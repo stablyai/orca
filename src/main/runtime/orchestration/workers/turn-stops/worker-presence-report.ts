@@ -33,6 +33,7 @@ export type WorkerRest = Pick<
   | 'approval'
   | 'turnStartedAt'
   | 'mailTaken'
+  | 'mailDelivered'
   | 'requestError'
 > & { reason: 'finished' | 'errored' | 'needs-input' }
 

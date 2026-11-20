@@ -20,6 +20,8 @@ export type WorkerTurnStop = {
   reason: WorkerTurnStopReason
   /** Coordinator mail the worker had taken when the stop was seen; mail it takes later is its next turn's. */
   mailTaken?: number
+  /** Untaken mail already delivered when the stop was seen; other untaken mail is still waking the worker. */
+  mailDelivered?: string[]
   lastOutput: string | undefined
   /** For `needs-input`: the turn ended asking for a reply, which a message answers; else a prompt does. */
   awaitsReply?: boolean
@@ -71,16 +73,29 @@ export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string
 export function isDeliberateRest(
   db: OrchestrationDb,
   target: WorkerTurnStopDispatch,
-  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt'>,
+  stop: Pick<WorkerTurnStop, 'reason' | 'turnStartedAt' | 'mailDelivered'>,
   deps: Pick<WorkerTurnStopReportDeps, 'isWaitingForMail'>
 ): boolean {
   const dispatchId = workerTurnStopDispatchId(target)
   return (
     deps.isWaitingForMail(`dispatch:${dispatchId}`) ||
     (stop.reason === 'finished' &&
-      (db.awaitsAnswerToLatestQuestion(dispatchId) ||
+      (wakingMail(db, dispatchId, stop.mailDelivered) ||
+        db.awaitsAnswerToLatestQuestion(dispatchId) ||
         rejectedReportInTurn(db, dispatchId, stop.turnStartedAt) ||
         (target.kind === 'local' && db.hasOpenHelperDispatch(dispatchId))))
+  )
+}
+
+/** Untaken mail not yet delivered when the stop was seen is waking the worker: until it moves, the rest is no stop. */
+function wakingMail(
+  db: OrchestrationDb,
+  dispatchId: string,
+  delivered: string[] | undefined
+): boolean {
+  return (
+    delivered !== undefined &&
+    db.getUnreadMessages(`dispatch:${dispatchId}`).some((mail) => !delivered.includes(mail.id))
   )
 }
 

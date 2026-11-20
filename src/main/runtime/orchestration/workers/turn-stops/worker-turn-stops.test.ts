@@ -247,7 +247,7 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail()).toHaveLength(2)
   })
 
-  it('waits once more for mail that lands as the turn ends, and reports a worker it did not wake', async () => {
+  it('holds a rest while mail that landed after it is still waking the worker, however long', async () => {
     const ctx = setup()
     const current = { row: hookRow({ state: 'working', stateStartedAt: 100 }) }
     const quiet: (() => void)[] = []
@@ -263,7 +263,7 @@ describe('terminal worker turn stops', () => {
       }
       await settle()
     }
-    const turnEndsAsAnswerLands = async (stateStartedAt: number) => {
+    const turnEnds = async (stateStartedAt: number, beforeStop?: () => void) => {
       current.row = hookRow({ state: 'working', stateStartedAt: stateStartedAt - 1 })
       stops.observe({
         kind: 'observed',
@@ -272,32 +272,32 @@ describe('terminal worker turn stops', () => {
         phase: 'working',
         at: 1
       })
-      const asked = ctx.db.createQuestion({
-        runId: ctx.run.id,
-        dispatchId: ctx.dispatch.id,
-        askerHandle: HANDLE,
-        question: 'Red or blue?'
-      })
+      beforeStop?.()
       current.row = hookRow({ stateStartedAt, lastAssistantMessage: 'Waiting for the answer.' })
       stops.observe(moved('working', 'done'))
-      ctx.db.answerQuestion({
-        messageId: asked.message.id,
-        runId: ctx.run.id,
-        consumerGeneration: ctx.run.consumer_generation,
-        body: 'Blue.'
-      })
-      await elapse()
     }
-
-    await turnEndsAsAnswerLands(200)
-    expect(ctx.mail()).toHaveLength(0)
-    // The answer woke the worker.
-    current.row = hookRow({ state: 'working', stateStartedAt: 250 })
+    const asked = ctx.db.createQuestion({
+      runId: ctx.run.id,
+      dispatchId: ctx.dispatch.id,
+      askerHandle: HANDLE,
+      question: 'Red or blue?'
+    })
+    await turnEnds(200)
+    // The answer lands after the stop; its pointer is still on its way, then typed, at report time.
+    const answer = ctx.db.answerQuestion({
+      messageId: asked.message.id,
+      runId: ctx.run.id,
+      consumerGeneration: ctx.run.consumer_generation,
+      body: 'Blue.'
+    })
     await elapse()
+    ctx.db.markAsDelivered([answer.message.id], `dispatch:${ctx.dispatch.id}`)
+    // Deciding this rest again, as a wait ending does, still holds it.
+    reconsiderWorkerRest(ctx.db, ctx.dispatch.id, ctx.deps)
     expect(ctx.mail()).toHaveLength(0)
 
-    await turnEndsAsAnswerLands(300)
-    // Nothing woke it: still resting on untaken mail.
+    // Woken by it, the worker ignored the answer and ended its next turn: that is a stop.
+    await turnEnds(300)
     await elapse()
     expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
   })

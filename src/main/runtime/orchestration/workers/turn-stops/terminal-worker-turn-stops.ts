@@ -2,7 +2,6 @@ import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
-  AGENT_DONE_QUIET_MS,
   hookRowAgentPhase,
   hookRowTransition
 } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
@@ -40,8 +39,7 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
 type PreparedStop = TerminalAgentTurnNewsItem & {
   dispatchId: string | null
   mailTaken?: number
-  /** Already waited one more quiet window for mail that had not reached the worker. */
-  heldForMail?: true
+  mailDelivered?: string[]
 }
 
 export class TerminalWorkerTurnStops {
@@ -57,9 +55,7 @@ export class TerminalWorkerTurnStops {
         return {
           ...news,
           dispatchId,
-          ...(resolved && dispatchId
-            ? { mailTaken: readCoordinatorMailCount(resolved.db, dispatchId) }
-            : {})
+          ...(resolved && dispatchId ? readMailAtStop(resolved.db, dispatchId) : {})
         }
       },
       deliver: (stop, row) => void this.report(stop, row),
@@ -100,7 +96,7 @@ export class TerminalWorkerTurnStops {
         worktreeId: row.worktreeId ?? '',
         row,
         dispatchId,
-        mailTaken: readCoordinatorMailCount(resolved.db, dispatchId)
+        ...readMailAtStop(resolved.db, dispatchId)
       },
       row
     )
@@ -120,23 +116,6 @@ export class TerminalWorkerTurnStops {
         : agentVerdictDisplayMark(stop.row) === 'failed'
           ? 'errored'
           : 'finished'
-    // Mail that lands as the turn ends is about to wake the worker; a worker still resting after it is news.
-    if (
-      reason === 'finished' &&
-      !stop.heldForMail &&
-      stopped.db.getUnreadMessages(`dispatch:${workerTurnStopDispatchId(stopped.target)}`).length >
-        0
-    ) {
-      this.deps.setTimer(
-        () =>
-          void this.report(
-            { ...stop, heldForMail: true },
-            this.deps.readHookRow(stop.paneKey) ?? latest
-          ),
-        AGENT_DONE_QUIET_MS
-      )
-      return
-    }
     // A clean finish has the agent's own last words; an error or prompt is on the screen.
     const lastOutput =
       (reason === 'finished' && (latest.lastAssistantMessage || stop.row.lastAssistantMessage)) ||
@@ -171,6 +150,7 @@ export class TerminalWorkerTurnStops {
           turnStartedAt: stop.row.turnStartedAt,
           reason,
           mailTaken: stop.mailTaken,
+          mailDelivered: stop.mailDelivered,
           lastOutput,
           ...(approval ? { approval } : {})
         }
@@ -213,6 +193,19 @@ export class TerminalWorkerTurnStops {
 
   private resolve(paneKey: string) {
     return resolveTerminalWorkerDispatch(this.deps, paneKey)
+  }
+}
+
+/** The worker's mail as its stop is seen: what it took, and what was already delivered to it untaken. */
+function readMailAtStop(
+  db: OrchestrationDb,
+  dispatchId: string
+): Pick<PreparedStop, 'mailTaken' | 'mailDelivered'> {
+  return {
+    mailTaken: readCoordinatorMailCount(db, dispatchId),
+    mailDelivered: db
+      .getUnreadMessages(`dispatch:${dispatchId}`)
+      .flatMap((mail) => (mail.delivered_at ? [mail.id] : []))
   }
 }
 
