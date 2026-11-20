@@ -9,12 +9,19 @@ import type { RuntimeTerminalProjection } from './terminal-projection'
 
 export type KeptGapScreen = RuntimeTerminalProjection & { seq: number; capturedAt: number }
 
+// A null anchor is a seq in runtime coordinates, which no re-anchor moves.
 function sameStream(a: GapScreenIdentity, b: GapScreenIdentity): boolean {
-  return a.generation === b.generation && a.anchorRevision === b.anchorRevision
+  return (
+    a.generation === b.generation &&
+    (a.anchorRevision === null ||
+      b.anchorRevision === null ||
+      a.anchorRevision === b.anchorRevision)
+  )
 }
 
-/** Keeps a frame known correct at `seq` unless a newer one of the same stream is kept. It is projected at once,
- *  so a landed capture's ANSI (the whole live window) is not retained past its parse. */
+/** Keeps a frame known correct at `seq` unless a newer one of the same stream is kept. It is projected on first
+ *  read, or when its capture attempt ends without rebuilding, so a landed capture's ANSI (the whole live window)
+ *  is never parsed for a rebuild that succeeds, nor held past the attempt that captured it. */
 export function keepGapRecoveryScreen(
   recovery: GapRecovery,
   frame: GapScreenIdentity & { seq: number; capturedAt: number },
@@ -24,15 +31,16 @@ export function keepGapRecoveryScreen(
   if (kept && sameStream(kept, frame) && kept.seq >= frame.seq) {
     return
   }
-  const projection = Promise.resolve()
-    .then(read)
-    .catch(() => null)
+  let projection: Promise<RuntimeTerminalProjection | null> | undefined
   recovery.keptScreen = {
     generation: frame.generation,
     anchorRevision: frame.anchorRevision,
     seq: frame.seq,
     capturedAt: frame.capturedAt,
-    read: () => projection
+    read: () =>
+      (projection ??= Promise.resolve()
+        .then(read)
+        .catch(() => null))
   }
 }
 
@@ -60,9 +68,16 @@ export function keepPreGapScreen(
     const frame = projectTerminalVisibleLines(state.emulator)
     keepGapRecoveryScreen(
       state.gapReseed,
-      { ...stream, seq: state.outputSequence, capturedAt: Date.now() },
+      { ...stream, anchorRevision: null, seq: state.outputSequence, capturedAt: Date.now() },
       () => frame
     )
+  }
+}
+
+/** A capture attempt that did not rebuild parses its frame now, releasing the ANSI it captured. */
+export function settleKeptGapScreen(state: RuntimeHeadlessTerminal, recovery: GapRecovery): void {
+  if (state.gapReseed === recovery) {
+    void recovery.keptScreen?.read()
   }
 }
 

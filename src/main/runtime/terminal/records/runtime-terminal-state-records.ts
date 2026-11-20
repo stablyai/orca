@@ -258,7 +258,7 @@ export type GapRecovery = {
 }
 
 /** The stream a frame's seq belongs to: a lifecycle or anchor change makes it incomparable. */
-export type GapScreenIdentity = { generation: number; anchorRevision: number | undefined }
+export type GapScreenIdentity = { generation: number; anchorRevision: number | undefined | null }
 
 export type GapRecoveryScreen = GapScreenIdentity & {
   seq: number

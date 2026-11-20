@@ -1,4 +1,5 @@
 import type {
+  GapScreenIdentity,
   RuntimeHeadlessTerminal,
   RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
@@ -30,6 +31,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
   protected abstract readRendererVisibleSnapshotLines(
     ptyId: string
   ): Promise<RuntimeTerminalProjection>
+  protected abstract gapScreenStream(ptyId: string): GapScreenIdentity
   protected abstract readWholeScreenModel(
     ptyId: string | null | undefined
   ): RuntimeHeadlessTerminal | null

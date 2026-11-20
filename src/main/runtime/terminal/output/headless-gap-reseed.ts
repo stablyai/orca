@@ -21,7 +21,7 @@ import {
   moveCodexNoticeTrackers,
   resetCodexNoticeTrackersAfterGap
 } from './codex-notice-terminal-status'
-import { keepPreGapScreen } from './gap-recovery-screen'
+import { keepPreGapScreen, settleKeptGapScreen } from './gap-recovery-screen'
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
@@ -45,7 +45,6 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     opts: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true },
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null>
-  protected abstract gapScreenStream(ptyId: string): GapScreenIdentity
   protected abstract trustedGapScreenStream(ptyId: string): GapScreenIdentity | null
 
   private gapCapturesInFlight = 0
@@ -184,6 +183,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
         // A failed capture retries; the live model is untouched.
       } finally {
         stopGapJournal(recovery)
+        settleKeptGapScreen(state, recovery)
         this.releaseGapCaptureSlot()
       }
     }
