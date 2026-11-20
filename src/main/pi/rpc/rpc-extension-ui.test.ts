@@ -143,6 +143,17 @@ describe('Pi RPC extension UI', () => {
     expect(
       agentSessionExtensionStripRows(await test.rows()).widgets.map((widget) => widget.placement)
     ).toEqual(['below'])
+
+    // The same lines in another placement still move the panel.
+    test.receive({
+      method: 'setWidget',
+      widgetKey: 'footer',
+      widgetLines: ['3 warnings'],
+      widgetPlacement: 'aboveEditor'
+    })
+    expect(
+      agentSessionExtensionStripRows(await test.rows()).widgets.map((widget) => widget.placement)
+    ).toEqual(['above'])
   })
 
   it('answers no request for the calls it cannot draw', async () => {

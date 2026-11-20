@@ -129,7 +129,7 @@ export class PiRpcExtensionUi {
       }
       return
     }
-    if (held?.text === input.text) {
+    if (held?.text === input.text && held.presentation === input.presentation) {
       return
     }
     input.rows.set(input.key, { presentation: input.presentation, text: input.text })
