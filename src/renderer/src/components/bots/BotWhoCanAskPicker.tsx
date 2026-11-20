@@ -100,6 +100,8 @@ export function BotWhoCanAskPicker({
   const t = useTranslate()
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<BotMember[]>([])
+  // A ticked person's real name, so a search by it still shows them once they scroll off.
+  const [pickedHandles, setPickedHandles] = useState<Readonly<Record<string, string>>>({})
   const { search, retry } = useMemberSearch(service, query)
   const needle = query.trim().toLowerCase()
   const listed = service.listed(bot.members)
@@ -108,10 +110,14 @@ export function BotWhoCanAskPicker({
     bot.members.length + picked.length >= BOT_MAX_MEMBERS ||
     added.size + picked.length >= service.max
   const isPicked = (id: string): boolean => picked.some((entry) => entry.id === id)
-  const toggle = (member: BotMember): void =>
+  const toggle = (member: BotMember, handle?: string): void => {
+    if (handle && pickedHandles[member.id] !== handle) {
+      setPickedHandles((current) => ({ ...current, [member.id]: handle }))
+    }
     setPicked((current) =>
       isPicked(member.id) ? current.filter((entry) => entry.id !== member.id) : [...current, member]
     )
+  }
 
   const found = search.status === 'ready' ? search.found.members : []
   const handles = new Map(found.map((person) => [person.id, person.handle]))
@@ -120,7 +126,13 @@ export function BotWhoCanAskPicker({
     (member) => matches(member.name || member.id, needle) || found.some((p) => p.id === member.id)
   )
   const ownerShown = needle === '' || found.some((person) => person.id === service.ownerId)
-  const idle = needle === '' ? service.idleHint : undefined
+  // A service that suggests people fills an empty search; the hint is for one that suggests nobody.
+  const idle =
+    needle === '' && search.status === 'ready' && addable.length === 0
+      ? service.idleHint
+      : undefined
+  const teammates = service.outsideHeading ? addable.filter((person) => !person.outside) : addable
+  const outside = service.outsideHeading ? addable.filter((person) => person.outside) : []
 
   const pickRow = (member: BotMember, handle?: string): React.JSX.Element => {
     const on = isPicked(member.id)
@@ -130,7 +142,7 @@ export function BotWhoCanAskPicker({
         value={member.id}
         aria-checked={on}
         disabled={full && !on}
-        onSelect={() => toggle(member)}
+        onSelect={() => toggle(member, handle)}
       >
         <Checkbox checked={on} tabIndex={-1} aria-hidden className="pointer-events-none" />
         <span className="size-6 shrink-0">
@@ -140,12 +152,17 @@ export function BotWhoCanAskPicker({
       </CommandItem>
     )
   }
-  // Ticked people the current search no longer shows stay on top, so the footer's count is on screen.
-  const offScreen = picked.filter((member) => !addable.some((person) => person.id === member.id))
+  // Ticked people the current search doesn't show stay on top while they still match it, so a
+  // search never lists someone it doesn't match; the footer keeps counting everyone ticked.
+  const offScreen = picked.filter(
+    (member) =>
+      !addable.some((person) => person.id === member.id) &&
+      (matches(member.name || member.id, needle) || matches(pickedHandles[member.id] ?? '', needle))
+  )
   const selectedGroup =
     offScreen.length > 0 ? (
       <CommandGroup heading={t('bots.whoCanAsk.selectedHeading', 'Selected')}>
-        {offScreen.map((member) => pickRow(member))}
+        {offScreen.map((member) => pickRow(member, pickedHandles[member.id]))}
       </CommandGroup>
     ) : null
 
@@ -163,9 +180,18 @@ export function BotWhoCanAskPicker({
       {t('bots.whoCanAsk.searching', 'Searching…')}
     </p>
   ) : addable.length > 0 ? (
-    <CommandGroup heading={service.peopleHeading}>
-      {addable.map((person) => pickRow(asMember(person, service), person.handle))}
-    </CommandGroup>
+    <>
+      {teammates.length > 0 ? (
+        <CommandGroup heading={service.peopleHeading}>
+          {teammates.map((person) => pickRow(asMember(person, service), person.handle))}
+        </CommandGroup>
+      ) : null}
+      {outside.length > 0 ? (
+        <CommandGroup heading={service.outsideHeading}>
+          {outside.map((person) => pickRow(asMember(person, service), person.handle))}
+        </CommandGroup>
+      ) : null}
+    </>
   ) : withAccess.length === 0 && !ownerShown ? (
     <PickerNote {...service.noMatch(query.trim())} />
   ) : null

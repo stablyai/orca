@@ -18,7 +18,7 @@ import type {
 } from '../../../shared/connector-bot-linear-contract'
 import type {
   ConnectorGitHubState,
-  ConnectorGitHubUsersResponse
+  BotGitHubPeople
 } from '../../../shared/connector-bot-github-contract'
 import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
 import type { ConnectorConnectRedeem } from '../../../../cloud/packages/connector-contract/src/connect-messages'
@@ -90,8 +90,8 @@ export function botLinearCalls(hostId: ExecutionHostId) {
 export function botGitHubCalls(hostId: ExecutionHostId) {
   return {
     state: () => call<ConnectorGitHubState>(hostId, 'bots.github.state'),
-    users: (args: { query: string }) =>
-      call<ConnectorGitHubUsersResponse>(hostId, 'bots.github.users', args),
+    users: (args: { query: string; scope?: { repositories: string[]; organizations: string[] } }) =>
+      call<BotGitHubPeople>(hostId, 'bots.github.users', args),
     unlink: () => call<undefined>(hostId, 'bots.github.unlink'),
     setDefaultBot: (args: { botId: string | null }) =>
       call<undefined>(hostId, 'bots.github.setDefaultBot', args)

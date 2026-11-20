@@ -27469,13 +27469,15 @@
     },
     "github": {
       "whoCanAsk": {
-        "search": "Search by GitHub username",
+        "searchPeople": "Search by name or username",
         "outsiders": "Everyone else on GitHub gets a public reply to ask you.",
         "needsSetup": "Finish setup to link your GitHub account, then pick people here.",
-        "found": "People on GitHub",
-        "noUser": "No GitHub user named “{{query}}”",
-        "exactOnly": "GitHub finds people by their exact username.",
-        "typeUsername": "Type a GitHub username"
+        "inRepositories": "People in your repositories",
+        "elsewhere": "Elsewhere on GitHub",
+        "noPerson": "No one found for “{{query}}”",
+        "searchedWhere": "Searched your connected repositories, and GitHub for that exact username.",
+        "typeName": "Type a name or GitHub username",
+        "findHow": "Find people in your connected repositories by name, or anyone on GitHub by exact username."
       },
       "connection": {
         "description": "{{repos}} · signed in as @{{login}}",

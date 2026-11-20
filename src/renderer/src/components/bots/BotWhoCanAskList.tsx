@@ -18,7 +18,8 @@ import { requestLine, useBotWhoCanAsk } from './use-bot-who-can-ask'
 
 /** complete is false when the service's people are too many to read whole. */
 export type BotWhoCanAskFound = {
-  members: { id: string; name: string; handle?: string; avatarUrl?: string }[]
+  /** `outside`: found only by an exact lookup, not among the people this connector works with. */
+  members: { id: string; name: string; handle?: string; avatarUrl?: string; outside?: boolean }[]
   complete: boolean
 }
 
@@ -34,9 +35,11 @@ export type BotWhoCanAskService = {
   searchPlaceholder: string
   /** The picker's heading over found people, e.g. "People in Globex". */
   peopleHeading: string
+  /** The heading over `outside` people, kept apart so a stranger never reads as a teammate. */
+  outsideHeading?: string
   /** What an empty search says, naming the query and where it looked. */
   noMatch: (query: string) => { title: string; detail: string }
-  /** Shown instead of people while the search box is empty, for a service that can't list them. */
+  /** Shown while the search box is empty and the service suggests nobody. */
   idleHint?: { title: string; detail: string }
   /** The owner's own account here, listed as the owner rather than offered; null when unknown. */
   ownerId: string | null

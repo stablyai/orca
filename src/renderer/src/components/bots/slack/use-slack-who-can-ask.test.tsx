@@ -220,14 +220,18 @@ describe('useSlackWhoCanAsk', () => {
     expect(screen.getByRole('option', { name: /Sam Lee/ })).toHaveAttribute('aria-disabled', 'true')
   })
 
-  it('keeps ticked people on screen under Selected when the search moves on', async () => {
+  it('lists ticked people under Selected only while the search matches them', async () => {
     await pickJane()
     api.members.mockResolvedValue({ ok: true, value: { members: [], complete: true } })
-    fireEvent.change(screen.getByPlaceholderText('Search people in Globex'), {
-      target: { value: 'zoe' }
-    })
+    const search = screen.getByPlaceholderText('Search people in Globex')
+    fireEvent.change(search, { target: { value: 'zoe' } })
     expect(await screen.findByText('No one named “zoe” in Globex')).toBeDefined()
-    expect(screen.getByText('Selected')).toBeDefined()
+    // A search for someone else never shows Jane as if she matched it; the footer still counts her.
+    expect(screen.queryByText('Selected')).toBeNull()
+    expect(screen.queryByRole('option', { name: /Jane Doe/ })).toBeNull()
+    expect(screen.getByText('1 selected')).toBeDefined()
+    fireEvent.change(search, { target: { value: 'jane' } })
+    expect(await screen.findByText('Selected')).toBeDefined()
     const jane = screen.getByRole('option', { name: /Jane Doe/ })
     expect(jane).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByText('1 selected')).toBeDefined()
