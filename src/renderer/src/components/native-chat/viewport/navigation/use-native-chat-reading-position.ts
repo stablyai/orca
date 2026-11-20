@@ -1,4 +1,5 @@
 import { useCallback, useContext, useLayoutEffect, useRef } from 'react'
+import type { HistoryJumpResult } from './use-native-chat-history-jump'
 import {
   NativeChatViewTabContext,
   readNativeChatViewMemory,
@@ -10,7 +11,6 @@ import {
 const MAX_RESTORE_ATTEMPTS = 5
 
 export type NativeChatReadingPosition = { messageId: string; offset: number }
-type RestoreResult = 'landed' | 'missing' | 'aborted' | 'superseded'
 
 /** The first row reaching below the viewport's top, by its message, and how far the reader is into it. */
 function readingPositionOf(
@@ -47,11 +47,12 @@ export function useNativeChatReadingPosition({
   readerAtEnd: () => boolean
   /** The message a transcript row shows, for rows of any kind. */
   messageIdAt: (index: number) => string | null
-  jumpTo: (position: NativeChatReadingPosition, settled: (result: RestoreResult) => void) => void
+  jumpTo: (position: NativeChatReadingPosition, settled: (result: HistoryJumpResult) => void) => void
 }): () => boolean {
   const tab = useContext(NativeChatViewTabContext)
   const key = `reading-position:${positionKey}`
-  // A reveal of a view that stayed mounted already holds its offset; only a fresh mount restores.
+  // A reveal of a view that stayed mounted already holds its offset; only a fresh mount, or one whose restore
+  // failed to load history, restores.
   const freshMountRef = useRef(true)
   // The restore in flight; an effect replay (StrictMode, a hide mid-restore) keeps the bookmark and retries it.
   const restoringRef = useRef<NativeChatReadingPosition | null>(null)
@@ -82,8 +83,12 @@ export function useNativeChatReadingPosition({
             frame = requestAnimationFrame(() => attempt(tries + 1))
             return
           }
-          // Landed, gone, or the reader moved on: the bookmark has done its job.
           restoringRef.current = null
+          if (result === 'failed') {
+            // History didn't load; the bookmark stays for the next reveal.
+            return
+          }
+          // Landed, gone, or the reader moved on: the bookmark has done its job.
           freshMountRef.current = false
           if (readNativeChatViewMemory(tab, key) === position) {
             writeNativeChatViewMemory(tab, key, undefined)
@@ -104,6 +109,10 @@ export function useNativeChatReadingPosition({
         container && !latest.current.readerAtEnd()
           ? readingPositionOf(container, latest.current.messageIdAt)
           : null
+      if (next === null && freshMountRef.current) {
+        return
+      }
+      freshMountRef.current = false
       writeNativeChatViewMemory(tab, key, next ?? undefined)
     }
   }, [isVisible, ready, tab, key, scrollRef])

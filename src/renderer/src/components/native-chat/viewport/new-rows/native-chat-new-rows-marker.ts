@@ -1,6 +1,6 @@
 // Mark the first row that arrived or kept growing while the reader was away.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNativeChatViewMemory } from '../../pane/ownership/native-chat-view-memory'
 import { useOrcaWindowForegroundFocused } from '@/attention/use-orca-window-foreground-focused'
 import { compareAgentJournalPositions } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
@@ -169,6 +169,17 @@ type Seen = {
   arriving: boolean
 }
 
+/** The reader looks away: an unanswered marker whose row still stands is kept, as they may be midway through it. */
+function leaving(
+  seen: Seen,
+  slots: readonly NativeChatTranscriptSlot[],
+  waitingSlots: readonly NativeChatTranscriptSlot[]
+): Seen {
+  const marked =
+    nativeChatNewRowsMarkerPlacement([...slots, ...waitingSlots], seen.missed) !== undefined
+  return { ...seen, watching: false, left: marked ? null : nativeChatLeftAt(slots, waitingSlots) }
+}
+
 export function useNativeChatNewRowsMarker(
   slots: readonly NativeChatTranscriptSlot[],
   /** Rows held behind the running turn: seen and missed like any other, drawn outside `slots`. */
@@ -196,6 +207,20 @@ export function useNativeChatNewRowsMarker(
   )
   const { write: keep } = kept
   useEffect(() => keep(seen), [keep, seen])
+  const latest = useRef({ enabled, seen, slots, waitingSlots })
+  useLayoutEffect(() => {
+    latest.current = { enabled, seen, slots, waitingSlots }
+  })
+  // Why: a hidden view runs no effects, so where the reader left is kept as it hides, before a release.
+  useEffect(
+    () => () => {
+      const { enabled: on, seen: held, slots: rows, waitingSlots: waiting } = latest.current
+      if (on && held.watching) {
+        keep(leaving(held, rows, waiting))
+      }
+    },
+    [keep]
+  )
   if (!enabled) {
     if (!seen.watching || seen.left !== null || seen.missed !== null) {
       setSeen({ watching, left: null, missed: null, arriving: false })
@@ -206,9 +231,7 @@ export function useNativeChatNewRowsMarker(
       const missed = seen.left ? nativeChatMissedRows(all, seen.left) : seen.missed
       setSeen({ watching, left: null, missed, arriving: seen.left !== null && missed !== null })
     } else {
-      // An unanswered marker whose row still stands is kept: the reader may be midway through it.
-      const marked = nativeChatNewRowsMarkerPlacement(all, seen.missed) !== undefined
-      setSeen({ ...seen, watching, left: marked ? null : nativeChatLeftAt(slots, waitingSlots) })
+      setSeen(leaving(seen, slots, waitingSlots))
     }
   }
   const { missed } = seen

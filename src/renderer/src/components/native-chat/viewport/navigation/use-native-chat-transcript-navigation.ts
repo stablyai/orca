@@ -199,7 +199,7 @@ export function useNativeChatNavigation({
     messageIdAt: (index) => nativeChatSlotMessageIdFrom(slots, index),
     jumpTo: ({ messageId, offset }, settled) =>
       startHistoryJump({ kind: 'item', id: messageId, offset }, (result) => {
-        if (result === 'missing') {
+        if (result === 'missing' || result === 'failed') {
           releaseHistory()
           if (subagentId === null) {
             scrollToBottom()
@@ -231,7 +231,7 @@ export function useNativeChatNavigation({
           return
         }
         consumeBotLinkItem(linkTarget)
-        if (result === 'missing') {
+        if (result === 'missing' || result === 'failed') {
           releaseHistory()
           scrollToBottom()
           toast.info(translate('nativeChat.linkedMessageMissing', "Couldn't find that message."))

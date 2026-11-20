@@ -13,8 +13,8 @@ export type NativeChatHistoryJumpTarget =
   | { kind: 'item'; id: string; offset?: number }
   | { kind: 'subagent'; agentId: string }
 
-/** What the committed transcript can do for a target now: it landed, it needs older history, or it cannot be reached. */
-type HistoryJumpResult = 'landed' | 'missing' | 'aborted' | 'superseded'
+/** What the committed transcript can do for a target now; `failed` means a page could not load, so a retry may reach it. */
+export type HistoryJumpResult = 'landed' | 'missing' | 'failed' | 'aborted' | 'superseded'
 
 export type NativeChatHistoryJumpStep = (
   target: NativeChatHistoryJumpTarget
@@ -107,8 +107,8 @@ export function useNativeChatHistoryJump({
         if (signal.aborted) {
           return 'aborted'
         }
-        if (result === 'superseded') {
-          return 'superseded'
+        if (result === 'superseded' || result === 'failed') {
+          return result
         }
         if (result !== 'applied') {
           return 'missing'
@@ -140,7 +140,7 @@ export function useNativeChatHistoryJump({
       controllerRef.current = controller
       setPending(target)
       void run(target, controller.signal)
-        .catch((): HistoryJumpResult => (controller.signal.aborted ? 'aborted' : 'missing'))
+        .catch((): HistoryJumpResult => (controller.signal.aborted ? 'aborted' : 'failed'))
         .then((result) => {
           settled?.(result)
           if (controllerRef.current === controller) {
