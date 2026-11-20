@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -223,6 +224,24 @@ describe('codex settings write-back promotion', () => {
 
       expect(lstatSync(systemConfigPath()).isSymbolicLink()).toBe(true)
       expect(readFileSync(realConfigPath, 'utf-8')).toBe('model = "o4"\n')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not write through a config.toml symlink into a WSL guest',
+    () => {
+      mkdirSync(join(tmpHome, '.codex'), { recursive: true })
+      const guestConfigPath = join(tmpHome, 'guest-config.toml')
+      writeFileSync(guestConfigPath, 'model = "gpt-5"\n', 'utf-8')
+      symlinkSync(guestConfigPath, systemConfigPath())
+      promotionTestState.wslSystemConfigPath = realpathSync(guestConfigPath)
+      syncSystemConfigIntoManagedCodexHome()
+
+      simulateCodexSettingWrite('model', '"o4"')
+      syncSystemConfigIntoManagedCodexHome()
+
+      expect(readFileSync(guestConfigPath, 'utf-8')).toBe('model = "gpt-5"\n')
+      expect(readRuntimeConfig()).toContain('model = "o4"')
     }
   )
 

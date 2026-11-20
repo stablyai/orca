@@ -166,9 +166,9 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
       runtimeValuesToPreserve
     })
   }
-  if (parseWslUncPath(systemTomlPath)) {
-    // Orca never writes a WSL guest's own Codex config; runtime edits stay in the managed home.
-    return keepRuntimeEditsInManagedHome({
+  // Orca never writes a WSL guest's own Codex config; runtime edits stay in the managed home.
+  const keepInManagedHome = (): CodexSettingsPromotionPlan =>
+    keepRuntimeEditsInManagedHome({
       updates,
       conflicts,
       runtimeValuesToPreserve,
@@ -177,6 +177,8 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
       registrations: baseline?.registrations ?? new Map(),
       systemValues
     })
+  if (parseWslUncPath(systemTomlPath)) {
+    return keepInManagedHome()
   }
   // Registrations can promote before the first mirror because untracked tables are additions.
   if (updates.size === 0 && !hasCodexRegistrationEntries(runtimeTomlObservation.value)) {
@@ -185,6 +187,10 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   // A new home may later hold auth.json, so create it owner-only.
   mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
   const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
+  // A host config can be a dotfile link into a distro.
+  if (parseWslUncPath(writeTarget.path)) {
+    return keepInManagedHome()
+  }
   // Dangling dotfile links may target a parent directory that does not exist yet.
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
   // Read the target before reconstructing it; registration promotion can run without a baseline.
