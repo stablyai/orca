@@ -3,6 +3,7 @@ import {
   linkSync,
   mkdtempSync,
   mkdirSync,
+  renameSync,
   rmSync,
   utimesSync,
   writeFileSync
@@ -33,6 +34,53 @@ const cleanup: (() => Promise<void> | void)[] = []
 afterEach(async () => {
   for (const close of cleanup.splice(0).toReversed()) {
     await close()
+  }
+})
+
+it('expires a failed unadopted chat upload after its original journal is moved away', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-attachment-custody-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: source } = openJournalDatabase(journalDatabasePath(root))
+  await initializeJournalDomainDatabase(root)
+  source.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('failed-chat', '{')
+  source
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('claimed', 'failed-chat', 100)
+  source.close()
+  const now = 2_000_000_000_000
+  const old = new Date(now - 8 * 24 * 60 * 60 * 1000)
+  const attachments = agentSessionAttachmentStoreRoot(root)
+  const upload = join(attachments, 'claimed')
+  mkdirSync(upload, { recursive: true })
+  writeFileSync(join(upload, 'saved.txt'), 'original upload')
+  utimesSync(upload, old, old)
+  const open = () =>
+    JournalSqlDatabase.open(root, {
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath(),
+      onMaintenanceError: () => {}
+    })
+  const store = new AgentSessionAttachmentStore(attachments, { hasSession: () => true })
+  const failed = await open()
+  try {
+    await sweepAgentSessionAttachments(
+      store,
+      structuredAgentSessionAttachmentSweepFacts(failed),
+      now
+    )
+    expect(existsSync(upload)).toBe(true)
+  } finally {
+    await failed.close()
+  }
+  renameSync(journalDatabasePath(root), join(root, 'moved-original.db'))
+  const reopened = await open()
+  try {
+    const facts = structuredAgentSessionAttachmentSweepFacts(reopened)
+    await sweepAgentSessionAttachments(store, facts, now)
+    await sweepAgentSessionAttachments(store, facts, now)
+    expect(existsSync(upload)).toBe(false)
+  } finally {
+    await reopened.close()
   }
 })
 
