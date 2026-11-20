@@ -1,3 +1,4 @@
+import { cloudSupportsConnectorSource } from '../../shared/connector-cloud-features'
 import { delayUnlessAborted } from '../../shared/concurrency/abort-aware-delay'
 import type { z } from 'zod'
 import {
@@ -67,11 +68,21 @@ export function postConnectorReply(
   transport: ConnectorTransport,
   body: ConnectorReplyBody,
   signal: AbortSignal,
-  random: () => number
+  random: () => number,
+  features: ReadonlySet<string> | null
 ): Promise<ConnectorResult<ConnectorReplyResponse>> {
+  if (!cloudSupportsConnectorSource(body.conversation.source, features)) {
+    return Promise.resolve({
+      ok: false,
+      status: 409,
+      error: 'source_unsupported',
+      retryAfterMs: null
+    })
+  }
+  const sent = features?.has('review') ? body : foldConnectorReview(body)
   return postWithRetries(
     transport,
-    { path: CONNECTOR_PATHS.replies, body: { v: 1, ...body }, schema: ConnectorReplyResponse },
+    { path: CONNECTOR_PATHS.replies, body: { v: 1, ...sent }, schema: ConnectorReplyResponse },
     signal,
     random
   )

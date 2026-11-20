@@ -42,6 +42,8 @@ export class FakeConnectorCloud {
   private lastRev = 0
   /** What each hello answer lists beyond the contract version; an older cloud lists nothing. */
   features: string[] | undefined
+  /** A deployed older schema refuses an event naming a source outside this list. */
+  eventSources: readonly string[] | undefined
   /** Hooks of this machine deleted while it was away, as the hello answer lists them. */
   webhookTombstones: string[] | undefined
   /** The bot ids the cloud holds for this machine, as its last hello listing bots replaced them. */
@@ -276,6 +278,26 @@ export class FakeConnectorCloud {
       return { status: 204 }
     }
     if (path === CONNECTOR_PATHS.events) {
+      const events = Array.isArray(fields.events) ? fields.events : []
+      const conversations = events.flatMap((event: unknown) => {
+        if (!isRecord(event)) {
+          return []
+        }
+        if (event.kind === 'snapshot' && Array.isArray(event.conversations)) {
+          return event.conversations.map((entry: unknown) =>
+            isRecord(entry) ? entry.conversation : null
+          )
+        }
+        return [event.conversation]
+      })
+      if (
+        this.eventSources &&
+        conversations.some(
+          (entry) => !isRecord(entry) || !this.eventSources!.includes(String(entry.source))
+        )
+      ) {
+        return { status: 400, body: { error: 'invalid_request' } }
+      }
       // Applied only above this hello's high-water mark; a late or repeated batch is dropped.
       const seq = typeof fields.seq === 'number' ? fields.seq : -1
       if (seq > hello.seq) {

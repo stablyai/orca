@@ -180,6 +180,11 @@ export const CONNECTOR_CLOUD_FEATURES = [
 ] as const
 // Hooks can be made. Listed only while webhooks are switched on and the cloud's sealing keys are valid.
 export const CONNECTOR_CLOUD_WEBHOOKS_FEATURE = 'webhooks'
+// Provisional opt-ins for the hosted group-mention adapters; never advertised by a contract bump.
+export const CONNECTOR_CLOUD_MENTION_SOURCES = {
+  feishu: 'feishu.mentions',
+  lark: 'lark.mentions'
+} as const
 // The cloud reads a prompt's raisedBy and routes or masks it by it, so a bot link's prompts from turns
 // its conversation didn't ask for may be sent. Kept out of CONNECTOR_CLOUD_FEATURES: only the code
 // that honours raisedBy lists it, so a contract bump alone never advertises it.

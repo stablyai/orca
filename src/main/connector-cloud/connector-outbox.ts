@@ -25,8 +25,8 @@ export type ConnectorStamp = {
 export type ConnectorOutboxHead<T> = { stamp: ConnectorStamp; batch: T[] }
 
 /**
- * Items owed to the cloud, in order. One leaves only through `accepted` with the stamp it went out under, so
- * no send, failure or hello change can lose it.
+ * Sendable items keep their order; temporarily unready items wait behind them. Stamped heads stay
+ * unchanged across retries, and only their own receipt can accept them.
  */
 export class ConnectorOutbox<T> {
   private items: T[]
@@ -37,6 +37,8 @@ export class ConnectorOutbox<T> {
       /** How many of the first items one request carries; at least one. */
       headSize: (items: readonly T[]) => number
       initial?: T[]
+      /** False holds an unstamped item locally while other items may pass it. */
+      ready?: (item: T) => boolean
       /** Trims what is owed, never the first `sent` items, so everything owed stays within bounds. */
       bound?: (items: T[], sent: number) => T[]
       /** Called after every change with everything still owed, e.g. to persist it. */
@@ -75,13 +77,18 @@ export class ConnectorOutbox<T> {
   next(helloRev: number): ConnectorOutboxHead<T> | null {
     let stamp = this.stamp
     if (stamp?.helloRev !== helloRev || stamp.size === 0) {
-      if (this.items.length === 0) {
+      const ready = this.options.ready ? this.items.filter(this.options.ready) : this.items
+      if (ready.length === 0) {
         return null
+      }
+      if (ready.length < this.items.length) {
+        this.items = [...ready, ...this.items.filter((item) => !this.options.ready!(item))]
+        this.notify()
       }
       stamp = this.stamp = {
         helloRev,
         seq: stamp?.helloRev === helloRev ? stamp.seq + 1 : 0,
-        size: Math.max(1, Math.min(this.options.headSize(this.items), this.items.length))
+        size: Math.max(1, Math.min(this.options.headSize(ready), ready.length))
       }
       this.options.onStamped?.(this.items.slice(0, stamp.size), stamp)
     }

@@ -108,7 +108,7 @@ describe('connectorHello', () => {
     )
     const { body, trimmed } = connectorHello(
       fakeMachine(() => null),
-      { bots, paged: false, cut: false, triggers }
+      { sources: ['slack', 'linear', 'github'], bots, paged: false, cut: false, triggers }
     )
     const json = JSON.stringify(body)
     expect(Buffer.byteLength(json)).toBeLessThanOrEqual(CONNECTOR_CLIENT_LIMITS.maxRequestBytes)
@@ -130,7 +130,7 @@ describe('connectorHello', () => {
     expect(webhookRuleBytes(triggers[0]!)).toBe(WEBHOOK_FILTER_LIMITS.maxRuleBytes)
     const { body } = connectorHello(
       fakeMachine(() => null),
-      { bots, paged: false, cut: false, triggers }
+      { sources: ['slack', 'linear', 'github'], bots, paged: false, cut: false, triggers }
     )
     expect(Buffer.byteLength(JSON.stringify(body))).toBeLessThanOrEqual(
       CONNECTOR_CLIENT_LIMITS.maxRequestBytes
@@ -139,6 +139,7 @@ describe('connectorHello', () => {
     const over = connectorHello(
       fakeMachine(() => null),
       {
+        sources: ['slack', 'linear', 'github'],
         bots: [],
         paged: false,
         cut: false,

@@ -31,7 +31,7 @@ the validation required before rolling out the updated images and host pins.
 - `packages/connector-contract`: the wire contract between Orca and the
   connector service, which receives Slack, Linear and GitHub events for signed-in
   Orcas. The hosted service is run by Orca and is not in this repository; Orca
-  talks to it only through this contract.
+  talks to it only through this contract. The [provisional Feishu/Lark host contract](docs/feishu-lark-host-contract.md) describes the public host slice and the remaining hosted adapter work.
 
 ## Mobile push gateway
 

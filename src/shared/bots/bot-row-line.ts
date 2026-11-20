@@ -186,7 +186,7 @@ type Translate = (key: string, fallback: string, values?: Record<string, unknown
 
 // Chat-like places are "in" a channel; issues and pull requests are "on" one.
 export function botRowReplyingAt(t: Translate, place: BotRowPlace, label = place.label): string {
-  return place.source === null || place.source === 'slack' || place.source === 'discord'
+  return place.source !== 'github' && place.source !== 'linear'
     ? t('bots.row.replyingIn', 'Replying in {{place}}', { place: label })
     : t('bots.row.replyingOn', 'Replying on {{place}}', { place: label })
 }

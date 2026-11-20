@@ -2,6 +2,7 @@
 // under a hello that lists replies.outbox, else through /replies (the kill switch); a row is marked
 // sent only once the cloud accepted it.
 import { createHash } from 'node:crypto'
+import { cloudSupportsConnectorSource } from '../../shared/connector-cloud-features'
 import {
   CONNECTOR_CLIENT_LIMITS,
   cloudConversation,
@@ -28,6 +29,7 @@ export type ConnectorReplyEvent = Extract<ConnectorEvent, { kind: 'reply' }>
 export type ConnectorReplyRoute = {
   client: ConnectorReplyClient | null
   outbox: boolean | undefined
+  features?: ReadonlySet<string>
 }
 
 /** How the running client sends what the journal holds; null while none runs. */
@@ -200,14 +202,19 @@ export class ConnectorReplyOutbox {
     this.setWaiting(owed.length)
     // The hello and client as they are now, after the read; and the account still this one, after
     // a count that may have reconciled it away.
-    const { client, outbox } = this.hooks.route()
+    const { client, outbox, features } = this.hooks.route()
     if (this.retired || !client || outbox === undefined || owed.length === 0) {
       return
     }
     if (outbox) {
-      owed.forEach((row) => this.inFlight.add(row.deliveryId))
-      client.push(replyEventsOf(owed))
-      this.setWaiting(0)
+      const ready = owed.filter(
+        (row) =>
+          cloudConversation(row.conversation) &&
+          cloudSupportsConnectorSource(row.conversation.source, features)
+      )
+      ready.forEach((row) => this.inFlight.add(row.deliveryId))
+      client.push(replyEventsOf(ready))
+      this.setWaiting(owed.length - ready.length)
       return
     }
     await this.post(journal, owed)
@@ -220,13 +227,16 @@ export class ConnectorReplyOutbox {
     for (const row of owed) {
       const { outcome, prose, answerDeliveryId, filledAt } = row.fill
       const conversation = cloudConversation(row.conversation)
-      if (outcome !== 'quiet' && conversation) {
-        // Checked just before the wire: still this account, still the kill switch's hello.
-        const { client, outbox } = this.hooks.route()
-        if (this.retired || !client || outbox !== false) {
-          this.again ||= outbox === true
-          return
-        }
+      // Checked before each post: the hello may have changed while the last one was in flight.
+      const { client, outbox, features } = this.hooks.route()
+      if (this.retired || !client || outbox !== false) {
+        this.again ||= outbox === true
+        return
+      }
+      if (!conversation || !cloudSupportsConnectorSource(conversation.source, features)) {
+        continue
+      }
+      if (outcome !== 'quiet') {
         const posted = await client.post({
           replyId: drainReplyId(row.deliveryId),
           conversation,

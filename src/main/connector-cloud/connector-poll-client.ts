@@ -5,7 +5,6 @@ import {
   CONNECTOR_CLIENT_LIMITS,
   CONNECTOR_PATHS,
   ConnectorPollResponse,
-  type ConnectorCloudFeature,
   type ConnectorReplyResponse,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
@@ -22,7 +21,6 @@ import { ConnectorDeliveryAcks } from './connector-delivery-acks'
 import { connectorHelloSaid, sayConnectorHello } from './connector-hello'
 import type { ConnectorPollClientOptions, ConnectorTransport } from './connector-machine'
 import {
-  foldConnectorReview,
   postConnectorBotMessage,
   postConnectorReply,
   type ConnectorBotPostBody,
@@ -140,9 +138,8 @@ export class ConnectorPollClient {
 
   /** Posts an agent's reply to its conversation's thread while this client runs. */
   reply(body: ConnectorReplyBody): Promise<ConnectorResult<ConnectorReplyResponse>> {
-    const review = this.features?.has('review' satisfies ConnectorCloudFeature)
-    const sent = review ? body : foldConnectorReview(body)
-    return this.posted(postConnectorReply(this.transport, sent, this.stopped.signal, this.random))
+    const { transport, stopped, random, features } = this
+    return this.posted(postConnectorReply(transport, body, stopped.signal, random, features))
   }
 
   /** Posts as a bot in one of its app's channels while this client runs. */
