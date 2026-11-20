@@ -8,6 +8,7 @@ import { journalDatabasePath } from './journal-host-database'
 import {
   journalLegacyChatRevision,
   journalLegacyChatRevisionKey,
+  journalLegacyFailureKey,
   openJournalLegacySource,
   recordJournalLegacyChatRevision,
   settleJournalLegacyCopy
@@ -24,6 +25,8 @@ import {
   readMeta,
   recordJournalLegacyFailure,
   strandedCopies,
+  holdsPendingCopy,
+  revisionHoldsHistory,
   writeMeta,
   type JournalLegacyFailure
 } from './journal-legacy-reconcile-marks'
@@ -197,40 +200,65 @@ function absorbChat(
   adoption: Adoption,
   pass: Pass
 ): void {
+  const claims = (adoption.claims.get(id) ?? []).filter(
+    (claim) =>
+      !db
+        .prepare('SELECT 1 FROM agent_session_attachment_claims WHERE upload_id=? AND session_id=?')
+        .get(claim.upload_id!, id)
+  )
+  const write = (keep: () => void) =>
+    runJournalTransaction(db, () => {
+      insertClaims(db, id, claims)
+      keep()
+    })
+  const claimsOnly = () => {
+    if (claims.length > 0) {
+      write(() => {})
+    }
+  }
   const adopt = (copy: string) => adoptChat(source, db, id, copy, adoption)
   const forced = pass.forced.get(id)
   if (forced) {
-    runJournalTransaction(db, () => keepForcedCopy(db, id, revision, forced, adopt))
+    write(() => keepForcedCopy(db, id, revision, forced, adopt))
     return
   }
   const shown = readMeta(db, journalLegacyChatRevisionKey(id))
   if (revision === shown) {
+    // Claims can change without a history revision, but a refused revision stays refused.
+    if (readMeta(db, journalLegacyFailureKey(id)) === undefined) {
+      claimsOnly()
+    }
     return
-  }
-  const claims = adoption.claims.get(id)
-  if (claims?.length) {
-    runJournalTransaction(db, () => insertClaims(db, id, claims))
   }
   const chat = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(id)
   const converted = chat?.epoch !== null && chat?.epoch !== undefined
-  // A file copied before revisions were kept has none to compare. A chat this file cataloged but
-  // hasn't converted converts from the current original, so nothing is hidden. The copy cataloged
-  // every chat with history, so one it didn't is new, unless it has none: then it may have been
-  // deleted here.
+  // A file copied before revisions were kept cataloged every chat with history; an unconverted
+  // chat still reads the current original, while a deleted empty chat stays deleted.
   if (
     shown === undefined &&
     !converted &&
     (chat !== undefined || (!pass.kept && revision === 'null'))
   ) {
+    claimsOnly()
     pass.baselines.push([id, revision])
     return
   }
   if (converted) {
-    keepContinuedChat(db, id, revision, shown, adopt, pass)
+    if (shown === undefined && revisionHoldsHistory(revision)) {
+      claimsOnly()
+      pass.compares.push([id, revision])
+      return
+    }
+    if (holdsPendingCopy(db, id)) {
+      claimsOnly()
+      pass.baselines.push([id, revision])
+      return
+    }
+    write(() => keepContinuedChat(db, id, revision, adopt))
     return
   }
   // Not converted here yet: its conversion reads the current original, so it joins as itself.
-  runJournalTransaction(db, () => {
+  write(() => {
     adoptChat(source, db, id, id, adoption)
     recordJournalLegacyChatRevision(db, id, revision)
   })

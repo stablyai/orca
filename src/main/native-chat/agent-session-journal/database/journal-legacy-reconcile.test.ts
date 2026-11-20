@@ -535,7 +535,9 @@ it('isolates rejected upload claims to their chat and keeps the failure across l
   expect(items(kept.db, 'after')).toEqual(['after-turn'])
   expect(
     kept.db
-      .prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims ORDER BY upload_id')
+      .prepare(
+        'SELECT upload_id,session_id FROM agent_session_attachment_claims ORDER BY upload_id'
+      )
       .all()
   ).toEqual([
     { upload_id: 'upload-after', session_id: 'after' },
@@ -552,6 +554,8 @@ it('isolates rejected upload claims to their chat and keeps the failure across l
   ).toMatchObject({ error: 'upload unavailable' })
   kept.db.exec('DROP TRIGGER refuse_claim')
   await kept.close()
+  olderOrcaChat(original, 'later', [rows[0], turn('later-turn', 2)])
+  original.pragma('wal_checkpoint(TRUNCATE)')
 
   const again = await upgrade(root)
   cleanup.push(again.close)
@@ -560,5 +564,34 @@ it('isolates rejected upload claims to their chat and keeps the failure across l
   ).toBeUndefined()
   expect(
     again.db.prepare('SELECT session_id FROM agent_session_records ORDER BY session_id').all()
-  ).toEqual([{ session_id: 'after' }, { session_id: 'before' }, { session_id: 'existing' }])
+  ).toEqual([
+    { session_id: 'after' },
+    { session_id: 'before' },
+    { session_id: 'existing' },
+    { session_id: 'later' }
+  ])
+})
+
+it('keeps attachment-only claims even when the original history is unchanged', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'existing', rows)
+  await (await upgrade(root)).close()
+  original
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('attached-without-history', 'existing', 100)
+  original.pragma('wal_checkpoint(TRUNCATE)')
+
+  for (let launch = 0; launch < 2; launch++) {
+    const opened = await upgrade(root)
+    try {
+      expect(
+        opened.db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
+      ).toEqual([{ upload_id: 'attached-without-history', session_id: 'existing' }])
+    } finally {
+      await opened.close()
+    }
+  }
 })
