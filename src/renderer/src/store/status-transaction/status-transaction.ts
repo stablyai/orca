@@ -1,9 +1,12 @@
-import type { HostStatusReplacement } from '../slices/runtime-status/host-status-transaction-draft'
+import type {
+  HostStatusReplacement,
+  HostStatusState
+} from '../slices/runtime-status/host-status-transaction-draft'
 
 /** One store's status write in flight; reused across that store's writes, so a write allocates none. */
 export type StatusTransaction = {
   /** The state this write's updater reads; a draft staged against any other state is not this write's. */
-  base: object | undefined
+  base: HostStatusState | undefined
   hostStatuses: readonly HostStatusReplacement[] | undefined
 }
 
@@ -23,6 +26,6 @@ export function swapOpenStatusTransaction(
 }
 
 /** The transaction whose updater is reading `state`, when a status transaction boundary owns the write. */
-export function openStatusTransactionFor(state: object): StatusTransaction | undefined {
+export function openStatusTransactionFor(state: HostStatusState): StatusTransaction | undefined {
   return open?.base === state ? open : undefined
 }

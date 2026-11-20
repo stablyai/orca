@@ -6,7 +6,9 @@ import {
 } from '../../status-transaction/status-transaction'
 
 export type HostStatusReplacement = readonly [string, RuntimeEnvironmentStatus | null]
-type HostStatusState = { runtimeStatusByEnvironmentId: Map<string, RuntimeEnvironmentStatus> }
+export type HostStatusState = {
+  runtimeStatusByEnvironmentId: Map<string, RuntimeEnvironmentStatus>
+}
 
 /**
  * Stages host status replacements for the write whose updater is reading `state`, alongside `patch`.
