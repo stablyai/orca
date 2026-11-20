@@ -48,9 +48,9 @@ async function run(): Promise<void> {
     {}
   for (const load of ['idle', 'busy'] as const) {
     if (load === 'busy') {
-      // Challenge: the page's main thread is busy 40ms of every 50, so teardown and painting run late.
+      // Challenge: the page's main thread is busy 45ms of every 50, so teardown and painting run late.
       await page.executeJavaScript(
-        `setInterval(() => { const end = performance.now() + 40; while (performance.now() < end) {} }, 50); true`
+        `setInterval(() => { const end = performance.now() + 45; while (performance.now() < end) {} }, 50); true`
       )
     }
     await runStates(load)

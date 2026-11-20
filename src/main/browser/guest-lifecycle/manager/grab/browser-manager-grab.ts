@@ -37,6 +37,26 @@ function runOverlayScript(guest: Electron.WebContents, mode: 'arm' | 'teardown')
   })
 }
 
+// Removing the overlay from the DOM is not yet a painted frame without it; on a busy page the next capture can still
+// show the old frame. Two animation frames mean a frame was produced after the removal. The cap keeps a throttled or
+// frozen page from stalling the caller.
+const PAINTED_FRAME_SCRIPT = `new Promise((resolve) => {
+  let done = false
+  const finish = () => { if (!done) { done = true; resolve(true) } }
+  requestAnimationFrame(() => requestAnimationFrame(finish))
+  setTimeout(finish, 500)
+})`
+
+function waitForPaintedFrame(guest: Electron.WebContents): Promise<void> {
+  if (guest.isDestroyed()) {
+    return Promise.resolve()
+  }
+  return guest.executeJavaScript(PAINTED_FRAME_SCRIPT).then(
+    () => {},
+    () => {}
+  )
+}
+
 // Fire-and-forget: a page that is gone or mid-navigation simply has no picker to tell.
 function sendLabelAvoidArea(
   guest: Electron.WebContents,
@@ -139,7 +159,11 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
       // Why always await a teardown, also right after cancelling a running pick: the page runs scripts in order, so
       // this settles only once the cancelled pick's own teardown has run too. Draw captures the page after this
       // resolves and must never freeze the picker's highlight into the screenshot.
-      return runOverlayScript(guest, 'teardown')
+      const tornDown = await runOverlayScript(guest, 'teardown')
+      if (tornDown) {
+        await waitForPaintedFrame(guest)
+      }
+      return tornDown
     }
     // Arm eagerly so hover feedback appears before selection starts.
     const armed = await runOverlayScript(guest, 'arm')

@@ -20,10 +20,13 @@ function heldGuest() {
   const guest = Object.assign(new EventEmitter(), {
     id: 7,
     isDestroyed: () => false,
-    executeJavaScript: () =>
-      new Promise<unknown>((resolve) => {
-        mainWorld.push(() => resolve(true))
-      }),
+    // Overlay scripts wait for the test; the painted-frame wait answers at once (proven in real Electron).
+    executeJavaScript: (script: string) =>
+      script.includes('requestAnimationFrame')
+        ? Promise.resolve(true)
+        : new Promise<unknown>((resolve) => {
+            mainWorld.push(() => resolve(true))
+          }),
     executeJavaScriptInIsolatedWorld: (_world: number, scripts: { code: string }[]) =>
       scripts[0]?.code.includes('current.await(')
         ? new Promise<boolean | null>((resolve) => isolatedReplies.push(resolve))
