@@ -56,6 +56,14 @@ export class BotAvatarSync {
       if (this.queued.size > 0) {
         this.retryLater()
       }
+      if (this.sending.size > 0) {
+        for (const bot of this.deps.bots.list()) {
+          const flying = this.sending.get(bot.id)
+          if (flying !== undefined && flying !== bot.avatar) {
+            this.changedWhileSending.add(bot.id)
+          }
+        }
+      }
       return
     }
     let waiting = false
@@ -155,7 +163,12 @@ export class BotAvatarSync {
       this.sent.set(bot.id, avatar)
       // The picture may have changed while this one was on its way: only then is the roster read again.
       if (this.changedWhileSending.delete(bot.id)) {
-        this.pass()
+        // While bots are off a pass only reads again once they are on.
+        if (this.deps.bots.enabled()) {
+          this.pass()
+        } else {
+          this.retryLater()
+        }
       }
     } else if (refused && writes === this.writes) {
       // The cloud doesn't know this bot: it is asked again less and less often, or after a write.

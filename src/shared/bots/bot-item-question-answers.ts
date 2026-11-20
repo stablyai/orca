@@ -4,6 +4,7 @@
 // to its question (that reply moves the item to In progress), so the pairing is read from the order of
 // events: the owner's comments after the ask, up to the agent's next question or the item's close.
 import {
+  botItemLineLead,
   botItemQuestionLine,
   botItemQuestionShape,
   botItemQuickReplyText,
@@ -68,8 +69,7 @@ function answeredLines(
   const named =
     picked === -1 && shape.decisions.length > 1
       ? shape.decisions.findIndex(
-          (decision, index) =>
-            open(index) && text.startsWith(`${botItemQuestionLine(decision.question)} →`)
+          (decision, index) => open(index) && text.startsWith(botItemLineLead(shape, decision))
         )
       : picked
   if (named !== -1) {

@@ -5,6 +5,7 @@ import { BotAvatarSync } from './bot-avatar-sync'
 type SyncedBot = Pick<Bot, 'id' | 'avatar' | 'slack' | 'github'>
 
 function harness(bots: Partial<SyncedBot>[]) {
+  const state = { enabled: true }
   const call = vi.fn().mockResolvedValue({ ok: true, value: undefined })
   const list: SyncedBot[] = bots.map((bot) => ({
     id: 'bot-1',
@@ -16,7 +17,7 @@ function harness(bots: Partial<SyncedBot>[]) {
   const reads = { count: 0 }
   const sync = new BotAvatarSync({
     bots: {
-      enabled: () => true,
+      enabled: () => state.enabled,
       list: () => {
         reads.count++
         return list
@@ -25,7 +26,7 @@ function harness(bots: Partial<SyncedBot>[]) {
     },
     cloud: () => ({ call })
   })
-  return { sync, call, list, reads }
+  return { sync, call, list, reads, state }
 }
 
 const SLACK = { appId: 'A1', teamId: 'T1' }
@@ -147,5 +148,26 @@ describe('BotAvatarSync', () => {
     answer({ ok: true, value: undefined })
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
     expect(call.mock.calls[1]?.[1]).toEqual({ v: 1, kind: 'mascot', id: 'A1' })
+  })
+
+  it('sends a picture chosen while bots were off and its send was in flight, once bots are on', async () => {
+    vi.useFakeTimers()
+    try {
+      const { sync, call, list, state } = harness([{ avatar: 'mascot:K2', slack: SLACK }])
+      let answer!: (value: unknown) => void
+      call.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+      sync.changed()
+      state.enabled = false
+      list[0] = { id: 'bot-1', slack: SLACK, github: null, avatar: 'mascot:A1' }
+      sync.changed()
+      answer({ ok: true, value: undefined })
+      await vi.advanceTimersByTimeAsync(0)
+      state.enabled = true
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(call).toHaveBeenCalledTimes(2)
+      expect(call.mock.calls[1]?.[1]).toEqual({ v: 1, kind: 'mascot', id: 'A1' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

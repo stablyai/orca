@@ -125,12 +125,19 @@ export function botItemQuickReplyText(
   decision: BotItemDecision,
   reply: BotItemQuickReply
 ): string {
-  return shape.decisions.length > 1 ? `${botItemLineLead(decision)} ${reply.label}` : reply.label
+  return shape.decisions.length > 1
+    ? `${botItemLineLead(shape, decision)} ${reply.label}`
+    : reply.label
 }
 
 /** What "Type your answer" puts first in the comment box to name a later line of a several-question ask. */
-export function botItemLineLead(decision: BotItemDecision): string {
-  return `${botItemQuestionLine(decision.question)} →`
+export function botItemLineLead(shape: BotItemQuestionShape, decision: BotItemDecision): string {
+  const line = botItemQuestionLine(decision.question)
+  // Questions sharing a first line are told apart by their whole text.
+  const shared = shape.decisions.some(
+    (other) => other !== decision && botItemQuestionLine(other.question) === line
+  )
+  return `${shared ? decision.question.trim().replace(/\s+/g, ' ') : line} →`
 }
 
 /** The draft without a lead a line's "Type your answer" put at its start. */

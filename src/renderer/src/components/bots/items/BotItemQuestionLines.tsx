@@ -127,8 +127,8 @@ export function BotItemQuestionLines({
                       shape.decisions.length < 2
                         ? actions.type()
                         : actions.startLine(
-                            index === firstOpen ? '' : botItemLineLead(decision),
-                            shape.decisions.map(botItemLineLead)
+                            index === firstOpen ? '' : botItemLineLead(shape, decision),
+                            shape.decisions.map((line) => botItemLineLead(shape, line))
                           )
                     }
                   >

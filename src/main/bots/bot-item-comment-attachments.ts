@@ -169,13 +169,21 @@ async function assertLocalImagesFit(
   store: NonNullable<BotItemCommentAttachmentDeps['store']>,
   paths: readonly string[]
 ): Promise<void> {
-  // Each listed path is copied, a repeated one too.
+  // Each outside path is copied, a repeated one too; a store path counts once, as admitImages does.
+  const counted = new Set<string>()
   const sizes = await Promise.all(
-    paths.map(async (path) =>
-      !isAbsolute(path) || parseAgentSessionAttachmentStorePath(store.rootDir, path)
-        ? 0
-        : ((await stat(path).catch(() => null))?.size ?? 0)
-    )
+    paths.map(async (path) => {
+      if (!isAbsolute(path)) {
+        return 0
+      }
+      if (parseAgentSessionAttachmentStorePath(store.rootDir, path)) {
+        if (counted.has(path)) {
+          return 0
+        }
+        counted.add(path)
+      }
+      return (await stat(path).catch(() => null))?.size ?? 0
+    })
   )
   const total = sizes.reduce((sum, size) => sum + size, 0)
   const over = sizes.findIndex((size) => size > AGENT_SESSION_ATTACHMENT_MAX_BYTES)

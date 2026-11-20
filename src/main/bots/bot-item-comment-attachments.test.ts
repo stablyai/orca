@@ -132,6 +132,17 @@ it("holds comments to chat's 20-image and 64 MB limits", async () => {
   )
 })
 
+it('counts a stored image with an outside one before copying the outside one in', async () => {
+  const inStore = await stored(UPLOAD_A, 'a.png', 40 * 1024 * 1024)
+  const dropped = join(dir, 'drop.png')
+  await writeFile(dropped, Buffer.alloc(30 * 1024 * 1024))
+
+  await expect(
+    admitBotItemCommentAttachments(deps({ local: true }), '', [inStore, inStore, dropped])
+  ).rejects.toThrow('These images add up to 70 MB. A comment takes up to 64 MB.')
+  expect(await readdir(store.rootDir)).toEqual([UPLOAD_A])
+})
+
 it("says which upload expired, and refuses attachments once the item's chat is gone", async () => {
   const shot = await stored(UPLOAD_A, 'shot.png')
   const expired = deps({
