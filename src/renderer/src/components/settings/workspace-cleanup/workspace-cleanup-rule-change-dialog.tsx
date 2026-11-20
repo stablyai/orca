@@ -45,7 +45,7 @@ export type WorkspaceCleanupRuleChangeRequest = {
 const EMPTY_SELECTION = new WorkspaceCleanupKeepSelection([])
 
 export function WorkspaceCleanupRuleChangeDialog({
-  request,
+  request: liveRequest,
   onCancel,
   onConfirm,
   onToggleKeep,
@@ -70,6 +70,12 @@ export function WorkspaceCleanupRuleChangeDialog({
   onCloseAutoFocus?: (event: Event) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const [shownRequest, setShownRequest] = useState(liveRequest)
+  if (liveRequest && liveRequest !== shownRequest) {
+    setShownRequest(liveRequest)
+  }
+  // Closing keeps what was reviewed on screen through the exit animation.
+  const request = liveRequest ?? shownRequest
   const status = useRef<HTMLDivElement>(null)
   const failure = useRef<HTMLParagraphElement>(null)
   const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
@@ -178,7 +184,7 @@ export function WorkspaceCleanupRuleChangeDialog({
             )
   return (
     <Dialog
-      open={request !== null}
+      open={liveRequest !== null}
       onOpenChange={(open) => {
         if (!open && !confirming) {
           onCancel()
