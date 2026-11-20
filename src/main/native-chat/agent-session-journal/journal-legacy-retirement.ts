@@ -7,7 +7,6 @@ import {
 } from './database/journal-host-database'
 import {
   legacyDestinationIdentity,
-  legacyDestinationMain,
   legacyFilePresent,
   legacyCompanionsPresent,
   removeLeftoverLegacyCompanions
@@ -17,7 +16,6 @@ import {
   type LegacySourceHeld,
   type LegacySourceRetiring
 } from './journal-legacy-retirement-state'
-import { readJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
 import {
   acquireJournalLegacyFileLock,
   createJournalLegacyFileEligibility
@@ -38,6 +36,9 @@ import {
   observeLegacySource,
   heldFor,
   laterVersion,
+  legacySourceUnchanged,
+  walkedFor,
+  type FinishedWalk,
   legacyProofWaits,
   provenOutcome,
   readRetirementState,
@@ -65,9 +66,9 @@ export class JournalLegacyRetirement {
   private readonly waits = legacyProofWaits()
   private firstAttemptAt: number | undefined
   // What the proof read this launch, so a failed attempt still reports the file's size.
-  private observed: { proof: string; walBytes: string } | undefined
+  private observed: (LegacyProofObservation & { walBytes: string }) | undefined
   // The first finished walk this launch: a retry walks only from saved progress, so counts less.
-  private finishedWalk: JournalLegacyProof['walked'] | undefined
+  private finishedWalk: FinishedWalk | undefined
   // Removing the side files a removal cut short left, after the main file was gone.
   private leftovers = false
 
@@ -116,7 +117,11 @@ export class JournalLegacyRetirement {
         await this.outcome({ outcome: 'deferred', defer: 'leftover_files' }).catch(() => {})
       } else {
         const removing = this.proof.finished && this.deletes
-        const failed = legacyProofFailureOutcome(error, this.proof.walked, removing)
+        const failed = legacyProofFailureOutcome(
+          error,
+          walkedFor(this.finishedWalk, this.observed) ?? this.proof.walked,
+          removing
+        )
         const bytes = this.observed ? sourceBytes(this.observed) : null
         await this.outcome({ ...failed, sourceBytes: bytes, activeMs: this.activeMs }).catch(
           () => {}
@@ -210,10 +215,11 @@ export class JournalLegacyRetirement {
       this.activeMs += performance.now() - started - (this.waits.waitedMs() - waited)
     }
     // Every early return below waits out the backoff: no helper or full-sync commit each minute.
-    if (!(await this.matches(observation))) {
+    if (!(await legacySourceUnchanged(this.filename, this.directory, observation))) {
       return this.later()
     }
-    const walked = (this.finishedWalk ??= this.proof.walked)
+    const walked = walkedFor(this.finishedWalk, observation) ?? this.proof.walked
+    this.finishedWalk = { proof: observation.proof, store: observation.store, walked }
     const proven: LegacySourceHeld = {
       version: 2,
       phase: 'held',
@@ -224,7 +230,7 @@ export class JournalLegacyRetirement {
       whole: walked.whole
     }
     if (!this.deletes) {
-      return this.hold(proven, observation)
+      return this.hold(proven, observation, walked.resumed)
     }
     const recycled = await this.readers.recycleSourceReaders()
     if (!recycled) {
@@ -258,7 +264,11 @@ export class JournalLegacyRetirement {
       }
       lease = await this.lock(this.filename, signal)
       // Checked again while held: from here no SQLite connection can open or write the original.
-      if (!lease.held() || !this.ownsProfile() || !(await this.matches(observation))) {
+      if (
+        !lease.held() ||
+        !this.ownsProfile() ||
+        !(await legacySourceUnchanged(this.filename, this.directory, observation))
+      ) {
         return this.later()
       }
       this.done = await lease.retire(observation.walBytes)
@@ -270,7 +280,7 @@ export class JournalLegacyRetirement {
         proven,
         observation,
         this.activeMs,
-        this.proof.walked.resumed
+        walked.resumed
       )
     } finally {
       try {
@@ -289,7 +299,8 @@ export class JournalLegacyRetirement {
   /** The proof finished and this build keeps the file: saved, so later launches don't walk again. */
   private async hold(
     proven: LegacySourceHeld,
-    observation: LegacyProofObservation & { walBytes: string }
+    observation: LegacyProofObservation & { walBytes: string },
+    resumed: boolean
   ): Promise<void> {
     if (
       (await this.writer.maintain({
@@ -302,9 +313,7 @@ export class JournalLegacyRetirement {
       return this.later()
     }
     this.done = true
-    await this.outcome(
-      provenOutcome('proof_complete', proven, observation, this.activeMs, this.proof.walked.resumed)
-    )
+    await this.outcome(provenOutcome('proof_complete', proven, observation, this.activeMs, resumed))
   }
 
   private outcome(fields: Partial<LegacyJournalRetirementOutcome>): Promise<void> {
@@ -318,13 +327,5 @@ export class JournalLegacyRetirement {
     this.proof.forgetFinished()
     this.retryAt = performance.now() + this.retryDelay
     this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
-  }
-
-  private async matches(observation: LegacyProofObservation): Promise<boolean> {
-    const domain = journalDomainDatabasePath(this.directory)
-    return (
-      JSON.stringify(await readJournalLegacySourceReceipt(this.filename)) === observation.proof &&
-      (await legacyDestinationMain(domain)) === observation.store
-    )
   }
 }

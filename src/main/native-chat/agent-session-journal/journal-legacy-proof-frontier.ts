@@ -51,7 +51,8 @@ export function createLegacyProofFrontier(
           copies: 0
         },
     resumed,
-    whole: !resumed || carried?.counts !== undefined,
+    // Resumed in the copies, a quit partway through a page lost the copies it converted.
+    whole: !resumed || (carried?.counts !== undefined && cursor.table < LEGACY_PROOF_COPIES_TABLE),
     copiesOnly: cursor.table >= LEGACY_PROOF_COPIES_TABLE && carried?.counts === undefined,
     unconverted: new Set()
   }

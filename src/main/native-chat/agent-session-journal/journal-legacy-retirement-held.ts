@@ -10,7 +10,7 @@ import {
   isValidAppVersion
 } from '../../../shared/app-lifecycle/identity/app-version'
 import { LEGACY_PROOF_LAYOUT, type LegacySourceHeld } from './journal-legacy-retirement-state'
-import type { LegacyProofObservation } from './journal-legacy-proof'
+import type { JournalLegacyProof, LegacyProofObservation } from './journal-legacy-proof'
 import type { LegacyJournalRetirementOutcome } from './journal-legacy-retirement-outcome'
 import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 import type { JournalSqlOwner } from './journal-sql-owner'
@@ -209,4 +209,27 @@ export async function observeLegacySource(
     store: await legacyDestinationMain(journalDomainDatabasePath(directory)),
     walBytes: current.wal.kind === 'empty' ? '0' : current.wal.size
   }
+}
+
+/** The original and the store are still the ones the proof read. */
+export async function legacySourceUnchanged(
+  filename: string,
+  directory: string,
+  observation: LegacyProofObservation
+): Promise<boolean> {
+  return (
+    JSON.stringify(await readJournalLegacySourceReceipt(filename)) === observation.proof &&
+    (await legacyDestinationMain(journalDomainDatabasePath(directory))) === observation.store
+  )
+}
+
+export type FinishedWalk = LegacyProofObservation & { walked: JournalLegacyProof['walked'] }
+
+/** The walk that finished for this original into this store, if one did. */
+export function walkedFor(
+  finished: FinishedWalk | undefined,
+  observation: LegacyProofObservation | undefined
+): JournalLegacyProof['walked'] | undefined {
+  const same = finished?.proof === observation?.proof && finished?.store === observation?.store
+  return same ? finished?.walked : undefined
 }
