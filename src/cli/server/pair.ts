@@ -63,11 +63,19 @@ export const PAIR_HANDLERS: Record<string, CommandHandler> = {
         '--grant-desktop-control applies only to an access link, not --mobile'
       )
     }
+    const grantCredentialVault = flags.get('grant-credential-vault') === true
+    if (grantCredentialVault && mobile) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--grant-credential-vault applies only to an access link, not --mobile'
+      )
+    }
     const params: PairingCreateOfferParams = {
       scope: mobile ? 'mobile' : 'runtime',
       address: getOptionalStringFlag(flags, 'address'),
       relay: flags.get('relay') === true,
       grantDesktopControl: flags.get('grant-desktop-control') === true,
+      ...(grantCredentialVault ? { grantCredentialVault: true } : {}),
       rotate: flags.get('rotate') === true,
       ...(await callerTerminal(client))
     }

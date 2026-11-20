@@ -34,6 +34,7 @@ import {
 } from './settings-git-task-section-renderers'
 import {
   renderBrowserSettingsSection,
+  renderCredentialVaultSettingsSection,
   renderFloatingWorkspaceSettingsSection,
   renderMobileEmulatorSettingsSection,
   renderQuickCommandsSettingsSection,
@@ -190,6 +191,7 @@ export function renderSettingsPage(
                   {renderTerminalSettingsSection(context, t)}
                   {renderQuickCommandsSettingsSection(context, t)}
                   {renderBrowserSettingsSection(context, t)}
+                  {renderCredentialVaultSettingsSection(context, t)}
                   {renderMobileEmulatorSettingsSection(context, t)}
                   {renderFloatingWorkspaceSettingsSection(context, t)}
                   {renderAppearanceSettingsSection(context, t)}

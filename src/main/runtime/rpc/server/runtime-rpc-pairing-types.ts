@@ -32,6 +32,7 @@ export function formatWsEndpoint(host: string, port: number): string {
 export type OrcaRuntimeRpcServerOptions = {
   runtime: OrcaRuntimeService
   userDataPath: string
+  credentialVaultDirectory?: string
   pid?: number
   platform?: NodeJS.Platform
   enableWebSocket?: boolean

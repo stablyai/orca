@@ -7,7 +7,8 @@ import {
   type BotToolServer
 } from '../../shared/bot-tools'
 import { readBotToolsSnapshot } from './bot-tools-file'
-import { botToolCredentialHeaderNames } from './bot-tool-credentials'
+import { readBotToolCredential } from './bot-tool-credentials'
+import { isBotVaultSource } from './bot-tool-vault-source'
 
 export async function readBotToolDetails(folder: string, name: string): Promise<BotToolDetails> {
   const { servers, version } = await readBotToolsSnapshot(folder)
@@ -17,6 +18,8 @@ export async function readBotToolDetails(folder: string, name: string): Promise<
   }
   const masked = (values: Record<string, string> | undefined) =>
     Object.keys(values ?? {}).map((key) => ({ key, configured: true }))
+  const credential =
+    'url' in server && server.credential ? readBotToolCredential(folder, server.credential) : null
   return {
     version,
     server:
@@ -25,12 +28,9 @@ export async function readBotToolDetails(folder: string, name: string): Promise<
             name: server.name,
             url: server.url,
             transport: 'http',
-            headers: server.credential
-              ? botToolCredentialHeaderNames(folder, server.credential).map((key) => ({
-                  key,
-                  configured: true
-                }))
-              : masked(server.headers)
+            ...(isBotVaultSource(credential?.source) ? { vaultBacked: true as const } : {}),
+            ...(!server.credential ? { vaultLinkAllowed: true as const } : {}),
+            headers: masked(server.credential ? credential?.headers : server.headers)
           }
         : { name: server.name, command: server.command, args: server.args, env: masked(server.env) }
   }

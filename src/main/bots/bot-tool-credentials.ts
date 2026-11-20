@@ -9,6 +9,7 @@ import { z } from 'zod'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type { BotToolServer } from '../../shared/bot-tools'
 import { announceBotToolCredentialsEnded } from './bot-tool-credential-ended'
+import { isBotVaultSource } from './bot-tool-vault-source'
 import {
   CredentialsFile,
   type Entry,
@@ -228,7 +229,10 @@ export function changeBotToolCredentials(
     return []
   }
   refuseUnsealedSecrets(
-    [...added.values()].some((credential) => Object.keys(credential.headers).length > 0)
+    [...added.values()].some(
+      (credential) =>
+        isBotVaultSource(credential.source) || Object.keys(credential.headers).length > 0
+    )
   )
   const path = botToolCredentialsPath(folder)
   const text = readFileText(path)

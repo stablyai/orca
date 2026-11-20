@@ -1,4 +1,6 @@
 import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
+import { getOrcaProfileDirectory } from '../../orca-profiles/profile-storage-paths'
+import { orcadServedProfileId } from '../orcad-served-profile'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { OrcadOptions } from '../serve-startup/orcad-start-contract'
 import { resolveOrcadWebClientRoot } from '../serve-startup/orcad-command-arguments'
@@ -14,9 +16,13 @@ export function createOrcadRuntimeRpcServer(
   bindHost: string
 ): OrcaRuntimeRpcServer {
   clearDesktopRuntimeFallbackPort(userDataPath)
+  const profileId = orcadServedProfileId()
   return new OrcaRuntimeRpcServer({
     runtime,
     userDataPath,
+    credentialVaultDirectory: profileId
+      ? getOrcaProfileDirectory(profileId, userDataPath)
+      : undefined,
     enableWebSocket: true,
     // Pin operator exposure across restarts; pairing must not silently widen a loopback bind.
     pinnedBindHost: bindHost,

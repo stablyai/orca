@@ -1,4 +1,10 @@
 import { BrowserPane } from '../browser/BrowserPane'
+import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
+import { CredentialVaultPane } from '../credential-vault/CredentialVaultPane'
+import {
+  CREDENTIAL_VAULT_SECTION,
+  getCredentialVaultSearchEntry
+} from '../credential-vault/credential-vault-settings-search'
 import { FloatingWorkspacePane } from '../floating-workspaces/FloatingWorkspacePane'
 import { MobileEmulatorSettingsPane } from '../mobile/emulator/MobileEmulatorSettingsPane'
 import { QuickCommandsPane } from '../quick-commands/QuickCommandsPane'
@@ -94,6 +100,48 @@ export function renderBrowserSettingsSection(
       ) : null}
     </SettingsSection>
   ) : null
+}
+
+export function renderCredentialVaultSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element | null {
+  const { model, navigation, view } = context
+  if (!model.showDesktopOnlySettings) {
+    return null
+  }
+  const { title, description } = getCredentialVaultSearchEntry(t)
+  const { target, available } = model.settingsHostScope
+  const environment =
+    target.kind === 'environment'
+      ? model.runtimeEnvironments.find((entry) => entry.id === target.environmentId)
+      : undefined
+  const server = environment
+    ? {
+        environmentId: environment.id,
+        pairingRevision: environment.pairingRevision ?? environment.createdAt,
+        name: environment.name
+      }
+    : undefined
+  return (
+    <SettingsSection
+      id={CREDENTIAL_VAULT_SECTION}
+      title={title}
+      description={description}
+      searchEntries={navigation.getSectionSearchEntries(CREDENTIAL_VAULT_SECTION)}
+    >
+      {!view.isSectionMounted(CREDENTIAL_VAULT_SECTION) ? null : target.kind === 'local' ? (
+        <CredentialVaultPane key="local" />
+      ) : available && server ? (
+        <CredentialVaultPane
+          key={`${server.environmentId}:${server.pairingRevision}`}
+          server={server}
+        />
+      ) : (
+        <SettingsHostScopeUnavailableNotice />
+      )}
+    </SettingsSection>
+  )
 }
 
 export function renderMobileEmulatorSettingsSection(

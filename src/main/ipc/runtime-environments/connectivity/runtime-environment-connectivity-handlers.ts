@@ -4,6 +4,7 @@ import {
 } from '../requests/runtime-environment-call-failure'
 import { desktopChatCreationHistory } from '../../../runtime/client/navigation/desktop-chat-creation-history'
 import { ipcMain } from 'electron'
+import { resolveRendererRuntimeCallEnvironment } from '../requests/runtime-environment-renderer-call-scope'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
@@ -252,7 +253,7 @@ function registerPassiveCallHandler(
         expectedEnvironmentRuntimeId?: string
       }
     ): Promise<RuntimeRpcResponse<unknown>> => {
-      const environment = await resolveEnvironment(getUserDataPath(), args.selector)
+      const environment = await resolveRendererRuntimeCallEnvironment(getUserDataPath(), args)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
       }

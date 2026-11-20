@@ -9,6 +9,7 @@ export const PairingCreateOfferParamsSchema = z
     address: z.string().min(1).max(512).optional(),
     relay: z.boolean().optional(),
     grantDesktopControl: z.boolean().optional(),
+    grantCredentialVault: z.boolean().optional(),
     rotate: z.boolean().optional(),
     /** The terminal `orca pair` ran in; one a paired client opened tags the offer with that client. */
     callerTerminalHandle: z.string().min(1).max(256).optional()
@@ -19,6 +20,9 @@ export const PairingCreateOfferParamsSchema = z
   })
   .refine((params) => params.scope === 'runtime' || params.grantDesktopControl !== true, {
     message: 'desktop control can be granted only to a runtime client'
+  })
+  .refine((params) => params.scope === 'runtime' || params.grantCredentialVault !== true, {
+    message: 'credential vault access can be granted only to a runtime client'
   })
 
 export type PairingCreateOfferParams = z.infer<typeof PairingCreateOfferParamsSchema>

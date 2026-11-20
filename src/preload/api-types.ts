@@ -51,6 +51,7 @@ import type {
 import type { PetApi } from './api/pets/pet-api'
 import type { AppIconApi } from './api/window-ui/app-icon-api'
 import type { BrowserPasswordsApi } from './api/browser/browser-passwords-api'
+import type { CredentialVaultApi } from '../shared/secure-storage/credential-vault'
 import type { PluginsApi } from './api/plugins/plugin-host-api'
 import type { PreflightApi } from './api/preflight/preflight-api'
 import type { BackgroundWorkerApi } from './api/diagnostics/background-worker-api'
@@ -155,6 +156,7 @@ export type PreloadApi = {
   appIcon: AppIconApi
   browser: BrowserApi
   browserPasswords: BrowserPasswordsApi
+  credentialVault: CredentialVaultApi
   emulator: EmulatorApi
   hooks: HooksApi
   ephemeralVm: EphemeralVmApi

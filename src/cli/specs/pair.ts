@@ -7,13 +7,14 @@ export const PAIR_COMMAND_SPECS: CommandSpec[] = [
     summary:
       'Pair a phone or another Orca with the Orca already running here, without restarting it',
     usage:
-      'orca pair [--mobile [--relay]] [--address <host>] [--grant-desktop-control] [--rotate] [--json]',
+      'orca pair [--mobile [--relay]] [--address <host>] [--grant-desktop-control] [--grant-credential-vault] [--rotate] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'mobile',
       'relay',
       'address',
       'grant-desktop-control',
+      'grant-credential-vault',
       'rotate'
     ],
     notes: [
@@ -24,6 +25,7 @@ export const PAIR_COMMAND_SPECS: CommandSpec[] = [
       'Mobile pairing is LAN-only (same network or tailnet) unless --relay is given; Relay needs this host’s Orca signed in (`orca auth login`).',
       'An unused offer is reused until --rotate replaces it. After Orca restarts it can’t be printed again, so a new one is made and the earlier link keeps working until --rotate. Clients that already paired keep their access.',
       "--grant-desktop-control lets Orca drive this machine's desktop (orca computer) for the paired Orca. Off, Orca won't do it for the client; anything with a terminal here can. It applies only to an access link, not to a phone.",
+      '--grant-credential-vault gives the holder of that access link full access to the server’s saved passwords and keys. Only issue it to devices you trust.',
       'Paired clients and phones can’t create offers through Orca, but anything with a terminal here can. Revoking a paired client also revokes links made from terminals it opened.'
     ],
     examples: [

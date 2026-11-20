@@ -114,9 +114,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
           deviceToken: socket.device.clientId,
           clientCapabilities: () => socket.clientCapabilities,
           reply,
-          sendBinary: (bytes) => {
-            sendBinary(bytes)
-          }
+          sendBinary: (bytes) => void sendBinary(bytes)
         },
         target.environmentId,
         request,
@@ -268,6 +266,8 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         // Diet only mobile payloads; retain full web/desktop replies.
         clientKind: device.scope,
         callerScope,
+        credentialVault:
+          authenticatedSocket && !device.ephemeral ? this.credentialVault : undefined,
         clientCapabilities: authenticatedSocket?.clientCapabilities,
         capabilitySource: authenticatedSocket?.capabilitySource,
         updateClientCapabilities:

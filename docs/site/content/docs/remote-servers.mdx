@@ -110,6 +110,26 @@ That means:
 - reconnecting the client or reopening Orca returns you to the server-owned workspace, tab, and visible-pane state without duplicating paired tabs;
 - projects you delete on the server disappear from every paired client's sidebar (no permanent ghost rows).
 
+## Save credentials in a server vault
+
+Update both Orca installations. On the server, run this from a trusted shell to create a pairing link with vault access:
+
+```bash
+orca pair --grant-credential-vault
+# Linux
+orca-ide pair --grant-credential-vault
+```
+
+Add that access link in **Settings → Remote Orca Servers** on the desktop client. A new link for an already saved server refreshes its pairing. Then open **Settings → Vault** and select that server from the **Host** picker. New entries are saved on that server; they are not copied to the local vault. Other trusted desktop clients can access the same vault after pairing with a link that grants vault access. A normal pairing link does not grant it.
+
+Only share vault-enabled links with trusted devices. The entries live under the server’s active profile at `server-credential-vault/entries.enc`, encrypted using the server’s credential store. On a headless server, this protects the entries file on its own, not against someone who controls the server account or can read both the vault and its encryption key.
+
+### Let a Bot use a vault key
+
+On a Bot that runs on that server, open **Tools**, edit an existing HTTPS tool, and choose **Use server vault**. Pick an API key or token from that server and choose `Authorization: Bearer` or `X-API-Key`. If the tool already uses manually saved credentials or OAuth, remove those first. Only link keys to HTTPS tools you trust.
+
+The server sends the key to the tool’s saved URL; it does not pass the key to the Bot or inject it into a terminal or browser. Editing a vault value rotates it for the next request. To stop access, unlink the credential in **Tools** or delete its vault entry.
+
 ## Access and security
 
 Orca creates a separate, revocable token for each paired client. The server lists these under **Shared Server Access**.
