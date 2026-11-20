@@ -191,8 +191,15 @@ export function reserveGroupMailTurn(
   ) {
     throw new Error('This mail is outside the active group request; it was not delivered.')
   }
-  const id = `mail:${input.operationId}`
-  if (groups.store.message(id)) {
+  // One room line per mail and member, whatever id carries it: the lane mints a new id when an
+  // attempt is refused, withdrawn or too old to reuse, and the line follows to the attempt that runs.
+  const id = `mail:${member.sessionId}:${notice.messages.map(({ messageId }) => messageId).join(',')}`
+  const reserved = groups.store.message(id)
+  if (reserved) {
+    if (!reserved.turns.some((turn) => turn.operationId === input.operationId)) {
+      groups.store.retarget(id, input.operationId)
+      groups.changed()
+    }
     return
   }
   const bot = groups.runtime.bots.list().find((bot) => bot.id === member.botId)
