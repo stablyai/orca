@@ -247,4 +247,11 @@ describe('a coordinator chat continued by /clear', () => {
     expect(idleEdge(SUCCESSOR)).toEqual([CHAT_ADDRESS])
     expect(db.getMessageById(direct.id)).toMatchObject({ to_handle: CHAT_ADDRESS, read: 0 })
   })
+
+  it('redrives direct mail addressed to the live successor, as item mail is', () => {
+    installLineage(MIDDLE, SUCCESSOR)
+    const address = formatOrcaSessionAddress(SUCCESSOR)
+    db.insertMessage({ from: 'orca_bot_items', to: address, subject: 'item', type: 'status' })
+    expect(idleEdge(SUCCESSOR)).toEqual([address])
+  })
 })

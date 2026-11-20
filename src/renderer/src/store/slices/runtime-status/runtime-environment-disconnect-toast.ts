@@ -55,7 +55,7 @@ export function showRuntimeDisconnectedToast(
           retrying = true
           showToast(Number.POSITIVE_INFINITY)
           void getState()
-            .refreshRuntimeEnvironmentStatus(environmentId)
+            .refreshRuntimeEnvironmentStatus(environmentId, undefined, { force: true })
             .then((reachable) => {
               const stillSaved = getState().runtimeEnvironments.some(
                 (entry) => entry.id === environmentId

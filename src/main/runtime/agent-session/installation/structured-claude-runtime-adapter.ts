@@ -29,12 +29,15 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   resolveClaudeInheritedEnv?: () => Promise<Record<string, string>>
   /** Asks Claude for a chat's `/` menu while it isn't running; absent reads the folders. */
   atRestCommandProbe?: ClaudeCommandCatalogProbe
+  /** The resting chat's discovery flags, so the probe lists what its launch would load. */
+  atRestDiscovery?: ClaudeAtRestCommandsDeps['discovery']
   /** Which version-gated flags a Claude CLI takes; absent never passes one. */
   claudeCliFlags?: ClaudeCliFlagSupport
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
   onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
+  onUserRenamed?: ClaudeStructuredSessionAdapterDeps['onUserRenamed']
   onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
   logger?: ClaudeStructuredSessionAdapterDeps['logger']
 }
@@ -89,7 +92,8 @@ export function createStructuredClaudeRuntimeAdapter(
     atRestCommands: new ClaudeAtRestCommandCatalog({
       resolveWorkspacePath: deps.resolveWorkspacePath,
       ...(deps.resolveAccountHome ? { resolveAccountHome: deps.resolveAccountHome } : {}),
-      ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {})
+      ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {}),
+      ...(deps.atRestDiscovery ? { discovery: deps.atRestDiscovery } : {})
     }),
     resolveLaunch: deps.resolveLaunch,
     ...(deps.namingInputs
@@ -133,6 +137,7 @@ export function createStructuredClaudeRuntimeAdapter(
       }
     },
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
+    ...(deps.onUserRenamed ? { onUserRenamed: deps.onUserRenamed } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.logger ? { logger: deps.logger } : {}),
     ...openClaudeConnectionOf(deps),
@@ -161,7 +166,8 @@ export function openClaudeConnectionOf(
               {
                 command: launch.pathToClaudeCodeExecutable,
                 prefixArgs: launch.prefixArgs,
-                cwd: launch.cwd
+                cwd: launch.cwd,
+                env: launch.env ?? {}
               },
               args[0]
             )

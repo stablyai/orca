@@ -229,15 +229,25 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
 
   // Card represents page’s actual block; only host dialogClosed proves answer applied, not button press.
   const sendDialogCommand = useCallback(
-    async (method: 'browser.dialogAccept' | 'browser.dialogDismiss') => {
-      const command = method === 'browser.dialogAccept' ? browserDialogAccept : browserDialogDismiss
+    async (method: 'browser.dialogAccept' | 'browser.dialogDismiss', promptText?: string) => {
       // Token binds answer to current dialog and disables duplicate taps; stale replies cannot mutate next card.
       const token = (dialogAnswerTokenRef.current += 1)
       setDialog((current) =>
         current === null ? null : { ...current, error: undefined, pending: token }
       )
       const result = await sendBrowserRequest(
-        async (rpc, page, options) => command.interpret(await command.request(rpc, page, options)),
+        async (rpc, page, options) =>
+          method === 'browser.dialogAccept'
+            ? browserDialogAccept.interpret(
+                await browserDialogAccept.request(
+                  rpc,
+                  promptText === undefined ? page : { ...page, text: promptText },
+                  options
+                )
+              )
+            : browserDialogDismiss.interpret(
+                await browserDialogDismiss.request(rpc, page, options)
+              ),
         { suppressError: true, timeoutMs: 5_000 }
       )
       const error = translate(

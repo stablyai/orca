@@ -28,6 +28,7 @@ export function WorkspaceTabDragLayer({
     <TabDragProvider
       isTabDragActive={dragSplit.activeDrag !== null}
       isTabDragActiveRef={dragSplit.isTabDragActiveRef}
+      activeDragVisibleTabId={dragSplit.activeDrag?.visibleTabId ?? null}
     >
       <DndContext
         sensors={dragSplit.sensors}

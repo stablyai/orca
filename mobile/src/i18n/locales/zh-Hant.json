@@ -18,6 +18,10 @@
       "title": "帳戶",
       "useReset": "使用重設額度",
       "weeklyWindow": "7 天"
+    },
+    "claude": {
+      "usageSignInLabel": "重新登入",
+      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。"
     }
   },
   "agentHistory": {
@@ -53,7 +57,8 @@
       "currentWorktree": "目前工作樹",
       "messages_one": "{{count}} 則訊息",
       "messages_other": "{{count}} 則訊息",
-      "resumeSession": "恢復代理程式工作階段"
+      "resumeSession": "恢復代理程式工作階段",
+      "continueInCli": "在 CLI 中繼續"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "無法連上主機",
@@ -161,11 +166,13 @@
       "invalidUrl": "請輸入有效的網址。"
     },
     "paneView": {
-      "dialogTitle": "瀏覽器對話方塊",
       "forward": "前進",
       "keyboardPlaceholder": "在網頁上輸入…",
       "reload": "重新載入",
-      "sendText": "傳送文字至瀏覽器"
+      "sendText": "傳送文字至瀏覽器",
+      "dialogTitleWithOrigin": "{{origin}} 顯示",
+      "dialogTitleNoOrigin": "此網頁顯示",
+      "dialogAnswer": "回答"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 點擊修飾鍵"
@@ -178,6 +185,20 @@
     "viewModeSwitch": {
       "mobileView": "顯示行動版網站",
       "webView": "顯示桌面版網站"
+    },
+    "loadFailure": {
+      "retry": "重試",
+      "connectionNotSecure": "連線不安全",
+      "certificateNameMismatch": "憑證與 {{value0}} 不相符。",
+      "certificateDateInvalid": "{{value0}} 的憑證在目前日期和時間無效。",
+      "certificateAuthorityInvalid": "Orca 不信任簽發 {{value0}} 憑證的機構。",
+      "certificateVerificationFailed": "Orca 無法驗證 {{value0}} 的憑證。",
+      "proceedUnsafe": "仍然繼續（不安全）",
+      "connecting": "正在連線…",
+      "certificateChallengeExpired": "此憑證的核准已過期。請重試此頁面以重新要求核准。",
+      "certificateChallengeChanged": "憑證要求已變更。請重試該頁面並檢視新的警告。",
+      "certificateProceedFailed": "Orca 無法核准此憑證要求。請重試該頁面後再試。",
+      "certificateChallengeUnavailable": "此憑證要求已無法使用。請重試該頁面以提出新的要求。"
     }
   },
   "chat": {
@@ -211,7 +232,8 @@
     "contextUsage": {
       "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
       "title": "上下文",
-      "estimated": "根據上一次回應的估算值。"
+      "estimated": "根據上一次回應的估算值。",
+      "deferredNote": "按需載入，不計入已用總量。"
     },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",
@@ -594,10 +616,6 @@
       "imageTooLarge": "圖片太大，無法附加",
       "permissionDenied": "照片存取權限遭拒"
     },
-    "agentMessage": {
-      "handedOffToAgent": "已交接給代理程式",
-      "startedAgent": "已啟動代理程式"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "無法讀取附件回應。請重試。",
       "incompleteReply": "附件已變更或回應不完整。請關閉後重試。",
@@ -645,7 +663,7 @@
       "confirm": "回溯",
       "unsupported": "此聊天無法返回到更早的訊息。",
       "historyNotPaginated": "此舊版 Codex 聊天無法返回到更早的訊息。請開始新聊天以使用「回溯到此處」。",
-      "busy": "當代理程式閒置且此聊天中沒有等待您處理的內容時可用。",
+      "busy": "聊天閒置時可用",
       "staleEpoch": "對話已發生變化。請檢視最新訊息後重試。",
       "invalidTarget": "對話無法返回到此訊息。未做任何更改。",
       "historyLimit": "此對話過長，無法回溯。未做任何更改。",
@@ -919,11 +937,11 @@
       "dismissDrawer": "關閉抽屜面板"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "鉤子",
       "label": "設定指令碼",
-      "run": "執行",
-      "runSetupCommand": "執行設定命令",
-      "skip": "跳過"
+      "runSetup": "執行設定",
+      "skip": "跳過",
+      "startAgentAfterSetup": "設定完成後再啟動代理程式",
+      "waitForSetupSaveFailed": "儲存設定啟動行為失敗"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "連線",
@@ -1127,6 +1145,9 @@
       "composer": {
         "planMode": "計畫",
         "exitPlanMode": "結束計畫模式"
+      },
+      "goal": {
+        "sentAsGoal": "作為目標傳送"
       }
     }
   },
@@ -1578,10 +1599,8 @@
   "host": {
     "edit": {
       "address": "位址",
-      "addressHint": "可輸入 IP、host:port 或 ws:// / wss://。wss:// URL 未指定連接埠時會使用 443。僅輸入位址時，會保留目前的連接埠（或使用 6768）。",
       "connectionPreview": "將連線至 {{endpoint}}",
       "goBack": "返回",
-      "help": "變更顯示名稱或連線位址。名稱留空時，會使用電腦回報的名稱。變更位址只會切換這支手機的連線位址，不會重新配對。適用於透過不同 IP 連線至同一台電腦的情況（例如家用區域網路或 Tailscale）。",
       "hostNamePlaceholder": "主機名稱",
       "hostRemoved": "此主機已從這支手機移除。",
       "loadFailed": "無法載入主機資料。",
@@ -2187,6 +2206,7 @@
       "providerUnavailable": "{{agent}} 因服務忙碌而無法回覆。請選擇其他模型，或稍候片刻後重新傳送。",
       "providerSafetyStopped": "{{agent}} 在安全檢查後停止了此次回覆。請檢查您的請求後重新傳送。",
       "providerResponseFailed": "{{agent}} 未能完成此回覆。開啟詳細資料以取得更多資訊。",
+      "providerResponseFailedQuoted": "{{agent}} 未能完成此回覆：{{detail}}。",
       "selectedModel": "所選模型",
       "providerRejected": "{{agent}} 未接受此訊息。",
       "providerRejectedQuoted": "{{agent}} 未接受此訊息：{{detail}}。",
@@ -2448,6 +2468,11 @@
       "sendReviewNotes": "傳送審查備註",
       "shortcut": "快速鍵",
       "terminal": "終端機",
+      "terminalWithShell": "終端機: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "命令提示字元",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "終端機名稱",
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
       "urlPrompt": "請輸入網址，或留空以開啟新分頁。",
@@ -2635,7 +2660,7 @@
       "disconnected": "貼上失敗（連線已中斷）",
       "imageTooLarge": "圖片太大，無法貼上",
       "pasteFailed": "貼上失敗",
-      "pasteTooLarge": "貼上內容太大（上限為 256 KiB）",
+      "pasteTooLarge": "貼上內容過大。",
       "terminalChanged": "已取消貼上（終端機已變更）"
     },
     "worktreeLabel": {
@@ -2765,6 +2790,12 @@
     "structuredOpen": {
       "worktreeDeleted": "工作樹已刪除。",
       "folderWorkspaceRemoved": "資料夾工作區已移除。"
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "找不到該訊息。"
+    },
+    "browserProfile": {
+      "default": "預設"
     }
   },
   "settings": {
@@ -3376,15 +3407,7 @@
       "confirmGitHubRebase": "要將 PR #{{number}} 變基後合併嗎？",
       "confirmGitLabMerge": "要合併合併請求 #{{number}} 嗎？",
       "confirmGitLabSquash": "要將合併請求 #{{number}} 的提交壓縮後合併嗎？",
-      "confirmGitLabRebase": "要將合併請求 #{{number}} 變基後合併嗎？",
-      "merged": "已合併",
-      "closed": "已關閉",
-      "conflicts": "有衝突",
-      "behind": "落後",
-      "blocked": "已封鎖",
-      "checksPending": "等待檢查",
-      "ableToMerge": "可以合併",
-      "unknown": "未知"
+      "confirmGitLabRebase": "要將合併請求 #{{number}} 變基後合併嗎？"
     },
     "pagination": {
       "pageUnreachable": "第 {{page}} 頁超出 GitHub 搜尋可傳回的範圍。",
@@ -3789,7 +3812,6 @@
       "title": "任務"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL，例如 project = ABC AND statusCategory != Done",
       "projectPlaceholder": "在專案檢視中搜尋…",
       "providerPlaceholder": "搜尋 {{provider}} 任務…"
     },
@@ -4231,7 +4253,134 @@
             }
           }
         }
+      },
+      "TaskPage": {
+        "99c2755218": "搜尋議題或輸入 JQL，例如 project = ABC",
+        "jiraTextMatchesNotice": "正在顯示文字比對結果。Jira 無法將此搜尋作為 JQL 執行。"
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "已取消"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "已合併",
+              "4f976d3450": "已關閉",
+              "1f8eb81c0e": "需要核准",
+              "c606463dc2": "要求變更",
+              "7e8bbe3cd7": "衝突",
+              "b169f943e1": "準備好後合併",
+              "autoMergeOn": "自動合併已開啟",
+              "039c072f94": "落後",
+              "bf5e4c6c92": "已阻塞",
+              "87fa36ac83": "檢查失敗",
+              "4e2507176b": "檢查待處理",
+              "def355ff38": "可以合併",
+              "f958920f3a": "檢查中"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "已合併",
+                  "88d044c42f": "已關閉",
+                  "96b05e374c": "衝突",
+                  "5105b0e584": "需要核准",
+                  "893a999c8c": "要求變更",
+                  "01ab632a21": "未解決的討論串",
+                  "bf628700f6": "檢查必須通過",
+                  "65c847ad1e": "檢查待處理",
+                  "382c70faeb": "落後",
+                  "195917574e": "檢查中",
+                  "4ecc0d90ee": "已阻塞",
+                  "49ac4fec10": "檢查失敗",
+                  "04a3015a12": "可以合併"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira 無法執行此 JQL 查詢。請檢查語法後再試一次。"
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "沒有來自 {{server}} 的用量資料",
+            "remoteOwnerNotConfigured": "{{server}} 上尚未設定",
+            "claudeUnknownOnHost": "無法從 {{server}} 取得 Claude 用量。可能尚未在該主機登入，或使用 API 金鑰計費。",
+            "remoteOwnerSignInSavedHere": "登入資訊僅儲存在這台電腦上。",
+            "f8b8dbed85": "用量不可用",
+            "e2c6a4f917": "執行 Grok 以重新整理",
+            "f90b3d7a16": "執行 Kimi 以重新整理",
+            "0d8d7cfe15": "等待 Claude 工作階段",
+            "claude": {
+              "waiting": {
+                "label": "執行 Claude 時更新",
+                "message": "Claude 用量將在下次執行 Claude 時更新。"
+              }
+            },
+            "1804cd8c3f": "正在重新整理登入",
+            "bf2e739f18": "登入不可用",
+            "f8f0f9d8cc": "網路問題",
+            "minimax": {
+              "expired": {
+                "label": "登入已過期",
+                "apiKey": "MiniMax API 金鑰已過期。在設定中替換它。",
+                "cookie": "MiniMax 工作階段 cookie 已過期。在設定中替換它。"
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "登入已過期",
+                "message": "請在執行 Orca 的電腦上的終端機中執行 cursor-agent login，然後重新整理用量。"
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "無訂閱"
+              }
+            },
+            "7ad719c4bf": "受限",
+            "e740f92596": "重新整理失敗",
+            "2c35eca8d4": "無法取得用量",
+            "d1b7f509ac": "在執行 Orca 的電腦上的終端機中執行 grok，並等待其啟動。如有提示，請完成登入，然後重試用量檢查。您無需傳送聊天訊息。",
+            "a37e8c15d4": "在執行 Orca 的電腦上的終端機中執行 kimi，等待其啟動，然後重試用量檢查。",
+            "3d3c9c0c1f": "正在執行的 Claude 終端機輪替憑證後，Claude 用量會重新整理。",
+            "42fdd4da1d": "正在重新整理 Claude 登入。代理程式工作階段可能仍處於登入狀態。",
+            "c06c1d215d": "由於網路請求失敗，無法重新整理 Claude 用量。",
+            "cabdc2a9e0": "無法讀取 Claude 登入憑證。",
+            "a7517cccb6": "Claude 用量目前不可用。",
+            "8418ec448d": "{{value0}} 用量無法重新整理。代理程式工作階段可能仍處於登入狀態。"
+          }
+        }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "配對電腦",
+      "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
+      "pairAction": "配對電腦",
+      "openFailed": "無法開啟此連結",
+      "ambiguous": "此機器人位於 {{names}}。請在你想用的電腦上透過 Orca 開啟聊天。",
+      "computer": "你的電腦",
+      "updateNeeded": "請更新 {{names}} 上的 Orca 以開啟此連結。",
+      "unreachable": "無法連線至 {{names}}。請確認其中一台電腦正在執行 Orca，然後重試。",
+      "missing": "你配對的電腦上都沒有此機器人。",
+      "offline": "{{name}} 已離線。請在它重新上線後再次開啟連結。",
+      "chatOpenFailed": "{{name}} 無法開啟此聊天。請重試此連結。",
+      "unreachableSingle": "無法連線至 {{name}}。請確認該電腦正在執行 Orca，然後重試。",
+      "workspaceDeleted": "此聊天的工作區已在 {{name}} 上被刪除。"
     }
   }
 }

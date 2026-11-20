@@ -1,41 +1,51 @@
-import { createContext, useMemo, type ReactNode } from 'react'
-import type { NativeChatFileLinkContext } from '../../links/actions/native-chat-file-link-context'
+import { createContext, useMemo } from 'react'
 import {
   useNativeChatImageRuntimeContext,
   type NativeChatImageRuntimeContext
 } from './native-chat-image-runtime-context'
 import { useNativeChatFileLinkContext } from '../../links/actions/use-native-chat-file-link-context'
-import { NativeChatLinkPeekProvider } from '../../links/previews/native-chat-link-peek-context'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import type { NativeChatFileLinkContext } from '../../links/actions/native-chat-file-link-context'
 
-export const NativeChatMarkdownImageOwnerContext = createContext<{
+export type NativeChatMarkdownImageOwner = {
   fileLinkContext: NativeChatFileLinkContext | null
   runtimeContext: NativeChatImageRuntimeContext
   isVisible: boolean
   sessionId?: string | null
-} | null>(null)
+}
 
-export function NativeChatMarkdownImageOwnerProvider({
-  tabId,
-  isVisible,
-  sessionId,
-  children
-}: {
-  tabId: string
-  isVisible: boolean
+export const NativeChatMarkdownImageOwnerContext =
+  createContext<NativeChatMarkdownImageOwner | null>(null)
+
+export function useNativeChatTabMarkdownImageOwner(
+  tabId: string,
+  isVisible: boolean,
   sessionId: string | null
-  children: ReactNode
-}): React.JSX.Element {
+): NativeChatMarkdownImageOwner {
   const fileLinkContext = useNativeChatFileLinkContext(tabId)
   const runtimeContext = useNativeChatImageRuntimeContext(tabId)
-  const value = useMemo(
+  return useMemo(
     () => ({ fileLinkContext, runtimeContext, isVisible, sessionId }),
     [fileLinkContext, runtimeContext, isVisible, sessionId]
   )
-  return (
-    <NativeChatMarkdownImageOwnerContext.Provider value={value}>
-      <NativeChatLinkPeekProvider fileLinkContext={fileLinkContext}>
-        {children}
-      </NativeChatLinkPeekProvider>
-    </NativeChatMarkdownImageOwnerContext.Provider>
-  )
+}
+
+/** How an image's file opens: paths resolve where its bytes are read, but it opens in the
+ *  transcript's own workspace. A group member's folder is only a path base, never a destination. */
+export function nativeChatImageFileLinkContext(
+  owner: NativeChatMarkdownImageOwner | null
+): NativeChatFileLinkContext | null {
+  const runtimeContext = owner?.runtimeContext
+  const fileLinkContext = owner?.fileLinkContext
+  if (!runtimeContext?.worktreePath || !fileLinkContext) {
+    return null
+  }
+  if (runtimeContext.worktreeId && runtimeContext.worktreeId !== fileLinkContext.worktreeId) {
+    return { ...fileLinkContext, pathBase: runtimeContext.worktreePath }
+  }
+  return {
+    ...fileLinkContext,
+    worktreePath: runtimeContext.worktreePath,
+    runtimeEnvironmentId: runtimeTargetEnvironmentId(runtimeContext.target)
+  }
 }

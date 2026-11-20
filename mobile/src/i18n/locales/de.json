@@ -18,6 +18,10 @@
       "title": "Konten",
       "useReset": "Jetzt zurücksetzen",
       "weeklyWindow": "7 Tage"
+    },
+    "claude": {
+      "usageSignInLabel": "Erneut anmelden",
+      "usageSignInMessage": "Für das ausgewählte Claude-Konto ist eine erneute Anmeldung erforderlich. Einstellungen > Konten für KI-Anbieter öffnen oder „Systemstandard“ auswählen."
     }
   },
   "agentHistory": {
@@ -53,7 +57,8 @@
       "currentWorktree": "Aktueller Worktree",
       "messages_one": "{{count}} Nachricht",
       "messages_other": "{{count}} Nachrichten",
-      "resumeSession": "Agentensitzung fortsetzen"
+      "resumeSession": "Agentensitzung fortsetzen",
+      "continueInCli": "In CLI fortsetzen"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Host nicht erreichbar",
@@ -161,11 +166,13 @@
       "invalidUrl": "Gültige URL eingeben."
     },
     "paneView": {
-      "dialogTitle": "Browser-Dialog",
       "forward": "Vorwärts",
       "keyboardPlaceholder": "Text auf der Seite eingeben…",
       "reload": "Neu laden",
-      "sendText": "Text an den Browser senden"
+      "sendText": "Text an den Browser senden",
+      "dialogTitleWithOrigin": "{{origin}} meldet",
+      "dialogTitleNoOrigin": "Diese Seite meldet",
+      "dialogAnswer": "Antwort"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} als Klick-Modifikator"
@@ -178,6 +185,20 @@
     "viewModeSwitch": {
       "mobileView": "Mobile Ansicht der Website anzeigen",
       "webView": "Desktop-Ansicht der Website anzeigen"
+    },
+    "loadFailure": {
+      "retry": "Erneut versuchen",
+      "connectionNotSecure": "Die Verbindung ist nicht sicher",
+      "certificateNameMismatch": "Das Zertifikat stimmt nicht mit {{value0}} überein.",
+      "certificateDateInvalid": "Das Zertifikat für {{value0}} ist zum aktuellen Datum und zur aktuellen Uhrzeit nicht gültig.",
+      "certificateAuthorityInvalid": "Orca vertraut der Zertifizierungsstelle nicht, die das Zertifikat für {{value0}} ausgestellt hat.",
+      "certificateVerificationFailed": "Orca konnte das Zertifikat für {{value0}} nicht überprüfen.",
+      "proceedUnsafe": "Trotzdem fortfahren (unsicher)",
+      "connecting": "Verbindung wird hergestellt…",
+      "certificateChallengeExpired": "Diese Zertifikatsgenehmigung ist abgelaufen. Die Seite erneut laden, um eine neue anzufordern.",
+      "certificateChallengeChanged": "Die Zertifikatsanfrage hat sich geändert. Die Seite erneut laden und die neue Warnung prüfen.",
+      "certificateProceedFailed": "Orca konnte diese Zertifikatsanfrage nicht genehmigen. Die Seite neu laden und erneut versuchen.",
+      "certificateChallengeUnavailable": "Diese Zertifikatsanfrage ist nicht mehr verfügbar. Die Seite erneut laden, um eine neue anzufordern."
     }
   },
   "chat": {
@@ -211,7 +232,8 @@
     "contextUsage": {
       "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
       "title": "Kontext",
-      "estimated": "Anhand der letzten Antwort geschätzt."
+      "estimated": "Anhand der letzten Antwort geschätzt.",
+      "deferredNote": "Bei Bedarf geladen. Nicht in der Nutzung enthalten."
     },
     "composerAttachments": {
       "attachedImage": "Angehängtes Bild",
@@ -598,10 +620,6 @@
       "imageTooLarge": "Bild zum Anhängen zu groß",
       "permissionDenied": "Zugriff auf Fotos verweigert"
     },
-    "agentMessage": {
-      "handedOffToAgent": "An Agenten übergeben",
-      "startedAgent": "Agent gestartet"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "Die Antwort zum Anhang ist nicht lesbar. Erneut versuchen.",
       "incompleteReply": "Der Anhang wurde geändert oder die Antwort war unvollständig. Schließen und erneut versuchen.",
@@ -649,7 +667,7 @@
       "confirm": "Zurücksetzen",
       "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",
       "historyNotPaginated": "Dieser ältere Codex-Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden. Einen neuen Chat starten, um „Bis hierher zurücksetzen“ zu verwenden.",
-      "busy": "Verfügbar, sobald der Agent inaktiv ist und im Chat keine Aktion mehr aussteht.",
+      "busy": "Verfügbar, wenn der Chat inaktiv ist",
       "staleEpoch": "Das Gespräch hat sich geändert. Die neuesten Nachrichten prüfen und erneut versuchen.",
       "invalidTarget": "Das Gespräch kann nicht zu dieser Nachricht zurückgesetzt werden. Es wurde nichts geändert.",
       "historyLimit": "Dieses Gespräch ist zu lang, um darin zurückzugehen. Es wurde nichts geändert.",
@@ -923,11 +941,11 @@
       "dismissDrawer": "Bereich schließen"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Einrichtungsskript",
-      "run": "Ausführen",
-      "runSetupCommand": "Einrichtungsbefehl ausführen",
-      "skip": "Überspringen"
+      "runSetup": "Einrichtung ausführen",
+      "skip": "Überspringen",
+      "startAgentAfterSetup": "Agent nach der Einrichtung starten",
+      "waitForSetupSaveFailed": "Das Startverhalten bei der Einrichtung konnte nicht gespeichert werden."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Verbinden",
@@ -1131,6 +1149,9 @@
       "composer": {
         "planMode": "Planen",
         "exitPlanMode": "Planungsmodus verlassen"
+      },
+      "goal": {
+        "sentAsGoal": "Als Ziel gesendet"
       }
     }
   },
@@ -1582,10 +1603,8 @@
   "host": {
     "edit": {
       "address": "Adresse",
-      "addressHint": "Akzeptiert IP-Adressen, host:port oder ws:// / wss://. Eine URL mit wss:// verwendet ohne Portangabe 443. Bei Adressen ohne Protokoll- und Portangabe bleibt der aktuelle Port erhalten (oder 6768).",
       "connectionPreview": "Verbindet mit {{endpoint}}",
       "goBack": "Zurück navigieren",
-      "help": "Anzeigenamen oder Verbindungsadresse ändern. Das Namensfeld leer lassen, um den vom Desktop gemeldeten Namen zu verwenden. Eine Adressänderung ändert nur das Verbindungsziel dieses Smartphones – es wird keine neue Kopplung hergestellt. Nützlich, wenn derselbe Desktop unter einer anderen IP-Adresse erreichbar ist (z. B. im Heim-LAN statt über Tailscale).",
       "hostNamePlaceholder": "Host-Name",
       "hostRemoved": "Dieser Host wurde von diesem Smartphone entfernt.",
       "loadFailed": "Host konnte nicht geladen werden.",
@@ -1626,7 +1645,10 @@
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "sleep": "In Ruhezustand versetzen",
       "unpin": "Anheftung aufheben",
-      "rename": "Umbenennen"
+      "rename": "Umbenennen",
+      "markRead": "Als gelesen markieren",
+      "markUnread": "Als ungelesen markieren",
+      "moveToStatus": "In Status verschieben"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fehlgeschlagen",
@@ -2191,6 +2213,7 @@
       "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
       "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
       "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+      "providerResponseFailedQuoted": "{{agent}} konnte diese Antwort nicht abschließen: {{detail}}.",
       "selectedModel": "das ausgewählte Modell",
       "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
       "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",
@@ -2452,6 +2475,11 @@
       "sendReviewNotes": "Review-Notizen senden",
       "shortcut": "Tastenkürzel",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD-Eingabeaufforderung",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Terminal-Name",
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
       "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
@@ -2639,7 +2667,7 @@
       "disconnected": "Einfügen fehlgeschlagen (Verbindung getrennt)",
       "imageTooLarge": "Bild zu groß zum Einfügen",
       "pasteFailed": "Einfügen fehlgeschlagen",
-      "pasteTooLarge": "Einzufügender Inhalt zu groß (max. 256 KiB)",
+      "pasteTooLarge": "Der einzufügende Inhalt ist zu groß.",
       "terminalChanged": "Einfügen abgebrochen (Terminal gewechselt)"
     },
     "worktreeLabel": {
@@ -2769,6 +2797,12 @@
     "structuredOpen": {
       "worktreeDeleted": "Der Worktree wurde gelöscht.",
       "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."
+    },
+    "browserProfile": {
+      "default": "Standard"
     }
   },
   "settings": {
@@ -3380,15 +3414,7 @@
       "confirmGitHubRebase": "PR #{{number}} mit Rebase zusammenführen?",
       "confirmGitLabMerge": "Merge Request #{{number}} zusammenführen?",
       "confirmGitLabSquash": "Merge Request #{{number}} mit Squash zusammenführen?",
-      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?",
-      "merged": "Zusammengeführt",
-      "closed": "Geschlossen",
-      "conflicts": "Konflikte",
-      "behind": "Nicht aktuell",
-      "blocked": "Blockiert",
-      "checksPending": "Prüfungen ausstehend",
-      "ableToMerge": "Zusammenführen möglich",
-      "unknown": "Unbekannt"
+      "confirmGitLabRebase": "Merge Request #{{number}} mit Rebase zusammenführen?"
     },
     "pagination": {
       "pageUnreachable": "Seite {{page}} liegt außerhalb des Bereichs der GitHub-Suche.",
@@ -3793,7 +3819,6 @@
       "title": "Aufgaben"
     },
     "searchControl": {
-      "jiraPlaceholder": "Jira JQL, z. B. project = ABC AND statusCategory != Done",
       "projectPlaceholder": "Projektansicht durchsuchen…",
       "providerPlaceholder": "{{provider}}-Aufgaben suchen…"
     },
@@ -4235,7 +4260,134 @@
             }
           }
         }
+      },
+      "TaskPage": {
+        "99c2755218": "Issues suchen oder JQL eingeben, z. B. project = ABC",
+        "jiraTextMatchesNotice": "Texttreffer werden angezeigt. Jira konnte diese Suche nicht als JQL ausführen."
+      },
+      "editor": {
+        "CheckRunDetailsPanel": {
+          "91a4c7e2b0": "Abgebrochen"
+        }
+      },
+      "github": {
+        "pr": {
+          "merge": {
+            "state": {
+              "83ecdbb4a6": "Gemergt",
+              "4f976d3450": "Geschlossen",
+              "1f8eb81c0e": "Genehmigung erforderlich",
+              "c606463dc2": "Änderungen angefordert",
+              "7e8bbe3cd7": "Konflikte",
+              "b169f943e1": "Mergen, sobald möglich",
+              "autoMergeOn": "Auto-Merge aktiviert",
+              "039c072f94": "Im Rückstand",
+              "bf5e4c6c92": "Blockiert",
+              "87fa36ac83": "Checks fehlgeschlagen",
+              "4e2507176b": "Checks ausstehend",
+              "def355ff38": "Merge möglich",
+              "f958920f3a": "Wird geprüft"
+            }
+          }
+        }
+      },
+      "right": {
+        "sidebar": {
+          "gitlab": {
+            "mr": {
+              "merge": {
+                "state": {
+                  "fae95ae20d": "Gemergt",
+                  "88d044c42f": "Geschlossen",
+                  "96b05e374c": "Konflikte",
+                  "5105b0e584": "Genehmigung erforderlich",
+                  "893a999c8c": "Änderungen angefordert",
+                  "01ab632a21": "Ungelöste Diskussionen",
+                  "bf628700f6": "Checks müssen erfolgreich sein",
+                  "65c847ad1e": "Checks ausstehend",
+                  "382c70faeb": "Im Rückstand",
+                  "195917574e": "Wird geprüft",
+                  "4ecc0d90ee": "Blockiert",
+                  "49ac4fec10": "Checks fehlgeschlagen",
+                  "04a3015a12": "Merge möglich"
+                }
+              }
+            }
+          }
+        }
+      },
+      "taskPageJiraLoadState": {
+        "jqlFailed": "Jira konnte diese JQL-Abfrage nicht ausführen. Syntax prüfen und erneut versuchen."
+      },
+      "status": {
+        "bar": {
+          "tooltip": {
+            "claudeNoUsageFromHost": "Keine Nutzungsdaten von {{server}}",
+            "remoteOwnerNotConfigured": "Auf {{server}} nicht konfiguriert",
+            "claudeUnknownOnHost": "Die Claude-Nutzung ist von {{server}} nicht verfügbar. Claude ist dort möglicherweise nicht angemeldet oder verwendet die Abrechnung per API-Schlüssel.",
+            "remoteOwnerSignInSavedHere": "Die Anmeldung ist nur auf diesem Computer gespeichert.",
+            "f8b8dbed85": "Nutzung nicht verfügbar",
+            "e2c6a4f917": "Grok zum Aktualisieren ausführen",
+            "f90b3d7a16": "Kimi zum Aktualisieren ausführen",
+            "0d8d7cfe15": "Warten auf Claude-Sitzung",
+            "claude": {
+              "waiting": {
+                "label": "Wird aktualisiert, wenn Claude läuft",
+                "message": "Die Claude-Nutzung wird beim nächsten Start von Claude aktualisiert."
+              }
+            },
+            "1804cd8c3f": "Anmeldung wird aktualisiert",
+            "bf2e739f18": "Anmeldung nicht verfügbar",
+            "f8f0f9d8cc": "Netzwerkproblem",
+            "minimax": {
+              "expired": {
+                "label": "Anmeldung abgelaufen",
+                "apiKey": "Der MiniMax-API-Schlüssel ist abgelaufen. In den Einstellungen ersetzen.",
+                "cookie": "Das MiniMax-Sitzungscookie ist abgelaufen. In den Einstellungen ersetzen."
+              }
+            },
+            "cursor": {
+              "expired": {
+                "label": "Anmeldung abgelaufen",
+                "message": "cursor-agent login in einem Terminal auf dem Computer ausführen, auf dem Orca läuft, und anschließend den Abruf der Nutzung erneut versuchen."
+              }
+            },
+            "usage": {
+              "noSubscription": {
+                "label": "Kein Abonnement"
+              }
+            },
+            "7ad719c4bf": "Begrenzt",
+            "e740f92596": "Aktualisierung fehlgeschlagen",
+            "2c35eca8d4": "Nutzung konnte nicht abgerufen werden",
+            "d1b7f509ac": "grok in einem Terminal auf dem Computer ausführen, auf dem Orca läuft, und den Start abwarten. Falls erforderlich, die Anmeldung abschließen und anschließend den Abruf der Nutzung erneut versuchen. Es muss keine Chatnachricht gesendet werden.",
+            "a37e8c15d4": "kimi in einem Terminal auf dem Computer ausführen, auf dem Orca läuft, und den Start abwarten. Anschließend den Abruf der Nutzung erneut versuchen.",
+            "3d3c9c0c1f": "Die Claude-Nutzung wird aktualisiert, nachdem das aktive Claude-Terminal seine Zugangsdaten erneuert hat.",
+            "42fdd4da1d": "Die Claude-Anmeldung wird aktualisiert. Agentensitzungen sind möglicherweise weiterhin angemeldet.",
+            "c06c1d215d": "Die Claude-Nutzung konnte nicht aktualisiert werden, da die Netzwerkanfrage fehlgeschlagen ist.",
+            "cabdc2a9e0": "Die Zugangsdaten für die Claude-Anmeldung konnten nicht gelesen werden.",
+            "a7517cccb6": "Die Claude-Nutzung ist derzeit nicht verfügbar.",
+            "8418ec448d": "Die Nutzung von {{value0}} konnte nicht aktualisiert werden. Agentensitzungen sind möglicherweise weiterhin angemeldet."
+          }
+        }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Computer koppeln",
+      "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",
+      "pairAction": "Computer koppeln",
+      "openFailed": "Link konnte nicht geöffnet werden",
+      "ambiguous": "Dieser Bot ist auf {{names}}. Öffne den Chat in Orca auf dem gewünschten Computer.",
+      "computer": "deinem Computer",
+      "updateNeeded": "Aktualisiere Orca auf {{names}}, um diesen Link zu öffnen.",
+      "unreachable": "{{names}} sind nicht erreichbar. Starte Orca auf einem davon und versuche es erneut.",
+      "missing": "Keiner deiner gekoppelten Computer hat diesen Bot.",
+      "offline": "{{name}} ist offline. Öffne den Link erneut, sobald der Computer wieder online ist.",
+      "chatOpenFailed": "{{name}} konnte diesen Chat nicht öffnen. Versuche es erneut.",
+      "unreachableSingle": "{{name}} ist nicht erreichbar. Starte Orca dort und versuche es erneut.",
+      "workspaceDeleted": "Der Arbeitsbereich dieses Chats wurde auf {{name}} gelöscht."
     }
   }
 }

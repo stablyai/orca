@@ -18,7 +18,7 @@ import { resolveInternalTerminalDropPane } from './terminal-drop-pane-resolution
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import type { TerminalDropWriteFailureReason } from './terminal-drop-write-failure'
 import { getTerminalInternalFileDropRejectionMessage } from './terminal-drop-internal-rejection-message'
-import { resolveTerminalDropWorktreePath } from './terminal-drop-worktree-path'
+import { resolveAgentStagingWorktreePath } from '@/runtime/files/imports/agent-file-staging'
 import './terminal-native-file-drop-destination'
 import type { NativeTerminalFileDropArgs } from './terminal-native-file-drop-destination'
 
@@ -91,7 +91,7 @@ export async function handleInternalTerminalFileDrop({
     return { status: 'rejected', reason: 'source-host-mismatch' }
   }
   const dropTargetSnapshot = captureTerminalDropTarget(pane, transport)
-  const worktreePath = resolveTerminalDropWorktreePath(
+  const worktreePath = resolveAgentStagingWorktreePath(
     worktreeId,
     runtimeEnvironmentId ? undefined : cwd,
     host?.id,

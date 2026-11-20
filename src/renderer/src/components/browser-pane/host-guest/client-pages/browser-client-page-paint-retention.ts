@@ -18,6 +18,11 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
   const blank = page.host.dataset.browserClientPageBlank === 'true'
   const viewport = page.host.ownerDocument.defaultView
   const interactive = shown && !blank
+  // A preset can outsize the pane; the body-level host must not paint or take input past the scroller's client box, which leaves its scrollbars uncovered.
+  const scroller = visible ? container!.closest('[data-browser-page-scroller]') : null
+  const clipInsets = scroller
+    ? scrollerClipInsets(bounds!, scroller.getBoundingClientRect(), scroller)
+    : []
   // Chromium needs a sized, onscreen guest to composite even when its desktop pane is hidden.
   const style = {
     left: visible ? `${bounds!.left}px` : retained ? '0px' : '-10000px',
@@ -34,7 +39,10 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
         : '1px',
     opacity: interactive ? '' : retained || visible ? '0' : '',
     visibility: blank && !retained ? 'hidden' : '',
-    'pointer-events': interactive && !isWebviewDragPassthroughActive() ? 'auto' : 'none'
+    'pointer-events': interactive && !isWebviewDragPassthroughActive() ? 'auto' : 'none',
+    'clip-path': clipInsets.some((inset) => inset > 0)
+      ? `inset(${clipInsets.map((inset) => `${inset}px`).join(' ')})`
+      : ''
   }
   for (const [property, value] of Object.entries(style)) {
     if (page.host.style.getPropertyValue(property) !== value) {
@@ -51,6 +59,17 @@ export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedR
   } else if (page.host.getAttribute('aria-hidden') !== 'true') {
     page.host.setAttribute('aria-hidden', 'true')
   }
+}
+
+function scrollerClipInsets(bounds: DOMRect, scrollerBounds: DOMRect, scroller: Element): number[] {
+  const left = scrollerBounds.left + scroller.clientLeft
+  const top = scrollerBounds.top + scroller.clientTop
+  return [
+    top - bounds.top,
+    bounds.right - (left + scroller.clientWidth),
+    bounds.bottom - (top + scroller.clientHeight),
+    left - bounds.left
+  ].map((inset) => Math.max(0, inset))
 }
 
 export function retainBrowserClientPagePaint(page: BrowserClientRetainedRendererPage): () => void {

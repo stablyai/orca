@@ -1,4 +1,5 @@
 import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { botAgentNeedsManagedRuntime } from '../../../../shared/bots/bot-agent-runtime'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
@@ -28,6 +29,10 @@ import {
 } from '../model-catalog/structured-agent-model-catalog-discovery'
 import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
+import {
+  isManagedAgentCli,
+  managedAgentCli
+} from '../../../managed-agent-cli/managed-agent-cli-registry'
 import type {
   StructuredAgentAccountHomeRequest,
   StructuredAgentChatProgram,
@@ -41,7 +46,7 @@ export type StructuredAgentRuntimeCatalogEntry =
 
 // Why the host's data folder: a start runs Orca's installed release before PATH.
 function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
-  const { managedRuntime } = spec
+  const { agent, managedRuntime } = spec
   return {
     resolve: (shellEnv, commandSettings) => {
       const env = { ...shellEnv, ...spec.env }
@@ -49,6 +54,8 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
       return { ...resolveAcpLaunchCommand(spec, env, options), env }
     },
     ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {}),
+    // Hosts without the user's own install can install Orca's copy.
+    ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
           hostAlternative: async (shellEnv, settings) =>
@@ -67,7 +74,9 @@ function cliChatProgram(agent: 'claude' | 'codex'): StructuredAgentChatProgram {
       const pathEnv = env.PATH ?? env.Path ?? null
       const options = { pathEnv, ...(homePath ? { homePath } : {}) }
       return { ...resolveStructuredAgentCommand(agent, commandSettings, options), env }
-    }
+    },
+    // Hosts without the user's own install can install Orca's copy.
+    installable: () => managedAgentCli(agent).available()
   }
 }
 
@@ -96,13 +105,14 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
     // New chats and their model catalog prefer a compatible host program, which a chat's account
     // home then pins; reads such as Orca's own sign-in keep the agent's account.
     resolveAccountHome: async (
-      { launchEnv, purpose, permissionMode },
+      { launchEnv, purpose, permissionMode, bot },
       { stateDirectory, hostLaunchEnvironment, hostSettings }
     ) => {
       // A host program without the chat's permission mode never takes it; `own` sets none.
       const host =
         spec.hostBackend &&
         (purpose === 'launch' || purpose === 'catalog') &&
+        !(bot && botAgentNeedsManagedRuntime(spec.agent)) &&
         (permissionMode === undefined ||
           permissionMode === 'own' ||
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
@@ -202,4 +212,20 @@ export function structuredAgentRuntimeMetadata(
   return (
     STRUCTURED_AGENT_RUNTIME_METADATA.find(({ definition }) => definition.agent === agent) ?? null
   )
+}
+
+/** The seed options `agent` still registers: a key it stopped offering would refuse the create. */
+export function supportedStructuredSeedOptions(
+  agent: string,
+  options: Readonly<Record<string, string>> | undefined
+): Record<string, string> {
+  const definition = structuredAgentRuntimeMetadata(agent)?.definition
+  return Object.fromEntries(
+    Object.entries(options ?? {}).filter(([key]) => definition?.restingOptions.acceptsKey(key))
+  )
+}
+
+/** Whether this host has Orca's managed runtime for `agent`, as its agent list publishes it. */
+export function hostHasManagedRuntime(agent: string): boolean {
+  return structuredAgentRuntimeMetadata(agent)?.definition.managedRuntime?.() === true
 }
