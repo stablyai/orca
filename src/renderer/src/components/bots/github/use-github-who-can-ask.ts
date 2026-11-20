@@ -28,22 +28,13 @@ export function useGitHubWhoCanAsk(
   const ownerId = account?.userId ?? null
   const ownerName = account?.login ?? null
   const installations = view.status === 'ready' ? view.github.installations : null
-  // The picker lists the people of the connected repositories: those are the owner's teammates.
+  // The picker lists the people of every connected repository, for every bot row: a host reads
+  // that list once per app run, so it asks for all of it, whichever installation's row this is.
   // Keyed by content: a state refresh hands over new objects, which must not restart the search.
   // Until the GitHub state is read, no scope is sent: unknown, not "nothing connected".
   const scopeKey = useMemo(
-    () =>
-      installations === null
-        ? null
-        : JSON.stringify(
-            gitHubPeopleScope(
-              installations.filter(
-                (install) =>
-                  installationId === undefined || install.installationId === installationId
-              )
-            )
-          ),
-    [installations, installationId]
+    () => (installations === null ? null : JSON.stringify(gitHubPeopleScope(installations))),
+    [installations]
   )
   const scope = useMemo(
     (): GitHubPeopleScope | undefined => (scopeKey === null ? undefined : JSON.parse(scopeKey)),

@@ -25,7 +25,9 @@ const roster: BotGitHubRoster = {
   from: { repositories: true, organizations: false },
   complete: true,
   omitted: false,
-  cut: { people: false, members: false, repositories: false }
+  cut: { people: false, members: false, repositories: false },
+  readAt: 0,
+  reused: false
 }
 type Users = BotSlackResult<ConnectorGitHubUsersResponse>
 

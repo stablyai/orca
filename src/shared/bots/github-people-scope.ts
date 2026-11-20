@@ -1,8 +1,9 @@
-// Who can ask › Add on GitHub searches the people of the repositories the Orca app is installed on.
+// Who can ask › Add on GitHub lists the people of the repositories the Orca app is installed on,
+// read once per picker open and filtered locally as the owner types.
 // The renderer bounds and orders that scope here, so what it sends always passes the RPC's limits
 // and the host searches the same repositories however the installations happen to be ordered.
 
-/** Repositories searched by name per keystroke; more are reported as a limited search. */
+/** Repositories read per picker open; more are reported as omitted. */
 export const GITHUB_PEOPLE_MAX_REPOSITORIES = 10
 /** Whole-account installs (an organization's members, or a person's own repositories). */
 export const GITHUB_PEOPLE_MAX_OWNERS = 3

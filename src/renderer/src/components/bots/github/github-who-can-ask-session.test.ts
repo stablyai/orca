@@ -20,7 +20,9 @@ const roster: BotGitHubRoster = {
   from: { repositories: true, organizations: false },
   complete: true,
   omitted: false,
-  cut: { people: false, members: false, repositories: false }
+  cut: { people: false, members: false, repositories: false },
+  readAt: 0,
+  reused: false
 }
 const deferred = <T>() => {
   let resolve = (_value: T): void => {}
@@ -84,6 +86,23 @@ describe('one Add picker open on GitHub', () => {
     expect(late).not.toHaveBeenCalled()
   })
 
+  it('keeps no search waiting on the roster past its deadline, however many queries are typed', async () => {
+    const never = deferred<BotSlackResult<BotGitHubRoster>>()
+    const session = gitHubWhoCanAskSession(
+      { people: () => never.promise, users: async () => noOne },
+      { scope, ownerLogin: 'owner', t }
+    )
+    const answers = ['b', 'br', 'bre', 'bren'].map((query) => session.search(query))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(session.waiters).toBe(4)
+    await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS)
+    // Every search answered and let go of the roster, which is still on its way.
+    expect(session.waiters).toBe(0)
+    for (const answer of await Promise.all(answers)) {
+      expect(answer.ok && answer.value.empty?.title).toBe('Still loading your repos')
+    }
+  })
+
   it('uses a roster that lands while the exact lookup is still on its way', async () => {
     const slowRoster = deferred<BotSlackResult<BotGitHubRoster>>()
     const slowExact = deferred<Users>()
@@ -113,11 +132,11 @@ describe('one Add picker open on GitHub', () => {
     await vi.advanceTimersByTimeAsync(0)
     const second = await session.search('brennan')
     expect(names(second)).toEqual(['brennanb2025'])
-    expect(second.ok && second.value.note).toBe('Couldn’t check GitHub usernames.')
+    expect(second.ok && second.value.note).toBe('Username check failed. Reopen to retry.')
 
     const unreadable = gitHubWhoCanAskSession(
       {
-        people: async () => ({ ok: true, value: { status: 'unavailable' } }),
+        people: async () => ({ ok: true, value: { status: 'unavailable', retry: 'restart' } }),
         users: async () => failed
       },
       { scope, ownerLogin: 'owner', t }
