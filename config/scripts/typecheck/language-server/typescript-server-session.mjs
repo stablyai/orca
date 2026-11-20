@@ -53,6 +53,7 @@ export function createServerSession({
   let killTimer
   let idleExpired = false
   let generation = 0
+  const retired = new Set()
   // Requests by id (in arrival order) plus a queued exit; notifications never wait here.
   const queue = new Map()
   let wakeWanted = false
@@ -127,8 +128,21 @@ export function createServerSession({
     }
     const stuck = server
     stuck.kill()
-    setTimer(() => stuck.kill('SIGKILL'), SHUTDOWN_GRACE_MS)
+    retired.add(stuck)
+    setTimer(() => {
+      retired.delete(stuck)
+      stuck.kill('SIGKILL')
+    }, SHUTDOWN_GRACE_MS)
     onExit(null, 'SIGTERM')
+  }
+
+  // The wrapper never exits while a server it gave up on may still be running.
+  const end = (code) => {
+    for (const stuck of retired) {
+      stuck.kill('SIGKILL')
+    }
+    retired.clear()
+    onEnd(code)
   }
 
   const stop = () => {
@@ -176,7 +190,7 @@ export function createServerSession({
       }
     }
     if (exit) {
-      onEnd(0)
+      end(0)
     }
   }
 
@@ -264,7 +278,7 @@ export function createServerSession({
         const { serverId, onAnswer } = relayed.get(message.id)
         relayed.delete(message.id)
         relayedByServerId.delete(serverId)
-        onAnswer?.()
+        onAnswer?.(message)
         server.write({ ...message, id: serverId })
       }
       return
@@ -305,7 +319,7 @@ export function createServerSession({
       } else if (state === 'stopped' && method === 'shutdown') {
         toClient({ jsonrpc: '2.0', id: message.id, result: null })
       } else if (state === 'stopped' && method === 'exit') {
-        onEnd(0)
+        end(0)
       } else if (method === '$/cancelRequest') {
         const cancelled = queue.get(message.params?.id)
         if (cancelled) {
@@ -346,19 +360,32 @@ export function createServerSession({
         id: message.id,
         error: { code: REQUEST_FAILED, message: 'client not answering' }
       })
-      return
+      return false
     }
     const id = `${SESSION_ID_PREFIX}${++nextId}`
     relayed.set(id, { serverId: message.id, onAnswer })
     relayedByServerId.set(message.id, id)
     toClient({ ...message, id })
+    return true
   }
 
+  // Recorded once sent (a stop before the answer still withdraws them) and dropped again if the client refuses.
   const onRegister = (message) => {
-    for (const registration of message.params?.registrations ?? []) {
-      clientRegistrations.set(registration.id, { method: registration.method })
+    const added = (message.params?.registrations ?? []).map(({ id, method }) => [id, { method }])
+    const sent = relayToClient(message, (answer) => {
+      if (answer.error) {
+        for (const [id, entry] of added) {
+          if (clientRegistrations.get(id) === entry) {
+            clientRegistrations.delete(id)
+          }
+        }
+      }
+    })
+    if (sent) {
+      for (const [id, entry] of added) {
+        clientRegistrations.set(id, entry)
+      }
     }
-    relayToClient(message)
   }
 
   const onUnregister = (message) => {
@@ -373,7 +400,10 @@ export function createServerSession({
     }
     if (forwarded.length > 0) {
       // Still the client's until it answers, so a stop in between withdraws them too.
-      relayToClient({ ...message, params: { unregisterations: forwarded } }, () => {
+      relayToClient({ ...message, params: { unregisterations: forwarded } }, (answer) => {
+        if (answer.error) {
+          return
+        }
         // A registration re-added under the same id since then is a new entry and stays.
         for (const [id, entry] of withdrawn) {
           if (clientRegistrations.get(id) === entry) {
@@ -444,7 +474,7 @@ export function createServerSession({
     replayId = null
     shutdownId = null
     if (closed || !(expected || waking)) {
-      onEnd(code ?? (signal ? 1 : 0))
+      end(code ?? (signal ? 1 : 0))
       return
     }
     if (waking) {
@@ -493,7 +523,7 @@ export function createServerSession({
       if (server) {
         server.end()
       } else {
-        onEnd(0)
+        end(0)
       }
     },
     kill(signal) {
@@ -501,7 +531,7 @@ export function createServerSession({
       if (server) {
         server.kill(signal)
       } else {
-        onEnd(0)
+        end(0)
       }
     }
   }
