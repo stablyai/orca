@@ -1,9 +1,5 @@
 import { app, BrowserWindow, webContents } from 'electron'
-import { writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
-import { BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL } from '../../../../shared/browser/guest-lifecycle/browser-guest-page-visibility'
-import { installBrowserGuestPageVisibilityReport } from '../../../../preload/browser/visibility/browser-guest-page-visibility-report'
 import { listenForBrowserGuestPageVisibility } from './browser-guest-page-visibility'
 
 type FrameRead = { visibilityState: string; hidden: boolean; events: string[] }
@@ -32,12 +28,11 @@ async function until(predicate: () => Promise<boolean>): Promise<void> {
 async function run(): Promise<void> {
   applyBackgroundActivationPolicy()
   await app.whenReady()
-  const preload = join(app.getPath('userData'), 'visibility-preload.cjs')
-  writeFileSync(
-    preload,
-    `const { ipcRenderer } = require('electron')
-;(${installBrowserGuestPageVisibilityReport.toString()})((state) => ipcRenderer.send(${JSON.stringify(BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL)}, state))`
-  )
+  // The shipped browser guest preload, bundled by the test.
+  const preload = process.env.ORCA_BROWSER_GUEST_PRELOAD
+  if (!preload) {
+    throw new Error('Missing browser guest preload')
+  }
   listenForBrowserGuestPageVisibility()
   const window = new BrowserWindow({
     show: false,
@@ -68,10 +63,8 @@ async function run(): Promise<void> {
   }
   const first = await guest('first')
   const second = await guest('second')
-  const frames = (target: Electron.WebContents): Electron.WebFrameMain[] => [
-    target.mainFrame,
-    ...target.mainFrame.frames
-  ]
+  const frames = (target: Electron.WebContents): Electron.WebFrameMain[] =>
+    target.mainFrame.framesInSubtree
   const read = (target: Electron.WebContents): Promise<FrameRead[]> =>
     Promise.all(
       frames(target).map((frame) =>
@@ -81,11 +74,15 @@ async function run(): Promise<void> {
       )
     )
   // Every frame of the page, settled on one state: [visibilityState, hidden, last event].
-  const settle = async (target: Electron.WebContents, state: string): Promise<unknown> => {
+  const settle = async (
+    target: Electron.WebContents,
+    state: string,
+    frameCount: number
+  ): Promise<unknown> => {
     await until(
       async () =>
         !target.isLoading() &&
-        frames(target).length === (target === first ? 2 : 1) &&
+        frames(target).length === frameCount &&
         (await read(target)).every((frame) => frame.visibilityState === state)
     ).catch(() => undefined)
     return (await read(target)).map((frame) => [
@@ -94,10 +91,17 @@ async function run(): Promise<void> {
       frame.events.at(-1) ?? null
     ])
   }
+  const firstPageState = async (state: string): Promise<string> => {
+    await until(async () => (await read(first))[0].visibilityState === state).catch(() => undefined)
+    return (await read(first))[0].visibilityState
+  }
   const eventCounts = async (target: Electron.WebContents): Promise<number[]> =>
     (await read(target)).map((frame) => frame.events.length)
 
-  const loaded = { first: await settle(first, 'visible'), second: await settle(second, 'hidden') }
+  const loaded = {
+    first: await settle(first, 'visible', 2),
+    second: await settle(second, 'hidden', 1)
+  }
 
   // What BrowserWindow emits when the window is restored: Electron sends it to every guest.
   const before = await eventCounts(second)
@@ -109,27 +113,20 @@ async function run(): Promise<void> {
 
   // Minimizing the window hides the shown tab even when Chromium keeps it painted.
   window.webContents.emit('-window-visibility-change', 'hidden')
-  const windowHidden = await until(
-    async () => (await read(first))[0].visibilityState === 'hidden'
-  ).then(
-    async () => (await read(first))[0].visibilityState,
-    () => 'visible'
-  )
+  const windowHidden = await firstPageState('hidden')
   window.webContents.emit('-window-visibility-change', 'visible')
-  const windowRestored = await until(
-    async () => (await read(first))[0].visibilityState === 'visible'
-  ).then(
-    async () => (await read(first))[0].visibilityState,
-    () => 'hidden'
-  )
+  const windowRestored = await firstPageState('visible')
 
   await window.webContents.executeJavaScript(
     `document.getElementById('first').style.display = 'none'; document.getElementById('second-tab').style.display = 'block'`
   )
-  const switched = { first: await settle(first, 'hidden'), second: await settle(second, 'visible') }
+  const switched = {
+    first: await settle(first, 'hidden', 2),
+    second: await settle(second, 'visible', 1)
+  }
 
   first.reload()
-  const reloadedInBackground = await settle(first, 'hidden')
+  const reloadedInBackground = await settle(first, 'hidden', 2)
 
   console.log(
     JSON.stringify({

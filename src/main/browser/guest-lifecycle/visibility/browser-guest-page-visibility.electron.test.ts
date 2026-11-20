@@ -1,12 +1,26 @@
+import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { runElectronFixture } from '../../electron-fixtures/electron-fixture-run'
+import {
+  buildPopupIdentityProbe,
+  createPopupIdentityProbeRoot
+} from '../../electron-fixtures/popup-identity-electron-probe'
+
+const preloadRoot = createPopupIdentityProbeRoot()
+afterAll(() => rmSync(preloadRoot, { recursive: true, force: true }))
 
 describe('browser guest page visibility in real Electron webviews', () => {
   // Builds a fixture bundle and launches real Electron, which is slow on CI runners.
   it('reports a tab that is not shown as hidden, and the shown tab as visible', async () => {
+    await buildPopupIdentityProbe(
+      preloadRoot,
+      join(process.cwd(), 'src/preload/browser-guest.ts'),
+      'browser-guest-preload.cjs'
+    )
     const result = await runElectronFixture(
-      join(import.meta.dirname, 'browser-guest-page-visibility-electron-fixture.ts')
+      join(import.meta.dirname, 'browser-guest-page-visibility-electron-fixture.ts'),
+      { ORCA_BROWSER_GUEST_PRELOAD: join(preloadRoot, 'browser-guest-preload.cjs') }
     )
     expect(result.timedOut).toBe(false)
     expect(result.code, `${result.signal}\n${result.stdout}\n${result.stderr}`).toBe(0)

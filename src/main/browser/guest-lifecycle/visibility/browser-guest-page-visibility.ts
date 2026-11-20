@@ -6,10 +6,9 @@ import { BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL } from '../../../../shared/browse
 // 'visible' (#44520).
 const ELECTRON_GUEST_VISIBILITY_CHANNEL = 'GUEST_INSTANCE_VISIBILITY_CHANGE'
 
-const pageVisibility = new WeakMap<Electron.WebContents, DocumentVisibilityState>()
-// Electron's last window value for the guest: a hidden or minimized window hides every page in it.
-const hiddenWindows = new WeakSet<Electron.WebContents>()
-const followedGuests = new WeakSet<Electron.WebContents>()
+// The main frame's last page value and Electron's last window value; a hidden or minimized window hides the page.
+type FollowedGuest = { page: DocumentVisibilityState; windowHidden: boolean }
+const followedGuests = new WeakMap<Electron.WebContents, FollowedGuest>()
 
 /** Makes each reporting frame's document.visibilityState follow Chromium's visibility for it; once per app. */
 export function listenForBrowserGuestPageVisibility(): void {
@@ -30,9 +29,8 @@ export function listenForBrowserGuestPageVisibility(): void {
       sendInternal(frame, state)
       return
     }
-    pageVisibility.set(guest, state)
-    followWindowVisibility(guest)
-    sendInternal(frame, hiddenWindows.has(guest) ? 'hidden' : state)
+    const followed = followWindowVisibility(guest, state)
+    sendInternal(frame, followed?.windowHidden ? 'hidden' : state)
   })
 }
 
@@ -44,21 +42,27 @@ function sendInternal(target: object, state: DocumentVisibilityState): void {
 }
 
 /** Electron's window broadcast and its dom-ready replay would otherwise undo the page's value. */
-function followWindowVisibility(guest: Electron.WebContents): void {
-  const original: unknown = Reflect.get(guest, '_sendInternal')
-  if (followedGuests.has(guest) || typeof original !== 'function') {
-    return
+function followWindowVisibility(
+  guest: Electron.WebContents,
+  page: DocumentVisibilityState
+): FollowedGuest | null {
+  const existing = followedGuests.get(guest)
+  if (existing) {
+    existing.page = page
+    return existing
   }
-  followedGuests.add(guest)
+  const original: unknown = Reflect.get(guest, '_sendInternal')
+  if (typeof original !== 'function') {
+    return null
+  }
+  const followed: FollowedGuest = { page, windowHidden: false }
+  followedGuests.set(guest, followed)
   Reflect.set(guest, '_sendInternal', (channel: string, ...args: unknown[]) => {
     if (channel === ELECTRON_GUEST_VISIBILITY_CHANNEL) {
-      if (args[0] === 'hidden') {
-        hiddenWindows.add(guest)
-      } else {
-        hiddenWindows.delete(guest)
-        args = [pageVisibility.get(guest) ?? args[0]]
-      }
+      followed.windowHidden = args[0] === 'hidden'
+      args = [followed.windowHidden ? 'hidden' : followed.page]
     }
     return Reflect.apply(original, guest, [channel, ...args])
   })
+  return followed
 }
