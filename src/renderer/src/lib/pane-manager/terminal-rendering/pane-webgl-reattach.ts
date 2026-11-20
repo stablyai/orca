@@ -57,11 +57,11 @@ export function restoreWebglAfterChatCover(terminal: ManagedPaneInternal['termin
   }
 }
 
-/** Detaches every renderer and returns the reattach step, so no pane can keep a shared atlas alive. */
-export function detachPanesWebglForRebuild(
+/** Detaches every renderer; returns those to reattach. */
+function detachPanesWebgl(
   panes: Iterable<ManagedPaneInternal>,
-  options?: { shouldReattach?: (pane: ManagedPaneInternal) => boolean }
-): () => void {
+  shouldReattach?: (pane: ManagedPaneInternal) => boolean
+): ManagedPaneInternal[] {
   const reattach: ManagedPaneInternal[] = []
   for (const pane of panes) {
     if (!pane.webglAddon || pane.webglDisabledAfterContextLoss) {
@@ -69,18 +69,42 @@ export function detachPanesWebglForRebuild(
     }
     disposeWebgl(pane)
     // Retained hidden panes must drop their atlas too; resume reattaches them, and panes kept off screen heal on reveal or their next fit.
-    if (!pane.webglAttachmentDeferred && (options?.shouldReattach?.(pane) ?? true)) {
+    if (!pane.webglAttachmentDeferred && (shouldReattach?.(pane) ?? true)) {
       reattach.push(pane)
     }
   }
+  return reattach
+}
+
+/** Detaches every renderer and returns the reattach step, so no pane can keep a shared atlas alive. */
+export function detachPanesWebglForRebuild(panes: Iterable<ManagedPaneInternal>): () => void {
+  const reattach = detachPanesWebgl(panes)
   return () => reattach.forEach(reattachDetachedWebgl)
 }
 
-setTerminalWebglAtlasRebuilder((panes, shouldReattach) => {
-  detachPanesWebglForRebuild(panes, { shouldReattach })()
-  for (const pane of panes) {
+/** One context per frame: recreating every context in one task stalls the renderer for hundreds of ms. */
+function reattachAcrossFrames(panes: ManagedPaneInternal[]): void {
+  const [pane, ...rest] = panes
+  if (!pane) {
+    return
+  }
+  // The pane may have closed, been reattached by reveal or fit, or lost its DOM since the rebuild.
+  if (!pane.webglAddon && pane.container.isConnected && !isXtermInstanceDisposed(pane.terminal)) {
+    reattachDetachedWebgl(pane)
     if (pane.webglAddon) {
       paintReplacementCanvasNow(pane.terminal)
     }
   }
+  if (rest.length > 0) {
+    requestAnimationFrame(() => reattachAcrossFrames(rest))
+  }
+}
+
+setTerminalWebglAtlasRebuilder((panes, shouldReattach) => {
+  const reattach = detachPanesWebgl(panes, shouldReattach)
+  // Waiting panes show xterm's DOM renderer until their frame; paint it now so a synchronized-output frame can't hold it blank.
+  for (const pane of reattach.slice(1)) {
+    paintReplacementCanvasNow(pane.terminal)
+  }
+  reattachAcrossFrames(reattach)
 })
