@@ -27,7 +27,7 @@ export async function scanCodexLeaseProcesses(
     return scanLinux(envName)
   }
   if (platform === 'darwin') {
-    return scanDarwin(envName, serverPid)
+    return scanDarwin(serverPid)
   }
   return null
 }
@@ -78,34 +78,26 @@ async function scanLinux(envName: string): Promise<CodexLeaseProcessScan | null>
   return { tagged: byTag(entries), unreadable }
 }
 
-async function ps(
-  withEnvironment: boolean,
-  pids: readonly number[]
-): Promise<Map<number, string> | null> {
+/** Every process's group, for the boundary a dedicated server's watcher owned on macOS. */
+async function processGroups(): Promise<Map<number, number> | null> {
   const result = await runProcess({
     program: 'ps',
-    args: [...(withEnvironment ? ['-E'] : []), '-ww', '-o', 'pid=,command=', '-p', pids.join(',')],
+    args: ['-A', '-o', 'pid=,pgid='],
     timeoutMs: PS_TIMEOUT_MS,
     maxOutputBytes: PS_MAX_OUTPUT_BYTES,
     env: { ...process.env, LC_ALL: 'C', LANG: 'C' }
   }).catch(() => null)
-  // ps exits 1 when some listed pid is gone; the rest of its output still stands.
-  if (
-    !result ||
-    result.timedOut ||
-    result.outputTruncated ||
-    (result.code !== 0 && result.code !== 1)
-  ) {
+  if (!result || result.timedOut || result.outputTruncated || result.code !== 0) {
     return null
   }
-  const lines = new Map<number, string>()
+  const groups = new Map<number, number>()
   for (const line of result.stdout.split('\n')) {
-    const match = /^\s*(\d+) (.*)$/.exec(line)
+    const match = /^\s*(\d+)\s+(\d+)\s*$/.exec(line)
     if (match) {
-      lines.set(Number(match[1]), match[2]!)
+      groups.set(Number(match[1]), Number(match[2]))
     }
   }
-  return lines
+  return groups
 }
 
 /** The server's launcher chain down to the native Codex process; null when Codex isn't found. */
@@ -129,50 +121,41 @@ function serverChain(index: ProcIndex, serverPid: number): Set<number> | null {
   return null
 }
 
-/** macOS has no subreaper, so a dedicated server's close could only ever reach its current tree;
- *  the shared one is held to the same boundary. `ps -E` prints the environment after the
- *  arguments with no boundary, and hides it entirely for Apple's own binaries (sh, sleep...), so
- *  the arguments are read first and only text after them counts; a process whose environment
- *  isn't shown, or whose readings don't line up, is unreadable rather than guessed at. */
-async function scanDarwin(
-  envName: string,
-  serverPid: number
-): Promise<CodexLeaseProcessScan | null> {
+/** macOS gives no trustworthy per-process environment: `ps -E` hides it for Apple's own binaries
+ *  and has no boundary between arguments and environment. So nothing is attributed or signalled
+ *  here. Every process a dedicated server's close owned (its current tree and the process groups
+ *  its watcher held), other than the server's own launcher chain, is reported unreadable: the
+ *  chat's Stop is proven only when the server runs nothing else at all. */
+async function scanDarwin(serverPid: number): Promise<CodexLeaseProcessScan | null> {
   const index = await enumerateHostProcesses({ trackCpu: false, withNames: true })
   if (!index.byPid.has(serverPid)) {
     return null
   }
   const chain = serverChain(index, serverPid)
-  if (!chain) {
+  const groups = chain ? await processGroups() : null
+  if (!chain || !groups) {
     return null
   }
-  const candidates = collectSubtree(index, serverPid).filter((pid) => !chain.has(pid))
-  if (candidates.length === 0) {
-    return { tagged: () => [], unreadable: [] }
-  }
-  const argv = await ps(false, candidates)
-  const full = argv ? await ps(true, candidates) : null
-  if (!argv || !full) {
-    return null
-  }
-  const entries: (readonly [number, string | null])[] = []
-  const unreadable: number[] = []
-  for (const [pid, line] of full) {
-    const args = argv.get(pid)
-    const environment = args !== undefined && line.startsWith(args) ? line.slice(args.length) : ''
-    if (!environment.trim()) {
-      unreadable.push(pid)
-      continue
-    }
-    const tags = environment
-      .split(' ')
-      .filter((token) => token.startsWith(`${envName}=`))
-      .map((token) => token.slice(envName.length + 1))
-    if (tags.length > 1) {
-      unreadable.push(pid)
-    } else {
-      entries.push([pid, tags[0] ?? null])
+  // Only a group the server's chain leads is the server's (the launcher starts the CLI in its own
+  // session); a group it merely inherited belongs to whoever spawned it.
+  const owned = new Set(
+    [...chain].flatMap((pid) => {
+      const group = groups.get(pid)
+      return group !== undefined && chain.has(group) ? [group] : []
+    })
+  )
+  // The launcher's owner-pipe watcher sits beside the chain: infrastructure, not a chat's work.
+  const infrastructure = new Set(chain)
+  for (const pid of chain) {
+    for (const child of index.childrenOf.get(pid) ?? []) {
+      if ((index.byPid.get(child)?.name ?? '').startsWith('orca-provider-ex')) {
+        infrastructure.add(child)
+      }
     }
   }
-  return { tagged: byTag(entries), unreadable }
+  const members = [...groups].flatMap(([pid, group]) => (owned.has(group) ? [pid] : []))
+  const others = [...new Set([...collectSubtree(index, serverPid), ...members])].filter(
+    (pid) => !infrastructure.has(pid)
+  )
+  return { tagged: () => [], unreadable: others }
 }
