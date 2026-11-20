@@ -13,6 +13,32 @@ is not the caller's project. For direct `worktree create`, likewise omit
 `--repo`/`--project` for same-project work and use `--parent-worktree active`
 when requesting a child of the current workspace.
 
+## Resolve the host before placing
+
+The Run stays on the machine that coordinates it, but the work may belong to a
+paired machine. Before choosing local placement or `--on`, resolve where the
+target project lives:
+
+```text
+ORCA host list --json
+ORCA project setups --json
+ORCA project setups --host <server> --json
+```
+
+`host list` names the current machine (`local`) and every paired server.
+`project setups` without `--host` lists only this runtime's setups; run it once
+per paired server with `--host <server>` to see that server's setups (use
+`--host runtime:<environment-id>` when the name is ambiguous). When the target
+project is set up only on a paired server, start the worker there with
+`--on <server>` and the exact remote repo selector, without waiting for the
+user to name the server. When several hosts have it, follow the host the user
+named; with no user preference, ask. When nothing is registered, keep the work
+local unless the user asked for a remote machine. Do not fall back to
+`--worktree current` until this resolution says the work belongs locally.
+
+Use the exact server name `host list` returns, and name the resolved host in
+the task spec so the placement is auditable.
+
 ```text
 # Child of the current worktree.
 ORCA orchestration worker-start --task <task_id> --worktree new-child --agent <agent> --setup run

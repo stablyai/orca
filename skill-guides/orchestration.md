@@ -57,6 +57,12 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   (the user will work in those chats), don't start workers; per workspace run
   `ORCA worktree create --name <name> --no-parent --agent <agent> --prompt "<brief>" --json`
   and end your turn.
+- Place work where the project lives. `ORCA host list --json` names this
+  machine and paired servers; `ORCA project setups --json` lists only this
+  runtime's setups, so also query each paired server with `--host <server>`.
+  When the target project is set up only on a paired server, load
+  `references/placement-and-remote.md` and start the worker there with `--on`
+  instead of locally.
 - Add `--model` only if the user named one.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.

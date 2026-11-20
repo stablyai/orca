@@ -102,6 +102,8 @@ Do not leave completed worker terminals open just to re-read output — use `wor
 
 ## Federated workers (optional)
 
+Resolve the host before placing: `orca host list --json` names this machine and every paired server. `orca project setups --json` lists only this runtime's setups, so also run it with `--host <server>` for each paired server. When the target project is set up only on a paired server, start the worker there with `--on` and its exact repo selector; when several hosts have it, follow the user's choice or ask.
+
 ```bash
 orca orchestration worker-start \
   --task <taskId> \
