@@ -49,6 +49,17 @@ pnpm dev:fresh [--keep] [--seed-from[=<profile dir>]]   # temporary profile, rem
 - Before a cross-architecture build (including `pnpm build:mac`, which builds x64 and arm64), run `pnpm install:release`.
 - On Linux, `pnpm build`, `pnpm build:native`, and packaging need a running Docker daemon for the clipboard helper. For native Wayland development, run `pnpm build:native` before `pnpm dev`. See the [clipboard build guide](../native/wayland-clipboard/README.md#building-and-testing).
 
+### Azure DevOps REST authentication
+
+Choose **Settings > Integrations > Azure DevOps > Authentication method** on the host that runs Orca's Azure DevOps REST requests. Desktop Settings uses the **Host** picker; a paired browser uses its serving Orca runtime. An SSH or WSL Git context does not by itself move REST authentication to that machine or distro. This setting covers REST features such as pull requests and build status, not `git fetch` or `git push`.
+
+- **Environment variables** (default): Orca uses `ORCA_AZURE_DEVOPS_ACCESS_TOKEN` as a bearer token when set. Otherwise it uses `ORCA_AZURE_DEVOPS_TOKEN`, then `ORCA_AZURE_DEVOPS_PAT`, as a personal access token with optional `ORCA_AZURE_DEVOPS_USERNAME`. Restart the owning Orca runtime after changing its environment. Set `ORCA_AZURE_DEVOPS_API_BASE_URL` only if Orca cannot derive the API URL from the Git remote or you want the Settings check to verify a specific organization.
+- **Azure CLI**: Install an up-to-date Azure CLI on the owning runtime host. Run `az login` and select the account for your Azure DevOps organization's tenant there. Orca uses the active CLI account and does not sign in or change accounts for you. This mode ignores environment credentials and supports only Azure DevOps Services over HTTPS (`dev.azure.com` and recognized `*.visualstudio.com` endpoints). Use **Environment variables** for Azure DevOps Server.
+
+Orca runs `az account get-access-token --resource 499b84ac-1321-427f-aa17-267ca6975798 --output json --only-show-errors`. It requires a future UTC `expires_on` Unix timestamp and does not accept the legacy local-time `expiresOn` field alone. If the CLI is too old or the account has changed, update the CLI or switch accounts externally, then choose **Re-check**. Re-check refreshes CLI discovery and discards the in-memory token cache. Orca also renews tokens within five minutes of expiry.
+
+**Credential ready** means Orca has a token, not that the account can access an organization. Without an explicit API base URL, access is checked when you use a repository. A successful organization check does not guarantee access to every repository.
+
 ## Troubleshooting
 
 - Slow main-process rebuilds: set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev` when you don't need main-process source maps.

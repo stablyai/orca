@@ -19,18 +19,22 @@ vi.mock('./repository-ref', () => ({
 const base = 'https://dev.azure.com/acme/Project'
 const pull = '/_apis/git/repositories/repo/pullRequests'
 const input = { provider: 'azure-devops', title: 'Review', base: 'main', head: 'feature' } as const
+const expiresAtMs = Date.parse('2026-01-01T00:10:00Z')
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
   installAzureDevOpsAuthSource({ getSettings: () => ({ azureDevOpsAuthMethod: 'azure-cli' }) })
   vi.stubEnv('ORCA_AZURE_DEVOPS_API_BASE_URL', undefined)
   vi.stubEnv('ORCA_AZURE_DEVOPS_TOKEN', 'ignored-pat')
   vi.mocked(acquireAzureCliAccessToken).mockResolvedValue({
     accessToken: 'cli-token-a',
-    expiresAtMs: Date.now() + 600_000
+    expiresAtMs
   })
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   installAzureDevOpsAuthSource(null)()
   vi.resetAllMocks()
   vi.unstubAllEnvs()
@@ -80,8 +84,8 @@ it('preserves API version negotiation for a legacy cloud organization', async ()
 
 it('refreshes a GET after an explicit HTTP 401', async () => {
   vi.mocked(acquireAzureCliAccessToken)
-    .mockResolvedValueOnce({ accessToken: 'rejected', expiresAtMs: Date.now() + 600_000 })
-    .mockResolvedValueOnce({ accessToken: 'fresh', expiresAtMs: Date.now() + 600_000 })
+    .mockResolvedValueOnce({ accessToken: 'rejected', expiresAtMs })
+    .mockResolvedValueOnce({ accessToken: 'fresh', expiresAtMs })
   vi.stubGlobal('fetch', async (_url: URL, init: RequestInit) =>
     new Headers(init.headers).get('authorization') === 'Bearer fresh'
       ? Response.json({ pullRequestId: 31 })
@@ -94,8 +98,8 @@ it('refreshes a GET after an explicit HTTP 401', async () => {
 
 it('does not replay a rejected creation, but lets the next attempt use a fresh credential', async () => {
   vi.mocked(acquireAzureCliAccessToken)
-    .mockResolvedValueOnce({ accessToken: 'rejected', expiresAtMs: Date.now() + 600_000 })
-    .mockResolvedValueOnce({ accessToken: 'fresh', expiresAtMs: Date.now() + 600_000 })
+    .mockResolvedValueOnce({ accessToken: 'rejected', expiresAtMs })
+    .mockResolvedValueOnce({ accessToken: 'fresh', expiresAtMs })
   vi.stubGlobal('fetch', async (_url: URL, init: RequestInit) =>
     new Headers(init.headers).get('authorization') === 'Bearer fresh'
       ? Response.json({ pullRequestId: 31, title: 'Review' })

@@ -1,7 +1,4 @@
-import {
-  AzureDevOpsIntegrationCard,
-  GiteaIntegrationCard
-} from '../../integrations/source-control/token-source-control-integration-cards'
+import { GiteaIntegrationCard } from '../../integrations/source-control/token-source-control-integration-cards'
 import { BitbucketIntegrationCard } from '../../integrations/source-control/bitbucket-integration-card'
 import {
   GitHubIntegrationCard,
@@ -31,7 +28,11 @@ function ProviderRow({
   )
 }
 
-export function IntegrationsPane(): React.JSX.Element {
+export function IntegrationsPane({
+  azureDevOps
+}: {
+  azureDevOps: React.ReactNode
+}): React.JSX.Element {
   const t = useTranslate()
   useIntegrationProviderStatusRefresh()
 
@@ -54,9 +55,7 @@ export function IntegrationsPane(): React.JSX.Element {
           <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.bitbucket}>
             <BitbucketIntegrationCard />
           </ProviderRow>
-          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.azuredevops}>
-            <AzureDevOpsIntegrationCard />
-          </ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.azuredevops}>{azureDevOps}</ProviderRow>
           <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.gitea}>
             <GiteaIntegrationCard />
           </ProviderRow>

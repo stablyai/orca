@@ -39,6 +39,8 @@ export function tokenApiStatusFromPreflight(
       return 'configured'
     case 'not-configured':
       return 'not-configured'
+    case undefined:
+      break
   }
   if (!status?.configured) {
     return 'not-configured'
