@@ -316,6 +316,7 @@ export function NativeChatMessageList({
     scrollRef,
     scrollMessageToTop,
     readerLeavesEnd,
+    readerAtEnd,
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation

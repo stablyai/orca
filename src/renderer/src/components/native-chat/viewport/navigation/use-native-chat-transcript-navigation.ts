@@ -23,6 +23,7 @@ import { nativeChatSlotIndexOf } from '../../conversation/slots/native-chat-tran
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { nativeChatRailJumpStep, useNativeChatHistoryJump } from './use-native-chat-history-jump'
 import { useNativeChatRailJumpLanding } from './use-native-chat-rail-jump-landing'
+import { useNativeChatReadingPosition } from './use-native-chat-reading-position'
 import type { NativeChatAlignEdge } from '../virtualization/use-native-chat-viewport-align'
 
 type NavigationRequest =
@@ -79,6 +80,7 @@ export function useNativeChatNavigation({
   scrollRef,
   scrollMessageToTop,
   readerLeavesEnd,
+  readerAtEnd,
   scrollToBottom
 }: {
   request: NativeChatNavigationRequest
@@ -101,6 +103,7 @@ export function useNativeChatNavigation({
   scrollRef: React.RefObject<HTMLDivElement | null>
   scrollMessageToTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   readerLeavesEnd: () => void
+  readerAtEnd: () => boolean
   scrollToBottom: () => void
 }) {
   const { issue, nextRequestId } = request
@@ -207,6 +210,20 @@ export function useNativeChatNavigation({
     releaseHistory,
     scrollToBottom
   ])
+  useNativeChatReadingPosition({
+    sessionKey,
+    isVisible,
+    ready,
+    scrollRef,
+    readerAtEnd,
+    jumpTo: (messageId) =>
+      startHistoryJump({ kind: 'item', id: messageId }, (result) => {
+        if (result === 'missing') {
+          releaseHistory()
+          scrollToBottom()
+        }
+      })
+  })
   const jumpToLatest = useCallback(() => {
     beginNavigation()
     scrollToBottom()

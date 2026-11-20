@@ -1,4 +1,4 @@
-import { Activity, memo, useCallback, useMemo, useState } from 'react'
+import { Activity, memo, useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store'
@@ -15,6 +15,7 @@ import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { chatViewRecency, useRetainedChatViewIds } from './native-chat-view-retention'
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -23,7 +24,6 @@ type StructuredAgentSessionTab = Tab & {
 
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
-const NO_SHOWN_TAB_IDS: ReadonlySet<string> = new Set()
 
 const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOverlaySlot({
   tab,
@@ -157,25 +157,32 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     )
     const isActive = (tab: Tab) =>
       Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)
-    // Why: a chat holds no view state until it is first shown, and mounting every restored chat runs the renderer out of memory at thousands of tabs.
-    const [shownTabIds, setShownTabIds] = useState(NO_SHOWN_TAB_IDS)
-    const mountedTabs = useMemo(
-      () =>
-        structuredTabs.filter(
-          (tab) => shownTabIds.has(tab.id) || groupActiveTabById.get(tab.groupId) === tab.id
-        ),
-      [structuredTabs, shownTabIds, groupActiveTabById]
-    )
-    let newlyShownCount = 0
-    for (const tab of mountedTabs) {
-      if (!shownTabIds.has(tab.id)) {
-        newlyShownCount++
+    const isShown = (tab: Tab) =>
+      Boolean(
+        (isWorktreeActive || preparingHandoff) && groupActiveTabById.get(tab.groupId) === tab.id
+      )
+    const shownKey = [...structuredTabs, ...roomTabs]
+      .filter(isShown)
+      .map((tab) => tab.id)
+      .join('\n')
+    useLayoutEffect(() => {
+      if (shownKey) {
+        chatViewRecency.reveal(shownKey.split('\n'))
       }
-    }
-    // Recording exactly the mounted chats also drops closed ones, so a reopened tab waits to be shown.
-    if (newlyShownCount > 0 || mountedTabs.length - newlyShownCount < shownTabIds.size) {
-      setShownTabIds(new Set(mountedTabs.map((tab) => tab.id)))
-    }
+    }, [shownKey])
+    const ownedTabIdsRef = useRef<ReadonlySet<string>>(new Set())
+    useLayoutEffect(() => {
+      const owned = new Set([...structuredTabs, ...roomTabs].map((tab) => tab.id))
+      const closed = new Set([...ownedTabIdsRef.current].filter((id) => !owned.has(id)))
+      ownedTabIdsRef.current = owned
+      if (closed.size > 0) {
+        chatViewRecency.forget(closed)
+      }
+    }, [structuredTabs, roomTabs])
+    // Why: only shown chats and a few recently shown ones stay mounted, so memory doesn't grow with chats visited.
+    const retainedTabIds = useRetainedChatViewIds()
+    const isMounted = (tab: Tab) => isShown(tab) || retainedTabIds.includes(tab.id)
+    const mountedTabs = structuredTabs.filter(isMounted)
 
     return (
       <>
@@ -195,7 +202,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
             onFocusOwningGroup={focusOwningGroup}
           />
         ))}
-        {roomTabs.map((tab) => (
+        {roomTabs.filter(isMounted).map((tab) => (
           <RoomOverlaySlot
             key={tab.id}
             tab={tab}
