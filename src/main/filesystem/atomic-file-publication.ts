@@ -5,7 +5,7 @@ import {
   observeFilePublication
 } from './file-content-observation'
 import { createHash, randomUUID } from 'node:crypto'
-import { linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { constants, copyFileSync, linkSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
@@ -93,7 +93,7 @@ export function removeFileAtomicallyIfUnchanged(
   const keep = !options?.credential
   restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
   try {
-    assertHardLinkPublicationSupported(targetPath, targetPath)
+    assertGuardedPublicationSupported(targetPath, targetPath)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return false
@@ -234,7 +234,7 @@ function attemptGuardedAtomicWrite(
     if (expectedContents === null) {
       return publishFileWithoutOverwrite(tmpPath, targetPath)
     }
-    assertHardLinkPublicationSupported(tmpPath, targetPath)
+    assertGuardedPublicationSupported(tmpPath, targetPath)
     try {
       renameFileWithWindowsRetry(targetPath, heldPath)
     } catch (error) {
@@ -269,7 +269,7 @@ function attemptGuardedAtomicWrite(
   }
 }
 
-function assertHardLinkPublicationSupported(sourcePath: string, targetPath: string): void {
+function assertGuardedPublicationSupported(sourcePath: string, targetPath: string): void {
   const probePath = `${targetPath}.${process.pid}.${randomUUID()}.link-probe`
   try {
     if (!publishFileWithoutOverwrite(sourcePath, probePath)) {
@@ -281,25 +281,44 @@ function assertHardLinkPublicationSupported(sourcePath: string, targetPath: stri
 }
 
 export function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      linkSync(sourcePath, targetPath)
+      return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+        return false
+      }
+      if (attempt === 0 && isPermissionError(error) && process.platform === 'win32') {
+        grantDirAcl(dirname(targetPath))
+        continue
+      }
+      if (!isHardLinkUnsupported(error)) {
+        throw error
+      }
+      break
+    }
+  }
+  // Why: \\wsl$ shares and FAT/exFAT have no hard links; an exclusive copy still never overwrites.
   try {
-    linkSync(sourcePath, targetPath)
+    copyFileSync(sourcePath, targetPath, constants.COPYFILE_EXCL)
     return true
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
       return false
     }
-    if (isPermissionError(error) && process.platform === 'win32') {
-      grantDirAcl(dirname(targetPath))
-      try {
-        linkSync(sourcePath, targetPath)
-        return true
-      } catch (retryError) {
-        if ((retryError as NodeJS.ErrnoException).code === 'EEXIST') {
-          return false
-        }
-        throw retryError
-      }
-    }
     throw error
   }
+}
+
+function isHardLinkUnsupported(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code
+  if (code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'ENOSYS') {
+    return true
+  }
+  // A \\wsl$ share refuses Windows links ("Incorrect function"), which Node reports as EISDIR,
+  // EINVAL or UNKNOWN; Linux vfat/exfat refuse link() with EPERM.
+  return process.platform === 'win32'
+    ? code === 'EISDIR' || code === 'EINVAL' || code === 'UNKNOWN'
+    : code === 'EPERM'
 }
