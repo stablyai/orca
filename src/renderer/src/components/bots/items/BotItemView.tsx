@@ -15,8 +15,6 @@ import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/wor
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemStatus } from '../../../../../shared/bots/bot-items'
-import { botItemWaitingLine } from '../../../../../shared/bots/bot-item-question-answers'
-import { botItemQuestionLine } from '../../../../../shared/bots/bot-item-ask'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatPaneFileDropSurface } from '../../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
@@ -234,7 +232,14 @@ export function BotItemBody({
     }),
     [fileContext?.fileLinkContext, runtimeContext]
   )
-  const { steps, sent, quick } = useBotItemQuestionSteps(bot, item, view.events, sendLatest)
+  // `waitingLine`: the question the comment box names, until a reply is on its way.
+  const { steps, sent, quick, waitingLine } = useBotItemQuestionSteps(
+    bot,
+    item,
+    view.events,
+    sendLatest,
+    pending.shown
+  )
   // The box's Enter, "Replying to" a line of several questions, answers that line like a quick reply.
   const sendFromBox = (text: string, paths: readonly string[]): void => {
     const line = steps ? `${steps.askId}:${steps.current}` : null
@@ -251,22 +256,13 @@ export function BotItemBody({
         : {
             send: quick,
             edit: (text: string) => comment.current?.fill(text),
+            recover: (text: string) => comment.current?.fill(text, true),
             type: () => comment.current?.answer(),
             steps,
             sent
           },
     [deleted, comment, quick, steps, sent]
   )
-  // The question the item waits on, as the comment box names it, until a reply is on its way: with
-  // several questions, the line the step is on.
-  const stepLine = steps?.shape.decisions[steps.current]
-  const waitingLine = stepLine
-    ? {
-        id: `${steps!.askId}:${steps!.current}`,
-        line: botItemQuestionLine(stepLine.question),
-        replies: stepLine.replies.length > 0
-      }
-    : botItemWaitingLine(item, view.events)
   // The waiting question's comment, with its words and quick replies, is read even when it is older
   // than the loaded page: earlier pages load until it shows.
   const questionId = item.question?.eventId

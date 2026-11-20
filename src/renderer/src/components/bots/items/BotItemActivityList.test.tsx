@@ -119,7 +119,7 @@ const WAITING: BotItemEvent[] = [
 ]
 
 it("posts a quick reply as the owner's comment, and Alt-click puts it in the box instead", () => {
-  const actions = { send: vi.fn(), edit: vi.fn(), type: vi.fn() }
+  const actions = { send: vi.fn(), edit: vi.fn(), recover: vi.fn(), type: vi.fn() }
   const item = makeTestBotItem(6, {
     status: 'needs_you',
     question: { eventId: 'e2', text: 'readable copy' }
@@ -158,7 +158,7 @@ it('shows an answer an older host recorded as a quoted comment, the question rea
       bot={BOT}
       item={makeTestBotItem(6)}
       events={events}
-      quickReplies={{ send: vi.fn(), edit: vi.fn(), type: vi.fn() }}
+      quickReplies={{ send: vi.fn(), edit: vi.fn(), recover: vi.fn(), type: vi.fn() }}
     />
   )
 

@@ -7,7 +7,10 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemEvent } from '../../../../../shared/bots/bot-items'
-import type { BotItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
+import {
+  botItemQuestionLine,
+  type BotItemQuestionShape
+} from '../../../../../shared/bots/bot-item-ask'
 import {
   botItemAnswersText,
   botItemAnswerWords,
@@ -15,8 +18,10 @@ import {
 } from '../../../../../shared/bots/bot-item-answer-lines'
 import {
   botItemQuestionPairing,
+  botItemWaitingLine,
   type BotItemQuestionAnswers
 } from '../../../../../shared/bots/bot-item-question-answers'
+import type { BotItemPendingComment } from './use-bot-item-pending-comments'
 import { useNativeChatDraft } from '../../native-chat/drafts/use-native-chat-draft'
 
 const NOT_COMPOSING = (): boolean => false
@@ -68,6 +73,8 @@ export type BotItemQuestionSteps = {
 export type BotItemQuickReplyActions = {
   send: (text: string) => void
   edit: (text: string) => void
+  /** Into the box as a comment of its own, answering no line: answers held for an earlier ask. */
+  recover: (text: string) => void
   /** Type your answer: the comment box takes focus, glowing once. */
   type: () => void
   /** The waiting ask of several questions, one line at a time. */
@@ -83,12 +90,15 @@ export function useBotItemQuestionSteps(
   bot: Bot,
   item: BotItem,
   events: readonly BotItemEvent[],
-  send: (text: string) => void
+  send: (text: string) => void,
+  pending: readonly BotItemPendingComment[]
 ): {
   steps: BotItemQuestionSteps | null
   sent: BotItemSentAnswers | null
   /** A quick reply of one question, posted at once as it always has. */
   quick: (text: string) => void
+  /** What the comment box replies to: with several questions, the line the step is on. */
+  waitingLine: { id: string; line: string; replies: boolean } | null
 } {
   // As cheap as the box's own waiting-line read, on each render.
   const asked = waitingAsk(item, events)
@@ -106,7 +116,10 @@ export function useBotItemQuestionSteps(
   const current =
     chosen && chosen.askId === askId && lines.includes(chosen.index) ? chosen.index : firstOpen
   const answer = useLatestHandler((index: number, words: string) => {
-    const next = shape.decisions.map((_, at) => (at === index ? words : (held[at] ?? null)))
+    // A line another client answered meanwhile keeps that answer; its held one is dropped.
+    const next = shape.decisions.map((_, at) =>
+      at === index ? words : lines.includes(at) ? (held[at] ?? null) : null
+    )
     setChosen(null)
     if (lines.every((at) => next[at])) {
       const text = botItemAnswersText(shape, next)
@@ -130,5 +143,21 @@ export function useBotItemQuestionSteps(
     }
     send(text)
   })
-  return { steps, sent, quick }
+  const stepLine = steps?.shape.decisions[steps.current]
+  return {
+    steps,
+    // Shown on their lines while their comment is on its way; a refused or discarded one shows as itself.
+    sent:
+      sent && pending.some(({ event, failed }) => !failed && event.data.text === sent.text)
+        ? sent
+        : null,
+    quick,
+    waitingLine: stepLine
+      ? {
+          id: `${askId}:${steps.current}`,
+          line: botItemQuestionLine(stepLine.question),
+          replies: stepLine.replies.length > 0
+        }
+      : botItemWaitingLine(item, events)
+  }
 }

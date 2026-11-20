@@ -95,7 +95,7 @@ export function BotItemQuestionLines({
                 words={held}
                 // Not sent: into the box, to send as a comment.
                 onClick={() => {
-                  actions.edit(botItemAnswersText(shape, unsent.held))
+                  actions.recover(botItemAnswersText(shape, unsent.held))
                   unsent.hold([])
                 }}
               />

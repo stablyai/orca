@@ -5,6 +5,7 @@
 // first one caused (`cause: 'answer'`) is not shown while the question is loaded. Answers recorded by
 // older hosts are replies like any other.
 import { botItemCommentFiles } from './bot-item-comment-files'
+import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
   botItemCommentImages,
   botItemLinksOnePerChain,
@@ -43,11 +44,19 @@ function answeredQuestion(event: BotItemEvent): string | null {
     : null
 }
 
-/** An answer the ask's lines show whole: words only, no recorded picks, images or files. */
+/** An answer the ask's lines show whole: words only, no recorded picks, images or files, and where it
+ *  names its lines, nothing but those lines. */
 function readsOnAsk(event: BotItemEvent, pairing: BotItemQuestionPairing): boolean {
   const text = typeof event.data.text === 'string' ? event.data.text : ''
+  const paired = pairing.replies.get(event.id)
+  const shape = paired ? pairing.questions.get(paired.questionId)?.shape : undefined
+  if (!shape) {
+    return false
+  }
+  const lines = text.split('\n').filter((line) => line.trim())
+  const named = botItemNamedAnswers(shape, text).filter((words) => words !== null).length
   return (
-    pairing.replies.has(event.id) &&
+    (named === 0 || named === lines.length) &&
     !Array.isArray(event.data.decisions) &&
     botItemCommentImages(event.data).length === 0 &&
     botItemCommentFiles(text).files.length === 0
