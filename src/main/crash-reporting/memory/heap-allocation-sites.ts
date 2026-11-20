@@ -103,16 +103,6 @@ function describeFrame(frame: CallFrame, trustedScriptPrefix: string | null): st
   return `${name}@${fileName}:${lineNumber + 1}:${columnNumber + 1}`
 }
 
-/** Bundle assets URL beside the window's page, or null for unsupported page URLs. */
-export function trustedScriptPrefixFor(pageUrl: string): string | null {
-  try {
-    const prefix = new URL('assets/', pageUrl)
-    return ['file:', 'http:', 'https:'].includes(prefix.protocol) ? prefix.href : null
-  } catch {
-    return null
-  }
-}
-
 export function readSamplingProfile(result: unknown): SamplingProfile | null {
   if (!result || typeof result !== 'object' || !('profile' in result)) {
     return null
