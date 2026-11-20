@@ -150,7 +150,7 @@ it.each([
   }
 )
 
-it('shares a transaction among small item writes but never between two large tool outputs', () => {
+it('shares a transaction among small item writes but commits two 200 KB tool outputs alone', () => {
   const toolOutput = (id: number, reservedBytes: number): JournalSqlRequest =>
     prepareJournalSqlRequest(id, {
       type: 'write',
