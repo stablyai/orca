@@ -42,7 +42,7 @@ type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   heldDeliveryId?: string
   newestSequence: number
   enterDelayMs: number
-  onUncertainDelivery?: (ptyId: string) => void
+  onUncertainDelivery?: (ptyId: string, mailboxHandle: string) => void
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -114,7 +114,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     }
     args.state.deactivateWatermark(args.mailboxHandle, args.newestSequence, ptyId)
     args.settle(ptyId, flight)
-    args.onUncertainDelivery?.(ptyId)
+    args.onUncertainDelivery?.(ptyId, args.mailboxHandle)
   }
   try {
     const writeResult = args.deps.writePty(ptyId, pointerText)

@@ -46,7 +46,7 @@ export type PointerSubmitDependencies = {
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
-  onUncertainDelivery?: (ptyId: string) => void
+  onUncertainDelivery?: (ptyId: string, mailboxHandle: string) => void
   onDeliveryDecision?: (ptyId: string, decision?: MailboxDeliveryDecision) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -286,7 +286,7 @@ export function submitOrchestrationMailboxPointer(
       const current = deps.state.isCurrentFlight(input.ptyId, input.flight)
       deps.settle(input.ptyId, input.flight)
       if (uncertain && current) {
-        deps.onUncertainDelivery?.(input.ptyId)
+        deps.onUncertainDelivery?.(input.ptyId, input.mailboxHandle)
       }
       if (
         released &&

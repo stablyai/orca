@@ -11,6 +11,7 @@ import {
   MAILBOX_POINTER_RESERVED,
   MAILBOX_POINTER_WRITE_ATTEMPTED
 } from '../../db/messages/mailbox-pointer-enter-state'
+import { hasUncertainMailboxClaims } from '../../db/messages/uncertain-mailbox-claims'
 
 /** Classifies persisted pointer reservations against the terminal's current process; it owns no live flight. */
 export function resumePendingOrchestrationMailboxPointer(args: {
@@ -128,7 +129,7 @@ export function reconcilePendingOrchestrationMailboxPointer<
 export class UncertainMailboxReconciliation<T extends OrchestrationMessageWaiter> {
   private readonly initialized = new Map<
     string,
-    { incarnation: string; db: OrchestrationDb | null; mailboxes: ReadonlySet<string> }
+    { incarnation: string; db: OrchestrationDb | null; mailboxes: Set<string> }
   >()
   private readonly pending = new Set<string>()
 
@@ -164,23 +165,56 @@ export class UncertainMailboxReconciliation<T extends OrchestrationMessageWaiter
         ? reconcileUncertainMailboxPointers(this.deps, this.state, ptyId)
         : null
       if (incarnation && mailboxes) {
-        this.initialized.set(ptyId, { incarnation, db: this.deps.getDb(), mailboxes })
+        this.initialized.set(ptyId, {
+          incarnation,
+          db: this.deps.getDb(),
+          mailboxes: new Set(mailboxes)
+        })
       }
     })
   }
 
-  /** A consuming read can only clear the mailboxes it read, so unrelated reads skip the recount.
-   * Why: the recount reads every claim the terminal holds, including other Runs' retained history. */
-  reconcileConsumed(ptyId: string, consumed: readonly string[]): void {
+  /** Re-check only `mailboxes` (read, or just typed into uncertainly) and publish if the notice changed.
+   * Why: a terminal-wide recount reads every claim it holds, including other Runs' retained history. */
+  reconcileMailboxes(ptyId: string, mailboxes: readonly string[]): void {
     const known = this.initialized.get(ptyId)
-    if (
-      !known ||
-      known.db !== this.deps.getDb() ||
-      known.incarnation !== this.deps.resolveSubmitTarget(ptyId)?.processIncarnation ||
-      consumed.some((mailbox) => known.mailboxes.has(mailbox))
-    ) {
+    const incarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
+    if (!known || known.db !== this.deps.getDb() || known.incarnation !== incarnation) {
       this.reconcile(ptyId)
+      return
     }
+    queueMicrotask(() => {
+      const db = this.deps.getDb()
+      if (this.initialized.get(ptyId) !== known || !db || this.pending.has(ptyId)) {
+        return
+      }
+      const staged = new Set(this.state.flightForPty(ptyId)?.stagedMessageIds)
+      let changed = false
+      try {
+        for (const mailbox of mailboxes) {
+          const uncertain = hasUncertainMailboxClaims(db, {
+            ptyId,
+            mailbox,
+            incarnation: known.incarnation,
+            staged
+          })
+          if (uncertain !== known.mailboxes.has(mailbox)) {
+            changed = true
+            if (uncertain) {
+              known.mailboxes.add(mailbox)
+            } else {
+              known.mailboxes.delete(mailbox)
+            }
+          }
+        }
+      } catch {
+        // Unavailable reservation evidence cannot withdraw an unread-mail explanation.
+        return
+      }
+      if (changed) {
+        this.deps.onDeliveryDecision(ptyId, { uncertainMailboxes: [...known.mailboxes].sort() })
+      }
+    })
   }
 
   /** Every terminal whose uncertainty was reconstructed, e.g. after a reset deleted mail under its notice. */

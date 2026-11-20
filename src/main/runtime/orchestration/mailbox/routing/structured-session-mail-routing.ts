@@ -91,7 +91,6 @@ export abstract class OrcaRuntimeWithStructuredSessionMail extends OrcaRuntimeWi
     reservationPtys: readonly string[] = []
   ): void {
     try {
-      const reserved = new Set(reservationPtys)
       const ptys = new Set(reservationPtys)
       for (const mailbox of mailboxes) {
         const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(mailbox)
@@ -99,12 +98,9 @@ export abstract class OrcaRuntimeWithStructuredSessionMail extends OrcaRuntimeWi
           ptys.add(terminal.ptyId)
         }
       }
+      // A read only clears uncertainty, and only in the mailboxes it read (which name every read message's mailbox).
       for (const ptyId of ptys) {
-        if (reserved.has(ptyId)) {
-          this.orchestrationMailboxPointerDelivery.reconcileUncertainMail(ptyId)
-        } else {
-          this.orchestrationMailboxPointerDelivery.uncertainty.reconcileConsumed(ptyId, mailboxes)
-        }
+        this.orchestrationMailboxPointerDelivery.uncertainty.reconcileMailboxes(ptyId, mailboxes)
         this.armDeliveryRecheck(ptyId, { settled: true })
       }
     } catch {

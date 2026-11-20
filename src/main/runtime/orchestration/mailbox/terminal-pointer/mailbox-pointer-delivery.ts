@@ -151,7 +151,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         newestSequence,
         enterDelayMs: pointerEnterDelayMs(),
         settle: (ptyId, flight) => this.settle(ptyId, flight),
-        onUncertainDelivery: (ptyId) => this.reconcileUncertainMail(ptyId),
+        onUncertainDelivery: (ptyId, mailbox) =>
+          this.uncertainty.reconcileMailboxes(ptyId, [mailbox]),
         redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
       })
     } finally {
@@ -183,7 +184,6 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
 
   readonly restoreUncertainMail = (ptyId: string): void => this.uncertainty.ensure(ptyId)
 
-  readonly reconcileUncertainMail = (ptyId: string): void => this.uncertainty.reconcile(ptyId)
   readonly reconcileAllUncertainMail = (): void => this.uncertainty.reconcileAll()
 
   readonly completeRecovery = this.state.completeRecovery.bind(this.state)
