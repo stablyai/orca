@@ -1384,42 +1384,7 @@ jobs:
           config/scripts/desktop-distribution/nsis/nsis-process-check.test.mjs
           config/scripts/performance/idle-cpu/idle-cpu-process-sampling.test.mjs
 
-      - name: Resolve the Windows Rust build scope
-        id: rust-scope
-        shell: bash
-        run: node config/scripts/native-build/windows/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
-
-      # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
-      - name: Cache Windows CLI launcher
-        uses: actions/cache@v5
-        with:
-          # Cache cargo registry with .build so misses do not rebuild resource crates cold.
-          path: |
-            native/windows-cli-launcher/.build
-            native/windows-cli-launcher/target
-            native/windows-agent-hook/.build
-            native/windows-agent-hook/target
-            ~/.cargo/registry
-          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs', 'config/scripts/native-build/windows/build-windows-agent-hook.mjs', 'config/scripts/native-build/windows/windows-rust-executable-build.mjs', 'config/scripts/native-build/windows/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
-          restore-keys: |
-            windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
-
-      # Require cargo early; otherwise packaged Rust launcher fails deep inside builder native hooks.
-      - name: Ensure the Rust toolchain for the Windows CLI launcher
-        shell: pwsh
-        run: |
-          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-            rustup toolchain install stable --profile minimal
-            rustup default stable
-          }
-          cargo --version
-
-      # Build agent-hook once before tests so suites share the binary instead of compiling concurrently.
-      - name: Build the Windows agent hook
-        run: node config/scripts/native-build/windows/build-windows-agent-hook.mjs
-
-      - name: Build the Windows CLI launcher
-        run: node config/scripts/native-build/windows/build-windows-cli-launcher.mjs
+      - uses: ./.github/actions/prepare-windows-package-rust
 
       # Install Electron once: otherwise each Electron test's require('electron') extracts it into one dist concurrently (EBUSY, 0xC0000005).
       - name: Install the Electron binary
@@ -1487,59 +1452,13 @@ jobs:
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
 
-      - name: Resolve the Windows Rust build scope
-        id: rust-scope
-        shell: bash
-        run: node config/scripts/native-build/windows/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/prepare-windows-package-rust
 
-      # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
-      - name: Cache Windows CLI launcher
-        uses: actions/cache@v5
-        with:
-          # Cache cargo registry with .build so misses do not rebuild resource crates cold.
-          path: |
-            native/windows-cli-launcher/.build
-            native/windows-cli-launcher/target
-            native/windows-agent-hook/.build
-            native/windows-agent-hook/target
-            ~/.cargo/registry
-          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs', 'config/scripts/native-build/windows/build-windows-agent-hook.mjs', 'config/scripts/native-build/windows/windows-rust-executable-build.mjs', 'config/scripts/native-build/windows/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
-          restore-keys: |
-            windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
-
-      # Require cargo early; otherwise packaged Rust launcher fails deep inside builder native hooks.
-      - name: Ensure the Rust toolchain for the Windows CLI launcher
-        shell: pwsh
-        run: |
-          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-            rustup toolchain install stable --profile minimal
-            rustup default stable
-          }
-          cargo --version
-
-      - name: Build the Windows agent hook
-        run: node config/scripts/native-build/windows/build-windows-agent-hook.mjs
-
-      - name: Build the Windows CLI launcher
-        run: node config/scripts/native-build/windows/build-windows-cli-launcher.mjs
-
-      # build:release:parallel's steps, with the mobile page (it writes only out/mobile-web) overlapping the Vite targets.
+      # Use parallel Vite targets as already packaged/smoked on Linux; release behavior is otherwise identical.
       - name: Build package inputs
-        shell: bash
         env:
           ORCA_CI_MAIN_SOURCEMAPS: '0'
-        run: |
-          set -euo pipefail
-          pnpm run build:wsl-guest
-          pnpm run build:native
-          pnpm run verify:computer-native
-          pnpm run build:cli
-          pnpm run build:mobile-web &
-          mobile="$!"
-          status=0
-          { pnpm run build:electron-vite:parallel && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer; } || status=1
-          wait "$mobile" || status=1
-          exit "$status"
+        run: pnpm run build:release:parallel
 
       - name: Prepare Electron native runtime
         uses: ./.github/actions/prepare-native-runtime

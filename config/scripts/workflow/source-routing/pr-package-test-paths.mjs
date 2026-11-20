@@ -110,6 +110,7 @@ export const LINUX_PACKAGE_PREFIXES = [
 
 export const WINDOWS_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  '.github/actions/prepare-windows-package-rust/',
   'native/windows-cli-launcher/',
   'native/windows-agent-hook/',
   'native/computer-use-windows/',
