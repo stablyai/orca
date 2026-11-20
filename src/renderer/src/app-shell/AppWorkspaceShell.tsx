@@ -94,6 +94,33 @@ function WorktreeSidebar({
   )
 }
 
+function ToolsSidebar({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <RecoverableRenderErrorBoundary
+      boundaryId="right-sidebar"
+      surface="right-sidebar"
+      resetKey={
+        layout.rightSidebarTab === 'explorer'
+          ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
+          : layout.rightSidebarTab
+      }
+      title={t('auto.App.ed6b168d00', 'The tools sidebar hit an error.')}
+      description={t(
+        'auto.App.8d1e160ed1',
+        'Retry the sidebar or switch tabs to reload this surface.'
+      )}
+    >
+      <RightSidebar
+        side={layout.toolsSidebarOnLeft ? 'left' : 'right'}
+        reserveTitlebarSpace={
+          layout.toolsSidebarOnLeft && layout.leftTitlebarChromeLayout.isFloating
+        }
+      />
+    </RecoverableRenderErrorBoundary>
+  )
+}
+
 // A chat-bound creation shows the chat itself, usable before its worktree exists.
 function PendingCreationSurface(props: {
   creationId: string
@@ -164,6 +191,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
   )
 }
 
+/** Workspace navigation, movable tools sidebar, and page/workbench content. */
 export function AppWorkspaceShell(props: {
   layout: AppChromeLayout
   floatingWorkspace: FloatingWorkspacePanelState
@@ -238,6 +266,9 @@ export function AppWorkspaceShell(props: {
                 <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
               )
             ) : null}
+            {layout.showRightSidebarControls && layout.toolsSidebarOnLeft ? (
+              <ToolsSidebar layout={layout} />
+            ) : null}
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
               {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}
               {layout.stackedSidebarOpen &&
@@ -247,7 +278,7 @@ export function AppWorkspaceShell(props: {
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}
-                {showsFloatingRightSidebarToggle(layout) && (
+                {showsFloatingRightSidebarToggle(layout) && !layout.toolsSidebarOnLeft && (
                   <div
                     className="absolute top-0 z-10 flex items-center h-[36px]"
                     style={
@@ -305,24 +336,8 @@ export function AppWorkspaceShell(props: {
             </div>
           </div>
         </div>
-        {/* Retain the shell for stable layout while heavy panels disconnect; tasks can unmount it. */}
-        {layout.showRightSidebarControls ? (
-          <RecoverableRenderErrorBoundary
-            boundaryId="right-sidebar"
-            surface="right-sidebar"
-            resetKey={
-              layout.rightSidebarTab === 'explorer'
-                ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
-                : layout.rightSidebarTab
-            }
-            title={t('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
-            description={t(
-              'auto.App.8d1e160ed1',
-              'Retry the sidebar or switch tabs to reload this surface.'
-            )}
-          >
-            <RightSidebar />
-          </RecoverableRenderErrorBoundary>
+        {layout.showRightSidebarControls && !layout.toolsSidebarOnLeft ? (
+          <ToolsSidebar layout={layout} />
         ) : null}
       </div>
     </RecoverableRenderErrorBoundary>

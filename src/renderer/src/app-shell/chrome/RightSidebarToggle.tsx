@@ -1,4 +1,4 @@
-import { PanelRight } from 'lucide-react'
+import { PanelLeft, PanelRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useShortcutLabel } from '../../lib/keyboard/useShortcutLabel'
@@ -9,6 +9,8 @@ import { useBotNeedsYouCount, useBotNow } from '../../components/bots/use-bot-no
 export function RightSidebarToggle(): React.JSX.Element {
   const t = useTranslate()
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
+  const onLeft = useAppStore((s) => s.settings?.toolsSidebarPosition === 'left')
+  const Icon = onLeft ? PanelLeft : PanelRight
   const rightSidebarShortcutLabel = useShortcutLabel('sidebar.right.toggle')
   const open = useAppStore((s) => s.rightSidebarOpen)
   const bot = useBotForWorkspace(useAppStore((s) => s.activeWorktreeId))
@@ -30,7 +32,7 @@ export function RightSidebarToggle(): React.JSX.Element {
           onClick={toggleRightSidebar}
           aria-label={needsYouLabel ?? t('auto.App.9e0b441a91', 'Toggle right sidebar')}
         >
-          <PanelRight size={16} />
+          <Icon size={16} />
           {needsYouLabel ? (
             <span
               aria-hidden

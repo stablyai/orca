@@ -80,6 +80,13 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const t = useTranslate()
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
+  const toolsSidebarOnLeft = useAppStore((state) => state.settings?.toolsSidebarPosition === 'left')
+  const windowControlsSpacerStyle = {
+    width: toolsSidebarOnLeft
+      ? 'var(--window-controls-width, 0px)'
+      : 'calc(40px + var(--window-controls-width, 0px))',
+    WebkitAppRegion: 'no-drag'
+  }
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
@@ -291,7 +298,9 @@ export default function TabGroupPanel({
         >
           <div className="flex h-full items-stretch pr-1">
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
-            {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+            {reserveCollapsedSidebarHeaderSpace &&
+            !sidebarOpen &&
+            !(toolsSidebarOnLeft && rightSidebarOpen) ? (
               <div
                 className="shrink-0"
                 style={
@@ -340,16 +349,8 @@ export default function TabGroupPanel({
               </div>
             </div>
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
-            {reserveRightTitlebarSpace ? (
-              <div
-                className="shrink-0"
-                style={
-                  {
-                    width: 'calc(40px + var(--window-controls-width, 0px))',
-                    WebkitAppRegion: 'no-drag'
-                  } as React.CSSProperties
-                }
-              />
+            {reserveRightTitlebarSpace || (reserveClosedExplorerToggleSpace && toolsSidebarOnLeft) ? (
+              <div className="shrink-0" style={windowControlsSpacerStyle} />
             ) : null}
           </div>
         </div>

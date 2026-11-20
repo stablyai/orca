@@ -167,6 +167,7 @@ export function ActivityBarButton({
   active,
   onClick,
   layout,
+  sidebarSide = 'right',
   statusIndicator,
   compact = false
 }: {
@@ -174,6 +175,7 @@ export function ActivityBarButton({
   active: boolean
   onClick: () => void
   layout: 'top' | 'side'
+  sidebarSide?: 'left' | 'right'
   statusIndicator?: CheckStatus | null
   /** A labeled tab that isn't open shows its icon alone, for a bar too narrow for every title. */
   compact?: boolean
@@ -252,7 +254,12 @@ export function ActivityBarButton({
         <div className="absolute bottom-0 left-[25%] right-[25%] h-[2px] bg-activity-bar-indicator rounded-t" />
       )}
       {active && !isTop && (
-        <div className="absolute right-0 top-[25%] bottom-[25%] w-[2px] bg-activity-bar-indicator rounded-l" />
+        <div
+          className={cn(
+            'absolute top-[25%] bottom-[25%] w-[2px] bg-activity-bar-indicator',
+            sidebarSide === 'left' ? 'left-0 rounded-r' : 'right-0 rounded-l'
+          )}
+        />
       )}
     </button>
   )
@@ -264,7 +271,10 @@ export function ActivityBarButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent side={isTop ? 'bottom' : 'left'} sideOffset={6}>
+      <TooltipContent
+        side={isTop ? 'bottom' : sidebarSide === 'left' ? 'right' : 'left'}
+        sideOffset={6}
+      >
         {item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
       </TooltipContent>
     </Tooltip>
