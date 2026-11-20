@@ -64,8 +64,10 @@ export type BotItemQuestionSteps = {
   held: readonly (string | null)[]
   /** The line shown, by its index in the ask. */
   current: number
-  /** The lines to step through: those no comment answered yet. */
+  /** The lines to step through: those no comment answered yet, or only by order while held here. */
   lines: readonly number[]
+  /** Comments read by order on a line held here: shown as comments of their own. */
+  plain: ReadonlySet<string>
   go: (index: number) => void
   answer: (index: number, words: string) => void
 }
@@ -108,9 +110,15 @@ export function useBotItemQuestionSteps(
   const { held, hold } = useBotItemHeldAnswers(botItemHeldAnswersScope(bot, item.uid, askId), shape)
   const [chosen, setChosen] = useState<{ askId: string; index: number } | null>(null)
   const [sent, setSent] = useState<BotItemSentAnswers | null>(null)
-  const lines = useMemo(
-    () => shape.decisions.flatMap((_, index) => (waiting?.answers[index] ? [] : [index])),
-    [shape, waiting]
+  // A plain comment read by order took a line whose answer is held here: the held answer stands.
+  const lines = shape.decisions.flatMap((_, index) =>
+    !waiting?.answers[index] || (waiting.byOrder[index] && held[index]) ? [index] : []
+  )
+  const plain = new Set(
+    lines.flatMap((index) => {
+      const taken = waiting?.answers[index]
+      return taken ? [taken.id] : []
+    })
   )
   const firstOpen = lines.find((index) => !held[index]) ?? lines[0] ?? 0
   const current =
@@ -130,11 +138,9 @@ export function useBotItemQuestionSteps(
     }
     hold(next)
   })
-  const go = useCallback((index: number) => setChosen({ askId, index }), [askId])
-  const steps = useMemo(
-    () => (waiting ? { askId, shape, held, current, lines, go, answer } : null),
-    [waiting, askId, shape, held, current, lines, go, answer]
-  )
+  const go = useLatestHandler((index: number) => setChosen({ askId, index }))
+  // Read fresh each render, as the waiting ask is.
+  const steps = waiting ? { askId, shape, held, current, lines, plain, go, answer } : null
   const quick = useLatestHandler((text: string) => {
     if (asked) {
       const { shape: own } = asked

@@ -56,7 +56,8 @@ export function BotItemQuestionLines({
   const stored = useBotItemHeldAnswers(heldScope ?? NO_HELD_SCOPE, shape)
   const sent = actions?.sent?.askId === askId ? actions.sent.answers : null
   const answered = shape.decisions.map((_, index) => {
-    const answer = answers[index]
+    // A line being stepped shows its held answer, even where a plain comment took it by order.
+    const answer = steps?.lines.includes(index) ? null : answers[index]
     return answer ? botItemAnswerWords(shape, index, answer.data) : (sent?.[index] ?? null)
   })
   if (waiting && several && steps && actions) {

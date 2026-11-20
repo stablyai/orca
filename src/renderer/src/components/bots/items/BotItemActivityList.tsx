@@ -283,7 +283,11 @@ export function BotItemActivityList({
       >
         {entries.map((entry) => {
           // An answer reads on its question's lines.
-          if (entry.kind === 'comment' && entry.onAsk) {
+          if (
+            entry.kind === 'comment' &&
+            entry.onAsk &&
+            !quickReplies?.steps?.plain.has(entry.key)
+          ) {
             return null
           }
           if (entry.kind === 'comment') {

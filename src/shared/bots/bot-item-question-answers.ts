@@ -17,6 +17,9 @@ export type BotItemQuestionAnswers = {
   shape: BotItemQuestionShape
   /** Per question line, the owner comment that answered it. */
   answers: (BotItemEvent | null)[]
+  /** Per line, answered only by order: a comment naming no line took the first open one. A later
+   *  comment naming the line takes it over. */
+  byOrder: boolean[]
   /** Lines still open, and the agent still waiting on them. */
   waiting: boolean
 }
@@ -49,24 +52,36 @@ function recordedLines(data: Record<string, unknown>, count: number): number[] |
   })
 }
 
+/** Every line written as "Question → answer": answers to an ask's lines, so they never answer an
+ *  ask that names none of them (answers held for an earlier ask, sent after the agent asked again). */
+function answersNamedQuestions(text: string): boolean {
+  const lines = text.split('\n').filter((line) => line.trim())
+  return (
+    lines.length > 0 &&
+    lines.every((line) => / → \S/.test(line)) &&
+    (lines.length > 1 || /\? → /.test(lines[0]!))
+  )
+}
+
 function answeredLines(
-  shape: BotItemQuestionShape,
-  answers: readonly (BotItemEvent | null)[],
+  entry: BotItemQuestionAnswers,
   reply: BotItemEvent
-): number[] {
+): { lines: number[]; byOrder: boolean } {
+  const { shape, answers, byOrder } = entry
   const recorded = recordedLines(reply.data, shape.decisions.length)
   if (recorded) {
-    return recorded
+    return { lines: recorded, byOrder: false }
   }
   const text = typeof reply.data.text === 'string' ? reply.data.text.trim() : ''
-  const open = (index: number): boolean => !answers[index]
+  // A line read by order is open to a comment that names it.
+  const open = (index: number): boolean => !answers[index] || byOrder[index] === true
   const picked = shape.decisions.findIndex(
     (decision, index) =>
       open(index) &&
       decision.replies.some((option) => botItemQuickReplyText(shape, decision, option) === text)
   )
   if (picked !== -1) {
-    return [picked]
+    return { lines: [picked], byOrder: false }
   }
   // Several questions answered in one comment, a line each; or one quick reply edited before sending.
   if (shape.decisions.length > 1) {
@@ -74,11 +89,14 @@ function answeredLines(
       words !== null && open(index) ? [index] : []
     )
     if (named.length > 0) {
-      return named
+      return { lines: named, byOrder: false }
     }
   }
+  if (answersNamedQuestions(text)) {
+    return { lines: [], byOrder: false }
+  }
   const next = answers.indexOf(null)
-  return next === -1 ? [] : [next]
+  return { lines: next === -1 ? [] : [next], byOrder: true }
 }
 
 export function botItemQuestionPairing(
@@ -105,6 +123,7 @@ export function botItemQuestionPairing(
         const entry: BotItemQuestionAnswers = {
           shape,
           answers: shape.decisions.map(() => null),
+          byOrder: shape.decisions.map(() => false),
           waiting: false
         }
         questions.set(event.id, entry)
@@ -115,12 +134,18 @@ export function botItemQuestionPairing(
     if (!current) {
       continue
     }
-    const { shape, answers } = current.entry
-    const lines = answeredLines(shape, answers, event)
+    const { shape, answers, byOrder } = current.entry
+    const { lines, byOrder: guessed } = answeredLines(current.entry, event)
     for (const line of lines) {
-      if (answers[line] === null) {
-        answers[line] = event
+      const taken = answers[line]
+      if (taken && byOrder[line]) {
+        // Named now: the comment read by order is a comment of its own again.
+        replies.delete(taken.id)
+      } else if (taken) {
+        continue
       }
+      answers[line] = event
+      byOrder[line] = guessed
     }
     // It quotes the first line it answers.
     const first = lines[0]
