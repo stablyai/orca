@@ -112,13 +112,14 @@ describe('SkillUploadSessionService', () => {
     expect(await readdir(uploads)).toEqual([])
   })
 
-  it('accepts monotonic chunks, acknowledges identical retries, and transfers ownership', async () => {
+  it('resumes a partial upload, acknowledges identical retries, and transfers ownership', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)
     const service = createUploadService(join(root, 'uploads'))
     const bytes = Buffer.from('immutable skill package')
     const packageIdentity = identity(bytes)
-    const begun = await service.begin({ package: packageIdentity })
+    const request = { package: packageIdentity, transferId: 'operation-1' }
+    const begun = await service.begin(request)
     if (process.platform !== 'win32') {
       expect((await stat(join(root, 'uploads'))).mode & 0o777).toBe(0o700)
       const [archivePath] = await stagedArchives(join(root, 'uploads'))
@@ -133,6 +134,20 @@ describe('SkillUploadSessionService', () => {
     await expect(
       service.append({ uploadId: begun.uploadId, offset: 0, bytesBase64: first.toString('base64') })
     ).resolves.toEqual({ acknowledgedOffset: first.length })
+    await expect(service.begin(request)).resolves.toEqual({
+      uploadId: begun.uploadId,
+      chunkBytes: begun.chunkBytes,
+      acknowledgedOffset: first.length
+    })
+    await expect(
+      service.begin({
+        package: { ...packageIdentity, packageId: 'different-package' },
+        transferId: request.transferId
+      })
+    ).rejects.toThrow('skill-upload-transfer-mismatch')
+    expect((await stagedArchives(join(root, 'uploads'))).map((path) => basename(path))).toEqual([
+      `${begun.uploadId}.tar.gz`
+    ])
     await service.append({
       uploadId: begun.uploadId,
       offset: first.length,
@@ -144,32 +159,6 @@ describe('SkillUploadSessionService', () => {
     await expect(readFile(staged.archivePath)).resolves.toEqual(bytes)
     await staged.cleanup()
     await expect(readFile(staged.archivePath)).rejects.toThrow()
-  })
-
-  it('resumes an idempotent transfer without allocating another session', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
-    roots.push(root)
-    const service = createUploadService(join(root, 'uploads'))
-    const bytes = Buffer.from('resumable package')
-    const packageIdentity = identity(bytes)
-    const request = { package: packageIdentity, transferId: 'operation-1' }
-    const begun = await service.begin(request)
-    await service.append({ uploadId: begun.uploadId, offset: 0, bytesBase64: 'cmVzdW1l' })
-
-    await expect(service.begin(request)).resolves.toEqual({
-      uploadId: begun.uploadId,
-      chunkBytes: begun.chunkBytes,
-      acknowledgedOffset: 6
-    })
-    await expect(
-      service.begin({
-        package: { ...packageIdentity, packageId: 'different-package' },
-        transferId: request.transferId
-      })
-    ).rejects.toThrow('skill-upload-transfer-mismatch')
-    expect((await stagedArchives(join(root, 'uploads'))).map((path) => basename(path))).toEqual([
-      `${begun.uploadId}.tar.gz`
-    ])
   })
 
   it('keeps a taken archive until retryable cleanup succeeds', async () => {
