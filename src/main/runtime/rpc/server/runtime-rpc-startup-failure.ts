@@ -1,3 +1,4 @@
+// @protected-copy: this copy fills the native "Orca CLI unavailable" message box.
 import type { RuntimeRpcStartErrorClass } from '../../../../shared/telemetry/schemas/telemetry-daemon-event-schemas'
 import { translateMain } from '../../../i18n/main-i18n'
 import { track } from '../../../telemetry/client'
