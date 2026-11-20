@@ -13,7 +13,7 @@ import type {
   TerminalLinkBufferRange
 } from './terminal-link-buffer'
 
-type WrappedLogicalRow = {
+export type WrappedLogicalRow = {
   y: number
   text: string
   sourceText: string
@@ -129,7 +129,7 @@ function getWrappedRowsFingerprint(rows: WrappedLogicalRow[]): string {
     .join('\n')
 }
 
-function toWrappedLogicalLine(rows: WrappedLogicalRow[], text: string): WrappedLogicalLine {
+export function toWrappedLogicalLine(rows: WrappedLogicalRow[], text: string): WrappedLogicalLine {
   return { text, rows: [...rows], fingerprint: getWrappedRowsFingerprint(rows) }
 }
 

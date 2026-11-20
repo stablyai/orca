@@ -4,6 +4,7 @@ import { dedupeLogicalLines } from './terminal-link-logical-line-deduplication'
 import { rangeForParsedLinkOnRow } from './terminal-link-row-range'
 import { extractTerminalFileLinkReadings, type ParsedTerminalFileLink } from './terminal-links'
 import { terminalLogicalLinkHasOscLink } from './terminal-osc-link-cells'
+import { buildTableCellPathLogicalLineCandidates } from './table-cell-terminal-path-links'
 import {
   buildHardWrappedPathLogicalLineCandidates,
   buildWrappedLogicalLine,
@@ -52,7 +53,10 @@ export function buildCandidateLogicalLinesForBufferPosition(
   buffer: TerminalLinkBuffer,
   bufferLineNumber: number
 ): WrappedLogicalLine[] {
-  const hardWrappedCandidates = buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber)
+  const hardWrappedCandidates = [
+    ...buildTableCellPathLogicalLineCandidates(buffer, bufferLineNumber),
+    ...buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber)
+  ]
   const softWrappedLogicalLine = buildWrappedLogicalLine(buffer, bufferLineNumber)
   const candidates = softWrappedLogicalLine
     ? [...hardWrappedCandidates, softWrappedLogicalLine]
