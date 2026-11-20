@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => {
     registrationListeners,
     emitWorkerStart: vi.fn(),
     uninstalled: vi.fn(),
+    /** A partition of its own, so another test's removed-storage marks don't reach it. */
+    resumed: {} as { session?: object },
     session: {
       serviceWorkers: {
         on: (_name: string, listener: (event: unknown, details: { scope: string }) => void) =>
@@ -70,7 +72,9 @@ vi.mock('electron', () => ({
               getAllExtensions: () => []
             }
           }
-        : mocks.session
+        : partition === 'persist:orca-browser-resumed'
+          ? (mocks.resumed.session ??= { ...mocks.session })
+          : mocks.session
   }
 }))
 vi.mock('node:fs', async (importOriginal) => ({
@@ -313,11 +317,13 @@ describe('a profile whose last page closed', () => {
     mocks.prepared.hasWorker = true
     const attach = async (): Promise<void> => {
       loader.attachBrowserExtensionsToProfileSession(resumed, [ID])
-      await vi.waitFor(() => expect(mocks.registrationListeners.size).toBeGreaterThan(0))
-      for (const listener of mocks.registrationListeners) {
-        listener({}, { scope: `chrome-extension://${ID}/` })
-      }
-      await loader.whenBrowserExtensionProfileLoaded(resumed.id)
+      // Completes the worker registration a load waits for, whenever that load starts waiting.
+      await vi.waitFor(() => {
+        for (const listener of mocks.registrationListeners) {
+          listener({}, { scope: `chrome-extension://${ID}/` })
+        }
+        expect(loader.isBrowserExtensionProfileLoading(resumed.id)).toBe(false)
+      })
     }
     await attach()
     await loader.unloadBrowserExtensionsFromIdleProfile(resumed.id, () => {})
@@ -343,6 +349,7 @@ it('does not restore stale enablement after uninstall and reinstall in another O
     attached: () => {},
     detached: () => {},
     loaded: async () => {},
+    unloading: async () => {},
     uninstalled: mocks.uninstalled
   })
   const store = getBrowserExtensionInstallStore()

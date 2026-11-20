@@ -33,7 +33,12 @@ class BrowserExtensionDnrStore extends BrowserExtensionProfileDocumentStore {
 
   readSessionRules(profileId: string, extension: Pick<Electron.Extension, 'id' | 'version'>) {
     const saved = this.sessionRules.get(profileId)?.get(extension.id)
-    return saved?.version === extension.version ? saved.rules : []
+    if (saved && saved.version !== extension.version) {
+      // A new version starts without the old one's rules, even if that version comes back later.
+      this.writeSessionRules(profileId, extension, [])
+      return []
+    }
+    return saved?.rules ?? []
   }
 
   writeSessionRules(
@@ -55,14 +60,17 @@ class BrowserExtensionDnrStore extends BrowserExtensionProfileDocumentStore {
   }
 
   override forgetExtension(extensionId: string): Promise<void> {
-    for (const byExtension of this.sessionRules.values()) {
+    for (const [profileId, byExtension] of this.sessionRules) {
       byExtension.delete(extensionId)
+      if (byExtension.size === 0) {
+        this.sessionRules.delete(profileId)
+      }
     }
     return super.forgetExtension(extensionId)
   }
 
   override forgetProfileExtension(profileId: string, extensionId: string): Promise<void> {
-    this.sessionRules.get(profileId)?.delete(extensionId)
+    this.forgetSessionRulesExcept(profileId, (id) => id !== extensionId)
     return super.forgetProfileExtension(profileId, extensionId)
   }
 
@@ -70,13 +78,25 @@ class BrowserExtensionDnrStore extends BrowserExtensionProfileDocumentStore {
     profileId: string,
     extensionIds: ReadonlySet<string>
   ): Promise<void> {
+    this.forgetSessionRulesExcept(profileId, (id) => extensionIds.has(id))
+    return super.forgetExtensionsExcept(profileId, extensionIds)
+  }
+
+  /** Extensions turned off, like a browser quit: every profile's session rules go. */
+  forgetAllSessionRules(): void {
+    this.sessionRules.clear()
+  }
+
+  private forgetSessionRulesExcept(profileId: string, keeps: (extensionId: string) => boolean) {
     const byExtension = this.sessionRules.get(profileId)
     for (const extensionId of byExtension?.keys() ?? []) {
-      if (!extensionIds.has(extensionId)) {
+      if (!keeps(extensionId)) {
         byExtension?.delete(extensionId)
       }
     }
-    return super.forgetExtensionsExcept(profileId, extensionIds)
+    if (byExtension?.size === 0) {
+      this.sessionRules.delete(profileId)
+    }
   }
 
   override forgetProfile(profileId: string): Promise<void> {

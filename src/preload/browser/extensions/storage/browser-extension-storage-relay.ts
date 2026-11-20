@@ -113,12 +113,18 @@ export function installBrowserExtensionStorageRelay(
       hasListeners: () => registered.size > 0
     }
   }
+  let reportedSessionWrite = false
   const publish = (areaName: string, changes: StorageChanges): void => {
     if (Object.keys(changes).length === 0) {
       return
     }
     if (context === 'worker') {
       deliver(areaName, changes)
+      // Main keeps a written session area across an idle unload; one report per worker run is enough.
+      if (areaName === 'session' && !reportedSessionWrite) {
+        reportedSessionWrite = true
+        void bridge.call(relayNamespace, 'report', [areaName, changes])
+      }
     } else {
       void bridge.call(relayNamespace, 'report', [areaName, changes])
     }

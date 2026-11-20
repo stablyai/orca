@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
+import { noteBrowserExtensionSessionStorageWritten } from '../profile-storage/browser-extension-session-storage-snapshot'
 import {
-  BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace
 } from '../api-runtime/browser-extension-namespace-registry'
@@ -26,8 +26,12 @@ export function registerStorageRelayNamespace(): void {
       report: defineBrowserExtensionMethod(
         z.tuple([z.enum(['local', 'session']), changesSchema]),
         (caller, areaName, changes) => {
+          if (areaName === 'session') {
+            noteBrowserExtensionSessionStorageWritten(caller.session, caller.extension.id)
+          }
+          // Why only noted: a worker delivers its own changes, and reports its first session write.
           if (caller.fromWorker) {
-            throw new BrowserExtensionApiError('The worker delivers its own storage changes')
+            return
           }
           emitBrowserExtensionEvent(
             { session: caller.session, extensionId: caller.extension.id },
