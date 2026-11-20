@@ -234,8 +234,8 @@ export function BotItemCommentBox({
     focusEnd: caretToEnd,
     type: (typed) => void composer.current?.insertTypedText(typed),
     answer: () => {
-      reply.answer()
-      caretToEnd()
+      reply.show()
+      composer.current?.focus({ caretAtEnd: true, glow: true })
     },
     fill: (text) => {
       setDraft(`${text} `)

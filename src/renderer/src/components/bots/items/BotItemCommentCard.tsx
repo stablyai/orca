@@ -146,12 +146,12 @@ export function BotItemCommentCard({
             runtimeContext={runtimeContext}
             renderText={(shown) =>
               !shown.trim() ? null : (
-                // 8 lines of 19 px; a question's body cuts between whole blocks, its question below it.
+                // 8 lines of 19 px; a question's footer follows, so its Show more reads as the body's.
                 <BotItemClampedText
                   text={shown}
-                  {...(waiting || shape.decisions.length > 0
-                    ? { blockFold: true }
-                    : { clampClassName: 'max-h-[152px]', fade: true })}
+                  clampClassName="max-h-[152px]"
+                  fade
+                  quietToggle={waiting || shape.decisions.length > 0}
                 />
               )
             }

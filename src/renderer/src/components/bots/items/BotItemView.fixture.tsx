@@ -270,3 +270,44 @@ export const waitingQuestion = defineFixture({
     </div>
   )
 })
+
+const answered = makeTestBotItem(283, {
+  title: 'Launch post: pick the draft',
+  owner: { botId: fixtureCos.id, name: 'Launch helper' },
+  status: 'working'
+})
+const answeredView = {
+  ...askingView,
+  item: answered,
+  events: [
+    ...askingView.events,
+    {
+      id: 'e53',
+      kind: 'commented' as const,
+      actor: { kind: 'owner' as const },
+      data: { text: 'A: smoother day with your agents', answers: 'e51' },
+      at: Date.now() - 5 * 60_000
+    },
+    {
+      id: 'e54',
+      kind: 'status' as const,
+      actor: { kind: 'owner' as const },
+      data: { from: 'needs_you', to: 'working', cause: 'answer' },
+      at: Date.now() - 5 * 60_000
+    }
+  ]
+}
+
+// After a quick reply: the question muted with only its pick, and the reply quoting it below.
+export const answeredQuestion = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="flex h-[680px] flex-col bg-sidebar">
+      <BotItemBody
+        bot={{ ...fixtureCos, name: 'Launch helper' }}
+        item={answered}
+        view={answeredView}
+      />
+    </div>
+  )
+})

@@ -3,7 +3,7 @@
 // posts its words as the owner's comment; a long press puts them in the comment box to add to first.
 // Answered, the lines go muted and keep only the reply picked.
 import { Pressable, Text, View } from 'react-native'
-import { Pencil } from 'lucide-react-native'
+import { Check, Pencil } from 'lucide-react-native'
 import {
   botItemPickedReplies,
   botItemQuickReplyText,
@@ -21,10 +21,10 @@ export type MobileBotItemQuickReplyActions = {
   type: () => void
 }
 
-function ChipWords({ reply }: { reply: BotItemQuickReply }) {
+function ChipWords({ reply, muted = false }: { reply: BotItemQuickReply; muted?: boolean }) {
   const t = useMobileTranslation()
   return (
-    <Text style={styles.chipText}>
+    <Text style={[styles.chipText, muted && styles.muted]}>
       {reply.label}
       {reply.recommended ? (
         <Text style={styles.recommended}>
@@ -93,7 +93,8 @@ export function MobileBotItemQuestionLines({
             ) : pick ? (
               <View style={styles.chips}>
                 <View style={styles.chip}>
-                  <ChipWords reply={pick} />
+                  <Check size={12} color={colors.textMuted} />
+                  <ChipWords reply={pick} muted />
                 </View>
               </View>
             ) : null}
@@ -130,7 +131,7 @@ const styles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.choiceBorder
   },
-  typeChip: { borderStyle: 'dashed' },
+  typeChip: { borderColor: 'transparent' },
   pressed: { opacity: 0.6 },
   chipText: { fontSize: typography.bodySize, lineHeight: 20, color: colors.textPrimary },
   recommended: { fontSize: typography.metaSize, color: colors.textMuted }

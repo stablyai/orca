@@ -3,15 +3,12 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
 import { CornerDownRight, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  glowNativeChatComposer,
-  useNativeChatComposerGlow
-} from '../../native-chat/native-chat-composer-glow'
+import { useNativeChatComposerGlow } from '../../native-chat/native-chat-composer-glow'
 
 export type BotItemWaitingQuestion = { id: string; line: string; replies: boolean }
 
 /** The box's reply mark and placeholder for the waiting question, if any: the mark hides per question,
- *  and `answer` (Type your answer) brings it back with the composer's one glow. The question's
+ *  and comes back with `show` (Type your answer); `glowing` is the composer's one glow. The question's
  *  placeholder gives way to the plain one where it would cut. */
 export function useBotItemReplyMark(
   box: RefObject<HTMLDivElement | null>,
@@ -20,7 +17,7 @@ export function useBotItemReplyMark(
 ): {
   quote: BotItemWaitingQuestion | null
   hide: () => void
-  answer: () => void
+  show: () => void
   glowing: boolean
   placeholder: string
 } {
@@ -34,10 +31,7 @@ export function useBotItemReplyMark(
   return {
     quote: question && hidden !== question.id ? question : null,
     hide: () => setHidden(question?.id ?? null),
-    answer: () => {
-      setHidden(null)
-      glowNativeChatComposer(scopeKey)
-    },
+    show: () => setHidden(null),
     glowing,
     placeholder: question && fits ? long : t('bots.items.comment.add', 'Add a comment…')
   }

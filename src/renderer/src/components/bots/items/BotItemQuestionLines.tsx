@@ -2,7 +2,7 @@
 // with its quick replies. While the item waits on it, a "Needs you" line heads the footer, the one color
 // on the comment; a quick reply posts its words as the owner's comment, and Alt- or Shift-click puts
 // them in the comment box to add to first; Type your answer leads to the box. Answered, the lines go muted and keep only the reply picked.
-import { Pencil } from 'lucide-react'
+import { Check, Pencil } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
@@ -102,12 +102,12 @@ export function BotItemQuestionLines({
                       <ChipWords reply={reply} />
                     </button>
                   ))}
-                  {/* Quieter than the options: your own words are the other way to answer. */}
+                  {/* Quieter than the options, with no edge: your own words are the other way to answer. */}
                   <button
                     type="button"
                     className={cn(
                       CHIP,
-                      'flex items-center gap-1.5 border-dashed text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50'
+                      'flex items-center gap-1.5 border-transparent text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50'
                     )}
                     onClick={actions.type}
                   >
@@ -117,8 +117,11 @@ export function BotItemQuestionLines({
                 </div>
               ) : pick ? (
                 <div className="mt-1.5 flex">
-                  <span className={cn(CHIP, 'text-foreground')}>
-                    <ChipWords reply={pick} />
+                  <span className={cn(CHIP, 'flex items-center gap-1.5 text-muted-foreground')}>
+                    <Check className="size-3 shrink-0" />
+                    <span className="min-w-0">
+                      <ChipWords reply={pick} />
+                    </span>
                   </span>
                 </div>
               ) : null}
