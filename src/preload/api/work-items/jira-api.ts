@@ -10,6 +10,7 @@ import type {
   JiraConnectionStatus,
   JiraCreateField,
   JiraCreateIssueArgs,
+  JiraEditField,
   JiraIssue,
   JiraIssueFilter,
   JiraIssueListFilters,
@@ -109,6 +110,11 @@ export type JiraApi = {
     siteId?: string
     strict?: boolean
   }) => Promise<JiraTransition[]>
+  getIssueEditFields: (args: {
+    key: string
+    siteId?: string
+    strict?: boolean
+  }) => Promise<JiraEditField[]>
   getProjectStatusOrder: (args: {
     projectKey: string
     siteId?: string

@@ -28,6 +28,26 @@ function toUserFieldValue(site: JiraSite, value: unknown): unknown {
   return value
 }
 
+/** Shapes edit-screen values: user ids into references, rich text into the site's body format. */
+async function shapeEditFields(site: JiraSite, updates: JiraIssueUpdate): Promise<JiraRecord> {
+  const userFieldKeys = new Set(updates.userFieldKeys ?? [])
+  const richTextFieldKeys = new Set(updates.richTextFieldKeys ?? [])
+  const shaped: JiraRecord = {}
+  for (const [fieldKey, value] of Object.entries(updates.fields ?? {})) {
+    if (!fieldKey) {
+      continue
+    }
+    if (userFieldKeys.has(fieldKey)) {
+      shaped[fieldKey] = toUserFieldValue(site, value)
+    } else if (richTextFieldKeys.has(fieldKey) && typeof value === 'string') {
+      shaped[fieldKey] = value.trim() ? await toBodyText(site, value.trim()) : null
+    } else {
+      shaped[fieldKey] = value
+    }
+  }
+  return shaped
+}
+
 /** Shape customFields named by userFieldKeys into user references. */
 export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreateIssueResult> {
   const entry = getClients(args.siteId)[0]
@@ -92,7 +112,8 @@ export async function updateIssue(
   }
   await acquire()
   try {
-    const fields: JiraRecord = {}
+    // Dedicated update keys win over the same field sent through `fields`.
+    const fields: JiraRecord = await shapeEditFields(entry.site, updates)
     if (updates.title !== undefined) {
       fields.summary = updates.title
     }

@@ -21,6 +21,7 @@ import { listFavouriteFilters } from '../../../jira/favourite-filters'
 import { addIssueComment, createIssue, updateIssue } from '../../../jira/jira-issue-mutations'
 import { getIssue, getIssueSummary } from '../../../jira/jira-issue-read'
 import { getIssueComments } from '../../../jira/jira-issue-comments'
+import { getIssueEditFields } from '../../../jira/jira-issue-edit-fields'
 import { getProjectStatusOrder, listTransitions } from '../../../jira/jira-transition-queries'
 import {
   listAssignableUsers,
@@ -194,6 +195,15 @@ export class RuntimeJiraCommands {
     strict = false
   ): ReturnType<typeof listTransitions> {
     return listTransitions(key, siteId, strict)
+  }
+
+  jiraGetIssueEditFields(
+    key: string,
+    siteId?: string,
+    strict = false,
+    includeRaw = false
+  ): ReturnType<typeof getIssueEditFields> {
+    return getIssueEditFields(key, siteId, strict, includeRaw)
   }
 
   jiraGetProjectStatusOrder(

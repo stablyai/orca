@@ -146,6 +146,32 @@ export type JiraIssueUpdate = {
   transitionId?: string
   transitionFields?: Record<string, unknown>
   transitionComment?: string
+  // Edit-screen values keyed by Jira field id. Older remote hosts drop these
+  // silently, so clients gate them on JIRA_ISSUE_EDIT_FIELDS_RUNTIME_CAPABILITY.
+  fields?: Record<string, unknown>
+  // Keys in `fields` the host shapes into {accountId} / {name} references.
+  userFieldKeys?: string[]
+  // Keys in `fields` holding Markdown (Cloud) or wiki text (Server/DC).
+  richTextFieldKeys?: string[]
+}
+
+export type JiraEditFieldValue =
+  | { kind: 'empty' }
+  | { kind: 'text'; text: string }
+  | { kind: 'options'; options: JiraCreateFieldAllowedValue[] }
+  | { kind: 'users'; users: JiraUser[] }
+  | { kind: 'strings'; values: string[] }
+  | { kind: 'unsupported'; display: string }
+
+/** An edit-screen field with its current value, from Jira's editmeta. */
+export type JiraEditField = JiraCreateField & {
+  operations: string[]
+  value: JiraEditFieldValue
+  richText?: boolean
+  // False when Jira refuses `set` or the value cannot be written back intact.
+  writable: boolean
+  // Jira's own value (ADF on Cloud), null when unset; only on includeRaw reads.
+  rawValue?: unknown
 }
 
 export type JiraIssueFilter = 'assigned' | 'reported' | 'all' | 'done'
