@@ -634,7 +634,11 @@ describe('signing this computer in from the chat while its sign-in changes again
       })
       expect(claims).toEqual(['u1'])
     } finally {
-      mocks.updateBot.mockImplementation(update)
+      if (update) {
+        mocks.updateBot.mockImplementation(update)
+      } else {
+        mocks.updateBot.mockReset()
+      }
       mocks.whileReading = null
       useAppStore.setState(initial, true)
     }
