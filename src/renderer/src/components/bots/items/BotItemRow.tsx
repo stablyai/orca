@@ -1,6 +1,6 @@
 // Hover or keyboard focus swaps the age for Done, Snooze, and More on open items.
 import { useId } from 'react'
-import { AlarmClock, Check, CircleCheck, CircleSlash, MoreHorizontal } from 'lucide-react'
+import { Check, CircleCheck, CircleSlash, Clock, MoreHorizontal } from 'lucide-react'
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -203,7 +203,7 @@ export function BotItemRow({
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost-on-accent" size="icon-xs" aria-label={snoozeLabel}>
-                    <AlarmClock className="size-3.5" />
+                    <Clock className="size-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
