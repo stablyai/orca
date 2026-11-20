@@ -19,6 +19,7 @@ export type JournalLegacyFailure = {
   error: unknown
   /** Missing claims accounted as refused; null clears an earlier custody refusal. */
   claims?: string | null
+  adoption?: true
 }
 
 /** Absorbed with its error: retried only when the older Orca writes this chat again. */
@@ -39,7 +40,8 @@ export function recordJournalLegacyFailure(
         failure.revision === undefined && previous?.revision !== null && previous !== undefined
           ? previous.error
           : failureMessage(failure.error),
-      claims: failure.claims === undefined ? previous?.claims : (failure.claims ?? undefined)
+      claims: failure.claims === undefined ? previous?.claims : (failure.claims ?? undefined),
+      adoption: failure.revision === undefined ? previous?.adoption : failure.adoption
     })
   )
   deleteMeta(db, `${JOURNAL_LEGACY_COPY_DUE}${failure.sessionId}`)

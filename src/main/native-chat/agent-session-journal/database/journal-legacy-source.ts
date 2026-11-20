@@ -112,6 +112,7 @@ export type JournalLegacyFailureRecord = {
   revision: string | null
   error: string
   claims?: string
+  adoption?: true
 }
 
 export function readJournalLegacyFailure(
@@ -129,7 +130,8 @@ export function readJournalLegacyFailure(
     return {
       revision: 'revision' in value && typeof value.revision === 'string' ? value.revision : null,
       error: String(value.error),
-      ...('claims' in value && typeof value.claims === 'string' ? { claims: value.claims } : {})
+      ...('claims' in value && typeof value.claims === 'string' ? { claims: value.claims } : {}),
+      ...('adoption' in value && value.adoption === true ? { adoption: true as const } : {})
     }
   } catch {
     return undefined
@@ -141,7 +143,7 @@ function clearJournalLegacyHistoryFailure(db: Database.Database, sessionId: stri
   const key = journalLegacyFailureKey(sessionId)
   if (failure?.claims) {
     db.prepare('UPDATE agent_session_store_meta SET value=? WHERE key=?').run(
-      JSON.stringify({ ...failure, revision: null }),
+      JSON.stringify({ ...failure, revision: null, adoption: undefined }),
       key
     )
   } else {

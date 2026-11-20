@@ -14,6 +14,7 @@ import {
   journalLegacyChatRevision,
   journalLegacyChatRevisionKey,
   readJournalLegacyFailure,
+  journalLegacyFailureKey,
   openJournalLegacySource,
   recordJournalLegacyChatRevision,
   settleJournalLegacyCopy
@@ -31,6 +32,7 @@ import {
   recordJournalLegacyFailure,
   strandedCopies,
   holdsPendingCopy,
+  deleteMeta,
   revisionHoldsHistory,
   writeMeta,
   type JournalLegacyFailure
@@ -75,6 +77,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   const pass: Pass = { kept, forced, baselines: [], compares: [] }
   const source = openJournalLegacySource(sourcePath)
   let complete = true
+  let gone: string[] = []
   try {
     if (unchanged) {
       // The original wrote nothing since the copy, so each chat is as shown here; once every
@@ -86,6 +89,11 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     } else {
       complete = absorbChats(source, db, pass, true)
     }
+    const hasOriginal = source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
+    const hasRecord = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
+    gone = metaKeys(db, journalLegacyFailureKey('')).filter(
+      (id) => !hasRecord.get(id) && !hasOriginal.get(id)
+    )
   } finally {
     source.close()
   }
@@ -98,6 +106,9 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     return
   }
   runJournalTransaction(db, () => {
+    for (const id of gone) {
+      deleteMeta(db, journalLegacyFailureKey(id))
+    }
     for (const [id, revision] of pass.baselines) {
       recordJournalLegacyChatRevision(db, id, revision)
     }
@@ -162,7 +173,7 @@ function absorbChats(
     let revision: string | undefined
     const added = adoption.added.length
     const { nextPosition, tabsRecorded } = adoption
-    const attempt = { claimsOnly: false }
+    const attempt = { claimsOnly: false, adopting: false }
     try {
       // A chat with no history still has a value, so one deleted here stays deleted.
       revision = journalLegacyChatRevision(source, id) ?? 'null'
@@ -181,12 +192,17 @@ function absorbChats(
       const failure: JournalLegacyFailure = {
         sessionId: id,
         revision: attempt.claimsOnly ? undefined : revision,
-        error
+        error,
+        ...(attempt.adopting ? { adoption: true } : {})
       }
       try {
         recoverJournalLegacyClaims(db, id, adoption.claims.get(id) ?? [], (claims) => {
           failure.claims = claims
-          recordJournalLegacyFailure(db, failure)
+          if (attempt.claimsOnly && claims === null) {
+            clearJournalLegacyClaimFailure(db, id)
+          } else {
+            recordJournalLegacyFailure(db, failure)
+          }
           const { stranded } = pass.forced.get(id) ?? {}
           if (stranded !== undefined) {
             settleJournalLegacyCopy(db, stranded)
@@ -218,7 +234,7 @@ function absorbChat(
   revision: string,
   adoption: Adoption,
   pass: Pass,
-  attempt: { claimsOnly: boolean }
+  attempt: { claimsOnly: boolean; adopting: boolean }
 ): void {
   const claims = missingJournalLegacyClaims(db, id, adoption.claims.get(id) ?? [])
   const write = (keep: () => void) =>
@@ -240,6 +256,7 @@ function absorbChat(
   const adopt = (copy: string) => adoptJournalLegacyChat(source, db, id, copy, adoption)
   const forced = pass.forced.get(id)
   if (forced) {
+    attempt.adopting = true
     write(() => keepForcedCopy(db, id, revision, forced, adopt))
     return
   }
@@ -250,7 +267,7 @@ function absorbChat(
       return
     }
     // A refused adoption retries when its refused claims change; history-only failures stay held.
-    if (!failure?.claims || failure.revision === null) {
+    if (!failure?.claims || !failure.adoption) {
       claimsOnly(failure)
       return
     }
@@ -279,10 +296,12 @@ function absorbChat(
       claimsOnly()
       return
     }
+    attempt.adopting = true
     write(() => keepContinuedChat(db, id, revision, adopt))
     return
   }
   // Not converted here yet: its conversion reads the current original, so it joins as itself.
+  attempt.adopting = true
   write(() => {
     adoptJournalLegacyChat(source, db, id, id, adoption)
     recordJournalLegacyChatRevision(db, id, revision)

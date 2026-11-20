@@ -1,3 +1,5 @@
+import { recoverJournalLegacyClaims } from './journal-legacy-claims'
+import { recordJournalLegacyFailure } from './journal-legacy-reconcile-marks'
 import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
 import { applyJournalWriterEffect } from '../journal-writer-effects'
 import { agentSessionAttachmentStoreRoot } from '../../agent-session-attachments/agent-session-attachment-references'
@@ -769,4 +771,65 @@ it('records a failed chat even when the original changes during reconciliation',
   expect(
     db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get('rejected')
   ).toBeUndefined()
+})
+
+it('releases failed custody holds after the older store removes the chat', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'existing', rows)
+  await (await upgrade(root)).close()
+  olderOrcaChat(original, 'rejected', [rows[0], turn('rejected-turn', 2)])
+  original
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('held-upload', 'rejected', 100)
+  const { db } = openJournalDomainDatabase(journalDomainDatabasePath(root))
+  cleanup.push(() => db.close())
+  db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_records
+    WHEN NEW.session_id='rejected' BEGIN SELECT RAISE(ABORT,'record refused'); END`)
+  reconcileJournalLegacySource(root, db)
+  expect(
+    db
+      .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
+      .get('journal.legacy-failed:rejected')
+  ).toBeDefined()
+  original.prepare('DELETE FROM agent_session_records WHERE session_id=?').run('rejected')
+  original.prepare('DELETE FROM journal_sessions WHERE session_id=?').run('rejected')
+  original.prepare('DELETE FROM agent_session_attachment_claims WHERE session_id=?').run('rejected')
+  reconcileJournalLegacySource(root, db)
+  expect(
+    db
+      .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
+      .get('journal.legacy-failed:rejected')
+  ).toBeUndefined()
+})
+
+it('never commits salvaged custody without its failure hold when a trigger rolls back', () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db } = openJournalDomainDatabase(journalDomainDatabasePath(root))
+  cleanup.push(() => db.close())
+  db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_attachment_claims
+    WHEN NEW.upload_id='refused' BEGIN SELECT RAISE(ROLLBACK,'upload unavailable'); END;
+    CREATE TRIGGER full_disk BEFORE INSERT ON agent_session_store_meta
+    WHEN NEW.key='journal.legacy-failed:unadopted' BEGIN SELECT RAISE(ABORT,'disk I/O error'); END`)
+  expect(() =>
+    recoverJournalLegacyClaims(
+      db,
+      'unadopted',
+      [
+        { upload_id: 'good', claimed_at: 100 },
+        { upload_id: 'refused', claimed_at: 100 }
+      ],
+      (claims) =>
+        recordJournalLegacyFailure(db, {
+          sessionId: 'unadopted',
+          revision: 'revision',
+          error: 'upload unavailable',
+          claims
+        })
+    )
+  ).toThrow('disk I/O error')
+  expect(db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()).toEqual([])
 })

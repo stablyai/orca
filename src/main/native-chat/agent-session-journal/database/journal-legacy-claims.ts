@@ -109,7 +109,10 @@ export function recoverJournalLegacyClaims(
     // A transaction-ending trigger defeats savepoints; each remaining attempt owns its rollback.
     for (const claim of missing) {
       try {
-        runJournalTransaction(db, () => insertJournalLegacyClaims(db, sessionId, [claim]))
+        runJournalTransaction(db, () => {
+          insertJournalLegacyClaims(db, sessionId, [claim])
+          finish()
+        })
       } catch (claimError) {
         if (
           isSqliteStorageFailure(claimError) ||
