@@ -86,7 +86,10 @@ function sshState(status: 'connected' | 'disconnected') {
   return { targetId: 'conn-1', status, error: null, reconnectAttempt: 0 }
 }
 
-export async function windowSavingTo(main: ReturnType<typeof inMemoryMain>) {
+export async function windowSavingTo(
+  main: ReturnType<typeof inMemoryMain>,
+  { listed = true }: { listed?: boolean } = {}
+) {
   probeDesktopRelays(main.api)
   await vi.advanceTimersByTimeAsync(0)
   const store = createTestStore()
@@ -99,9 +102,14 @@ export async function windowSavingTo(main: ReturnType<typeof inMemoryMain>) {
   })
   seedStore(store, {
     repos: [SSH_REPO],
-    worktreesByRepo: {
-      [SSH_REPO.id]: [makeWorktree({ id: WORKTREE_ID, repoId: SSH_REPO.id, path: '/remote/wt' })]
-    },
+    // Unlisted: a cold start before the SSH host's worktree listing arrives.
+    worktreesByRepo: listed
+      ? {
+          [SSH_REPO.id]: [
+            makeWorktree({ id: WORKTREE_ID, repoId: SSH_REPO.id, path: '/remote/wt' })
+          ]
+        }
+      : {},
     tabsByWorktree: {
       [WORKTREE_ID]: [makeTab({ id: 'tab-a', worktreeId: WORKTREE_ID, ptyId: 'relay-a' })]
     },

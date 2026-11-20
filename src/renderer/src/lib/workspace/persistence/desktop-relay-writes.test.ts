@@ -28,6 +28,16 @@ describe('relay ids saved by ownership', () => {
     }
   })
 
+  it("keeps a host's relay ids when its worktree listing hasn't arrived yet", async () => {
+    const main = inMemoryMain()
+    const { stop } = await windowSavingTo(main, { listed: false })
+    try {
+      expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
+    } finally {
+      stop()
+    }
+  })
+
   it('clears it after a fenced partition opens again', async () => {
     const main = inMemoryMain()
     const { stop, endRelay, renameTab } = await windowSavingTo(main)

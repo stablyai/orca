@@ -7,6 +7,7 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../../../shared/works
 import { normalizeBrowserHistoryEntries } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from '../../../../../shared/workspace-session/workspace-doc-history'
 import type { AppState } from '../../../store/types'
+import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
@@ -240,8 +241,10 @@ export function buildTerminalSessionData(
   // Derive reconnect targets locally with preindexed ownership; fragile synchronous IPC can drop under shutdown pressure, while per-tab catalog rescans delay quit.
   const remoteSessionIdsByTabId: Record<string, string> = {}
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const worktree = worktreeById.get(worktreeId)
-    const repo = worktree ? repoById.get(worktree.repoId) : null
+    // Cold-start SSH listings can be absent; the composite worktree id still names its repo.
+    const repo = repoById.get(
+      worktreeById.get(worktreeId)?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+    )
     if (!repo?.connectionId) {
       continue
     }
