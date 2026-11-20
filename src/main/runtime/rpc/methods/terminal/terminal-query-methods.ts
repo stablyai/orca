@@ -107,7 +107,7 @@ export const TERMINAL_QUERY_METHODS = [
       const terminal = await runtime.showTerminal(params.terminal)
       const session =
         terminal.ptyId !== null && terminal.connected && terminal.verdict !== 'exited'
-          ? runtime.getExactWorkerProviderSession(terminal.handle)
+          ? runtime.getExactWorkerProviderSession(terminal.handle, terminal)
           : null
       return { terminal: { ...terminal, providerSessionId: session?.providerSession.id ?? null } }
     }

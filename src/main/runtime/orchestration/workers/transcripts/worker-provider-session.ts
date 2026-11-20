@@ -1,9 +1,33 @@
+import type { RuntimeTerminalSummary } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import {
   isWslHookRelayConnectionId,
   wslHookRelayConnectionId
 } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+
+export type WorkerSessionObservation =
+  | number
+  | Pick<RuntimeTerminalSummary, 'ptyId' | 'incarnationId'>
+
+// A terminal inspection has no dispatch timestamp. Its live launch must match the snapshot.
+export function matchesWorkerSessionObservation(
+  observation: WorkerSessionObservation | undefined,
+  pty: RuntimePtyWorktreeRecord | undefined
+): boolean {
+  if (typeof observation === 'number') {
+    return true
+  }
+  if (!pty?.launchToken) {
+    return false
+  }
+  return (
+    !observation ||
+    (pty.ptyId === observation.ptyId &&
+      (observation.incarnationId == null || pty.incarnationId === observation.incarnationId))
+  )
+}
 
 export function selectExactWorkerProviderSession(args: {
   paneKey: string
