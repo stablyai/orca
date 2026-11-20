@@ -28,12 +28,12 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/agent-session-history-modal'
 import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
-import { BotChatPaging, FOLD_TOGGLE_CLASS } from './BotChatRowControls'
+import { BotChatPaging, FOLD_TOGGLE_CLASS, MENU_TAKES_PLACE } from './BotChatRowControls'
 import { openBotAutomation } from './bot-automation-open'
 import { revealWorkerPane } from '@/lib/open-orchestration-worker'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
-import { BotChatContextMenu, BotChatMoreButton } from './BotChatRowMenu'
+import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
 import { openBotSession } from './bot-session-open'
 
 function openChat(bot: Bot, chat: BotChatTreeChat): void {
@@ -276,7 +276,7 @@ export function BotChatTreeGroup({
               <span className="flex-1" />
               {/* The ⋯ takes the meta's place on hover, so nothing moves. */}
               <span className="group/chat-end relative flex shrink-0 items-center">
-                <span className="flex items-center group-hover/bot-chat:invisible group-has-[[data-state=open]]/chat-end:invisible">
+                <span className={cn('flex items-center', botChatHasMenu(chat) && MENU_TAKES_PLACE)}>
                   <ChatRowMeta chat={chat} />
                 </span>
                 <BotChatMoreButton

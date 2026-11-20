@@ -48,11 +48,13 @@ function BotChatMenuItems({
   const Separator = kind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
   const home = chat.origin === 'home' && !chat.closed
   const label = home ? t('bots.chats.clear', 'Clear chat') : t('bots.chats.delete', 'Delete chat')
-  const reason =
-    orcaChatDeleteBlockedReason({
-      replying: chat.live === 'replying',
-      workersRunning: chat.runningTotal > 0 || chatRunningCount(chat) > 0
-    }) ?? hostReason
+  // A Home not started yet has no chat to clear (its id is empty); Open still starts it.
+  const reason = !chat.chatId
+    ? t('bots.chats.homeNotStarted', 'Not started yet')
+    : (orcaChatDeleteBlockedReason({
+        replying: chat.live === 'replying',
+        workersRunning: chat.runningTotal > 0 || chatRunningCount(chat) > 0
+      }) ?? hostReason)
   return (
     <>
       <Item onSelect={onOpen}>
@@ -138,6 +140,7 @@ export function BotChatMoreButton({
     <DropdownMenu modal={false}>
       {/* Shown on hover, focus or while open. */}
       <span
+        data-chat-menu=""
         className={cn(
           'opacity-0 group-hover/bot-chat:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100',
           className

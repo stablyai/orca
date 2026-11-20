@@ -13,7 +13,7 @@ import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-sess
 import type { StructuredAgentSessionCreateOptions } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-create-options'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import { nameNewHome, type BotHomeHost } from './bot-home-chat-name'
+import { nameNewHome } from './bot-home-chat-name'
 export { BOT_CREATED_KICKOFF } from '../../shared/bot-created-kickoff'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -29,37 +29,15 @@ import { createBackgroundStructuredAgentSession } from '../runtime/rpc/methods/s
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import {
   closeStructuredAgentSessionChild,
-  type StructuredAgentSessionCloseOutcome
+  type StructuredAgentSessionCloseOptions
 } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
-import type { BotController } from './bot-controller'
+import type { BotChatDependencies, BotChatHost } from './bot-chat-dependencies'
 import type { TookOverNotice } from '../../shared/native-chat/took-over-notice'
 import type { AutomationRunMessage } from '../../shared/automations/automation-run-message'
 import { botStartOptions } from './bot-start-options'
 import { supportedStructuredSeedOptions } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 
-export type BotChatHost = StructuredAgentTurnHost &
-  BotHomeHost & {
-    deps: {
-      store: Pick<
-        StructuredAgentSessionHost['deps']['store'],
-        'getConversation' | 'requireWritableRecord'
-      >
-    }
-  }
-
-export type BotChatDependencies = {
-  bots: Pick<BotController, 'list' | 'setChatSession'>
-  /** Installs the native-chat host on first use. */
-  host: () => Promise<BotChatHost>
-  /** Creates `sessionId` at rest, with its tab, in the bot's home; its first message starts it. */
-  createChat: (bot: Bot, sessionId: string) => Promise<void>
-  /** Shows the Chat's tab again if it was closed. */
-  showTab: (bot: Bot, sessionId: string) => Promise<void>
-  /** Stops the Chat and removes its tab; its history stays. A close that cannot be proven keeps the tab. */
-  closeChat: (
-    sessionId: string
-  ) => Promise<Pick<StructuredAgentSessionCloseOutcome, 'stopped' | 'reason'>>
-}
+export type { BotChatDependencies, BotChatHost } from './bot-chat-dependencies'
 
 /** What Orca writes on an automation run's message: where what the bot learns came from, who did
  *  the event, and the run itself for the chat's row. */
@@ -152,6 +130,20 @@ export function botChatSessions(deps: BotChatDependencies) {
   const reset = (botId: string): Promise<string> =>
     underLock(botId, async (host, bot) => shown(bot, await replace(host, bot)))
 
+  /** Replaces the Home a delete named, under the lock that admits its turns: only while it is still
+   *  the bot's Home (`moved` otherwise, so two clears never retire a fresh Home) and proven at rest. */
+  const clearHome = (botId: string, home: string): Promise<'cleared' | 'moved' | 'busy'> =>
+    underLock(botId, async (host, bot) => {
+      if (bot.chatSessionId !== home) {
+        return 'moved'
+      }
+      if (!(await deps.closeChat(home, (work) => work.state === 'idle')).stopped) {
+        return 'busy'
+      }
+      await shown(bot, await replace(host, bot))
+      return 'cleared'
+    })
+
   const deliver = async (
     host: BotChatHost,
     /** Sends the turn; the lock is released once it is admitted. */
@@ -234,7 +226,7 @@ export function botChatSessions(deps: BotChatDependencies) {
       deliver(host, admitting, botId, sessionId, text, from, run)
     )
 
-  return { ensure, reset, withChat, sendToChat: send, sendToSession }
+  return { ensure, reset, clearHome, withChat, sendToChat: send, sendToSession }
 }
 
 /** The selector native chat resolves a bot's home folder workspace by. */
@@ -337,9 +329,10 @@ export async function startBotSession(
 /** Stops a bot's conversation and removes its tab; its history stays. */
 export function closeBotSession(
   runtime: OrcaRuntimeService,
-  sessionId: string
+  sessionId: string,
+  admitClose?: StructuredAgentSessionCloseOptions['admitClose']
 ): ReturnType<typeof closeStructuredAgentSessionChild> {
-  return closeStructuredAgentSessionChild(sessionId, { runtime })
+  return closeStructuredAgentSessionChild(sessionId, { runtime, admitClose })
 }
 
 /** The bot as a chat on `agent` runs it: another agent starts on its own defaults, since the bot's
@@ -362,6 +355,6 @@ export function runtimeBotChats(runtime: OrcaRuntimeService) {
         agent: bot.agent,
         activate: false
       }),
-    closeChat: (sessionId) => closeBotSession(runtime, sessionId)
+    closeChat: (sessionId, admitClose) => closeBotSession(runtime, sessionId, admitClose)
   })
 }

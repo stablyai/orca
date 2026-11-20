@@ -8,6 +8,10 @@ import { persistConfirmationSkipPreference } from '@/components/dismiss/confirma
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import {
+  getRuntimeEnvironmentRevision,
+  resolveContinuedRuntimeEnvironmentRevision
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -28,6 +32,8 @@ export type OrcaChatDeleteTarget = {
   sessionId: string
   /** A bot's live Home Chat is cleared: a fresh Home takes its place. */
   home?: { botName: string }
+  /** The pairing that listed the chat (Session History's row); else the current one when asked. */
+  pairingRevision?: number
 }
 
 const SETTINGS_SECTION_ID = 'general-skip-delete-chat-confirm'
@@ -55,7 +61,15 @@ export function orcaChatDeleteBlockedReason(
   return null
 }
 
+/** A group room's chats carry the room's messages, so Session History doesn't delete them. */
+export function orcaChatGroupDeleteReason(t: Translate = translate): string {
+  return t('chats.delete.groupRoom', "A group room's chat can't be deleted")
+}
+
 function refusalText(reason: OrcaChatDeleteRefusal): string {
+  if (reason === 'group') {
+    return orcaChatGroupDeleteReason()
+  }
   return reason === 'replying' || reason === 'workers'
     ? orcaChatDeleteBlockedReason({ replying: reason === 'replying', workersRunning: true })!
     : translate('chats.delete.failed', "Couldn't delete the chat")
@@ -82,6 +96,17 @@ export function useDeleteOrcaChat(): (target: OrcaChatDeleteTarget) => Promise<b
       const hostLabel = environmentId ? selectExecutionHostDisplayLabel(state, target.hostId) : null
       const callTarget = ipcOrRuntimeTargetForHostId(target.hostId)
       if (!callTarget) {
+        return false
+      }
+      // Pinned before the prompt: a re-pair while it is open must not receive the delete.
+      const pairingRevision = environmentId
+        ? target.pairingRevision !== undefined
+          ? resolveContinuedRuntimeEnvironmentRevision(environmentId, target.pairingRevision)
+          : getRuntimeEnvironmentRevision(environmentId)
+        : undefined
+      if (environmentId && target.pairingRevision !== undefined && pairingRevision === undefined) {
+        // The row came from a pairing since replaced by another machine.
+        toast.error(translate('chats.delete.failed', "Couldn't delete the chat"))
         return false
       }
       if (
@@ -131,7 +156,8 @@ export function useDeleteOrcaChat(): (target: OrcaChatDeleteTarget) => Promise<b
               persistConfirmationSkipPreference({
                 updates: { skipDeleteChatConfirm: true },
                 settingsSectionId: SETTINGS_SECTION_ID,
-                updateSettings: state.updateSettings,
+                // The throwing write, so a failed save says so instead of claiming it.
+                updateSettings: state.updateSettingsOrThrow,
                 openSettingsPage: state.openSettingsPage,
                 openSettingsTarget: state.openSettingsTarget
               })
@@ -145,9 +171,20 @@ export function useDeleteOrcaChat(): (target: OrcaChatDeleteTarget) => Promise<b
         const result = await callStructuredAgentSession<OrcaChatDeleteResult>(
           callTarget,
           'agentSession.delete',
-          { sessionId: target.sessionId }
+          { sessionId: target.sessionId },
+          pairingRevision !== undefined
+            ? { expectedEnvironmentPairingRevision: pairingRevision }
+            : {}
         )
         if (result.outcome === 'deleted') {
+          if (result.historyKept) {
+            toast.warning(
+              translate(
+                'chats.delete.historyKept',
+                "Chat deleted, but its agent's own history of it couldn't be removed"
+              )
+            )
+          }
           return true
         }
         toast.error(refusalText(result.reason))

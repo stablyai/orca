@@ -8,13 +8,14 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import { isOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
 import { splitWorktreeId } from '../../../shared/worktree/id'
+import { isBotGroupMemberSession } from '../../../shared/bots/bot-group'
 import type { OrcaChatDeleteResult } from '../../../shared/agent-session/chat-deletion/orca-chat-delete'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { listAiVaultSessions } from '../../ai-vault/listing/cached-session-list'
-import { historyRowOwnershipLookup } from '../../ai-vault/structured-sessions/history-row-ownership-lookup'
+import { historyRowOwnershipsLookup } from '../../ai-vault/structured-sessions/history-row-ownership-lookup'
 import { createCanonicalOrcaSessionResolver } from '../../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { readAgentSessionRecordStore } from '../../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
-import { readSessionWorkers } from '../../runtime/rpc/methods/orchestration/worker/session-workers-method'
+import { readDispatchWorkers } from '../../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import { dropUnreadBotRequests } from '../../runtime/rpc/methods/orchestration/messaging/bot-request-outcome'
 import { runtimeBotChats } from '../../bots/bot-chat-session'
 import { botOfSession } from '../../bots/bot-session-tabs'
@@ -24,10 +25,10 @@ import { forgetNativeChatInLane } from '../../workspaces/cleanup/chat-history/de
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getStructuredAgentSessionHost } from '../agent-session-wire/host/structured-agent-session-registry'
 
-type Transcript = { agent: AiVaultAgent; filePath: string }
+type Transcript = { agent: AiVaultAgent; sessionId: string; filePath: string }
 
 /** A session's chat: the first session of its /clear lineage. */
-function chatRootResolver(): (sessionId: string) => string {
+export function chatRootResolver(): (sessionId: string) => string {
   const resolve = createCanonicalOrcaSessionResolver(readAgentSessionRecordStore())
   return (sessionId) => (isOrcaSessionId(sessionId) ? resolve(sessionId) : sessionId)
 }
@@ -47,17 +48,37 @@ function chatLineage(sessionId: string): { root: string; records: AgentSessionRe
   return { root, records }
 }
 
-async function ownsRunningWorkers(
+/** Whether a Dispatch any session of the chat created is unsettled with a worker that may still run.
+ *  Every unsettled one, however old; a liveness this host can't prove, or a failed read, counts. */
+async function ownsLiveWorkers(
   runtime: OrcaRuntimeService,
   records: readonly AgentSessionRecord[]
 ): Promise<boolean> {
-  for (const record of records) {
-    const workers = await readSessionWorkers(runtime, record.sessionId).catch(() => [])
-    if (workers.some((worker) => worker.state === 'working')) {
-      return true
+  try {
+    const open = runtime
+      .getOrchestrationDb()
+      .listDispatchesCreatedByAny(
+        { orcaSessionIds: records.map((record) => record.sessionId), paneKeys: [] },
+        0
+      )
+    if (open.length === 0) {
+      return false
     }
+    const ended = new Set(
+      (
+        await readDispatchWorkers(
+          runtime,
+          open.map((dispatch) => dispatch.id)
+        )
+      )
+        .filter((worker) => worker.state !== 'working' && worker.state !== 'unverifiable')
+        .map((worker) => worker.dispatchId)
+    )
+    return open.some((dispatch) => !ended.has(dispatch.id))
+  } catch (error) {
+    console.warn('[chat-delete] could not read the chat workers', error)
+    return true
   }
-  return false
 }
 
 /** Where the agent wrote its transcript: the chat's launch folder on this host, not WSL's. */
@@ -77,49 +98,82 @@ function transcriptFolder(record: AgentSessionRecord): string | null {
   )
 }
 
-/** The agent transcripts Session History lists under these chats, read while the chats still exist. */
-async function listChatTranscripts(records: readonly AgentSessionRecord[]): Promise<Transcript[]> {
+/** The chats holding a history row's conversation, across every provider that can own the row. */
+function historyRowHolders(): ((row: Transcript) => string[]) | null {
+  const owners = historyRowOwnershipsLookup()
+  return (
+    owners &&
+    ((row) =>
+      owners(row)
+        .flat()
+        .map((ownership) => ownership.sessionId))
+  )
+}
+
+/** The agent transcripts Session History lists under these chats and no other chat holds, read
+ *  while the chats still exist. Null when the scan failed. */
+async function listChatTranscripts(
+  records: readonly AgentSessionRecord[]
+): Promise<Transcript[] | null> {
   const folders = [...new Set(records.flatMap((record) => transcriptFolder(record) ?? []))]
-  const owner = historyRowOwnershipLookup()
-  if (folders.length === 0 || !owner) {
+  const holders = historyRowHolders()
+  if (folders.length === 0 || !holders) {
     return []
   }
   const ids = new Set(records.map((record) => record.sessionId))
-  const { sessions } = await listAiVaultSessions({
-    unlimited: true,
-    scopePaths: folders,
-    scopeOnly: true
-  })
-  return sessions.flatMap((session) => {
-    const owned = owner(session)
-    return session.executionHostId === LOCAL_EXECUTION_HOST_ID && owned && ids.has(owned.sessionId)
-      ? [{ agent: session.agent, filePath: session.filePath }]
-      : []
-  })
+  try {
+    const { sessions } = await listAiVaultSessions({
+      unlimited: true,
+      scopePaths: folders,
+      scopeOnly: true
+    })
+    return sessions.flatMap((session) => {
+      const held = session.executionHostId === LOCAL_EXECUTION_HOST_ID ? holders(session) : []
+      return held.length > 0 && held.every((id) => ids.has(id))
+        ? [{ agent: session.agent, sessionId: session.sessionId, filePath: session.filePath }]
+        : []
+    })
+  } catch (error) {
+    console.warn('[chat-delete] could not list the chat transcripts', error)
+    return null
+  }
 }
 
-/** Best effort: the chat is already gone, so a transcript that stays is logged, not refused. */
+/** Removes the transcripts once the chats are gone, each only while no chat holds its conversation
+ *  any more (checked right before the unlink). False when any stays: an agent Orca can't delete
+ *  history for, or a failed removal. */
 async function deleteTranscripts(
   runtime: OrcaRuntimeService,
   transcripts: readonly Transcript[]
-): Promise<void> {
+): Promise<boolean> {
   if (transcripts.length === 0) {
-    return
+    return true
   }
-  const result = await Promise.resolve()
-    .then(() =>
-      deleteHostChatTranscriptsPermanently(runtime.requireStore(), transcripts, async () => true)
+  const byPath = new Map(transcripts.map((transcript) => [transcript.filePath, transcript]))
+  try {
+    const result = await deleteHostChatTranscriptsPermanently(
+      runtime.requireStore(),
+      transcripts,
+      async (target) => {
+        const transcript = byPath.get(target.filePath)
+        const holders = historyRowHolders()
+        return Boolean(transcript && holders && holders(transcript).length === 0)
+      }
     )
-    .catch((error: unknown) => {
-      console.warn('[chat-delete] a deleted chat kept its transcript', error)
-      return null
-    })
-  if (result && result.failed > 0) {
-    console.warn('[chat-delete] a deleted chat kept some transcripts', result.failed)
+    return result.failed === 0
+  } catch (error) {
+    console.warn('[chat-delete] a deleted chat kept its transcript', error)
+    return false
   }
 }
 
-/** Deletes the chat `sessionId` belongs to. A bot's Home Chat is cleared: a fresh Home takes its place first. */
+/**
+ * Deletes the chat `sessionId` belongs to. A bot's Home Chat is cleared: a fresh Home takes its place
+ * first. Check, then commit: every refusal is decided before anything changes. The commit's own
+ * steps (the Home reset, each close, each forget) recheck in their session's lane, so a turn or open
+ * that slips in after the checks refuses there; nothing irreversible (mail notices, transcripts) runs
+ * until every session of the chat is forgotten.
+ */
 export async function deleteOrcaChat(
   runtime: OrcaRuntimeService,
   sessionId: string
@@ -133,83 +187,54 @@ export async function deleteOrcaChat(
   if (!chat) {
     return { outcome: 'refused', reason: 'not-found' }
   }
-  if (await ownsRunningWorkers(runtime, chat.records)) {
-    return { outcome: 'refused', reason: 'workers' }
+  // A group room routes its messages to each member's session, so a member's chat isn't one to delete.
+  if (chat.records.some((record) => isBotGroupMemberSession(record.sessionId))) {
+    return { outcome: 'refused', reason: 'group' }
   }
   if (chat.records.some((record) => record.lastTurn?.state === 'open')) {
     return { outcome: 'refused', reason: 'replying' }
   }
+  if (await ownsLiveWorkers(runtime, chat.records)) {
+    return { outcome: 'refused', reason: 'workers' }
+  }
+  const transcripts = await listChatTranscripts(chat.records)
   const bot = botOfSession(runtime.bots, chat.root)
-  const rootOf = chatRootResolver()
-  const home = Boolean(bot?.chatSessionId && rootOf(bot.chatSessionId) === chat.root)
+  const home = chat.records.find((record) => record.sessionId === bot?.chatSessionId)
   if (bot && home) {
     // Never the live Home in place: a fresh one takes over, then the old one is an ordinary chat.
-    await runtimeBotChats(runtime).reset(bot.id)
+    if ((await runtimeBotChats(runtime).clearHome(bot.id, home.sessionId)) === 'busy') {
+      return { outcome: 'refused', reason: 'replying' }
+    }
   }
-  // A chat viewed lately stays loaded with its tab open: stop it and close its tab on every
-  // client, as a closed tab would, unless a turn started meanwhile.
+  // A chat viewed lately stays loaded with its tab open: stop it and close its tab on every client,
+  // as a closed tab would, only while it is proven at rest.
   for (const record of chat.records) {
     const closed = await closeStructuredAgentSessionChild(record.sessionId, {
       runtime,
-      admitClose: (work) => work.state !== 'busy'
+      admitClose: (work) => work.state === 'idle'
     })
     if (!closed.stopped) {
       return { outcome: 'refused', reason: 'replying' }
     }
   }
-  // Mail it never read goes unanswered, and its senders hear so.
-  for (const record of bot ? chat.records : []) {
-    await dropUnreadBotRequests(
-      runtime,
-      bot!.id,
-      home ? 'new-chat' : 'chat-deleted',
-      record.sessionId
-    )
-  }
-  const transcripts = await listChatTranscripts(chat.records).catch((error: unknown) => {
-    console.warn('[chat-delete] could not list the chat transcripts', error)
-    return []
-  })
   for (const record of chat.records) {
     const outcome = await forgetNativeChatInLane(record, Number.MAX_SAFE_INTEGER, async () => true)
-    if (outcome === 'open') {
-      return { outcome: 'refused', reason: 'replying' }
+    if (outcome !== 'forgotten') {
+      return { outcome: 'refused', reason: outcome === 'open' ? 'replying' : 'unavailable' }
     }
-    if (outcome === 'kept') {
-      return { outcome: 'refused', reason: 'unavailable' }
-    }
-    if (bot) {
+  }
+  if (bot) {
+    for (const record of chat.records) {
+      // Mail it never read goes unanswered, and its senders hear so.
+      await dropUnreadBotRequests(
+        runtime,
+        bot.id,
+        home ? 'new-chat' : 'chat-deleted',
+        record.sessionId
+      )
       await runtime.botWork.forget(record.sessionId).catch(() => false)
     }
   }
-  await deleteTranscripts(runtime, transcripts)
-  return { outcome: 'deleted' }
-}
-
-/** A deleted agent's chats in its home folder go too, each as Delete chat would; a running one stays. */
-export async function deleteChatsInWorkspace(
-  runtime: OrcaRuntimeService,
-  workspaceId: string
-): Promise<void> {
-  await runtime.ensureStructuredAgentSessionHost()
-  const store = getStructuredAgentSessionHost()?.deps.store
-  if (!store || store.readOnly) {
-    return
-  }
-  const rootOf = chatRootResolver()
-  const roots = new Set(
-    store
-      .listRecords()
-      .filter((record) => record.location.workspaceId === workspaceId)
-      .map((record) => rootOf(record.sessionId))
-  )
-  for (const root of roots) {
-    const result = await deleteOrcaChat(runtime, root).catch((error: unknown) => {
-      console.warn('[chat-delete] a deleted agent kept a chat', error)
-      return null
-    })
-    if (result?.outcome === 'refused' && result.reason !== 'not-found') {
-      console.warn('[chat-delete] a deleted agent kept a chat', result.reason)
-    }
-  }
+  const historyGone = transcripts !== null && (await deleteTranscripts(runtime, transcripts))
+  return historyGone ? { outcome: 'deleted' } : { outcome: 'deleted', historyKept: true }
 }

@@ -23,7 +23,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, BotChatRowEnd, useBotChatPress } from './BotChatRowControls'
 import type { BotChatTree } from './use-bot-chat-tree'
-import { BotChatContextMenu, BotChatMoreButton } from './BotChatRowMenu'
+import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
@@ -212,7 +212,9 @@ function BotSidebarChat({
             text={trailing}
             fold={foldable ? { open, name: title, onToggle: () => toggle(open) } : null}
             menu={
-              <BotChatMoreButton bot={bot} chat={chat} onOpen={() => pressRow({ detail: 1 })} />
+              botChatHasMenu(chat) ? (
+                <BotChatMoreButton bot={bot} chat={chat} onOpen={() => pressRow({ detail: 1 })} />
+              ) : null
             }
             className="max-w-[60%]"
           />

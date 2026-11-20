@@ -15,6 +15,24 @@ import {
 export function historyRowOwnershipLookup():
   | ((row: { agent: string; sessionId: string }) => StructuredProviderSessionOwnership | null)
   | null {
+  const owners = historyRowOwnershipsLookup()
+  return (
+    owners &&
+    ((row) => {
+      // Per provider the first head link, else the first link, in listing order.
+      const found = owners(row).flatMap(
+        (owned) => owned.find((ownership) => ownership.role === 'head') ?? owned[0] ?? []
+      )
+      return found.find((ownership) => ownership.role === 'head') ?? found[0] ?? null
+    })
+  )
+}
+
+/** Every chat that holds a history row's conversation, per provider that can own the row. A
+ *  conversation can be held by several chats (a fork, a duplicate adoption). */
+export function historyRowOwnershipsLookup():
+  | ((row: { agent: string; sessionId: string }) => StructuredProviderSessionOwnership[][])
+  | null {
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return null
@@ -30,17 +48,13 @@ export function historyRowOwnershipLookup():
     }
     return byKey
   }
-  return (row) => {
-    // Per provider the first head link, else the first link, in listing order.
-    const found = historyRowOwners(row.agent).flatMap((owner) => {
+  return (row) =>
+    historyRowOwners(row.agent).map((owner) => {
       const key = ownershipKey({ provider: owner, providerSessionId: row.sessionId })
-      const owned = store
+      return store
         .conversationsKeyedBy(ownershipKeys, key)
         .flatMap((view) => ownedBy(view).get(key) ?? [])
-      return owned.find((ownership) => ownership.role === 'head') ?? owned[0] ?? []
     })
-    return found.find((ownership) => ownership.role === 'head') ?? found[0] ?? null
-  }
 }
 
 const ownershipKey = (ownership: { provider: string; providerSessionId: string }): string =>

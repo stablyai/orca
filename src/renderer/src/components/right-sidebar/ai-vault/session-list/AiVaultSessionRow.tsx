@@ -1,4 +1,8 @@
-import { useOrcaChatDeleteHostReason } from '@/lib/agent-session/chat-deletion/orca-chat-delete'
+import {
+  orcaChatGroupDeleteReason,
+  useOrcaChatDeleteHostReason
+} from '@/lib/agent-session/chat-deletion/orca-chat-delete'
+import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
@@ -122,7 +126,9 @@ export function VaultSessionRow({
   // An Orca chat is deleted by the host that owns it, transcript and all.
   const deleteBlockedReason = session.structuredSession
     ? onRequestDelete
-      ? chatDeleteHostReason
+      ? isBotGroupMemberSession(session.structuredSession.sessionId)
+        ? orcaChatGroupDeleteReason(t)
+        : chatDeleteHostReason
       : t(
           'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
           'The transcript source is unavailable.'

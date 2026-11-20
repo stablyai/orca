@@ -85,7 +85,13 @@ export function useAiVaultSessionDeleteAction({
     async (session: AiVaultSession) => {
       const chat = session.structuredSession
       if (chat) {
-        if (await deleteChat({ hostId: session.executionHostId, sessionId: chat.sessionId })) {
+        if (
+          await deleteChat({
+            hostId: session.executionHostId,
+            sessionId: chat.sessionId,
+            pairingRevision: session.hostPairingRevision
+          })
+        ) {
           forgetAiVaultSessionResult(session.id)
           onDeleted?.(session)
           void refresh({ force: true })
