@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { CodexAppServerUnsupportedError } from '../codex-app-server-request-error'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -28,7 +29,8 @@ function fakeCodex(
   /** What closing the process proves about its commands. */
   closeTree: 'exited' | 'unverifiable' = 'exited',
   /** Whether thread/backgroundTerminals/terminate actually stops the command. */
-  terminateWorks = true
+  terminateWorks = true,
+  codex: { listUnsupported?: boolean; unsubscribeFails?: boolean } = {}
 ) {
   const servers: FakeServer[] = []
   let nextThread = 1
@@ -80,6 +82,12 @@ function fakeCodex(
           })
         }
         const threadId = typeof params?.threadId === 'string' ? params.threadId : ''
+        if (method === 'thread/backgroundTerminals/list' && codex.listUnsupported) {
+          throw new CodexAppServerUnsupportedError('codex app-server does not support list')
+        }
+        if (method === 'thread/unsubscribe' && codex.unsubscribeFails) {
+          throw new Error('codex app-server thread/unsubscribe failed')
+        }
         if (method === 'thread/backgroundTerminals/list') {
           const running = [...(server.terminals.get(threadId) ?? [])]
           const result = { data: running.map((processId) => ({ processId })), nextCursor: null }
@@ -123,7 +131,13 @@ function fakeCodex(
       }
     }
   }
-  return { servers, pool: new CodexSharedServerPool(connect) }
+  // The host sweep finds nothing left of a chat unless a test leaves something running.
+  const sweep = { leftovers: false }
+  return {
+    servers,
+    sweep,
+    pool: new CodexSharedServerPool(connect, async () => !sweep.leftovers)
+  }
 }
 
 function chat() {
@@ -296,7 +310,7 @@ describe('shared Codex app-servers', () => {
     expect(y.closed).toBe(false)
   })
 
-  it('never unsubscribes a thread a recovering chat already resumed while the old lease was stopping', async () => {
+  it('makes a recovering chat resume its thread only after the old lease has let go of it', async () => {
     vi.useFakeTimers()
     const { servers, pool } = fakeCodex('later')
     const a = chat()
@@ -313,13 +327,17 @@ describe('shared Codex app-servers', () => {
       sessionId: 'a',
       skillRoots: []
     })
-    await replacement.request('thread/resume', { threadId: threadA })
+    // The replacement's resume waits until the old chat's cleanup is done with the thread.
+    const resumed = replacement.request('thread/resume', { threadId: threadA })
     await vi.advanceTimersByTimeAsync(5_000)
+    await resumed
     expect(a.exits).toHaveLength(1)
-    expect(servers[0]!.requests).not.toContainEqual({
-      method: 'thread/unsubscribe',
-      params: { threadId: threadA }
-    })
+    // The old chat let go of the thread before the replacement subscribed to it again.
+    const order = servers[0]!.requests
+      .filter((r) => r.params?.threadId === threadA)
+      .map((r) => r.method)
+      .filter((method) => method === 'thread/unsubscribe' || method === 'thread/resume')
+    expect(order).toEqual(['thread/unsubscribe', 'thread/resume'])
   })
 
   it('starts a fresh server once the current one can no longer take requests', async () => {
@@ -482,5 +500,47 @@ describe('shared Codex app-servers', () => {
     const opened = servers[0]!.requests.filter((r) => r.method === 'thread/unsubscribe')
     expect(opened).toEqual([{ method: 'thread/unsubscribe', params: { threadId: 'thread-1' } }])
     expect(connA.processTreeUnproven).toBe(false)
+  })
+
+  it("leaves Stop unproven when an older Codex can't list commands and one is left under the server", async () => {
+    const { servers, pool, sweep } = fakeCodex('ends', 'exited', true, { listUnsupported: true })
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    await startThread(connA)
+    sweep.leftovers = true
+    await connA.close()
+    expect(servers[0]!.requests.map((r) => r.method)).toContain('thread/backgroundTerminals/clean')
+    expect(connA.processTreeUnproven).toBe(true)
+  })
+
+  it('leaves Stop unproven when Codex refuses to let go of a thread that opened after close', async () => {
+    const { servers, pool } = fakeCodex('ends', 'exited', true, { unsubscribeFails: true })
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    // Another chat is working, so the server can't simply be stopped to prove it.
+    const connB = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const threadB = await startThread(connB)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadB, turn: { id: 'b' } })
+    const opening = connA.request('thread/start', { cwd: '/work', holdOpen: true })
+    const closing = connA.close()
+    servers[0]!.releaseOpen()
+    await opening.catch(() => {})
+    await closing
+    expect(connA.processTreeUnproven).toBe(true)
+    expect(connB.closed).toBe(false)
+  })
+
+  it('lets go of a thread whose open answers after its caller timed out', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex()
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const opening = connA.request('thread/start', { holdOpen: true }, { timeoutMs: 1_000 })
+    const failed = expect(opening).rejects.toThrow('exceeded 1000ms')
+    await vi.advanceTimersByTimeAsync(1_500)
+    await failed
+    servers[0]!.releaseOpen()
+    expect(servers[0]!.requests).toContainEqual({
+      method: 'thread/unsubscribe',
+      params: { threadId: 'thread-1' }
+    })
+    expect(connA.closed).toBe(false)
   })
 })

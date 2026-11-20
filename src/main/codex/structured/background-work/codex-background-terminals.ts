@@ -93,19 +93,22 @@ async function stillRunning(
   throw new Error('codex app-server listed more background terminals than Orca reads')
 }
 
-/** Every background terminal a thread still runs; none when Codex can't have any (it predates
- *  background terminals) or the thread is unloaded, which ends them. Other failures throw. */
+/** Every background terminal a thread still runs; none once the thread is unloaded (which ends
+ *  them); null when this Codex can't list them. Other failures throw. */
 export async function listCodexThreadBackgroundTerminals(
   rpc: CodexTerminalRpc,
   threadId: string,
   timeoutMs: number | undefined
-): Promise<CodexBackgroundTerminal[]> {
+): Promise<CodexBackgroundTerminal[] | null> {
   try {
     const running = await stillRunning(rpc, threadId, boundedTimeout(timeoutMs))
     return [...running].map((processId) => ({ threadId, processId }))
   } catch (error) {
-    if (refusesMethod(error) || terminalsAreGone(error)) {
+    if (terminalsAreGone(error)) {
       return []
+    }
+    if (refusesMethod(error)) {
+      return null
     }
     throw error
   }

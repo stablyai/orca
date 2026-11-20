@@ -9,6 +9,7 @@ import type {
 import { codexSharedServerSpec } from './codex-shared-server-key'
 import { CodexSharedServerLease } from './codex-shared-server-lease'
 import { CodexSharedServer } from './codex-shared-server'
+import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
 import {
   CodexSharedServerMemoryCeiling,
   type CodexSharedServerToolUsage
@@ -48,7 +49,10 @@ export class CodexSharedServerPool {
     (server) => this.onServerFreed(server)
   )
 
-  constructor(private readonly connect?: typeof spawnCodexAppServerConnection) {}
+  constructor(
+    private readonly connect?: typeof spawnCodexAppServerConnection,
+    private readonly sweep?: CodexSharedServerProcessSweep
+  ) {}
 
   async open(
     launch: CodexAppServerLaunch,
@@ -100,7 +104,12 @@ export class CodexSharedServerPool {
   }
 
   private startServer(spec: CodexSharedServer['spec']): CodexSharedServer {
-    const server = new CodexSharedServer(spec, (ended) => this.onServerFreed(ended), this.connect)
+    const server = new CodexSharedServer(
+      spec,
+      (ended) => this.onServerFreed(ended),
+      this.connect,
+      this.sweep
+    )
     server.ready.catch(() => this.remove(server))
     const group = this.servers.get(spec.key) ?? []
     group.push(server)

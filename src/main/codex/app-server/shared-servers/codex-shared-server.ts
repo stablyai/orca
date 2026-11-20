@@ -2,7 +2,10 @@ import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
 import { initializeCodexAppServerConnection } from '../codex-app-server-handshake'
 import { isCodexAppServerUnsupportedError } from '../codex-app-server-session'
-import { stopCodexSharedChatWorkload } from './codex-shared-server-chat-workload'
+import {
+  stopCodexSharedChatWorkload,
+  type CodexSharedServerProcessSweep
+} from './codex-shared-server-chat-workload'
 import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { DescendantTreeVerdict } from '../../../pty/process-retirement/pty-descendant-exit-verification'
 import type { CodexSharedServerSpec } from './codex-shared-server-key'
@@ -29,6 +32,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   private physical: CodexAppServerConnection | null = null
   private hasExited = false
   private reaping: Promise<void> | null = null
+  /** Threads a leaving chat is still cleaning up; a chat resuming one waits for that. */
+  private readonly releasingThreads = new Map<string, Promise<void>>()
   private readonly releases = new WeakMap<CodexSharedServerLease, Promise<boolean>>()
   private readonly turns = new CodexSharedServerTurns()
   private readonly router = new CodexSharedServerRouter(
@@ -40,7 +45,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   constructor(
     readonly spec: CodexSharedServerSpec,
     private readonly onEnded: (server: CodexSharedServer) => void,
-    connect: typeof spawnCodexAppServerConnection = spawnCodexAppServerConnection
+    connect: typeof spawnCodexAppServerConnection = spawnCodexAppServerConnection,
+    private readonly sweep?: CodexSharedServerProcessSweep
   ) {
     this.ready = this.start(connect)
   }
@@ -125,7 +131,28 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
 
   private async releaseLease(lease: CodexSharedServerLease): Promise<boolean> {
     this.leases.delete(lease)
-    const threads = this.router.release(lease)
+    const owned = this.router.release(lease)
+    let done = (): void => {}
+    const released = new Promise<void>((resolve) => {
+      done = resolve
+    })
+    for (const threadId of owned) {
+      this.releasingThreads.set(threadId, released)
+    }
+    try {
+      return await this.stopLeaseWork(lease, owned)
+    } finally {
+      for (const threadId of owned) {
+        if (this.releasingThreads.get(threadId) === released) {
+          this.releasingThreads.delete(threadId)
+        }
+      }
+      done()
+    }
+  }
+
+  private async stopLeaseWork(lease: CodexSharedServerLease, owned: string[]): Promise<boolean> {
+    let threads = owned
     let proven = true
     const physical = this.physical
     if (physical && this.closed && !this.hasExited) {
@@ -141,6 +168,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         RELEASE_REQUEST_TIMEOUT_MS
       )
       proven = lease.pendingOpens.size === 0 && !this.turns.anyStartPending(threads)
+      // Threads that opened after the chat left are let go here, and their commands stopped below.
+      proven &&= (await Promise.all(lease.abandoning)).every(Boolean)
+      threads = [...threads, ...lease.abandonedThreads]
       const turns = threads.flatMap((threadId) => {
         const turnId = this.turns.runningOn(threadId)
         return turnId ? [{ threadId, turnId }] : []
@@ -167,12 +197,14 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         const workloadStopped = await stopCodexSharedChatWorkload({
           rpc: physical,
           threads,
-          sessionId: lease.sessionId,
+          leaseId: lease.id,
+          ...(this.sweep ? { sweep: this.sweep } : {}),
           serverPid: this.pid,
           timeoutMs: RELEASE_REQUEST_TIMEOUT_MS
         })
         // A chat that already resumed one of these threads here owns its subscription now.
-        const unclaimed = threads.filter((threadId) => !this.router.isClaimed(threadId))
+        // Abandoned threads were already let go by abandon().
+        const unclaimed = owned.filter((threadId) => !this.router.isClaimed(threadId))
         const unsubscribed = await Promise.allSettled(
           unclaimed.map((threadId) => physical.request('thread/unsubscribe', { threadId }, options))
         )
@@ -188,16 +220,28 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     return proven
   }
 
-  abandon(threadId: string): void {
+  abandon(threadId: string, lease: CodexSharedServerLease): Promise<boolean> {
     if (this.router.isClaimed(threadId)) {
-      return
+      return Promise.resolve(true)
     }
     this.router.retire(threadId)
-    if (!this.closed) {
-      this.physical
-        ?.request('thread/unsubscribe', { threadId }, { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS })
-        .catch(() => {})
-    }
+    lease.abandonedThreads.add(threadId)
+    const physical = this.physical
+    const letGo =
+      !physical || this.closed
+        ? Promise.resolve(false)
+        : physical
+            .request('thread/unsubscribe', { threadId }, { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS })
+            .then(
+              () => true,
+              (error: unknown) => isCodexAppServerUnsupportedError(error)
+            )
+    lease.abandoning.add(letGo)
+    return letGo
+  }
+
+  threadReleased(threadId: string): Promise<void> {
+    return this.releasingThreads.get(threadId) ?? Promise.resolve()
   }
 
   /** A turn that ignores Stop: stop the server if no other chat is working, else drain it. */
