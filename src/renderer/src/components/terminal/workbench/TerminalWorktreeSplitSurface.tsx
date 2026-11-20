@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { TabGroupLayoutNode } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ActivityTerminalPortalTarget } from '../../activity/terminal-portal/activity-terminal-portal'
 import {
@@ -46,13 +47,18 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   // Allowlist: only views drawn outside the layout (terminals restore from parking snapshots, chats stay mounted).
-  const layoutHoldsOnlyOverlays = useAppStore((state) => {
-    const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-    if (tabs.some((tab) => tab.contentType === 'simulator')) {
+  const { tabs, groups } = useAppStore(
+    useShallow((state) => ({
+      tabs: state.unifiedTabsByWorktree[worktreeId],
+      groups: state.groupsByWorktree[worktreeId]
+    }))
+  )
+  const layoutHoldsOnlyOverlays = useMemo(() => {
+    if (tabs?.some((tab) => tab.contentType === 'simulator')) {
       return false
     }
-    return (state.groupsByWorktree[worktreeId] ?? []).every((group) => {
-      const active = tabs.find((tab) => tab.id === group.activeTabId)
+    return (groups ?? []).every((group) => {
+      const active = tabs?.find((tab) => tab.id === group.activeTabId)
       return (
         !active ||
         active.contentType === 'terminal' ||
@@ -60,7 +66,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         isStructuredTab(active)
       )
     })
-  })
+  }, [tabs, groups])
   const surfaceReleased =
     shouldColdParkTerminalPanes &&
     !isForceParked &&
