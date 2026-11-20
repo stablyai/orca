@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-composer'
+import { mailboxComposerHoldsDraft } from '../../../runtime/terminal/wait/terminal-delivery-refusal'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
 import type { TerminalCursorContext } from '../../../../shared/terminal/input/terminal-composer-draft'
 import { HeadlessEmulator } from '../headless-emulator'
@@ -95,6 +96,7 @@ describe('piComposerHoldsDraft', () => {
       launchAgent: agent,
       data: ''
     })
-    expect(runtime['hasComposerDraft'](TRANSCRIPT_PANE_PTY_ID, context)).toBe(held)
+    const paneAgent = runtime['mailDeliveryAgent'](TRANSCRIPT_PANE_PTY_ID)
+    expect(mailboxComposerHoldsDraft(paneAgent, context)).toBe(held)
   })
 })
