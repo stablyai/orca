@@ -9,6 +9,8 @@ import {
 } from '../../../ui/dialog'
 import { RuntimeHostAccessForm } from '../../../runtime-access/RuntimeHostAccessForm'
 import type { RuntimeHostAccessFailure } from '../../../runtime-access/RuntimeHostAccessFailureAlert'
+import type { RuntimeHostSshRoute } from '../../../runtime-access/RuntimeHostAccessForm'
+import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 
 type RuntimeAddServerDialogProps = {
   open: boolean
@@ -19,7 +21,8 @@ type RuntimeAddServerDialogProps = {
   onNameChange: (value: string) => void
   onAccessLinkChange: (value: string) => void
   onClose: () => void
-  onSubmit: (allowLoopback: boolean) => void
+  onSubmit: (allowLoopback: boolean, sshRoute?: RuntimeHostSshRoute) => void
+  sshTargets?: readonly SshTarget[]
 }
 
 export function RuntimeAddServerDialog({
@@ -31,7 +34,8 @@ export function RuntimeAddServerDialog({
   onNameChange,
   onAccessLinkChange,
   onClose,
-  onSubmit
+  onSubmit,
+  sshTargets
 }: RuntimeAddServerDialogProps): React.JSX.Element {
   const t = useTranslate()
   const takenNames = useAppStore((state) => state.runtimeEnvironments)
@@ -66,6 +70,7 @@ export function RuntimeAddServerDialog({
           onAccessLinkChange={onAccessLinkChange}
           onCancel={onClose}
           onSubmit={onSubmit}
+          sshTargets={sshTargets}
         />
       </DialogContent>
     </Dialog>
