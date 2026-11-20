@@ -21,6 +21,8 @@ export class ClaudeOwedNotificationExpiryTimers {
   private readonly wakeups = new CodexSubagentPollScheduler<PublishRow>(0, (paneKey, publish) =>
     this.restate(paneKey, publish)
   )
+  // Row writes re-arm far more often than deadlines move; an unchanged one keeps its schedule.
+  private readonly armedDeadlines = new Map<string, number>()
 
   constructor(private readonly state: HookListenerState) {}
 
@@ -28,9 +30,14 @@ export class ClaudeOwedNotificationExpiryTimers {
   arm(paneKey: string, publish: PublishRow): void {
     const deadline = this.deadline(paneKey)
     if (deadline === undefined) {
+      this.armedDeadlines.delete(paneKey)
       this.wakeups.clear(paneKey)
       return
     }
+    if (this.armedDeadlines.get(paneKey) === deadline) {
+      return
+    }
+    this.armedDeadlines.set(paneKey, deadline)
     // Cap delays after backward clock steps; restate rechecks the deadline and may re-arm.
     const delay = Math.min(
       CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS,
@@ -40,6 +47,7 @@ export class ClaudeOwedNotificationExpiryTimers {
   }
 
   clearAll(): void {
+    this.armedDeadlines.clear()
     this.wakeups.clearAll()
   }
 
@@ -59,6 +67,7 @@ export class ClaudeOwedNotificationExpiryTimers {
   }
 
   private restate(paneKey: string, publish: PublishRow): void {
+    this.armedDeadlines.delete(paneKey)
     const deadline = this.deadline(paneKey)
     if (deadline === undefined) {
       return
@@ -88,5 +97,9 @@ export class ClaudeOwedNotificationExpiryTimers {
       claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(this.state, paneKey),
       payload
     })
+    // A host whose publish stores no row would otherwise strand the pane's next deadline; a passed one stays passed.
+    if ((this.deadline(paneKey) ?? 0) > Date.now()) {
+      this.arm(paneKey, publish)
+    }
   }
 }

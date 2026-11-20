@@ -126,13 +126,27 @@ export function setClaudeMainAgentTurnState(
   const { state: nextState, outcome, stateStartedAt, model, ...rest } = next
   // Lead events that omit the model keep the last reported one.
   const retainedModel = model || previous?.model
+  const announcedTurnCompletedAt =
+    'announcedTurnCompletedAt' in next
+      ? next.announcedTurnCompletedAt
+      : (next.turnCompletedAt ?? previous?.announcedTurnCompletedAt)
   const record: ClaudeLeadTurnState = {
     ...rest,
     ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now),
-    ...(retainedModel ? { model: retainedModel } : {})
+    ...(retainedModel ? { model: retainedModel } : {}),
+    ...(announcedTurnCompletedAt !== undefined ? { announcedTurnCompletedAt } : {})
   }
   state.claudeLeadStateByPaneKey.set(paneKey, record)
   return record
+}
+
+/** A task wakeup is not a person's turn: its rows repeat the end the person's turn announced, so it is not announced again. */
+export function claudePublishedTurnCompletedAt(record: ClaudeLeadTurnState): number | undefined {
+  const own = record.waitingAgentId !== undefined ? record.stateBeforeWait : record
+  return (
+    record.turnCompletedAt ??
+    (own?.taskWakeupTurn === true ? record.announcedTurnCompletedAt : undefined)
+  )
 }
 
 /** Publish only observed lead facts, restoring child-displaced state; absent records fall back to aggregate state. */
@@ -300,8 +314,8 @@ export function clearClaudeAnsweredQuestionWait(
     claudeTaskWakeupPending: resolved.claudeTaskWakeupPending,
     ...(resolved.workingMode ? { workingMode: resolved.workingMode } : {}),
     ...(mainAgentTurnInterrupted(restored) ? { interrupted: true as const } : {}),
-    ...(restored.turnCompletedAt !== undefined
-      ? { turnCompletedAt: restored.turnCompletedAt }
+    ...(claudePublishedTurnCompletedAt(restored) !== undefined
+      ? { turnCompletedAt: claudePublishedTurnCompletedAt(restored) }
       : {}),
     ...(publishedMainAgent ? { mainAgent: publishedMainAgent } : {})
   }

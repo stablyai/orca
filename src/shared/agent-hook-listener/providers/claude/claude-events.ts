@@ -34,7 +34,7 @@ import { trackClaudeTaskNotificationDelivery } from './background-tasks/claude-t
 import { recordClaudeTeammateSpawn } from './lifecycle/claude-teammate-spawn'
 import { settleLateClaudePromptSubmit } from './lifecycle/claude-late-prompt-submit'
 import { CLAUDE_LATE_PROMPT_SUBMIT_EVENT } from './lifecycle/claude-prompt-turn-order'
-import { claudeHeldTurnEnd } from './lifecycle/claude-held-turn-end'
+import { claudeAnnouncedTurnEnd, claudeHeldTurnEnd } from './lifecycle/claude-held-turn-end'
 import { normalizeClaudeSessionStart } from './lifecycle/claude-session-start-event'
 import { isClaudeToolEvent, restatePluginToolCall } from './lifecycle/claude-tool-events'
 
@@ -289,14 +289,6 @@ export function normalizeClaudeEvent(
           selfStarted: ownPreviousLead?.taskWakeupTurn === true
         })
       : {}
-  // A task wakeup is not a person's turn: it repeats the end the person's turn already announced, so it is not announced again.
-  const wakeupKeepsPersonEnd =
-    eventAgentId === undefined &&
-    (taskWakeupTurn || (isTurnBoundary && ownPreviousLead?.taskWakeupTurn === true)) &&
-    ownPreviousLead?.turnCompletedAt !== undefined
-      ? { turnCompletedAt: ownPreviousLead.turnCompletedAt }
-      : {}
-
   setClaudeMainAgentTurnState(state, paneKey, {
     state: reportedStateName,
     ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
@@ -304,7 +296,9 @@ export function normalizeClaudeEvent(
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...claudeWaitRequest(eventName, isAskUserQuestionWait, eventToolUseId, previousLead),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),
-    ...wakeupKeepsPersonEnd,
+    ...(eventAgentId === undefined
+      ? claudeAnnouncedTurnEnd({ name: eventName, isTaskWakeup, opensTurn }, previousLead)
+      : {}),
     ...heldEnd,
     model: leadModel
   })

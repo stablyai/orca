@@ -244,6 +244,51 @@ describe('Claude prompt event arriving after its turn', () => {
     ).not.toBe('working')
   })
 
+  describe('a finished background task’s wakeup after the person’s turn was announced', () => {
+    const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
+
+    function personTurnHeldByShell(): number | undefined {
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })
+      claude({
+        hook_event_name: 'PostToolUse',
+        prompt_id: FIRST,
+        tool_name: 'Bash',
+        tool_input: { command: SHELL.command, run_in_background: true },
+        tool_response: { backgroundTaskId: SHELL.id }
+      })
+      return claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL] })
+        ?.turnCompletedAt
+    }
+
+    it('repeats the person’s end when the wakeup’s tool call beats its prompt event', () => {
+      const personEnd = personTurnHeldByShell()
+      expect(typeof personEnd).toBe('number')
+      claude({
+        hook_event_name: 'PreToolUse',
+        prompt_id: SECOND,
+        tool_name: 'Bash',
+        tool_use_id: 'w'
+      })
+
+      expect(
+        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+          ?.turnCompletedAt
+      ).toBe(personEnd)
+      expect(
+        claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })
+      ).toMatchObject({ state: 'done', turnCompletedAt: personEnd })
+    })
+
+    it('never gives the person’s next turn the end it already announced', () => {
+      const personEnd = personTurnHeldByShell()
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+      // The wakeup is interrupted without a hook; the person's next turn ends before its prompt event lands.
+      expect(
+        claude({ hook_event_name: 'Stop', prompt_id: THIRD, background_tasks: [] })?.turnCompletedAt
+      ).not.toBe(personEnd)
+    })
+  })
+
   describe('a turn whose Stop beats its prompt event while a shell runs', () => {
     function startWatching() {
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })
@@ -297,6 +342,38 @@ describe('Claude prompt event arriving after its turn', () => {
         expect(published).toEqual([])
         vi.advanceTimersByTime(1_000)
         expect(typeof published.at(-1)?.payload.turnCompletedAt).toBe('number')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('still expires an owed notification after the held end is released on a host that stores no row', () => {
+      vi.useFakeTimers()
+      try {
+        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })
+        for (const id of [SHELL.id, 'ended-shell']) {
+          claude({
+            hook_event_name: 'PostToolUse',
+            prompt_id: FIRST,
+            tool_name: 'Bash',
+            tool_input: { command: 'sleep 1', run_in_background: true },
+            tool_response: { backgroundTaskId: id }
+          })
+        }
+        claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL] })
+        claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [SHELL] })
+        seedLegacyAgentStatusForTests(state, {
+          paneKey: PANE_KEY,
+          connectionId: null,
+          payload: { state: 'working', prompt: '', agentType: 'claude' }
+        })
+        const published: AgentHookEventPayload[] = []
+        new ClaudeOwedNotificationExpiryTimers(state).arm(PANE_KEY, (row) => published.push(row))
+
+        vi.advanceTimersByTime(5_000)
+        expect(published).toHaveLength(1)
+        vi.advanceTimersByTime(60_000)
+        expect(published).toHaveLength(2)
       } finally {
         vi.useRealTimers()
       }

@@ -73,5 +73,24 @@ export function releaseClaudeUnclassifiedTurnEnd(
     claudePaneHasRunningChildWork(state, paneKey)
   ) {
     lead.turnCompletedAt = heldEnd
+    lead.announcedTurnCompletedAt = heldEnd
   }
+}
+
+/** A wakeup's end repeats the person's announced end; a person's prompt starts a turn that announces its own. */
+export function claudeAnnouncedTurnEnd(
+  event: { name: unknown; isTaskWakeup: boolean; opensTurn: boolean },
+  previousLead: ClaudeLeadTurnState | undefined
+): Pick<ClaudeLeadTurnState, 'turnCompletedAt' | 'announcedTurnCompletedAt'> {
+  if (event.name === 'UserPromptSubmit' && !event.isTaskWakeup) {
+    return { announcedTurnCompletedAt: undefined }
+  }
+  const own =
+    previousLead?.waitingAgentId !== undefined ? previousLead.stateBeforeWait : previousLead
+  return (event.name === 'Stop' || event.name === 'StopFailure') &&
+    !event.opensTurn &&
+    own?.taskWakeupTurn === true &&
+    previousLead?.announcedTurnCompletedAt !== undefined
+    ? { turnCompletedAt: previousLead.announcedTurnCompletedAt }
+    : {}
 }

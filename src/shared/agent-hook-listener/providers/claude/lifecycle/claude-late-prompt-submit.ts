@@ -34,6 +34,7 @@ export function settleLateClaudePromptSubmit(
   if (isTaskWakeup) {
     lead.unclassifiedTurnCompletedAt = undefined
   } else {
+    lead.announcedTurnCompletedAt = undefined
     releaseClaudeUnclassifiedTurnEnd(state, paneKey, lead)
   }
   resolvePrompt(state, paneKey, promptText)

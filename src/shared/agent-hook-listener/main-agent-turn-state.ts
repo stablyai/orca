@@ -18,6 +18,8 @@ export type ClaudeLeadTurnState = {
   turnCompletedAt?: number
   /** That end time, held because the turn's late prompt event has not said whether a task wakeup started it. */
   unclassifiedTurnCompletedAt?: number
+  /** The end last announced, until the person starts another turn; the task wakeups between repeat it. */
+  announcedTurnCompletedAt?: number
   /** Claude hook model. Later events that omit it keep the last reported value. */
   model?: string
   /** Restore the lead state displaced by a child wait; inventing working cannot later fold back to done. */
