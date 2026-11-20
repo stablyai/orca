@@ -44,15 +44,21 @@ export async function credentialFileExists(path: string): Promise<boolean> {
 
 const hardenedPaths = new SecurePathHardeningCache<string>(DEFAULT_HARDENING_CACHE_BOUNDS)
 async function hardenPosixCredentialPath(path: string, mode: number): Promise<void> {
-  const signature = async () => {
+  const read = async () => {
     const metadata = await stat(path, { bigint: true })
-    return `${fileStatSignature(metadata)}:${metadata.mode}`
+    return { signature: `${fileStatSignature(metadata)}:${metadata.mode}`, mode: metadata.mode }
   }
-  if (hardenedPaths.get(path) === (await signature())) {
+  const current = await read()
+  if (hardenedPaths.get(path) === current.signature) {
+    return
+  }
+  // A no-op chmod still bumps ctime, which misses every other process's cache and makes them chmod back (#44839).
+  if ((current.mode & 0o7777n) === BigInt(mode)) {
+    hardenedPaths.set(path, current.signature)
     return
   }
   await chmod(path, mode)
-  hardenedPaths.set(path, await signature())
+  hardenedPaths.set(path, (await read()).signature)
 }
 
 export async function hardenCredentialFile(path: string): Promise<void> {
