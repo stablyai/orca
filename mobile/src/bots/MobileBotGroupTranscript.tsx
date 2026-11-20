@@ -1,16 +1,21 @@
-import { useCallback, type ReactNode } from 'react'
+import { useCallback, useMemo, type ReactNode } from 'react'
 import { ScrollView, View, type ScrollViewInstance } from 'react-native'
+import { folderWorkspaceKey } from '../../../src/shared/workspace/identity/workspace-scope'
 import { useMobileNativeChatTailFollow } from '../session/native-chat/transcript/viewport/use-mobile-native-chat-tail-follow'
 import { MobileNativeChatFloatingControls } from '../session/native-chat/lower-region/MobileNativeChatFloatingControls'
 import { MobileNativeChatEmptyStateView } from '../session/native-chat/transcript/viewport/MobileNativeChatEmptyStateView'
+import { MobileNativeChatRowOverlaysHost } from '../session/native-chat/transcript/message-actions/MobileNativeChatRowOverlaysHost'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { BotGroupTranscript } from '../../../src/shared/bots/bot-group-transcript'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupStyles as styles } from './mobile-bot-group-styles'
 export function MobileBotGroupTranscript({
+  client,
   groupId,
   data,
   children
 }: {
+  client: RpcClient
   groupId: string
   data: BotGroupTranscript | null
   children: ReactNode
@@ -31,6 +36,15 @@ export function MobileBotGroupTranscript({
       ),
     [attach]
   )
+  const folderId = data?.group.folderWorkspaceId
+  const conversation = useMemo(
+    () => ({ surfaceId: `group:${groupId}`, sessionId: null }),
+    [groupId]
+  )
+  const imageSource = useMemo(
+    () => (folderId ? { client, worktreeId: folderWorkspaceKey(folderId) } : undefined),
+    [client, folderId]
+  )
   // A loaded room with no messages yet: its name over desktop's prompt, as an empty chat shows.
   if (data?.messages.length === 0) {
     return (
@@ -46,27 +60,33 @@ export function MobileBotGroupTranscript({
     )
   }
   return (
-    <View style={styles.grow}>
-      <ScrollView
-        ref={ref}
-        keyboardShouldPersistTaps="handled"
-        style={styles.grow}
-        contentContainerStyle={styles.transcript}
-        onContentSizeChange={tail.pinToTailAfterContentResize}
-        onLayout={tail.pinToTail}
-        onScroll={(event) => tail.recordScrollMetrics(event.nativeEvent)}
-        onScrollBeginDrag={tail.beginUserScroll}
-        onScrollEndDrag={tail.endUserDrag}
-        onMomentumScrollBegin={tail.beginMomentum}
-        onMomentumScrollEnd={tail.endMomentum}
-        scrollEventThrottle={32}
-      >
-        {children}
-      </ScrollView>
-      <MobileNativeChatFloatingControls
-        showJumpToTail={tail.showJumpToTail}
-        onJumpToTail={tail.jumpToTail}
-      />
-    </View>
+    <MobileNativeChatRowOverlaysHost
+      conversation={conversation}
+      imageSource={imageSource}
+      linkOpenMode="ask"
+    >
+      <View style={styles.grow}>
+        <ScrollView
+          ref={ref}
+          keyboardShouldPersistTaps="handled"
+          style={styles.grow}
+          contentContainerStyle={styles.transcript}
+          onContentSizeChange={tail.pinToTailAfterContentResize}
+          onLayout={tail.pinToTail}
+          onScroll={(event) => tail.recordScrollMetrics(event.nativeEvent)}
+          onScrollBeginDrag={tail.beginUserScroll}
+          onScrollEndDrag={tail.endUserDrag}
+          onMomentumScrollBegin={tail.beginMomentum}
+          onMomentumScrollEnd={tail.endMomentum}
+          scrollEventThrottle={32}
+        >
+          {children}
+        </ScrollView>
+        <MobileNativeChatFloatingControls
+          showJumpToTail={tail.showJumpToTail}
+          onJumpToTail={tail.jumpToTail}
+        />
+      </View>
+    </MobileNativeChatRowOverlaysHost>
   )
 }

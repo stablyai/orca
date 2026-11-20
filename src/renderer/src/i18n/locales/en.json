@@ -26606,11 +26606,13 @@
       "when": "When",
       "option": "Bot · {{name}}",
       "channelMissing": "Enter the channel to send results to.",
-      "hostUnavailable": "This computer can't hold a new automation yet. Try again in a moment.",
+      "hostUnavailable": "The bot's computer can't hold a new automation yet. Try again in a moment.",
       "promptMissing": "Enter what it should do.",
       "deletedBot": "Deleted bot",
       "fieldLabel": "Bot or project",
       "fieldPlaceholder": "Select bot or project",
+      "search": "Search bots and projects...",
+      "searchEmpty": "No bots or projects match your search.",
       "resultsToLinear": "A Linear issue",
       "resultsToLinearNeedsLinear": "A Linear issue (connect Linear first)",
       "linearIssuePlaceholder": "Issue key (e.g. ENG-123) or a Linear link",
@@ -27983,6 +27985,7 @@
       "needsYou": "· Needs you",
       "stopCouldNotBeConfirmed": "Stop could not be confirmed.",
       "useEachBotSNativeSessionForCommands": "Use each bot’s native session for commands.",
+      "attachmentsHostTooOld": "{{host}} needs an update to attach files in group chats.",
       "loadEarlierMessages": "Load earlier messages",
       "loadingGroup": "Loading group…",
       "manageMembers": "Manage members",
@@ -29294,9 +29297,11 @@
         "pickCustom": "Custom time"
       },
       "ask": {
+        "next": "Next question",
+        "previous": "Previous question",
         "recommended": "Recommended",
-        "typeAnswer": "Type your answer",
-        "replaced": "The agent asked a new question. Read it, then reply."
+        "step": "{{n}} of {{total}}",
+        "typeAnswer": "Type your answer"
       }
     },
     "search": {

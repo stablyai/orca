@@ -13,7 +13,6 @@ import {
 } from 'react'
 import { ArrowUp } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { caretToEndOf, useBotItemLineLead } from './use-bot-item-line-lead'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { NativeChatComposerPrimaryButton } from '../../native-chat/composer/controls/NativeChatComposerPrimaryButton'
@@ -69,13 +68,13 @@ export type BotItemCommentBoxHandle = {
   focusEnd: () => void
   /** Focus the box and type `text` at its caret. */
   type: (text: string) => void
-  /** Put `text` in the box in place of its words, to add to before sending. */
-  fill: (text: string) => void
-  /** Names the question line a typed answer is for ('' for the first open one), keeping the draft after
-   *  it; `leads`: every line's lead, so one from an earlier click is replaced. */
-  startLine: (lead: string, leads: readonly string[]) => void
+  /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
+   *  of its own, with "Replying to" hidden. */
+  fill: (text: string, plain?: boolean) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
+  /** The waiting question "Replying to" names, by its id; null once hidden. */
+  replyingTo: () => string | null
 }
 
 const NO_TARGET = () => null
@@ -228,31 +227,36 @@ export function BotItemCommentBox({
   }, [draft, ime])
 
   const reply = useBotItemReplyMark(box, question ?? null, scopeKey)
-  const answer = (): void => {
-    reply.show()
-    composer.current?.focus({ caretAtEnd: true, glow: true })
+  const caretToEnd = (): void => {
+    const node = input.current
+    node?.focus()
+    node?.setSelectionRange(node.value.length, node.value.length)
   }
-  const fillBox = (next: string): void => {
-    setDraft(next)
-    if (input.current) {
-      input.current.value = next
-    }
-    caretToEndOf(input.current)
-  }
-  const { leadOnly, startLine } = useBotItemLineLead(scopeKey, draft, fillBox, answer)
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
-    focusEnd: () => caretToEndOf(input.current),
+    focusEnd: caretToEnd,
     type: (typed) => void composer.current?.insertTypedText(typed),
-    answer,
-    startLine,
-    fill: (text) => fillBox(`${text} `)
+    replyingTo: () => reply.quote?.id ?? null,
+    answer: () => {
+      reply.show()
+      composer.current?.focus({ caretAtEnd: true, glow: true })
+    },
+    fill: (text, plain) => {
+      if (plain) {
+        reply.hide()
+      }
+      setDraft(`${text} `)
+      if (input.current) {
+        input.current.value = `${text} `
+      }
+      caretToEnd()
+    }
   }))
   const images = attachments.imageAttachments
   // The thumbnails' order numbers their pills, as in chat.
   const imageRow = useMemo(() => images.map(({ id }) => id), [images])
   const pending = images.some((image) => image.pending) || attachments.pastedTextSaving
-  const empty = (!draft.trim() || (leadOnly && Boolean(question))) && images.length === 0
+  const empty = !draft.trim() && images.length === 0
   const send = (): void => {
     if (empty || pending) {
       return

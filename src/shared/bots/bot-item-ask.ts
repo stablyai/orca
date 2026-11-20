@@ -126,24 +126,8 @@ export function botItemQuickReplyText(
   reply: BotItemQuickReply
 ): string {
   return shape.decisions.length > 1
-    ? `${botItemLineLead(shape, decision)} ${reply.label}`
+    ? `${botItemQuestionLine(decision.question)} → ${reply.label}`
     : reply.label
-}
-
-/** What "Type your answer" puts first in the comment box to name a later line of a several-question ask. */
-export function botItemLineLead(shape: BotItemQuestionShape, decision: BotItemDecision): string {
-  const line = botItemQuestionLine(decision.question)
-  // Questions sharing a first line are told apart by their whole text.
-  const shared = shape.decisions.some(
-    (other) => other !== decision && botItemQuestionLine(other.question) === line
-  )
-  return `${shared ? decision.question.trim().replace(/\s+/g, ' ') : line} →`
-}
-
-/** The draft without a lead a line's "Type your answer" put at its start. */
-export function withoutBotItemLineLeads(draft: string, leads: readonly string[]): string {
-  const lead = leads.find((candidate) => draft.startsWith(candidate))
-  return lead ? draft.slice(lead.length).trimStart() : draft
 }
 
 /** The quick replies an owner's reply picked for each question line, none where they wrote their own
@@ -154,14 +138,16 @@ export function botItemPickedReplies(
 ): BotItemQuickReply[][] {
   const text = typeof reply.text === 'string' ? reply.text.trim() : ''
   const recorded = Array.isArray(reply.decisions) ? reply.decisions : null
+  // With several questions, one comment can answer each on its own line.
+  const lines = shape.decisions.length > 1 ? text.split('\n').map((line) => line.trim()) : [text]
   return shape.decisions.map((decision, index) => {
     const picks: unknown = recorded?.[index]?.picks
     if (Array.isArray(picks)) {
       // A pick-several decision kept every pick.
       return decision.replies.filter((_, at) => picks.includes(at))
     }
-    return decision.replies.filter(
-      (option) => botItemQuickReplyText(shape, decision, option) === text
+    return decision.replies.filter((option) =>
+      lines.includes(botItemQuickReplyText(shape, decision, option))
     )
   })
 }

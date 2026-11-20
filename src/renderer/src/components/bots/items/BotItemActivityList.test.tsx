@@ -119,7 +119,7 @@ const WAITING: BotItemEvent[] = [
 ]
 
 it("posts a quick reply as the owner's comment, and Alt-click puts it in the box instead", () => {
-  const actions = { send: vi.fn(), edit: vi.fn(), type: vi.fn(), startLine: vi.fn() }
+  const actions = { send: vi.fn(), edit: vi.fn(), recover: vi.fn(), type: vi.fn() }
   const item = makeTestBotItem(6, {
     status: 'needs_you',
     question: { eventId: 'e2', text: 'readable copy' }
@@ -130,47 +130,12 @@ it("posts a quick reply as the owner's comment, and Alt-click puts it in the box
   fireEvent.click(screen.getByRole('button', { name: 'Wait' }), { altKey: true })
   fireEvent.click(screen.getByRole('button', { name: 'Type your answer' }))
 
-  expect(actions.send).toHaveBeenCalledExactlyOnceWith('Go ahead', 'e2')
+  expect(actions.send).toHaveBeenCalledExactlyOnceWith('Go ahead')
   expect(actions.edit).toHaveBeenCalledExactlyOnceWith('Wait')
   expect(actions.type).toHaveBeenCalledOnce()
 })
 
-it('names the line a typed answer is for, and leaves the first open line to the box', () => {
-  const asked: BotItemEvent[] = [
-    {
-      id: 'e2',
-      kind: 'commented',
-      actor: ASKER,
-      data: {
-        text: 'two things',
-        ask: {
-          questions: [
-            { prompt: 'Ship it?', options: [{ label: 'Yes' }] },
-            { prompt: 'Notify the team?', options: [{ label: 'No' }] }
-          ]
-        }
-      },
-      at: 200
-    },
-    { id: 'e3', kind: 'status', actor: ASKER, data: { from: 'working', to: 'needs_you' }, at: 200 }
-  ]
-  const actions = { send: vi.fn(), edit: vi.fn(), type: vi.fn(), startLine: vi.fn() }
-  const item = makeTestBotItem(6, {
-    status: 'needs_you',
-    question: { eventId: 'e2', text: 'two things' }
-  })
-  render(<BotItemActivityList bot={BOT} item={item} events={asked} quickReplies={actions} />)
-
-  const [first, second] = screen.getAllByRole('button', { name: 'Type your answer' })
-  fireEvent.click(first!)
-  fireEvent.click(second!)
-
-  const leads = ['Ship it? →', 'Notify the team? →']
-  expect(actions.startLine).toHaveBeenNthCalledWith(1, '', leads)
-  expect(actions.startLine).toHaveBeenNthCalledWith(2, 'Notify the team? →', leads)
-})
-
-it('shows an answer an older host recorded as a quoted comment, the question keeping only its pick', () => {
+it('shows an answer an older host recorded as a quoted comment, the question reading Question → pick', () => {
   const events: BotItemEvent[] = [
     ...WAITING,
     {
@@ -193,14 +158,14 @@ it('shows an answer an older host recorded as a quoted comment, the question kee
       bot={BOT}
       item={makeTestBotItem(6)}
       events={events}
-      quickReplies={{ send: vi.fn(), edit: vi.fn(), type: vi.fn(), startLine: vi.fn() }}
+      quickReplies={{ send: vi.fn(), edit: vi.fn(), recover: vi.fn(), type: vi.fn() }}
     />
   )
 
   expect(screen.queryByRole('button', { name: /^Go ahead/ })).toBeNull()
   expect(screen.queryByText('Needs you')).toBeNull()
   const question = document.querySelector('[data-bot-item-question="closed"]')!
-  expect(question.textContent).toBe('Go ahead without the design review?Wait')
+  expect(question.textContent).toBe('Go ahead without the design review? → Wait')
   expect(
     screen.getByRole('button', { name: /^Replying to: Go ahead without the design review\?/ })
   ).toBeTruthy()

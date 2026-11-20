@@ -86,3 +86,56 @@ describe('Android emulator pane keys', () => {
     expect(scrcpyKeyboard.sendText.mock.calls).toEqual([['@']])
   })
 })
+
+describe('iOS simulator pane keys', () => {
+  it('drops keys buffered for a capture that ended before its layout sync finished', async () => {
+    const { callRuntimeRpc } = await import('@/runtime/rpc/calls/runtime-rpc-call')
+    const replies: (() => void)[] = []
+    vi.mocked(callRuntimeRpc).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          replies.push(() => resolve({ physicalKeys: true }))
+        })
+    )
+    const sent: number[] = []
+    function IosPane(): React.JSX.Element {
+      const { handleKeyDown, enableKeyboardCapture } = useEmulatorScreenKeyboard({
+        cancelKeyboardFrames: () => {},
+        canInteract: true,
+        scrcpyKeyboard: null,
+        sendKeyboardFrames: (frames) => {
+          sent.push(frames.length)
+          return true
+        },
+        worktreeId: 'wt-1'
+      })
+      return (
+        <div
+          aria-label="ios"
+          tabIndex={0}
+          onKeyDown={handleKeyDown}
+          onFocus={enableKeyboardCapture}
+        />
+      )
+    }
+    act(() => root.render(<IosPane />))
+    const screen = container.querySelector<HTMLDivElement>('[aria-label="ios"]')!
+    const key = (init: KeyboardEventInit) =>
+      act(() => {
+        const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+        Object.defineProperty(event, 'getModifierState', { value: () => false })
+        screen.dispatchEvent(event)
+      })
+
+    key({ key: 'Enter', code: 'Enter' })
+    key({ key: 'a', code: 'KeyA' })
+    key({ key: 'Escape', code: 'Escape' })
+    key({ key: 'Enter', code: 'Enter' })
+    key({ key: 'b', code: 'KeyB' })
+    await act(async () => {
+      replies.forEach((resolve) => resolve())
+    })
+
+    expect(sent).toEqual([2])
+  })
+})
