@@ -1,4 +1,12 @@
-import { existsSync, lstatSync, mkdirSync, readlinkSync, renameSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  renameSync,
+  rmSync
+} from 'node:fs'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import {
   getOrcaManagedCodexHomePath,
@@ -6,13 +14,16 @@ import {
 } from '../../configuration/homes/codex-home-paths'
 import { listCodexSessionJsonlFilesIncrementally } from '../rollouts/codex-session-file-listing'
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
-import {
-  clearLegacyCopiedSessionMarker,
-  fileStatsMatchMarker,
-  migrateLegacyCopiedSessionBridge,
-  readLegacyCopiedSessionMarker
-} from './codex-legacy-session-copy'
+import { replaceCopyWithSourceLink } from './codex-legacy-session-copy'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
+
+type LegacyCopiedSessionMarker = {
+  sourcePath: string
+  sourceSize: number
+  sourceMtimeMs: number
+  targetSize: number
+  targetMtimeMs: number
+}
 
 export type LegacyCopiedCodexSessionBridgeScanPreference = {
   sourcePath: string
@@ -158,6 +169,38 @@ function replaceSymlinkSessionBridgeWithHardlink(
   return false
 }
 
+async function migrateLegacyCopiedSessionBridge(
+  sourceHomePath: string,
+  sourcePath: string,
+  targetPath: string,
+  relativePath: string
+): Promise<void> {
+  const marker = readLegacyCopiedSessionMarker(relativePath)
+  if (!marker || marker.sourcePath !== sourcePath) {
+    return
+  }
+  try {
+    const targetStat = lstatSync(targetPath)
+    if (targetStat.isSymbolicLink()) {
+      clearLegacyCopiedSessionMarker(relativePath)
+      return
+    }
+    if (!fileStatsMatchMarker(targetStat, marker, 'target')) {
+      return
+    }
+  } catch {
+    return
+  }
+  const replaced = await replaceCopyWithSourceLink({
+    sourcePath,
+    copyPath: targetPath,
+    threadHomes: [getOrcaManagedCodexHomePath(), sourceHomePath]
+  })
+  if (replaced) {
+    clearLegacyCopiedSessionMarker(relativePath)
+  }
+}
+
 /** Keep resume scans coherent until legacy copies can be replaced with links. */
 export function getLegacyCopiedCodexSessionBridgeScanPreference(
   sessionFilePath: string
@@ -192,4 +235,46 @@ export function getLegacyCopiedCodexSessionBridgeScanPreference(
     preferManagedCopy: !targetMatchesMarker || sourceMatchesMarker,
     sourceSkipBytes: !targetMatchesMarker && !sourceMatchesMarker ? marker.sourceSize : null
   }
+}
+
+function getLegacySessionCopyMarkerPath(relativePath: string): string {
+  return join(getOrcaManagedCodexHomePath(), '.orca-session-copies', `${relativePath}.json`)
+}
+
+function readLegacyCopiedSessionMarker(relativePath: string): LegacyCopiedSessionMarker | null {
+  try {
+    const parsed: unknown = JSON.parse(
+      readFileSync(getLegacySessionCopyMarkerPath(relativePath), 'utf-8')
+    )
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+    const marker = parsed as Record<string, unknown>
+    if (
+      typeof marker.sourcePath !== 'string' ||
+      typeof marker.sourceSize !== 'number' ||
+      typeof marker.sourceMtimeMs !== 'number' ||
+      typeof marker.targetSize !== 'number' ||
+      typeof marker.targetMtimeMs !== 'number'
+    ) {
+      return null
+    }
+    return marker as LegacyCopiedSessionMarker
+  } catch {
+    return null
+  }
+}
+
+function fileStatsMatchMarker(
+  stat: { size: number; mtimeMs: number },
+  marker: LegacyCopiedSessionMarker,
+  kind: 'source' | 'target'
+): boolean {
+  const expectedSize = kind === 'source' ? marker.sourceSize : marker.targetSize
+  const expectedMtimeMs = kind === 'source' ? marker.sourceMtimeMs : marker.targetMtimeMs
+  return stat.size === expectedSize && stat.mtimeMs === expectedMtimeMs
+}
+
+function clearLegacyCopiedSessionMarker(relativePath: string): void {
+  rmSync(getLegacySessionCopyMarkerPath(relativePath), { force: true })
 }

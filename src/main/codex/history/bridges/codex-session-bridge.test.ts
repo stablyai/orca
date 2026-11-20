@@ -18,17 +18,18 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
-const { linkMockState } = vi.hoisted(() => ({
-  linkMockState: { beforeLink: null as null | (() => void) }
-}))
+const { linkMockState } = vi.hoisted(() => {
+  const state: { beforeLink: (() => void) | null } = { beforeLink: null }
+  return { linkMockState: state }
+})
 
 vi.mock('../rollouts/codex-session-link', async () => {
   const actual = await vi.importActual<typeof SessionLink>('../rollouts/codex-session-link')
   return {
     ...actual,
-    linkCodexSessionFile: (sourcePath: string, targetPath: string) => {
+    linkCodexSessionFileAsync: (...args: Parameters<typeof actual.linkCodexSessionFileAsync>) => {
       linkMockState.beforeLink?.()
-      return actual.linkCodexSessionFile(sourcePath, targetPath)
+      return actual.linkCodexSessionFileAsync(...args)
     }
   }
 })
