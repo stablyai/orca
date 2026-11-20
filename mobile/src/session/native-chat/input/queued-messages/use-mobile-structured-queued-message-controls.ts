@@ -247,7 +247,6 @@ export function useMobileStructuredQueuedMessageControls(args: {
       ),
     [mutate, resolved]
   )
-  const pause = queuedMessagesQueuePause(cards, queuePause)
   const waitingAgentMailIds = useMemo(
     () =>
       new Set(
@@ -255,6 +254,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
       ),
     [queuedMessages, submissions]
   )
+  const pause = queuedMessagesQueuePause(cards, queuePause, waitingAgentMailIds.size > 0)
   const holds = useCallback(
     (messageId: string): boolean =>
       waitingAgentMailIds.has(messageId) || cards.some((card) => card.messageId === messageId),

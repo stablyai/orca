@@ -293,12 +293,14 @@ export function queuedMessageCardNeedsAttention(
   return card.state === 'returned' || card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED
 }
 
-/** Offer Resume only while the queue pause holds a card it could actually send. */
+/** Offer Resume only while the queue pause holds a card it could actually send, or another agent's
+ *  waiting mail the transcript draws instead of a card. */
 export function queuedMessagesQueuePause(
   cards: readonly QueuedMessageCard[],
-  queuePause: AgentSessionQueuePause | null
+  queuePause: AgentSessionQueuePause | null,
+  agentMailWaiting = false
 ): AgentSessionQueuePause | null {
-  return cards.some((card) => card.resumeEligible) ? queuePause : null
+  return agentMailWaiting || cards.some((card) => card.resumeEligible) ? queuePause : null
 }
 
 /** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */

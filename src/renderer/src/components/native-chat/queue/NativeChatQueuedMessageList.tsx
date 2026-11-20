@@ -100,7 +100,8 @@ export function NativeChatQueuedMessageList({
   })
   return (
     <div ref={regionRef} aria-live="polite">
-      {cards.length > 0 ? (
+      {/* A paused queue holding only agent mail, which the transcript draws, still offers Resume. */}
+      {cards.length > 0 || pause ? (
         <div ref={queueRef} className="mx-auto w-full max-w-(--chat-content-max-width) px-4 py-1">
           <div className="divide-y divide-border rounded-md border border-border bg-card text-card-foreground">
             <NativeChatQueueHeader
@@ -115,51 +116,53 @@ export function NativeChatQueuedMessageList({
               onClearAll={() => refocusAfter(controller.clear())}
               onResume={() => refocusAfter(controller.resume())}
             />
-            <ul
-              ref={listRef}
-              id={listId}
-              // Hidden, not unmounted: an open edit keeps its typing while the list is collapsed.
-              hidden={!expanded}
-              aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
-              // Bound queue height to preserve transcript/composer space; allow extra room for edit thumbnails.
-              className={cn(
-                'scrollbar-sleek divide-y divide-border overflow-y-auto',
-                controller.editor ? 'max-h-72' : 'max-h-40'
-              )}
-            >
-              <NativeChatQueuedMessageRows
-                cards={cards}
-                reorder={controller.editor ? undefined : controller.reorder}
-                renderCard={(card, drag) => (
-                  <NativeChatQueuedMessageCard
-                    key={card.messageId}
-                    card={card}
-                    drag={drag}
-                    chatWorktreeId={chatWorktreeId}
-                    agentName={agentName}
-                    statedFailures={statedFailures}
-                    showsSteerShortcut={card === steerableHead}
-                    agentWorking={controller.isWorking}
-                    steerHeld={steerHeld}
-                    pending={controller.pending(card.messageId)}
-                    onSteer={() => refocusAfter(controller.steer(card.messageId))}
-                    onDelete={() => refocusAfter(controller.remove(card.messageId))}
-                    onEdit={
-                      controller.editCapable
-                        ? () => void controller.edit(card.messageId)
-                        : undefined
-                    }
-                    editor={
-                      controller.editor?.messageId === card.messageId
-                        ? controller.editor
-                        : undefined
-                    }
-                    editAttachTo={editAttachTo}
-                    editDisabled={controller.editor !== undefined}
-                  />
+            {cards.length > 0 ? (
+              <ul
+                ref={listRef}
+                id={listId}
+                // Hidden, not unmounted: an open edit keeps its typing while the list is collapsed.
+                hidden={!expanded}
+                aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
+                // Bound queue height to preserve transcript/composer space; allow extra room for edit thumbnails.
+                className={cn(
+                  'scrollbar-sleek divide-y divide-border overflow-y-auto',
+                  controller.editor ? 'max-h-72' : 'max-h-40'
                 )}
-              />
-            </ul>
+              >
+                <NativeChatQueuedMessageRows
+                  cards={cards}
+                  reorder={controller.editor ? undefined : controller.reorder}
+                  renderCard={(card, drag) => (
+                    <NativeChatQueuedMessageCard
+                      key={card.messageId}
+                      card={card}
+                      drag={drag}
+                      chatWorktreeId={chatWorktreeId}
+                      agentName={agentName}
+                      statedFailures={statedFailures}
+                      showsSteerShortcut={card === steerableHead}
+                      agentWorking={controller.isWorking}
+                      steerHeld={steerHeld}
+                      pending={controller.pending(card.messageId)}
+                      onSteer={() => refocusAfter(controller.steer(card.messageId))}
+                      onDelete={() => refocusAfter(controller.remove(card.messageId))}
+                      onEdit={
+                        controller.editCapable
+                          ? () => void controller.edit(card.messageId)
+                          : undefined
+                      }
+                      editor={
+                        controller.editor?.messageId === card.messageId
+                          ? controller.editor
+                          : undefined
+                      }
+                      editAttachTo={editAttachTo}
+                      editDisabled={controller.editor !== undefined}
+                    />
+                  )}
+                />
+              </ul>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -199,7 +202,7 @@ function NativeChatQueueHeader({
       className={cn(
         'flex items-center gap-1 rounded-t-md py-1 pr-1 pl-2.5 text-xs text-muted-foreground',
         pause && 'bg-muted',
-        !expanded && 'rounded-b-md'
+        (!expanded || count === 0) && 'rounded-b-md'
       )}
     >
       <p className={cn('truncate', pause && 'font-medium text-foreground')}>
@@ -207,10 +210,16 @@ function NativeChatQueueHeader({
           ? t('components.native-chat.queuedMessages.paused', 'Paused')
           : t('components.native-chat.queuedMessages.queued', 'Queued')}
       </p>
-      <span aria-hidden>·</span>
-      <span className={cn('tabular-nums', attentionCaption ? 'shrink-0' : 'min-w-0 flex-1')}>
-        {count}
-      </span>
+      {count > 0 ? (
+        <>
+          <span aria-hidden>·</span>
+          <span className={cn('tabular-nums', attentionCaption ? 'shrink-0' : 'min-w-0 flex-1')}>
+            {count}
+          </span>
+        </>
+      ) : (
+        <span className="min-w-0 flex-1" />
+      )}
       {attentionCaption ? (
         <span className="flex min-w-0 flex-1 items-center gap-1 text-destructive">
           <AlertCircle className="size-3.5 shrink-0" aria-hidden />
@@ -220,18 +229,20 @@ function NativeChatQueueHeader({
       {pause ? (
         <>
           {/* Each greys during the other: a Resume would send the cards a Clear is deleting. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            disabled={!clearCapable || queuePending !== null}
-            onClick={onClearAll}
-          >
-            <NativeChatPendingIcon pending={queuePending === 'clear'} className="size-3">
-              <Trash2 className="size-3" />
-            </NativeChatPendingIcon>
-            {t('components.native-chat.queuedMessages.clearAll', 'Clear all')}
-          </Button>
+          {count > 0 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              disabled={!clearCapable || queuePending !== null}
+              onClick={onClearAll}
+            >
+              <NativeChatPendingIcon pending={queuePending === 'clear'} className="size-3">
+                <Trash2 className="size-3" />
+              </NativeChatPendingIcon>
+              {t('components.native-chat.queuedMessages.clearAll', 'Clear all')}
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
@@ -246,24 +257,26 @@ function NativeChatQueueHeader({
           </Button>
         </>
       ) : null}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
-            aria-expanded={expanded}
-            aria-controls={listId}
-            onClick={onToggle}
-          >
-            {expanded ? <ChevronDown /> : <ChevronRight />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {toggleLabel}
-        </TooltipContent>
-      </Tooltip>
+      {count > 0 ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
+              aria-expanded={expanded}
+              aria-controls={listId}
+              onClick={onToggle}
+            >
+              {expanded ? <ChevronDown /> : <ChevronRight />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {toggleLabel}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
     </div>
   )
 }

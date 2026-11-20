@@ -145,7 +145,8 @@ export function MobileNativeChatQueuedMessages({
       setExpandedIds(new Set([...expandedIds].filter((messageId) => liveIds.includes(messageId))))
     }
   }
-  if (!cards || cards.length === 0) {
+  // A paused queue holding only agent mail, which the transcript draws, still offers Resume.
+  if (!cards || (cards.length === 0 && !pause)) {
     if (openChoice !== null) {
       setOpenChoice(null)
     }
@@ -185,7 +186,7 @@ export function MobileNativeChatQueuedMessages({
   // A paused queue keeps a header for Resume and Clear all; an unpaused one offers Clear all in each menu.
   const headerActions = pause ? (
     <>
-      {onClearAll ? (
+      {onClearAll && cards.length > 0 ? (
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: clearBusy }}
@@ -291,14 +292,18 @@ export function MobileNativeChatQueuedMessages({
                 <Text style={[styles.headerLabel, styles.headerLabelPaused]}>
                   {t('chat.queuedMessages.pausedState', 'Paused')}
                 </Text>
-                <Text
-                  style={styles.headerLabel}
-                  importantForAccessibility="no"
-                  accessibilityElementsHidden
-                >
-                  ·
-                </Text>
-                <Text style={styles.headerCount}>{cards.length}</Text>
+                {cards.length > 0 ? (
+                  <>
+                    <Text
+                      style={styles.headerLabel}
+                      importantForAccessibility="no"
+                      accessibilityElementsHidden
+                    >
+                      ·
+                    </Text>
+                    <Text style={styles.headerCount}>{cards.length}</Text>
+                  </>
+                ) : null}
               </View>
               {largeText ? null : headerActions}
             </View>

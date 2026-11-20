@@ -10,6 +10,7 @@ import { runningStructuredAgentSessionTurnScope } from '../../../agent-session/v
 import { structuredAgentSessionOpeningSendIn } from '../../../agent-session/requests/structured-agent-session-opening-send'
 
 /** Place pending sends after live activity when host handover waits: during conversation commands (/compact), Stop, or a send still opening its turn.
+ * Another agent's waiting mail always follows the live turn: it is not part of the work the agent is doing.
  * Include this client’s unrecorded sends; ordinary running turns accept sends promptly, and pre-Stop sends stay put.
  * While a turn opens, later sends wait regardless of queue/publication state; queued positions precede the handover that moved the opening send. */
 export function nativeChatMessagesWaitingBehindLiveTurn(
@@ -17,6 +18,7 @@ export function nativeChatMessagesWaitingBehindLiveTurn(
     id: string
     role?: NativeChatRole
     queued?: true
+    from?: unknown
     unsent?: true
     sentWhileStopping?: true
     awaitsRetry?: true
@@ -37,6 +39,8 @@ export function nativeChatMessagesWaitingBehindLiveTurn(
     message.journalPosition === undefined &&
     message.unsent !== true &&
     message.awaitsRetry !== true
+  const agentMail = (message: (typeof messages)[number]): boolean =>
+    message.queued === true && message.from !== undefined
   const candidates = messages.filter((message) => waits(message) || unrecorded(message))
   if (candidates.length === 0 || !items) {
     return new Set()
@@ -50,6 +54,7 @@ export function nativeChatMessagesWaitingBehindLiveTurn(
     candidates
       .filter(
         (message) =>
+          agentMail(message) ||
           (behindHold && waits(message)) ||
           (behindOpening && (message.queued === true || unrecorded(message)))
       )

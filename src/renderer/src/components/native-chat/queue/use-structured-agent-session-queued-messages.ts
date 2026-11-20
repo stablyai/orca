@@ -235,13 +235,17 @@ export function useStructuredAgentSessionQueuedMessages(args: {
       }),
     [mutate, run]
   )
-  const pause = useMemo(() => queuedMessagesQueuePause(cards, queuePause), [cards, queuePause])
+
   const waitingAgentMailIds = useMemo(
     () =>
       new Set(
         waitingAgentMailEchoes(queuedMessages, submissions).map((echo) => echo.clientMessageId)
       ),
     [queuedMessages, submissions]
+  )
+  const pause = useMemo(
+    () => queuedMessagesQueuePause(cards, queuePause, waitingAgentMailIds.size > 0),
+    [cards, queuePause, waitingAgentMailIds]
   )
   const holds = useCallback(
     (messageId: string): boolean =>

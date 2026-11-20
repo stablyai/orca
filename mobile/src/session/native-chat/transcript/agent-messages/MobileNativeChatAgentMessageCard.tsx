@@ -90,13 +90,15 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   const canCopy = agentMessageCanCopy(text)
   // Mail from several senders opens each from its details.
   const several = shown.length > 1
+  // Not taken by the agent yet: dimmed, with no time, until its delivered row replaces it in place.
+  const waiting = message.queued === true
+  // A row with details is a button VoiceOver names by its label, which says a waiting one is not sent yet.
   const expandable =
+    waiting ||
     canCopy ||
     several ||
     merged.length > 0 ||
     message.blocks.some((block) => block.type === 'image-ref')
-  // Not taken by the agent yet: dimmed, with no time, until its delivered row replaces it in place.
-  const waiting = message.queued === true
   const waitingId = agentMessageWaitingQueuedId(message)
   const open =
     sender && !several ? <OpenSender from={from} sender={sender} unnamed={unnamed} /> : null

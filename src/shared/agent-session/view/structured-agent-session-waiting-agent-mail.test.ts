@@ -21,8 +21,10 @@ import {
 import {
   createTranscriptEchoes,
   projectQueuedMessageCards,
+  queuedMessagesQueuePause,
   waitingAgentMailEchoes
 } from './structured-agent-session-queued-cards'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../native-chat/transcript/turns/native-chat-messages-waiting-behind-live-turn'
 
 const FROM: AgentMessageSource = {
   kind: 'agent',
@@ -285,4 +287,29 @@ it("keeps the transcript's echoes across a queue change that leaves the waiting 
   const after = echoes([], [card('mail', 1), personCard('b', 2), personCard('a', 3)], [])
   expect(after).toBe(before)
   expect(echoes([], [card('mail', 1), card('more', 2)], []).length).toBe(2)
+})
+
+it("draws waiting agent mail after the running turn's live activity, not inside it", () => {
+  const working: AgentJournalRenderItem = {
+    itemId: 'orca:reply',
+    revision: 0,
+    sequence: 4,
+    observedAt: 4,
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'working' }] },
+    turnScope: { kind: 'thread' }
+  }
+  const behind = nativeChatMessagesWaitingBehindLiveTurn(
+    [
+      { id: 'orca:reply', role: 'assistant', journalPosition: { sequence: 4, index: 0 } },
+      { id: 'orca:mail', role: 'user', queued: true, from: FROM }
+    ],
+    [working]
+  )
+  expect([...behind]).toEqual(['orca:mail'])
+})
+
+it('keeps Resume while a paused queue holds only agent mail the transcript draws', () => {
+  const pause = { reason: 'failed' as const }
+  expect(queuedMessagesQueuePause([], pause, true)).toBe(pause)
+  expect(queuedMessagesQueuePause([], pause)).toBeNull()
 })
