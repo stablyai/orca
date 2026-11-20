@@ -12,7 +12,13 @@ type SerializeCursorTerminal = {
   buffer: { active: { cursorX: number; cursorY: number } }
 }
 
-type ReprintCell = { getChars: () => string; getWidth: () => number }
+type ReprintCell = {
+  getChars: () => string
+  getWidth: () => number
+  isBgPalette: () => number
+  isBgRGB: () => number
+  getBgColor: () => number
+}
 
 // Structural view of an xterm Terminal for reprinting the cursor row.
 type SnapshotTerminal = SerializeCursorTerminal & {
@@ -92,7 +98,9 @@ export function serializeWithAbsoluteCursor(
   serializer: SnapshotSerializer,
   terminal: SnapshotTerminal,
   opts?: SnapshotSerializeOptions,
-  savedCursor?: SavedCursorRegister | null
+  savedCursor?: SavedCursorRegister | null,
+  // Off for replays into a pane of unknown width, where repainted cells would land on reflowed rows.
+  { repaintPendingWrap = true }: { repaintPendingWrap?: boolean } = {}
 ): string {
   const serialized = serializer.serialize(opts)
   // Empty means nothing to restore to callers; a bare CUP would persist every idle pane.
@@ -103,9 +111,16 @@ export function serializeWithAbsoluteCursor(
   const mouseEncodingRestore = serializesModes(opts)
     ? buildMouseEncodingRestoreSequence(readTerminalMouseEncoding(terminal))
     : ''
-  const cursorRestore = buildAbsoluteCursorRestoreSequence(terminal, savedCursor, {
-    pendingWrapRestore: (cupCursorY) => buildPendingWrapRestore(serializer, terminal, cupCursorY)
-  })
+  const cursorRestore = buildAbsoluteCursorRestoreSequence(
+    terminal,
+    savedCursor,
+    repaintPendingWrap
+      ? {
+          pendingWrapRestore: (cupCursorY) =>
+            buildPendingWrapRestore(serializer, terminal, cupCursorY)
+        }
+      : {}
+  )
   return `${serialized}${mouseEncodingRestore}${cursorRestore}`
 }
 
@@ -123,31 +138,51 @@ export function serializeCurrentPenState(
   })
 }
 
-// A cursor move cannot set pending wrap; reprinting the row so it ends on the edge cell can (STA-16354).
+// A cursor move cannot set pending wrap; printing the edge cell again can (STA-16354).
 function buildPendingWrapRestore(
   serializer: SnapshotSerializer,
   terminal: SnapshotTerminal,
   cupCursorY: number
 ): string | null {
-  if (typeof serializer._serializeBufferByRange !== 'function') {
-    return null
-  }
   const buffer = terminal.buffer.active
   const row = buffer.baseY + buffer.cursorY
   const edge = buffer.getLine(row)?.getCell(terminal.cols - 1)
-  // A blank edge serializes to nothing, so the reprint would stop short of the wrap.
-  if (!edge || (edge.getChars() === '' && edge.getWidth() !== 0)) {
+  if (!edge) {
     return null
   }
-  const rowAnsi = serializer._serializeBufferByRange(
-    terminal,
-    buffer,
-    { start: row, end: row },
-    true
-  )
-  // Insert mode would shift the old cells into the reprint's skipped blanks.
+  let repaint: string
+  if (edge.getChars() === '' && edge.getWidth() !== 0) {
+    // An erased edge serializes to nothing; a blank in its background looks the same and arms the wrap.
+    repaint = `\x1b[${cupCursorY + 1};${terminal.cols}H\x1b[${buildBackgroundSgr(edge)}m `
+  } else if (typeof serializer._serializeBufferByRange === 'function') {
+    // Reprint the whole row so the edge cell keeps its exact style, link and width.
+    const rowAnsi = serializer._serializeBufferByRange(
+      terminal,
+      buffer,
+      { start: row, end: row },
+      true
+    )
+    repaint = `\x1b[${cupCursorY + 1};1H\x1b[0m${rowAnsi}`
+  } else {
+    return null
+  }
+  // Insert mode would shift old cells into skipped blanks; an open OSC 8 link would claim unlinked cells.
   const insertMode = terminal.modes.insertMode
-  return `${insertMode ? '\x1b[4l' : ''}\x1b[${cupCursorY + 1};1H\x1b[0m${rowAnsi}${insertMode ? '\x1b[4h' : ''}\x1b[0m${serializeCurrentPenState(serializer, terminal)}`
+  return `${insertMode ? '\x1b[4l' : ''}\x1b]8;;\x1b\\${repaint}${insertMode ? '\x1b[4h' : ''}\x1b[0m${serializeCurrentPenState(serializer, terminal)}`
+}
+
+function buildBackgroundSgr(cell: ReprintCell): string {
+  const color = cell.getBgColor()
+  if (cell.isBgRGB()) {
+    return `0;48;2;${(color >> 16) & 0xff};${(color >> 8) & 0xff};${color & 0xff}`
+  }
+  if (!cell.isBgPalette()) {
+    return '0'
+  }
+  if (color < 8) {
+    return `0;${40 + color}`
+  }
+  return color < 16 ? `0;${100 + color - 8}` : `0;48;5;${color}`
 }
 
 function serializesModes(opts: unknown): boolean {
@@ -176,9 +211,13 @@ export function buildAbsoluteCursorRestoreSequence(
   const originMode = terminalWithCore.modes?.originMode === true
   const cupCursorY = cursorY - (originMode ? scrollTop : 0)
   const cursorRowInView = cupCursorY >= 0 && cupCursorY < terminal.rows
-  // Trailing DECSTBM/DECOM home the cursor, so a wrap-pending cursor (cursorX == cols) needs its row reprinted.
+  // Origin-mode CUP clamps to the margins, so a repaint outside them would hit another row.
+  const cursorRowAddressable = originMode
+    ? cursorY >= scrollTop && cursorY <= scrollBottom
+    : cursorRowInView
+  // Trailing DECSTBM/DECOM home the cursor, so a wrap-pending cursor (cursorX == cols) needs its edge repainted.
   const pendingWrapRestore =
-    cursorX === terminal.cols && cursorRowInView
+    cursorX === terminal.cols && cursorRowAddressable
       ? (options.pendingWrapRestore?.(cupCursorY) ?? null)
       : null
   // Never emit a CUP that clamps; a clamped wrap-pending cursor would overwrite the edge cell.
