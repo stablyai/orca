@@ -9,16 +9,7 @@ import {
   setSshTargetRegistryStore
 } from '../targets/ssh-target-registry'
 import { initializeSshConnectionGenerationSession } from '../connection/authority/ssh-connection-generation'
-import {
-  getSshHostServerStatus,
-  isSshHostKeptForBridgedTerminals,
-  setSshHostServedListener
-} from '../host-server/ssh-host-server-status'
-import {
-  onLastBridgedTerminalExit,
-  retryMoveAfterLastBridgedExit
-} from '../legacy-relay/bridge/legacy-relay-move-retry'
-import { installLegacyRelayBridgeApplication } from '../legacy-relay/bridge/legacy-relay-bridge-application'
+import { setSshHostServedListener } from '../host-server/ssh-host-server-status'
 import { setSshStartupReady } from '../../ipc/ssh/ssh-startup-ready'
 import { awaitSignInForCredentialHosts } from '../../ipc/ssh/ssh-sign-in-requirement'
 import { holdLaunchReconnectOptOuts } from '../../ipc/ssh/ssh-host-user-disconnect'
@@ -39,8 +30,6 @@ import { broadcastPortForwards } from '../../ipc/ssh/ssh-renderer-broadcast'
 import { registerSshTargetCrudHandlers } from '../../ipc/ssh/ssh-target-crud-handlers'
 import { registerSshConnectionHandlers } from '../../ipc/ssh/ssh-connection-handlers'
 import { registerSshPortForwardHandlers } from '../../ipc/ssh/ssh-port-forward-handlers'
-import { connectInFlight } from '../../ipc/ssh/ssh-connect-attempt-registry'
-import { connectTarget } from '../../ipc/ssh/ssh-connect-flow'
 import { installManagedOrcadStartStatus } from '../../ipc/runtime-environments/managed-orcad/runtime-environment-managed-tunnel'
 import { retainUnretainedOrcadMigrationSources } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-source-retention'
 import { reconcileManagedOrcadSshTargets } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source'
@@ -57,12 +46,15 @@ export async function startSshApplication({
   store,
   runtime,
   hostInitialization,
-  register
+  register,
+  beforeReady
 }: {
   store: Store
   runtime?: OrcaRuntimeService
   hostInitialization?: Promise<void>
   register: RegisterSshRequest
+  /** Synchronous wiring that must exist before startup reconciliation settles. */
+  beforeReady?: () => void
 }): Promise<{ connectionManager: SshConnectionManager; sshStore: SshConnectionStore }> {
   initializeSshConnectionGenerationSession()
   setCurrentRuntime(runtime)
@@ -117,23 +109,7 @@ export async function startSshApplication({
   registerSshTargetCrudHandlers(handle)
   registerSshConnectionHandlers(handle)
   registerSshPortForwardHandlers(handle)
-  // COMPAT(legacy-relay-bridge): terminals an older Orca's relay still runs.
-  installLegacyRelayBridgeApplication({
-    store,
-    connection: (targetId) => connectionManager?.getConnection(targetId) ?? null,
-    runtime: () => runtime ?? null
-  })
-  // COMPAT(legacy-relay-bridge): the move waited only on those terminals; finish it (#29626).
-  onLastBridgedTerminalExit(
-    (targetId) =>
-      void retryMoveAfterLastBridgedExit(targetId, {
-        waitingOnBridgedTerminals: (id) =>
-          connectionManager?.getState(id)?.status === 'connected' &&
-          isSshHostKeptForBridgedTerminals(getSshHostServerStatus(id)),
-        connectInFlight: (id) => connectInFlight.get(id)?.promise,
-        connect: (id) => connectTarget(id, { quiet: true })
-      })
-  )
+  beforeReady?.()
 
   await ready
   void retainUnretainedOrcadMigrationSources(getAppEnvironment().getPath('userData'), store)

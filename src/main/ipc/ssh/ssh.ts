@@ -40,6 +40,16 @@ import { targetLifecycleInFlight } from './ssh-target-lifecycle-queue'
 import { disposeOrcadManagedTunnels } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { registerLegacyRelayBridgeIpc } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-ipc'
+import { installLegacyRelayBridgeApplication } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-application'
+import {
+  onLastBridgedTerminalExit,
+  retryMoveAfterLastBridgedExit
+} from '../../ssh/legacy-relay/bridge/legacy-relay-move-retry'
+import {
+  getSshHostServerStatus,
+  isSshHostKeptForBridgedTerminals
+} from '../../ssh/host-server/ssh-host-server-status'
+import { connectTarget } from './ssh-connect-flow'
 import {
   disposeDesktopBrowserBridge,
   installDesktopBrowserBridge
@@ -75,7 +85,26 @@ export async function registerSshHandlers(
     runtime,
     hostInitialization,
     register: (channel, operation) =>
-      ipcMain.handle(channel, (_event, args: unknown) => operation(args))
+      ipcMain.handle(channel, (_event, args: unknown) => operation(args)),
+    beforeReady: () => {
+      // COMPAT(legacy-relay-bridge): terminals an older Orca's relay still runs.
+      installLegacyRelayBridgeApplication({
+        store,
+        connection: (targetId) => connectionManager?.getConnection(targetId) ?? null,
+        runtime: () => runtime ?? null
+      })
+      // COMPAT(legacy-relay-bridge): the move waited only on those terminals; finish it (#29626).
+      onLastBridgedTerminalExit(
+        (targetId) =>
+          void retryMoveAfterLastBridgedExit(targetId, {
+            waitingOnBridgedTerminals: (id) =>
+              connectionManager?.getState(id)?.status === 'connected' &&
+              isSshHostKeptForBridgedTerminals(getSshHostServerStatus(id)),
+            connectInFlight: (id) => connectInFlight.get(id)?.promise,
+            connect: (id) => connectTarget(id, { quiet: true })
+          })
+      )
+    }
   })
   registerSshBrowseHandler(() => connectionManager)
   registerPlainSshTerminalHandlers((channel, listener) =>

@@ -713,7 +713,7 @@
 2 src/main/ipc/ssh/ssh-connection-handlers.ts
 2 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
 2 src/main/ipc/ssh/ssh-target-crud-handlers.ts
-2 src/main/ipc/ssh/ssh.ts
+1 src/main/ipc/ssh/ssh.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-git-evidence.ts
 1 src/main/ipc/workspace-cleanup/workspace-cleanup-worktree-listing.ts
 3 src/main/ipc/worktrees.ts
@@ -1394,6 +1394,7 @@
 12 src/main/sqlite/row-cache/keyed-json-row-cache.ts
 1 src/main/sqlite/row-cache/legacy-json-source.ts
 8 src/main/sqlite/versioned-cache-database.ts
+1 src/main/ssh/application/ssh-application.ts # one-shot registerSshConnectionHandlers moved here from ipc/ssh/ssh.ts, whose row dropped 2 to 1
 1 src/main/ssh/authentication/ssh-agent-identity-filter.ts
 2 src/main/ssh/authentication/ssh-auth-resolution.ts
 1 src/main/ssh/authentication/ssh-identity-file-read.ts
