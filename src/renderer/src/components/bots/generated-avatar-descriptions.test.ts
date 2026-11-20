@@ -3,6 +3,7 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
   keepSavedPictureDescription,
@@ -14,7 +15,7 @@ const OWNER = { id: 'b1', hostId: 'local', avatar: 'upload:v2' }
 
 describe('generated picture descriptions', () => {
   beforeEach(() => {
-    let settings = {} as GlobalSettings
+    let settings = getDefaultSettings('/home/test')
     useAppStore.setState({
       settings,
       updateSettings: async (updates: Partial<GlobalSettings>) => {

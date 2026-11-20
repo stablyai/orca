@@ -34,15 +34,15 @@ export type SlotPicture = { src: string; description: string }
  * its checks), so a picture taken earlier and still being read can't replace it.
  */
 export function useGenerateFace(
-  onResult: (result: GeneratedAvatar) => void,
+  /** False when a picture taken in since it was asked for keeps the slot. */
+  onResult: (result: GeneratedAvatar) => boolean,
   applied: SlotPicture | null,
   onStart?: () => void
 ) {
   // A picture taken in after the last one made (an upload, an undo) wins the slot back.
   const [superseded, setSuperseded] = useState(false)
   const generation = useAvatarGeneration((made) => {
-    setSuperseded(false)
-    onResult(made)
+    setSuperseded(!onResult(made))
   }, onStart)
   const made = generation.result && !superseded ? generation.result : null
   const picture: SlotPicture | null = made

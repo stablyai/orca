@@ -191,24 +191,6 @@ export function BotPicturePicker({
   })
   const intake = sharedIntake ?? ownIntake
   const outlinePicker = useBotAvatarIntakeHost(rootRef, intake)
-  // The intake turn a generated picture holds: one taken after it was asked for wins, in any order and
-  // even within one render, since the turn is checked when the picture arrives, not from React state.
-  const generateTurn = useRef<(() => boolean) | null>(null)
-  const face = useGenerateFace(
-    (made) => {
-      const ownTurn = generateTurn.current?.() ?? true
-      // Applied only while Generate is the current face and no picture was taken since it was asked for.
-      if (generating && ownTurn) {
-        onUpload(made.png, -1)
-      } else if (!ownTurn) {
-        face.supersede()
-      }
-    },
-    custom?.src ? { src: custom.src, description: custom.description } : null,
-    () => {
-      generateTurn.current = intake.claim()
-    }
-  )
   // Read once, at mount: the face list is final from the first paint. A check still unanswered
   // at the very first open (just after launch) means no Generate face for that open only.
   const [withGenerate] = useState(() => (readAvatarCapability()?.length ?? 0) > 0)
@@ -226,6 +208,23 @@ export function BotPicturePicker({
         ? CUSTOM_FACE
         : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
   const generating = currentKey === GENERATE_FACE
+  // The intake turn a generated picture holds: one taken after it was asked for wins, in any order and
+  // even within one render, since the turn is checked when the picture arrives, not from React state.
+  const generateTurn = useRef<(() => boolean) | null>(null)
+  const face = useGenerateFace(
+    (made) => {
+      const ownTurn = generateTurn.current?.() ?? true
+      // Applied only while Generate is the current face and no picture was taken since it was asked for.
+      if (generating && ownTurn) {
+        onUpload(made.png, -1)
+      }
+      return ownTurn
+    },
+    custom?.src ? { src: custom.src, description: custom.description } : null,
+    () => {
+      generateTurn.current = intake.claim()
+    }
+  )
   const faces: BotPictureFace[] = order.map((key) =>
     key === GENERATE_FACE
       ? {
