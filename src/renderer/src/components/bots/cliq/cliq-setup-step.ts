@@ -4,6 +4,9 @@ import type { ConnectorConnectView } from '@/lib/connector-connect-state'
 import type { ConnectorCliqState } from '../../../../../shared/connector-bot-cliq-contract'
 import { BOT_CLIQ_OFF } from '../../../../../shared/connector-bot-cliq-contract'
 
+/** A repair's sign-in reached another organization than the row's. */
+export const CLIQ_OTHER_ORG = 'cliq_other_org'
+
 export type CliqSignIn = ConnectorCliqState['orgs'][number]
 
 export type BotCliqSetupStep =
@@ -22,8 +25,10 @@ export type BotCliqSetupStep =
 export function botCliqSetupStep(
   view: BotCliqView,
   connect: ConnectorConnectView,
-  /** `taken`: organizations the bot is already in, never picked for it as the only one signed in. */
-  choice: { orgId: string | null; done: boolean; taken?: readonly string[] }
+  /** `target`: the row's organization being repaired, never swapped for another. `picked`: the
+   *  owner's choice in an add. `taken`: organizations the bot is already in, never picked for it as
+   *  the only one signed in. */
+  choice: { target: string | null; picked: string | null; done: boolean; taken?: readonly string[] }
 ): BotCliqSetupStep {
   if (choice.done) {
     return { kind: 'done' }
@@ -38,18 +43,30 @@ export function botCliqSetupStep(
     return { kind: 'failed', code: view.status === 'off' ? BOT_CLIQ_OFF : view.error }
   }
   const { orgs } = view.cliq
-  // The trip's organization first, then the one asked for or picked, then the only one signed in.
-  const wanted = (connect.status === 'linked' ? connect.link.org?.orgId : undefined) ?? choice.orgId
+  const linkedOrg = connect.status === 'linked' ? connect.link.org?.orgId : undefined
+  if (choice.target !== null) {
+    // A repair keeps its row's organization: a sign-in that reached another one never replaces it.
+    const org = orgs.find((entry) => entry.orgId === choice.target)
+    if (org) {
+      return org.expired ? { kind: 'expired', org } : { kind: 'turn-on', org }
+    }
+    return {
+      kind: 'connect',
+      error:
+        connect.status === 'failed'
+          ? connect.error
+          : linkedOrg !== undefined
+            ? CLIQ_OTHER_ORG
+            : null
+    }
+  }
+  // An add: the trip's organization first, then the owner's pick, then the only one signed in.
+  const wanted = linkedOrg ?? choice.picked
   const open = orgs.filter((entry) => !choice.taken?.includes(entry.orgId))
-  // An organization asked for by name (repairing its row) is never swapped for another one.
   const org =
     orgs.find((entry) => entry.orgId === wanted) ??
     (wanted == null && open.length === 1 ? open[0] : null)
   if (!org) {
-    // The asked-for organization has no sign-in here: signing in there is the way on.
-    if (wanted != null) {
-      return { kind: 'connect', error: connect.status === 'failed' ? connect.error : null }
-    }
     return open.length > 1
       ? { kind: 'pick', orgs: open }
       : { kind: 'connect', error: connect.status === 'failed' ? connect.error : null }

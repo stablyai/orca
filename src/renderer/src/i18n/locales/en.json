@@ -29379,7 +29379,8 @@
         "unavailable": "Zoho Cliq did not answer. Try again.",
         "rateLimited": "Too many tries. Wait a few minutes, then try again.",
         "signedOut": "Sign in to Orca to connect Zoho Cliq.",
-        "unreachable": "Orca Cloud could not be reached. Check your connection and try again."
+        "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
+        "otherOrg": "That sign-in reached another Cliq organization. Sign in to the one this bot is set up in."
       },
       "howToAsk": "Mention <code>{{mention}}</code> in a channel or thread, or message it directly.",
       "whoCanAsk": {

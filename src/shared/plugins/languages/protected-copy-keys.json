@@ -702,6 +702,7 @@
     "bots.cliq.connect.who",
     "bots.cliq.errors.grantExpired",
     "bots.cliq.errors.off",
+    "bots.cliq.errors.otherOrg",
     "bots.cliq.errors.rateLimited",
     "bots.cliq.errors.refused",
     "bots.cliq.errors.replaced",

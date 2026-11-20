@@ -3,6 +3,7 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_CLIQ_OFF } from '../../../../../shared/connector-bot-cliq-contract'
 import { HOW_TO_ASK_ESCAPED } from '../BotHowToAsk'
 import { hostSetupErrorMessage } from '../bot-host-copy'
+import { CLIQ_OTHER_ORG } from './cliq-setup-step'
 
 /** What to tell the owner for a Cliq error code, the cloud's or the host's; `hostName` names a server. */
 export function botCliqErrorMessage(code: string, hostName: string | null): string {
@@ -22,6 +23,11 @@ export function botCliqErrorMessage(code: string, hostName: string | null): stri
       return translate(
         'bots.cliq.errors.wrongAccount',
         'This sign-in was started from another Orca account. Connect Zoho Cliq again from this one.'
+      )
+    case CLIQ_OTHER_ORG:
+      return translate(
+        'bots.cliq.errors.otherOrg',
+        'That sign-in reached another Cliq organization. Sign in to the one this bot is set up in.'
       )
     case 'cliq_grant_expired':
       return translate(
