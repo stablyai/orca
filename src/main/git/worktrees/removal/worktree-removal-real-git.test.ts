@@ -6,14 +6,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { promisify } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { installRealWorkerThreadChildProcesses } from '../../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
 import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 
 import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { removeWorktree } from './worktree-removal'
-import { runUnderWorktreeDeleteLimit, WORKTREE_DELETE_CONCURRENCY } from './worktree-delete-limit'
+import {
+  _queuedWorktreeDeletesForTests,
+  runUnderWorktreeDeleteLimit,
+  WORKTREE_DELETE_CONCURRENCY
+} from './worktree-delete-limit'
 import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
 import { areWorktreePathsEqual } from '../catalog/worktree-path-comparison'
 import { isPrunableGitFileWorktree } from '../../../workspaces/removal/worktree-prunable-git-file'
@@ -101,8 +105,7 @@ describe('worktree removal against the real Git binary', () => {
         }
       }
     })
-    // ast-grep-ignore: test-no-real-time-wait -- no signal marks a request as queued; this lets it reach the slot wait
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await vi.waitFor(() => expect(_queuedWorktreeDeletesForTests()).toBe(1))
     // Swapped while the request queued for a slot.
     replaced = true
     releaseSlots()
