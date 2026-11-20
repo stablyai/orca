@@ -2207,18 +2207,25 @@ html.native-shell .app-layout {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
-/* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
+/* 24 steps/second on the rings' clock: a smooth spin made the GPU present every refresh; these steps land on the rings' frames. */
+.loading-spinner {
+  animation: agent-spinner-rotate 86400s steps(2073600, end) infinite;
+}
+
+/* Offscreen subtrees pause their loops; spinners drop their animation instead so reveal re-anchors phase. */
 [data-animation-offscreen],
 [data-animation-offscreen] * {
   animation-play-state: paused;
 }
 
-.agent-working-spinner[data-animation-offscreen] {
+.agent-working-spinner[data-animation-offscreen],
+.loading-spinner[data-animation-offscreen] {
   animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-spinner {
+  .agent-working-spinner,
+  .loading-spinner {
     animation: none;
   }
 }
