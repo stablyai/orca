@@ -57,7 +57,8 @@ function legacyDispatchAddressSql(handle: string, runId: string, extra = ''): st
         AND d.contract_version = ${LEGACY_CONTRACT_VERSION} ${extra}
     ) OR (substr(${handle}, 1, 9) = 'dispatch:' AND EXISTS(
       SELECT 1 FROM dispatch_contexts d
-      WHERE d.id = substr(${handle}, 10) AND d.run_id = ${runId}
+      WHERE d.id = substr(${handle}, 10) AND ${handle} = 'dispatch:' || d.id
+        AND d.run_id = ${runId}
         AND d.contract_version = ${LEGACY_CONTRACT_VERSION} ${extra}
     )))`
 }

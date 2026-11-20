@@ -60,6 +60,7 @@ function seedLargeRun(): OrchestrationDb {
   send('term_worker_other', 'term_cross_run_mail')
   send('dispatch:ctx_cross_run', 'term_cross_run_mail')
   send('DISPATCH:ctx_0_0', 'term_wrong_case')
+  send('dispatch:ctx_0_0\u0000x', 'term_nul_suffix')
   send('term_worker_0_0', 'term_other_run_mail', 'run_other')
   // A handle reused by many Dispatches in other Runs; with these statistics an assignee-only index loses to a scan.
   for (let i = 0; i < 2000; i++) {
