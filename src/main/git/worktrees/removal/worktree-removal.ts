@@ -27,6 +27,8 @@ import { removeWindowsCheckout, usesNativeWindowsRemoval } from './windows-workt
 import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
 import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
+import { canSpawnOnWorkerThread } from '../../../worker-thread-child-process/worker-thread-child-process'
+import { WorktreeRemovalIdentityUnverifiableError } from '../../../../shared/worktree/removal/worktree-checkout-identity'
 
 const branchCleanupQueueByRepo = new Map<string, Promise<void>>()
 
@@ -112,6 +114,10 @@ async function performRemoveWorktree(
   await runUnderWorktreeDeleteLimit(async () => {
     options.checkoutDeleteGuard?.()
     if (usesNativeWindowsRemoval(worktreePath, options)) {
+      // Its last Git step needs the worker's identity check: without a worker, delete nothing.
+      if (options.checkoutDeleteIdentity && !canSpawnOnWorkerThread()) {
+        throw new WorktreeRemovalIdentityUnverifiableError()
+      }
       await removeWindowsCheckout(repoPath, worktreePath, force, {
         ...options,
         knownRemovedWorktree: removedWorktree
