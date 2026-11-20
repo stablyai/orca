@@ -141,12 +141,15 @@ function parkedTabIds(state: RelayHostState): HeldRelayTabs {
   }
 }
 
-/** Built only when a host the window last wrote is missing from a write. */
+/** Hosts with a live owner: catalog repos, folders and groups, parked rows, or an unread partition.
+ *  Startup lists (hydrated, restored and contested hosts) outlive removals, so they don't count.
+ *  Built only when a host the window last wrote is missing from a write. */
 function routedRelayHosts(state: RelayHostState): RelayWriteContext['routes'] {
   let routed: Set<ExecutionHostId> | null = null
   return (hostId) => {
+    const { repos, folderWorkspaces, projectGroups } = state
     routed ??= new Set([
-      ...routedSessionHostIds(state, {}),
+      ...routedSessionHostIds({ repos, folderWorkspaces, projectGroups }, {}),
       ...nonLocalHostSessionEntries(state.contestedHostWorkspaceSessions ?? {}).map(([id]) => id),
       ...unreadHostIds
     ])

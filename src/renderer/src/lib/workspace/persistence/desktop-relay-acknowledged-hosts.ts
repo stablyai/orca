@@ -101,13 +101,13 @@ export class AcknowledgedDesktopRelays {
       }
     }
     // A host this save leaves out (an incomplete host with no slice) resends a baseline when it next
-    // goes, still naming the ids that ended meanwhile. One the window no longer routes to is dropped
-    // (its workspaces were removed, and main clears their ownership with them).
+    // goes, still naming the ids that ended meanwhile. One holding no ids, or that the window no longer
+    // routes to, is dropped (its workspaces were removed, and main clears their ownership with them).
     for (const [hostId, host] of this.hosts) {
       if (wanted.has(hostId)) {
         continue
       }
-      if (!routes(hostId)) {
+      if (!hasEntries(host.relayIdsByTabId) || !routes(hostId)) {
         this.hosts.delete(hostId)
       } else if (!host.stale) {
         this.hosts.set(hostId, { ...host, stale: true })
@@ -193,4 +193,11 @@ export class AcknowledgedDesktopRelays {
     }
     return { hostId: host.hostId, complete: host.complete, relayIdsByTabId, removedTabIds }
   }
+}
+
+function hasEntries(record: Record<string, string>): boolean {
+  for (const _ in record) {
+    return true
+  }
+  return false
 }
