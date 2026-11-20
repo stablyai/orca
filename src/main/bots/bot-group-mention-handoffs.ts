@@ -45,7 +45,10 @@ export async function handOffGroupMentions(
     if (targets.length === 0) {
       return []
     }
-    const lines = groups.store.continuing(groupId, rootRequestId)
+    // A post's hand-offs sit among the room's newest lines; a newer person's post starts its own count.
+    const lines = groups.store
+      .roomMessages(groupId, threadId, 200)
+      .filter((line) => line.rootRequestId === rootRequestId)
     const place = { groupId, ...(threadId ? { threadId } : {}), rootRequestId, rootSequence }
     const speaker = { kind: 'bot' as const, id: turn.botId, name: turn.botName }
     const used = lines.filter((line) => line.mentioned).length

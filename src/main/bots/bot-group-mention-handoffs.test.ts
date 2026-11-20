@@ -93,7 +93,7 @@ describe('group @Name hand-offs', () => {
       groupId: group.id,
       author: { kind: 'bot', id: 'bot-0', name: 'Scout' },
       text: 'Forge asked Scout',
-      createdAt: Date.now(),
+      createdAt: next.createdAt,
       rootRequestId: next.id,
       rootSequence: next.sequence,
       turns: [
