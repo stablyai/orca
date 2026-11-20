@@ -184,7 +184,6 @@ export function createMainWindow(
       mainWindow.setTitle(resolveMainWindowTitle(pageTitle, baseTitle))
     }
   })
-import { resolveMainWindowTitle } from './main-window-title'
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Native paste fallback is privileged; trust only the top-level renderer.

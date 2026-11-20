@@ -63,7 +63,6 @@ function App(): React.JSX.Element {
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
   useWindowTitle()
-import { useWindowTitle } from './app-shell/use-window-title'
 
   useAppShellServices()
   // Load drafts before the startup chain so no failed step can skip them.
