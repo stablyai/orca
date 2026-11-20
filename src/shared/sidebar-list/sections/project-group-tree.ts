@@ -5,6 +5,8 @@ import type { ProjectSectionEntry, ProjectSectionRepo } from './project-section-
 import type { Repo } from '../../repository/repo-types'
 import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import {
+  breakProjectGroupParentCycles,
+  compareProjectGroupSiblings,
   getDistinctProjectGroups,
   getEffectiveProjectGroupManualRank
 } from '../../project/groups/project-groups'
@@ -15,7 +17,6 @@ import {
   type ActivityItem
 } from './project-section-order'
 import { compareRootProjectEntries } from './root-project-order'
-import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
 
 type GroupedProjectEntry = ProjectSectionEntry<
   ActivityItem,
@@ -68,23 +69,17 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
   }
 
   const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const parentIdByGroupId = getDrawnProjectGroupParentIds(projectGroups)
   const childGroupsByParentId = new Map<string | null, ProjectGroup[]>()
   // Why distinct: membership is id-keyed, so a same-id copy's header would sit empty (#30045).
   for (const group of getDistinctProjectGroups(projectGroups)) {
-    const parentId =
-      group.parentGroupId && projectGroupsById.has(group.parentGroupId) ? group.parentGroupId : null
+    const parentId = parentIdByGroupId.get(group.id) ?? null
     const children = childGroupsByParentId.get(parentId) ?? []
     children.push(group)
     childGroupsByParentId.set(parentId, children)
   }
   for (const groups of childGroupsByParentId.values()) {
-    groups.sort(
-      (left, right) =>
-        left.tabOrder - right.tabOrder ||
-        compareSidebarText(left.name, right.name) ||
-        compareCodePoints(left.executionHostId ?? '', right.executionHostId ?? '') ||
-        compareCodePoints(left.id, right.id)
-    )
+    groups.sort(compareProjectGroupSiblings)
   }
 
   const getProjectGroupSubtreeCount = (groupId: string): number => {
@@ -148,4 +143,20 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
       visit.projects([entry.repoEntry], 0)
     }
   }
+}
+
+/** Parent each drawn group sits under; missing parents make roots. */
+export function getDrawnProjectGroupParentIds(
+  projectGroups: readonly ProjectGroup[]
+): Map<string, string | null> {
+  const groups = getDistinctProjectGroups(projectGroups).sort(compareProjectGroupSiblings)
+  const groupIds = new Set(groups.map((group) => group.id))
+  const links = groups.map((group) => ({
+    id: group.id,
+    parentGroupId:
+      group.parentGroupId && groupIds.has(group.parentGroupId) ? group.parentGroupId : null
+  }))
+  // Why: each host's catalog is acyclic, but same-id copies from two hosts can still close a loop.
+  breakProjectGroupParentCycles(links)
+  return new Map(links.map((link) => [link.id, link.parentGroupId]))
 }

@@ -565,6 +565,7 @@
     "auto.components.sidebar.ProjectGroupDeleteDialog.deleteGroupDescription",
     "auto.components.sidebar.ProjectGroupDeleteDialog.moreProjects",
     "auto.components.sidebar.ProjectGroupDeleteDialog.removeContainedProjects",
+    "auto.components.sidebar.ProjectGroupDeleteDialog.subgroupsDeleted",
     "auto.components.sidebar.RemoveFolderDialog.4dc5b5065b",
     "auto.components.sidebar.RemoveFolderDialog.b79b39d865",
     "auto.components.sidebar.RemoveFolderDialog.d36883e046",

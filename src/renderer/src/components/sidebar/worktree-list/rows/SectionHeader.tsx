@@ -11,7 +11,6 @@ import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 
 import '@/store/project-groups/project-group-owner-routing'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   getHeaderDragRepo,
   isSingleHostProjectHeader,
@@ -82,11 +81,8 @@ export function renderWorktreeSectionHeaderRow(
       : undefined
   const projectGroupDragIdForHeader =
     row.repeated && !usesRootProjectDrag ? undefined : projectGroupIdForHeader
-  // Why: rename/delete must route to the host that owns this row, not to whichever host has focus.
-  const projectGroupHostIdForHeader =
-    row.projectGroup && 'createdFrom' in row.projectGroup
-      ? getRepoExecutionHostId(row.projectGroup)
-      : undefined
+  const projectGroupForHeader =
+    isProjectGroupHeader && !row.repo && row.projectGroup?.id != null ? row.projectGroup : undefined
   const repoHeaderIndex = headerRepo && headerDrag.repoHeaderIndexByRepoId.get(headerRepo.id)
   const repoHeaderBucketKey = headerRepo && headerDrag.repoHeaderBucketByRepoId.get(headerRepo.id)
   const projectGroupHeaderIndex =
@@ -357,15 +353,12 @@ export function renderWorktreeSectionHeaderRow(
               </div>
             ) : null}
 
-            {isProjectGroupHeader && !row.repo && projectGroupIdForHeader ? (
+            {projectGroupForHeader ? (
               <ProjectGroupHeaderMenu
-                groupId={projectGroupIdForHeader}
-                hostId={projectGroupHostIdForHeader}
+                projectGroup={projectGroupForHeader}
                 label={label}
-                projectGroup={folderBackedProjectGroup}
-                onRefreshProjectGroup={ctx.onRefreshProjectGroup}
-                onRename={ctx.onRenameProjectGroup}
-                onDelete={ctx.onDeleteProjectGroup}
+                projectGroups={ctx.projectGroups}
+                actions={ctx.projectGroupActions}
               />
             ) : null}
 

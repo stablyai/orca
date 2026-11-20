@@ -29,15 +29,25 @@ export function SidebarWorktreeListDialogs({
   onOpenWorktreeVisibility: (repo: Repo) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
+  const { setNameDialog, deleteDialog, setDeleteDialog } = dialogs
+  // Why: keep the closing dialog's copy through its fade-out instead of flashing the create-from-project text.
+  const [nameDialog, setShownNameDialog] = React.useState(dialogs.nameDialog)
+  if (dialogs.nameDialog && dialogs.nameDialog !== nameDialog) {
+    setShownNameDialog(dialogs.nameDialog)
+  }
   return (
     <>
       <ProjectGroupNameDialog
-        open={nameDialog !== null}
+        open={dialogs.nameDialog !== null}
         title={
           nameDialog?.type === 'rename'
             ? t('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
-            : t('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
+            : nameDialog?.type === 'create-subgroup'
+              ? t(
+                  'auto.components.sidebar.worktree.list.rows.ProjectGroupDialogs.dc04680eef',
+                  'New Subgroup'
+                )
+              : t('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
         }
         description={
           nameDialog?.type === 'rename'
@@ -45,15 +55,21 @@ export function SidebarWorktreeListDialogs({
                 'auto.components.sidebar.WorktreeList.bc1460beb3',
                 'Update the group name shown in the sidebar.'
               )
-            : t(
-                'auto.components.sidebar.WorktreeList.d880ea0744',
-                'Create a group and move this project into it.'
-              )
+            : nameDialog?.type === 'create-subgroup'
+              ? t(
+                  'auto.components.sidebar.worktree.list.rows.ProjectGroupDialogs.1c1d0b3021',
+                  'Create a group inside "{{value0}}".',
+                  { value0: nameDialog.parentName }
+                )
+              : t(
+                  'auto.components.sidebar.WorktreeList.d880ea0744',
+                  'Create a group and move this project into it.'
+                )
         }
         initialName={
           nameDialog?.type === 'rename'
             ? nameDialog.currentName
-            : nameDialog
+            : nameDialog?.type === 'create-from-repo'
               ? t(
                   'auto.components.sidebar.ProjectGroupNameDialog.defaultGroupName',
                   '{{name}} group',
@@ -108,6 +124,7 @@ export function SidebarWorktreeListDialogs({
         open={deleteDialog !== null}
         groupName={deleteDialog?.groupName ?? ''}
         projectCount={dialogs.deleteProjectCount}
+        subgroupCount={dialogs.deleteSubgroupCount}
         projectNames={dialogs.deleteProjectNames}
         removeContainedProjects={dialogs.removeContainedProjects}
         onRemoveContainedProjectsChange={(removeContainedProjects) => {

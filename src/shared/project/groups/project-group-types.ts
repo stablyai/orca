@@ -20,8 +20,12 @@ export type ProjectGroup = {
   updatedAt: number
 }
 
+/** `parentGroupId: null` moves the group to the top level; omitted keeps its parent. */
 export type ProjectGroupUpdate = Partial<
-  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'hookSettings'>
+  Pick<
+    ProjectGroup,
+    'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'hookSettings' | 'parentGroupId'
+  >
 > & { rootProjectOrder?: number | null }
 
 export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }

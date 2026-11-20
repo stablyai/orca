@@ -6285,7 +6285,9 @@
           "removeContainedProjects_one": "İçerdiği {{count}} projeyi kaldır",
           "deleteGroupDescription": "<name>{{name}}</name> silinecek.",
           "moreProjects_other": "+{{count}} tane daha",
-          "moreProjects_one": "+{{count}} tane daha"
+          "moreProjects_one": "+{{count}} tane daha",
+          "subgroupsDeleted_other": "{{count}} alt grubu da silinecek.",
+          "subgroupsDeleted_one": "Alt grubu da silinecek."
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "İptal",
@@ -6994,6 +6996,33 @@
               "7c2f009786": "Devam ediyor",
               "6798dc7c94": "İncelemede",
               "5076efc3d2": "Tamamlandı"
+            },
+            "rows": {
+              "ProjectGroupDialogs": {
+                "dc04680eef": "Yeni Alt Grup",
+                "1c1d0b3021": "\"{{value0}}\" içinde bir grup oluşturun."
+              },
+              "project": {
+                "group": {
+                  "header": {
+                    "actions": {
+                      "dd93986e77": "Yeni alt grup"
+                    }
+                  }
+                }
+              },
+              "use": {
+                "project": {
+                  "group": {
+                    "dialogs": {
+                      "009a0dfef9": "Grup taşınamadı",
+                      "b1ba3948b3": "Orca, taşımayı grubun host'uyla doğrulayamadı. Yeniden bağlandıktan sonra grubu tekrar kontrol edin veya o host'taki Orca'yı güncelleyin.",
+                      "8269fcd14a": "Alt grup oluşturulamadı",
+                      "daf08d9e4e": "Orca, yeni grubu üst grubun host'uyla doğrulayamadı. Yeniden bağlandıktan sonra kenar çubuğunu tekrar kontrol edin."
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -7468,6 +7497,9 @@
           "inProgress": "Devam ediyor",
           "inReview": "İncelemede",
           "done": "Tamamlandı"
+        },
+        "ProjectGroupMoveSubmenu": {
+          "5f1e73c267": "Üst düzey"
         }
       },
       "shared": {

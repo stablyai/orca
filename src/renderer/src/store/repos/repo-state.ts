@@ -247,6 +247,12 @@ export type RepoSlice = {
   }) => Promise<ProjectGroupImportResult | null>
   /** `hostId` is the host of the project that seeds the group. */
   createProjectGroup: (name: string, hostId: ExecutionHostId) => Promise<ProjectGroup | null>
+  // Created on the parent's owner host; hostId disambiguates the parent row.
+  createProjectSubgroup: (
+    name: string,
+    parentGroupId: string,
+    options?: { hostId?: ExecutionHostId }
+  ) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: FolderWorkspaceCreateInput,
     options: FolderWorkspacePathStatusRouteOptions & { signal?: AbortSignal }
@@ -276,6 +282,12 @@ export type RepoSlice = {
   updateProjectGroup: (
     groupId: string,
     updates: ProjectGroupUpdate,
+    options?: { hostId?: ExecutionHostId }
+  ) => Promise<boolean>
+  // parentGroupId null moves the group to the top level; false when the owner host rejected or ignored the move.
+  moveProjectGroup: (
+    groupId: string,
+    parentGroupId: string | null,
     options?: { hostId?: ExecutionHostId }
   ) => Promise<boolean>
   updateProjectGroups: (

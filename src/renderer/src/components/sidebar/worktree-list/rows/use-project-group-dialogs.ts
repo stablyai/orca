@@ -12,6 +12,8 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { refreshFolderProjectGroup } from './project-group-folder-refresh'
+import type { ProjectGroupHeaderActions } from './project-group-header-actions'
+import { useProjectGroupNestingActions } from './use-project-group-nesting-actions'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
@@ -26,6 +28,7 @@ export type ProjectGroupNameDialogState =
       currentName: string
       hostId?: ExecutionHostId
     }
+  | { type: 'create-subgroup'; parentGroupId: string; parentName: string; hostId?: ExecutionHostId }
 
 export type ProjectGroupDeleteDialogState = {
   groupId: string
@@ -77,6 +80,7 @@ function reportProjectGroupDeleteFailures(result: {
   }
 }
 
+// Create/rename/move/delete flows for project groups, including the contained-project fan-out.
 export function useProjectGroupDialogs(args: {
   repos: readonly Repo[]
   repoMap: Map<string, Repo>
@@ -86,6 +90,7 @@ export function useProjectGroupDialogs(args: {
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
+  const { handleMoveProjectGroup, submitProjectSubgroup } = useProjectGroupNestingActions()
   const deleteProjectGroupWithContainedProjects = useAppStore(
     (s) => s.deleteProjectGroupWithContainedProjects
   )
@@ -160,9 +165,20 @@ export function useProjectGroupDialogs(args: {
     []
   )
 
+  const handleCreateProjectSubgroup = useCallback(
+    (parentGroupId: string, parentName: string, hostId?: ExecutionHostId) => {
+      setNameDialog({ type: 'create-subgroup', parentGroupId, parentName, hostId })
+    },
+    []
+  )
+
   const handleSubmitProjectGroupName = useCallback(
     async (name: string) => {
       if (!nameDialog) {
+        return
+      }
+      if (nameDialog.type === 'create-subgroup') {
+        await submitProjectSubgroup(name, nameDialog.parentGroupId, nameDialog.hostId)
         return
       }
       if (nameDialog.type === 'create-from-repo') {
@@ -193,7 +209,7 @@ export function useProjectGroupDialogs(args: {
         )
       }
     },
-    [createProjectGroup, moveProjectToGroup, nameDialog, updateProjectGroup]
+    [createProjectGroup, moveProjectToGroup, nameDialog, submitProjectSubgroup, updateProjectGroup]
   )
 
   const deleteTargets = useMemo(() => {
@@ -208,6 +224,7 @@ export function useProjectGroupDialogs(args: {
     )
   }, [deleteDialog, projectGroups, repos])
   const deleteProjectCount = deleteTargets?.projectIds.length ?? 0
+  const deleteSubgroupCount = Math.max(0, (deleteTargets?.deletedGroupIds.size ?? 0) - 1)
   const deleteProjectNames = useMemo(
     () =>
       (deleteTargets?.projectIds ?? []).map(
@@ -264,22 +281,38 @@ export function useProjectGroupDialogs(args: {
     deleteUnsavedTargets
   ])
 
+  const projectGroupActions = useMemo<ProjectGroupHeaderActions>(
+    () => ({
+      onRename: handleRenameProjectGroup,
+      onCreateSubgroup: handleCreateProjectSubgroup,
+      onMove: handleMoveProjectGroup,
+      onDelete: handleDeleteProjectGroup,
+      onRefresh: handleRefreshProjectGroup
+    }),
+    [
+      handleCreateProjectSubgroup,
+      handleDeleteProjectGroup,
+      handleMoveProjectGroup,
+      handleRefreshProjectGroup,
+      handleRenameProjectGroup
+    ]
+  )
+
   return {
     nameDialog,
     setNameDialog,
     deleteDialog,
     setDeleteDialog,
     deleteProjectCount,
+    deleteSubgroupCount,
     deleteProjectNames,
     removeContainedProjects,
     deleteUnsavedTargets,
     handleCreateGroupFromRepo,
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
-    handleRefreshProjectGroup,
-    handleRenameProjectGroup,
     handleSubmitProjectGroupName,
-    handleDeleteProjectGroup,
-    handleConfirmDeleteProjectGroup
+    handleConfirmDeleteProjectGroup,
+    projectGroupActions
   }
 }

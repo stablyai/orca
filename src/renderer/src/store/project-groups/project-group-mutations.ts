@@ -1,12 +1,10 @@
-import { initializeNewRootProjectGroupOrder } from './project-group-update-persistence'
+import { getNextRootProjectGroupPlacement } from './project-group-update-persistence'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import {
   isProjectGroupJoinableFromCatalog,
-  projectGroupMatchesOwnerHost,
   resolveProjectGroupOwnerHostId,
   runtimeTargetForProjectGroupOwner
 } from './project-group-owner-routing'
@@ -22,6 +20,10 @@ import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
+import { createProjectGroupOnHost } from './project-group-create-on-host'
+import { findIndexedProjectGroupOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { PROJECT_GROUP_NESTING_RUNTIME_CAPABILITY } from '../../../../shared/project/groups/project-group-nesting-capability'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
@@ -43,62 +45,84 @@ export function createProjectGroupMutationActions(
 ): Pick<
   RepoSlice,
   | 'createProjectGroup'
+  | 'createProjectSubgroup'
   | 'updateProjectGroup'
+  | 'moveProjectGroup'
   | 'deleteProjectGroup'
   | 'deleteProjectGroupWithContainedProjects'
   | 'moveProjectToGroup'
 > {
+  const createOnTarget = createProjectGroupOnHost(set, get)
+
   return {
     createProjectGroup: async (name, hostId) => {
       try {
         // Why: a new group lands on the host of the project that seeds it, not the focused one.
         const target = ipcOrRuntimeTargetForHostId(hostId)
-        if (!target) {
-          return null
-        }
-        const group =
-          target.kind === 'local'
-            ? await window.api.projectGroups.create({
-                name,
-                createdFrom: 'manual'
-              })
-            : (
-                await callRuntimeRpc<{ group: ProjectGroup }>(
-                  target,
-                  'projectGroup.create',
-                  { name, createdFrom: 'manual' },
-                  { timeoutMs: 15_000 }
-                )
-              ).group
-        const orderedGroup = await initializeNewRootProjectGroupOrder(target, group, get())
-        const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: orderedGroup })
-        const ownerHostId = getRepoExecutionHostId(ownedGroup)
-        set((s) => {
-          const existing = s.projectGroups.find((entry) =>
-            projectGroupMatchesOwnerHost(entry, ownedGroup.id, ownerHostId)
-          )
-          if (existing && orderedGroup === group) {
-            return s
-          }
-          // Keep newer catalog fields, but include the order confirmed after that refresh.
-          const { rootProjectOrder, tabOrder } = ownedGroup
-          const nextGroup = existing ? { ...existing, rootProjectOrder, tabOrder } : ownedGroup
-          return {
-            projectGroups: existing
-              ? s.projectGroups.map((entry) => (entry === existing ? nextGroup : entry))
-              : [...s.projectGroups, nextGroup],
-            folderWorkspacePathStatuses: {}
-          }
-        })
-        return ownedGroup
+        return target ? await createOnTarget(target, { name, createdFrom: 'manual' }) : null
       } catch (err) {
         console.error('Failed to create project group:', err)
         return null
       }
     },
 
+    createProjectSubgroup: async (name, parentGroupId, options) => {
+      try {
+        // Why: a subgroup is created on its parent's host, which may not be the focused one.
+        const parent = findIndexedProjectGroupOwner(
+          get().projectGroups,
+          parentGroupId,
+          options?.hostId
+        )
+        const target = runtimeTargetForProjectGroupOwner(get(), parentGroupId, options?.hostId)
+        if (!parent || !target) {
+          return null
+        }
+        // Why: an older host drops parentGroupId and would create a top-level group instead.
+        if (
+          target.kind === 'environment' &&
+          !(await runtimeEnvironmentSupportsCapability(
+            target.environmentId,
+            PROJECT_GROUP_NESTING_RUNTIME_CAPABILITY
+          ))
+        ) {
+          return null
+        }
+        return await createOnTarget(target, {
+          name,
+          createdFrom: 'manual',
+          parentGroupId,
+          // Why: hosts older than nesting don't inherit the parent's SSH target on create.
+          ...(parent.connectionId ? { connectionId: parent.connectionId } : {})
+        })
+      } catch (err) {
+        console.error('Failed to create project subgroup:', err)
+        return null
+      }
+    },
+
     updateProjectGroup: (groupId, updates, options) =>
       get().updateProjectGroups([{ groupId, updates, hostId: options?.hostId }]),
+
+    moveProjectGroup: async (groupId, parentGroupId, options) => {
+      const state = get()
+      const group = findIndexedProjectGroupOwner(state.projectGroups, groupId, options?.hostId)
+      if (group && (group.parentGroupId ?? null) === parentGroupId) {
+        return true
+      }
+      // Why: top-level rows rank across every host, so only the renderer knows the last root slot.
+      // Under a parent the host appends the group after its new siblings.
+      const placement =
+        parentGroupId === null
+          ? getNextRootProjectGroupPlacement({
+              repos: state.repos,
+              projectGroups: state.projectGroups.filter((entry) => entry !== group)
+            })
+          : undefined
+      return state.updateProjectGroups([
+        { groupId, hostId: options?.hostId, updates: { parentGroupId, ...placement } }
+      ])
+    },
 
     deleteProjectGroup: async (groupId, options) => {
       try {

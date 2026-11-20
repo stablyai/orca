@@ -12414,7 +12414,10 @@
           "deleteGroupDescription": "Excluir <name>{{name}}</name>.",
           "moreProjects_one": "+{{count}} a mais",
           "moreProjects_other": "+{{count}} a mais",
-          "moreProjects_many": "+{{count}} a mais"
+          "moreProjects_many": "+{{count}} a mais",
+          "subgroupsDeleted_one": "Seu subgrupo também será excluído.",
+          "subgroupsDeleted_other": "Seus {{count}} subgrupos também serão excluídos.",
+          "subgroupsDeleted_many": "Seus {{count}} subgrupos também serão excluídos."
         },
         "HostSectionHeaderMenu": {
           "5b8b4b6a01": "Atualização do servidor necessária",
@@ -12623,6 +12626,33 @@
               "7c2f009786": "Em andamento",
               "6798dc7c94": "Em revisão",
               "5076efc3d2": "Concluídos"
+            },
+            "rows": {
+              "ProjectGroupDialogs": {
+                "dc04680eef": "Novo Subgrupo",
+                "1c1d0b3021": "Crie um grupo dentro de \"{{value0}}\"."
+              },
+              "project": {
+                "group": {
+                  "header": {
+                    "actions": {
+                      "dd93986e77": "Novo subgrupo"
+                    }
+                  }
+                }
+              },
+              "use": {
+                "project": {
+                  "group": {
+                    "dialogs": {
+                      "009a0dfef9": "Falha ao mover o grupo",
+                      "b1ba3948b3": "O Orca não conseguiu confirmar a movimentação com o host do grupo. Verifique o grupo novamente após reconectar ou atualize o Orca nesse host.",
+                      "8269fcd14a": "Falha ao criar o subgrupo",
+                      "daf08d9e4e": "O Orca não conseguiu confirmar o novo grupo com o host do grupo pai. Verifique a barra lateral novamente após reconectar."
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -13184,6 +13214,9 @@
           "inProgress": "Em andamento",
           "inReview": "Em revisão",
           "done": "Concluído"
+        },
+        "ProjectGroupMoveSubmenu": {
+          "5f1e73c267": "Nível superior"
         }
       },
       "editor": {

@@ -1,41 +1,61 @@
 import { getNextRootProjectOrder } from '../../../../shared/sidebar-list/sections/root-project-order'
 import type {
   ProjectGroup,
-  ProjectGroupMutation
+  ProjectGroupMutation,
+  ProjectGroupUpdate
 } from '../../../../shared/project/groups/project-group-types'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import type { RepoSlice } from '../repos/repo-state'
 import {
   PROJECT_GROUP_UPDATE_MANY_RUNTIME_CAPABILITY,
   PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
 } from '../../../../shared/project/groups/project-group-order-capability'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { PROJECT_GROUP_NESTING_RUNTIME_CAPABILITY } from '../../../../shared/project/groups/project-group-nesting-capability'
+import {
+  runtimeEnvironmentSupportsCapabilities,
+  runtimeEnvironmentSupportsCapability
+} from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
-function groupOrderMatchesUpdate(
-  group: ProjectGroup,
-  updates: ProjectGroupMutation['updates']
-): boolean {
+// Why: older hosts drop fields they don't know and still answer, so only the echoed row proves the update landed.
+function groupPlacementMatchesUpdate(group: ProjectGroup, updates: ProjectGroupUpdate): boolean {
   return (
     (updates.rootProjectOrder === undefined ||
       (group.rootProjectOrder ?? null) === updates.rootProjectOrder) &&
-    (updates.tabOrder === undefined || group.tabOrder === updates.tabOrder)
+    (updates.tabOrder === undefined || group.tabOrder === updates.tabOrder) &&
+    (updates.parentGroupId === undefined || (group.parentGroupId ?? null) === updates.parentGroupId)
+  )
+}
+
+async function targetSupportsUpdates(
+  target: RuntimeClientTarget,
+  updates: readonly ProjectGroupUpdate[]
+): Promise<boolean> {
+  if (target.kind !== 'environment') {
+    return true
+  }
+  const capabilities: RuntimeCapability[] = []
+  if (updates.some((update) => update.rootProjectOrder !== undefined)) {
+    capabilities.push(PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY)
+  }
+  if (updates.some((update) => update.parentGroupId !== undefined)) {
+    capabilities.push(PROJECT_GROUP_NESTING_RUNTIME_CAPABILITY)
+  }
+  return (
+    capabilities.length === 0 ||
+    (await runtimeEnvironmentSupportsCapabilities(target.environmentId, capabilities)).every(
+      Boolean
+    )
   )
 }
 
 export async function persistProjectGroupUpdate(
   target: RuntimeClientTarget,
   groupId: string,
-  updates: Parameters<RepoSlice['updateProjectGroup']>[1]
+  updates: ProjectGroupUpdate
 ): Promise<ProjectGroup | null> {
-  if (
-    updates.rootProjectOrder !== undefined &&
-    target.kind === 'environment' &&
-    !(await runtimeEnvironmentSupportsCapability(
-      target.environmentId,
-      PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
-    ))
-  ) {
+  if (!(await targetSupportsUpdates(target, [updates]))) {
     return null
   }
   const updated =
@@ -49,7 +69,7 @@ export async function persistProjectGroupUpdate(
             { timeoutMs: 15_000 }
           )
         ).group
-  if (!updated || !groupOrderMatchesUpdate(updated, updates)) {
+  if (!updated || !groupPlacementMatchesUpdate(updated, updates)) {
     return null
   }
   return updated
@@ -80,11 +100,9 @@ export async function persistProjectGroupUpdates(
     )
   }
   if (
-    target.kind === 'environment' &&
-    mutations.some(({ updates }) => updates.rootProjectOrder !== undefined) &&
-    !(await runtimeEnvironmentSupportsCapability(
-      target.environmentId,
-      PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
+    !(await targetSupportsUpdates(
+      target,
+      mutations.map(({ updates }) => updates)
     ))
   ) {
     return mutations.map(() => null)
@@ -103,20 +121,17 @@ export async function persistProjectGroupUpdates(
   const byId = new Map(updated?.map((group) => [group.id, group]))
   return mutations.map(({ groupId, updates }) => {
     const group = byId.get(groupId)
-    return group && groupOrderMatchesUpdate(group, updates) ? group : null
+    return group && groupPlacementMatchesUpdate(group, updates) ? group : null
   })
 }
 
-export async function initializeNewRootProjectGroupOrder(
-  target: RuntimeClientTarget,
-  group: ProjectGroup,
+/** Last top-level slot across every host's catalog; undefined while root order is still legacy. */
+export function getNextRootProjectGroupPlacement(
   state: Pick<RepoSlice, 'repos' | 'projectGroups'>
-): Promise<ProjectGroup> {
-  const rootProjectOrder = !group.parentGroupId
-    ? getNextRootProjectOrder(state.repos, state.projectGroups)
-    : undefined
+): { rootProjectOrder: number; tabOrder: number } | undefined {
+  const rootProjectOrder = getNextRootProjectOrder(state.repos, state.projectGroups)
   if (rootProjectOrder === undefined) {
-    return group
+    return undefined
   }
   const groupIds = new Set(state.projectGroups.map((entry) => entry.id))
   let tabOrder = -1000
@@ -125,11 +140,20 @@ export async function initializeNewRootProjectGroupOrder(
       tabOrder = Math.max(tabOrder, existing.tabOrder)
     }
   }
+  return { rootProjectOrder, tabOrder: tabOrder + 1000 }
+}
+
+export async function initializeNewRootProjectGroupOrder(
+  target: RuntimeClientTarget,
+  group: ProjectGroup,
+  state: Pick<RepoSlice, 'repos' | 'projectGroups'>
+): Promise<ProjectGroup> {
+  const placement = !group.parentGroupId ? getNextRootProjectGroupPlacement(state) : undefined
+  if (!placement) {
+    return group
+  }
   return (
-    (await persistProjectGroupUpdate(target, group.id, {
-      rootProjectOrder,
-      tabOrder: tabOrder + 1000
-    }).catch((err) => {
+    (await persistProjectGroupUpdate(target, group.id, placement).catch((err) => {
       console.error('Failed to initialize project group order:', err)
       return null
     })) ?? group

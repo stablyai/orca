@@ -1,5 +1,4 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { NotificationSettings } from '../notifications/notification-settings-types'
 import type { VoiceSettings } from '../speech/speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from '../terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from '../terminal/quick-commands/terminal-quick-commands'
@@ -34,7 +33,7 @@ export function buildDefaultSettings(args: {
   terminalFontWeightWindowsRegular?: GlobalSettings['terminalFontWeightWindowsRegular']
   terminalInactivePaneOpacity: number
   terminalRightClickToPaste: boolean
-  notifications: NotificationSettings
+  notifications: GlobalSettings['notifications']
   voice: VoiceSettings
 }): GlobalSettings {
   return {

@@ -950,7 +950,9 @@
           "moreProjects_one": "+{{count}} more",
           "moreProjects_other": "+{{count}} more",
           "removeContainedProjects_one": "Remove {{count}} contained project",
-          "removeContainedProjects_other": "Remove {{count}} contained projects"
+          "removeContainedProjects_other": "Remove {{count}} contained projects",
+          "subgroupsDeleted_one": "Its subgroup will also be deleted.",
+          "subgroupsDeleted_other": "Its {{count}} subgroups will also be deleted."
         },
         "RemoveFolderDialog": {
           "linkedWorkspaceWarning_one": "{{count}} workspace in this project will also be removed from Orca.",

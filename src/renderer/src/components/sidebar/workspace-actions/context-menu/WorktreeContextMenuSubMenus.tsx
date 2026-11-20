@@ -25,6 +25,8 @@ import {
   getWorktreeParentPickerLabel,
   isWorktreeParentPickerDisabled
 } from './worktree-context-menu-policy'
+import { getProjectGroupMoveTargetsForProject } from '../../worktree-list/rows/project-group-move-targets'
+import { PROJECT_GROUP_HEADER_INDENT } from '../../worktree-list/rows/indentation'
 
 export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel }) {
   const t = useTranslate()
@@ -102,6 +104,7 @@ export function WorktreeProjectGroupSubMenu({ model }: { model: WorktreeContextM
   if (!repo) {
     return null
   }
+  const destinationGroups = getProjectGroupMoveTargetsForProject(projectGroups, repo)
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={isDeleting}>
@@ -119,7 +122,7 @@ export function WorktreeProjectGroupSubMenu({ model }: { model: WorktreeContextM
             {t('auto.components.sidebar.WorktreeContextMenu.d35dfeae58', 'Remove from group')}
           </DropdownMenuItem>
         ) : null}
-        {projectGroups.length > 0 ? (
+        {destinationGroups.length > 0 ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuLabel>
@@ -129,14 +132,20 @@ export function WorktreeProjectGroupSubMenu({ model }: { model: WorktreeContextM
               value={repo.projectGroupId ?? ''}
               onValueChange={model.handleMoveProjectToGroup}
             >
-              {projectGroups.map((group) => (
+              {destinationGroups.map(({ group, depth, disabled }) => (
                 <DropdownMenuRadioItem
                   key={group.id}
                   value={group.id}
                   textValue={group.name}
-                  disabled={isDeleting || repo.projectGroupId === group.id}
+                  disabled={isDeleting || disabled}
                 >
-                  <span className="max-w-48 truncate">{group.name}</span>
+                  {/* Why: indent inline; computed padding classes on menu primitives are lint-gated. */}
+                  <span
+                    className="max-w-48 truncate"
+                    style={{ paddingLeft: depth * PROJECT_GROUP_HEADER_INDENT }}
+                  >
+                    {group.name}
+                  </span>
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>

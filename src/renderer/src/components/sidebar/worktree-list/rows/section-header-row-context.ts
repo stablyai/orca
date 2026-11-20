@@ -1,7 +1,6 @@
 import type React from 'react'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
@@ -10,6 +9,7 @@ import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-
 import type { WorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 import type { ProjectHeaderHostContext } from './project-header-host-context'
 import type { RepoHeaderProjectActions } from './repo-header-project-actions'
+import type { ProjectGroupHeaderActions } from './project-group-header-actions'
 
 export type SectionHeaderRowContext = {
   groupBy: WorktreeGroupBy
@@ -28,9 +28,7 @@ export type SectionHeaderRowContext = {
   toggleGroupWithScrollAnchor: (groupKey: string) => void
   toggleAllProjects?: () => void
   projectActions: RepoHeaderProjectActions
-  onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
-  onDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
-  onRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
+  projectGroupActions: ProjectGroupHeaderActions
   onCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
   onWorkspaceStatusDragLeave: (event: React.DragEvent) => void

@@ -6024,7 +6024,8 @@
           "55f75628c0": "不會刪除磁碟上的專案資料夾。",
           "removeContainedProjects_other": "移除內含的 {{count}} 個專案",
           "deleteGroupDescription": "刪除 <name>{{name}}</name>。",
-          "moreProjects_other": "另有 {{count}} 個"
+          "moreProjects_other": "另有 {{count}} 個",
+          "subgroupsDeleted_other": "其 {{count}} 個子群組也將被刪除。"
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "取消",
@@ -6720,6 +6721,33 @@
               "7c2f009786": "進行中",
               "6798dc7c94": "審查中",
               "5076efc3d2": "完成"
+            },
+            "rows": {
+              "ProjectGroupDialogs": {
+                "dc04680eef": "新子群組",
+                "1c1d0b3021": "在「{{value0}}」中建立群組。"
+              },
+              "project": {
+                "group": {
+                  "header": {
+                    "actions": {
+                      "dd93986e77": "新子群組"
+                    }
+                  }
+                }
+              },
+              "use": {
+                "project": {
+                  "group": {
+                    "dialogs": {
+                      "009a0dfef9": "移動群組失敗",
+                      "b1ba3948b3": "Orca 無法與該群組的主機確認移動。重新連線後重新檢查該群組，或更新該主機上的 Orca。",
+                      "8269fcd14a": "建立子群組失敗",
+                      "daf08d9e4e": "Orca 無法與父群組的主機確認新群組。重新連線後重新檢查側邊欄。"
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -7185,6 +7213,9 @@
           "inProgress": "進行中",
           "inReview": "審核中",
           "done": "已完成"
+        },
+        "ProjectGroupMoveSubmenu": {
+          "5f1e73c267": "最上層"
         }
       },
       "shared": {

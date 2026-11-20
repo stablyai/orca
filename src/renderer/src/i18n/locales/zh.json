@@ -6383,7 +6383,8 @@
           "55f75628c0": "不会删除磁盘上的项目文件夹",
           "removeContainedProjects_other": "移除包含的 {{count}} 个项目",
           "deleteGroupDescription": "删除 <name>{{name}}</name>",
-          "moreProjects_other": "另有 {{count}} 个"
+          "moreProjects_other": "另有 {{count}} 个",
+          "subgroupsDeleted_other": "其 {{count}} 个子组也将被删除。"
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "取消",
@@ -7123,6 +7124,33 @@
               "7c2f009786": "进行中",
               "6798dc7c94": "评审中",
               "5076efc3d2": "完成"
+            },
+            "rows": {
+              "project": {
+                "group": {
+                  "header": {
+                    "actions": {
+                      "dd93986e77": "新建子组"
+                    }
+                  }
+                }
+              },
+              "ProjectGroupDialogs": {
+                "dc04680eef": "新建子组",
+                "1c1d0b3021": "在“{{value0}}”中创建一个组。"
+              },
+              "use": {
+                "project": {
+                  "group": {
+                    "dialogs": {
+                      "009a0dfef9": "移动组失败",
+                      "b1ba3948b3": "Orca 无法与该组的主机确认此次移动。重新连接后请重新检查该组，或更新该主机上的 Orca。",
+                      "8269fcd14a": "创建子组失败",
+                      "daf08d9e4e": "Orca 无法与父组所在的主机确认新组。重新连接后请重新检查侧边栏。"
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -7472,6 +7500,9 @@
           "title": "排序更改为手动",
           "description": "手动将工作区保留在您放置它们的位置",
           "restore": "返回{{label}}"
+        },
+        "ProjectGroupMoveSubmenu": {
+          "5f1e73c267": "顶层"
         },
         "AddWslHostDialogBody": {
           "added": "已添加 {{value0}}"

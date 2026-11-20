@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
@@ -13,8 +14,14 @@ import { useTranslate } from '@/i18n/use-translate'
 import { getFolderWorkspacePathStatusDescription } from '@/lib/workspace/paths/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import { canCreateProjectSubgroup } from '../../../../../../shared/project/groups/project-group-nesting'
 import { getFolderProjectGroupRefreshHandler } from './project-group-folder-refresh'
+import { ProjectGroupMoveSubmenu } from './ProjectGroupMoveSubmenu'
+import { selectProjectGroupCatalog } from './project-group-move-targets'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import {
   handleRepoHeaderActionPointerDown,
@@ -22,26 +29,25 @@ import {
   stopRepoHeaderMenuEvent
 } from './header-event-guards'
 
-export function ProjectGroupHeaderMenu({
-  groupId,
-  hostId,
-  label,
-  projectGroup,
-  onRefreshProjectGroup,
-  onRename,
-  onDelete
-}: {
-  groupId: string
-  /** Owner host of the group row, so rename/delete route to the host that holds it. */
-  hostId?: ExecutionHostId
-  label: string
-  projectGroup: ProjectGroup | null
-  onRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
+// hostId is the group row's owner host, so each action routes to the host that holds the group.
+export type ProjectGroupHeaderActions = {
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
+  onCreateSubgroup: (parentGroupId: string, parentName: string, hostId?: ExecutionHostId) => void
+  onMove: (groupId: string, parentGroupId: string | null, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
-}): React.JSX.Element {
+  onRefresh?: (projectGroup: ProjectGroup) => void
+}
+
+type ProjectGroupHeaderMenuProps = {
+  projectGroup: ProjectGroup
+  label: string
+  /** Every host's groups; the menu narrows them to this group's host. */
+  projectGroups: readonly ProjectGroup[]
+  actions: ProjectGroupHeaderActions
+}
+
+export function ProjectGroupHeaderMenu(props: ProjectGroupHeaderMenuProps): React.JSX.Element {
   const t = useTranslate()
-  const onRefresh = getFolderProjectGroupRefreshHandler(projectGroup, onRefreshProjectGroup)
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -54,7 +60,7 @@ export function ProjectGroupHeaderMenu({
           aria-label={t(
             'auto.components.sidebar.WorktreeList.79465e9034',
             'Group actions for {{value0}}',
-            { value0: label }
+            { value0: props.label }
           )}
           onClick={(event) => event.stopPropagation()}
           onKeyDown={stopRepoHeaderKeyboardToggle}
@@ -75,20 +81,63 @@ export function ProjectGroupHeaderMenu({
         onClick={stopRepoHeaderMenuEvent}
         onKeyDown={stopRepoHeaderMenuEvent}
       >
-        {onRefresh ? (
-          <DropdownMenuItem onSelect={onRefresh}>
-            <RefreshCw className="size-3.5" />
-            {t('auto.components.sidebar.WorktreeList.refreshProjectGroup', 'Refresh projects')}
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
-          {t('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
-          {t('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
-        </DropdownMenuItem>
+        <ProjectGroupHeaderMenuItems {...props} />
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+// Why: mounted only while the menu is open, so the catalog walk never runs per sidebar row.
+function ProjectGroupHeaderMenuItems({
+  projectGroup,
+  label,
+  projectGroups,
+  actions
+}: ProjectGroupHeaderMenuProps): React.JSX.Element {
+  const t = useTranslate()
+  const groupId = projectGroup.id
+  const hostId = getRepoExecutionHostId(projectGroup)
+  const onRefresh = getFolderProjectGroupRefreshHandler(projectGroup, actions.onRefresh)
+  // Why: the level comes from the host's whole catalog; row depth reads 0 when a filter hides a parent.
+  const canCreateSubgroup = canCreateProjectSubgroup(
+    selectProjectGroupCatalog(projectGroups, hostId),
+    groupId
+  )
+  return (
+    <>
+      {onRefresh ? (
+        <DropdownMenuItem onSelect={onRefresh}>
+          <RefreshCw className="size-3.5" />
+          {t('auto.components.sidebar.WorktreeList.refreshProjectGroup', 'Refresh projects')}
+        </DropdownMenuItem>
+      ) : null}
+      <DropdownMenuItem onSelect={() => actions.onRename(groupId, label, hostId)}>
+        {t('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        disabled={!canCreateSubgroup}
+        onSelect={() => actions.onCreateSubgroup(groupId, label, hostId)}
+      >
+        {t(
+          'auto.components.sidebar.worktree.list.rows.project.group.header.actions.dd93986e77',
+          'New subgroup'
+        )}
+      </DropdownMenuItem>
+      <ProjectGroupMoveSubmenu
+        projectGroups={projectGroups}
+        movingGroup={projectGroup}
+        onSelect={(parentGroupId) => actions.onMove(groupId, parentGroupId, hostId)}
+      >
+        {t('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
+      </ProjectGroupMoveSubmenu>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        variant="destructive"
+        onSelect={() => actions.onDelete(groupId, label, hostId)}
+      >
+        {t('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
+      </DropdownMenuItem>
+    </>
   )
 }
 
