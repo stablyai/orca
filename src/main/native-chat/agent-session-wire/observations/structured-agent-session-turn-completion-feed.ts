@@ -62,6 +62,8 @@ type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
 /** Missing baseline makes first observation silent; settled/prompts track already-accounted edges. */
 type SessionBaseline = CompletionFeedCursor & {
   settled: RequestMark | null
+  heldCompletedTurns: number
+  heldRequest: RequestMark | null
   prompts: ReadonlySet<string>
 }
 
@@ -148,7 +150,13 @@ export class StructuredAgentSessionTurnCompletionFeed {
       this.publishState(session, sessionId, state.pendingPromptIds)
     }
     if (!baseline || options?.historical) {
-      this.baselines.set(sessionId, { ...cursor, settled: settledMark(request), prompts })
+      this.baselines.set(sessionId, {
+        ...cursor,
+        settled: settledMark(request),
+        heldCompletedTurns: 0,
+        heldRequest: null,
+        prompts
+      })
       return
     }
     if (baseline.epoch !== cursor.epoch || cursor.sequence < baseline.sequence) {
@@ -156,6 +164,8 @@ export class StructuredAgentSessionTurnCompletionFeed {
       baseline.epoch = cursor.epoch
       baseline.sequence = cursor.sequence
       baseline.settled = settledMark(request)
+      baseline.heldCompletedTurns = 0
+      baseline.heldRequest = null
       baseline.prompts = prompts
       return
     }
@@ -213,12 +223,24 @@ export class StructuredAgentSessionTurnCompletionFeed {
     if (request?.turnState === 'running') {
       // Clear on running so each running-to-settled transition can fire, even for a reused ID.
       baseline.settled = null
+      baseline.heldRequest = null
       return null
     }
-    // Wait until all owed sends are answered; pending prompts announce immediately.
-    // Withdrawn sends expose the older request without making it news.
+    // Repeated publications of one held end must not count as more provider turns.
+    if (state.owesWork) {
+      if (
+        request?.kind === 'turn' &&
+        request.turnState === 'completed' &&
+        request.outcome &&
+        baseline.settled?.id !== request.id &&
+        baseline.heldRequest?.id !== request.id
+      ) {
+        baseline.heldCompletedTurns += 1
+        baseline.heldRequest = { kind: request.kind, id: request.id }
+      }
+      return null
+    }
     if (
-      state.owesWork ||
       !request ||
       (baseline.settled?.kind === request.kind && baseline.settled.id === request.id) ||
       this.heldByLiveWork(sessionId, state, request)
@@ -230,10 +252,16 @@ export class StructuredAgentSessionTurnCompletionFeed {
     if (!request.outcome) {
       return null
     }
+    const mergedTurnCount =
+      baseline.heldCompletedTurns +
+      (request.kind === 'turn' && baseline.heldRequest?.id !== request.id ? 1 : 0)
+    baseline.heldCompletedTurns = 0
+    baseline.heldRequest = null
     return {
       scope: session.params.location,
       sessionId,
       turnId: request.id,
+      ...(mergedTurnCount > 1 ? { mergedTurnCount } : {}),
       outcome: request.outcome,
       completedAt: this.deps.now(),
       // Include attention here: remote clients receive status and completion streams unordered.

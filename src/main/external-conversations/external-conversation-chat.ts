@@ -80,6 +80,8 @@ export type ChatNews =
       kind: 'turn-ended'
       sessionId: string
       outcome: AgentJournalTurnOutcome
+      providerTurnId?: string
+      mergedTurnCount?: number
       /** Read in full from the journal, only for linked chats; the status row keeps a short preview. */
       readTurn: () => Promise<EndedChatTurn>
       /** Only whom the turn acts for (its opener and the deliveries it answered), read by index. */
@@ -107,6 +109,10 @@ export function watchChatNews(
             kind: 'turn-ended',
             sessionId,
             outcome,
+            providerTurnId: event.completion.turnId,
+            ...(event.completion.mergedTurnCount !== undefined
+              ? { mergedTurnCount: event.completion.mergedTurnCount }
+              : {}),
             readTurn: () =>
               endedTurn(chat, sessionId, event.completion.turnId, event.completion.journalCursor),
             readAttribution: () =>

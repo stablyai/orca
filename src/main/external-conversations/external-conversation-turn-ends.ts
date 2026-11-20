@@ -58,7 +58,11 @@ export function endAdoptedTurn(
 
 /** Its reply posts after the owner's words: held while their post failed, until Retry or Dismiss,
  *  across a restart too. A quiet result still ends the turn, with no words. */
-export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): void {
+export function endMirroredTurn(
+  end: ChatTurnEnd,
+  mirrored: SlackMirrorTurn,
+  link: ExternalConversationLink
+): void {
   void end.news.readTurn().then(async (read) => {
     if (!end.current()) {
       return
@@ -67,7 +71,7 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
     if (!end.current()) {
       return
     }
-    const message = read.lastAssistantMessage
+    const message = botTurnReply(end, link, read, false)
     mirrored.release({
       ...end.ended,
       ...end.turnFor(read),
@@ -107,7 +111,8 @@ export async function endRepliedTurn(
   turn: EndedChatTurn,
   link: ExternalConversationLink,
   links: () => Promise<ConnectorWorkLink[]>,
-  fill: ConversationReplyFill | null | undefined
+  fill: ConversationReplyFill | null | undefined,
+  legacyReply?: string
 ): Promise<boolean> {
   // A reset meanwhile: the end reaches no one, either way.
   if (!end.current()) {
@@ -135,10 +140,42 @@ export async function endRepliedTurn(
   if (!end.current() || !covered.has(link.externalId)) {
     return !end.current()
   }
+  // The constant fallback uses this end's existing durable turn-event key.
+  if (legacyReply && legacyReply !== turn.lastAssistantMessage) {
+    return false
+  }
   await end.workersChecked()
   if (end.current()) {
     // The cloud keeps the thread's failure from whichever of this and the reply lands last.
     end.emit({ ...end.ended, ...end.turnFor(turn), stateOnly: true, ...failure })
   }
   return true
+}
+
+const COALESCED_QUIET_REPLY =
+  'I replied but the message may not have reached you. Please ask again.'
+
+/** Only count metadata can turn a quiet completion into a constant; earlier text is never read. */
+export function botTurnReply(
+  end: ChatTurnEnd,
+  link: ExternalConversationLink,
+  turn: EndedChatTurn,
+  requested: boolean
+): string | undefined {
+  const message = turn.lastAssistantMessage
+  if (!link.bot || !message || !isQuietBotResult(message)) {
+    return message
+  }
+  const providerTurnCount = end.news.mergedTurnCount ?? 1
+  const fallback = requested && providerTurnCount > 1
+  console.info('[connector] bot quiet completion suppressed', {
+    threadId: link.externalId,
+    source: link.source,
+    sessionId: end.news.sessionId,
+    turnId: end.ended.turnId,
+    providerTurnId: end.news.providerTurnId,
+    providerTurnCount,
+    fallback
+  })
+  return fallback ? COALESCED_QUIET_REPLY : undefined
 }
