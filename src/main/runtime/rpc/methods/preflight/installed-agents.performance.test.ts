@@ -107,13 +107,14 @@ describe('installed-agent workspace resolution bound', () => {
       })
     )
     const readFolders = vi.fn(() => folders)
+    const groups = Array.from({ length: groupCount }, (_, index) =>
+      storeProjectGroup({ id: index === 0 ? 'group' : `group-${index}` })
+    )
+    const readGroups = vi.fn(() => groups)
     const runtime = new OrcaRuntimeService(
       partialRuntimeStore({
         getFolderWorkspaces: readFolders,
-        getProjectGroups: () =>
-          Array.from({ length: groupCount }, (_, index) =>
-            storeProjectGroup({ id: index === 0 ? 'group' : `group-${index}` })
-          )
+        getProjectGroups: readGroups
       })
     )
     vi.spyOn(detection, 'detectAgentsOnHost').mockResolvedValue(['codex'])
@@ -125,5 +126,6 @@ describe('installed-agent workspace resolution bound', () => {
 
     expect(result).toMatchObject({ agents: ['codex'] })
     expect(readFolders).toHaveBeenCalledTimes(1)
+    expect(readGroups).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,10 +1,7 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import {
-  resolveQualifiedFolderWorkspace,
-  type QualifiedFolderWorkspaceSelection
-} from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { resolveQualifiedFolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { resolveWorkspaceAgentDetectionHost } from '../../../../preflight/workspace-agent-detection'
 import { resolveWorktreeHostRouting } from '../../../workspaces/catalog/worktree-launch-host-repo'
 
@@ -15,7 +12,7 @@ export async function resolveQualifiedAgentDetectionHost(
   >,
   params: { worktreeId?: string; worktreeHostId?: ExecutionHostId; repoId?: string },
   selectedWorktree?: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
-  selectedFolder?: QualifiedFolderWorkspaceSelection
+  selectedFolder?: NonNullable<ReturnType<OrcaRuntimeService['resolveManagedFolderWorkspace']>>
 ) {
   const hostId = params.worktreeHostId
   if (!hostId || !params.worktreeId) {
@@ -24,8 +21,8 @@ export async function resolveQualifiedAgentDetectionHost(
   const store = runtime.requireStore()
   const scope = parseWorkspaceKey(params.worktreeId)
   if (scope?.type === 'folder') {
-    const groups = store.getProjectGroups?.() ?? []
-    const repos = store.getRepos()
+    const groups = selectedFolder?.catalog.projectGroups ?? store.getProjectGroups?.() ?? []
+    const repos = selectedFolder?.catalog.repos ?? store.getRepos()
     const selected =
       selectedFolder ??
       resolveQualifiedFolderWorkspace(

@@ -15,10 +15,7 @@ import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/w
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { RuntimeWorkspacePortOperations } from './ports/runtime-workspace-port-operations'
-import {
-  folderCatalogOf,
-  resolveKeyedFolderWorkspaceSelection
-} from './catalog/workspace-selector-candidates'
+import { resolveKeyedFolderWorkspaceSelection } from './catalog/workspace-selector-candidates'
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
 export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspacePortOperations {
   protected abstract resolveFolderWorkspaceSelector(
@@ -155,11 +152,15 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
   }
 
   resolveManagedFolderWorkspace(selector: string, requiredHostId?: ExecutionHostId) {
-    return resolveKeyedFolderWorkspaceSelection(
-      folderCatalogOf(this.requireStore()),
+    const store = this.requireStore()
+    const projectGroups = store.getProjectGroups?.() ?? []
+    const repos = store.getRepos()
+    const selected = resolveKeyedFolderWorkspaceSelection(
+      { folderWorkspaces: store.getFolderWorkspaces?.() ?? [], projectGroups, repos },
       selector,
       requiredHostId
     )
+    return selected ? { ...selected, catalog: { projectGroups, repos } } : null
   }
 
   /**

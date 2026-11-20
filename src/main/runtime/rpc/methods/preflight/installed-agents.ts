@@ -12,7 +12,6 @@ import { agentCommandOverrideDetectionOptions } from '../../../../preflight/inst
 import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
-import type { QualifiedFolderWorkspaceSelection } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 
 type InstalledAgentsRuntime = Pick<
   OrcaRuntimeService,
@@ -31,7 +30,9 @@ export async function listInstalledWorkspaceAgents(
   let selectedWorktree:
     | Awaited<ReturnType<InstalledAgentsRuntime['showManagedWorktree']>>
     | undefined
-  let selectedFolder: QualifiedFolderWorkspaceSelection | undefined
+  let selectedFolder:
+    | NonNullable<ReturnType<InstalledAgentsRuntime['resolveManagedFolderWorkspace']>>
+    | undefined
   if (params.worktreeId) {
     if (parseWorkspaceKey(params.worktreeId)?.type === 'folder') {
       selectedFolder =
