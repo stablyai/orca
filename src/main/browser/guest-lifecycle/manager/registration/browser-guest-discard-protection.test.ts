@@ -262,3 +262,48 @@ it('protects active page features from the private observer and at idle admissio
     vi.useRealTimers()
   }
 })
+
+it('keeps a page an embedded form POSTed to the top from being discarded', () => {
+  let url = 'https://example.test/embed'
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
+  const guest = Object.assign(new EventEmitter(), {
+    id: 8,
+    mainFrame,
+    session: {},
+    getURL: () => url,
+    isDestroyed: () => false,
+    isCrashed: () => false,
+    isCurrentlyAudible: () => false
+  }) as unknown as Electron.WebContents
+  const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
+  const load = (next: string): void => {
+    guest.emit('did-start-navigation', { url: next, isMainFrame: true, isSameDocument: false })
+    url = next
+    guest.emit('did-navigate', {}, next, 200, 'OK')
+    guest.emit('dom-ready')
+    guest.emit(
+      'ipc-message',
+      { sender: guest, senderFrame: mainFrame },
+      BROWSER_GUEST_PROTECTION_REPORT,
+      {
+        generation: mainFrame.send.mock.lastCall?.[1],
+        dirty: false,
+        pictureInPicture: false,
+        contentType: 'text/html'
+      }
+    )
+  }
+  try {
+    load('https://example.test/embed')
+    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
+    // A child frame's `<form method="post" target="_top">` reports itself, then the top navigates.
+    guest.emit('ipc-message', { sender: guest, senderFrame: {} }, BROWSER_GUEST_PROTECTION_REPORT, {
+      formPost: 'https://example.test/report'
+    })
+    load('https://example.test/report')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
+  } finally {
+    stop()
+  }
+})

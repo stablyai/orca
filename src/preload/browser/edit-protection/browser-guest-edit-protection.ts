@@ -34,27 +34,6 @@ export function installBrowserGuestEditProtection(port: {
   // Capture before page handlers; reset, submit and SPA steps do not retire the document's edits.
   window.addEventListener('input', edited, true)
   window.addEventListener('change', edited, true)
-  const lastSubmitterByForm = new WeakMap<HTMLFormElement, HTMLElement | null>()
-  window.addEventListener(
-    'submit',
-    (event) => {
-      if (event.isTrusted && event.target instanceof HTMLFormElement) {
-        lastSubmitterByForm.set(event.target, event.submitter)
-      }
-    },
-    true
-  )
-  // Fires only for a submission that wasn't cancelled; main matches it to the navigation it starts.
-  window.addEventListener(
-    'formdata',
-    (event) => {
-      const formPost = event.isTrusted ? postedFormAction(event.target, lastSubmitterByForm) : null
-      if (formPost) {
-        port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost })
-      }
-    },
-    true
-  )
   // Video picture-in-picture events bubble from the element; a document picture-in-picture
   // window reports its own close.
   const pictureInPictureChanged = (): void => report()
@@ -99,39 +78,4 @@ function isPictureInPicture(): boolean {
     'window' in documentPictureInPicture &&
     documentPictureInPicture.window
   )
-}
-
-/** The action URL of a POST that replaces this page; null for GET or another target. */
-function postedFormAction(
-  target: EventTarget | null,
-  lastSubmitterByForm: WeakMap<HTMLFormElement, HTMLElement | null>
-): string | null {
-  if (!(target instanceof HTMLFormElement)) {
-    return null
-  }
-  const submitter = lastSubmitterByForm.get(target)
-  lastSubmitterByForm.delete(target)
-  const button =
-    submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
-      ? submitter
-      : null
-  const method = button?.hasAttribute('formmethod')
-    ? button.formMethod
-    : formProperty(target, 'method')
-  const formTarget = button?.hasAttribute('formtarget')
-    ? button.formTarget
-    : formProperty(target, 'target')
-  if (method !== 'post' || !['', '_self', '_top', '_parent'].includes(formTarget.toLowerCase())) {
-    return null
-  }
-  return button?.hasAttribute('formaction') ? button.formAction : formProperty(target, 'action')
-}
-
-// A field named `action`, `method` or `target` shadows the form's own property; read the getter.
-function formProperty(form: HTMLFormElement, name: 'action' | 'method' | 'target'): string {
-  const value: unknown = Object.getOwnPropertyDescriptor(
-    HTMLFormElement.prototype,
-    name
-  )?.get?.call(form)
-  return typeof value === 'string' ? value : ''
 }

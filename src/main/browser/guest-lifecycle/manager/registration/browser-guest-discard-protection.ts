@@ -163,14 +163,18 @@ export function installBrowserGuestDiscardProtection(
       channel !== BROWSER_GUEST_PROTECTION_REPORT ||
       guest.isDestroyed() ||
       event.sender !== guest ||
-      event.senderFrame !== guest.mainFrame ||
       !payload ||
       typeof payload !== 'object'
     ) {
       return
     }
+    // Any frame may report: an embedded form can POST to the top page, and a false report only
+    // keeps a page from being discarded.
     if ('formPost' in payload && typeof payload.formPost === 'string') {
       formPost.submitted(payload.formPost)
+      return
+    }
+    if (event.senderFrame !== guest.mainFrame) {
       return
     }
     if ('ready' in payload && payload.ready === true) {
