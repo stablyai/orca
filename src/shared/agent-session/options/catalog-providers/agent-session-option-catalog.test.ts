@@ -47,7 +47,7 @@ describe('agent session option catalog', () => {
       label: 'Opus (1M context)',
       description: 'Opus 5 with 1M context'
     })
-    expect(parsed[0].options.map(({ id }) => id)).toEqual(['effort', 'fastMode', 'renderer'])
+    expect(parsed[0].options.map(({ id }) => id)).toEqual(['effort', 'fastMode'])
     const opusEffort = parsed[0].options[0]
     expect(opusEffort.kind).toMatchObject({ defaultValue: 'high' })
     expect(
@@ -57,7 +57,7 @@ describe('agent session option catalog', () => {
     expect(
       sonnetEffort.kind.type === 'select' ? sonnetEffort.kind.choices.map((c) => c.value) : []
     ).toEqual(['low', 'medium', 'high'])
-    expect(parsed[2].options.map(({ id }) => id)).toEqual(['renderer'])
+    expect(parsed[2].options).toEqual([])
   })
 
   it('resolves only stored values without leaking values across models', () => {

@@ -44,6 +44,8 @@ export type CatalogOption = {
       }
     | { type: 'boolean'; defaultValue: boolean }
   apply: CatalogOptionApply
+  /** A terminal launch setting: applies whatever model runs and is never offered to structured chats. */
+  terminalSetting?: true
 }
 
 export type CatalogModel = {

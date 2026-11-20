@@ -10,6 +10,10 @@ const PIECES: Record<NativeChatSessionOptionCopyId, (values?: { value0: string }
   model: () => translate('components.native-chat.composer.model', 'Model'),
   effort: () => translate('components.native-chat.composer.effort', 'Effort'),
   fastMode: () => translate('components.native-chat.composer.fastMode', 'Fast mode'),
+  renderer: () => translate('components.native-chat.composer.renderer', 'Renderer'),
+  inline: () => translate('components.native-chat.composer.optionValue.inline', 'Inline'),
+  fullscreen: () =>
+    translate('components.native-chat.composer.optionValue.fullscreen', 'Fullscreen'),
   speed: () => translate('components.native-chat.composer.speed', 'Speed'),
   thinking: () => translate('components.native-chat.composer.thinking', 'Thinking'),
   standard: () => translate('components.native-chat.composer.optionValue.standard', 'Standard'),

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { resolveAgentSessionOptionLaunch } from '../launch/agent-session-option-launch'
-import { createClaudeCatalogOptions } from './agent-session-option-catalog-claude-codex'
 import { getAgentSessionOptionCatalog } from '../agent-session-option-catalog'
+import { structuredAgentSessionOptionCatalog } from '../structured-agent-session-options'
 import { sourceControlActionOptions } from '../../../source-control/ai/recipes/source-control-action-options'
+import { analyzeAgentChoiceArgs } from '../../../agent-launch/choices/agent-choice-args'
 
 function settingsJson(args: readonly string[]): unknown {
   const index = args.indexOf('--settings')
@@ -10,15 +11,7 @@ function settingsJson(args: readonly string[]): unknown {
 }
 
 describe('Claude renderer option', () => {
-  it('launches the inline renderer for one session', () => {
-    const { args } = resolveAgentSessionOptionLaunch('claude', {
-      model: 'sonnet',
-      renderer: 'default'
-    })
-    expect(settingsJson(args)).toEqual({ tui: 'default' })
-  })
-
-  it('launches the fullscreen renderer for one session', () => {
+  it('launches the picked renderer for one session', () => {
     const { args } = resolveAgentSessionOptionLaunch('claude', {
       model: 'sonnet',
       renderer: 'fullscreen'
@@ -31,6 +24,16 @@ describe('Claude renderer option', () => {
     expect(args).not.toContain('--settings')
   })
 
+  it('survives a --model in the user arguments, which still drops the model options', () => {
+    const { args } = resolveAgentSessionOptionLaunch(
+      'claude',
+      { model: 'opus', effort: 'low', renderer: 'default' },
+      ['--model', 'sonnet']
+    )
+    expect(args).not.toContain('--effort')
+    expect(settingsJson(args)).toEqual({ tui: 'default' })
+  })
+
   it('merges with Fast mode into a single --settings', () => {
     const { args } = resolveAgentSessionOptionLaunch('claude', {
       model: 'opus',
@@ -41,31 +44,28 @@ describe('Claude renderer option', () => {
     expect(settingsJson(args)).toEqual({ fastMode: true, tui: 'default' })
   })
 
-  it('is offered for every built-in Claude model and unknown models', () => {
-    const catalog = getAgentSessionOptionCatalog('claude')!
-    for (const model of catalog.models) {
-      expect(model.options.map(({ id }) => id)).toContain('renderer')
-    }
-    expect(catalog.unknownModelOptions?.map(({ id }) => id)).toContain('renderer')
+  it('reads both keys back out of that shared --settings', () => {
+    const analysis = analyzeAgentChoiceArgs(
+      'claude',
+      `--settings '{"fastMode":true,"tui":"fullscreen","x":1}' --verbose`
+    )
+    expect(analysis.cut(analysis.occurrences)).toBe(`--settings '{"x":1}' --verbose`)
   })
 
-  it('is left out of option lists built for structured chats', () => {
-    expect(createClaudeCatalogOptions({ effortLevelIds: ['high'] }).map(({ id }) => id)).toEqual([
-      'effort'
-    ])
-  })
-
-  it('reaches terminal launches only, since chats have no terminal renderer', () => {
+  it('reaches terminal launches of a listed model', () => {
     const row = sourceControlActionOptions('claude', 'sonnet').find(
       ({ option }) => option.id === 'renderer'
     )
     expect(row?.route).toBe('terminals')
   })
 
-  it('shows without a picked model, unlike model-dependent mode options', () => {
-    const renderer = getAgentSessionOptionCatalog('claude')!.unknownModelOptions?.find(
-      ({ id }) => id === 'renderer'
+  it('is not offered to a structured chat running an unlisted model', () => {
+    const catalog = structuredAgentSessionOptionCatalog(
+      getAgentSessionOptionCatalog('claude')!,
+      { models: [], current: { model: 'claude-custom' } },
+      'claude'
     )
-    expect(renderer?.category).toBeUndefined()
+    const unlisted = catalog.models.find(({ id }) => id === 'claude-custom')
+    expect(unlisted?.options.map(({ id }) => id)).toEqual(['effort', 'fastMode'])
   })
 })

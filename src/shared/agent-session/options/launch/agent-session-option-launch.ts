@@ -218,7 +218,7 @@ function resolveModelOptionLaunch(
       continue
     }
     // Why: options belong to the picked model and may be invalid for the user's model.
-    if (!option.apply.launchArgs || modelOverridden) {
+    if (!option.apply.launchArgs || (modelOverridden && !option.terminalSetting)) {
       continue
     }
     const settings = option.apply.cli?.find((form) => form.kind === 'settings')

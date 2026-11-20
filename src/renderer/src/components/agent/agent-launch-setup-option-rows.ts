@@ -173,7 +173,7 @@ export function agentLaunchSetupOptionRows(
           (valueKnown ||
             option.kind.type === 'select' ||
             Boolean(currentModel && draft.delegated?.includes(option.id))) &&
-          (!(option.id === 'fastMode' || option.id === 'serviceTier') ||
+          (!(option.id === 'fastMode' || option.id === 'serviceTier' || option.terminalSetting) ||
             !entry.surfaces.includes('terminal') ||
             argumentsKnown)
       }
