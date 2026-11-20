@@ -217,25 +217,50 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
       vi.spyOn(detection, 'detectAgentsOnHost').mockImplementation(async (_host, options) =>
         options?.agentCmdOverrides?.codex === '/owner/codex' ? ['codex'] : ['claude']
       )
+      vi.spyOn(detection, 'refreshAgentsOnHost').mockImplementation(async (_host, options) => ({
+        agents: options?.agentCmdOverrides?.codex === '/owner/codex' ? ['codex'] : ['claude'],
+        addedPathSegments: [],
+        shellHydrationOk: true,
+        pathSource: 'sync_seed_only',
+        pathFailureReason: 'none'
+      }))
       const { session, replies } = await startTopology(owner)
-      for (const worktreeHostId of ['runtime:box', 'local', 'runtime:other']) {
-        sendEncryptedWsRequest(session, {
-          id: worktreeHostId,
-          method: 'preflight.installedAgents',
-          executionHost: 'runtime:box',
-          params: { worktreeId, worktreeHostId }
-        })
-        const response = await replies.next(worktreeHostId)
-        if (worktreeHostId === 'runtime:other') {
-          expect(response).toMatchObject({ ok: false, error: { code: 'selector_not_found' } })
-        } else {
-          expect(response).toMatchObject({
-            ok: true,
-            result: {
-              agents: ['codex'],
-              settings: { disabledTuiAgents: ['gemini'], defaultTuiAgent: 'codex' }
-            }
+      for (const method of [
+        'preflight.installedAgents',
+        'preflight.detectAgents',
+        'preflight.refreshAgents'
+      ]) {
+        for (const [executionHost, worktreeHostId] of [
+          ['runtime:box', 'runtime:box'],
+          ['runtime:box', ' runtime:b%6Fx '],
+          [' runtime:b%6Fx ', 'runtime:box'],
+          ['runtime:box', 'local'],
+          ['runtime:box', 'runtime:other']
+        ]) {
+          const id = `${method}:${executionHost}:${worktreeHostId}`
+          sendEncryptedWsRequest(session, {
+            id,
+            method,
+            executionHost,
+            params: { worktreeId, worktreeHostId }
           })
+          const response = await replies.next(id)
+          if (worktreeHostId === 'runtime:other') {
+            expect(response).toMatchObject({ ok: false, error: { code: 'selector_not_found' } })
+          } else {
+            expect(response).toMatchObject({
+              ok: true,
+              result:
+                method === 'preflight.detectAgents'
+                  ? ['codex']
+                  : {
+                      agents: ['codex'],
+                      ...(method === 'preflight.installedAgents'
+                        ? { settings: { disabledTuiAgents: ['gemini'], defaultTuiAgent: 'codex' } }
+                        : {})
+                    }
+            })
+          }
         }
       }
     }
