@@ -5223,13 +5223,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "工作集 (WS) 的总和，共享页可能会出现在多个进程中",
-                "privateBytesDescription": "专用字节的总和：这些进程已提交的内存，无论驻留还是已换出都会计入，这是主机计入提交限制的数值，因此在分页导致上方工作集缩小时它仍会继续上升",
-                "footprintDescription": "内存占用的总和，与“活动监视器”显示的数值相同：每个进程自身占用的内存，包括图形内存。进程之间共享的页不会被重复计算",
-                "rssDescription": "驻留集大小 (RSS) 的总和，共享页或别名映射页可能会出现在多个进程中",
                 "memColumn": "内存",
-                "memorySummary": "Σ 内存",
-                "privateSummary": "Σ 专用"
+                "memorySummary": "Σ 内存"
               }
             },
             "manager": {
@@ -24565,8 +24560,7 @@
     "refresh": "刷新",
     "restartLocal": "重启本地守护进程",
     "killAllLocal": "结束所有本地会话",
-    "killFailed": "无法结束终端。将保留上次观察到的会话",
-    "metricDetails": "指标详情"
+    "killFailed": "无法结束终端。将保留上次观察到的会话"
   },
   "browserExtensions": {
     "permission": {
@@ -26004,7 +25998,6 @@
       "close": "关闭",
       "comesWith": "包含",
       "comesWithHelp": "关于模板计划和设置",
-      "olderHost": "{{host}} 上的 Orca 版本较旧，因此不会添加此模板的技能和计划。请在该主机上更新 Orca 以添加这些内容，或仅使用模板指令创建机器人。",
       "comesWithNote": "计划默认关闭。选好仓库或频道后，在首次聊天中设置自动化和连接器。",
       "keepSkill": "添加 {{skill}} 技能",
       "stateOff": "关闭",
@@ -26025,7 +26018,6 @@
       "closeTooltip": "关闭 · Esc",
       "fromLink": "来自链接",
       "search": "搜索模板",
-      "originTemplateNamed": "来自 {{template}} 模板",
       "aboutTemplate": "关于 {{name}}",
       "allTemplates": "所有模板",
       "filterCategory": "按类别筛选",

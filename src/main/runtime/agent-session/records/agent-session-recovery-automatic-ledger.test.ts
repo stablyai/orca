@@ -118,3 +118,73 @@ it('keeps an offer passed over while a person holds it, should their continuatio
   await capsule.rollbackResume('person', NOW + 3)
   expect(await capsule.beginResume(undefined, 'automatic', NOW + MINUTE, true)).toEqual([])
 })
+
+it('writes a ledger its own reader accepts even with maximum-length offer ids', async () => {
+  const entries = Array.from({ length: 1000 }, (_, index) => ({
+    state: 'pending' as const,
+    marker: marker({
+      sessionId: `${index}`.padEnd(512, 's'),
+      teardownId: 't'.repeat(512),
+      recordedAt: 1
+    })
+  }))
+  const next = automaticLedger.passOverAutomaticOffers(
+    { taken: {}, passed: [], dismissed: [] },
+    entries,
+    10
+  )
+
+  await automaticLedger.writeAutomaticRestartLedger(join(directory, 'capsule.json'), next)
+
+  expect(
+    await automaticLedger.readAutomaticReservationLedger(join(directory, 'capsule.json'))
+  ).not.toBeNull()
+})
+
+it('sheds old continuation records before passed-over offers when the ledger is too large', async () => {
+  const taken = Object.fromEntries(
+    Array.from({ length: 1500 }, (_, index) => [
+      `${index}`.padEnd(512, 's'),
+      [{ at: index * 10 * 60_000, work: `turn:${'w'.repeat(500)}` }]
+    ])
+  )
+  const path = join(directory, 'capsule.json')
+
+  await automaticLedger.writeAutomaticRestartLedger(path, {
+    taken,
+    passed: ['session-a:td:1'],
+    dismissed: []
+  })
+
+  const read = await automaticLedger.readAutomaticReservationLedger(path)
+  expect(read?.passed).toEqual(['session-a:td:1'])
+})
+
+it('keeps a recent continuation when passed-over offers force the ledger to shrink', async () => {
+  const path = join(directory, 'capsule.json')
+  const passed = Array.from({ length: 1000 }, (_, index) => `${index}`.padEnd(512, 's'))
+
+  await automaticLedger.writeAutomaticRestartLedger(path, {
+    taken: { 'session-a': [{ at: 10, work: 'turn:t1' }] },
+    passed,
+    dismissed: []
+  })
+
+  const read = await automaticLedger.readAutomaticReservationLedger(path)
+  expect(read?.taken['session-a']).toEqual([{ at: 10, work: 'turn:t1' }])
+})
+
+it('keeps in-window continuations that fit within the read limit', async () => {
+  const path = join(directory, 'capsule.json')
+  const taken = Object.fromEntries(
+    Array.from({ length: 260 }, (_, index) => [
+      `${index}`.padEnd(512, 's'),
+      [1, 2, 3].map((at) => ({ at, work: `turn:${'w'.repeat(500)}` }))
+    ])
+  )
+
+  await automaticLedger.writeAutomaticRestartLedger(path, { taken, passed: [], dismissed: [] })
+
+  const read = await automaticLedger.readAutomaticReservationLedger(path)
+  expect(Object.values(read?.taken ?? {}).flat()).toHaveLength(780)
+})

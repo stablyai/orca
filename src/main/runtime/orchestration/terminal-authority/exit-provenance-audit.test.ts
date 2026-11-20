@@ -1,8 +1,5 @@
 // STA-4603/STA-4536: distinguish operator close, clean finish and crash records.
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../db/orchestration-db'
 import '../db/contract-constants'
@@ -20,18 +17,16 @@ const PTY_ID = 'pty-exit-provenance'
 const HANDLE = 'term_exit_provenance'
 const WORKTREE_ID = 'repo-audit::/tmp/audit'
 
-const directories: string[] = []
+let openDb: OrchestrationDb | undefined
 
 afterEach(() => {
-  for (const directory of directories.splice(0)) {
-    rmSync(directory, { recursive: true, force: true })
-  }
+  openDb?.close()
+  openDb = undefined
 })
 
 function createDb(): OrchestrationDb {
-  const directory = mkdtempSync(join(tmpdir(), 'exit-provenance-'))
-  directories.push(directory)
-  return new OrchestrationDb(join(directory, 'orchestration.db'))
+  openDb = new OrchestrationDb(':memory:')
+  return openDb
 }
 
 function dispatchOnHandle(

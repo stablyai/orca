@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import '../../../../shared/agent-status/identity/agent-kind'
 import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
@@ -26,6 +26,7 @@ vi.mock('../../../opencode/model-launch/opencode-launch-model-context', () => ({
   probeOpenCodeLaunchModelContext: mocks.modelContext
 }))
 
+import * as typedLineShell from '../../terminal/launch/agent-launch-typed-line-shell'
 import {
   buildWorktreeStartupForAgent,
   buildWorktreeStartupForDraft
@@ -60,6 +61,14 @@ const settings = {
 }
 
 describe('buildWorktreeStartupForAgent prompt carry', () => {
+  // This block pins a local POSIX launch; the host fact decides only whether a paste may follow.
+  beforeEach(() => {
+    vi.spyOn(typedLineShell, 'launchHostProvesAgentInFront').mockReturnValue(true)
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   const build = (onPromptCarry?: (carried: boolean) => void, terminalDefaultShell = '/bin/bash') =>
     buildWorktreeStartupForAgent({
       repo: makeRepo({}),

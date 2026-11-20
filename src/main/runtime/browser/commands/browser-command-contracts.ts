@@ -4,7 +4,6 @@ import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/cli
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
 import type { BrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
-import type { BrowserWindow } from 'electron'
 import type { BrowserBackend } from '../../../browser/browser-backend'
 import type { BrowserSessionTabSelectionOptions } from '../tabs/browser-tab-create-publication'
 import type { ServeBrowserTabs } from '../headless/serve-browser-tabs'
@@ -54,8 +53,8 @@ export type RuntimeBrowserCommandHost = {
   /** The name a paired desktop registered with, for errors that must say which one. */
   getPairedDeviceName?(pairedDeviceId: string): string | null
   getRuntimeBrowserPageRegistry(): RuntimeBrowserPageRegistry
-  getAuthoritativeWindow(): BrowserWindow
-  getAvailableAuthoritativeWindow(): BrowserWindow | null
+  getAuthoritativeWindowId(): number
+  getAvailableAuthoritativeWindowId(): number | null
   /** Headless offscreen backend, or null where unsupported. */
   getOffscreenBrowserBackend(): BrowserBackend | null
   // Update snapshot focus or paired clients snap back to a terminal.

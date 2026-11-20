@@ -299,7 +299,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
         }))
       )
     }
-    const session = this.getAvailableAuthoritativeWindow()
+    const session = this.hasAuthoritativeWindow()
       ? null
       : this.getWorkspaceSessionForWorktree(worktreeId)
     const next =

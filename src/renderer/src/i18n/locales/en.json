@@ -6040,13 +6040,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Summed working set (WS): pages resident in RAM right now. Shared pages can appear in more than one process, and memory Windows has paged out is not counted here.",
-                "privateBytesDescription": "Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.",
-                "footprintDescription": "Summed memory footprint, the same figure Activity Monitor shows: memory each process owns, including graphics memory. Pages shared between processes are not counted twice.",
-                "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process.",
                 "memColumn": "Mem",
-                "memorySummary": "Σ Memory",
-                "privateSummary": "Σ Private"
+                "memorySummary": "Σ Memory"
               }
             },
             "manager": {
@@ -21717,7 +21712,10 @@
         "paused": "Paused goal",
         "blocked": "Goal blocked",
         "limited": "Goal limited",
-        "attachmentsUnsupported": "Remove attachments before setting a goal."
+        "attachmentsUnsupported": "Remove attachments before setting a goal.",
+        "checks_one": "{{count}} check",
+        "checks_other": "{{count}} checks",
+        "last-check": "Last goal check"
       },
       "fileLinks": {
         "notFound": "File not found: {{value0}}",
@@ -22060,7 +22058,8 @@
         "addOrg": "Add org",
         "addWorkspace": "Add workspace",
         "githubAsYou": "It can also work in GitHub as you, through your gh login.",
-        "linearAsYou": "It can also work in Linear as you, through your own Linear sign-in in Orca."
+        "linearAsYou": "It can also work in Linear as you, through your own Linear sign-in in Orca.",
+        "paused": "Paused until {{host}} signs in to Orca."
       },
       "toolAdded": {
         "removed": "Removed",
@@ -23538,6 +23537,20 @@
           "enabledDescription": "Alerts {{host}} sends for its agents and terminals, including pushes to your phones.",
           "sectionDescription": "Alerts {{host}} sends for its agents and terminals."
         }
+      },
+      "orcaAccount": {
+        "server": {
+          "sectionDescription": "The Orca account {{host}} runs as, for its bots’ Slack, GitHub, Linear and webhooks.",
+          "unread": "Can’t read {{host}}’s Orca account. Update or reconnect {{host}}.",
+          "signInThere": "Run `orca auth login` on {{host}} to sign it in."
+        }
+      },
+      "hostScope": {
+        "updateHostToChange": "Update Orca on {{host}} to change this setting there.",
+        "updateFailed": "Couldn't update the setting on {{host}}."
+      },
+      "git": {
+        "branchPrefixHostGitUsername": "Git username on {{host}}"
       }
     },
     "agentChildRow": {
@@ -25902,12 +25915,10 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained.",
-    "metricDetails": "Metric details",
     "owner": {
       "orca": "Orca",
       "agents": "Agents",
       "otherTerminals": "Other terminals",
-      "description": "Orca is the app. Agents are terminals running an agent; Other terminals are the rest you run in Orca. The bar shows each one's share of their combined memory.",
       "privateBytes": "Committed by Orca and terminals"
     }
   },
@@ -27089,7 +27100,22 @@
       "purposePlaceholder": "Who it is and what it does",
       "uploadPasteOrDrop": "or upload, paste or drop your own",
       "pasteHint": "Paste an image with {{shortcut}}",
-      "changePicture": "Change picture"
+      "changePicture": "Change picture",
+      "parts": {
+        "olderHost": "{{host}} needs an Orca update to add skills and schedules",
+        "skillsKept_one": "{{kept}}/{{count}} skill",
+        "skillsKept_other": "{{kept}}/{{count}} skills",
+        "skills_one": "{{count}} skill",
+        "skills_other": "{{count}} skills",
+        "automations_one": "{{count}} automation",
+        "automations_other": "{{count}} automations",
+        "schedules_one": "{{count}} schedule",
+        "schedules_other": "{{count}} schedules",
+        "needsApp": "Needs {{app}}",
+        "needsApps_one": "Needs {{count}} app",
+        "needsApps_other": "Needs {{count}} apps",
+        "setUpInFirstChat": "Set up in first chat"
+      }
     },
     "section": {
       "title": "Bots",
@@ -28516,7 +28542,6 @@
       "close": "Close",
       "comesWith": "Comes with",
       "comesWithHelp": "About template schedules and setup",
-      "olderHost": "{{host}} runs an older Orca, so this template’s skills and schedules won’t be added. Update Orca there to get them, or create the bot with just its instructions.",
       "comesWithNote": "Schedules start turned off. Automations and connectors are set up in its first chat, once you pick the repo or channel.",
       "keepSkill": "Add the {{skill}} skill",
       "stateOff": "Off",
@@ -28537,7 +28562,6 @@
       "closeTooltip": "Close · Esc",
       "fromLink": "From a link",
       "search": "Search templates",
-      "originTemplateNamed": "From the {{template}} template",
       "aboutTemplate": "About {{name}}",
       "allTemplates": "All templates",
       "filterCategory": "Filter by category",

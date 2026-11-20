@@ -17,16 +17,29 @@ export type ChatTurnEnd = {
   news: Extract<ChatNews, { kind: 'turn-ended' }>
   agent: NativeChatAgent
   emit: (event: ConversationEvent) => void
+  /** Whom the turn acts for, once its journal is read. */
+  turnFor: (turn: EndedChatTurn) => Pick<ChatTurnEnd['ended'], 'turnFor'>
   /** The turn's workers are read, so its end never reads done while they run. */
   workersChecked: () => Promise<unknown>
   /** Still the same signed-in account: false after a reset, so the end reaches no one. */
   current: () => boolean
 }
 
-/** An adopted turn's end: how it went, never what it said or the links its work opened. */
-export function endAdoptedTurn(end: ChatTurnEnd, promptsAudience: () => boolean): void {
+/** An adopted turn's end: how it went, never what it said or the links its work opened. A success
+ *  reads only whom it acts for (by index); without that read it proves nothing. `read`: the turn
+ *  already read in full. */
+export function endAdoptedTurn(
+  end: ChatTurnEnd,
+  promptsAudience: () => boolean,
+  read?: EndedChatTurn
+): void {
   const failed = end.news.outcome === 'failure'
-  void (failed ? end.news.readTurn() : Promise.resolve(null)).then(async (turn) => {
+  const reading: Promise<EndedChatTurn> = read
+    ? Promise.resolve(read)
+    : failed
+      ? end.news.readTurn()
+      : (end.news.readAttribution?.() ?? Promise.resolve({}))
+  void reading.then(async (turn) => {
     if (!end.current()) {
       return
     }
@@ -36,8 +49,9 @@ export function endAdoptedTurn(end: ChatTurnEnd, promptsAudience: () => boolean)
     }
     end.emit({
       ...end.ended,
+      ...end.turnFor(turn),
       origin: 'local',
-      ...(failed ? { failure: connectorFailure(turn?.failure, end.agent) } : {})
+      ...(failed ? { failure: connectorFailure(turn.failure, end.agent) } : {})
     })
   })
 }
@@ -56,6 +70,7 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
     const message = read.lastAssistantMessage
     mirrored.release({
       ...end.ended,
+      ...end.turnFor(read),
       origin: 'local',
       mirror: true,
       ...(message && !isQuietBotResult(message) ? { lastAssistantMessage: message } : {}),
@@ -123,7 +138,7 @@ export async function endRepliedTurn(
   await end.workersChecked()
   if (end.current()) {
     // The cloud keeps the thread's failure from whichever of this and the reply lands last.
-    end.emit({ ...end.ended, stateOnly: true, ...failure })
+    end.emit({ ...end.ended, ...end.turnFor(turn), stateOnly: true, ...failure })
   }
   return true
 }
