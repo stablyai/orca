@@ -16,6 +16,7 @@ import {
   JOURNAL_LEGACY_COPY_DUE,
   recordJournalLegacyFailure
 } from './journal-legacy-reconcile-marks'
+import { fakeLease, profile } from '../journal-legacy-retirement.test-fixture'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -52,6 +53,49 @@ function reads(db: Database.Database, counted: (sql: string, key: unknown) => bo
     }
   }
 }
+
+it.each([10, 100])(
+  'does not retry %i recordless claim refusals during retirement',
+  async (count) => {
+    const state = await profile()
+    const { db: source } = openJournalDatabase(state.filename)
+    const claim = source.prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    const record = state.db.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+    for (let index = 0; index < count; index++) {
+      const id = `claim-only-${index}`
+      claim.run(`refused-${index}`, id, 100)
+      record.run(id, '{}')
+    }
+    let writes = 0
+    state.db.function('refused_attempt', () => {
+      writes++
+      return 1
+    })
+    state.db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_attachment_claims
+    WHEN refused_attempt() BEGIN SELECT RAISE(ABORT,'upload unavailable'); END`)
+    reconcileJournalLegacySource(state.root, state.db)
+    source.close()
+    writes = 0
+    let eligibility = 0
+    for (let launch = 0; launch < 3; launch++) {
+      await state
+        .launch('1.0.1', true, fakeLease, {
+          present: () => {},
+          check: async () => {
+            eligibility++
+          }
+        })
+        .run()
+    }
+    expect(eligibility).toBe(1)
+    expect(writes).toBe(0)
+    expect(
+      state.db.prepare('SELECT COUNT(*) AS held FROM agent_session_attachment_claims').get()
+    ).toEqual({
+      held: 0
+    })
+  }
+)
 
 it.each([10, 100])(
   'does not inventory %i unrelated failures for one forced copy',

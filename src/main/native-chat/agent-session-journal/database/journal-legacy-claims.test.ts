@@ -13,6 +13,7 @@ import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-d
 import { openJournalDatabase } from './journal-database'
 import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
 import { publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
+import { assertLegacyStoreReady } from '../journal-legacy-proof-copies'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -22,47 +23,55 @@ afterEach(() => {
   }
 })
 
-it('keeps claims whose original record is gone and isolates a refusal among their owners', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
-  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
-  const { db: source } = openJournalDatabase(journalDatabasePath(root))
-  cleanup.push(() => source.close())
-  const record = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
-  record.run('kept-failed', '{}')
-  record.run('kept-healthy', '{}')
-  for (const id of ['kept-failed', 'kept-healthy']) {
-    publishJournalSessionEpoch(source, { sessionId: id, workspaceId: 'workspace' }, 'original')
-  }
-  const filename = await initializeJournalDomainDatabase(root)
-  const { db } = openJournalDomainDatabase(filename)
-  cleanup.push(() => db.close())
-  for (const id of ['kept-failed', 'kept-healthy']) {
-    db.prepare("UPDATE journal_chat_state SET epoch='converted' WHERE session_id=?").run(id)
-  }
-  source.exec('DELETE FROM agent_session_records')
-  const claim = source.prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
-  claim.run('refused', 'kept-failed', 100)
-  claim.run('claimed', 'kept-healthy', 100)
-  db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_attachment_claims
+it.each([true, false])(
+  'keeps recordless claims and isolates refusals with original history=%s',
+  async (history) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+    const { db: source } = openJournalDatabase(journalDatabasePath(root))
+    cleanup.push(() => source.close())
+    const record = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+    record.run('kept-failed', '{}')
+    record.run('kept-healthy', '{}')
+    for (const id of ['kept-failed', 'kept-healthy']) {
+      publishJournalSessionEpoch(source, { sessionId: id, workspaceId: 'workspace' }, 'original')
+    }
+    const filename = await initializeJournalDomainDatabase(root)
+    const { db } = openJournalDomainDatabase(filename)
+    cleanup.push(() => db.close())
+    for (const id of ['kept-failed', 'kept-healthy']) {
+      db.prepare("UPDATE journal_chat_state SET epoch='converted' WHERE session_id=?").run(id)
+    }
+    source.exec('DELETE FROM agent_session_records')
+    if (!history) {
+      source.exec('DELETE FROM journal_sessions')
+    }
+    const claim = source.prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    claim.run('refused', 'kept-failed', 100)
+    claim.run('claimed', 'kept-healthy', 100)
+    db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_attachment_claims
     WHEN NEW.upload_id='refused' BEGIN SELECT RAISE(ABORT,'upload unavailable'); END`)
-  reconcileJournalLegacySource(root, db)
-  expect(
-    db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
-  ).toEqual([{ upload_id: 'claimed', session_id: 'kept-healthy' }])
-  const failure = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
-  expect(JSON.parse(String(failure.get('journal.legacy-failed:kept-failed')?.value)).error).toBe(
-    'upload unavailable'
-  )
-  expect(failure.get('journal.legacy-failed:kept-healthy')).toBeUndefined()
-  db.exec('DROP TRIGGER refused')
-  reconcileJournalLegacySource(root, db)
-  expect(
-    db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
-  ).toEqual([{ upload_id: 'claimed', session_id: 'kept-healthy' }])
-  source.exec("DELETE FROM agent_session_attachment_claims WHERE session_id='kept-failed'")
-  reconcileJournalLegacySource(root, db)
-  expect(failure.get('journal.legacy-failed:kept-failed')).toBeUndefined()
-})
+    reconcileJournalLegacySource(root, db)
+    expect(
+      db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
+    ).toEqual([{ upload_id: 'claimed', session_id: 'kept-healthy' }])
+    const failure = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+    expect(JSON.parse(String(failure.get('journal.legacy-failed:kept-failed')?.value)).error).toBe(
+      'upload unavailable'
+    )
+    expect(failure.get('journal.legacy-failed:kept-healthy')).toBeUndefined()
+    expect(() => assertLegacyStoreReady(source, db, false)).toThrow('could not be kept')
+    db.exec('DROP TRIGGER refused')
+    reconcileJournalLegacySource(root, db)
+    expect(
+      db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
+    ).toEqual([{ upload_id: 'claimed', session_id: 'kept-healthy' }])
+    source.exec("DELETE FROM agent_session_attachment_claims WHERE session_id='kept-failed'")
+    reconcileJournalLegacySource(root, db)
+    expect(failure.get('journal.legacy-failed:kept-failed')).toBeUndefined()
+    expect(() => assertLegacyStoreReady(source, db, false)).not.toThrow()
+  }
+)
 
 it.each([11, 10])(
   'keeps every enumerated claim after a source record page fails with SQLite code %i',
