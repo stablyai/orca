@@ -300,7 +300,7 @@ export class ChatTurns {
     // Someone in the thread spoke during it: the thread mirrors the chat, so it gets the answer
     // whatever opened the turn.
     if (adopted && !heard) {
-      return endAdoptedTurn(end, this.deps.promptsAudience, adopted)
+      return endAdoptedTurn(end, this.deps.promptsAudience, adopted.kept)
     }
     // A turn begun in Orca never reached the conversation, so its end doesn't either.
     if (shared && !heard) {

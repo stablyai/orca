@@ -26,14 +26,15 @@ export type ChatTurnEnd = {
 }
 
 /** An adopted turn's end: how it went, never what it said or the links its work opened. Whom it
- *  acts for comes from `known` (the opener kept at adoption), so a success never reads the journal. */
+ *  acts for comes from `kept` (the opener kept at adoption), so a success reads the journal only
+ *  when nothing was kept. */
 export function endAdoptedTurn(
   end: ChatTurnEnd,
   promptsAudience: () => boolean,
-  known: Pick<EndedChatTurn, 'opener' | 'stamps'>
+  kept: Pick<EndedChatTurn, 'opener' | 'stamps'> | null
 ): void {
   const failed = end.news.outcome === 'failure'
-  void (failed ? end.news.readTurn() : Promise.resolve(null)).then(async (turn) => {
+  void (failed || !kept ? end.news.readTurn() : Promise.resolve(null)).then(async (turn) => {
     if (!end.current()) {
       return
     }
@@ -43,7 +44,7 @@ export function endAdoptedTurn(
     }
     end.emit({
       ...end.ended,
-      ...end.turnFor(known),
+      ...end.turnFor(kept ?? turn ?? {}),
       origin: 'local',
       ...(failed ? { failure: connectorFailure(turn?.failure, end.agent) } : {})
     })

@@ -314,6 +314,34 @@ describe('questions of a bot turn typed in Orca (10:27Z regression)', () => {
     }
   )
 
+  it('reads whom a turn re-adopted after a restart acts for from its journal, which keeps a steered delivery', async () => {
+    const h = mailStartedBot('bot-chat')
+    const turns = h.create()
+    turns.observe(h.link.paneKey)
+    turns.news({ kind: 'prompt', sessionId: SESSION })
+    h.restart()
+    const recreated = h.create()
+    expect(recreated.hears(h.link)).toBe(true)
+    recreated.adopt(h.link.paneKey)
+    const stamp = {
+      account: 'a',
+      conversation: { source: 'slack', externalId: 'T1:D7:U9' },
+      deliveryId: 'd1'
+    }
+    recreated.news({
+      kind: 'turn-ended',
+      sessionId: SESSION,
+      outcome: 'success',
+      at: 600,
+      readTurn: async () => ({ ...(await h.end('Done.')()), stamps: [stamp] })
+    })
+    await vi.waitFor(() =>
+      expect(h.events.at(-1)).toMatchObject({ kind: 'turn-ended', origin: 'local' })
+    )
+    const ended = h.events.at(-1)
+    expect(ended?.kind === 'turn-ended' ? ended.turnFor : null).toBeUndefined()
+  })
+
   it('keeps a relinked conversation’s prompt restricted even when its turn has a delivery stamp', () => {
     const h = mailStartedBot('bot-chat')
     h.relink()
