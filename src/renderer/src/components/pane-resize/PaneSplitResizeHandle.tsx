@@ -1,32 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/drag/webview-drag-passthrough'
-import { DIVIDER_HIT_PX } from '@/lib/divider-hit-area'
 import { getDraggedSplitRatio, measureSplitRatio, readSplitRatio } from './pane-split-drag-ratio'
-
-type WideHandleStyle = React.CSSProperties & Record<`--${string}`, string>
-// Why: the line reaches the center of a perpendicular parent gap so split T-junctions connect.
-const LINE_EXTENSION = `${DIVIDER_HIT_PX / 2}px`
-const WIDE_VERTICAL_STYLE: WideHandleStyle = {
-  width: DIVIDER_HIT_PX,
-  '--divider-extension': LINE_EXTENSION
-}
-const WIDE_HORIZONTAL_STYLE: WideHandleStyle = {
-  height: DIVIDER_HIT_PX,
-  '--divider-extension': LINE_EXTENSION
-}
 
 export function ResizeHandle({
   direction,
-  wide = false,
+  thin = false,
   tabBand = false,
   onResizeStart,
   onResizeEnd,
   onRatioChange
 }: {
   direction: 'horizontal' | 'vertical'
-  /** Use the shared in-flow grab size instead of the compact 6px gutter (DevTools docks keep 6px). */
-  wide?: boolean
-  /** The gap's top edge sits beside attached tab strips, so it continues their band. */
+  /** A 1px line with an invisible wider grab area instead of the compact 6px gutter (DevTools docks keep 6px). */
+  thin?: boolean
+  /** Attached tab strips run along the seam's top, so the grab area stays off their row. */
   tabBand?: boolean
   onResizeStart: () => void
   onResizeEnd?: () => void
@@ -194,8 +181,7 @@ export function ResizeHandle({
     <div
       className={`tab-group-split-resize-handle ${
         isHorizontal ? 'is-vertical' : 'is-horizontal'
-      }${wide ? ' is-wide' : ''}${tabBand ? ' has-tab-band' : ''}${dragging ? ' is-dragging' : ''}`}
-      style={wide ? (isHorizontal ? WIDE_VERTICAL_STYLE : WIDE_HORIZONTAL_STYLE) : undefined}
+      }${thin ? ' is-thin' : ''}${tabBand ? ' has-tab-band' : ''}${dragging ? ' is-dragging' : ''}`}
       onPointerDown={onPointerDown}
     />
   )
