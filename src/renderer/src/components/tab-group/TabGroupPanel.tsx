@@ -262,6 +262,7 @@ export default function TabGroupPanel({
             } ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} border-border`
           : ''
       }`}
+      data-unfocused-split={hasSplitGroups && !isFocused ? '' : undefined}
       // Why not over a window backdrop (material or theme image): group opacity would let it bleed through opaque chrome.
       style={
         hasSplitGroups && !isFocused && !backdropActive

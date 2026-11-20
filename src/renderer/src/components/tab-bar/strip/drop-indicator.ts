@@ -15,9 +15,10 @@ export function getDropIndicatorClasses(dropIndicator: DropIndicator): string {
 export const ACTIVE_TAB_INDICATOR_CLASSES =
   'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-tab-active-indicator z-20 group-data-[single-tab]/tab-strip:hidden'
 
+// Why: in an unfocused split group the selected tab's label recedes, so the focused group reads at a glance.
 export function getTabRootStateClasses(isActive: boolean): string {
   return isActive
-    ? 'bg-tab-active text-tab-active-foreground'
+    ? 'bg-tab-active text-tab-active-foreground group-data-[unfocused-split]/tab-group:text-tab-inactive-foreground'
     : 'bg-tab-inactive text-tab-inactive-foreground hover:text-tab-active-foreground'
 }
 
