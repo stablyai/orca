@@ -1,4 +1,5 @@
 import type { ProviderProcessCloseResult } from '../../../provider-process/provider-process-close'
+import type { DescendantTreeVerdict } from '../../../pty/process-retirement/pty-descendant-exit-verification'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -27,12 +28,15 @@ export type CodexSharedLeaseHost = {
   noteTurnStarted: (threadId: string, turnId: string) => void
   /** True only once every turn this chat ran is proven over. */
   release: (lease: CodexSharedServerLease) => Promise<boolean>
+  /** After the server exited: whether its commands were proven gone, once reaped. */
+  workloadVerdict: () => DescendantTreeVerdict
+  afterReap: () => Promise<void>
 }
 
 /** One chat's view of a shared app-server: its threads' frames, its own backpressure and close. */
 export class CodexSharedServerLease implements CodexAppServerConnection {
   readonly threads = new Set<string>()
-  closeResult: ProviderProcessCloseResult | null = null
+  private workload: (() => DescendantTreeVerdict) | null = null
   private state: 'open' | 'closing' | 'ended' = 'open'
   private closing: Promise<boolean> | null = null
   private closeAnnounced = false
@@ -59,6 +63,11 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
 
   get open(): boolean {
     return this.state === 'open'
+  }
+
+  /** The lease's end, judged like a process: the chat's commands are its workload tree. */
+  get closeResult(): ProviderProcessCloseResult | null {
+    return this.workload ? { root: 'exited', tree: this.workload() } : null
   }
 
   /** The lease ended without proof that its turns stopped (Stop reports it, as for a live tree). */
@@ -194,7 +203,8 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
 
   close(): Promise<boolean> {
     if (this.state === 'ended') {
-      return Promise.resolve(true)
+      // A lease its server's exit ended reports once that server's tree is judged.
+      return this.host.afterReap().then(() => true)
     }
     if (this.closing) {
       return this.closing
@@ -206,7 +216,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       .release(this)
       .catch(() => false)
       .then((proven) => {
-        this.finish(error, true, proven)
+        this.finish(error, true, proven ? 'exited' : 'live')
         return true
       })
     return this.closing
@@ -232,7 +242,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     if (this.state === 'closing') {
       // A dead server proves its turns ended; anything else leaves the close's own proof pending.
       if (!releaseOnServer) {
-        this.finish(error, true, true)
+        this.finish(error, true, () => this.host.workloadVerdict())
       }
       return
     }
@@ -240,7 +250,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     this.announceClose(error)
     this.paused = true
     if (!releaseOnServer) {
-      this.finish(error, false, true)
+      this.finish(error, false, () => this.host.workloadVerdict())
       return
     }
     // The chat hears its exit only after its turns are stopped, so a recovery can't race them; a
@@ -249,12 +259,16 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       .release(this)
       .catch(() => false)
       .then((proven) => {
-        this.finish(error, false, proven)
+        this.finish(error, false, proven ? 'exited' : 'live')
         return true
       })
   }
 
-  private finish(error: Error, expected: boolean, proven: boolean): void {
+  private finish(
+    error: Error,
+    expected: boolean,
+    workload: DescendantTreeVerdict | (() => DescendantTreeVerdict)
+  ): void {
     if (this.state === 'ended') {
       return
     }
@@ -262,7 +276,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     this.queue = []
     this.queueHead = 0
     this.queuedBytes = 0
-    this.closeResult = { root: 'exited', tree: proven ? 'exited' : 'live' }
+    this.workload = typeof workload === 'function' ? workload : () => workload
     this.handlers.onExit?.(error, { expected })
   }
 }

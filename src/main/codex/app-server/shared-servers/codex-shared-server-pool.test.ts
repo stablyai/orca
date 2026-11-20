@@ -19,7 +19,11 @@ type FakeServer = {
 }
 
 /** interrupt: 'ends' completes the turn at once, 'later' after 3 s, 'ignored' never. */
-function fakeCodex(interrupt: 'ends' | 'later' | 'ignored' = 'ends') {
+function fakeCodex(
+  interrupt: 'ends' | 'later' | 'ignored' = 'ends',
+  /** What closing the process proves about its commands. */
+  closeTree: 'exited' | 'unverifiable' = 'exited'
+) {
   const servers: FakeServer[] = []
   let nextThread = 1
   const connect = async (
@@ -85,7 +89,7 @@ function fakeCodex(interrupt: 'ends' | 'later' | 'ignored' = 'ends') {
       respondWithError: () => {},
       close: async () => {
         closed = true
-        closeResult = { root: 'exited', tree: 'exited' }
+        closeResult = { root: 'exited', tree: closeTree }
         handlers.onExit?.(new Error('closed'), { expected: true })
         return true
       }
@@ -327,6 +331,22 @@ describe('shared Codex app-servers', () => {
     await connA.close()
     expect(connA.closeResult).toEqual({ root: 'exited', tree: 'exited' })
     expect(servers[0]!.requests.map((r) => r.method)).not.toContain('turn/interrupt')
+
+    const unproven = fakeCodex('ends', 'unverifiable')
+    const connB = await unproven.pool.open(launch(), chat().handlers, {
+      sessionId: 'b',
+      skillRoots: []
+    })
+    const sibling = await unproven.pool.open(launch(), chat().handlers, {
+      sessionId: 'c',
+      skillRoots: []
+    })
+    unproven.servers[0]!.closeTransport()
+    await connB.close()
+    // The server's root exit is no proof its commands are gone, for this chat or its neighbour.
+    expect(connB.processTreeUnproven).toBe(true)
+    await sibling.close()
+    expect(sibling.processTreeUnproven).toBe(true)
   })
 
   it("keeps a server up for another chat's unanswered send when a stuck turn is stopped", async () => {

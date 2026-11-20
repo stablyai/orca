@@ -10,6 +10,7 @@ import {
   codexSubagentParentThreadId,
   type CodexSharedServerFrame
 } from './codex-shared-server-frames'
+import type { DescendantTreeVerdict } from '../../../pty/process-retirement/pty-descendant-exit-verification'
 import type { CodexSharedServerSpec } from './codex-shared-server-key'
 import type { CodexSharedServerToolUsage } from './codex-shared-server-memory-ceiling'
 import type { CodexSharedLeaseHost, CodexSharedServerLease } from './codex-shared-server-lease'
@@ -35,6 +36,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   private physical: CodexAppServerConnection | null = null
   private hasExited = false
   private readonly owners = new Map<string, CodexSharedServerLease>()
+  private reaping: Promise<void> | null = null
   private readonly releases = new WeakMap<CodexSharedServerLease, Promise<boolean>>()
   private readonly turns = new CodexSharedServerTurns()
   private readonly retired = new Set<string>()
@@ -147,7 +149,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     const physical = this.physical
     if (physical && this.closed && !this.hasExited) {
       // A broken transport proves nothing about the process or its turns; only its exit does.
-      proven = await this.stop()
+      await this.stop()
+      await this.afterReap()
+      proven = this.workloadVerdict() === 'exited'
     } else if (physical && !this.closed) {
       const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
       await withDeadline(
@@ -199,6 +203,19 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     await this.physical.close()
     const result = this.physical.closeResult
     return result?.root === 'exited' && result.tree === 'exited'
+  }
+
+  /** Whether the process's descendants (the chats' commands) were proven gone when it closed. */
+  workloadVerdict(): DescendantTreeVerdict {
+    if (!this.physical) {
+      return 'exited'
+    }
+    return this.physical.closeResult?.tree ?? 'unverifiable'
+  }
+
+  /** Settles once an exited server's process tree has been reaped and judged. */
+  afterReap(): Promise<void> {
+    return this.reaping ?? Promise.resolve()
   }
 
   /** Stops the process (only the pool calls this, for a server with no chats left); resolves
@@ -291,6 +308,14 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.draining = true
     this.unrouted.clear()
     this.turns.endAll()
+    // Root exit says nothing of the commands it ran; reap and judge the tree for every chat.
+    const physical = this.physical
+    this.reaping = physical
+      ? physical.close().then(
+          () => {},
+          () => {}
+        )
+      : Promise.resolve()
     // Every chat on it sees its own unexpected exit and reopens its thread on its next send.
     for (const lease of this.leases) {
       lease.fail(error, false)
