@@ -383,6 +383,68 @@ describe('bot Home tab placement', () => {
     expect(store.getState().getTab('tab-home')?.entityId).toBe('home')
   })
 
+  it('keeps focus on Home when a focused duplicate in a split closes and Home moves to the top-left group', () => {
+    const tab = (id: string, entityId: string, groupId: string, createdAt: number): Tab => ({
+      id,
+      entityId,
+      executionHostId: 'local',
+      groupId,
+      worktreeId: WT,
+      contentType: 'agent-session',
+      agentSessionAgent: 'claude',
+      label: id,
+      customLabel: null,
+      color: null,
+      sortOrder: createdAt,
+      createdAt
+    })
+    store.getState().hydrateTabsSession(
+      {
+        activeRepoId: null,
+        activeWorktreeId: WT,
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        unifiedTabs: {
+          [WT]: [
+            tab('tab-side-1', 'side-1', 'left', 0),
+            tab('tab-side-2', 'side-2', 'right', 0),
+            tab('tab-home', 'home', 'right', 1),
+            tab('dup-home', 'home', 'right', 2)
+          ]
+        },
+        tabGroups: {
+          [WT]: [
+            { id: 'left', worktreeId: WT, activeTabId: 'tab-side-1', tabOrder: ['tab-side-1'] },
+            {
+              id: 'right',
+              worktreeId: WT,
+              activeTabId: 'dup-home',
+              tabOrder: ['tab-side-2', 'tab-home', 'dup-home']
+            }
+          ]
+        },
+        tabGroupLayouts: {
+          [WT]: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'left' },
+            second: { type: 'leaf', groupId: 'right' }
+          }
+        },
+        activeGroupIdByWorktree: { [WT]: 'right' }
+      },
+      { additionalValidWorkspaceKeys: [WT] }
+    )
+    expect(strips()).toEqual([['tab-home', 'tab-side-1'], ['tab-side-2']])
+    const state = store.getState()
+    const activeGroupId = state.activeGroupIdByWorktree[WT]
+    expect(activeGroupId).toBe(groupOf('tab-home'))
+    expect(
+      state.groupsByWorktree[WT]?.find((group) => group.id === activeGroupId)?.activeTabId
+    ).toBe('tab-home')
+  })
+
   it('keeps Home pinned across same-session inventory and transfers the pin on rotation', () => {
     open('home')
     const snapshot = makeSnapshot(

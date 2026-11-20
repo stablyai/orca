@@ -65,6 +65,8 @@ function placeBotHomeTabsOnce(store: StoreApi<AppState>): void {
     if (!bot.chatSessionId) {
       continue
     }
+    // A focused duplicate hands focus to Home only after Home's final move, which keeps the destination's selection.
+    let focusHomeId: string | null = null
     if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {
       const state = store.getState()
       if (!state.workspaceSessionReady) {
@@ -82,14 +84,14 @@ function placeBotHomeTabsOnce(store: StoreApi<AppState>): void {
           state.groupsByWorktree[worktreeId]?.some(
             (group) => group.id === duplicate.groupId && group.activeTabId === duplicate.id
           )
+        if (focusedDuplicate) {
+          focusHomeId = home.id
+        }
         store.getState().closeUnifiedTab(duplicate.id, {
           preserveAgentSession: true,
           preserveWorktreeSelection: true,
           recordInteraction: false
         })
-        if (focusedDuplicate) {
-          store.getState().activateTab(home.id, { worktreeId, recordFocus: false })
-        }
       }
       for (const tab of tabs) {
         if (tab.isPinned && isBotSideChatTab(tab, bot)) {
@@ -107,6 +109,9 @@ function placeBotHomeTabsOnce(store: StoreApi<AppState>): void {
         .moveUnifiedTabToGroup(move.tabId, move.groupId, { index: 0, recordInteraction: false })
     } else if (move) {
       store.getState().reorderUnifiedTabs(move.groupId, move.tabOrder, { recordInteraction: false })
+    }
+    if (focusHomeId) {
+      store.getState().activateTab(focusHomeId, { worktreeId, recordFocus: false })
     }
   }
 }
