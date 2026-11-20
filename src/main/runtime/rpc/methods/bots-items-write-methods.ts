@@ -12,6 +12,8 @@ import { botItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
 import { linksOutsideLinkedChains } from '../../../bots/bot-item-dispatch-facts'
 import { defineMethod } from '../core'
 import { addItem } from './bots-items-add'
+import { admitBotItemFiles } from './bots-items-bot-files'
+import { BotItemError } from '../../../bots/bot-item-error'
 import { commentAsMaker } from './bots-items-maker-comment'
 import { parseItemLink, resolveItem, writeResult, writerOf } from './bots-items-write-support'
 
@@ -30,8 +32,25 @@ const SET = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const { title, description, doneMeans, status, note, reason, comment, ask } = params
-    const changes = { title, description, doneMeans, status, note, reason, comment, ask }
+    const { title, description, doneMeans, status, note, reason } = params
+    let { comment, ask } = params
+    if (params.files?.length && !comment?.trim() && !ask) {
+      throw new BotItemError('invalid_argument', '--file goes with --comment. Nothing was posted.')
+    }
+    // With an ask, its context is the words the files go under; the host spells the text out of it.
+    const attached = await admitBotItemFiles(
+      context,
+      item,
+      ask?.context ?? comment ?? '',
+      params.files
+    )
+    if (ask) {
+      ask = { ...ask, ...(attached.text ? { context: attached.text } : {}) }
+    } else if (comment !== undefined) {
+      comment = attached.text
+    }
+    const images = attached.images.length > 0 ? attached.images : undefined
+    const changes = { title, description, doneMeans, status, note, reason, comment, ask, images }
     const defined = Object.fromEntries(
       Object.entries(changes).filter(([, value]) => value !== undefined)
     )
@@ -52,10 +71,11 @@ const COMMENT = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
+    const { text, images } = await admitBotItemFiles(context, item, params.text, params.files)
     const outcome =
       item.ownerBotId !== writer.bot.id && item.madeBy?.botId === writer.bot.id
-        ? await commentAsMaker(context, writer, item, params.text)
-        : await store.comment(item.uid, params.text, writer.actor)
+        ? await commentAsMaker(context, writer, item, text, images)
+        : await store.comment(item.uid, text, writer.actor, images)
     return writeResult(context.runtime, outcome, writer)
   }
 })

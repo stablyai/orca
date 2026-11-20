@@ -138,9 +138,10 @@ export class BotItemsEdits extends BotItemsReads {
         : undefined
     const edited = Object.keys(fields).length > 0
     const commentText = changes.comment?.trim() ? changes.comment : undefined
+    const images = changes.images?.length ? { images: changes.images } : {}
     const commentData =
       commentText !== undefined || changes.ask
-        ? botItemCommentData(commentText, changes.ask, status === 'needs_you')
+        ? { ...botItemCommentData(commentText, changes.ask, status === 'needs_you'), ...images }
         : undefined
     if (!edited && status === undefined && commentData === undefined) {
       return { uid, eventId: null, unchanged: true }
