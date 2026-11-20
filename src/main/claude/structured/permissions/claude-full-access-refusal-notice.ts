@@ -1,4 +1,4 @@
-// The once-per-mode warning a Full access chat gets when Claude runs it in another mode.
+// The warning a Full access chat gets, as a new row, when Claude runs it in another mode.
 
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
