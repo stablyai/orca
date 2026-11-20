@@ -69,7 +69,11 @@ export function renderResourceUsagePopoverBody(
   },
   t: Translate = translate
 ): React.JSX.Element {
-  const sharedAgentUsage = resourceSnapshot ? sharedAgentProcessUsage(resourceSnapshot) : null
+  const sharedAgentUsage = resourceSnapshot
+    ? sharedAgentProcessUsage(resourceSnapshot, unifiedRepos)
+    : null
+  const listsNothing =
+    unifiedRepos.length === 0 && sharedAgentUsage === null && runtimeHostNotices.length === 0
   return (
     <div
       ref={setPopoverBodyNode}
@@ -148,7 +152,7 @@ export function renderResourceUsagePopoverBody(
         ))}
         {sharedAgentUsage && <SharedAgentProcessesRow usage={sharedAgentUsage} />}
 
-        {unifiedRepos.length === 0 && resourceSnapshot && (
+        {listsNothing && resourceSnapshot && (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             {t(
               'auto.components.status.bar.ResourceUsageStatusSegment.27a74f91f0',

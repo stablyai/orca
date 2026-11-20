@@ -78,9 +78,11 @@ export function getRuntimeHostResourceNotices(
         {
           environmentId,
           hostLabel: label,
-          reason: t('resourceManager.remoteHost.unreachable', "Couldn't reach {{host}}", {
-            host: label
-          })
+          reason: t(
+            'auto.components.status.bar.ResourceUsageStatusSegment.8a0472ab54',
+            "Couldn't reach {{value0}}; its resources are unknown.",
+            { value0: label }
+          )
         }
       ]
     }
