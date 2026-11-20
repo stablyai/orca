@@ -1,6 +1,6 @@
 // Agent Platform needs a Google Cloud project and location; fill them from the host's gcloud setup.
 
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -87,5 +87,16 @@ export async function agentPlatformEnvironment(
   env: Readonly<Record<string, string>>
 ): Promise<Record<string, string>> {
   const { project, location } = await resolveAgentPlatformProject(saved, env)
-  return { ...(project ? { GOOGLE_CLOUD_PROJECT: project } : {}), GOOGLE_CLOUD_LOCATION: location }
+  // Google's Go client finds ADC under HOME, not CLOUDSDK_CONFIG, so name the file Orca read.
+  const adcFile = env.GOOGLE_APPLICATION_CREDENTIALS
+    ? null
+    : env.CLOUDSDK_CONFIG
+      ? join(env.CLOUDSDK_CONFIG, 'application_default_credentials.json')
+      : null
+  const adcExists = adcFile ? (await stat(adcFile).catch(() => null))?.isFile() === true : false
+  return {
+    ...(project ? { GOOGLE_CLOUD_PROJECT: project } : {}),
+    GOOGLE_CLOUD_LOCATION: location,
+    ...(adcFile && adcExists ? { GOOGLE_APPLICATION_CREDENTIALS: adcFile } : {})
+  }
 }

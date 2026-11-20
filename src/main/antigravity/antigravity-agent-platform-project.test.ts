@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { resolveAgentPlatformProject } from './antigravity-agent-platform-project'
+import {
+  agentPlatformEnvironment,
+  resolveAgentPlatformProject
+} from './antigravity-agent-platform-project'
 
 const dirs: string[] = []
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })))
@@ -66,5 +69,23 @@ describe('resolveAgentPlatformProject', () => {
     await expect(resolveAgentPlatformProject({}, { CLOUDSDK_CONFIG: gcloud({}) })).resolves.toEqual(
       { project: null, location: 'global' }
     )
+  })
+})
+
+describe('agentPlatformEnvironment', () => {
+  it("points the server at ADC under CLOUDSDK_CONFIG, which its client doesn't read", async () => {
+    const config = gcloud({
+      'application_default_credentials.json': JSON.stringify({ quota_project_id: 'from-adc' })
+    })
+    await expect(agentPlatformEnvironment({}, { CLOUDSDK_CONFIG: config })).resolves.toEqual({
+      GOOGLE_CLOUD_PROJECT: 'from-adc',
+      GOOGLE_CLOUD_LOCATION: 'global',
+      GOOGLE_APPLICATION_CREDENTIALS: join(config, 'application_default_credentials.json')
+    })
+    const env = { CLOUDSDK_CONFIG: config, GOOGLE_APPLICATION_CREDENTIALS: '/keys/sa.json' }
+    await expect(agentPlatformEnvironment({ gcpProject: 'p' }, env)).resolves.toEqual({
+      GOOGLE_CLOUD_PROJECT: 'p',
+      GOOGLE_CLOUD_LOCATION: 'global'
+    })
   })
 })
