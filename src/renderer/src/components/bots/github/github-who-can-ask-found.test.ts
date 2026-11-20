@@ -25,7 +25,7 @@ describe('the GitHub picker’s reading of a search', () => {
       members: [
         { id: '2', name: 'brennanb2025', handle: 'Brennan Benson', group: 'scoped' },
         { id: '9', name: 'brennan', group: 'outside' },
-        { id: '8', name: 'jordan' }
+        { id: '8', name: 'jordan', tag: 'Repos not checked' }
       ],
       complete: true
     })
@@ -45,9 +45,8 @@ describe('the GitHub picker’s reading of a search', () => {
       t
     )
     expect(found.note).toBe(
-      'Couldn’t search your repos from this computer, so only exact GitHub usernames were checked. ' +
-        'Couldn’t check exact GitHub usernames just now. ' +
-        'Your repos were searched as @someone-else, the GitHub CLI account on this computer.'
+      'Repos unavailable here. Exact usernames only. Couldn’t check GitHub usernames. ' +
+        'Repos searched as @someone-else on this computer.'
     )
     expect(
       gitHubWhoCanAskFound(
@@ -55,6 +54,6 @@ describe('the GitHub picker’s reading of a search', () => {
         'owner',
         t
       ).note
-    ).toBe('Not every repo or person was searched. Type more of the name to narrow it down.')
+    ).toBe('Partial results. Keep typing to narrow.')
   })
 })

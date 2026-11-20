@@ -32,7 +32,7 @@ function service(
     outsideHeading: 'Elsewhere on GitHub',
     outsideTag: 'Not in your repos',
     noMatch: (query) => ({ title: `No one found for ${query}`, detail: '' }),
-    idleHint: { title: 'Type a name or GitHub username', detail: '' },
+    idleHint: { title: 'Find people', detail: '' },
     ownerId: null,
     ownerName: null,
     kind: 'github',
@@ -58,7 +58,7 @@ describe('Who can ask › Add on GitHub', () => {
     )
     expect(await screen.findByText('People in your repositories')).toBeTruthy()
     expect(screen.getByText('Brennan Benson')).toBeTruthy()
-    expect(screen.queryByText('Type a name or GitHub username')).toBeNull()
+    expect(screen.queryByText('Find people')).toBeNull()
   })
 
   it('keeps a stranger with that exact username apart from teammates', async () => {
@@ -109,8 +109,7 @@ describe('Who can ask › Add on GitHub', () => {
   })
 
   it('says what the search could not cover instead of claiming no one exists', async () => {
-    const note =
-      'Couldn’t search your repos from this computer, so only exact GitHub usernames were checked.'
+    const note = 'Repos unavailable here. Exact usernames only.'
     render(
       <BotWhoCanAskPicker
         bot={bot}
@@ -124,5 +123,18 @@ describe('Who can ask › Add on GitHub', () => {
     })
     expect(await screen.findByText('No one found for neil par')).toBeTruthy()
     expect(screen.getByText(note)).toBeTruthy()
+  })
+
+  it('does not say no one was found while a ticked person matches the search', async () => {
+    const stranger = { id: '9', name: 'jordan', tag: 'Repos not checked' }
+    const found = (query: string) => (query === 'jordan' ? [stranger] : [])
+    render(<BotWhoCanAskPicker bot={bot} service={service(found)} owner="You" onPicked={vi.fn()} />)
+    const search = screen.getByPlaceholderText('Search by name or username')
+    fireEvent.change(search, { target: { value: 'jordan' } })
+    fireEvent.click(await screen.findByText('jordan'))
+    expect(screen.getByText('Repos not checked')).toBeTruthy()
+    fireEvent.change(search, { target: { value: 'jor' } })
+    expect(await screen.findByText('Selected')).toBeTruthy()
+    expect(screen.queryByText(/No one found/)).toBeNull()
   })
 })

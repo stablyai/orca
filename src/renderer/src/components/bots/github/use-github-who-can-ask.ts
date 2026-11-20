@@ -72,17 +72,11 @@ export function useGitHubWhoCanAsk(
         : t('bots.github.whoCanAsk.notInRepos', 'Not in your repos'),
       noMatch: (query) => ({
         title: t('bots.github.whoCanAsk.noPerson', 'No one found for “{{query}}”', { query }),
-        detail: t(
-          'bots.github.whoCanAsk.checkedWhere',
-          'Checked your repos and exact GitHub usernames.'
-        )
+        detail: t('bots.github.whoCanAsk.checkedWhere', 'Searched your repos and exact usernames.')
       }),
       idleHint: {
-        title: t('bots.github.whoCanAsk.typeName', 'Type a name or GitHub username'),
-        detail: t(
-          'bots.github.whoCanAsk.findHow',
-          'Find teammates by name, or anyone by exact GitHub username.'
-        )
+        title: t('bots.github.whoCanAsk.findPeople', 'Find people'),
+        detail: t('bots.github.whoCanAsk.findHow', 'Teammates by name, others by exact username.')
       },
       ownerId,
       ownerName,
