@@ -134,13 +134,17 @@ describe('BotSoulEditor', () => {
   })
 
   it('opens non-empty SOUL.md in Read preview and switches to Edit on click', () => {
+    const content = '# Reviewer\nKeep answers concise.\n## Rules\n- Be brief.'
     const { getByRole, getByText, queryByLabelText, getByLabelText } = render(
-      <BotSoulEditor file={file('# Reviewer\n\nKeep answers concise.')} label="Soul" />
+      <BotSoulEditor file={file(content)} label="Soul" />
     )
-    expect(getByText('Reviewer')).toBeTruthy()
+    expect(getByRole('heading', { level: 1, name: 'Reviewer' })).toBeTruthy()
+    expect(getByText('Keep answers concise.')).toBeTruthy()
+    expect(getByRole('heading', { level: 2, name: 'Rules' })).toBeTruthy()
+    expect(getByText('Be brief.')).toBeTruthy()
     expect(queryByLabelText('Soul')).toBeNull()
     fireEvent.click(getByRole('tab', { name: 'Edit' }))
-    expect(getByLabelText('Soul')).toHaveProperty('value', '# Reviewer\n\nKeep answers concise.')
+    expect(getByLabelText('Soul')).toHaveProperty('value', content)
   })
 
   describe('leaving its settings page during a conflict', () => {

@@ -103,9 +103,10 @@ export function BotMemoryList({
     if (saving || quickAdd.trim() === '') {
       return
     }
-    const text = quickAdd.trim()
+    const submitted = quickAdd
+    const text = submitted.trim()
     if (await run(() => edits.add(text))) {
-      setQuickAdd('')
+      setQuickAdd((current) => (current === submitted ? '' : current))
     }
   }
 
@@ -119,21 +120,24 @@ export function BotMemoryList({
     }
   }
 
-  // Closing (Back, Escape, another bot) saves an open draft, as Soul's editor does.
+  // Closing (Back, Escape, another bot) saves open drafts, as Soul's editor does.
   const unsavedEdit = editing !== null && !saving && draft.trim() !== '' && draft !== editing.text
   const unsavedQuickAdd = !saving && quickAdd.trim() !== ''
   useSaveOnClose(
-    unsavedEdit
-      ? () =>
-          void (edited ? edits.reword(edited.text, draft) : edits.add(draft)).catch(
-            (error: unknown) => toast.error(botErrorMessage(error))
-          )
-      : unsavedQuickAdd
-        ? () =>
+    unsavedEdit || unsavedQuickAdd
+      ? () => {
+          if (unsavedEdit) {
+            void (edited ? edits.reword(edited.text, draft) : edits.add(draft)).catch(
+              (error: unknown) => toast.error(botErrorMessage(error))
+            )
+          }
+          if (unsavedQuickAdd) {
             void edits
               .add(quickAdd.trim())
               .catch((error: unknown) => toast.error(botErrorMessage(error)))
-        : null
+          }
+        }
+      : null
   )
 
   const editor = (
@@ -192,6 +196,7 @@ export function BotMemoryList({
               void submitQuickAdd()
             } else if (event.key === 'Escape' && !event.nativeEvent.isComposing) {
               if (quickAdd !== '') {
+                event.preventDefault()
                 event.stopPropagation()
                 setQuickAdd('')
               }
