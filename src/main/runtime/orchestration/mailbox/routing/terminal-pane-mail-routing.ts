@@ -152,9 +152,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
       if (agent === undefined || !(await this.isTerminalRunningAgent(handle, presence))) {
         return false
       }
-      const previous = trackedPty.foregroundAgent
       trackedPty.foregroundAgent = agent
-      this.releaseCommandCodeComposer(ptyId, previous)
       return true
     } catch {
       return false

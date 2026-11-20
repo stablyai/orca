@@ -1,10 +1,6 @@
 import type { RuntimeTerminalAgentStatusEvent } from './terminal-agent-status-events'
 import { OrcaRuntimeWithApplyTrackedPtyTitle } from './terminal-title-observation'
-import type {
-  CommandCodeComposerState,
-  RuntimePtyTitleTrackerEntry
-} from '../records/runtime-terminal-state-records'
-import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import type { RuntimePtyTitleTrackerEntry } from '../records/runtime-terminal-state-records'
 import { createCommandCodeOutputStatusDetector } from '../../../../shared/agent-status/output/command-code-output-status'
 
 type TerminalAgentStatusTarget = Pick<
@@ -68,7 +64,6 @@ export abstract class RuntimeCommandCodeCompletion extends OrcaRuntimeWithApplyT
         if (!pty?.connected) {
           return
         }
-        this.setCommandCodeComposer(ptyId, 'idle')
         for (const target of this.resolveTerminalAgentStatusTargets(ptyId)) {
           const row = this.getAgentStatusSnapshotForPaneFn?.(target.paneKey)[0]
           if (
@@ -102,7 +97,6 @@ export abstract class RuntimeCommandCodeCompletion extends OrcaRuntimeWithApplyT
       startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
       onWorking: (prompt) => {
         this.cancelCommandCodeDone(ptyId)
-        this.setCommandCodeComposer(ptyId, null)
         for (const target of this.resolveTerminalAgentStatusTargets(ptyId)) {
           const row = this.getAgentStatusSnapshotForPaneFn?.(target.paneKey)[0]
           const foreground = this.ptysById.get(ptyId)?.foregroundAgent
@@ -144,27 +138,6 @@ export abstract class RuntimeCommandCodeCompletion extends OrcaRuntimeWithApplyT
         this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
       }
     })
-  }
-
-  /** After an exit only a new turn re-arms idle: the exit's chunk can repaint the composer. */
-  protected setCommandCodeComposer(ptyId: string, state: CommandCodeComposerState): void {
-    const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
-    const current = entry?.commandCodeComposer
-    if (!entry || current === state || (current === 'exited' && state === 'idle')) {
-      return
-    }
-    const flips = (current === 'idle') !== (state === 'idle')
-    entry.commandCodeComposer = state
-    if (flips) {
-      this.reclassifyTrackedPtyTitle(ptyId, entry)
-    }
-  }
-
-  /** A shell left under Command Code's stale title must not inherit its idle composer. */
-  protected releaseCommandCodeComposer(ptyId: string, previous: TerminalAgent | null): void {
-    if (previous === 'command-code' && this.ptysById.get(ptyId)?.foregroundAgent !== previous) {
-      this.setCommandCodeComposer(ptyId, 'exited')
-    }
   }
 
   /** The panes a PTY's in-band status belongs to: its mounted leaves, else its own pane record. */

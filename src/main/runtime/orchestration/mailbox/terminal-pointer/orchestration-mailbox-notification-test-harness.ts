@@ -80,24 +80,6 @@ class MailboxRuntime extends OrcaRuntimeService {
   get idleEvidenceSource() {
     return this.tuiIdleEvidenceSource
   }
-
-  setForegroundAgent(ptyId: string, agent: TuiAgent): void {
-    const pty = this.ptysById.get(ptyId)
-    if (pty) {
-      pty.foregroundAgent = agent
-    }
-  }
-
-  seedTitle(ptyId: string, title: string): void {
-    const pty = this.ptysById.get(ptyId)
-    if (pty) {
-      pty.lastOscTitle = title
-    }
-  }
-
-  agentStatus(ptyId: string) {
-    return this.ptysById.get(ptyId)?.lastAgentStatus ?? null
-  }
 }
 
 export type MailboxNotificationHarness = {
@@ -137,7 +119,6 @@ export async function createRuntime(
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
     launchAgent?: TuiAgent | null
-    getForegroundProcess?: () => Promise<string | null>
   } = {}
 ): Promise<MailboxNotificationHarness> {
   const runtime = new MailboxRuntime(
@@ -158,7 +139,7 @@ export async function createRuntime(
     write,
     writeWithSettlement: settledWriteStub(write),
     kill: vi.fn(),
-    getForegroundProcess: options.getForegroundProcess ?? (async () => null)
+    getForegroundProcess: async () => null
   })
   bindPaneFirst(runtime, { worktreeId: WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_ID, ptyId: PTY_ID })
   runtime.registerPty(
