@@ -215,6 +215,7 @@ export async function readStructuredAgentSessionOptions(
         )?.id ?? current.model
     }
     const { listedServiceTiers: _tiers, ...view } = structuredAgentSessionCapabilityView(
+      agent,
       inventory,
       current.model,
       fallback,

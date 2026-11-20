@@ -6,26 +6,27 @@ import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
+import type { ArchiveDigest } from './runtime-archive-download'
 
 export type ManagedRuntimeMember = { path: string; sha256: string; bytes: number }
 
 export type ManagedRuntimePin = {
   version: string
   url: string
-  archiveSha256: string
   archiveBytes: number
-} & (
-  | {
-      /** `file`: the download is the single member itself, not a zip. */
-      format?: 'zip' | 'file'
-      members: readonly ManagedRuntimeMember[]
-    }
-  | {
-      /** Only the archive's hash is published; it vouches for every file, and these must be executable. */
-      format: 'tar.gz'
-      executables: readonly string[]
-    }
-)
+} & ArchiveDigest &
+  (
+    | {
+        /** `file`: the download is the single member itself, not a zip. */
+        format?: 'zip' | 'file'
+        members: readonly ManagedRuntimeMember[]
+      }
+    | {
+        /** Only the archive's hash is published; it vouches for every file, and these must be executable. */
+        format: 'tar.gz' | 'zip'
+        executables: readonly string[]
+      }
+  )
 
 export type ManagedRuntime = {
   label: string
@@ -35,6 +36,21 @@ export type ManagedRuntime = {
   refreshPin?(signal?: AbortSignal): Promise<void>
   /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
+  /** Add files the unpacked release needs before it is checked and published, e.g. a second command name. */
+  prepare?(folder: string, pin: ManagedRuntimePin): Promise<void>
+}
+
+/** A managed runtime that is an agent CLI, and where its command sits in a release. */
+export type ManagedAgentCli = {
+  runtime: ManagedRuntime
+  /** Whether this host has a build to download. */
+  available: () => boolean
+  executable: (folder: string) => string
+}
+
+/** The download's digest names the release, so a republished build is never mistaken for it. */
+export function runtimeReleaseId(pin: ArchiveDigest): string {
+  return 'archiveSha512' in pin ? pin.archiveSha512 : pin.archiveSha256
 }
 
 /** What a failed start check observed; the installer words it for the user. */
@@ -59,7 +75,7 @@ const RECEIPT_MAX_BYTES = 8 * 1024
 const VERSION_ORDER = new Intl.Collator(undefined, { numeric: true })
 
 const runtimeReleaseReceiptSchema = z.object({
-  releaseId: z.string().regex(/^[a-f0-9]{64}$/),
+  releaseId: z.string().regex(/^[a-f0-9]{64}(?:[a-f0-9]{64})?$/),
   version: z.string().min(1),
   platform: z.string(),
   arch: z.string(),
@@ -98,7 +114,7 @@ export function resolveInstalledRuntimeRelease(
     typeof read === 'object' ? [{ name, releaseId: read.releaseId }] : []
   )
   const pinned = releases.find(
-    (release) => release.name === pin?.version && release.releaseId === pin.archiveSha256
+    (release) => release.name === pin?.version && release.releaseId === runtimeReleaseId(pin)
   )
   const chosen = pinned ?? releases.sort((a, b) => VERSION_ORDER.compare(b.name, a.name))[0]
   return {
@@ -134,7 +150,7 @@ export async function writeRuntimeReleaseReceipt(
   pin: ManagedRuntimePin
 ): Promise<void> {
   const receipt: z.infer<typeof runtimeReleaseReceiptSchema> = {
-    releaseId: pin.archiveSha256,
+    releaseId: runtimeReleaseId(pin),
     version: pin.version,
     platform: process.platform,
     arch: process.arch,

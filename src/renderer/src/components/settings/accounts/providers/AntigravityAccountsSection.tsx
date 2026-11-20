@@ -74,6 +74,12 @@ export function AntigravityAccountsSection({
   // Chats run on the host itself, never in a WSL distro.
   const chats = runtime !== 'wsl'
   const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
+  const managedVersion =
+    chatRuntime.kind === 'active' &&
+    chatRuntime.snapshot.kind === 'known' &&
+    chatRuntime.snapshot.state.source === 'managed'
+      ? chatRuntime.snapshot.state.installedVersion
+      : null
   // A remote host's sign-in finishes from the address pasted back into its row.
   const chatSignIn = chats && chatRuntime.kind === 'active'
   const signIn = useAntigravityChatSignIn(chatSignIn ? owner : null)
@@ -220,10 +226,29 @@ export function AntigravityAccountsSection({
       {chatRows ? (
         <SettingsGroup
           title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
-          description={t(
-            'accounts.antigravity.chatDescription',
-            'Signs in through your browser, so Chat works without agy installed.'
-          )}
+          description={
+            state?.chatUsesAgy
+              ? state.chatAgyVersion
+                ? t(
+                    'accounts.antigravity.chatDescriptionAgyVersion',
+                    "New chats run on your agy (v{{version}}) and its account below. This sign-in is used when agy isn't.",
+                    { version: state.chatAgyVersion }
+                  )
+                : t(
+                    'accounts.antigravity.chatDescriptionAgy',
+                    "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't."
+                  )
+              : managedVersion && state?.chatUsesAgy === false
+                ? t(
+                    'accounts.antigravity.chatDescriptionManagedVersion',
+                    "New chats run on Orca's copy (v{{version}}), so Chat works without agy installed.",
+                    { version: managedVersion }
+                  )
+                : t(
+                    'accounts.antigravity.chatDescription',
+                    'Signs in through your browser, so Chat works without agy installed.'
+                  )
+          }
         >
           {chatRows}
         </SettingsGroup>
@@ -236,10 +261,20 @@ export function AntigravityAccountsSection({
                 'accounts.antigravity.terminalDescriptionWindows',
                 "Uses agy's own saved accounts. Switching applies to the host default agy credential."
               )
-            : t(
-                'accounts.antigravity.terminalDescription',
-                "Uses agy's own saved accounts. Switching applies to new agy sessions."
-              )
+            : state?.chatUsesAgy === undefined
+              ? t(
+                  'accounts.antigravity.terminalDescription',
+                  "Uses agy's own saved accounts. Switching applies to new agy sessions."
+                )
+              : state.chatUsesAgy
+                ? t(
+                    'accounts.antigravity.terminalDescriptionChats',
+                    "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats."
+                  )
+                : t(
+                    'accounts.antigravity.terminalDescriptionNoChats',
+                    "Uses agy's own saved accounts. Switching applies to new agy sessions, not to Antigravity chats."
+                  )
         }
         action={
           <Tooltip>

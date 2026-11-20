@@ -28,6 +28,7 @@ import {
   type MobileScrollTailMetrics
 } from '../../session/native-chat/transcript/viewport/use-mobile-native-chat-tail-follow'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import { botItemWaitingLine } from '../../../../src/shared/bots/bot-item-question-answers'
 import { MobileBotItemActivity } from './MobileBotItemActivity'
 import { MobileBotItemCommentBox, type BotItemCommentBoxHandle } from './MobileBotItemCommentBox'
 import { MobileBotItemLinks } from './MobileBotItemLinks'
@@ -72,11 +73,20 @@ export function MobileBotItemPage({
   const view = usePhoneBotItemView({ client, uid, reads })
   const now = useNow(60_000)
   const comment = useRef<BotItemCommentBoxHandle>(null)
+  // A quick reply on its way or landed: its chips wait for the item's next event, or come back if it
+  // surely failed, so a second tap never posts it twice.
+  const [replyAfter, setReplyAfter] = useState<string | null>(null)
+  const lastEventId = view.events.at(-1)?.id ?? ''
+  const replyBusy = replyAfter !== null && replyAfter === lastEventId
+  const waitingLine = view.item ? botItemWaitingLine(view.item, view.events) : null
+  const waitingOn = waitingLine
+    ? { replies: waitingLine.replies, asker: view.item?.owner.name ?? bot.name }
+    : null
   const jump = useJumpToEnd()
-  // The item's own title heads the page, so the header carries only the way back.
+  // Titled like the drawer's other pages; the item's number leads its own heading below.
   const back = (
     <SheetHeader
-      title=""
+      title={t('bots.items.view.title', 'Item')}
       onBack={{
         label: t('bots.panel.backTo', 'Back to {{name}}', { name: t('bots.items.tab', 'Items') }),
         onPress: onBack
@@ -136,8 +146,7 @@ export function MobileBotItemPage({
               {item.title}
             </Text>
             <Text style={styles.sub} numberOfLines={1}>
-              {t('bots.items.view.sub', 'Item {{number}} · {{chat}} · {{when}}', {
-                number: item.number,
+              {t('bots.items.view.chatAndWhen', '{{chat}} · {{when}}', {
                 chat: chatTitle,
                 when: new Intl.DateTimeFormat(getUiIntlLocale(), {
                   weekday: 'short',
@@ -245,7 +254,20 @@ export function MobileBotItemPage({
           <MobileBotItemActivity
             item={item}
             events={view.events}
-            onReply={() => comment.current?.focus()}
+            busy={replyBusy}
+            attachments={{ client, onOpenFile }}
+            quickReplies={{
+              send: (text) => {
+                setReplyAfter(lastEventId)
+                void comment.current?.send(text).then((outcome) => {
+                  if (outcome === 'failed') {
+                    setReplyAfter(null)
+                  }
+                })
+              },
+              edit: (text) => comment.current?.fill(text),
+              type: () => comment.current?.focus()
+            }}
           />
         </ScrollView>
         {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
@@ -259,6 +281,7 @@ export function MobileBotItemPage({
           item={item}
           online={online && !view.failed}
           hostName={hostName}
+          waitingOn={waitingOn}
         />
       </View>
     </View>

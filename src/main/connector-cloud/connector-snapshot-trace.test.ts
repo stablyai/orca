@@ -183,7 +183,7 @@ describe('a snapshot’s sent span', () => {
     expect(sent().map((span) => span.attributes.outcome)).toEqual(['never-sent', 'accepted'])
   })
 
-  it('counts every POST of a 401 renewal, and none for a failed mint', async () => {
+  it('counts every POST of a 401 renewal', async () => {
     const renewal = fakeCloud()
     renewal.answers.push(answer(401), answer(204))
     snapshot('first', 1)
@@ -192,20 +192,6 @@ describe('a snapshot’s sent span', () => {
     events.accepted(head.stamp)
     expect(sent()[0]?.attributes).toMatchObject({ httpRequests: 2, authRetries: 1 })
     expect(renewal.fetches.count).toBe(2)
-
-    const noToken = fakeCloud()
-    noToken.mints.push(noToken.mintFailure)
-    snapshot('silence', 2)
-    const second = events.next(2)!
-    expect((await post(noToken, second)).ok).toBe(false)
-    expect(noToken.fetches.count).toBe(0)
-    await post(noToken, second)
-    events.accepted(second.stamp)
-    expect(sent()[1]?.attributes).toMatchObject({
-      httpRequests: 1,
-      credentialMintFailures: 1,
-      stampsMinted: 1
-    })
   })
 
   it('counts a 401 whose renewal mint fails as one POST and one token failure', async () => {
@@ -441,13 +427,18 @@ it('C1-5: exports the mint failure counter through the production tracer', async
     cloud.mints.push(cloud.mintFailure)
     snapshot('first', 1)
     const head = events.next(1)!
-    await post(cloud, head)
+    expect((await post(cloud, head)).ok).toBe(false)
+    expect(cloud.fetches.count).toBe(0)
     await post(cloud, head)
     events.accepted(head.stamp)
     expect(exported).toContainEqual(
       expect.objectContaining({
         name: 'connector.snapshot.sent',
-        attributes: expect.objectContaining({ credentialMintFailures: 1, httpRequests: 1 })
+        attributes: expect.objectContaining({
+          credentialMintFailures: 1,
+          httpRequests: 1,
+          stampsMinted: 1
+        })
       })
     )
     expect(JSON.stringify(exported)).not.toContain('connectorToken')

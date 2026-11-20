@@ -4,7 +4,8 @@ import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-eve
 import {
   isSameAgentProcess,
   readAgentProcessIdentity,
-  type AgentProcessIdentity
+  type AgentProcessIdentity,
+  type AgentProcessPresence
 } from '../../../shared/agent-status/process/agent-process-presence'
 
 /** All pane aliases share the same exit evidence. */
@@ -23,6 +24,13 @@ export type PersistedAgentExitEvidence = {
 }
 
 type EndedAgent = { agent?: string; process?: AgentProcessIdentity }
+
+/** The row's owner marked ended, keeping whatever process identity hooks proved. */
+export function endedPresenceOf(
+  row: Pick<AgentHookEventPayload, 'payload' | 'agentPresence'>
+): AgentProcessPresence {
+  return { agent: row.payload.agentType ?? 'unknown', ...row.agentPresence, ended: true }
+}
 
 export function recordAgentExit(
   exits: Map<string, AgentExitEvidence>,

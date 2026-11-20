@@ -58,15 +58,14 @@ function capture(state: PersistedState, repo = state.repos[0]!) {
 function pruneCaptured(
   state: PersistedState,
   scan: ReturnType<typeof capture>,
-  ids: readonly string[],
-  platform?: NodeJS.Platform
+  ids: readonly string[]
 ): string[] {
   const wanted = new Set(ids)
   return pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     state,
     scan,
     scan.metadata.filter(({ worktreeId }) => wanted.has(worktreeId)),
-    platform
+    'linux'
   )
 }
 

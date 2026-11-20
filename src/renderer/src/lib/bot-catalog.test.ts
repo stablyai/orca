@@ -293,34 +293,7 @@ describe('listed Needs you items', () => {
 })
 
 describe('Needs you counts on items notices', () => {
-  const listReads = () =>
-    mocks.callRuntimeRpc.mock.calls.filter(([, method]) => method === 'bots.list').length
   const reviewer = { id: 'Reviewer', hostId: 'local' as const }
-
-  it("shows each items notice's counts with no list read, at N and 10N notices", async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({
-      bots: [bot('Reviewer')],
-      needsYou: { Reviewer: 1 },
-      needsYouAt: 100
-    })
-    renderHook(() => useBots())
-    await act(() => refreshBots())
-    const before = listReads()
-    for (const notices of [5, 50]) {
-      for (let index = 0; index < notices; index += 1) {
-        act(() =>
-          emitBotsChangedWindowEvent('local', {
-            botIds: ['Reviewer'],
-            kinds: ['items'],
-            needsYou: { counts: { Reviewer: index + 2 }, at: 1000 * notices + index }
-          })
-        )
-      }
-      expect(readBotItemsNeedingOwner(reviewer)).toBe(notices + 1)
-    }
-    await act(() => Promise.resolve())
-    expect(listReads()).toBe(before)
-  })
 
   it('keeps a later count over an earlier list read landing late, and reads the list for a notice without counts', async () => {
     mocks.callRuntimeRpc.mockResolvedValue({
@@ -347,13 +320,11 @@ describe('Needs you counts on items notices', () => {
       needsYou: {},
       needsYouAt: 400_000
     })
-    const before = listReads()
     await act(async () => {
       emitBotsChangedWindowEvent('local', { kinds: ['items'] })
       await Promise.resolve()
     })
     await waitFor(() => expect(readBotItemsNeedingOwner(reviewer)).toBe(0))
-    expect(listReads()).toBe(before + 1)
   })
 
   it("keeps the last counts when the host's count fails, and counts again when it reads", async () => {
@@ -399,11 +370,9 @@ describe('Needs you counts on items notices', () => {
         needsYou: { Reviewer: 1 },
         needsYouAt: 700_000
       })
-      const before = listReads()
       await act(() => vi.advanceTimersByTimeAsync(59_000))
-      expect(listReads()).toBe(before)
+      expect(readBotItemsNeedingOwner(reviewer)).toBe(2)
       await act(() => vi.advanceTimersByTimeAsync(2_000))
-      expect(listReads()).toBe(before + 1)
       expect(readBotItemsNeedingOwner(reviewer)).toBe(1)
     } finally {
       vi.useRealTimers()

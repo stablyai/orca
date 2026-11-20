@@ -54,7 +54,9 @@ const helperTranscript = (helper: string) => `/t/session/subagents/agent-${helpe
 // The screen while a held helper prompt waits: Claude draws no dialog for it (probe 2026-11-19, 2.1.326).
 const LEAD_WAITING = ['⏺ Agent(Run rm check)', '✻ Waiting for 1 background agent to finish', '❯']
 
-function setup(options: { canAnswer?: boolean; coordinatorApprovals?: boolean } = {}) {
+function setup(
+  options: { canAnswer?: boolean; coordinatorApprovals?: boolean; waitingForMail?: boolean } = {}
+) {
   const db = new OrchestrationDb(':memory:')
   const run = db.createRun({
     objective: 'approvals',
@@ -74,7 +76,7 @@ function setup(options: { canAnswer?: boolean; coordinatorApprovals?: boolean } 
   const holds = new TerminalWorkerApprovalHolds({
     notify: vi.fn(),
     getDb: () => db,
-    isWaitingForMail: () => false,
+    isWaitingForMail: () => options.waitingForMail ?? false,
     coordinatorApprovals: () => options.coordinatorApprovals ?? true,
     resolveWorker: () => ({ db, handle: HANDLE, dispatch }),
     canAnswerPane: () => options.canAnswer ?? true,
@@ -510,6 +512,15 @@ describe("terminal worker approval holds for a helper agent's prompt", () => {
     })
     ctx.screen.lines = DIALOG
     expect(await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)).toBeNull()
+  })
+
+  it("leaves a helper's prompt to the worker's terminal while its lead waits on mail", () => {
+    const ctx = setup({ waitingForMail: true })
+    ctx.screen.lines = LEAD_WAITING
+    const asked = helperAsks(ctx, 'tool-2')
+
+    expect(ctx.escalations()).toEqual([])
+    expect(asked.replies).toEqual([null])
   })
 
   it("hands a helper's prompt to the worker's terminal when Orca's hold ends unanswered", async () => {

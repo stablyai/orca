@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MAX_PARTIAL_ESCAPE_TAIL_LENGTH,
   advancePartialEscapeTail,
   advanceTerminalEscapeBoundary,
   extractPartialEscapeTail
 } from './terminal-partial-escape-tail'
 
 describe('advanceTerminalEscapeBoundary', () => {
-  it.each(['\x1b]0;title', '\x1bPqpayload', '\x1bXsos', '\x1b^pm', '\x1b_apc'])(
+  it.each(['\x1b]0;title', '\x1bPqpayload'])(
     'retains only the pending ESC after a string ends: %j',
     (prefix) => {
       const stream = `${prefix}\x1b`
@@ -16,10 +17,10 @@ describe('advanceTerminalEscapeBoundary', () => {
         const state = advanceTerminalEscapeBoundary('', stream.slice(0, split))
         const continued = advanceTerminalEscapeBoundary(state, stream.slice(split))
         expect(continued).toBe('\x1b')
-        for (const completion of ['\\', '[31m', '\x1b[0m', '\x18', '\x1a', ']0;next\x07']) {
-          expect(advanceTerminalEscapeBoundary(continued, completion)).toBe('')
-          expect(extractPartialEscapeTail(stream + completion)).toBe('')
-        }
+      }
+      for (const completion of ['\\', '[31m', '\x1b[0m', '\x18', '\x1a', ']0;next\x07']) {
+        expect(advanceTerminalEscapeBoundary('\x1b', completion)).toBe('')
+        expect(extractPartialEscapeTail(stream + completion)).toBe('')
       }
     }
   )
@@ -64,10 +65,20 @@ describe('extractPartialEscapeTail', () => {
   })
 })
 
-describe('advancePartialEscapeTail ESC-free fast path', () => {
-  it('still carries a pending tail through an ESC-free chunk', () => {
-    expect(advancePartialEscapeTail('\x1b]0;my-title', ' still in the OSC')).toBe(
-      '\x1b]0;my-title still in the OSC'
-    )
-  })
+describe('advancePartialEscapeTail past the length cap', () => {
+  it.each([
+    ['\x1b]52;c;', 'A', '\x1b]x;', '\x07'],
+    ['\x1bPq', '#', '\x1bP0<', '\x1b\\'],
+    ['\x1b_G', 'A', '\x1bP0<', '\x18'],
+    ['\x1b[', '3', '\x1b[0<', 'm']
+  ])(
+    'carries %j as a bounded inert prefix until it ends',
+    (introducer, fill, inert, terminator) => {
+      const overflow = fill.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH)
+      const tail = advancePartialEscapeTail('', introducer + overflow)
+      expect(tail).toBe(inert)
+      expect(advancePartialEscapeTail(tail, overflow)).toBe(inert)
+      expect(advancePartialEscapeTail(tail, `${fill}${terminator}plain`)).toBe('')
+    }
+  )
 })

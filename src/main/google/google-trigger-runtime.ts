@@ -17,8 +17,8 @@ export function bindGoogleTriggersToAutomations(
   const checker = new GoogleTriggerChecker({
     automations: () => store.listAutomations(),
     bots: () => store.getBots(),
-    accounts: () =>
-      listGoogleAccounts().flatMap((entry) =>
+    accounts: async () =>
+      (await listGoogleAccounts()).flatMap((entry) =>
         'record' in entry && entry.record.status === 'connected' ? [entry.record.email] : []
       ),
     api: (account) => googleApi(account),

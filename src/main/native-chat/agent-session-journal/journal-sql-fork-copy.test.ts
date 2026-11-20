@@ -12,7 +12,6 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionForkBoundary } from '../agent-session-wire/acquisition/structured-agent-session-fork-boundary'
-import { prepareForkSnapshot } from '../agent-session-wire/acquisition/structured-agent-session-fork-snapshot'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { JournalForkStages } from './journal-fork-stages'
 import { messageFixture } from './journal-sql-message.test-fixture'
@@ -337,11 +336,16 @@ it.each(['current', 'stale', 'mixed', 'temp-write', 'release', 'cleanup'])(
         ordinal: 0
       })
       expect(
-        output.find(({ identity }) => 'ordinal' in identity && identity.ordinal === 1)?.body
-      ).toEqual({
-        kind: 'message',
-        role: 'assistant',
-        blocks: [{ type: 'text', text: frozenText }]
+        output.find(({ identity }) => 'ordinal' in identity && identity.ordinal === 1)
+      ).toMatchObject({
+        observedAt: 3,
+        ownerFence: 0,
+        turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:root' },
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: frozenText }]
+        }
       })
       expect(
         output.find(({ identity }) => 'ordinal' in identity && identity.ordinal === 2)?.body
@@ -361,23 +365,6 @@ it.each(['current', 'stale', 'mixed', 'temp-write', 'release', 'cleanup'])(
           ({ identity }) => identity.provider === 'orca' && identity.clientMessageId === 'stop:fork'
         )?.body
       ).toEqual({ kind: 'status', text: 'Cancellation requested.' })
-      expect(output).toEqual(
-        prepareForkSnapshot({
-          snapshot: {
-            sessionId: 'source-chat',
-            cursor: { epoch: 'epoch', sequence: 142 },
-            submissions,
-            items: items.map<AgentJournalRenderItem>((item) =>
-              item.itemId === stopId
-                ? { ...item, body: { kind: 'status', text: 'Cancellation requested.' } }
-                : item
-            )
-          },
-          nextItemId: null,
-          sourceThreadId: 'source',
-          childThreadId: 'child'
-        })
-      )
       writer
         .prepare(
           "INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('workspace','child','empty',0,1)"

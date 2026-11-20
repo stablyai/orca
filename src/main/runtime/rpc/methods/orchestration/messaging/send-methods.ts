@@ -146,6 +146,9 @@ export const ORCHESTRATION_SEND_METHODS = [
         return botRoute.receipt
       }
       to = botRoute.to
+      if (botRoute.body !== undefined) {
+        params = { ...params, body: botRoute.body }
+      }
 
       const sendWarnings: SendRecipientWarning[] = []
       let messageRunId = routing.run?.id

@@ -86,4 +86,25 @@ describe('ACP standing instructions on the session', () => {
     expect(String(refuses.openFailure())).toMatch(/cannot take this chat's standing instructions/)
     expect(refuses.sent('session/new')).toEqual([])
   })
+
+  it('keeps folder instructions in place only while a new session opens, never for a reopen', async () => {
+    const events: string[] = []
+    let sentNew = (): number => 0
+    const aroundNewSession = async (cwd: string) => {
+      events.push(`placed in ${cwd} before ${sentNew()} new`)
+      return async () => {
+        events.push(`removed after ${sentNew()} new`)
+      }
+    }
+    const fresh = await openAcpAdapterRig({ launch: { aroundNewSession } })
+    sentNew = () => fresh.sent('session/new').length
+    await fresh.acquire()
+    expect(events).toEqual(['placed in /workspace/project before 0 new', 'removed after 1 new'])
+
+    events.length = 0
+    const reopened = await openAcpAdapterRig({ launch: { aroundNewSession, resume: REOPEN } })
+    sentNew = () => reopened.sent('session/new').length
+    await reopened.acquire({ fence: 2 })
+    expect(events).toEqual([])
+  })
 })

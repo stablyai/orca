@@ -23,7 +23,6 @@ import { awaitPackedRefsLockRelease } from '../../git/refs/maintenance/local-rep
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { setUnreadDockBadgeCount } from '../../dock/unread-badge'
 import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
@@ -91,6 +90,8 @@ function installWillQuitHandler(): void {
     }
     // Include pane grids still inside their write burst in final save.
     const paneGridFlush = state.runtime?.flushPaneGrids() ?? null
+    // Before the daemon detaches: the next run reads quiet agents' retained frames from it.
+    const paintLedgerSave = state.runtime?.saveReattachedPaintLedger() ?? null
     // A renderer can veto before-quit; push must survive until quit is committed.
     markHostShuttingDown()
     state.profileShutdownCheckpoint ??= beginProfileShutdownCheckpoint(state.store, paneGridFlush)
@@ -145,7 +146,6 @@ function installWillQuitHandler(): void {
     setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
     state.pluginService = null
-    setUnreadDockBadgeCount(0)
     // Wait briefly for ref maintenance instead of killing mid-prune and stranding its lock; an orphan can finish safely.
     const refMaintenanceShutdown = settleWithinMs(
       Promise.all([state.repoMaintenanceShutdown, state.uninstallRepoMaintenanceIdleGate?.()]).then(
@@ -227,9 +227,10 @@ function installWillQuitHandler(): void {
     // Removal writers and pending pane grids must settle before the profile freezes.
     const finalSaves = Promise.all([
       paneGridFlush,
+      paintLedgerSave,
       removalQuiescence,
       state.profileShutdownCheckpoint.catch(() => {})
-    ]).then(([, stopped]) => beginSshShutdownAndFinalSave(stopped))
+    ]).then(([, , stopped]) => beginSshShutdownAndFinalSave(stopped))
     const sshShutdown = Promise.resolve(finalSaves).then((saves) => saves.sshShutdown)
     const storeFlush = Promise.resolve(finalSaves).then((saves) => saves.storeFlush)
     const watcherShutdown = Promise.resolve(finalSaves).then((saves) => saves.watcherShutdown)

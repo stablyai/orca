@@ -4,6 +4,11 @@ import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const homes = vi.hoisted(() => ({ original: '', selected: '', system: '' }))
+vi.mock('../../codex/trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../codex/trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('electron', () => ({ app: { getPath: () => homes.system } }))
 vi.mock('../main-process-state', () => ({
   mainProcessState: {

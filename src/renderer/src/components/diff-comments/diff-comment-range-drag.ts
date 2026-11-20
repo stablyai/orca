@@ -10,6 +10,7 @@ import {
   orderLineRange,
   type DiffCommentLineRange
 } from './diff-comment-line-range'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 // Capture pointerdown before Monaco’s bubble handler on the same view node so gutter selection cannot compete with the drag.
 
@@ -286,7 +287,8 @@ export function installDiffCommentRangeDrag({
     document.addEventListener('pointerup', handlePointerUp)
     document.addEventListener('pointercancel', handlePointerCancel)
     document.addEventListener('lostpointercapture', handlePointerCancel)
-    document.addEventListener('keydown', handleKeyDown, true)
+    // Why: first app owner, so page Esc owners (Tasks detail) see defaultPrevented and stay put.
+    addAppKeyListener('keydown', handleKeyDown, { first: true })
   }
 
   function detachDragListeners(): void {
@@ -294,7 +296,7 @@ export function installDiffCommentRangeDrag({
     document.removeEventListener('pointerup', handlePointerUp)
     document.removeEventListener('pointercancel', handlePointerCancel)
     document.removeEventListener('lostpointercapture', handlePointerCancel)
-    document.removeEventListener('keydown', handleKeyDown, true)
+    removeAppKeyListener('keydown', handleKeyDown)
   }
 
   editorDomNode.addEventListener('pointerdown', handlePointerDown, true)

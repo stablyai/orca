@@ -12,6 +12,7 @@ import {
   clampFloatingTerminalTriggerPosition,
   getDefaultFloatingTerminalTriggerCommittedPosition,
   getDefaultFloatingTerminalTriggerPosition,
+  keepFloatingTerminalTriggerClear,
   persistFloatingTerminalTriggerPosition,
   readPersistedFloatingTerminalTriggerPosition,
   resolveFloatingTerminalTriggerCommittedPosition,
@@ -21,6 +22,7 @@ import {
   type FloatingTerminalTriggerPosition,
   type FloatingTerminalTriggerPositionSource
 } from './floating-terminal-trigger-position'
+import { useFloatingTerminalTriggerKeepClearRects } from './floating-terminal-trigger-keep-clear'
 import { useTranslate } from '@/i18n/use-translate'
 
 const FLOATING_TERMINAL_TRIGGER_DRAG_THRESHOLD = 4
@@ -84,11 +86,16 @@ export function FloatingTerminalToggleButton({
     initialPositionState.current.committedPosition
   )
   const [position, setPosition] = useState(initialPositionState.current.position)
-  // A visible side chat reserves its controls without overwriting the saved launcher location.
-  const visiblePosition =
+  const keepClear = useFloatingTerminalTriggerKeepClearRects()
+  const [dragging, setDragging] = useState(false)
+  // Reserve the side chat's controls without overwriting the saved launcher location.
+  const boundedPosition =
     rightBoundary === null
       ? position
       : clampFloatingTerminalTriggerPosition(position, rightBoundary)
+  const shown = dragging
+    ? boundedPosition
+    : keepFloatingTerminalTriggerClear(boundedPosition, keepClear)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -152,8 +159,8 @@ export function FloatingTerminalToggleButton({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      left: visiblePosition.left,
-      top: visiblePosition.top,
+      left: shown.left,
+      top: shown.top,
       moved: false
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -169,7 +176,10 @@ export function FloatingTerminalToggleButton({
     if (!drag.moved && Math.hypot(dx, dy) < FLOATING_TERMINAL_TRIGGER_DRAG_THRESHOLD) {
       return
     }
-    drag.moved = true
+    if (!drag.moved) {
+      drag.moved = true
+      setDragging(true)
+    }
     previewPosition({
       left: drag.left + dx,
       top: drag.top + dy
@@ -183,9 +193,10 @@ export function FloatingTerminalToggleButton({
     }
     suppressClickRef.current = drag.moved
     if (drag.moved && stagedPositionRef.current) {
-      commitPosition(stagedPositionRef.current)
+      commitPosition(keepFloatingTerminalTriggerClear(stagedPositionRef.current, keepClear))
     }
     dragRef.current = null
+    setDragging(false)
   }
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
@@ -203,7 +214,7 @@ export function FloatingTerminalToggleButton({
       currentLocation="floating-button"
       // Keep the toggle above the panel so overlapping areas remain clickable.
       className="fixed z-[46]"
-      style={{ left: visiblePosition.left, top: visiblePosition.top }}
+      style={{ left: shown.left, top: shown.top }}
     >
       <Tooltip>
         <TooltipTrigger asChild>

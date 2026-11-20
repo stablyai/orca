@@ -164,7 +164,7 @@ export function WorkspaceSpaceBreakdownList({
                       breakdownItems.length <= 4 && '[@media(min-height:651px)]:hidden'
                     )}
                   >
-                    {t('workspaceSpace.breakdown.viewAll', 'Show more folder details')}
+                    {t('workspaceSpace.breakdown.viewAll', 'Folder details')}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-80">

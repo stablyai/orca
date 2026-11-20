@@ -43,3 +43,32 @@ it("numbers each comment's [Image #N] by the mail's image order, which carries e
   expect(mail?.body).toContain('Not [Image #3], but [Image #2]')
   expect(mail?.body).toContain('[Image #2] "/store/b.png", [Image #3] "/store/c.png"]')
 })
+
+it('names the question an answer is for, and tells the bot to carry on with it', () => {
+  const answer: BotItemEventRecord = {
+    id: 7,
+    itemUid: 'uid-4',
+    kind: 'commented',
+    actor: { kind: 'owner' },
+    data: { text: '1. Ship it? → Yes', decisions: [{ picks: [0] }], answers: 'e5' },
+    createdAt: 1
+  }
+  const moved: BotItemEventRecord = {
+    ...answer,
+    id: 8,
+    kind: 'status',
+    data: { from: 'needs_you', to: 'working' }
+  }
+
+  const mail = botItemChangeMail([
+    { event: answer, item },
+    { event: moved, item }
+  ])
+
+  expect(mail?.body).toContain('answered your question e5 (event e7)')
+  expect(mail?.body).toContain('1. Ship it? → Yes')
+  expect(mail?.body).toContain(
+    'Your owner answered your question, and the item is In progress again'
+  )
+  expect(mail?.body).not.toContain('is not a recorded answer')
+})
