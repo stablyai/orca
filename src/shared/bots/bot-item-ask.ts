@@ -130,24 +130,23 @@ export function botItemQuickReplyText(
     : reply.label
 }
 
-/** The quick reply an owner's reply picked for each question line, or null where they wrote their own
+/** The quick replies an owner's reply picked for each question line, none where they wrote their own
  *  words: read from what a quick reply posts, or from the picks a v1.4.265 host recorded. */
 export function botItemPickedReplies(
   shape: BotItemQuestionShape,
   reply: Record<string, unknown>
-): (string | null)[] {
+): BotItemQuickReply[][] {
   const text = typeof reply.text === 'string' ? reply.text.trim() : ''
   const recorded = Array.isArray(reply.decisions) ? reply.decisions : null
   return shape.decisions.map((decision, index) => {
     const picks: unknown = recorded?.[index]?.picks
     if (Array.isArray(picks)) {
-      const pick = picks[0]
-      return typeof pick === 'number' ? (decision.replies[pick]?.label ?? null) : null
+      // A pick-several decision kept every pick.
+      return decision.replies.filter((_, at) => picks.includes(at))
     }
-    const picked = decision.replies.find(
+    return decision.replies.filter(
       (option) => botItemQuickReplyText(shape, decision, option) === text
     )
-    return picked?.label ?? null
   })
 }
 

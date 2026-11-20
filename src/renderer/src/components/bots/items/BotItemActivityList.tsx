@@ -289,7 +289,11 @@ export function BotItemActivityList({
                 bot={bot}
                 item={item}
                 // A reply already sent answers the question, before the host's read says so.
-                entry={pending?.shown.length ? { ...entry, waiting: false } : entry}
+                entry={
+                  pending?.shown.some(({ failed }) => !failed)
+                    ? { ...entry, waiting: false }
+                    : entry
+                }
                 onJump={jump}
                 quickReplies={quickReplies}
               />

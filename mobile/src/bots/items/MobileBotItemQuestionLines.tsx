@@ -52,7 +52,7 @@ export function MobileBotItemQuestionLines({
   return (
     <View style={[styles.footer, shape.body.trim() ? styles.divided : null]}>
       {shape.decisions.map((decision, index) => {
-        const pick = decision.replies.find((reply) => reply.label === picked[index])
+        const picks = picked[index] ?? []
         return (
           <View key={decision.question} style={styles.decision}>
             <View>
@@ -88,12 +88,14 @@ export function MobileBotItemQuestionLines({
                   </Text>
                 </Pressable>
               </View>
-            ) : pick ? (
+            ) : picks.length > 0 ? (
               <View style={styles.chips}>
-                <View style={[styles.chip, styles.picked]}>
-                  <Check size={12} color={colors.textMuted} />
-                  <ChipWords reply={pick} muted />
-                </View>
+                {picks.map((pick) => (
+                  <View key={pick.label} style={[styles.chip, styles.picked]}>
+                    <Check size={12} color={colors.textMuted} />
+                    <ChipWords reply={pick} muted />
+                  </View>
+                ))}
               </View>
             ) : null}
           </View>

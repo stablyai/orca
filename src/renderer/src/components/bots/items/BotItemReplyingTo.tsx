@@ -46,7 +46,11 @@ export function useBotItemReplyMark(
   }, [openQuestion, scopeKey])
   return {
     quote: question && hidden !== question.id ? question : null,
-    hide: () => setHidden(question?.id ?? null),
+    hide: () => {
+      setHidden(question?.id ?? null)
+      // Its × goes with it; typing carries on in the box.
+      box.current?.querySelector<HTMLElement>('[contenteditable]')?.focus()
+    },
     show: () => setHidden(null),
     glowing,
     placeholder: question && fits ? long : t('bots.items.comment.add', 'Add a comment…')
@@ -110,9 +114,14 @@ function useTextFits(box: RefObject<HTMLDivElement | null>, text: string): boole
         Number.parseFloat(style.paddingRight)
       setFits(context.measureText(text).width <= room)
     }
-    measure()
     const observer = new ResizeObserver(measure)
     observer.observe(frame)
+    // The editor narrows without the frame when the attach button comes in.
+    const editor = frame.querySelector('[contenteditable]')
+    if (editor) {
+      observer.observe(editor)
+    }
+    measure()
     return () => observer.disconnect()
   }, [box, text])
   return fits

@@ -115,6 +115,7 @@ export function MobileBotItemCommentBox({
     const outcome = await commentOnBotItem(client, item.uid, words)
     setSending(false)
     if (outcome.kind === 'done') {
+      setError(null)
       if (typed) {
         setText('')
       }

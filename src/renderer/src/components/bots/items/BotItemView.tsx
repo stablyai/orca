@@ -245,7 +245,7 @@ export function BotItemBody({
   )
   // The question the item waits on, as the comment box names it, until a reply is on its way.
   const waitingOn =
-    item.status === 'needs_you' && item.question && pending.shown.length === 0
+    item.status === 'needs_you' && item.question && !pending.shown.some(({ failed }) => !failed)
       ? {
           id: item.question.eventId,
           line: botItemQuestionLine(

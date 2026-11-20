@@ -61,7 +61,7 @@ export function BotItemQuestionLines({
     >
       <div className="space-y-3">
         {shape.decisions.map((decision, index) => {
-          const pick = decision.replies.find((reply) => reply.label === picked[index])
+          const picks = picked[index] ?? []
           return (
             // A decision's question is unique within its ask.
             <div key={decision.question}>
@@ -116,19 +116,22 @@ export function BotItemQuestionLines({
                     {t('bots.items.ask.typeAnswer', 'Type your answer')}
                   </button>
                 </div>
-              ) : pick ? (
-                <div className="mt-1.5 flex">
-                  <span
-                    className={cn(
-                      CHIP,
-                      'flex items-center gap-1.5 bg-foreground/5 text-muted-foreground'
-                    )}
-                  >
-                    <Check className="size-3 shrink-0" />
-                    <span className="min-w-0">
-                      <ChipWords reply={pick} />
+              ) : picks.length > 0 ? (
+                <div className="mt-1.5 flex flex-wrap gap-[5px]">
+                  {picks.map((pick) => (
+                    <span
+                      key={pick.label}
+                      className={cn(
+                        CHIP,
+                        'flex items-center gap-1.5 bg-foreground/5 text-muted-foreground'
+                      )}
+                    >
+                      <Check className="size-3 shrink-0" />
+                      <span className="min-w-0">
+                        <ChipWords reply={pick} />
+                      </span>
                     </span>
-                  </span>
+                  ))}
                 </div>
               ) : null}
             </div>
