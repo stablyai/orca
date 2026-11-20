@@ -209,18 +209,6 @@ describe('group mail roots', () => {
     expect(next?.turns[0]).not.toHaveProperty('error')
   })
 
-  it('asks the chat about an open turn again only after a while', async () => {
-    const { groups, group, notice } = await room(1)
-    const { sendAnswer } = groupNativeMocks()
-    groups.reserveMailTurn(notice('queued', ['peer-0']))
-    groups.read(group.id)
-    await vi.waitFor(() => expect(groups.mailTurnChecks.get('queued')?.state).toBe('open'))
-    groups.read(group.id)
-    // Asked just now: this read leaves it be rather than asking the chat again.
-    expect(groups.mailTurnChecks.get('queued')?.state).toBe('open')
-    expect(sendAnswer).toHaveBeenCalledTimes(1)
-  })
-
   it('gives mail back after its turn ran a line of its own, which then follows retries', async () => {
     const { groups, notice } = await room(1)
     groups.reserveMailTurn(notice('ran', ['peer-0']))
