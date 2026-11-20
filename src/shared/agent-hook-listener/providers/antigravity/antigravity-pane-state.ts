@@ -21,7 +21,6 @@ export type TrackedAntigravityChild = {
   id: string
   startedAt: number
   revision: number
-  verified?: boolean
   state: 'working' | 'waiting'
   description?: string
   agentType?: string
@@ -41,6 +40,7 @@ export type AntigravityPaneChildState = {
   leadModel?: string
   commands?: Set<number>
   children: Map<string, TrackedAntigravityChild>
+  verifiedChildren: Set<string>
   retiredChildren: Set<string>
   brainCache: AntigravityBrainCache
   dirty?: boolean
@@ -53,6 +53,7 @@ export function getOrCreateAntigravityPaneState(
   if (!pane) {
     pane = {
       children: new Map(),
+      verifiedChildren: new Set(),
       retiredChildren: new Set(),
       brainCache: createAntigravityBrainCache()
     }
@@ -66,7 +67,7 @@ export function retireAntigravityChild(pane: AntigravityPaneChildState, id: stri
   if (pane.retiredChildren.size > 4096) {
     pane.retiredChildren.delete(pane.retiredChildren.values().next().value!)
   }
-  const verified = pane.children.get(id)?.verified
+  const verified = pane.verifiedChildren.delete(id)
   pane.children.delete(id)
   if (pane.rootBrainDir) {
     pane.brainCache.transcripts.delete(
@@ -78,7 +79,7 @@ export function retireAntigravityChild(pane: AntigravityPaneChildState, id: stri
     }
   }
   pane.dirty = true
-  if (verified && !pane.commands?.size) {
+  if (verified && pane.verifiedChildren.size === 0 && !pane.commands?.size) {
     pane.helpersIdleAt = Date.now()
   }
 }
@@ -104,8 +105,7 @@ export function recordAntigravityChildHook(
     id,
     startedAt: now,
     revision: 0,
-    state: 'working',
-    verified: !pane.rootBrainDir
+    state: 'working'
   }
   if (eventName === 'PreInvocation' && existing) {
     existing.revision++
@@ -128,7 +128,10 @@ export function recordAntigravityChildHook(
     pane.children.set(id, child)
     pane.dirty = true
   }
-  if (child.verified) {
+  if (!pane.rootBrainDir) {
+    pane.verifiedChildren.add(id)
+  }
+  if (pane.verifiedChildren.has(id)) {
     pane.helpersIdleAt = undefined
     pane.awaitingInitialHelperDiscovery = undefined
   }

@@ -190,6 +190,7 @@ export function normalizeAntigravityEvent(
       retireAntigravityChild(paneState, id)
     }
     paneState.children.clear()
+    paneState.verifiedChildren.clear()
     paneState.brainCache = createAntigravityBrainCache()
     paneState.commands?.clear()
     paneState.discoversChildren = false

@@ -121,7 +121,7 @@ export function pollAntigravityTranscriptStatus(
     if (metadata?.killed) {
       retireAntigravityChild(pane, child.id)
     } else if (metadata) {
-      child.verified = true
+      pane.verifiedChildren.add(child.id)
       pane.helpersIdleAt = undefined
       pane.awaitingInitialHelperDiscovery = undefined
       child.description = metadata.description

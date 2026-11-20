@@ -133,4 +133,7 @@ it("keeps the run working when agy's done lands while a sibling subagent still w
 
   vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 2)
   expect(state()).toBe('working')
+  await agyHook('Stop', { ...child, conversationId: 'sibling', fullyIdle: true })
+  vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
+  expect(state()).toBe('done')
 })

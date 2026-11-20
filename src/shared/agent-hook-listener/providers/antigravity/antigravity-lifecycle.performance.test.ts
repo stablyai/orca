@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type { AgentHookEventPayload } from '../../listener-event'
 import { createHookListenerState } from '../../listener-state'
 import { RolloutReadBatch } from '../codex/codex-rollout-async-reads'
@@ -73,6 +73,7 @@ it.each([10, 100])(
       recordAntigravityChildHook(pane, `child-${i}`, 'Stop', { fullyIdle: true }, 2)
     }
     expect(pane.children.size).toBe(0)
+    expect(pane.verifiedChildren.size).toBe(0)
     expect(pane.brainCache.transcripts.size).toBe(0)
   }
 )
@@ -107,5 +108,28 @@ it('bounds an unfinished model transcript record and recovers after truncation t
     expect(await read()).toMatchObject({ model: 'model-a' })
   } finally {
     rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+it.each([10, 100])('retires %s verified siblings without traversing the roster', (children) => {
+  const pane = getOrCreateAntigravityPaneState(createHookListenerState(), 'pane')
+  for (let i = 0; i < children; i++) {
+    recordAntigravityChildHook(pane, `child-${i}`, 'PreInvocation', {}, 1)
+  }
+  const values = vi.spyOn(pane.children, 'values')
+  const entries = vi.spyOn(pane.children, Symbol.iterator)
+  try {
+    for (let i = 0; i < children - 1; i++) {
+      recordAntigravityChildHook(pane, `child-${i}`, 'Stop', { fullyIdle: true }, 2)
+    }
+    expect(pane.helpersIdleAt).toBeUndefined()
+    recordAntigravityChildHook(pane, `child-${children - 1}`, 'Stop', { fullyIdle: true }, 2)
+    expect(pane.helpersIdleAt).toEqual(expect.any(Number))
+    expect(pane.verifiedChildren.size).toBe(0)
+    expect(values).toHaveBeenCalledTimes(0)
+    expect(entries).toHaveBeenCalledTimes(0)
+  } finally {
+    values.mockRestore()
+    entries.mockRestore()
   }
 })
