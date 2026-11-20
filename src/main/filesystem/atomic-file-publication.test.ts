@@ -9,7 +9,7 @@ import {
   writeFileAtomicallyIfUnchanged
 } from './atomic-file-publication'
 
-const fsMock = vi.hoisted(() => ({ linkSync: vi.fn(), renameSync: vi.fn() }))
+const fsMock = vi.hoisted(() => ({ linkSync: vi.fn(), renameSync: vi.fn(), rmSync: vi.fn() }))
 
 type PathMock = typeof fsMock.linkSync
 
@@ -42,7 +42,13 @@ vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   fsMock.linkSync.mockImplementation(actual.linkSync)
   fsMock.renameSync.mockImplementation(actual.renameSync)
-  return { ...actual, linkSync: fsMock.linkSync, renameSync: fsMock.renameSync }
+  fsMock.rmSync.mockImplementation(actual.rmSync)
+  return {
+    ...actual,
+    linkSync: fsMock.linkSync,
+    renameSync: fsMock.renameSync,
+    rmSync: fsMock.rmSync
+  }
 })
 
 const originalPlatform = process.platform
@@ -238,6 +244,49 @@ describe('writeFileAtomically', () => {
       }
     }
   )
+
+  it('keeps one claimed copy however often recovery is cut short after claiming', () => {
+    setup()
+    try {
+      const target = join(dir, 'config.toml')
+      writeFileSync(target, 'approval = "never"\n')
+      const rename = fsMock.renameSync.getMockImplementation()!
+      for (let crash = 0; crash < 3; crash++) {
+        writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
+        // Stands in for a crash right after the claim: it happens, and nothing after it runs.
+        const undo = onFirstCallTo(fsMock.renameSync, isKept, (source, destination) => {
+          rename(source, destination)
+          throw Object.assign(new Error('killed'), { code: 'EKILLED' })
+        })
+        expect(() => recoverInterruptedGuardedFileOperation(target)).toThrow('killed')
+        undo()
+      }
+      expect(readdirSync(dir).filter((name) => name.includes('.orca-kept-'))).toHaveLength(1)
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('puts the user file back even when the temp file cannot be deleted', () => {
+    setup()
+    try {
+      const target = join(dir, 'config.toml')
+      writeFileSync(target, 'user edit\n')
+      const rm = fsMock.rmSync.getMockImplementation()!
+      fsMock.rmSync.mockImplementation((path: string, options?: NodeFs.RmOptions) => {
+        if (path.endsWith('.tmp')) {
+          throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+        }
+        return rm(path, options)
+      })
+
+      expect(() => writeFileAtomicallyIfUnchanged(target, 'stale\n', 'mirror\n')).toThrow('busy')
+      fsMock.rmSync.mockImplementation(rm)
+      expect(readFileSync(target, 'utf-8')).toBe('user edit\n')
+    } finally {
+      cleanup()
+    }
+  })
 
   it('restores the user file even when giving the held file back by link fails too', () => {
     setup()

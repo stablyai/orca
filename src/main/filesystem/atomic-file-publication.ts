@@ -184,7 +184,8 @@ function restoreMovedFileWithoutOverwrite(
       if (name === null) {
         break
       }
-      const claimed = `${targetPath}.orca-kept-${randomUUID()}`
+      // Named by content too: a claim a crash left behind holds the same bytes and is replaced.
+      const claimed = `${targetPath}.orca-kept-${name}-claimed`
       try {
         renameFileWithWindowsRetry(sourcePath, claimed)
       } catch (error) {
@@ -283,9 +284,12 @@ function attemptGuardedAtomicWrite(
     restoreHeld = !superseded
     throw error
   } finally {
-    rmSync(tmpPath, { force: true })
-    if (restoreHeld !== null) {
-      restoreMovedFileWithoutOverwrite(heldPath, targetPath, restoreHeld, keep)
+    try {
+      if (restoreHeld !== null) {
+        restoreMovedFileWithoutOverwrite(heldPath, targetPath, restoreHeld, keep)
+      }
+    } finally {
+      rmSync(tmpPath, { force: true })
     }
   }
 }
