@@ -20,7 +20,8 @@ describe('recolorMascotSvg', () => {
 
 const DRESSABLE =
   '<svg><defs><path d="M1"/></defs><g><g><path d="M1"/><g id="face"><circle r="1"/></g></g></g></svg>\n'
-const ART = '<image href="data:image/webp;base64,QQ" x="1" y="2" width="3" height="4" preserveAspectRatio="none"/>'
+const ART =
+  '<image href="data:image/webp;base64,QQ" x="1" y="2" width="3" height="4" preserveAspectRatio="none"/>'
 
 describe('dressMascotSvg', () => {
   it('draws the outfit over the picture', () => {

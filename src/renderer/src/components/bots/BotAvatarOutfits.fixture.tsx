@@ -42,7 +42,11 @@ function OutfitSheet({ outfit }: { outfit: BotAvatarOutfit }): React.JSX.Element
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 1000))
 
 function sheet(outfit: BotAvatarOutfit): ComponentFixture {
-  return defineFixture({ width: 760, render: () => <OutfitSheet outfit={outfit} />, interact: settle })
+  return defineFixture({
+    width: 760,
+    render: () => <OutfitSheet outfit={outfit} />,
+    interact: settle
+  })
 }
 
 export const tie = sheet('tie')
