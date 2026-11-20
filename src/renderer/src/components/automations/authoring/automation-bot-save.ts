@@ -10,7 +10,10 @@ import {
   hasAutomationSchedule
 } from '../../../../../shared/automation-event-triggers'
 import { listAutomationsForTarget } from '../hosts/automation-host-client'
-import { dispatchAutomationReread } from '../hosts/automation-row-action-dispatch'
+import {
+  dispatchAutomationReread,
+  type AutomationActionNotice
+} from '../hosts/automation-row-action-dispatch'
 import {
   automationCreateHostFor,
   automationCreateHostStableKey,
@@ -27,6 +30,8 @@ import { botResultsPlace, withBotResultsPlace } from './automation-bot-results-t
 import { botAutomationSetup, sameBotAgentSetup } from '../../../../../shared/bots/bot-agent-setup'
 import { isBotAgent } from '../../../../../shared/bot-types'
 import { readBots } from '@/lib/bot-catalog'
+import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
+import { automationHostRecoveryActions } from '../hosts/automation-host-status-descriptors'
 
 /** Why the target cannot be saved yet, or null when it can. */
 export function botTargetError(target: AutomationBotTarget): string | null {
@@ -84,6 +89,31 @@ export function botSchedulePatch(
   }
   // A picked schedule is new even when its rule matches the never-reached one.
   return !scheduled || current?.rrule !== schedule.rrule ? schedule : {}
+}
+
+/** Why the bot's host can't hold a new automation, with the repair that can help: an old server needs updating, not Retry. */
+export function botHostUnavailableNotice(
+  botHost: AutomationHostCatalogEntry | null
+): AutomationActionNotice {
+  const recovery = botHost ? automationHostRecoveryActions(botHost).authority : null
+  if (botHost && recovery === 'update-server') {
+    return {
+      message: translate(
+        'automations.botTarget.hostNeedsUpdate',
+        'Update the Orca server on {host} so its bots can have automations.'
+      ).replace('{host}', () => botHost.authorityLabel),
+      recovery,
+      severity: 'owner'
+    }
+  }
+  return {
+    message: translate(
+      'automations.botTarget.hostUnavailable',
+      "The bot's computer can't hold a new automation yet. Try again in a moment."
+    ),
+    recovery: recovery ?? 'retry',
+    severity: 'owner'
+  }
 }
 
 /** Saves an automation that runs as a bot; it lives beside its bot, on the bot's host. */
@@ -157,14 +187,7 @@ export async function saveBotAutomation(
   if (here.status !== 'ready') {
     // Recovery acts on the bot's host, not the Host picker the bot form hides.
     local.setEditorNoticeHost(botHost)
-    local.setEditorNotice({
-      message: translate(
-        'automations.botTarget.hostUnavailable',
-        "The bot's computer can't hold a new automation yet. Try again in a moment."
-      ),
-      recovery: 'retry',
-      severity: 'owner'
-    })
+    local.setEditorNotice(botHostUnavailableNotice(botHost))
     return
   }
   const input: AutomationCreateInput = {

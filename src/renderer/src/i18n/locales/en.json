@@ -26619,6 +26619,7 @@
       "option": "Bot · {{name}}",
       "channelMissing": "Enter the channel to send results to.",
       "hostUnavailable": "The bot's computer can't hold a new automation yet. Try again in a moment.",
+      "hostNeedsUpdate": "Update the Orca server on {host} so its bots can have automations.",
       "promptMissing": "Enter what it should do.",
       "deletedBot": "Deleted bot",
       "fieldLabel": "Bot or project",
