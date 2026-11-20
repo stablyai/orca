@@ -6,7 +6,7 @@ import { translateLineWithColumns, type WrappedLogicalLine } from './wrapped-ter
 const VERTICAL_FRAME_PATTERN = /[│┃║╎╏┆┇┊┋|]/
 // File-link characters, plus `:` so a wrapped `:line:col` stays on the path.
 const TABLE_PATH_FRAGMENT_CHAR = /[\p{L}\p{N}\p{M}._~@%+=:,/\\()[\]-]/u
-// A cell this full is a hard wrap. Matches framed HTTP links, and still allows one padding space.
+// Share of the usable cell, after symmetric frame padding, that counts as a hard wrap.
 const MIN_TABLE_PATH_FILL_RATIO = 0.8
 const MAX_TABLE_PATH_ROWS = 20
 const extSet = (s: string) => new Set(s.split(' '))
@@ -144,19 +144,21 @@ function frameSpans(translated: TranslatedLine): FrameSpan[] {
 }
 
 function fillsCell(translated: TranslatedLine, span: FrameSpan, slice: PathSlice): boolean {
-  if (!/^\s*$/.test(translated.text.slice(slice.end, span.rightIndex))) {
+  const { text, columns } = translated
+  const [start, from, to] = [columns[span.leftIndex + 1], columns[slice.start], columns[slice.end]]
+  if (start === undefined || from === undefined || to === undefined) {
     return false
   }
-  const contentStart = translated.columns[span.leftIndex + 1]
-  const fragmentStart = translated.columns[slice.start]
-  const fragmentEnd = translated.columns[slice.end]
-  const contentWidth = contentStart !== undefined ? span.rightColumn - contentStart : 0
-  return (
-    contentWidth > 0 &&
-    fragmentStart !== undefined &&
-    fragmentEnd !== undefined &&
-    (fragmentEnd - fragmentStart) / contentWidth >= MIN_TABLE_PATH_FILL_RATIO
-  )
+  if (!/^\s*$/.test(text.slice(slice.end, span.rightIndex))) {
+    return false
+  }
+  // Subtract narrow symmetric cell padding (<= 2 terminal columns, left <= right) only when only
+  // whitespace precedes the path fragment, so labeled, centered, right-aligned, or sparse cells
+  // do not count as hard wraps.
+  const leftPad = /^\s*$/.test(text.slice(span.leftIndex + 1, slice.start)) ? from - start : -1
+  const pad = leftPad >= 0 && leftPad <= 2 && leftPad <= span.rightColumn - to ? leftPad : 0
+  const usable = span.rightColumn - start - pad * 2
+  return usable > 0 && (to - from) / usable >= MIN_TABLE_PATH_FILL_RATIO
 }
 
 function trailingPathSlice(translated: TranslatedLine, span: FrameSpan): PathSlice | null {
@@ -185,7 +187,7 @@ function leadingPathSlice(translated: TranslatedLine, span: FrameSpan, startColu
   }
   if (
     (translated.columns[start] ?? -1) !== startColumn ||
-    (start > span.leftIndex + 1 && !/\s/.test(translated.text[start - 1] ?? ''))
+    !/^\s*$/.test(translated.text.slice(span.leftIndex + 1, start))
   ) {
     return null
   }

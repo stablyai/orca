@@ -13,25 +13,50 @@ type TestBufferLine = {
   ) => string
 }
 
+function charColumns(text: string): number[] {
+  const columns: number[] = []
+  let col = 0
+  for (let index = 0; index < text.length; index++) {
+    columns.push(col)
+    col += text[index] === '\u3000' ? 2 : 1
+  }
+  columns.push(col)
+  return columns
+}
+
 function makeBufferLine(text: string): TestBufferLine {
-  const columns = Array.from({ length: text.length + 1 }, (_value, index) => index)
+  const columns = charColumns(text)
+  const totalWidth = columns[text.length] ?? text.length
   return {
     isWrapped: false,
-    length: text.length,
+    length: totalWidth,
     getCell: () => undefined,
     translateToString: (
       _trimRight?: boolean,
       startColumn = 0,
-      endColumn = text.length,
+      endColumn = totalWidth,
       outColumns?: number[]
     ) => {
+      let result = ''
       if (outColumns) {
         outColumns.length = 0
-        for (let index = startColumn; index <= endColumn; index++) {
-          outColumns.push(columns[index] ?? index)
-        }
       }
-      return text.slice(startColumn, endColumn)
+      for (let index = 0; index < text.length; index++) {
+        const col = columns[index] ?? index
+        if (col < startColumn || col >= endColumn) {
+          continue
+        }
+        result += text[index] ?? ''
+        outColumns?.push(col)
+      }
+      if (outColumns) {
+        const lastCol =
+          result.length > 0
+            ? (columns[text.length] ?? totalWidth)
+            : Math.min(startColumn, totalWidth)
+        outColumns.push(Math.min(endColumn, lastCol))
+      }
+      return result
     }
   }
 }
@@ -59,10 +84,11 @@ function fileLinksAt(rows: readonly string[], lineNumber: number, needle: string
     )
   }
   const lines = rows.map((text) => makeBufferLine(text))
+  const lineCols = charColumns(line)
   return findTerminalFileLinksAtBufferPosition(
     { getLine: (y) => lines[y] },
-    { x: index + 1, y: lineNumber },
-    Math.max(...rows.map((row) => row.length))
+    { x: (lineCols[index] ?? index) + 1, y: lineNumber },
+    Math.max(...lines.map((entry) => entry.length))
   ).links.map(({ pathText, line: linkLine, column }) => ({
     pathText,
     line: linkLine,
@@ -653,6 +679,113 @@ describe('file paths wrapped inside terminal table cells', () => {
     const reading = { pathText: 'src/components/ProgressView.swift', line: null, column: null }
     expect(fileLinksAt(rows, 1, 'src/components')).toContainEqual(reading)
     expect(fileLinksAt(rows, 2, 'ft')).toContainEqual(reading)
+  })
+
+  it('joins a path that fills the usable width of a padded narrow cell', () => {
+    const reading = { pathText: 'src/a.ts', line: null, column: null }
+    const singlePad = ['│ src/ │', '│ a.ts │']
+    expect(fileLinksAt(singlePad, 1, 'src/')).toContainEqual(reading)
+    expect(fileLinksAt(singlePad, 2, 'a.ts')).toContainEqual(reading)
+
+    const doublePad = ['│  src/  │', '│  a.ts  │']
+    expect(fileLinksAt(doublePad, 1, 'src/')).toContainEqual(reading)
+    expect(fileLinksAt(doublePad, 2, 'a.ts')).toContainEqual(reading)
+
+    // Full-width ideographic spaces (U+3000) occupy two terminal columns each.
+    const wideSpacePad = ['│\u3000src/\u3000│', '│\u3000a.ts\u3000│']
+    expect(fileLinksAt(wideSpacePad, 1, 'src/')).toContainEqual(reading)
+    expect(fileLinksAt(wideSpacePad, 2, 'a.ts')).toContainEqual(reading)
+
+    // U+3000 plus an ASCII space is 3 terminal columns (exceeding the 2-column padding cap)
+    // even though it is only 2 UTF-16 code units.
+    const threeColWideSpacePad = ['│\u3000 src/ \u3000│', '│\u3000 a.ts \u3000│']
+    expect(fileLinksAt(threeColWideSpacePad, 1, 'src/').map((link) => link.pathText)).not.toContain(
+      'src/a.ts'
+    )
+    expect(fileLinksAt(threeColWideSpacePad, 2, 'a.ts')).toEqual([
+      { pathText: 'a.ts', line: null, column: null }
+    ])
+  })
+
+  it('does not join centered or right-aligned table rows as hard wraps', () => {
+    const centered = ['│     src/     │', '│     a.ts     │']
+    expect(fileLinksAt(centered, 1, 'src/').map((link) => link.pathText)).not.toContain('src/a.ts')
+    expect(fileLinksAt(centered, 2, 'a.ts')).toEqual([
+      { pathText: 'a.ts', line: null, column: null }
+    ])
+
+    const rightAligned = ['│   src/foo/ │', '│   other.ts │']
+    expect(fileLinksAt(rightAligned, 1, 'src/foo/').map((link) => link.pathText)).not.toContain(
+      'src/foo/other.ts'
+    )
+    expect(fileLinksAt(rightAligned, 2, 'other.ts')).toEqual([
+      { pathText: 'other.ts', line: null, column: null }
+    ])
+
+    const narrowRightAligned = ['│  src/foo/ │', '│  other.ts │']
+    expect(
+      fileLinksAt(narrowRightAligned, 1, 'src/foo/').map((link) => link.pathText)
+    ).not.toContain('src/foo/other.ts')
+
+    const labeledPrefix = ['│ A src/foo/ │', '│ B other.ts │']
+    expect(fileLinksAt(labeledPrefix, 1, 'src/foo/').map((link) => link.pathText)).not.toContain(
+      'src/foo/other.ts'
+    )
+    expect(fileLinksAt(labeledPrefix, 2, 'other.ts')).toEqual([
+      { pathText: 'other.ts', line: null, column: null }
+    ])
+
+    // Flush single-column labels and a labeled continuation after a padded head must stay separate.
+    const flushLabeledPrefix = ['│A src/foo/  │', '│B other.ts  │']
+    expect(
+      fileLinksAt(flushLabeledPrefix, 1, 'src/foo/').map((link) => link.pathText)
+    ).not.toContain('src/foo/other.ts')
+    expect(fileLinksAt(flushLabeledPrefix, 2, 'other.ts')).toEqual([
+      { pathText: 'other.ts', line: null, column: null }
+    ])
+
+    const labeledContinuation = ['│  src/  │', '│B a.ts  │']
+    expect(fileLinksAt(labeledContinuation, 1, 'src/').map((link) => link.pathText)).not.toContain(
+      'src/a.ts'
+    )
+    expect(fileLinksAt(labeledContinuation, 2, 'a.ts')).toEqual([
+      { pathText: 'a.ts', line: null, column: null }
+    ])
+  })
+
+  it('does not join a short fragment that leaves unused width beside cell padding', () => {
+    const narrowGap = ['│ a/   │', '│ b.ts │']
+    expect(fileLinksAt(narrowGap, 1, 'a/').map((link) => link.pathText)).not.toContain('a/b.ts')
+    expect(fileLinksAt(narrowGap, 2, 'b.ts')).toEqual([
+      { pathText: 'b.ts', line: null, column: null }
+    ])
+
+    const wideGap = ['│ src/        │', '│ a.ts        │']
+    expect(fileLinksAt(wideGap, 1, 'src/').map((link) => link.pathText)).not.toContain('src/a.ts')
+    expect(fileLinksAt(wideGap, 2, 'a.ts')).toEqual([
+      { pathText: 'a.ts', line: null, column: null }
+    ])
+
+    const separateFiles = ['│ foo.ts   │', '│ bar.ts   │']
+    expect(fileLinksAt(separateFiles, 1, 'foo.ts')).toEqual([
+      { pathText: 'foo.ts', line: null, column: null }
+    ])
+    expect(fileLinksAt(separateFiles, 2, 'bar.ts')).toEqual([
+      { pathText: 'bar.ts', line: null, column: null }
+    ])
+
+    // One left space and a flush right border is not symmetric padding. The fragment is 3/4 of
+    // the cell, under the fill ratio, so these rows stay separate.
+    const flushNarrow = ['│ ab/│', '│ cd/│']
+    expect(fileLinksAt(flushNarrow, 1, 'ab/').map((link) => link.pathText)).not.toContain('ab/cd/')
+    expect(fileLinksAt(flushNarrow, 2, 'cd/').map((link) => link.pathText)).not.toContain('ab/cd/')
+  })
+
+  it('still joins a narrow path that is flush with the right border', () => {
+    const rows = ['│ src/│', '│ a.ts│']
+    const reading = { pathText: 'src/a.ts', line: null, column: null }
+    expect(fileLinksAt(rows, 1, 'src/')).toContainEqual(reading)
+    expect(fileLinksAt(rows, 2, 'a.ts')).toContainEqual(reading)
   })
 
   it('still joins a hard-wrapped path that is not inside a table', () => {
