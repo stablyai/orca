@@ -58,6 +58,7 @@ import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-struct
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { nativeChatSignInHostWords } from '../../host-access/native-chat-sign-in-notice'
+import { NativeChatNoticeAuthRecovery } from '../../antigravity-auth/NativeChatAntigravityAuthRecovery'
 
 const BOT_CONTEXT_WORDS: Record<BotContextChange, () => string> = {
   soul: () => translate('components.native-chat.botContext.soul', BOT_CONTEXT_NOTE_COPY.soul),
@@ -340,6 +341,7 @@ export function NativeChatNoticeRow({
         ) : null}
       </div>
       <NativeChatSetupButton failureKind={block.failure?.kind} rowId={messageId} />
+      {resolved ? null : <NativeChatNoticeAuthRecovery block={block} agentName={agentName} />}
       {details}
     </div>
   )

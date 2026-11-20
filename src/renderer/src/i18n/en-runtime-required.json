@@ -1618,6 +1618,14 @@
       "mentionedCount": "{{count}} mentioned",
       "unavailableBot": "Unavailable bot"
     },
+    "hover": {
+      "itemsNeedYou_one": "{{count}} item it flagged for you",
+      "itemsNeedYou_other": "{{count}} items it flagged for you",
+      "moreAsks_one": "+{{count}} more ask",
+      "moreAsks_other": "+{{count}} more asks",
+      "needsYouHeading_one": "1 thing needs you",
+      "needsYouHeading_other": "{{count}} things need you"
+    },
     "items": {
       "pill": {
         "moveCount_one": "Move {{count}} item to",
@@ -2033,6 +2041,8 @@
         "headerTotal_other": "{{count}} background tasks",
         "monitor": "Background monitor",
         "monitoring": "Monitoring background tasks",
+        "needsAttention_one": "{{count}} needs attention",
+        "needsAttention_other": "{{count}} need attention",
         "outputFile": "Output: {{value0}}",
         "reasonBlocked": "failed",
         "reasonWaiting": "needs approval",

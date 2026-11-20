@@ -153,7 +153,10 @@ export function createBotMemoryHistory(
     const all = text === null ? [] : z.array(BotMemoryHistoryRowSchema).parse(JSON.parse(text))
     const rows = all.filter(kept)
     if (rows.length < all.length) {
-      await io.write(botId, rows.length > 0 ? JSON.stringify(rows) : null)
+      // What was read still holds; a later read deletes the old rows.
+      await io
+        .write(botId, rows.length > 0 ? JSON.stringify(rows) : null)
+        .catch((error: unknown) => console.warn('[bots] memory history not pruned', error))
     }
     return rows
   }

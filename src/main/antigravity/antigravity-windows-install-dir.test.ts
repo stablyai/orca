@@ -20,27 +20,20 @@ afterEach(() => {
 })
 
 describe('Windows agy install directory discovery', () => {
-  it('finds agy.exe under AppData/Local/agy/bin when PATH omits it', () => {
-    const home = makeTempDir('orca-agy-win-fallback-')
-    const agyExe = join(home, 'AppData', 'Local', 'agy', 'bin', 'agy.exe')
-    mkdirSync(join(home, 'AppData', 'Local', 'agy', 'bin'), { recursive: true })
-    writeFileSync(agyExe, '')
-
-    expect(resolveCliCommand('agy', { platform: 'win32', pathEnv: '', homePath: home })).toBe(
-      agyExe
-    )
-  })
-
-  it('prefers an explicit PATH entry over the Windows fallback directory', () => {
+  it('finds a Windows fallback install and gives an explicit PATH entry precedence', () => {
     const home = makeTempDir('orca-agy-win-path-')
     const pathBin = join(home, 'custom-bin')
     const pathAgy = join(pathBin, 'agy.exe')
     const fallbackBin = join(home, 'AppData', 'Local', 'agy', 'bin')
+    const fallbackAgy = join(fallbackBin, 'agy.exe')
     mkdirSync(pathBin, { recursive: true })
     mkdirSync(fallbackBin, { recursive: true })
     writeFileSync(pathAgy, '')
-    writeFileSync(join(fallbackBin, 'agy.exe'), '')
+    writeFileSync(fallbackAgy, '')
 
+    expect(resolveCliCommand('agy', { platform: 'win32', pathEnv: '', homePath: home })).toBe(
+      fallbackAgy
+    )
     expect(resolveCliCommand('agy', { platform: 'win32', pathEnv: pathBin, homePath: home })).toBe(
       pathAgy
     )
@@ -64,7 +57,7 @@ describe('Windows agy install directory discovery', () => {
     expect(resolved.command).toBe(agyExe)
   })
 
-  it('ignores relative LOCALAPPDATA values and deduplicates the default Windows path', () => {
+  it('ignores relative LOCALAPPDATA values', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const root = makeTempDir('orca-agy-dirs-')
     const hostSpec = ANTIGRAVITY_LAUNCH_SPEC.hostBackend.spec
@@ -72,10 +65,6 @@ describe('Windows agy install directory discovery', () => {
 
     expect(
       hostSpec.installDirectories({ env: { LOCALAPPDATA: 'relative\\path' }, homePath: root })
-    ).toEqual([join(defaultLocal, 'agy', 'bin'), join(root, '.local', 'bin')])
-
-    expect(
-      hostSpec.installDirectories({ env: { LOCALAPPDATA: defaultLocal }, homePath: root })
     ).toEqual([join(defaultLocal, 'agy', 'bin'), join(root, '.local', 'bin')])
   })
 

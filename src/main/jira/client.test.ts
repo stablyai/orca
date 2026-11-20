@@ -226,7 +226,7 @@ describe('Jira client credential storage', () => {
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(existsSync(tokenPath)).toBe(true)
-    expect(jira.getStatus()).toMatchObject({
+    expect(await jira.getStatus()).toMatchObject({
       connected: true,
       credentialError:
         'Could not decrypt saved Jira credential. Approve Keychain access or reconnect Jira.',
@@ -252,7 +252,7 @@ describe('Jira client credential storage', () => {
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(existsSync(tokenPath)).toBe(true)
-    expect(jira.getStatus()).toMatchObject({
+    expect(await jira.getStatus()).toMatchObject({
       connected: true,
       credentialError:
         'Could not decrypt saved Jira credential. Approve Keychain access or reconnect Jira.',
@@ -285,7 +285,7 @@ describe('Jira client credential storage', () => {
 
     expect(fetchMock).not.toHaveBeenCalled()
     expect(existsSync(tokenPath)).toBe(true)
-    expect(jira.getStatus()).toMatchObject({
+    expect(await jira.getStatus()).toMatchObject({
       connected: true,
       sites: [{ id: siteId }]
     })
@@ -316,7 +316,7 @@ describe('Jira client credential storage', () => {
     })
 
     await expect(jira.testConnection(siteId)).resolves.toMatchObject({ ok: false })
-    expect(jira.getStatus().credentialError).toContain('Could not decrypt')
+    expect((await jira.getStatus()).credentialError).toContain('Could not decrypt')
 
     keychainApproved = true
     await expect(jira.testConnection(siteId)).resolves.toMatchObject({
@@ -324,7 +324,7 @@ describe('Jira client credential storage', () => {
       viewer: { displayName: 'Ada' }
     })
     expect(fetchMock).not.toHaveBeenCalled()
-    expect(jira.getStatus().credentialError).toBeUndefined()
+    expect((await jira.getStatus()).credentialError).toBeUndefined()
   })
 
   it('keeps healthy sites under the "all" selection when one site cannot be decrypted', async () => {
@@ -344,10 +344,10 @@ describe('Jira client credential storage', () => {
       }
     })
 
-    const clients = jira.getClients('all')
+    const clients = await jira.getClients('all')
     expect(clients.map((client) => client.site.id)).toEqual(['good'])
     // The bad site's decrypt error is still recorded for the status banner.
-    expect(jira.getStatus().credentialError).toContain('Could not decrypt')
+    expect((await jira.getStatus()).credentialError).toContain('Could not decrypt')
   })
 
   it('does not clear credentials when Electron transport fails after a network change', async () => {
@@ -369,7 +369,7 @@ describe('Jira client credential storage', () => {
     expect(fetchMock).not.toHaveBeenCalled()
     expect(netFetchMock).toHaveBeenCalledTimes(1)
     expect(existsSync(tokenPath)).toBe(true)
-    expect(jira.getStatus()).toMatchObject({
+    expect(await jira.getStatus()).toMatchObject({
       connected: true,
       sites: [{ id: siteId }]
     })
@@ -430,7 +430,7 @@ describe('Jira Cloud site saved through the self-hosted form', () => {
     mockMyself()
     const jira = await loadClientModule()
 
-    expect(jira.getClients('site-alpha')[0].site.authType).toBe('cloud')
+    expect((await jira.getClients('site-alpha'))[0].site.authType).toBe('cloud')
     await expect(jira.testConnection('site-alpha')).resolves.toMatchObject({ ok: true })
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://example.atlassian.net/rest/api/3/myself',
@@ -451,7 +451,7 @@ describe('Jira Cloud site saved through the self-hosted form', () => {
       })
     ).resolves.toMatchObject({ ok: true })
 
-    expect(jira.getClients()[0].site.authType).toBe('cloud')
+    expect((await jira.getClients())[0].site.authType).toBe('cloud')
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://example.atlassian.net/rest/api/3/myself',
       expect.anything()
@@ -471,7 +471,7 @@ describe('Jira Cloud site saved through the self-hosted form', () => {
       })
     ).resolves.toMatchObject({ ok: true })
 
-    expect(jira.getClients()[0].site.authType).toBe('server')
+    expect((await jira.getClients())[0].site.authType).toBe('server')
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://jira.example.com/rest/api/2/myself',
       expect.anything()
@@ -482,7 +482,10 @@ describe('Jira Cloud site saved through the self-hosted form', () => {
     writeJiraFiles('site-alpha', 'token-alpha', { authType: 'server', email: '' })
     const jira = await loadClientModule()
 
-    expect(jira.getClients('site-alpha')[0].site).toMatchObject({ authType: 'server', email: '' })
+    expect((await jira.getClients('site-alpha'))[0].site).toMatchObject({
+      authType: 'server',
+      email: ''
+    })
   })
 })
 
@@ -493,19 +496,19 @@ describe('Jira site file cross-process visibility', () => {
     utimesSync(path, 1_700_000_000, 1_700_000_000)
     const decrypt = vi.fn((value: Buffer) => value.toString('utf-8'))
     const jira = await loadClientModule({ encryptionAvailable: true, decryptString: decrypt })
-    expect(jira.getStatus().connected).toBe(true)
+    expect((await jira.getStatus()).connected).toBe(true)
     expect(decrypt).not.toHaveBeenCalled()
-    const captured = jira.getClients('site-alpha')[0]
+    const captured = (await jira.getClients('site-alpha'))[0]
     expect(decrypt).toHaveBeenCalledOnce()
-    jira.getClients('site-alpha')
+    await jira.getClients('site-alpha')
     expect(decrypt).toHaveBeenCalledOnce()
 
     writeFileSync(`${path}.replacement`, 'token-bravo')
     utimesSync(`${path}.replacement`, 1_700_000_000, 1_700_000_000)
     renameSync(`${path}.replacement`, path)
-    expect(jira.getStatus().connected).toBe(true)
+    expect((await jira.getStatus()).connected).toBe(true)
     expect(decrypt).toHaveBeenCalledOnce()
-    expect(jira.getClients('site-alpha')[0]?.authorization).toBe(
+    expect((await jira.getClients('site-alpha'))[0]?.authorization).toBe(
       `Basic ${Buffer.from('ada@example.com:token-bravo').toString('base64')}`
     )
     expect(captured?.authorization).toBe(
@@ -519,18 +522,18 @@ describe('Jira site file cross-process visibility', () => {
     async (mode) => {
       writeJiraFiles('site-alpha', 'token-alpha')
       const jira = await loadClientModule()
-      expect(jira.getClients('site-alpha')).toHaveLength(1)
+      expect(await jira.getClients('site-alpha')).toHaveLength(1)
       const path = tokenPathForSite('site-alpha')
       if (mode === 'remove') {
         rmSync(path)
       } else {
         writeFileSync(path, '')
       }
-      expect(jira.getStatus().connected).toBe(false)
-      expect(jira.getClients('site-alpha')).toEqual([])
+      expect((await jira.getStatus()).connected).toBe(false)
+      expect(await jira.getClients('site-alpha')).toEqual([])
       writeFileSync(path, 'token-bravo')
-      expect(jira.getStatus().connected).toBe(true)
-      expect(jira.getClients('site-alpha')[0]?.authorization).toBe(
+      expect((await jira.getStatus()).connected).toBe(true)
+      expect((await jira.getClients('site-alpha'))[0]?.authorization).toBe(
         `Basic ${Buffer.from('ada@example.com:token-bravo').toString('base64')}`
       )
     }
@@ -541,10 +544,10 @@ describe('Jira site file cross-process visibility', () => {
     const path = tokenPathForSite('site-alpha')
     rmSync(path)
     const jira = await loadClientModule()
-    expect(jira.getStatus().connected).toBe(false)
+    expect((await jira.getStatus()).connected).toBe(false)
     writeFileSync(path, 'token-alpha')
-    expect(jira.getStatus().connected).toBe(true)
-    expect(jira.getClients('site-alpha')).toHaveLength(1)
+    expect((await jira.getStatus()).connected).toBe(true)
+    expect(await jira.getClients('site-alpha')).toHaveLength(1)
   })
 
   it('keeps a captured request on its site after an external selection change', async () => {
@@ -554,13 +557,13 @@ describe('Jira site file cross-process visibility', () => {
     ]
     writeMultiSiteFiles(sites, 'site-alpha')
     const jira = await loadClientModule()
-    const captured = jira.getClients()[0]
+    const captured = (await jira.getClients())[0]
     if (!captured) {
       throw new Error('Expected stored Jira client')
     }
 
     writeMultiSiteFiles(sites, 'site-beta')
-    expect(jira.getClients()[0]?.site.id).toBe('site-beta')
+    expect((await jira.getClients())[0]?.site.id).toBe('site-beta')
     netFetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ issues: [] }), {
         status: 200,
@@ -580,11 +583,11 @@ describe('Jira site file cross-process visibility', () => {
   it('picks up a site connected by another Orca process', async () => {
     // Processes share ~/.orca; an initially empty read must observe later connections.
     const jira = await loadClientModule()
-    expect(jira.getStatus()).toMatchObject({ connected: false, sites: [] })
+    expect(await jira.getStatus()).toMatchObject({ connected: false, sites: [] })
 
     writeJiraFiles('site-alpha', 'token-alpha')
 
-    expect(jira.getStatus()).toMatchObject({
+    expect(await jira.getStatus()).toMatchObject({
       connected: true,
       activeSiteId: 'site-alpha',
       sites: [{ id: 'site-alpha' }]
@@ -594,7 +597,7 @@ describe('Jira site file cross-process visibility', () => {
   it('drops a site disconnected by another Orca process', async () => {
     writeJiraFiles('site-alpha', 'token-alpha')
     const jira = await loadClientModule()
-    expect(jira.getStatus()).toMatchObject({ connected: true })
+    expect(await jira.getStatus()).toMatchObject({ connected: true })
 
     writeFileSync(
       join(tempHome, '.orca', 'jira-sites.json'),
@@ -602,6 +605,6 @@ describe('Jira site file cross-process visibility', () => {
       { encoding: 'utf-8' }
     )
 
-    expect(jira.getStatus()).toMatchObject({ connected: false, sites: [] })
+    expect(await jira.getStatus()).toMatchObject({ connected: false, sites: [] })
   })
 })

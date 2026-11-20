@@ -1,9 +1,9 @@
 import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
-import { firstWindowsPathEnvKey, isNativeExecutable } from '../launch/cli-runtime-pairing-inputs'
+import { firstWindowsPathEnvKey } from '../launch/cli-runtime-pairing-inputs'
 import { getFnmDefaultAliasDirectories } from './fnm-default-alias-dirs'
 import { getNvmVersionDirectories, nvmVersionDirectories } from './nvm-version-directories'
-import { isRunnableCommand, runCliFsReadsSync, type CliFsReads } from './cli-fs-reads'
+import { runCliFsReadsSync, type CliFsReads } from './cli-fs-reads'
 import { getSystemCliInstallDirectories } from './system-cli-install-dirs'
 
 export type ResolveCommandOptions = {
@@ -189,25 +189,45 @@ export function resolveCliCommand(
   return runCliFsReadsSync(cliCommandLookup(commandName, options))
 }
 
-/** Resolve a literal override without falling back to an unverified command name. */
-export function resolveExecutableCommand(
+/** A literal override, never falling back to an unverified command name. Run with cli-fs-reads. */
+export function* executableCommandLookup(
   command: string,
   options: ResolveCommandOptions = {}
-): string | null {
+): CliFsReads<string | null> {
   const platform = options.platform ?? process.platform
   const expanded =
     command.startsWith('~/') || command.startsWith('~\\')
       ? join(options.homePath ?? homedir(), command.slice(2))
       : command
   if (isAbsolute(expanded)) {
-    return isRunnableCommand(platform, expanded) ? expanded : null
+    return (yield { kind: 'runnable', platform, path: expanded }) === true ? expanded : null
   }
   // Relative paths depend on the workspace, which a session-less catalog cannot name.
   if (expanded.includes('/') || expanded.includes('\\')) {
     return null
   }
-  const resolved = resolveCliCommand(expanded, options)
-  return isAbsolute(resolved) && isRunnableCommand(platform, resolved) ? resolved : null
+  // The lookup returns an absolute path only after a runnable check.
+  const resolved = yield* cliCommandLookup(expanded, options)
+  return isAbsolute(resolved) ? resolved : null
+}
+
+export function resolveExecutableCommand(
+  command: string,
+  options: ResolveCommandOptions = {}
+): string | null {
+  return runCliFsReadsSync(executableCommandLookup(command, options))
+}
+
+/** Command-setting arguments get the `~/` a shell would expand. */
+export function expandHomeArgs(args: readonly string[], homePath?: string): string[] {
+  return args.map((token) =>
+    token.startsWith('~/') ? resolve(homePath ?? homedir(), token.slice(2)) : token
+  )
+}
+
+// Extensionless commands cannot spawn on Windows; .cmd/.bat use Orca's shim handling.
+export function isSpawnableCommand(platform: NodeJS.Platform, command: string): boolean {
+  return platform !== 'win32' || /\.(exe|com|cmd|bat)$/i.test(command)
 }
 
 export function resolveCliCommands(
@@ -250,14 +270,23 @@ export function withCliRuntimeOnPath<T extends NodeJS.ProcessEnv>(
   env: T,
   options: Pick<ResolveCommandOptions, 'platform'> = {}
 ): T {
+  return runCliFsReadsSync(cliRuntimePathPairing(commandPath, env, options))
+}
+
+/** withCliRuntimeOnPath's walk; run with cli-fs-reads. */
+export function* cliRuntimePathPairing<T extends NodeJS.ProcessEnv>(
+  commandPath: string,
+  env: T,
+  options: Pick<ResolveCommandOptions, 'platform'> = {}
+): CliFsReads<T> {
   const platform = options.platform ?? process.platform
   if (!isAbsolute(commandPath)) {
     return env
   }
   const commandDirectory = dirname(commandPath)
   if (
-    !findFirstExecutable(platform, [commandDirectory], getExecutableNames(platform, 'node')) ||
-    isNativeExecutable(commandPath)
+    !(yield* firstRunnable(platform, [commandDirectory], getExecutableNames(platform, 'node'))) ||
+    (yield { kind: 'native', path: commandPath }) === true
   ) {
     return env
   }

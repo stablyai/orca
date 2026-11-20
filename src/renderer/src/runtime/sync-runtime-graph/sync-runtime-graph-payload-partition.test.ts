@@ -9,29 +9,17 @@ import { acceptedAgentStatuses } from '../../store/slices/agent-status/status-ow
 import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 
-function leafIdFor(index: number): string {
-  return `${String(index).padStart(8, '0')}-1111-4111-8111-111111111111`
-}
-
-/** Distinct ids per test: the publication memo is module state shared in this file. */
-function makeState(prefix: string, worktreeCount: number, titles: string[] = []): AppState {
-  const tabsByWorktree: Record<string, unknown[]> = {}
-  const terminalLayoutsByTabId: Record<string, unknown> = {}
-  for (let i = 0; i < worktreeCount; i++) {
-    const tabId = `${prefix}-term-${i}`
-    tabsByWorktree[`repo::/${prefix}-wt-${i}`] = [
-      { id: tabId, title: titles[i] ?? `Agent ${i}`, customTitle: null, ptyId: null }
-    ]
-    terminalLayoutsByTabId[tabId] = {
-      root: { type: 'leaf', leafId: leafIdFor(i) },
-      activeLeafId: leafIdFor(i),
-      expandedLeafId: null
-    }
-  }
+function makeState(): AppState {
+  const tabId = 'orchestration-term-0'
+  const leafId = '00000000-1111-4111-8111-111111111111'
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the graph publisher reads only these slices of AppState.
   return {
-    tabsByWorktree,
-    terminalLayoutsByTabId,
+    tabsByWorktree: {
+      'repo::/orchestration-wt-0': [{ id: tabId, title: 'Agent 0', customTitle: null, ptyId: null }]
+    },
+    terminalLayoutsByTabId: {
+      [tabId]: { root: { type: 'leaf', leafId }, activeLeafId: leafId, expandedLeafId: null }
+    },
     runtimePaneTitlesByTabId: {},
     groupsByWorktree: {},
     activeGroupIdByWorktree: {},
@@ -73,7 +61,7 @@ describe('orchestration graph reply', () => {
       dispatchId: 'dispatch-1',
       dispatchStatus: 'dispatched'
     }
-    const current = makeState('orchestration', 1)
+    const current = makeState()
     current.runtimeAgentOrchestrationByPaneKey = {}
     current.setRuntimeAgentOrchestrationByPaneKey = (next) => {
       current.runtimeAgentOrchestrationByPaneKey = next

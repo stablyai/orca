@@ -6,12 +6,12 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
   protected async fetchAll(options?: { force?: boolean }): Promise<void> {
     if (this.isFetching) {
       if (options?.force) {
-        this.fullFetchQueued = true
+        this.fullFetchQueued = { force: true }
         return this.waitForFetchIdle()
       }
       return
     }
-    // Only user-forced refreshes bypass Retry-After; queued reruns are forced.
+    // Only user-forced refreshes bypass Retry-After.
     return this.runFetchQueue((signal) =>
       this.runFetchAllCycle(signal, { force: options?.force ?? false })
     )
@@ -72,8 +72,9 @@ export abstract class RateLimitServiceFetchQueue extends RateLimitServiceProvide
 
   private takeQueuedFetchCycle(): FetchCycle | null {
     if (this.fullFetchQueued) {
-      this.fullFetchQueued = false
-      return (signal) => this.runFetchAllCycle(signal, { force: true })
+      const options = this.fullFetchQueued
+      this.fullFetchQueued = null
+      return (signal) => this.runFetchAllCycle(signal, options)
     }
     if (this.codexOnlyFetchQueued) {
       this.codexOnlyFetchQueued = false
