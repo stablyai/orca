@@ -65,7 +65,12 @@ function insertAfterFirstLineIf(
 /** True when a newer build last wrote any of this agent's shared hook scripts; its config entries go with them. */
 export async function isAgentHookOwnedByNewerBuild(agent: string): Promise<boolean> {
   const dir = dirname(getSharedManagedScriptPath(`${agent}-hook.sh`))
-  const names = await readdir(dir).catch(() => [] as string[])
+  let names: string[]
+  try {
+    names = await readdir(dir)
+  } catch {
+    return false
+  }
   for (const name of names) {
     if (!name.startsWith(`${agent}-hook.`) && !name.startsWith(`${agent}-hook-`)) {
       continue
