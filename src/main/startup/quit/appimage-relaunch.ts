@@ -1,6 +1,7 @@
 import { Socket } from 'node:net'
 import { app } from 'electron'
 import { spawnProcess } from '@orca/process-host'
+import { appImageEphemeralRootOf } from '../../../shared/desktop-distribution/appimage/appimage-ephemeral-root'
 import { envWithoutAppImageRuntime } from '../../pty/shell-startup/appimage-terminal-env'
 import { resolveAppImageRelaunchPath } from '../../updater/linux-package/appimage-runtime-identity'
 import { runWithLaunchPath } from '../shell-environment/hydrate-shell-path'
@@ -15,11 +16,7 @@ done
 electron=/proc/$1/exe
 runtime=/proc/$2/exe
 shift 2
-if [ "$runtime" -ef "$1" ]; then
-  export APPIMAGE_EXTRACT_AND_RUN=1
-else
-  runtime=
-fi
+[ "$runtime" -ef "$1" ] || runtime=
 while IFS= read -r line; do :; done
 while [ -e "$electron" ] || { [ -n "$runtime" ] && [ -e "$runtime" ]; }; do /bin/sleep 0.1; done
 exec "$@"
@@ -47,6 +44,10 @@ export async function scheduleAppRelaunch(options?: Electron.RelaunchOptions): P
 function scheduleAppImageRelaunch(appImagePath: string, args: string[]): boolean {
   const env = envWithoutAppImageRuntime(process.env)
   delete env.TARGET_APPIMAGE
+  // The AppImage runtime consumes --appimage-extract-and-run before starting Electron.
+  if (appImageEphemeralRootOf(process.execPath)?.kind === 'extract') {
+    env.APPIMAGE_EXTRACT_AND_RUN = '1'
+  }
   try {
     // Electron's Linux relauncher sets NO_NEW_PRIVS, which blocks setuid fusermount.
     const child = spawnProcess({
