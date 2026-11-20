@@ -162,7 +162,7 @@ ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --run-hooks --json
 ```
 
-For `worktree rm`, pass `--run-hooks` to run the repo's archive hook, which may release resources its setup hook allocated. Without the flag, removal skips archive hooks. On native Windows, a worktree whose `.git` entry is missing skips the hook even with the flag; release those resources yourself. A failed archive hook blocks removal even with `--force`.
+For `worktree rm`, pass `--run-hooks` to run the repo's archive hook, which may release resources its setup hook allocated. Without the flag, removal skips archive hooks. On native Windows, a worktree whose `.git` entry is missing skips the hook even with the flag; release those resources yourself. A failed archive hook blocks removal even with `--force`; add `--allow-failed-archive-hook` to remove it anyway.
 
 `repo add` defaults to Git. Use `--kind folder` for an ordinary directory or a parent of separate Git repositories; worktrees attached to a folder workspace appear in its Source Control panel, one section each. With `--environment`, pass an absolute path on that server.
 
