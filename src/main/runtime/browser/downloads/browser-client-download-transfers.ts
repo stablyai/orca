@@ -180,7 +180,7 @@ export class BrowserClientDownloadTransferStore {
         expectation,
         relativePath: session.tempRelativePath,
         contentBase64: input.contentBase64,
-        append: session.bytesWritten > 0
+        append: session.ownsTempFile
       })
       session.ownsTempFile = true
     } catch (error) {
