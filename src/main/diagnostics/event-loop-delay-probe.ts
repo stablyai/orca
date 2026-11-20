@@ -13,8 +13,8 @@ const RESOLUTION_MS = 10
 const TICK_MS = 500
 /** Below this share of main-thread CPU since the last tick, main counts as quiet. */
 const BUSY_CPU_SHARE = 0.01
-/** A main quiet this long ticks rarely so the probe alone never keeps an idle app awake. */
-const MAIN_IDLE_TICKS: EventLoopIdleTicks = { afterMs: 30_000, tickMs: 10_000 }
+/** A main quiet this long ticks 4x less often; any idle-time stall of 2 s or more still overlaps a tick. */
+const MAIN_IDLE_TICKS: EventLoopIdleTicks = { afterMs: 30_000, tickMs: 2_000 }
 const REPORT_EVERY_TICKS = 2
 /** Main's summary: one window a minute, and quieter windows write nothing. */
 const MAIN_STALL_SUMMARY: EventLoopStallSummaryOptions = {
