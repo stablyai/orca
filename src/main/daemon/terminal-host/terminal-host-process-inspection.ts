@@ -99,6 +99,20 @@ export async function inspectTerminalHostProcess(args: {
       }
     }
   }
+  // Idle shell panes poll forever; macOS reads the pane's own terminal in-process instead of the whole machine.
+  if (
+    args.steadyState === true &&
+    args.jobMembershipOnly === true &&
+    incarnationMatches &&
+    process.platform === 'darwin'
+  ) {
+    const sample = await session.observeForeground()
+    const current = session.isAlive && (!args.currentSession || args.currentSession() === session)
+    if (current && sample.verdict === 'observed' && sample.foregroundKind === 'shell') {
+      args.onTier?.('cheap')
+      return { foregroundProcess: sample.processName, hasChildProcesses: false }
+    }
+  }
   if (args.steadyState === true && incarnationMatches) {
     const anchored = await readAnchoredForeground(session)
     if (anchored !== null) {
