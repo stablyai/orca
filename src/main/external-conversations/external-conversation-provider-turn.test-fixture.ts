@@ -26,6 +26,8 @@ export async function finishTurn(
     opener?: AgentMessageSource | 'person'
     steer?: AgentMessageSource
     turnId?: string
+    /** The outbox reads only prose explicitly scoped to its provider turn. */
+    turnScopedReply?: boolean
     /** As Claude: the provider echoes the sent message, and the turn names the echo's id, which
      *  the journal keeps only as an alias of the send's row. */
     claudeEcho?: boolean
@@ -38,6 +40,7 @@ export async function finishTurn(
   const scope = { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   const turnId = input.turnId ?? 'turn-1'
   const turn = { ...TURN, turnId }
+  const completedTurn = { ...turn, ordinal: 3 }
   const sent = dispatch.mock.calls.at(-1)?.[0].clientMessageId
   const echo = { provider: 'claude' as const, sessionId: 'claude-session', uuid: turnId }
   if (input.claudeEcho && sent) {
@@ -83,10 +86,12 @@ export async function finishTurn(
   events?.appendItem(
     { ...turn, ordinal: 2 },
     { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
-    scope
+    input.turnScopedReply
+      ? { turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(completedTurn) } }
+      : scope
   )
   events?.appendItem(
-    { ...turn, ordinal: 3 },
+    completedTurn,
     { kind: 'turn', turnId, state: 'completed', outcome: 'success', userItemId },
     scope
   )

@@ -12,6 +12,7 @@ import {
   type ConnectorCloudFeature,
   type ConnectorTrigger
 } from '../../shared/connectors/connector-cloud-contract'
+import { CONNECTOR_CLOUD_MENTION_SOURCES } from '../../shared/connector-cloud-features'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorMachine, ConnectorTransport } from './connector-machine'
 import { jsonBytes } from './connector-snapshot'
@@ -42,6 +43,7 @@ const PROMPT_KINDS = ['approval', 'question']
 const SOURCES = ['slack', 'linear', 'github']
 
 export type ConnectorHelloSaid = {
+  sources: string[]
   /** Null: left out, so the cloud keeps the bots it has until its answer says whether it takes pages. */
   bots: ConnectorBot[] | null
   /** Sent in pages before the hello, which names them. */
@@ -61,18 +63,26 @@ export function connectorHelloSaid(
   machine: ConnectorMachine,
   cloudFeatures: ReadonlySet<string> | null
 ): ConnectorHelloSaid {
+  const sources = [
+    ...SOURCES,
+    ...Object.entries(CONNECTOR_CLOUD_MENTION_SOURCES).flatMap(([source, feature]) =>
+      cloudFeatures?.has(feature) && cloudFeatures.has(CONNECTOR_REPLIES_OUTBOX_FEATURE)
+        ? [source]
+        : []
+    )
+  ]
   const bots = machine.bots()
   const triggers = machine.triggers()
   const { maxHelloBots } = CONNECTOR_CLIENT_LIMITS
   if (bots.length <= maxHelloBots) {
-    return { bots, paged: false, cut: false, triggers }
+    return { sources, bots, paged: false, cut: false, triggers }
   }
   if (cloudFeatures === null) {
-    return { bots: null, paged: false, cut: false, triggers }
+    return { sources, bots: null, paged: false, cut: false, triggers }
   }
   return cloudFeatures.has('bots.pages' satisfies ConnectorCloudFeature)
-    ? { bots, paged: true, cut: false, triggers }
-    : { bots: bots.slice(0, maxHelloBots), paged: false, cut: true, triggers }
+    ? { sources, bots, paged: true, cut: false, triggers }
+    : { sources, bots: bots.slice(0, maxHelloBots), paged: false, cut: true, triggers }
 }
 
 /** Says `said`, after staging a paged hello's bots: the cloud's answer, and whether it left any out. */
@@ -131,7 +141,7 @@ export function connectorHello(
     projects: [],
     promptKinds: PROMPT_KINDS,
     features: machine.prEvent ? [...FEATURES, 'prEvents'] : FEATURES,
-    sources: SOURCES,
+    sources: said.sources,
     ...(botPages ? { botPages } : said.bots ? { bots: said.bots } : {})
   }
   let bytes = jsonBytes({ ...envelope, triggers: [], triggersTruncated: false })

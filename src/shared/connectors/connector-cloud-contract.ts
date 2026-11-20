@@ -1,9 +1,9 @@
-import { ConnectorAnswerFields } from '../connector-prompt-contract'
+import { ConnectorAnswerFields, type ConnectorPrompt } from '../connector-prompt-contract'
 import type { ConnectorTurnActivity } from './connector-turn-activity-contract'
 // Mirror of cloud/packages/connector-contract/src for the machine side of the Orca Cloud connector.
 // Copies, not imports: the CLI compiles src/shared with rootDir src, so it can't reach cloud files.
 import * as z from 'zod'
-import type { ConnectorPrompt } from '../connector-prompt-contract'
+import { CONNECTOR_SOURCES } from './external-conversation-link'
 export * from '../connector-prompt-contract'
 import {
   ConnectorTriggerEvent,
@@ -94,7 +94,7 @@ export const ConnectorHelloResponse = z.object({
 })
 
 /** Where an Orca Cloud conversation comes from. */
-export const CONNECTOR_CLOUD_SOURCES = ['slack', 'discord', 'linear', 'github', 'webhook'] as const
+export const CONNECTOR_CLOUD_SOURCES = [...CONNECTOR_SOURCES, 'webhook'] as const
 
 /** A thread; a webhook has none, only its calls' trigger deliveries. */
 export const ConnectorConversation = z.object({

@@ -13,7 +13,7 @@ export const ConnectorHostDescription = {
   orcaVersion: z.string().min(1)
 }
 
-export const CONNECTOR_SOURCES = ['slack', 'discord', 'linear', 'github', 'webhook'] as const
+export const CONNECTOR_SOURCES = ['slack', 'discord', 'linear', 'github', 'webhook', 'feishu', 'lark'] as const
 
 export const ConnectorConversationSchema = z.object({
   source: z.enum(CONNECTOR_SOURCES),

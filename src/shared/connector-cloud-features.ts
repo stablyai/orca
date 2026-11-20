@@ -57,3 +57,19 @@ export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 /** Listed by this Orca, which keeps a reply outbox, and by a cloud that takes its `reply` events
  *  (design item 125). Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
+
+/** Provisional hosted group-mention adapters; a contract update alone never enables either. */
+export const CONNECTOR_CLOUD_MENTION_SOURCES = {
+  feishu: 'feishu.mentions',
+  lark: 'lark.mentions'
+} as const
+
+/** New sources stay local while the Cloud's current schema cannot read them. */
+export function cloudSupportsConnectorSource(
+  source: string,
+  features: ReadonlySet<string> | null | undefined
+): boolean {
+  return source === 'feishu' || source === 'lark'
+    ? features?.has(CONNECTOR_CLOUD_MENTION_SOURCES[source]) === true
+    : true
+}

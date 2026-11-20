@@ -375,3 +375,19 @@ describe('an outcome the cloud can’t stand up yet', () => {
     expect(outbox.size).toBe(0)
   })
 })
+
+it.each([true, false])('retains an unknown-source reply under outbox=%s', async (capability) => {
+  const pending = {
+    ...row('future-d1', answered('future-d1')),
+    conversation: { source: 'future-chat', externalId: 'future-1' }
+  }
+  const store = journal([pending])
+  const sender = outbox(store)
+  const target = client()
+  await sender.via(target.sender, capability)
+  expect(store.rows).toEqual([pending])
+  expect(target.pushed).toEqual([])
+  expect(target.posted).toEqual([])
+  expect(sender.owed).toBe(1)
+  sender.retire()
+})

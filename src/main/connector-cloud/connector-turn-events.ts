@@ -1,5 +1,6 @@
 // The seam's watch, as the cloud reads it. Turn ends wait in an owner-only file so a restart still reports them.
 import { join } from 'node:path'
+import { cloudSupportsConnectorSource } from '../../shared/connector-cloud-features'
 import {
   CONNECTOR_CLIENT_LIMITS,
   CONNECTOR_AUDIENCE_EVENTS_VERSION,
@@ -106,7 +107,7 @@ function boundEvents(events: ConnectorEvent[], sent: number): ConnectorEvent[] {
 
 /**
  * One account's events for the cloud, in order, owned once per process so a replacement client never
- * races a retired one over the file. Turn ends also wait on disk until the cloud accepts them.
+ * races a retired one over the file. The newest turn ends wait on disk within the shared cap.
  */
 export class ConnectorTurnEvents {
   private readonly outbox: ConnectorOutbox<ConnectorEvent>
@@ -139,6 +140,10 @@ export class ConnectorTurnEvents {
     this.outbox = new ConnectorOutbox<ConnectorEvent>({
       headSize: eventsHeadSize,
       initial: this.stored.read(),
+      // shortcut: held turn ends share the 200-event cap; split retention if lifecycle replay must be lossless.
+      ready: (event) =>
+        event.kind === 'snapshot' ||
+        cloudSupportsConnectorSource(event.conversation.source, this.cloudFeatures),
       bound: (queued, sent) => {
         // A superseded activity is no loss, so it owes no snapshot.
         const events = newestActivities(queued, sent)
@@ -255,13 +260,17 @@ export class ConnectorTurnEvents {
           flush()
         }
       },
-      outbox: this.repliesOutbox
+      outbox: this.repliesOutbox,
+      features: this.cloudFeatures
     }
   }
 
   // Across a new hello: turn ends, and replies while the cloud still takes them.
   private readonly carried = (event: ConnectorEvent): boolean =>
-    isTurnEnded(event) || (isReplyEvent(event) && this.repliesOutbox === true)
+    isTurnEnded(event) ||
+    (isReplyEvent(event) &&
+      this.repliesOutbox === true &&
+      cloudSupportsConnectorSource(event.conversation.source, this.cloudFeatures))
 
   private restart(first: ConnectorEvent[], keep: (event: ConnectorEvent) => boolean): void {
     let released: ConnectorEvent[] = []

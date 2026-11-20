@@ -202,13 +202,14 @@ export function buildBotChatBase(
       })
     }
   }
-  for (const link of inputs.links) {
-    // Discord has no mark of its own; its threads show as side chats.
-    const origin: BotChatOrigin = link.source === 'discord' ? 'side' : link.source
-    originBySessionId.set(rootOf(link.sessionId), {
+  for (const { source, sessionId, place, title } of inputs.links) {
+    // Sources without a dedicated mark use the existing side-chat presentation.
+    const origin =
+      source === 'slack' || source === 'linear' || source === 'github' ? source : 'side'
+    originBySessionId.set(rootOf(sessionId), {
       origin,
-      ...(link.place ? { label: link.place } : {}),
-      ...(link.title ? { title: link.title } : {})
+      ...(place ? { label: place } : {}),
+      ...(title ? { title } : {})
     })
   }
   const homeRecords = records.filter((record) =>

@@ -38,7 +38,9 @@ export function fakeSeam() {
     watch: vi.fn((_host: unknown, listener: ConversationWatchListener) => {
       listener({ kind: 'snapshot', conversations: [] })
       watchers.add(listener)
-      return () => watchers.delete(listener)
+      return () => {
+        watchers.delete(listener)
+      }
     })
   }
   return {

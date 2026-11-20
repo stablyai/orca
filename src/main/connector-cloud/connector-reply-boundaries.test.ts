@@ -24,6 +24,10 @@ import { drainReplyId, type ConnectorReplyJournal } from './connector-reply-outb
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { postConnectorOutboxReply } from './connector-replies'
 import { ConnectorAccountTransport } from './connector-transport'
+import { fakeSeam, type FakeSeam } from './fake-connector-seam.test-fixture'
+import { harness } from '../external-conversations/external-conversation-seam.test-fixture'
+import { WORKTREE } from '../external-conversations/external-conversation.test-fixture'
+import { findLink } from '../external-conversations/external-conversation-links'
 
 // Design item 125 §8, desktop boundaries end to end: the journal's own file reopened by a new
 // process, and the cloud's wire answering (or losing its answer to) the reply events and posts.
@@ -43,12 +47,17 @@ function openJournal(path: string): ConnectorReplyJournal & { db: Database.Datab
   }
 }
 
-function admitAndAnswer(db: Database.Database, deliveryId: string, prose: string): void {
+function admitAndAnswer(
+  db: Database.Database,
+  deliveryId: string,
+  prose: string,
+  conversation = SLACK
+): void {
   recordJournalConnectorReplies(db, { sessionId: 'chat-1', epoch: 'e' }, `m-${deliveryId}`, false, {
     kind: 'message',
     role: 'user',
     blocks: [{ type: 'text', text: 'review' }],
-    connectorDelivery: { account: 'ada', conversation: SLACK, deliveryId }
+    connectorDelivery: { account: 'ada', conversation, deliveryId }
   })
   fillJournalConnectorReplies(
     db,
@@ -58,7 +67,7 @@ function admitAndAnswer(db: Database.Database, deliveryId: string, prose: string
 }
 
 /** One process: its events outbox over the journal, and a client that posts through the cloud. */
-function startProcess(journal: ConnectorReplyJournal) {
+function startProcess(journal: ConnectorReplyJournal, seam?: FakeSeam) {
   let running: ConnectorPollClient | null = null
   const events = new ConnectorTurnEvents(h.userDataPath, 'ada', undefined, {
     journal: () => journal,
@@ -73,7 +82,7 @@ function startProcess(journal: ConnectorReplyJournal) {
         : { ok: false, status: 0, error: null, retryAfterMs: null },
     hostName: () => 'box'
   })
-  const { client } = h.startClient(undefined, events)
+  const { client } = h.startClient(seam, events)
   running = client
   return { client, events }
 }
@@ -238,5 +247,106 @@ describe('a desktop downgrade and re-upgrade', () => {
     expect(readJournalConnectorReplies(journal.db)).toEqual([])
     upgraded.client.stop()
     journal.db.close()
+  })
+})
+
+describe('a Cloud rollback with persisted new-source conversations', () => {
+  it('sends Slack snapshots but holds Feishu/Lark replies until compatible Cloud returns', async () => {
+    const feishu = { source: 'feishu', externalId: 'app-a:tenant-a:chat-a:root-a' } as const
+    const lark = { source: 'lark', externalId: 'app-a:tenant-a:chat-a:root-a' } as const
+    const local = harness()
+    local.seam.linkChat(feishu, { worktreeId: WORKTREE, sessionId: 'feishu-chat', agent: 'codex' })
+    local.seam.linkChat(lark, { worktreeId: WORKTREE, sessionId: 'lark-chat', agent: 'codex' })
+    local.seam.linkChat(
+      { source: 'slack', externalId: SLACK.externalId },
+      {
+        worktreeId: WORKTREE,
+        sessionId: 'slack-chat',
+        agent: 'codex'
+      }
+    )
+    const seam = fakeSeam()
+    seam.calls.watch.mockImplementation((_host, listener) => local.seam.watch({}, listener))
+    const file = join(h.userDataPath, 'source-rollback.db')
+    const first = openJournal(file)
+    admitAndAnswer(first.db, 'feishu-d1', 'Feishu answer.', feishu)
+    admitAndAnswer(first.db, 'lark-d1', 'Lark answer.', lark)
+    h.fake.features = ['feishu.mentions', 'lark.mentions', 'replies.outbox']
+    h.fake.forced.set(CONNECTOR_PATHS.events, { status: 503 })
+    const original = startProcess(first, seam)
+    await settle(100)
+    original.client.stop()
+    first.db.close()
+
+    h.fake.features = []
+    h.fake.eventSources = ['slack', 'discord', 'linear', 'github', 'webhook']
+    h.fake.forced.delete(CONNECTOR_PATHS.events)
+    const journal = openJournal(file)
+    const restored = startProcess(journal, seam)
+    try {
+      await settle(100)
+      expect(h.fake.events).toContainEqual({
+        kind: 'snapshot',
+        conversations: [
+          expect.objectContaining({
+            conversation: { source: 'slack', externalId: 'T1:C9:1792.9:U5' }
+          })
+        ]
+      })
+      expect(readJournalConnectorReplies(journal.db).map((row) => row.deliveryId)).toEqual([
+        'feishu-d1',
+        'lark-d1'
+      ])
+      expect(h.fake.replies.size).toBe(0)
+      expect(findLink(local.store, feishu)?.link.sessionId).toBe('feishu-chat')
+      expect(findLink(local.store, lark)?.link.sessionId).toBe('lark-chat')
+      restored.events.observe({
+        kind: 'turn-started',
+        conversation: feishu,
+        worktreeId: WORKTREE,
+        paneKey: 'feishu-pane',
+        at: SERVER_NOW
+      })
+      expect(restored.events.next(2)).toBeNull()
+      expect(
+        await restored.client.reply({
+          replyId: 'manual-feishu',
+          conversation: feishu,
+          turnId: SERVER_NOW,
+          text: 'An explicit reply.'
+        })
+      ).toMatchObject({ ok: false, error: 'source_unsupported' })
+      expect(h.fake.requestsTo(CONNECTOR_PATHS.replies)).toEqual([])
+
+      h.fake.features = ['feishu.mentions', 'lark.mentions', 'replies.outbox']
+      h.fake.eventSources = undefined
+      h.fake.forgetHello()
+      h.poll([])
+      await settle(200)
+      expect(replyEvents()).toEqual([
+        {
+          kind: 'reply',
+          conversation: feishu,
+          deliveryIds: ['feishu-d1'],
+          answerDeliveryId: 'feishu-d1',
+          outcome: 'answered',
+          prose: 'Feishu answer.'
+        },
+        {
+          kind: 'reply',
+          conversation: lark,
+          deliveryIds: ['lark-d1'],
+          answerDeliveryId: 'lark-d1',
+          outcome: 'answered',
+          prose: 'Lark answer.'
+        }
+      ])
+      expect(readJournalConnectorReplies(journal.db)).toEqual([])
+    } finally {
+      restored.client.stop()
+      local.seam.dispose('connectors_disabled')
+      local.db.close()
+      journal.db.close()
+    }
   })
 })

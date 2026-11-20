@@ -14,7 +14,7 @@ import {
 type Target = { sessionId: string; epoch: string }
 
 /** One row per delivery a committed admission takes (its head and each carried id); a repeat keeps
- *  the first. Only Slack's conversations are answered through the outbox. */
+ *  the first. Slack, Feishu and Lark conversations are answered through the outbox. */
 export function recordJournalConnectorReplies(
   db: Database.Database,
   target: Target,
@@ -23,7 +23,7 @@ export function recordJournalConnectorReplies(
   body: AgentJournalMessageItem
 ): void {
   const stamp = body.connectorDelivery
-  if (!stamp || stamp.conversation.source !== 'slack') {
+  if (!stamp || !['slack', 'feishu', 'lark'].includes(stamp.conversation.source)) {
     return
   }
   const insert = db.prepare(`INSERT INTO journal_connector_replies

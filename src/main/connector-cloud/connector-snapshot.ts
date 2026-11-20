@@ -6,6 +6,7 @@ import {
   type ConnectorEvent,
   type ConnectorPrompt
 } from '../../shared/connectors/connector-cloud-contract'
+import { cloudSupportsConnectorSource } from '../../shared/connector-cloud-features'
 import type { ConversationSnapshot } from '../external-conversations/external-conversation-events'
 
 type Snapshot = Extract<ConnectorEvent, { kind: 'snapshot' }>
@@ -49,7 +50,11 @@ export function connectorSnapshot(
     .flatMap((entry) => {
       const conversation = cloudConversation(entry.conversation)
       const activeAt = entry.working || entry.prompt || entry.workersRunning ? now : entry.activeAt
-      return conversation && activeAt >= since ? [{ ...entry, conversation, activeAt }] : []
+      return conversation &&
+        cloudSupportsConnectorSource(conversation.source, cloudFeatures) &&
+        activeAt >= since
+        ? [{ ...entry, conversation, activeAt }]
+        : []
     })
     .sort((a, b) => b.activeAt - a.activeAt)
   let conversations: Snapshot['conversations'] = recent

@@ -7,6 +7,7 @@ import {
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
 import {
+  cloudSupportsConnectorSource,
   CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE,
   CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE
 } from '../../shared/connector-cloud-features'
@@ -22,13 +23,17 @@ function promptEvent(event: Extract<ConnectorEvent, { kind: 'prompt' }>): Connec
     : { ...event, prompt: unsupported(event.prompt) }
 }
 
-/** `cloudFeatures`: what the cloud's hello answer listed; an event it can't read is left out. */
+/** Unsupported live events are omitted; durable turn ends wait in the outbox for a capable Cloud. */
 export function toConnectorEvent(
   event: ConversationEvent,
   cloudFeatures: ReadonlySet<string>
 ): ConnectorEvent | null {
   const conversation = cloudConversation(event.conversation)
-  if (!conversation) {
+  if (
+    !conversation ||
+    (event.kind !== 'turn-ended' &&
+      !cloudSupportsConnectorSource(conversation.source, cloudFeatures))
+  ) {
     return null
   }
   const { paneKey } = event
