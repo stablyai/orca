@@ -16,7 +16,7 @@ const tasks: AgentSessionBackgroundTask[] = [
     startedAt: now - 95_000
   },
   {
-    id: 'dev',
+    id: 'codex-command:primary:call-dev',
     kind: 'command',
     description: 'pnpm dev',
     state: 'monitoring',
@@ -43,10 +43,19 @@ const testOutput = [
   '      Tests  12 passed (21)'
 ].join('\n')
 
-// Only the test run published an output file; `pnpm dev` came from an agent that shares none.
+// The test run published an output file; `pnpm dev` came from an agent that only streams it into the chat.
 const outputs: ZotzBackgroundTaskOutputs = {
   worktreeId: 'zotz::/Users/me/code/zotz',
   outputFiles: new Map([['tests', '/private/tmp/claude-501/tasks/tests.output']]),
+  callOutputs: {
+    byCall: new Map([
+      [
+        'call-dev',
+        '> zotz@1.4.0 dev\n> electron-vite dev\n\n  VITE ready in 812 ms\n  ➜  Local: http://localhost:5173/'
+      ]
+    ]),
+    callByTask: new Map()
+  },
   read: async () => testOutput
 }
 

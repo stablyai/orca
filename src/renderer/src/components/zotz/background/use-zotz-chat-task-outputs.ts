@@ -3,7 +3,7 @@ import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/o
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { readZotzTaskOutputTail } from './zotz-background-task-output-read'
 import {
-  useZotzTaskOutputFiles,
+  useZotzTaskOutputSources,
   type ZotzBackgroundTaskOutputs
 } from './zotz-background-task-outputs'
 
@@ -13,9 +13,9 @@ export function useZotzChatTaskOutputs(
   messages: readonly NativeChatMessage[] | undefined
 ): ZotzBackgroundTaskOutputs {
   const worktreeId = useNativeChatTabOwnerWorktreeId(tabId)
-  const outputFiles = useZotzTaskOutputFiles(messages)
+  const { outputFiles, callOutputs } = useZotzTaskOutputSources(messages)
   return useMemo(
-    () => ({ worktreeId, outputFiles, read: readZotzTaskOutputTail }),
-    [worktreeId, outputFiles]
+    () => ({ worktreeId, outputFiles, callOutputs, read: readZotzTaskOutputTail }),
+    [worktreeId, outputFiles, callOutputs]
   )
 }

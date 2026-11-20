@@ -4,8 +4,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { AgentChildRowModel } from '../../../../../shared/agent-status/presentation/agent-child-row-model'
 import {
   useZotzBackgroundTaskOutputs,
+  zotzTaskCallOutput,
   type ZotzBackgroundTaskOutputs
 } from './zotz-background-task-outputs'
+import { zotzOutputTail } from './zotz-background-task-output-read'
 
 const REFRESH_MS = 1000
 
@@ -54,6 +56,25 @@ function useTaskOutputTail(
   return state
 }
 
+function OutputText({ text }: { text: string }): React.JSX.Element {
+  const t = useTranslate()
+  const preRef = useRef<HTMLPreElement>(null)
+  useEffect(() => {
+    // Follow the newest lines, like a terminal.
+    if (preRef.current) {
+      preRef.current.scrollTop = preRef.current.scrollHeight
+    }
+  }, [text])
+  return (
+    <pre
+      ref={preRef}
+      className="scrollbar-sleek max-h-60 overflow-auto whitespace-pre-wrap break-all px-2 py-1 font-mono text-3xs leading-4 text-foreground"
+    >
+      {text || t('zotz.background.outputEmpty', 'No output yet')}
+    </pre>
+  )
+}
+
 function OutputTail({
   outputs,
   filePath,
@@ -65,14 +86,6 @@ function OutputTail({
 }): React.JSX.Element {
   const t = useTranslate()
   const state = useTaskOutputTail(outputs, filePath, live)
-  const preRef = useRef<HTMLPreElement>(null)
-  const text = state.kind === 'loaded' ? state.text : null
-  useEffect(() => {
-    // Follow the newest lines, like a terminal.
-    if (preRef.current) {
-      preRef.current.scrollTop = preRef.current.scrollHeight
-    }
-  }, [text])
   if (state.kind === 'loading') {
     return (
       <p className="px-2 py-1 text-muted-foreground">
@@ -87,13 +100,32 @@ function OutputTail({
       </p>
     )
   }
+  return <OutputText text={state.text} />
+}
+
+function TaskOutput({
+  outputs,
+  taskId,
+  live
+}: {
+  outputs: ZotzBackgroundTaskOutputs
+  taskId: string
+  live: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
+  const filePath = outputs.outputFiles.get(taskId)
+  if (filePath) {
+    return <OutputTail outputs={outputs} filePath={filePath} live={live} />
+  }
+  // Agents without an output file still stream the shell's output into the chat.
+  const callOutput = zotzTaskCallOutput(outputs.callOutputs, taskId)
+  if (callOutput !== null) {
+    return <OutputText text={zotzOutputTail(callOutput, false)} />
+  }
   return (
-    <pre
-      ref={preRef}
-      className="scrollbar-sleek max-h-60 overflow-auto whitespace-pre-wrap break-all px-2 py-1 font-mono text-3xs leading-4 text-foreground"
-    >
-      {state.text || t('zotz.background.outputEmpty', 'No output yet')}
-    </pre>
+    <p className="px-2 py-1 text-muted-foreground">
+      {t('zotz.background.outputNotShared', 'This agent does not share the output of its shells.')}
+    </p>
   )
 }
 
@@ -105,12 +137,10 @@ export function useZotzBackgroundTaskOutputToggle(row: AgentChildRowModel): {
   panel: React.JSX.Element | null
 } | null {
   const outputs = useZotzBackgroundTaskOutputs()
-  const t = useTranslate()
   const [open, setOpen] = useState(false)
   if (!outputs || (row.kind !== 'command' && row.kind !== 'monitor')) {
     return null
   }
-  const filePath = outputs.outputFiles.get(row.providerId ?? row.id)
   const Chevron = open ? ChevronDown : ChevronRight
   return {
     open,
@@ -118,16 +148,7 @@ export function useZotzBackgroundTaskOutputToggle(row: AgentChildRowModel): {
     chevron: <Chevron aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />,
     panel: open ? (
       <li className="ml-5 overflow-hidden rounded-md border border-border bg-background text-xs">
-        {filePath ? (
-          <OutputTail outputs={outputs} filePath={filePath} live={!row.settled} />
-        ) : (
-          <p className="px-2 py-1 text-muted-foreground">
-            {t(
-              'zotz.background.outputNotShared',
-              'This agent does not share the output of its shells.'
-            )}
-          </p>
-        )}
+        <TaskOutput outputs={outputs} taskId={row.providerId ?? row.id} live={!row.settled} />
       </li>
     ) : null
   }
