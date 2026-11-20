@@ -64,7 +64,8 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<message>"`
   in any state: a working worker gets it when its current turn ends; a finished
   or closed one gets it as a follow-up Task and reports with `worker_done`. The
-  receipt says which.
+  receipt says which. For a short question after a report while the terminal is
+  still open, see `references/worker-teardown.md`.
   Except on a paired server: a finished worker there refuses `send`, so start
   new work there with `worker-start --on <server>` (load
   `references/placement-and-remote.md` first).
@@ -127,5 +128,6 @@ assignment does not prove its agent stopped.
 | Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |
 | Group messages                                 | `references/messaging-and-gates.md`  |
 | A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |
+| A finished task, closed tab, or unknown exit   | `references/worker-teardown.md`      |
 | Several independent workers at once            | `references/parallel-start.md`       |
 | Custom argv or terminal layout                 | `references/low-level-topology.md`   |

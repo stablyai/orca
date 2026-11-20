@@ -4627,7 +4627,8 @@ const ORCHESTRATION_MARKDOWN = [
   "  `ORCA orchestration send --to dispatch:<dispatch_id> --subject \"<topic>\" --body \"<message>\"`",
   "  in any state: a working worker gets it when its current turn ends; a finished",
   "  or closed one gets it as a follow-up Task and reports with `worker_done`. The",
-  "  receipt says which.",
+  "  receipt says which. For a short question after a report while the terminal is",
+  "  still open, see `references/worker-teardown.md`.",
   "  Except on a paired server: a finished worker there refuses `send`, so start",
   "  new work there with `worker-start --on <server>` (load",
   "  `references/placement-and-remote.md` first).",
@@ -4690,6 +4691,7 @@ const ORCHESTRATION_MARKDOWN = [
   "| Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |",
   "| Group messages                                 | `references/messaging-and-gates.md`  |",
   "| A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |",
+  "| A finished task, closed tab, or unknown exit   | `references/worker-teardown.md`      |",
   "| Several independent workers at once            | `references/parallel-start.md`       |",
   "| Custom argv or terminal layout                 | `references/low-level-topology.md`   |",
   "",
@@ -4966,6 +4968,37 @@ const ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN = [
 ].join('\n')
 
 // oxfmt-ignore
+const ORCHESTRATION_WORKER_TEARDOWN_REFERENCE_MARKDOWN = [
+  "# When a worker ends",
+  "",
+  "| What ended | Evidence | What you can rely on |",
+  "| --- | --- | --- |",
+  "| The assignment | A `worker_done` verdict, or an observed exit before a report | A successful report completes the Task and Dispatch. A failed report fails them. An unreported exit escalates to the coordinator with `exited`, or `lost` when the pane was deliberately closed. Read that escalation before deciding on a retry. |",
+  "| The session | The worker tab has closed | The Task and Dispatch records persist. An eligible finished worker auto-closes after the agent comes to rest. A user-kept worker stays open. A local Dispatch follow-up can reopen a resumable session. |",
+  "| The process | Confirmed termination of the recorded process incarnation | A stop needs positive exit evidence. Release addresses the exact owned terminal, preserves its output reference when available and returns a receipt. A reused or user-kept terminal can be retained. |",
+  "",
+  "Read `ORCA orchestration worker-show --dispatch <dispatch_id> --json` and follow its `next` or recovery instruction.",
+  "",
+  "- `unverifiable` means the host cannot establish liveness. Treat the process as possibly live.",
+  "- `stop_unknown` means the stop lacks confirmation. Later exit evidence or host reconciliation can settle it. A timeout or a missing tab supplies no exit evidence.",
+  "- `release_pending` means cleanup is waiting for recovery, such as rediscovery of the terminal. `release_unknown` means Orca could not verify the outcome. Inspect the current receipt before retrying. When it calls for a new release attempt, omit `--retry-request` so the CLI creates a fresh request ID.",
+  "- `worker-abandon` fences the assignment. Its process and resources may still be live. Use the recovery guide for user-directed cancellation or reassignment.",
+  "",
+  "## A short follow-up after a report",
+  "",
+  "For a quick question while the original worker terminal is still live, address its exact handle:",
+  "",
+  "```text",
+  "ORCA orchestration send --to <worker_terminal_handle> --type question --subject \"One detail\" --body \"Which browser did you use?\"",
+  "```",
+  "",
+  "This sends ordinary mailbox mail without launching a new Task or injecting the assignment preamble. A send receipt records the message. The worker’s reply confirms it received the question. Closing the terminal can strand its unread mail.",
+  "",
+  "When the terminal has closed or you need another supervised result, send to `dispatch:<dispatch_id>`. A local settled Dispatch starts a follow-up Task and can reopen its saved session. For a finished worker on a paired server, use `worker-start --on <server>` as described in [placement and remote execution](placement-and-remote.md).",
+  "",
+].join('\n')
+
+// oxfmt-ignore
 export const BUNDLED_SKILL_GUIDES = [
   {
     name: "jira-tickets",
@@ -5042,6 +5075,6 @@ export const BUNDLED_SKILL_GUIDES = [
     description: "Run work in separate Orca worker agents and get their results back. Use when the user invokes /orchestration, asks for Orca workers or supervision (monitor, task DAGs, ask/reply, decision gates), or asks to split, parallelize or fan out code changes across agents, worktrees or branches; use Orca workers for those. Also use when the work needs a different agent (such as Codex from Claude) or its own Orca workspace: \"Have Codex (or Claude) review this and report back\" means an Orca worker of that agent. Also use when you are a dispatched worker (a prompt with Task and Dispatch IDs: ask, worker_done). Unless the user asks for Orca workers or a named agent, searches, reads and research in your workspace stay with your own subagents, even in parallel. Use `orca-cli` to hand work off with nothing expected back (\"hand off\", \"handover\", \"give this to another agent\", \"another worktree\"), and for terminal control, shell commands, worktree management, and reading or waiting on terminals.",
     markdown: ORCHESTRATION_MARKDOWN,
     aliases: [],
-    references: [{ name: "coordinator-loop", markdown: ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN }, { name: "low-level-topology", markdown: ORCHESTRATION_LOW_LEVEL_TOPOLOGY_REFERENCE_MARKDOWN }, { name: "messaging-and-gates", markdown: ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN }, { name: "parallel-start", markdown: ORCHESTRATION_PARALLEL_START_REFERENCE_MARKDOWN }, { name: "placement-and-remote", markdown: ORCHESTRATION_PLACEMENT_AND_REMOTE_REFERENCE_MARKDOWN }, { name: "recovery-and-cleanup", markdown: ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN }]
+    references: [{ name: "coordinator-loop", markdown: ORCHESTRATION_COORDINATOR_LOOP_REFERENCE_MARKDOWN }, { name: "low-level-topology", markdown: ORCHESTRATION_LOW_LEVEL_TOPOLOGY_REFERENCE_MARKDOWN }, { name: "messaging-and-gates", markdown: ORCHESTRATION_MESSAGING_AND_GATES_REFERENCE_MARKDOWN }, { name: "parallel-start", markdown: ORCHESTRATION_PARALLEL_START_REFERENCE_MARKDOWN }, { name: "placement-and-remote", markdown: ORCHESTRATION_PLACEMENT_AND_REMOTE_REFERENCE_MARKDOWN }, { name: "recovery-and-cleanup", markdown: ORCHESTRATION_RECOVERY_AND_CLEANUP_REFERENCE_MARKDOWN }, { name: "worker-teardown", markdown: ORCHESTRATION_WORKER_TEARDOWN_REFERENCE_MARKDOWN }]
   }
 ] as const satisfies readonly BundledSkillGuide[]
