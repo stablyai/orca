@@ -58,8 +58,8 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['slack', 'post'],
     summary: 'Post a message in a Slack channel, thread or DM as this bot',
-    usage: 'orca slack post <place|@person> (<text> | --text-file <path|->) [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'ref', 'text', 'text-file'],
+    usage: 'orca slack post <place|@person> (<text> | --text-file <path|->) [--at <time>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'ref', 'text', 'text-file', 'at'],
     positionalArgs: ['ref', 'text'],
     notes: [
       AS_BOT,
@@ -67,6 +67,7 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
       TO_PERSON,
       `A message ref posts in its thread. ${WOKEN}`,
       POSTED_REF,
+      '--at posts it later, by Slack itself: in a while (+30m, +2h, +3d) or at a time with its zone (2026-12-01T09:00:00-08:00), up to 120 days ahead. A scheduled post has no ref to edit until it posts.',
       TEXT_FILE,
       SLACK_MENTION,
       SLACK_MARKDOWN

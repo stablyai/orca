@@ -4104,6 +4104,7 @@
             "e518f544b1": "Aucun agent détecté",
             "8dea9b5cdf": "Aucun agent activé",
             "chatNotInstalled": "Non installé",
+            "chatInstallRequired": "Installation requise",
             "startChat": "Démarrer un chat avec {{value0}}",
             "chatNotOverSsh": "Chat indisponible via SSH",
             "chatCheckFailed": "Impossible de vérifier la disponibilité du chat",
@@ -18142,10 +18143,6 @@
           "standaloneTerminal": "Terminal autonome"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Chemin copié dans le presse-papiers",
-          "copyPathFailed": "Échec de la copie du chemin",
-          "workspace": "Espace de travail",
-          "copyPath": "Copier le chemin",
           "jumpToWorkspace": "Accéder à l'espace de travail"
         },
         "ActivityThreadContextMenu": {
@@ -18958,7 +18955,6 @@
         "stoppedRestart_many": "{{count}} chats arrêtés à la fermeture d’Orca.",
         "stoppedRestart_other": "{{count}} chats arrêtés à la fermeture d’Orca.",
         "promptsNotResent": "La reprise ne renverra pas vos prompts.",
-        "promptsNotSent": "Vos prompts n’ont pas été renvoyés.",
         "resume": "Reprendre",
         "details": "Détails",
         "close": "Fermer",
@@ -20979,7 +20975,6 @@
       "cancelFailed": "Impossible d'annuler l'installation. Réessayez.",
       "install": "Installer {{agent}}",
       "installManaged": "Installer la copie d'Orca",
-      "installed": "Installé",
       "notInstalled": "Non installé.",
       "progress": "Téléchargement de {{agent}}",
       "readFailed": "Impossible de vérifier {{agent}} sur cet hôte. Nouvel essai en cours.",
@@ -24234,7 +24229,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, tout afficher",
       "searchEverything": "Tout rechercher pour « {{text}} »",
-      "searchBotsFor": "Rechercher des bots pour « {{text}} »",
       "noMatch": "Aucun bot ne correspond à « {{text}} »",
       "noBotsYet": "Aucun bot pour l’instant",
       "filtersPaused": "Les filtres s’appliquent aux espaces de travail, pas aux bots",
@@ -24251,7 +24245,7 @@
       "browse": "Parcourir les modèles"
     },
     "new": {
-      "fromTemplate": "Utiliser un modèle"
+      "fromTemplate": "Modèle"
     },
     "googleSetup": {
       "otherAccount": "Changer de compte"

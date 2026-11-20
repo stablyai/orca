@@ -216,6 +216,9 @@ export const ConnectorActionArgsSchema = z
     join: z.literal(true).optional(),
     // A post's idempotency key, minted once by the CLI: a retry with it never posts twice.
     postId: z.string().min(1).max(128).optional(),
+    // post: when to post it (epoch seconds), for the source to send then by itself. Sent only to a
+    // cloud listing `post.schedule`.
+    postAt: z.number().int().positive().optional(),
     // attach: the file, posted with text as its comment (a machine before `files.direct`).
     file: ConnectorAttachedFileSchema.optional(),
     // reply and attach, with stage: a file the machine uploads itself. The answer's `upload.url` takes

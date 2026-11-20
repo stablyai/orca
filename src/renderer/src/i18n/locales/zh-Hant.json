@@ -4255,6 +4255,7 @@
             "terminalListNeedsServerUpdate": "更新此伺服器上的 Orca，以列出終端機代理程式",
             "terminalListFailed": "無法列出此工作區的終端機代理程式",
             "chatNotInstalled": "未安裝",
+            "chatInstallRequired": "需要安裝",
             "chatNotOverSsh": "SSH 連線不支援聊天",
             "chatNotInWsl": "WSL 不支援聊天",
             "chatNotInSubfolder": "子資料夾不支援聊天",
@@ -17899,10 +17900,6 @@
           "hideOtherClients": "隱藏其他用戶端的代理程式"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "路徑已複製到剪貼簿",
-          "copyPathFailed": "無法複製路徑",
-          "workspace": "工作區",
-          "copyPath": "複製路徑",
           "jumpToWorkspace": "跳至工作區"
         },
         "ActivityThreadRow": {
@@ -18665,7 +18662,6 @@
         "stoppedUpdate_other": "Orca 更新時有 {{count}} 個聊天已停止。",
         "stoppedRestart_other": "Orca 關閉時有 {{count}} 個聊天已停止。",
         "promptsNotResent": "恢復不會重新傳送你的提示。",
-        "promptsNotSent": "你的提示沒有被重新傳送。",
         "resume": "恢復",
         "details": "詳情",
         "close": "關閉",
@@ -20537,7 +20533,6 @@
       "cancelFailed": "無法取消安裝。請再試一次。",
       "install": "安裝 {{agent}}",
       "installManaged": "安裝 Orca 提供的副本",
-      "installed": "已安裝",
       "notInstalled": "尚未安裝。",
       "progress": "{{agent}} 下載",
       "readFailed": "無法檢查此主機上的 {{agent}}。正在重試。",
@@ -23314,7 +23309,6 @@
       "chip": "機器人",
       "chipLabel": "機器人，顯示全部",
       "searchEverything": "在全部內容中搜尋「{{text}}」",
-      "searchBotsFor": "在機器人中搜尋「{{text}}」",
       "noMatch": "沒有符合「{{text}}」的機器人",
       "noBotsYet": "還沒有機器人",
       "filtersPaused": "篩選僅適用於工作區，不適用於機器人",
@@ -23329,7 +23323,7 @@
       "browse": "瀏覽範本"
     },
     "new": {
-      "fromTemplate": "使用範本"
+      "fromTemplate": "範本"
     },
     "apps": {
       "paste": {

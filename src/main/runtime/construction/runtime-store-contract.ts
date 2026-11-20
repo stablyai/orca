@@ -124,6 +124,7 @@ export type RuntimeStore = {
     browserClientHostedRemoteEnabled?: GlobalSettings['browserClientHostedRemoteEnabled']
     autoRenameBranchFromWork?: GlobalSettings['autoRenameBranchFromWork']
     nativeChatAutoName?: GlobalSettings['nativeChatAutoName']
+    nativeChatResumeWorkOnRestart?: GlobalSettings['nativeChatResumeWorkOnRestart']
     notifications?: GlobalSettings['notifications']
     claudeManagedAccounts?: GlobalSettings['claudeManagedAccounts']
     activeClaudeManagedAccountId?: GlobalSettings['activeClaudeManagedAccountId']

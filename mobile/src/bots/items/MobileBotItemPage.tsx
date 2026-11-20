@@ -255,6 +255,7 @@ export function MobileBotItemPage({
             item={item}
             events={view.events}
             busy={replyBusy}
+            attachments={{ client, onOpenFile }}
             quickReplies={{
               send: (text) => {
                 setReplyAfter(lastEventId)

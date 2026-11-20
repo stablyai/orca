@@ -64,7 +64,7 @@ export function isAntigravityHostAccountHome(home: AgentSessionAccountHome): boo
 }
 
 // Keyed by the binary's identity so an upgrade or reinstall is checked again.
-type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number }
+type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number; version?: string }
 const checks = new Map<string, HostCheck>()
 
 class IncompatibleHostAcp extends Error {}
@@ -72,6 +72,16 @@ class IncompatibleHostAcp extends Error {}
 /** After agy's login changes, the next check asks again instead of trusting the last answer. */
 export function forgetAntigravityHostAcpChecks(): void {
   checks.clear()
+  latestAsked = null
+}
+
+// The check behind the latest answer, cached or not, so the version is never another binary's.
+let latestAsked: HostCheck | null = null
+
+/** The version of the agy the latest answer vouched for, for naming what chats run on; null when it
+ *  did not pass. Reads the cache only, so it never starts agy. */
+export function readyAntigravityHostAcpVersion(): string | null {
+  return latestAsked?.version ?? null
 }
 
 /** Whether `command acp` initializes as a compatible server that serves session requests. An
@@ -90,6 +100,7 @@ export async function antigravityHostAcpReady(
   const identity = `${stats.size}:${stats.mtimeMs}`
   const cached = checks.get(command)
   if (cached?.identity === identity && (cached.retryAt === undefined || now() < cached.retryAt)) {
+    latestAsked = cached
     return cached.answer
   }
   let answered = false
@@ -111,7 +122,10 @@ export async function antigravityHostAcpReady(
         await connection.listSessions({ cwd: folder })
       }
     ).then(
-      () => true,
+      (initialized) => {
+        check.version = initialized.agentInfo?.version
+        return true
+      },
       (error: unknown) => {
         // An exit before initialize answers is a binary rejecting the launch flag, not a lapse.
         if (
@@ -125,6 +139,7 @@ export async function antigravityHostAcpReady(
     )
   }
   checks.set(command, check)
+  latestAsked = check
   return check.answer
 }
 

@@ -2085,6 +2085,8 @@
         "soul": "Updated soul applied"
       },
       "botCreateOffer": {
+        "askedMany": "Asked to take over {{count}} workspaces",
+        "askedOne": "Asked to take over 1 workspace",
         "create": "Create bot",
         "created": "Created",
         "createdAskedMany": "Created · asked to take over {{count}} workspaces",
@@ -2105,6 +2107,9 @@
         "takesOverMany": "Takes over {{count}} workspaces",
         "takesOverOne": "Takes over 1 workspace",
         "template": "Template",
+        "tookOverMany": "Took over {{count}} workspaces",
+        "tookOverOne": "Took over 1 workspace",
+        "tookOverSome": "Took over {{taken}} of {{count}} workspaces",
         "watches": "Watches",
         "willPropose": "Will propose"
       },
@@ -2814,6 +2819,14 @@
     "toggleFullScreen": "Toggle Full Screen",
     "unhide": "Show All",
     "zoom": "Zoom"
+  },
+  "perfNotices": {
+    "hiddenTabs": {
+      "descriptionOneHour_one": "You have {{count}} tab you haven't viewed in over an hour. Turn on Memory Saver to free up its memory.",
+      "descriptionOneHour_other": "You have {{count}} tabs you haven't viewed in over an hour. Turn on Memory Saver to free up their memory.",
+      "description_one": "You have {{count}} tab you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up its memory.",
+      "description_other": "You have {{count}} tabs you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up their memory."
+    }
   },
   "pet": {
     "defaultLabels": {

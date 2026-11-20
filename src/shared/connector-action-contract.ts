@@ -80,6 +80,8 @@ export const ConnectorActionArgs = z
     join: z.literal(true).optional(),
     // Minted once by the CLI, so the host's retries post at most once.
     postId: z.string().min(1).max(128).optional(),
+    // post: when to post it (epoch seconds); sent only to a cloud listing `post.schedule`.
+    postAt: z.number().int().positive().optional(),
     // read: the id of a file on the message read, to download it.
     download: z.string().min(1).max(64).optional(),
     // reply and attach, with stage: a file the CLI uploads itself, straight to the source, to the
@@ -125,6 +127,7 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   'cloud_lacks_actions',
   'cloud_lacks_places',
   'cloud_lacks_search',
+  'cloud_lacks_schedule',
   'cloud_lacks_set',
   'cloud_lacks_create',
   // `bot reply` with several files, to a cloud that posts one file a message.

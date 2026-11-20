@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chatFoldCounts,
   normalizeBotChatFolds,
   orderBotChats,
   withBotChatFold,
@@ -54,6 +55,24 @@ describe('orderBotChats', () => {
       'running',
       'closed'
     ])
+  })
+})
+
+describe('chatFoldCounts', () => {
+  const worker = (key: string, state: 'running' | 'needs-you' | 'unreachable') => ({
+    key,
+    title: key,
+    state,
+    startedAt: 1
+  })
+
+  it('counts waiting and running workers, and none while nothing runs', () => {
+    const running = [worker('a', 'needs-you'), worker('b', 'running'), worker('c', 'unreachable')]
+    expect(chatFoldCounts(chat('c', { running, runningTotal: 4 }))).toEqual({
+      waiting: 1,
+      running: 2
+    })
+    expect(chatFoldCounts(chat('idle'))).toBeNull()
   })
 })
 

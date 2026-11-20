@@ -236,7 +236,9 @@ export function acpStructuredLaunchPart(
           linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
         )
       ),
-      env: childEnvironmentView({ ...env, ...skill?.env }, inherited, envToDelete)
+      env: childEnvironmentView({ ...env, ...skill?.env }, inherited, envToDelete),
+      cwd,
+      version: launchVersion.version
     })
     const fullAccess = basis.permissionMode === 'full-access'
     const tools = await basis.toolServers()

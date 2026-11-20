@@ -4347,6 +4347,7 @@
             "terminalListNeedsServerUpdate": "更新此服务器上的 Orca 以列出终端智能体",
             "terminalListFailed": "无法列出此工作区的终端智能体",
             "chatNotInstalled": "未安装",
+            "chatInstallRequired": "需要安装",
             "startChat": "与 {{value0}} 开始聊天",
             "chatUnavailableAfterSelection": "无法启动 {{value0}} 聊天",
             "chatCheckFailed": "无法检查聊天可用性",
@@ -18404,10 +18405,6 @@
           "standaloneTerminal": "独立终端"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "路径已复制到剪贴板",
-          "copyPathFailed": "复制路径失败",
-          "workspace": "工作区",
-          "copyPath": "复制路径",
           "jumpToWorkspace": "跳转到工作区"
         },
         "ActivityThreadContextMenu": {
@@ -19256,7 +19253,6 @@
         "stoppedUpdate_other": "Orca 更新时有 {{count}} 个聊天已停止。",
         "stoppedRestart_other": "Orca 关闭时有 {{count}} 个聊天已停止。",
         "promptsNotResent": "恢复不会重新发送你的提示。",
-        "promptsNotSent": "你的提示没有被重新发送。",
         "resume": "恢复",
         "details": "详情",
         "close": "关闭",
@@ -21769,7 +21765,6 @@
       "cancelFailed": "无法取消安装，请重试",
       "install": "安装 {{agent}}",
       "installManaged": "安装 Orca 的副本",
-      "installed": "已安装",
       "notInstalled": "未安装",
       "progress": "{{agent}} 下载",
       "readFailed": "无法检查此主机上的 {{agent}}，正在重试",
@@ -25488,7 +25483,6 @@
       "chip": "机器人",
       "chipLabel": "机器人，显示全部",
       "searchEverything": "在全部内容中搜索“{{text}}”",
-      "searchBotsFor": "在机器人中搜索“{{text}}”",
       "noMatch": "没有与“{{text}}”匹配的机器人",
       "noBotsYet": "还没有机器人",
       "filtersPaused": "筛选仅适用于工作区，不适用于机器人",
@@ -25503,7 +25497,7 @@
       "browse": "浏览模板"
     },
     "new": {
-      "fromTemplate": "使用模板"
+      "fromTemplate": "模板"
     },
     "googleSetup": {
       "otherAccount": "切换账号"

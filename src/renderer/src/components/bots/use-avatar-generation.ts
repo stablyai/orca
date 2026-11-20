@@ -40,7 +40,11 @@ function imageBlob(image: GeneratedAvatarImage): Blob {
   return new Blob([bytes], { type: image.mimeType })
 }
 
-export function useAvatarGeneration(onResult: (result: GeneratedAvatar) => void): {
+/** `onStart` runs once a run is accepted (after the description is checked), before the agent is asked. */
+export function useAvatarGeneration(
+  onResult: (result: GeneratedAvatar) => void,
+  onStart?: () => void
+): {
   agents: AvatarImageAgentStatus[]
   /** null while no capable agent was found. */
   agent: AvatarImageAgent | null
@@ -61,8 +65,10 @@ export function useAvatarGeneration(onResult: (result: GeneratedAvatar) => void)
   const current = useRef<string | null>(null)
   // A result can land after the face moved; the picker decides then whether it applies.
   const latestOnResult = useRef(onResult)
+  const latestOnStart = useRef(onStart)
   useEffect(() => {
     latestOnResult.current = onResult
+    latestOnStart.current = onStart
   })
 
   const setStatus = (target: AvatarImageAgent, status: AvatarImageAgentStatus['status']): void =>
@@ -113,6 +119,7 @@ export function useAvatarGeneration(onResult: (result: GeneratedAvatar) => void)
       setRun({ kind: 'error', failure: 'real-person' })
       return
     }
+    latestOnStart.current?.()
     const requestId = createNonSecureContextUuid()
     current.current = requestId
     rememberAgent(agent)

@@ -59,6 +59,7 @@ const ANTIGRAVITY_IMAGE_STEER =
 function agentArgs(agent: AvatarImageAgent, cwd: string, prompt: string): string[] {
   if (agent === 'codex') {
     // Read-only: the image tool saves under CODEX_HOME by itself; the run needs no shell or writes.
+    // Low effort makes the same picture about a fifth faster than a high default.
     return [
       'exec',
       '--json',
@@ -66,6 +67,8 @@ function agentArgs(agent: AvatarImageAgent, cwd: string, prompt: string): string
       '--ephemeral',
       '-s',
       'read-only',
+      '-c',
+      'model_reasoning_effort="low"',
       '-C',
       cwd,
       '-'
@@ -94,6 +97,9 @@ function agentArgs(agent: AvatarImageAgent, cwd: string, prompt: string): string
     '--allow',
     'image_gen',
     '--disable-web-search',
+    // Low effort makes the same picture about a fifth faster.
+    '--reasoning-effort',
+    'low',
     '--output-format',
     'streaming-json',
     '--cwd',
