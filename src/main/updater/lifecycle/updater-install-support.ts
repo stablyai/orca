@@ -1,4 +1,8 @@
+import { hasInProcessTerminalSessions } from '../../ipc/pty/provider/kill-all'
+import { prepareRendererForUpdate } from '../../window/renderer-relays/native-unload-coordinator'
+import { wslMoveInstallHold } from './updater-wsl-move-install-hold'
 import { app } from 'electron'
+import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import {
   isWindowsSignatureCheckUnavailableFailure,
   isWindowsSignatureMismatchFailure
@@ -75,7 +79,62 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     return `${userInitiated ? 'user' : 'auto'}:${message}`
   }
 
+  protected canProceedWithInstall(version: string, automatic: boolean): boolean {
+    if (automatic && this.getAutomaticUpdates?.() !== true) {
+      this.cancelAutomaticInstall(version)
+      return false
+    }
+
+    const wslHold = wslMoveInstallHold()
+    const hold = wslHold
+      ? { message: wslHold.message }
+      : automatic && hasInProcessTerminalSessions()
+        ? { ...updaterCodedMessage('automaticInstallTerminalBusy'), retryable: false }
+        : null
+    if (!hold) {
+      return true
+    }
+
+    if (wslHold) {
+      recordUpdaterLifecycle(wslHold.lifecycleEvent, { version: version || null })
+    }
+    this.resetQuitForUpdateState()
+    this.sendToMainWindow('updater:quitAndInstallAborted')
+    this.sendInstallFailureStatus({
+      state: 'error',
+      version,
+      retryAction: 'install',
+      ...hold
+    })
+    return false
+  }
+
+  protected async prepareAutomaticInstall(version: string): Promise<boolean> {
+    const window = this.getMainWindow()
+    if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
+      this.cancelAutomaticInstallPreparation = await prepareRendererForUpdate(window.webContents)
+      if (!this.cancelAutomaticInstallPreparation) {
+        this.resetQuitForUpdateState()
+        this.sendInstallFailureStatus({
+          state: 'error',
+          version,
+          retryAction: 'install',
+          ...updaterCodedMessage('automaticInstallCheckpointFailed')
+        })
+        return false
+      }
+    }
+    return true
+  }
+
+  protected cancelAutomaticInstall(version: string): void {
+    this.resetQuitForUpdateState()
+    this.sendStatus({ state: 'downloaded', version }, { force: true })
+  }
+
   protected resetQuitForUpdateState(): void {
+    this.cancelAutomaticInstallPreparation?.()
+    this.cancelAutomaticInstallPreparation = null
     this.quitAndInstallInProgress = false
     this.quittingForUpdate = false
     this.updateInstallCommitted = false

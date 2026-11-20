@@ -51,6 +51,11 @@ export async function antigravityUsesFileCredentialAuthority(
   return process.platform === 'linux' && !(await hasAntigravityLinuxSecretService(env))
 }
 
+/** agy writes this after a keyring timeout and may read its file store for a while after. */
+export function antigravityKeyringFallbackMarker(home: string): string {
+  return join(home, '.gemini', 'antigravity-cli', 'cache', 'antigravity-keyring-unavailable')
+}
+
 export function createAntigravityHostCredentialBackend(home: string): AntigravityCredentialBackend {
   if (process.platform === 'win32') {
     return createAntigravityWindowsCredentialBackend(getAntigravityWindowsHome(process.env))
@@ -64,7 +69,7 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
     return file
   }
   const keyring = hostKeyring()
-  const marker = join(root, 'cache', 'antigravity-keyring-unavailable')
+  const marker = antigravityKeyringFallbackMarker(home)
   const hasMarker = () =>
     access(marker).then(
       () => true,

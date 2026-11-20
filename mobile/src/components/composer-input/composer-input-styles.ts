@@ -5,6 +5,9 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 export const COMPOSER_CONTROL_SIZE = 38
 /** Grows a round control to a 44 pt touch box without crossing the action row's 8 pt gap. */
 export const COMPOSER_CONTROL_HIT_SLOP = (44 - COMPOSER_CONTROL_SIZE) / 2
+/** A round control in a one-line box: one 20pt text line plus its 4pt insets. */
+export const COMPOSER_COMPACT_CONTROL_SIZE = 28
+export const COMPOSER_COMPACT_CONTROL_HIT_SLOP = (44 - COMPOSER_COMPACT_CONTROL_SIZE) / 2
 // Every input uses the composer's size, which also keeps the page above iOS's 16px focus-zoom floor.
 export const COMPOSER_TEXT_SIZE = 16
 export const COMPOSER_LINE_HEIGHT = 22
@@ -114,6 +117,10 @@ export const composerInputStyles = themedStyleSheet(() => ({
   sendButton: {
     ...roundControl,
     backgroundColor: colors.surfaceBright
+  },
+  compactSendButton: {
+    width: COMPOSER_COMPACT_CONTROL_SIZE,
+    height: COMPOSER_COMPACT_CONTROL_SIZE
   },
   sendButtonDisabled: {
     backgroundColor: colors.composerControl

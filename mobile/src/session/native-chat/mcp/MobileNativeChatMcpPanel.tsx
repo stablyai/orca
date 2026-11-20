@@ -265,6 +265,7 @@ function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
     case 'failed':
       return <View style={[styles.dot, styles.dotFailed]} />
     case 'disabled':
+    case 'not-started':
       return <View style={[styles.dot, styles.dotDisabled]} />
     case 'pending':
       return <View style={styles.dotPending} />

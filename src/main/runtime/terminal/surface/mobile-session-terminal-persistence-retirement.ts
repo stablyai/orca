@@ -7,6 +7,7 @@ import {
 } from './mobile-session-terminal-retirement'
 import { retireLeavesFromTerminalLayout } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-leaf-retirement'
 import { rebaseWorkspaceSessionTerminalMembership } from './workspace-session-terminal-membership-authority'
+import type { MembershipRewrites } from './workspace-session-membership-rewrites'
 import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 
 function visibleTypeForContentType(
@@ -219,9 +220,11 @@ export function retireTerminalSurfaceFromPersistence(
   )
 }
 
+/** `rewrites`, when given, collects what the rebase changed beyond `incoming`. */
 export function sanitizeWorkspaceSessionTerminalRetirements(
   incoming: WorkspaceSessionState,
-  prior: WorkspaceSessionState | undefined
+  prior: WorkspaceSessionState | undefined,
+  rewrites?: MembershipRewrites
 ): WorkspaceSessionState {
   if (
     !prior?.terminalSurfaceTombstonesByPaneKey &&
@@ -239,6 +242,10 @@ export function sanitizeWorkspaceSessionTerminalRetirements(
     ...incoming.terminalSurfaceTombstonesByPaneKey
   }
   const hasLegacyTombstones = Object.keys(tombstones).length > 0
+  if (rewrites && hasLegacyTombstones) {
+    // A legacy retirement can change any workspace.
+    rewrites.whole = true
+  }
   let next: WorkspaceSessionState = {
     ...incoming,
     terminalPtyIncarnationsByPaneKey: hasLegacyTombstones
@@ -251,6 +258,7 @@ export function sanitizeWorkspaceSessionTerminalRetirements(
   }
   return rebaseWorkspaceSessionTerminalMembership(
     { ...next, terminalSurfaceTombstonesByPaneKey: {} },
-    prior
+    prior,
+    rewrites
   )
 }

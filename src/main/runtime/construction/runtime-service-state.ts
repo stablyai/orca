@@ -18,7 +18,7 @@ import type { AgentBrowserBridge } from '../../browser/agent-browser/agent-brows
 import type { BrowserBackend } from '../../browser/browser-backend'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 import { RuntimeResolvedWorktreeCache } from '../workspaces/catalog/runtime-resolved-worktree-cache'
-import { RuntimeWorktreeLineageController } from '../workspaces/lineage/runtime-worktree-lineage-controller'
+import { BotWorktreeLineageController } from '../workspaces/lineage/runtime-bot-worktree-lineage-controller'
 import { createRuntimeAgentProjections } from './runtime-agent-projections'
 import { RuntimeTerminalList } from '../terminal/query/runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from '../workspaces/catalog/runtime-managed-worktree-queries'
@@ -32,10 +32,8 @@ import { OrchestrationMailboxOwner } from '../orchestration/mailbox/routing/mail
 import { OrchestrationMailboxDeliveryTarget } from '../orchestration/mailbox/routing/mailbox-delivery-target'
 import { OrchestrationMailboxPointerDelivery } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-delivery'
 import { OrchestrationMailboxNotificationCoordinator } from '../orchestration/mailbox/notifications/mailbox-notification-coordinator'
-import {
-  RuntimeMessageWaiters,
-  type RuntimeMessageWaiter
-} from '../orchestration/mailbox/runtime-message-waiters'
+import { RuntimeMessageWaiters } from '../orchestration/mailbox/runtime-message-waiters'
+import type { RuntimeMessageWaiter } from '../orchestration/mailbox/runtime-message-waiters'
 import type { WorkerTurnStopReportDeps } from '../orchestration/workers/turn-stops/worker-turn-stop-report'
 import type { LostWorkerReport } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
 import { terminalLastOutput } from '../terminal/output/tail/terminal-tail-read'
@@ -102,7 +100,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   /** Bound abandoned Git-admin filesystem probes to one per repo. */
   protected worktreeAdminFingerprintProbes = new Set<string>()
 
-  protected readonly worktreeLineage = new RuntimeWorktreeLineageController({
+  protected readonly worktreeLineage = BotWorktreeLineageController.forRuntime(this, {
     getStore: () => this.store,
     getDb: () => this.getOrchestrationDbIfAvailable(),
     resolveWorkspace: (selector, options) => this.resolveWorkspaceCandidate(selector, options),
@@ -265,10 +263,15 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
       resolveStructuredTarget: (handle) => this.resolveStructuredMailboxTarget(handle),
       redeliver: (handle) => this.deliverPendingMessagesForHandle(handle),
       getCliCommand: localOrchestrationCliCommand,
+      replyFollowUp: (db, message, sessionId) =>
+        this.structuredMailReplyFollowUp?.(db, message, sessionId),
+      reportItem: (db, message) =>
+        this.structuredMailReportItem?.(db, message) ?? Promise.resolve(null),
+      conversationPlace: (sessionId, from) => this.chatConversationPlace?.(sessionId, from) ?? null,
       senderSnapshotReader: () => this.orchestrationSenderNames.snapshotReader(),
-      senderSnapshot: (party, reportedDispatchId) =>
-        this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId),
-      host: createStructuredMailboxPointerHost()
+      senderSnapshot: (party, reportedDispatchId, recorded) =>
+        this.orchestrationSenderNames.snapshotOf(party, reportedDispatchId, recorded),
+      host: createStructuredMailboxPointerHost(this.structuredMailOwner?.())
     })
 
   readonly orchestrationSenderNames = new RuntimeOrchestrationSenderNames({
@@ -280,7 +283,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getPtyAgents: (ptyId) => this.ptysById.get(ptyId),
     getTerminalPaneKey: (handle) => this.getTerminalPaneKey(handle),
     getWorkspaceSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
-    getGeneratedTitlesEnabled: () => this.store?.getSettings?.()?.tabAutoGenerateTitle === true,
+    getStore: () => this.store,
     getAgentStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
     getAgentStatusSnapshotForPane: (paneKey) => this.getAgentStatusSnapshotForPaneFn?.(paneKey),
     getTrackedTitle: (ptyId) => this.getTrackedDisplayTitleForPty(ptyId)
@@ -309,7 +312,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly workerTurnStopReportDeps: WorkerTurnStopReportDeps = {
     getDb: () => this._orchestrationDb,
-    isWaitingForMail: (mailbox) => (this.messageWaiters.get(mailbox)?.size ?? 0) > 0,
+    isWaitingForMail: (mailbox) => this.messageWaiters.has(mailbox),
     notify: (handle, messageType) => this.notifyMessageArrived(handle, messageType),
     isChatMailbox: (mailbox) =>
       typeof structuredMailboxCustody(mailbox, this._orchestrationDb) === 'object',

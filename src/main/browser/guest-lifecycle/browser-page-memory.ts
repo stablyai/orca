@@ -21,6 +21,7 @@ export {
   startBrowserPageAttach,
   hasPendingBrowserPageAttach
 } from './browser-page-attach'
+import { noteBrowserPageClosed } from './browser-page-partition-presence'
 
 export function bindBrowserPageMemoryInvalidation(
   pageId: string,
@@ -165,9 +166,10 @@ export function isRetiredBrowserGuest(pageId: string, guestId: number): boolean 
   return pages.get(pageId)?.retired.has(guestId) === true
 }
 
-export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
+/** Whether a discard reservation would be granted right now, without taking one. */
+export function canReserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
   const page = pages.get(pageId)
-  if (
+  return !(
     !page ||
     page.guest !== guest ||
     page.claim.held ||
@@ -179,7 +181,12 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
     guest.isDevToolsOpened() ||
     guest.debugger.isAttached() ||
     readBrowserGuestDiscardProtection(guest).protection !== 'discardable'
-  ) {
+  )
+}
+
+export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
+  const page = pages.get(pageId)
+  if (!page || !canReserveBrowserPageDiscard(pageId, guest)) {
     return false
   }
   let history: History
@@ -258,6 +265,7 @@ export function closeBrowserMemoryPage(pageId: string): void {
   forgetBrowserPageAttach(page)
   page.history = null
   pages.delete(pageId)
+  noteBrowserPageClosed(page.partition)
   for (const retired of page.retired.values()) {
     if (!retired.guest.isDestroyed()) {
       retired.guest.close({ waitForBeforeUnload: false })

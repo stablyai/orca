@@ -1,4 +1,5 @@
 import { runProcess } from '@orca/process-host'
+import { secretServiceProcessEnvironment } from '../linux-secret-service/session-bus-environment'
 import {
   decodeAntigravityKeychainValue,
   parseAntigravityNativeCredential,
@@ -12,9 +13,6 @@ const LOGIN_COLLECTION = '/org/freedesktop/secrets/collection/login'
 const DEFAULT_COLLECTION = '/org/freedesktop/secrets/aliases/default'
 // secret-tool silently truncates stdin secrets at 8 KiB.
 const MAX_SECRET_BYTES = 8191
-
-const HEADLESS_DBUS_ERROR =
-  /ServiceUnknown|NameHasNoOwner|UnknownObject|NoSuchObject|Cannot autolaunch D-Bus|dbus-launch|Connection refused|No such file or directory|Failed to connect to socket|The connection is closed/i
 
 class LinuxKeyringLockedError extends Error {}
 
@@ -35,7 +33,7 @@ async function run(
       program,
       args,
       input,
-      ...(env !== undefined ? { env } : {}),
+      env: await secretServiceProcessEnvironment(env),
       timeoutMs: 10_000,
       maxOutputBytes: 64 * 1024
     })
@@ -77,16 +75,19 @@ async function getSecretServiceProperty(
     undefined,
     env
   )
-  if (result.timedOut || result.signal || result.outputTruncated) {
+  if (
+    result.timedOut ||
+    result.signal ||
+    result.outputTruncated ||
+    /Timeout was reached|DBus\.Error\.(NoReply|Timeout|TimedOut)/.test(result.stderr)
+  ) {
     throw new Error('The Antigravity Linux keyring did not respond.')
   }
   if (result.code === 0) {
     return { value: result.stdout }
   }
-  if (HEADLESS_DBUS_ERROR.test(result.stderr)) {
-    return null
-  }
-  throw new Error('The Antigravity Linux keyring could not be accessed.')
+  // agy reads its token file after any keyring error but a timeout, e.g. no bus or no collection.
+  return null
 }
 
 /** Mirrors go-keyring's GetLoginCollection; null means agy falls back to its credential file. */

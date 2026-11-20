@@ -26,7 +26,7 @@ import type {
   AgentSessionAcceptedInputSources,
   AgentSessionOptionsResult
 } from './protocol/agent-session-options-result'
-import { labelFromModelId } from './model-catalog/model-id-label'
+import { unlistedModelLabel } from './model-catalog/model-id-label'
 import type { AgentSessionChildPermissionFields } from './permissions/agent-session-status-permission-fields'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import { listingVerifiedModelIds } from './model-catalog/structured-agent-session-listing-verified-ids'
@@ -47,7 +47,7 @@ export function structuredAgentSessionOptionCatalog(
   if (result.current.model && !models.some((model) => model.id === result.current.model)) {
     models.push({
       id: result.current.model,
-      label: labelFromModelId(result.current.model),
+      label: unlistedModelLabel(agent, result.current.model),
       description: result.current.model,
       options: (seed.unknownModelOptions ?? []).filter((option) =>
         STRUCTURED_LAUNCH_SEED_OPTION_IDS.some((id) => id === option.id)

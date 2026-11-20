@@ -29,9 +29,9 @@ function callRemoteUpdater<TResult>(
 }
 
 const transport: RemoteServerUpdateTransport = {
-  getRuntimeStatus: (environmentId, timeoutMs) =>
+  getRuntimeStatus: (environmentId, timeoutMs, options) =>
     window.api.runtimeEnvironments
-      .getStatus({ selector: environmentId, timeoutMs })
+      .getStatus({ selector: environmentId, timeoutMs, ...options })
       .then((response) => unwrapRuntimeRpcResult<RuntimeStatus>(response)),
   getUpdaterStatus: (environmentId, timeoutMs) =>
     callRemoteUpdater<RemoteServerUpdaterSnapshot>(

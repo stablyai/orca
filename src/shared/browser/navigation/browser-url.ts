@@ -33,6 +33,9 @@ const SEARCH_ENGINE_URLS: Record<SearchEngine, string> = {
 
 export const DEFAULT_SEARCH_ENGINE: SearchEngine = 'google'
 
+// Lone surrogates make encodeURIComponent throw. Not toWellFormed() (Android WebView <111) and no lookbehind (WebKit <16.4).
+const LONE_SURROGATE = /[\uD800-\uDFFF]/gu
+
 export function classifySchemeLessLocalDevAddress(rawInput: string): URL | null {
   const trimmed = rawInput.trim()
   if (!LOCAL_ADDRESS_PATTERN.test(trimmed)) {
@@ -220,7 +223,7 @@ export function buildSearchUrl(
       return sessionSearchUrl
     }
   }
-  return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query.toWellFormed())}`
+  return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query.replace(LONE_SURROGATE, '\uFFFD'))}`
 }
 
 export function looksLikeSearchQuery(input: string): boolean {

@@ -1,8 +1,11 @@
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import type { ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { spawnProcessOnWorkerThread } from '../../../worker-thread-child-process/worker-thread-child-process'
-import type { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
+import {
+  isWorkerChildStdinWriteError,
+  spawnProcessOnWorkerThread,
+  WorkerThreadChildProcess
+} from '../../../worker-thread-child-process/worker-thread-child-process'
 
 type CaptureOptions = {
   cwd?: string | URL
@@ -21,6 +24,23 @@ type CaptureCallback = (
   stderr: string | Buffer
 ) => void
 
+/** A second, passive stderr listener: execFile still captures every byte. */
+export function observeCapturedStderr(
+  child: ChildProcess | WorkerThreadChildProcess,
+  observer: (chunk: string) => void
+): void {
+  const onData = (chunk: string | Buffer): void => {
+    try {
+      observer(typeof chunk === 'string' ? chunk : chunk.toString('utf8'))
+    } catch (error) {
+      // Detach throwing observers so stream callbacks cannot crash main.
+      child.stderr?.off('data', onData)
+      console.warn('git stderr observer failed; detaching it', error)
+    }
+  }
+  child.stderr?.on('data', onData)
+}
+
 /** Capture a worker-owned child; the caller still owns deadlines and aborts. */
 export function workerExecFile(
   command: string,
@@ -33,7 +53,8 @@ export function workerExecFile(
       program: command,
       args,
       cwd: options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd,
-      env: options.env,
+      // The worker's env is a copy from its start; send main's current one (PATH refreshes after launch).
+      env: options.env ?? process.env,
       ...(options.ownedPosixGroup ? { terminationBarrier: true as const } : {})
     })
   )
@@ -46,16 +67,20 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
   callback: CaptureCallback,
   launch: () => T
 ): T {
-  const encoding = options.encoding === null ? 'buffer' : (options.encoding ?? 'utf8')
+  const requested = options.encoding === null ? 'buffer' : (options.encoding ?? 'utf8')
+  // Git asks for 'utf-8'; one spelling lets a failure reuse its decoded stderr.
+  const encoding = requested.toLowerCase() === 'utf-8' ? 'utf8' : requested
   if (encoding !== 'buffer' && !Buffer.isEncoding(encoding)) {
     throw new TypeError(`Unsupported output encoding: ${encoding}`)
   }
   const child = launch()
   const stdout = createOutputSink(options.maxBuffer)
   const stderr = createOutputSink(options.maxBuffer)
+  const decode = (bytes: Buffer): string | Buffer =>
+    encoding === 'buffer' ? bytes : bytes.toString(encoding)
   const read = (): { stdout: string | Buffer; stderr: string | Buffer } => ({
-    stdout: encoding === 'buffer' ? stdout.buffer() : stdout.buffer().toString(encoding),
-    stderr: encoding === 'buffer' ? stderr.buffer() : stderr.buffer().toString(encoding)
+    stdout: decode(stdout.buffer()),
+    stderr: decode(stderr.buffer())
   })
   options.onCapture?.(read)
   let completed = false
@@ -65,6 +90,10 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
       return
     }
     completed = true
+    // Output after completion has no reader; keep it on the worker while cleanup runs.
+    if (child instanceof WorkerThreadChildProcess) {
+      child.discardOutput()
+    }
     const output = captured ?? read()
     callback(error, output.stdout, output.stderr)
   }
@@ -92,28 +121,43 @@ export function spawnedExecFile<T extends ChildProcess | WorkerThreadChildProces
   child.stderr?.on('error', () => {})
   child.stdout?.on('data', (chunk: Buffer) => collect(stdout, chunk))
   child.stderr?.on('data', (chunk: Buffer) => collect(stderr, chunk))
-  child.once('error', (error: Error) => {
+  child.on('error', (error: Error) => {
+    if (child instanceof WorkerThreadChildProcess && isWorkerChildStdinWriteError(error)) {
+      return
+    }
     options.onError?.(error)
     finish(error)
   })
   child.once('close', (code: number | null, signal: NodeJS.Signals | null) => {
+    if (completed) {
+      return
+    }
+    if (overflowError || code === 0) {
+      finish(overflowError)
+      return
+    }
+    // Assemble stderr once; the failure message and the callback share it.
+    const stderrBytes = stderr.buffer()
+    const stderrText = stderrBytes.toString('utf8')
+    const output = {
+      stdout: decode(stdout.buffer()),
+      stderr: encoding === 'utf8' ? stderrText : decode(stderrBytes)
+    }
     finish(
-      overflowError ??
-        (code === 0
-          ? null
-          : Object.assign(
-              new Error(
-                options.errorCommand
-                  ? `Command failed: ${options.errorCommand}\n${stderr.text()}`
-                  : stderr.text().trim() || `${command} exited with ${code}`
-              ),
-              {
-                code,
-                signal,
-                killed: signal !== null,
-                ...(options.errorCommand ? { cmd: options.errorCommand } : {})
-              }
-            ))
+      Object.assign(
+        new Error(
+          options.errorCommand
+            ? `Command failed: ${options.errorCommand}\n${stderrText}`
+            : stderrText.trim() || `${command} exited with ${code}`
+        ),
+        {
+          code,
+          signal,
+          killed: signal !== null,
+          ...(options.errorCommand ? { cmd: options.errorCommand } : {})
+        }
+      ),
+      output
     )
   })
   return child

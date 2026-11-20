@@ -47,12 +47,12 @@ function sameTarget(left: RateLimitRuntimeTarget, right: RateLimitRuntimeTarget)
   return left.runtime === right.runtime && left.wslDistro === right.wslDistro
 }
 
-export function validateCodexResetCreditScope(
+export async function validateCodexResetCreditScope(
   expectedScope: CodexResetCreditExpectedScope,
   validation: CodexResetCreditScopeValidation,
   dependencies: CodexResetCreditScopeDependencies
-): { managedHomePath: string; rateLimits: RateLimitState } {
-  const rateLimitState = dependencies.rateLimits.getState()
+): Promise<{ managedHomePath: string; rateLimits: RateLimitState }> {
+  const rateLimitState = await dependencies.rateLimits.getState()
   if (!sameTarget(rateLimitState.codexTarget, expectedScope.target)) {
     throw new CodexResetCreditScopeRejection(
       'targetChanged',

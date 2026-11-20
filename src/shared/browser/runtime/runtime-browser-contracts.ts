@@ -64,6 +64,7 @@ export type BrowserSelectResult = { selected: string }
 export type BrowserScrollResult = { scrolled: 'up' | 'down' }
 export type BrowserBackResult = { url: string; title: string }
 export type BrowserReloadResult = { url: string; title: string }
+export type BrowserStopResult = { url: string; title: string }
 export type BrowserScreenshotAnnotation = {
   ref: string
   number: number
@@ -91,7 +92,14 @@ export type BrowserScreencastReadyResult = {
 }
 
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
-export type BrowserScreencastDialogResult = { type: 'dialog'; dialogType: string; message: string }
+export type BrowserScreencastDialogResult = {
+  type: 'dialog'
+  dialogType: string
+  message: string
+  /** Older hosts omit these two; viewers then start a prompt empty and name no origin. */
+  defaultPromptText?: string
+  origin?: string | null
+}
 export type BrowserScreencastDialogClosedResult = { type: 'dialogClosed' }
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 

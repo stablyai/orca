@@ -33,6 +33,13 @@ export const SendParams = z
     // Use remint-stable pane keys to attest worker_done/heartbeat; from handles only route.
     senderPaneKey: OptionalString,
     run: OptionalString,
+    /** With `to: bot:<name>`, the one of that bot's chats the mail lands in instead of its Home Chat;
+     *  `new` starts a new chat for it. */
+    chat: OptionalString,
+    /** With `to: bot:<name>`, an item number: the mail lands in the chat that owns it. */
+    item: OptionalString,
+    /** With `item`: files on this computer, sent with the mail into the item's chat. */
+    files: z.array(z.string().min(1).max(4096)).max(30).optional(),
     // A paired server: this Orca carries the mail there and the replies back (`send --on`).
     on: OptionalString,
     waitForLifecycleSettlement: OptionalBoolean,

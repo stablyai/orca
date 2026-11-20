@@ -311,7 +311,8 @@ describe('Coordinator', () => {
       expect(dispatch).toBeDefined()
       db.insertMessage({
         runId,
-        from: dispatch?.assignee_handle ?? 'missing-worker',
+        from:
+          i === 0 ? `dispatch:${dispatch!.id}` : (dispatch?.assignee_handle ?? 'missing-worker'),
         to: 'coord',
         subject: `Failed attempt ${i + 1}`,
         type: 'escalation',
@@ -373,7 +374,7 @@ describe('Coordinator', () => {
     expect(dispatch).toBeDefined()
     db.insertMessage({
       runId,
-      from: 'term_a',
+      from: `dispatch:${dispatch!.id}`,
       to: 'coord',
       subject: 'Need approval',
       type: 'decision_gate',
@@ -390,6 +391,7 @@ describe('Coordinator', () => {
     const blocked = db.getTask(task.id)
     expect(blocked?.status).toBe('blocked')
     expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
+    expect(db.getDispatchContextById(dispatch!.id)?.status).toBe('completed')
 
     const gates = db.listGates({ taskId: task.id, status: 'pending' })
     expect(gates.length).toBe(1)

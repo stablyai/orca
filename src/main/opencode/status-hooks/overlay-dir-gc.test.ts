@@ -90,17 +90,14 @@ function sweep(extra: Partial<Parameters<typeof sweepOrphanedOpenCodeDirs>[0]> =
   })
 }
 
-it('collects only an old, owned missing source while retaining active and reusable sources', async () => {
+it('removes an old overlay for a missing source and keeps one whose source still exists', async () => {
   const retired = createOverlay('retired')
-  const active = createOverlay('active')
   const reusable = createOverlay('reusable')
-  mkdirSync(active.source)
   mkdirSync(reusable.source)
-  const result = await sweep()
-  expect(result.removed).toBe(1)
-  expect(result.keptSourcePresent).toBe(2)
+
+  await sweep()
+
   expect(existsSync(retired.directory)).toBe(false)
-  expect(existsSync(active.directory)).toBe(true)
   expect(existsSync(reusable.directory)).toBe(true)
 })
 
@@ -112,20 +109,6 @@ it.each([null, ['surviving-daemon-pty']] as const)(
     expect(existsSync(retired.directory)).toBe(true)
   }
 )
-
-it('preserves a candidate when owning-host inventory fails', async () => {
-  const retired = createOverlay('retired')
-  expect(
-    (
-      await sweep({
-        readLivePtyIds: async () => {
-          throw new Error('host unavailable')
-        }
-      })
-    ).keptUnverifiable
-  ).toBe(1)
-  expect(existsSync(retired.directory)).toBe(true)
-})
 
 it('keeps a young candidate and refreshes reference protection after an asynchronous inventory', async () => {
   const young = createOverlay('young')

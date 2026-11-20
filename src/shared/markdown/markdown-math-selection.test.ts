@@ -28,6 +28,16 @@ describe('markdownMathSelectionText', () => {
       text: 'Inline $x^2$ here.\n\none\n\ntwo\n\nquoted one\n\nquoted two words\n\nHeading\nterm\ndef\nsum\nbody text'
     },
     {
+      name: 'trailing empty table cells',
+      html: `<p>${formula}</p><table><tr><td>A</td><td></td><td></td></tr><tr><td>B</td><td></td><td></td></tr></table>`,
+      text: '$x^2$\n\nA\t\t\nB\t\t'
+    },
+    {
+      name: 'fully empty last table row',
+      html: `<p>${formula}</p><table><tr><td>A</td><td>b</td><td>c</td></tr><tr><td></td><td></td><td></td></tr></table>`,
+      text: '$x^2$\n\nA\tb\tc'
+    },
+    {
       name: 'preformatted code',
       html: `<div><p>${formula}</p>\n<div><div>TypeScript</div><pre><code>  if (a) {\n\n    b()\n  }\n</code></pre></div>\n<p>after</p></div>`,
       text: '$x^2$\n\nTypeScript\n  if (a) {\n\n    b()\n  }\nafter'

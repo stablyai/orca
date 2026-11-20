@@ -146,10 +146,7 @@ function SetupGuideModalContent({
           onClick={handleHideFromSidebar}
           className="absolute right-11 top-3.5 hidden sm:inline-flex"
         >
-          {t(
-            'auto.components.setup.guide.SetupGuideModal.f3b5ffb2a6',
-            'Hide checklist from sidebar'
-          )}
+          {t('auto.components.setup.guide.SetupGuideModal.f3b5ffb2a6', 'Hide checklist')}
         </Button>
         <DialogHeader className="gap-1 border-b border-border px-7 py-4">
           <DialogTitle className="text-lg">
