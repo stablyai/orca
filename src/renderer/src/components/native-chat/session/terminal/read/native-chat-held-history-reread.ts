@@ -1,6 +1,9 @@
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatReadSessionResult } from '../../../../../../../preload/api/native-chat/native-chat-api'
 import { mergeTranscriptRanges } from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
+import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
+import { nativeChatHistoryCursor } from '../../../viewport/history/native-chat-pagination'
+import type { ReadState } from './native-chat-live-session-contract'
 import type { NativeChatSessionTransport } from './native-chat-session-transport'
 
 export async function rereadNativeChatHeldHistory(
@@ -60,4 +63,40 @@ export async function rereadNativeChatHeldHistory(
     hasMore,
     beforeOffset: pages.at(-1)?.messages[0]?.transcriptOrder
   }
+}
+
+/** A window that landed during the re-read keeps its rows; the re-read supplies only the rows older than it. */
+export function spliceHeldHistoryReread(
+  agent: AgentType,
+  reread: readonly NativeChatMessage[],
+  held: ReadState,
+  windowFirst: NativeChatMessage | undefined
+): NativeChatMessage[] | undefined {
+  const start = nativeChatHistoryCursor(agent, windowFirst)
+  const at =
+    held.phase === 'ready' && windowFirst
+      ? held.messages.findIndex((message) => message.id === windowFirst.id)
+      : -1
+  const end = nativeChatHistoryCursor(agent, reread.at(-1))
+  // Rows appended past the re-read's end leave a gap only another re-read fills.
+  if (held.phase !== 'ready' || start === undefined || at < 0 || end === undefined || end < start) {
+    return undefined
+  }
+  return [
+    ...reread.filter((message) => {
+      const cursor = nativeChatHistoryCursor(agent, message)
+      return cursor !== undefined && cursor < start
+    }),
+    ...held.messages.slice(at)
+  ]
+}
+
+/** Held base rows plus live-tail rows the base doesn't already hold. */
+export function heldNativeChatHistoryDepth(
+  held: ReadState,
+  liveTail: readonly NativeChatMessage[]
+): number {
+  const messages = held.phase === 'ready' ? held.messages : []
+  const ids = new Set(messages.map((message) => message.id))
+  return messages.length + liveTail.filter((message) => !ids.has(message.id)).length
 }

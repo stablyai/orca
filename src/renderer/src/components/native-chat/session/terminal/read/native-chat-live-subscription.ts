@@ -17,7 +17,11 @@ import type { ReadState } from './native-chat-live-session-contract'
 import type { NativeChatSessionTransport } from './native-chat-session-transport'
 import type { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
 import { NativeChatHeldHistoryVerify } from './native-chat-held-history-verify'
-import { rereadNativeChatHeldHistory } from './native-chat-held-history-reread'
+import {
+  heldNativeChatHistoryDepth,
+  rereadNativeChatHeldHistory,
+  spliceHeldHistoryReread
+} from './native-chat-held-history-reread'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
 import { takeNativeChatOpenWake } from '../../../pane/routing/native-chat-open-wake'
@@ -134,30 +138,31 @@ export function subscribeNativeChatLiveSession({
             signal
           )
       : undefined,
-    reread: (signal) => {
-      const held = heldRef.current
-      const messages = held.phase === 'ready' ? held.messages : []
-      const ids = new Set(messages.map((message) => message.id))
-      let count = messages.length
-      for (const message of appendMergerRef.current.list) {
-        if (!ids.has(message.id)) {
-          count++
-        }
-        ids.add(message.id)
-      }
-      return rereadNativeChatHeldHistory(
+    reread: (signal) =>
+      rereadNativeChatHeldHistory(
         transport,
         agent,
         activeSessionId,
         transcriptPath ?? undefined,
-        count,
+        heldNativeChatHistoryDepth(heldRef.current, appendMergerRef.current.list),
         limitRef.current,
         signal
-      )
-    },
-    apply: (result) => {
+      ),
+    apply: (result, superseded) => {
       const repaired = result && 'messages' in result ? result : undefined
-      const messages = repaired?.messages ?? windowMessages
+      let messages = repaired?.messages ?? windowMessages
+      if (repaired && superseded) {
+        const spliced = spliceHeldHistoryReread(
+          agent,
+          repaired.messages,
+          heldRef.current,
+          windowMessages[0]
+        )
+        if (!spliced) {
+          return false
+        }
+        messages = spliced
+      }
       if (repaired) {
         limitRef.current = Math.max(limitRef.current, messages.length)
       }

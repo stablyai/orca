@@ -9,13 +9,16 @@ type VerificationOptions<T> = {
   olderSpan: () => { start: number; end: number } | undefined
   verify?: (ranges: TranscriptByteRange[], signal: AbortSignal) => Promise<boolean[] | null>
   reread: (signal: AbortSignal) => Promise<T>
-  apply: (result: T | undefined) => TranscriptByteRange[] | undefined
+  /** False leaves the held rows as they are; `superseded` means a newer window landed during the re-read. */
+  apply: (result: T | undefined, superseded: boolean) => TranscriptByteRange[] | undefined | false
 }
 
 export class NativeChatHeldHistoryVerify<T> {
   private ranges: TranscriptByteRange[] = []
   private window: TranscriptByteRange[] = []
   private unsupported = false
+  // A known mismatch goes straight to the re-read instead of verifying again.
+  private stale = false
   private generation = 0
   private revision = 0
   private pending = false
@@ -100,6 +103,14 @@ export class NativeChatHeldHistoryVerify<T> {
     this.running?.abort()
     this.ranges = []
     this.window = []
+    this.stale = false
+  }
+
+  private applyResult(result: T | undefined, superseded: boolean): void {
+    const ranges = this.options.apply(result, superseded)
+    if (ranges !== false) {
+      this.reread(ranges)
+    }
   }
 
   private schedule(): void {
@@ -132,7 +143,7 @@ export class NativeChatHeldHistoryVerify<T> {
     try {
       if (!this.supported) {
         if (current()) {
-          this.reread(this.options.apply(undefined))
+          this.applyResult(undefined, false)
         }
         return
       }
@@ -140,36 +151,44 @@ export class NativeChatHeldHistoryVerify<T> {
       if (!span || span.start >= span.end) {
         return
       }
-      const ranges = this.ranges.filter((range) => range.start < span.end && range.end > span.start)
-      let coveredTo = span.start
-      for (const range of ranges) {
-        if (range.start > coveredTo) {
-          break
-        }
-        coveredTo = Math.max(coveredTo, range.end)
-      }
-      if (coveredTo >= span.end && this.options.verify) {
-        const result = await this.options.verify(ranges, controller.signal)
-        if (controller.signal.aborted || this.generation !== generation) {
-          return
-        }
-        if (result === null) {
-          this.unsupported = true
-          if (current()) {
-            this.reread(this.options.apply(undefined))
+      if (!this.stale) {
+        const ranges = this.ranges.filter(
+          (range) => range.start < span.end && range.end > span.start
+        )
+        let coveredTo = span.start
+        for (const range of ranges) {
+          if (range.start > coveredTo) {
+            break
           }
-          return
+          coveredTo = Math.max(coveredTo, range.end)
         }
-        if (result.length === ranges.length && result.every(Boolean)) {
-          return
+        if (coveredTo >= span.end && this.options.verify) {
+          const result = await this.options.verify(ranges, controller.signal)
+          if (controller.signal.aborted || this.generation !== generation) {
+            return
+          }
+          if (result === null) {
+            this.unsupported = true
+            if (current()) {
+              this.applyResult(undefined, false)
+            }
+            return
+          }
+          if (result.length === ranges.length && result.every(Boolean)) {
+            return
+          }
         }
+        this.stale = true
       }
-      if (!current()) {
+      const live = (): boolean =>
+        !controller.signal.aborted && this.generation === generation && this.options.visible()
+      if (!live()) {
         return
       }
       const result = await this.options.reread(controller.signal)
-      if (current()) {
-        this.reread(this.options.apply(result))
+      // A window that landed during the re-read keeps its rows; the re-read supplies the older prefix.
+      if (live()) {
+        this.applyResult(result, this.revision !== revision)
       }
     } catch {
       // A transient failure leaves held rows available for the next replacement.

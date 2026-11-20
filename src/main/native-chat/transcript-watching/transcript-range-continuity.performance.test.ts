@@ -10,10 +10,8 @@ import {
   readNativeChatTranscriptTailFile,
   type NativeChatLineDecoder
 } from '../transcript-tail-reader'
-import {
-  createIncrementalTranscriptState,
-  readIncrementalTranscriptMessages
-} from './transcript-incremental-reader'
+import { readAndEmitTranscriptAppends } from './transcript-append-emitter'
+import { createIncrementalTranscriptState } from './transcript-incremental-reader'
 import { verifyTranscriptRanges } from './transcript-range-verifier'
 
 // PR #45168: non-message append lines must not fragment held-history verification into repeated reads.
@@ -21,7 +19,7 @@ describe.each([10_000, 100_000])('transcript range continuity at %i messages', (
   beforeEach(() => vi.useFakeTimers({ toFake: ['Date'] }))
   afterEach(() => vi.useRealTimers())
 
-  it('keeps snapshot and twenty mixed append bursts in one verifiable range', async () => {
+  it('keeps mixed append bursts in one verifiable range and sends no frame for non-message drains', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'native-chat-continuity-'))
     const file = join(directory, 'session.jsonl')
     const decode: NativeChatLineDecoder = (line, id) =>
@@ -41,23 +39,37 @@ describe.each([10_000, 100_000])('transcript range continuity at %i messages', (
       state.offset = snapshot.consumedTo
       state.pendingStart = snapshot.consumedTo
       const ranges: TranscriptByteRange[] = [...(snapshot.ranges ?? [])]
-      for (let burst = 0; burst < 20; burst++) {
-        const lines = Array.from({ length: 5 + (burst % 8) * 5 }, (_, index) =>
-          index % 4 === 0 ? '{"message":true}\n' : '{}\n'
-        )
+      let frames = 0
+      const drain = async (lines: string[]): Promise<number> => {
+        const before = frames
         await appendFile(file, lines.join(''))
-        await readIncrementalTranscriptMessages(
+        await readAndEmitTranscriptAppends(
           file,
           state,
           decode,
-          (_messages, batchRanges) => ranges.push(...(batchRanges ?? [])),
-          undefined,
-          undefined,
-          undefined,
-          true,
-          (appendRanges) => ranges.push(...appendRanges)
+          {
+            agent: 'claude',
+            sessionId: 'session',
+            sourceOrder: true,
+            onAppend: (_messages, _lifecycle, frameRanges) => {
+              frames++
+              ranges.push(...(frameRanges ?? []))
+            }
+          },
+          () => true,
+          new AbortController().signal
         )
+        return frames - before
       }
+      for (let burst = 0; burst < 20; burst++) {
+        // Bursts start with non-message lines, so a range that begins at the first message leaves a gap.
+        const lines = Array.from({ length: 5 + (burst % 8) * 5 }, (_, index) =>
+          index % 4 === 3 ? '{"message":true}\n' : '{}\n'
+        )
+        await drain(lines)
+        expect(await drain(['{}\n'])).toBe(0)
+      }
+      expect(await drain(['{"message":true}\n'])).toBe(1)
       const merged = mergeTranscriptRanges(ranges)
       expect(merged).toHaveLength(1)
       expect(merged[0]?.start).toBe(0)

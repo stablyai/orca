@@ -39,7 +39,14 @@ export async function readAndEmitTranscriptAppends(
       ranges = value
     }
   )
-  if (canPublish() && (remaining.length > 0 || lifecycle || ranges?.length)) {
-    onAppend(remaining, lifecycle, ranges)
+  if (remaining.length > 0 || lifecycle) {
+    if (canPublish()) {
+      onAppend(remaining, lifecycle, ranges)
+    }
+    return
+  }
+  const pending = ranges?.[0]
+  if (pending) {
+    state.unpublishedRange = { start: pending.start, digest: BigInt(`0x${pending.digest}`) }
   }
 }

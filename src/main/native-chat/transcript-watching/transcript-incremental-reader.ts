@@ -30,6 +30,8 @@ export type IncrementalTranscriptState = {
   pendingBytes: number
   droppingOversizedRecord: boolean
   latestTimestamp: number
+  /** Bytes read since the last published range; they join the next frame instead of sending their own. */
+  unpublishedRange?: { start: number; digest: bigint }
 }
 
 export function createIncrementalTranscriptState(): IncrementalTranscriptState {
@@ -52,6 +54,7 @@ export function resetIncrementalTranscriptState(state: IncrementalTranscriptStat
   state.pendingBytes = 0
   state.droppingOversizedRecord = false
   state.latestTimestamp = Number.NEGATIVE_INFINITY
+  state.unpublishedRange = undefined
 }
 
 export async function readIncrementalTranscriptMessages(
@@ -71,8 +74,9 @@ export async function readIncrementalTranscriptMessages(
   }
   const messages: NativeChatMessage[] = []
   // Ranges cover every consumed line, including ones that decode to nothing, so consecutive reads stay contiguous.
-  let rangeStart = state.pendingStart
-  let digest = 0n
+  let rangeStart = state.unpublishedRange?.start ?? state.pendingStart
+  let digest = state.unpublishedRange?.digest ?? 0n
+  state.unpublishedRange = undefined
   const ranges = (): TranscriptByteRange[] =>
     rangeStart < state.pendingStart
       ? [{ start: rangeStart, end: state.pendingStart, digest: transcriptDigestHex(digest) }]

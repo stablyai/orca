@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import { withHeldOlderHistory } from '../../../viewport/history/native-chat-pagination'
 import { NativeChatHeldHistoryVerify } from './native-chat-held-history-verify'
-import { rereadNativeChatHeldHistory } from './native-chat-held-history-reread'
+import {
+  rereadNativeChatHeldHistory,
+  spliceHeldHistoryReread
+} from './native-chat-held-history-reread'
 import type { NativeChatSessionTransport } from './native-chat-session-transport'
 import type { NativeChatReadSessionResult } from '../../../../../../../preload/api/native-chat/native-chat-api'
 import type { TranscriptByteRange } from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
@@ -16,7 +19,8 @@ describe.each([
   afterEach(() => vi.useRealTimers())
 
   function history(
-    verify?: (ranges: TranscriptByteRange[], signal: AbortSignal) => Promise<boolean[] | null>
+    verify?: (ranges: TranscriptByteRange[], signal: AbortSignal) => Promise<boolean[] | null>,
+    readDelayMs = 0
   ) {
     const held: NativeChatMessage[] = Array.from({ length: count }, (_, n) => ({
       id: `row-${n}`,
@@ -30,6 +34,9 @@ describe.each([
     const window = [{ start: count - 300, end: count, digest: '0000000000000300' }]
     const readSession = vi.fn<NativeChatSessionTransport['readSession']>(
       async (_agent, _sessionId, _limit, _path, options) => {
+        if (readDelayMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, readDelayMs))
+        }
         const end = options?.beforeOffset ?? count
         const start = Math.max(0, end - 2_000)
         return {
@@ -41,9 +48,24 @@ describe.each([
     )
     const transport: NativeChatSessionTransport = { readSession, subscribe: () => () => {} }
     let current = held
-    const apply = vi.fn((result: NativeChatReadSessionResult | undefined) => {
-      current = result && 'messages' in result ? result.messages : windowRows
-      return result && 'messages' in result ? result.ranges : undefined
+    const apply = vi.fn((result: NativeChatReadSessionResult | undefined, superseded: boolean) => {
+      if (!result || !('messages' in result)) {
+        current = windowRows
+        return undefined
+      }
+      const spliced = superseded
+        ? spliceHeldHistoryReread(
+            'claude',
+            result.messages,
+            { phase: 'ready', messages: current },
+            windowRows[0]
+          )
+        : result.messages
+      if (!spliced) {
+        return false
+      }
+      current = spliced
+      return result.ranges
     })
     const scheduler = new NativeChatHeldHistoryVerify({
       visible: () => true,
@@ -110,6 +132,24 @@ describe.each([
         beforeOffset: 2_000
       })
       expect(apply).toHaveBeenCalledTimes(1)
+      expect(current()).toHaveLength(count)
+      expect(current()[0]?.id).toBe('row-0')
+    } finally {
+      scheduler.clear()
+    }
+  })
+
+  it('applies one re-read while replacements keep landing every 2.5 s after a mismatch', async () => {
+    const verify = vi.fn().mockResolvedValueOnce([false]).mockResolvedValue([true])
+    const { scheduler, replace, readSession, current } = history(verify, 100)
+    try {
+      for (let i = 0; i < 8; i++) {
+        replace()
+        await vi.advanceTimersByTimeAsync(2_500)
+      }
+      await vi.advanceTimersByTimeAsync(10_000)
+      const eofReads = readSession.mock.calls.filter(([, , , , options]) => !options)
+      expect(eofReads).toHaveLength(1)
       expect(current()).toHaveLength(count)
       expect(current()[0]?.id).toBe('row-0')
     } finally {
