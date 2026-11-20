@@ -23,11 +23,11 @@ export function buildAntigravityFoldedStatusPayload(
   const leadStateStartedAt = paneState.leadStateStartedAt ?? now
   const hasWaitingSubagent = subagents.some((subagent) => subagent.state === 'waiting')
   const hasCommands = (paneState.commands?.size ?? 0) > 0
-  const hookOnlyChildrenEnded = !paneState.rootBrainDir && paneState.helpersIdleAt !== undefined
+  const childrenEnded = paneState.helpersIdleAt !== undefined
   const liveness: AgentChildWorkLiveness = hasWaitingSubagent
     ? 'waiting'
     : subagents.length > 0 ||
-        hookOnlyChildrenEnded ||
+        childrenEnded ||
         (leadState === 'done' && paneState.awaitingInitialHelperDiscovery !== undefined)
       ? 'working'
       : hasCommands

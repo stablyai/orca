@@ -9,6 +9,7 @@ import {
   getOrCreateAntigravityPaneState,
   getOrCreateTrackedChild,
   recordAntigravityChildHook,
+  retireAntigravityChild,
   type AntigravityPaneChildState,
   type TrackedAntigravityChild
 } from './antigravity-pane-state'
@@ -16,6 +17,7 @@ import {
 export {
   getOrCreateAntigravityPaneState,
   recordAntigravityChildHook,
+  retireAntigravityChild,
   type AntigravityPaneChildState
 }
 
@@ -81,29 +83,26 @@ function reconcileSwarmMemberSnapshot(
   now: number
 ): AgentSubagentSnapshot | null {
   if (member.killed || member.desiredState === 'KILLED' || member.phase !== 'RUNNING') {
-    paneState.retiredChildren.add(member.conversationId)
-    paneState.children.delete(member.conversationId)
+    retireAntigravityChild(paneState, member.conversationId)
     return null
   }
   const existing = paneState.children.get(member.conversationId)
-  const previousWakeMode = existing?.lastMemberWakeMode
-  const isWorking = member.wakeMode === 'working'
-  if (existing && previousWakeMode !== 'working' && isWorking && existing.hookState === 'done') {
-    existing.hookState = 'working'
-  }
-
-  let active = false
-  if (member.wakeMode === 'mentions') {
-    if (existing) {
+  const wakeChanged = existing?.lastMemberWakeMode !== member.wakeMode
+  if (wakeChanged && existing) {
+    if (member.wakeMode === 'working') {
+      paneState.retiredChildren.delete(member.conversationId)
+      existing.hookState = 'working'
+    } else if (member.wakeMode === 'mentions') {
       existing.hookState = undefined
       existing.toolName = undefined
       existing.toolInput = undefined
     }
-  } else if (isWorking) {
-    active = existing?.hookState !== 'done'
-  } else {
-    active = Boolean(existing && existing.hookState && existing.hookState !== 'done')
   }
+  const active =
+    !paneState.retiredChildren.has(member.conversationId) &&
+    (existing?.hookState !== undefined
+      ? existing.hookState !== 'done'
+      : member.wakeMode === 'working')
 
   const startAt =
     existing?.startedAt ?? paneState.transcriptTails.get(member.conversationId)?.createdAtMs ?? now
@@ -144,7 +143,7 @@ function isRegularSubagentTailSettled(
   ) {
     return true
   }
-  return existing.settledStepAtTurnStart === undefined && existing.hookStepIdx === undefined
+  return false
 }
 
 function reconcileDiskSubagentSnapshot(
@@ -154,8 +153,7 @@ function reconcileDiskSubagentSnapshot(
   now: number
 ): AgentSubagentSnapshot | null {
   if (diskEntry?.state === 'SUBAGENT_STATE_KILLED') {
-    paneState.retiredChildren.add(childId)
-    paneState.children.delete(childId)
+    retireAntigravityChild(paneState, childId)
     return null
   }
   const existing = paneState.children.get(childId)
@@ -164,8 +162,7 @@ function reconcileDiskSubagentSnapshot(
   }
   const tail = paneState.transcriptTails.get(childId)
   if (isRegularSubagentTailSettled(existing, tail)) {
-    paneState.retiredChildren.add(childId)
-    paneState.children.delete(childId)
+    retireAntigravityChild(paneState, childId)
     return null
   }
   if (
@@ -242,7 +239,8 @@ export function reconcileAntigravityActiveSubagents(
   if (
     paneState.awaitingInitialHelperDiscovery &&
     [...diskSubagentById.keys(), ...swarmById.keys(), ...paneState.children.keys()].some(
-      (id) => !paneState.awaitingInitialHelperDiscovery?.has(id)
+      (id) =>
+        !paneState.retiredChildren.has(id) && !paneState.awaitingInitialHelperDiscovery?.has(id)
     )
   ) {
     paneState.awaitingInitialHelperDiscovery = undefined

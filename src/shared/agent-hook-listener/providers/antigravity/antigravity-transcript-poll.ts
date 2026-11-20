@@ -19,7 +19,7 @@ export function hasAntigravityPollWork(
     (pane.discoversChildren ||
       pane.awaitingInitialHelperDiscovery ||
       event.payload.subagents?.length ||
-      (!pane.leadModel && pane.leadState === 'working')) &&
+      (pane.leadModel === undefined && pane.leadState === 'working')) &&
     event.payload.state !== 'done'
   )
 }
@@ -40,37 +40,36 @@ export async function readAntigravityTranscriptPoll(
   if (!pane?.rootBrainDir) {
     return undefined
   }
+  const cache = pane.brainCache
   const batch = new RolloutReadBatch(
-    () => state.antigravityChildWorkByPaneKey.get(paneKey) === pane
+    () => state.antigravityChildWorkByPaneKey.get(paneKey) === pane && pane.brainCache === cache
   )
   try {
     const leadModel =
-      !pane.leadModel && pane.rootConversationId
+      pane.leadModel === undefined && pane.rootConversationId
         ? (
             await readAntigravityChildTranscriptTail(
               pane.rootBrainDir,
               pane.rootConversationId,
-              pane.brainCache,
+              cache,
               batch
             )
           )?.model
         : undefined
     batch.unreserve(Number.MAX_SAFE_INTEGER)
     const diskSubagents = (
-      await readAntigravityBrainSubagents(
-        pane.rootBrainDir,
-        pane.brainCache,
-        batch,
-        pane.retiredChildren
-      )
+      await readAntigravityBrainSubagents(pane.rootBrainDir, cache, batch, pane.retiredChildren)
     ).filter(
       (child) =>
         !pane.retiredBefore ||
         child.mtimeMs > pane.retiredBefore ||
         pane.children.has(child.conversationId)
     )
+    const swarm = await readAntigravitySwarmMembers(pane.rootBrainDir, cache)
     const swarmMembers =
-      (await readAntigravitySwarmMembers(pane.rootBrainDir, pane.brainCache))?.members ?? []
+      swarm && (!pane.retiredBefore || swarm.mtimeMs > pane.retiredBefore)
+        ? swarm.members
+        : (pane.swarmMembers ?? [])
     const ids = new Set([
       ...diskSubagents
         .filter((child) => child.state !== 'SUBAGENT_STATE_KILLED')
@@ -82,7 +81,7 @@ export async function readAntigravityTranscriptPoll(
         .map((member) => member.conversationId),
       ...pane.children.keys()
     ])
-    const tails = new Map(pane.transcriptTails)
+    const tails: AntigravityPaneChildState['transcriptTails'] = new Map()
     for (const id of ids) {
       if (!batch.wanted()) {
         return undefined
@@ -94,19 +93,17 @@ export async function readAntigravityTranscriptPoll(
       ) {
         continue
       }
-      const tail = await readAntigravityChildTranscriptTail(
-        pane.rootBrainDir,
-        id,
-        pane.brainCache,
-        batch
-      )
-      if (tail) {
+      const tail = await readAntigravityChildTranscriptTail(pane.rootBrainDir, id, cache, batch)
+      if (!batch.wanted()) {
+        return undefined
+      }
+      if (tail && !pane.retiredChildren.has(id)) {
         tails.set(id, tail)
       }
       // Parsed records own their small projection now; release buffers before reading the next child.
       batch.unreserve(Number.MAX_SAFE_INTEGER)
     }
-    return { pane, diskSubagents, swarmMembers, tails, leadModel }
+    return batch.wanted() ? { pane, diskSubagents, swarmMembers, tails, leadModel } : undefined
   } finally {
     batch.release()
   }

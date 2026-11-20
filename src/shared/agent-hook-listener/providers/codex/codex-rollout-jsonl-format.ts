@@ -8,6 +8,7 @@ export type JsonlCursor = {
   filePath?: string
   offset: number
   carry: string
+  discardingLine?: boolean
 }
 
 export type JsonRecord = Record<string, unknown>
@@ -124,8 +125,15 @@ export function applyJsonlCursorBytes(
   const lines = content.split('\n')
   cursor.offset = read.start + read.bytes.length
   cursor.carry = lines.pop() ?? ''
-  if (skippedPrefix) {
+  const discarding = skippedPrefix || (read.from === read.offset && cursor.discardingLine)
+  if (discarding && lines.length) {
     lines.shift()
+  }
+  cursor.discardingLine =
+    Boolean(discarding && !content.includes('\n')) ||
+    Buffer.byteLength(cursor.carry, 'utf8') > TRANSCRIPT_LINE_MAX_BYTES
+  if (cursor.discardingLine) {
+    cursor.carry = ''
   }
   const records: JsonRecord[] = []
   for (const line of lines) {

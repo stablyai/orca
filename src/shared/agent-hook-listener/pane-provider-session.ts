@@ -296,7 +296,7 @@ export function retainHookRootContext(
   const modelSource =
     incoming.payload.agentType === 'codex'
       ? previousRoot
-      : (incoming.payload.agentType === 'claude' || incoming.payload.agentType === 'antigravity') &&
+      : incoming.payload.agentType === 'claude' &&
           sameTerminalOwner &&
           previous?.payload.agentType === incoming.payload.agentType
         ? previous

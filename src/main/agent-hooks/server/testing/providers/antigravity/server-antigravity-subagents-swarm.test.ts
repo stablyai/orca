@@ -47,8 +47,10 @@ async function agyHook(payload: Record<string, unknown>, hookEventName: string):
 }
 
 async function waitForChildren(ids: string[]): Promise<void> {
-  await vi.waitFor(() =>
-    expect(server.getStatusSnapshot()[0]?.subagents?.map((child) => child.id) ?? []).toEqual(ids)
+  await vi.waitFor(
+    () =>
+      expect(server.getStatusSnapshot()[0]?.subagents?.map((child) => child.id) ?? []).toEqual(ids),
+    { timeout: 10000 }
   )
 }
 

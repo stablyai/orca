@@ -1,5 +1,5 @@
 import * as fs from 'node:fs'
-import * as fsp from 'node:fs/promises'
+import fsp from 'node:fs/promises'
 import { RolloutReadBatch } from '../codex/codex-rollout-async-reads'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

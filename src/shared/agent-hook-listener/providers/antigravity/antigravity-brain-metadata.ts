@@ -1,4 +1,4 @@
-import { stat } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { readPathFromKeys } from '../../../agent-session/lifecycle/agent-session-resume'
@@ -11,11 +11,9 @@ import { readNodeFileWithinLimit } from '../../../file-content/node-bounded-file
 import { readFirstString } from '../../interactive-tool'
 import { parseAgentHookJson } from '../../request-body'
 import type { RolloutReadBatch } from '../codex/codex-rollout-async-reads'
-import { readTranscriptDirectoryAsync } from '../codex/codex-rollout-async-reads'
 import type { JsonlCursor } from '../codex/codex-rollout-jsonl-format'
 
 const BRAIN_METADATA_MAX_BYTES = 256 * 1024
-const BRAIN_CACHE_MAX_ENTRIES = 4097
 const TRANSCRIPT_SUFFIX_RE = /[\\/]\.system_generated[\\/]logs[\\/]transcript(?:_full)?\.jsonl$/
 
 export type AntigravityDiskSubagent = {
@@ -111,7 +109,7 @@ async function readBoundedJsonRecord(
     )
     const parsed = parseAgentHookJson(buffer.toString('utf8'))
     const record = isRecord(parsed) ? parsed : null
-    if (cache.jsonFiles.size < BRAIN_CACHE_MAX_ENTRIES || cached) {
+    {
       cache.jsonFiles.set(filePath, {
         mtimeMs: readStats.mtimeMs,
         size: readStats.size,
@@ -135,11 +133,7 @@ export async function readAntigravityBrainSubagents(
   try {
     const info = await stat(subagentsDir)
     if (!directory || directory.mtimeMs !== info.mtimeMs) {
-      const files = new Set(
-        (await readTranscriptDirectoryAsync(subagentsDir, batch)).filter((name) =>
-          name.endsWith('.json')
-        )
-      )
+      const files = new Set((await readdir(subagentsDir)).filter((name) => name.endsWith('.json')))
       const active = directory?.active ?? new Map<string, AntigravityDiskSubagent | undefined>()
       for (const name of files) {
         if (!directory?.files.has(name)) {
@@ -149,6 +143,7 @@ export async function readAntigravityBrainSubagents(
       for (const name of active.keys()) {
         if (!files.has(name)) {
           active.delete(name)
+          cache.jsonFiles.delete(join(subagentsDir, name))
         }
       }
       directory = { mtimeMs: info.mtimeMs, files, active }
@@ -161,6 +156,7 @@ export async function readAntigravityBrainSubagents(
   for (const [name, cachedEntry] of directory.active) {
     if (cachedEntry && retired.has(cachedEntry.conversationId)) {
       directory.active.delete(name)
+      cache.jsonFiles.delete(join(subagentsDir, name))
       continue
     }
     if (!batch.wanted()) {
@@ -189,6 +185,7 @@ export async function readAntigravityBrainSubagents(
     }
     if (entry.state === 'SUBAGENT_STATE_KILLED' || retired.has(conversationId)) {
       directory.active.delete(name)
+      cache.jsonFiles.delete(join(subagentsDir, name))
     } else {
       directory.active.set(name, entry)
     }

@@ -57,6 +57,9 @@ export async function readAntigravityChildTranscriptTail(
     cursor: { filePath: childTranscriptPath, offset: 0, carry: '' }
   }
   const read = await readJsonlCursorBytes(previous.cursor, batch)
+  if (!batch.wanted()) {
+    return undefined
+  }
   if (read === 'deferred') {
     return previous.tail
   }
