@@ -24,6 +24,7 @@ import {
 } from '../../../../managed-agent-cli/managed-agent-cli-registry'
 import { streamManagedRuntimeInstall } from './managed-runtime-install-stream'
 import { scheduleAntigravityServerRetirement } from '../../../../antigravity/antigravity-server-retirement'
+import { syncAgyLoginCopy } from '../../../../antigravity/antigravity-chat-agy-login-copy'
 import {
   managedCopyMayRun,
   noteManagedReleasesRead,
@@ -99,6 +100,11 @@ function agentCliInstallation(
 export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
   provideManagedAgentDetection(runtime)
   scheduleAntigravityServerRetirement(getProfileUserDataPath())
+  // A login that agy dropped while Orca was closed doesn't stay in Orca's chat home.
+  void syncAgyLoginCopy(
+    runtime.requireStore().getSettings().antigravityChatAuth,
+    getProfileUserDataPath()
+  )
   for (const agent of MANAGED_AGENT_CLI_IDS) {
     try {
       installationOf(agent, runtime)

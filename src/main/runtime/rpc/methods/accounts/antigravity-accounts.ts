@@ -8,6 +8,8 @@ import {
 import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
 import { restartIdleAgyChats, withAntigravityChatBackend } from './antigravity-chat-backend'
+import { syncAgyLoginCopy } from '../../../../antigravity/antigravity-chat-agy-login-copy'
+import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import { lastAntigravityAgySignedOut } from '../../../../antigravity/antigravity-chat-route'
 import { readyAntigravityHostAcpVersion } from '../../../../antigravity/antigravity-host-acp'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
@@ -111,8 +113,13 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     name: 'accounts.antigravityChatAuthApply',
     permission: 'accounts-admin',
     params: AntigravityChatAuthConfigSchema,
-    handler: (config, ctx) =>
-      applyAntigravityChatAuthConfig(ctx.runtime.requireStore(), config, stopLiveChats)
+    handler: async (config, ctx) => {
+      const store = ctx.runtime.requireStore()
+      const applied = await applyAntigravityChatAuthConfig(store, config, stopLiveChats)
+      // A key or gcloud mustn't find the Google login in Orca's chat home; Google brings it back.
+      await syncAgyLoginCopy(applied, getProfileUserDataPath())
+      return applied
+    }
   }),
   defineMethod({
     name: 'accounts.antigravityChatApiKeyStatus',

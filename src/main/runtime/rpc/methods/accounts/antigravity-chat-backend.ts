@@ -16,6 +16,7 @@ import {
   antigravityChatUsesOrcaHome
 } from '../../../../antigravity/antigravity-chat-route'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
+import { syncAgyLoginCopy } from '../../../../antigravity/antigravity-chat-agy-login-copy'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
@@ -83,13 +84,14 @@ export function restartIdleAgyChats(
   }
   // The cached answer vouched for the previous login.
   forgetAntigravityHostAcpChecks()
+  const saved = runtime.requireStore().getSettings().antigravityChatAuth
+  // The chat home's copy of agy's login follows the switch now, not at the next old-chat resume.
+  void syncAgyLoginCopy(saved, getProfileUserDataPath())
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return
   }
-  const google = !antigravityChatUsesOrcaHome(
-    runtime.requireStore().getSettings().antigravityChatAuth
-  )
+  const google = !antigravityChatUsesOrcaHome(saved)
   for (const id of host.loadedSessionIds()) {
     const home =
       host.sessionAgent(id) === 'antigravity' ? host.childAccountHome(id, true) : undefined

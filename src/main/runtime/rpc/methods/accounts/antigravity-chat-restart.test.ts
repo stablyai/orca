@@ -1,7 +1,18 @@
 import { expect, it, vi } from 'vitest'
 import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 
-const host = vi.hoisted((): { released: string[] } => ({ released: [] }))
+const host = vi.hoisted((): { released: string[]; synced: unknown[] } => ({
+  released: [],
+  synced: []
+}))
+vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
+  getProfileUserDataPath: () => '/data'
+}))
+vi.mock('../../../../antigravity/antigravity-chat-agy-login-copy', () => ({
+  syncAgyLoginCopy: async (saved: unknown, data: string) => {
+    host.synced.push([saved, data])
+  }
+}))
 vi.mock(
   '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry',
   () => ({
@@ -23,6 +34,7 @@ import { restartIdleAgyChats } from './antigravity-chat-backend'
 
 function restart(antigravityChatAuth: AntigravityChatAuthConfig): string[] {
   host.released = []
+  host.synced = []
   restartIdleAgyChats(
     { runtime: 'host' },
     { requireStore: () => ({ getSettings: () => ({ antigravityChatAuth }) }) }
@@ -36,4 +48,9 @@ it("restarts Orca's chat home too when its chats sign in with agy's Google login
 
 it("leaves Orca's chat home running on a key, which an agy account switch doesn't touch", () => {
   expect(restart({ method: 'gemini-api-key' })).toEqual(['agy-home'])
+})
+
+it("brings the chat home's copy of agy's login in line on every switch or removal", () => {
+  restart({ method: 'oauth-personal' })
+  expect(host.synced).toEqual([[{ method: 'oauth-personal' }, '/data']])
 })
