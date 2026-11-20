@@ -8,6 +8,8 @@ import { journalDomainLinkedInputs } from './journal-domain-input-populations'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { nextJournalDomainQueueCard } from './journal-domain-submission-consume'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
+import { journalDomainQueueHasInterruptedSend } from './journal-domain-queue-reads'
+import { applyJournalDomainControlCommand } from './journal-domain-control-command'
 import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
@@ -107,9 +109,19 @@ export function applyJournalSqlSendAdmission(
       )
     })
   }
+  const resumeInterrupted =
+    operation.fromPerson &&
+    facts.identity.agent === 'claude' &&
+    !operation.queueOnly &&
+    eligibility.prompts.length === 0 &&
+    journalDomainQueueHasInterruptedSend(db, scope, facts.reopenFloor ?? null)
   let queue = false
   if (operation.fromAgent || !pendingPromptsAllUnanswerableHere(eligibility.prompts)) {
-    queue = eligibility.prompts.length > 0 || eligibility.work.working() || !!eligibility.pending
+    queue =
+      resumeInterrupted ||
+      eligibility.prompts.length > 0 ||
+      eligibility.work.working() ||
+      !!eligibility.pending
     if (!queue && operation.fromAgent) {
       queue = readJournalDomainQueuePauseContext(
         db,
@@ -161,6 +173,15 @@ export function applyJournalSqlSendAdmission(
     if (refusal) {
       return empty({ kind: 'refused', refusal })
     }
+    const resumed = resumeInterrupted
+      ? applyJournalDomainControlCommand(
+          db,
+          target,
+          { kind: 'queue-resume', fence: input.fence, onlyRestarted: true },
+          facts,
+          savedAt
+        )
+      : null
     const result = applyJournalDomainQueueCommand(
       db,
       stateDirectory,
@@ -194,7 +215,10 @@ export function applyJournalSqlSendAdmission(
           queued: { messageId: id, position: card.position, state: card.state }
         }
       } satisfies JournalSendAdmissionResult,
-      [{ kind: 'queue', epoch: target.epoch, seq: result.cursor.sequence }]
+      [
+        ...(resumed?.coordinates ?? []),
+        { kind: 'queue', epoch: target.epoch, seq: result.cursor.sequence }
+      ]
     )
   }
   if (operation.queueOnly) {

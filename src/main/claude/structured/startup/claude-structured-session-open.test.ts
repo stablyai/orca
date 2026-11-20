@@ -1,15 +1,5 @@
-import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { restoredChatWithBlockedRecovery } from './claude-structured-session-open.test-fixture'
 import { readTestHostJournal } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
-import { seedTestAgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
-import {
-  openTestAgentSessionRecordStore,
-  openTestAgentSessionDatabase
-} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
-import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { afterEach, expect, it, vi } from 'vitest'
 import * as jsonlImport from '../../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
 import * as transcriptCatchUp from '../../transcripts/claude-transcript-catch-up'
@@ -180,103 +170,27 @@ it('releases the recovery hold when the session closes and drops the replacement
 })
 
 it('keeps the send that acquires a restored chat queued until recovery commits, then delivers it once', async () => {
-  const providerSessionId = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
-  const c = await chat('batch', providerSessionId)
-  await c.journal.appendItem(
-    { provider: 'claude', sessionId: providerSessionId, uuid: 'unheld-turn' },
-    { kind: 'turn', turnId: 'unheld-turn', state: 'running' },
-    { fence: 1, turnScope: { kind: 'thread' } }
-  )
-  const record = agentSessionRecordFixture({
-    sessionId: SESSION,
-    accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: c.config },
-    location: { workspaceId: 'workspace' },
-    providerHandleChain: [
-      {
-        linkId: 'saved-link',
-        handle: claudeProviderHandle(providerSessionId, 'old-leaf'),
-        origin: 'created',
-        mintedAtFence: 1,
-        observedAt: 0
-      }
-    ]
-  })
-  await seedTestAgentSessionRecordStore(c.cwd, { records: [record] })
-  const claude = fakeClaude({ initSessionId: providerSessionId })
-  const adapter = adapterAtPublishFor(claude, {
-    providerSessionId,
-    resumeLeafUuid: 'old-leaf',
-    resumesTranscript: true,
-    continuesChain: true,
-    cwd: c.cwd,
-    claudeConfigDir: c.config
-  })
-  const host = new StructuredAgentSessionHost({
-    agents: NO_STRUCTURED_AGENTS,
-    logger: createStructuredAgentSessionLogger(),
-    store: await openTestAgentSessionRecordStore(c.cwd),
-    adapter,
-    journalDatabase: await openTestAgentSessionDatabase(c.cwd),
-    claimKeyId: 'test-key',
-    mintSpawnToken: () => 'recovery-send'
-  })
-  const blocked = Promise.withResolvers<void>()
-  const release = Promise.withResolvers<void>()
-  const preparedImport = jsonlImport.prepareJsonlTranscriptImport
-  vi.spyOn(jsonlImport, 'prepareJsonlTranscriptImport').mockImplementationOnce(async (input) => {
-    const prepared = await preparedImport(input)
-    blocked.resolve()
-    await release.promise
-    return prepared
-  })
+  const c = await restoredChatWithBlockedRecovery(cleanups)
   const delivered = Promise.withResolvers<void>()
-  const dispatch = adapter.dispatch
-  vi.spyOn(adapter, 'dispatch').mockImplementation(async (input) => {
+  const dispatch = c.adapter.dispatch
+  vi.spyOn(c.adapter, 'dispatch').mockImplementation(async (input) => {
     const outcome = await dispatch(input)
     delivered.resolve()
     return outcome
   })
-  cleanups.push(async () => {
-    release.resolve()
-    await host.flushAllStreamedEvents()
-    await adapter.closeAll()
-    claude.dispose()
-  })
-  const body = {
-    kind: 'message' as const,
-    role: 'user' as const,
-    blocks: [{ type: 'text' as const, text: 'Keep my original send' }]
-  }
   const clientOperationId = '1800000000000-00000000000000000000000000000001'
-  expect(
-    await host.send(
-      { callerKey: 'test-client' },
-      {
-        envelope: {
-          sessionId: SESSION,
-          clientOperationId,
-          expectedRuntimeFence: 1,
-          payloadFingerprint: computeAgentSessionPayloadFingerprint({
-            method: 'agentSession.send',
-            sessionId: SESSION,
-            fields: { body }
-          })
-        },
-        body
-      }
-    )
-  ).toMatchObject({ ok: true })
-  await blocked.promise
-  const waiting = await readTestHostJournal(host, SESSION)
+  expect(await c.send(clientOperationId)).toMatchObject({ ok: true })
+  await c.blocked
+  const waiting = await readTestHostJournal(c.host, SESSION)
   const queued = waiting.submissions.find(
     (submission) => submission.clientMessageId === clientOperationId
   )
   expect(queued).toBeDefined()
   expect(queued?.handedOverAt).toBeUndefined()
-  expect(claude.connections[0]!.sent).toEqual([])
-  release.resolve()
+  expect(c.claude.connections[0]!.sent).toEqual([])
+  c.release.resolve()
   await delivered.promise
-  const recovered = await readTestHostJournal(host, SESSION)
+  const recovered = await readTestHostJournal(c.host, SESSION)
   expect(recovered.items).toContainEqual(
     expect.objectContaining({
       body: {
@@ -286,10 +200,62 @@ it('keeps the send that acquires a restored chat queued until recovery commits, 
       }
     })
   )
-  expect(recovered.items).toContainEqual(expect.objectContaining({ body }))
+  expect(recovered.items).toContainEqual(expect.objectContaining({ body: c.body }))
   expect(
-    claude.connections[0]!.sent.filter((message) =>
+    c.claude.connections[0]!.sent.filter((message) =>
       JSON.stringify(message).includes('Keep my original send')
     )
   ).toHaveLength(1)
+})
+
+it('delivers a send interrupted by closing during recovery before a newer send after reopen, once each', async () => {
+  const c = await restoredChatWithBlockedRecovery(cleanups)
+  expect(await c.send('1800000000000-00000000000000000000000000000001')).toMatchObject({ ok: true })
+  await c.blocked
+  expect(c.adapter.holdsDispatch(SESSION)).toBe('history-catch-up')
+  expect(c.claude.connections[0]!.sent).toEqual([])
+  const recovery = c.adapter.pendingDelivery(SESSION)
+  await c.host.close(SESSION, 'user-close')
+  c.release.resolve()
+  await recovery
+  const reopened = await c.host.history({ sessionId: SESSION, direction: 'tail' })
+  expect(reopened).toMatchObject({
+    ok: true,
+    page: { queuedMessages: [expect.objectContaining({ state: 'waiting' })] }
+  })
+  const first = Promise.withResolvers<void>()
+  const second = Promise.withResolvers<void>()
+  const deliveries = [first, second]
+  const dispatch = c.adapter.dispatch
+  vi.spyOn(c.adapter, 'dispatch').mockImplementation(async (input) => {
+    const outcome = await dispatch(input)
+    deliveries.shift()?.resolve()
+    return outcome
+  })
+  expect(
+    await c.send('1800000000000-00000000000000000000000000000002', {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'My newer send' }]
+    })
+  ).toMatchObject({ ok: true })
+  await first.promise
+  const connection = c.claude.connections[1]!
+  connection.handlers.onMessage?.({
+    type: 'result',
+    subtype: 'success',
+    session_id: '819cf9f8-e43c-4ad7-b50f-54aa158a726a',
+    uuid: 'first-result',
+    num_turns: 1
+  })
+  await second.promise
+  await readTestHostJournal(c.host, SESSION)
+  expect(
+    c.claude.connections.flatMap((child) =>
+      child.sent.filter((message) => message.type === 'user').map((message) => message.message)
+    )
+  ).toEqual([
+    { role: 'user', content: [{ type: 'text', text: 'Keep my original send' }] },
+    { role: 'user', content: [{ type: 'text', text: 'My newer send' }] }
+  ])
 })
