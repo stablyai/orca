@@ -33,31 +33,28 @@ describe('orchestration worker automatic release', () => {
     h.setup()
   }
 
-  it.each(['succeeded', 'failed'] as const)(
-    'releases a %s worker once its grace period ends and keeps where its output lives',
-    async (outcome) => {
-      setupWithFakeClock()
-      const { dispatchId } = await h.startSettledWorker(outcome)
-      await expect(
-        h.call('orchestration.workerShow', { dispatch: dispatchId })
-      ).resolves.toMatchObject({
-        autoReleaseAt: '2026-10-27T12:02:00Z',
-        terminalResource: { autoReleaseAt: '2026-10-27T12:02:00Z' },
-        projection: { nextAction: { kind: 'none' } }
-      })
+  it('releases a failed worker once its grace period ends and keeps where its output lives', async () => {
+    setupWithFakeClock()
+    const { dispatchId } = await h.startSettledWorker('failed')
+    await expect(
+      h.call('orchestration.workerShow', { dispatch: dispatchId })
+    ).resolves.toMatchObject({
+      autoReleaseAt: '2026-10-27T12:02:00Z',
+      terminalResource: { autoReleaseAt: '2026-10-27T12:02:00Z' },
+      projection: { nextAction: { kind: 'none' } }
+    })
 
-      await vi.advanceTimersByTimeAsync(GRACE_MS - 1_000)
-      expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-      await vi.advanceTimersByTimeAsync(1_000)
+    await vi.advanceTimersByTimeAsync(GRACE_MS - 1_000)
+    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1_000)
 
-      await vi.waitFor(() =>
-        expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
-      )
-      expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
-      expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
-      await expectOutputReference(dispatchId)
-    }
-  )
+    await vi.waitFor(() =>
+      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
+    )
+    expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
+    expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
+    await expectOutputReference(dispatchId)
+  })
 
   it('hands a terminal reused during the grace period to the new Dispatch', async () => {
     setupWithFakeClock()

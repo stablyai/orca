@@ -184,22 +184,7 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
       ])
     })
 
-    it('publishes the proof when the renderer drops the surface before the exit lands', async () => {
-      const { runtime, handle, retirePersistedSurface } = await createHost()
-
-      await retirePersistedSurface()
-      await republishWithoutTheSurface(runtime)
-      await runtime.onPtyExit('pty-left', 0, 'incarnation-a')
-
-      const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-      expect(published.tabs).toEqual([])
-      expect(published.retiredTerminalSurfaces).toEqual([
-        expect.objectContaining({ parentTabId: 'tab', leafId: LEAF_ID, terminal: handle })
-      ])
-    })
-
-    // Assert subscriber frames: a proof stored without publication is invisible to the mirror.
-    it('fans the proof out to a paired subscriber, not just into stored state', async () => {
+    it('stores and sends the proof when the renderer drops the surface before the exit lands', async () => {
       const { runtime, handle, retirePersistedSurface } = await createHost()
       const frames: RuntimeMobileSessionTabsResult[] = []
       const unsubscribe = runtime.onMobileSessionTabsChanged(
@@ -215,14 +200,19 @@ export function registerPairedCloseRetirementProofPublicationOrderTests(): void 
         unsubscribe()
       }
 
-      expect(
-        frames.some((frame) =>
-          frame.retiredTerminalSurfaces?.some(
-            (proof) =>
-              proof.terminal === handle && proof.parentTabId === 'tab' && proof.leafId === LEAF_ID
-          )
-        )
-      ).toBe(true)
+      const proof = expect.objectContaining({
+        parentTabId: 'tab',
+        leafId: LEAF_ID,
+        terminal: handle
+      })
+      const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      expect(published.tabs).toEqual([])
+      expect(published.retiredTerminalSurfaces).toEqual([proof])
+      expect(frames).toContainEqual(
+        expect.objectContaining({
+          retiredTerminalSurfaces: expect.arrayContaining([proof])
+        })
+      )
     })
   })
 }

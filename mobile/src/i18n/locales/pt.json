@@ -48,7 +48,6 @@
       "workspace": "Espaço de Trabalho",
       "hideDetails": "Ocultar detalhes",
       "showDetails": "Mostrar detalhes",
-      "dismissNotice": "Descartar",
       "loading": "Carregando sessões do agente…"
     },
     "resumeTarget": {
@@ -125,7 +124,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... ou cole o código",
       "pasteCodeTitle": "Colar código de pareamento",
       "pasteInstead": "Colar código em vez disso",
-      "pastePairingCode": "Ou colar o código de pareamento",
+      "pastePairingCode": "Colar código de pareamento",
       "scanCodeStep": "Escaneie o código QR",
       "title": "Parear com desktop",
       "tryAgain": "Tentar novamente",
@@ -161,7 +160,7 @@
       "installTitle": "Baixe o novo app",
       "installDescription": "Se o celular pedir, permita que o navegador instale apps.",
       "download": "Baixar",
-      "keepThisVersion": "Continuar usando esta versão",
+      "keepThisVersion": "Manter esta versão",
       "keepThisVersionNote": "Você vai ficar sem as correções de segurança. Vamos lembrar você em uma semana."
     },
     "pairTitle": "Pareie com o seu computador",
@@ -345,7 +344,7 @@
       "triedSearchWeb": "Tentou buscar na web"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "Mostrar mensagem completa — falha ao carregar, toque para tentar novamente",
+      "loadFailed": "Tentar carregar mensagem completa",
       "showFullMessage": "Mostrar mensagem completa",
       "showLess": "Mostrar menos"
     },
@@ -411,8 +410,7 @@
       "submitSelectedOptions": "Enviar opções selecionadas"
     },
     "queuedMessages": {
-      "clearAll": "Limpar tudo",
-      "deleteAll": "Excluir todas as mensagens na fila",
+      "deleteAll": "Excluir tudo",
       "editMessage": "Editar mensagem",
       "pausedState": "Pausado",
       "queuedState": "Na fila",
@@ -675,15 +673,6 @@
       "imageTooLarge": "Imagem grande demais para anexar",
       "permissionDenied": "Permissão de acesso às fotos negada"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Entregue a um agente",
-      "startedAgent": "Agente iniciado",
-      "startedWorker": "Worker iniciado",
-      "taskFromCoordinator": "Tarefa do coordenador",
-      "messageFromCoordinator": "Mensagem do coordenador",
-      "updateFromWorker": "Atualização do worker",
-      "messageFrom": "Mensagem de"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "A resposta do anexo não pode ser lida. Tente novamente.",
       "incompleteReply": "O anexo foi alterado ou a resposta estava incompleta. Feche-o e tente novamente.",
@@ -869,7 +858,7 @@
       "manageShortcuts": "Gerenciar atalhos",
       "manageShortcutsHint": "Mostrar, ocultar ou reordenar teclas de atalho",
       "modifiers": "Modificadores",
-      "moreKeys": "Mais teclas — Tab, setas, F1–F12…",
+      "moreKeys": "MAIS TECLAS",
       "navigation": "Navegação",
       "pickKey": "Selecione uma tecla",
       "pressEnter": "Pressionar Enter",
@@ -1056,12 +1045,10 @@
       "dismissDrawer": "Fechar painel inferior"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Script de configuração",
-      "run": "Executar",
-      "runSetupCommand": "Executar comando de configuração",
+      "runSetup": "Executar configuração",
       "skip": "Pular",
-      "waitForSetup": "Esperar a configuração terminar antes de iniciar o agente",
+      "startAgentAfterSetup": "Iniciar o agente após a configuração",
       "waitForSetupSaveFailed": "Falha ao salvar o comportamento de inicialização da configuração."
     },
     "newWorkspaceSshConnectionField": {
@@ -1385,7 +1372,7 @@
       "privacyHint": "Envia um relatório de tamanho limitado com dados sensíveis ocultados, incluindo nome do host, endereço de conexão, versões, estado da conexão e eventos — nunca o conteúdo do terminal ou credenciais.",
       "reconnecting": "reconectando",
       "retrySending": "Tentar enviar novamente",
-      "sendDiagnostics": "Enviar diagnóstico ao Orca",
+      "sendDiagnostics": "Enviar diagnóstico",
       "sending": "Enviando…",
       "sent": "Diagnóstico enviado",
       "stateWithAttempt": "{{state}} · tentativa {{attempts}}",
@@ -1791,10 +1778,8 @@
   "host": {
     "edit": {
       "address": "Endereço",
-      "addressHint": "Aceita IP, host:port ou ws:// / wss://. Uma URL wss:// sem porta usa a porta 443. Endereços sem protocolo mantêm a porta atual (ou 6768).",
       "connectionPreview": "Conecta a {{endpoint}}",
       "goBack": "Voltar",
-      "help": "Altere o nome de exibição ou o endereço de conexão. Deixe o nome em branco para usar o nome informado pelo desktop. Alterar o endereço só muda onde este celular se conecta — não refaz o pareamento. Use esta opção quando o mesmo desktop estiver acessível por outro IP (por exemplo, pela LAN doméstica ou pelo Tailscale).",
       "hostNamePlaceholder": "Nome do host",
       "hostRemoved": "Este host foi removido deste celular.",
       "loadFailed": "Falha ao carregar o host.",
@@ -2191,7 +2176,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} não está vinculada a um PR aberto.",
       "currentBranchNotLinked": "A branch atual não está vinculada a um PR aberto.",
-      "linkExistingPullRequest": "Vincular um pull request existente",
+      "linkExistingPullRequest": "Vincular pull request",
       "linkedPrUnavailable": "PR vinculado #{{number}} indisponível",
       "refreshOrCreate": "Atualize para verificar novamente ou crie um novo PR para esta branch.",
       "branchRequired": "Faça checkout de uma branch antes de criar um pull request."
@@ -2655,6 +2640,7 @@
       "providerUnavailable": "{{agent}} não conseguiu responder porque o serviço está ocupado. Escolha outro modelo ou aguarde um pouco e envie novamente.",
       "providerSafetyStopped": "{{agent}} interrompeu esta resposta após uma verificação de segurança. Revise sua solicitação e envie novamente.",
       "providerResponseFailed": "{{agent}} não conseguiu concluir esta resposta. Abra os detalhes para obter mais informações.",
+      "providerResponseFailedQuoted": "{{agent}} não conseguiu concluir esta resposta: {{detail}}.",
       "selectedModel": "o modelo selecionado",
       "providerRejected": "{{agent}} não aceitou esta mensagem.",
       "providerRejectedQuoted": "{{agent}} não aceitou esta mensagem: {{detail}}.",
@@ -2772,8 +2758,8 @@
       "scrollToLatest": "Rolar até o conteúdo mais recente"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "Mostrar mensagem completa — falha ao carregar, toque para tentar novamente",
-      "loadOutputFailed": "Mostrar saída completa — falha ao carregar, toque para tentar novamente",
+      "loadMessageFailed": "Tentar carregar mensagem completa",
+      "loadOutputFailed": "Tentar carregar saída completa",
       "partialMessage": "Exibindo parte desta mensagem.",
       "partialOutput": "Exibindo {{shown}} de {{total}}.",
       "showFullMessage": "Mostrar mensagem completa",
@@ -2789,8 +2775,8 @@
       "notFoundTitle": "Conversa ainda não encontrada"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "Alternar para a visualização de chat",
-      "switchToTerminalView": "Alternar para a visualização do terminal"
+      "switchToChatView": "Mudar para o chat",
+      "switchToTerminalView": "Mudar para o terminal"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "O agente foi iniciado, mas as notas não foram enviadas.",
@@ -3955,7 +3941,7 @@
       "updateBranch": "Atualizar branch",
       "back": "Voltar ao controle de versão",
       "title": "Commits",
-      "loadMoreFailed": "Não foi possível carregar mais commits. Tentar novamente",
+      "loadMoreFailed": "Tentar carregar commits",
       "notPushed": "Commits não enviados: {{count}}",
       "onOrigin": "Na origem {{count}}",
       "baseNewer_many": "{{count}} commits mais recentes"
@@ -4479,7 +4465,7 @@
       "issueSource": "Origem da issue",
       "keySecurityHint": "Sua chave é criptografada pelo chaveiro do sistema operacional do host e armazenada localmente.",
       "linearConnectSubtitle": "Cole uma chave de API pessoal para consultar as issues desse espaço de trabalho.",
-      "linearSettingsLink": "Configurações do Linear / Segurança / Nova chave de API",
+      "linearSettingsLink": "Abrir configurações do Linear",
       "linearTeam": "Equipe do Linear",
       "linearTeamSubtitle": "Crie uma issue na equipe selecionada do Linear.",
       "newIssueTitle": "Nova Issue do {{providerLabel}}",
@@ -4555,7 +4541,7 @@
       "runSetupAndCreate": "Executar configuração e criar",
       "setupSubtitle": "Escolha se deseja executar a configuração de {{name}} antes de criar este espaço de trabalho.",
       "setupTitle": "Executar script de configuração?",
-      "skipSetupAndCreate": "Pular configuração e criar",
+      "skipSetupAndCreate": "Criar sem configuração",
       "trustFailed": "Falha ao marcar o script de configuração como confiável."
     },
     "worktreeCreateRetry": {
@@ -5065,7 +5051,7 @@
   "bots": {
     "link": {
       "pairTitle": "Emparelhar um computador",
-      "pairRequired": "Para abrir este link, emparelhe este telefone com um computador.",
+      "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",
       "pairAction": "Emparelhar um computador",
       "openFailed": "Não foi possível abrir este link",
       "ambiguous": "Este bot está em {{names}}. Abra a conversa no Orca no computador que você quiser.",

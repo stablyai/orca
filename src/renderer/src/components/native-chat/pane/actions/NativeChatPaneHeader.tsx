@@ -48,7 +48,7 @@ export function NativeChatPaneHeader({
   const splitShortcutCombos = useShortcutKeyComboDetails('terminal.splitRight')
   const handOffLabel = t(
     'components.agentSessionContinuation.handOffToAnotherAgent',
-    'Hand Off to Another Agent'
+    'Hand off to agent'
   )
   return (
     <div

@@ -112,7 +112,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... 또는 코드 붙여넣기",
       "pasteCodeTitle": "페어링 코드 붙여넣기",
       "pasteInstead": "대신 코드 붙여넣기",
-      "pastePairingCode": "또는 페어링 코드 붙여넣기",
+      "pastePairingCode": "페어링 코드 붙여넣기",
       "scanCodeStep": "QR 코드를 스캔하세요",
       "title": "데스크톱과 페어링",
       "tryAgain": "다시 시도",
@@ -146,7 +146,7 @@
       "installTitle": "새 앱 다운로드",
       "installDescription": "휴대폰에서 요청하면 브라우저가 앱을 설치하도록 허용하세요.",
       "download": "다운로드",
-      "keepThisVersion": "이 버전 계속 사용",
+      "keepThisVersion": "이 버전 유지",
       "keepThisVersionNote": "보안 수정을 받을 수 없습니다. 일주일 후에 다시 알려 드릴게요."
     },
     "pairTitle": "컴퓨터와 페어링",
@@ -324,7 +324,7 @@
       "triedSearchWeb": "웹 검색 시도"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "전체 메시지 표시 — 불러오지 못했습니다. 탭하여 다시 시도하세요.",
+      "loadFailed": "전체 메시지 다시 불러오기",
       "showFullMessage": "전체 메시지 표시",
       "showLess": "접기"
     },
@@ -390,8 +390,7 @@
       "submitSelectedOptions": "선택한 옵션 제출"
     },
     "queuedMessages": {
-      "clearAll": "모두 지우기",
-      "deleteAll": "대기 중인 메시지 모두 삭제",
+      "deleteAll": "모두 삭제",
       "editMessage": "메시지 편집",
       "pausedState": "일시 중지됨",
       "queuedState": "대기 중",
@@ -616,10 +615,6 @@
       "imageTooLarge": "이미지가 너무 커서 첨부할 수 없습니다.",
       "permissionDenied": "사진 접근 권한 거부됨"
     },
-    "agentMessage": {
-      "handedOffToAgent": "에이전트에게 넘김",
-      "startedAgent": "에이전트 시작됨"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "첨부 파일 응답을 읽을 수 없습니다. 다시 시도하세요.",
       "incompleteReply": "첨부 파일이 변경되었거나 응답이 불완전합니다. 닫고 다시 시도하세요.",
@@ -789,7 +784,7 @@
       "manageShortcuts": "단축키 관리",
       "manageShortcutsHint": "단축키 표시, 숨기기 및 순서 변경",
       "modifiers": "보조 키",
-      "moreKeys": "더 많은 키 — Tab, 방향키, F1–F12…",
+      "moreKeys": "더 많은 키",
       "navigation": "탐색",
       "pickKey": "키 선택",
       "pressEnter": "Enter 누르기",
@@ -941,12 +936,10 @@
       "dismissDrawer": "하단 패널 닫기"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "훅",
       "label": "설정 스크립트",
-      "run": "실행",
-      "runSetupCommand": "설정 명령 실행",
+      "runSetup": "설정 실행",
       "skip": "건너뛰기",
-      "waitForSetup": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
+      "startAgentAfterSetup": "설정 후 agent 시작",
       "waitForSetupSaveFailed": "시작 동작 저장 실패"
     },
     "newWorkspaceSshConnectionField": {
@@ -1221,7 +1214,7 @@
       "privacyHint": "호스트 이름, 엔드포인트, 버전, 연결 상태, 이벤트를 포함하되 민감한 정보를 가리고 크기를 제한한 보고서를 전송합니다. 터미널 내용이나 인증 정보는 절대 포함하지 않습니다.",
       "reconnecting": "재연결 중",
       "retrySending": "다시 보내기",
-      "sendDiagnostics": "Orca에 진단 정보 보내기",
+      "sendDiagnostics": "진단 정보 보내기",
       "sending": "전송 중…",
       "sent": "진단 정보를 보냈습니다",
       "stateWithAttempt": "{{state}} · {{attempts}}번째 시도",
@@ -1605,10 +1598,8 @@
   "host": {
     "edit": {
       "address": "주소",
-      "addressHint": "IP, host:port 또는 ws:// / wss:// 형식을 사용할 수 있습니다. 포트가 없는 wss:// URL은 443을 사용합니다. 스킴과 포트 없이 주소만 입력하면 현재 포트(또는 6768)를 유지합니다.",
       "connectionPreview": "{{endpoint}}에 연결",
       "goBack": "돌아가기",
-      "help": "표시 이름이나 연결 주소를 변경하세요. 이름을 비워 두면 데스크톱에서 보내는 이름을 사용합니다. 주소를 수정하면 이 휴대폰이 연결하는 주소만 바뀌며 다시 페어링하지 않습니다. 같은 데스크톱에 다른 IP로 연결할 때 사용하세요(예: 홈 LAN과 Tailscale 간 전환).",
       "hostNamePlaceholder": "호스트 이름",
       "hostRemoved": "이 호스트는 이 휴대폰에서 제거되었습니다.",
       "loadFailed": "호스트 정보를 불러오지 못했습니다.",
@@ -1954,7 +1945,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} 브랜치는 열려 있는 PR에 연결되어 있지 않습니다.",
       "currentBranchNotLinked": "현재 브랜치는 열려 있는 PR에 연결되어 있지 않습니다.",
-      "linkExistingPullRequest": "기존 PR 연결",
+      "linkExistingPullRequest": "PR 연결",
       "linkedPrUnavailable": "연결된 PR #{{number}} 사용 불가",
       "refreshOrCreate": "새로고침하여 다시 확인하거나 이 브랜치의 새 PR을 작성하세요."
     },
@@ -2219,6 +2210,7 @@
       "providerUnavailable": "서비스가 혼잡하여 {{agent}}이(가) 응답하지 못했습니다. 다른 모델을 선택하거나 잠시 기다린 후 다시 보내세요.",
       "providerSafetyStopped": "{{agent}}이(가) 안전 검사 후 이 응답을 중단했습니다. 요청을 검토한 후 다시 보내세요.",
       "providerResponseFailed": "{{agent}}이(가) 이 응답을 완료하지 못했습니다. 자세한 내용을 열어 확인하세요.",
+      "providerResponseFailedQuoted": "{{agent}}이(가) 이 응답을 완료하지 못했습니다: {{detail}}.",
       "selectedModel": "선택한 모델",
       "providerRejected": "{{agent}}이(가) 이 메시지를 받아들이지 않았습니다.",
       "providerRejectedQuoted": "{{agent}}이(가) 이 메시지를 받아들이지 않았습니다: {{detail}}.",
@@ -2331,8 +2323,8 @@
       "scrollToLatest": "최신 내용으로 스크롤"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "전체 메시지 보기 — 불러오지 못했습니다. 탭하여 다시 시도하세요.",
-      "loadOutputFailed": "전체 출력 보기 — 불러오지 못했습니다. 탭하여 다시 시도하세요.",
+      "loadMessageFailed": "전체 메시지 다시 불러오기",
+      "loadOutputFailed": "전체 출력 다시 불러오기",
       "partialMessage": "이 메시지의 일부를 표시하고 있습니다.",
       "partialOutput": "{{total}} 중 {{shown}}을(를) 표시하는 중입니다.",
       "showFullMessage": "전체 메시지 보기",
@@ -2348,8 +2340,8 @@
       "notFoundTitle": "아직 이 대화를 찾을 수 없습니다."
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "채팅 보기로 전환",
-      "switchToTerminalView": "터미널 보기로 전환"
+      "switchToChatView": "채팅으로 전환",
+      "switchToTerminalView": "터미널로 전환"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "에이전트가 시작되었지만 메모가 전송되지 않았습니다.",
@@ -3861,7 +3853,7 @@
       "issueSource": "이슈 소스",
       "keySecurityHint": "키는 호스트 OS 키체인을 통해 암호화되어 로컬에 저장됩니다.",
       "linearConnectSubtitle": "해당 워크스페이스의 이슈를 보려면 개인 API 키를 붙여넣으세요.",
-      "linearSettingsLink": "Linear 설정 / 보안 / 새 API 키",
+      "linearSettingsLink": "Linear 설정 열기",
       "linearTeam": "Linear 팀",
       "linearTeamSubtitle": "선택한 Linear 팀에 이슈를 생성하세요.",
       "newIssueTitle": "새 {{providerLabel}} 이슈",
@@ -3935,7 +3927,7 @@
       "runSetupAndCreate": "설정 실행 후 만들기",
       "setupSubtitle": "{{name}}의 워크스페이스를 만들려면 먼저 설정 스크립트 실행 여부를 선택해야 합니다.",
       "setupTitle": "설정 스크립트를 실행하시겠습니까?",
-      "skipSetupAndCreate": "설정 건너뛰고 만들기",
+      "skipSetupAndCreate": "설정 없이 만들기",
       "trustFailed": "설정 스크립트 신뢰 설정에 실패했습니다."
     },
     "worktreeCreateRetry": {
@@ -4381,7 +4373,7 @@
   "bots": {
     "link": {
       "pairTitle": "컴퓨터 페어링",
-      "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링하세요.",
+      "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
       "pairAction": "컴퓨터 페어링",
       "openFailed": "이 링크를 열 수 없습니다",
       "ambiguous": "이 봇은 {{names}}에 있습니다. 원하는 컴퓨터의 Orca에서 채팅을 여세요.",

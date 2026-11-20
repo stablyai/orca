@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
+import { useModalReturnFocus } from '@/lib/pane-manager/pane-focus/useModalReturnFocus'
 
 export type CloseTerminalDialogCopyKind = 'command' | 'agent' | 'chat-agent'
 
@@ -36,6 +37,14 @@ export default function CloseTerminalDialog({
   onConfirm: (dontAskAgain: boolean) => void
 }): React.JSX.Element {
   const checkboxId = useId()
+  // Why: no Radix trigger, so dismiss would leave focus on body; Stop/Sleep move focus themselves, and Cancel re-arms after a queued Stop.
+  const { captureReturnFocus, skipReturnFocus, rearmReturnFocus } = useModalReturnFocus(open, {
+    preferCapturedElement: true
+  })
+  const cancel = (): void => {
+    rearmReturnFocus()
+    onCancel()
+  }
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const [previousOpen, setPreviousOpen] = useState(open)
   const [previousSubjectKey, setPreviousSubjectKey] = useState(subjectKey)
@@ -61,20 +70,30 @@ export default function CloseTerminalDialog({
       open={open}
       onOpenChange={(isOpen) => {
         if (!isOpen) {
-          onCancel()
+          cancel()
         }
       }}
     >
-      <DialogContent size="confirm" initialFocus="cancel">
+      <DialogContent size="confirm" initialFocus="cancel" onOpenAutoFocus={captureReturnFocus}>
         <CloseTerminalDialogBody
           copyKind={copyKind}
           workspaceName={workspaceName}
-          onSleepInstead={onSleepInstead}
+          onSleepInstead={
+            onSleepInstead
+              ? () => {
+                  skipReturnFocus()
+                  onSleepInstead()
+                }
+              : undefined
+          }
           checkboxId={checkboxId}
           dontAskAgain={dontAskAgain}
           setDontAskAgain={setDontAskAgain}
-          onCancel={onCancel}
-          onConfirm={onConfirm}
+          onCancel={cancel}
+          onConfirm={(dontAskAgainChoice) => {
+            skipReturnFocus()
+            onConfirm(dontAskAgainChoice)
+          }}
         />
       </DialogContent>
     </Dialog>
@@ -156,7 +175,7 @@ function CloseTerminalDialogBody({
             <Button type="button" variant="ghost" size="sm" onClick={onSleepInstead}>
               {t(
                 'components.terminal.pane.CloseTerminalDialog.sleepWorkspaceInstead',
-                'Sleep workspace instead'
+                'Sleep workspace'
               )}
             </Button>
           ) : (

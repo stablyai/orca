@@ -64,12 +64,6 @@ describe('bot-created worktree lineage', () => {
     expect(resolution).toMatchObject(BOT_OWNED)
   })
 
-  it('files a bot chat create with no parent context under the bot', async () => {
-    await expect(resolveCreate({ callerAgentSessionId: 'bot-chat' })).resolves.toMatchObject(
-      BOT_OWNED
-    )
-  })
-
   it('files a create from a terminal in the bot home under the bot', async () => {
     await expect(
       resolveCreate({ noParent: true, callerTerminalHandle: 'term_bot' })

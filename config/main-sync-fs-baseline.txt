@@ -12,7 +12,6 @@
 1 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
 2 src/main/agent-launch/trust/agent-trust-path-canonicalization.ts # moved out of agent-trust-presets.ts (its count dropped by 2) so the Codex trust worker shares it
 12 src/main/agent-launch/trust/agent-trust-presets.ts
-2 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
 1 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 1 src/main/ai-vault-search/worker/session-search-worker-client.ts
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
@@ -24,14 +23,11 @@
 8 src/main/amp/hook-service.ts
 2 src/main/amp/managed-plugin-install-status.ts
 1 src/main/antigravity/antigravity-host-acp.ts
-1 src/main/antigravity/native-account-launch.ts
-5 src/main/antigravity/native-account-store.ts
 2 src/main/antigravity/native-credential-backend.ts
-7 src/main/antigravity/native-file-credentials.ts
+3 src/main/antigravity/native-file-credentials.ts
 3 src/main/artifacts/artifact-create-intent-store.ts
 2 src/main/artifacts/artifact-share-record-store.ts
 1 src/main/automations/external-managers/external-manager-discovery.ts
-7 src/main/bitbucket/credential-store.ts
 2 src/main/bots/bot-access-request-watch.ts
 1 src/main/bots/bot-look-around-store.ts
 3 src/main/bots/bot-tool-credentials.ts
@@ -43,7 +39,6 @@
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-binary.ts
-2 src/main/browser/agent-browser/helper-process/agent-browser-dependency-binary.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-process-environment.ts
 1 src/main/browser/agent-browser/session-lifecycle/agent-browser-session-reset.ts
 1 src/main/browser/bundled-main-file-path.ts
@@ -156,8 +151,8 @@
 2 src/main/codex/history/resume/codex-session-resume-home.ts
 1 src/main/codex/history/rollouts/codex-session-file-listing.ts
 2 src/main/codex/history/rollouts/codex-session-link.ts
-1 src/main/codex/hooks/installation/codex-hook-local-install.ts
-2 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
+1 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
+1 src/main/codex/hooks/installation/codex-hook-managed-strip.ts # moved from codex-hook-local-maintenance with the managed-hook strip
 1 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts
 2 src/main/codex/hooks/reconciliation/codex-hook-status.ts
 1 src/main/codex/hooks/reconciliation/codex-real-home-hooks-json.ts
@@ -174,12 +169,6 @@
 1 src/main/connector-cloud/connector-turn-outbox-file.ts
 1 src/main/copilot/hook-service.ts
 4 src/main/crash-reporting/capture/appimage-crashpad-handler-exit.ts
-2 src/main/credentials/credential-file-protection.ts
-6 src/main/credentials/encrypted-api-key-file-store.ts
-10 src/main/credentials/integration-credential-file.ts
-1 src/main/credentials/integration-state-file-cache.ts
-1 src/main/credentials/integration-token-file-cache.ts
-2 src/main/credentials/saved-credential-readability.ts
 2 src/main/daemon/admission/automatic-work-run-marker-store.ts
 5 src/main/daemon/admission/host-terminal-ledger.ts
 1 src/main/daemon/admission/legacy-restore-records.ts
@@ -258,7 +247,6 @@
 1 src/main/git/source-control/ignores/huge-folder-ignore.ts
 3 src/main/git/worktrees/catalog/worktree-git-path.ts
 1 src/main/github/client/check/check-job-log-cache-retention-child.mjs
-6 src/main/google/google-credential-store.ts
 1 src/main/google/google-pdf-text-client.ts
 3 src/main/google/google-setup-runs.ts
 2 src/main/google/google-trigger-state.ts
@@ -285,25 +273,19 @@
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
-1 src/main/ipc/keyboard/macos-keyboard-layout-snapshot.ts
 1 src/main/ipc/notifications/notification-authorization-status.ts
 1 src/main/ipc/pty/host-env/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts
 1 src/main/ipc/worktrees/floating-workspace-directory.ts
 2 src/main/ipc/worktrees/worktree-remote.ts
 7 src/main/jcode/hook-service.ts
-8 src/main/jira/site-credential-store.ts
 7 src/main/keybindings/keybinding-file-parser.ts
 1 src/main/keybindings/keybinding-file.ts
 13 src/main/kimi/hook-service.ts
 3 src/main/kiro/hook-service.ts
 1 src/main/kiro/standalone-hooks.ts
 3 src/main/lib/hidden-probe-cwd.ts
-4 src/main/linear/accounts/linear-credential-paths.ts
 3 src/main/linear/accounts/linear-legacy-viewer-store.ts
-1 src/main/linear/accounts/linear-login-store.ts
-1 src/main/linear/accounts/linear-token-store.ts
-3 src/main/linear/accounts/linear-workspace-registry.ts
 1 src/main/macos-permissions/macos-tcc-prompt-notice.ts
 3 src/main/managed-data-accounts/credential-capture.ts
 18 src/main/managed-data-accounts/profile-removal.ts
@@ -312,7 +294,6 @@
 1 src/main/managed-server/install/orcad-deployment-target.ts
 2 src/main/managed-server/install/remote-versioned-install.ts
 13 src/main/mimo/hook-service.ts
-6 src/main/minimax/minimax-cookie-store.ts
 1 src/main/muse/hook-config-json.ts
 4 src/main/muse/hook-service.ts
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
@@ -334,8 +315,8 @@
 3 src/main/orca-profiles/catalog/other-profile-workspace-catalog.ts
 3 src/main/orca-profiles/cloud-auth/profile-artifact-cloud-cleanup.ts
 1 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
-5 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
-12 src/main/orca-profiles/profile-index-store.ts
+4 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
+11 src/main/orca-profiles/profile-index-store.ts
 4 src/main/orca-profiles/project-transfer/profile-project-move-intent.ts
 3 src/main/orca-profiles/project-transfer/profile-project-move-record.ts
 4 src/main/orca-profiles/project-transfer/profile-project-state-file.ts
@@ -441,7 +422,7 @@
 1 src/main/providers/shell-launch/macos/login-session-pty-probe.ts
 3 src/main/providers/shell-launch/macos/tcc-login-shell.ts
 3 src/main/providers/shell-launch/windows/powershell-executable.ts
-2 src/main/providers/shell-launch/windows/windows-interactive-login-spawn.ts
+1 src/main/providers/shell-launch/windows/windows-interactive-login-spawn.ts
 2 src/main/providers/working-directory/validation.ts
 4 src/main/pty/history/fish-history-session.ts
 4 src/main/pty/history/terminal-history-deletion.ts
@@ -494,7 +475,6 @@
 1 src/main/server/serve-pairing-output.ts
 2 src/main/speech/model-cache-path.ts
 7 src/main/speech/model-manager.ts
-10 src/main/speech/openai-api-key-store.ts
 1 src/main/speech/speech-model-download-cleanup.ts
 1 src/main/speech/speech-model-download-transport.ts
 1 src/main/speech/speech-model-files.ts
@@ -537,7 +517,7 @@
 1 src/main/updater/lifecycle/windows-update-install-directory.ts
 9 src/main/updater/linux-package/appimage-runtime-identity.ts
 1 src/main/updater/linux-package/linux-package-install-command.ts
-1 src/main/updater/linux-package/linux-update-package-type.ts
+2 src/main/updater/linux-package/linux-update-package-type.ts
 6 src/main/updater/serve-update-handoff.ts
 2 src/main/usage/provider-lifecycle/usage-provider-store-lifecycle.ts
 1 src/main/usage/scan-worker/usage-scan-worker-spawn.ts
@@ -568,7 +548,6 @@
 1 src/main/wsl/host-lifecycle/wsl-host-early-wake.ts
 1 src/main/wsl/host-lifecycle/wsl-orphan-holder-release.ts
 1 src/main/zcode/hook-config-json.ts
-12 src/main/zcode/zcode-plan-api-key-store.ts
 6 src/shared/agent-hook-listener/claude-session-continuation.ts
 9 src/shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor.ts
 1 src/shared/agent-hook-listener/providers/codex/codex-subagent-roster.ts
@@ -604,8 +583,8 @@
 3 src/shared/remote-runtime/serve-supervisor/serve-abort-park.ts
 7 src/shared/remote-runtime/serve-supervisor/serve-bundle-park.ts
 1 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
-14 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-file-async-write.ts # one renameSync per publish, in the same turn as the shouldPublish fence so a sign-out clear cannot land between; staging and fsync are async
+14 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-path-metadata-snapshot.ts
 2 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts

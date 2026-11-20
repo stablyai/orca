@@ -15,6 +15,9 @@ export type JournalAutomaticSelection = {
     stopping: boolean
   } | null
   steering: StructuredMessageSteeringInputs
+  /** Whether other agents' mail may join a running turn. False where the provider can only take a
+   *  new message by cancelling its prompt (`steering: 'queue'`); that mail waits for the turn's end. */
+  mailJoinsTurn: boolean
 }
 
 /** The queued card a host guard passed; a guarded claim takes only this card. */

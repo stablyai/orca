@@ -182,7 +182,7 @@ export function NativeChatPartyWorkerApprovalStack({
 }): React.JSX.Element | null {
   return (
     <NativeChatWorkerApprovalStack
-      approvals={useNativeChatPinnedWorkerApprovals(party)}
+      approvals={useNativeChatPinnedWorkerApprovals(stack.target, party)}
       {...stack}
     />
   )
@@ -202,14 +202,9 @@ function useSecondClock(active: boolean): number {
   return now
 }
 
-/** The chat's address its workers report to, when it can coordinate: a local Orca session (v1). */
-export function nativeChatWorkerApprovalParty(pane: {
-  target: RuntimeClientTarget
-  sessionId: string
-}): string | null {
-  return pane.target.kind === 'local' && isOrcaSessionId(pane.sessionId)
-    ? formatOrcaSessionAddress(pane.sessionId)
-    : null
+/** The chat's address its workers report to, when it can coordinate: an Orca session on its host. */
+export function nativeChatWorkerApprovalParty(pane: { sessionId: string }): string | null {
+  return isOrcaSessionId(pane.sessionId) ? formatOrcaSessionAddress(pane.sessionId) : null
 }
 
 /** A coordinator chat's closed worker prompts, each in its transcript at the time the worker
@@ -223,7 +218,7 @@ export function NativeChatWorkerApprovalTimeline({
   target: RuntimeClientTarget
   children: (timedRows: readonly NativeChatTimedRow[]) => React.ReactNode
 }): React.ReactNode {
-  const receipts = useNativeChatWorkerApprovalReceipts(party)
+  const receipts = useNativeChatWorkerApprovalReceipts(target, party)
   const timedRows = useMemo(
     () =>
       receipts.map((entry) => ({

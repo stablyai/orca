@@ -5,6 +5,8 @@ import type { BotItem, BotItemEvent, BotItemLinkView } from '../../../../../shar
 import { BotItemPaneFrame } from './BotItemPane'
 import { BotItemBody, BotItemDeletedNotice } from './BotItemView'
 import type { BotItemWalkState } from './use-bot-item-walk'
+import { botRefKey } from '@/lib/bot-hosts'
+import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 
 const item = makeTestBotItem(6, {
   title: 'Ship the share dialog',
@@ -53,9 +55,10 @@ function Pane({
   return (
     <div className={tall ? 'flex h-[860px] flex-col' : 'flex h-[420px] flex-col'}>
       <BotItemPaneFrame walk={state} offline={offline} onBack={() => {}}>
-        {(comment) => (
+        {({ comment, nav }) => (
           <BotItemBody
             commentRef={comment}
+            nav={nav}
             bot={fixtureCos}
             item={shown}
             deleted={deleted}
@@ -276,3 +279,92 @@ export const answeredQuestion = defineFixture({
   ...asking,
   render: () => <Pane state={walk(3, 14)} shown={named} activity={answered} tall />
 })
+
+const draftKey = (shown: BotItem): string =>
+  `bot-item-comment:${botRefKey(fixtureCos)}:${shown.uid}`
+const LONG_DRAFT = [
+  'Retry here, and cap it at 10 minutes.',
+  '',
+  'If the build still fails:',
+  '1. keep the log',
+  '2. write the help text by hand in the PR',
+  '3. leave the generated types for CI',
+  '',
+  "Then ping me with the PR link and I'll review it tonight."
+].join('\n')
+
+/** Answering the bot's question with a long draft: the arrows stay in the box's tool row. */
+const drafting = {
+  ...named,
+  uid: 'uid-drafting',
+  status: 'needs_you' as const,
+  question: { eventId: 'e3', text: QUESTION }
+}
+export const askingLongDraft = defineFixture({
+  ...asking,
+  setup: () =>
+    updateNativeChatComposerDraft(
+      draftKey(drafting),
+      { text: LONG_DRAFT, images: [] },
+      'immediate'
+    ),
+  render: () => <Pane state={walk(3, 14)} shown={drafting} activity={thread} tall />
+})
+
+/** A 300px pane: a three-digit place still shows beside the arrows. */
+export const narrow300 = defineFixture({
+  width: 300,
+  render: () => <Pane state={walk(42, 105)} />
+})
+
+async function focusArrow(frame: HTMLElement, wait: number): Promise<void> {
+  frame.querySelector<HTMLButtonElement>('[data-bot-item-step="next"]')?.focus()
+  await new Promise((resolve) => setTimeout(resolve, wait))
+}
+
+/** Keyboard focus on Next: its ring, inside the box. */
+export const arrowFocused = defineFixture({
+  width: 340,
+  render: () => <Pane state={walk(3, 14)} />,
+  interact: (frame) => focusArrow(frame, 50)
+})
+
+/** Next's tooltip, on hover: its label and chord. */
+export const arrowTooltip = defineFixture({
+  ...arrowFocused,
+  interact: async (frame) => {
+    const next = frame.querySelector<HTMLButtonElement>('[data-bot-item-step="next"]')
+    next?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
+    await new Promise((resolve) => setTimeout(resolve, 900))
+  }
+})
+
+/** A Closed page has been reading for a while: the counter's place shows a spinner, the arrows stay off. */
+export const loadingNext = defineFixture({
+  width: 340,
+  render: () => <Pane state={walk(9, 14, { pending: true, canStep: () => false })} />,
+  interact: () => new Promise((resolve) => setTimeout(resolve, 600))
+})
+
+/** A waiting question: the comment box stays, with the arrows in its row. */
+const waiting = {
+  ...named,
+  uid: 'uid-card',
+  status: 'needs_you' as const,
+  question: { eventId: 'e3', text: QUESTION }
+}
+function askingAt(width: number) {
+  return defineFixture({
+    width,
+    render: () => <Pane state={walk(3, 14)} shown={waiting} activity={thread} tall />,
+    interact: (frame) => scrollItem(frame, 'bottom')
+  })
+}
+export const asking300 = askingAt(300)
+export const askingWide = askingAt(480)
+/** A plain item at the same widths, to compare the arrows' x with a waiting question's. */
+export const plain300 = defineFixture({
+  width: 300,
+  render: () => <Pane state={walk(3, 14)} activity={thread} tall />
+})
+export const plainWide = defineFixture({ ...plain300, width: 480 })

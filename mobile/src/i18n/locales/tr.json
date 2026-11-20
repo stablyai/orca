@@ -112,7 +112,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... veya kodu yapıştırın",
       "pasteCodeTitle": "Eşleştirme kodunu yapıştır",
       "pasteInstead": "Bunun yerine kod yapıştır",
-      "pastePairingCode": "Veya eşleştirme kodunu yapıştır",
+      "pastePairingCode": "Eşleştirme kodunu yapıştır",
       "scanCodeStep": "QR kodunu tarayın",
       "title": "Masaüstüyle eşleştir",
       "tryAgain": "Tekrar Dene",
@@ -146,7 +146,7 @@
       "installTitle": "Yeni uygulamayı indirin",
       "installDescription": "Telefonunuz sorarsa tarayıcınızın uygulama yüklemesine izin verin.",
       "download": "İndir",
-      "keepThisVersion": "Bu sürümü kullanmaya devam et",
+      "keepThisVersion": "Bu sürümü koru",
       "keepThisVersionNote": "Güvenlik düzeltmelerini kaçıracaksınız. Size bir hafta sonra hatırlatacağız."
     },
     "pairTitle": "Bilgisayarınızla eşleştirin",
@@ -324,7 +324,7 @@
       "triedSearchWeb": "Web'de aramayı denedi"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "Mesajın tamamını göster — yüklenemedi, yeniden denemek için dokunun",
+      "loadFailed": "Tam mesajı yeniden yükle",
       "showFullMessage": "Mesajın tamamını göster",
       "showLess": "Daha az göster"
     },
@@ -390,8 +390,7 @@
       "submitSelectedOptions": "Seçilen seçenekleri gönder"
     },
     "queuedMessages": {
-      "clearAll": "Tümünü temizle",
-      "deleteAll": "Kuyruktaki tüm mesajları sil",
+      "deleteAll": "Tümünü sil",
       "editMessage": "Mesajı düzenle",
       "pausedState": "Duraklatıldı",
       "queuedState": "Sıraya alındı",
@@ -620,10 +619,6 @@
       "imageTooLarge": "Görsel eklenemeyecek kadar büyük",
       "permissionDenied": "Fotoğraf erişim izni reddedildi"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Ajana devredildi",
-      "startedAgent": "Ajan başlatıldı"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "Ek yanıtı okunamıyor. Tekrar deneyin.",
       "incompleteReply": "Ek değişti veya yanıtı eksikti. Kapatıp tekrar deneyin.",
@@ -793,7 +788,7 @@
       "manageShortcuts": "Kısayolları Yönet",
       "manageShortcutsHint": "Kısayol tuşlarını gösterin, gizleyin veya yeniden sıralayın",
       "modifiers": "Değiştirici Tuşlar",
-      "moreKeys": "Diğer tuşlar — Tab, ok tuşları, F1–F12…",
+      "moreKeys": "DİĞER TUŞLAR",
       "navigation": "Gezinme",
       "pickKey": "Bir tuş seçin",
       "pressEnter": "Enter Tuşuna Bas",
@@ -945,12 +940,10 @@
       "dismissDrawer": "Alt paneli kapat"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOK'LAR",
       "label": "Kurulum betiği",
-      "run": "Çalıştır",
-      "runSetupCommand": "Kurulum komutunu çalıştır",
+      "runSetup": "Kurulumu çalıştır",
       "skip": "Atla",
-      "waitForSetup": "Ajanı başlatmadan önce setup'ın tamamlanmasını bekle",
+      "startAgentAfterSetup": "Ajanı kurulumdan sonra başlat",
       "waitForSetupSaveFailed": "Kurulum başlangıç davranışı kaydedilemedi."
     },
     "newWorkspaceSshConnectionField": {
@@ -1225,7 +1218,7 @@
       "privacyHint": "Sunucu adını, uç noktayı, sürümleri, bağlantı durumunu ve olayları içeren, hassas bilgileri çıkarılmış ve boyutu sınırlı bir rapor gönderir. Terminal içeriklerini veya kimlik bilgilerini asla göndermez.",
       "reconnecting": "yeniden bağlanılıyor",
       "retrySending": "Göndermeyi yeniden dene",
-      "sendDiagnostics": "Tanılama bilgilerini Orca'ya gönder",
+      "sendDiagnostics": "Tanılama verilerini gönder",
       "sending": "Gönderiliyor…",
       "sent": "Tanılama bilgileri gönderildi",
       "stateWithAttempt": "{{state}} · {{attempts}}. deneme",
@@ -1609,10 +1602,8 @@
   "host": {
     "edit": {
       "address": "Adres",
-      "addressHint": "IP, host:port veya ws:// / wss:// kabul edilir. Bağlantı noktası belirtilmeyen wss:// URL'lerinde 443 kullanılır. Yalnızca adres girilirse mevcut bağlantı noktası (veya 6768) korunur.",
       "connectionPreview": "Bağlanılacak adres: {{endpoint}}",
       "goBack": "Geri git",
-      "help": "Görünen adı veya bağlantı adresini değiştirin. Masaüstünün bildirdiği adı kullanmak için ad alanını boş bırakın. Adres değişikliği yalnızca bu telefonun bağlandığı yeri değiştirir; yeniden eşleştirme yapmaz. Aynı masaüstüne farklı bir IP adresinden erişilebildiğinde bunu kullanın (örneğin evdeki LAN veya Tailscale üzerinden).",
       "hostNamePlaceholder": "Sunucu adı",
       "hostRemoved": "Bu sunucu bu telefondan kaldırıldı.",
       "loadFailed": "Sunucu yüklenemedi.",
@@ -1956,7 +1947,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} branch'i açık bir PR'a bağlı değil.",
       "currentBranchNotLinked": "Geçerli branch açık bir PR'a bağlı değil.",
-      "linkExistingPullRequest": "Mevcut bir pull request'i bağla",
+      "linkExistingPullRequest": "Pull request'i bağla",
       "linkedPrUnavailable": "Bağlı PR #{{number}} kullanılamıyor",
       "refreshOrCreate": "Tekrar kontrol etmek için yenileyin veya bu branch için yeni bir PR oluşturun."
     },
@@ -2221,6 +2212,7 @@
       "providerUnavailable": "Hizmet meşgul olduğu için {{agent}} yanıt veremedi. Başka bir model seçin veya biraz bekleyip yeniden gönderin.",
       "providerSafetyStopped": "{{agent}}, bir güvenlik kontrolünden sonra bu yanıtı durdurdu. İsteğinizi gözden geçirip yeniden gönderin.",
       "providerResponseFailed": "{{agent}} bu yanıtı tamamlayamadı. Daha fazla bilgi için ayrıntıları açın.",
+      "providerResponseFailedQuoted": "{{agent}} bu yanıtı tamamlayamadı: {{detail}}.",
       "selectedModel": "seçilen modeli",
       "providerRejected": "{{agent}} bu mesajı kabul etmedi.",
       "providerRejectedQuoted": "{{agent}} bu mesajı kabul etmedi: {{detail}}.",
@@ -2333,8 +2325,8 @@
       "scrollToLatest": "En sona kaydır"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "Mesajın tamamını göster — yüklenemedi, yeniden denemek için dokunun",
-      "loadOutputFailed": "Çıktının tamamını göster — yüklenemedi, yeniden denemek için dokunun",
+      "loadMessageFailed": "Tam mesajı yeniden yükle",
+      "loadOutputFailed": "Tam çıktıyı yeniden yükle",
       "partialMessage": "Bu mesajın bir kısmı gösteriliyor.",
       "partialOutput": "Gösterilen: {{shown}} / {{total}}.",
       "showFullMessage": "Mesajın tamamını göster",
@@ -2350,8 +2342,8 @@
       "notFoundTitle": "Bu konuşma henüz bulunamadı"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "Sohbet görünümüne geç",
-      "switchToTerminalView": "Terminal görünümüne geç"
+      "switchToChatView": "Sohbete geç",
+      "switchToTerminalView": "Terminale geç"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "Ajan başlatıldı, ancak notlar gönderilemedi.",
@@ -3863,7 +3855,7 @@
       "issueSource": "Sorun kaynağı",
       "keySecurityHint": "Anahtarınız, sunucunun işletim sistemi anahtar zinciriyle şifrelenir ve yerel olarak saklanır.",
       "linearConnectSubtitle": "Bu çalışma alanındaki sorunlara göz atmak için bir kişisel API anahtarı yapıştırın.",
-      "linearSettingsLink": "Linear Settings / Security / New API key",
+      "linearSettingsLink": "Linear ayarlarını aç",
       "linearTeam": "Linear Takımı",
       "linearTeamSubtitle": "Seçili Linear takımında bir sorun oluşturun.",
       "newIssueTitle": "Yeni {{providerLabel}} Sorunu",
@@ -3937,7 +3929,7 @@
       "runSetupAndCreate": "Kurulumu çalıştır ve oluştur",
       "setupSubtitle": "Bu çalışma alanını oluşturmadan önce {{name}} için bir kurulum seçeneği belirlemeniz gerekiyor.",
       "setupTitle": "Kurulum Betiği Çalıştırılsın mı?",
-      "skipSetupAndCreate": "Kurulumu atla ve oluştur",
+      "skipSetupAndCreate": "Kurulum yapmadan oluştur",
       "trustFailed": "Kurulum betiği güvenilir olarak işaretlenemedi."
     },
     "worktreeCreateRetry": {
@@ -4383,7 +4375,7 @@
   "bots": {
     "link": {
       "pairTitle": "Bilgisayar eşleyin",
-      "pairRequired": "Bu bağlantıyı açmak için bu telefonu bir bilgisayarla eşleyin.",
+      "pairRequired": "Bu bağlantıyı açmak için bu telefonu bir bilgisayarla eşleyin, ardından bağlantıyı yeniden açın.",
       "pairAction": "Bilgisayar eşleyin",
       "openFailed": "Bu bağlantı açılamadı",
       "ambiguous": "Bu bot {{names}} üzerinde. İstediğiniz bilgisayarda Orca’yı açıp sohbete gidin.",

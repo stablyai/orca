@@ -1,5 +1,4 @@
 import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from '../../../../shared/terminal/images/terminal-image-viewer-capability'
-import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { RpcContext } from '../../rpc/core'
 
 export function terminalImageViewerSupported(
@@ -25,21 +24,4 @@ export function terminalImageViewerSupported(
     context.clientKind === 'runtime' &&
     context.clientCapabilities?.includes(TERMINAL_IMAGE_VIEWER_CAPABILITY) === true
   )
-}
-
-export function applyClaudeTerminalImageViewerEnv<
-  T extends {
-    launchAgent?: TuiAgent
-    env?: Record<string, string>
-  }
->(launch: T, supported: boolean | undefined, agent = launch.launchAgent): T {
-  if (
-    supported !== false ||
-    agent !== 'claude' ||
-    launch.env?.CLAUDE_CODE_FORCE_TERMINAL_IMAGES !== undefined ||
-    process.env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES !== undefined
-  ) {
-    return launch
-  }
-  return { ...launch, env: { ...launch.env, CLAUDE_CODE_FORCE_TERMINAL_IMAGES: '0' } }
 }

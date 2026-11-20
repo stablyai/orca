@@ -8,14 +8,7 @@ import { setGroupRatioThroughLayoutOwner } from '../../runtime/workspace-layout/
 import '../browser-pane/host-guest/drag/webview-drag-passthrough'
 
 import { ResizeHandle } from '../pane-resize/PaneSplitResizeHandle'
-import { DIVIDER_HIT_PX } from '@/lib/divider-hit-area'
-
-const ROOT_CLIP_STYLE: React.CSSProperties = { overflow: 'hidden' }
-// Why: a nested seam's line runs half a gap past its subtree so T-junctions meet the parent line; pane content still clips itself.
-const SUBTREE_CLIP_STYLE: React.CSSProperties = {
-  overflow: 'clip',
-  overflowClipMargin: DIVIDER_HIT_PX / 2
-}
+import { getSeamTabRowStarts } from './seam-tab-row-starts'
 
 function SplitNode({
   node,
@@ -89,16 +82,10 @@ function SplitNode({
 
   return (
     <div
-      className="flex flex-1 min-w-0 min-h-0"
-      style={{
-        flexDirection: isHorizontal ? 'row' : 'column',
-        ...(nodePath.length > 0 ? SUBTREE_CLIP_STYLE : ROOT_CLIP_STYLE)
-      }}
+      className="flex flex-1 min-w-0 min-h-0 overflow-hidden"
+      style={{ flexDirection: isHorizontal ? 'row' : 'column' }}
     >
-      <div
-        className="flex min-w-0 min-h-0"
-        style={{ flex: `${ratio} 1 0%`, ...SUBTREE_CLIP_STYLE }}
-      >
+      <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${ratio} 1 0%` }}>
         <SplitNode
           node={node.first}
           nodePath={nodePath.length > 0 ? `${nodePath}.first` : 'first'}
@@ -122,8 +109,10 @@ function SplitNode({
       </div>
       <ResizeHandle
         direction={node.direction}
-        wide
-        tabBand={isHorizontal && tabStrip === 'attached'}
+        thin
+        tabRowStarts={
+          isHorizontal && tabStrip === 'attached' ? getSeamTabRowStarts(node.second) : undefined
+        }
         onResizeStart={() => recordFeatureInteraction('terminal-panes')}
         onRatioChange={(nextRatio) =>
           ORCA_LAYOUT_OWNER_IS_MAIN
@@ -131,10 +120,7 @@ function SplitNode({
             : setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)
         }
       />
-      <div
-        className="flex min-w-0 min-h-0"
-        style={{ flex: `${1 - ratio} 1 0%`, ...SUBTREE_CLIP_STYLE }}
-      >
+      <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${1 - ratio} 1 0%` }}>
         <SplitNode
           node={node.second}
           nodePath={nodePath.length > 0 ? `${nodePath}.second` : 'second'}

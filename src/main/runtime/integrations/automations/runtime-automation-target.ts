@@ -3,7 +3,6 @@ import type {
   AutomationBotTarget,
   AutomationWorkspaceMode
 } from '../../../../shared/automations/automation-definition'
-import { assertBotAgentRunsOnThisHost } from '../../../bots/bot-agent-host-refusal'
 import type { Bot } from '../../../../shared/bot-types'
 import { BotsDisabledError, isBotsEnabled } from '../../../../shared/bots-switch'
 import type { Repo } from '../../../../shared/repository/repo-types'
@@ -203,7 +202,6 @@ export function requireCreatableAutomationBot(
   }
   const bot = requireAutomationBot(store, input.bot)
   const agent = botAutomationAgent(input.bot, bot)
-  assertBotAgentRunsOnThisHost(agent)
   assertNoBotOwnedSettings(input, agent)
   assertBotHearsEventTriggers(webhooks.hearing(bot), input.on)
   return bot

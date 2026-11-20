@@ -39,12 +39,14 @@ export const MobileBotGroupReader = memo(function Reader({
   support,
   report,
   onError,
-  visible
+  visible,
+  connected
 }: {
   turn: Pick<BotGroupTurn, 'sessionId' | 'agent'> & { operationIds: readonly string[] }
   client: RpcClient
   support: StructuredAgentSessionHostSupport
   visible: boolean
+  connected: boolean
   report: (id: string, session: MobileBotGroupSession | null) => void
   onError: (message: string) => void
 }) {
@@ -54,7 +56,7 @@ export const MobileBotGroupReader = memo(function Reader({
     sessionId: turn.sessionId,
     agent: turn.agent,
     enabled: visible,
-    connected: client.getState() === 'connected',
+    connected,
     hostSupport: support,
     onSendError: onError
   })
@@ -67,6 +69,7 @@ export const MobileBotGroupReader = memo(function Reader({
   useEffect(() => {
     if (
       visible &&
+      connected &&
       status === 'ready' &&
       hasMore &&
       !loadingEarlier &&
@@ -79,6 +82,7 @@ export const MobileBotGroupReader = memo(function Reader({
     }
   }, [
     visible,
+    connected,
     status,
     hasMore,
     loadingEarlier,

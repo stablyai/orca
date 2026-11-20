@@ -1,6 +1,6 @@
 // A bot commenting, closing and linking its own items (comments go on closed items too, and from the
 // bot that made one with `--for`; the rest only on open ones), and Orca linking a worker started for an item.
-import type { BotItemActor } from '../../shared/bots/bot-items'
+import type { BotItemActor, BotItemCommentImage } from '../../shared/bots/bot-items'
 import { BotItemError } from './bot-item-error'
 import { BotItemsEdits } from './bot-items-edits'
 import {
@@ -14,14 +14,16 @@ import {
 } from './bot-items-input'
 
 export class BotItemsWrites extends BotItemsEdits {
+  /** `images` were admitted and claimed on the host first; attachments alone make a comment. */
   comment(
     uid: string,
     commentText: string,
     actor: BotItemBotActor,
+    images: readonly BotItemCommentImage[] = [],
     now = Date.now()
   ): BotItemWriteOutcome {
     assertBotItemText('text', commentText)
-    if (!commentText.trim()) {
+    if (!commentText.trim() && images.length === 0) {
       throw new BotItemError('invalid_argument', 'A comment needs its text.')
     }
     return this.transaction(() => {
@@ -36,7 +38,8 @@ export class BotItemsWrites extends BotItemsEdits {
         )
       }
       const mail = !maker && mailsItemChat(item, actor)
-      const eventId = this.appendEvent(uid, 'commented', actor, { text: commentText }, mail, now)
+      const data = { text: commentText, ...(images.length > 0 ? { images } : {}) }
+      const eventId = this.appendEvent(uid, 'commented', actor, data, mail, now)
       return { uid, eventId }
     })
   }

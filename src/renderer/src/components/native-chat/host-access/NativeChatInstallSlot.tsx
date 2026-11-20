@@ -22,6 +22,7 @@ import {
 } from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
 import { useStructuredAgentSessionHostProgram } from '../session/status/structured-agent-session-status-hooks'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
+import type { NativeChatAntigravityAuthTarget } from '../antigravity-auth/native-chat-antigravity-auth'
 
 export type NativeChatInstallSlotState =
   | { kind: 'none' }
@@ -49,6 +50,8 @@ export function useNativeChatInstallSlot(
   signIn: NativeChatSignInStripState | null
   sendBlockedReason: string | null
   unavailableHint: string | undefined
+  /** How this Antigravity chat signs in on its host; null for every other chat. */
+  antigravityAuth: NativeChatAntigravityAuthTarget | null
 } {
   const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
@@ -80,7 +83,19 @@ export function useNativeChatInstallSlot(
     slot,
     signIn,
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
-    unavailableHint
+    unavailableHint,
+    antigravityAuth: signsIn
+      ? {
+          host: props.target,
+          backend: 'managed',
+          managedVersion:
+            observation.snapshot.kind === 'known'
+              ? observation.snapshot.state.installedVersion
+              : null
+        }
+      : props.agent === 'antigravity' && props.isVisible && hostProgram
+        ? { host: props.target, backend: 'agy' }
+        : null
   }
 }
 
@@ -127,14 +142,15 @@ function installSlotSendBlockedReason(
 export function NativeChatInstallSlot(props: {
   install: { slot: NativeChatInstallSlotState; signIn: NativeChatSignInStripState | null }
   agentLabel: string
+  /** A new bot's setup card offers the install and the sign-in itself. */
+  inCard?: boolean
 }): React.JSX.Element | null {
   const { slot, signIn } = props.install
-  const strip =
-    slot.kind === 'install' && slot.layout === 'strip' ? (
-      <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
-    ) : signIn ? (
-      <NativeChatSignInStrip state={signIn} agentLabel={props.agentLabel} />
-    ) : null
+  const strip = props.inCard ? null : slot.kind === 'install' && slot.layout === 'strip' ? (
+    <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
+  ) : signIn ? (
+    <NativeChatSignInStrip state={signIn} agentLabel={props.agentLabel} />
+  ) : null
   if (!strip) {
     return null
   }

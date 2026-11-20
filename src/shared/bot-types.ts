@@ -14,7 +14,7 @@ import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 import { BotAvatarOutfitSchema } from './bots/bot-avatar-outfit'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = ['opencode2', 'copilot', 'cursor', 'kimi', 'hermes'] as const
+export const BOT_HELD_BACK_AGENTS = ['kimi'] as const
 
 /** Bots run in a native chat; every native-chat agent but the held-back ones. */
 export const BOT_AGENTS = [
@@ -24,7 +24,11 @@ export const BOT_AGENTS = [
   'opencode',
   'omp',
   'pi',
-  'antigravity'
+  'antigravity',
+  'cursor',
+  'hermes',
+  'copilot',
+  'opencode2'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 export function isBotAgent(agent: string): agent is BotAgent {

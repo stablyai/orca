@@ -4,6 +4,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'
 import { NativeChatActionButton } from './NativeChatActionButton'
+import { NativeChatSignInRow } from '../../host-access/NativeChatSignInRow'
+import { NativeChatDetailsDisclosure } from '../../messages/diagnostics/NativeChatProviderDetails'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
 /** Keep the live region mounted so screen readers announce the first notice; show errors first. */
@@ -25,7 +27,7 @@ export function NativeChatComposerNotices({
       aria-live="polite"
       className={cn(
         'divide-y divide-border overflow-hidden rounded-md border border-border bg-card text-xs text-card-foreground',
-        ordered[0]?.kind === 'error' && 'border-destructive/30',
+        ordered[0]?.kind === 'error' && !ordered[0].signIn && 'border-destructive/30',
         className
       )}
     >
@@ -68,6 +70,27 @@ function NoticeAction({
 
 function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.Element {
   const t = useTranslate()
+  if (notice.signIn) {
+    return (
+      <li data-notice-kind={notice.kind}>
+        <NativeChatSignInRow
+          view={notice.signIn}
+          sentence={notice.text}
+          surface="composer"
+          className="px-2.5 py-1.5"
+        />
+        {notice.signInDetails ? (
+          <div className="px-2.5 pb-1.5">
+            <NativeChatDetailsDisclosure
+              summary={t('components.native-chat.notices.details', 'Details')}
+            >
+              {notice.signInDetails}
+            </NativeChatDetailsDisclosure>
+          </div>
+        ) : null}
+      </li>
+    )
+  }
   const isError = notice.kind === 'error'
   const isHostWarning = notice.kind === 'host' && notice.tone === 'warning'
   const Icon =

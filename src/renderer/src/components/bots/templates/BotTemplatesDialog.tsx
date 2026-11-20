@@ -283,34 +283,42 @@ function BotTemplatesDialogContent({ onClose }: { onClose: () => void }): React.
                     aria-label={t('bots.templates.title', 'Bot templates')}
                     className="px-6 pb-8"
                   >
-                    {groups.map((group) => (
-                      <section key={group.category} role="group" aria-label={label(group.category)}>
-                        <h2 className="sticky top-0 z-[5] bg-popover py-2 text-xs font-medium text-muted-foreground">
-                          {label(group.category)}
-                        </h2>
-                        {group.templates.map((template) => (
-                          <BotTemplateRow
-                            key={template.id}
-                            template={template}
-                            current={template.id === selected?.id}
-                            rowRef={(element) => {
-                              if (element) {
-                                rows.current.set(template.id, element)
-                              } else {
-                                rows.current.delete(template.id)
-                              }
-                            }}
-                            onSelect={() => {
-                              pick(template)
-                              if (narrow()) {
-                                setInPlace(true)
-                              }
-                            }}
-                            onUse={() => startFrom(template)}
-                          />
-                        ))}
-                      </section>
-                    ))}
+                    {groups.map((group) => {
+                      const Icon = CATEGORY_ICONS[group.category]
+                      return (
+                        <section
+                          key={group.category}
+                          role="group"
+                          aria-label={label(group.category)}
+                        >
+                          <h2 className="sticky top-0 z-[5] flex items-center gap-1.5 bg-popover py-2 text-xs font-medium text-muted-foreground">
+                            <Icon className="size-3 shrink-0" aria-hidden />
+                            {label(group.category)}
+                          </h2>
+                          {group.templates.map((template) => (
+                            <BotTemplateRow
+                              key={template.id}
+                              template={template}
+                              current={template.id === selected?.id}
+                              rowRef={(element) => {
+                                if (element) {
+                                  rows.current.set(template.id, element)
+                                } else {
+                                  rows.current.delete(template.id)
+                                }
+                              }}
+                              onSelect={() => {
+                                pick(template)
+                                if (narrow()) {
+                                  setInPlace(true)
+                                }
+                              }}
+                              onUse={() => startFrom(template)}
+                            />
+                          ))}
+                        </section>
+                      )
+                    })}
                   </div>
                 )}
               </div>

@@ -1,6 +1,7 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useEffect, useState } from 'react'
 import { LayoutAnimation, Pressable, ScrollView, Text, View } from 'react-native'
+import { Users } from 'lucide-react-native'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ListGroup, ListRow } from '../components/list/ListGroup'
@@ -158,14 +159,21 @@ export function MobileBotGroupMembers({
         }}
       />
       <View style={styles.picture}>
-        <MobileBotFaceStack
-          slot={96}
-          ringColor={colors.sheetSurface}
-          faces={picked.map((bot) => ({
-            id: bot.id,
-            avatar: mobileBotAvatarSource(bot, undefined)
-          }))}
-        />
+        {picked.length > 0 ? (
+          <MobileBotFaceStack
+            slot={96}
+            ringColor={colors.sheetSurface}
+            faces={picked.map((bot) => ({
+              id: bot.id,
+              avatar: mobileBotAvatarSource(bot, undefined)
+            }))}
+          />
+        ) : (
+          // The desktop dialog's empty picture, so the space reads as the group's picture to come.
+          <View style={styles.emptyPicture}>
+            <Users size={28} strokeWidth={1.5} color={colors.textMuted} />
+          </View>
+        )}
       </View>
       <View style={styles.inset}>
         <TextField

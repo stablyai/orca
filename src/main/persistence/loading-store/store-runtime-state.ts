@@ -44,6 +44,8 @@ export type DurableProfileStateMutation<T> = {
   rollback?: () => void
   /** Absent means any host may have changed; otherwise notify only listed partitions. */
   writtenHostIds?: readonly ExecutionHostId[]
+  /** The workspaces a listed host's write changed; a listed host absent here may have changed any. */
+  writtenWorkspaces?: ReadonlyMap<ExecutionHostId, ReadonlySet<string>>
 }
 
 export type StoreRuntimeOptions = {

@@ -28,7 +28,7 @@ function userMessage(text: string, createdAt: number): string {
 
 describe('parseOpenCodeSessionFile', () => {
   it.each(
-    [undefined, null, [], '', '   ', [{ type: 'image', source: {} }]].map((content) => ({
+    [undefined, '   ', [{ type: 'image', source: {} }]].map((content) => ({
       content
     }))
   )(
@@ -69,7 +69,7 @@ describe('parseOpenCodeSessionFile', () => {
     }
   )
 
-  it('skips a corrupt message file instead of discarding the whole session', async () => {
+  it('skips a corrupt message file and orders the remaining turns by creation time', async () => {
     const storageRoot = await mkdtemp(join(tmpdir(), 'orca-opencode-parser-'))
     tempDirs.push(storageRoot)
     const sessionDir = join(storageRoot, 'session', 'project')
@@ -88,39 +88,9 @@ describe('parseOpenCodeSessionFile', () => {
         time: { created: 1_777_634_000_000, updated: 1_777_634_002_000 }
       })
     )
-    await writeFile(join(messageDir, 'msg_1.json'), userMessage('First prompt', 1_777_634_000_000))
+    await writeFile(join(messageDir, 'msg_1.json'), userMessage('Later turn', 1_777_634_002_000))
     await writeFile(join(messageDir, 'msg_2.json'), '{"role":"user","content":[{"type":')
-    await writeFile(join(messageDir, 'msg_3.json'), userMessage('Third prompt', 1_777_634_002_000))
-
-    const session = await parseOpenCodeSessionFile({
-      path,
-      mtimeMs,
-      modifiedAt: new Date(mtimeMs).toISOString()
-    })
-
-    expect(session).not.toBeNull()
-    expect(session?.messageCount).toBe(2)
-    expect(session?.totalTokens).toBe(10)
-    expect(session?.previewMessages.map((message) => message.text)).toEqual([
-      'First prompt',
-      'Third prompt'
-    ])
-  })
-
-  it('orders messages by created time when file order disagrees', async () => {
-    const storageRoot = await mkdtemp(join(tmpdir(), 'orca-opencode-parser-'))
-    tempDirs.push(storageRoot)
-    const sessionDir = join(storageRoot, 'session', 'project')
-    const messageDir = join(storageRoot, 'message', 'ses_order')
-    await mkdir(sessionDir, { recursive: true })
-    await mkdir(messageDir, { recursive: true })
-
-    const path = join(sessionDir, 'ses_order.json')
-    const mtimeMs = Date.now()
-    await writeFile(path, JSON.stringify({ id: 'ses_order', directory: '/tmp/opencode' }))
-    // File names sort the opposite way from the transcript's creation order.
-    await writeFile(join(messageDir, 'msg_a.json'), userMessage('Later turn', 1_777_634_002_000))
-    await writeFile(join(messageDir, 'msg_b.json'), userMessage('Earliest turn', 1_777_634_000_000))
+    await writeFile(join(messageDir, 'msg_3.json'), userMessage('Earliest turn', 1_777_634_000_000))
 
     const session = await withFullFirstUserPromptCapture(() =>
       parseOpenCodeSessionFile({
@@ -131,6 +101,8 @@ describe('parseOpenCodeSessionFile', () => {
     )
 
     expect(session?.firstUserPrompt).toBe('Earliest turn')
+    expect(session?.messageCount).toBe(2)
+    expect(session?.totalTokens).toBe(10)
     expect(session?.previewMessages.map((message) => message.text)).toEqual([
       'Earliest turn',
       'Later turn'

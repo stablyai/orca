@@ -2,11 +2,17 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../shared/bot-types'
 import { BotAvatarSync } from './bot-avatar-sync'
 
-type SyncedBot = Pick<Bot, 'id' | 'avatar' | 'slack'>
+type SyncedBot = Pick<Bot, 'id' | 'avatar' | 'slack' | 'github'>
 
 function harness(bots: Partial<SyncedBot>[]) {
   const call = vi.fn().mockResolvedValue({ ok: true, value: undefined })
-  const list: SyncedBot[] = bots.map((bot) => ({ id: 'bot-1', avatar: null, slack: null, ...bot }))
+  const list: SyncedBot[] = bots.map((bot) => ({
+    id: 'bot-1',
+    avatar: null,
+    slack: null,
+    github: null,
+    ...bot
+  }))
   const sync = new BotAvatarSync({
     bots: {
       enabled: () => true,
@@ -37,7 +43,7 @@ describe('BotAvatarSync', () => {
       { method: 'PUT' }
     )
 
-    list[0] = { id: 'bot-1', slack: SLACK, avatar: 'upload:0123456789abcdef' }
+    list[0] = { id: 'bot-1', slack: SLACK, github: null, avatar: 'upload:0123456789abcdef' }
     sync.changed()
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
     expect(call.mock.calls[1]?.[1]).toEqual({
@@ -46,6 +52,21 @@ describe('BotAvatarSync', () => {
       version: '0123456789abcdef',
       png: Buffer.from('png').toString('base64')
     })
+  })
+
+  it('sends the picture of a bot linked only to GitHub, for the cloud’s pages', async () => {
+    const { sync, call } = harness([
+      { id: 'bot-1', avatar: 'mascot:K2', github: {} },
+      { id: 'bot-2', avatar: 'mascot:A1' }
+    ])
+    sync.changed()
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1))
+    expect(call).toHaveBeenCalledWith(
+      '/v1/connector/bots/bot-1/avatar',
+      { v: 1, kind: 'mascot', id: 'K2' },
+      expect.anything(),
+      { method: 'PUT' }
+    )
   })
 
   it('sends again after a failed send', async () => {
@@ -58,12 +79,46 @@ describe('BotAvatarSync', () => {
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
   })
 
+  it('asks less and less often while the cloud doesn’t know the bot, and at once after a write', async () => {
+    vi.useFakeTimers()
+    try {
+      const { sync, call } = harness([{ avatar: 'mascot:K2', github: {} }])
+      call.mockResolvedValue({ ok: false, status: 404, error: 'unknown_bot', retryAfterMs: null })
+      sync.changed()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(call).toHaveBeenCalledTimes(1)
+      // Then after 1, 2 and 4 more minutes: 7 minutes in, four asks in all.
+      await vi.advanceTimersByTimeAsync(7 * 60_000)
+      expect(call).toHaveBeenCalledTimes(4)
+      await vi.advanceTimersByTimeAsync(7 * 60_000)
+      expect(call).toHaveBeenCalledTimes(4)
+      // A write may be what registered it: asked again at once.
+      sync.changed()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(call).toHaveBeenCalledTimes(5)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('sends a picture chosen while a refused one was on its way', async () => {
+    const { sync, call, list } = harness([{ avatar: 'mascot:K2', github: {} }])
+    let answer!: (value: unknown) => void
+    call.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
+    sync.changed()
+    list[0] = { id: 'bot-1', slack: null, github: {}, avatar: 'mascot:A1' }
+    sync.changed()
+    answer({ ok: false, status: 404, error: 'unknown_bot', retryAfterMs: null })
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
+    expect(call.mock.calls[1]?.[1]).toEqual({ v: 1, kind: 'mascot', id: 'A1' })
+  })
+
   it('sends one picture at a time per bot, ending on the latest', async () => {
     const { sync, call, list } = harness([{ avatar: 'mascot:K2', slack: SLACK }])
     let answer!: (value: unknown) => void
     call.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
     sync.changed()
-    list[0] = { id: 'bot-1', slack: SLACK, avatar: 'mascot:A1' }
+    list[0] = { id: 'bot-1', slack: SLACK, github: null, avatar: 'mascot:A1' }
     sync.changed()
     expect(call).toHaveBeenCalledTimes(1)
     answer({ ok: true, value: undefined })

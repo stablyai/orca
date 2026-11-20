@@ -2,6 +2,7 @@ import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser
 // Build slices without set: pending window commands keep tabs as drawn (including removal/placement); other tabs and order follow main, retaining hidden chat launch slots.
 
 import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { isAgentSessionSlotTabId } from '../../../../../shared/agent-session/view/agent-session-slot-tab-id'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isEditorTabContentType } from '../../slices/editor/tabs/editor-tab-content-type'
 import { heldTabsInMainGroups } from './workspace-layout-frame-held-tab-groups'
@@ -129,7 +130,9 @@ function launchSlotIds(
     )
   )
   return (state.groupsByWorktree[key] ?? []).flatMap((group) =>
-    group.tabOrder.filter((id) => id.startsWith(LAUNCH_SLOT_ID_PREFIX) && !rows.has(id))
+    group.tabOrder.filter(
+      (id) => (id.startsWith(LAUNCH_SLOT_ID_PREFIX) || isAgentSessionSlotTabId(id)) && !rows.has(id)
+    )
   )
 }
 
