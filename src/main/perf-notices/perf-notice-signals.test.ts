@@ -28,23 +28,14 @@ describe('readPerfNoticeSignals', () => {
   })
 
   it.runIf(process.platform !== 'win32')(
-    'reads the volume under the repo for a relative workspace folder, via its nearest existing parent',
+    'reads the volume under the repo for a relative workspace folder',
     async () => {
-      statfs.mockImplementation(async (path: string) => {
-        if (path !== '/vol/dev/app') {
-          throw new Error('ENOENT')
-        }
-        return { bavail: 2, bsize: GB, blocks: 500 }
-      })
+      statfs.mockResolvedValue({ bavail: 2, bsize: GB, blocks: 500 })
       const { readPerfNoticeSignals } = await import('./perf-notice-signals')
 
       const signals = await readPerfNoticeSignals(store('.orca/worktrees'))
 
-      expect(statfs.mock.calls.map(([path]) => path)).toEqual([
-        '/vol/dev/app/.orca/worktrees',
-        '/vol/dev/app/.orca',
-        '/vol/dev/app'
-      ])
+      expect(statfs.mock.calls.map(([path]) => path)).toEqual(['/vol/dev/app/.orca/worktrees'])
       expect(signals.disk).toEqual({ freeBytes: 2 * GB, totalBytes: 500 * GB })
     }
   )

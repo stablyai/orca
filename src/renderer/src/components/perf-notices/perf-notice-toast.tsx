@@ -51,11 +51,11 @@ function copyFor(notice: PerfNotice): Copy {
               i18n={i18n}
               defaults={translate(
                 'perfNotices.disk.description',
-                '{{free}} left. Clean up workspaces you no longer need in <link>the Resource Manager</link>.',
+                '{{free}} left. Clean up workspaces you no longer need in <resourceManager>the Resource Manager</resourceManager>.',
                 { free: notice.freeLabel }
               )}
               components={{
-                link: (
+                resourceManager: (
                   <button
                     type="button"
                     onClick={() => {

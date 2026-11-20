@@ -1,5 +1,4 @@
 import { statfs } from 'node:fs/promises'
-import { dirname } from 'node:path'
 import {
   isDiskAlmostFull,
   type PerfNoticeDisk,
@@ -30,7 +29,12 @@ type PerfNoticeSignalStore = Omit<ProjectRuntimeResolutionStore, 'getSettings'> 
   getRepos: () => Repo[]
 }
 
-let disk: { key: string; readAt: number; value: Promise<PerfNoticeDisk | null> } | null = null
+let disk: {
+  key: string
+  readAt: number
+  settled: boolean
+  value: Promise<PerfNoticeDisk | null>
+} | null = null
 
 /** Where local worktrees land, resolved per repo as creation does, so relative and per-repo
  *  folders point at their real volumes. WSL roots are skipped: reading them can wake a distro. */
@@ -55,35 +59,45 @@ function localWorktreeRoots(store: PerfNoticeSignalStore): string[] {
   return [...roots]
 }
 
-/** A root not created yet still lives on its nearest existing parent's volume. */
 async function statDisk(path: string): Promise<PerfNoticeDisk | null> {
-  for (let current = path; ; current = dirname(current)) {
-    try {
-      const stats = await statfs(current)
-      return { freeBytes: stats.bavail * stats.bsize, totalBytes: stats.blocks * stats.bsize }
-    } catch {
-      if (dirname(current) === current) {
-        // An unmounted or unreadable folder has nothing to warn about.
-        return null
-      }
-    }
+  try {
+    const stats = await statfs(path)
+    return { freeBytes: stats.bavail * stats.bsize, totalBytes: stats.blocks * stats.bsize }
+  } catch {
+    // A root not created yet, or on an unplugged volume, has no workspaces to clean up.
+    return null
   }
 }
 
+/** One statfs at a time: a hung network mount then holds one libuv thread, not one per repo. */
 async function readFullestDisk(roots: string[]): Promise<PerfNoticeDisk | null> {
-  const disks = (await Promise.all(roots.map(statDisk))).filter((d): d is PerfNoticeDisk => !!d)
-  return disks.find(isDiskAlmostFull) ?? disks[0] ?? null
+  let first: PerfNoticeDisk | null = null
+  for (const root of roots) {
+    const disk = await statDisk(root)
+    if (isDiskAlmostFull(disk)) {
+      return disk
+    }
+    first ??= disk
+  }
+  return first
 }
 
-/** Cached for 10 minutes per set of roots; concurrent callers share one read, even while it is slow. */
+/** Cached for 10 minutes per set of roots; concurrent callers share one read, and a read still
+ *  pending (a hung mount) is never stacked with another. */
 export function readPerfNoticeSignals(store: PerfNoticeSignalStore): Promise<PerfNoticeSignals> {
   const roots = localWorktreeRoots(store)
   const key = roots.join('\0')
   const now = Date.now()
-  if (!disk || disk.key !== key || now - disk.readAt >= DISK_READ_INTERVAL_MS) {
-    disk = { key, readAt: now, value: readFullestDisk(roots) }
+  let current = disk
+  const stale = !current || current.key !== key || now - current.readAt >= DISK_READ_INTERVAL_MS
+  if (!current || (stale && current.settled)) {
+    const read = { key, readAt: now, settled: false, value: readFullestDisk(roots) }
+    void read.value.finally(() => {
+      read.settled = true
+    })
+    current = disk = read
   }
-  return disk.value.then((value) => ({ disk: value }))
+  return current.value.then((value) => ({ disk: value }))
 }
 
 /** Asked only when the hidden-tabs notice could show, so idle reads never touch browser state. */
