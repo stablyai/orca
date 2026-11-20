@@ -4,6 +4,7 @@ import { BrowserCertificateTrustController } from './browser-certificate-trust-c
 import { resetSessionProxyApplicationForTests } from '../../network/proxy-settings'
 
 const FIRST_CERTIFICATE = certificate('first certificate')
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stub with every Session member the controller and proxy readiness read.
 const browserSession = {
   resolveProxy: vi.fn(async () => 'DIRECT'),
   setProxy: vi.fn(async () => {}),
@@ -18,6 +19,7 @@ function certificate(contents: string): Electron.Certificate {
 }
 
 function createGuest(id: number, session: Electron.Session = browserSession): Electron.WebContents {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stub with every WebContents member the controller reads.
   return {
     id,
     session,

@@ -43,7 +43,8 @@ vi.mock('../../../identity/browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({
     mode: 'clean',
     userAgent: 'Mozilla/5.0 (Test) Chrome/140.0.0.0'
-  })
+  }),
+  isBrowserProcessUserAgentInitialized: () => true
 }))
 
 import { browserManager } from '../browser-manager'
