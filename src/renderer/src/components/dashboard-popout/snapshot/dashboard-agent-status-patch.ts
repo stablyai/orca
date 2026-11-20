@@ -51,8 +51,8 @@ export function patchDashboardSnapshotFromAgentStatus(
   }
 
   const stateChanged = event.stateStartedAt > card.stateChangedAt
-  // Why ack 0: the event is a live turn and the pop-out holds no acks; the next snapshot has them.
   const restatesTurn = event.state === 'done' && event.sessionBoundary === true
+  // Why ack 0: the event is a live turn and the pop-out holds no acks; the next snapshot has them.
   const unseen =
     stateChanged && !restatesTurn ? isAgentTurnUnacknowledged(0, event.stateStartedAt) : card.unseen
   const dotState = event.state
@@ -78,7 +78,8 @@ export function patchDashboardSnapshotFromAgentStatus(
     unseen,
     stateChangedAt: stateChanged ? event.stateStartedAt : card.stateChangedAt,
     statusUpdatedAt: event.receivedAt,
-    finishedAt: dotState === 'done' && stateChanged ? event.stateStartedAt : card.finishedAt,
+    finishedAt:
+      dotState === 'done' && stateChanged && !restatesTurn ? event.stateStartedAt : card.finishedAt,
     askSummary:
       bucket === 'attention'
         ? event.interactivePrompt !== undefined

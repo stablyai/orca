@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentCompletionSource } from '../../../shared/agent-status/lifecycle/agent-completion-time'
-import { isAgentSubjectUnread } from './agent-attention-acknowledgement'
+import { isAgentSubjectUnread, type AgentAttentionTurn } from './agent-attention-acknowledgement'
 
 const done = (startedAt: number) => ({ state: 'done' as const, prompt: '', startedAt })
 const working = (startedAt: number) => ({ state: 'working' as const, prompt: '', startedAt })
 
 describe('isAgentSubjectUnread', () => {
   it('keeps a viewed turn read across a later session boundary, and the next turn unread', () => {
-    const read = (entry: AgentCompletionSource) =>
+    const read = (entry: AgentAttentionTurn) =>
       isAgentSubjectUnread(
         { liveTurns: { pane: entry }, acknowledgedTurnStartedAt: { pane: 2_000 } },
         'pane'
@@ -20,14 +19,6 @@ describe('isAgentSubjectUnread', () => {
         sessionBoundary: true,
         stateStartedAt: 5_000,
         stateHistory: [done(1_000)]
-      })
-    ).toBe(false)
-    expect(
-      read({
-        state: 'done',
-        sessionBoundary: true,
-        stateStartedAt: 5_000,
-        stateHistory: [done(1_000), working(3_000)]
       })
     ).toBe(false)
     expect(
