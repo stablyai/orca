@@ -8,7 +8,7 @@ import { ZotzAgentQueueStore } from '../zotz-agent-queue-store'
 import { ZotzAgentMemorySampler } from './zotz-agent-memory-sampler'
 import { listZotzAgentProcessRoots, measureZotzAgentProcessRoots } from './zotz-agent-process-roots'
 import { ZotzMemoryGovernorService } from './zotz-memory-governor-service'
-import { createZotzSystemPressureReader } from './zotz-darwin-memory-signals'
+import { collectZotzHostMemory, createZotzSystemPressureReader } from './zotz-darwin-memory-signals'
 import { ZotzAgentLaunchQueue } from './zotz-agent-launch-queue'
 import { setZotzAgentLaunchQueue } from './zotz-agent-launch-hold'
 import { registerZotzAgentQueueHandlers } from './zotz-agent-queue-ipc'
@@ -36,7 +36,7 @@ export function startZotzMemoryGovernor(input: {
         measureZotzAgentProcessRoots(listZotzAgentProcessRoots(input.server.getStatusSnapshot())),
       now: Date.now
     }),
-    collectHost: collectHostMemory,
+    collectHost: () => collectZotzHostMemory(collectHostMemory),
     readSystemPressure: createZotzSystemPressureReader(),
     limits: computeZotzMemoryGovernorDefaults(os.totalmem()),
     loadLedger: () => queueStore.loadLedger(),

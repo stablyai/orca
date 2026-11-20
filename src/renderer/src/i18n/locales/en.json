@@ -25902,7 +25902,6 @@
         "priorityAutomation": "Automation",
         "free": "{{free}} GB free of {{total}} GB",
         "keepsFree": "Always keeps {{min}} GB free",
-        "minFreeMarker": "Always free",
         "legendSystem": "System and other apps",
         "legendAgents": "Agents",
         "legendMinFree": "Always free",
@@ -25925,9 +25924,10 @@
         "doneEmpty": "No finished runs yet",
         "doneRun": "{{minutes}} min · peak {{peak}} GB",
         "title": "Agent queue",
-        "description": "Agents start when they fit in memory; the rest wait their turn here.",
+        "description": "Each machine has its own memory: its agents start when they fit there, the rest wait their turn.",
         "gbAmount": "{{gb}} GB",
-        "gbEstimate": "~{{gb}} GB"
+        "gbEstimate": "~{{gb}} GB",
+        "close": "Close"
       },
       "segment": {
         "withQueue": "{{free}} GB free · {{queued}} queued",
@@ -25941,7 +25941,11 @@
       "dismissCanceled": "Dismiss",
       "canceledMark": "Canceled",
       "queuedMark": "Queued",
-      "queuedFor": "Queued · {{minutes}} min"
+      "queuedFor": "Queued · {{minutes}} min",
+      "machines": {
+        "thisDevice": "This device",
+        "readOnly": "Update Zotz on {{host}} to cancel or launch its waits from here."
+      }
     },
     "sidebar": {
       "home": "Home",

@@ -24276,7 +24276,6 @@
         "priorityAutomation": "Automatización",
         "free": "{{free}} GB libres de {{total}} GB",
         "keepsFree": "Siempre deja {{min}} GB libres",
-        "minFreeMarker": "Siempre libre",
         "legendSystem": "Sistema y otras apps",
         "legendAgents": "Agentes",
         "legendMinFree": "Siempre libre",
@@ -24299,9 +24298,10 @@
         "doneEmpty": "Todavía no hay corridas terminadas",
         "doneRun": "{{minutes}} min · pico {{peak}} GB",
         "title": "Cola de agentes",
-        "description": "Los agentes arrancan cuando caben en memoria; los demás esperan su turno aquí.",
+        "description": "Cada máquina tiene su propia memoria: sus agentes arrancan cuando caben ahí y los demás esperan su turno.",
         "gbAmount": "{{gb}} GB",
-        "gbEstimate": "~{{gb}} GB"
+        "gbEstimate": "~{{gb}} GB",
+        "close": "Cerrar"
       },
       "segment": {
         "withQueue": "{{free}} GB libres · {{queued}} en cola",
@@ -24315,7 +24315,11 @@
       "dismissCanceled": "Quitar aviso",
       "canceledMark": "Cancelado",
       "queuedMark": "En cola",
-      "queuedFor": "En cola · {{minutes}} min"
+      "queuedFor": "En cola · {{minutes}} min",
+      "machines": {
+        "thisDevice": "Este equipo",
+        "readOnly": "Actualiza Zotz en {{host}} para cancelar o lanzar sus esperas desde aquí."
+      }
     },
     "sidebar": {
       "home": "Inicio",

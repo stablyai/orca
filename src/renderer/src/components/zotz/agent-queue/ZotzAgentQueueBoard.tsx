@@ -3,19 +3,32 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { ZotzAgentQueueSnapshot } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue-snapshot'
 import type { ZotzAgentTaskPriority } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue'
 import { formatZotzGb, minutesSince } from './zotz-memory-format'
+import { MachineName, MemoryRows } from './ZotzAgentQueueMemoryRows'
 
 type Snapshot = ZotzAgentQueueSnapshot
 type Running = Snapshot['running'][number]
 
-export type ZotzAgentQueueBoardProps = {
+/** One machine's queue as the board shows it; each machine has its own RAM and its own line. */
+export type ZotzAgentQueueMachine = {
+  hostId: ExecutionHostId
+  name: string
+  /** The machine this window runs on. */
+  isThisDevice: boolean
   snapshot: Snapshot
+  /** Both absent for a server that does not take these calls; its backlog is then read-only. */
+  onForceStart?: (id: string) => void
+  onCancel?: (id: string) => void
+}
+
+export type ZotzAgentQueueBoardProps = {
+  /** This machine first, then each server. */
+  machines: readonly ZotzAgentQueueMachine[]
   now: number
   workspaceName: (worktreeId: string | null) => string
-  onForceStart: (id: string) => void
-  onCancel: (id: string) => void
   onOpenPane: (paneKey: string, worktreeId: string | null) => void
 }
 
@@ -28,58 +41,6 @@ function priorityLabel(priority: ZotzAgentTaskPriority, t: Translate): string {
     case 'automation':
       return t('zotz.agentQueue.board.priorityAutomation', 'Automation')
   }
-}
-
-function MemoryBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element | null {
-  const t = useTranslate()
-  const memory = snapshot.memory
-  if (!memory || memory.totalBytes <= 0) {
-    return null
-  }
-  const agents = snapshot.running.reduce((sum, agent) => sum + agent.bytes, 0)
-  const free = Math.min(memory.availableBytes, memory.totalBytes)
-  const other = Math.max(0, memory.totalBytes - free - agents)
-  const percent = (bytes: number) => `${(bytes / memory.totalBytes) * 100}%`
-  return (
-    <div className="space-y-1.5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
-        <span className="font-medium text-foreground">
-          {t('zotz.agentQueue.board.free', '{{free}} GB free of {{total}} GB', {
-            free: formatZotzGb(free),
-            total: formatZotzGb(memory.totalBytes)
-          })}
-        </span>
-        <span className="text-muted-foreground">
-          {t('zotz.agentQueue.board.keepsFree', 'Always keeps {{min}} GB free', {
-            min: formatZotzGb(memory.minFreeBytes)
-          })}
-        </span>
-      </div>
-      <div className="relative flex h-2.5 overflow-hidden rounded-full bg-muted">
-        <div className="bg-muted-foreground/50" style={{ width: percent(other) }} />
-        <div className="bg-primary" style={{ width: percent(agents) }} />
-        <div
-          className="absolute inset-y-0 border-l-2 border-dashed border-destructive"
-          style={{ left: `calc(100% - ${percent(memory.minFreeBytes)})` }}
-          title={t('zotz.agentQueue.board.minFreeMarker', 'Always free')}
-        />
-      </div>
-      <div className="flex gap-3 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <span className="size-2 rounded-sm bg-muted-foreground/50" />
-          {t('zotz.agentQueue.board.legendSystem', 'System and other apps')}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="size-2 rounded-sm bg-primary" />
-          {t('zotz.agentQueue.board.legendAgents', 'Agents')}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="size-2 rounded-sm border border-dashed border-destructive" />
-          {t('zotz.agentQueue.board.legendMinFree', 'Always free')}
-        </span>
-      </div>
-    </div>
-  )
 }
 
 function Column({
@@ -108,9 +69,14 @@ function Column({
 }
 
 function Card({
+  machine,
+  showMachine,
   highlighted,
   children
 }: {
+  machine: ZotzAgentQueueMachine
+  /** Off when only one machine is on the board: the mark would say nothing. */
+  showMachine: boolean
   highlighted?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
@@ -120,7 +86,11 @@ function Card({
         'space-y-1 rounded-md border border-border bg-card p-2 text-card-foreground',
         highlighted && 'border-primary ring-1 ring-primary'
       )}
+      data-zotz-queue-machine={machine.hostId}
     >
+      {showMachine ? (
+        <MachineName machine={machine} className="text-[11px] text-muted-foreground" />
+      ) : null}
       {children}
     </div>
   )
@@ -138,19 +108,43 @@ function UsageBar({ bytes, ceiling }: { bytes: number; ceiling: number }): React
   )
 }
 
+function QueuedActions({
+  onCancel,
+  onForceStart
+}: {
+  onCancel: () => void
+  onForceStart: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex flex-wrap justify-end gap-1.5">
+      <Button type="button" size="xs" variant="outline" onClick={onCancel}>
+        <X className="size-3" />
+        {t('zotz.agentQueue.cancel', 'Cancel')}
+      </Button>
+      <Button type="button" size="xs" onClick={onForceStart}>
+        <Play className="size-3" />
+        {t('zotz.agentQueue.forceStart', 'Launch anyway')}
+      </Button>
+    </div>
+  )
+}
+
 function RunningCard({
   agent,
+  machine,
   props,
   review
 }: {
   agent: Running
+  machine: ZotzAgentQueueMachine
   props: ZotzAgentQueueBoardProps
   review: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const ceiling = props.snapshot.memory?.perAgentMaxBytes ?? 0
+  const ceiling = machine.snapshot.memory?.perAgentMaxBytes ?? 0
   return (
-    <Card>
+    <Card machine={machine} showMachine={props.machines.length > 1}>
       <div className="flex items-center gap-1.5 text-xs">
         <span className="font-semibold">{agent.agent}</span>
         <span className="min-w-0 truncate text-muted-foreground">
@@ -191,28 +185,47 @@ function RunningCard({
   )
 }
 
-/** The queue board: Backlog → In Progress → Review → Done over a live memory bar (docs/zotz/PLAN.md §8g). */
+function withMachine<T>(
+  machines: readonly ZotzAgentQueueMachine[],
+  pick: (snapshot: Snapshot) => readonly T[]
+): { machine: ZotzAgentQueueMachine; item: T }[] {
+  return machines.flatMap((machine) => pick(machine.snapshot).map((item) => ({ machine, item })))
+}
+
+/** Every machine's queue on one board: a memory line each, then Backlog → In Progress → Review → Done (docs/zotz/PLAN.md §8g). */
 export function ZotzAgentQueueBoard(props: ZotzAgentQueueBoardProps): React.JSX.Element {
   const t = useTranslate()
-  const { snapshot } = props
-  const working = snapshot.running.filter((agent) => agent.state === 'working')
-  const review = snapshot.running.filter((agent) => agent.state !== 'working')
+  const { machines } = props
+  const showMachine = machines.length > 1
+  // Each machine serves its own line, so their next-to-start sit together at the top.
+  const queued = withMachine(machines, (s) => s.queued).sort(
+    (a, b) => a.item.position - b.item.position
+  )
+  const running = withMachine(machines, (s) => s.running)
+  const working = running.filter(({ item }) => item.state === 'working')
+  const review = running.filter(({ item }) => item.state !== 'working')
+  const done = withMachine(machines, (s) => s.done).sort((a, b) => b.item.endedAt - a.item.endedAt)
   const empty = (text: string) => (
     <div className="px-1 py-3 text-center text-[11px] text-muted-foreground">{text}</div>
   )
   return (
     <div className="space-y-3">
-      <MemoryBar snapshot={snapshot} />
+      <MemoryRows queues={machines} />
       <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
         <Column
           title={t('zotz.agentQueue.board.backlog', 'Backlog')}
           hint={t('zotz.agentQueue.board.backlogHint', 'Turn order: manual › remote › automation')}
-          count={snapshot.queued.length}
+          count={queued.length}
         >
-          {snapshot.queued.length === 0
+          {queued.length === 0
             ? empty(t('zotz.agentQueue.board.backlogEmpty', 'Nothing waiting'))
-            : snapshot.queued.map((task) => (
-                <Card key={task.id} highlighted={task.position === 1}>
+            : queued.map(({ machine, item: task }) => (
+                <Card
+                  key={`${machine.hostId}:${task.id}`}
+                  machine={machine}
+                  showMachine={showMachine}
+                  highlighted={task.position === 1}
+                >
                   <div className="flex items-center gap-1.5 text-xs">
                     <span
                       className={cn(
@@ -240,21 +253,12 @@ export function ZotzAgentQueueBoard(props: ZotzAgentQueueBoardProps): React.JSX.
                       })}
                     </span>
                   </div>
-                  <div className="flex flex-wrap justify-end gap-1.5">
-                    <Button
-                      type="button"
-                      size="xs"
-                      variant="outline"
-                      onClick={() => props.onCancel(task.id)}
-                    >
-                      <X className="size-3" />
-                      {t('zotz.agentQueue.cancel', 'Cancel')}
-                    </Button>
-                    <Button type="button" size="xs" onClick={() => props.onForceStart(task.id)}>
-                      <Play className="size-3" />
-                      {t('zotz.agentQueue.forceStart', 'Launch anyway')}
-                    </Button>
-                  </div>
+                  {machine.onCancel && machine.onForceStart ? (
+                    <QueuedActions
+                      onCancel={() => machine.onCancel?.(task.id)}
+                      onForceStart={() => machine.onForceStart?.(task.id)}
+                    />
+                  ) : null}
                 </Card>
               ))}
         </Column>
@@ -265,8 +269,14 @@ export function ZotzAgentQueueBoard(props: ZotzAgentQueueBoardProps): React.JSX.
         >
           {working.length === 0
             ? empty(t('zotz.agentQueue.board.inProgressEmpty', 'No agent is working'))
-            : working.map((agent) => (
-                <RunningCard key={agent.paneKey} agent={agent} props={props} review={false} />
+            : working.map(({ machine, item }) => (
+                <RunningCard
+                  key={`${machine.hostId}:${item.paneKey}`}
+                  agent={item}
+                  machine={machine}
+                  props={props}
+                  review={false}
+                />
               ))}
         </Column>
         <Column
@@ -276,19 +286,29 @@ export function ZotzAgentQueueBoard(props: ZotzAgentQueueBoardProps): React.JSX.
         >
           {review.length === 0
             ? empty(t('zotz.agentQueue.board.reviewEmpty', 'Nothing to review'))
-            : review.map((agent) => (
-                <RunningCard key={agent.paneKey} agent={agent} props={props} review />
+            : review.map(({ machine, item }) => (
+                <RunningCard
+                  key={`${machine.hostId}:${item.paneKey}`}
+                  agent={item}
+                  machine={machine}
+                  props={props}
+                  review
+                />
               ))}
         </Column>
         <Column
           title={t('zotz.agentQueue.board.done', 'Done')}
           hint={t('zotz.agentQueue.board.doneHint', 'Closed · peaks improve the estimates')}
-          count={snapshot.done.length}
+          count={done.length}
         >
-          {snapshot.done.length === 0
+          {done.length === 0
             ? empty(t('zotz.agentQueue.board.doneEmpty', 'No finished runs yet'))
-            : snapshot.done.map((run) => (
-                <Card key={`${run.paneKey}-${run.endedAt}`}>
+            : done.map(({ machine, item: run }) => (
+                <Card
+                  key={`${machine.hostId}:${run.paneKey}-${run.endedAt}`}
+                  machine={machine}
+                  showMachine={showMachine}
+                >
                   <div className="flex items-center gap-1.5 text-xs">
                     <span className="font-semibold">{run.agent}</span>
                     <span className="min-w-0 truncate text-muted-foreground">
