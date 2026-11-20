@@ -43,6 +43,24 @@ export async function initializeMainProcessAccountServices(): Promise<void> {
       services.codexRuntimeHome.importCodexHistoryInBackground({ settingChanged: true })
     }
   })
+  store.onSettingsChanged((updates) => {
+    if (
+      [
+        'localAccountRuntime',
+        'localAccountWslDistro',
+        'localWindowsRuntimeDefault',
+        'activeClaudeManagedAccountId',
+        'activeClaudeManagedAccountIdsByRuntime',
+        'claudeManagedAccounts'
+      ].some((key) => key in updates)
+    ) {
+      void state.backend
+        ?.callControl('claudeUsage:refresh', { force: true, rerunIfScanning: true })
+        .catch((error: unknown) =>
+          console.warn('[claude-usage] Failed to refresh after account runtime change:', error)
+        )
+    }
+  })
   state.codexAccounts = services.codexAccounts
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts

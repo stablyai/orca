@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
-import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
+import { mainProcessState } from '../startup/main-process-state'
 import { readUsageWorktreeCatalog } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { isTelemetryEnabled, track } from '../telemetry/client'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
@@ -55,7 +55,10 @@ export function createBackendDesktopCapabilities(
       return readUsageWorktreeCatalog(store)
     }
     if (method === 'usage.claudeProfileDirs') {
-      return claudeProfileTranscriptDirs()
+      if (!mainProcessState.claudeRuntimeAuth) {
+        throw new Error('Claude account routing is not ready')
+      }
+      return mainProcessState.claudeRuntimeAuth.getUsageProfileDirs()
     }
     if (method === 'usage.telemetry.enabled') {
       return isTelemetryEnabled()

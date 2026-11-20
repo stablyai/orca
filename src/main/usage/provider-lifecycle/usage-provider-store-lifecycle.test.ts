@@ -72,6 +72,16 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
   TestState,
   'hasAnyTestData'
 > {
+  private writeOverride: (() => Promise<void>) | undefined
+
+  setWriteOverride(write?: () => Promise<void>): void {
+    this.writeOverride = write
+  }
+
+  protected override writeToDisk(): Promise<void> {
+    return this.writeOverride ? this.writeOverride() : super.writeToDisk()
+  }
+
   constructor(
     cacheFile: string,
     scan: TestScan,
@@ -146,6 +156,59 @@ describe('UsageProviderStoreLifecycle', () => {
     await Promise.all(stores.map((store) => store.flush()))
     rmSync(tempDirectory, { recursive: true, force: true })
     vi.restoreAllMocks()
+  })
+
+  it('publishes the newly selected profile when selection changes during a scan', async () => {
+    const started = Promise.withResolvers<void>()
+    const firstScan = Promise.withResolvers<TestScanResult>()
+    scan
+      .mockImplementationOnce(() => {
+        started.resolve()
+        return firstScan.promise
+      })
+      .mockResolvedValueOnce({ sessions: [{ id: 'new-profile' }], dailyAggregates: [] })
+    const cacheFile = join(tempDirectory, 'profile-switch.json')
+    const store = new TestUsageStore(cacheFile, scan, split, capture)
+    stores.push(store)
+    await store.setEnabled(true)
+    const first = store.refresh(true)
+    await started.promise
+    const updated = store.refresh(true, { rerunIfScanning: true })
+    const duplicate = store.refresh(true, { rerunIfScanning: true })
+    await Promise.resolve()
+    firstScan.resolve({ sessions: [{ id: 'old-profile' }], dailyAggregates: [] })
+    await Promise.all([first, updated, duplicate])
+    await store.flush()
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8')).sessions).toEqual([{ id: 'new-profile' }])
+  })
+
+  it('retains a profile refresh arriving between scan completion and cleanup', async () => {
+    const writeStarted = Promise.withResolvers<void>()
+    const writeGate = Promise.withResolvers<void>()
+    scan
+      .mockResolvedValueOnce({ sessions: [{ id: 'old-profile' }], dailyAggregates: [] })
+      .mockResolvedValueOnce({ sessions: [{ id: 'new-profile' }], dailyAggregates: [] })
+    const cacheFile = join(tempDirectory, 'late-profile-switch.json')
+    const store = new TestUsageStore(cacheFile, scan, split, capture)
+    stores.push(store)
+    await store.setEnabled(true)
+    store.setWriteOverride(() => {
+      writeStarted.resolve()
+      return writeGate.promise
+    })
+    const first = store.refresh(true)
+    await writeStarted.promise
+    let updated: Promise<unknown> | undefined
+    writeGate.resolve()
+    queueMicrotask(() => {
+      updated = store.refresh(true, { rerunIfScanning: true })
+    })
+    await first
+    await updated
+    store.setWriteOverride()
+    await store.setEnabled(true)
+    await store.flush()
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8')).sessions).toEqual([{ id: 'new-profile' }])
   })
 
   it('preserves inline sources across failed migration, an enabled toggle and a later retry', async () => {

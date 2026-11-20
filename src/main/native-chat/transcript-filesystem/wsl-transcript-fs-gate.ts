@@ -1,4 +1,5 @@
 import { wslTranscriptFsLaneKey, wslTranscriptFsRouteKey } from './wsl-transcript-fs-route'
+import type { WslTranscriptFsProcessCall } from './process/wsl-transcript-fs-process-protocol'
 import {
   WslTranscriptFsError,
   wslTranscriptFsCapacityError as capacityError,
@@ -279,7 +280,7 @@ export function resetWslTranscriptFsGateForTests(): void {
 
 export function runWslTranscriptFsTask<T>(
   options: {
-    operation: 'access' | 'readdir' | 'stat' | 'lstat' | 'open' | 'read' | 'readfile'
+    operation: Exclude<WslTranscriptFsProcessCall['operation'], 'close'>
     path: string
     priority: WslTranscriptFsTaskPriority
     signal?: AbortSignal

@@ -1,10 +1,12 @@
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { toWindowsWslPath } from '../../shared/file-access/wsl-paths'
 import { resolveLocalAccountRuntimeTarget } from '../../shared/agent-accounts/local-account-runtime'
 import type { Store } from '../persistence/loading-store/store'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
+import { getWslGuestEnvironment } from '../wsl/execution/wsl-guest-environment'
+import { getInitialClaudeRateLimitTarget } from '../rate-limits/providers/claude/claude-rate-limit-target'
 import { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
 import { ClaudeWslProfileRouter } from './profiles/wsl/claude-profile-wsl-router'
 import {
@@ -49,6 +51,29 @@ export class ClaudeRuntimeAuthService {
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const wsl = this.wslRouteFor(target)
     return wsl ? wsl.router.prepareLaunch(wsl.distro) : this.router.prepareLaunch()
+  }
+
+  /** Usage follows the selected profile, never every installed WSL distro. */
+  async getUsageProfileDirs(): Promise<string[]> {
+    const target = this.resolveTarget(getInitialClaudeRateLimitTarget(this.store.getSettings()))
+    const wsl = this.wslRouteFor(target)
+    if (target.runtime === 'wsl' && !wsl) {
+      throw new Error('Selected WSL Claude runtime is unavailable')
+    }
+    const preparation = wsl ? await wsl.router.preparation(wsl.distro) : this.router.preparation()
+    let configDir = preparation.configDir
+    if (wsl && !preparation.provenance.startsWith('profile:')) {
+      const environment = await getWslGuestEnvironment(wsl.distro)
+      if (!environment || environment.claudeConfigDir === null) {
+        throw new Error('Selected WSL Claude environment is unavailable')
+      }
+      configDir = toWindowsWslPath(
+        environment.claudeConfigDir ?? `${environment.home}/.claude`,
+        wsl.distro
+      )
+    }
+    const joinPath = wsl ? win32.join : join
+    return [joinPath(configDir, 'projects'), joinPath(configDir, 'transcripts')]
   }
 
   async prepareForRateLimitFetch(

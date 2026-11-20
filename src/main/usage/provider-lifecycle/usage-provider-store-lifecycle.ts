@@ -35,6 +35,7 @@ export abstract class UsageProviderStoreLifecycle<
   private readonly schemaVersion: number
   private scanPromise: Promise<void> | null = null
   private stopping = false
+  private rescanRequested = false
   private tokenReporter: AgentTokenUsageReporter | null = null
   private analyticsSessionIds: AnalyticsSessionIdStore | null = null
   private readonly writer: UsageCacheSnapshotWriter
@@ -99,7 +100,10 @@ export abstract class UsageProviderStoreLifecycle<
     return this.getScanState()
   }
 
-  async refresh(force = false): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
+  async refresh(
+    force = false,
+    options: { rerunIfScanning?: boolean } = {}
+  ): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
     await this.loaded
     if (this.stopping || !this.state.scanState.enabled) {
       return this.getScanState()
@@ -116,7 +120,7 @@ export abstract class UsageProviderStoreLifecycle<
     if (this.stopping || !this.state.scanState.enabled) {
       return this.getScanState()
     }
-    await this.runScan(catalog)
+    await this.runScan(catalog, options.rerunIfScanning ?? false)
     return this.getScanState()
   }
 
@@ -236,12 +240,19 @@ export abstract class UsageProviderStoreLifecycle<
   }
 
   private async runScan(
-    catalog: Awaited<ReturnType<UsageStoreHost['readCatalog']>>
+    catalog: Awaited<ReturnType<UsageStoreHost['readCatalog']>>,
+    rerunIfScanning: boolean
   ): Promise<void> {
-    if (this.scanPromise) {
+    while (this.scanPromise) {
+      this.rescanRequested ||= rerunIfScanning
+      // Any scan starting after this await already sees the newer selection.
+      rerunIfScanning = false
       await this.scanPromise
-      return
+      if (!this.rescanRequested || this.stopping || !this.state.scanState.enabled) {
+        return
+      }
     }
+    this.rescanRequested = false
 
     this.state.scanState.lastScanStartedAt = Date.now()
     this.state.scanState.lastScanError = null

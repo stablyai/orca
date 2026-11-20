@@ -24,7 +24,7 @@ type QueryStore<Scope, Range, Kind> = {
   whenLoaded(): Promise<void>
   getScanState(): unknown
   setEnabled(enabled: boolean): unknown
-  refresh(force?: boolean): unknown
+  refresh(force?: boolean, options?: { rerunIfScanning?: boolean }): unknown
   getSnapshot(scope: Scope, range: Range, limit?: number): unknown
   getSummary(scope: Scope, range: Range): unknown
   getDaily(scope: Scope, range: Range): unknown
@@ -48,9 +48,13 @@ function registerUsageQueries<Scope extends string, Range extends string, Kind e
   handlers.set(`${prefix}:setEnabled`, (raw) =>
     store.setEnabled(z.object({ enabled: z.boolean() }).parse(raw).enabled)
   )
-  handlers.set(`${prefix}:refresh`, (raw) =>
-    store.refresh(z.object({ force: z.boolean().optional() }).optional().parse(raw)?.force ?? false)
-  )
+  handlers.set(`${prefix}:refresh`, (raw) => {
+    const args = z
+      .object({ force: z.boolean().optional(), rerunIfScanning: z.boolean().optional() })
+      .optional()
+      .parse(raw)
+    return store.refresh(args?.force ?? false, { rerunIfScanning: args?.rerunIfScanning })
+  })
   handlers.set(
     `${prefix}:getSnapshot`,
     query((scope, range, limit) => store.getSnapshot(scope, range, limit))
