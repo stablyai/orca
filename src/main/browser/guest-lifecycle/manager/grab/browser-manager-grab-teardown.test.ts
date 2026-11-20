@@ -19,6 +19,7 @@ afterEach(() => vi.unstubAllGlobals())
 /** The private preload must wait for the painted frame before it grants a clean capture. */
 function heldGuest() {
   const frames: FrameRequestCallback[] = []
+  vi.stubGlobal('cancelAnimationFrame', () => {})
   vi.stubGlobal('requestAnimationFrame', (frame: FrameRequestCallback) => {
     frames.push(frame)
     return frames.length
