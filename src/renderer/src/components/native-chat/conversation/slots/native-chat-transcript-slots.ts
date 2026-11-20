@@ -107,6 +107,8 @@ export type NativeChatMessageSlot = {
   workRun?: readonly NativeChatMessage[]
   /** Consecutive quiet item notes drawn close together, with message as the first. */
   itemNotes?: readonly NativeChatMessage[]
+  /** Carries on the run of notes in the slot before: drawn 4 px below it, not a row gap below. */
+  followsNotes?: boolean
 }
 
 const NO_SUBAGENT_HEADS: readonly NativeChatSubagentHead[] = []
@@ -225,12 +227,7 @@ export function buildNativeChatTranscript(
         message.mergedInto === undefined &&
         (isNativeChatOrcaCard(message) || nativeChatRowRendersContent(message.blocks)) &&
         message.id !== liveReasoningId)
-    if (
-      drawsRow ||
-      status !== undefined ||
-      turnDiff !== undefined ||
-      openedPullRequests !== undefined
-    ) {
+    if (drawsRow || status || turnDiff || openedPullRequests) {
       slots.push({
         kind: 'message',
         message,
