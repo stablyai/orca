@@ -1,11 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { lstatSync, mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
+import type * as ProcessHost from '@orca/process-host'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from './codex-session-bridge'
 
-const markerReads = vi.hoisted(() => ({ count: 0, transcriptStats: 0 }))
+const markerReads = vi.hoisted(() => ({ count: 0, transcriptStats: 0, helpers: 0 }))
+
+vi.mock('@orca/process-host', async (importOriginal) => {
+  const actual = await importOriginal<typeof ProcessHost>()
+  return {
+    ...actual,
+    spawnProcess: (...args: Parameters<typeof actual.spawnProcess>) => {
+      markerReads.helpers += 1
+      return actual.spawnProcess(...args)
+    }
+  }
+})
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
@@ -70,9 +82,11 @@ beforeEach(() => {
   mkdirSync(join(root, 'real-codex-home', 'thread-writer-locks'), { recursive: true })
   markerReads.count = 0
   markerReads.transcriptStats = 0
+  markerReads.helpers = 0
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllEnvs()
   rmSync(root, { recursive: true, force: true })
 })
@@ -104,5 +118,20 @@ describe('legacy session copy swap budget', () => {
     await pass()
     // Once protected, the copies past the budget aren't examined at all.
     expect(markerReads.transcriptStats).toBeLessThanOrEqual(12)
+  })
+
+  it.each([10, 100])('holds the locks with one helper for a whole pass (N=%i)', async (n) => {
+    for (let index = 0; index < n; index += 1) {
+      legacyCopy('20', index)
+    }
+    // A frozen clock never ends a hold window, so the count shows only what the pass shares.
+    vi.useFakeTimers({ toFake: ['Date'] })
+
+    await syncSystemCodexSessionsIntoManagedHomeIncrementally(
+      { yieldMs: 0 },
+      join(root, 'real-codex-home')
+    )
+
+    expect(markerReads.helpers).toBe(1)
   })
 })

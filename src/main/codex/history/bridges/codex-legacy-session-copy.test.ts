@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   closeSync,
   existsSync,
@@ -97,6 +97,17 @@ function asides(): string[] {
     .map((entry) => join(dirname(copyPath), entry))
 }
 
+/** A Codex holding a thread's writer lock, as Codex does (flock); call the result to let go. */
+async function holdThreadLock(home: string, threadId: string): Promise<() => void> {
+  const holder = spawn('perl', [
+    '-e',
+    'use Fcntl qw(:flock); $| = 1; open(my $f, ">>", $ARGV[0]) or die; flock($f, LOCK_EX) or die; print "held\\n"; <STDIN>;',
+    join(home, 'thread-writer-locks', `${threadId}.lock`)
+  ])
+  await new Promise((resolve) => holder.stdout.once('data', resolve))
+  return () => holder.stdin.end()
+}
+
 function bridgePass(): Promise<unknown> {
   return syncSystemCodexSessionsIntoManagedHomeIncrementally({ yieldMs: 0 }, systemHome)
 }
@@ -154,40 +165,44 @@ describe('legacy session copy swap', () => {
     expect(lstatSync(kept.sourcePath).ino).toBe(lstatSync(sourcePath).ino)
   })
 
-  it('lets later copies through when an earlier copy can never be linked', async () => {
-    const blockedRelative = join(
-      '2026',
-      '05',
-      '19',
-      `rollout-2026-05-19T10-00-00-${BLOCKED_THREAD_ID}.jsonl`
-    )
-    const blockedSource = join(systemHome, 'sessions', blockedRelative)
-    const blockedCopy = join(runtimeHome(), 'sessions', blockedRelative)
-    writeFile(blockedSource, OLD_TURNS)
-    writeFile(blockedCopy, OLD_TURNS)
-    // As large as a whole pass may read.
-    truncateSync(blockedCopy, 64 * 1024 * 1024)
-    truncateSync(blockedSource, 64 * 1024 * 1024)
-    // Held open by a Codex for good, so it never gets as far as a read.
-    writeFile(join(runtimeHome(), 'thread-writer-locks', `${BLOCKED_THREAD_ID}.lock`), '')
-    const blocked = lstatSync(blockedCopy)
-    writeFile(
-      join(runtimeHome(), '.orca-session-copies', `${blockedRelative}.json`),
-      JSON.stringify({
-        sourcePath: blockedSource,
-        sourceSize: blocked.size,
-        sourceMtimeMs: lstatSync(blockedSource).mtimeMs,
-        targetSize: blocked.size,
-        targetMtimeMs: blocked.mtimeMs
-      })
-    )
-    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+  it.skipIf(process.platform === 'win32')(
+    'lets later copies through when an earlier copy can never be linked',
+    async () => {
+      const blockedRelative = join(
+        '2026',
+        '05',
+        '19',
+        `rollout-2026-05-19T10-00-00-${BLOCKED_THREAD_ID}.jsonl`
+      )
+      const blockedSource = join(systemHome, 'sessions', blockedRelative)
+      const blockedCopy = join(runtimeHome(), 'sessions', blockedRelative)
+      writeFile(blockedSource, OLD_TURNS)
+      writeFile(blockedCopy, OLD_TURNS)
+      // As large as a whole pass may read.
+      truncateSync(blockedCopy, 64 * 1024 * 1024)
+      truncateSync(blockedSource, 64 * 1024 * 1024)
+      // Held open by a Codex for good, so it never gets as far as a read.
+      const letGo = await holdThreadLock(runtimeHome(), BLOCKED_THREAD_ID)
+      onTestFinished(letGo)
+      const blocked = lstatSync(blockedCopy)
+      writeFile(
+        join(runtimeHome(), '.orca-session-copies', `${blockedRelative}.json`),
+        JSON.stringify({
+          sourcePath: blockedSource,
+          sourceSize: blocked.size,
+          sourceMtimeMs: lstatSync(blockedSource).mtimeMs,
+          targetSize: blocked.size,
+          targetMtimeMs: blocked.mtimeMs
+        })
+      )
+      legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
 
-    await bridgePass()
+      await bridgePass()
 
-    expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
-    expect(lstatSync(blockedCopy).ino).not.toBe(lstatSync(blockedSource).ino)
-  })
+      expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
+      expect(lstatSync(blockedCopy).ino).not.toBe(lstatSync(blockedSource).ino)
+    }
+  )
 
   it('swaps the rest of a pass when one copy is larger than a whole pass may read', async () => {
     const largeRelative = join(
@@ -221,16 +236,19 @@ describe('legacy session copy swap', () => {
     expect(lstatSync(largeCopy).ino).not.toBe(lstatSync(largeSource).ino)
   })
 
-  it('leaves a copy alone while a Codex holds its thread lock, and hides it from older builds', async () => {
-    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
-    writeFile(join(runtimeHome(), 'thread-writer-locks', `${THREAD_ID}.lock`), '')
+  it.skipIf(process.platform === 'win32')(
+    'leaves a copy alone while a Codex holds its thread lock, and hides it from older builds',
+    async () => {
+      legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+      onTestFinished(await holdThreadLock(runtimeHome(), THREAD_ID))
 
-    await bridgePass()
+      await bridgePass()
 
-    expect(lstatSync(copyPath).ino).not.toBe(lstatSync(sourcePath).ino)
-    // Older builds match the source by its exact path and would swap this copy destructively.
-    expect(JSON.parse(readFileSync(markerPath, 'utf-8')).sourcePath).not.toBe(sourcePath)
-  })
+      expect(lstatSync(copyPath).ino).not.toBe(lstatSync(sourcePath).ino)
+      // Older builds match the source by its exact path and would swap this copy destructively.
+      expect(JSON.parse(readFileSync(markerPath, 'utf-8')).sourcePath).not.toBe(sourcePath)
+    }
+  )
 
   it('takes no proof of an idle copy from the source home', async () => {
     rmSync(join(runtimeHome(), 'thread-writer-locks'), { recursive: true })
@@ -275,23 +293,24 @@ describe('legacy session copy swap', () => {
     'never links in a source while a Codex holds its thread in the source home',
     async () => {
       legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
-      const holder = spawn('perl', [
-        '-e',
-        'use Fcntl qw(:flock); $| = 1; open(my $f, ">>", $ARGV[0]) or die; flock($f, LOCK_EX) or die; print "held\\n"; <STDIN>;',
-        join(systemHome, 'thread-writer-locks', `${THREAD_ID}.lock`)
-      ])
-      try {
-        await new Promise((resolve) => holder.stdout.once('data', resolve))
+      onTestFinished(await holdThreadLock(systemHome, THREAD_ID))
 
-        await bridgePass()
+      await bridgePass()
 
-        expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
-        expect(existsSync(markerPath)).toBe(true)
-      } finally {
-        holder.stdin.end()
-      }
+      expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
+      expect(existsSync(markerPath)).toBe(true)
     }
   )
+
+  it('swaps past lock files a crashed Codex left in either home', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    writeFile(join(runtimeHome(), 'thread-writer-locks', `${THREAD_ID}.lock`), '')
+    writeFile(join(systemHome, 'thread-writer-locks', `${THREAD_ID}.lock`), '')
+
+    await bridgePass()
+
+    expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
+  })
 
   it('protects a marker only once a running swap of its copy is done', async () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)

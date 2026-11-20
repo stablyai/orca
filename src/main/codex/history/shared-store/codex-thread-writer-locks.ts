@@ -229,25 +229,21 @@ export async function moveIdleThreadLockFolder(
   }
 }
 
+export type ThreadLockFoldersHold = { stillHeld: () => boolean; release: () => Promise<void> }
+
+// Matches no thread lock's name, so the helper counts none as held.
+const NO_THREAD = '-'
+
 /**
- * Runs `work` while holding Codex's coordination in every lock folder, so no Codex can take a
- * thread lock there meanwhile: Codex writes and rewrites a rollout only under its thread's lock.
- * `busy` when a Codex holds one of `threadIds` in the first folder, or the hold can't be taken.
+ * Holds Codex's coordination in every folder, after deleting free thread locks there as Codex does.
+ * No Codex can take a thread lock while it lasts, so any thread lock file left in a folder is held,
+ * or was let go since; callers check each thread's file themselves. Null when it can't be taken.
  */
-export async function whileThreadsUnlocked<T>(
-  locksDirs: string[],
-  threadIds: readonly string[],
-  work: () => Promise<T>
-): Promise<T | 'busy'> {
-  const hold = await startProbe(locksDirs, true, threadIds)
-  if (!hold || !('release' in hold) || !hold.stillHeld()) {
-    return 'busy'
-  }
-  try {
-    return await work()
-  } finally {
-    await hold.release()
-  }
+export async function holdThreadLockFolders(
+  locksDirs: string[]
+): Promise<ThreadLockFoldersHold | null> {
+  const hold = await startProbe(locksDirs, true, [NO_THREAD])
+  return hold && 'release' in hold && hold.stillHeld() ? hold : null
 }
 
 // A Codex that started meanwhile: a file it opened (Windows) or the folder it recreated mid-swap.

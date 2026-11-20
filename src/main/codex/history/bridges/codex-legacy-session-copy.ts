@@ -14,7 +14,7 @@ import { sourceStartsWithCopy } from './codex-legacy-session-copy-prefix'
 import { restoreMovedCopy } from './codex-legacy-session-copy-recovery'
 import { runAloneForCopy } from './codex-legacy-session-copy-turns'
 import { isCopyIdle, keepsThreadLocks, threadIdsOf } from './codex-legacy-session-copy-writer-locks'
-import { whileThreadsUnlocked } from '../shared-store/codex-thread-writer-locks'
+import { LegacyCopyLockHolder } from './codex-legacy-session-copy-lock-holder'
 import {
   linkUnlessTaken,
   lstatIfPresent,
@@ -29,8 +29,8 @@ import {
 export { settleLegacySessionCopyName } from './codex-legacy-session-copy-recovery'
 
 export const LEGACY_SESSION_COPY_ASIDE_SUFFIX = '.orca-legacy-copy'
-/** What one publish costs a background pass's read budget: it starts a helper process. */
-const PUBLISH_BUDGET_BYTES = 1024 * 1024
+/** What one publish costs a background pass's read budget, bounding publishes per pass. */
+const PUBLISH_BUDGET_BYTES = 64 * 1024
 /** Attempts that each keep an aside name; past this a copy settles as kept. */
 export const LEGACY_SESSION_COPY_MAX_ASIDES = 16
 
@@ -56,9 +56,20 @@ export function swapLegacySessionCopy(args: {
   expectedSourcePath?: string
   /** Copy bytes a background pass may still compare; resume-time swaps have no limit. */
   readBudget?: LegacySessionCopyReadBudget
+  /** A background pass's shared hold of Codex's coordination. */
+  lockHolder?: LegacyCopyLockHolder
 }): Promise<LegacySessionCopySwap> {
   const copyPath = join(args.managedHome, 'sessions', args.relativePath)
-  return runAloneForCopy(copyPath, () => swap(args, copyPath))
+  return runAloneForCopy(copyPath, async () => {
+    const lockHolder = args.lockHolder ?? new LegacyCopyLockHolder()
+    try {
+      return await swap({ ...args, lockHolder }, copyPath)
+    } finally {
+      if (!args.lockHolder) {
+        await lockHolder.release()
+      }
+    }
+  })
 }
 
 /**
@@ -132,7 +143,23 @@ async function swap(
     await writeMarker(markerPath, { ...marker, kept: true })
     return 'kept'
   }
-  if (!(await isCopyIdle(args))) {
+  // Codex writes or rewrites a rollout only under its thread's lock, taken with its home's
+  // coordination held: under a hold, no Codex can start on this thread in either home.
+  const sourceSessions = dirname(dirname(dirname(dirname(sourcePath))))
+  if (
+    basename(sourceSessions) !== 'sessions' ||
+    !(await keepsThreadLocks(dirname(sourceSessions)))
+  ) {
+    return 'deferred'
+  }
+  const locksDirs = [
+    join(dirname(sourceSessions), 'thread-writer-locks'),
+    join(args.managedHome, 'thread-writer-locks')
+  ]
+  const threadIds = threadIdsOf(args.relativePath)
+  const holder = args.lockHolder ?? new LegacyCopyLockHolder()
+  // Before any bytes are read, and after the hold's sweep drops locks a crashed Codex left.
+  if ((await holder.whileUnlocked(locksDirs, threadIds, () => isCopyIdle(args))) !== true) {
     return 'deferred'
   }
   // The source's change time: an in-place rewrite of the same file voids the check too.
@@ -151,17 +178,7 @@ async function swap(
     }
     marker = await writeMarker(markerPath, { ...marker, verified: proof })
   }
-  // Codex writes or rewrites a rollout only under its thread's lock, taken with its home's
-  // coordination held; holding both homes' coordination keeps every Codex out until the link is in.
-  const sourceSessions = dirname(dirname(dirname(dirname(sourcePath))))
-  if (
-    basename(sourceSessions) !== 'sessions' ||
-    !(await keepsThreadLocks(dirname(sourceSessions)))
-  ) {
-    return 'deferred'
-  }
   if (args.readBudget) {
-    // Each publish starts a helper process to hold the locks.
     if (args.readBudget.bytes < PUBLISH_BUDGET_BYTES) {
       args.readBudget.exhausted = true
       return 'deferred'
@@ -170,22 +187,16 @@ async function swap(
   }
   const settled = marker
   const locked = await linkCodexRolloutUnlessHeld(sourcePath, () =>
-    whileThreadsUnlocked(
-      [
-        join(dirname(sourceSessions), 'thread-writer-locks'),
-        join(args.managedHome, 'thread-writer-locks')
-      ],
-      threadIdsOf(args.relativePath),
-      () =>
-        publishSourceOverCopy({
-          copyPath,
-          markerPath,
-          marker: settled,
-          sourcePath,
-          copy,
-          source,
-          args
-        })
+    holder.whileUnlocked(locksDirs, threadIds, () =>
+      publishSourceOverCopy({
+        copyPath,
+        markerPath,
+        marker: settled,
+        sourcePath,
+        copy,
+        source,
+        args
+      })
     )
   )
   const outcome = locked === 'busy' ? 'deferred' : locked

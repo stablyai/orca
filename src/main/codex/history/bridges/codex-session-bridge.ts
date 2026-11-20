@@ -15,6 +15,7 @@ import {
 import { listCodexSessionJsonlFilesIncrementally } from '../rollouts/codex-session-file-listing'
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
+import { LegacyCopyLockHolder } from './codex-legacy-session-copy-lock-holder'
 import {
   protectLegacySessionCopy,
   settleLegacySessionCopyName,
@@ -81,55 +82,62 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
     limit: LEGACY_COPY_READ_BUDGET_BYTES
   }
   const hasLegacyCopies = existsSync(join(managedHome, '.orca-session-copies'))
-  for await (const systemSessionFilePath of listCodexSessionJsonlFilesIncrementally(
-    systemSessionsRoot,
-    options
-  )) {
-    summary.scannedFiles += 1
-    const relativePath = relative(systemSessionsRoot, systemSessionFilePath)
-    const managedSessionFilePath = join(managedSessionsRoot, relativePath)
-    let bridged: boolean | 'existing' | 'missing'
-    let mayBeMovedAside = hasLegacyCopies
-    do {
-      bridged = bridgeSystemCodexSessionFile(
-        systemSessionFilePath,
-        managedSessionFilePath,
-        relativePath,
-        mayBeMovedAside
-      )
-      if (bridged === 'missing') {
-        mayBeMovedAside = false
-        const restored = await settleLegacySessionCopyName({ managedHome, relativePath }).then(
-          () => true,
-          (error: unknown) => {
-            console.warn(
-              '[codex-session-bridge] Could not restore a legacy copy moved aside:',
-              error
-            )
-            return false
-          }
+  // One hold of Codex's coordination shared by the pass's publishes, let go when it ends.
+  const lockHolder = new LegacyCopyLockHolder()
+  try {
+    for await (const systemSessionFilePath of listCodexSessionJsonlFilesIncrementally(
+      systemSessionsRoot,
+      options
+    )) {
+      summary.scannedFiles += 1
+      const relativePath = relative(systemSessionsRoot, systemSessionFilePath)
+      const managedSessionFilePath = join(managedSessionsRoot, relativePath)
+      let bridged: boolean | 'existing' | 'missing'
+      let mayBeMovedAside = hasLegacyCopies
+      do {
+        bridged = bridgeSystemCodexSessionFile(
+          systemSessionFilePath,
+          managedSessionFilePath,
+          relativePath,
+          mayBeMovedAside
         )
-        // Left for a later pass rather than linking the source over a copy that may be aside.
-        if (!restored) {
-          bridged = false
+        if (bridged === 'missing') {
+          mayBeMovedAside = false
+          const restored = await settleLegacySessionCopyName({ managedHome, relativePath }).then(
+            () => true,
+            (error: unknown) => {
+              console.warn(
+                '[codex-session-bridge] Could not restore a legacy copy moved aside:',
+                error
+              )
+              return false
+            }
+          )
+          // Left for a later pass rather than linking the source over a copy that may be aside.
+          if (!restored) {
+            bridged = false
+          }
         }
+      } while (bridged === 'missing')
+      if (bridged === 'existing') {
+        if (hasLegacyCopies && existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))) {
+          // Past the read budget a copy waits for a later pass; only its marker is hidden from older builds.
+          await (readBudget.exhausted
+            ? protectLegacySessionCopy({ managedHome, relativePath })
+            : swapLegacySessionCopy({
+                managedHome,
+                relativePath,
+                expectedSourcePath: systemSessionFilePath,
+                readBudget,
+                lockHolder
+              }))
+        }
+      } else if (bridged) {
+        summary.linkedFiles += 1
       }
-    } while (bridged === 'missing')
-    if (bridged === 'existing') {
-      if (hasLegacyCopies && existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))) {
-        // Past the read budget a copy waits for a later pass; only its marker is hidden from older builds.
-        await (readBudget.exhausted
-          ? protectLegacySessionCopy({ managedHome, relativePath })
-          : swapLegacySessionCopy({
-              managedHome,
-              relativePath,
-              expectedSourcePath: systemSessionFilePath,
-              readBudget
-            }))
-      }
-    } else if (bridged) {
-      summary.linkedFiles += 1
     }
+  } finally {
+    await lockHolder.release()
   }
   return summary
 }
