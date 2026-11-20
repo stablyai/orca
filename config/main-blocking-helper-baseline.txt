@@ -300,7 +300,7 @@
 2 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
 2 src/main/codex/configuration/settings/config-settings-baseline.ts
-1 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
+2 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 resolveThroughLinkedParent: one realpathSync only when creating a missing config.toml (once per home), so a linked ~/.codex never creates a file inside a WSL guest (#45247)
 8 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/settings/config-sync-stall.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
