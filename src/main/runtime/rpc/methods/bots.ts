@@ -37,6 +37,8 @@ import { dropUnreadBotRequests } from './orchestration/messaging/bot-request-out
 import { releaseHeldBotMail } from '../../../bots/bot-paused-mail'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { botSkillProjectViews, relinkBotSkills } from '../../../bots/bot-skill-projects'
+import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills'
+import { botHomeFolder } from '../../../bots/bot-home'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
@@ -52,6 +54,9 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   const bot = await context.runtime.bots.update(params.botId, params.updates)
   if (params.updates.skillProjects !== undefined) {
     relinkBotSkills(bot, context.runtime.listRepos())
+  }
+  if (params.updates.agent !== undefined) {
+    void linkBotOwnSkills(botHomeFolder(bot)).catch(() => {})
   }
   if (params.updates.paused === true) {
     await dropUnreadBotRequests(context.runtime, bot.id, 'paused')
@@ -194,9 +199,16 @@ export const BOT_METHODS = [
     name: 'bots.skillProjects.scan',
     permission: 'workspace',
     params: BotSkillProjectsScan,
-    handler: async (params, { runtime }) => ({
-      projects: await botSkillProjectViews(params.repoIds, runtime.listRepos())
-    })
+    handler: async (params, { runtime }) => {
+      const bot = params.botId
+        ? runtime.bots.list().find((entry) => entry.id === params.botId)
+        : undefined
+      const [projects, own] = await Promise.all([
+        botSkillProjectViews(params.repoIds, runtime.listRepos()),
+        bot ? botOwnSkillsView(botHomeFolder(bot)) : undefined
+      ])
+      return own ? { projects, own } : { projects }
+    }
   }),
   defineMethod({
     name: 'bots.avatar.upload',
