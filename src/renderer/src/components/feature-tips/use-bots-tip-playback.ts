@@ -112,7 +112,9 @@ export function useBotsTipPlayback(active: boolean): BotsTipPlayback {
       reducedMotion ? pageEnd : index === page ? t : (left[index] ?? 0)
     ),
     pageSeconds: end + BOTS_TIP_PAGE_HOLD,
-    pageElapsed: reducedMotion ? end + BOTS_TIP_PAGE_HOLD : Math.min(elapsed, end + BOTS_TIP_PAGE_HOLD),
+    pageElapsed: reducedMotion
+      ? end + BOTS_TIP_PAGE_HOLD
+      : Math.min(elapsed, end + BOTS_TIP_PAGE_HOLD),
     playing,
     visit,
     pageStarts: starts,

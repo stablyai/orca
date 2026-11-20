@@ -68,12 +68,7 @@ export function BotsTipPageNav({
             onClick={() => onPage(index)}
           >
             {index === page ? (
-              <DotFill
-                key={visit}
-                seconds={pageSeconds}
-                elapsed={pageElapsed}
-                playing={playing}
-              />
+              <DotFill key={visit} seconds={pageSeconds} elapsed={pageElapsed} playing={playing} />
             ) : null}
           </button>
         ))}

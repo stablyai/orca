@@ -14,7 +14,13 @@ import { useBotsTipPlayback } from './use-bots-tip-playback'
 describe('feature tip card playback renders', () => {
   beforeEach(() => {
     vi.useFakeTimers({
-      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance']
+      toFake: [
+        'setTimeout',
+        'clearTimeout',
+        'requestAnimationFrame',
+        'cancelAnimationFrame',
+        'performance'
+      ]
     })
   })
   afterEach(() => {

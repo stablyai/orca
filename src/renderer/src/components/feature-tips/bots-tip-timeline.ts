@@ -99,7 +99,10 @@ export type ItemsPointer = (typeof ITEMS_PAGE.pointer)[number][1]
 /** Worker badges: csv and docs finish; safari waits on the question, then resumes and finishes. */
 const ITEMS_WORKER_DONE_AT = { csv: 5.3, docs: 6.7, safari: 14.7, 'follow-up': 14.7 } as const
 
-export function itemsWorkerBadge(t: number, worker: keyof typeof ITEMS_WORKER_DONE_AT): ItemsWorkerBadge {
+export function itemsWorkerBadge(
+  t: number,
+  worker: keyof typeof ITEMS_WORKER_DONE_AT
+): ItemsWorkerBadge {
   return t >= ITEMS_WORKER_DONE_AT[worker] ? 'done' : 'run'
 }
 
@@ -167,7 +170,11 @@ function cueTimes(...sources: unknown[]): readonly number[] {
 
 // Every time any page's frame reads; an extra entry only costs one render.
 const PAGE_CUES = [
-  cueTimes(SLACK_PAGE, MASCOT_PAW_TAPS, MASCOT_PAW_TAPS.map((at) => at + PAW_TAP_SECONDS)),
+  cueTimes(
+    SLACK_PAGE,
+    MASCOT_PAW_TAPS,
+    MASCOT_PAW_TAPS.map((at) => at + PAW_TAP_SECONDS)
+  ),
   cueTimes(ITEMS_PAGE, ITEMS_WORKER_DONE_AT, ITEMS_SUBTITLE_STEPS),
   cueTimes(GROUP_PAGE)
 ] as const
