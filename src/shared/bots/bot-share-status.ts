@@ -1,8 +1,21 @@
 // A bot's link, found by its package name: free of Node imports, so the renderer reads it too.
+import type { SkillCloudOperation } from '../skills/sharing/skill-cloud-contract'
 
 /** The cloud package a bot is shared as: fixed by its id, so *Update link* finds it again. */
 export function botPackageName(botId: string): string {
   return `bot-${botId.replace(/-/g, '').toLowerCase()}`
+}
+
+/** Whether a successful listing names the link as this bot's; a failed or missing one never does. */
+export function listedAsBotShare(
+  listed: SkillCloudOperation<readonly { id: string; name: string }[]> | null,
+  shareId: string,
+  botId: string
+): boolean {
+  return (
+    listed?.status === 'ok' &&
+    listed.value.some((share) => share.id === shareId && share.name === botPackageName(botId))
+  )
 }
 
 /** A live bot link the owner made, as Orca Cloud lists it. */
