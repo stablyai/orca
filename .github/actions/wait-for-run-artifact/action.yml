@@ -29,20 +29,40 @@ runs:
       run: |
         # Why: runner bash starts with -e; failed polls are expected here, so handle statuses explicitly.
         set +e -uo pipefail
-        if ! [[ "$ARTIFACT_ID" =~ ^[0-9]+$ && "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]]; then
+        if ! [[ "$ARTIFACT_ID" =~ ^[0-9]+$ && "$TIMEOUT_SECONDS" =~ ^[0-9]{1,6}$ ]]; then
           echo "::error::wait-for-run-artifact needs numeric artifact-id and timeout-seconds, got '$ARTIFACT_ID' and '$TIMEOUT_SECONDS'."
           exit 1
         fi
-        deadline=$((SECONDS + TIMEOUT_SECONDS))
+        # Why: base 10 so a value like 010 is not read as octal (and 08 does not error).
+        budget=$((10#$TIMEOUT_SECONDS))
+        deadline=$((SECONDS + budget))
         delay=2
         sightings=0
         last='no response yet'
+        # Stop a stalled reader without ever blocking on it: TERM, short grace, then KILL plus
+        # taskkill on Windows (MSYS signals may not reach native gh.exe). A survivor is abandoned.
+        stop_reader() {
+          kill "$1" 2>/dev/null
+          for _ in 1 2 3 4; do kill -0 "$1" 2>/dev/null || break; sleep 0.5; done
+          if kill -0 "$1" 2>/dev/null; then
+            if [ -r "/proc/$1/winpid" ] && command -v taskkill >/dev/null; then
+              taskkill //F //T //PID "$(cat "/proc/$1/winpid")" >/dev/null 2>&1
+            fi
+            kill -KILL "$1" 2>/dev/null
+            sleep 0.5
+          fi
+          if kill -0 "$1" 2>/dev/null; then
+            echo "::warning::Could not stop the stalled artifact-list read (pid $1); continuing without it."
+          else
+            wait "$1" 2>/dev/null
+          fi
+        }
         out=$(mktemp)
         trap 'rm -f "$out"' EXIT
         while :; do
           remaining=$((deadline - SECONDS))
           if [ "$remaining" -le 0 ]; then
-            echo "::error::Artifact $ARTIFACT_ID was not listed for run $GITHUB_RUN_ID within ${TIMEOUT_SECONDS}s, so SignPath would reject it ($last)."
+            echo "::error::Artifact $ARTIFACT_ID was not listed for run $GITHUB_RUN_ID within ${budget}s, so SignPath would reject it ($last)."
             exit 1
           fi
           # Why: SignPath's lookup is run-scoped, so poll the run's artifact list rather than /artifacts/<id>.
@@ -51,21 +71,27 @@ runs:
           # Why: bound the read by the deadline without timeout(1); --norc Git Bash may resolve it to System32's timeout.exe.
           while kill -0 "$pid" 2>/dev/null && [ "$SECONDS" -lt "$deadline" ]; do sleep 0.5; done
           if kill -0 "$pid" 2>/dev/null; then
-            kill "$pid" 2>/dev/null
-            wait "$pid" 2>/dev/null
+            stop_reader "$pid"
             status=124
           else
             wait "$pid"
             status=$?
           fi
           ids=$(tr -d '\r' <"$out")
-          if [ "$SECONDS" -ge "$deadline" ]; then
+          if [ "$status" -eq 124 ]; then
             sightings=0
-            last="the last read was still running at the deadline (exit $status)"
+            last="the last read was still running at the deadline"
           elif [ "$status" -ne 0 ]; then
             sightings=0
             last="gh api failed (exit $status): ${ids:0:300}"
-          elif grep -qx "$ARTIFACT_ID" <<<"$ids"; then
+          elif ! grep -qx "$ARTIFACT_ID" <<<"$ids"; then
+            sightings=0
+            last="run lists $(grep -c . <<<"$ids" || true) other artifact(s)"
+          elif [ "$SECONDS" -ge "$deadline" ]; then
+            # Why: a sighting that lands after the deadline must not pass the gate late.
+            sightings=0
+            last="the artifact was only seen after the deadline"
+          else
             sightings=$((sightings + 1))
             # Why: two consecutive sightings guard against a single replica answering early.
             if [ "$sightings" -ge 2 ]; then
@@ -73,9 +99,6 @@ runs:
               exit 0
             fi
             delay=2
-          else
-            sightings=0
-            last="run lists $(grep -c . <<<"$ids" || true) other artifact(s)"
           fi
           remaining=$((deadline - SECONDS))
           [ "$remaining" -le 0 ] && continue
