@@ -75,6 +75,7 @@ export function SlackConfigTokenForm({
         setToken(text.trim())
       }
     } else if (kind === 'access') {
+      setToken('')
       setAccessPasted(true)
     }
     return kind !== null

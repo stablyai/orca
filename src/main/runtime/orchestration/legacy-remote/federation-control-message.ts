@@ -1,4 +1,5 @@
 import { MESSAGE_TYPES, type MessagePriority, type MessageType } from '../db/orchestration-records'
+import { BOT_ITEM_MAIL_SENDER } from '../../../../shared/bots/bot-item-note-runs'
 import { callerMailProvenance } from '../db/messages/message-orca-provenance'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { OrchestrationError } from '../orchestration-error'
@@ -67,7 +68,9 @@ export function importFederatedControlMessage(
     )
   }
   db.requireRun(attachment.home_run_id)
-  const message = parseFederatedControlMessage(params.payload)
+  const parsed = parseFederatedControlMessage(params.payload)
+  // An older home may have queued the reserved sender; refusing it here would stall the relay behind it.
+  const message = parsed.from === BOT_ITEM_MAIL_SENDER ? { ...parsed, from: 'unknown' } : parsed
   const recipient = `dispatch:${params.dispatchId}`
   const existing = db.getMessageById(params.messageId)
   if (existing) {
