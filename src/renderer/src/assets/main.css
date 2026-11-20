@@ -4341,8 +4341,7 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
 
 .browser-agent-cursor-layer[data-agent-active]::before {
   opacity: 1;
-  /* Paused: looping-animation-clock.ts steps it, so the glow never redraws the window by itself. */
-  animation: browser-agent-glow-breathe 2.4s ease-in-out infinite paused;
+  animation: browser-agent-glow-breathe 2.4s ease-in-out infinite;
 }
 
 @keyframes browser-agent-glow-breathe {

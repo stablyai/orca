@@ -24,7 +24,6 @@ export type Scenario = {
 const LEGACY_CSS = `
   .agent-working-spinner { animation: agent-spinner-rotate 1s steps(12, end) infinite running; }
   .animate-spin, .animate-pulse { animation-play-state: running; }
-  .shimmer { animation-play-state: running; animation-timing-function: steps(30); }
 `
 
 function ElapsedLabel({ quiet }: { quiet: boolean }): React.JSX.Element {
@@ -46,8 +45,6 @@ function WorkingAgent(): React.JSX.Element {
       <Loader2 className="size-4 animate-spin" />
       {/* A running tool's label in the chat. */}
       <span className="animate-pulse text-sm motion-reduce:animate-none">Running tests</span>
-      {/* A stale review reference on the workspace card. */}
-      <span className="shimmer shimmer-duration-2400 shimmer-held text-sm">#123</span>
     </div>
   )
 }
@@ -123,9 +120,7 @@ Object.assign(window, {
         .filter(
           (animation): animation is CSSAnimation =>
             'animationName' in animation &&
-            ['spin', 'agent-spinner-rotate', 'pulse', 'tw-shimmer'].includes(
-              String(animation.animationName)
-            )
+            ['spin', 'agent-spinner-rotate', 'pulse'].includes(String(animation.animationName))
         )
         .map((animation) => ({
           name: animation.animationName,
