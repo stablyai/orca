@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
   /** Holds prepareBrowserExtensionDirectory until released, to land a load late. */
   const prepareGate: { held: Promise<void> | null } = { held: null }
   const storage: { path: string | null } = { path: null }
+  const runningWorkers: Record<number, { scope: string }> = {}
   const resumed: { session?: object } = {}
   return {
     userData: '',
@@ -29,8 +30,10 @@ const mocks = vi.hoisted(() => {
     uninstalled: vi.fn(),
     /** A partition of its own, so another test's removed-storage marks don't reach it. */
     resumed,
+    runningWorkers,
     session: {
       serviceWorkers: {
+        getAllRunning: () => runningWorkers,
         on: (_name: string, listener: (event: unknown, details: { scope: string }) => void) =>
           registrationListeners.add(listener),
         removeListener: (
@@ -108,7 +111,6 @@ const apiHost = await import('../api-runtime/browser-extension-api-host')
 const { setBrowserExtensionSupportEnabled } = await import('../browser-extension-support')
 const loader = await import('./browser-extension-session-loader')
 const idleKeptState = await import('./browser-extension-idle-kept-state')
-const { ensureHostSessionState } = await import('../api-runtime/browser-extension-contexts')
 await import('./browser-extension-load-errors')
 const { getBrowserExtensionProfileStateStore } =
   await import('../profile-storage/browser-extension-profile-state-store')
@@ -341,13 +343,10 @@ describe('a profile whose last page closed', () => {
       'onStartup',
       []
     )
-    // A worker a socket keeps running at the stop loses it there, so it starts clean.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the profile's mock session
-    const workers = ensureHostSessionState(mocks.resumed.session as never, resumed.id).workers
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the idle stop reads only `running`
-    workers.set(ID, { running: { isDestroyed: () => false } } as never)
+    // A worker still running at the stop loses what holds it open, so it starts clean.
+    mocks.runningWorkers[1] = { scope: `chrome-extension://${ID}/` }
     await loader.unloadBrowserExtensionsFromIdleProfile(resumed.id, () => {})
-    workers.delete(ID)
+    delete mocks.runningWorkers[1]
     mocks.emitWorkerStart.mockClear()
     await attach()
     expect(mocks.emitWorkerStart).toHaveBeenCalledWith(
