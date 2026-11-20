@@ -2128,6 +2128,7 @@
     "failure": {
       "accountSwitchInProgress": "Bu ana makinede {{agent}} yapılandırması değiştiriliyor. İşlem tamamlandıktan sonra yeniden deneyin.",
       "agentCommandNotRunnable": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı, Orca'nın bulabileceği bir program yolu veya adı olmalı; argüman ya da değişken içermemelidir. Değiştirin veya sıfırlayın.",
+      "agentCommandFailed": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı {{agent}} uygulamasını başlatmadı: {{detail}}. Değiştirin veya sıfırlayın.",
       "agentCommandNotSignedIn": "Bu sohbetin çalıştığı bilgisayarda `{{loginCommand}}` komutuyla {{agent}} oturumu açın.",
       "agentNotSignedIn": "{{agent}} oturumu açın.",
       "agentStarting": "Ajan hâlâ başlatılıyor.",

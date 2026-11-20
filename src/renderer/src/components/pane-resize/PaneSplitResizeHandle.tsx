@@ -1,30 +1,63 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/drag/webview-drag-passthrough'
 import { getDraggedSplitRatio, measureSplitRatio, readSplitRatio } from './pane-split-drag-ratio'
+import {
+  getThinSeamGrabSegments,
+  sameGrabSegments,
+  type GrabSegment
+} from './thin-seam-grab-segments'
 
-const ROW = 'var(--workspace-tab-row-height)'
-// Why: nested seams make the computed row starts up to a few px off; keep the gap a little wider.
-const ROW_SLACK_PX = 2
+const TAB_ROW_SELECTOR = '[data-tab-group-strip-id]'
+// Matches --divider-grab-reach in main.css, for when the variable can't be read.
+const DEFAULT_GRAB_REACH_PX = 7
+const WHOLE_SEAM: React.CSSProperties[] = [{}]
 
-/** Grab-area pieces of a thin seam: the whole length, minus a gap at each attached tab row it passes. */
-function getGrabSegments(tabRowStarts: readonly number[]): React.CSSProperties[] {
-  const segments: React.CSSProperties[] = []
-  let top = '0px'
-  for (const start of [...tabRowStarts].sort((a, b) => a - b)) {
-    segments.push({ top, bottom: `calc(${(1 - start) * 100}% + ${ROW_SLACK_PX}px)` })
-    top = `calc(${start * 100}% + ${ROW} + ${ROW_SLACK_PX}px)`
-  }
-  segments.push({ top, bottom: '0px' })
+/**
+ * Keeps a vertical thin seam's grab segments off the tab rows rendered at its right edge. Reads real
+ * row bounds, so nested 1px seams and live drags of inner splits (which resize groups) stay exact.
+ */
+function useTabRowGrabSegments(
+  handleRef: React.RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+  layoutKey: unknown
+): GrabSegment[] | null {
+  const [segments, setSegments] = useState<GrabSegment[] | null>(null)
+  useLayoutEffect(() => {
+    const handle = handleRef.current
+    const secondPane = handle?.nextElementSibling
+    if (!enabled || !handle || !secondPane) {
+      setSegments(null)
+      return
+    }
+    const reachPx =
+      Number.parseFloat(getComputedStyle(handle).getPropertyValue('--divider-grab-reach')) ||
+      DEFAULT_GRAB_REACH_PX
+    const measure = (): void => {
+      const rows = Array.from(secondPane.querySelectorAll(TAB_ROW_SELECTOR), (row) =>
+        row.getBoundingClientRect()
+      )
+      const next = getThinSeamGrabSegments(handle.getBoundingClientRect(), rows, reachPx)
+      setSegments((previous) => (previous && sameGrabSegments(previous, next) ? previous : next))
+    }
+    measure()
+    // Why: an inner split moving a row always resizes the groups around it; the handle covers outer resizes.
+    const observer = new ResizeObserver(measure)
+    observer.observe(handle)
+    for (const row of secondPane.querySelectorAll(TAB_ROW_SELECTOR)) {
+      if (row.parentElement) {
+        observer.observe(row.parentElement)
+      }
+    }
+    return () => observer.disconnect()
+  }, [enabled, handleRef, layoutKey])
   return segments
 }
-
-const NO_TAB_ROWS: readonly number[] = []
-const WHOLE_SEAM: React.CSSProperties[] = [{}]
 
 export function ResizeHandle({
   direction,
   thin = false,
-  tabRowStarts = NO_TAB_ROWS,
+  avoidTabRows = false,
+  layoutKey,
   onResizeStart,
   onResizeEnd,
   onRatioChange
@@ -32,15 +65,17 @@ export function ResizeHandle({
   direction: 'horizontal' | 'vertical'
   /** A 1px line with an invisible wider grab area instead of the compact 6px gutter (DevTools docks keep 6px). */
   thin?: boolean
-  /** Vertical thin seams: fractions down the seam where an attached tab row begins on its right side.
-   *  The grab area skips those rows so tabs and their buttons keep their clicks. */
-  tabRowStarts?: readonly number[]
+  /** Vertical thin seams: keep the grab area off attached tab rows on the right, so tabs keep their presses. */
+  avoidTabRows?: boolean
+  /** Changes when the layout beside the seam changes, so tab rows are found again. */
+  layoutKey?: unknown
   onResizeStart: () => void
   onResizeEnd?: () => void
   onRatioChange: (ratio: number) => void
 }): React.JSX.Element {
   const isHorizontal = direction === 'horizontal'
   const [dragging, setDragging] = useState(false)
+  const handleRef = useRef<HTMLDivElement>(null)
   const activeResizeCleanupRef = useRef<((updateDragging?: boolean) => void) | null>(null)
 
   useEffect(
@@ -197,11 +232,17 @@ export function ResizeHandle({
     [isHorizontal, onRatioChange, onResizeStart, onResizeEnd]
   )
 
+  const tabRowSegments = useTabRowGrabSegments(
+    handleRef,
+    thin && isHorizontal && avoidTabRows,
+    layoutKey
+  )
   // Horizontal seams reach up, away from the tab strip below, so they need no gaps.
-  const grabSegments = !thin ? null : isHorizontal ? getGrabSegments(tabRowStarts) : WHOLE_SEAM
+  const grabSegments: React.CSSProperties[] | null = !thin ? null : (tabRowSegments ?? WHOLE_SEAM)
 
   return (
     <div
+      ref={handleRef}
       className={`tab-group-split-resize-handle ${
         isHorizontal ? 'is-vertical' : 'is-horizontal'
       }${thin ? ' is-thin' : ''}${dragging ? ' is-dragging' : ''}`}

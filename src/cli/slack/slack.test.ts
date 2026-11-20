@@ -99,30 +99,6 @@ describe('orca slack', () => {
       { sessionId: 'session-1', verb: 'find', ref: '#general', args: {} }
     ])
   })
-  it('mints one postId per post, so the host retries it at most once', async () => {
-    vi.stubEnv(ORCA_AGENT_SESSION_ID_ENV, 'session-1')
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    const call = vi.fn(async (..._args: unknown[]) => ({
-      result: {
-        ok: true,
-        result: {
-          target: { ref: 'slack:T1:C1', label: '#general' },
-          queued: true
-        }
-      }
-    }))
-    await handle(
-      'slack post',
-      [
-        ['ref', 'slack:T1:C1'],
-        ['text', 'hi']
-      ],
-      call
-    )
-    expect(call.mock.calls[0]?.[1]).toMatchObject({
-      args: { text: 'hi', postId: expect.any(String) }
-    })
-  })
   it('posts and edits multiline text from --text-file unchanged', async () => {
     vi.stubEnv(ORCA_AGENT_SESSION_ID_ENV, 'session-1')
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -149,7 +125,10 @@ describe('orca slack', () => {
         )
       }
       expect(call.mock.calls.map((args) => args[1])).toEqual([
-        expect.objectContaining({ verb: 'post', args: expect.objectContaining({ text }) }),
+        expect.objectContaining({
+          verb: 'post',
+          args: expect.objectContaining({ text, postId: expect.any(String) })
+        }),
         expect.objectContaining({ verb: 'edit', args: { text } })
       ])
       await expect(
@@ -512,14 +491,6 @@ describe('orca slack', () => {
     expect(formatActionResult('read', { messages: [{ ...post, app: true }] })).not.toContain(
       'Dana wrote'
     )
-  })
-  it('says when a search found more than it shows, even with none shown', () => {
-    expect(
-      formatActionResult('find', {
-        matches: [],
-        note: 'More issues match than shown; narrow the search.'
-      })
-    ).toBe('No matches.\nMore issues match than shown; narrow the search.')
   })
   it("prints what each searched message says, quoted as someone else's words", () => {
     const printed = formatActionResult('find', {

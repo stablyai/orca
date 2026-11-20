@@ -19301,7 +19301,8 @@
       "install": {
         "checking": "{{agent}} ajanının bu ana makinede hazır olup olmadığı denetleniyor…",
         "cliInstall": "Yükle",
-        "cliRecheck": "Yeniden kontrol et"
+        "cliRecheck": "Yeniden kontrol et",
+        "openAgentSettings": "Ayarları aç"
       },
       "reasoning": "Akıl yürütme",
       "failureWords": {
@@ -19335,6 +19336,7 @@
         "claudeAccountFolderMissing": "Seçilen Claude hesabının klasörü bulunamıyor. O hesapta yeniden oturum açın veya başka bir hesap seçin.",
         "claudeAccountSetupFailed": "Seçilen Claude hesabı ayarlanamadı. Yeniden deneyin veya başka bir hesap seçin.",
         "agentCommandNotRunnable": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı, Orca'nın bulabileceği bir program yolu veya adı olmalı; argüman ya da değişken içermemelidir. Değiştirin veya sıfırlayın.",
+        "agentCommandFailed": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı {{agent}} uygulamasını başlatmadı: {{detail}}. Değiştirin veya sıfırlayın.",
         "runtimeNotInstalled": "Bu sohbetin çalıştığı bilgisayarda {{agent}} yüklü değil. Orca'nın güncel bir sürümünde sohbet içinden yükleyin.",
         "fullAccessAsRoot": "{{agent}}, root olarak çalışırken Tam erişim iznini kullanmaz. Bu sohbeti çalıştıran bilgisayarda Ayarlar → Ajanlar bölümünden {{agent}} için başka bir izin seçin, ardından yeni bir sohbet başlatın.",
         "launchPreparationFailed": "Orca, bu sohbeti çalıştıran bilgisayarda {{agent}} başlatmayı hazırlayamadı.",
