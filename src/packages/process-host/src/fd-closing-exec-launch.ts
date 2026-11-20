@@ -1,6 +1,4 @@
 import { accessSync, constants, statSync } from 'node:fs'
-import { delimiter } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { getSystemErrorName } from 'node:util'
 import type { ChildProcess, SpawnOptions, StdioOptions } from 'node:child_process'
 
@@ -8,17 +6,16 @@ export const FD_CLOSING_EXEC_ARGS = ['--exec-without-inherited-fds', '--'] as co
 // The helper writes a failed exec's errno to this fd; a successful exec closes it.
 const EXEC_STATUS_FD_ENV = 'ORCA_EXEC_STATUS_FD'
 
-// libuv's search path when the child's environment has no PATH.
-const DEFAULT_SEARCH_PATH = '/usr/bin:/bin'
-
 type StdioSlot = Exclude<StdioOptions, string>[number]
 
 let installedHelper: string | undefined
-let missingHelperLogged = false
+// Checked once, on the first launch that opts in, so later launches do no filesystem work.
+let helperUsable: boolean | undefined
 
 /** Main installs the Linux helper that execs a command keeping only stdio and NODE_CHANNEL_FD. */
 export function setFdClosingExec(helper: string | undefined): void {
   installedHelper = helper
+  helperUsable = undefined
 }
 
 export type FdClosingLaunch = {
@@ -32,31 +29,30 @@ export type FdClosingLaunch = {
 
 /**
  * Linux: run `file` through the installed fd-closing helper so the child keeps only stdio and the
- * IPC channel; pass the spawned child to `watchFdClosingExec`. Null off Linux, without a helper,
- * or when `file` isn't on PATH, so a direct spawn reports that itself.
+ * IPC channel; pass the spawned child to `watchFdClosingExec`, which reports a failed exec as the
+ * spawn error. Null off Linux or without a usable helper.
  */
 export function fdClosingLaunch(
   file: string,
   args: readonly string[],
-  options: Pick<SpawnOptions, 'cwd' | 'env' | 'stdio'>
+  options: Pick<SpawnOptions, 'env' | 'stdio'>
 ): FdClosingLaunch | null {
   const helper = installedHelper
   if (process.platform !== 'linux' || !helper) {
     return null
   }
-  if (!isExecutableFile(helper)) {
-    if (!missingHelperLogged) {
-      missingHelperLogged = true
+  if (helperUsable === undefined) {
+    helperUsable = isExecutableFile(helper)
+    if (!helperUsable) {
       console.warn(`[process-host] ${helper} is unavailable; children inherit our descriptors`)
     }
+  }
+  if (!helperUsable) {
     return null
   }
   const stdio = normalizeStdio(options.stdio)
   if (stdio.slice(3).some((slot) => slot !== 'ipc' && slot != null)) {
     throw new Error('fd-closing launches keep only stdio and IPC; extra stdio slots would close')
-  }
-  if (!onSearchPath(file, options)) {
-    return null
   }
   const statusFd = stdio.length
   // The helper starts after the child's chdir and execvp's the same name, so argv0 is unchanged.
@@ -140,21 +136,6 @@ function normalizeStdio(stdio: SpawnOptions['stdio']): StdioSlot[] {
     slots.push(undefined)
   }
   return slots
-}
-
-// execvp's lookup, unnormalized so symlinks and `..` resolve as the kernel does.
-function onSearchPath(file: string, options: Pick<SpawnOptions, 'cwd' | 'env'>): boolean {
-  const cwd =
-    typeof options.cwd === 'string' ? options.cwd : options.cwd && fileURLToPath(options.cwd)
-  const inCwd = (path: string): string =>
-    path.startsWith('/') || cwd === undefined ? path : `${cwd}/${path}`
-  if (file.includes('/')) {
-    return isExecutableFile(inCwd(file))
-  }
-  const searchPath = (options.env ?? process.env).PATH ?? DEFAULT_SEARCH_PATH
-  return searchPath
-    .split(delimiter)
-    .some((directory) => isExecutableFile(inCwd(directory === '' ? file : `${directory}/${file}`)))
 }
 
 function isExecutableFile(path: string): boolean {
