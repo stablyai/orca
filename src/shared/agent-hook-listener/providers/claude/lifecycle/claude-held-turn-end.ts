@@ -39,8 +39,8 @@ export function claudeHeldTurnEnd(
   // A wakeup the person joined finishes as theirs.
   const selfStarted =
     !unclassified &&
-    end.endingTurn?.taskWakeupTurn === true &&
-    end.endingTurn.turnOrigin !== 'person'
+    (end.endingTurn?.turnOrigin === 'task-wakeup' ||
+      (end.endingTurn?.taskWakeupTurn === true && end.endingTurn.turnOrigin !== 'person'))
   if (
     !heldTurnCountsAsFinished(resolvedStatus, outcome, selfStarted) ||
     // Owed notifications wake the lead within ~100ms; announcing first would duplicate completion.
@@ -99,7 +99,7 @@ export function claudeLeadTurnStart(
     isWaitingInducing: boolean
   },
   previousLead: ClaudeLeadTurnState | undefined
-): Pick<ClaudeLeadTurnState, 'turnOrigin' | 'turnCompletedAt'> {
+): Pick<ClaudeLeadTurnState, 'turnOrigin' | 'turnCompletedAt' | 'stateStartedAt'> {
   if (event.eventAgentId !== undefined) {
     return {}
   }
@@ -138,6 +138,11 @@ export function claudeLeadTurnStart(
           : event.isTaskWakeup
             ? 'task-wakeup'
             : 'person',
-    ...(heldEnd !== undefined ? { turnCompletedAt: heldEnd } : {})
+    ...(heldEnd !== undefined ? { turnCompletedAt: heldEnd } : {}),
+    // A turn first seen at its end ends now, not when the last one did.
+    ...(previousLead?.state === 'done' &&
+    (event.eventName === 'Stop' || event.eventName === 'StopFailure')
+      ? { stateStartedAt: Date.now() }
+      : {})
   }
 }

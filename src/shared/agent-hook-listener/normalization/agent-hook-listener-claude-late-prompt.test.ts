@@ -465,6 +465,58 @@ describe('Claude prompt event arriving after its turn', () => {
     expect(joined?.turnCompletedAt).toBeGreaterThan(held?.turnCompletedAt ?? Infinity)
   })
 
+  it('never announces a cancelled wakeup the person joins late', () => {
+    const second = { ...SHELL, id: 'c9second', command: 'sleep 20' }
+    const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
+    for (const task of [SHELL, second]) {
+      claude({
+        hook_event_name: 'PostToolUse',
+        prompt_id: FIRST,
+        tool_name: 'Bash',
+        tool_input: { command: task.command, run_in_background: true },
+        tool_response: { backgroundTaskId: task.id }
+      })
+    }
+    claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL, second] })
+    const held = claude({
+      hook_event_name: 'Stop',
+      prompt_id: SECOND,
+      background_tasks: [second],
+      is_interrupt: true
+    })
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+    const joined = claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: 'hi' })
+    expect(joined?.turnCompletedAt).toBe(held?.turnCompletedAt)
+  })
+
+  it('keeps a wakeup quiet when Claude repeats its Stop', () => {
+    const second = { ...SHELL, id: 'c9second', command: 'sleep 20' }
+    const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })
+    for (const task of [SHELL, second]) {
+      claude({
+        hook_event_name: 'PostToolUse',
+        prompt_id: FIRST,
+        tool_name: 'Bash',
+        tool_input: { command: task.command, run_in_background: true },
+        tool_response: { backgroundTaskId: task.id }
+      })
+    }
+    claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL, second] })
+    claude({
+      hook_event_name: 'PreToolUse',
+      prompt_id: SECOND,
+      tool_name: 'Bash',
+      tool_use_id: 'w'
+    })
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+    claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [second] })
+    expect(
+      claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [second] })
+        ?.turnCompletedAt
+    ).toBeUndefined()
+  })
+
   describe('a turn whose Stop beats its prompt event while a shell runs', () => {
     function startWatching(): number | undefined {
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })
