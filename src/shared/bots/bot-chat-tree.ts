@@ -115,15 +115,32 @@ export function chatRunningCount(chat: BotChatTreeChat): number {
   return chat.runningTotal - notRunning
 }
 
-/** A folded chat's live counts, '1 waiting · 3 running'; null when nothing runs, so the row shows its time. */
-export function chatFoldSummary(chat: BotChatTreeChat): string | null {
+/** What a folded chat's line counts: its workers waiting on the owner and still running. */
+export type ChatFoldCounts = { waiting: number; running: number }
+
+/** A folded chat's live counts; null when nothing runs, so the row shows its time. */
+export function chatFoldCounts(chat: BotChatTreeChat): ChatFoldCounts | null {
   const waiting = chatWaitingCount(chat)
   const running = chatRunningCount(chat)
-  const parts = [
-    waiting > 0 ? `${waiting} waiting` : null,
-    running > 0 ? `${running} running` : null
-  ].filter(Boolean)
-  return parts.length > 0 ? parts.join(' · ') : null
+  return waiting > 0 || running > 0 ? { waiting, running } : null
+}
+
+/** Each client's `t`: the desktop's and the phone's both fit. */
+export type BotChatTranslate = (
+  key: string,
+  fallback: string,
+  values?: Record<string, unknown>
+) => string
+
+/** '1 waiting · 3 running' in the reader's language; a zero count drops out. */
+export function chatFoldSummary(t: BotChatTranslate, counts: ChatFoldCounts): string {
+  const { waiting, running } = counts
+  return [
+    waiting > 0 ? t('bots.chats.waitingCount', '{{count}} waiting', { count: waiting }) : null,
+    running > 0 ? t('bots.chats.runningCount', '{{count}} running', { count: running }) : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /** A manual fold; a chat with none starts folded. */
