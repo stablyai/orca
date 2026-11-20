@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Toaster, toast } from 'sonner'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
@@ -25,15 +25,18 @@ const view = resumeToastView(
   [],
   new Map()
 )
-const id = 'fixture-resume-timing'
+let nextId = 0
 const noop = (): void => {}
 
-function Report(): React.JSX.Element {
-  const setDuration = useCallback((duration: number) => {
-    if (toast.getToasts().some((entry) => entry.id === id)) {
-      toast.custom(() => <Report />, { id, duration })
-    }
-  }, [])
+function Report({ id }: { id: string }): React.JSX.Element {
+  const setDuration = useCallback(
+    (duration: number) => {
+      if (toast.getToasts().some((entry) => entry.id === id)) {
+        toast.custom(() => <Report id={id} />, { id, duration })
+      }
+    },
+    [id]
+  )
   const { onDetailsOpened, focusHandlers } = useResumeToastAutoDismiss(true, setDuration)
   return (
     <div {...focusHandlers}>
@@ -52,15 +55,16 @@ function Report(): React.JSX.Element {
 }
 
 function Timing(): React.JSX.Element {
+  const [id] = useState(() => `fixture-resume-timing-${++nextId}`)
   useEffect(() => {
     const timer = setTimeout(() => {
-      toast.custom(() => <Report />, { id, duration: Infinity, unstyled: true })
+      toast.custom(() => <Report id={id} />, { id, duration: Infinity, unstyled: true })
     }, 50)
     return () => {
       clearTimeout(timer)
       toast.dismiss(id)
     }
-  }, [])
+  }, [id])
   return (
     <div style={{ position: 'relative', height: 120 }}>
       <Toaster
@@ -77,11 +81,11 @@ export const initial = defineFixture({ width: 448, render, interact: () => wait(
 export const hovered = defineFixture({
   width: 448,
   render,
-  interact: async () => {
+  interact: async (frame) => {
     await wait(300)
-    document
+    frame
       .querySelector('[data-sonner-toaster]')
-      ?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+      ?.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
     await wait(6000)
   }
 })
