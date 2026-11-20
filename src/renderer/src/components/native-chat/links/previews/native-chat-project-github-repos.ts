@@ -16,15 +16,15 @@ import { readCachedOriginKey } from './native-chat-github-repo'
 
 const NO_REPOS: readonly GitHubRepoReference[] = []
 
-/** `owner/repo` per line for each project whose slug is cached. */
+/** Each cached project slug once, sorted, as `owner/repo` lines: project order and extra
+ *  checkouts of a repo don't change it. */
 function cachedReferenceKey(repos: readonly Repo[]): string {
-  return repos
-    .flatMap((repo) => {
-      const originKey = readCachedOriginKey(repo)
-      const reference = originKey ? githubReferenceRepo(repo, originKey) : null
-      return reference ? [`${reference.owner}/${reference.repo}`] : []
-    })
-    .join('\n')
+  const slugs = repos.flatMap((repo) => {
+    const originKey = readCachedOriginKey(repo)
+    const reference = originKey ? githubReferenceRepo(repo, originKey) : null
+    return reference ? [`${reference.owner}/${reference.repo}`] : []
+  })
+  return [...new Set(slugs)].sort().join('\n')
 }
 
 /** The GitHub repo of every git project in Orca, so a chat's `name#123` can name one of them. */
