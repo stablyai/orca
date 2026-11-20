@@ -40,7 +40,11 @@ const desktopRelayWriteSchema = z.object({
 
 type RelayStore = Pick<
   Store,
-  'getRepos' | 'getWorkspaceSession' | 'getWorkspaceSessionHostIds' | 'patchWorkspaceSessionRelays'
+  | 'getRepos'
+  | 'getWorkspaceSession'
+  | 'getWorkspaceSessionHostIds'
+  | 'hasWorkspaceSessionHost'
+  | 'patchWorkspaceSessionRelays'
 >
 
 export type DesktopRelayHostApplied = {
@@ -102,19 +106,20 @@ export function registerDesktopRelayHandlers(
   const legacyBaseline: LegacyRelayBaseline = ORCA_LAYOUT_OWNER_IS_MAIN
     ? new Map()
     : captureLegacyRelayBaseline(store)
-  // One apply batch: legacy adoption indexes rows at most once and partitions are listed at most once.
+  // One apply batch: legacy adoption indexes rows at most once.
   const relayApplier = (hostIds: readonly ExecutionHostId[]): DesktopRelayHostApply => {
     const adoptionFor = legacyRelayAdoptionBatch(store, legacyBaseline, hostIds)
-    let existing: Set<string> | null = null
     return (hostId, host, base) => {
       const { patch, refused, changedTabIds } = applyDesktopRelayWrite(
         base,
         host,
         adoptionFor(hostId)
       )
-      existing ??= new Set(store.getWorkspaceSessionHostIds())
       // Never materialize a partition just to record that it holds nothing.
-      const kept = patch && (existing.has(hostId) || patch.remoteSessionIdsByTabId) ? patch : null
+      const kept =
+        patch && (patch.remoteSessionIdsByTabId || store.hasWorkspaceSessionHost(hostId))
+          ? patch
+          : null
       const stored = () => {
         if (kept?.desktopRelayAdoptionVersion !== undefined) {
           legacyBaseline.delete(hostId)

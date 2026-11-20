@@ -101,8 +101,8 @@ export class AcknowledgedDesktopRelays {
       }
     }
     // A host this save leaves out (an incomplete host with no slice) resends a baseline when it next
-    // goes, still naming the ids that ended meanwhile. One the window no longer routes to is dropped:
-    // main clears its ownership when its workspaces go.
+    // goes, still naming the ids that ended meanwhile. One the window no longer routes to is dropped
+    // (its workspaces were removed, and main clears their ownership with them).
     for (const [hostId, host] of this.hosts) {
       if (wanted.has(hostId)) {
         continue
