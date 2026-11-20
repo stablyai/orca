@@ -7,6 +7,7 @@ import {
   BROWSER_AGENT_VIEWPORT_CHANNEL,
   type BrowserAgentActivityEvent,
   type BrowserAgentCursorEvent,
+  type BrowserAgentInputFocusGuardEvent,
   type BrowserAgentViewportEvent
 } from '../../../shared/browser/automation/browser-agent-activity-contract'
 import type { PreloadApi } from '../../api-types'
@@ -80,12 +81,10 @@ export const browserPageInteractionAndSessionsApi = {
     return () => ipcRenderer.removeListener(BROWSER_AGENT_VIEWPORT_CHANNEL, listener)
   },
   onAgentInputFocusGuard: (
-    callback: (data: { browserPageId: string; token: string; active: boolean }) => void
+    callback: (data: BrowserAgentInputFocusGuardEvent) => void
   ): (() => void) => {
-    const listener = (
-      _event: Electron.IpcRendererEvent,
-      data: { browserPageId: string; token: string; active: boolean }
-    ) => callback(data)
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserAgentInputFocusGuardEvent) =>
+      callback(data)
     ipcRenderer.on('browser:agentInputFocusGuard', listener)
     return () => ipcRenderer.removeListener('browser:agentInputFocusGuard', listener)
   },

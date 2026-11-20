@@ -1,6 +1,7 @@
 import type {
   BrowserAgentActivityEvent,
   BrowserAgentCursorEvent,
+  BrowserAgentInputFocusGuardEvent,
   BrowserAgentViewportEvent
 } from '../../../shared/browser/automation/browser-agent-activity-contract'
 import type { DesktopBrowserBridgeHostNotice } from '../../../shared/browser/client-hosting/desktop-browser-bridge-host-control-contract'
@@ -8,9 +9,7 @@ import type { DesktopBrowserBridgeHostNotice } from '../../../shared/browser/cli
 /** window.api.browser members through which main shows an agent driving a page. */
 export type BrowserAgentPresenceApi = {
   /** Main asks the pane to keep the user's focus through an agent press; `ready` answers it. */
-  onAgentInputFocusGuard: (
-    callback: (data: { browserPageId: string; token: string; active: boolean }) => void
-  ) => () => void
+  onAgentInputFocusGuard: (callback: (data: BrowserAgentInputFocusGuardEvent) => void) => () => void
   agentInputFocusGuardReady: (token: string, composing: boolean) => void
   /** Main marks the pages an agent drives; the tab strip badges them. */
   onAgentActivity: (callback: (data: BrowserAgentActivityEvent) => void) => () => void

@@ -52,7 +52,7 @@ describe('guardPaneFocusForAgentInput', () => {
     const { renderer } = fakeRenderer(7, false)
     let settled: 'pending' | 'ready' | 'refused' = 'pending'
 
-    void guardPaneFocusForAgentInput(renderer, 'page-1').then(
+    void guardPaneFocusForAgentInput(renderer, 'page-1', 41).then(
       () => {
         settled = 'ready'
       },
@@ -73,7 +73,7 @@ describe('guardPaneFocusForAgentInput', () => {
     vi.useFakeTimers()
     const { sent, renderer } = fakeRenderer(7, false)
 
-    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1')
+    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1', 41)
     await vi.advanceTimersByTimeAsync(1000)
     const [listener] = ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL) ?? []
     listener({ sender: { id: 7 } }, { token: sent[0].data.token })
@@ -85,7 +85,7 @@ describe('guardPaneFocusForAgentInput', () => {
     vi.useFakeTimers()
     const { sent, renderer } = fakeRenderer(7, false)
 
-    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1')
+    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1', 41)
     const refusal = expect(guarded).rejects.toMatchObject({
       code: 'browser_focus_guard_unavailable',
       data: { phase: 'no_pane_answer' }
@@ -98,7 +98,7 @@ describe('guardPaneFocusForAgentInput', () => {
   it('refuses the input at once and ends the guard while the user composes', async () => {
     const { sent, renderer } = fakeRenderer(7, false)
 
-    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1')
+    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1', 41)
     const [listener] = ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL) ?? []
     listener({ sender: { id: 7 } }, { token: sent[0].data.token, composing: true })
 

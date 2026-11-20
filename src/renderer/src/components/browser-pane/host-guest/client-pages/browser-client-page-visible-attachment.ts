@@ -2,6 +2,7 @@ import { registerWebviewDragPassthroughSurface } from '../drag/webview-drag-pass
 import { retainWebviewDragListeners } from '../webview-registry'
 import { registerBrowserClientPagePositionSync } from '../viewport/browser-client-page-position-driver'
 import { syncBrowserClientPagePaintRetention } from './browser-client-page-paint-retention'
+import { readBrowserClientPageAttachedGuestId } from './browser-client-page-retained-elements'
 import type { BrowserClientPageRendererIdentity as RendererPageIdentity } from '../../../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
 
@@ -24,6 +25,23 @@ export function findBrowserClientRetainedPageForAttachment(
     }
   }
   return undefined
+}
+
+export function findBrowserClientRetainedAttachedWebview(
+  pages: Map<string, RetainedPage>,
+  browserPageId: string,
+  webContentsId: number
+): Electron.WebviewTag | null {
+  for (const page of pages.values()) {
+    if (
+      page.status === 'attached' &&
+      page.identity.browserPageId === browserPageId &&
+      readBrowserClientPageAttachedGuestId(page.webview) === webContentsId
+    ) {
+      return page.webview
+    }
+  }
+  return null
 }
 
 export function attachBrowserClientRetainedPage(
