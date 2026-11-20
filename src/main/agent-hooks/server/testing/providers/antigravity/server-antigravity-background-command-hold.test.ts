@@ -52,24 +52,35 @@ function programDone(): void {
 const state = () => server.getStatusSnapshot()[0]?.state
 const worker = (id: string) => ({ id, state: 'working' as const, startedAt: 1, description: id })
 
-it('keeps a turn waiting on a background command working past the hook-silence fallback, then bounds it', async () => {
-  const command = {
-    stepIdx: 2,
-    toolCall: { name: 'run_command', args: { CommandLine: 'sleep 600', IsDaemon: false } }
+it.each([
+  ['', false],
+  [' and a workflow that started no subagent', true]
+])(
+  'keeps a turn waiting on a background command%s working past the hook-silence fallback, then bounds it',
+  async (_case, workflow) => {
+    const command = {
+      stepIdx: 2,
+      toolCall: { name: 'run_command', args: { CommandLine: 'sleep 600', IsDaemon: false } }
+    }
+    await agyHook('PreInvocation', {})
+    await agyHook('PreToolUse', command)
+    if (workflow) {
+      const run = { stepIdx: 3, toolCall: { name: 'run_workflow', args: {} } }
+      await agyHook('PreToolUse', run)
+      await agyHook('PostToolUse', { ...run, error: '' })
+    }
+    await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    // agy reports this done once; only the hook-silence recheck can offer it again.
+    programDone()
+
+    vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
+    expect(state()).toBe('working')
+
+    vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS)
+    expect(state()).toBe('done')
   }
-  await agyHook('PreInvocation', {})
-  await agyHook('PreToolUse', command)
-  await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
-  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-  // agy reports this done once; only the hook-silence recheck can offer it again.
-  programDone()
-
-  vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
-  expect(state()).toBe('working')
-
-  vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS)
-  expect(state()).toBe('done')
-})
+)
 
 const subagentCall = { stepIdx: 2, toolCall: { name: 'invoke_subagent', args: { Prompt: 'ls' } } }
 const child = { conversationId: 'child', lastUserInput: '' }

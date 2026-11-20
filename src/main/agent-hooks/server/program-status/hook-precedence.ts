@@ -94,12 +94,14 @@ export function programStatusHookYieldEndsAt(
   ) {
     return Infinity
   }
-  // agy reports no end for a backgrounded command that never exits, so its hold lapses after hook silence.
+  // agy reports no end for a backgrounded command that never exits, or for a spawn call (a workflow
+  // with nothing to delegate) that starts no subagent, so those holds lapse after hook silence.
   if (
     payload.state === 'done' &&
     payload.sessionBoundary !== true &&
     previous.payload.agentType === 'antigravity' &&
-    previous.payload.workingMode === 'monitoring' &&
+    (previous.payload.workingMode === 'monitoring' ||
+      (previous.payload.antigravitySpawnPending === true && !previous.payload.subagents?.length)) &&
     isAgentStatusHeldOpenByChildWork(previous.payload)
   ) {
     return previous.receivedAt + AGENT_STATUS_STALE_AFTER_MS
