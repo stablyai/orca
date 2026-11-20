@@ -84,7 +84,10 @@ export function VmStateIcon({
     case 'waking':
       return (
         <Loader2
-          className={cn(sizeClassName, 'animate-spin text-muted-foreground')}
+          className={cn(
+            sizeClassName,
+            'animate-spin text-muted-foreground motion-reduce:animate-none'
+          )}
           aria-hidden="true"
         />
       )
