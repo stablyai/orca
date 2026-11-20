@@ -43,9 +43,9 @@ function logPlanExitFailure(error: unknown): void {
   }
 }
 
-/** Claude stays in plan after an approved ExitPlanMode until told. The request is written
- *  before the allow and never awaited, so its failure cannot hold or reject the approval.
- *  Full access reads the mode in wire order: its presentation report can lag behind the plan. */
+/** Claude stays in plan after an approved ExitPlanMode until the allow names the build mode.
+ *  The control is written first and never awaited, so its failure cannot hold the approval.
+ *  A plan-started chat's report can still name the launch mode; Full access reads the wire. */
 export function leaveClaudePlanModeOnApproval(
   session: Pick<
     ClaudeSession,
@@ -57,14 +57,25 @@ export function leaveClaudePlanModeOnApproval(
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,
   reply: PermissionResult
 ): void {
-  const mode = session.orderedPermissionMode
+  const reported = session.orderedPermissionMode
     ? session.orderedPermissionMode()
     : session.reportedOptions.reportedPermissionMode
-  if (prompt.toolName !== 'ExitPlanMode' || reply.behavior !== 'allow' || mode !== 'plan') {
+  const inPlan =
+    reported === 'plan' || session.appliedInputOptions?.get('interactionMode') === 'plan'
+  if (prompt.toolName !== 'ExitPlanMode' || reply.behavior !== 'allow' || !inPlan) {
     return
   }
   try {
-    const restored = claudePlanApprovalMode(session)
+    const restored = claudeBuildPermissionMode({
+      launchIntent: session.launchIntent,
+      firstRootInit: session.firstRootInit,
+      appliedInputOptions: session.appliedInputOptions ?? new Map()
+    })
+    // ExitPlanMode otherwise restores prePlanMode, which a chat opened in plan never saved, or default.
+    reply.updatedPermissions = [
+      ...(reply.updatedPermissions ?? []),
+      { type: 'setMode', mode: restored, destination: 'session' }
+    ]
     session.connection.setPermissionMode(restored).then(() => {
       session.appliedInputOptions?.set('interactionMode', 'default')
       session.appliedInputOptions?.set('buildPermissionMode', restored)
