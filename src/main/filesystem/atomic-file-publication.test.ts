@@ -115,12 +115,49 @@ describe('writeFileAtomically', () => {
     setup()
     try {
       const target = join(dir, 'config.toml')
-      for (const next of ['first', 'second']) {
+      const conflict = (): void => {
         writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
         writeFileSync(target, 'approval = "never"\n')
-        expect(writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', next)).toBe(true)
+        expect(writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toBe(true)
       }
-      expect(readdirSync(dir).filter((name) => name.includes('.orca-kept-'))).toHaveLength(1)
+      const kept = (): string[] =>
+        readdirSync(dir)
+          .filter((name) => name.includes('.orca-kept-'))
+          .map((name) => readFileSync(join(dir, name), 'utf-8'))
+          .sort()
+      conflict()
+      conflict()
+      expect(kept()).toEqual(['model = "o5"\n'])
+      // Edited since it was kept, the copy no longer holds those bytes.
+      const keptName = readdirSync(dir).find((name) => name.includes('.orca-kept-'))!
+      writeFileSync(join(dir, keptName), 'model = "edited"\n')
+      conflict()
+      expect(kept()).toEqual(['model = "edited"\n', 'model = "o5"\n'])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('leaves the held file in place when it cannot be kept aside', () => {
+    setup()
+    try {
+      const target = join(dir, 'config.toml')
+      writeFileSync(`${target}.orca-guarded`, 'model = "o5"\n')
+      writeFileSync(target, 'approval = "never"\n')
+      fsMock.renameSync.mockImplementationOnce(() => {
+        throw Object.assign(new Error('no space'), { code: 'ENOSPC' })
+      })
+
+      expect(() => writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toThrow(
+        'no space'
+      )
+      expect(readFileSync(`${target}.orca-guarded`, 'utf-8')).toBe('model = "o5"\n')
+      expect(writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toBe(true)
+      expect(
+        readdirSync(dir)
+          .filter((name) => name.includes('.orca-kept-'))
+          .map((name) => readFileSync(join(dir, name), 'utf-8'))
+      ).toEqual(['model = "o5"\n'])
     } finally {
       cleanup()
     }

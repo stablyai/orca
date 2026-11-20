@@ -155,23 +155,30 @@ function restoreMovedFileWithoutOverwrite(
     return
   }
   let held: Buffer | null = null
-  let matches = false
   try {
     held = readFileSync(sourcePath)
-    matches = nodeFileContentsEqualSync(targetPath, held)
   } catch {
-    // An unreadable or vanished target proves nothing: keep the held bytes.
-  }
-  if (matches || !keep) {
-    drop()
-    return
+    // Unreadable or vanished: nothing proves these bytes are kept elsewhere.
   }
   // Named by content: a conflict that repeats with the same bytes finds its copy already kept.
   const name = held ? createHash('sha256').update(held).digest('hex').slice(0, 16) : randomUUID()
-  const keptPath = `${targetPath}.orca-kept-${name}`
-  if (held && existsSync(keptPath)) {
+  let keptPath = `${targetPath}.orca-kept-${name}`
+  let keptPathFree = held === null
+  const kept = (keep && held ? [targetPath, keptPath] : [targetPath]).some((path) => {
+    try {
+      return held !== null && nodeFileContentsEqualSync(path, held)
+    } catch (error) {
+      keptPathFree ||= path === keptPath && isDefinitiveAbsence(error)
+      return false
+    }
+  })
+  if (kept || !keep) {
     drop()
     return
+  }
+  if (!keptPathFree) {
+    // A copy by that name holds other bytes now (edited since): these are kept beside it.
+    keptPath = `${targetPath}.orca-kept-${randomUUID()}`
   }
   try {
     // A rename needs no free space and never widens who can read the file.
@@ -181,10 +188,8 @@ function restoreMovedFileWithoutOverwrite(
     if (isDefinitiveAbsence(error)) {
       return
     }
-    // Left held, a later recovery could put stale bytes back after a logout: drop it as before.
-    console.warn('[atomic-file] Could not keep an earlier version of', targetPath, error)
-    drop()
-    return
+    // Left held, the next guarded operation keeps it first, and fails until it can.
+    throw error
   }
   console.warn('[atomic-file] Kept an earlier version beside', targetPath, keptPath)
 }
