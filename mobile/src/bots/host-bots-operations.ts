@@ -7,6 +7,7 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/r
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { normalizeBotSidebarView } from '../../../src/shared/bots/bot-sidebar-view'
 import { CONNECTOR_SOURCES } from '../../../src/shared/connectors/external-conversation-link'
+import { CONNECTOR_CLOUD_STATUSES } from '../../../src/shared/bots/connector-cloud-status'
 
 // The phone's one bot shape, for the list, links and sheet. `agent` and `permissionMode` follow
 // public agent lists that grow with each release, so a host's new one never drops a bot.
@@ -40,26 +41,6 @@ export const phoneBotSchema = z.looseObject({
 })
 
 export type PhoneBot = z.output<typeof phoneBotSchema>
-
-/** `bots.list` `connectorStatus`, the host's link to Orca Cloud. Absent on an older host. */
-export const LISTED_CONNECTOR_STATUSES = [
-  'signed-out',
-  'needs-sign-in',
-  'unreachable',
-  'refused',
-  'ok'
-] as const
-
-export type ListedConnectorStatus = (typeof LISTED_CONNECTOR_STATUSES)[number]
-
-/** A status this build names; anything else, including an older host's omission, is absent. */
-export function readListedConnectorStatus(value: unknown): ListedConnectorStatus | undefined {
-  return typeof value === 'string' &&
-    (LISTED_CONNECTOR_STATUSES as readonly string[]).includes(value)
-    ? // The includes check above is the predicate for this union.
-      (value as ListedConnectorStatus)
-    : undefined
-}
 
 /** What the host list draws of a bot. */
 export type ListedBot = Pick<
@@ -99,8 +80,8 @@ export const botsListRead = bindDeferredRpcOperation(
           needsYou: z.unknown().optional(),
           // When those counts next change (an item goes stale or a snoozed one comes back).
           needsYouStaleInMs: z.number().optional().catch(undefined),
-          // The host's Orca Cloud link. Unknown is dropped, so one new value cannot fail the list.
-          connectorStatus: z.unknown().optional()
+          // The host's Orca Cloud link; absent from an older host, and a newer value reads as absent.
+          connectorStatus: z.enum(CONNECTOR_CLOUD_STATUSES).optional().catch(undefined)
         })
         // Off, the host's own sidebar lists its bot homes as ordinary folders, so the phone does too.
         .transform((listing) => ({
@@ -110,7 +91,7 @@ export const botsListRead = bindDeferredRpcOperation(
           view: normalizeBotSidebarView(listing.botSidebarView),
           waits: botWaitsSchema.catch({}).parse(listing.waits ?? {}),
           needsYou: botNeedsYouSchema.catch({}).parse(listing.needsYou ?? {}),
-          connectorStatus: readListedConnectorStatus(listing.connectorStatus),
+          connectorStatus: listing.connectorStatus,
           ...(listing.needsYouStaleInMs !== undefined
             ? { needsYouChangeInMs: listing.needsYouStaleInMs }
             : {})
