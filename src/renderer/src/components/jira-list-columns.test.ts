@@ -9,7 +9,7 @@ import {
   loadJiraListColumnIds,
   resolveJiraListColumnIds,
   saveJiraListColumnIds
-} from './jira-list-columns'
+} from './task-page/jira/listing/jira-list-columns'
 import esCatalog from '@/i18n/locales/es.json'
 
 const STORAGE_KEY = 'orca.jira.list-columns.v1'
