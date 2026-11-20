@@ -53,7 +53,6 @@ const EMPTY_CLAUDE_ACCOUNTS = emptyClaudeAccountsState()
 // Retain account switch/reset drill-in even though the footer now opens UsageRosterPanel.
 export function ClaudeSwitcherForOwner({
   claude,
-  compact,
   iconOnly,
   asSubmenu = false,
   triggerContent,
@@ -352,7 +351,6 @@ export function ClaudeSwitcherForOwner({
   return (
     <ProviderDetailsMenu
       provider={claude}
-      compact={compact}
       iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
@@ -363,7 +361,7 @@ export function ClaudeSwitcherForOwner({
       )}
       variant="account"
       accountLabel={
-        panelShowsActiveAccount
+        panelShowsActiveAccount && rosterKnown
           ? (selectedGroup?.targets.find((target) => target.active)?.label ??
             t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
           : undefined
@@ -382,30 +380,33 @@ export function ClaudeSwitcherForOwner({
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <AccountSwitchSection
-        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
-        targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount={panelShowsActiveAccount}
-        onOpenSettings={() => {
-          openSettingsTarget({
-            pane: 'accounts',
-            repoId: null,
-            sectionId: 'accounts-claude',
-            // Why: without a scope Settings opens on the default host, not the one these rows belong to.
-            hostScope: runtimeTarget,
-            ...(chatAction ? { intent: 'native-accounts' } : {})
-          })
-          openSettingsPage()
-        }}
-      >
-        {rows.filter((row) => !row.signInId).map(renderRow)}
-        {signedOutRows.length > 0 ? (
-          <>
-            <AccountSwitchSignedOutHeading />
-            {signedOutRows.map(renderRow)}
-          </>
-        ) : null}
-      </AccountSwitchSection>
+      {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
+      {rosterKnown ? (
+        <AccountSwitchSection
+          heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+          targets={selectedGroup?.targets ?? []}
+          panelShowsActiveAccount={panelShowsActiveAccount}
+          onOpenSettings={() => {
+            openSettingsTarget({
+              pane: 'accounts',
+              repoId: null,
+              sectionId: 'accounts-claude',
+              // Why: without a scope Settings opens on the default host, not the one these rows belong to.
+              hostScope: runtimeTarget,
+              ...(chatAction ? { intent: 'native-accounts' } : {})
+            })
+            openSettingsPage()
+          }}
+        >
+          {rows.filter((row) => !row.signInId).map(renderRow)}
+          {signedOutRows.length > 0 ? (
+            <>
+              <AccountSwitchSignedOutHeading />
+              {signedOutRows.map(renderRow)}
+            </>
+          ) : null}
+        </AccountSwitchSection>
+      ) : null}
     </ProviderDetailsMenu>
   )
 }

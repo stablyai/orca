@@ -44,7 +44,8 @@ async function listedTabs(client: RuntimeClient, worktree: string) {
   return listed.result.tabs
 }
 
-test('a serve browser tab survives a restart and starts when opened', async () => {
+test('restored serve browser tabs start only when a client opens them', async () => {
+  // Two serve restarts and lazy Chromium startup run in this lifecycle.
   test.setTimeout(300_000)
   const page = await startPage()
   const host = await startHeadlessOracleHost('electron')
@@ -62,18 +63,33 @@ test('a serve browser tab survives a restart and starts when opened', async () =
       .poll(async () => (await browserRows(phone, worktree)).find((row) => row.id === pageId)?.url)
       .toBe(`${page.url}/next`)
 
-    await host.restart()
-    const loadsBeforeOpen = page.loads.get('/next')
+    const activationUrl = `${page.url}/activate`
+    const activatedId = (
+      await phone.call<{ browserPageId: string }>('browser.tabCreate', {
+        worktree,
+        url: activationUrl
+      })
+    ).result.browserPageId
+    await expect.poll(() => page.loads.get('/activate')).toBe(1)
 
-    // Listed at its last address before anything opens it, with no page running yet.
+    const loadsBeforeOpen = page.loads.get('/next') ?? 0
+    await host.restart()
+
+    // Both tabs are listed at their last addresses without loading them.
     await expect
       .poll(async () => browserRows(phone, worktree), { timeout: 30_000 })
-      .toEqual([{ id: pageId, url: `${page.url}/next`, title: 'next' }])
-    expect(page.loads.get('/next')).toBe(loadsBeforeOpen)
+      .toEqual(
+        expect.arrayContaining([
+          { id: pageId, url: `${page.url}/next`, title: 'next' },
+          { id: activatedId, url: activationUrl, title: 'first' }
+        ])
+      )
+    expect(page.loads.get('/next') ?? 0).toBe(loadsBeforeOpen)
+    expect(page.loads.get('/activate')).toBe(1)
 
     // Driving it by page id, as an old client's stream does, starts it at that address.
     await phone.call('browser.snapshot', { worktree, page: pageId })
-    await expect.poll(() => page.loads.get('/next')).toBe((loadsBeforeOpen ?? 0) + 1)
+    await expect.poll(() => page.loads.get('/next')).toBe(loadsBeforeOpen + 1)
     await expect
       .poll(
         async () =>
@@ -81,39 +97,17 @@ test('a serve browser tab survives a restart and starts when opened', async () =
       )
       .toBe(`${page.url}/next`)
 
+    // An explicit activation is the current client's way to start a cold tab.
+    await phone.call('session.tabs.activate', { worktree, tabId: activatedId })
+    await expect.poll(() => page.loads.get('/activate')).toBe(2)
+
+    await phone.call('session.tabs.close', { worktree, tabId: activatedId, reason: 'user' })
     await phone.call('session.tabs.close', { worktree, tabId: pageId, reason: 'user' })
     await expect.poll(async () => browserRows(phone, worktree)).toEqual([])
     await host.restart()
     await expect
       .poll(async () => (await browserRows(phone, worktree)).length, { timeout: 15_000 })
       .toBe(0)
-  } finally {
-    await host.dispose()
-    await new Promise((resolve) => page.server.close(resolve))
-  }
-})
-
-test('tapping a restored serve browser tab starts its page', async () => {
-  test.setTimeout(300_000)
-  const page = await startPage()
-  const host = await startHeadlessOracleHost('electron')
-  try {
-    const cli = cliClient(host)
-    const phone = pairedClient(host, 'phone')
-    const worktree = `id:${await addRepoWorktree(host, cli)}`
-    const created = await phone.call<{ browserPageId: string }>('browser.tabCreate', {
-      worktree,
-      url: `${page.url}/first`
-    })
-    const pageId = created.result.browserPageId
-    await expect.poll(() => page.loads.get('/first')).toBe(1)
-    await host.restart()
-    await expect.poll(async () => (await browserRows(phone, worktree)).length).toBe(1)
-    expect(page.loads.get('/first')).toBe(1)
-
-    await phone.call('session.tabs.activate', { worktree, tabId: pageId })
-
-    await expect.poll(() => page.loads.get('/first')).toBe(2)
   } finally {
     await host.dispose()
     await new Promise((resolve) => page.server.close(resolve))

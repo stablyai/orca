@@ -2077,6 +2077,9 @@
       "sendFailed": "No se pudo enviar el comando de reanudación"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Esta conversación de {{agent}} está abierta en un chat. Actualiza el historial de sesiones para abrirla.",
+      "ownershipUnknown": "Orca no pudo confirmar quién es el propietario de esta conversación de {{agent}}. Actualiza el historial de sesiones e inténtalo de nuevo.",
+      "preparationRefused": "Orca no pudo preparar esta conversación de {{agent}}. Inicia un chat nuevo para continuar.",
       "prepareFailed": "No se pudo preparar esta sesión antigua de Codex. Vuelve a intentar reanudarla."
     },
     "backgroundTask": {
@@ -2198,6 +2201,7 @@
     "failure": {
       "accountSwitchInProgress": "La configuración de {{agent}} está cambiando en este host. Vuelva a intentarlo cuando termine.",
       "agentCommandNotRunnable": "{{agent}}: el Comando en Ajustes → Agentes debe ser la ruta o el nombre de un programa que Orca pueda encontrar, sin argumentos ni variables. Cámbielo o restablézcalo con Reiniciar.",
+      "agentCommandFailed": "El Comando de {{agent}} en Ajustes → Agentes no inició {{agent}}: {{detail}}. Cámbialo o restablécelo.",
       "agentCommandNotSignedIn": "Inicia sesión en {{agent}} con `{{loginCommand}}` en el equipo donde se ejecuta este chat.",
       "agentNotSignedIn": "Inicia sesión en {{agent}}.",
       "agentStarting": "El agente todavía se está iniciando.",

@@ -2477,6 +2477,9 @@
       "inputLocked": "Terminal input is locked"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "This {{agent}} conversation is open in a chat. Refresh Session History to open it.",
+      "ownershipUnknown": "Orca could not confirm who owns this {{agent}} conversation. Refresh Session History and try again.",
+      "preparationRefused": "Orca could not prepare this {{agent}} conversation. Start a new chat to continue.",
       "prepareFailed": "Could not prepare this legacy Codex session. Retry resume."
     },
     "floatingWorkspace": {
@@ -2956,6 +2959,7 @@
       "claudeAccountFolderMissing": "The selected Claude account's folder is missing. Sign in to it again or choose another account.",
       "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
       "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
+      "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
       "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
       "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
       "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
@@ -3703,7 +3707,10 @@
       "collapse": "Hide full goal",
       "attachmentsUnsupported": "Remove attachments before setting a goal.",
       "pause": "Pause",
-      "resume": "Resume"
+      "resume": "Resume",
+      "checks_one": "{{count}} check",
+      "checks_other": "{{count}} checks",
+      "last-check": "Last goal check"
     },
     "rewind": {
       "title": "Rewind to here?",
@@ -3809,6 +3816,11 @@
         "createdTookOverSome": "Created · took over {{taken}} of {{count}} workspaces",
         "createdTookOverOne": "Created · took over 1 workspace",
         "createdTookOverMany": "Created · took over {{count}} workspaces",
+        "askedOne": "Asked to take over 1 workspace",
+        "askedMany": "Asked to take over {{count}} workspaces",
+        "tookOverSome": "Took over {{taken}} of {{count}} workspaces",
+        "tookOverOne": "Took over 1 workspace",
+        "tookOverMany": "Took over {{count}} workspaces",
         "deleted": "Created, then deleted",
         "nameTaken": "You already have a bot named {{name}}.",
         "rename": "Rename",
@@ -5246,6 +5258,7 @@
     },
     "connectorOffer": {
       "connected": "Connected",
+      "paused": "Paused until {{host}} signs in to Orca.",
       "onComputer": "Connect it in Orca on your computer, from the card in this chat.",
       "addGitHubAccess": "Add repositories or organizations in Orca on your computer, from the card in this chat.",
       "addWorkspace": "Add another workspace in Orca on your computer, from the card in this chat."
@@ -5283,6 +5296,7 @@
       "repliesValue": "Replies: {{value0}}",
       "whoAnswers": "Who answers your messages",
       "peerAsked": "{{from}} asked {{to}}",
+      "peerTold": "{{from}} told {{to}}",
       "peerFollowedUp": "{{bot}} followed up",
       "peerReplyRead": "{{reader}} read {{peer}}'s reply",
       "deleteTitle": "Delete {{name}}?",
@@ -5416,7 +5430,9 @@
       "showMoreWorkers_other": "Show {{count}} more workers",
       "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
-      "readFailedTitle": "Couldn’t load chats"
+      "readFailedTitle": "Couldn’t load chats",
+      "waitingCount": "{{count}} waiting",
+      "runningCount": "{{count}} running"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",

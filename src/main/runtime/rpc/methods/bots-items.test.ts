@@ -11,6 +11,7 @@ import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BotItemsHost, type BotItemsHostDeps } from '../../../bots/bot-items-runtime'
 import type { BotItemMail } from '../../../bots/bot-items-schema'
 import type { BotItemEvent } from '../../../../shared/bots/bot-items'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { BotsDbWorkerClient } from '../../../bots/db-worker/bots-db-worker-client'
 import { closeBotsDbStores } from '../../../bots/db-worker/bots-db-worker-entry'
 import { inProcessBotsDbWorker } from '../../../bots/db-worker/bots-db-worker.test-fixture'
@@ -433,10 +434,8 @@ describe('bot items over RPC', () => {
       join(paths.userData, 'agent-session-attachments'),
       { hasSession: () => true }
     )
-    const claimed: string[] = []
-    setAgentSessionAttachmentStore(store, async (sessionId) => {
-      claimed.push(sessionId)
-    })
+    const claim = vi.fn(async (_sessionId: string, _body: AgentJournalMessageItem) => undefined)
+    setAgentSessionAttachmentStore(store, claim)
     itemChat.sessionId = 'ranger-live'
     try {
       await dispatcher.dispatch(
@@ -469,7 +468,6 @@ describe('bot items over RPC', () => {
           })
         )
       ).toMatchObject({ ok: true })
-      expect(claimed).toEqual(['ranger-live', 'ranger-live'])
       // What the write would refuse is refused before a file is copied or claimed.
       expect(await comment({ text: 'x'.repeat(7_990), files: [log] })).toMatchObject({
         ok: false,
@@ -488,7 +486,7 @@ describe('bot items over RPC', () => {
           })
         )
       ).toMatchObject({ ok: false, error: { message: 'Canceling needs a reason: --reason "..."' } })
-      expect(claimed).toEqual(['ranger-live', 'ranger-live'])
+      expect(claim).toHaveBeenCalledTimes(2)
       const shown = await dispatcher.dispatch(
         request('bots.items.show', { callerSessionId: RANGER_CHAT, item: '1' })
       )
@@ -496,8 +494,19 @@ describe('bot items over RPC', () => {
       const { events } = (shown as { result: { events: BotItemEvent[] } }).result
       const comments = events.filter((event) => event.kind === 'commented')
       expect(comments).toHaveLength(2)
-      expect(comments[0]?.data.images).toMatchObject([{ name: 'after.png', bytes: 4 }])
+      expect(comments[0]?.data.images).toMatchObject([
+        { name: 'after.png', bytes: 4, path: expect.stringContaining(store.rootDir) }
+      ])
       expect(comments[0]?.data.text).toMatch(/^@\S+agent-session-attachments\S+run\.log$/)
+      expect(claim).toHaveBeenNthCalledWith(1, 'ranger-live', {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: comments[0]?.data.text },
+          { type: 'image-ref', path: comments[0]?.data.images?.[0]?.path }
+        ]
+      })
+      expect(claim).toHaveBeenNthCalledWith(2, 'ranger-live', expect.anything())
       expect(comments[1]?.data).toMatchObject({
         text: 'Which one?',
         images: [{ name: 'after.png', bytes: 4 }]

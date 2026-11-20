@@ -180,8 +180,9 @@ function MobileSessionTabsSheetContent({
   const renderRow = (row: MobileSessionTabRow) => {
     const current = row.tab.id === activeSessionTabId
     const badge = row.dotState && row.dotState !== 'idle' ? row.dotState : undefined
-    const showUnreadBell =
+    const unreadBell =
       row.unread &&
+      row.group === 'other' &&
       (!badge || (agentStatusGroup(badge) !== 'needs-you' && agentStatusGroup(badge) !== 'working'))
     const time = current
       ? t('session.tabsSheet.open', 'Open')
@@ -226,10 +227,10 @@ function MobileSessionTabsSheetContent({
               <>
                 {current || pressed ? <View pointerEvents="none" style={styles.wash} /> : null}
                 <View style={styles.tile}>
-                  <MobileSessionTabMark row={{ ...row, unread: false }} size={17} />
-                  {showUnreadBell || badge ? (
+                  <MobileSessionTabMark row={row} size={17} />
+                  {unreadBell || badge ? (
                     <View style={styles.tileBadge}>
-                      {showUnreadBell ? (
+                      {unreadBell ? (
                         <Bell
                           size={10}
                           color={colors.statusAmber}

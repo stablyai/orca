@@ -11,6 +11,8 @@ export type SecretSealing =
 export type SecretStore = {
   isEncryptionAvailable(): boolean
   encryptString(plainText: string): Buffer
+  /** Seals off the caller's thread where the host can; absent stores seal through encryptString. */
+  encryptStringAsync?(plainText: string): Promise<Buffer>
   decryptString(cipher: Buffer): string
   /** Report weak/no protection separately from capability: marking weak backends unavailable would skip decryption
    * and hide existing credentials. Null means protected; a message describes the gap. */

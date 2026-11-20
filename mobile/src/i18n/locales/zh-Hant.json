@@ -2013,6 +2013,9 @@
       "sendFailed": "無法傳送恢復命令"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "此 {{agent}} 對話已在聊天中開啟。請重新整理工作階段歷史記錄以開啟它。",
+      "ownershipUnknown": "Orca 無法確認此 {{agent}} 對話的歸屬。請重新整理工作階段歷史記錄並重試。",
+      "preparationRefused": "Orca 無法準備此 {{agent}} 對話。請開啟新聊天以繼續。",
       "prepareFailed": "無法準備此舊版 Codex 工作階段。請再次嘗試恢復。"
     },
     "backgroundTask": {
@@ -2121,6 +2124,7 @@
     "failure": {
       "accountSwitchInProgress": "{{agent}} 在此主機上的設定正在變更。請在完成後重試。",
       "agentCommandNotRunnable": "{{agent}} 在「設定 → 代理程式」中的命令必須是 Orca 能找到的程式路徑或名稱，且不能包含引數或變數。請修改或重設。",
+      "agentCommandFailed": "{{agent}} 在「設定 → 代理程式」中的命令未能啟動 {{agent}}：{{detail}}。請修改或重設。",
       "agentCommandNotSignedIn": "請在執行此聊天的電腦上使用 `{{loginCommand}}` 登入 {{agent}}。",
       "agentNotSignedIn": "請登入 {{agent}}。",
       "agentStarting": "代理程式仍在啟動。",

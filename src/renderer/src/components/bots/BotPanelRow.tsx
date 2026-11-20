@@ -16,28 +16,25 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { BOT_ITEM_ROW_HOVER_ACTIONS } from './items/bot-item-row-hover-actions'
+import { useBotRowCardPlacement } from './use-bot-row-card-placement'
 
-/** Shows `card` beside the panel while `children` (the row's button) is hovered or keyboard-focused. */
-export function BotRowHoverCard({
-  card,
-  children
-}: {
+type BotRowHoverCardProps = {
   card: React.ReactNode
   children: React.ReactElement
-}): React.JSX.Element {
-  if (!card) {
-    return children
-  }
+}
+
+export function BotRowHoverCard(props: BotRowHoverCardProps): React.JSX.Element {
+  return props.card ? <BotRowPreview {...props} /> : props.children
+}
+
+function BotRowPreview({ card, children }: BotRowHoverCardProps): React.JSX.Element {
+  const placement = useBotRowCardPlacement()
   return (
-    <HoverCard openDelay={400} closeDelay={80}>
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-      <HoverCardContent
-        side="left"
-        align="start"
-        sideOffset={12}
-        collisionPadding={8}
-        variant="row-details"
-      >
+    <HoverCard openDelay={400} closeDelay={80} {...placement.root}>
+      <HoverCardTrigger asChild {...placement.trigger}>
+        {children}
+      </HoverCardTrigger>
+      <HoverCardContent {...placement.content} variant="row-details">
         {card}
       </HoverCardContent>
     </HoverCard>

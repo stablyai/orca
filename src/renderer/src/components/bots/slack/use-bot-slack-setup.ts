@@ -47,8 +47,9 @@ export type BotSlackSetupStep =
   /** `teamId`: the workspace it is in, whose people the owner then picks. */
   /** `setupState`: the install link this flow installed with, so its identity pick applies at once. */
   | { kind: 'installed'; teamId: string; setupState?: string }
-  /** `code` is the desktop error code, so a signed-out failure can offer Sign in. */
-  | { kind: 'failed'; code: string }
+  /** `code` is the desktop error code, so a signed-out failure can offer Sign in; `local`: this
+   *  computer's own account failed, not the bot's host's. */
+  | { kind: 'failed'; code: string; local?: true }
 
 type OpenedSlackPage = { returnUrl: string | null; link: SlackInstallLink }
 
@@ -192,7 +193,7 @@ export function useBotSlackSetup(
         setStep(
           app.error === 'grant_expired' && code.ok
             ? { kind: 'token', reconnect: true, error: null, teamId, mine: true }
-            : { kind: 'failed', code: app.error }
+            : { kind: 'failed', code: app.error, ...(code.ok ? { local: true as const } : {}) }
         )
         return
       }
@@ -223,8 +224,9 @@ export function useBotSlackSetup(
     const slack = slackTeamState(view.slack, teamId)
     switch (slack.state) {
       // An app whose manifest is out of date gets the new one, then Slack's page for the new scopes.
+      // One that only predates optional permissions is opened here for nothing else: the same path.
       case 'installed':
-        return slack.updateNeeded
+        return slack.updateNeeded || slack.updateAvailable
           ? await setUp(slack.teamId, mount)
           : setStep({ kind: 'installed', teamId: slack.teamId })
       // The dialog opens on the owner's own click, so an app made earlier (or kept by a removal)
@@ -311,7 +313,8 @@ export function useBotSlackSetup(
     step.kind === 'waiting' && view.status === 'ready'
       ? slackTeamState(view.slack, step.teamId)
       : null
-  const installed = waited?.state === 'installed' && !waited.updateNeeded
+  // Still behind, on required or optional permissions: the approval this flow waits for isn't in.
+  const installed = waited?.state === 'installed' && !waited.updateNeeded && !waited.updateAvailable
   const otherUser = waited?.state === 'created' && waited.oauthFailure === 'other_user'
   const shown: BotSlackSetupStep = (() => {
     if (step.kind !== 'waiting' && step.kind !== 'ready') {

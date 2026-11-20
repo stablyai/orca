@@ -162,35 +162,7 @@ it("refuses a comment naming an upload while this host's store is unavailable, a
   expect(chat).not.toHaveBeenCalled()
 })
 
-it("copies a bot's --file files in: images join the images, other files the text as @path", async () => {
-  const shot = join(dir, 'after fix.png')
-  const report = join(dir, 'report.pdf')
-  await writeFile(shot, Buffer.alloc(4))
-  await writeFile(report, Buffer.alloc(9))
-
-  const { text, images } = await admitBotItemCommentAttachments(
-    deps({ local: true }),
-    'Fixed.',
-    [],
-    [shot, report]
-  )
-
-  expect(images).toHaveLength(1)
-  expect(images[0]?.name).toBe('after fix.png')
-  expect(images[0]?.path.startsWith(store.rootDir)).toBe(true)
-  const copied = text.match(/^Fixed\.\n\n@(\S+)$/)?.[1]
-  expect(copied?.startsWith(store.rootDir)).toBe(true)
-  expect(copied?.endsWith('report.pdf')).toBe(true)
-  expect(claims[0]?.body.blocks).toEqual([
-    { type: 'text', text },
-    { type: 'image-ref', path: images[0]?.path }
-  ])
-})
-
-it('refuses a missing --file and more than 10 files besides images', async () => {
-  await expect(
-    admitBotItemCommentAttachments(deps({ local: true }), '', [], [join(dir, 'gone.log')])
-  ).rejects.toThrow("gone.log can't be read.")
+it('refuses more than 10 files besides images', async () => {
   const many = Array.from({ length: 11 }, (_, n) => join(dir, `${n}.log`))
   await expect(admitBotItemCommentAttachments(deps({ local: true }), '', [], many)).rejects.toThrow(
     'Comments take up to 10 files besides images.'

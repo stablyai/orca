@@ -2018,6 +2018,9 @@
       "sendFailed": "再開コマンドの送信に失敗しました。"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "この {{agent}} の会話はチャットで開かれています。開くにはセッション履歴を更新してください。",
+      "ownershipUnknown": "Orca はこの {{agent}} の会話の所有者を確認できませんでした。セッション履歴を更新して、再試行してください。",
+      "preparationRefused": "Orca はこの {{agent}} の会話を準備できませんでした。続けるには新しいチャットを開始してください。",
       "prepareFailed": "この旧形式の Codex セッションを準備できませんでした。再開を再試行してください。"
     },
     "backgroundTask": {
@@ -2126,6 +2129,7 @@
     "failure": {
       "accountSwitchInProgress": "このホストで {{agent}} のセットアップを変更中です。完了してからもう一度お試しください。",
       "agentCommandNotRunnable": "[設定] → [Agent] にある {{agent}} の [コマンド] には、Orca が見つけられるプログラムのパスまたは名前を、引数や変数なしで指定する必要があります。変更するか、[リセット] してください。",
+      "agentCommandFailed": "設定 → Agent にある {{agent}} の「コマンド」で {{agent}} を起動できませんでした: {{detail}}。コマンドを変更するかリセットしてください。",
       "agentCommandNotSignedIn": "このチャットを実行しているコンピューターで `{{loginCommand}}` を使って {{agent}} にサインインしてください。",
       "agentNotSignedIn": "{{agent}} にサインインしてください。",
       "agentStarting": "Agent はまだ起動中です。",

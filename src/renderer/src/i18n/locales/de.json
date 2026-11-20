@@ -4946,13 +4946,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Summe des Arbeitssatzes (WS): Speicherseiten, die sich derzeit im RAM befinden. Gemeinsam genutzte Seiten können in mehreren Prozessen erscheinen. Speicher, den Windows ausgelagert hat, wird hier nicht mitgezählt.",
-                "privateBytesDescription": "Summe der privaten Bytes: von diesen Prozessen zugesicherter Speicher, unabhängig davon, ob er sich im RAM befindet oder ausgelagert ist. Der Host rechnet diesen Wert auf sein Zusicherungslimit an. Daher steigt er weiter, während der obige Arbeitssatz durch Auslagerung schrumpft.",
-                "footprintDescription": "Summe des Speicherbedarfs, derselbe Wert wie in Activity Monitor: Speicher, der den einzelnen Prozessen gehört, einschließlich Grafikspeicher. Gemeinsam genutzte Speicherseiten werden nicht doppelt gezählt.",
-                "rssDescription": "Summe des residenten Speichers (RSS). Gemeinsam genutzte oder mehrfach eingeblendete Speicherseiten können in mehreren Prozessen erscheinen.",
                 "memColumn": "Speicher",
-                "memorySummary": "Σ Arbeitsspeicher",
-                "privateSummary": "Σ Privat"
+                "memorySummary": "Σ Arbeitsspeicher"
               }
             },
             "manager": {
@@ -12510,6 +12505,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS-Schlüsselbund (cursor-agent)",
+            "keyring": "Linux-Schlüsselbund (cursor-agent)",
             "cli": "Authentifizierungsdatei der Cursor-CLI",
             "desktop": "Cursor IDE"
           },
@@ -17317,8 +17313,6 @@
             "27d863542c": "Browser-Anmerkungen",
             "e48569ac6d": "Diese Website konnte nicht erreicht werden.",
             "bbe8f15e83": "Dieser Bereich wird über den aktiven Laufzeitserver dargestellt.",
-            "8b7e6d1f5a": "Browser-Anmerkungen sind nur in lokalen Browser-Tabs verfügbar.",
-            "deb5293610": "Browser-Anmerkungen in entfernter Laufzeitumgebung nicht verfügbar",
             "90d021f2ad": "Hinzufügen",
             "0cb3bd6221": "Zweck der Anmerkung",
             "532bac48c5": "Beschreiben, was der Agent hier ändern soll…",
@@ -18927,7 +18921,6 @@
         "stoppedRestart_one": "{{count}} Chat beim Beenden von Orca angehalten.",
         "stoppedRestart_other": "{{count}} Chats beim Beenden von Orca angehalten.",
         "promptsNotResent": "Deine Prompts werden nicht erneut gesendet.",
-        "promptsNotSent": "Deine Prompts wurden nicht erneut gesendet.",
         "resume": "Fortsetzen",
         "details": "Details",
         "close": "Schließen",
@@ -19153,7 +19146,8 @@
       "install": {
         "checking": "Es wird geprüft, ob {{agent}} auf diesem Host bereit ist…",
         "cliInstall": "Installieren",
-        "cliRecheck": "Erneut prüfen"
+        "cliRecheck": "Erneut prüfen",
+        "openAgentSettings": "Einstellungen öffnen"
       },
       "reasoning": "Denkprozess",
       "failureWords": {
@@ -19187,6 +19181,7 @@
         "claudeAccountFolderMissing": "Der Ordner des ausgewählten Claude-Kontos fehlt. Erneut bei diesem Konto anmelden oder ein anderes Konto auswählen.",
         "claudeAccountSetupFailed": "Das ausgewählte Claude-Konto konnte nicht eingerichtet werden. Erneut versuchen oder ein anderes Konto auswählen.",
         "agentCommandNotRunnable": "Der Befehl für {{agent}} unter Einstellungen → Agenten muss ein Programmpfad oder -name sein, den Orca finden kann, ohne Argumente oder Variablen. Den Befehl ändern oder zurücksetzen.",
+        "agentCommandFailed": "Der Befehl für {{agent}} unter Einstellungen → Agenten hat {{agent}} nicht gestartet: {{detail}}. Den Befehl ändern oder zurücksetzen.",
         "runtimeNotInstalled": "{{agent}} ist auf dem Computer, auf dem dieser Chat läuft, nicht installiert. Die Installation über den Chat in einer aktuellen Orca-Version durchführen.",
         "fullAccessAsRoot": "{{agent}} verwendet keinen Vollzugriff, solange die Ausführung als root erfolgt. Unter Einstellungen → Agenten für den Computer, auf dem dieser Chat läuft, eine andere Berechtigung für {{agent}} auswählen und anschließend einen neuen Chat starten.",
         "launchPreparationFailed": "Orca konnte den Start von {{agent}} auf dem Computer, auf dem dieser Chat läuft, nicht vorbereiten.",
@@ -20855,7 +20850,6 @@
       "cancelFailed": "Die Installation konnte nicht abgebrochen werden. Erneut versuchen.",
       "install": "{{agent}} installieren",
       "installManaged": "Orcas Version installieren",
-      "installed": "Installiert",
       "notInstalled": "Nicht installiert.",
       "progress": "Download von {{agent}}",
       "readFailed": "{{agent}} konnte auf diesem Host nicht überprüft werden. Erneuter Versuch.",
@@ -22730,8 +22724,7 @@
     "refresh": "Aktualisieren",
     "restartLocal": "Lokalen Daemon neu starten",
     "killAllLocal": "Alle lokalen Sitzungen beenden",
-    "killFailed": "Das Terminal konnte nicht beendet werden. Die zuletzt beobachteten Sitzungen bleiben erhalten.",
-    "metricDetails": "Metrikdetails"
+    "killFailed": "Das Terminal konnte nicht beendet werden. Die zuletzt beobachteten Sitzungen bleiben erhalten."
   },
   "browserExtensions": {
     "permission": {
@@ -23650,7 +23643,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, alles anzeigen",
       "searchEverything": "Überall nach „{{text}}“ suchen",
-      "searchBotsFor": "Bots nach „{{text}}“ durchsuchen",
       "noMatch": "Keine Bots passen zu „{{text}}“",
       "noBotsYet": "Noch keine Bots",
       "filtersPaused": "Filter gelten für Arbeitsbereiche, nicht für Bots",
@@ -23666,7 +23658,7 @@
       "browse": "Vorlagen durchsuchen"
     },
     "new": {
-      "fromTemplate": "Vorlage verwenden"
+      "fromTemplate": "Vorlage"
     },
     "apps": {
       "paste": {
@@ -23823,5 +23815,8 @@
     "dontSend": "Nicht senden",
     "sending": "Wird gesendet…",
     "sendReport": "Bericht senden"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "Dieser Computer"
   }
 }

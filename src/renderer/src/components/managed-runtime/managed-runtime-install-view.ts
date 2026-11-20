@@ -138,7 +138,13 @@ function settledView(
       : state.available
         ? reinstall
         : null
-    const status = t('components.managed-runtime.installed', 'Installed')
+    const status = t(
+      'components.managed-runtime.installedByOrca',
+      'Installed by Orca · {{version}}',
+      {
+        version: state.installedVersion
+      }
+    )
     return state.installedCurrent
       ? view(status, null, null, label)
       : { ...view(status, label), prominent: true }

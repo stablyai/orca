@@ -2,7 +2,9 @@
 import * as z from 'zod'
 import { requiredString } from './rpc-param-primitives'
 
-const Names = z.array(z.string().min(1).max(200)).max(64).optional()
+/** The most names one part's pick may carry; the picker never sends more. */
+export const BOT_SHARE_MAX_PICKS = 64
+const Names = z.array(z.string().min(1).max(200)).max(BOT_SHARE_MAX_PICKS).optional()
 const BotId = requiredString('Missing bot')
 
 /** The owner's picks; an absent list shares all of that part, except memory, which is off unless named. */

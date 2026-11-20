@@ -100,15 +100,23 @@ function expectNoDeadTuiModes(snapshot: TerminalSnapshot): void {
 }
 
 describe('durable checkpoint rebased on the live snapshot', () => {
-  it('drops a dead TUI alt screen and mouse modes after one compaction', async () => {
+  it('drops dead TUI modes with and without pending output', async () => {
     const { restoreInfo, live } = poisonedColdRestore()
+    const boundary = await buildDurableCheckpointSnapshot({
+      liveSnapshot: { ...live.getSnapshot(), outputSequence: 3 },
+      restoreInfo,
+      pendingRecords: [],
+      isFirstTake: false
+    })
+
+    expectNoDeadTuiModes(boundary)
+    expect(boundary.outputSequence).toBe(3)
+    expect(numberedRowIds(replayedRows(boundary), 'OLD')).toHaveLength(40)
+
     const newOutput = 'new shell prompt $ '
     write(live, newOutput)
-    const liveSnapshot = { ...live.getSnapshot(), outputSequence: 11 }
-    expect(liveSnapshot.modes.mouseTracking).toBe(false)
-
     const durable = await buildDurableCheckpointSnapshot({
-      liveSnapshot,
+      liveSnapshot: { ...live.getSnapshot(), outputSequence: 11 },
       restoreInfo,
       pendingRecords: [{ kind: 'output', data: newOutput }],
       isFirstTake: false
@@ -119,22 +127,6 @@ describe('durable checkpoint rebased on the live snapshot', () => {
     const rows = replayedRows(durable)
     expect(numberedRowIds(rows, 'OLD')).toHaveLength(40)
     expect(rows.join('\n')).toContain(newOutput.trimEnd())
-  })
-
-  it('serves live modes for a boundary fold with zero pending records', async () => {
-    const { restoreInfo, live } = poisonedColdRestore()
-    const liveSnapshot = { ...live.getSnapshot(), outputSequence: 3 }
-
-    const durable = await buildDurableCheckpointSnapshot({
-      liveSnapshot,
-      restoreInfo,
-      pendingRecords: [],
-      isFirstTake: false
-    })
-
-    expectNoDeadTuiModes(durable)
-    expect(durable.outputSequence).toBe(3)
-    expect(numberedRowIds(replayedRows(durable), 'OLD')).toHaveLength(40)
   })
 
   it('keeps the live alt frame, modes and owner verbatim', async () => {
