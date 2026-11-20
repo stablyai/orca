@@ -76,7 +76,12 @@ function copyFor(notice: PerfNotice): Copy {
           ),
           onClick: () => {
             const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
-            openSettingsTarget({ pane: 'workspace-cleanup', repoId: null })
+            // Why: the full disk is this machine's, even when Settings last showed a remote host.
+            openSettingsTarget({
+              pane: 'workspace-cleanup',
+              repoId: null,
+              hostScope: { kind: 'local' }
+            })
             openSettingsPage()
           }
         }
