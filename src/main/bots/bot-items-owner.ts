@@ -1,6 +1,6 @@
 // The owner's writes from the panel (desktop or phone): comments, which move a Needs you item to In
-// progress, and any status on any number of items, each owing the item's chat a mail; and snoozes, which
-// mail nobody. A comment or status move brings a snoozed item back.
+// progress (one written while the bot asks is the answer), and any status on any number of items, each
+// owing the item's chat a mail; and snoozes, which mail nobody. A comment or status move brings a snoozed item back.
 import {
   botItemEventId,
   isOpenBotItemStatus,

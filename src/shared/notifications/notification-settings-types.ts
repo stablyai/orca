@@ -41,6 +41,12 @@ export type NotificationSettings = {
   notifyHiddenWorkspaces: boolean
 }
 
+/** The switches a host applies to its own phone pushes; sounds and per-source mutes stay with each client. */
+export type HostNotificationSettings = Pick<
+  NotificationSettings,
+  'enabled' | 'agentTaskComplete' | 'agentNeedsInput' | 'terminalBell'
+>
+
 export function usesCustomNotificationSound(soundId: string | null | undefined): boolean {
   return !!soundId && soundId !== 'system' && soundId !== 'none'
 }

@@ -19,7 +19,7 @@ async function apiWith(routes: FakeRoute[], emails?: string[]) {
   cleanup = google.cleanup
   const fake = fakeGoogle(routes)
   return {
-    api: google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
+    api: await google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
     fake,
     google
   }
@@ -255,11 +255,11 @@ describe('the Google API client', () => {
     const google = await connectedGoogle(['ada@acme.dev', 'ada@gmail.com'])
     cleanup = google.cleanup
     // Accounts come in the order the store lists them, which varies by file system.
-    expect(() => google.client.googleApi(undefined)).toThrow(
+    await expect(google.client.googleApi(undefined)).rejects.toThrow(
       /ada@acme\.dev, ada@gmail\.com|ada@gmail\.com, ada@acme\.dev/
     )
-    expect(google.client.googleApi('ADA@gmail.com').email).toBe('ada@gmail.com')
-    expect(() => google.client.googleApi('sam@x.com')).toThrow("isn't connected")
+    expect((await google.client.googleApi('ADA@gmail.com')).email).toBe('ada@gmail.com')
+    await expect(google.client.googleApi('sam@x.com')).rejects.toThrow("isn't connected")
   })
 })
 

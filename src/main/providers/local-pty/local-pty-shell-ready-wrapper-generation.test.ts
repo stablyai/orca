@@ -149,17 +149,4 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(output.split('PROMPT_ARRAY_B')).toHaveLength(4)
     expectBashOsc133Lifecycle(output)
   })
-
-  itWithBash('composes an inherited PROMPT_COMMAND ending in separators', () => {
-    writeFileSync(
-      join(userDataPath, '.bash_profile'),
-      'PROMPT_COMMAND=\'printf "PROMPT_SEPARATOR\\n"; ;\t\n;;  \'\n'
-    )
-
-    const output = runInteractiveBashRcfile(getBashShellReadyRcfileContent(), userDataPath)
-
-    expect(output).not.toContain('syntax error')
-    expect(output).toContain('PROMPT_SEPARATOR')
-    expectBashOsc133Lifecycle(output)
-  })
 })

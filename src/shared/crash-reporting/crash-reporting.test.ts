@@ -41,6 +41,22 @@ describe('crash-reporting shared helpers', () => {
     )
   })
 
+  it('redacts quoted, escaped and nested JSON secret keys', () => {
+    expect(sanitizeCrashReportString('API Error: {"api_key":"private-value","code":503}')).toBe(
+      'API Error: {"api_key=[redacted],"code":503}'
+    )
+    expect(sanitizeCrashReportString('{"api_key":"a\\"b","code":503}')).toBe(
+      '{"api_key=[redacted],"code":503}'
+    )
+    expect(sanitizeCrashReportString('{"message":"bad {\\"api_key\\":\\"private-value\\"}"}')).toBe(
+      '{"message":"bad {\\"api_key=[redacted]}"}'
+    )
+    expect(sanitizeCrashReportString('password="first SECRET\\"')).toBe('password=[redacted]')
+    expect(sanitizeCrashReportString('password="first\\" token="private-value"')).toBe(
+      'password=[redacted] token=[redacted]'
+    )
+  })
+
   it('still redacts paths and secrets far past the old 240-char cap', () => {
     const note = [
       'a'.repeat(1_000),

@@ -18,8 +18,23 @@ const CAN = 0x18
 const SUB = 0x1a
 const BEL = 0x07
 
-// Bound unterminated OSC/DCS memory and snapshot size; beyond the cap, abandon carry and lose partial-sequence fidelity.
+// Bound unterminated OSC/DCS memory and snapshot size; beyond the cap, carry an inert prefix instead of the sequence.
 export const MAX_PARTIAL_ESCAPE_TAIL_LENGTH = 4096
+
+// Past the cap, a bare state prefix would let the continuation print or dispatch as a new command
+// (#44623), so replay one that keeps xterm discarding until the sequence ends.
+// A non-numeric OSC id aborts the command until BEL/ST.
+const INERT_OSC_PREFIX = '\x1b]x;'
+// A private marker after a parameter enters DCS_IGNORE until ST.
+const INERT_DCS_PREFIX = '\x1bP0<'
+const INERT_PREFIX_BY_STATE_PREFIX: Record<string, string> = {
+  '\x1b]': INERT_OSC_PREFIX,
+  '\x1bP': INERT_DCS_PREFIX,
+  '\x1b[': '\x1b[0<' // the same marker enters CSI_IGNORE until the final byte
+}
+const INERT_STRING_PREFIXES = new Set([INERT_OSC_PREFIX, INERT_DCS_PREFIX])
+// oxlint-disable-next-line no-control-regex -- the C0 bytes that can end an open OSC/DCS string.
+const STRING_END_BYTE = /[\x07\x18\x1a\x1b]/
 
 /** ESC-state transition shared by the fresh-ESC and abort-reprocess paths. */
 function stateAfterEscByte(code: number): ScanState {
@@ -232,12 +247,24 @@ export function skipOpenEscapeContinuation(
     : { rest: chunk.slice(length), stillOpen: '' }
 }
 
-/** Advance the incremental tail; abandon it past the cap. */
+/** Advance the incremental tail, capped by capPartialEscapeTail. */
 export function advancePartialEscapeTail(pendingTail: string, chunk: string): string {
   // Only ESC leaves ground, so no tail + no ESC avoids concatenation and the full chunk walk.
   if (pendingTail.length === 0 && !chunk.includes('\x1b')) {
     return ''
   }
-  const tail = extractPartialEscapeTail(pendingTail + chunk)
-  return tail.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : tail
+  // An inert string stays inert until a byte that can end it, so large payloads skip the char walk.
+  if (INERT_STRING_PREFIXES.has(pendingTail) && !STRING_END_BYTE.test(chunk)) {
+    return pendingTail
+  }
+  return capPartialEscapeTail(extractPartialEscapeTail(pendingTail + chunk))
+}
+
+/** Past the cap, replace a tail with an inert prefix in the same parser state. */
+export function capPartialEscapeTail(tail: string): string {
+  if (tail.length <= MAX_PARTIAL_ESCAPE_TAIL_LENGTH) {
+    return tail
+  }
+  const statePrefix = advanceTerminalEscapeBoundary('', tail)
+  return INERT_PREFIX_BY_STATE_PREFIX[statePrefix] ?? statePrefix
 }

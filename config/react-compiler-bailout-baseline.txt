@@ -14,10 +14,8 @@
 10 src/renderer/src/components/maintenance/update-card/UpdateCard.tsx
 1 src/renderer/src/components/sidebar/workspace-creation/base-ref-update/WorktreeBaseFallbackDialog.tsx
 1 src/renderer/src/components/activity/terminal-portal/activity-terminal-portal-status.ts
-1 src/renderer/src/components/activity/thread-preview/activity-thread-hover-card-summary.tsx
 1 src/renderer/src/components/activity/thread-list/activity-thread-list-pane.tsx
 1 src/renderer/src/components/activity/thread-list/use-activity-thread-action-bindings.ts
-1 src/renderer/src/components/activity/threads/use-agent-pane-threads.ts
 1 src/renderer/src/components/agent-session-continuation/AgentSessionContinuationDialog.tsx
 2 src/renderer/src/components/agent/AgentLaunchPickerMenu.tsx
 1 src/renderer/src/components/agent/AgentLaunchPickerMenuRow.tsx

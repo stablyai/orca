@@ -110,26 +110,17 @@ describe("a finished item worker's report", () => {
     expect(db.getRunMailboxHistory(activeRunId!, 10)[0]).toMatchObject({ payload, read: 1 })
   })
 
-  it('leaves out Done means for an item without one', async () => {
-    const { checked } = await reportAndCheck(`bot-item:${ITEM.uid}`, async () => ({
-      ...ITEM,
-      status: 'needs_you' as const,
-      doneMeans: null
-    }))
-    expect(checked.formatted.split('\n').at(-2)).toBe(
-      '[This worker was started for item 34, "Item comment box: click anywhere to focus + paste images" (Needs you). If this result changes the item, update it with orca bot item <cancel|comment|done|set> 34.]'
-    )
-  })
-
   it("names the item on a follow-up's report, which keeps its earlier start's item", async () => {
     const { checked, get, origin } = await reportAndCheck(
       `bot-item:${ITEM.uid}`,
-      async () => ITEM,
+      async () => ({ ...ITEM, status: 'needs_you' as const, doneMeans: null }),
       { followUp: true }
     )
     expect(origin).toBe(`bot-item:${ITEM.uid}`)
     expect(get).toHaveBeenCalledWith(ITEM.uid)
-    expect(checked.formatted.split('\n').at(-2)).toBe(LINE)
+    expect(checked.formatted.split('\n').at(-2)).toBe(
+      '[This worker was started for item 34, "Item comment box: click anywhere to focus + paste images" (Needs you). If this result changes the item, update it with orca bot item <cancel|comment|done|set> 34.]'
+    )
   })
 
   it.each([

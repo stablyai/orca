@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import {
@@ -133,5 +133,10 @@ export function useNativeChatStructuredPaneNotices({
   if (hostNotice) {
     notices.push(hostNotice)
   }
-  return { setup, notices }
+  // One Sign in on screen: while the composer's notice or Antigravity's sign-in strip has it,
+  // transcript rows only say what wasn't sent.
+  const signInInComposer =
+    install.signIn !== null || notices.some((notice) => notice.signIn !== undefined)
+  const rowSetup = useMemo(() => ({ ...setup, signInInComposer }), [setup, signInInComposer])
+  return { setup: rowSetup, notices }
 }

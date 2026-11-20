@@ -204,7 +204,7 @@ export function AppMoveScreen() {
           <Text style={styles.secondaryLabel}>
             {play
               ? t('appMove.play.cantUseGooglePlay', "I can't use Google Play")
-              : t('appMove.download.keepThisVersion', 'Keep using this version')}
+              : t('appMove.download.keepThisVersion', 'Keep this version')}
           </Text>
         </Pressable>
         {play ? null : (

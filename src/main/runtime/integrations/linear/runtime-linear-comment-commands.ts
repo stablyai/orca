@@ -241,7 +241,7 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
     if (!isLinearUuid(params.commentId)) {
       throw this.linearCommentNotFound(params.commentId)
     }
-    const workspaces = requireConnectedWorkspaces()
+    const workspaces = await requireConnectedWorkspaces()
     const selected = resolveWorkspaceSelector(params, workspaces)
     const missing = this.linearCommentNotFound(params.commentId)
     try {

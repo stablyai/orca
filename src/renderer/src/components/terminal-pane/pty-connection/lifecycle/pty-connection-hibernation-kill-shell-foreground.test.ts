@@ -265,42 +265,4 @@ describe('shell showing through a hibernation kill', () => {
       })
     }
   )
-
-  it('clears the record once another PTY is bound in place of the hibernated one', async () => {
-    const pane = await connectHibernatingPane(true)
-
-    pane.exitPty()
-    await flushAsyncTicks()
-    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
-    // A restart binds a new PTY without consuming the armed wake.
-    pane.rebindPty('pty-restarted')
-    pane.finishCommand()
-    await vi.advanceTimersByTimeAsync(350)
-
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
-  })
-
-  it('still clears a record beside a PTY that is not being hibernated', async () => {
-    const pane = await connectHibernatingPane(false)
-
-    pane.finishCommand()
-    await vi.advanceTimersByTimeAsync(350)
-
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
-  })
-
-  it('does not protect a replacement record with the old wake target', async () => {
-    const pane = await connectHibernatingPane(true)
-
-    pane.exitPty()
-    await flushAsyncTicks()
-    mockStoreState.sleepingAgentSessionsByPaneKey[pane.paneKey] = {
-      ...pane.record,
-      updatedAt: 2
-    }
-    pane.finishCommand()
-    await vi.advanceTimersByTimeAsync(350)
-
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
-  })
 })

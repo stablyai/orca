@@ -3,6 +3,7 @@
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { isClipboardTextTooLargeError } from '../../../../../../shared/clipboard/clipboard-text'
+import type { NativeChatSignInNoticeView } from '../../host-access/native-chat-sign-in-notice'
 
 export type NativeChatComposerNoticeContent = {
   text: string
@@ -23,6 +24,10 @@ export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
     status?: React.ReactNode
   }
   onDismiss?: () => void
+  /** A not-signed-in notice: one neutral line whose own button signs in. */
+  signIn?: NativeChatSignInNoticeView
+  /** The host's fuller words under a sign-in notice, collapsed so the notice stays one line. */
+  signInDetails?: string
 } & ({ kind: 'error' | 'attachment' | 'device' } | { kind: 'host'; tone: 'warning' | 'muted' })
 
 /** Keep external errors apart from headline; localErrorIsOrcaWords identifies already-worded renderer errors. */

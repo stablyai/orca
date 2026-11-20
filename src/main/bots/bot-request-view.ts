@@ -239,3 +239,16 @@ export function botRequestUnansweredText(
     ? `${what}, so do it yourself or tell ${record.fromBotName} that ${bot} couldn't take it.`
     : `${what}, so do it yourself or tell ${askersOf(record)} that ${bot} couldn't take it.`
 }
+
+/** A bot request's mail payload: its view, and any store images claimed for the receiving chat
+ *  (`send --item --file`), delivered as that chat's image blocks. */
+export function botRequestPayload(
+  record: BotRequestRecord,
+  messageId: string,
+  images: readonly string[] = []
+): string {
+  return JSON.stringify({
+    botRequest: botRequestView(record, messageId),
+    ...(images.length > 0 ? { images } : {})
+  })
+}

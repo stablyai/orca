@@ -3637,7 +3637,6 @@
       "src/renderer/src/lib/monaco-languages/register-svelte.test.ts": 319,
       "src/renderer/src/lib/monaco-languages/register-zig.test.ts": 4750,
       "src/renderer/src/lib/simulator/launch/open-mobile-emulator-tab.test.ts": 545,
-      "src/renderer/src/lib/pane-manager/pane-drag-window-blur.test.ts": 618,
       "src/renderer/src/lib/pane-manager/pane-layout-geometry-apply.test.ts": 897,
       "src/renderer/src/lib/pane-manager/pane-manager-spawn-placement.test.ts": 766,
       "src/renderer/src/lib/pane-manager/terminal-output/pane-terminal-output-queue-chunks.test.ts": 44,

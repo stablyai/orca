@@ -8,7 +8,6 @@ import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
 import { botChatFoldKey, type BotChatTreeChat } from '../../../../shared/bots/bot-chat-tree'
-import { pressFoldableRow } from '../../../../shared/bots/bot-row-press'
 import { botSidebarListedChats } from '../../../../shared/bots/bot-sidebar-chat-groups'
 import {
   botSidebarWorkerPagingLabel,
@@ -157,22 +156,17 @@ function BotSidebarChat({
   const title = chatTitle(t, chat)
   const label = useBotChatLabel(chat, title)
   const trailing = trailingText(view.trailing)
-  const pressRow = (event: Parameters<typeof pressFoldableRow>[1]): void =>
-    pressFoldableRow(
-      {
-        active,
-        folded: foldable && !open,
-        open: () => {
-          if (chat.origin === 'home') {
-            void openBotHomeTab(bot)
-          } else {
-            openBotSession(bot, chat.chatId)
-          }
-        },
-        toggle: foldable ? () => toggle(open) : null
-      },
-      event
-    )
+  // A press only switches to the chat; only the chevron shows or hides its workers.
+  const pressRow = (event: { detail: number; repeat?: boolean }): void => {
+    if (event.detail > 1 || event.repeat) {
+      return
+    }
+    if (chat.origin === 'home') {
+      void openBotHomeTab(bot)
+    } else {
+      openBotSession(bot, chat.chatId)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-1">

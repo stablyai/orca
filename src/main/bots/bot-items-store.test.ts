@@ -38,17 +38,19 @@ function input(overrides: Partial<BotItemAddInput> = {}): BotItemAddInput {
 }
 
 describe('bot items store', () => {
-  it('takes Needs you only with the question, and drops the question when it moves on', () => {
+  it('takes Needs you with or without a question, and drops the question when it moves on', () => {
     const store = open()
     const { uid } = store.add(input(), owner)
 
-    expect(() => store.set(uid, { status: 'needs_you' }, owner)).toThrow(/--comment/)
+    store.set(uid, { status: 'needs_you' }, owner)
+    expect(store.get(uid)?.status).toBe('needs_you')
+    expect(store.get(uid)?.questionEvent).toBeNull()
+    // Needs you again with nothing to say writes nothing.
+    expect(store.set(uid, { status: 'needs_you' }, owner).unchanged).toBe(true)
+
     store.set(uid, { status: 'needs_you', comment: 'Ship behind a flag?' }, owner)
-    const asking = store.get(uid)
-    expect(asking?.status).toBe('needs_you')
     expect(store.needsYou().map((row) => row.botId)).toEqual(['bot-a'])
-    const question = store.viewRows([uid]).questions[uid]
-    expect(question?.data).toEqual({ text: 'Ship behind a flag?' })
+    expect(store.viewRows([uid]).questions[uid]?.data).toEqual({ text: 'Ship behind a flag?' })
 
     store.set(uid, { status: 'working' }, owner)
     expect(store.get(uid)?.questionEvent).toBeNull()
@@ -464,5 +466,31 @@ describe('bot items store', () => {
     store.close(later, 'done', undefined, owner, NOW + 2 * HOUR)
     expect(store.events(later, 0, 50).some((event) => event.kind === 'unsnoozed')).toBe(false)
     expect(store.get(later)?.snoozedUntil).toBeNull()
+  })
+})
+
+describe("an ask's quick replies and the owner's reply", () => {
+  it("keeps an ask's question lines and options with its comment, and a reply quotes it like any comment", () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    const ask = {
+      context: 'The reviewer is out until Monday.',
+      questions: [
+        { prompt: 'Merge now?', options: [{ label: 'Merge' }, { label: 'Wait' }], recommended: 0 }
+      ]
+    }
+    store.set(uid, { status: 'needs_you', comment: 'copy for older hosts', ask }, owner)
+    const question = store.get(uid)!.questionEvent!
+
+    store.ownerComment(uid, 'Wait', { kind: 'owner' })
+
+    const events = store.events(uid, 0, 50)
+    expect(events.find((event) => event.id === question)?.data).toEqual({
+      text: 'The reviewer is out until Monday.\n\nMerge now?\n   - Merge (recommended)\n   - Wait',
+      ask
+    })
+    expect(events.at(-2)?.data).toEqual({ text: 'Wait', answers: `e${question}` })
+    expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working', cause: 'answer' })
+    expect(store.get(uid)?.status).toBe('working')
   })
 })

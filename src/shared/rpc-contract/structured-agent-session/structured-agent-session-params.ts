@@ -305,6 +305,12 @@ export const RestartResumeParams = z
   .object({ sessionIds: z.array(SessionId).max(MAX_RESTART_RESUME_SESSIONS).optional() })
   .strict()
 
+/** Waits for this start's own continuation of what the last run cut off; `taken` answers once it
+ *  has reserved its chats, before any agent starts. */
+export const RestartLaunchSettledParams = z
+  .object({ until: z.literal('taken').optional() })
+  .strict()
+
 export const HistoryParams = z
   .object({
     sessionId: SessionId,

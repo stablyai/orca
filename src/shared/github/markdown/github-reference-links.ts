@@ -14,6 +14,7 @@ type MarkdownNode = {
   value?: string
   url?: string
   title?: string | null
+  data?: unknown
   children?: MarkdownNode[]
 }
 
@@ -92,7 +93,8 @@ export function linkGitHubReferences(node: MarkdownNode, defaultRepo: GitHubRepo
 
   const nextChildren: MarkdownNode[] = []
   for (const child of node.children) {
-    if (child.type === 'text' && child.value !== undefined) {
+    // Text an earlier pass drew as something else, such as a mention chip, stays as drawn.
+    if (child.type === 'text' && child.value !== undefined && child.data === undefined) {
       // Agent replies can contain thousands of issue refs; append iteratively to avoid V8’s argument limit.
       for (const part of splitGitHubReferenceText(child.value, defaultRepo)) {
         nextChildren.push(part)

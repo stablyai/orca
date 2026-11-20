@@ -22,7 +22,6 @@ import {
   type BotChatSearchAsk
 } from '../../../../shared/bots/use-bot-chat-search'
 import type { BotChatSearchResult } from '../../../../shared/bots/bot-chat-search'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { BotChatTreeGroup } from './BotChatTreeGroup'
 import {
   BotUsageLimitStopsContext,
@@ -57,30 +56,13 @@ function OfflineHeader({ bot }: { bot: Bot }): React.JSX.Element {
 }
 
 /** Why this bot's chats couldn't be listed. */
-function ChatsReadNote({
-  state,
-  retry
-}: {
-  state: 'failed' | 'unsupported'
-  retry: () => void
-}): React.JSX.Element {
+function ChatsReadNote({ retry }: { retry: () => void }): React.JSX.Element {
   const t = useTranslate()
-  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
-  if (state === 'failed') {
-    return (
-      <p className={NOTE}>
-        {t('bots.chats.readFailed', "Couldn't read this bot's chats.")}{' '}
-        <Button variant="link" size="inlineText" onClick={retry}>
-          {t('bots.chats.searchRetry', 'Try again')}
-        </Button>
-      </p>
-    )
-  }
   return (
     <p className={NOTE}>
-      {t('bots.chats.unsupported', "This bot's computer runs an older Orca that can't list chats.")}{' '}
-      <Button variant="link" size="inlineText" onClick={() => setRightSidebarTab('bot-activity')}>
-        {t('bots.chats.seeItems', 'See its work in Home')}
+      {t('bots.chats.readFailed', "Couldn't read this bot's chats.")}{' '}
+      <Button variant="link" size="inlineText" onClick={retry}>
+        {t('bots.chats.searchRetry', 'Try again')}
       </Button>
     </p>
   )
@@ -135,9 +117,6 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
         botId,
         query: text
       }).catch((error: unknown) => {
-        if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
-          return 'unsupported' as const
-        }
         console.error('Failed to search bot chats:', error)
         throw error
       }),
@@ -205,7 +184,7 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
             tree.state === 'loading' ? (
               <BotChatsSkeleton />
             ) : (
-              <ChatsReadNote state={tree.state} retry={tree.retry} />
+              <ChatsReadNote retry={tree.retry} />
             )
           ) : null}
           {searching && chatHits.length > 0 ? (

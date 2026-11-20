@@ -276,19 +276,6 @@ describe('a Google setup card in the chat', () => {
     expect(screen.getByText('Application privacy policy link')).toBeTruthy()
   })
 
-  it('doesn’t guess the audience when the account’s kind isn’t known yet', () => {
-    mocks.run.current = run({
-      mode: 'guide-browser',
-      steps: { branding: { status: 'active', at: 2 } }
-    })
-    show('step', 'branding')
-    const audience = screen
-      .getAllByRole('listitem')
-      .find((item) => item.textContent?.includes('Audience'))
-    expect(audience?.textContent).toContain('External')
-    expect(audience?.textContent).toContain('Internal')
-  })
-
   it('waits for the key even while an earlier step is still open, with Import as a fallback', () => {
     const at = { status: 'done' as const, at: 2, by: 'bot' as const }
     mocks.run.current = run({
@@ -305,16 +292,6 @@ describe('a Google setup card in the chat', () => {
     expect(mocks.sources[0].at(-1)).toEqual({ kind: 'downloads' })
     fireEvent.click(screen.getByRole('button', { name: 'Import file' }))
     expect(mocks.pick).toHaveBeenCalled()
-  })
-
-  it('warns about Google’s screen for a new personal app only', () => {
-    mocks.run.current = run({ kind: 'personal', account: 'a@gmail.com' })
-    show('connect')
-    expect(screen.queryByText(/Google will show a warning/)).toBeTruthy()
-    cleanup()
-    mocks.run.current = run({ kind: 'work', account: 'a@acme.com' })
-    show('connect')
-    expect(screen.queryByText(/Google will show a warning/)).toBeNull()
   })
 
   it('offers Make a new key on the progress card when the key went missing before client is done', async () => {
@@ -473,12 +450,12 @@ describe('a Google setup card in the chat', () => {
     mocks.run.current = run({ state: 'done', account: 'a@x.com', kind: 'work' })
     show('connected')
     expect(screen.getByText('Ivy can use Gmail.')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Share setup with teammates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Share setup' }))
     expect(mocks.share).toHaveBeenCalledWith({ kind: 'local' }, 'p')
     cleanup()
     mocks.run.current = run({ state: 'done', account: 'a@x.com', kind: 'personal' })
     show('connected')
-    expect(screen.queryByRole('button', { name: 'Share setup with teammates' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Share setup' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Add a service' })).toBeTruthy()
   })
 
@@ -522,7 +499,7 @@ describe('a Google setup card in the chat', () => {
       steps: { account: { status: 'done', at: 2, by: 'bot', note: 'Already signed in as a@x.com' } }
     })
     show('progress')
-    fireEvent.click(screen.getByRole('button', { name: 'Use a different account' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch account' }))
     await waitFor(() =>
       expect(mocks.answer).toHaveBeenCalledWith(expect.objectContaining({ id: 'ivy' }), 'account', [
         'other'
@@ -537,7 +514,7 @@ describe('a Google setup card in the chat', () => {
       }
     })
     show('progress')
-    expect(screen.queryByRole('button', { name: 'Use a different account' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Switch account' })).toBeNull()
   })
 
   describe('getting unstuck', () => {

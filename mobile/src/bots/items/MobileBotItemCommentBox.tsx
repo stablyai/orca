@@ -1,4 +1,4 @@
-// The item page's comment box, docked at the bottom: it names the bot's open question, sends with the
+// The item page's comment box, docked at the bottom: it sends with the
 // chat composer's arrow, and keeps its text until a send lands (closing the panel keeps each item's draft for
 // the session). Offline, Comment waits; a dropped reply says the comment may have arrived, never resends.
 // The chat's field and mic: the session's dictation lands here while the box is its target.
@@ -12,7 +12,7 @@ import {
   type Ref
 } from 'react'
 import { Text, View, type HostInstance, type TextInputInstance } from 'react-native'
-import { CornerDownRight, WifiOff } from 'lucide-react-native'
+import { WifiOff } from 'lucide-react-native'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import { ComposerSendButton } from '../../components/composer-input/ComposerSendButton'
 import { COMPOSER_COMPACT_CONTROL_SIZE } from '../../components/composer-input/composer-input-styles'
@@ -37,19 +37,30 @@ import { botItemWriteFailure } from './use-bot-item-moves'
 // Each item's unsent text, for this app session.
 const drafts = new Map<string, string>()
 
-export type BotItemCommentBoxHandle = { focus: () => void }
+export type BotItemCommentBoxHandle = {
+  focus: () => void
+  /** Post `text` as the owner's comment, as Comment does (a quick reply): `landed` when it went or
+   *  may have gone (the reply dropped after sending), `failed` when it surely didn't. */
+  send: (text: string) => Promise<'landed' | 'failed'>
+  /** Put `text` in the box in place of its words, to add to before sending. */
+  fill: (text: string) => void
+}
 
 export function MobileBotItemCommentBox({
   client,
   item,
   online,
   hostName,
+  waitingOn = null,
   ref
 }: {
   client: RpcClient | null
   item: BotItem
   online: boolean
   hostName: string
+  /** The agent's question waiting on the owner (what is sent is the reply): who asked, and whether it
+   *  gave quick replies. */
+  waitingOn?: { replies: boolean; asker: string } | null
   ref?: Ref<BotItemCommentBoxHandle>
 }) {
   useMobileColorScheme()
@@ -60,10 +71,12 @@ export function MobileBotItemCommentBox({
   const [error, setError] = useState<string | null>(null)
   const input = useRef<TextInputInstance>(null)
   const cancelRef = useRef<HostInstance>(null)
-  useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }))
   const { uid } = item
+  // Bumped on every change, so a send clears only the words it sent.
+  const revision = useRef(0)
   const setText = useCallback(
     (next: string) => {
+      revision.current += 1
       setTextState(next)
       setError(null)
       if (next) {
@@ -98,20 +111,39 @@ export function MobileBotItemCommentBox({
     })
   const micActive = mic?.micActive ?? false
   const canSend = online && text.trim().length > 0 && !micActive
-  const send = async () => {
-    if (!canSend || sending || !client) {
-      return
+  const post = async (words: string, typed: boolean): Promise<'landed' | 'failed'> => {
+    if (!online || !words || sending || !client) {
+      return 'failed'
     }
     setSending(true)
-    const outcome = await commentOnBotItem(client, item.uid, text.trim())
+    const sentRevision = revision.current
+    const outcome = await commentOnBotItem(client, item.uid, words)
     setSending(false)
     if (outcome.kind === 'done') {
-      setText('')
-      return
+      setError(null)
+      // Words put in the box while it was sending (a quick reply's long press) stay.
+      if (typed && revision.current === sentRevision) {
+        setText('')
+      }
+      return 'landed'
     }
     triggerError()
     setError(botItemWriteFailure(outcome, hostName, t))
+    return outcome.kind === 'unknown' ? 'landed' : 'failed'
   }
+  const send = async () => {
+    if (canSend) {
+      await post(text.trim(), true)
+    }
+  }
+  useImperativeHandle(ref, () => ({
+    focus: () => input.current?.focus(),
+    send: (words) => post(words.trim(), false),
+    fill: (words) => {
+      setText(`${words} `)
+      input.current?.focus()
+    }
+  }))
   const notice = !online
     ? t(
         'bots.items.comment.offline',
@@ -121,15 +153,6 @@ export function MobileBotItemCommentBox({
     : null
   return (
     <View style={styles.box}>
-      {item.question ? (
-        <View style={styles.answering}>
-          <CornerDownRight size={12} color={colors.textMuted} />
-          <Text style={styles.answeringText} numberOfLines={1}>
-            {t('bots.items.comment.answering', 'Answering:')}{' '}
-            <Text style={styles.answeringQuestion}>{item.question.text}</Text>
-          </Text>
-        </View>
-      ) : null}
       <View style={styles.row}>
         <View style={styles.field}>
           <MobileNativeChatComposerField
@@ -148,7 +171,13 @@ export function MobileBotItemCommentBox({
             editable={!sending}
             multiline
             accessibilityLabel={t('bots.items.comment.label', 'Comment')}
-            placeholder={t('bots.items.comment.add', 'Add a comment…')}
+            placeholder={
+              !waitingOn
+                ? t('bots.items.comment.add', 'Add a comment…')
+                : waitingOn.replies
+                  ? t('bots.items.comment.reply', 'Reply in your own words')
+                  : t('bots.items.comment.replyTo', 'Reply to {{name}}…', { name: waitingOn.asker })
+            }
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.textPrimary}
           />
@@ -209,14 +238,6 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.sheetGroup
   },
-  answering: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs
-  },
-  answeringText: { flex: 1, fontSize: typography.metaSize, color: colors.textMuted },
-  answeringQuestion: { fontWeight: '500', color: colors.textSecondary },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
   field: { flex: 1 },
   micSlot: { height: COMPOSER_COMPACT_CONTROL_SIZE, justifyContent: 'center' },

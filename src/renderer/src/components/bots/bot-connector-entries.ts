@@ -15,7 +15,6 @@ import {
   type BotLinear
 } from '../../../../shared/bot-types'
 import type { ComposioConnection } from '../../../../shared/composio/composio-apps'
-import { botToolsSupported } from '../../../../shared/bot-tools'
 import type { BotGitHubView } from '@/lib/bot-github-state'
 import type { BotLinearView } from '@/lib/bot-linear-state'
 import type { BotSlackView } from '@/lib/bot-slack-state'
@@ -92,7 +91,7 @@ export function useBotConnectorEntries(
   // No bot shown reads nothing, so the host it would read is only a placeholder.
   const google = useGoogleHost(bot ? botTarget(bot) : ownBotHost().target, shown)
   const composio = useComposioBot(bot)
-  const { view: tools } = useBotTools(bot && botToolsSupported(bot.agent) ? bot : null, appsCheck)
+  const { view: tools } = useBotTools(bot, appsCheck)
   // Changes with the UI language, so the translated titles follow a switch.
   const t = useTranslate()
   // The panel header, tab and toggle all read it, so one list per change of its sources.

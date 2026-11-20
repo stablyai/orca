@@ -40,7 +40,7 @@ const mocks = vi.hoisted(
     reviewById: {},
     smartOrder: null,
     offline: false,
-    chatTree: { state: 'unsupported', chats: [], workspaceChats: {} },
+    chatTree: { state: 'failed', chats: [], workspaceChats: {} },
     chatTreeReads: []
   })
 )
@@ -224,7 +224,7 @@ beforeEach(() => {
   mocks.smartOrder = null
   mocks.offline = false
   mocks.reviewById = {}
-  mocks.chatTree = { state: 'unsupported', chats: [], workspaceChats: {} }
+  mocks.chatTree = { state: 'failed', chats: [], workspaceChats: {} }
   mocks.chatTreeReads = []
 })
 
@@ -294,7 +294,7 @@ describe('BotSidebarEntry', () => {
     expect(lines()).toEqual(['third', 'second', 'first'])
   })
 
-  it('counts every workspace on the collapsed row and restores its rows on unfold', () => {
+  it('hides workspaces on the collapsed row and restores its rows on unfold', () => {
     seed({ ask: 'permission', run: 'working', run2: 'working', broke: 'failed', ok: 'done' })
     renderEntry()
 
@@ -302,8 +302,9 @@ describe('BotSidebarEntry', () => {
     expect(fold.textContent).toBe('')
     fireEvent.click(fold)
     expect(lines()).toEqual([])
+    // Folded, it shows only its most urgent workspace's status, not a count of every one.
     const toggle = screen.getByRole('button', { name: 'Unfold Scout' })
-    expect(toggle.textContent).toBe('5')
+    expect(toggle.textContent).toBe('')
 
     fireEvent.click(toggle)
     expect(lines()).toHaveLength(5)
@@ -376,7 +377,7 @@ describe('BotSidebarEntry', () => {
     expect(lines()).toEqual([])
   })
 
-  it('folds the front chat from its sidebar row and opens a background chat', () => {
+  it('switches chats from their sidebar rows and folds only from the chevron', () => {
     seed({ 'front-work': 'working', 'background-work': 'working' })
     const workspace = folderWorkspaceKey(home.id)
     const groupId = 'group-1'
@@ -430,14 +431,22 @@ describe('BotSidebarEntry', () => {
       expect(front.getAttribute('aria-current')).toBe('true')
       expect(background.hasAttribute('aria-current')).toBe(false)
 
+      // A press only switches chats, the front one included; its workers stay as they were.
+      const frontFold = front.getAttribute('aria-expanded')
       fireEvent.click(front, { detail: 1 })
-      expect(front.getAttribute('aria-expanded')).toBe('true')
-      fireEvent.click(front, { detail: 1 })
-      expect(front.getAttribute('aria-expanded')).toBe('false')
-      expect(openBotSession).not.toHaveBeenCalled()
+      expect(front.getAttribute('aria-expanded')).toBe(frontFold)
+      expect(openBotSession).toHaveBeenCalledExactlyOnceWith(bot(), 'front')
+      fireEvent.click(front, { detail: 2 })
+      fireEvent.keyDown(front, { key: 'Enter', repeat: true })
+      expect(openBotSession).toHaveBeenCalledOnce()
 
+      const backgroundFold = background.getAttribute('aria-expanded')
       fireEvent.click(background, { detail: 1 })
-      expect(openBotSession).toHaveBeenCalledExactlyOnceWith(bot(), 'background')
+      expect(openBotSession).toHaveBeenLastCalledWith(bot(), 'background')
+      expect(background.getAttribute('aria-expanded')).toBe(backgroundFold)
+
+      // Only the chevron shows its workers.
+      fireEvent.click(screen.getByRole('button', { name: 'Unfold background' }))
       expect(background.getAttribute('aria-expanded')).toBe('true')
     } finally {
       vi.unstubAllGlobals()
