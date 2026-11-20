@@ -1,3 +1,11 @@
+import { readBots, readBotsEnabled } from '@/lib/bot-catalog'
+import {
+  botHostEndsChats,
+  requestBotChatEnd,
+  showBotChatTabCloseResult
+} from '@/components/bots/bot-chat-end'
+import { botOfHomeWorkspace } from '../../../../../shared/bots/bot-homes'
+import { chatTabShowing } from './chat-tab-showings'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
@@ -7,6 +15,30 @@ import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 const inFlightRetirements = new Map<string, Promise<boolean>>()
+
+/** A bot side chat's "x" asks its host once: it ends the chat when nothing is left, else keeps it in
+ *  the background as before. Null when the host can't (older host, no showing yet) or it is the Home. */
+function closeBotSideChatTab(args: {
+  target: RuntimeClientTarget
+  worktreeId: string
+  sessionId: string
+  onError?: (error: unknown) => void
+}): Promise<boolean> | null {
+  const bot = readBotsEnabled() ? botOfHomeWorkspace(readBots(), args.worktreeId) : null
+  const showing = chatTabShowing(args.target, args.worktreeId, args.sessionId)
+  if (!bot || !showing || bot.chatSessionId === args.sessionId || !botHostEndsChats(bot)) {
+    return null
+  }
+  return requestBotChatEnd(bot, { chat: args.sessionId, intent: 'x', showing })
+    .then((result) => {
+      showBotChatTabCloseResult(bot, args.sessionId, result)
+      return result.outcome === 'ended' || ('background' in result && result.background === true)
+    })
+    .catch((error: unknown) => {
+      args.onError?.(error)
+      return false
+    })
+}
 
 function retirementKey(target: RuntimeClientTarget, worktreeId: string, sessionId: string): string {
   return `${target.kind}:${target.kind === 'environment' ? target.environmentId : 'local'}:${worktreeId}:${sessionId}`
@@ -28,6 +60,12 @@ export function retireStructuredAgentSessionTab(args: {
   const existing = inFlightRetirements.get(key)
   if (existing) {
     return existing
+  }
+  const botClose = closeBotSideChatTab(args)
+  if (botClose) {
+    const settled = botClose.finally(() => inFlightRetirements.delete(key))
+    inFlightRetirements.set(key, settled)
+    return settled
   }
   const hostTabId = `agent-session:${args.sessionId}`
   // Why: main echoes the host tab id it was asked to close, never this window's tab id.
