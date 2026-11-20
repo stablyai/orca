@@ -122,3 +122,21 @@ it('leaves a paired web client’s shared acknowledgements to its host to carry'
     [CONVERSATION_KEY]: 500
   })
 })
+
+it('removes a carried acknowledgement an older build un-acknowledged under the tab key', () => {
+  const tabKey = `agent-chat-tab-v1-abc:${LEAF}`
+  const state = {
+    current: chatTabState('agent-chat-tab-v1-abc', {
+      // After a downgrade, Mark unread deleted the tab-keyed acknowledgement and stamped the turn.
+      acknowledgedAgentsByPaneKey: { [CONVERSATION_KEY]: 300 },
+      manuallyUnreadTurnsByPaneKey: { [tabKey]: 290 },
+      chatReadMarksCarriedFrom: { [`acknowledgedAgentsByPaneKey ${tabKey}`]: 300 }
+    })
+  }
+  carryChatReadMarks(storeOver(state), chatReadMarkRecordsCarriedHere(false))
+  expect(state.current.acknowledgedAgentsByPaneKey).toEqual({})
+  expect(state.current.manuallyUnreadTurnsByPaneKey).toEqual({
+    [tabKey]: 290,
+    [CONVERSATION_KEY]: 290
+  })
+})

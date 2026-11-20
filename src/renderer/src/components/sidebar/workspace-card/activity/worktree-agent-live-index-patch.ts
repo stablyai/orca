@@ -6,6 +6,7 @@ import {
 } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
+import { chatPaneKeySessionId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 // Local completed orphans stay hidden; remote rows await host retraction, not tab hydration.
 export function liveEntryWorktreeId(
@@ -20,7 +21,8 @@ export function liveEntryWorktreeId(
   }
   const tabWorktreeId = tabIdToWorktreeId.get(parsed.tabId)
   const remote = Boolean(entry.connectionId) || isWebTerminalSurfaceTabId(parsed.tabId)
-  if (remote) {
+  // A chat row names its own workspace; its key's tab part may be another workspace's tab id.
+  if (remote || (entry.worktreeId && chatPaneKeySessionId(paneKey) !== null)) {
     return resolveAgentStatusWorktreeId(entry, tabIdToWorktreeId) ?? undefined
   }
   return tabWorktreeId ?? (entry.state === 'done' && !remote ? undefined : entry.worktreeId)

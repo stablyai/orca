@@ -82,6 +82,8 @@ export function stageProjectionTopology(
             ...Object.keys(state.unifiedTabsByWorktree ?? {})
           ])
     const removedKeys = new Set<string>()
+    // The first tab listed for a conversation represents it, as the status bridge's member does.
+    const insertedKeys = new Set<string>()
     for (const owner of owners) {
       for (const tab of previous?.unifiedTabsByWorktree[owner] ?? []) {
         if (
@@ -108,7 +110,8 @@ export function stageProjectionTopology(
           const key = chatPaneKey(tab.entityId)
           changedKeys.add(key)
           removedKeys.delete(key)
-          if (isStructuredTab(tab)) {
+          if (isStructuredTab(tab) && !insertedKeys.has(key)) {
+            insertedKeys.add(key)
             represented.set(key, tab)
           }
           nextTabOwners.set(tab.id, owner)

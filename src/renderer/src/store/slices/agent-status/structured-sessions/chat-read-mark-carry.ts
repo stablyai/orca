@@ -39,8 +39,8 @@ export function chatReadMarkRecordsCarriedHere(
  * (a replaced conversation, a reopened tab) saved its read marks under the tab's key before pane
  * keys followed the conversation. Copy each to the conversation key, keeping the larger value on
  * collision as the saved pane-key remap does. Originals stay for older desktops and downgrades;
- * `chatReadMarksCarriedFrom` records each carried value, so only a changed one is carried again and
- * a later Mark unread is never undone.
+ * `chatReadMarksCarriedFrom` records each carried value, so only a changed one is carried again, a
+ * later Mark unread is never undone, and an older build's removal of a carried mark removes its copy.
  */
 export function carriedChatReadMarks(
   marks: ReadMarks,
@@ -62,7 +62,24 @@ export function carriedChatReadMarks(
       const value = marks[record][tabKey]
       const carriedKey = `${record} ${tabKey}`
       const carried = patch?.chatReadMarksCarriedFrom ?? marks.chatReadMarksCarriedFrom
-      if (value === undefined || carried[carriedKey] === value) {
+      const carriedValue = carried[carriedKey]
+      if (value === undefined) {
+        // An older build undid a carried read or unread mark under the tab's key; undo its copy too.
+        // Cutoffs only advance, so a missing one was retired, not undone.
+        if (
+          carriedValue !== undefined &&
+          record !== 'activityClearedAtByPaneKey' &&
+          (patch?.[record] ?? marks[record])[key] === carriedValue
+        ) {
+          patch ??= {}
+          delete (patch[record] ??= { ...marks[record] })[key]
+          delete (patch.chatReadMarksCarriedFrom ??= { ...marks.chatReadMarksCarriedFrom })[
+            carriedKey
+          ]
+        }
+        continue
+      }
+      if (carriedValue === value) {
         continue
       }
       patch ??= {}
