@@ -173,6 +173,8 @@ describe('streamDeliveryOf', () => {
     expect(cutTail({ data: '2B>4;2m', seq: 7, midEscape: 'unknown' })).toBeUndefined()
     // Cut-off bytes holding a C1 control are not scanned.
     expect(cutTail({ data: '\u009bab\x1b[>4;2m', seq: 10 })).toBeUndefined()
+    // An escape past the carry cap re-arms inert, so its continuation is discarded, not printed.
+    expect(cutTail({ data: `\x1b]52;c;${'A'.repeat(5000)}>4;2m`, seq: 5012 })).toBe('\x1b]x;')
   })
 
   it('never fabricates a position for a suffix of a transformed chunk', () => {

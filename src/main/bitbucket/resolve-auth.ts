@@ -6,8 +6,7 @@ import {
   type BitbucketAuthConfig
 } from './bitbucket-auth-config'
 import {
-  getStoredBitbucketMetadata,
-  loadStoredBitbucketSecret,
+  loadStoredBitbucketCredential,
   type BitbucketStoredMetadata,
   type BitbucketStoredSecret
 } from './credential-store'
@@ -30,14 +29,14 @@ export function storedAuthConfig(
 }
 
 // Preserve environment auth precedence; decrypt stored secrets only for API calls.
-export function resolveBitbucketAuthConfig(): BitbucketAuthConfig {
+export async function resolveBitbucketAuthConfig(): Promise<BitbucketAuthConfig> {
   const env = getEnvAuthConfig()
   if (hasAuth(env)) {
     return env
   }
   try {
-    const secret = loadStoredBitbucketSecret({ force: true })
-    return secret ? storedAuthConfig(getStoredBitbucketMetadata(), secret) : env
+    const { secret, metadata } = await loadStoredBitbucketCredential({ force: true })
+    return secret ? storedAuthConfig(metadata, secret) : env
   } catch {
     return env
   }

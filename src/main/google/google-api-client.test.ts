@@ -26,7 +26,10 @@ async function apiWith(routes: FakeRoute[]) {
     },
     ...routes
   ])
-  return { api: google.client.googleApi(undefined, { http: fake.http, now: () => NOW }), seen }
+  return {
+    api: await google.client.googleApi(undefined, { http: fake.http, now: () => NOW }),
+    seen
+  }
 }
 
 const DOCS = 'https://docs.googleapis.com/v1/documents'

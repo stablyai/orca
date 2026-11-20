@@ -31,7 +31,6 @@
       "emptyScope": "此范围内暂无历史智能体会话",
       "hideDetails": "隐藏详情",
       "showDetails": "显示详情",
-      "dismissNotice": "关闭",
       "loading": "正在加载智能体会话…",
       "missingResumeId": "此会话缺少恢复 ID",
       "noSearchResults": "没有符合搜索条件的会话",
@@ -1078,12 +1077,10 @@
       "dismissDrawer": "关闭抽屉"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "钩子",
       "label": "设置脚本",
-      "run": "执行",
-      "runSetupCommand": "执行设置命令",
+      "runSetup": "执行设置",
       "skip": "跳过",
-      "waitForSetup": "等待设置完成后再启动代理",
+      "startAgentAfterSetup": "设置完成后再启动代理",
       "waitForSetupSaveFailed": "保存设置启动行为失败"
     },
     "newWorkspaceSshConnectionField": {
@@ -1829,10 +1826,8 @@
   "host": {
     "edit": {
       "address": "地址",
-      "addressHint": "支持 IP、host:port 或 ws:// / wss://。wss:// URL 未指定端口时使用 443。仅输入地址时保留当前端口（或使用 6768）",
       "connectionPreview": "连接到 {{endpoint}}",
       "goBack": "返回",
-      "help": "更改显示名称或连接地址。名称留空时，将使用主机提供的名称。更改地址只会切换此手机的连接地址，不会重新配对。当同一主机可通过不同 IP 访问时（例如家庭局域网与 Tailscale），可使用此功能",
       "hostNamePlaceholder": "主机名",
       "hostRemoved": "此主机已从这部手机上移除",
       "loadFailed": "加载主机失败",
