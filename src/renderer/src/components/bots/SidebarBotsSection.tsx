@@ -114,9 +114,8 @@ export function SidebarBotsSection({
   // Folds even while empty, so the onboarding card can be put away. A fold landing mid-search
   // (another writer) still leaves the results showing until the search ends.
   const collapsed = savedCollapsed && !searchOpen
-  // The + menu unmounts with the folded header's controls, and while the onboarding card offers New bot.
-  // A fold or emptying it didn't see must not reopen it later.
-  if ((collapsed || !hasEntries) && newMenuOpen) {
+  // The + menu unmounts with the folded header's controls; a fold it didn't see must not reopen it on unfold.
+  if (collapsed && newMenuOpen) {
     setNewMenuOpen(false)
   }
   const collapseAll = useBotCollapseAll(entries, savedEntries)
@@ -228,87 +227,85 @@ export function SidebarBotsSection({
                 />
               ) : null}
               {hasEntries ? <BotSidebarOptionsMenu /> : null}
-              {hasEntries ? (
-                <DropdownMenu open={newMenuOpen} onOpenChange={setNewMenuOpen}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="shrink-0"
-                          aria-label={newLabel}
-                        >
-                          <Plus className="size-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      {newLabel}
-                    </TooltipContent>
-                  </Tooltip>
-                  <DropdownMenuContent side="bottom" align="start" sideOffset={6}>
-                    {/* New bot opens its dialog on click or Enter; hover or › shows the other ways to add one. */}
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger
-                        onClick={(event) => {
+              <DropdownMenu open={newMenuOpen} onOpenChange={setNewMenuOpen}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="shrink-0"
+                        aria-label={newLabel}
+                      >
+                        <Plus className="size-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {newLabel}
+                  </TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent side="bottom" align="start" sideOffset={6}>
+                  {/* New bot opens its dialog on click or Enter; hover or › shows the other ways to add one. */}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      onClick={(event) => {
+                        event.preventDefault()
+                        openNewBot()
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault()
                           openNewBot()
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            openNewBot()
-                          }
-                        }}
-                      >
-                        <span className={BOT_MENU_ROW}>
-                          <BotIcon className="size-3.5" />
-                          {newBotLabel}
-                        </span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent>
-                        <DropdownMenuItem onSelect={openNewBot}>
-                          <span className={BOT_MENU_ROW}>
-                            <Plus className="size-3.5" />
-                            {t('bots.section.startFromScratch', 'Start from scratch')}
-                          </span>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onSelect={() => openBotTemplates()}>
-                          <span className={BOT_MENU_ROW}>
-                            <LayoutTemplate className="size-3.5" />
-                            {t('bots.templates.browse', 'Browse templates')}
-                          </span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => openBotShareLink(null)}>
-                          <span className={BOT_MENU_ROW}>
-                            <Link2 className="size-3.5" />
-                            {t('bots.share.receive.fromLinkMenu', 'From a link…')}
-                          </span>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => setImportOpen(true)}>
-                          <span className={BOT_MENU_ROW}>
-                            <Download className="size-3.5" />
-                            {t('bots.import.menu', 'Import from another app…')}
-                          </span>
-                        </DropdownMenuItem>
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                    {/* A group needs two bots to talk to each other. */}
-                    <DropdownMenuItem
-                      disabled={bots.length < 2}
-                      onSelect={() => setEditingGroup('new')}
+                        }
+                      }}
                     >
                       <span className={BOT_MENU_ROW}>
-                        <Users className="size-3.5" />
-                        {t('bots.groups.newGroup', 'New group')}
+                        <BotIcon className="size-3.5" />
+                        {newBotLabel}
                       </span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuItem onSelect={openNewBot}>
+                        <span className={BOT_MENU_ROW}>
+                          <Plus className="size-3.5" />
+                          {t('bots.section.startFromScratch', 'Start from scratch')}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => openBotTemplates()}>
+                        <span className={BOT_MENU_ROW}>
+                          <LayoutTemplate className="size-3.5" />
+                          {t('bots.templates.browse', 'Browse templates')}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => openBotShareLink(null)}>
+                        <span className={BOT_MENU_ROW}>
+                          <Link2 className="size-3.5" />
+                          {t('bots.share.receive.fromLinkMenu', 'From a link…')}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setImportOpen(true)}>
+                        <span className={BOT_MENU_ROW}>
+                          <Download className="size-3.5" />
+                          {t('bots.import.menu', 'Import from another app…')}
+                        </span>
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  {/* A group needs two bots to talk to each other. */}
+                  <DropdownMenuItem
+                    disabled={bots.length < 2}
+                    onSelect={() => setEditingGroup('new')}
+                  >
+                    <span className={BOT_MENU_ROW}>
+                      <Users className="size-3.5" />
+                      {t('bots.groups.newGroup', 'New group')}
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           )
         }

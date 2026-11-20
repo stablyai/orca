@@ -282,32 +282,34 @@ describe('SidebarBotsSection', () => {
     expect(screen.queryByRole('menuitem', { name: 'New bot' })).toBeNull()
   })
 
-  it('offers New bot only from the onboarding card while empty, and folds the card away', async () => {
+  it('keeps New bot access while empty and folds the onboarding card away', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     renderSection()
     expect(screen.getByText('Bots')).toBeTruthy()
-    // The card's New bot stands in for the header +, so the header doesn't repeat it.
-    expect(screen.queryByRole('button', { name: 'New bot or group' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'New bot' })).toBeTruthy()
     // No count beside the title while there is nothing to count.
     expect(screen.queryByText('0')).toBeNull()
     const emptyHeader = screen.getByRole('button', { name: /^Collapse Bots, 0 bots/ })
     expect(emptyHeader.hasAttribute('disabled')).toBe(false)
     fireEvent.click(emptyHeader)
     expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
-    expect(screen.queryByRole('button', { name: 'New bot' })).toBeNull()
+    expect(screen.queryByText('Your AI teammate')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /^Expand Bots, 0 bots/ }))
-    expect(screen.queryByRole('button', { name: 'New bot or group' })).toBeNull()
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'New bot' }))
-    })
-    expect(document.querySelector('[data-new-bot-dialog]')).not.toBeNull()
+    expect(screen.getByText('Your AI teammate')).toBeTruthy()
+    fireEvent.keyDown(screen.getByRole('button', { name: 'New bot or group' }), { key: 'Enter' })
+    expect(screen.getByRole('menuitem', { name: 'New bot' })).toBeTruthy()
+    // A group needs two bots.
+    expect(
+      screen.getByRole('menuitem', { name: 'New group' }).getAttribute('data-disabled')
+    ).not.toBeNull()
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(false)
 
     cleanup()
     mocks.bots = [bot()]
     useAppStore.setState({ folderWorkspaces: [home()] })
     renderSection()
     expect(screen.getByText('Reviewer')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'New bot or group' })).toBeTruthy()
   })
 
   it('saves mixed bot and group order without opening a bot on drop', async () => {
@@ -354,8 +356,6 @@ describe('SidebarBotsSection', () => {
   })
 
   it('lists Start from scratch first in the New bot submenu and opens the blank dialog', async () => {
-    mocks.bots = [bot()]
-    useAppStore.setState({ folderWorkspaces: [home()] })
     renderSection()
     fireEvent.keyDown(screen.getByRole('button', { name: 'New bot or group' }), { key: 'Enter' })
     await act(async () => {
