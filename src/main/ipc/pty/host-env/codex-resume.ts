@@ -107,12 +107,7 @@ export async function reconcileSharedRuntimeResumeHome(
     return resumeHome.codexHomePath
   }
   const currentHome = await resolveCurrentHome()
-  if (
-    !codexHomePathsEqual(
-      currentHome,
-      resumeHome.reconcileAgainstHomePath ?? resumeHome.codexHomePath
-    )
-  ) {
+  if (!codexHomePathsEqual(currentHome, resumeHome.codexHomePath)) {
     throw new Error(CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE)
   }
   return resumeHome.codexHomePath

@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { lstatSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
@@ -93,8 +101,8 @@ vi.mock('node:os', async () => {
   }
 })
 import {
-  getNewerLegacyCopiedCodexSessionSource,
-  syncSystemCodexSessionsIntoManagedHome
+  syncSystemCodexSessionsIntoManagedHome,
+  syncSystemCodexSessionsIntoManagedHomeIncrementally
 } from './codex-session-bridge'
 
 let fakeHomeDir: string
@@ -187,7 +195,7 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')
   })
 
-  it('keeps a legacy copy holding lines its source lacks', () => {
+  it('keeps a legacy copy holding lines its source lacks', async () => {
     const relativeSessionPath = join('2026', '05', '26', 'rollout-legacy-diverged.jsonl')
     const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
     const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
@@ -197,12 +205,13 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     writeFileSync(runtimeSessionPath, '{"turn":1}\n{"turn":2}\n', 'utf-8')
     writeLegacyCopyMarker(relativeSessionPath, systemSessionPath, runtimeSessionPath)
 
-    syncSystemCodexSessionsIntoManagedHome()
+    await syncSystemCodexSessionsIntoManagedHomeIncrementally()
 
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"turn":1}\n{"turn":2}\n')
+    expect(existsSync(`${runtimeSessionPath}.orca-legacy-copy`)).toBe(false)
   })
 
-  it('resumes the source of an untouched old copy once the source has grown', async () => {
+  it('sets an untouched legacy copy aside and links the source that grew from it', async () => {
     const relativeSessionPath = join('2026', '05', '27', 'rollout-legacy-grown.jsonl')
     const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
     const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
@@ -211,22 +220,16 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     writeFileSync(systemSessionPath, '{"turn":1}\n', 'utf-8')
     writeFileSync(runtimeSessionPath, '{"turn":1}\n', 'utf-8')
     writeLegacyCopyMarker(relativeSessionPath, systemSessionPath, runtimeSessionPath)
-    expect(
-      await getNewerLegacyCopiedCodexSessionSource(runtimeSessionPath, getRuntimeCodexHomePath())
-    ).toBeNull()
-
     writeFileSync(systemSessionPath, '{"turn":1}\n{"turn":2}\n', 'utf-8')
-    syncSystemCodexSessionsIntoManagedHome()
 
-    expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"turn":1}\n')
-    expect(
-      await getNewerLegacyCopiedCodexSessionSource(runtimeSessionPath, getRuntimeCodexHomePath())
-    ).toBe(systemSessionPath)
+    await syncSystemCodexSessionsIntoManagedHomeIncrementally()
 
-    // A rewritten source that grew but lost the copy's lines does not win.
-    writeFileSync(systemSessionPath, '{"turn":"rewritten"}\n{"turn":2}\n', 'utf-8')
+    expect(lstatSync(runtimeSessionPath).ino).toBe(lstatSync(systemSessionPath).ino)
+    expect(readFileSync(`${runtimeSessionPath}.orca-legacy-copy`, 'utf-8')).toBe('{"turn":1}\n')
     expect(
-      await getNewerLegacyCopiedCodexSessionSource(runtimeSessionPath, getRuntimeCodexHomePath())
-    ).toBeNull()
+      existsSync(
+        join(getRuntimeCodexHomePath(), '.orca-session-copies', `${relativeSessionPath}.json`)
+      )
+    ).toBe(false)
   })
 })

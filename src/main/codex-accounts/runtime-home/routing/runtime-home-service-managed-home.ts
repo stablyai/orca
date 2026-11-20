@@ -30,7 +30,7 @@ import { CodexRuntimeHomeSync } from '../runtime-home-service-sync'
 import type { CodexHomeLaunchOptions } from '../runtime-home-service-types'
 
 export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
-  private readonly accountHistoryPasses = new CodexAccountHistoryPasses({
+  protected readonly accountHistoryPasses = new CodexAccountHistoryPasses({
     sharedHomes: () =>
       isCodexHistorySharedAcrossAccounts(this.store.getSettings())
         ? this.getManagedHostAccountHomesForSessionDiscovery()

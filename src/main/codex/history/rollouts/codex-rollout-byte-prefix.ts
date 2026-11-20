@@ -4,7 +4,11 @@ const CHUNK_BYTES = 64 * 1024
 
 /** Whether `fullPath` starts with every byte of `prefixPath`: it then holds the whole of it. */
 export async function isRolloutBytePrefix(prefixPath: string, fullPath: string): Promise<boolean> {
-  const [prefix, full] = await Promise.all([open(prefixPath, 'r'), open(fullPath, 'r')])
+  const prefix = await open(prefixPath, 'r')
+  const full = await open(fullPath, 'r').catch(async (error: unknown) => {
+    await prefix.close()
+    throw error
+  })
   try {
     const [prefixStat, fullStat] = await Promise.all([prefix.stat(), full.stat()])
     if (prefixStat.size > fullStat.size) {

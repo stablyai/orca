@@ -1,12 +1,9 @@
-import { join } from 'node:path'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
-  codexDatedRolloutRelativePath,
   trustedCodexResumeHomes,
   type CodexSessionResumePreparation
 } from './codex-session-resume-home'
-import { getNewerLegacyCopiedCodexSessionSource } from '../bridges/codex-session-bridge'
 import { prepareCodexSessionResume } from './codex-session-resume-preparation'
 import {
   prepareCodexAccountRestartResume,
@@ -71,31 +68,13 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     const trustedHomes = trustedCodexResumeHomes(runtimeHome, systemHomePath)
     // Refuse unreadable selections before provenance matching can choose another account.
     const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
-    const savedTranscriptPath = args.providerSession.transcriptPath
-    const sharedRuntimeCodexHomePath = getOrcaManagedCodexHomePath()
-    // Old copies are never linked any more: an untouched one whose source grew resumes the source.
-    const newerSource = savedTranscriptPath
-      ? await getNewerLegacyCopiedCodexSessionSource(
-          savedTranscriptPath,
-          sharedRuntimeCodexHomePath
-        )
-      : null
-    const redirected =
-      newerSource !== null &&
-      codexDatedRolloutRelativePath(join(systemHomePath, 'sessions'), newerSource) !== null
-    const transcriptPath = redirected ? newerSource : savedTranscriptPath
-    // Off the real-home route the copy resumed under the shared runtime home's account check; the
-    // source keeps it.
-    // An account restart links the source into the selected home, as it linked the linked copy.
-    const keepSharedRuntimeCheck =
-      redirected && !args.useSelectedAccount && !runtimeHome.isHostSystemDefaultRealHomeSelected()
     const preparation = await prepareCodexSessionResume({
       sessionId: args.providerSession.id,
-      transcriptPath,
+      transcriptPath: args.providerSession.transcriptPath,
       trustedCodexHomes: trustedHomes,
       getSelectedAccountCodexHome: () => selectedAccountCodexHome,
       systemCodexHomePath: systemHomePath,
-      sharedRuntimeCodexHomePath,
+      sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
       resolveVerifiedResumeHome: async (sessionSource) => {
         let migrated = { useRealCodexHome: false }
         try {
@@ -137,21 +116,14 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
         return resumeHome
       }
     })
-    if (preparation.outcome !== 'resume') {
-      return preparation
-    }
-    return keepSharedRuntimeCheck
+    return preparation.outcome === 'resume'
       ? {
-          ...preparation,
-          reconcileSharedRuntimeAuth: true,
-          reconcileAgainstHomePath: sharedRuntimeCodexHomePath
-        }
-      : {
           ...preparation,
           reconcileSharedRuntimeAuth:
             normalizeRuntimePathForComparison(preparation.codexHomePath) ===
-            normalizeRuntimePathForComparison(sharedRuntimeCodexHomePath)
+            normalizeRuntimePathForComparison(getOrcaManagedCodexHomePath())
         }
+      : preparation
   }
 
   return { prepareCodexSessionResumeForLaunch, prepareCodexPinnedLaunchHome }

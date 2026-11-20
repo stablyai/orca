@@ -24,6 +24,7 @@ import {
   type CodexHistoryMoveOutcome
 } from '../../../telemetry/codex-history-move-telemetry'
 import { isLinkedDirectory } from '../../../filesystem/merged-directory-link'
+import { getLegacyCopiesSetAsideCount } from '../bridges/codex-legacy-session-copy'
 
 const BUSY_RETRY_MS = 5 * 60_000
 // Retries start outside any pass's trace, so each is its own trace instead of nesting forever.
@@ -61,11 +62,12 @@ export class CodexAccountHistoryPasses {
   private censusHomes: string[] = []
   private readonly moveReport = new CodexHistoryMoveReport({
     wslHomeCount: () => this.homes.wslHomeCount(),
+    oldCopiesSetAside: getLegacyCopiesSetAsideCount,
     // A launch's own pass runs before its census refreshes the listing.
     currentHomes: () => {
-      const homes = this.homes.sharedHomes() ?? []
-      this.censusHomes = homes.map((home) => normalizeRuntimePathForComparison(home))
-      return this.censusHomes
+      const homes = this.homes.sharedHomes()
+      this.censusHomes = (homes ?? []).map((home) => normalizeRuntimePathForComparison(home))
+      return homes && this.censusHomes
     },
     markerPath: () => join(getOrcaUserDataPath(), 'codex-account-history', 'move-status-sent.json')
   })
@@ -183,6 +185,11 @@ export class CodexAccountHistoryPasses {
       .finally(() => {
         this.censusWaiting = false
       })
+  }
+
+  /** Reports the move status if every listed home has settled; for launches no census follows. */
+  reportMoves(): void {
+    void this.reportUnlessPending(null)
   }
 
   /** Copies the import folder's conversations that ~/.codex lacks into it (see the runner). */

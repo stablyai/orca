@@ -22,7 +22,6 @@ import {
 import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-backfill'
 import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
-import { isRolloutBytePrefix } from '../rollouts/codex-rollout-byte-prefix'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
@@ -224,15 +223,6 @@ async function installRollout(sourcePath: string, targetPath: string): Promise<v
 
 async function assertMatchingExistingTarget(sourcePath: string, targetPath: string): Promise<void> {
   const [sourceStat, targetStat] = await Promise.all([lstat(sourcePath), lstat(targetPath)])
-  // An old copy Orca kept is superseded by the rollout that grew from it: that holds all of it.
-  const targetHoldsSource =
-    targetStat.isFile() &&
-    !targetStat.isSymbolicLink() &&
-    sourceStat.size < targetStat.size &&
-    (await isRolloutBytePrefix(sourcePath, targetPath))
-  if (targetHoldsSource) {
-    return
-  }
   if (
     !targetStat.isFile() ||
     targetStat.isSymbolicLink() ||

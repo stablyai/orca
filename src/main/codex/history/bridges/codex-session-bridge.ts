@@ -7,7 +7,7 @@ import {
   renameSync,
   rmSync
 } from 'node:fs'
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import {
   getOrcaManagedCodexHomePath,
@@ -19,16 +19,12 @@ import {
 } from '../rollouts/codex-session-file-listing'
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
-import { codexDatedRolloutRelativePath } from '../resume/codex-session-resume-home'
-import { isRolloutBytePrefix } from '../rollouts/codex-rollout-byte-prefix'
-
-type LegacyCopiedSessionMarker = {
-  sourcePath: string
-  sourceSize: number
-  sourceMtimeMs: number
-  targetSize: number
-  targetMtimeMs: number
-}
+import {
+  fileStatsMatchMarker,
+  parseLegacyCopiedSessionMarker,
+  setAsideLegacyCopy,
+  type LegacyCopiedSessionMarker
+} from './codex-legacy-session-copy'
 
 export type LegacyCopiedCodexSessionBridgeScanPreference = {
   sourcePath: string
@@ -42,7 +38,6 @@ export type CodexSessionBridgeSummary = {
 }
 
 let backgroundSessionBridgeTask: Promise<void> | null = null
-
 /** Custom CODEX_HOME changes history discovery only. */
 export function syncSystemCodexSessionsIntoManagedHome(sourceCodexHomePath?: string): void {
   const systemSessionsRoot = join(sourceCodexHomePath || getSystemCodexHomePath(), 'sessions')
@@ -87,14 +82,27 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
   }
 
   const managedSessionsRoot = join(getOrcaManagedCodexHomePath(), 'sessions')
+  const markersRoot = join(dirname(managedSessionsRoot), '.orca-session-copies')
+  const hasLegacyCopies = (await lstat(markersRoot).catch(() => null))?.isDirectory() === true
   const summary: CodexSessionBridgeSummary = { scannedFiles: 0, linkedFiles: 0 }
   for await (const systemSessionFilePath of listCodexSessionJsonlFilesIncrementally(
     systemSessionsRoot,
     options
   )) {
     summary.scannedFiles += 1
+    const relativePath = relative(systemSessionsRoot, systemSessionFilePath)
     if (
-      bridgeSystemCodexSessionFile(systemSessionsRoot, managedSessionsRoot, systemSessionFilePath)
+      bridgeSystemCodexSessionFile(
+        systemSessionsRoot,
+        managedSessionsRoot,
+        systemSessionFilePath
+      ) ||
+      (hasLegacyCopies &&
+        (await setAsideLegacyCopy(
+          systemSessionFilePath,
+          join(managedSessionsRoot, relativePath),
+          join(markersRoot, `${relativePath}.json`)
+        )))
     ) {
       summary.linkedFiles += 1
     }
@@ -178,8 +186,7 @@ function replaceSymlinkSessionBridgeWithHardlink(
   return false
 }
 
-// An old copy is never swapped for a link: a turn written to it, or lines its source lacks, would be
-// lost. Only a copy something already turned into a link drops its marker.
+// Only a copy something already turned into a link drops its marker here.
 function forgetLinkedLegacyCopy(targetPath: string, relativePath: string): void {
   try {
     if (lstatSync(targetPath).isSymbolicLink()) {
@@ -190,7 +197,7 @@ function forgetLinkedLegacyCopy(targetPath: string, relativePath: string): void 
   }
 }
 
-/** Keep resume scans coherent until legacy copies can be replaced with links. */
+/** Keep resume scans coherent until legacy copies are replaced with links. */
 export function getLegacyCopiedCodexSessionBridgeScanPreference(
   sessionFilePath: string
 ): LegacyCopiedCodexSessionBridgeScanPreference | null {
@@ -226,38 +233,6 @@ export function getLegacyCopiedCodexSessionBridgeScanPreference(
   }
 }
 
-/** The source of an untouched old copy whose source grew since: resume reads it, not the copy. */
-export async function getNewerLegacyCopiedCodexSessionSource(
-  sessionFilePath: string,
-  managedHomePath: string
-): Promise<string | null> {
-  // Also reads Codex's `\\?\C:\...` spelling of a Windows path.
-  const relativePath = codexDatedRolloutRelativePath(
-    join(managedHomePath, 'sessions'),
-    sessionFilePath
-  )
-  if (!relativePath) {
-    return null
-  }
-  try {
-    const marker = parseLegacyCopiedSessionMarker(
-      await readFile(join(managedHomePath, '.orca-session-copies', `${relativePath}.json`), 'utf-8')
-    )
-    if (!marker) {
-      return null
-    }
-    const [target, source] = await Promise.all([lstat(sessionFilePath), lstat(marker.sourcePath)])
-    // The source must hold every byte of the copy: a rewritten one may lack lines it holds.
-    return fileStatsMatchMarker(target, marker, 'target') &&
-      source.size > target.size &&
-      (await isRolloutBytePrefix(sessionFilePath, marker.sourcePath))
-      ? marker.sourcePath
-      : null
-  } catch {
-    return null
-  }
-}
-
 function getLegacySessionCopyMarkerPath(relativePath: string): string {
   return join(getOrcaManagedCodexHomePath(), '.orca-session-copies', `${relativePath}.json`)
 }
@@ -270,38 +245,6 @@ function readLegacyCopiedSessionMarker(relativePath: string): LegacyCopiedSessio
   } catch {
     return null
   }
-}
-
-function parseLegacyCopiedSessionMarker(text: string): LegacyCopiedSessionMarker | null {
-  try {
-    const parsed: unknown = JSON.parse(text)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return null
-    }
-    const marker = parsed as Record<string, unknown>
-    if (
-      typeof marker.sourcePath !== 'string' ||
-      typeof marker.sourceSize !== 'number' ||
-      typeof marker.sourceMtimeMs !== 'number' ||
-      typeof marker.targetSize !== 'number' ||
-      typeof marker.targetMtimeMs !== 'number'
-    ) {
-      return null
-    }
-    return marker as LegacyCopiedSessionMarker
-  } catch {
-    return null
-  }
-}
-
-function fileStatsMatchMarker(
-  stat: { size: number; mtimeMs: number },
-  marker: LegacyCopiedSessionMarker,
-  kind: 'source' | 'target'
-): boolean {
-  const expectedSize = kind === 'source' ? marker.sourceSize : marker.targetSize
-  const expectedMtimeMs = kind === 'source' ? marker.sourceMtimeMs : marker.targetMtimeMs
-  return stat.size === expectedSize && stat.mtimeMs === expectedMtimeMs
 }
 
 function clearLegacyCopiedSessionMarker(relativePath: string): void {

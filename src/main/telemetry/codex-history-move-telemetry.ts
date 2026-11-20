@@ -59,8 +59,12 @@ export class CodexHistoryMoveReport {
     private readonly deps: {
       markerPath: () => string
       wslHomeCount: () => number
-      /** The homes that should be shared now, read only right before a report can go out. */
-      currentHomes: () => string[]
+      oldCopiesSetAside: () => number
+      /**
+       * The homes that should be shared now, null while sharing is off; read only right before a
+       * report can go out.
+       */
+      currentHomes: () => string[] | null
     }
   ) {}
 
@@ -73,8 +77,11 @@ export class CodexHistoryMoveReport {
     this.outcomes.delete(homeKey)
   }
 
+  // With no host homes, an install with WSL homes still reports how many it has.
   private isComplete(homeKeys: string[]): boolean {
-    return homeKeys.length > 0 && homeKeys.every((home) => this.outcomes.has(home))
+    return homeKeys.length > 0
+      ? homeKeys.every((home) => this.outcomes.has(home))
+      : this.deps.wslHomeCount() > 0
   }
 
   /**
@@ -105,7 +112,7 @@ export class CodexHistoryMoveReport {
     }
     // Read after the marker loads: homes added, or sharing turned off, meanwhile.
     const homes = this.deps.currentHomes()
-    if (!this.isComplete(homes)) {
+    if (!homes || !this.isComplete(homes)) {
       return
     }
     const tally = (outcome: CodexHistoryMoveOutcome): number =>
@@ -119,7 +126,12 @@ export class CodexHistoryMoveReport {
       stuck_refused: tally('refused'),
       stuck_incomplete: tally('incomplete'),
       stuck_failed: tally('failed'),
-      wsl_homes: count(this.deps.wslHomeCount())
+      wsl_homes: count(this.deps.wslHomeCount()),
+      old_copies_set_aside: count(this.deps.oldCopiesSetAside())
+    }
+    // The one follow-up waits until no home is busy, so a second busy home's move isn't capped out.
+    if (marker.sent.length > 0 && props.stuck_busy > 0) {
+      return
     }
     const key = JSON.stringify(props)
     if (marker.sent.includes(key) || !track('codex_history_move_status', props)) {
