@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { tableRows } = vi.hoisted(() => {
-  const current: { pid: number; ppid: number; name: string; command: string }[] = []
+  const current: {
+    pid: number
+    ppid: number
+    name: string
+    command: string
+    creationTimeMs?: number
+  }[] = []
   return { tableRows: { current } }
 })
 
@@ -13,7 +19,7 @@ vi.mock('../../../windows/windows-process-table', async (importOriginal) => ({
 }))
 
 import { resolveWindowsAgentForegroundProcessWithAvailability } from './agent-process'
-import { paneMemberConsoleReader } from './exited-root-orphans'
+import { resetWindowsProcessRowsSnapshotForTests } from './process-rows'
 
 const DEAD_ROOT = 5368
 const ORPHAN_SH = {
@@ -33,6 +39,7 @@ const ORPHAN_CLAUDE = {
 
 describe('resolveWindowsAgentForegroundProcessWithAvailability when the pane root has exited', () => {
   beforeEach(() => {
+    resetWindowsProcessRowsSnapshotForTests()
     tableRows.current = [ORPHAN_SH, ORPHAN_CLAUDE]
   })
 
@@ -68,17 +75,52 @@ describe('resolveWindowsAgentForegroundProcessWithAvailability when the pane roo
 
   it("never credits another pane's orphan whose parent pid the dead root reused", async () => {
     const readConsole = vi.fn(async () => new Set([5656, 15864]))
+    // Seen alive at 2000; the orphans below were born at 1000, under an earlier holder of its pid.
+    tableRows.current = [
+      { pid: DEAD_ROOT, ppid: 1, name: 'bash.exe', command: 'bash.exe', creationTimeMs: 2000 }
+    ]
+    await resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', {
+      fresh: true
+    })
+    tableRows.current = [
+      { ...ORPHAN_SH, creationTimeMs: 1000 },
+      { ...ORPHAN_CLAUDE, creationTimeMs: 3000 }
+    ]
     await expect(
       resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', {
         fresh: true,
-        readWindowsConsoleAttachedProcessIds: paneMemberConsoleReader(
-          DEAD_ROOT,
-          () => [9100, 9101],
-          readConsole
-        )
+        readWindowsConsoleAttachedProcessIds: readConsole
       })
     ).resolves.toEqual({ available: false, processName: null })
     expect(readConsole).not.toHaveBeenCalled()
+  })
+
+  it("reads through the pane's own orphan when an older one sits before it", async () => {
+    tableRows.current = [
+      { pid: DEAD_ROOT, ppid: 1, name: 'bash.exe', command: 'bash.exe', creationTimeMs: 2000 }
+    ]
+    await resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', {
+      fresh: true
+    })
+    tableRows.current = [
+      {
+        pid: 9100,
+        ppid: DEAD_ROOT,
+        name: 'node.exe',
+        command: 'node old.js',
+        creationTimeMs: 1000
+      },
+      { ...ORPHAN_SH, creationTimeMs: 2500 },
+      { ...ORPHAN_CLAUDE, creationTimeMs: 2600 }
+    ]
+    const readConsole = vi.fn(async () => new Set([5656, 15864]))
+    await expect(
+      resolveWindowsAgentForegroundProcessWithAvailability(DEAD_ROOT, 'bash.exe', {
+        fresh: true,
+        readWindowsConsoleAttachedProcessIds: readConsole
+      })
+    ).resolves.toMatchObject({ available: true, processName: 'claude' })
+    expect(readConsole).toHaveBeenCalledWith(5656)
   })
 
   it('stays unavailable on a cached table, which may be stale', async () => {

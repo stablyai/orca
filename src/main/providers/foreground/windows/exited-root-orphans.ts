@@ -1,6 +1,4 @@
-import type { WindowsProcessCandidate } from './process-rows'
-
-type ConsoleReader = (pid: number) => Promise<ReadonlySet<number> | null>
+import type { WindowsProcessCandidate, WindowsProcessRow } from './process-rows'
 
 const CONSOLE_HOST_NAMES = new Set(['conhost.exe', 'openconsole.exe'])
 
@@ -18,16 +16,43 @@ export function findOrphanOnInheritedConsole(
   )?.pid
 }
 
-/** Windows reuses a dead root's pid, so only an orphan inside this pane's job may speak for its console. */
-export function paneMemberConsoleReader(
+// Creation times of pane roots seen alive, bounded; the oldest entry is dropped first.
+const rootCreationTimes = new Map<number, number>()
+const MAX_REMEMBERED_ROOTS = 512
+
+export function rememberPaneRoot(
+  row: Pick<WindowsProcessRow, 'pid' | 'creationTimeMs'> | undefined
+) {
+  if (row?.creationTimeMs === undefined) {
+    return
+  }
+  rootCreationTimes.delete(row.pid)
+  rootCreationTimes.set(row.pid, row.creationTimeMs)
+  if (rootCreationTimes.size > MAX_REMEMBERED_ROOTS) {
+    rootCreationTimes.delete(rootCreationTimes.keys().next().value!)
+  }
+}
+
+export function forgetPaneRoots(): void {
+  rootCreationTimes.clear()
+}
+
+/** Windows reuses a dead root's pid: a direct orphan born before the root was seen is a child of an
+ * earlier holder of that pid, so it and its subtree are dropped. Unseen roots keep every orphan. */
+export function orphansBornAfterRoot(
   rootPid: number,
-  listJobProcessIds: () => readonly number[] | null,
-  readConsole: ConsoleReader
-): (memberPid?: number) => Promise<ReadonlySet<number> | null> {
-  return async (memberPid) =>
-    memberPid === undefined
-      ? readConsole(rootPid)
-      : listJobProcessIds()?.includes(memberPid)
-        ? readConsole(memberPid)
-        : null
+  orphans: WindowsProcessCandidate[]
+): WindowsProcessCandidate[] {
+  const rootBorn = rootCreationTimes.get(rootPid)
+  if (rootBorn === undefined) {
+    return orphans
+  }
+  const foreign = new Set<number>()
+  for (const orphan of [...orphans].sort((a, b) => a.depth - b.depth)) {
+    const older = orphan.depth === 1 && (orphan.creationTimeMs ?? rootBorn) < rootBorn
+    if (older || foreign.has(orphan.ppid)) {
+      foreign.add(orphan.pid)
+    }
+  }
+  return orphans.filter((orphan) => !foreign.has(orphan.pid))
 }

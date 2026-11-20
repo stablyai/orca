@@ -11,11 +11,14 @@ import {
   type WindowsProcessRow as NativeWindowsProcessRow
 } from '../../../windows/windows-process-table'
 
+import { forgetPaneRoots, orphansBornAfterRoot, rememberPaneRoot } from './exited-root-orphans'
+
 export type WindowsProcessRow = {
   pid: number
   ppid: number
   name: string
   command: string
+  creationTimeMs?: number
 }
 
 export type WindowsProcessCandidate = WindowsProcessRow & { depth: number }
@@ -26,7 +29,8 @@ function toProcessRow(row: NativeWindowsProcessRow): WindowsProcessRow {
     ppid: row.ppid,
     name: row.name,
     // Query denial can hide command lines; preserve image-name recognition as fallback.
-    command: row.command || row.name
+    command: row.command || row.name,
+    ...(row.creationTimeMs !== undefined ? { creationTimeMs: row.creationTimeMs } : {})
   }
 }
 
@@ -89,12 +93,13 @@ export async function queryWindowsPaneProcessInventory(
     if (options.fresh !== true || options.includeOrphansOfExitedRoot !== true) {
       return null
     }
-    const orphans = collectDescendantsFromIndex(index, rootPid)
+    const orphans = orphansBornAfterRoot(rootPid, collectDescendantsFromIndex(index, rootPid))
     if (orphans.length === 0) {
       return null
     }
     return { candidates: orphans.sort((a, b) => b.depth - a.depth), anchorRow, rootExited: true }
   }
+  rememberPaneRoot(index.byPid.get(rootPid))
   return {
     candidates: collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth),
     anchorRow
@@ -103,4 +108,5 @@ export async function queryWindowsPaneProcessInventory(
 
 export function resetWindowsProcessRowsSnapshotForTests(): void {
   resetWindowsProcessTableForTests()
+  forgetPaneRoots()
 }
