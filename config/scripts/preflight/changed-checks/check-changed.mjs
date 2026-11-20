@@ -1,6 +1,6 @@
 // Pre-handoff gate: runs the checks a change's paths need, in parallel, printing failures in full.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -380,7 +380,9 @@ export async function main(root, argv) {
     },
     // Working-tree and merge-base text; null where the file is absent on that side.
     readVersions: (file) => [
-      existsSync(path.join(root, file)) ? readFileSync(path.join(root, file), 'utf8') : null,
+      existsSync(path.join(root, file)) && statSync(path.join(root, file)).isFile()
+        ? readFileSync(path.join(root, file), 'utf8')
+        : null,
       gitShow(root, `${mergeBase}:${file}`)
     ]
   })
