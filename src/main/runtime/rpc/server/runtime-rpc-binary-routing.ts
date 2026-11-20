@@ -34,6 +34,20 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
     return this.binaryMessageRouter.registerBrowserTunnel(connectionId, handler)
   }
 
+  // One call's registrars, bound to its connection: the router owns the connection these attach to.
+  protected connectionBinaryRegistrars(connectionId: string | undefined) {
+    return {
+      registerBinaryStreamHandler: (
+        streamId: number,
+        handler: (frame: TerminalStreamFrame) => void
+      ) => this.registerBinaryStreamHandler(connectionId, streamId, handler),
+      registerBinaryMessageHandler: (handler: (bytes: Uint8Array<ArrayBufferLike>) => void) =>
+        this.registerBinaryMessageHandler(connectionId, handler),
+      registerBrowserTunnelFrameHandler: (handler: (bytes: Uint8Array<ArrayBufferLike>) => void) =>
+        this.registerBrowserTunnelFrameHandler(connectionId, handler)
+    }
+  }
+
   protected handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
     this.binaryMessageRouter.dispatch(this.mobileSocketWiring?.getConnectionId(ws), bytes)
   }

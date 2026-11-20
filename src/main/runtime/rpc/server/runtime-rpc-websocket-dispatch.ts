@@ -314,12 +314,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
             : undefined,
         signal: abortRegistration?.signal,
         sendBinary,
-        registerBinaryStreamHandler: (streamId, handler) =>
-          this.registerBinaryStreamHandler(connectionId, streamId, handler),
-        registerBinaryMessageHandler: (handler) =>
-          this.registerBinaryMessageHandler(connectionId, handler),
-        registerBrowserTunnelFrameHandler: (handler) =>
-          this.registerBrowserTunnelFrameHandler(connectionId, handler)
+        ...this.connectionBinaryRegistrars(connectionId)
       })
     } finally {
       abortRegistration?.dispose()
