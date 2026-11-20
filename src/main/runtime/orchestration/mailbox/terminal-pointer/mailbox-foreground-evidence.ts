@@ -14,6 +14,8 @@ type ForegroundObservation = {
   generation: number
   held: boolean
   screenRequired: boolean
+  /** When a shell or other program last stood in front; evidence after it is the returning agent's own. */
+  screenRequiredSince?: number
   contradiction: number
   status?: string
   /** The admitted agent's process; while held, only that process returning releases the hold. */
@@ -21,7 +23,9 @@ type ForegroundObservation = {
 }
 
 export type OrchestrationMailboxForegroundObservation = {
-  observation: Readonly<Omit<ForegroundObservation, 'held' | 'screenRequired'>>
+  observation: Readonly<
+    Omit<ForegroundObservation, 'held' | 'screenRequired' | 'screenRequiredSince'>
+  >
   generation: number
   contradiction: number
   process?: MailboxAgentProcess
@@ -122,6 +126,7 @@ export class MailboxForegroundEvidence {
       // TODO(STA-16313): record the suspended agent's process here when no earlier probe named it.
       observation.held = !proof.agentUnprovable
       observation.screenRequired = true
+      observation.screenRequiredSince = Date.now()
       observation.contradiction++
     } else if (foreground === 'agent' && admitted) {
       const known = observation.agentProcess
@@ -147,6 +152,13 @@ export class MailboxForegroundEvidence {
   screenRecovery(ptyId: string): string | undefined {
     const observation = this.foregroundObservations.get(ptyId)
     return observation?.screenRequired ? observation.processIncarnation : undefined
+  }
+
+  screenRecoverySince(ptyId: string, incarnation: string | undefined): number | undefined {
+    const observation = this.foregroundObservations.get(ptyId)
+    return observation?.screenRequired && observation.processIncarnation === incarnation
+      ? (observation.screenRequiredSince ?? 0)
+      : undefined
   }
 
   completeDelivery(ptyId: string): void {

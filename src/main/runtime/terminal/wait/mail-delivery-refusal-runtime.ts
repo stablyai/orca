@@ -34,15 +34,17 @@ export abstract class OrcaRuntimeWithMailDeliveryRefusal extends OrcaRuntimeWith
     if (hold) {
       return { kind: hold }
     }
+    const recoverySince = this.orchestrationMailboxPointerDelivery.screenRecoverySince(ptyId)
     return mailboxDeliveryRefusal(
       { ...this.tuiIdleEvidenceSource, getPaneAgent: () => (isTuiAgent(agent) ? agent : null) },
       pty,
       () => buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
-      this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(ptyId) ||
+      recoverySince !== undefined ||
         (pty.lastAgentStatus === null && (foreground === 'agent' || pointerText !== undefined)),
       () => this.readMailboxComposerText(pty.ptyId, candidate),
       !!agent,
-      stagedText
+      stagedText,
+      recoverySince
     )
   }
 
