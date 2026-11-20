@@ -33,6 +33,7 @@ type TransferSession = {
   pageHostGeneration: number
   workspaceId: string
   tempRelativePath: string
+  startedAt: number
   pinnedExpectation: RuntimeFileMutationExpectation | null
   bytesWritten: number
   /** Set synchronously before queued cleanup. */
@@ -44,6 +45,10 @@ type TransferSession = {
 
 export type BrowserClientDownloadCommit = {
   workspaceRelativePath: string
+  /** When the transfer's first chunk arrived. */
+  startedAt: number
+  /** The host the transfer wrote to; anything done to the file afterwards must expect it. */
+  expectation: RuntimeFileMutationExpectation
 }
 
 export type BrowserClientDownloadChunk = {
@@ -119,9 +124,7 @@ export class BrowserClientDownloadTransferStore {
     if (session.idleTimer || this.sessions.get(session.key) !== session) {
       return
     }
-    const timer = setTimeout(() => {
-      void this.expire(session)
-    }, this.idleTimeoutMs)
+    const timer = setTimeout(() => void this.expire(session), this.idleTimeoutMs)
     timer.unref?.()
     session.idleTimer = timer
   }
@@ -237,6 +240,7 @@ export class BrowserClientDownloadTransferStore {
       pageHostGeneration: input.pageHostGeneration,
       workspaceId: input.workspaceId,
       tempRelativePath: `${BROWSER_CLIENT_DOWNLOAD_WORKSPACE_DIRECTORY}/.incoming-${input.transferId}`,
+      startedAt: Date.now(),
       pinnedExpectation: null,
       bytesWritten: 0,
       canceled: false,
@@ -281,7 +285,7 @@ export class BrowserClientDownloadTransferStore {
         continue
       }
       this.settle(session)
-      return { workspaceRelativePath: finalRelativePath }
+      return { workspaceRelativePath: finalRelativePath, startedAt: session.startedAt, expectation }
     }
     throw new Error('browser_client_download_transfer_name_unavailable')
   }

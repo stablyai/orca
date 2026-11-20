@@ -108,14 +108,19 @@ export function googleSetupKeyDownloadClaim(
 }
 
 /** A key a paired client's browser downloaded into this host, already saved in the page's workspace:
- *  taken like a local download, so the file never stays where the agent could read it. */
+ *  taken like a local download, so the file never stays where the agent could read it. Only the run
+ *  already waiting when the transfer began takes it; a run started over since only gets it deleted. */
 export function googleSetupCommittedKeyClaim(
   deps: GoogleSetupKeyDownloadDeps
-): (download: GoogleSetupKeyDownload & KeyFile) => Promise<boolean> {
+): (download: GoogleSetupKeyDownload & KeyFile & { startedAt: number }) => Promise<boolean> {
   return async (download) => {
     const run = claimingRun(deps, download)
     if (!run) {
       return false
+    }
+    if (run.startedAt > download.startedAt) {
+      await download.remove().catch(() => {})
+      return true
     }
     await takeKey(deps, run, download)
     return true

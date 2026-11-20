@@ -1,7 +1,7 @@
 // A paired client's download, once the file channel has saved it in the page's workspace here. A
 // feature may take it (and must then remove it); nothing else reads these files.
-import { captureRuntimeFileMutationExpectation } from '../../files/file-mutation-expectation'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { BrowserClientDownloadCommit } from './browser-client-download-transfers'
 
 export type CommittedBrowserDownload = {
   browserPageId: string
@@ -9,6 +9,8 @@ export type CommittedBrowserDownload = {
   filename: string
   /** Where the page may be, as this host knows it. */
   urls: readonly string[]
+  /** When the transfer began. */
+  startedAt: number
   /** The text, or null when it is larger than `maxBytes`. */
   read: (maxBytes: number) => Promise<string | null>
   remove: () => Promise<void>
@@ -46,7 +48,7 @@ export async function offerCommittedBrowserDownload(
   runtime: CommittedDownloadRuntime,
   page: { browserPageId: string; workspaceId: string },
   urls: readonly string[],
-  workspaceRelativePath: string
+  { workspaceRelativePath, startedAt, expectation }: BrowserClientDownloadCommit
 ): Promise<void> {
   if (!claim) {
     return
@@ -57,7 +59,13 @@ export async function offerCommittedBrowserDownload(
       browserPageId: page.browserPageId,
       filename: workspaceRelativePath.slice(workspaceRelativePath.lastIndexOf('/') + 1),
       urls,
+      startedAt,
       read: async (maxBytes) => {
+        // The workspace moved hosts since the write: the same path there is another file.
+        const { executionHostId } = await runtime.resolveRuntimeFileTarget(workspaceId)
+        if (executionHostId !== expectation.expectedExecutionHostId) {
+          throw new Error('the download’s host is no longer this workspace’s.')
+        }
         const chunk = await runtime.readFileExplorerChunk(
           workspaceId,
           workspaceRelativePath,
@@ -68,9 +76,6 @@ export async function offerCommittedBrowserDownload(
         return bytes.byteLength > maxBytes ? null : bytes.toString('utf8')
       },
       remove: async () => {
-        const expectation = captureRuntimeFileMutationExpectation(
-          (await runtime.resolveRuntimeFileTarget(workspaceId)).executionHostId
-        )
         await runtime.deleteFileExplorerPath(
           workspaceId,
           workspaceRelativePath,

@@ -28,10 +28,21 @@ export async function importGoogleSetupKeySavedHere(
   if (!key) {
     return false
   }
+  // Cancelled or started over while looking: the key is only deleted.
+  const stillWaiting = (): boolean => {
+    const now = googleSetupRuns().get(bot.id)
+    return now?.id === run.id && googleSetupAwaitsKey(now)
+  }
   try {
+    if (!stillWaiting()) {
+      return false
+    }
     await connect.importClient(key.text)
   } finally {
     await rm(join(folder, key.name), { force: true }).catch(() => {})
+  }
+  if (!stillWaiting()) {
+    return false
   }
   await keyArrived()
   return true

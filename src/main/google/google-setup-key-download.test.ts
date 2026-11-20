@@ -160,7 +160,8 @@ describe("the Google key a paired client's browser saved on this host", () => {
     const saved = {
       browserPageId: 'setup-page',
       filename: 'client_secret_123 (1).json',
-      urls: ['http://127.0.0.1:3000/start', KEY.documentUrl]
+      urls: ['http://127.0.0.1:3000/start', KEY.documentUrl],
+      startedAt: 5
     }
     const key = file(desktopKey())
     expect(await claim({ ...saved, ...key })).toBe(true)
@@ -179,5 +180,12 @@ describe("the Google key a paired client's browser saved on this host", () => {
     )
     expect(elsewhere.read).not.toHaveBeenCalled()
     expect(elsewhere.remove).not.toHaveBeenCalled()
+
+    // Begun before this run started (the setup was started over meanwhile): deleted, not imported.
+    const earlier = file(desktopKey())
+    expect(await claim({ ...saved, startedAt: 0, ...earlier })).toBe(true)
+    expect(earlier.read).not.toHaveBeenCalled()
+    expect(earlier.remove).toHaveBeenCalledOnce()
+    expect(deps.importKey).toHaveBeenCalledOnce()
   })
 })

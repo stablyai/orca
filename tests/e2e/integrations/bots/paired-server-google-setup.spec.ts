@@ -84,9 +84,10 @@ test('a server agent sets Google up through the paired desktop browser', async (
   // A headless serve host, a paired desktop, and several real page loads and a download.
   test.setTimeout(360_000)
   const { server, origin } = await startKeyServer()
-  const host = await launchHeadlessPairedRuntimeHost({ withoutBrowser: true })
+  let host: Awaited<ReturnType<typeof launchHeadlessPairedRuntimeHost>> | null = null
   let client: PairedElectronClient | null = null
   try {
+    host = await launchHeadlessPairedRuntimeHost({ withoutBrowser: true })
     const owner = pairedOwnerApp(host.userDataDir, host.offer.pairingUrl)
     // Never launch a real agent: the stub exits at once.
     await owner.call('settings.mutateAgentLaunch', {
@@ -165,8 +166,14 @@ test('a server agent sets Google up through the paired desktop browser', async (
     expect(existsSync(downloads) ? readdirSync(downloads) : []).toEqual([])
     expect(existsSync(path.join(host.env.HOME!, '.orca', 'google', 'client.enc'))).toBe(true)
   } finally {
-    await client?.dispose()
-    await host.dispose()
-    server.close()
+    try {
+      await client?.dispose()
+    } finally {
+      try {
+        await host?.dispose()
+      } finally {
+        server.close()
+      }
+    }
   }
 })

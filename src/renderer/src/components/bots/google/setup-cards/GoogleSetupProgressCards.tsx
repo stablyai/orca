@@ -16,7 +16,7 @@ import {
 } from '../../../../../../shared/google/google-setup-run'
 import { GoogleBrandingLinks } from '../GoogleBrandingLinks'
 import { googleConsoleStepUrl } from '../../../../../../shared/google/google-console-setup'
-import { importGoogleApp, openInMyBrowser } from '../google-connect-client'
+import { importGoogleApp, openInMyBrowser, refreshGoogle } from '../google-connect-client'
 import { googleKeyRefusalHeadline, googleStepNotes } from '../google-copy'
 import { useGoogleClientFile } from '../use-google-client-file'
 import { GoogleSetupBlockerPanel } from './GoogleSetupBlockerPanel'
@@ -67,7 +67,13 @@ function KeyImport({ bot }: { bot: BotRef }): React.JSX.Element {
   const t = useTranslate()
   const file = useGoogleClientFile((text) => saveKey(bot, text), {
     // A bot on another host: its browser's download is there, so that host looks first.
-    tryHost: () => importGoogleSetupKeyOnHost(bot)
+    tryHost: async () => {
+      const found = await importGoogleSetupKeyOnHost(bot)
+      if (found) {
+        await refreshGoogle(botTarget(bot))
+      }
+      return found
+    }
   })
   return (
     <div className="mt-2 text-xs text-muted-foreground">

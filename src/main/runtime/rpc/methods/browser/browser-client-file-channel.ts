@@ -115,7 +115,7 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
         context.runtime,
         page,
         clientPageKnownUrls(getRuntimeBrowserPageRegistry(context.runtime), page.browserPageId),
-        commit.workspaceRelativePath
+        commit
       )
       return { accepted: true as const, workspaceRelativePath: commit.workspaceRelativePath }
     }
