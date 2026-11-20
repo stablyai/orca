@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -38,6 +39,7 @@ const upstream = vi.mocked(getRuntimeGitUpstreamStatus)
 const rpc = vi.mocked(callRuntimeRpc)
 const activate = vi.mocked(activateAndRevealWorktree)
 const defaultParent = vi.mocked(getRuntimeDefaultCreateProjectParent)
+const toastError = vi.spyOn(toast, 'error')
 const createWorktree = vi.fn()
 const pushBranch = vi.fn()
 const setupProjectClone = vi.fn()
@@ -150,12 +152,22 @@ describe('runOpenOnHost', () => {
   })
 
   it('fetches the fork remote and refuses when the host clone lacks it', async () => {
-    fetch.mockRejectedValue(new Error("fatal: 'fork' does not appear to be a git repository"))
+    const raw = "fatal: 'fork' does not appear to be a git repository"
+    fetch.mockRejectedValue(new Error(raw))
     expect(await runOpenOnHost(forkRequest)).toBeNull()
     expect(fetch).toHaveBeenCalledWith(expect.anything(), {
       remoteName: 'fork',
       branchName: 'feature/x'
     })
+    expect(createWorktree).not.toHaveBeenCalled()
+    expect(toastError).toHaveBeenCalledOnce()
+    expect(toastError.mock.calls[0][0]).not.toBe(raw)
+  })
+
+  it('toasts when the host copy is not loaded', async () => {
+    useAppStore.setState({ repos: [] })
+    expect(await runOpenOnHost(workspaceRequest)).toBeNull()
+    expect(toastError).toHaveBeenCalledOnce()
     expect(createWorktree).not.toHaveBeenCalled()
   })
 
