@@ -83,7 +83,8 @@ export function BotCliqSetupFlow({
     }
   }, [away, signInEnded, comeBack])
   const step = botCliqSetupStep(view, connect, {
-    orgId: picked ?? orgId ?? null,
+    target: orgId ?? null,
+    picked,
     done,
     taken: orgId === undefined ? botCliqBots(bot).map((entry) => entry.orgId) : []
   })
