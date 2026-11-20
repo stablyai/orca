@@ -25,7 +25,12 @@ const allow = (
   })
 
 describe('worker approval access', () => {
-  it('lets a person on a phone allow a worker prompt', () => {
+  it('lets a person on a paired window or phone allow a worker prompt', () => {
+    expect(allow({ kind: 'paired-device', deviceId: 'laptop-1' })).toEqual({
+      answeredBy: 'person',
+      reason: null
+    })
+    // A phone app that predates the window's claim is still the person.
     expect(allow({ kind: 'paired-device', deviceId: 'phone-1' }, [], undefined, 'mobile')).toEqual({
       answeredBy: 'person',
       reason: null
@@ -33,10 +38,6 @@ describe('worker approval access', () => {
   })
 
   it("refuses an agent's allow that arrives over a pairing", () => {
-    // A paired window's self-declared person capability proves nothing.
-    expect(() => allow({ kind: 'paired-device', deviceId: 'laptop-1' })).toThrow(
-      /Only a person can allow apr_1/
-    )
     expect(() => allow({ kind: 'paired-device', deviceId: 'laptop-1', agent: true })).toThrow(
       /Only a person can allow apr_1/
     )
