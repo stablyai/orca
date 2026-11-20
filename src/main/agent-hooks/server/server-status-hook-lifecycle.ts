@@ -53,6 +53,11 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     }
     this.statusHooksEnabled = enabled
     if (enabled && this.server) {
+      // Disabling dropped agy polls, which alone retire subagents that end without another hook.
+      for (const paneKey of this.state.antigravityChildWorkByPaneKey.keys()) {
+        this.replayTranscriptPolls.set(paneKey, { source: 'antigravity', body: { paneKey } })
+      }
+      this.scheduleReplayTranscriptPolls()
       void this.initializeStatusHookOwner().catch((error: unknown) => {
         console.error('[agent-hooks] status initialization failed', error)
       })
