@@ -250,6 +250,35 @@ it('carries a tool row too large for one reply with its output cut, keeping its 
   })
 })
 
+it('cuts a saved compressed output to the same head as inline text', async () => {
+  const { f, reads } = await chat(1)
+  const output = `${'p'.repeat(1_000)}important.ts${'q'.repeat(19_000)}`
+  await f.run({
+    kind: 'item',
+    identity: identity('diff'),
+    options: { ...options, turnScope: { kind: 'turn', turnItemId: 'orca:send-0-turn' } },
+    body: {
+      kind: 'tool-call',
+      name: 'Diff',
+      input: { content: 'i'.repeat(33 * 1024 * 1024) },
+      state: 'completed',
+      output: { head: output, byteLength: 20_012, digest: 'diff', truncated: false }
+    }
+  })
+  expect(
+    f.db
+      .prepare(
+        `SELECT output_blob IS NOT NULL AS blob FROM journal_items WHERE item_id LIKE '%diff'`
+      )
+      .get()
+  ).toEqual({ blob: 1 })
+  const { snapshot } = await reads.operationWindow({ afterSequence: 0 })
+  const tool = snapshot.items.find((item) => item.body.kind === 'tool-call')
+  expect(tool?.body).toMatchObject({
+    output: { head: output.slice(0, 16 * 1024), byteLength: 20_012, truncated: true }
+  })
+})
+
 it('cuts only as many of the largest rows as the window needs to fit one reply', async () => {
   const { f, reads } = await chat(1)
   for (const id of ['read-a', 'read-b', 'read-c']) {

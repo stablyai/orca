@@ -1,7 +1,8 @@
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { JOURNAL_READER_REPLY_BYTE_LIMIT } from './journal-sql-reader-reply-limit'
 
 const LIMIT = JOURNAL_READER_REPLY_BYTE_LIMIT
-const SHORTENED_HEAD_CHARS = 16 * 1024
+export const SHORTENED_HEAD_CHARS = 16 * 1024
 
 /**
  * Selects stored JSON only when it fits one reader reply, so neither the reader nor main ever
@@ -47,4 +48,25 @@ export function boundedStoredJson(row: Record<string, unknown>, as: string): unk
     throw new Error(`journal stored item (${bytes} bytes) exceeds ${LIMIT} bytes`)
   }
   return row[as]
+}
+
+/** The cut `shortenedJsonSql` makes, for an item decoded in JS: the first characters of its output
+ *  or patch head, marked truncated, keeping size and digest. */
+export function shortenJournalItemHead<T extends AgentJournalRenderItem>(item: T): T {
+  const body = item.body
+  const field = body.kind === 'tool-call' ? 'output' : body.kind === 'diff' ? 'patch' : null
+  const payload = field ? (body as unknown as Record<string, unknown>)[field] : undefined
+  if (!field || !payload || typeof payload !== 'object' || !('head' in payload)) {
+    return item
+  }
+  const head = String(payload.head)
+  // SQLite's substr counts characters, not UTF-16 units.
+  let end = 0
+  for (let chars = 0; end < head.length && chars < SHORTENED_HEAD_CHARS; chars++) {
+    end += (head.codePointAt(end) ?? 0) > 0xffff ? 2 : 1
+  }
+  return {
+    ...item,
+    body: { ...body, [field]: { ...payload, head: head.slice(0, end), truncated: true } }
+  }
 }
