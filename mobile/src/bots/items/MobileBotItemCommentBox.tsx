@@ -50,15 +50,16 @@ export function MobileBotItemCommentBox({
   item,
   online,
   hostName,
-  waiting = false,
+  waitingOn = null,
   ref
 }: {
   client: RpcClient | null
   item: BotItem
   online: boolean
   hostName: string
-  /** The agent's question waits on the owner: what is sent is the reply. */
-  waiting?: boolean
+  /** The agent's question waiting on the owner (what is sent is the reply): who asked, and whether it
+   *  gave quick replies. */
+  waitingOn?: { replies: boolean; asker: string } | null
   ref?: Ref<BotItemCommentBoxHandle>
 }) {
   useMobileColorScheme()
@@ -163,9 +164,11 @@ export function MobileBotItemCommentBox({
             multiline
             accessibilityLabel={t('bots.items.comment.label', 'Comment')}
             placeholder={
-              waiting
-                ? t('bots.items.comment.reply', 'Reply in your own words')
-                : t('bots.items.comment.add', 'Add a comment…')
+              !waitingOn
+                ? t('bots.items.comment.add', 'Add a comment…')
+                : waitingOn.replies
+                  ? t('bots.items.comment.reply', 'Reply in your own words')
+                  : t('bots.items.comment.replyTo', 'Reply to {{name}}…', { name: waitingOn.asker })
             }
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.textPrimary}

@@ -271,13 +271,6 @@ function CommentCard({
     <View style={[styles.card, mine && styles.cardMine]}>
       <View style={styles.cardHead}>
         <Text style={styles.author}>{botItemActorName(event, item, t)}</Text>
-        {/* A question asked in prose has no footer to mark, so its header says it. */}
-        {waiting && shape.decisions.length === 0 ? (
-          <View style={styles.inline}>
-            <View style={styles.dot} />
-            <Text style={styles.needsYou}>{t('bots.items.activity.needsYou', 'Needs you')}</Text>
-          </View>
-        ) : null}
         <View style={styles.spacer} />
         <Text style={styles.meta}>{timeOf(event.at)}</Text>
       </View>
@@ -378,8 +371,6 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.sheetGroup
   },
   cardMine: { backgroundColor: colors.bgRaised },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.agentQuestion },
-  needsYou: { fontSize: typography.metaSize, color: colors.agentQuestion },
   cardHead: {
     flexDirection: 'row',
     alignItems: 'center',

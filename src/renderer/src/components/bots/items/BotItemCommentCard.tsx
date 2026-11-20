@@ -107,13 +107,6 @@ export function BotItemCommentCard({
         <div className="mb-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <Avatar bot={bot} event={event} name={name} />
           <b className="shrink-0 text-[13px] font-medium text-foreground">{name}</b>
-          {/* A question asked in prose has no question line to mark, so its header says it. */}
-          {waiting && shape.decisions.length === 0 ? (
-            <span className="flex items-center gap-1.5 whitespace-nowrap text-agent-question-text">
-              <span aria-hidden className="size-1.5 rounded-full bg-agent-question" />
-              {t('bots.items.activity.needsYou', 'Needs you')}
-            </span>
-          ) : null}
           <span className="ml-auto shrink-0 text-2xs tabular-nums">{format.format(event.at)}</span>
         </div>
         {replyTo ? (

@@ -1,11 +1,20 @@
 // The comment box's reply mark while the agent's question waits: "Replying to: <question>", which hides
 // for that question; and the check that the box's question placeholder fits on its one line.
-import { useLayoutEffect, useState, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useState, type RefObject } from 'react'
 import { CornerDownRight, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { useNativeChatComposerGlow } from '../../native-chat/native-chat-composer-glow'
+import {
+  glowNativeChatComposer,
+  useNativeChatComposerGlow
+} from '../../native-chat/native-chat-composer-glow'
 
-export type BotItemWaitingQuestion = { id: string; line: string; replies: boolean }
+export type BotItemWaitingQuestion = {
+  id: string
+  line: string
+  replies: boolean
+  /** Who asked, for the box's placeholder when the answer is the owner's own words. */
+  asker: string
+}
 
 /** The box's reply mark and placeholder for the waiting question, if any: the mark hides per question,
  *  and comes back with `show` (Type your answer); `glowing` is the composer's one glow. The question's
@@ -25,9 +34,16 @@ export function useBotItemReplyMark(
   const [hidden, setHidden] = useState<string | null>(null)
   const long = question?.replies
     ? t('bots.items.comment.replyOrPick', 'Reply in your own words, or pick an option')
-    : t('bots.items.comment.reply', 'Reply in your own words')
+    : t('bots.items.comment.replyTo', 'Reply to {{name}}…', { name: question?.asker ?? '' })
   const fits = useTextFits(box, long)
   const glowing = useNativeChatComposerGlow(scopeKey)
+  // A question with no quick replies is answered here: the box glows once when it shows.
+  const openQuestion = question && !question.replies ? question.id : null
+  useEffect(() => {
+    if (openQuestion) {
+      glowNativeChatComposer(scopeKey)
+    }
+  }, [openQuestion, scopeKey])
   return {
     quote: question && hidden !== question.id ? question : null,
     hide: () => setHidden(question?.id ?? null),

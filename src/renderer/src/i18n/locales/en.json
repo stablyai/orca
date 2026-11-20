@@ -28981,8 +28981,7 @@
         "snoozed": "snoozed this until {{when}}",
         "snoozedBare": "snoozed this",
         "unsnoozed": "unsnoozed this",
-        "snoozeEnded": "Back from snooze early",
-        "needsYou": "Needs you"
+        "snoozeEnded": "Back from snooze early"
       },
       "cancel": {
         "confirmMany": "Cancel {{count}}",
@@ -29041,10 +29040,10 @@
         "showLess": "Show less",
         "submit": "Comment",
         "thisServer": "This server",
-        "reply": "Reply in your own words",
         "replyOrPick": "Reply in your own words, or pick an option",
         "replyingTo": "Replying to:",
-        "hideReplyingTo": "Hide"
+        "hideReplyingTo": "Hide",
+        "replyTo": "Reply to {{name}}…"
       },
       "empty": {
         "allClear": "Nothing needs you and nothing is running.",

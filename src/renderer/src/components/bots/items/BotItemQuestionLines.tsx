@@ -1,7 +1,7 @@
 // A Needs you comment's question footer: under the body and a hairline, each question line (`--ask`)
-// with its quick replies. While the item waits on it, a "Needs you" line heads the footer, the one color
-// on the comment; a quick reply posts its words as the owner's comment, and Alt- or Shift-click puts
-// them in the comment box to add to first; Type your answer leads to the box. Answered, the lines go muted and keep only the reply picked.
+// with its quick replies. While the item waits on it, an orange dot marks each line, the one color on
+// the comment; a quick reply posts its words as the owner's comment, and Alt- or Shift-click puts them
+// in the comment box to add to first; Type your answer leads to the box. Answered, the lines go muted and keep only the reply picked.
 import { Check, Pencil } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -59,12 +59,6 @@ export function BotItemQuestionLines({
       data-bot-item-question={waiting ? 'waiting' : 'closed'}
       className={cn(shape.body.trim() && 'mt-2 border-t border-foreground/[0.09] pt-2')}
     >
-      {waiting ? (
-        <p className="mb-0.5 flex items-center gap-1.5 text-xs text-agent-question-text">
-          <span aria-hidden className="size-1.5 rounded-full bg-agent-question" />
-          {t('bots.items.activity.needsYou', 'Needs you')}
-        </p>
-      ) : null}
       <div className="space-y-3">
         {shape.decisions.map((decision, index) => {
           const pick = decision.replies.find((reply) => reply.label === picked[index])
@@ -73,13 +67,20 @@ export function BotItemQuestionLines({
             <div key={decision.question}>
               <div
                 className={cn(
-                  'font-medium [&_p]:font-medium',
+                  'relative font-medium [&_p]:font-medium',
                   !waiting && 'text-muted-foreground [&_*]:text-muted-foreground'
                 )}
               >
+                {waiting ? (
+                  // Hangs in the gutter, so the question, the body and the chips share one left edge.
+                  <span
+                    aria-hidden
+                    className="absolute -left-3 top-[6.5px] size-1.5 rounded-full bg-agent-question"
+                  />
+                ) : null}
                 <BotItemMarkdown text={decision.question} />
               </div>
-              {waiting && actions ? (
+              {waiting && actions && decision.replies.length > 0 ? (
                 <div className="mt-1.5 flex flex-wrap gap-[5px]">
                   {decision.replies.map((reply) => (
                     <button
@@ -102,12 +103,12 @@ export function BotItemQuestionLines({
                       <ChipWords reply={reply} />
                     </button>
                   ))}
-                  {/* Quieter than the options, with no edge: your own words are the other way to answer. */}
+                  {/* Muted, with a pencil: your own words are the other way to answer. */}
                   <button
                     type="button"
                     className={cn(
                       CHIP,
-                      'flex items-center gap-1.5 border-transparent text-muted-foreground outline-none hover:bg-foreground/5 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50'
+                      'flex items-center gap-1.5 text-muted-foreground outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/50'
                     )}
                     onClick={actions.type}
                   >
@@ -117,7 +118,12 @@ export function BotItemQuestionLines({
                 </div>
               ) : pick ? (
                 <div className="mt-1.5 flex">
-                  <span className={cn(CHIP, 'flex items-center gap-1.5 text-muted-foreground')}>
+                  <span
+                    className={cn(
+                      CHIP,
+                      'flex items-center gap-1.5 bg-foreground/5 text-muted-foreground'
+                    )}
+                  >
                     <Check className="size-3 shrink-0" />
                     <span className="min-w-0">
                       <ChipWords reply={pick} />

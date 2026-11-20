@@ -5481,15 +5481,15 @@
         "snoozed": "snoozed this until {{when}}",
         "snoozedBare": "snoozed this",
         "unsnoozed": "unsnoozed this",
-        "snoozeEnded": "Back from snooze early",
-        "needsYou": "Needs you"
+        "snoozeEnded": "Back from snooze early"
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
         "label": "Comment",
         "add": "Add a comment…",
         "submit": "Comment",
-        "reply": "Reply in your own words"
+        "reply": "Reply in your own words",
+        "replyTo": "Reply to {{name}}…"
       },
       "link": {
         "notRead": "Not read yet",

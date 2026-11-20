@@ -262,7 +262,16 @@ export function MobileBotItemPage({
           item={item}
           online={online && !view.failed}
           hostName={hostName}
-          waiting={item.status === 'needs_you' && item.question !== null}
+          waitingOn={
+            item.status === 'needs_you' && item.question
+              ? {
+                  replies:
+                    item.question.decisions?.some((decision) => decision.replies.length > 0) ??
+                    false,
+                  asker: item.owner.name ?? ''
+                }
+              : null
+          }
         />
       </View>
     </View>

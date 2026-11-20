@@ -251,7 +251,9 @@ export function BotItemBody({
           line: botItemQuestionLine(
             item.question.decisions?.[0]?.question ?? item.question.gist ?? item.question.text
           ),
-          replies: item.question.decisions?.some((decision) => decision.replies.length > 0) ?? false
+          replies:
+            item.question.decisions?.some((decision) => decision.replies.length > 0) ?? false,
+          asker: item.owner.name ?? bot.name
         }
       : null
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {

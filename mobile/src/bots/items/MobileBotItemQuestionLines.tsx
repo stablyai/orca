@@ -1,5 +1,5 @@
-// A Needs you comment's question footer on the phone, as on desktop: under a hairline, "Needs you" while
-// the item waits on it, each question line with its quick replies, and Type your answer. A quick reply
+// A Needs you comment's question footer on the phone, as on desktop: under a hairline, each question line
+// (an orange dot while the item waits on it) with its quick replies, and Type your answer. A quick reply
 // posts its words as the owner's comment; a long press puts them in the comment box to add to first.
 // Answered, the lines go muted and keep only the reply picked.
 import { Pressable, Text, View } from 'react-native'
@@ -51,18 +51,16 @@ export function MobileBotItemQuestionLines({
   const picked = !waiting && answeredBy ? botItemPickedReplies(shape, answeredBy.data) : []
   return (
     <View style={[styles.footer, shape.body.trim() ? styles.divided : null]}>
-      {waiting ? (
-        <View style={styles.label}>
-          <View style={styles.dot} />
-          <Text style={styles.labelText}>{t('bots.items.activity.needsYou', 'Needs you')}</Text>
-        </View>
-      ) : null}
       {shape.decisions.map((decision, index) => {
         const pick = decision.replies.find((reply) => reply.label === picked[index])
         return (
           <View key={decision.question} style={styles.decision}>
-            <Text style={[styles.question, !waiting && styles.muted]}>{decision.question}</Text>
-            {waiting && actions ? (
+            <View>
+              {/* Hangs in the gutter, so the question and its chips share the body's left edge. */}
+              {waiting ? <View style={styles.dot} /> : null}
+              <Text style={[styles.question, !waiting && styles.muted]}>{decision.question}</Text>
+            </View>
+            {waiting && actions && decision.replies.length > 0 ? (
               <View style={styles.chips}>
                 {decision.replies.map((reply) => {
                   const text = botItemQuickReplyText(shape, decision, reply)
@@ -82,7 +80,7 @@ export function MobileBotItemQuestionLines({
                 <Pressable
                   accessibilityRole="button"
                   onPress={actions.type}
-                  style={({ pressed }) => [styles.chip, styles.typeChip, pressed && styles.pressed]}
+                  style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
                 >
                   <Pencil size={12} color={colors.textMuted} />
                   <Text style={[styles.chipText, styles.muted]}>
@@ -92,7 +90,7 @@ export function MobileBotItemQuestionLines({
               </View>
             ) : pick ? (
               <View style={styles.chips}>
-                <View style={styles.chip}>
+                <View style={[styles.chip, styles.picked]}>
                   <Check size={12} color={colors.textMuted} />
                   <ChipWords reply={pick} muted />
                 </View>
@@ -113,9 +111,15 @@ const styles = themedStyleSheet(() => ({
     borderTopWidth: 1,
     borderTopColor: colors.borderSubtle
   },
-  label: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: -spacing.sm },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.agentQuestion },
-  labelText: { fontSize: typography.metaSize, color: colors.agentQuestion },
+  dot: {
+    position: 'absolute',
+    left: -12,
+    top: 7.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.agentQuestion
+  },
   decision: { gap: 6 },
   question: { fontSize: 15, lineHeight: 21, fontWeight: '500', color: colors.textPrimary },
   muted: { color: colors.textMuted },
@@ -131,7 +135,7 @@ const styles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.choiceBorder
   },
-  typeChip: { borderColor: 'transparent' },
+  picked: { backgroundColor: colors.translucentFill },
   pressed: { opacity: 0.6 },
   chipText: { fontSize: typography.bodySize, lineHeight: 20, color: colors.textPrimary },
   recommended: { fontSize: typography.metaSize, color: colors.textMuted }
