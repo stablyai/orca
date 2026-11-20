@@ -6,6 +6,8 @@ export const BOT_ACCESS_COPY = {
   place: '{{connector}} ({{workspace}})',
   // The desktop confirm: one warning line, then up to four one-line rows of what they reach.
   confirmWarning: 'They’ll act as you on {{computer}}.',
+  // The phone's heading over those rows.
+  whatTheyCanDo: 'What {{person}} can do',
   confirmComputer: 'Run commands and change files',
   confirmNoApprovals: 'Acts without asking first',
   confirmMaySkipApprovals: 'May act without asking first',

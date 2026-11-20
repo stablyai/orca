@@ -28,13 +28,10 @@ import {
   type LookAroundPage
 } from './MobileBotLookAround'
 import { MobileTidyUpPage, MobileTidyUpSection, type TidyUpPage } from './MobileBotTidyUp'
+import { MobileBotAccessDecisionContent } from './MobileBotAccessDecision'
 import { useMobileBotTidyUp } from './use-mobile-bot-tidy-up'
 import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
-import {
-  accessGrantConfirmCopy,
-  accessRequestLine,
-  phoneAccessHost
-} from './bot-access-request-copy'
+import { accessRequestLine, phoneAccessHost } from './bot-access-request-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import type { RouteBot } from './use-route-bot'
 import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
@@ -249,15 +246,12 @@ export function MobileBotSettingsTab(props: {
 
   // Any paired phone may grant (D3), so it always asks first, as the desktop does.
   if (granting && access) {
-    const copy = accessGrantConfirmCopy(granting, accessBot)
     return (
-      <ConfirmContent
-        title={copy.title}
-        message={copy.message}
-        confirmLabel={BOT_ACCESS_COPY.confirm}
-        destructive
-        onCancel={() => setGranting(null)}
-        onConfirm={() => void access.decide(granting, 'granted')}
+      <MobileBotAccessDecisionContent
+        request={granting}
+        bot={accessBot}
+        onGrant={() => void access.decide(granting, 'granted')}
+        onClose={() => setGranting(null)}
       />
     )
   }

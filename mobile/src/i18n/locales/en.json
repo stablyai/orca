@@ -5821,7 +5821,9 @@
       "whereItRuns": "{{need}} · open it where it runs",
       "worker": "Worker: {{name}}",
       "actionFor": "{{action}}: {{title}}",
-      "open": "Open"
+      "open": "Open",
+      "chat": "Your chat with {{name}}",
+      "access": "{{person}} asked for access"
     },
     "chat": {
       "nothingToReport": "Nothing to report"
@@ -6019,6 +6021,9 @@
       "toolsNone": "No MCP servers yet",
       "toolsOne": "1 MCP server: {{names}}",
       "toolsMany": "{{count}} MCP servers: {{names}}"
+    },
+    "accessRequest": {
+      "review": "Review"
     }
   },
   "mobileWebShell": {
