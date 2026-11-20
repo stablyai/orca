@@ -5,7 +5,12 @@ import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesy
 import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/codex/codex-rollout-history-source'
 import { readHistoryBase } from './codex-rollout-history-base-header'
 import { isNamedOn, recentDates } from './codex-rollout-recent-dates'
-import { linksIntoWsl, lstatUnlessAbsent, statUnlessAbsent } from './codex-rollout-path-probes'
+import {
+  linksIntoWsl,
+  lstatUnlessAbsent,
+  pathCrossesIntoWsl,
+  statUnlessAbsent
+} from './codex-rollout-path-probes'
 import {
   createCodexRolloutFolderRelists,
   type CodexRolloutRoot
@@ -303,6 +308,10 @@ export function createCodexRolloutHistoryReferences(
     refresh: (homes) => update(homes, true),
     isReferenced: async (rolloutId) => {
       for (const fork of deletedForks.get(rolloutId) ?? []) {
+        // Opening a path through a link into WSL can start a distro: a fork there keeps its parent.
+        if (await pathCrossesIntoWsl(fork.path)) {
+          return true
+        }
         const entry = await lstatUnlessAbsent(fork.path)
         // Can't tell: it may be back.
         if (entry === undefined) {
@@ -310,10 +319,6 @@ export function createCodexRolloutHistoryReferences(
         }
         if (entry === null) {
           continue
-        }
-        // Opening a link into WSL can start a distro: a fork back as one keeps its parent.
-        if (entry.isSymbolicLink() && (await linksIntoWsl(fork.path))) {
-          return true
         }
         // Back, it needs a header read in full: unlike a scan, no age lets an unreadable one pass.
         const header = await readHistoryBase(fork.path)

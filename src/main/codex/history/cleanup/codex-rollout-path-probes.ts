@@ -56,3 +56,20 @@ export function createNestedWslLinkProbe(): (
     return false
   }
 }
+
+/** Whether the path itself or any folder above it links into WSL, checked outermost first. */
+export async function pathCrossesIntoWsl(path: string): Promise<boolean> {
+  if (process.platform !== 'win32') {
+    return false
+  }
+  const chain: string[] = []
+  for (let current = path; dirname(current) !== current; current = dirname(current)) {
+    chain.unshift(current)
+  }
+  for (const entry of chain) {
+    if (await linksIntoWsl(entry)) {
+      return true
+    }
+  }
+  return false
+}
