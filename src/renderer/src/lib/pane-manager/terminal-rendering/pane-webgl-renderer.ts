@@ -303,6 +303,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     }
     pane.webglAttachFailedSinceRecovery = true
     console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
+    releaseTerminalWebglAtlasWatcher(pane.terminal)
     try {
       webglAddon?.dispose()
     } catch {}

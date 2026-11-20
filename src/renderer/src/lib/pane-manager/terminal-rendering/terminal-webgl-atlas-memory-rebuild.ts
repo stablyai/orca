@@ -4,7 +4,7 @@ import { rebuildAllTerminalWebglRenderers } from '../pane-manager-registry'
 // A 4096² merged page means the shared atlas reached ~64 MiB; on Apple GPUs each context keeps its upload memory until the context is destroyed (GiBs across panes).
 const ATLAS_REBUILD_PAGE_SIZE = 4096
 const ATLAS_REBUILD_MIN_INTERVAL_MS = 10_000
-// Only macOS was measured retaining it; elsewhere a mass context recreate risks the driver's context budget. Touch excludes iPadOS desktop-mode agents.
+// Only macOS was measured retaining it (desktop app and Mac browsers); elsewhere a mass context recreate risks the driver's context budget. Touch excludes iPadOS desktop-mode agents.
 const ATLAS_MEMORY_REBUILD_ENABLED =
   typeof navigator !== 'undefined' &&
   navigator.userAgent.includes('Macintosh') &&
@@ -33,7 +33,7 @@ function scheduleRebuild(): void {
   }, delay)
 }
 
-/** Watches a WebGL terminal's output for its renderer's lifetime; repaints, warm-up and reveals parse nothing, so only output re-arms a rebuild. */
+/** Watches a WebGL terminal's output for its renderer's lifetime; repaints, warm-up and reveals parse nothing, so only output from any terminal re-arms a rebuild. */
 export function watchTerminalWebglAtlasOutput(terminal: OutputSource): void {
   if (!ATLAS_MEMORY_REBUILD_ENABLED || outputWatchers.has(terminal)) {
     return
