@@ -20,7 +20,7 @@ const JournalRetirementPolicySchema = z.object({
   mode: z.enum(['off', 'report', 'enforce']).catch('report'),
   enforcePermille: z.number().catch(0),
   /** Per platform, replacing `enforcePermille`, so each platform rolls out at its own share. */
-  platformPermille: z.record(z.string(), z.number()).optional().catch(undefined),
+  platformPermille: z.unknown().optional(),
   platforms: z.array(z.unknown()).optional().catch([])
 })
 
@@ -56,6 +56,25 @@ export function newestJournalRetirementPolicy(
     : newestKnown
 }
 
+/**
+ * This platform's share: its own entry, or the shared one when the map doesn't name it. Anything
+ * malformed gives 0, never the shared share: a bad entry must not widen a platform held back.
+ */
+function platformShare(rule: JournalRetirementPolicy, platform: NodeJS.Platform): number {
+  const shares = rule.platformPermille
+  if (shares === undefined) {
+    return rule.enforcePermille
+  }
+  if (typeof shares !== 'object' || shares === null || Array.isArray(shares)) {
+    return 0
+  }
+  const entry = Object.entries(shares).find(([name]) => name === platform)
+  if (!entry) {
+    return rule.enforcePermille
+  }
+  return typeof entry[1] === 'number' && Number.isFinite(entry[1]) ? entry[1] : 0
+}
+
 /** This install's mode now, and the revision it comes from (0 with no policy known). */
 export function effectiveJournalRetirementMode(args: {
   fetched: {
@@ -88,9 +107,6 @@ export function effectiveJournalRetirementMode(args: {
     args.now - args.fetched.at <= JOURNAL_RETIREMENT_ENFORCE_FRESH_MS &&
     !!args.installId &&
     journalRetirementBucket(args.installId) <
-      Math.min(
-        1000,
-        Math.max(0, Math.round(rule.platformPermille?.[args.platform] ?? rule.enforcePermille))
-      )
+      Math.min(1000, Math.max(0, Math.round(platformShare(rule, args.platform))))
   return { mode: enforce ? 'enforce' : 'report', revision }
 }

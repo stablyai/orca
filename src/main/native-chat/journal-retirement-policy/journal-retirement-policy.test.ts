@@ -64,6 +64,22 @@ it('deletes only with a fresh download that enforces for this install, and never
       fetched: fetched(policy({ enforcePermille: 1000, platformPermille: shares }))
     }).mode
   ).toBe('report')
+  // A malformed entry or map holds that platform back rather than falling to the shared share.
+  for (const platformPermille of [{ darwin: '1000' }, { darwin: null }, [1000], 'all']) {
+    expect(
+      effectiveJournalRetirementMode({
+        ...base,
+        fetched: fetched(policy({ enforcePermille: 1000, platformPermille }))
+      }).mode
+    ).toBe('report')
+  }
+  const parsedShares = parseJournalRetirementPolicy(
+    '{"version":1,"revision":7,"mode":"enforce","enforcePermille":1000,"platformPermille":{"darwin":0,"win32":"10"}}'
+  )
+  expect(
+    parsedShares.ok &&
+      effectiveJournalRetirementMode({ ...base, fetched: fetched(parsedShares.policy) }).mode
+  ).toBe('report')
   expect(
     effectiveJournalRetirementMode({ ...base, installId: undefined, fetched: fetched(policy({})) })
       .mode
