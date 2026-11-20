@@ -50,7 +50,10 @@ function sendLabelAvoidArea(
 
 export abstract class BrowserManagerGrab extends BrowserManagerViewport {
   /** The annotate palette's footprint per page, re-sent to each newly armed picker. */
-  private readonly grabLabelAvoidAreaByTabId = new Map<string, BrowserGrabLabelAvoidArea>()
+  private readonly grabLabelAvoidAreaByTabId = new Map<
+    string,
+    { area: BrowserGrabLabelAvoidArea; rendererWebContentsId: number }
+  >()
   /** Private preload key ownership for the current document and hosting renderer. */
   private readonly nativeKeysByTabId = new Map<string, GrabNativeKeySession>()
   isGrabPickedElementPresent(selectionId: string, guest: Electron.WebContents): Promise<boolean> {
@@ -60,16 +63,23 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
   setGrabLabelAvoidArea(
     browserTabId: string,
     area: BrowserGrabLabelAvoidArea | null,
-    guest: Electron.WebContents | null
-  ): void {
+    rendererWebContentsId: number
+  ): boolean {
+    const guest = this.getAuthorizedGuest(browserTabId, rendererWebContentsId)
+    const retained = this.grabLabelAvoidAreaByTabId.get(browserTabId)
+    // Guest loss permits only its recorded owner to clear the retained footprint.
+    if (!guest && (area !== null || retained?.rendererWebContentsId !== rendererWebContentsId)) {
+      return false
+    }
     if (area) {
-      this.grabLabelAvoidAreaByTabId.set(browserTabId, area)
+      this.grabLabelAvoidAreaByTabId.set(browserTabId, { area, rendererWebContentsId })
     } else {
       this.grabLabelAvoidAreaByTabId.delete(browserTabId)
     }
     if (guest) {
       sendLabelAvoidArea(guest, area)
     }
+    return true
   }
 
   /** Authorize tools for browsing and document guests; documents stay outside browsing maps. */
@@ -121,7 +131,7 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     }
     // Arm eagerly so hover feedback appears before selection starts.
     const armed = await runOverlayScript(guest, 'arm')
-    const area = this.grabLabelAvoidAreaByTabId.get(browserTabId)
+    const area = this.grabLabelAvoidAreaByTabId.get(browserTabId)?.area
     if (armed && area) {
       sendLabelAvoidArea(guest, area)
     }

@@ -155,13 +155,7 @@ export function registerBrowserGrabHandlers(): void {
       if (area === undefined) {
         return false
       }
-      const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      // A closing palette may outlive its page; its footprint is still forgotten.
-      if (!guest && area !== null) {
-        return false
-      }
-      browserManager.setGrabLabelAvoidArea(args.browserPageId, area, guest)
-      return guest !== null
+      return browserManager.setGrabLabelAvoidArea(args.browserPageId, area, event.sender.id)
     }
   )
 
