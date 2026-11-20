@@ -241,6 +241,13 @@ export const reusedList = defineFixture({
   interact: searching('maya')
 })
 
+/** A list read on an earlier day of the same app run: the note gives the date. */
+export const reusedListOlder = defineFixture({
+  width: 340,
+  render: pickerOf(readRoster({ reused: true, readAt: new Date(2026, 10, 10, 9, 30).getTime() })),
+  interact: searching('maya')
+})
+
 /** No gh child was started (gh missing): the next open tries again. */
 export const unavailableReopen = defineFixture({
   width: 340,

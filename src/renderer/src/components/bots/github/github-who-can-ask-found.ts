@@ -28,6 +28,19 @@ type Answer = {
   query: string
   /** The linked GitHub login; a different gh account is named. */
   ownerLogin: string | null
+  /** The time now (epoch ms), for how old a reused list is. */
+  now?: number
+}
+
+/** A reused list older than this is worth mentioning on every search. */
+export const STALE_LIST_MS = 60 * 60_000
+
+/** When a list was read: the time today, the date otherwise (date and time wouldn't fit one line). */
+function readTime(readAt: number, now: number): string {
+  const read = new Date(readAt)
+  return new Date(now).toDateString() === read.toDateString()
+    ? read.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : read.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
 /** Why the roster holds only part of its sources' people, by the kind of read that stopped at its
@@ -59,7 +72,7 @@ function cutLine(
 /** One search as the picker draws it. Every line says only what was actually read: an empty list
  *  never reads as "no one exists" when nothing, or not everything, was looked at. */
 export function gitHubWhoCanAskAnswer(
-  { roster, exact, query, ownerLogin }: Answer,
+  { roster, exact, query, ownerLogin, now = Date.now() }: Answer,
   t: Translate
 ): BotSlackResult<BotWhoCanAskFound> {
   // GitHub off, as the cloud just said, is definitive. With the roster settled and unread too,
@@ -127,16 +140,15 @@ export function gitHubWhoCanAskAnswer(
       ? t('bots.github.whoCanAsk.exactOnly', 'Exact usernames only.')
       : null
   const limits = [
-    // A host reads its list once per app run; a reused one says when it was read.
-    read?.reused
+    // A host reads its list once per app run. A reused one says when it was read, but only when
+    // that matters: it's over an hour old, or the search found no one in it.
+    read?.reused &&
+    (now - read.readAt > STALE_LIST_MS || (query.trim() !== '' && shown.length === 0))
       ? t(
           'bots.github.whoCanAsk.readEarlier',
           'Repo list from {{time}}. Restart Orca to refresh.',
           {
-            time: new Date(read.readAt).toLocaleTimeString([], {
-              hour: 'numeric',
-              minute: '2-digit'
-            })
+            time: readTime(read.readAt, now)
           }
         )
       : null,
