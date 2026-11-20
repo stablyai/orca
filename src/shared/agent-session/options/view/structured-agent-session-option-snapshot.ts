@@ -28,6 +28,7 @@ import { listedModelDescribing } from '../model-catalog/structured-agent-session
 import { structuredAgentSessionPermissionDescriptor } from '../permissions/structured-agent-session-permission-option'
 import { structuredAgentSessionInteractionDescriptor } from '../permissions/agent-session-interaction-mode'
 import type { StructuredAgentSessionOptionState } from '../structured-agent-session-options'
+import { effectiveAgentContextMode } from '../model-catalog/agent-session-context-mode'
 
 /** Unpickable placeholder cannot become a launch selection before a real model answer. */
 const PROVIDER_DEFAULT_MODEL_PLACEHOLDER: SessionOptionDescriptor = {
@@ -179,6 +180,16 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
   let values = normalises
     ? valuesUnderControls(catalog, controls, record.values, state.olderHost === true)
     : record.values
+  const contextMode = values.contextMode
+  const effectiveContext = normalises
+    ? effectiveAgentContextMode(
+        typeof contextMode?.value === 'string' ? contextMode.value : undefined,
+        structuredAgentSessionDescribedModel(state, shown.shown.currentId!)?.supportsMaxMode
+      )
+    : undefined
+  if (contextMode && effectiveContext && contextMode.value !== effectiveContext) {
+    values = { ...values, contextMode: { value: effectiveContext, source: 'applied' } }
+  }
   if (record.agent === 'pi' && state.reportedEffort !== undefined) {
     values = { ...values, effort: { value: state.reportedEffort, source: 'reported' } }
   }
@@ -272,7 +283,8 @@ export function lockedStructuredAgentSessionOptionSnapshot(
   capabilitiesOnly = false
 ): SessionOptionDescriptor[] {
   return snapshot.map((descriptor) =>
-    capabilitiesOnly && !['effort', 'serviceTier', 'fastMode'].includes(descriptor.id)
+    capabilitiesOnly &&
+    !['effort', 'serviceTier', 'fastMode', 'contextMode'].includes(descriptor.id)
       ? descriptor
       : { ...descriptor, settable: false, disabledReason: 'available-after-session-start' }
   )
@@ -289,12 +301,17 @@ export function canSetStructuredAgentSessionOption(
   if (!interactionReady || pending || (id === 'fastMode' && state.fastModeRestricted)) {
     return false
   }
-  if (id === 'permissionMode' || id === 'interactionMode') {
+  if (
+    id === 'permissionMode' ||
+    id === 'interactionMode' ||
+    id === 'contextMode' ||
+    (id === 'effort' && state.record.agent === 'trae')
+  ) {
     const descriptor = snapshot.find((entry) => entry.id === id)
     return (
       descriptor?.settable === true &&
       descriptor.kind.type === 'select' &&
-      (value === 'own'
+      (id === 'permissionMode' && value === 'own'
         ? state.permissionOwnSupported === true
         : descriptor.kind.choices.some((choice) => choice.value === value))
     )

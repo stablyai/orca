@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionAtRestCommands } from '../options/structured-agent-session-at-rest-commands'
+import { createStructuredAgentAtRestCommandRouter } from '../options/structured-agent-session-at-rest-command-router'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -128,6 +128,14 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return compact(input)
   }
 
+  recap: NonNullable<Adapter['recap']> = (input) => {
+    const recap = this.owner(input.sessionId).recap
+    if (!recap) {
+      throw new Error('Recap is unavailable for this provider.')
+    }
+    return recap(input)
+  }
+
   cancelTurn: Adapter['cancelTurn'] = (input) => this.owner(input.sessionId).cancelTurn(input)
 
   changeThreadGoal: NonNullable<Adapter['changeThreadGoal']> = (input) => {
@@ -190,24 +198,11 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   readCommands: NonNullable<Adapter['readCommands']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.readCommands?.(sessionId)
 
-  atRestCommands: StructuredAgentSessionAtRestCommands = {
-    read: (record) =>
-      this.agents.registration(record.provider)?.adapter.atRestCommands?.read(record),
-    snapshot: (record) =>
-      this.agents.registration(record.provider)?.adapter.atRestCommands?.snapshot?.(record) ?? {
-        commandsPending: false
-      },
-    settled: async (record, budgetMs, independent) => {
-      const source = this.agents.registration(record.provider)?.adapter.atRestCommands
-      return source?.settled ? source.settled(record, budgetMs, independent) : source?.read(record)
-    },
-    onChange: (listener) => {
-      const stops = this.adapters().flatMap((adapter) =>
-        adapter.atRestCommands ? [adapter.atRestCommands.onChange(listener)] : []
-      )
-      return () => stops.forEach((stop) => stop())
-    }
-  }
+  atRestCommands = createStructuredAgentAtRestCommandRouter(
+    (provider) => this.agents.registration(provider)?.adapter.atRestCommands,
+    () =>
+      this.adapters().flatMap((adapter) => (adapter.atRestCommands ? [adapter.atRestCommands] : []))
+  )
 
   answerPrompt: Adapter['answerPrompt'] = (input) => this.owner(input.sessionId).answerPrompt(input)
 
@@ -231,6 +226,12 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     return reader(input)
   }
 
+  generateConversationName: NonNullable<Adapter['generateConversationName']> = (input) =>
+    this.capabilityOwner(
+      input.record.sessionId,
+      input.record.provider
+    )?.adapter.generateConversationName?.(input) ?? Promise.resolve(null)
+
   generateText: NonNullable<Adapter['generateText']> = (input) => {
     const { adapter } = this.requireAgent(input)
     if (!adapter.generateText) {
@@ -245,6 +246,11 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
       return Promise.reject(new Error(`${input.identity.agent} cannot copy a conversation`))
     }
     return adapter.copyConversation(input)
+  }
+
+  readConversationHistory: NonNullable<Adapter['readConversationHistory']> = (input) => {
+    const { adapter } = this.requireAgent(input)
+    return adapter.readConversationHistory?.(input) ?? Promise.resolve(null)
   }
 
   closeSession: NonNullable<Adapter['closeSession']> = (...args) =>

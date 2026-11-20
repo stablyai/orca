@@ -21,6 +21,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-wire'
 import {
   agentSessionConversationCommandFields,
+  type AgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
 } from '../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
@@ -31,10 +32,7 @@ import {
   agentSessionSendFields,
   type StructuredAgentSessionSendMutation
 } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import {
-  STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
-  structuredAgentSessionCompactBody
-} from './structured-agent-session-command-turn'
+import { structuredAgentSessionCommandBody } from './structured-agent-session-command-turn'
 import {
   performSend,
   type AgentSessionTurnContext,
@@ -198,17 +196,19 @@ export type ConversationCommandAcceptance =
 /** Accept compact as a submission, or as a queued card later converted to one. */
 export function conversationCommandPlan(params: {
   envelope: AgentSessionMutationEnvelope
+  command?: AgentSessionConversationCommand
   instructions?: string
   delivery?: 'queue-if-active'
   priorRecord: () => AgentSessionConversationCommandResult | null
 }): MutationPlan<ConversationCommandAcceptance> {
   const clientMessageId = params.envelope.clientOperationId
+  const command = params.command ?? 'compact'
   return {
     method: 'agentSession.conversationCommand',
     operationIdScope: 'global',
     conversationWrite: true,
     commandReceipt: submissionOrDraftReceipt(clientMessageId),
-    fields: agentSessionConversationCommandFields(STRUCTURED_AGENT_SESSION_COMPACT_COMMAND, params),
+    fields: agentSessionConversationCommandFields(command, params),
     recoverUnknownFromDurableState: true,
     run: async (ctx) => {
       const sent = await performSend(ctx, {
@@ -216,7 +216,7 @@ export function conversationCommandPlan(params: {
         origin: 'client',
         source: USER_MESSAGE_SOURCE,
         payloadFingerprint: params.envelope.payloadFingerprint,
-        body: structuredAgentSessionCompactBody(params.instructions)
+        body: structuredAgentSessionCommandBody(command, params.instructions)
       })
       return sent.ok ? { ok: true, value: { clientMessageId } } : sent
     },

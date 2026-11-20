@@ -135,7 +135,7 @@ export class AgentModelCatalogStore {
 
   /** Live saves must not delay account-level discovery. */
   isStale(entry: AgentModelCatalogEntry): boolean {
-    return agentModelCatalogEntryIsStale(entry, this.dueEntries.has(entry.fingerprint))
+    return agentModelCatalogEntryIsStale(entry, this.dueEntries.has(entry.fingerprint), this.now())
   }
 
   failureDetail(fingerprint: string): string | null {

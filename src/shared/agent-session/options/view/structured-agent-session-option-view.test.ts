@@ -14,7 +14,10 @@ import {
   createStructuredAgentSessionOptionState,
   type StructuredAgentSessionOptionState
 } from '../structured-agent-session-options'
-import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
+import {
+  structuredAgentSessionOptionSnapshot,
+  canSetStructuredAgentSessionOption
+} from './structured-agent-session-option-snapshot'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView,
@@ -28,6 +31,70 @@ const SONNET = { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: level
 // Claude's session-less listing marks no default row.
 const LISTED: AgentSessionModelCatalogResult = { origin: 'probe', fetchedAt: 1, models: [OPUS] }
 const remembered = { model: 'claude-gone', effort: 'max' }
+
+it('captures a Trae context pick and normalizes it under a standard-only model', () => {
+  const seed = { models: [], modelApply: {} }
+  const state = applyStructuredAgentSessionOptions(
+    createStructuredAgentSessionOptionState('trae', seed),
+    seed,
+    {
+      models: [
+        { id: 'large', label: 'Large', isDefault: true, efforts: [], supportsMaxMode: true },
+        { id: 'small', label: 'Small', isDefault: false, efforts: [], supportsMaxMode: false }
+      ],
+      current: {
+        model: 'large',
+        contextMode: 'max',
+        acceptedInputSources: { model: 'saved', contextMode: 'saved' },
+        defaulted: []
+      }
+    }
+  )
+  expect(structuredAgentSessionMessageSelection(state)).toEqual({
+    model: 'large',
+    contextMode: 'max'
+  })
+  const switched = commitStructuredAgentSessionOption(state, 'model', 'small')
+  expect(structuredAgentSessionMessageSelection(switched)).toEqual({
+    model: 'small',
+    contextMode: 'standard'
+  })
+})
+
+it('admits only the Trae model’s offered efforts, including custom levels', () => {
+  const seed = { models: [], modelApply: {} }
+  const state = applyStructuredAgentSessionOptions(
+    createStructuredAgentSessionOptionState('trae', seed),
+    seed,
+    {
+      models: [
+        {
+          id: 'adjustable',
+          label: 'Adjustable',
+          isDefault: true,
+          efforts: levels('low', 'high', 'budget-4096')
+        },
+        { id: 'fixed', label: 'Fixed', isDefault: false, efforts: [], supportsMaxMode: false },
+        {
+          id: 'single',
+          label: 'Single',
+          isDefault: false,
+          efforts: levels('high'),
+          supportsMaxMode: false
+        }
+      ],
+      current: { model: 'adjustable', effort: 'xhigh' }
+    }
+  )
+  expect(canSetStructuredAgentSessionOption(state, 'effort', 'xhigh')).toBe(false)
+  expect(canSetStructuredAgentSessionOption(state, 'effort', 'high')).toBe(true)
+  expect(canSetStructuredAgentSessionOption(state, 'effort', 'budget-4096')).toBe(true)
+  const fixed = commitStructuredAgentSessionOption(state, 'model', 'fixed')
+  expect(canSetStructuredAgentSessionOption(fixed, 'effort', 'high')).toBe(false)
+  expect(canSetStructuredAgentSessionOption(fixed, 'contextMode', 'standard')).toBe(false)
+  const single = commitStructuredAgentSessionOption(fixed, 'model', 'single')
+  expect(canSetStructuredAgentSessionOption(single, 'effort', 'high')).toBe(false)
+})
 // Claude Code 2.1.302 lists plain opus and no opus[1m], which still runs.
 const CLI302 = [{ ...OPUS, id: 'opus', isDefault: true }, SONNET]
 

@@ -1,4 +1,6 @@
+import { join } from 'node:path'
 import process from 'node:process'
+import { configureSessionParseCachePersistence } from '../../ai-vault/parse-cache/session-parse-cache-persistence'
 import { startBackendCore } from '../../backend/core-runtime'
 import { resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from '../serve-startup/orcad-cli-launcher'
@@ -16,6 +18,11 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   const userDataPath = resolveUserDataPath()
   // Override inherited data roots so CLI-shared Codex homes resolve on this host.
   process.env.ORCA_USER_DATA_PATH = userDataPath
+  // Headless startup skips Electron preflight; without this every scanner child cold-parses all transcripts.
+  configureSessionParseCachePersistence({
+    filePath: join(userDataPath, 'ai-vault', 'session-parse-cache.json'),
+    appVersion: process.env.ORCA_APP_VERSION ?? '0.0.0-orcad'
+  })
   return startBackendCore({
     userDataPath,
     supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1',

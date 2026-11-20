@@ -1,6 +1,9 @@
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
-import { normalizeSourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import {
+  DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
+  normalizeSourceControlActionRecipe
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   renderConversationNamePrompt,
   sanitizeGeneratedConversationName
@@ -78,7 +81,27 @@ export function structuredChatNamingDeps(
       if (useChatAgent && ['copilot', 'kimi', 'cursor', 'hermes'].includes(record.provider)) {
         return null
       }
-      if (useChatAgent && (record.provider === 'grok' || record.provider === 'antigravity')) {
+      if (
+        useChatAgent &&
+        (record.provider === 'grok' ||
+          record.provider === 'antigravity' ||
+          record.provider === 'trae')
+      ) {
+        if (
+          record.provider === 'trae' &&
+          recipe.commandInputTemplate ===
+            DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES.conversationName
+        ) {
+          const generateName =
+            getStructuredAgentSessionHost()?.deps.adapter.generateConversationName
+          const name =
+            generateName && shouldExecute?.() !== false
+              ? await generateName({ record }).catch(() => null)
+              : null
+          if (name) {
+            return { name }
+          }
+        }
         const generateText = getStructuredAgentSessionHost()?.deps.adapter.generateText
         try {
           if (!generateText) {
@@ -103,7 +126,9 @@ export function structuredChatNamingDeps(
           throw new Error('The naming agent returned an empty title')
         } catch (error) {
           logger.warn('Native chat naming failed', { ...log, error })
-          return chatNamingFailure(record.provider === 'grok' ? 'grokFailed' : 'antigravityFailed')
+          return record.provider === 'trae'
+            ? chatNamingFailure('agentNotRun')
+            : chatNamingFailure(record.provider === 'grok' ? 'grokFailed' : 'antigravityFailed')
         }
       }
       const settings = resolveTextGenerationParams(

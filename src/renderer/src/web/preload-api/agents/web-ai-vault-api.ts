@@ -17,9 +17,10 @@ import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
 } from '../../../../../shared/ai-vault/contracts/ai-vault-session-title'
-import type {
-  AiVaultListArgs,
-  AiVaultListResult
+import {
+  AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS,
+  type AiVaultListArgs,
+  type AiVaultListResult
 } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   normalizeExecutionHostId,
@@ -72,18 +73,22 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
       }
       const hostPairingRevision = environment.pairingRevision ?? environment.createdAt
       // Why: no local filesystem in the browser, so every history scan runs on and is stamped as the paired runtime host.
-      return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
-        includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
-        limit: args?.limit,
-        unlimited: args?.unlimited,
-        force: args?.force,
-        ...(requestedScope === executionHostId && args?.afterFingerprint !== undefined
-          ? { afterFingerprint: args.afterFingerprint }
-          : {}),
-        scopePaths: args?.scopePaths,
-        ...(args?.scopeOnly === true ? { scopeOnly: true } : {}),
-        executionHostId
-      }).then((result) =>
+      return callRuntimeResult<AiVaultListResult>(
+        'aiVault.listSessions',
+        {
+          includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
+          limit: args?.limit,
+          unlimited: args?.unlimited,
+          force: args?.force,
+          ...(requestedScope === executionHostId && args?.afterFingerprint !== undefined
+            ? { afterFingerprint: args.afterFingerprint }
+            : {}),
+          scopePaths: args?.scopePaths,
+          ...(args?.scopeOnly === true ? { scopeOnly: true } : {}),
+          executionHostId
+        },
+        AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS
+      ).then((result) =>
         // Fence later host mutations on these rows to the pairing that listed them.
         result.sessions
           ? {

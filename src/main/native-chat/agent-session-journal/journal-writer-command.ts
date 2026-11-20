@@ -165,6 +165,7 @@ export type JournalWriterContextOperation =
     }
   | {
       kind: 'epoch-replace'
+      preserveCurrentItems?: true
       historyOrigin?: JournalEpochRow['historyOrigin']
       reason: AgentJournalEpochReason
       fence: number

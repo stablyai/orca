@@ -11,9 +11,17 @@ import {
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import {
   attachFingerprintFields,
+  reserveRequestFor,
   type AgentSessionAttachParams
 } from '../../acquisition/structured-agent-session-attach'
 import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
+import {
+  performAttach,
+  type AttachFlowInput
+} from '../../acquisition/structured-agent-session-attach-flow'
+import type { StructuredAgentSessionAttachLock } from '../../acquisition/structured-agent-session-attach-lock'
+import { TRAEX_STRUCTURED_AGENT } from '../../../../traex/traex-agent-definition'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
@@ -197,3 +205,207 @@ describe('adopting a provider conversation on create', () => {
     await host.flushAllStreamedEvents()
   })
 })
+
+it.each(['cancelled', 'completed', 'concurrent', 'unimported'] as const)(
+  'prepares %s native history outside the attach commit',
+  async (outcome) => {
+    root = await mkdtemp(join(tmpdir(), 'orca-adopt-native-cancel-'))
+    const transcriptPath = join(root, 'native-history.jsonl')
+    await writeFile(transcriptPath, '{}\n')
+    const params = attachParams(transcriptPath, {
+      provider: 'trae',
+      agent: 'trae',
+      accountHome: { variable: 'TRAECLI_HOME', path: root },
+      envelope: {
+        sessionId: SESSION,
+        clientOperationId: OPERATION,
+        expectedRuntimeFence: null,
+        payloadFingerprint: ''
+      },
+      adopt: {
+        transcriptPath,
+        providerHandle: { transport: 'traex-app-server', agent: 'trae', nativeId: THREAD }
+      }
+    })
+    store = await openTestAgentSessionRecordStore(root)
+    const authority = {
+      spawnToken: 'spawn-owner',
+      claimKeyId: 'key-1',
+      handoffOperationId: null,
+      probe: { outcome: 'reservation-unused' as const }
+    }
+    const reserved = await store.reserveOwner(
+      reserveRequestFor({
+        sessionId: SESSION,
+        params,
+        authority,
+        callerKey: 'client-1',
+        fingerprint: params.envelope.payloadFingerprint,
+        now: NOW
+      })
+    )
+    const fence = reserved.record.lease.runtimeFence
+    await store.commitProcessIdentity({
+      sessionId: SESSION,
+      fence,
+      process: { hostId: 'local', pid: 4242, processStartTimeMs: NOW, spawnToken: 'spawn-owner' },
+      now: NOW
+    })
+    await store.proveOwner({ sessionId: SESSION, fence, now: NOW })
+    const journal = await AgentSessionJournal.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'trae',
+        providerHandle: params.adopt!.providerHandle
+      },
+      database: await openTestAgentSessionDatabase(root)
+    })
+    const saveDuringImport = async () => {
+      await journal.appendItem(
+        { provider: 'orca', clientMessageId: 'saved-during-import' },
+        { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Saved during import' }] },
+        { fence, turnScope: { kind: 'thread' } }
+      )
+      await journal.appendItem(
+        { provider: 'orca', clientMessageId: 'reply-saved-during-import' },
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Reply saved during import' }]
+        },
+        { fence, turnScope: { kind: 'thread' } }
+      )
+    }
+    if (outcome === 'unimported') {
+      await saveDuringImport()
+    }
+    const controller = new AbortController()
+    const entered = Promise.withResolvers<void>()
+    const history =
+      Promise.withResolvers<
+        Awaited<ReturnType<NonNullable<StructuredAgentSessionAdapter['readConversationHistory']>>>
+      >()
+    let inCommit = false
+    const lock: StructuredAgentSessionAttachLock = {
+      signal: controller.signal,
+      wait: (work) => work,
+      commit: async (step) => {
+        controller.signal.throwIfAborted()
+        inCommit = true
+        try {
+          return await step()
+        } finally {
+          inCommit = false
+        }
+      }
+    }
+    try {
+      const flow: AttachFlowInput = {
+        store,
+        adapter: {
+          ...adapter(),
+          supportsLocation: () => true,
+          readConversationHistory: async ({ signal }) => {
+            entered.resolve()
+            if (inCommit) {
+              throw new Error('Provider history read held the attach commit')
+            }
+            if (signal !== controller.signal) {
+              throw new Error('Provider history read did not receive attach cancellation')
+            }
+            signal.addEventListener('abort', () => history.reject(signal.reason), { once: true })
+            return history.promise
+          }
+        },
+        agents: { definition: () => TRAEX_STRUCTURED_AGENT },
+        logger: createStructuredAgentSessionLogger(),
+        authority,
+        callerKey: 'client-1',
+        params,
+        now: () => NOW,
+        lock,
+        openConversation: async () => journal,
+        onAttached: () => {}
+      }
+      const attaching = performAttach(flow)
+      const settled = attaching.then(
+        (value) => value,
+        (error: unknown) => error
+      )
+      await Promise.race([
+        entered.promise,
+        settled.then((outcome) => {
+          throw outcome instanceof Error
+            ? outcome
+            : new Error(
+                `Attach ended before native history preparation: ${JSON.stringify(outcome)}`
+              )
+        })
+      ])
+      if (outcome === 'cancelled') {
+        controller.abort(new Error('Caller cancelled history preparation'))
+        await expect(attaching).rejects.toThrow('Caller cancelled history preparation')
+      } else {
+        if (outcome === 'concurrent') {
+          await saveDuringImport()
+        }
+        history.resolve({
+          sourceEmpty: false,
+          items: [
+            {
+              identity: {
+                provider: 'legacy',
+                agent: 'trae',
+                sessionId: SESSION,
+                recordId: 'restored-user'
+              },
+              body: {
+                kind: 'message',
+                role: 'user',
+                blocks: [{ type: 'text', text: 'Restored conversation' }]
+              },
+              ownerFence: 0
+            }
+          ]
+        })
+        expect(await attaching).toMatchObject({ ok: true })
+        expect(
+          (await readTestJournalItems(journal)).find((row) => row.body.kind === 'message')?.body
+        ).toMatchObject({
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Restored conversation' }]
+        })
+        if (outcome === 'concurrent' || outcome === 'unimported') {
+          const messages = (await readTestJournalItems(journal)).flatMap((row) =>
+            row.body.kind === 'message'
+              ? row.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+              : []
+          )
+          expect(messages).toEqual([
+            'Restored conversation',
+            'Saved during import',
+            'Reply saved during import'
+          ])
+          expect(await journal.reads.itemProvenance('orca:saved-during-import')).toMatchObject({
+            ownerFence: 1
+          })
+          expect(
+            await performAttach({
+              ...flow,
+              adapter: {
+                ...flow.adapter,
+                readConversationHistory: async () => {
+                  throw new Error('Provider history is unavailable')
+                }
+              }
+            })
+          ).toMatchObject({ ok: true })
+        }
+      }
+    } finally {
+      await journal.close()
+    }
+  }
+)

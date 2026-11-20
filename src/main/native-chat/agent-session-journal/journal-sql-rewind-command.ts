@@ -1,3 +1,4 @@
+import { readJournalDomainContextHead } from './journal-domain-context-state'
 import { isDeepStrictEqual } from 'node:util'
 import type Database from '../../sqlite/sync-database'
 import { isReadableAgentSessionStoreRecord } from '../../runtime/agent-session/records/agent-session-store-row-rules'
@@ -11,10 +12,7 @@ import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalWriterCommand } from './journal-writer-command'
 import { JournalSqlScope } from './journal-sql-scope'
 import { planJournalDomainRewindCut } from './journal-domain-rewind-cut'
-import {
-  readJournalDomainContextHead,
-  journalDomainPublicCursor
-} from './journal-domain-context-replacement'
+import { journalDomainPublicCursor } from './journal-domain-context-replacement'
 import { journalDomainEventItem } from './journal-domain-item-removal'
 import { restoreRetainedFailures } from './journal-domain-retained-failures'
 import { removeJournalDomainRewindSuffix } from './journal-domain-rewind-removal'

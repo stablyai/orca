@@ -5,8 +5,8 @@ import { CodexAppServerRequestError } from '../../app-server/codex-app-server-re
 import { changeCodexThreadGoal } from './codex-structured-thread-goal'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import {
-  codexTurnOptionsDiffer,
-  waitsForCodexTurnOptions
+  providerTurnOptionsDiffer,
+  waitsForProviderTurnOptions
 } from '../../../native-chat/agent-session-wire/options/structured-agent-session-message-options'
 
 const THREAD = 'thread-1'
@@ -102,7 +102,7 @@ describe('direct goal settings application', () => {
         signal
       })
     const held = (options: Record<string, string>) =>
-      waitsForCodexTurnOptions(
+      waitsForProviderTurnOptions(
         { provider: 'codex', sessionId: 'session-1' },
         {
           reads: {
@@ -278,7 +278,7 @@ describe('direct goal settings application', () => {
         }
         await Promise.allSettled([rpc])
         const differs = (model: string) =>
-          codexTurnOptionsDiffer(
+          providerTurnOptionsDiffer(
             { provider: 'codex', sessionId: 'session-1' },
             { model, effort: 'high' },
             { fence: 7, generation, phase: 'ready' },

@@ -30,6 +30,7 @@ import { structuredAgentSessionImmediatePermission } from './structured-agent-se
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { readStructuredSessionRecovery } from '../recovery/structured-agent-session-recovery-read'
 import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-efforts'
+import { effectiveAgentContextMode } from '../../../../shared/agent-session/options/model-catalog/agent-session-context-mode'
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
 export async function readStructuredAgentSessionOptions(
@@ -171,6 +172,10 @@ export async function readStructuredAgentSessionOptions(
     ...options.current,
     ...(model !== undefined ? { model } : {}),
     effort: saved.effort ?? options.current.effort,
+    contextMode: effectiveAgentContextMode(
+      saved.contextMode ?? options.current.contextMode,
+      options.models.find((entry) => entry.id === model)?.supportsMaxMode
+    ),
     // A running model's Fast says nothing about another selected model, which keeps its own default.
     fastMode:
       selected.current.fastMode ??
@@ -196,7 +201,14 @@ export async function readStructuredAgentSessionOptions(
     (key) => saved[key] === undefined && defaultedBy(key)
   )
   const acceptedInputSources: AgentSessionAcceptedInputSources = {}
-  for (const key of ['model', 'effort', 'fastMode', 'serviceTier', 'interactionMode'] as const) {
+  for (const key of [
+    'model',
+    'effort',
+    'fastMode',
+    'serviceTier',
+    'interactionMode',
+    'contextMode'
+  ] as const) {
     if (current[key] !== undefined && saved[key] !== undefined) {
       acceptedInputSources[key] = 'saved'
     }
@@ -280,7 +292,11 @@ export async function readStructuredAgentSessionOptions(
             supported: false,
             reason: 'unsupported'
           }),
-    conversationCommands: capabilities?.compact ? ['clear', 'compact'] : ['clear'],
+    conversationCommands: [
+      'clear',
+      ...(capabilities?.compact ? (['compact'] as const) : []),
+      ...(capabilities?.recap ? (['recap'] as const) : [])
+    ],
     ...(capabilities?.compact && capabilities.compactInstructions
       ? { compactInstructions: true }
       : {}),

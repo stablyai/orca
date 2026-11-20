@@ -32,16 +32,21 @@ export const rewindMessage = (
   blocks: [{ type: 'text', text }]
 })
 
-export function sqlRewindFixture(cleanups: (() => void)[], provider: 'codex' | 'claude' = 'codex') {
+export function sqlRewindFixture(
+  cleanups: (() => void)[],
+  provider: 'codex' | 'claude' | 'trae' = 'codex'
+) {
   const sessionId = 'chat-rewind'
   const f = domainLifecycleFixture(cleanups, sessionId)
   const record = agentSessionRecordFixture({
     sessionId,
     provider,
     accountHome:
-      provider === 'codex'
-        ? { variable: 'CODEX_HOME', path: '/home/work/.codex' }
-        : { variable: 'CLAUDE_CONFIG_DIR', path: '/home/work/.claude' },
+      provider === 'trae'
+        ? { variable: 'TRAECLI_HOME', path: '/home/work/.trae/cli' }
+        : provider === 'codex'
+          ? { variable: 'CODEX_HOME', path: '/home/work/.codex' }
+          : { variable: 'CLAUDE_CONFIG_DIR', path: '/home/work/.claude' },
     providerHandleChain: [
       {
         linkId: 'head',
@@ -49,9 +54,11 @@ export function sqlRewindFixture(cleanups: (() => void)[], provider: 'codex' | '
         mintedAtFence: 1,
         observedAt: 1,
         handle:
-          provider === 'codex'
-            ? codexProviderHandle('thread')
-            : claudeProviderHandle('native', null)
+          provider === 'trae'
+            ? { transport: 'traex-app-server', agent: 'trae', nativeId: 'thread' }
+            : provider === 'codex'
+              ? codexProviderHandle('thread')
+              : claudeProviderHandle('native', null)
       }
     ]
   })
@@ -108,7 +115,7 @@ export function sqlRewindFixture(cleanups: (() => void)[], provider: 'codex' | '
       planJournalDomainRewindCut(new JournalSqlScope(f.db, sessionId, 'epoch'), {
         itemId,
         provider,
-        nativeId: provider === 'codex' ? 'thread' : 'native'
+        nativeId: provider === 'claude' ? 'native' : 'thread'
       })?.cut ?? null
     return {
       rewind,

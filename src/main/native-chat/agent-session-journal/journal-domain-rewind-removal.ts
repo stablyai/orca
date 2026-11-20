@@ -31,9 +31,9 @@ export function removeJournalDomainRewindSuffix(
       turn_id TEXT,special INTEGER) WITHOUT ROWID;
     DELETE FROM journal_rewind_members; DELETE FROM journal_rewind_removals`)
   db.prepare(
-    `${rewindRetainedTurns(plan.claude)} INSERT INTO journal_rewind_members SELECT member FROM rewind_kept_turns`
+    `${rewindRetainedTurns(plan.scope)} INSERT INTO journal_rewind_members SELECT member FROM rewind_kept_turns`
   ).run(...bindings)
-  const kept = rewindKept(plan.claude, 'temp.journal_rewind_members')
+  const kept = rewindKept(plan.scope, 'temp.journal_rewind_members')
   if (childBoundary?.kind === 'item') {
     const anchor = db
       .prepare(`SELECT sequence,sequence_index,ordinal FROM journal_items

@@ -6,31 +6,31 @@ import type { StructuredAgentSessionAdapter } from '../providers/structured-agen
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 
-/** A different Codex control needs a new turn: steer has no choice parameters. */
-export async function waitsForCodexTurnOptions(
+/** A different Codex or Trae control needs a new turn: steer has no choice parameters. */
+export async function waitsForProviderTurnOptions(
   record: Pick<AgentSessionRecord, 'provider' | 'sessionId'> | null,
   journal: { reads: Pick<AgentSessionJournalReads, 'messageOptions'> },
   next: AgentJournalSubmission,
   child: StructuredAgentSessionProviderChild,
   adapter?: Pick<StructuredAgentSessionAdapter, 'captureMessageSteeringInputs'>
 ): Promise<boolean> {
-  if (record?.provider !== 'codex') {
+  if (record?.provider !== 'codex' && record?.provider !== 'trae') {
     return false
   }
   const options = await journal.reads.messageOptions(next.clientMessageId)
   if (!options.ordinaryMessage || !options.runningTurn) {
     return false
   }
-  return codexTurnOptionsDiffer(record, next.options, child, adapter)
+  return providerTurnOptionsDiffer(record, next.options, child, adapter)
 }
 
-export function codexTurnOptionsDiffer(
+export function providerTurnOptionsDiffer(
   record: Pick<AgentSessionRecord, 'provider' | 'sessionId'>,
   options: AgentSessionExecutionOptions | undefined,
   child: StructuredAgentSessionProviderChild,
   adapter?: Pick<StructuredAgentSessionAdapter, 'captureMessageSteeringInputs'>
 ): boolean {
-  if (record.provider !== 'codex') {
+  if (record.provider !== 'codex' && record.provider !== 'trae') {
     return false
   }
   const input = adapter?.captureMessageSteeringInputs?.({

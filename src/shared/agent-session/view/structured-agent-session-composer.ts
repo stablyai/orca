@@ -218,7 +218,7 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   ) {
     return { handled: false, accepted: false, error: null }
   }
-  if (command.name === 'clear' || command.name === 'compact') {
+  if (command.name === 'clear' || command.name === 'compact' || command.name === 'recap') {
     if (command.argument && !(command.name === 'compact' && controller.compactInstructions)) {
       return {
         handled: true,

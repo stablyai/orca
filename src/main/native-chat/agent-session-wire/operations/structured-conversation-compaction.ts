@@ -1,4 +1,7 @@
-import type { AgentSessionConversationCommandResult } from '../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
+import type {
+  AgentSessionConversationCommand,
+  AgentSessionConversationCommandResult
+} from '../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import {
   agentSessionFailureFact,
   readAgentSessionFailureFact
@@ -35,10 +38,10 @@ import {
   conversationCommandBlocked
 } from './structured-conversation-command-admission'
 import { maybeQueueStructuredAgentSessionSend } from '../delivery/structured-agent-session-queued-messages'
-import { structuredAgentSessionCompactBody } from './structured-agent-session-command-turn'
+import { structuredAgentSessionCommandBody } from './structured-agent-session-command-turn'
 
 /** RPC success means handed over, not finished; queued commands answer immediately as cards. */
-export async function runStructuredCompaction(
+export async function runStructuredCommandTurn(
   context: StructuredAgentSessionMutationContext,
   host: Pick<StructuredAgentSessionHost, 'waitForSendSettlement'>,
   caller: StructuredAgentSessionCaller,
@@ -55,7 +58,7 @@ export async function runStructuredCompaction(
     return prior.phase === 'committed'
       ? prior
       : {
-          command: 'compact',
+          command: params.command,
           state: 'unknown',
           ...conversationCommandFailure(agentSessionFailureFact('compactionUnconfirmed'))
         }
@@ -77,7 +80,7 @@ export async function runStructuredCompaction(
     // Queued cards own any later refusal feedback.
     return {
       ...accepted,
-      value: { command: 'compact', state: 'completed', queued: accepted.value.queued }
+      value: { command: params.command, state: 'completed', queued: accepted.value.queued }
     }
   }
   const settled = await host.waitForSendSettlement(sessionId, accepted.value.clientMessageId, {
@@ -87,47 +90,49 @@ export async function runStructuredCompaction(
   return {
     ...accepted,
     ...(settled ? { cursor: settled.cursor } : {}),
-    value: compactionReply(
+    value: commandReply(
       settled && 'submission' in settled.value ? settled.value.submission : undefined,
       {
         ...structuredAgentSessionFailureWordsContext(context.deps.store.getConversation(sessionId)),
-        command: 'compact'
-      }
+        command: params.command
+      },
+      params.command
     )
   }
 }
 
 /** Legacy completed replies now mean the command started. */
-function compactionReply(
+function commandReply(
   submission: AgentJournalSubmission | undefined,
-  context: AgentSessionFailureWordsContext
+  context: AgentSessionFailureWordsContext,
+  command: AgentSessionConversationCommand
 ): AgentSessionConversationCommandResult {
   const error = (reason: string | null, fallback: string) => (reason ?? fallback).slice(0, 4096)
   if (!submission || isQueuedAgentJournalSubmission(submission)) {
-    return { command: 'compact', state: 'unknown', error: 'The command has not started yet.' }
+    return { command, state: 'unknown', error: 'The command has not started yet.' }
   }
   if (submission.dispatchState === 'rejected') {
     // Preserve legacy row reasons when no structured failure fact exists.
     const rejection = readAgentSessionFailureFact(submission.rejection)
     return rejection
       ? {
-          command: 'compact',
+          command,
           state: 'completed',
           ...conversationCommandFailure(rejection, context)
         }
       : {
-          command: 'compact',
+          command,
           state: 'completed',
           error: error(submission.reason, 'The command was not run.')
         }
   }
   return submission.dispatchState === 'unknown'
     ? {
-        command: 'compact',
+        command,
         state: 'unknown',
         error: error(submission.reason, 'The command may not have run.')
       }
-    : { command: 'compact', state: 'completed' }
+    : { command, state: 'completed' }
 }
 
 function acceptStructuredConversationCommand(
@@ -139,6 +144,7 @@ function acceptStructuredConversationCommand(
 ): Promise<AgentSessionMutationResult<ConversationCommandAcceptance>> {
   const plan = conversationCommandPlan({
     envelope: params.envelope,
+    command: params.command,
     ...(params.instructions ? { instructions: params.instructions } : {}),
     ...(params.delivery ? { delivery: params.delivery } : {}),
     priorRecord
@@ -166,7 +172,7 @@ function acceptUnderSerialize(
         // Queue first so commands obey the same holds as sends before active-work admission.
         const queued = await maybeQueueStructuredAgentSessionSend(context, ctx, {
           envelope: params.envelope,
-          body: structuredAgentSessionCompactBody(params.instructions),
+          body: structuredAgentSessionCommandBody(params.command, params.instructions),
           ...(params.userSend ? { userSend: params.userSend } : {}),
           ...(params.delivery ? { delivery: params.delivery } : {})
         })

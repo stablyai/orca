@@ -132,7 +132,8 @@ export function decideTurnEnd(
     state: event.state,
     completedAt: event.at,
     ...(event.outcome !== undefined ? { outcome: event.outcome } : {}),
-    ...(event.durationMs !== undefined ? { durationMs: event.durationMs } : {})
+    ...(event.durationMs !== undefined ? { durationMs: event.durationMs } : {}),
+    ...(event.providerTurnId !== undefined ? { providerTurnId: event.providerTurnId } : {})
   }
   return {
     ends: { turnItemId: turn.itemId, current: !state.open || state.open.itemId === turn.itemId },

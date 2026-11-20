@@ -11,7 +11,8 @@ const COMPACT_INSTRUCTIONS_HINT = '[instructions]'
 
 export const CONVERSATION_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'clear', description: 'Clear conversation context' },
-  { name: 'compact', description: 'Compact conversation context' }
+  { name: 'compact', description: 'Compact conversation context' },
+  { name: 'recap', description: 'Show a recap of this conversation' }
 ]
 
 /** Orca's MCP panel, offered where the host manages this agent's servers. */
@@ -59,17 +60,24 @@ export function structuredSessionSlashCommands(
   reported: readonly AgentSessionSlashCommand[] | undefined,
   compactInstructions?: boolean,
   interactionModeSupported = false,
-  mcpPanel = false
+  mcpPanel = false,
+  threadGoalSupported = false
 ): readonly SlashCommandSuggestion[] {
   const modeCommands: SlashCommandSuggestion[] = interactionModeSupported
     ? [
         { name: 'plan', description: 'Switch to Plan mode', orcaOwned: true },
-        ...(agent === 'codex'
+        ...(agent === 'codex' || agent === 'trae'
           ? [{ name: 'default', description: 'Switch to Build mode', orcaOwned: true as const }]
           : [])
       ]
     : []
-  const orcaOwned = [...modeCommands, ...(mcpPanel ? [STRUCTURED_AGENT_SESSION_MCP_COMMAND] : [])]
+  const orcaOwned = [
+    ...(threadGoalSupported
+      ? [{ name: 'goal', description: 'Set or view the goal', orcaOwned: true as const }]
+      : []),
+    ...modeCommands,
+    ...(mcpPanel ? [STRUCTURED_AGENT_SESSION_MCP_COMMAND] : [])
+  ]
   const hostOwned = [
     ...orcaOwned,
     ...structuredSlashCommands(conversationCommands, agent, compactInstructions).filter(

@@ -19,8 +19,8 @@ import {
   resolvedCodexMessageOptions
 } from './codex-structured-message-options'
 import {
-  codexTurnOptionsDiffer,
-  waitsForCodexTurnOptions
+  providerTurnOptionsDiffer,
+  waitsForProviderTurnOptions
 } from '../../../native-chat/agent-session-wire/options/structured-agent-session-message-options'
 import { startCodexTurn } from './codex-structured-turn-start'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
@@ -277,7 +277,7 @@ it.each(['priority', 'default'])(
     )
     catalog(false)
     const differs = (next: Record<string, string>) =>
-      codexTurnOptionsDiffer(
+      providerTurnOptionsDiffer(
         { provider: 'codex', sessionId: 'session-1' },
         next,
         { fence: 1, generation: 'generation-1', phase: 'ready' },
@@ -316,7 +316,7 @@ it('holds Plan behind a successful sparse Default start, then starts Plan after 
       turn: { id: turnId, status: 'completed' }
     })
   const held = (interactionMode: 'default' | 'plan') =>
-    waitsForCodexTurnOptions(
+    waitsForProviderTurnOptions(
       { provider: 'codex', sessionId: 'session-1' },
       {
         reads: {

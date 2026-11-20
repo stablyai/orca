@@ -179,3 +179,8 @@ function storeCodexSessionIndexTitleCacheEntry(
     }
   }
 }
+
+/** Codex and Trae both keep `session_index.jsonl` (`id` → `thread_name`) beside `sessions/`. */
+export const readSessionIndexTitles = readCodexSessionIndexTitles
+export const sessionIndexHomeFromSessionFilePath = codexHomeFromSessionFilePath
+export const readSessionIndexTitle = readCodexSessionIndexTitle

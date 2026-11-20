@@ -49,7 +49,7 @@ export type NativeChatNoticeLook =
   | {
       kind: 'settled-permission'
       decision: 'approved' | 'safety-review' | 'denied'
-      agent: 'Codex' | 'Claude'
+      agent: 'Codex' | 'Claude' | 'TRAE CLI'
       tone: NativeChatNoticeTone
     }
   /** An action the agent's automatic review denied, which the person may approve one retry of. */
@@ -117,13 +117,16 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
     if (denial) {
       return { kind: 'auto-review-denied', agent: 'Codex', denial }
     }
-    if (frame?.provider === 'codex' && frame.kind === 'notification:guardianWarning') {
+    if (
+      (frame?.provider === 'codex' || frame?.provider === 'trae') &&
+      frame.kind === 'notification:guardianWarning'
+    ) {
       // Codex also reports approvals here; its own TUI hides them by this prefix.
       const approved = block.text.startsWith('Automatic approval review approved (')
       return {
         kind: 'settled-permission',
         decision: approved ? 'approved' : 'safety-review',
-        agent: 'Codex',
+        agent: frame.provider === 'trae' ? 'TRAE CLI' : 'Codex',
         tone: approved ? 'notice' : 'warning'
       }
     }

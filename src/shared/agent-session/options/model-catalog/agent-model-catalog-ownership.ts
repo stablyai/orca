@@ -1,5 +1,5 @@
 export function independentAgentModelCatalog(agent: string): boolean {
-  return agent === 'claude' || agent === 'codex'
+  return agent === 'claude' || agent === 'codex' || agent === 'trae'
 }
 
 /** Claude and Codex run at standard speed until Fast is picked; ACP agents keep each model's own default. */
