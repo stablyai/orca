@@ -158,16 +158,21 @@ export function paintReplacementCanvasNow(terminal: unknown): void {
   if (!service || service._isPaused === true || typeof rows !== 'number' || rows < 1) {
     return
   }
+  // This paint covers the full refresh attach queued; drop it first so the next frame repaints only what the paint itself requests (selection restore, later output).
+  const debouncer = service._renderDebouncer
+  const queued = debouncer && { start: debouncer._rowStart, end: debouncer._rowEnd }
+  if (debouncer) {
+    debouncer._rowStart = undefined
+    debouncer._rowEnd = undefined
+  }
   try {
     service.refreshRows(0, rows - 1, true)
-    // That paint covered the full refresh attach queued; drop its rows so the next frame doesn't repaint them (later output queues its own).
-    const debouncer = service._renderDebouncer
-    if (debouncer) {
-      debouncer._rowStart = undefined
-      debouncer._rowEnd = undefined
-    }
   } catch {
     // A pane disposed mid-rebuild keeps its scheduled refresh.
+    if (debouncer && queued) {
+      debouncer._rowStart = queued.start
+      debouncer._rowEnd = queued.end
+    }
   }
 }
 
