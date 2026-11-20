@@ -24,15 +24,30 @@ export function hourlyLookup<T>(
       if (latest && Date.now() - latest.at < REFRESH_MS) {
         return
       }
-      lookup ??= fetchLatest(AbortSignal.timeout(LOOKUP_DEADLINE_MS))
-        .then((value) => {
-          latest = { value, at: Date.now() }
-        })
-        .finally(() => {
-          lookup = null
-        })
+      lookup ??= lookUp()
       await waitForPromiseWithSignal(lookup, signal)
     }
+  }
+
+  function lookUp(): Promise<void> {
+    const deadline = AbortSignal.timeout(LOOKUP_DEADLINE_MS)
+    return fetchLatest(deadline)
+      .then(
+        (value) => {
+          latest = { value, at: Date.now() }
+        },
+        (error: unknown) => {
+          // Install surfaces show this text, so say what stalled instead of a bare timeout.
+          throw deadline.aborted
+            ? new Error('Looking up the latest release took longer than a minute. Try again.', {
+                cause: error
+              })
+            : error
+        }
+      )
+      .finally(() => {
+        lookup = null
+      })
   }
 }
 
