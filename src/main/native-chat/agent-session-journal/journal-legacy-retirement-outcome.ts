@@ -205,7 +205,8 @@ export class LegacyJournalRetirementReporter {
       event.policy_revision,
       this.version
     ])
-    const send = signature !== this.last
+    // Without a host nothing goes out, so nothing is marked reported for the desktop to skip.
+    const send = host !== undefined && signature !== this.last
     // Logged once per launch for each distinct outcome, however often a retry repeats it.
     if (send || !this.logged.has(signature)) {
       this.logged.add(signature)
@@ -225,7 +226,8 @@ export class LegacyJournalRetirementReporter {
  */
 export function legacyProofFailureOutcome(
   error: unknown,
-  counts: LegacyProofCounts
+  counts: LegacyProofCounts,
+  proven: boolean
 ): Partial<LegacyJournalRetirementOutcome> {
   const walked = { completeness: 'partial', counts } as const
   if (error instanceof JournalLegacyRetentionError) {
@@ -233,7 +235,10 @@ export function legacyProofFailureOutcome(
       ? { outcome: 'refused', reason: error.reason, artifact: error.artifact ?? 'none', ...walked }
       : { outcome: 'proving', error: 'pending', ...walked }
   }
-  return { outcome: 'proving', error: legacyProofErrorKind(error), ...walked }
+  // After a finished proof, only the removal itself (its commit or lock) can fail.
+  return proven
+    ? { outcome: 'delete_failed', error: legacyProofErrorKind(error), ...walked }
+    : { outcome: 'proving', error: legacyProofErrorKind(error), ...walked }
 }
 
 function legacyProofErrorKind(error: unknown): LegacyJournalRetirementEvent['error'] {

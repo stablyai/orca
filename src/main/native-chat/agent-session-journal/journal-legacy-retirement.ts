@@ -108,9 +108,9 @@ export class JournalLegacyRetirement {
         this.done = true
         await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }).catch(() => {})
       } else {
-        await this.outcome(legacyProofFailureOutcome(error, this.proof.walked.counts)).catch(
-          () => {}
-        )
+        await this.outcome(
+          legacyProofFailureOutcome(error, this.proof.walked.counts, this.proof.finished)
+        ).catch(() => {})
       }
       this.later()
       const reason = error instanceof Error ? error.message : String(error)
@@ -129,13 +129,12 @@ export class JournalLegacyRetirement {
     if (!(await legacyFilePresent(this.filename))) {
       // Finishing a removal cut short deletes too, so it needs the same permission.
       if (this.ownsProfile() && (await legacyCompanionsPresent(this.filename))) {
+        // Asked last, right before the unlink: the saved-state read can take a while.
+        const absorbed = absorbedWal((await this.savedState()).retirement)
         if (!(await this.enforced())) {
           return this.later()
         }
-        await removeLeftoverLegacyCompanions(
-          this.filename,
-          absorbedWal((await this.savedState()).retirement)
-        )
+        await removeLeftoverLegacyCompanions(this.filename, absorbed)
       }
       this.done = true
       return
@@ -284,9 +283,6 @@ export class JournalLegacyRetirement {
       value: JSON.stringify(proven),
       durable: false
     })
-    // A permission arriving later this launch resumes from the saved record, rechecking what can
-    // change meanwhile (compares due, failures), exactly as the next launch would.
-    this.proof.forget()
     this.later()
     await this.outcome(
       provenOutcome('proof_complete', proven, observation, this.activeMs, this.proof.walked.resumed)
@@ -299,7 +295,9 @@ export class JournalLegacyRetirement {
     return this.reporter.report({ elapsedMs, ...fields }, this.policy)
   }
 
+  /** Tried again after the backoff; a finished proof is never reused without its checks. */
   private later(): void {
+    this.proof.forgetFinished()
     this.retryAt = performance.now() + this.retryDelay
     this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
   }

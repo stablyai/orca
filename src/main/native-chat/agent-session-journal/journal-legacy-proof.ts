@@ -52,9 +52,19 @@ export class JournalLegacyProof {
     }
   }
 
-  /** Drops a finished walk: the next attempt resumes from what was saved and checks it again. */
-  forget(): void {
-    this.descriptor = undefined
+  /** The walk finished this attempt; only the removal is left. */
+  get finished(): boolean {
+    return this.proven
+  }
+
+  /**
+   * Drops a finished walk, so the next attempt resumes from what was saved and checks again what
+   * can change meanwhile (compares due, failures), exactly as the next launch would.
+   */
+  forgetFinished(): void {
+    if (this.proven) {
+      this.descriptor = undefined
+    }
   }
 
   /**

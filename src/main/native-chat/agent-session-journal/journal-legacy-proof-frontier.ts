@@ -22,6 +22,8 @@ export type LegacyProofFrontier = {
   whole: boolean
   /** Resumed at the copies from a finished proof, whose own record holds the counts. */
   fromCopies: boolean
+  /** Chats unconverted when this page was first read: a retry reads them back as converted. */
+  unconverted: Set<string>
 }
 
 export function createLegacyProofFrontier(
@@ -47,7 +49,8 @@ export function createLegacyProofFrontier(
         },
     resumed,
     whole: !resumed || carried?.counts !== undefined,
-    fromCopies: carried?.fromCopies === true
+    fromCopies: carried?.fromCopies === true,
+    unconverted: new Set()
   }
 }
 
@@ -76,6 +79,11 @@ export async function completeJournalLegacyProof(
     if (!frontier.page) {
       const started = performance.now()
       frontier.page = await readers.legacyProof(frontier.cursor)
+      for (const chat of frontier.page.sessions) {
+        if (chat.convert && !chat.ready) {
+          frontier.unconverted.add(chat.sessionId)
+        }
+      }
       await rest(started)
     }
     const page = frontier.page
@@ -184,7 +192,7 @@ export async function completeJournalLegacyProof(
           ? chat.epoch === ''
             ? 'drafts'
             : 'deletedHere'
-          : chat.ready
+          : chat.ready && !frontier.unconverted.has(chat.sessionId)
             ? 'alreadyConverted'
             : 'newlyConverted'
         frontier.counts[kind] += 1
@@ -192,6 +200,7 @@ export async function completeJournalLegacyProof(
       frontier.counts.chats += page.sessions.length
       frontier.counts.originals += originals.length
     }
+    frontier.unconverted.clear()
     frontier.cursor = page.next
     frontier.page = undefined
     frontier.session = 0
