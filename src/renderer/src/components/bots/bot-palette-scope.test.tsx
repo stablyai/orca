@@ -626,7 +626,7 @@ describe('Cmd+K opening a bot or group from the palette', () => {
     }
   })
 
-  it('drops a pending task search when showing only bots', async () => {
+  it('keeps task search idle after clearing into bot scope', async () => {
     openMocks.taskRequests.mockImplementation(() => [
       {
         id: 'github',
@@ -643,7 +643,7 @@ describe('Cmd+K opening a bot or group from the palette', () => {
         filterRepoIds: ['repo-1']
       })
       await typeQuery('triage')
-      // Within the search's debounce, switch to bots for the same text.
+      // Within the search's debounce, clear the field, enter bot scope, and retype.
       await typeQuery('')
       await typeScopeKey()
       await typeQuery('triage')
