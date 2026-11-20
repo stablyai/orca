@@ -52,46 +52,44 @@ describe('readPerfNoticeSignals', () => {
     'warns about the volume holding existing workspaces after the workspace folder moved',
     async () => {
       statfs.mockImplementation(async (path: string) =>
-        path === '/vol/old/workspaces/app/login-form'
+        path === '/vol/old/workspaces/app'
           ? { bavail: 1, bsize: GB, blocks: 500 }
           : { bavail: 400, bsize: GB, blocks: 500 }
       )
       const { readPerfNoticeSignals } = await import('./perf-notice-signals')
 
       const signals = await readPerfNoticeSignals(
-        store('/vol/new/workspaces', ['/vol/dev/app', '/vol/old/workspaces/app/login-form'])
+        store('/vol/new/workspaces', [
+          '/vol/dev/app',
+          '/vol/new/workspaces/app/signup',
+          '/vol/old/workspaces/app/login-form',
+          '/vol/old/workspaces/app/billing'
+        ])
       )
 
-      // The repo's own checkout is not a workspace, so its folder is never read.
+      // The repo's own checkout is not a workspace, and each folder is read once.
       expect(statfs.mock.calls.map(([path]) => path)).toEqual([
         '/vol/new/workspaces',
-        '/vol/old/workspaces/app/login-form'
+        '/vol/old/workspaces/app'
       ])
       expect(signals.disk).toEqual({ freeBytes: 1 * GB, totalBytes: 500 * GB })
     }
   )
 
   it.runIf(process.platform !== 'win32')(
-    'reads new roots once a call that outlived its deadline returns',
+    'warns about another disk while one folder stays hung',
     async () => {
       vi.useFakeTimers()
-      let finishHungCall: (value: unknown) => void = () => {}
       statfs.mockImplementation((path: string) =>
         path === '/vol/hung'
-          ? new Promise((resolve) => {
-              finishHungCall = resolve
-            })
+          ? new Promise(() => {})
           : Promise.resolve({ bavail: 1, bsize: GB, blocks: 500 })
       )
       const { readPerfNoticeSignals } = await import('./perf-notice-signals')
 
-      const hung = readPerfNoticeSignals(store('/vol/hung'))
+      const first = readPerfNoticeSignals(store('/vol/hung', ['/vol/full/workspaces/a']))
       await vi.advanceTimersByTimeAsync(15_000)
-      expect(await hung).toEqual({ disk: null })
-      expect(await readPerfNoticeSignals(store('/vol/new'))).toEqual({ disk: null })
-
-      finishHungCall({ bavail: 400, bsize: GB, blocks: 500 })
-      await vi.advanceTimersByTimeAsync(0)
+      expect(await first).toEqual({ disk: { freeBytes: 1 * GB, totalBytes: 500 * GB } })
 
       expect(await readPerfNoticeSignals(store('/vol/new'))).toEqual({
         disk: { freeBytes: 1 * GB, totalBytes: 500 * GB }

@@ -247,7 +247,7 @@ export function NotificationsPane({
           }
         />
 
-        <PerfNoticeToggles settings={settings} updateSettings={updateSettings} />
+        <PerfNoticeToggles settings={settings} />
 
         <div data-settings-row="" className="flex flex-wrap items-center gap-2 py-2">
           <Button

@@ -1,4 +1,5 @@
 import { statfs } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import { webContents } from 'electron'
 import {
   isDiskAlmostFull,
@@ -6,10 +7,13 @@ import {
   type PerfNoticeSignals
 } from '../../shared/diagnostics/perf-notice-signals'
 import {
-  getRepoExecutionHostId,
+  isRepoOnCatalogHost,
   LOCAL_EXECUTION_HOST_ID
 } from '../../shared/execution-host/execution-host'
-import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
+import {
+  createNormalizedPathInsideOrEqualMatcher,
+  normalizeRuntimePathForComparison
+} from '../../shared/file-access/cross-platform-path'
 import { isFolderRepo } from '../../shared/repository/repo-kind'
 import type { Repo } from '../../shared/repository/repo-types'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
@@ -32,6 +36,9 @@ import { wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
 
 const DISK_READ_INTERVAL_MS = 10 * 60_000
 const DISK_READ_DEADLINE_MS = 15_000
+const ROOT_READ_DEADLINE_MS = 5_000
+/** Calls a dead mount may hold at once; the rest of libuv's pool (4 by default) stays free. */
+const MAX_STALLED_READS = 2
 
 type PerfNoticeSignalStore = Omit<ProjectRuntimeResolutionStore, 'getSettings'> & {
   getSettings: () => Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'> &
@@ -42,9 +49,9 @@ type PerfNoticeSignalStore = Omit<ProjectRuntimeResolutionStore, 'getSettings'> 
   ) => Record<string, { archivedCheckout?: unknown }>
 }
 
-/** A filesystem call still running. While one is, no other starts: a dead mount then holds one
- *  libuv thread, not the whole pool, and disk checks resume once it returns. */
-let callInFlight = false
+/** Roots whose filesystem call is still running. A stalled root is skipped, not re-read, so a dead
+ *  mount holds one libuv thread while other disks keep their readings. */
+const pendingRoots = new Set<string>()
 
 let disk: {
   key: string
@@ -55,15 +62,16 @@ let disk: {
 } | null = null
 
 /** The folders whose disks hold local workspaces: where each project creates new ones (resolved as
- *  creation does), then each existing workspace itself, since one can be its own mounted volume.
+ *  creation does), then the folder of each workspace outside those, e.g. from before the workspace
+ *  folder moved. One root per folder, so the reads stay flat in workspace count.
  *  WSL roots are skipped: resolving or reading them can wake a distro. */
 function localWorktreeRoots(store: PerfNoticeSignalStore): string[] {
+  // Why: only rows whose files provably live here, matching what local cleanup owns.
+  const repos = store.getRepos().filter((repo) => isRepoOnCatalogHost(repo) && !isFolderRepo(repo))
+  if (repos.length === 0) {
+    return []
+  }
   const settings = store.getSettings()
-  const repos = store
-    .getRepos()
-    .filter(
-      (repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID && !isFolderRepo(repo)
-    )
   // Why: one pass over projects for every repo, not one per repo.
   const runtimes =
     process.platform === 'win32' ? resolveLocalProjectRuntimesForRepos(store, repos) : null
@@ -86,18 +94,18 @@ function localWorktreeRoots(store: PerfNoticeSignalStore): string[] {
       add(computeWorkspaceRoot(repo.path, pathSettings))
     }
   }
+  const insideRoot = [...roots.values()].map(createNormalizedPathInsideOrEqualMatcher)
   // Why: this machine's rows only; remote hosts can reuse a repo id for their own paths.
   const metaById = store.getAllWorktreeMetaForHost(LOCAL_EXECUTION_HOST_ID)
   for (const [worktreeId, meta] of Object.entries(metaById)) {
     const parsed = splitWorktreeId(worktreeId)
     const checkout = parsed ? checkoutByRepoId.get(parsed.repoId) : undefined
-    if (
-      parsed &&
-      checkout !== undefined &&
-      !meta.archivedCheckout &&
-      normalizeRuntimePathForComparison(parsed.worktreePath) !== checkout
-    ) {
-      add(parsed.worktreePath)
+    if (!parsed || checkout === undefined || meta.archivedCheckout) {
+      continue
+    }
+    const worktreePath = normalizeRuntimePathForComparison(parsed.worktreePath)
+    if (worktreePath !== checkout && !insideRoot.some((inside) => inside(worktreePath))) {
+      add(dirname(parsed.worktreePath))
     }
   }
   return [...roots.values()]
@@ -113,35 +121,36 @@ async function statDisk(path: string): Promise<PerfNoticeDisk | null> {
   }
 }
 
-/** `complete` is false when another call still running cut the scan short. */
-async function readFullestDisk(
-  roots: string[]
-): Promise<{ disk: PerfNoticeDisk | null; complete: boolean }> {
+/** One root at a time; a root slower than its deadline keeps running alone while the rest are read. */
+async function readFullestDisk(roots: string[]): Promise<PerfNoticeDisk | null> {
   let first: PerfNoticeDisk | null = null
   for (const root of roots) {
-    if (callInFlight) {
-      return { disk: first, complete: false }
+    const key = normalizeRuntimePathForComparison(root)
+    if (pendingRoots.has(key)) {
+      continue
     }
-    callInFlight = true
-    let disk: PerfNoticeDisk | null
-    try {
-      disk = await statDisk(root)
-    } finally {
-      callInFlight = false
+    if (pendingRoots.size >= MAX_STALLED_READS) {
+      break
     }
+    pendingRoots.add(key)
+    const read = statDisk(root).finally(() => pendingRoots.delete(key))
+    const disk = await withDeadline(read, ROOT_READ_DEADLINE_MS)
     if (isDiskAlmostFull(disk)) {
-      return { disk, complete: true }
+      return disk
     }
     first ??= disk
   }
-  return { disk: first, complete: true }
+  return first
 }
 
 /** A hung mount answers "no reading" so the notice loop moves on. */
-function withDeadline(read: Promise<PerfNoticeDisk | null>): Promise<PerfNoticeDisk | null> {
+function withDeadline(
+  read: Promise<PerfNoticeDisk | null>,
+  deadlineMs: number
+): Promise<PerfNoticeDisk | null> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<null>((resolve) => {
-    timer = setTimeout(() => resolve(null), DISK_READ_DEADLINE_MS)
+    timer = setTimeout(() => resolve(null), deadlineMs)
   })
   return Promise.race([read, deadline]).finally(() => clearTimeout(timer))
 }
@@ -150,6 +159,9 @@ function withDeadline(read: Promise<PerfNoticeDisk | null>): Promise<PerfNoticeD
  *  or its deadline. */
 export function readPerfNoticeSignals(store: PerfNoticeSignalStore): Promise<PerfNoticeSignals> {
   const roots = localWorktreeRoots(store)
+  if (roots.length === 0) {
+    return Promise.resolve({ disk: null })
+  }
   const key = roots.join('\0')
   const now = Date.now()
   let current = disk
@@ -160,19 +172,14 @@ export function readPerfNoticeSignals(store: PerfNoticeSignalStore): Promise<Per
       key,
       readAt: now,
       settled: false,
-      bounded: withDeadline(scan.then((result) => result.disk))
+      bounded: withDeadline(scan, DISK_READ_DEADLINE_MS)
     }
     void read.bounded.finally(() => {
       read.settled = true
     })
     // Why: a read slower than the deadline still lands in the cache, so the next check uses it.
-    void scan.then(({ disk: result, complete }) => {
-      if (!complete) {
-        // Why: a scan cut short read nothing new; caching it would hide these roots for 10 minutes.
-        if (disk === read) {
-          disk = null
-        }
-      } else if (!disk || disk.key === key) {
+    void scan.then((result) => {
+      if (!disk || disk.key === key) {
         disk = { key, readAt: Date.now(), settled: true, bounded: Promise.resolve(result) }
       }
     })

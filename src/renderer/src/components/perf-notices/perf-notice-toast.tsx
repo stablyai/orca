@@ -4,8 +4,8 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { TRAILING_ACTIONS_CLASS_NAMES } from '@/components/ui/sonner'
 import { getEffectiveBrowserMemorySaverHours } from '../../../../shared/browser/guest-lifecycle/browser-memory-saver'
-import { withPerfNoticeOff } from '../../../../shared/perf-notices/perf-notice-settings'
 import { recordPerfNoticeShown, snoozePerfNotice } from './perf-notice-ledger'
+import { setPerfNoticeOff } from './perf-notice-opt-out'
 
 export type PerfNotice =
   | { id: 'hidden-browser-tabs'; count: number; hours: number }
@@ -107,10 +107,7 @@ export function showPerfNotice(notice: PerfNotice, now: number): void {
     action: copy.action,
     cancel: {
       label: translate('perfNotices.dontShowAgain', "Don't show again"),
-      onClick: () => {
-        const { settings, updateSettings } = useAppStore.getState()
-        void updateSettings({ perfNoticesOff: withPerfNoticeOff(settings, id, true) })
-      }
+      onClick: () => void setPerfNoticeOff(id, true)
     },
     // Why: the close button is "not now": the notice stays quiet for its snooze window.
     onDismiss: () => snoozePerfNotice(id, Date.now())
