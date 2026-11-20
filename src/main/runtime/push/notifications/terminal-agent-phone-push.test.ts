@@ -220,6 +220,61 @@ describe('TerminalAgentPhonePush on a windowless host', () => {
     ])
   })
 
+  it("still pushes the person's finish when a quiet wakeup runs inside its quiet window", () => {
+    const host = windowlessHost()
+    const pane = 'tab-1:leaf-1'
+    const turn = { paneKey: pane, agentType: 'claude', connectionId: null, prompt: 'go' } as const
+    host.hookRows.set(pane, {
+      ...turn,
+      state: 'working',
+      receivedAt: host.now(),
+      stateStartedAt: host.now()
+    })
+    host.push.observe({
+      kind: 'observed',
+      paneKey: pane,
+      workspace,
+      phase: 'working',
+      at: host.now()
+    })
+    host.hookRows.set(pane, {
+      ...turn,
+      state: 'done',
+      receivedAt: host.now(),
+      stateStartedAt: host.now()
+    })
+    host.moved(pane, 'done', 'turn-finished')
+    host.advance(100)
+    const wakeup = { state: 'working', taskWakeup: true, stateStartedAt: host.now() } as const
+    host.hookRows.set(pane, {
+      ...turn,
+      state: 'working',
+      receivedAt: host.now(),
+      stateStartedAt: host.now(),
+      mainAgent: wakeup
+    })
+    host.push.observe({
+      kind: 'moved',
+      paneKey: pane,
+      workspace,
+      from: 'done',
+      to: 'working',
+      at: host.now(),
+      transition: 'prompt-submitted'
+    })
+    host.advance(100)
+    host.hookRows.set(pane, {
+      ...turn,
+      state: 'done',
+      receivedAt: host.now(),
+      stateStartedAt: host.now(),
+      mainAgent: { ...wakeup, state: 'done' }
+    })
+    host.moved(pane, 'done', 'turn-finished')
+    host.advance(5_000)
+    expect(host.sent.map((event) => event.source)).toEqual(['agent-task-complete'])
+  })
+
   it('rings a bell its finish held once the agent resumes work instead', () => {
     const host = windowlessHost()
     const idle: TerminalSideEffectFact = { kind: 'agent-idle', title: '◇ Ready (gemini)' }

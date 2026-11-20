@@ -72,6 +72,11 @@ export class TerminalAgentTurnNews<Prepared> {
     this.tellOptIn(change)
     const finished = transition === 'turn-finished' || transition === 'errored'
     const row = finished || transition === 'needs-input' ? this.deps.readHookRow(paneKey) : null
+    // A wakeup that is no news neither retracts the person's queued finish nor queues its own.
+    const quietWakeup =
+      this.deps.quietTaskWakeups === true &&
+      (finished || transition === 'prompt-submitted') &&
+      isQuietTaskWakeup(row ?? this.deps.readHookRow(paneKey) ?? {})
     // The all-clear of a turn announced when its lead agent finished: that finish still stands.
     const leadTurnEndedAt = row ? this.leadTurnEndedAt(row) : undefined
     if (
@@ -82,7 +87,7 @@ export class TerminalAgentTurnNews<Prepared> {
       return
     }
     // Departure retracts occupancy; an accepted finish still owns its queued delivery.
-    if (change.to !== 'rest') {
+    if (change.to !== 'rest' && !quietWakeup) {
       this.cancelPending(paneKey)
     }
     if (transition === 'prompt-submitted' || change.to === 'rest') {
@@ -98,7 +103,7 @@ export class TerminalAgentTurnNews<Prepared> {
       this.announce(paneKey, change.workspace.worktreeId, row, false)
       return
     }
-    if (this.deps.quietTaskWakeups && finished && isQuietTaskWakeup(row)) {
+    if (finished && quietWakeup) {
       this.workingSeen.delete(paneKey)
       this.quietWakeupEnds.add(paneKey)
       return

@@ -17,6 +17,7 @@ type HookObserverState = {
   lastCompletedTurn: number | null
   lastCompletionAt: number
   pendingHookDoneTimer: ReturnType<typeof setTimeout> | null
+  pendingHookDonePayload: AgentCompletionStatusSnapshot | null
 }
 
 type HookObserverOptions = {
@@ -153,7 +154,13 @@ export function createAgentCompletionHookObserver({
       : undefined
     // Nor is its end; a person's prompt reaching that turn later restates the row and announces it then.
     if (turnCompletedAt === undefined && isQuietTaskWakeup(payload)) {
-      clearPendingHookDone()
+      // Only this wakeup's own end, queued before its prompt event said what it was; the person's stays queued.
+      if (
+        state.pendingHookDonePayload?.mainAgent?.stateStartedAt ===
+        payload.mainAgent?.stateStartedAt
+      ) {
+        clearPendingHookDone()
+      }
       options.dispatchHookLifecycle?.(payload)
       return
     }

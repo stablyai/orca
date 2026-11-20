@@ -313,6 +313,37 @@ describe('Claude prompt event arriving after its turn', () => {
       ).toBeUndefined()
     })
 
+    it('announces a monitoring wakeup the person joins while the shell still runs', () => {
+      personTurnHeldByShell()
+      const tick = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<event>tick</event>`
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: tick })
+      const wakeupEnd = claude({
+        hook_event_name: 'Stop',
+        prompt_id: SECOND,
+        background_tasks: [SHELL]
+      })
+      expect(wakeupEnd?.turnCompletedAt).toBeUndefined()
+      const joined = claude({
+        hook_event_name: 'UserPromptSubmit',
+        prompt_id: SECOND,
+        prompt: 'also this'
+      })
+      expect(typeof joined?.turnCompletedAt).toBe('number')
+      expect(joined?.mainAgent?.taskWakeup).toBeUndefined()
+    })
+
+    it('keeps the person’s claim on a wakeup through the wait it was made in', () => {
+      personTurnHeldByShell()
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+      claude({ hook_event_name: 'Elicitation', prompt_id: SECOND })
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: 'also this' })
+      claude({ hook_event_name: 'ElicitationResult', prompt_id: SECOND })
+      expect(
+        claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })?.mainAgent
+          ?.taskWakeup
+      ).toBeUndefined()
+    })
+
     it('starts the person’s next turn with no wakeup mark', () => {
       personTurnHeldByShell()
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
