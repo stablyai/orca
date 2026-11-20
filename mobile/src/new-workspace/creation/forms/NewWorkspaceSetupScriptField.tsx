@@ -53,9 +53,10 @@ export function NewWorkspaceSetupScriptField({
               title={runLabel}
               subtitle={command}
               subtitleMono
-              subtitleLines={3}
+              subtitleLines={0}
               selected={decision === 'run'}
               onPress={() => onDecisionChange('run')}
+              accessibilityLabel={`${runLabel}, ${command}`}
             />,
             <ListRow
               key="skip"
@@ -70,7 +71,7 @@ export function NewWorkspaceSetupScriptField({
             title={runLabel}
             subtitle={command}
             subtitleMono
-            subtitleLines={3}
+            subtitleLines={0}
             accessory={
               <MobileSwitch
                 value={runSetup}
