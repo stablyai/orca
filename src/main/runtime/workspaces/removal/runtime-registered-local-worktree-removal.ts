@@ -193,6 +193,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(
       await args.beforeCheckoutDelete?.(refreshed)
       args.expectation?.check()
       if (!markerMissing && linkedPaths.length > 0) {
+        // Shared links live in the checkout: prove it's still the reviewed one before unlinking any.
+        await args.expectation?.verifyCheckout(canonicalPath)
         args.expectation?.begin()
         await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
       }
