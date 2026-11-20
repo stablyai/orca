@@ -4,7 +4,6 @@ import {
 } from '../../../../shared/concurrency/abort-signal-reason'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
-import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   releaseStartupRemovalFence,
   type BackgroundWorktreeRemovalJob
@@ -13,7 +12,6 @@ import {
   resolveWorktreeRemovalMetadata,
   resolveLocalWorktreeRemovalRepo
 } from '../../../workspaces/removal/worktree-removal-repo-owner'
-import type { RuntimePreservedBranchCleanup } from '../../repositories/runtime-preserved-branch-cleanup'
 import { listWorktreesSharedStrict as listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import {
   authorizeWindowsCheckout,
@@ -55,19 +53,10 @@ import {
   finishRuntimeLocalWorktreeRemoval,
   type RuntimeLocalWorktreeRemovalFinishArgs
 } from './runtime-registered-local-worktree-removal'
-
-type InterruptedWorktreeRemovalHost = {
-  store: RuntimeStore
-  acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
-  closeWatchers: (path: string) => Promise<void>
-  preservedBranchCleanup: Pick<RuntimePreservedBranchCleanup, 'preserveHead' | 'remember'>
-  /** A retry's teardown: terminals opened in the folder before the user removed it. */
-  stopPtys?: () => Promise<void>
-  /** Drops the worktree's host state (metadata, history, caches), as every removal path does. */
-  purge: (record: WorktreeRemovalRecord) => void | Promise<void>
-  onRemoved: (record: WorktreeRemovalRecord) => void
-  publish: (repoId: string) => void
-}
+import type {
+  InterruptedLocalWorktreeRemovalArgs,
+  InterruptedWorktreeRemovalHost
+} from './runtime-interrupted-local-worktree-removal-types'
 
 /** The background job that finishes one interrupted removal on this host. */
 export function interruptedLocalWorktreeRemovalJob(
@@ -128,17 +117,6 @@ export function interruptedLocalWorktreeRemovalJob(
     },
     publish: () => host.publish(record.repoId)
   }
-}
-
-type InterruptedLocalWorktreeRemovalArgs = Pick<
-  RuntimeLocalWorktreeRemovalFinishArgs,
-  'removedPushTarget' | 'closeWatchers' | 'preserveBranchHead' | 'finishRemoval' | 'expectation'
-> & {
-  store: RuntimeStore
-  record: WorktreeRemovalRecord
-  acquireWatcherRemoval: (path: string) => Promise<{ finish: (removed: boolean) => Promise<void> }>
-  stopPtys?: () => Promise<void>
-  stopSignal: AbortSignal
 }
 
 /** Finish from current Git/disk evidence; native markerless roots permit only empty rmdir. */
