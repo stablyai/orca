@@ -1,5 +1,5 @@
-import { rename, rm, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, sep } from 'node:path'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { basename, dirname, join, normalize, sep } from 'node:path'
 
 export type LegacyCopiedSessionMarker = {
   sourcePath: string
@@ -54,4 +54,31 @@ export async function writeMarker(
     throw error
   }
   return marker
+}
+
+/** Older builds match a marker's source by exact path; the respelled one makes them skip it. */
+export async function protectLegacySessionCopyMarker(
+  managedHome: string,
+  relativePath: string
+): Promise<void> {
+  const markerPath = legacySessionCopyMarkerPath(managedHome, relativePath)
+  const marker = await readFile(markerPath, 'utf-8').then(
+    parseLegacyCopiedSessionMarker,
+    () => null
+  )
+  if (marker) {
+    await protectMarker(markerPath, marker)
+  }
+}
+
+export async function protectMarker(
+  markerPath: string,
+  marker: LegacyCopiedSessionMarker
+): Promise<LegacyCopiedSessionMarker> {
+  return marker.sourcePath.includes(`${sep}.${sep}`)
+    ? marker
+    : writeMarker(markerPath, {
+        ...marker,
+        sourcePath: protectedSpelling(normalize(marker.sourcePath))
+      })
 }

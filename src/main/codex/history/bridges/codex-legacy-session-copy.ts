@@ -1,12 +1,12 @@
 import type { BigIntStats } from 'node:fs'
 import { link, lstat, open, readFile, rename, stat, unlink } from 'node:fs/promises'
-import { basename, join, normalize, sep } from 'node:path'
+import { basename, join, normalize } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
 import {
   legacySessionCopyMarkerPath,
   parseLegacyCopiedSessionMarker,
-  protectedSpelling,
+  protectMarker,
   writeMarker
 } from './codex-legacy-session-copy-marker'
 
@@ -65,6 +65,8 @@ async function swap(
   if (args.expectedSourcePath && sourcePath !== normalize(args.expectedSourcePath)) {
     return 'none'
   }
+  // First, so no exit below leaves the marker to an older build's destructive swap.
+  marker = await protectMarker(markerPath, marker)
   const asidePath = `${copyPath}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}`
   let copy = await lstatIfPresent(copyPath)
   if (!copy) {
@@ -88,9 +90,6 @@ async function swap(
     await unlinkIfPresent(markerPath)
     return 'none'
   }
-  if (!marker.sourcePath.includes(`${sep}.${sep}`)) {
-    marker = await writeMarker(markerPath, { ...marker, sourcePath: protectedSpelling(sourcePath) })
-  }
   const source = await lstatIfPresent(sourcePath)
   if (!copy.isFile() || !source?.isFile()) {
     return 'deferred'
@@ -112,15 +111,17 @@ async function swap(
   if (!(await keepsThreadLocks(args.managedHome))) {
     return 'deferred'
   }
-  // Without file identities nothing can prove the name still holds the copy that was checked.
-  if (copy.ino === 0n || source.ino === 0n) {
+  // Without file identities nothing can prove the name still holds the copy that was checked, and
+  // across volumes the source can never be linked in.
+  if (copy.ino === 0n || source.ino === 0n || copy.dev !== source.dev) {
     await writeMarker(markerPath, { ...marker, kept: true })
     return 'kept'
   }
   if ((await lstatIfPresent(asidePath)) || !(await isCopyIdle(args))) {
     return 'deferred'
   }
-  const proof = `${copy.dev}:${copy.ino}:${copy.size}:${copy.mtimeNs}|${source.dev}:${source.ino}`
+  // The source's change time: an in-place rewrite of the same file voids the check too.
+  const proof = `${copy.dev}:${copy.ino}:${copy.size}:${copy.mtimeNs}|${source.dev}:${source.ino}:${source.ctimeNs}`
   if (marker.verified !== proof || source.size < copy.size) {
     if (args.readBudget) {
       if (copy.size > BigInt(args.readBudget.bytes)) {
@@ -285,7 +286,16 @@ async function sourceStartsWithCopy(
 
 /** Gives the file at `asidePath` its name back unless something else took it; the aside goes only then. */
 async function restoreName(asidePath: string, path: string): Promise<void> {
-  await linkUnlessTaken(asidePath, path)
+  try {
+    await linkUnlessTaken(asidePath, path)
+  } catch (error) {
+    // A filesystem without hard links: move it back instead, unless the name was taken meanwhile.
+    if (await lstatIfPresent(path)) {
+      throw error
+    }
+    await rename(asidePath, path)
+    return
+  }
   await removeExtraName(asidePath, path)
 }
 

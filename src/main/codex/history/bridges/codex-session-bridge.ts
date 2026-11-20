@@ -22,6 +22,7 @@ import {
 import {
   legacySessionCopyMarkerPath,
   parseLegacyCopiedSessionMarker,
+  protectLegacySessionCopyMarker,
   type LegacyCopiedSessionMarker
 } from './codex-legacy-session-copy-marker'
 
@@ -88,18 +89,16 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
       relativePath
     )
     if (bridged === 'existing') {
-      // Once the pass has spent its read budget the rest wait for the next one, unprepared.
-      if (
-        hasLegacyCopies &&
-        !readBudget.exhausted &&
-        existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))
-      ) {
-        await swapLegacySessionCopy({
-          managedHome,
-          relativePath,
-          expectedSourcePath: systemSessionFilePath,
-          readBudget
-        })
+      if (hasLegacyCopies && existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))) {
+        // Past the read budget a copy waits for a later pass; only its marker is hidden from older builds.
+        await (readBudget.exhausted
+          ? protectLegacySessionCopyMarker(managedHome, relativePath)
+          : swapLegacySessionCopy({
+              managedHome,
+              relativePath,
+              expectedSourcePath: systemSessionFilePath,
+              readBudget
+            }))
       }
     } else if (bridged) {
       summary.linkedFiles += 1
