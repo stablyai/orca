@@ -125,7 +125,7 @@ describe('Add to <bot>', () => {
 
     expect(screen.getByText('Finish in your browser')).toBeTruthy()
     expect(screen.queryByText(/is on Reviewer/)).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Signing in on another computer?' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remote sign-in' })).toBeNull()
 
     signedIn = true
     await act(() => vi.advanceTimersByTimeAsync(2_000))

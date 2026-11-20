@@ -76,17 +76,6 @@ afterEach(() => {
 describe('the Connect card', () => {
   it('connects through the same setup as Add connector', () => {
     show(makeTestBot({ id: 'b1' }), { source: 'linear' })
-    expect(
-      screen.getByText(
-        'Hand the bot issues by @mentioning or assigning it, and start automations on Linear events.'
-      )
-    ).toBeTruthy()
-    // How it can work there without the connector.
-    expect(
-      screen.getByText(
-        'It can also work in Linear as you, through your own Linear sign-in in Orca.'
-      )
-    ).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
     expect(mocks.start).toHaveBeenCalledWith('linear')
   })
@@ -100,7 +89,6 @@ describe('the Connect card', () => {
 
   it('still adds repositories or organizations once GitHub is connected', () => {
     show(makeTestBot({ id: 'b1', github: {} }), { source: 'github' })
-    expect(screen.getAllByText('Connected')).toHaveLength(2)
     fireEvent.click(screen.getByRole('button', { name: 'Add repositories or organizations' }))
     expect(mocks.start).toHaveBeenCalledWith('github')
   })

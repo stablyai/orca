@@ -24,6 +24,7 @@ export type AllAgentPaneThreadsStoreData = Pick<
   | 'tabsByWorktree'
   | 'ptyIdsByTabId'
   | 'repos'
+  | 'projectGroups'
   | 'worktreesByRepo'
   | 'folderWorkspaces'
   | 'floatingWorkspacePath'
@@ -75,6 +76,8 @@ export function useAllAgentPaneThreadStoreData(): AllAgentPaneThreadsStoreData {
         return projected
       })(),
       repos: s.repos,
+      // Read by getKnownWorktreeById for folder owners, so a change must rebuild Activity owners.
+      projectGroups: s.projectGroups,
       worktreesByRepo: selectWorktreesByRepo(s),
       folderWorkspaces: selectFolderWorkspaces(s),
       floatingWorkspacePath: s.floatingWorkspacePath,

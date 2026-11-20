@@ -111,7 +111,7 @@ export function resetRateLimitProviderMocks(): void {
   vi.mocked(fetchZcodeRateLimits).mockResolvedValue(unavailableProvider('zcode'))
   vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(unavailableProvider('antigravity'))
   vi.mocked(fetchMuseRateLimits).mockResolvedValue(unavailableProvider('muse'))
-  vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
+  vi.mocked(hasMiniMaxSessionCookie).mockResolvedValue(false)
   vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
   vi.mocked(readCursorAuthSession).mockResolvedValue({ status: 'missing' })
 }

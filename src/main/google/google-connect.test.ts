@@ -178,7 +178,7 @@ describe('Google sign-in on the execution host', () => {
   it('needs a client first', async () => {
     const { GoogleConnect } = await load()
     const connect = new GoogleConnect({ http: fakeGoogle().http, now: () => now })
-    const flow = connect.startSignIn('owner', { openBrowser: false })
+    const flow = await connect.startSignIn('owner', { openBrowser: false })
     const done = await until(connect, flow, settled)
     expect(done.phase).toBe('failed')
     expect(done.error).toContain('Add your team’s Google client first, in Orca')
@@ -195,10 +195,10 @@ describe('Google sign-in on the execution host', () => {
         opened.push(url)
       }
     })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: true }),
+      await connect.startSignIn('owner', { openBrowser: true }),
       waiting
     )
     const authorize = new URL(prompt.prompt?.authorizeUrl ?? '')
@@ -220,7 +220,7 @@ describe('Google sign-in on the execution host', () => {
     expect(back.status).toBe(200)
     // The tab waited for the saved account before saying so.
     expect(await back.text()).toContain('Signed in to Google')
-    expect(store.readGoogleAccount('ada@acme.dev')).not.toBeNull()
+    expect(await store.readGoogleAccount('ada@acme.dev')).not.toBeNull()
 
     const done = await until(connect, prompt, settled)
     expect(done.phase).toBe('signedIn')
@@ -238,7 +238,7 @@ describe('Google sign-in on the execution host', () => {
     // The token URL in the client file is ignored.
     expect(google.calls.some((call) => call.url.includes('attacker'))).toBe(false)
 
-    const saved = store.readGoogleAccount('ada@acme.dev')
+    const saved = await store.readGoogleAccount('ada@acme.dev')
     expect(saved).toMatchObject({ sub: '1044', refreshToken: 'rt-1', accessToken: 'at-1' })
     const files = readdirSync(join(tempHome, '.orca', 'google', 'accounts'))
     expect(files).toHaveLength(1)
@@ -248,10 +248,10 @@ describe('Google sign-in on the execution host', () => {
     const { GoogleConnect } = await load()
     // No challenge recorded: Google refuses the code exchange.
     const connect = new GoogleConnect({ http: fakeGoogle().http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false }),
+      await connect.startSignIn('owner', { openBrowser: false }),
       waiting
     )
     const back = await fetch(returnUrl(prompt))
@@ -265,10 +265,10 @@ describe('Google sign-in on the execution host', () => {
     const { GoogleConnect } = await load()
     const google = fakeGoogle()
     const connect = new GoogleConnect({ http: google.http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false }),
+      await connect.startSignIn('owner', { openBrowser: false }),
       waiting
     )
     google.challenge = challengeOf(prompt)
@@ -282,10 +282,10 @@ describe('Google sign-in on the execution host', () => {
     const { GoogleConnect } = await load()
     const google = fakeGoogle()
     const connect = new GoogleConnect({ http: google.http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false }),
+      await connect.startSignIn('owner', { openBrowser: false }),
       waiting
     )
     expect(prompt.prompt?.browserOpened).toBe(false)
@@ -316,10 +316,10 @@ describe('Google sign-in on the execution host', () => {
   it('stops taking a pasted address once the sign-in is a few minutes old', async () => {
     const { GoogleConnect } = await load()
     const connect = new GoogleConnect({ http: fakeGoogle().http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false }),
+      await connect.startSignIn('owner', { openBrowser: false }),
       waiting
     )
     now += 6 * 60_000
@@ -332,10 +332,10 @@ describe('Google sign-in on the execution host', () => {
   it('says when Google refused the sign-in', async () => {
     const { GoogleConnect } = await load()
     const connect = new GoogleConnect({ http: fakeGoogle().http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false }),
+      await connect.startSignIn('owner', { openBrowser: false }),
       waiting
     )
     expect(() =>
@@ -352,10 +352,10 @@ describe('Google sign-in on the execution host', () => {
     const { GoogleConnect } = await load()
     const google = fakeGoogle()
     const connect = new GoogleConnect({ http: google.http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false, callerLoopbackPort: 45_678 }),
+      await connect.startSignIn('owner', { openBrowser: false, callerLoopbackPort: 45_678 }),
       waiting
     )
     expect(prompt.prompt?.redirectUri).toBe('http://127.0.0.1:45678/google/callback')
@@ -374,10 +374,10 @@ describe('Google sign-in on the execution host', () => {
     const google = fakeGoogle()
     google.grantedScope = googleSignInScopes(['gmail']).join(' ')
     const connect = new GoogleConnect({ http: google.http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const first = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false, services: ['gmail'] }),
+      await connect.startSignIn('owner', { openBrowser: false, services: ['gmail'] }),
       waiting
     )
     const asked = new URL(first.prompt?.authorizeUrl ?? '').searchParams
@@ -399,7 +399,7 @@ describe('Google sign-in on the execution host', () => {
     google.grantedScope = googleSignInScopes(['gmail', 'files']).join(' ')
     const more = await until(
       connect,
-      connect.startSignIn('owner', {
+      await connect.startSignIn('owner', {
         openBrowser: false,
         loginHint: 'ada@acme.dev',
         services: ['files']
@@ -429,10 +429,10 @@ describe('Google sign-in on the execution host', () => {
       ' '
     )
     const connect = new GoogleConnect({ http: google.http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false }),
+      await connect.startSignIn('owner', { openBrowser: false }),
       waiting
     )
     google.challenge = challengeOf(prompt)
@@ -449,26 +449,26 @@ describe('an account file this computer can’t read', () => {
     const { GoogleConnect } = await load()
     const google = fakeGoogle()
     const connect = new GoogleConnect({ http: google.http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const dir = join(tempHome, '.orca', 'google', 'accounts')
     mkdirSync(dir, { recursive: true })
     const name = `${Buffer.from('ada@acme.dev').toString('base64url')}.enc`
     writeFileSync(join(dir, name), Buffer.from([0x00, 0x01, 0xff, 0x7f]))
 
-    expect(connect.accounts()).toEqual([
+    expect(await connect.accounts()).toEqual([
       expect.objectContaining({ email: 'ada@acme.dev', status: 'reconnect' })
     ])
     await expect(connect.checkAccounts()).resolves.toHaveLength(1)
 
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false, loginHint: 'ada@acme.dev' }),
+      await connect.startSignIn('owner', { openBrowser: false, loginHint: 'ada@acme.dev' }),
       waiting
     )
     google.challenge = challengeOf(prompt)
     connect.finishSignIn('owner', prompt.flowId, returnUrl(prompt))
     expect((await until(connect, prompt, settled)).phase).toBe('signedIn')
-    expect(connect.accounts()).toEqual([
+    expect(await connect.accounts()).toEqual([
       expect.objectContaining({ email: 'ada@acme.dev', status: 'connected' })
     ])
   })
@@ -486,7 +486,7 @@ describe('an account file this computer can’t read', () => {
       removed: 'ada@acme.dev',
       revoked: false
     })
-    expect(connect.accounts()).toEqual([])
+    expect(await connect.accounts()).toEqual([])
   })
 })
 
@@ -495,10 +495,10 @@ describe('a refresh racing a disconnect or a reconnect', () => {
     const loaded = await load()
     const google = fakeGoogle()
     const connect = new loaded.GoogleConnect({ http: google.http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false }),
+      await connect.startSignIn('owner', { openBrowser: false }),
       waiting
     )
     google.challenge = challengeOf(prompt)
@@ -512,7 +512,7 @@ describe('a refresh racing a disconnect or a reconnect', () => {
     await expect(
       loaded.tokens.googleAccessToken('ada@acme.dev', { http, now: () => now })
     ).rejects.toThrow("isn't connected")
-    expect(connect.accounts()).toEqual([])
+    expect(await connect.accounts()).toEqual([])
   })
 })
 
@@ -520,11 +520,11 @@ describe('handing the client to teammates', () => {
   it('exports the client as a Desktop app file another computer imports as is', async () => {
     const { GoogleConnect } = await load()
     const connect = new GoogleConnect({ http: fakeGoogle().http, now: () => now })
-    expect(() => connect.exportClient()).toThrow('no Google client')
-    const imported = connect.importClient(CLIENT_FILE)
-    const file = connect.exportClient()
+    await expect(connect.exportClient()).rejects.toThrow('no Google client')
+    const imported = await connect.importClient(CLIENT_FILE)
+    const file = await connect.exportClient()
     expect(file).not.toContain('attacker')
-    expect(connect.importClient(file)).toEqual(imported)
+    expect(await connect.importClient(file)).toEqual(imported)
   })
 })
 
@@ -533,10 +533,10 @@ describe('keeping a Google sign-in fresh on the host', () => {
     const loaded = await load()
     const google = fakeGoogle()
     const connect = new loaded.GoogleConnect({ http: google.http, now: () => now })
-    connect.importClient(CLIENT_FILE)
+    await connect.importClient(CLIENT_FILE)
     const prompt = await until(
       connect,
-      connect.startSignIn('owner', { openBrowser: false }),
+      await connect.startSignIn('owner', { openBrowser: false }),
       waiting
     )
     google.challenge = challengeOf(prompt)
@@ -570,7 +570,7 @@ describe('keeping a Google sign-in fresh on the host', () => {
     await expect(tokens.googleAccessToken('ada@acme.dev', deps)).rejects.toThrow(
       'Reconnect it in Orca.'
     )
-    expect(connect.accounts()).toEqual([
+    expect(await connect.accounts()).toEqual([
       expect.objectContaining({ email: 'ada@acme.dev', status: 'reconnect' })
     ])
     // Reconnect state needs no more calls to Google.
@@ -586,7 +586,7 @@ describe('keeping a Google sign-in fresh on the host', () => {
     await expect(tokens.googleAccessToken('ada@acme.dev', deps)).rejects.toThrow(
       "Couldn't reach Google"
     )
-    expect(connect.accounts()[0]?.status).toBe('connected')
+    expect((await connect.accounts())[0]?.status).toBe('connected')
   })
 
   it('disconnect removes the sign-in here, and --revoke cancels it at Google too', async () => {
@@ -597,7 +597,7 @@ describe('keeping a Google sign-in fresh on the host', () => {
     })
     const revoke = google.calls.find((call) => call.url.includes('/revoke'))
     expect(revoke?.form?.get('token')).toBe('rt-1')
-    expect(connect.accounts()).toEqual([])
+    expect(await connect.accounts()).toEqual([])
     await expect(connect.disconnect('ada@acme.dev', false)).rejects.toThrow("isn't connected")
   })
 })
@@ -616,8 +616,8 @@ describe('checking the saved app key', () => {
     expect(await connect.checkClient()).toBeNull()
     expect(http).not.toHaveBeenCalled()
 
-    connect.importClient(CLIENT_FILE)
-    expect(connect.clientCheck()).toBeNull()
+    await connect.importClient(CLIENT_FILE)
+    expect(await connect.clientCheck()).toBeNull()
     expect(await connect.checkClient()).toBe('works')
     const [url, request] = http.mock.calls[0] ?? []
     expect(url).toBe('https://oauth2.googleapis.com/token')
@@ -628,13 +628,13 @@ describe('checking the saved app key', () => {
 
     expect(await connect.checkClient()).toBe('unknown')
     expect(await connect.checkClient()).toBe('unknown')
-    expect(connect.clientCheck()).toBe('works')
+    expect(await connect.clientCheck()).toBe('works')
 
     now += 1
-    connect.importClient(CLIENT_FILE)
-    expect(connect.clientCheck()).toBeNull()
+    await connect.importClient(CLIENT_FILE)
+    expect(await connect.clientCheck()).toBeNull()
     expect(await connect.checkClient()).toBe('gone')
-    expect(connect.clientCheck()).toBe('gone')
+    expect(await connect.clientCheck()).toBe('gone')
     expect(await connect.checkClient()).toBe('gone')
   })
 })

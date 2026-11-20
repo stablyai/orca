@@ -43,6 +43,7 @@ type UseFileExplorerTreePaneStateParams = {
   activeFileId: string | null
   openFiles: OpenFile[]
   hasNameFilter: boolean
+  hasNameFilterQuery: boolean
   setNameFilterQuery: Dispatch<SetStateAction<string>>
   handleToggleNameFilterDir: (worktreeId: string, dirPath: string) => void
   tree: ReturnType<typeof useFileExplorerTree>
@@ -82,6 +83,7 @@ export function useFileExplorerTreePaneState({
   activeFileId,
   openFiles,
   hasNameFilter,
+  hasNameFilterQuery,
   setNameFilterQuery,
   handleToggleNameFilterDir,
   tree,
@@ -243,9 +245,11 @@ export function useFileExplorerTreePaneState({
     rootCache,
     loadDir,
     loadMoreDir,
+    selectedPath: selection.selectedPath,
     setSelectedPath: setSingleSelectedPath,
     activeFileId,
-    openFiles
+    openFiles,
+    hasNameFilterQuery
   })
 
   useFileExplorerLoadMore({
