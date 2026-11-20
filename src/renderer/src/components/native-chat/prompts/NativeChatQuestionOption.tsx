@@ -1,4 +1,6 @@
 import { Check } from 'lucide-react'
+import { Children, type ReactNode } from 'react'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 
 // Stable, so it runs when the preview opens rather than on every render; the option list is height-capped.
@@ -6,8 +8,31 @@ function revealPreview(element: HTMLPreElement | null): void {
   element?.scrollIntoView?.({ block: 'nearest' })
 }
 
+export function NativeChatQuestionOptions({
+  multiSelect,
+  children
+}: {
+  multiSelect: boolean
+  children: ReactNode
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-1.5 px-3.5 pb-3">
+      {Children.count(children) > 0 && (
+        <legend className="mb-1.5 text-xs text-muted-foreground">
+          {multiSelect
+            ? t('nativeChat.question.selectMultiple', 'Select one or more')
+            : t('nativeChat.question.selectOne', 'Select one')}
+        </legend>
+      )}
+      {children}
+    </fieldset>
+  )
+}
+
 export function NativeChatQuestionOption({
   badge,
+  multiSelect,
   initialFocus,
   label,
   description,
@@ -18,6 +43,7 @@ export function NativeChatQuestionOption({
   onEnter
 }: {
   badge: string
+  multiSelect: boolean
   initialFocus: boolean
   label: string
   description?: string
@@ -69,14 +95,18 @@ export function NativeChatQuestionOption({
         )}
       >
         <span
+          aria-hidden="true"
           className={cn(
-            'flex size-5.5 shrink-0 items-center justify-center rounded-md border text-xs font-medium',
+            'flex size-5.5 shrink-0 items-center justify-center border text-xs font-medium',
+            multiSelect ? 'rounded-md' : 'rounded-full',
             selected
               ? 'border-primary bg-primary text-primary-foreground'
               : 'border-question-option-border text-foreground'
           )}
         >
-          {selected ? <Check className="size-3.5" strokeWidth={3} /> : badge}
+          {selected && multiSelect && <Check className="size-3.5" strokeWidth={3} />}
+          {selected && !multiSelect && <span className="size-2 rounded-full bg-current" />}
+          {!selected && badge}
         </span>
         <span className="min-w-0">
           <span className="block break-words text-sm font-medium">{label}</span>

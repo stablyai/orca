@@ -23338,6 +23338,10 @@
     }
   },
   "nativeChat": {
+    "question": {
+      "selectOne": "Sélectionnez une option",
+      "selectMultiple": "Sélectionnez une ou plusieurs options"
+    },
     "linkedMessageMissing": "Impossible de trouver ce message.",
     "math": {
       "scrollDisplayEquation": "Faire défiler l'équation affichée"
