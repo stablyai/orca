@@ -307,3 +307,19 @@ it('asks only whether a send is queued, without reading the recoverable sends', 
   expect(asked).not.toContain('recoverable-submissions')
   expect(chat.child()).toBe(idle)
 })
+
+it('keeps the agent when a background task settles after its check, before it is marked closing', async () => {
+  const chat = await idleClaudeChat()
+  const idle = chat.child()
+  // The task's result reaches the chat's child-work status (no journal row) as the stop begins.
+  const requireWritableRecord = chat.rig.store.requireWritableRecord.bind(chat.rig.store)
+  vi.spyOn(chat.rig.store, 'requireWritableRecord').mockImplementation((sessionId) => {
+    chat.childWork([settledTask()])
+    return requireWritableRecord(sessionId)
+  })
+  chat.select('/homes/b')
+  await chat.moveChats()
+  expect(chat.child()).toBe(idle)
+  expect(chat.child()?.close).toBeUndefined()
+  expect(chat.rig.closeSession).not.toHaveBeenCalled()
+})
