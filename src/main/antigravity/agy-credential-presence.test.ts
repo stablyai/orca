@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 
-type Keyring = 'item' | 'none' | 'locked' | 'toolMissing'
+type Keyring = 'item' | 'none' | 'locked' | 'gdbusMissing' | 'secretToolMissing'
 const host = vi.hoisted(
   (): { platform: NodeJS.Platform; fileStore: boolean; keyring: Keyring } => ({
     platform: 'linux',
@@ -21,15 +21,22 @@ vi.mock('./native-windows-credentials', () => ({
   hasAntigravityWindowsCredential: async () => host.keyring === 'item'
 }))
 vi.mock('./native-linux-credentials', async () => {
-  class AntigravityKeyringToolMissingError extends Error {}
+  class AntigravityKeyringToolMissingError extends Error {
+    constructor(readonly program: 'gdbus' | 'secret-tool') {
+      super(`needs ${program}`)
+    }
+  }
   return {
     AntigravityKeyringToolMissingError,
     readAntigravityLinuxCredential: async () => {
       if (host.keyring === 'locked') {
         throw new Error('Your Linux keyring is locked')
       }
-      if (host.keyring === 'toolMissing') {
-        throw new AntigravityKeyringToolMissingError('needs gdbus')
+      if (host.keyring === 'gdbusMissing') {
+        throw new AntigravityKeyringToolMissingError('gdbus')
+      }
+      if (host.keyring === 'secretToolMissing') {
+        throw new AntigravityKeyringToolMissingError('secret-tool')
       }
       return host.keyring === 'item' ? { contents: '{}' } : null
     }
@@ -77,14 +84,16 @@ it.each<
   ['macOS with neither', 'darwin', { keyring: 'none' }, {}, 'absent'],
   ['a locked Linux keyring', 'linux', { keyring: 'locked' }, { token: true }, 'locked'],
   ['an unlocked Linux keyring without an item', 'linux', { keyring: 'none' }, {}, 'absent'],
+  // agy reaches the Secret Service itself; without gdbus Orca can't tell if it is locked.
+  ['a Linux host without gdbus', 'linux', { keyring: 'gdbusMissing' }, { token: true }, 'locked'],
+  // secret-tool is needed only once gdbus found the collection unlocked.
   [
-    'a Linux host without gdbus, and a token',
+    'an unlocked keyring without secret-tool',
     'linux',
-    { keyring: 'toolMissing' },
-    { token: true },
+    { keyring: 'secretToolMissing' },
+    {},
     'present'
   ],
-  ['a Linux host without gdbus or a token', 'linux', { keyring: 'toolMissing' }, {}, 'absent'],
   ['a Windows Credential Manager item', 'win32', { keyring: 'item' }, {}, 'present'],
   ['Windows with neither', 'win32', { keyring: 'none' }, {}, 'absent']
 ])('reads %s as its login presence', async (_case, platform, state, files, expected) => {

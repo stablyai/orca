@@ -12,7 +12,8 @@ import {
 } from './native-linux-credentials'
 import { hasAntigravityWindowsCredential } from './native-windows-credentials'
 
-/** `locked`: the keyring can't be read without unlocking it, so asking agy could prompt. */
+/** `locked`: the keyring can't be read without unlocking it, or Orca can't tell, so asking agy
+ *  could prompt. */
 export type AgyCredentialPresence = 'present' | 'absent' | 'locked'
 
 const exists = (path: string): Promise<boolean> =>
@@ -51,12 +52,15 @@ export async function agyCredentialPresence(homePath: string): Promise<AgyCreden
     const item = await hasAntigravityWindowsCredential().catch(() => false)
     return item ? 'present' : tokenFile()
   }
-  // The read refuses a locked collection rather than unlocking it; a missing tool makes agy fall
-  // back to its token file.
+  // The read refuses a locked collection rather than unlocking it. Without gdbus Orca can't tell
+  // whether it is locked, so it stays `locked`; secret-tool is only needed after gdbus found the
+  // collection unlocked, where asking agy can't prompt.
   const keyring = await readAntigravityLinuxCredential().then(
     (credential): AgyCredentialPresence | 'tokenFile' => (credential ? 'present' : 'tokenFile'),
-    (error: unknown) =>
-      error instanceof AntigravityKeyringToolMissingError ? 'tokenFile' : 'locked'
+    (error: unknown): AgyCredentialPresence =>
+      error instanceof AntigravityKeyringToolMissingError && error.program === 'secret-tool'
+        ? 'present'
+        : 'locked'
   )
   return keyring === 'tokenFile' ? tokenFile() : keyring
 }

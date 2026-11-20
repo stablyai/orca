@@ -91,8 +91,9 @@ export async function antigravityChatRoute(
   if (!agyResolves) {
     return { agy: 'notInstalled', installs: 'agy' }
   }
-  // A session request behind a locked keyring could raise an unlock dialog, so only whether agy
-  // can serve chats is asked; agy asks for the keyring when the chat starts.
+  // Seen on a locked-keyring host: `agy acp` opens no D-Bus connection for initialize, but a
+  // session request calls Secret Service Unlock and raises its prompt. So only initialize asks
+  // whether agy can serve chats; agy asks for the keyring when the chat starts.
   if ((await agyCredentialPresence(homePath)) === 'locked') {
     const compatible = await checkAntigravityHostAcpCompatible(command, env, envToDelete)
     return compatible === 'incompatible' ? ON_SERVER : { agy: 'unknown', installs: 'agy' }

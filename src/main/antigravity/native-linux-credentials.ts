@@ -20,8 +20,16 @@ function requireLinux(): void {
   }
 }
 
-/** gdbus or secret-tool isn't installed, so agy's keyring lookup fails over to its token file. */
-export class AntigravityKeyringToolMissingError extends Error {}
+/** gdbus or secret-tool, which Orca reads the keyring with, isn't installed; agy talks to the
+ *  Secret Service itself, so this says nothing about agy's own store. */
+export class AntigravityKeyringToolMissingError extends Error {
+  constructor(
+    readonly program: 'gdbus' | 'secret-tool',
+    message: string
+  ) {
+    super(message)
+  }
+}
 
 async function run(program: 'gdbus' | 'secret-tool', args: string[], input?: string) {
   try {
@@ -36,6 +44,7 @@ async function run(program: 'gdbus' | 'secret-tool', args: string[], input?: str
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       throw new AntigravityKeyringToolMissingError(
+        program,
         program === 'gdbus'
           ? 'Antigravity account switching on Linux needs gdbus (GLib) to reach the keyring. Install it and try again.'
           : 'Antigravity account switching on Linux needs secret-tool. Install libsecret-tools (or your distribution’s equivalent) and try again.'
