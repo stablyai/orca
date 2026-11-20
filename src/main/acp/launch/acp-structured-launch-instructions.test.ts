@@ -10,6 +10,7 @@ import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-stru
 import { createAcpStructuredLaunchResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecFor } from './acp-launch-registry'
+import { deliverCopilotInstructions } from './acp-instructions'
 
 const PREAMBLE = 'You are Zorblax, a bot that runs in Orca.'
 
@@ -29,7 +30,8 @@ const SPECS = {
   omp: acpLaunchSpecFor('omp')!,
   antigravity: acpLaunchSpecFor('antigravity')!,
   cursor: acpLaunchSpecFor('cursor')!,
-  hermes: acpLaunchSpecFor('hermes')!
+  hermes: acpLaunchSpecFor('hermes')!,
+  copilot: acpLaunchSpecFor('copilot')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
@@ -38,13 +40,15 @@ const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome'
   omp: { variable: 'PI_CODING_AGENT_DIR', path: '/home/user/.omp/agent' },
   antigravity: { variable: 'GEMINI_HOME', path: '/home/user/orca-data/antigravity-chat' },
   cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' },
-  hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' }
+  hermes: { variable: 'HERMES_HOME', path: '/home/user/.hermes' },
+  copilot: { variable: 'COPILOT_HOME', path: '/home/user/.copilot' }
 }
 
 const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
   omp: '17.2.9',
   cursor: '2026.11.19-f005e9d',
-  hermes: '0.23.3'
+  hermes: '0.23.3',
+  copilot: '1.0.114'
 }
 
 let dataDirectory = ''
@@ -187,6 +191,39 @@ describe('ACP launch: standing instructions', () => {
     } finally {
       await rm(home, { recursive: true, force: true })
     }
+  })
+
+  it("gives Copilot them as an always-applied instructions file in a folder of the chat's own", async () => {
+    const resolved = await launch('copilot', { instructions: PREAMBLE })
+    const dir = resolved.env.COPILOT_CUSTOM_INSTRUCTIONS_DIRS ?? ''
+    expect(dir.startsWith(join(dataDirectory, 'acp-instructions'))).toBe(true)
+    const path = join(dir, '.github', 'instructions', 'orca.instructions.md')
+    expect(await readFile(path, 'utf8')).toBe(`---\napplyTo: "**"\n---\n${PREAMBLE}\n`)
+    if (process.platform !== 'win32') {
+      expect((await stat(path)).mode & 0o777).toBe(0o600)
+    }
+    expect(resolved.args).toEqual((await launch('copilot')).args)
+  })
+
+  it("keeps the user's own Copilot instruction folders ahead of Orca's", async () => {
+    const resolved = await launch('copilot', {
+      instructions: PREAMBLE,
+      launchEnv: { COPILOT_CUSTOM_INSTRUCTIONS_DIRS: '/home/user/mine,/home/user/team' }
+    })
+    const dirs = (resolved.env.COPILOT_CUSTOM_INSTRUCTIONS_DIRS ?? '').split(',')
+    expect(dirs.slice(0, 2)).toEqual(['/home/user/mine', '/home/user/team'])
+    expect(dirs).toHaveLength(3)
+  })
+
+  it('refuses Copilot instructions in a folder whose path has a comma, which its list would split', async () => {
+    const delivered = await deliverCopilotInstructions({
+      text: PREAMBLE,
+      env: {},
+      cwd: '/home/user/bot',
+      file: async () => '/unused',
+      folder: async () => '/home/user/Orca, Inc/acp-instructions/chat'
+    })
+    expect(delivered).toBeNull()
   })
 
   it('refuses to start an agent that has no way to take them', async () => {
