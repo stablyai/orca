@@ -22,7 +22,7 @@ function source(id: string, fetchedAt: number | null): PluginMarketplaceSourceSt
 }
 
 function setup(sources: PluginMarketplaceSourceState[]) {
-  const refreshSource = vi.fn(async (id: string) => source(id, Date.now()))
+  const refreshSource = vi.fn(async (id: string) => source(id, 100 * HOUR))
   const refresh = createStaleMarketplaceRefresh({
     listSources: async () => sources,
     refreshSource
