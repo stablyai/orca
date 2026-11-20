@@ -1,4 +1,4 @@
-// A server bot's Slack or Linear setup started in Settings moves to the bot's own Connectors tab
+// A server bot's Slack, Linear or Cliq setup started in Settings moves to the bot's own Connectors tab
 // first: its sign-in page opens in the bot's workspace, which leaves Settings and would take a
 // dialog open there with it. The tab's Add connector takes the setup up when it mounts.
 import { useSyncExternalStore } from 'react'
@@ -21,7 +21,7 @@ function subscribe(listener: () => void): () => void {
 export function handOffConnectorSetup(bot: Bot, connector: BotConnectorId): boolean {
   if (
     bot.hostId === LOCAL_EXECUTION_HOST_ID ||
-    (connector !== 'slack' && connector !== 'linear') ||
+    (connector !== 'slack' && connector !== 'linear' && connector !== 'cliq') ||
     useAppStore.getState().activeView !== 'settings' ||
     !openBotConnectorsTab(bot)
   ) {

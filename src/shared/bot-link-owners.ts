@@ -1,7 +1,9 @@
 import {
+  botCliqBots,
   botLinearWorkspaces,
   botSlackApps,
   type Bot,
+  type BotCliqLink,
   type BotLinearLink,
   type BotSlackLink
 } from './bot-types'
@@ -26,8 +28,13 @@ export function stampBotLinkOwners(
     )
     return stamp(link, was)
   })
+  const cliqBots = botCliqBots(next).map((link): BotCliqLink => {
+    const was = botCliqBots(previous).find((entry) => entry.orgId === link.orgId)
+    return stamp(link, was)
+  })
   return {
     ...next,
+    ...(next.cliqBots ? { cliqBots } : {}),
     ...(next.slackApps ? { slackApps } : {}),
     slack: slackApps[0] ?? null,
     ...(next.linearWorkspaces ? { linearWorkspaces } : {}),
@@ -41,6 +48,7 @@ export function botLinkOwners(bot: Bot): (string | null)[] {
   return [
     ...botSlackApps(bot),
     ...botLinearWorkspaces(bot),
+    ...botCliqBots(bot),
     ...(bot.github ? [bot.github] : [])
   ].map((link) => link.ownerUserId ?? null)
 }

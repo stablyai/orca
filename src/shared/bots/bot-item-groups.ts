@@ -267,6 +267,7 @@ const TREE_KINDS: Record<BotChatOrigin, BotItemChatKind> = {
   side: 'chat',
   automation: 'automation',
   slack: 'thread',
+  cliq: 'thread',
   linear: 'thread',
   github: 'thread'
 }

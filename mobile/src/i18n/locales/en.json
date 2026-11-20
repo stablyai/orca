@@ -5398,7 +5398,8 @@
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
       "readFailedTitle": "Couldn’t load chats",
       "waitingCount": "{{count}} waiting",
-      "runningCount": "{{count}} running"
+      "runningCount": "{{count}} running",
+      "kindCliq": "Cliq thread"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",

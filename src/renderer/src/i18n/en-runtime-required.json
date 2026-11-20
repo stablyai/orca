@@ -1539,6 +1539,7 @@
       "newBot": "New bot…",
       "permissionFellBack": "{{agent}} has no {{mode}} mode, so {{name}} uses Ask for approval.",
       "place": "{{connector}} ({{workspace}})",
+      "reachCliq": "Post in Zoho Cliq as {{name}}, through your Zoho account",
       "reachComputer": "Your files, commands and accounts on {{computer}}",
       "reachComputerDetail": "As you, as far as the permission below allows.",
       "reachGitHub": "Comment, review and push on GitHub as you",

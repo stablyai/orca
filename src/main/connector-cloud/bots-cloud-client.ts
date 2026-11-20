@@ -23,6 +23,7 @@ import {
   ConnectorGitHubState,
   ConnectorGitHubUsersResponse
 } from '../../shared/connector-bot-github-contract'
+import { cliqAnswer, cliqCloudClient } from './cliq-cloud-client'
 import {
   ConnectorAccessRequest,
   ConnectorAccessRequestList,
@@ -51,7 +52,7 @@ const SLACK_HAND_OFF_REDEEM = '/v1/connector/slack/handoffs/redeem'
 const teamQuery = (teamId: string | undefined, separator: '?' | '&'): string =>
   teamId === undefined ? '' : `${separator}team=${encodeURIComponent(teamId)}`
 
-function answer<T>(result: ConnectorResult<T>): BotSlackResult<T> {
+export function answer<T>(result: ConnectorResult<T>): BotSlackResult<T> {
   if (result.ok) {
     return result
   }
@@ -77,10 +78,12 @@ function gitHubAnswer<T>(result: ConnectorResult<T>): BotSlackResult<T> {
     : answer(result)
 }
 
+const SOURCE_ANSWERS = { linear: linearAnswer, github: gitHubAnswer, cliq: cliqAnswer } as const
+
 function sourceAnswer(
   source: ConnectorConnectSource
 ): <T>(result: ConnectorResult<T>) => BotSlackResult<T> {
-  return source === 'linear' ? linearAnswer : gitHubAnswer
+  return SOURCE_ANSWERS[source]
 }
 
 /** A cloud with bots off, or from before access requests, has none to list. */
@@ -98,6 +101,7 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
   const botSlack = (botId: string): string =>
     `${CONNECTOR_PATHS.bots}/${encodeURIComponent(botId)}/slack`
   return {
+    ...cliqCloudClient(cloud),
     /** Hands the cloud a config refresh token; it keeps only its rotation, encrypted, for this workspace. */
     saveSlackGrant: async (refreshToken: string) =>
       answer(

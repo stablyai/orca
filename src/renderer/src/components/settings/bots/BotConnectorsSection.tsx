@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { BotGitHubCard } from '@/components/bots/github/BotGitHubCard'
 import { BotGoogleCard } from '@/components/bots/google/BotGoogleCard'
 import { BotLinearCard } from '@/components/bots/linear/BotLinearCard'
+import { BotCliqCard } from '@/components/bots/cliq/BotCliqCard'
 import { BotSlackCard } from '@/components/bots/slack/BotSlackCard'
 import { BotWebhooksCard } from '@/components/bots/webhooks/BotWebhooksCard'
 import { BotCloudSignInNotice } from '@/components/bots/BotCloudSignInNotice'
@@ -60,6 +61,8 @@ function BotConnectorEntryCard({
       return (
         <BotLinearCard bot={bot} linear={entry.linear} title={title} defaultOpen={defaultOpen} />
       )
+    case 'cliq':
+      return <BotCliqCard bot={bot} cliq={entry.cliq} title={title} defaultOpen={defaultOpen} />
     case 'github':
       return (
         <BotGitHubCard

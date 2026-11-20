@@ -64,7 +64,7 @@ export function botPermissionNotes(
   return notes
 }
 
-export type BotAccessConnector = 'linear' | 'slack' | 'github'
+export type BotAccessConnector = 'linear' | 'slack' | 'github' | 'cliq'
 
 export type BotReachLine =
   | { kind: 'computer' }
@@ -178,6 +178,7 @@ export function botReachLineText(
 export const CONNECTOR_REACH_COPY: Record<BotAccessConnector, BotAccessCopyId> = {
   linear: 'reachLinear',
   slack: 'reachSlack',
+  cliq: 'reachCliq',
   github: 'reachGitHub'
 }
 

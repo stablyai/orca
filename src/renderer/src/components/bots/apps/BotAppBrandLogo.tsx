@@ -2,6 +2,7 @@
 // is drawn on (LOGO_TILES.brand; white otherwise). GitHub keeps its monochrome mark: the connector's own icon.
 import React, { type ComponentType } from 'react'
 import atlassianLogo from '@/assets/connector-brands/atlassian.svg'
+import cliqLogo from '@/assets/connector-brands/cliq.svg'
 import cloudflareLogo from '@/assets/connector-brands/cloudflare.svg'
 import context7Logo from '@/assets/connector-brands/context7.svg'
 import datadogLogo from '@/assets/connector-brands/datadog.svg'
@@ -20,6 +21,7 @@ import vercelLogo from '@/assets/connector-brands/vercel.svg'
 import { GitHubIcon } from '../../icons/GitHubIcon'
 import { GoogleIcon } from '../../icons/GoogleIcon'
 import { SlackIcon } from '../../icons/SlackIcon'
+import { CliqIcon } from '../../icons/CliqIcon'
 import { LinearIcon } from '../../icons/LinearIcon'
 import { BotAppLogo } from './BotAppRow'
 import { LOGO_TILES } from './brand-logo-tiles'
@@ -36,6 +38,7 @@ const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   slack: { logo: slackLogo, Icon: SlackIcon },
   google: { logo: googleLogo, Icon: GoogleIcon },
   linear: { Icon: LinearIcon },
+  cliq: { logo: cliqLogo, Icon: CliqIcon },
   github: { Icon: GitHubIcon },
   vercel: { logo: vercelLogo },
   sentry: { logo: sentryLogo },

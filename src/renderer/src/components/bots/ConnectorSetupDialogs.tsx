@@ -6,6 +6,7 @@ import { openGitHubInstall } from '@/lib/bot-github-install-record'
 import type { BotConnectorId } from './AddConnectorDialog'
 import { openGitHubInstallPage } from './github/github-install-page'
 import { BotLinearSetupDialog } from './linear/BotLinearSetupDialog'
+import { BotCliqSetupDialog } from './cliq/BotCliqSetupDialog'
 import { BotSlackSetupDialog } from './slack/BotSlackSetupDialog'
 import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
 import { refreshGoogle } from './google/google-connect-client'
@@ -77,6 +78,11 @@ export function useConnectorSetup(bot: Bot): {
         bot={bot}
         open={setupOpen === 'linear'}
         onOpenChange={(next) => setSetupOpen(next ? 'linear' : null)}
+      />
+      <BotCliqSetupDialog
+        bot={bot}
+        open={setupOpen === 'cliq'}
+        onOpenChange={(next) => setSetupOpen(next ? 'cliq' : null)}
       />
       <GoogleHostChoiceDialog
         bot={bot}
