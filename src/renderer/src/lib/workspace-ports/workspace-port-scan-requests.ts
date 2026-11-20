@@ -6,49 +6,52 @@ export function workspacePortRuntimeTargetKey(target: RuntimeClientTarget): stri
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
 }
 
-const inFlightWorkspacePortScans = new Map<string, Promise<WorkspacePortScanResult>>()
-// Latest manual Refresh per target, so a background scan that started before it cannot repaint older owners.
-const latestFreshWorkspacePortScans = new Map<
-  string,
-  { sequence: number; promise: Promise<WorkspacePortScanResult> }
->()
-let workspacePortScanSequence = 0
-
-function workspacePortScanRequestKey(
-  target: RuntimeClientTarget,
-  repoId: string | undefined,
+type InFlightWorkspacePortScan = {
+  promise: Promise<WorkspacePortScanResult>
   freshOwners: boolean
-): string {
-  return JSON.stringify([workspacePortRuntimeTargetKey(target), repoId ?? null, freshOwners])
+  supersede: (refresh: Promise<WorkspacePortScanResult>) => void
 }
+
+// One request per target; entries leave when they settle.
+const inFlightWorkspacePortScans = new Map<string, InFlightWorkspacePortScan>()
 
 export async function scanWorkspacePortsForTarget(
   target: RuntimeClientTarget,
   repoId?: string,
   { freshOwners = false }: { freshOwners?: boolean } = {}
 ): Promise<WorkspacePortScanResult> {
-  const key = workspacePortScanRequestKey(target, repoId, freshOwners)
+  const key = JSON.stringify([workspacePortRuntimeTargetKey(target), repoId ?? null])
   const existing = inFlightWorkspacePortScans.get(key)
-  if (existing) {
-    return existing
+  // Coalesce same-tick surface refreshes to avoid duplicate lsof/netstat/RPC work.
+  if (existing && (existing.freshOwners || !freshOwners)) {
+    return existing.promise
   }
 
-  const sequence = ++workspacePortScanSequence
-  const backgroundKey = workspacePortScanRequestKey(target, repoId, false)
-  // Coalesce same-tick surface refreshes to avoid duplicate lsof/netstat/RPC work.
+  // A manual Refresh outranks a background scan already running: that scan settles with the Refresh outcome.
+  let supersededBy: Promise<WorkspacePortScanResult> | undefined
   const promise = runWorkspacePortScanForTarget(target, repoId, freshOwners)
-    .then((result) => {
-      const fresh = freshOwners ? undefined : latestFreshWorkspacePortScans.get(backgroundKey)
-      return fresh && fresh.sequence > sequence ? fresh.promise.catch(() => result) : result
-    })
+    .then(
+      (result) => supersededBy ?? result,
+      (error: unknown) => {
+        if (supersededBy) {
+          return supersededBy
+        }
+        throw error
+      }
+    )
     .finally(() => {
-      if (inFlightWorkspacePortScans.get(key) === promise) {
+      if (inFlightWorkspacePortScans.get(key) === entry) {
         inFlightWorkspacePortScans.delete(key)
       }
     })
-  inFlightWorkspacePortScans.set(key, promise)
-  if (freshOwners) {
-    latestFreshWorkspacePortScans.set(backgroundKey, { sequence, promise })
+  const entry: InFlightWorkspacePortScan = {
+    promise,
+    freshOwners,
+    supersede: (refresh) => {
+      supersededBy = refresh
+    }
   }
+  existing?.supersede(promise)
+  inFlightWorkspacePortScans.set(key, entry)
   return promise
 }
