@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   nativeChatFirstScreen,
+  nativeChatFirstScreenSignIn,
   nativeChatKickoffEnded,
   nativeChatKickoffRefusal
 } from './native-chat-bot-kickoff-view'
@@ -106,4 +107,44 @@ it('shows a pending kickoff until the host refuses it before a turn opens', () =
       nativeChatKickoffRefusal(refused)
     )
   ).toEqual({ phase: 'failed', turn: [], refused: { reason: 'Claude Code could not start.' } })
+})
+
+describe('nativeChatFirstScreenSignIn', () => {
+  const failedTurn = (kind: 'notSignedIn' | 'startFailed'): NativeChatMessage => ({
+    ...message('f', 'system', 'Antigravity isn’t signed in.'),
+    blocks: [
+      {
+        type: 'text',
+        text: 'Antigravity isn’t signed in.',
+        failure: { kind, account: 'system' }
+      }
+    ]
+  })
+
+  it("asks for agy's own sign-in when the kickoff was refused as signed out", () => {
+    const rejection = { kind: 'notSignedIn', account: 'system' } as const
+    const refused = nativeChatKickoffRefusal({
+      isWorking: false,
+      submissions: [
+        {
+          dispatchState: 'rejected',
+          reason: 'notSignedIn',
+          rejection
+        }
+      ]
+    })
+
+    expect(nativeChatFirstScreenSignIn(nativeChatFirstScreen([kickoff], true, refused))).toEqual({
+      account: 'system'
+    })
+  })
+
+  it('asks for it when the first turn failed signed out, and not for another failure', () => {
+    expect(
+      nativeChatFirstScreenSignIn(nativeChatFirstScreen([kickoff, failedTurn('notSignedIn')], true))
+    ).toEqual({ account: 'system' })
+    expect(
+      nativeChatFirstScreenSignIn(nativeChatFirstScreen([kickoff, failedTurn('startFailed')], true))
+    ).toBeNull()
+  })
 })
