@@ -127,7 +127,10 @@ export function EditorFileTabContextMenu({
           ? t('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
           : t('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
       </ContextMenuItem>
-      <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
+      <CopyTabIdMenuItem
+        menuKind="context"
+        reference={{ unifiedTabId, kind: 'editor', filePath: file.filePath }}
+      />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
         <X className="size-3.5" />
