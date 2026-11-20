@@ -1,3 +1,4 @@
+import { WorkerPlacementCatalogOwner } from './placement/worker-placement-catalog-owner'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
@@ -62,7 +63,20 @@ export class RuntimeOrchestrationFederation {
     private readonly transport: OrchestrationEnvironmentTransport | null
   ) {}
 
+  private placementCatalogs: WorkerPlacementCatalogOwner | undefined
+
+  getWorkerPlacementCatalogOwner(): WorkerPlacementCatalogOwner {
+    const db = this.runtime.getOrchestrationDb()
+    if (this.placementCatalogs?.db !== db) {
+      this.placementCatalogs?.dispose()
+      this.placementCatalogs = new WorkerPlacementCatalogOwner(db, this.transport)
+    }
+    return this.placementCatalogs
+  }
+
   resetForDatabaseChange(): void {
+    this.placementCatalogs?.dispose()
+    this.placementCatalogs = undefined
     this.relayGeneration += 1
     this.unwatchVerifiedEnvironments()
     this.relays.clear()

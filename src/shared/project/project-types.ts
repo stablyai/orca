@@ -1,3 +1,4 @@
+import type { WorkerExecutionTarget } from './host-setup/worker-execution-target'
 import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { RepoIcon } from '../repository/appearance/repo-icon'
 import type { GitRemoteIdentity } from '../git/remotes/git-remote-identity'
@@ -46,6 +47,8 @@ export type RepoProjectHostSetupMethod = Extract<
 >
 
 export type ProjectHostSetup = {
+  /** Computed on owner replies only; omitted by older runtimes, never a persisted launch setting. */
+  workerExecutionTarget?: WorkerExecutionTarget
   id: string
   projectId: string
   hostId: ExecutionHostId

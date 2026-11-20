@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getEnvironmentStorePath } from '../../../../shared/remote-runtime/host-store/runtime-environment-store-records'
 import type { Store } from '../../../persistence/loading-store/store'
-import { watchFileAcrossReplacement } from '../../filesystem/watcher-process/native-subscriptions/rebinding-file-watch'
+import { watchFileAcrossReplacementAsync } from '../../filesystem/watcher-process/native-subscriptions/rebinding-file-watch-owner'
 
 type PreferenceStore = Pick<Store, 'getSettings' | 'updateSettings'>
 
@@ -76,7 +76,7 @@ export function watchRuntimeEnvironmentRegistry(
   owner: string
 ): () => void {
   // Watch the file: macOS directory watches recursively stream Orca's own userData writes.
-  const registryWatch = watchFileAcrossReplacement(
+  const registryWatch = watchFileAcrossReplacementAsync(
     getEnvironmentStorePath(userDataPath),
     onChanged,
     (error) => console.warn(`[runtime-environments] ${owner} watch failed:`, error)

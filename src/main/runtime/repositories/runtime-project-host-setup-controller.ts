@@ -12,6 +12,7 @@ import type {
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
 } from '../../../shared/project/project-types'
+import { projectSetupsWithWorkerExecutionTargets } from '../orchestration/federation/placement/worker-execution-target'
 import type { Repo } from '../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
@@ -104,7 +105,11 @@ export class RuntimeProjectHostSetupController {
 
   /** What clients may list; internal lookups keep the full store, as `listSetups` does. */
   listVisibleSetups(): ProjectHostSetup[] {
-    return runtimeVisibleProjectHostSetups(this.deps.getStore())
+    const store = this.deps.getStore()
+    const setups = runtimeVisibleProjectHostSetups(store)
+    return store
+      ? projectSetupsWithWorkerExecutionTargets(store, this.deps.listRepos(), setups)
+      : setups.map((setup) => ({ ...setup, workerExecutionTarget: { kind: 'unknown' } }))
   }
 
   createSetup(args: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult {

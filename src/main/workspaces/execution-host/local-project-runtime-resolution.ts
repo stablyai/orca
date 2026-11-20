@@ -64,7 +64,8 @@ function resolveLocalProjectRuntime(
   store: ResolvableStore,
   project: Pick<Project, 'id' | 'localWindowsRuntimePreference'>,
   settings: ReturnType<ResolvableStore['getSettings']> = store.getSettings(),
-  checkWslCache = true
+  checkWslCache = true,
+  availableWslDistroSet?: ReadonlySet<string>
 ): ProjectExecutionRuntimeResolution {
   const wslAvailable =
     checkWslCache && hasCachedWslAvailability()
@@ -77,7 +78,8 @@ function resolveLocalProjectRuntime(
     projectRuntimePreference: project.localWindowsRuntimePreference,
     globalWindowsRuntimeDefault: settings.localWindowsRuntimeDefault,
     wslAvailable,
-    availableWslDistros
+    availableWslDistros,
+    availableWslDistroSet: checkWslCache ? availableWslDistroSet : undefined
   })
 }
 
@@ -112,7 +114,8 @@ export function resolveLocalProjectRuntimeForRepo(
 export function resolveLocalWorkspaceRuntime(
   store: ProjectRuntimeResolutionStore,
   repo: Repo,
-  workspacePath: string | null | undefined
+  workspacePath: string | null | undefined,
+  availableWslDistroSet?: ReadonlySet<string>
 ): ProjectExecutionRuntimeResolution | undefined {
   if (
     getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID ||
@@ -130,7 +133,8 @@ export function resolveLocalWorkspaceRuntime(
     store,
     { id: project?.id ?? repo.id, localWindowsRuntimePreference: preference },
     undefined,
-    Boolean(project?.localWindowsRuntimePreference) || preference.kind !== 'wsl'
+    Boolean(project?.localWindowsRuntimePreference) || preference.kind !== 'wsl',
+    availableWslDistroSet
   )
 }
 

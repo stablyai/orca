@@ -673,13 +673,10 @@
 2 src/main/ipc/repos/repo-clone-lifecycle.ts
 2 src/main/ipc/repos/repo-creation-handlers.ts
 1 src/main/ipc/repos/repo-update-handler.ts
-2 src/main/ipc/runtime-environments/catalog/runtime-environment-preference.ts
 2 src/main/ipc/runtime-environments/connections/paired-desktop-account-declaration.ts
 1 src/main/ipc/runtime-environments/managed-orcad/managed-orcad-actions.ts
 1 src/main/ipc/runtime-environments/managed-orcad/orcad-runtime-lifecycle-handlers.ts
 1 src/main/ipc/runtime-environments/managed-orcad/runtime-environment-recipe-vm-wake.ts
-1 src/main/ipc/runtime-environments/mobile-relay/runtime-environment-mobile-relay-hosts.ts
-1 src/main/ipc/runtime-environments/runtime-environments.ts
 2 src/main/ipc/session.ts
 3 src/main/ipc/settings/settings.ts
 3 src/main/ipc/shell/shell.ts
