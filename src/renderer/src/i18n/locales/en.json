@@ -1540,6 +1540,7 @@
         "updateNeeded": "Update needed"
       },
       "avatarSlackNote": "Slack gets the picture, not the color or outfit.",
+      "avatarSlackNotePicture": "Changes your bot's picture in Slack too.",
       "linearStatus": {
         "checking": "Checking",
         "unknown": "Can’t check",
