@@ -207,19 +207,6 @@ it('keeps focus on the clicked arrow in the next item, and gives it to the pane 
   expect(document.activeElement).toBe(paneRoot())
 })
 
-it('steps with ⌥⌘↓ / ⌥⌘↑ from inside the pane, keeping the comment box focused', () => {
-  pane()
-  chord(screen.getByLabelText('Comment b'), 'ArrowDown')
-  expect(document.activeElement).toBe(screen.getByLabelText('Comment c'))
-  chord(screen.getByLabelText('Comment c'), 'ArrowUp')
-  expect(document.activeElement).toBe(screen.getByLabelText('Comment b'))
-
-  chord(screen.getByLabelText('Elsewhere'), 'ArrowDown')
-  chord(screen.getByLabelText('Comment b'), 'ArrowDown', { repeat: true })
-  chord(screen.getByLabelText('Comment b'), 'ArrowDown', { isComposing: true })
-  expect(screen.getByLabelText('Comment b')).toBeTruthy()
-})
-
 it('offline, neither the arrows nor the chord step, and Back still works', () => {
   const { onBack } = pane({ offline: true })
   expect(arrow('Next item').disabled).toBe(true)

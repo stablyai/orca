@@ -119,8 +119,14 @@ function press(target: Element, init: KeyboardEventInit): KeyboardEvent {
 it('steps from the comment box with ⌥⌘↓ / ⌥⌘↑ and keeps typing in the shown item, its draft kept', () => {
   reads.mockReturnValue(new Promise(() => {}))
   pane(1)
+  const nextItem = { key: 'ArrowDown', code: 'ArrowDown', metaKey: true, altKey: true }
+  press(screen.getByLabelText('Elsewhere'), nextItem)
+  press(editor(), { ...nextItem, repeat: true })
+  press(editor(), { ...nextItem, isComposing: true })
+  expect(heading()).toContain('Draft the release notes')
+
   changePrompt(editor(), 'reply to 22')
-  press(editor(), { key: 'ArrowDown', code: 'ArrowDown', metaKey: true, altKey: true })
+  press(editor(), nextItem)
   expect(heading()).toContain('Retry the help-text build')
   expect(document.activeElement).toBe(editor())
   expect(promptValue(editor())).toBe('')
