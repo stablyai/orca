@@ -146,6 +146,10 @@ export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
       'slack react',
       'slack edit',
       'slack delete',
+      'slack pin',
+      'slack canvas',
+      'slack list',
+      'slack scheduled',
       'slack attach'
     ],
     load: async () => (await import('../slack/slack.js')).SLACK_HANDLERS

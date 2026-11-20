@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
+import { readCreatedWorkspaceLaunch } from '../../../../agent-launch/agent-launch-created-workspace'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { defineMethod, defineStreamingMethod } from '../../core'
@@ -154,11 +155,13 @@ export const SESSION_TAB_METHODS = [
         sentUnreadMarks = currentSnapshot
           ? sessionTabUnreadMarks(runtime, currentSnapshot, clientKind)
           : ''
+        const launch = readCreatedWorkspaceLaunch(runtime, projected.worktree)
+        const launchAware = launch ? { ...projected, initialSurfaceLaunch: launch } : projected
         emit({
           type,
           ...(type === 'snapshot'
-            ? tabDelta.full(withProofDelta(projected))
-            : tabDelta.update(withProofDelta(projected)))
+            ? tabDelta.full(withProofDelta(launchAware))
+            : tabDelta.update(withProofDelta(launchAware)))
         })
         if (!released) {
           runtime.observeClientHostedPageSnapshots?.([projected], pairedDeviceId, observation)

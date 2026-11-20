@@ -182,25 +182,21 @@ describe('the tools a chat launched with', () => {
     workspaceId = folderWorkspaceKey('scout-home')
   ) => botSessionToolServers(bots, { provider, location: { workspaceId } }, folder, relay)
 
-  it('gives a bot with no tools a revision its first tool changes', async () => {
+  it('changes the revision when the first tool is added and the last tool is removed', async () => {
     const folder = tempDir('bot-tools-revision-')
-    const { launched } = await launch(folder)
-    expect(launched).not.toBeNull()
+    const { launched: empty } = await launch(folder)
+    expect(empty).not.toBeNull()
 
     await writeBotToolServers(folder, [notion])
 
-    expect(await currentBotToolsRevision(folder)).not.toBe(launched?.revision)
-    expect(botToolsEpoch(folder)).not.toBe(launched?.epoch)
-  })
-
-  it('changes the revision when the last tool goes', async () => {
-    const folder = tempDir('bot-tools-revision-')
-    await writeBotToolServers(folder, [notion])
-    const { launched } = await launch(folder)
+    const { launched: configured } = await launch(folder)
+    expect(configured).not.toBeNull()
+    expect(configured?.revision).not.toBe(empty?.revision)
+    expect(configured?.epoch).not.toBe(empty?.epoch)
 
     await writeBotToolServers(folder, [])
 
-    expect(await currentBotToolsRevision(folder)).not.toBe(launched?.revision)
+    expect(await currentBotToolsRevision(folder)).not.toBe(configured?.revision)
   })
 
   it('counts a finished sign-in, and an edit made outside Orca, as a change', async () => {

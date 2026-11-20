@@ -61,7 +61,8 @@ import {
 import {
   computeCodexTrustKey as computeTrustKey,
   getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath,
-  computeCodexTrustedHash as computeTrustedHash
+  computeCodexTrustedHash as computeTrustedHash,
+  normalizeCodexHookTrustLookupKey
 } from '../../trust/identity/codex-trust-identity'
 import {
   CODEX_EVENTS,
@@ -271,7 +272,7 @@ describe('managed-home Codex hook approval', () => {
       writeCodexTrustGrantLedgerHome(managedHome(), {
         binary: null,
         entries: {
-          [computeTrustKey(entry)]: {
+          [normalizeCodexHookTrustLookupKey(computeTrustKey(entry))]: {
             signature: getCodexHookTrustSignature(entry),
             trustedHash: 'sha256:main-granted'
           }

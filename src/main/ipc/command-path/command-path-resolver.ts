@@ -2,7 +2,10 @@ import { access, constants as fsConstants, stat } from 'node:fs/promises'
 import { statSync, type Stats } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { getExecutableNames } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
+import {
+  getExecutableNames,
+  stripWindowsPathQuotes
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { forEachWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { directoryNameKey } from './command-path-directory'
 import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
@@ -32,9 +35,6 @@ function readEnvCaseInsensitive(env: NodeJS.ProcessEnv, key: string): string | u
   }
   return undefined
 }
-
-// Windows installers often quote PATH entries; cmd strips only double quotes, so match the terminal.
-const stripWindowsPathQuotes = (entry: string): string => entry.replace(/^"(.*)"$/, '$1')
 
 function getWindowsPathSearchExtensions(env: NodeJS.ProcessEnv, command: string): string[] {
   const pathext = readEnvCaseInsensitive(env, 'PATHEXT') ?? '.EXE;.CMD;.BAT;.COM'

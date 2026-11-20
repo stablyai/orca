@@ -132,20 +132,20 @@ describe('usage-limit row over time', () => {
     act(() => vi.advanceTimersByTime(HOUR))
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { pressed: true })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Hand off to another agent' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Hand off to agent' })).toBeNull()
   })
 
   it('never turns an older turn into a ready row, however long it waits', () => {
     render(row({ resetsAt: start + HOUR, active: false, actions: handOffActions() }))
     act(() => vi.advanceTimersByTime(2 * HOUR))
     expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Hand off to another agent' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Hand off to agent' })).toBeNull()
     expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument()
   })
 
   it('moves focus from a tool that disappears at the reset to Continue', () => {
     render(row({ resetsAt: start + HOUR, actions: handOffActions() }))
-    screen.getByRole('button', { name: 'Hand off to another agent' }).focus()
+    screen.getByRole('button', { name: 'Hand off to agent' }).focus()
     act(() => vi.advanceTimersByTime(HOUR))
     expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus()
   })
@@ -284,16 +284,12 @@ describe('usage-limit row over time', () => {
       }
     })
     const view = render(row({ resetsAt: start + HOUR, auto: null }))
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Continue automatically when limits reset' })
-    )
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-continue on reset' }))
     expect(updateSettings).toHaveBeenCalledWith({ nativeChatAutoContinueAfterUsageLimit: true })
     expect(openSettingsPage).not.toHaveBeenCalled()
     // Nothing to schedule against without a reset time.
     view.rerender(row({ resetsAt: undefined, auto: null }))
-    expect(
-      screen.queryByRole('button', { name: 'Continue automatically when limits reset' })
-    ).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Auto-continue on reset' })).toBeNull()
   })
 
   it('opens Settings when the host reports off while the setting is already on', () => {
@@ -316,7 +312,7 @@ describe('usage-limit row over time', () => {
         actions: { ...handOffActions(handOff), disabled: true, preparing: true }
       })
     )
-    const button = screen.getByRole('button', { name: 'Hand off to another agent' })
+    const button = screen.getByRole('button', { name: 'Hand off to agent' })
     button.focus()
     fireEvent.click(button)
     expect(button).toHaveFocus()

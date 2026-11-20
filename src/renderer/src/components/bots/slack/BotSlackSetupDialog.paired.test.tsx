@@ -128,7 +128,7 @@ afterEach(() => {
 })
 
 describe('BotSlackSetupDialog on a paired computer', () => {
-  it('waits for Approve in Slack, and Copy link copies the link instead of opening Slack', async () => {
+  it('copies the approval link without opening Slack and shows a wrong-installer failure', async () => {
     mocks.bots.push(bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } }))
     serverState({ state: 'not_created' })
     mocks.hosts[SERVER].setUpApp.mockResolvedValue(
@@ -144,6 +144,10 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     expect(writeClipboardText).toHaveBeenCalledWith(AUTHORIZE)
     expect(screen.getByText('Waiting for Slack…')).toBeTruthy()
     expect(mocks.open).not.toHaveBeenCalled()
+
+    serverState({ state: 'created', teamId: 'T1', appId: 'A1', oauthFailure: 'other_user' })
+    await act(() => refreshBotSlack({ hostId: SERVER, id: 'bot-1' }))
+    expect(await screen.findByText(/Another Slack account approved it/)).toBeTruthy()
   })
 
   it('creates the app with this desktop’s own account from the hand-off line, never the server’s', async () => {
@@ -219,22 +223,5 @@ describe('BotSlackSetupDialog on a paired computer', () => {
     await screen.findByText('The install link expired.')
     fireEvent.click(screen.getByRole('button', { name: 'Get a new link' }))
     await waitFor(() => expect(mocks.hosts[SERVER].setUpApp).toHaveBeenCalledTimes(2))
-  })
-
-  it('says another Slack account approved it when the cloud refused that installer', async () => {
-    mocks.bots.push(bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } }))
-    serverState({ state: 'not_created' })
-    mocks.hosts[SERVER].setUpApp.mockResolvedValue(ok({ appId: 'A1', authorizeUrl: AUTHORIZE }))
-    openDialog()
-    fireEvent.click(await screen.findByRole('button', { name: 'Copy link' }))
-    await screen.findByText('Link copied')
-
-    serverState({ state: 'created', teamId: 'T1', appId: 'A1', oauthFailure: 'other_user' })
-    await act(() => refreshBotSlack({ hostId: SERVER, id: 'bot-1' }))
-    expect(
-      await screen.findByText(
-        'Another Slack account approved it. Get a new link and approve as yourself.'
-      )
-    ).toBeTruthy()
   })
 })

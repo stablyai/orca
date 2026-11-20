@@ -4,6 +4,7 @@ import { enqueueWrite } from './primary-state-writes'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   notifyWorkspaceSessionWritten,
+  type WrittenWorkspaceScope,
   type WorkspaceSessionOperationListener,
   type WorkspaceSessionWriteListener
 } from '../workspace-sessions/workspace-session-write-listeners'
@@ -124,13 +125,14 @@ export class WriteSchedulingOperations {
   }
 }
 
-/** Saves the rows of the domains a mutation changed. */
+/** Saves the rows of the domains a mutation changed; `written` names the partition's changed workspaces when the writer knows them. */
 export function scheduleSave(
   owner: WriteSchedulingOperations,
   domains: ProfileSaveDomains,
-  writtenHostId?: ExecutionHostId
+  writtenHostId?: ExecutionHostId,
+  written?: WrittenWorkspaceScope
 ): void {
-  scheduleDomainSave(owner, domains, writtenHostId)
+  scheduleDomainSave(owner, domains, writtenHostId, written)
 }
 
 /** Startup load, migration and maintenance resume only: their changes span the profile. */
@@ -141,10 +143,17 @@ export function scheduleFullProfileSave(owner: WriteSchedulingOperations): void 
 function scheduleDomainSave(
   owner: WriteSchedulingOperations,
   dirtyDomains: readonly string[] | undefined,
-  writtenHostId?: ExecutionHostId
+  writtenHostId?: ExecutionHostId,
+  written?: WrittenWorkspaceScope
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
-  notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
+  notifyWorkspaceSessionWritten(
+    runtime,
+    dirtyDomains,
+    writtenHostId,
+    written?.workspaces,
+    written?.refs
+  )
   for (const listener of runtime.stateWriteListeners) {
     try {
       listener(dirtyDomains)

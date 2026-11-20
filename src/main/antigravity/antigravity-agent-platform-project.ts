@@ -60,15 +60,21 @@ async function readGcloudProject(
   return null
 }
 
+/** The ADC file Google's libraries read: GOOGLE_APPLICATION_CREDENTIALS, else gcloud's default. */
+export function agentPlatformCredentialsFile(env: Readonly<Record<string, string>>): string {
+  return (
+    env.GOOGLE_APPLICATION_CREDENTIALS ||
+    join(gcloudConfigDirectory(env), 'application_default_credentials.json')
+  )
+}
+
 /** Saved values win, then the launch environment, then ADC's project, then gcloud's project. */
 export async function resolveAgentPlatformProject(
   saved: { gcpProject?: string; gcpLocation?: string },
   env: Readonly<Record<string, string>>
 ): Promise<{ project: string | null; location: string }> {
   const configDirectory = gcloudConfigDirectory(env)
-  const adcFile =
-    env.GOOGLE_APPLICATION_CREDENTIALS ||
-    join(configDirectory, 'application_default_credentials.json')
+  const adcFile = agentPlatformCredentialsFile(env)
   const project =
     saved.gcpProject ||
     env.GOOGLE_CLOUD_PROJECT ||

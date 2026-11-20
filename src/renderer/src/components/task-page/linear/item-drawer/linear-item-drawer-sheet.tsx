@@ -295,12 +295,9 @@ export function renderLinearItemDrawerSheet(
                 <Button
                   onClick={handleOpenOrUseIssue}
                   className="w-full justify-center gap-2"
-                  aria-label={t(
-                    'auto.components.LinearItemDrawer.04008e6c46',
-                    'Start workspace from issue'
-                  )}
+                  aria-label={t('auto.components.LinearItemDrawer.04008e6c46', 'Start workspace')}
                 >
-                  {t('auto.components.LinearItemDrawer.04008e6c46', 'Start workspace from issue')}
+                  {t('auto.components.LinearItemDrawer.04008e6c46', 'Start workspace')}
                   <ArrowRight className="size-4" />
                 </Button>
               )}

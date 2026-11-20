@@ -233,7 +233,7 @@ describe('BotConnectorsSection', () => {
     expect(await screen.findByText('web, api · signed in as @dana')).toBeDefined()
     expect(screen.getByRole('button', { name: 'GitHub · acme' })).toBeDefined()
     expect(
-      screen.getByText(sentence('Mention @orca-ide scout … on an issue or pull request.'))
+      screen.getByText(sentence('Mention @orca-bots scout … on an issue or pull request.'))
     ).toBeDefined()
     // Each row lists only its own service's people.
     expect(screen.getAllByText('octocat')).toHaveLength(1)

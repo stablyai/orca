@@ -124,7 +124,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... ou cole o código",
       "pasteCodeTitle": "Colar código de pareamento",
       "pasteInstead": "Colar código em vez disso",
-      "pastePairingCode": "Ou colar o código de pareamento",
+      "pastePairingCode": "Colar código de pareamento",
       "scanCodeStep": "Escaneie o código QR",
       "title": "Parear com desktop",
       "tryAgain": "Tentar novamente",
@@ -160,7 +160,7 @@
       "installTitle": "Baixe o novo app",
       "installDescription": "Se o celular pedir, permita que o navegador instale apps.",
       "download": "Baixar",
-      "keepThisVersion": "Continuar usando esta versão",
+      "keepThisVersion": "Manter esta versão",
       "keepThisVersionNote": "Você vai ficar sem as correções de segurança. Vamos lembrar você em uma semana."
     },
     "pairTitle": "Pareie com o seu computador",
@@ -344,7 +344,7 @@
       "triedSearchWeb": "Tentou buscar na web"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "Mostrar mensagem completa — falha ao carregar, toque para tentar novamente",
+      "loadFailed": "Tentar carregar mensagem completa",
       "showFullMessage": "Mostrar mensagem completa",
       "showLess": "Mostrar menos"
     },
@@ -410,8 +410,7 @@
       "submitSelectedOptions": "Enviar opções selecionadas"
     },
     "queuedMessages": {
-      "clearAll": "Limpar tudo",
-      "deleteAll": "Excluir todas as mensagens na fila",
+      "deleteAll": "Excluir tudo",
       "editMessage": "Editar mensagem",
       "pausedState": "Pausado",
       "queuedState": "Na fila",
@@ -859,7 +858,7 @@
       "manageShortcuts": "Gerenciar atalhos",
       "manageShortcutsHint": "Mostrar, ocultar ou reordenar teclas de atalho",
       "modifiers": "Modificadores",
-      "moreKeys": "Mais teclas — Tab, setas, F1–F12…",
+      "moreKeys": "MAIS TECLAS",
       "navigation": "Navegação",
       "pickKey": "Selecione uma tecla",
       "pressEnter": "Pressionar Enter",
@@ -1373,7 +1372,7 @@
       "privacyHint": "Envia um relatório de tamanho limitado com dados sensíveis ocultados, incluindo nome do host, endereço de conexão, versões, estado da conexão e eventos — nunca o conteúdo do terminal ou credenciais.",
       "reconnecting": "reconectando",
       "retrySending": "Tentar enviar novamente",
-      "sendDiagnostics": "Enviar diagnóstico ao Orca",
+      "sendDiagnostics": "Enviar diagnóstico",
       "sending": "Enviando…",
       "sent": "Diagnóstico enviado",
       "stateWithAttempt": "{{state}} · tentativa {{attempts}}",
@@ -2177,7 +2176,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} não está vinculada a um PR aberto.",
       "currentBranchNotLinked": "A branch atual não está vinculada a um PR aberto.",
-      "linkExistingPullRequest": "Vincular um pull request existente",
+      "linkExistingPullRequest": "Vincular pull request",
       "linkedPrUnavailable": "PR vinculado #{{number}} indisponível",
       "refreshOrCreate": "Atualize para verificar novamente ou crie um novo PR para esta branch.",
       "branchRequired": "Faça checkout de uma branch antes de criar um pull request."
@@ -2422,6 +2421,9 @@
       "sendFailed": "Falha ao enviar comando de retomada"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Esta conversa de {{agent}} está aberta em um chat. Atualize o Histórico de sessões para abri-la.",
+      "ownershipUnknown": "O Orca não conseguiu confirmar quem é o proprietário desta conversa de {{agent}}. Atualize o Histórico de sessões e tente novamente.",
+      "preparationRefused": "O Orca não conseguiu preparar esta conversa do {{agent}}. Inicie um novo chat para continuar.",
       "prepareFailed": "Não foi possível preparar esta sessão legada do Codex. Tente retomar novamente."
     },
     "backgroundTask": {
@@ -2557,6 +2559,7 @@
     "failure": {
       "accountSwitchInProgress": "A configuração de {{agent}} está sendo alterada neste host. Tente novamente quando terminar.",
       "agentCommandNotRunnable": "O Comando de {{agent}} em Configurações → Agentes deve ser o caminho ou nome de um programa que o Orca possa encontrar, sem argumentos nem variáveis. Altere-o ou redefina-o.",
+      "agentCommandFailed": "O Comando do {{agent}} em Configurações → Agentes não iniciou o {{agent}}: {{detail}}. Altere ou redefina o comando.",
       "agentCommandNotSignedIn": "Entre na conta de {{agent}} com `{{loginCommand}}` no computador que executa este chat.",
       "agentNotSignedIn": "Entre na conta de {{agent}}.",
       "agentStarting": "O agente ainda está iniciando.",
@@ -2759,8 +2762,8 @@
       "scrollToLatest": "Rolar até o conteúdo mais recente"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "Mostrar mensagem completa — falha ao carregar, toque para tentar novamente",
-      "loadOutputFailed": "Mostrar saída completa — falha ao carregar, toque para tentar novamente",
+      "loadMessageFailed": "Tentar carregar mensagem completa",
+      "loadOutputFailed": "Tentar carregar saída completa",
       "partialMessage": "Exibindo parte desta mensagem.",
       "partialOutput": "Exibindo {{shown}} de {{total}}.",
       "showFullMessage": "Mostrar mensagem completa",
@@ -2776,8 +2779,8 @@
       "notFoundTitle": "Conversa ainda não encontrada"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "Alternar para a visualização de chat",
-      "switchToTerminalView": "Alternar para a visualização do terminal"
+      "switchToChatView": "Mudar para o chat",
+      "switchToTerminalView": "Mudar para o terminal"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "O agente foi iniciado, mas as notas não foram enviadas.",
@@ -3942,7 +3945,7 @@
       "updateBranch": "Atualizar branch",
       "back": "Voltar ao controle de versão",
       "title": "Commits",
-      "loadMoreFailed": "Não foi possível carregar mais commits. Tentar novamente",
+      "loadMoreFailed": "Tentar carregar commits",
       "notPushed": "Commits não enviados: {{count}}",
       "onOrigin": "Na origem {{count}}",
       "baseNewer_many": "{{count}} commits mais recentes"
@@ -4466,7 +4469,7 @@
       "issueSource": "Origem da issue",
       "keySecurityHint": "Sua chave é criptografada pelo chaveiro do sistema operacional do host e armazenada localmente.",
       "linearConnectSubtitle": "Cole uma chave de API pessoal para consultar as issues desse espaço de trabalho.",
-      "linearSettingsLink": "Configurações do Linear / Segurança / Nova chave de API",
+      "linearSettingsLink": "Abrir configurações do Linear",
       "linearTeam": "Equipe do Linear",
       "linearTeamSubtitle": "Crie uma issue na equipe selecionada do Linear.",
       "newIssueTitle": "Nova Issue do {{providerLabel}}",
@@ -4542,7 +4545,7 @@
       "runSetupAndCreate": "Executar configuração e criar",
       "setupSubtitle": "Escolha se deseja executar a configuração de {{name}} antes de criar este espaço de trabalho.",
       "setupTitle": "Executar script de configuração?",
-      "skipSetupAndCreate": "Pular configuração e criar",
+      "skipSetupAndCreate": "Criar sem configuração",
       "trustFailed": "Falha ao marcar o script de configuração como confiável."
     },
     "worktreeCreateRetry": {

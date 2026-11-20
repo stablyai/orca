@@ -108,7 +108,7 @@ describe('buildBotSidebarTree', () => {
         trailing
       ])
     ).toEqual([
-      ['home', true, false, { kind: 'summary', text: '1 waiting · 1 running' }],
+      ['home', true, false, { kind: 'summary', counts: { waiting: 1, running: 1 } }],
       ['done', true, false, { kind: 'time', at: 7 }],
       ['kept', true, true, null],
       ['empty', false, false, null],

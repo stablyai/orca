@@ -8,13 +8,20 @@ import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_CHAT_AUTH_DETECT_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY
 } from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import type { RuntimeRpcSuccess } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import type { AntigravityChatApiKeyStatus } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
+import type {
+  AntigravityChatApiKeyStatus,
+  AntigravityChatAuthDetection
+} from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { assertRuntimeEnvironmentCapability } from '../../rpc/compatibility/runtime-capability-proof'
+import {
+  assertRuntimeEnvironmentCapability,
+  runtimeEnvironmentSupportsCapability
+} from '../../rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc, callRuntimeRpcResponse } from '../../rpc/calls/runtime-rpc-call'
 import {
   subscribeRuntimeRpc,
@@ -132,4 +139,22 @@ export async function callAntigravityChatApiKey(
         undefined,
         { timeoutMs: 20_000 }
       )
+}
+
+/** The credentials the host's chat could use; null from a host too old to say. */
+export async function callAntigravityChatAuthDetect(
+  owner: RuntimeClientTarget
+): Promise<AntigravityChatAuthDetection | null> {
+  if (
+    owner.kind === 'environment' &&
+    !(await runtimeEnvironmentSupportsCapability(
+      owner.environmentId,
+      ANTIGRAVITY_CHAT_AUTH_DETECT_RUNTIME_CAPABILITY
+    ))
+  ) {
+    return null
+  }
+  return callRuntimeRpc(owner, 'accounts.antigravityChatAuthDetect', undefined, {
+    timeoutMs: 10_000
+  })
 }

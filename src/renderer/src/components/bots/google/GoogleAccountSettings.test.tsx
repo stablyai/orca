@@ -60,13 +60,8 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-function renderNoApp(): HTMLElement {
+function renderNoApp(): void {
   render(<GoogleAccountSettings target={{ kind: 'local' }} />)
-  const section = screen.getByText('About 10 minutes').closest('section')
-  if (!section) {
-    throw new Error('no section')
-  }
-  return section
 }
 
 describe('Google with no app on this computer', () => {
@@ -81,7 +76,7 @@ describe('Google with no app on this computer', () => {
     mocks.bots.current = []
     renderNoApp()
     expect(screen.queryByRole('button', { name: 'Set up Google' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Create a bot to set up Google' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New bot' }))
     fireEvent.click(screen.getByRole('button', { name: 'Create bot' }))
     expect(mocks.startGoogleSetupInChat).toHaveBeenCalledWith(NEW_BOT, 'settings')
   })
@@ -101,15 +96,12 @@ describe('Google with no app on this computer', () => {
     )
   })
 
-  it('imports a team file dropped anywhere on the section, highlighting while dragging', async () => {
-    const section = renderNoApp()
-    fireEvent.dragOver(section)
-    expect(section.getAttribute('data-dragging')).toBe('true')
+  it('imports a team file dropped on the section header', async () => {
+    renderNoApp()
     const file = new File([TEAM_FILE], 'client_secret.json', { type: 'application/json' })
     await act(async () => {
-      fireEvent.drop(section, { dataTransfer: { files: [file] } })
+      fireEvent.drop(screen.getByText('Connect Google'), { dataTransfer: { files: [file] } })
     })
-    expect(section.getAttribute('data-dragging')).toBe('false')
     await waitFor(() =>
       expect(mocks.importGoogleApp).toHaveBeenCalledWith({ kind: 'local' }, TEAM_FILE)
     )

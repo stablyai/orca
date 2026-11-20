@@ -213,7 +213,7 @@ export function GoogleSetupProgressCard({
                     size="inlineText"
                     onClick={() => answerAccount(bot, ['other'])}
                   >
-                    {t('bots.googleSetup.otherAccount', 'Use a different account')}
+                    {t('bots.googleSetup.otherAccount', 'Switch account')}
                   </Button>
                 ) : null}
               </div>

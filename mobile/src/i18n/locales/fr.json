@@ -114,7 +114,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... ou collez le code",
       "pasteCodeTitle": "Coller le code d'appairage",
       "pasteInstead": "Coller plutôt le code",
-      "pastePairingCode": "Ou coller le code d'appairage",
+      "pastePairingCode": "Coller le code d'appairage",
       "scanCodeStep": "Scannez le QR code",
       "title": "Appairer un ordinateur",
       "tryAgain": "Réessayer",
@@ -150,7 +150,7 @@
       "installTitle": "Téléchargez la nouvelle app",
       "installDescription": "Si votre téléphone le demande, autorisez votre navigateur à installer des apps.",
       "download": "Télécharger",
-      "keepThisVersion": "Continuer avec cette version",
+      "keepThisVersion": "Garder cette version",
       "keepThisVersionNote": "Vous ne recevrez plus les correctifs de sécurité. Nous vous le rappellerons dans une semaine."
     },
     "pairTitle": "Appairez-la avec votre ordinateur",
@@ -328,7 +328,7 @@
       "triedSearchWeb": "A tenté de rechercher sur le web"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "Afficher le message complet — chargement impossible, touchez pour réessayer",
+      "loadFailed": "Réessayer le message complet",
       "showFullMessage": "Afficher le message complet",
       "showLess": "Afficher moins"
     },
@@ -394,8 +394,7 @@
       "submitSelectedOptions": "Valider les options sélectionnées"
     },
     "queuedMessages": {
-      "clearAll": "Tout effacer",
-      "deleteAll": "Supprimer tous les messages en file d'attente",
+      "deleteAll": "Tout supprimer",
       "editMessage": "Modifier le message",
       "pausedState": "En pause",
       "queuedState": "En file d'attente",
@@ -825,7 +824,7 @@
       "manageShortcuts": "Gérer les raccourcis",
       "manageShortcutsHint": "Afficher, masquer ou réordonner les touches de raccourci",
       "modifiers": "Modificateurs",
-      "moreKeys": "Autres touches — Tab, flèches, F1–F12…",
+      "moreKeys": "PLUS DE TOUCHES",
       "navigation": "Navigation",
       "pickKey": "Choisir une touche",
       "pressEnter": "Appuyer sur Entrée",
@@ -1258,7 +1257,7 @@
       "privacyHint": "Envoie un rapport expurgé de taille limitée contenant le nom de l'hôte, le point de terminaison, les versions, l'état de la connexion et les événements — jamais le contenu des terminaux ni les identifiants de connexion.",
       "reconnecting": "reconnexion en cours",
       "retrySending": "Réessayer l'envoi",
-      "sendDiagnostics": "Envoyer les diagnostics à Orca",
+      "sendDiagnostics": "Envoyer les diagnostics",
       "sending": "Envoi…",
       "sent": "Diagnostics envoyés",
       "stateWithAttempt": "{{state}} · tentative {{attempts}}",
@@ -2002,7 +2001,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} n'est pas liée à une PR ouverte.",
       "currentBranchNotLinked": "La branche actuelle n'est pas liée à une PR ouverte.",
-      "linkExistingPullRequest": "Lier une pull request existante",
+      "linkExistingPullRequest": "Lier la pull request",
       "linkedPrUnavailable": "PR liée #{{number}} indisponible",
       "refreshOrCreate": "Actualisez pour vérifier à nouveau, ou créez une nouvelle PR pour cette branche."
     },
@@ -2078,6 +2077,9 @@
       "sendFailed": "Impossible d'envoyer la commande de reprise"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Cette conversation {{agent}} est ouverte dans un chat. Actualisez l'historique des sessions pour l'ouvrir.",
+      "ownershipUnknown": "Orca n'a pas pu confirmer à qui appartient cette conversation {{agent}}. Actualisez l'historique des sessions et réessayez.",
+      "preparationRefused": "Orca n'a pas pu préparer cette conversation {{agent}}. Démarrez un nouveau chat pour continuer.",
       "prepareFailed": "Impossible de préparer cette ancienne session Codex. Réessayez de la reprendre."
     },
     "backgroundTask": {
@@ -2199,6 +2201,7 @@
     "failure": {
       "accountSwitchInProgress": "La configuration de {{agent}} est en cours de modification sur cet hôte. Réessayez une fois l'opération terminée.",
       "agentCommandNotRunnable": "{{agent}} : la Commande dans Paramètres → Agents doit être le chemin ou le nom d'un programme qu'Orca peut trouver, sans arguments ni variables. Modifiez-la ou réinitialisez-la.",
+      "agentCommandFailed": "La Commande de {{agent}} dans Réglages → Agents n’a pas lancé {{agent}} : {{detail}}. Modifiez-la ou réinitialisez-la.",
       "agentCommandNotSignedIn": "Connectez-vous à {{agent}} avec `{{loginCommand}}` sur l’ordinateur qui exécute ce chat.",
       "agentNotSignedIn": "Connectez-vous à {{agent}}.",
       "agentStarting": "L'agent est encore en cours de démarrage.",
@@ -2397,8 +2400,8 @@
       "scrollToLatest": "Faire défiler jusqu'au dernier message"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "Afficher le message complet — échec du chargement, appuyez pour réessayer",
-      "loadOutputFailed": "Afficher la sortie complète — échec du chargement, appuyez pour réessayer",
+      "loadMessageFailed": "Réessayer le message complet",
+      "loadOutputFailed": "Réessayer la sortie complète",
       "partialMessage": "Affichage d'une partie de ce message.",
       "partialOutput": "Affichage de {{shown}} sur {{total}}.",
       "showFullMessage": "Afficher le message complet",
@@ -2414,8 +2417,8 @@
       "notFoundTitle": "Conversation introuvable pour le moment"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "Passer à la vue du chat",
-      "switchToTerminalView": "Passer à la vue du terminal"
+      "switchToChatView": "Passer au chat",
+      "switchToTerminalView": "Passer au terminal"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "L'agent a démarré, mais les notes n'ont pas été envoyées.",
@@ -3954,7 +3957,7 @@
       "issueSource": "Source des issues",
       "keySecurityHint": "Votre clé est chiffrée via le trousseau du système d'exploitation de l'hôte et stockée localement.",
       "linearConnectSubtitle": "Collez une clé d'API personnelle pour parcourir les tickets de cet espace de travail.",
-      "linearSettingsLink": "Paramètres Linear / Sécurité / Nouvelle clé d'API",
+      "linearSettingsLink": "Ouvrir les paramètres Linear",
       "linearTeam": "Équipe Linear",
       "linearTeamSubtitle": "Créez un ticket dans l'équipe Linear sélectionnée.",
       "newIssueTitle": "Nouveau ticket {{providerLabel}}",
@@ -4029,7 +4032,7 @@
       "runSetupAndCreate": "Exécuter le setup et créer",
       "setupSubtitle": "Choisissez si vous souhaitez exécuter le setup de {{name}} avant de créer cet espace de travail.",
       "setupTitle": "Exécuter le script de setup ?",
-      "skipSetupAndCreate": "Ignorer le setup et créer",
+      "skipSetupAndCreate": "Créer sans configuration",
       "trustFailed": "Échec de l'approbation du script de setup."
     },
     "worktreeCreateRetry": {

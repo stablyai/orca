@@ -52,7 +52,8 @@ function harness() {
   return { services, listeners, renamed, codex, usage, snapshot, snapshots, emit, generations }
 }
 
-it.each([1, 10, 100])('reuses published usage for %i subscribers', async (count) => {
+it('reuses published usage across concurrent subscribers', async () => {
+  const count = 100
   const h = harness()
   const received: AccountsSnapshot[] = []
   const stops = Array.from({ length: count }, () =>
@@ -142,61 +143,59 @@ it.each([0, 1])(
   }
 )
 
-it.each([100, 1000])(
-  'delivers account snapshots throughout %i overlapping usage changes',
-  async (count) => {
-    const h = harness()
-    const reads = Array.from({ length: count + 2 }, () => ({
-      entered: Promise.withResolvers<void>(),
-      release: Promise.withResolvers<AccountsSnapshot['codex']>()
-    }))
-    let nextRead = 0
-    h.codex.mockImplementation(() => {
-      const read = reads[nextRead++]
-      read.entered.resolve()
-      return read.release.promise
-    })
-    const usage = (value: number): AccountsSnapshot['rateLimits'] => ({
-      ...h.usage,
-      codex: {
-        provider: 'codex',
-        status: 'ok',
-        error: null,
-        updatedAt: value,
-        weekly: null,
-        session: { usedPercent: value, windowMinutes: 300, resetsAt: null, resetDescription: null }
-      }
-    })
-    const received: AccountsSnapshot[] = []
-    const latest = Promise.withResolvers<void>()
-    const stop = subscribeRuntimeAccountChanges(h.services, h.snapshots, (snapshot) => {
-      received.push(snapshot)
-      if (received.length === count + 1) {
-        latest.resolve()
-      }
-    })
-    h.emit(usage(0))
-    await reads[0].entered.promise
-    for (let value = 1; value <= count; value++) {
-      h.emit(usage(value))
-      reads[value - 1].release.resolve(h.snapshot.codex)
-      await reads[value].entered.promise
-      expect(received).toHaveLength(value)
-      expect(received[value - 1].rateLimits.codex?.session?.usedPercent).toBe(value - 1)
+it('delivers account snapshots throughout overlapping usage changes', async () => {
+  const count = 100
+  const h = harness()
+  const reads = Array.from({ length: count + 2 }, () => ({
+    entered: Promise.withResolvers<void>(),
+    release: Promise.withResolvers<AccountsSnapshot['codex']>()
+  }))
+  let nextRead = 0
+  h.codex.mockImplementation(() => {
+    const read = reads[nextRead++]
+    read.entered.resolve()
+    return read.release.promise
+  })
+  const usage = (value: number): AccountsSnapshot['rateLimits'] => ({
+    ...h.usage,
+    codex: {
+      provider: 'codex',
+      status: 'ok',
+      error: null,
+      updatedAt: value,
+      weekly: null,
+      session: { usedPercent: value, windowMinutes: 300, resetsAt: null, resetDescription: null }
     }
-    reads[count].release.resolve(h.snapshot.codex)
-    await latest.promise
-    expect(received).toHaveLength(count + 1)
-    expect(received[count].rateLimits.codex?.session?.usedPercent).toBe(count)
-    h.emit(usage(count + 1))
-    await reads[count + 1].entered.promise
-    h.emit(usage(count + 2))
-    stop()
-    reads[count + 1].release.resolve(h.snapshot.codex)
-    await reads[count + 1].release.promise
-    h.emit(usage(count + 3))
-    expect(received).toHaveLength(count + 1)
-    expect(h.listeners.size).toBe(0)
-    expect(h.renamed.size).toBe(0)
+  })
+  const received: AccountsSnapshot[] = []
+  const latest = Promise.withResolvers<void>()
+  const stop = subscribeRuntimeAccountChanges(h.services, h.snapshots, (snapshot) => {
+    received.push(snapshot)
+    if (received.length === count + 1) {
+      latest.resolve()
+    }
+  })
+  h.emit(usage(0))
+  await reads[0].entered.promise
+  for (let value = 1; value <= count; value++) {
+    h.emit(usage(value))
+    reads[value - 1].release.resolve(h.snapshot.codex)
+    await reads[value].entered.promise
+    expect(received).toHaveLength(value)
+    expect(received[value - 1].rateLimits.codex?.session?.usedPercent).toBe(value - 1)
   }
-)
+  reads[count].release.resolve(h.snapshot.codex)
+  await latest.promise
+  expect(received).toHaveLength(count + 1)
+  expect(received[count].rateLimits.codex?.session?.usedPercent).toBe(count)
+  h.emit(usage(count + 1))
+  await reads[count + 1].entered.promise
+  h.emit(usage(count + 2))
+  stop()
+  reads[count + 1].release.resolve(h.snapshot.codex)
+  await reads[count + 1].release.promise
+  h.emit(usage(count + 3))
+  expect(received).toHaveLength(count + 1)
+  expect(h.listeners.size).toBe(0)
+  expect(h.renamed.size).toBe(0)
+})

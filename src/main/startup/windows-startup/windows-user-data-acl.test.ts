@@ -50,7 +50,7 @@ describe('ensureWindowsUserDataAclGrant', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('grants each child directory, then the root, then writes the marker', async () => {
+  it('grants children before the root and skips a repeat grant for the same identity', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'))
     mkdirSync(join(userDataPath, 'codex-runtime-home'))
     writeFileSync(join(userDataPath, 'orca-runtime.json'), '{}')
@@ -71,13 +71,10 @@ describe('ensureWindowsUserDataAclGrant', () => {
     )
     expect(marker.schemeVersion).toBe(WINDOWS_ACL_GRANT_SCHEME_VERSION)
     expect(marker.identity).toBe(IDENTITY)
-  })
 
-  it('skips every grant when the marker matches the identity', async () => {
-    writeMarker(userDataPath, IDENTITY)
-
+    const firstGrant = granted()
     expect(await awaitResult(userDataPath)).toEqual({ mode: 'marker-hit' })
-    expect(granted()).toEqual([])
+    expect(granted()).toEqual(firstGrant)
   })
 
   it('re-grants when the marker belongs to a different identity', async () => {

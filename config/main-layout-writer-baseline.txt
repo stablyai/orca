@@ -24,8 +24,8 @@
 1 src/main/persistence/loading-store/profile-preferences/mobile-tab-selection-persistence.ts
 2 src/main/persistence/loading-store/profile-writing/state-serialization-secret-handling.ts
 10 src/main/persistence/loading-store/project-catalog/repo-lifecycle-operations.ts
-5 src/main/persistence/loading-store/terminal-bindings/pty-binding-persistence.ts
 9 src/main/persistence/loading-store/terminal-bindings/pty-binding-session-update.ts
+5 src/main/persistence/loading-store/terminal-bindings/pty-binding-write.ts
 1 src/main/persistence/loading-store/workspace-lineage/metadata-lineage-operations.ts
 10 src/main/persistence/loading-store/workspace-sessions/session-host-partitions.ts
 9 src/main/persistence/loading-store/workspace-sessions/session-snapshot-operations.ts
