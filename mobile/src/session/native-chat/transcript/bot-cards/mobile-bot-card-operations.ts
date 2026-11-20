@@ -1,6 +1,7 @@
 // The RPCs the chat's bot cards call, all on the phone's bot allowlist.
 import * as z from 'zod'
 import { WEBHOOK_ADAPTERS } from '../../../../../../src/shared/connector-webhook-contract'
+import { GoogleSetupRunSchema } from '../../../../../../src/shared/google/google-setup-run'
 import {
   bindDeferredRpcOperation,
   defineRpcOperation
@@ -84,5 +85,57 @@ export const webhookKeyReveal = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('webhook-key', z.looseObject({ url: z.string() }))
+  })
+)
+
+const GoogleSetupReadingSchema = z.looseObject({
+  run: GoogleSetupRunSchema.nullable(),
+  // Kept as sent; the card reads only the kinds and buttons it knows (mobile-google-setup-store).
+  blocker: z.unknown()
+})
+
+export const googleSetupRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.googleSetup.read',
+    method: 'bots.googleSetup.read',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('google-setup', GoogleSetupReadingSchema)
+  })
+)
+
+/** Records the owner's card answer; the host replies with the run and where it's stuck now. */
+export const googleSetupAnswer = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.googleSetup.answer',
+    method: 'bots.googleSetup.answer',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('google-setup-answered', GoogleSetupReadingSchema)
+  })
+)
+
+/** The host's Google app and accounts, for its client id and what each account can use; `check` asks
+ *  Google again first. */
+export const googleStatusRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'google.status',
+    method: 'google.status',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant(
+      'google-status',
+      z.looseObject({
+        client: z.looseObject({ clientId: z.string() }).nullable().optional(),
+        accounts: z
+          .array(
+            z.looseObject({
+              email: z.string(),
+              services: z.array(z.looseObject({ service: z.string(), state: z.string() }))
+            })
+          )
+          .optional()
+      })
+    )
   })
 )

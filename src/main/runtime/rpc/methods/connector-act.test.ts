@@ -25,6 +25,9 @@ const [act] = eraseRpcMethods([CONNECTOR_ACT_METHOD])
 function actContext(cloud: {
   features: string[] | null
   answers?: unknown[]
+  /** A headless Orca server's: its signed-out copy names it. */
+  headless?: boolean
+  status?: string
   // The cloud conversation the calling chat answers, if it answers one.
   conversation?: { source: string; externalId: string }
 }): {
@@ -34,6 +37,7 @@ function actContext(cloud: {
   const calls: { path: string; body: unknown }[] = []
   const runtime = {
     bots: { enabled: () => true, list: () => [] },
+    servesWithoutWindow: () => cloud.headless === true,
     getOrchestrationDb: () => ({}),
     lookAround: {
       botOfLook: (sessionId: string) => (sessionId === 'look-session' ? 'b1' : null),
@@ -44,6 +48,7 @@ function actContext(cloud: {
     }),
     getConnectorCloud: () => ({
       cloudFeatures: () => (cloud.features ? new Set(cloud.features) : null),
+      status: () => cloud.status ?? 'ok',
       call: async (path: string, body: unknown) => {
         calls.push({ path, body })
         return (
@@ -343,6 +348,61 @@ describe('connector.act', () => {
     })
   })
 
+  it.each<[string, boolean, string[] | null]>([
+    ['signed-out', true, null],
+    ['needs-sign-in', true, null],
+    // Orca Cloud refused the sign-in after its hello: its features stay cached.
+    ['needs-sign-in', true, ['actions']],
+    ['signed-out', false, null],
+    ['needs-sign-in', false, ['actions']]
+  ])(
+    'refuses before calling the cloud while the host is not signed in (%s, headless %s, features %j)',
+    async (status, headless, features) => {
+      const { context, calls } = actContext({ features, status, headless })
+      const refused = run({ sessionId: 'bot-session', verb: 'places' }, context)
+      await expect(refused).rejects.toMatchObject({ code: 'connector_not_connected' })
+      const error: unknown = await refused.catch((caught: unknown) => caught)
+      const message = error instanceof Error ? error.message : ''
+      if (headless) {
+        expect(message).toMatch(
+          /^This Orca server \(.+\) isn't signed in to Orca Cloud, so it can't reach Orca Cloud\. Your owner can sign it in by running `orca auth login` in a terminal on .+ Then try again\.$/
+        )
+      } else {
+        expect(message).toBe(
+          "This computer isn't signed in to Orca Cloud: sign in to Orca Cloud on this computer, then try again."
+        )
+      }
+      expect(calls).toEqual([])
+    }
+  )
+
+  it.each([
+    { status: 401, error: 'signed_out' },
+    // The connector-token route refused the sign-in after the session refresh.
+    { status: 401, error: 'invalid_token', sessionRefused: true as const }
+  ])('names a headless server when the cloud refuses its sign-in (%j)', async (failure) => {
+    const { context } = actContext({
+      features: ['actions'],
+      headless: true,
+      answers: [{ ok: false, retryAfterMs: null, ...failure }]
+    })
+    await expect(
+      run({ sessionId: 'bot-session', verb: 'read', ref: 'slack:T1:C1' }, context)
+    ).rejects.toMatchObject({
+      code: 'connector_not_connected',
+      message: expect.stringContaining('`orca auth login` in a terminal on')
+    })
+  })
+
+  it("says Orca isn't connected only when this host has no Orca Cloud features and is signed in", async () => {
+    const { context } = actContext({ features: null, status: 'ok' })
+    await expect(run({ sessionId: 'bot-session', verb: 'places' }, context)).rejects.toMatchObject({
+      code: 'connector_not_connected',
+      message:
+        "Orca isn't connected to Orca Cloud: sign in to Orca Cloud and connect a bot to Slack, Linear or GitHub, then try again."
+    })
+  })
+
   it.each([
     [{ status: 404, error: 'unknown_bot' }, 'bot_not_in_cloud', "isn't on Orca Cloud"],
     [{ status: 400, error: 'invalid_ref' }, 'connector_invalid_request', 'invalid_ref'],
@@ -350,7 +410,7 @@ describe('connector.act', () => {
     [
       { status: 401, error: 'signed_out' },
       'connector_not_connected',
-      'sign in to Orca Cloud on this computer'
+      "isn't signed in to Orca Cloud: sign in to Orca Cloud on this computer"
     ]
   ])('names the cloud refusal %j', async (failure, code, says) => {
     const { context } = actContext({

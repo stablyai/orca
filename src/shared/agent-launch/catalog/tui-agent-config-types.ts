@@ -68,7 +68,7 @@ export type TuiAgentConfig = {
   composerReadyCaptures?: readonly string[]
   /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
   submitRetryDelayMs?: number
-  /** How long an agent-prompt send keeps re-pressing Enter at `submitRetryDelayMs` while its composer holds the prompt, for TUIs that paint it before their session can submit (dsh). */
+  /** How long an agent-prompt send keeps re-pressing Enter at `submitRetryDelayMs` (else each second) while its composer holds the prompt, for TUIs that drop an early Enter (dsh, OpenCode). */
   submitRetryBudgetMs?: number
   /** Extra ms per logical prompt line before Enter, for TUIs that expand multiline paste slowly (antigravity). */
   submitLineSettleMsPerLine?: number

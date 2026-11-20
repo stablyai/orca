@@ -175,8 +175,7 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
       nextTabs,
       new Set([retiredTab.id, retiredTab.browserWorkspaceId])
     )
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
     return true
   }
 

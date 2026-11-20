@@ -178,13 +178,15 @@ export class RuntimeClientSettingsController {
               process.platform
             )
           : {}),
-        ...(updates.defaultTuiAgent !== undefined ? { newWorkspaceSetupOnly: false } : {})
+        ...(updates.defaultTuiAgent !== undefined ? { newWorkspaceSetupOnly: false } : {}),
+        ...(updates.agentDefaultSurface !== undefined ? { agentDefaultSurfaceChosen: true } : {})
       },
       { notifyListeners: true }
     )
     const settings = this.store.getSettings()
     await getClaudeAgentViewService().reconcile(settings)
-    if (updates.worktreeVisibilityDefaults !== undefined) {
+    // Nesting moves the worktree roots the base-directory watcher follows.
+    if (updates.worktreeVisibilityDefaults !== undefined || updates.nestWorkspaces !== undefined) {
       this.notifyReposChanged?.()
     }
     if (

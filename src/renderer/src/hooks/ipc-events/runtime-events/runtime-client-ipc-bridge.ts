@@ -3,7 +3,7 @@ import {
   refreshDefaultLinkedLinearIssue
 } from '../../../lib/work-items/linear/linear-linked-issue-refresh'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
-import { emitPairedBotsChanged } from '@/lib/bot-host-listing'
+import { emitPairedBotsChanged, emitPairedBotsStreamCameBack } from '@/lib/bot-host-listing'
 import { readBotChangeScope } from '../../../../../shared/bots/bot-change-scope'
 import { emitRuntimeClientWindowEvent } from './runtime-client-window-events'
 import { applyHostWorkspaceRowEvent } from '../workspace-catalog/worktree-metadata-set-events'
@@ -254,8 +254,8 @@ export function registerRuntimeClientIpcBridge(
             },
             requestProjectRefresh: () => {
               requestProjectRefresh(environmentId)
-              // Changes during the outage were lost, not queued.
-              emitPairedBotsChanged(environmentId)
+              // Changes during the outage were lost, not queued: reads from before prove nothing now.
+              emitPairedBotsStreamCameBack(environmentId)
             },
             markEnvironmentSshStateStale: () =>
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),

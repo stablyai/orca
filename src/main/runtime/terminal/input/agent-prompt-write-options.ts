@@ -25,6 +25,9 @@ export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, '
   expectedBinding?: AgentPromptExpectedBinding
   /** Run on accepted Enter write, including OMP paste framing; later abort cannot undo submitted text. */
   onSubmitWritten?: () => void
+  /** Receives the held-paste retry an OpenCode send leaves running after it resolves; keep
+   *  `beforeWrite` valid until the retry settles. */
+  onHeldPromptRetry?: (retry: Promise<void>) => void
 }
 
 export type AgentPromptExpectedBinding = { ptyId: string; processIncarnation: string }

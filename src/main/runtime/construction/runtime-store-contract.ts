@@ -174,6 +174,7 @@ export type RuntimeStore = {
     terminalScrollbackRows?: GlobalSettings['terminalScrollbackRows']
     terminalWordSeparator?: GlobalSettings['terminalWordSeparator']
     agentDefaultSurface?: GlobalSettings['agentDefaultSurface']
+    agentDefaultSurfaceChosen?: GlobalSettings['agentDefaultSurfaceChosen']
     nativeChatProviders?: GlobalSettings['nativeChatProviders']
     antigravityChatAuth?: GlobalSettings['antigravityChatAuth']
     antigravityManagedAgyEnabled?: GlobalSettings['antigravityManagedAgyEnabled']
