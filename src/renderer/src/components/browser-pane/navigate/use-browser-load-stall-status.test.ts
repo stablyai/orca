@@ -2,31 +2,32 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import type { BrowserLoadStallEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
-import {
-  listenForBrowserLoadStalls,
-  useBrowserLoadStallStatus
-} from './use-browser-load-stall-status'
+import { registerBrowserStateIpcBridge } from '../../../hooks/ipc-events/browser/browser-state-ipc-bridge'
+import { useBrowserLoadStallStatus } from './use-browser-load-stall-status'
 
 afterEach(() => {
   cleanup()
 })
 
-it('shows a stall reported before any status bubble mounted', () => {
+it('shows a stall reported after app launch but before any status bubble mounted', () => {
   const port: { deliver?: (event: BrowserLoadStallEvent) => void } = {}
-  Object.assign(window, {
-    api: {
-      browser: {
-        onLoadStall: (callback: (event: BrowserLoadStallEvent) => void) => {
-          port.deliver = callback
-          return () => {
-            port.deliver = undefined
-          }
-        }
-      }
+  // Every bridge subscription is a no-op except the load-stall one under test.
+  const methods = new Proxy(
+    {},
+    {
+      get: (_target, method) =>
+        method === 'onLoadStall'
+          ? (callback: (event: BrowserLoadStallEvent) => void) => {
+              port.deliver = callback
+              return () => {}
+            }
+          : () => () => {}
     }
-  })
-  // App launch subscribes; a retained page then stalls while no browser pane is open.
-  const stop = listenForBrowserLoadStalls()
+  )
+  Object.assign(window, { api: new Proxy({}, { get: () => methods }) })
+  const unsubs: (() => void)[] = []
+  registerBrowserStateIpcBridge(unsubs, () => false)
+  // A retained page stalls while no browser pane is open.
   const deliver = (event: BrowserLoadStallEvent): void => port.deliver?.(event)
   deliver({
     browserPageId: 'page-1',
@@ -35,5 +36,7 @@ it('shows a stall reported before any status bubble mounted', () => {
   })
   const { result } = renderHook(() => useBrowserLoadStallStatus('page-1'))
   expect(result.current).toContain('localhost:3000')
-  stop()
+  for (const unsubscribe of unsubs) {
+    unsubscribe()
+  }
 })

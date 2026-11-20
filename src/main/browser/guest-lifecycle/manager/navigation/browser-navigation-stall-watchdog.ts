@@ -12,6 +12,7 @@ import {
 
 /** Long enough that a slow server or a cold dev-server compile isn't called stuck. */
 export const BROWSER_LOAD_STALL_AFTER_MS = 5_000
+const MAX_REPLACED_LOADS = 8
 
 type PendingLoad = {
   origin: string
@@ -107,6 +108,9 @@ export function installBrowserNavigationStallWatchdog(
   // Read once: a destroyed guest throws on .session, and dispose can run after destruction.
   const session = guest.session
   let pending: PendingLoad | null = null
+  // Loads replaced before they failed; one may still fail late (e.g. a delayed extension block),
+  // even at the same URL as its successor, and must not end the successor's watch.
+  let replaced: { startUrl: string; url: string }[] = []
   indexedGuests.set(guest, { session, origin: null, hidden: false })
   const recordCommit = (): void => {
     reindex(guest, guest.isDestroyed() ? null : (webOrigin(guest.getURL())?.origin ?? null))
@@ -166,6 +170,15 @@ export function installBrowserNavigationStallWatchdog(
     if (!details.isMainFrame || details.isSameDocument) {
       return
     }
+    if (pending) {
+      replaced = [
+        ...replaced.slice(1 - MAX_REPLACED_LOADS),
+        {
+          startUrl: pending.startUrl,
+          url: pending.url.href
+        }
+      ]
+    }
     finish('replaced')
     const url = webOrigin(details.url)
     if (!url) {
@@ -214,6 +227,7 @@ export function installBrowserNavigationStallWatchdog(
   })
 
   const committed = (): void => {
+    replaced = []
     recordCommit()
     finish('committed')
   }
@@ -225,9 +239,19 @@ export function installBrowserNavigationStallWatchdog(
     failedUrl: string,
     isMainFrame: boolean
   ): void => {
-    const load = pending
+    if (!isMainFrame) {
+      return
+    }
     const href = failedUrl ? normalizedHref(failedUrl) : null
-    if (isMainFrame && load && (!href || href === load.startUrl || href === load.url.href)) {
+    const earlier = href
+      ? replaced.findIndex((load) => load.startUrl === href || load.url === href)
+      : -1
+    if (earlier >= 0) {
+      replaced.splice(earlier, 1)
+      return
+    }
+    const load = pending
+    if (load && (!href || href === load.startUrl || href === load.url.href)) {
       finish('failed')
     }
   }
