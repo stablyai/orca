@@ -116,4 +116,13 @@ describe('OrchestrationDbCompaction', () => {
 
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok', tasks: 1 })
   })
+
+  it("swaps in a copy when only the runtime's TEMP tables were written since", async () => {
+    const file = legacyDatabase()
+    const { orchestration, compaction } = await copiedWhileQuiet(file)
+    orchestration.db.exec('CREATE TEMP TABLE scratch (x); INSERT INTO scratch VALUES (1)')
+
+    expect((await compaction.swapAtQuit(() => {})).kind).toBe('compacted')
+    expect(inspect(file).autoVacuum).toBe(2)
+  })
 })

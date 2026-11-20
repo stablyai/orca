@@ -1,9 +1,9 @@
 import type { ChildProcess } from 'node:child_process'
 import { watch, type FSWatcher } from 'node:fs'
-import { link, readFile, rename, writeFile } from 'node:fs/promises'
+import { link, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
-import type Database from '../../../../sqlite/sync-database'
+import Database from '../../../../sqlite/sync-database'
 import type { OrchestrationDb } from '../orchestration-db'
 import { refuseOrchestrationDbWritesForReplacement } from '../orchestration-db-file'
 import { compactionChildSource } from './orchestration-db-compaction-child-source'
@@ -29,7 +29,6 @@ const COPY_BUDGET_MS = 120_000
 // journal_size_limit: closing at quit checkpoints at most this much.
 const MAX_WAL_BYTES = 8 * MIB
 const LOCK_WAIT_MS = 300
-const SWAP_CAP_MS = 2_000
 const UNLINK_WAIT_MS = 1_000
 
 export type OrchestrationDbSwap =
@@ -37,15 +36,14 @@ export type OrchestrationDbSwap =
   | { kind: 'compacted'; beforeBytes: number; afterBytes: number; ms: number }
   | { kind: 'failed'; error: string }
 
-// One cached statement: this connection's write counters and the header's page counts (page 1 only).
-const FILE_STATE_SQL = `SELECT total_changes() AS changes, d.data_version, s.schema_version, u.user_version,
-  a.auto_vacuum, p.page_size, c.page_count, f.freelist_count
-  FROM pragma_data_version AS d, pragma_schema_version AS s, pragma_user_version AS u,
-    pragma_auto_vacuum AS a, pragma_page_size AS p, pragma_page_count AS c, pragma_freelist_count AS f`
+// One cached statement on the runtime's connection, page 1 only: data_version moves with any other
+// connection's commit.
+const FILE_STATE_SQL = `SELECT d.data_version, a.auto_vacuum, p.page_size, c.page_count, f.freelist_count
+  FROM pragma_data_version AS d, pragma_auto_vacuum AS a, pragma_page_size AS p,
+    pragma_page_count AS c, pragma_freelist_count AS f`
 
 type FileState = {
-  /** Changes with any write: this connection's rows, another connection's commit, the schema. */
-  fingerprint: string | null
+  othersVersion: number
   legacy: boolean
   /** Live bytes when enough pages are free to be worth a copy. */
   worthCopyingLiveBytes: number | null
@@ -58,10 +56,7 @@ function readFileState(db: Database.Database): FileState {
   const freePages = Number(row.freelist_count)
   const warranted = freePages * pageSize >= MIN_FREE_BYTES && freePages >= pages * MIN_FREE_FRACTION
   return {
-    // An open transaction's rows count before they commit, so a copy taken now could miss them.
-    fingerprint: db.isTransaction
-      ? null
-      : [row.changes, row.data_version, row.schema_version, row.user_version].join(':'),
+    othersVersion: Number(row.data_version),
     legacy: Number(row.auto_vacuum) === 0,
     worthCopyingLiveBytes: warranted ? (pages - freePages) * pageSize : null
   }
@@ -77,13 +72,16 @@ export class OrchestrationDbCompaction {
   private finished = false
   private stopped = false
   private leftoversRemoved = false
-  private lastFingerprint: string | null = null
+  private lastActivity: string | null = null
   private quietTicks = 0
   private attempts = 0
   private pastAttempts = 0
   private lastAttemptAt = Number.NEGATIVE_INFINITY
   private copying: ChildProcess | undefined
-  private ready: { fingerprint: string } | undefined
+  private ready: { stamp: string } | undefined
+  // Opened before a copy and kept until the swap: its data_version moves with every commit to the file,
+  // the runtime's included, and nothing else (the runtime's TEMP tables write at quit, for one).
+  private observer: Database.Database | undefined
 
   constructor(
     private readonly orchestrationDb: OrchestrationDb,
@@ -94,6 +92,11 @@ export class OrchestrationDbCompaction {
 
   private get copyPath(): string {
     return `${this.filename}-compacted`
+  }
+
+  /** The copy and the rollback journal VACUUM INTO keeps beside it while writing. */
+  private async removeCopy(): Promise<void> {
+    await Promise.all([removeQuietly(this.copyPath), removeQuietly(`${this.copyPath}-journal`)])
   }
 
   private get replacedPath(): string {
@@ -113,7 +116,7 @@ export class OrchestrationDbCompaction {
     if (!this.leftoversRemoved) {
       // From a session that quit or crashed part-way, a swapped file included.
       this.leftoversRemoved = true
-      await Promise.all([removeQuietly(this.copyPath), removeQuietly(this.replacedPath)])
+      await Promise.all([this.removeCopy(), removeQuietly(this.replacedPath)])
       this.pastAttempts = Number(await readFile(this.attemptsPath, 'utf8').catch(() => '0')) || 0
     }
     const { db } = this.orchestrationDb
@@ -123,17 +126,17 @@ export class OrchestrationDbCompaction {
       await removeQuietly(this.attemptsPath)
       return
     }
-    const { fingerprint } = state
-    this.quietTicks =
-      fingerprint !== null && fingerprint === this.lastFingerprint ? this.quietTicks + 1 : 0
-    this.lastFingerprint = fingerprint
     if (this.ready) {
-      if (fingerprint === this.ready.fingerprint) {
+      if (this.stamp() === this.ready.stamp) {
         return
       }
-      this.ready = undefined
-      await removeQuietly(this.copyPath)
+      await this.dropCopy()
     }
+    // Every commit, by any connection, writes the WAL.
+    const wal = await stat(`${this.filename}-wal`).catch(() => null)
+    const activity = `${state.othersVersion}:${wal?.size}:${wal?.mtimeMs}`
+    this.quietTicks = activity === this.lastActivity ? this.quietTicks + 1 : 0
+    this.lastActivity = activity
     if (this.pastAttempts + this.attempts >= ATTEMPTS_PER_FILE) {
       this.finished = true
       return
@@ -153,7 +156,7 @@ export class OrchestrationDbCompaction {
     if ((await availableBytesIn(dirname(this.filename))) < 2 * liveBytes) {
       return
     }
-    if (this.stopped || fingerprint === null) {
+    if (this.stopped) {
       return
     }
     this.attempts++
@@ -166,19 +169,34 @@ export class OrchestrationDbCompaction {
       () => true,
       () => false
     )
-    // Read again after the awaits, right before the child takes its snapshot: any later write shows.
-    if (!counted || this.stopped || readFileState(db).fingerprint !== fingerprint) {
+    if (!counted || this.stopped) {
       return
     }
-    const copied = await this.copy(fingerprint)
-    if (copied && !this.stopped && readFileState(db).fingerprint === fingerprint) {
-      this.ready = { fingerprint }
+    // Before the child takes its snapshot, so any later commit moves the stamp.
+    this.observer = new Database(this.filename, { readonly: true, fileMustExist: true })
+    const stamp = this.stamp()
+    const copied = await this.copy(stamp)
+    if (copied && !this.stopped && this.stamp() === stamp) {
+      this.ready = { stamp }
     } else if (!this.stopped) {
-      await removeQuietly(this.copyPath)
+      await this.dropCopy()
     }
   }
 
-  private copy(fingerprint: string): Promise<boolean> {
+  /** Moves with any commit to the file since the observer opened. */
+  private stamp(): string {
+    const observed = Number(this.observer?.pragma('data_version', { simple: true }))
+    return `${observed}:${readFileState(this.orchestrationDb.db).othersVersion}`
+  }
+
+  private async dropCopy(): Promise<void> {
+    this.ready = undefined
+    this.observer?.close()
+    this.observer = undefined
+    await this.removeCopy()
+  }
+
+  private copy(stamp: string): Promise<boolean> {
     return new Promise((resolve) => {
       let child: ChildProcess
       try {
@@ -204,13 +222,13 @@ export class OrchestrationDbCompaction {
       this.copying = child
       const budget = setTimeout(() => child.kill('SIGKILL'), COPY_BUDGET_MS)
       // A write makes the copy stale, so stop it then: its disk traffic can slow the runtime's later
-      // commits (seen on a busy Linux disk). Every commit touches the WAL; the fingerprint stays the judge.
+      // commits (seen on a busy Linux disk). Every commit touches the WAL; the stamp stays the judge.
       let walWatch: FSWatcher | undefined
       try {
         walWatch = watch(`${this.filename}-wal`, () => {
           let stale = true
           try {
-            stale = readFileState(this.orchestrationDb.db).fingerprint !== fingerprint
+            stale = this.stamp() !== stamp
           } catch {
             // A closed database: nothing left to copy for.
           }
@@ -244,7 +262,9 @@ export class OrchestrationDbCompaction {
     this.stopped = true
     if (this.copying) {
       this.copying.kill('SIGKILL')
-      void removeQuietly(this.copyPath)
+    }
+    if (!this.ready) {
+      void this.dropCopy()
     }
   }
 
@@ -257,13 +277,12 @@ export class OrchestrationDbCompaction {
    * cuts the runtime off the database; the swap then holds it alone and closes it.
    */
   async swapAtQuit(detach: () => void): Promise<OrchestrationDbSwap> {
+    // Kept set until the end: detaching stops maintenance, whose stop drops an unready copy.
     const ready = this.ready
-    this.ready = undefined
     if (!ready) {
       return { kind: 'none' }
     }
     const started = performance.now()
-    const copy = this.copyPath
     const { db } = this.orchestrationDb
     let open = true
     const closeDb = (): void => {
@@ -274,22 +293,26 @@ export class OrchestrationDbCompaction {
     }
     const giveUp = async (kind: 'busy' | 'stale'): Promise<OrchestrationDbSwap> => {
       closeDb()
-      await removeQuietly(copy)
+      await this.dropCopy()
       return { kind }
     }
     try {
       const beforeBytes = await sizeOf(this.filename)
       const walBytes = await sizeOf(`${this.filename}-wal`)
       if (beforeBytes === null || (walBytes ?? 0) > MAX_WAL_BYTES) {
-        await removeQuietly(copy)
+        await this.dropCopy()
         return { kind: 'busy' }
       }
       // From here on nothing else in this process can reach the file.
       refuseOrchestrationDbWritesForReplacement(this.filename)
       detach()
+      // Read, then closed so the lock can be had; after it, only other connections' commits move.
+      const observed = Number(this.observer?.pragma('data_version', { simple: true }))
+      this.observer?.close()
+      this.observer = undefined
       try {
-        // Refused while any other connection, in any process, has the file open (after a short wait for
-        // a maintenance checkpoint thread still exiting); once held, it keeps every other one out.
+        // Refused while any other connection, in any process, has the file open (after a short wait for an
+        // exiting checkpoint thread); once held, it keeps every other one out.
         // The checkpoint leaves an empty WAL, so nothing of the old file can be replayed onto the copy.
         db.exec(
           `PRAGMA busy_timeout = ${LOCK_WAIT_MS}; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;
@@ -299,7 +322,7 @@ export class OrchestrationDbCompaction {
         return await giveUp('busy')
       }
       // Under the lock: any commit since the copy, by any connection, shows here.
-      if (readFileState(db).fingerprint !== ready.fingerprint) {
+      if (`${observed}:${readFileState(db).othersVersion}` !== ready.stamp) {
         return await giveUp('stale')
       }
       // The second name keeps the old file's blocks alive, so the rename doesn't wait for them to be freed.
@@ -307,12 +330,12 @@ export class OrchestrationDbCompaction {
         () => true,
         () => false
       )
-      // Elsewhere the rename happens under the lock; Windows can't rename over an open file, and its
-      // rename fails if anything opened the file since.
+      // Elsewhere under the lock; Windows can't rename over an open file, and fails if it was reopened.
       if (process.platform === 'win32') {
         closeDb()
       }
-      await rename(copy, this.filename)
+      await rename(this.copyPath, this.filename)
+      this.ready = undefined
       closeDb()
       await syncDirectory(dirname(this.filename))
       await removeQuietly(this.attemptsPath)
@@ -327,31 +350,8 @@ export class OrchestrationDbCompaction {
       }
     } catch (error) {
       closeDb()
-      await removeQuietly(copy)
+      await this.dropCopy()
       return { kind: 'failed', error: String(error) }
     }
-  }
-}
-
-export type OrchestrationDbQuitOwner = {
-  swapCompactedOrchestrationDbForQuit(): Promise<OrchestrationDbSwap>
-}
-
-/** Last step of a clean desktop quit, after every other teardown settled: nothing else uses the file. */
-export async function swapCompactedOrchestrationDbAtQuit(
-  owner: OrchestrationDbQuitOwner | null | undefined
-): Promise<void> {
-  if (!owner) {
-    return
-  }
-  try {
-    const result = await settlesWithin(owner.swapCompactedOrchestrationDbForQuit(), SWAP_CAP_MS)
-    if (result === 'late' || result.kind === 'failed') {
-      console.warn('[orchestration] database compaction failed', result)
-    } else if (result.kind !== 'none') {
-      console.info('[orchestration] database compaction', result)
-    }
-  } catch (error) {
-    console.warn('[orchestration] database compaction failed', error)
   }
 }
