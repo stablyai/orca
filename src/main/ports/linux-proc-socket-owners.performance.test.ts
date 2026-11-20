@@ -90,9 +90,9 @@ describe('Linux listener owner lookup', () => {
     vi.restoreAllMocks()
   })
 
-  it('reads only the cached owner fds once no listener is new or newly missed', async () => {
+  it('reads only cached owners and new pids between full walks, and finds a forked holder', async () => {
     fakeProc.tcp = PROC_NET_HEADER + procNetRow('1F90', OWN_UID, 5001) + procNetRow('0016', 0, 6001)
-    const expectedPort = {
+    const nodePort = {
       host: '127.0.0.1',
       port: 8080,
       pid: 100,
@@ -104,28 +104,45 @@ describe('Linux listener owner lookup', () => {
 
     fakeProc.readdirPaths = []
     const first = await scanPlatformListeningPorts({})
-    expect(first.ports).toEqual([expectedPort, sshPort])
+    expect(first.ports).toEqual([nodePort, sshPort])
     expect(fakeProc.readdirPaths).toEqual(['/proc', '/proc/100/fd', '/proc/200/fd', '/proc/300/fd'])
 
-    // root's sshd socket gets one retry walk; the cached owner's fds are not read twice.
     fakeProc.readdirPaths = []
-    await scanPlatformListeningPorts({})
-    expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd', '/proc', '/proc/200/fd', '/proc/300/fd'])
+    const second = await scanPlatformListeningPorts({})
+    expect(second.ports).toEqual([nodePort, sshPort])
+    expect(fakeProc.readdirPaths).toEqual(['/proc', '/proc/100/fd'])
 
+    // A worker forked after caching inherits the socket and, as the later holder in /proc, owns it.
+    fakeProc.processes.set(400, {
+      uid: OWN_UID,
+      comm: 'node',
+      cmdline: 'node\u0000worker.js',
+      cwd: '/repo/app',
+      fds: ['socket:[5001]']
+    })
     fakeProc.readdirPaths = []
     const third = await scanPlatformListeningPorts({})
-    expect(third.ports).toEqual([expectedPort, sshPort])
-    expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd'])
+    expect(third.ports.map((port) => [port.port, port.pid, port.cwd])).toEqual([
+      [8080, 400, '/repo/app'],
+      [22, undefined, undefined]
+    ])
+    expect(fakeProc.readdirPaths).toEqual(['/proc', '/proc/100/fd', '/proc/400/fd'])
 
     fakeProc.processes.get(200)!.fds.push('socket:[5002]')
     fakeProc.tcp += procNetRow('1F91', OWN_UID, 5002)
     fakeProc.readdirPaths = []
     const fourth = await scanPlatformListeningPorts({})
     expect(fourth.ports.map((port) => [port.port, port.pid])).toEqual([
-      [8080, 100],
+      [8080, 400],
       [22, undefined],
       [8081, 200]
     ])
-    expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd', '/proc', '/proc/200/fd', '/proc/300/fd'])
+    expect(fakeProc.readdirPaths).toEqual([
+      '/proc',
+      '/proc/400/fd',
+      '/proc/100/fd',
+      '/proc/200/fd',
+      '/proc/300/fd'
+    ])
   })
 })

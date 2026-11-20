@@ -1,97 +1,81 @@
 import { readdir, readlink } from 'node:fs/promises'
 
-// A full walk still runs on this cadence so sockets that became shared, or stayed unresolved, are re-picked.
+// Backstop for holders a partial pass cannot see: a socket passed to an existing process, or pid reuse.
 const FULL_WALK_INTERVAL_SCANS = 10
 const SOCKET_LINK = /^socket:\[(\d+)\]$/
 
 let ownerPidByInode = new Map<number, number>()
-let missesByInode = new Map<number, number>()
+let previousInodes = new Set<number>()
+let previousPids: ReadonlySet<number> | undefined
 let scanSequence = 0
 let lastFullWalkScan = Number.NEGATIVE_INFINITY
 
-/** Map listener socket inodes to the pid holding them, walking all of /proc only when a socket is new or lost its owner. */
+/**
+ * Map listener socket inodes to the pid holding them; a shared socket goes to the last holder in /proc order.
+ * Between full walks only cached owners and pids new since the last scan are read: a process that
+ * inherited a listening socket by fork is always a new pid.
+ */
 export async function resolveLinuxSocketOwners(
   inodes: ReadonlySet<number>,
   { fresh }: { fresh?: boolean } = {}
 ): Promise<Map<number, number>> {
   scanSequence += 1
+  const owners = new Map<number, number>()
   if (inodes.size === 0) {
     ownerPidByInode = new Map()
-    missesByInode = new Map()
-    return new Map()
+    previousInodes = new Set()
+    return owners
   }
-  const { owners, socketsByPid } = await verifyCachedOwners(inodes)
-  const needsWalk =
-    fresh ||
-    scanSequence - lastFullWalkScan >= FULL_WALK_INTERVAL_SCANS ||
-    [...inodes].some(
-      (inode) =>
-        !owners.has(inode) &&
-        // One immediate retry covers a socket handed to a fork while the last walk ran.
-        (ownerPidByInode.has(inode) || (missesByInode.get(inode) ?? 0) < 2)
-    )
-  if (needsWalk) {
-    lastFullWalkScan = scanSequence
-    // Every socket is a candidate so a shared one goes to the last holder in /proc order, as before caching.
-    await walkProcForOwners(inodes, socketsByPid, owners)
+  let pids: number[]
+  try {
+    pids = (await readdir('/proc'))
+      .filter((entry) => /^\d+$/.test(entry))
+      .map((entry) => Number.parseInt(entry, 10))
+  } catch {
+    return owners
   }
 
-  const nextMisses = new Map<number, number>()
-  for (const inode of inodes) {
-    if (!owners.has(inode)) {
-      const misses = missesByInode.get(inode) ?? 0
-      nextMisses.set(inode, needsWalk ? misses + 1 : misses)
-    }
-  }
-  ownerPidByInode = new Map(owners)
-  missesByInode = nextMisses
-  return owners
-}
-
-/** A cached pair is used only after re-reading that pid's fds, so pid reuse or a closed socket drops it. */
-async function verifyCachedOwners(
-  inodes: ReadonlySet<number>
-): Promise<{ owners: Map<number, number>; socketsByPid: Map<number, Set<number>> }> {
-  const owners = new Map<number, number>()
-  const socketsByPid = new Map<number, Set<number>>()
-  for (const inode of inodes) {
-    const pid = ownerPidByInode.get(inode)
-    if (pid === undefined) {
-      continue
-    }
+  const socketsByPid = new Map<number, ReadonlySet<number>>()
+  const readSockets = async (pid: number): Promise<ReadonlySet<number>> => {
     let sockets = socketsByPid.get(pid)
     if (!sockets) {
       sockets = await readPidListenerSockets(pid, inodes)
       socketsByPid.set(pid, sockets)
     }
-    if (sockets.has(inode)) {
-      owners.set(inode, pid)
+    return sockets
+  }
+  // A cached pair counts only after re-reading that pid's fds, so pid reuse or a closed socket drops it.
+  let lostOwner = false
+  for (const inode of inodes) {
+    const pid = ownerPidByInode.get(inode)
+    if (pid !== undefined && !(await readSockets(pid)).has(inode)) {
+      lostOwner = true
     }
   }
-  return { owners, socketsByPid }
-}
+  const seenBefore = previousPids
+  const fullWalk =
+    fresh ||
+    seenBefore === undefined ||
+    lostOwner ||
+    scanSequence - lastFullWalkScan >= FULL_WALK_INTERVAL_SCANS ||
+    [...inodes].some((inode) => !previousInodes.has(inode))
+  const cachedOwnerPids = new Set(ownerPidByInode.values())
 
-/** Later pids overwrite earlier ones for a shared socket, as the uncached walk always did. */
-async function walkProcForOwners(
-  inodes: ReadonlySet<number>,
-  alreadyRead: ReadonlyMap<number, ReadonlySet<number>>,
-  owners: Map<number, number>
-): Promise<void> {
-  let entries: string[]
-  try {
-    entries = await readdir('/proc')
-  } catch {
-    return
-  }
-  for (const entry of entries) {
-    if (!/^\d+$/.test(entry)) {
-      continue
-    }
-    const pid = Number.parseInt(entry, 10)
-    for (const inode of alreadyRead.get(pid) ?? (await readPidListenerSockets(pid, inodes))) {
-      owners.set(inode, pid)
+  for (const pid of pids) {
+    if (fullWalk || cachedOwnerPids.has(pid) || !seenBefore?.has(pid)) {
+      for (const inode of await readSockets(pid)) {
+        owners.set(inode, pid)
+      }
     }
   }
+
+  if (fullWalk) {
+    lastFullWalkScan = scanSequence
+  }
+  ownerPidByInode = owners
+  previousInodes = new Set(inodes)
+  previousPids = new Set(pids)
+  return new Map(owners)
 }
 
 /** Keeps only listener inodes, not every connection the process holds. */
