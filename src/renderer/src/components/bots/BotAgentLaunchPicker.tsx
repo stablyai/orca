@@ -121,6 +121,7 @@ export type BotAgentLaunchInherit = {
 export function BotAgentLaunchPicker({
   model,
   choices,
+  worktreeId,
   value,
   withPermission = true,
   showChatDefaultHint = true,
@@ -132,6 +133,8 @@ export function BotAgentLaunchPicker({
   model: NewTabAgentMenuModel
   /** The agents the host has. */
   choices: readonly BotAgent[]
+  /** The bot's home folder workspace, so host catalog reads resolve in its folder. */
+  worktreeId?: string
   value: BotAgentSetup
   /** False where the bot's permission has its own control beside the picker. */
   withPermission?: boolean
@@ -145,7 +148,7 @@ export function BotAgentLaunchPicker({
   const [menuOpen, setMenuOpen] = useState(false)
   const [catalogAgent, setCatalogAgent] = useState<AgentPickerEntry['agent']>()
   const observed = useAgentLaunchPickerInventory(
-    undefined,
+    worktreeId,
     model,
     menuOpen,
     catalogAgent ?? value.agent

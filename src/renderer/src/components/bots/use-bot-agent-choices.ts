@@ -10,22 +10,28 @@ import type {
 } from '../agent/launch-menu/new-tab-agent-menu-model'
 import { botAgentChoices } from '../../../../shared/bots/bot-agent-choices'
 
-// A bot lives in a folder workspace on its host.
-const BOT_HOME: AgentMenuRowsTarget = { workspace: { kind: 'folder' } }
-
 /** The host's agent menu, for the bot agent picker, and the agents a bot can be set to there. */
 export function useBotAgentMenu(
   hostId: ExecutionHostId,
   open: boolean,
   current?: BotAgent
 ): { model: NewTabAgentMenuModel; choices: BotAgent[] } {
-  const detection = useMemo<AgentDetectionTarget>(() => {
-    const target = botHostTarget(hostId)
-    return target.kind === 'environment'
-      ? { kind: 'runtime', environmentId: target.environmentId }
-      : target
+  const target = useMemo<AgentMenuRowsTarget>(() => {
+    const host = botHostTarget(hostId)
+    return {
+      workspace:
+        host.kind === 'environment'
+          ? { kind: 'folder', runtimeEnvironmentId: host.environmentId }
+          : { kind: 'folder', executionHostId: hostId }
+    }
   }, [hostId])
-  const model = useNewTabAgentMenuRows(BOT_HOME, open, detection)
+  const detection = useMemo<AgentDetectionTarget>(() => {
+    const host = botHostTarget(hostId)
+    return host.kind === 'environment'
+      ? { kind: 'runtime', environmentId: host.environmentId }
+      : host
+  }, [hostId])
+  const model = useNewTabAgentMenuRows(target, open, detection)
   return { model, choices: botAgentChoices(model, current) }
 }
 
