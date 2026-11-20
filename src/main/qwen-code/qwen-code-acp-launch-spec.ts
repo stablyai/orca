@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { QWEN_CODE_ACP_DIALECT } from '../acp/acp-dialects/qwen-code-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
+import { deliverQwenCodeInstructions } from '../acp/launch/acp-instructions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   resumeInvocationFromOptions,
@@ -40,6 +41,8 @@ export const QWEN_CODE_LAUNCH_SPEC: AcpLaunchSpec = {
     kind: 'unavailable',
     reason: 'Qwen Code lists its models only inside a session it cannot delete'
   },
+  instructions: deliverQwenCodeInstructions,
+  instructionsInWorkspace: true,
   compaction: true,
   compactionInstructions: true,
   transcriptImport: null,
