@@ -166,7 +166,13 @@ it('shares a transaction among small item writes but commits two 200 KB tool out
               resolution: {
                 kind: 'literal',
                 identity: { provider: 'orca', clientMessageId: `call${id}` },
-                body: { kind: 'tool-call', name: 'shell', callId: `call${id}`, state: 'completed' }
+                body: {
+                  kind: 'tool-call',
+                  name: 'shell',
+                  callId: `call${id}`,
+                  input: { command: 'cat build.log' },
+                  state: 'completed'
+                }
               }
             }
           ]
