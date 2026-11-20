@@ -22,7 +22,8 @@ afterEach(() => {
   }
 })
 
-// A run with ~1,400 Dispatches over a few hundred Tasks, the shape that froze the main process.
+// Guards #45330 (Dispatch probe by task) and #45426 (legacy mail probes by address, coordinator_runs index):
+// a run with ~1,400 Dispatches over a few hundred Tasks, the shape that froze the main process.
 function seedLargeRun(): OrchestrationDb {
   const dir = mkdtempSync(join(tmpdir(), 'orca-legacy-durable-'))
   dirs.push(dir)
