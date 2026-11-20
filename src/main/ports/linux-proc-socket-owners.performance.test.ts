@@ -144,5 +144,22 @@ describe('Linux listener owner lookup', () => {
       '/proc/200/fd',
       '/proc/300/fd'
     ])
+
+    // The cached worker exits; the parent still holds the socket, so a full walk hands it back.
+    fakeProc.processes.delete(400)
+    fakeProc.readdirPaths = []
+    const fifth = await scanPlatformListeningPorts({})
+    expect(fifth.ports.map((port) => [port.port, port.pid])).toEqual([
+      [8080, 100],
+      [22, undefined],
+      [8081, 200]
+    ])
+    expect(fakeProc.readdirPaths).toEqual([
+      '/proc',
+      '/proc/400/fd',
+      '/proc/200/fd',
+      '/proc/100/fd',
+      '/proc/300/fd'
+    ])
   })
 })

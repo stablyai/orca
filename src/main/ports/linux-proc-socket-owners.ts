@@ -19,7 +19,7 @@ export async function resolveLinuxSocketOwners(
   inodes: ReadonlySet<number>,
   { fresh }: { fresh?: boolean } = {}
 ): Promise<Map<number, number>> {
-  scanSequence += 1
+  const sequence = ++scanSequence
   // Overlapping scans replace the module state, so each call works from the state it started with.
   const cachedOwners = ownerPidByInode
   const seenBefore = previousPids
@@ -60,11 +60,12 @@ export async function resolveLinuxSocketOwners(
     fresh ||
     seenBefore === undefined ||
     lostOwner ||
-    scanSequence - lastFullWalkScan >= FULL_WALK_INTERVAL_SCANS ||
+    sequence - lastFullWalkScan >= FULL_WALK_INTERVAL_SCANS ||
     [...inodes].some((inode) => !knownInodes.has(inode))
 
   for (const pid of pids) {
     const cached = cachedOwnerSockets.get(pid)
+    cachedOwnerSockets.delete(pid)
     if (cached || fullWalk || !seenBefore?.has(pid)) {
       for (const inode of cached ?? (await readPidListenerSockets(pid, inodes))) {
         owners.set(inode, pid)
@@ -73,7 +74,7 @@ export async function resolveLinuxSocketOwners(
   }
 
   if (fullWalk) {
-    lastFullWalkScan = scanSequence
+    lastFullWalkScan = Math.max(lastFullWalkScan, sequence)
   }
   ownerPidByInode = owners
   previousInodes = new Set(inodes)
