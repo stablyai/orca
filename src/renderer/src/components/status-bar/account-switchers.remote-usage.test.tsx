@@ -352,7 +352,6 @@ describe('Claude account rows outside the status bar owner', () => {
       <TooltipProvider>
         <ClaudeSwitcherMenu
           claude={null}
-          compact
           iconOnly
           chatAction={{ target, canSwitch: async () => true }}
         />
@@ -372,9 +371,7 @@ describe('Claude account rows outside the status bar owner', () => {
   it("names no account before the server's list arrives", async () => {
     const owned: OwnerUsageRateLimits = { ...claudeOwner(), accounts: null }
     const claude: ProviderRateLimits = { ...usage(4), provider: 'claude' }
-    render(
-      <ClaudeSwitcherMenu claude={claude} ownerUsage={owned} compact={false} iconOnly={false} />
-    )
+    render(<ClaudeSwitcherMenu claude={claude} ownerUsage={owned} iconOnly={false} />)
     fireEvent.pointerDown(
       screen.getByRole('button', { name: 'Open Claude details and account switcher' }),
       { button: 0, ctrlKey: false }
