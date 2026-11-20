@@ -92,10 +92,6 @@ function preservedHistoryPath(accountId: string): string {
   return join(getRuntimeCodexHomePath(), `history.orca-legacy-${accountId}.jsonl`)
 }
 
-function sessionsMigratedStatePath(): string {
-  return join(testState.userDataDir, 'codex-runtime-home', 'migration-v1-sessions.json')
-}
-
 function historyStatePath(): string {
   return join(testState.userDataDir, 'codex-runtime-home', 'migration-v1-history.json')
 }
@@ -258,6 +254,22 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"shared-1"}\n')
   })
 
+  it('copies the history, the sessions and the marker before the service is constructed', async () => {
+    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
+    mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
+    writeFileSync(join(managedHomePath, 'sessions', 'rollout.jsonl'), '{}', 'utf-8')
+
+    await constructService()
+
+    // Nothing can remove or share the account before this: it all happened in the constructor.
+    expect(readFileSync(preservedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"legacy-1"}\n')
+    expect(
+      readFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'rollout.jsonl'), 'utf-8')
+    ).toBe('{}')
+    expect(existsSync(migrationMarkerPath())).toBe(true)
+    await waitForHistorySettled()
+  })
+
   it('makes a real copy when the shared history and the preserved name only link to the account history', async () => {
     const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
     mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
@@ -278,12 +290,8 @@ describe('CodexRuntimeHomeService', () => {
     mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
     writeFileSync(preservedHistoryPath('account-1'), '{"id":"legacy-1"}\n', 'utf-8')
     mkdirSync(join(historyStatePath(), '..'), { recursive: true })
-    writeFileSync(sessionsMigratedStatePath(), '{}', 'utf-8')
-    writeFileSync(
-      historyStatePath(),
-      JSON.stringify({ historiesPreserved: true, historyImportAttempts: 1 }),
-      'utf-8'
-    )
+    writeFileSync(migrationMarkerPath(), '{}', 'utf-8')
+    writeFileSync(historyStatePath(), JSON.stringify({ historyImportAttempts: 1 }), 'utf-8')
 
     await startService()
 
@@ -299,19 +307,10 @@ describe('CodexRuntimeHomeService', () => {
       mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
       writeFileSync(join(managedHomePath, 'sessions', 'rollout.jsonl'), '{}', 'utf-8')
       chmodSync(join(managedHomePath, 'history.jsonl'), 0o000)
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       try {
         await constructService()
-        await vi.waitFor(
-          () =>
-            expect(warn).toHaveBeenCalledWith(
-              '[codex-runtime-home] Failed to migrate legacy Codex prompt history:',
-              expect.anything()
-            ),
-          { timeout: WAIT_MS }
-        )
+        await waitForImportOutcomes(['failed'])
       } finally {
-        warn.mockRestore()
         chmodSync(join(managedHomePath, 'history.jsonl'), 0o644)
       }
 
