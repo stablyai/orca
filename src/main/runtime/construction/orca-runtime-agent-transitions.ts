@@ -284,7 +284,12 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     const detachMail = subscribe?.((row) => {
       const pty = this.getPtyRecordForPaneKey(row.paneKey)
       if (pty) {
-        this.orchestrationMailboxPointerDelivery.observeTerminal(pty.ptyId, row.payload.state, true)
+        // Why: only a live hook proves the agent itself spoke; replays and synthetic re-emissions do not.
+        this.orchestrationMailboxPointerDelivery.observeTerminal(
+          pty.ptyId,
+          row.payload.state,
+          !row.isReplay && !!row.hookEventName
+        )
       }
     })
     const detachTitles = subscribe
