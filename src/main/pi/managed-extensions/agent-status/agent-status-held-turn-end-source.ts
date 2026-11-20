@@ -17,6 +17,11 @@ export function getPiHeldTurnEndHandlerSourceLines(kind: PiAgentKind): string[] 
     '    piUserTurnPending = false',
     '  }',
     '',
+    // A turn that launched a child is woken by its result, so it waits for the all-clear even after that child ends.
+    '  function forgetUserTurnOnNewChild(id: string): void {',
+    '    if (!piUserTurnPriorChildren?.has(id)) piUserTurnPriorChildren = null',
+    '  }',
+    '',
     // Wake turns and turns that launched their own children stay held until the all-clear, which reuses this stamp.
     '  function postHeldTurnEnd(): void {',
     '    if (replyFinishedAt === undefined || replyAborted || !piUserTurnPriorChildren || isTurnInFlight()) return',

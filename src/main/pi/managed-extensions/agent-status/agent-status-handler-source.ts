@@ -211,7 +211,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    pendingAgentEndCheck = null',
     '    pendingAgentEndContext = null',
     '  }',
-    ...getPiSubagentRosterEventSourceLines(),
+    ...getPiSubagentRosterEventSourceLines(kind),
     // Exited child runners retain ownership through their grace period.
     '  function isHeldByChildren(): boolean {',
     '    return lifecycleState.active.size > 0',
