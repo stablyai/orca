@@ -57,6 +57,12 @@ describe('actionArgs for Slack’s own surfaces', () => {
     })
   })
 
+  it('refuses a blank --cancel, which would otherwise list', async () => {
+    await expect(actionArgs('scheduled', flags({ cancel: '' }), '/')).rejects.toThrow(
+      '--cancel takes the id `orca slack scheduled <place>` lists.'
+    )
+  })
+
   it('refuses a list with no item', async () => {
     await expect(actionArgs('list', flags({ title: 'Launch' }), '/')).rejects.toThrow(
       'A list needs at least one --item.'

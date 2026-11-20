@@ -153,8 +153,15 @@ export async function actionArgs(
     case 'list':
       return { title: getRequiredStringFlag(flags, 'title'), items: listItems(flags) }
     case 'scheduled': {
-      const cancel = getOptionalStringFlag(flags, 'cancel')
-      return cancel ? { cancel } : {}
+      // Read with its blank kept: `--cancel ""` is a mistake to refuse, never a request to list.
+      const cancel = getOptionalStringFlagAllowingEmpty(flags, 'cancel')
+      if (cancel !== undefined && !cancel.trim()) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--cancel takes the id `orca slack scheduled <place>` lists.'
+        )
+      }
+      return cancel ? { cancel: cancel.trim() } : {}
     }
     case 'edit':
       return { text: await readMessageText(flags, cwd, true) }
