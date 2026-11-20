@@ -131,10 +131,10 @@ it.each([10, 100])('keeps listings warm across detached commits (N=%i)', async (
     join(root, '.git', 'config'),
     '[includeIf "onbranch:release/**"] path = remote-config\n'
   )
-  await writeFile(join(root, '.git', 'HEAD'), 'a'.repeat(40) + '\n')
+  await writeFile(join(root, '.git', 'HEAD'), `${'a'.repeat(40)}\n`)
   await listCachedRemoteNames(root)
   for (let index = 0; index < commits; index += 1) {
-    await writeFile(join(root, '.git', 'HEAD'), index.toString(16).padStart(40, '0') + '\n')
+    await writeFile(join(root, '.git', 'HEAD'), `${index.toString(16).padStart(40, '0')}\n`)
     await listCachedRemoteNames(root)
   }
   expect(
