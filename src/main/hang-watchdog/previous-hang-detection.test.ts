@@ -85,6 +85,9 @@ describe('previous hang detection', () => {
     expect(existsSync(markerPath)).toBe(false)
     expect(reportPreviousHangDetection(dir)).toBeNull()
     expect(existsSync(`${markerPath}.previous`)).toBe(true)
+    writeHangDetectionMarker(markerPath, retainHangObservation(emptyHangObservations(), gap))
+    preservePreviousHangDetection(dir)
+    expect(existsSync(markerPath)).toBe(false)
     writeHangDetectionMarker(markerPath, { ...marker, parentPid: 789 })
     const records: unknown[] = []
     setActiveSink({ push: (record) => records.push(record), flush() {}, close() {} })
@@ -97,22 +100,163 @@ describe('previous hang detection', () => {
             previousPid: 456
           })
         })
+      }),
+      expect.objectContaining({
+        attributes: expect.objectContaining({
+          'breadcrumb.name': 'main_thread_watchdog_gap',
+          'breadcrumb.data': expect.objectContaining({ previousPid: 789 })
+        })
       })
     ])
     expect(existsSync(`${markerPath}.previous`)).toBe(false)
     expect(JSON.parse(readFileSync(markerPath, 'utf8')).parentPid).toBe(789)
     expect(reportPreviousHangDetection(dir)).toBeNull()
+    expect(records).toHaveLength(2)
   })
 
-  it('retains a pending note when a launch ends before sink installation', () => {
-    const markerPath = hangDetectionMarkerPath(dir)
-    writeHangDetectionMarker(markerPath, marker)
+  it('keeps the hang marker and its telemetry for hangs only while later short stalls arrive', () => {
+    const hang: HangObservation = {
+      ...gap,
+      id: '789:300:1',
+      kind: 'heartbeat-stall',
+      detectedAt: 300,
+      durationMs: 46_000,
+      selfRecovered: true,
+      tier: 'hang'
+    }
+    let collection = retainHangObservation(emptyHangObservations(), hang)
+    for (let index = 0; index < 4; index++) {
+      collection = retainHangObservation(collection, {
+        ...hang,
+        id: `789:${400 + index}:${index + 2}`,
+        detectedAt: 400 + index,
+        durationMs: 9_000,
+        tier: 'stall'
+      })
+    }
+    writeHangDetectionMarker(hangDetectionMarkerPath(dir), collection)
     preservePreviousHangDetection(dir)
-    writeHangDetectionMarker(markerPath, retainHangObservation(emptyHangObservations(), gap))
+    const breadcrumbNames: unknown[] = []
+    setActiveSink({
+      push: (record) => {
+        const attributes =
+          typeof record === 'object' && record !== null && 'attributes' in record
+            ? record.attributes
+            : null
+        if (
+          typeof attributes === 'object' &&
+          attributes !== null &&
+          'breadcrumb.name' in attributes
+        ) {
+          breadcrumbNames.push(attributes['breadcrumb.name'])
+        }
+      },
+      flush() {},
+      close() {}
+    })
+    expect(reportPreviousHangDetection(dir)).toEqual({
+      detectedAt: 300,
+      parentPid: 789,
+      unresponsiveMs: 46_000,
+      selfRecovered: true
+    })
+    expect(breadcrumbNames).toEqual([
+      'main_thread_hang_detected',
+      'main_thread_stall_detected',
+      'main_thread_stall_detected',
+      'main_thread_stall_detected'
+    ])
+  })
+
+  it('keeps a new stall when four hangs are already retained', () => {
+    let collection = emptyHangObservations()
+    for (let index = 0; index < 4; index++) {
+      collection = retainHangObservation(collection, {
+        ...gap,
+        id: `789:${300 + index}:${index + 1}`,
+        kind: 'heartbeat-stall',
+        detectedAt: 300 + index,
+        durationMs: 46_000,
+        tier: 'hang'
+      })
+    }
+    const stall: HangObservation = {
+      ...gap,
+      id: '789:900:9',
+      kind: 'heartbeat-stall',
+      detectedAt: 900,
+      durationMs: 9_000,
+      tier: 'stall'
+    }
+    const live = retainHangObservation(collection, stall, { reserve: true })
+    expect(live.observations.map((item) => item.id)).toContain('789:900:9')
+    expect(live.observations).toHaveLength(4)
+    // A startup replay of the same unrecovered stall keeps every pending hang instead.
+    const replayed = retainHangObservation(collection, stall)
+    expect(replayed.observations.map((item) => item.id)).not.toContain('789:900:9')
+  })
+
+  it('reports an escalated hang that never recovered as lasting at least until escalation', () => {
+    const escalated: HangObservation = {
+      ...gap,
+      id: '789:10000:1',
+      kind: 'heartbeat-stall',
+      detectedAt: 10_000,
+      durationMs: 10_000,
+      tier: 'hang',
+      escalatedAt: 50_000
+    }
+    writeHangDetectionMarker(
+      hangDetectionMarkerPath(dir),
+      retainHangObservation(emptyHangObservations(), escalated)
+    )
     preservePreviousHangDetection(dir)
-    expect(existsSync(`${markerPath}.previous`)).toBe(true)
     setActiveSink({ push() {}, flush() {}, close() {} })
-    expect(reportPreviousHangDetection(dir)).toEqual(marker)
+    expect(reportPreviousHangDetection(dir)).toEqual({
+      detectedAt: 10_000,
+      parentPid: 789,
+      unresponsiveMs: 50_000,
+      selfRecovered: false
+    })
+  })
+
+  it('reports an escalated hang whose recovery was stamped before its escalation as lasting to escalation', () => {
+    const escalated: HangObservation = {
+      ...gap,
+      id: '789:12000:1',
+      kind: 'heartbeat-stall',
+      detectedAt: 12_000,
+      durationMs: 10_000,
+      selfRecovered: true,
+      tier: 'hang',
+      escalatedAt: 47_001,
+      resolution: { ...gap.snapshot!, wallMs: 46_000 }
+    }
+    writeHangDetectionMarker(
+      hangDetectionMarkerPath(dir),
+      retainHangObservation(emptyHangObservations(), escalated)
+    )
+    preservePreviousHangDetection(dir)
+    setActiveSink({ push() {}, flush() {}, close() {} })
+    expect(reportPreviousHangDetection(dir)?.unresponsiveMs).toBe(45_001)
+  })
+
+  it('reads a stall-only previous run as no hang', () => {
+    const stall: HangObservation = {
+      ...gap,
+      id: '789:300:1',
+      kind: 'heartbeat-stall',
+      durationMs: 13_000,
+      selfRecovered: true,
+      tier: 'stall'
+    }
+    writeHangDetectionMarker(
+      hangDetectionMarkerPath(dir),
+      retainHangObservation(emptyHangObservations(), stall)
+    )
+    preservePreviousHangDetection(dir)
+    setActiveSink({ push() {}, flush() {}, close() {} })
+    expect(reportPreviousHangDetection(dir)).toBeNull()
   })
 
   it('carries gap and overlapping-stall evidence through the real trace and bundle', () => {

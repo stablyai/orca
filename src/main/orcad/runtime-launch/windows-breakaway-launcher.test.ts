@@ -14,14 +14,11 @@ import {
   type WindowsBreakawayLauncher
 } from './windows-breakaway-launcher'
 
-// The launcher is contract-agnostic; this stands in for the retired relay's contract.
+// A legacy relay report parser must leave orcad's report alone.
 const RELAY_WINDOWS_BREAKAWAY_CONTRACT: WindowsBreakawayLaunchContract = {
   argsFlag: '--relay-args',
   reportMarker: 'ORCA_RELAY_LAUNCH'
 }
-
-const parseRelayWindowsBreakawayLaunch = (args: readonly string[]) =>
-  parseWindowsBreakawayLaunchRequest(RELAY_WINDOWS_BREAKAWAY_CONTRACT, args)
 
 function launcherFor(
   spawn: SpawnOutsideJob,
@@ -29,33 +26,6 @@ function launcherFor(
 ): WindowsBreakawayLauncher {
   return { spawnOutsideJob: spawn, readCreationTimeMs: () => creationTimeMs }
 }
-
-const argv = [
-  'C:\\rt\\node.exe',
-  'C:\\Users\\me user\\.orca-remote\\relay-1\\relay.js',
-  RELAY_WINDOWS_BREAKAWAY_LAUNCH_FLAG,
-  '--stdout-file',
-  'C:/Users/me user/relay.log',
-  '--stderr-file',
-  'C:/Users/me user/relay.err.log',
-  '--relay-args',
-  '--detached',
-  '--sock-path',
-  '\\\\.\\pipe\\orca-relay-1',
-  '--log-file',
-  'C:/Users/me user/relay.log'
-]
-
-describe('relay Windows breakaway launcher', () => {
-  it('takes its own flags before -- and hands the rest to the relay', () => {
-    expect(parseRelayWindowsBreakawayLaunch(argv)).toEqual({
-      stdoutPath: 'C:/Users/me user/relay.log',
-      stderrPath: 'C:/Users/me user/relay.err.log',
-      env: {},
-      programArgs: argv.slice(8)
-    })
-  })
-})
 
 describe('orcad Windows breakaway launcher', () => {
   const orcadArgv = [

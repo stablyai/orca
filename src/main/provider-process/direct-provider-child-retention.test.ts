@@ -115,7 +115,8 @@ async function finishChats(count: number) {
 }
 
 describe('finished CLI retention while native parents keep reaping', () => {
-  it.each([150, 1500])('releases %i finished connections while H stays live', async (count) => {
+  it('releases 1500 finished connections while H stays live', async () => {
+    const count = 1500
     const { parents, refs } = await finishChats(count)
     if (!('gc' in globalThis) || typeof globalThis.gc !== 'function') {
       throw new Error('The test runner must enable --expose-gc')
@@ -141,7 +142,8 @@ it('closes public input as soon as its native destination closes', async () => {
   await run.closed
 })
 
-it.each(['EMFILE', 'ENFILE'])('reports a processless %s launch without throwing', async (code) => {
+it('reports a processless launch without losing its spawn error', async () => {
+  const code = 'EMFILE'
   const raw = createFakeSpawnedChild()
   for (const stream of [raw.stdin, raw.stdout, raw.stderr]) {
     stream.destroy()

@@ -32,10 +32,7 @@ import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
 import type { AgentSessionStatusPermissionFields } from './options/permissions/agent-session-status-permission-fields'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
 
-export type AgentSessionTurnActivity = {
-  turnId: string
-  text: string
-}
+export type AgentSessionTurnActivity = { turnId: string; text: string }
 
 /** The agent's guess at the user's next prompt; never journaled, replaced when a turn opens. */
 export type AgentSessionPromptSuggestion = {
@@ -199,6 +196,9 @@ export type AgentSessionSubscribeEvent =
 
 // ─── Status feed ────────────────────────────────────────────────────────────
 
+/** An open async question: its row, which Skip names, and its text bounded like a status preview. */
+export type AgentSessionAwaitedQuestion = { itemId: string; text: string }
+
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
   usageLimitContinue?: AgentSessionUsageLimitContinue
@@ -223,6 +223,8 @@ export type AgentSessionStatusSummary = {
   model?: string
   /** Legacy host execution report; clients use the saved model for option invalidation. */
   reportedModel?: string
+  /** The current child's provider fallback model; moving it makes clients re-read options. */
+  fallbackModel?: string
   /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
    *  client re-reads options. Absent from older hosts. */
   effort?: string
@@ -243,6 +245,9 @@ export type AgentSessionStatusSummary = {
   /** The agent asked a question its turn does not wait on (Codex's async question), and the person
    *  has not answered it yet. Turn status is unchanged; only the lead state shows it. Older hosts omit it. */
   awaitsAnswer?: true
+  /** The question `awaitsAnswer` waits on, so a client that has not loaded its row can still show
+   *  it and Skip it. Older hosts omit it. */
+  awaitsQuestion?: AgentSessionAwaitedQuestion
   /** The newest async question row the person skipped: clients hide it and every earlier question.
    *  Older hosts omit it, and their clients hide a skipped card on that screen only. */
   asyncQuestionsSkippedThrough?: string
@@ -287,6 +292,8 @@ export type AgentSessionConversationName = {
   sessionId: string
   conversationName: string | null
   namingError?: AgentSessionNamingError
+  /** The chat's agent, so an older fork can title itself from an unnamed source no longer open. */
+  agent?: AgentSessionStatusSummary['agent']
 } & Pick<AgentSessionStatusSummary, 'conversationNameSource' | 'forkedFrom'>
 
 /** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */

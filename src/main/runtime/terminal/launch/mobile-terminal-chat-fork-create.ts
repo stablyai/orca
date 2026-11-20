@@ -16,7 +16,7 @@ import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
-import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
+import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/execution-host/project-runtime-repair-message'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
@@ -121,7 +121,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
           }),
           opts.terminalImageViewerSupported
         )
-        const win = this.getAvailableAuthoritativeWindow()
+        const windowId = this.getAvailableAuthoritativeWindowId()
         const placement = resolveSavedChatForkAnchor(
           this.getWorkspaceSessionForWorktree(worktreeId),
           worktreeId,
@@ -135,7 +135,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         return {
           startup,
           launchRuntime,
-          win,
+          windowId,
           phoneAnchor,
           ...placement,
           targetGroupId: opts.targetGroupId ?? placement.targetGroupId
@@ -160,13 +160,13 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         throw new Error('chat_fork_source_unavailable')
       }
     })()
-    const { startup, launchRuntime, win, phoneAnchor, targetGroupId, afterDesktopTabId } = preflight
+    const { startup, launchRuntime, windowId, phoneAnchor, targetGroupId, afterDesktopTabId } =
+      preflight
+    const desktop = getRuntimeDesktopSurface()
     const clientIdentity = opts.clientNavigationId ?? 'local'
     const seed = `${clientIdentity}\0${worktreeId}\0${mutationId}`
     const releaseThrottle =
-      win && !win.webContents.isDestroyed?.()
-        ? rendererPublicationThrottle.acquire(win.webContents)
-        : () => {}
+      windowId !== null ? (desktop.holdRendererPublication?.(windowId) ?? (() => {})) : () => {}
     try {
       const created = await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
@@ -189,7 +189,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
           signal: opts.signal
         }
       )
-      if (!win) {
+      if (windowId === null) {
         return created
       }
       const tab = created.tab
@@ -201,7 +201,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
         !tab.ptyId ||
         !tab.incarnationId ||
         pty.incarnationId !== tab.incarnationId ||
-        win.webContents.isDestroyed?.()
+        !desktop.hasLiveRenderer(windowId)
       ) {
         return { ...created, warning: 'desktop-tab-not-shown' }
       }

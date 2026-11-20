@@ -6,7 +6,11 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { buildAiVaultCopiedSessionStartupForWorktree } from '@/lib/agent-session/resume/history/ai-vault-session-fork-startup'
+import {
+  buildAiVaultCliForkStartupForWorktree,
+  captureAiVaultCliForkOwner,
+  readAiVaultCliForkLaunchSettings
+} from '@/lib/agent-session/resume/history/ai-vault-session-fork-startup'
 import { launchAiVaultSessionAndReveal } from '@/lib/agent-session/resume/history/launch-ai-vault-session-and-reveal'
 import { updateNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 import type { NativeChatForkOutcome } from './native-chat-fork-launch'
@@ -130,7 +134,13 @@ export async function resumeClaudeCopyInNewTerminalTab(input: {
   executionHostId: ExecutionHostId
   draft?: string
 }): Promise<void> {
-  const startup = buildAiVaultCopiedSessionStartupForWorktree({
+  // The copy launches with the settings of the host that runs it, like any other CLI fork.
+  const owner = captureAiVaultCliForkOwner(input.executionHostId)
+  const settings = await readAiVaultCliForkLaunchSettings({
+    owner,
+    localSettings: useAppStore.getState().settings
+  })
+  const startup = buildAiVaultCliForkStartupForWorktree({
     state: useAppStore.getState(),
     worktreeId: input.worktreeId,
     session: {
@@ -140,8 +150,19 @@ export async function resumeClaudeCopyInNewTerminalTab(input: {
       cwd: input.cwd,
       codexHome: null,
       executionHostId: input.executionHostId
-    }
+    },
+    copied: true,
+    owner,
+    settings
   })
+  if (!startup) {
+    throw new Error(
+      translate(
+        'auto.components.right.sidebar.AiVaultPanel.resumeInNewCliUnavailable',
+        'This session cannot be opened in the CLI.'
+      )
+    )
+  }
   const tabId = await launchAiVaultSessionAndReveal({
     agent: 'claude',
     worktreeId: input.worktreeId,

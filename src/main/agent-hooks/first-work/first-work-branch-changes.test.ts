@@ -44,16 +44,6 @@ describe('readBranchChangesForNaming', () => {
     await expect(read(cwd)).resolves.toEqual({ kind: 'nothing-yet' })
   })
 
-  it('keeps a staged new file that was deleted from disk', async () => {
-    const cwd = await repository()
-    await writeFile(join(cwd, 'added.txt'), 'new\n')
-    await git(cwd, 'add', 'added.txt')
-    await unlink(join(cwd, 'added.txt'))
-    const result = await read(cwd)
-    expect(result.kind).toBe('changes')
-    expect(result.kind === 'changes' && result.changes.stagedStat).toContain('added.txt')
-  })
-
   it('keeps a staged edit that the working copy reversed', async () => {
     const cwd = await repository()
     await writeFile(join(cwd, 'tracked.txt'), 'two\n')

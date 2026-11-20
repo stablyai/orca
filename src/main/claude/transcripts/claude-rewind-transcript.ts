@@ -2,7 +2,7 @@ import { AgentConversationCopyError } from '../../native-chat/conversation-adopt
 import { access, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { AgentSessionRewindFork } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
-import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
+import { retryHeavyWorkers, spawnHeavyWorker } from '../../utility-worker-host/heavy-worker-spawn'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
@@ -47,6 +47,8 @@ export async function materializeClaudeConversationTranscript(input: {
     destinationDirectory,
     temporaryPath
   }
+  // Rewind and copy are user actions; asking again is how a user retries after repeated crashes.
+  retryHeavyWorkers()
   const worker = await spawnClaudeConversationWorker(workerData)
   let abort: () => void = () => undefined
   try {
@@ -157,5 +159,5 @@ export async function spawnClaudeConversationWorker(workerData: unknown) {
   const entry = installed
     ? installed
     : new URL('./claude-conversation-fork-worker-entry.ts', import.meta.url)
-  return spawnWorkerThread(entry, { name: 'orca-claude-rewind-transcript', workerData })
+  return spawnHeavyWorker(entry, { name: 'orca-claude-rewind-transcript', workerData })
 }

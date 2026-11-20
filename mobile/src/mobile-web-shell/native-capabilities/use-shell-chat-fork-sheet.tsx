@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import {
+  BRIDGE_CHAT_FORK_VERB,
   chatForkParamsSchema,
   type BridgeChatForkParams,
   type BridgeChatForkResult
@@ -12,6 +13,7 @@ import {
   type ChatForkRunTarget
 } from '../../session/chat-fork/chat-fork-run'
 import { MobileChatForkSheet } from '../../session/chat-fork/MobileChatForkSheet'
+import { useNativeDeviceVerbs, type NativeDeviceVerb } from '../../platform/use-native-device-verbs'
 import { useOpenMobileSession } from '../../session/use-open-mobile-session'
 import { useRpcClientContext } from '../../transport/connection/client-context'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
@@ -187,4 +189,13 @@ function wireTarget(
 ): Extract<BridgeChatForkResult, { outcome: 'here' }>['target'] {
   const { hostCapabilities, ...rest } = target
   return hostCapabilities ? { ...rest, hostCapabilities: [...hostCapabilities] } : rest
+}
+
+/** A shell page's device verbs, with the app's Fork sheet serving its own. */
+export function useShellDeviceVerbs(hostId: string, sessionId: string | null) {
+  const chatFork = useShellChatForkSheet(hostId, sessionId)
+  const serveDevice = useNativeDeviceVerbs(sessionId)
+  const serve = (verb: NativeDeviceVerb | typeof BRIDGE_CHAT_FORK_VERB, params: unknown) =>
+    verb === BRIDGE_CHAT_FORK_VERB ? chatFork.serve(params) : serveDevice(verb, params)
+  return { serve, sheet: chatFork.sheet }
 }

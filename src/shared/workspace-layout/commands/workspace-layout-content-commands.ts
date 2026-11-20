@@ -199,6 +199,34 @@ export function holdsBrowserPage(model: WorkspaceLayoutModel, pageId: string): b
   )
 }
 
+/** A bot group's room: a chat tab whose entity is the group, in the group's home workspace. */
+export function openRoomTab(
+  model: WorkspaceLayoutModel,
+  command: CommandOf<'openRoomTab'>,
+  context: LayoutContext
+): Applied {
+  const drawn = drawnTabOpen(
+    model,
+    command.workspace,
+    command.tabId,
+    (tab) => tab.kind === 'room' && tab.entityId === command.botGroupId,
+    true
+  )
+  if (drawn) {
+    return drawn
+  }
+  const tab = contentTab(context, {
+    ...(command.tabId ? { id: command.tabId } : {}),
+    ...(command.createdAt !== undefined ? { createdAt: command.createdAt } : {}),
+    kind: 'room',
+    entityId: command.botGroupId
+  })
+  const target = withSendersGroup(model, command.workspace, command.groupId)
+  return applied(placeContentTab(target, command.workspace, tab, command, context).model, {
+    tabId: tab.id
+  })
+}
+
 export function openAgentSessionTab(
   model: WorkspaceLayoutModel,
   command: CommandOf<'openAgentSessionTab'>,
@@ -220,6 +248,13 @@ export function openAgentSessionTab(
   )
   if (drawn) {
     return drawn
+  }
+  // One chat, one tab: an open under another slot id shows the tab the chat already has.
+  const shown = model.workspaces[command.workspace]?.tabs.find(
+    (tab) => tab.kind === 'agent-session' && tab.entityId === command.sessionId
+  )
+  if (shown) {
+    return applied(model, { tabId: shown.id })
   }
   const tab = contentTab(context, {
     ...(command.tabId ? { id: command.tabId } : {}),

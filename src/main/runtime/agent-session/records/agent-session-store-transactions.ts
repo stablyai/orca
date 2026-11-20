@@ -1,4 +1,5 @@
-import { AgentSessionProviderAliasIndex } from './agent-session-provider-alias-index'
+import { AgentSessionConversationKeyIndexes } from './agent-session-conversation-key-index'
+import { AgentSessionRecordsChanged } from './agent-session-records-changed'
 import { AgentSessionLeaseHolderIndex } from './agent-session-lease-holder-index'
 import {
   applyAgentSessionStoreCommand,
@@ -51,12 +52,13 @@ export class AgentSessionStoreTransactions {
   readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
   readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
   readonly heldChangeListeners = new Set<() => void>()
+  readonly recordsChanged = new AgentSessionRecordsChanged()
   private published: AgentSessionStoreState
   /** Moves only when a commit changes what chat sender identity reads. */
   senderIdentityRevision = 0
   /** Lineage survives admission and lease writes; membership and committed clear invalidate it. */
   private lineage: object = {}
-  private providerAliases: AgentSessionProviderAliasIndex | null = null
+  readonly keyIndexes = new AgentSessionConversationKeyIndexes()
   readonly leaseHolders: AgentSessionLeaseHolderIndex
   private readonly receiptCommits = new WeakMap<
     JournalReceiptStage,
@@ -95,11 +97,6 @@ export class AgentSessionStoreTransactions {
     return this.lineage
   }
 
-  providerAliasOwner(nativeId: string): string | null {
-    this.providerAliases ??= new AgentSessionProviderAliasIndex(this.published)
-    return this.providerAliases.owner(nativeId)
-  }
-
   get readOnly(): boolean {
     return this.journalDatabase.readOnly
   }
@@ -125,6 +122,10 @@ export class AgentSessionStoreTransactions {
     return this.executeMutation({ kind: 'command', command }, check)
   }
 
+  private runtimeStamp() {
+    return { incarnation: agentSessionRuntimeIncarnation(), ends: this.published.runtimeEnds }
+  }
+
   private executeMutation<T>(input: AgentSessionStoreMutation, check?: () => void): Promise<T> {
     const run = this.queue.then(async () => {
       check?.()
@@ -145,13 +146,7 @@ export class AgentSessionStoreTransactions {
       const [result] = await this.journalDatabase.effects([
         {
           kind: 'store',
-          mutation: {
-            input,
-            runtime: {
-              incarnation: agentSessionRuntimeIncarnation(),
-              ends: this.published.runtimeEnds
-            }
-          }
+          mutation: { input, runtime: this.runtimeStamp() }
         }
       ])
       const [store] = this.publishResults([result])
@@ -215,10 +210,7 @@ export class AgentSessionStoreTransactions {
               mutation: {
                 input: effective,
                 at: context.savedAt,
-                runtime: {
-                  incarnation: agentSessionRuntimeIncarnation(),
-                  ends: this.published.runtimeEnds
-                }
+                runtime: this.runtimeStamp()
               }
             }
           ],
@@ -302,11 +294,12 @@ export class AgentSessionStoreTransactions {
         this.published = draft
       }
       this.leaseHolders.applyCommitted(this.published, writes.records)
-      if (published.unreadableRecords !== draft.unreadableRecords) {
-        this.providerAliases = null
-      } else {
-        this.providerAliases?.applyCommitted(this.published, writes.records)
-      }
+      this.keyIndexes.applyCommitted(
+        published,
+        this.published,
+        writes.records,
+        published.unreadableRecords !== draft.unreadableRecords
+      )
       notifyAgentSessionStoreCacheChanges(published, draft, writes)
       for (const id of changes.deaths) {
         this.deathEvidenceListeners.forEach((listener) => listener(id))
@@ -318,6 +311,7 @@ export class AgentSessionStoreTransactions {
       ) {
         this.heldChangeListeners.forEach((listener) => listener())
       }
+      this.recordsChanged.notify(writes)
     }
   }
 }

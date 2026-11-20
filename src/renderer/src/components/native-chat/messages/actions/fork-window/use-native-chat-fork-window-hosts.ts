@@ -24,7 +24,16 @@ import type { NativeChatForkHostInput } from './native-chat-fork-window-choices'
 export function useNativeChatForkHosts(): NativeChatForkHostInput[] {
   const t = useTranslate()
   const environments = useAppStore((state) => state.runtimeEnvironments)
-  const statuses = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  // One line per connected host ("id\tcaps"): a status update re-renders only when capabilities change.
+  const advertised = useAppStore((state) =>
+    state.runtimeEnvironments
+      .flatMap((environment) => {
+        const entry = state.runtimeStatusByEnvironmentId.get(environment.id)
+        const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
+        return status ? [`${environment.id}\t${(status.capabilities ?? []).join(' ')}`] : []
+      })
+      .join('\n')
+  )
   const local = useSyncExternalStore(
     subscribeLocalRuntimeCapabilityObservation,
     readLocalRuntimeCapabilitiesOrUnknown
@@ -33,15 +42,16 @@ export function useNativeChatForkHosts(): NativeChatForkHostInput[] {
     void ensureLocalRuntimeCapabilities()
   }, [])
   return useMemo(() => {
-    const remote = environments.map((environment): NativeChatForkHostInput => {
-      const entry = statuses.get(environment.id)
-      const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
-      return {
-        id: toRuntimeExecutionHostId(environment.id),
-        label: environment.name,
-        capabilities: status ? (status.capabilities ?? []) : null
-      }
-    })
+    const capabilitiesById = new Map<string, string[]>()
+    for (const line of advertised.split('\n').filter(Boolean)) {
+      const [id = '', capabilities = ''] = line.split('\t')
+      capabilitiesById.set(id, capabilities.split(' ').filter(Boolean))
+    }
+    const remote = environments.map((environment): NativeChatForkHostInput => ({
+      id: toRuntimeExecutionHostId(environment.id),
+      label: environment.name,
+      capabilities: capabilitiesById.get(environment.id) ?? null
+    }))
     return [
       {
         id: LOCAL_EXECUTION_HOST_ID,
@@ -50,7 +60,7 @@ export function useNativeChatForkHosts(): NativeChatForkHostInput[] {
       },
       ...remote
     ]
-  }, [environments, local, statuses, t])
+  }, [advertised, environments, local, t])
 }
 
 /** The worktrees whose owner is `hostId`, by name, leaving out the chat's own. */

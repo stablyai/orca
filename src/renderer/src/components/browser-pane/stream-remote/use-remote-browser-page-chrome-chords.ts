@@ -24,7 +24,9 @@ export function useRemoteBrowserPageChromeChords({
   chromeShortcutScope: BrowserChromeShortcutScope
   workspaceId: string
   runRemoteNavigation: (
-    method: 'browser.reload' | 'browser.back' | 'browser.forward'
+    method: 'browser.reload' | 'browser.back' | 'browser.forward',
+    url?: string,
+    ignoreCache?: boolean
   ) => Promise<void> | void
   setPaneNotice: Dispatch<SetStateAction<RemoteBrowserPaneNotice | null>>
 }): void {
@@ -108,9 +110,7 @@ export function useRemoteBrowserPageChromeChords({
       }
       event.preventDefault()
       event.stopImmediatePropagation()
-      // Why: the runtime exposes one reload; a hard reload would need a wire change, so both
-      // chords land on it rather than one of them silently doing nothing.
-      void runRemoteNavigation('browser.reload')
+      void runRemoteNavigation('browser.reload', undefined, isHardReload)
     }
     addAppKeyListener('keydown', handleKeyDown)
     return () => {

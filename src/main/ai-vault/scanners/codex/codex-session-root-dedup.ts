@@ -84,12 +84,7 @@ export function codexSessionRootRank(codexHome: string | null): number {
  */
 export function dedupeCodexRolloutFileAliases<T>(
   candidates: T[],
-  accessors: {
-    isCodex: (candidate: T) => boolean
-    getFilePath: (candidate: T) => string
-    getCodexHome: (candidate: T) => string | null
-    getHardlinkIdentity: (candidate: T) => string | null
-  }
+  accessors: CodexAliasAccessors<T>
 ): T[] {
   let bestByAlias: Map<string, { candidate: T; rank: number; filePath: string }> | undefined
   let aliased = false
@@ -138,18 +133,23 @@ export function dedupeCodexRolloutFileAliases<T>(
 // Match parse batch width; the WSL transcript gate separately serializes UNC reads.
 const COPY_PROOF_READ_CONCURRENCY = 8
 
-/** Bounded metadata must prove copy identity; unreadable or ambiguous files stay for full parsing. */
-export async function dedupeCodexRolloutCopyAliases<T>(
+type CodexAliasAccessors<T> = {
+  isCodex: (candidate: T) => boolean
+  getFilePath: (candidate: T) => string
+  getCodexHome: (candidate: T) => string | null
+  getHardlinkIdentity: (candidate: T) => string | null
+}
+
+/**
+ * Bounded metadata must prove copy identity; unreadable or ambiguous files stay alone.
+ * Outranked copies are keyed by the surviving copy they fold into, so callers can retire their rows.
+ */
+export async function groupCodexRolloutCopyAliases<T>(
   candidates: readonly T[],
-  accessors: {
-    isCodex: (candidate: T) => boolean
-    getFilePath: (candidate: T) => string
-    getCodexHome: (candidate: T) => string | null
-    getHardlinkIdentity: (candidate: T) => string | null
-  },
+  accessors: CodexAliasAccessors<T>,
   readSessionMetaId: (filePath: string) => Promise<string | null>,
   signal?: AbortSignal
-): Promise<T[]> {
+): Promise<{ survivors: readonly T[]; outranked: ReadonlyMap<T, readonly T[]> }> {
   const groups = new Map<string, T[]>()
   for (const candidate of candidates) {
     if (!accessors.isCodex(candidate)) {
@@ -169,8 +169,8 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     }
   }
 
-  // Proven hardlinks need no read; compare inodes only within same-name groups.
-  const aliasesToDrop = new Set<T>()
+  // Outranked copy -> the copy it folds into; proven hardlinks need no read.
+  const outrankedBy = new Map<T, T>()
   const contested: T[] = []
   for (const [key, group] of groups) {
     if (group.length < 2) {
@@ -178,10 +178,12 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     }
     const physical = dedupeCodexRolloutFileAliases(group, accessors)
     if (physical !== group) {
-      const kept = new Set(physical)
+      const twinByInode = new Map(physical.map((kept) => [hardlinkKey(kept, accessors), kept]))
       for (const candidate of group) {
-        if (!kept.has(candidate)) {
-          aliasesToDrop.add(candidate)
+        const inode = hardlinkKey(candidate, accessors)
+        const twin = inode === null ? undefined : twinByInode.get(inode)
+        if (twin !== undefined && twin !== candidate) {
+          outrankedBy.set(candidate, twin)
         }
       }
       groups.set(key, physical)
@@ -190,11 +192,6 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     if (physical.length > 1) {
       contested.push(...physical)
     }
-  }
-  if (contested.length === 0) {
-    return aliasesToDrop.size === 0
-      ? [...candidates]
-      : candidates.filter((candidate) => !aliasesToDrop.has(candidate))
   }
   const identifiedIds = await mapWithConcurrency(
     contested,
@@ -232,12 +229,40 @@ export async function dedupeCodexRolloutCopyAliases<T>(
     }
     for (const candidate of group) {
       const id = idByCandidate.get(candidate)
-      if (id && bestById.get(id)?.candidate !== candidate) {
-        aliasesToDrop.add(candidate)
+      const best = id ? bestById.get(id)?.candidate : undefined
+      if (best !== undefined && best !== candidate) {
+        outrankedBy.set(candidate, best)
       }
     }
   }
-  return candidates.filter((candidate) => !aliasesToDrop.has(candidate))
+
+  const outranked = new Map<T, T[]>()
+  for (const [candidate, outranker] of outrankedBy) {
+    let preferred = outranker
+    for (let next = outrankedBy.get(preferred); next !== undefined; next = outrankedBy.get(next)) {
+      preferred = next
+    }
+    const copies = outranked.get(preferred)
+    if (copies) {
+      copies.push(candidate)
+    } else {
+      outranked.set(preferred, [candidate])
+    }
+  }
+  return {
+    survivors:
+      outrankedBy.size === 0
+        ? candidates
+        : candidates.filter((candidate) => !outrankedBy.has(candidate)),
+    outranked
+  }
+}
+
+function hardlinkKey<T>(candidate: T, accessors: CodexAliasAccessors<T>): string | null {
+  const identity = accessors.getHardlinkIdentity(candidate)
+  return identity === null
+    ? null
+    : `${lastPathSegment(accessors.getFilePath(candidate))}\0${identity}`
 }
 
 export function codexSessionAliasKey(session: AiVaultSession): string | null {

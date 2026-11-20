@@ -12,6 +12,10 @@ import {
   type ProfileStateWriterResponse
 } from './profile-state-writer-protocol'
 import { installWorkerSendLedger } from '../../../worker-threads/worker-send-ledger'
+import {
+  forgetCommittedProfileStateDomains,
+  profileStateWriterPatching
+} from '../documents/profile-state-patched-domains'
 
 installWorkerSendLedger('orca-profile-state-writer')
 
@@ -44,19 +48,27 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
   let exportedRevision: number | null | undefined
   switch (request.command) {
     case 'write-state':
+      forgetCommittedProfileStateDomains()
       authority.writeSerializedState(Buffer.from(request.payload))
       break
     case 'write-complete':
-      authority.writeCompleteSerializedDomains(request.replacements)
+      authority.writeCompleteSerializedDomains(request.replacements, {
+        patches: request.patches,
+        patching: profileStateWriterPatching
+      })
       break
     case 'write-domains':
-      authority.writeSerializedDomains(request.replacements)
+      authority.writeSerializedDomains(request.replacements, {
+        patches: request.patches,
+        patching: profileStateWriterPatching
+      })
       break
     case 'write-automation':
-      authority.writeSerializedAutomationRuns(
-        request.replacements,
-        request.runPayloads.map((payload): unknown => JSON.parse(payload))
-      )
+      // Session domains written whole here must refresh the writer's committed copy too.
+      authority.writeSerializedDomains(request.replacements, {
+        automationRunsAfter: request.runPayloads.map((payload): unknown => JSON.parse(payload)),
+        patching: profileStateWriterPatching
+      })
       break
     case 'assert-revision':
       authority.assertCurrentRevision()

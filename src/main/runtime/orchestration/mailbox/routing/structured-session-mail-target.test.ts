@@ -226,7 +226,7 @@ describe('a coordinator chat continued by /clear', () => {
     expect(probe().target(`run:${runId}`)).toEqual({ sessionId: SUCCESSOR, dispatchId: null })
   })
 
-  it('reaches the live session through any spelling of the conversation, and stores one', () => {
+  it('reaches the live session through any spelling and redrives mail to both addresses', () => {
     installLineage(MIDDLE, SUCCESSOR)
     for (const member of [CHAT, MIDDLE, SUCCESSOR]) {
       expect(resolveOrcaSessionParty(member, db)).toMatchObject({
@@ -244,7 +244,10 @@ describe('a coordinator chat continued by /clear', () => {
       subject: 'hi',
       type: 'status'
     })
-    expect(idleEdge(SUCCESSOR)).toEqual([CHAT_ADDRESS])
     expect(db.getMessageById(direct.id)).toMatchObject({ to_handle: CHAT_ADDRESS, read: 0 })
+
+    const address = formatOrcaSessionAddress(SUCCESSOR)
+    db.insertMessage({ from: 'orca_bot_items', to: address, subject: 'item', type: 'status' })
+    expect(idleEdge(SUCCESSOR).sort()).toEqual([CHAT_ADDRESS, address].sort())
   })
 })

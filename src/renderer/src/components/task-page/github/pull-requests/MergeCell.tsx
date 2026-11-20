@@ -115,7 +115,8 @@ export function PRMergeCell({
                   repo: runtimeRepoId,
                   prNumber: item.number,
                   method,
-                  prRepo
+                  prRepo,
+                  expectedHeadSha: item.headSha ?? null
                 },
                 {
                   timeoutMs: 30_000
@@ -127,7 +128,8 @@ export function PRMergeCell({
                 sourceContext,
                 prNumber: item.number,
                 method,
-                prRepo
+                prRepo,
+                expectedHeadSha: item.headSha ?? null
               })
         }
       })

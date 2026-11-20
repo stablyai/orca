@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clientInstances,
@@ -59,21 +62,27 @@ function lastConnectPassword(): unknown {
 
 describe('SshConnectionManager on a password host', () => {
   const onCredentialRequest = vi.fn(async () => 'hunter2')
+  const passwordTarget = (overrides?: Parameters<typeof createTarget>[0]) =>
+    createTarget({ identityAgent: 'none', ...overrides })
+  let emptyHome = ''
   let manager: SshConnectionManager
 
   beforeEach(async () => {
     resetSshConnectionMocks()
-    vi.stubEnv('SSH_AUTH_SOCK', '')
+    emptyHome = mkdtempSync(join(tmpdir(), 'orca-ssh-sign-in-home-'))
+    vi.stubEnv('HOME', emptyHome)
+    vi.stubEnv('USERPROFILE', emptyHome)
     onCredentialRequest.mockClear()
     manager = new SshConnectionManager(createCallbacks({ onCredentialRequest }))
     // The first sign-in: no key or agent, so the host refuses until the user types the password.
     ssh2Mock.connectSequence = [authFailure(), 'ready']
-    await manager.connect(createTarget())
+    await manager.connect(passwordTarget())
     expect(onCredentialRequest).toHaveBeenCalledTimes(1)
   })
 
   afterEach(async () => {
     await manager.disconnectAll()
+    rmSync(emptyHome, { recursive: true, force: true })
   })
 
   it('does not ask again when a background dial lands while the dropped connection reconnects', async () => {
@@ -82,7 +91,7 @@ describe('SshConnectionManager on a password host', () => {
     expect(dropped?.getState().status).toBe('reconnecting')
 
     ssh2Mock.connectSequence = ['ready']
-    const replacement = await manager.connect(createTarget())
+    const replacement = await manager.connect(passwordTarget())
 
     expect(replacement).not.toBe(dropped)
     expect(replacement.getState().status).toBe('connected')
@@ -93,10 +102,10 @@ describe('SshConnectionManager on a password host', () => {
   it('keeps the sign-in across a replacement that failed for a reason other than sign-in', async () => {
     await manager.disconnectConnection('target-1', manager.getConnection('target-1')!)
     ssh2Mock.connectSequence = [new Error('Handshake failed: signature verification failed')]
-    await expect(manager.connect(createTarget())).rejects.toThrow('signature verification failed')
+    await expect(manager.connect(passwordTarget())).rejects.toThrow('signature verification failed')
 
     ssh2Mock.connectSequence = ['ready']
-    await manager.connect(createTarget())
+    await manager.connect(passwordTarget())
 
     expect(lastConnectPassword()).toBe('hunter2')
     expect(onCredentialRequest).toHaveBeenCalledTimes(1)
@@ -105,12 +114,12 @@ describe('SshConnectionManager on a password host', () => {
   it('asks again, once, after the host refuses the remembered password', async () => {
     await manager.disconnectConnection('target-1', manager.getConnection('target-1')!)
     ssh2Mock.connectSequence = [authFailure()]
-    await expect(manager.connect(createTarget())).rejects.toThrow('authentication methods failed')
+    await expect(manager.connect(passwordTarget())).rejects.toThrow('authentication methods failed')
     expect(onCredentialRequest).toHaveBeenCalledTimes(1)
 
     onCredentialRequest.mockResolvedValueOnce('new-password')
     ssh2Mock.connectSequence = [authFailure(), 'ready']
-    await manager.connect(createTarget())
+    await manager.connect(passwordTarget())
 
     expect(onCredentialRequest).toHaveBeenCalledTimes(2)
     expect(lastConnectPassword()).toBe('new-password')
@@ -131,11 +140,11 @@ describe('SshConnectionManager on a password host', () => {
     emitSshEvent('keyboard-interactive', '', '', '', passwordPrompt, vi.fn())
     await vi.waitFor(() => expect(onCredentialRequest).toHaveBeenCalledTimes(2))
     // A background dial may not close the dialog the user is answering.
-    await expect(manager.connect(createTarget())).rejects.toThrow('already in progress')
+    await expect(manager.connect(passwordTarget())).rejects.toThrow('already in progress')
     await manager.disconnectConnection('target-1', manager.getConnection('target-1')!)
 
     ssh2Mock.connectSequence = [authFailure(), 'ready']
-    await manager.connect(createTarget())
+    await manager.connect(passwordTarget())
 
     expect(onCredentialRequest).toHaveBeenCalledTimes(3)
   })
@@ -147,11 +156,11 @@ describe('SshConnectionManager on a password host', () => {
       authFailure(),
       new Error('Handshake failed: signature verification failed')
     ]
-    await expect(manager.connect(createTarget())).rejects.toThrow('signature verification failed')
-    expect(manager.hasCachedCredential(createTarget())).toBe(false)
+    await expect(manager.connect(passwordTarget())).rejects.toThrow('signature verification failed')
+    expect(manager.hasCachedCredential(passwordTarget())).toBe(false)
 
     ssh2Mock.connectSequence = [authFailure(), 'ready']
-    await manager.connect(createTarget())
+    await manager.connect(passwordTarget())
 
     expect(onCredentialRequest).toHaveBeenCalledTimes(3)
   })
@@ -161,13 +170,13 @@ describe('SshConnectionManager on a password host', () => {
     recordSshCredentialDeclined('target-1')
     const clientsBefore = clientInstances.length
 
-    await expect(manager.connect(createTarget())).rejects.toThrow('was cancelled')
+    await expect(manager.connect(passwordTarget())).rejects.toThrow('was cancelled')
     expect(clientInstances).toHaveLength(clientsBefore)
   })
 
   it('asks again when the host was edited to point somewhere else', async () => {
     await manager.disconnectConnection('target-1', manager.getConnection('target-1')!)
-    const edited = createTarget({ host: 'other.example.com' })
+    const edited = passwordTarget({ host: 'other.example.com' })
     expect(manager.hasCachedCredential(edited)).toBe(false)
 
     ssh2Mock.connectSequence = [authFailure(), 'ready']
@@ -178,10 +187,10 @@ describe('SshConnectionManager on a password host', () => {
 
   it('forgets the sign-in when the user disconnects', async () => {
     await manager.disconnect('target-1')
-    expect(manager.hasCachedCredential(createTarget())).toBe(false)
+    expect(manager.hasCachedCredential(passwordTarget())).toBe(false)
 
     ssh2Mock.connectSequence = [authFailure(), 'ready']
-    await manager.connect(createTarget())
+    await manager.connect(passwordTarget())
 
     expect(onCredentialRequest).toHaveBeenCalledTimes(2)
   })

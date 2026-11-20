@@ -1,6 +1,12 @@
 import { parseOrcaSessionAddress } from '../../agent-session/identity/orca-session-address'
 
-export type OrchestrationAgentReference = { label: string; address: string; hostKey: string }
+export type OrchestrationAgentReference = {
+  label: string
+  address: string
+  hostKey: string
+  /** The agent's logo on its composer pill; never part of the sent text. */
+  agentType?: string
+}
 
 export function isPublicOrchestrationAddress(address: string): boolean {
   return (

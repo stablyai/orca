@@ -59,7 +59,8 @@
       "messages_many": "{{count}} mensajes",
       "messages_one": "{{count}} mensaje",
       "messages_other": "{{count}} mensajes",
-      "resumeSession": "Reanudar sesión de agente"
+      "resumeSession": "Reanudar sesión de agente",
+      "continueInCli": "Continuar en la CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "No se pudo contactar con el host",
@@ -113,7 +114,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... o pega el código",
       "pasteCodeTitle": "Pegar código de emparejamiento",
       "pasteInstead": "Pegar código en su lugar",
-      "pastePairingCode": "O pegar código de emparejamiento",
+      "pastePairingCode": "Pegar código de emparejamiento",
       "scanCodeStep": "Escanea el código QR",
       "title": "Emparejar con un escritorio",
       "tryAgain": "Reintentar",
@@ -149,7 +150,7 @@
       "installTitle": "Descarga la nueva app",
       "installDescription": "Si tu teléfono lo pide, permite que tu navegador instale apps.",
       "download": "Descargar",
-      "keepThisVersion": "Seguir usando esta versión",
+      "keepThisVersion": "Conservar esta versión",
       "keepThisVersionNote": "Te perderás las correcciones de seguridad. Te lo recordaremos en una semana."
     },
     "pairTitle": "Emparéjala con tu equipo",
@@ -169,11 +170,13 @@
       "invalidUrl": "Introduce una URL válida."
     },
     "paneView": {
-      "dialogTitle": "Diálogo del navegador",
       "forward": "Adelante",
       "keyboardPlaceholder": "Escribe en la página…",
       "reload": "Recargar",
-      "sendText": "Enviar texto al navegador"
+      "sendText": "Enviar texto al navegador",
+      "dialogTitleWithOrigin": "{{origin}} dice",
+      "dialogTitleNoOrigin": "Esta página dice",
+      "dialogAnswer": "Respuesta"
     },
     "pointerModifiers": {
       "clickModifier": "Modificador {{key}} para clics"
@@ -186,6 +189,20 @@
     "viewModeSwitch": {
       "mobileView": "Mostrar vista móvil del sitio web",
       "webView": "Mostrar vista de escritorio del sitio web"
+    },
+    "loadFailure": {
+      "retry": "Reintentar",
+      "connectionNotSecure": "La conexión no es segura",
+      "certificateNameMismatch": "El certificado no coincide con {{value0}}.",
+      "certificateDateInvalid": "El certificado de {{value0}} no es válido en la fecha y hora actuales.",
+      "certificateAuthorityInvalid": "Orca no confía en la autoridad que emitió el certificado de {{value0}}.",
+      "certificateVerificationFailed": "Orca no pudo verificar el certificado de {{value0}}.",
+      "proceedUnsafe": "Continuar (no seguro)",
+      "connecting": "Conectando…",
+      "certificateChallengeExpired": "Esta aprobación de certificado caducó. Vuelve a intentarlo con la página para solicitar una nueva.",
+      "certificateChallengeChanged": "La solicitud de certificado cambió. Vuelve a intentarlo con la página y revisa la nueva advertencia.",
+      "certificateProceedFailed": "Orca no pudo aprobar esta solicitud de certificado. Vuelve a intentarlo con la página e inténtalo de nuevo.",
+      "certificateChallengeUnavailable": "Esta solicitud de certificado ya no está disponible. Vuelve a intentarlo con la página para solicitar una nueva."
     }
   },
   "chat": {
@@ -219,7 +236,8 @@
     "contextUsage": {
       "label": "Contexto: {{used}} de {{window}} tokens, {{percent}} % usados",
       "title": "Contexto",
-      "estimated": "Estimado a partir de la última respuesta."
+      "estimated": "Estimado a partir de la última respuesta.",
+      "deferredNote": "Se cargan cuando se necesitan. No cuentan en el total usado."
     },
     "composerAttachments": {
       "attachedImage": "Imagen adjunta",
@@ -310,7 +328,7 @@
       "triedSearchWeb": "Intentó buscar en la web"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "Mostrar mensaje completo — no se pudo cargar; toca para reintentar",
+      "loadFailed": "Reintentar mensaje completo",
       "showFullMessage": "Mostrar mensaje completo",
       "showLess": "Mostrar menos"
     },
@@ -376,8 +394,7 @@
       "submitSelectedOptions": "Enviar opciones seleccionadas"
     },
     "queuedMessages": {
-      "clearAll": "Borrar todo",
-      "deleteAll": "Eliminar todos los mensajes en cola",
+      "deleteAll": "Eliminar todo",
       "editMessage": "Editar mensaje",
       "pausedState": "En pausa",
       "queuedState": "En cola",
@@ -637,10 +654,6 @@
       "imageTooLarge": "Imagen demasiado grande para adjuntarla",
       "permissionDenied": "Permiso de acceso a las fotos denegado"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Entregado a un agente",
-      "startedAgent": "Agente iniciado"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "La respuesta del adjunto no se puede leer. Inténtalo de nuevo.",
       "incompleteReply": "El adjunto cambió o su respuesta estaba incompleta. Ciérralo e inténtalo de nuevo.",
@@ -688,7 +701,7 @@
       "confirm": "Rebobinar",
       "unsupported": "Este chat no puede volver a un mensaje anterior.",
       "historyNotPaginated": "Este chat de Codex más antiguo no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Rebobinar hasta aquí.",
-      "busy": "Disponible cuando el agente esté inactivo y nada en este chat esté esperándote.",
+      "busy": "Disponible cuando el chat esté inactivo",
       "staleEpoch": "La conversación cambió. Revisa los últimos mensajes e inténtalo de nuevo.",
       "invalidTarget": "La conversación no puede volver a este mensaje. No se cambió nada.",
       "historyLimit": "Esta conversación es demasiado larga para retroceder en ella. No se cambió nada.",
@@ -811,7 +824,7 @@
       "manageShortcuts": "Gestionar atajos",
       "manageShortcutsHint": "Muestra, oculta o reordena los atajos de teclado",
       "modifiers": "Modificadores",
-      "moreKeys": "Más teclas: Tab, flechas, F1–F12…",
+      "moreKeys": "MÁS TECLAS",
       "navigation": "Navegación",
       "pickKey": "Elige una tecla",
       "pressEnter": "Pulsar Enter",
@@ -965,11 +978,11 @@
       "dismissDrawer": "Cerrar panel"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Script de configuración",
-      "run": "Ejecutar",
-      "runSetupCommand": "Ejecutar comando de configuración",
-      "skip": "Omitir"
+      "runSetup": "Ejecutar configuración",
+      "skip": "Omitir",
+      "startAgentAfterSetup": "Iniciar el agente tras la configuración",
+      "waitForSetupSaveFailed": "Error al guardar el comportamiento de inicio"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Conectar",
@@ -1174,6 +1187,9 @@
       "composer": {
         "planMode": "Planificar",
         "exitPlanMode": "Salir del modo de planificación"
+      },
+      "goal": {
+        "sentAsGoal": "Enviado como objetivo"
       }
     }
   },
@@ -1241,7 +1257,7 @@
       "privacyHint": "Envía un informe de tamaño limitado con los datos sensibles ocultos, que incluye el nombre del host, el punto de conexión, las versiones, el estado de la conexión y los eventos; nunca el contenido del terminal ni las credenciales.",
       "reconnecting": "reconectando",
       "retrySending": "Reintentar envío",
-      "sendDiagnostics": "Enviar diagnósticos a Orca",
+      "sendDiagnostics": "Enviar diagnóstico",
       "sending": "Enviando…",
       "sent": "Diagnósticos enviados",
       "stateWithAttempt": "{{state}} · intento {{attempts}}",
@@ -1627,10 +1643,8 @@
   "host": {
     "edit": {
       "address": "Dirección",
-      "addressHint": "Acepta IP, host:port o ws:// / wss://. Una URL wss:// sin puerto usa el puerto 443. Las direcciones sin protocolo ni puerto conservan el puerto actual (o 6768).",
       "connectionPreview": "Se conecta a {{endpoint}}",
       "goBack": "Volver",
-      "help": "Cambia el nombre que se muestra o la dirección de conexión. Deja el nombre vacío para usar el que indica el escritorio. Cambiar la dirección solo modifica adónde se conecta este teléfono; no se repite el emparejamiento. Usa esta opción cuando el mismo escritorio sea accesible desde otra IP (por ejemplo, la LAN de casa o Tailscale).",
       "hostNamePlaceholder": "Nombre del host",
       "hostRemoved": "Este host se eliminó de este teléfono.",
       "loadFailed": "No se pudo cargar el host.",
@@ -1671,7 +1685,12 @@
       "removeHostMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
       "sleep": "Suspender",
       "unpin": "Desanclar",
-      "rename": "Cambiar nombre"
+      "rename": "Cambiar nombre",
+      "markRead": "Marcar como leído",
+      "markUnread": "Marcar como no leído",
+      "muteNotifications": "Silenciar notificaciones",
+      "unmuteNotifications": "Reactivar notificaciones",
+      "moveToStatus": "Mover al estado"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fallidos",
@@ -1982,7 +2001,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "La rama {{branch}} no está vinculada a ningún PR abierto.",
       "currentBranchNotLinked": "La rama actual no está vinculada a ningún PR abierto.",
-      "linkExistingPullRequest": "Vincular un pull request existente",
+      "linkExistingPullRequest": "Vincular pull request",
       "linkedPrUnavailable": "PR #{{number}} vinculado no disponible",
       "refreshOrCreate": "Actualiza para volver a comprobarlo o crea un nuevo PR para esta rama."
     },
@@ -2058,6 +2077,9 @@
       "sendFailed": "No se pudo enviar el comando de reanudación"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Esta conversación de {{agent}} está abierta en un chat. Actualiza el historial de sesiones para abrirla.",
+      "ownershipUnknown": "Orca no pudo confirmar quién es el propietario de esta conversación de {{agent}}. Actualiza el historial de sesiones e inténtalo de nuevo.",
+      "preparationRefused": "Orca no pudo preparar esta conversación de {{agent}}. Inicia un chat nuevo para continuar.",
       "prepareFailed": "No se pudo preparar esta sesión antigua de Codex. Vuelve a intentar reanudarla."
     },
     "backgroundTask": {
@@ -2179,6 +2201,7 @@
     "failure": {
       "accountSwitchInProgress": "La configuración de {{agent}} está cambiando en este host. Vuelva a intentarlo cuando termine.",
       "agentCommandNotRunnable": "{{agent}}: el Comando en Ajustes → Agentes debe ser la ruta o el nombre de un programa que Orca pueda encontrar, sin argumentos ni variables. Cámbielo o restablézcalo con Reiniciar.",
+      "agentCommandFailed": "El Comando de {{agent}} en Ajustes → Agentes no inició {{agent}}: {{detail}}. Cámbialo o restablécelo.",
       "agentCommandNotSignedIn": "Inicia sesión en {{agent}} con `{{loginCommand}}` en el equipo donde se ejecuta este chat.",
       "agentNotSignedIn": "Inicia sesión en {{agent}}.",
       "agentStarting": "El agente todavía se está iniciando.",
@@ -2263,6 +2286,7 @@
       "providerUnavailable": "{{agent}} no pudo responder porque el servicio está ocupado. Elige otro modelo o espera un poco y vuelve a enviar el mensaje.",
       "providerSafetyStopped": "{{agent}} detuvo esta respuesta tras una comprobación de seguridad. Revisa tu solicitud y vuelve a enviarla.",
       "providerResponseFailed": "{{agent}} no pudo terminar esta respuesta. Abre los detalles para obtener más información.",
+      "providerResponseFailedQuoted": "{{agent}} no pudo terminar esta respuesta: {{detail}}.",
       "selectedModel": "el modelo seleccionado",
       "providerRejected": "{{agent}} no aceptó este mensaje.",
       "providerRejectedQuoted": "{{agent}} no aceptó este mensaje: {{detail}}.",
@@ -2376,8 +2400,8 @@
       "scrollToLatest": "Ir a lo más reciente"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "Mostrar mensaje completo — no se pudo cargar; toca para reintentar",
-      "loadOutputFailed": "Mostrar salida completa — no se pudo cargar; toca para reintentar",
+      "loadMessageFailed": "Reintentar mensaje completo",
+      "loadOutputFailed": "Reintentar salida completa",
       "partialMessage": "Se muestra parte de este mensaje.",
       "partialOutput": "Se muestran {{shown}} de {{total}}.",
       "showFullMessage": "Mostrar mensaje completo",
@@ -2393,8 +2417,8 @@
       "notFoundTitle": "Aún no se encuentra esta conversación"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "Cambiar a la vista de chat",
-      "switchToTerminalView": "Cambiar a la vista de terminal"
+      "switchToChatView": "Cambiar al chat",
+      "switchToTerminalView": "Cambiar al terminal"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "El agente se inició, pero no se enviaron las notas.",
@@ -2526,6 +2550,11 @@
       "sendReviewNotes": "Enviar notas de revisión",
       "shortcut": "Atajo",
       "terminal": "Terminal",
+      "terminalWithShell": "Terminal: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD Prompt",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "Nombre de la terminal",
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
       "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva.",
@@ -2713,7 +2742,7 @@
       "disconnected": "No se pudo pegar (sin conexión)",
       "imageTooLarge": "Imagen demasiado grande para pegarla",
       "pasteFailed": "No se pudo pegar",
-      "pasteTooLarge": "Contenido demasiado grande para pegarlo (máx. 256 KiB)",
+      "pasteTooLarge": "El contenido pegado es demasiado grande.",
       "terminalChanged": "Pegado cancelado (se cambió de terminal)"
     },
     "worktreeLabel": {
@@ -2843,6 +2872,12 @@
     "structuredOpen": {
       "worktreeDeleted": "El worktree se eliminó.",
       "folderWorkspaceRemoved": "Se quitó el espacio de trabajo de carpeta."
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "No se pudo encontrar ese mensaje."
+    },
+    "browserProfile": {
+      "default": "Predeterminado"
     }
   },
   "settings": {
@@ -3922,7 +3957,7 @@
       "issueSource": "Fuente de issues",
       "keySecurityHint": "Tu clave se cifra con el llavero del sistema operativo del host y se guarda localmente.",
       "linearConnectSubtitle": "Pega una clave API personal para consultar los issues de ese espacio de trabajo.",
-      "linearSettingsLink": "Ajustes de Linear / Seguridad / Nueva clave API",
+      "linearSettingsLink": "Abrir ajustes de Linear",
       "linearTeam": "Equipo de Linear",
       "linearTeamSubtitle": "Crea un issue en el equipo de Linear seleccionado.",
       "newIssueTitle": "Nuevo issue de {{providerLabel}}",
@@ -3997,7 +4032,7 @@
       "runSetupAndCreate": "Ejecutar configuración y crear",
       "setupSubtitle": "{{name}} requiere que decidas si ejecutar la configuración antes de crear este espacio de trabajo.",
       "setupTitle": "¿Ejecutar script de configuración?",
-      "skipSetupAndCreate": "Omitir configuración y crear",
+      "skipSetupAndCreate": "Crear sin configuración",
       "trustFailed": "No se pudo marcar el script de configuración como de confianza."
     },
     "worktreeCreateRetry": {
@@ -4441,6 +4476,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "Vincular un ordenador",
+      "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
+      "pairAction": "Vincular un ordenador",
+      "openFailed": "No se pudo abrir este enlace",
+      "ambiguous": "Este bot está en {{names}}. Abre el chat en Orca en el ordenador que quieras.",
+      "computer": "tu ordenador",
+      "updateNeeded": "Actualiza Orca en {{names}} para abrir este enlace.",
+      "unreachable": "No se pudo conectar con {{names}}. Asegúrate de que Orca esté abierto en uno de ellos e inténtalo de nuevo.",
+      "missing": "Ninguno de tus ordenadores vinculados tiene este bot.",
+      "offline": "{{name}} está desconectado. Vuelve a abrir el enlace cuando se conecte.",
+      "chatOpenFailed": "{{name}} no pudo abrir este chat. Vuelve a intentar el enlace.",
+      "unreachableSingle": "No se pudo conectar con {{name}}. Asegúrate de que Orca esté abierto allí e inténtalo de nuevo.",
+      "workspaceDeleted": "El espacio de trabajo de este chat se eliminó en {{name}}."
     }
   }
 }
