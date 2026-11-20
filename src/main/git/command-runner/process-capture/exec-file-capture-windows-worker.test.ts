@@ -101,7 +101,13 @@ describe('Windows process creation off the calling loop', () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       try {
         const child = new WorkerThreadChildProcess(1, () => true)
-        worker.spawn.mockReturnValue(child)
+        // The launch reaches the worker after its ready check; real-time polling would also advance the fake deadline.
+        const spawned = new Promise<void>((resolve) =>
+          worker.spawn.mockImplementation(() => {
+            resolve()
+            return child
+          })
+        )
         const controller = new AbortController()
         const timeoutError = new Error('Git deadline expired')
         const terminated = vi.fn()
@@ -112,6 +118,7 @@ describe('Windows process creation off the calling loop', () => {
           maxBuffer: 4,
           onChildTerminated: terminated
         }).catch((error: unknown) => error)
+        await spawned
         child.receive({ type: 'spawn', id: 1, pid: 4242 })
         if (overflow) {
           child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('overflow') })
