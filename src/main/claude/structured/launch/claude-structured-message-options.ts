@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
 import {
   claudeOwesFullAccessFallback,
@@ -77,15 +78,48 @@ export async function applyClaudeMessageOptions(
     if (options.interactionMode === 'default') {
       session.appliedInputOptions.set('buildPermissionMode', mode)
     }
-  } else if (claudeOwesFullAccessFallback(session)) {
-    // Claude started a refused Full access chat in its own fallback; the chat's is Approve for me.
-    const mode = await waitForPromiseWithSignal(
-      setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), { timeoutMs }),
-      signal
-    )
-    session.appliedInputOptions.set('buildPermissionMode', mode)
+  } else {
+    await applyClaudeFullAccessFallback(session, timeoutMs, signal)
   }
   throwIfSignalAborted(signal)
+}
+
+const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000
+
+/** Claude starts a refused Full access chat in its own fallback; the chat's is Approve for me. A
+ *  first send waits briefly for the startup settings read that tells, and a failed switch leaves
+ *  the send to run as Claude stands (the next send tries again). */
+async function applyClaudeFullAccessFallback(
+  session: ClaudeSession,
+  timeoutMs: number | undefined,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  if (
+    session.launchIntent?.permissionMode === 'bypassPermissions' &&
+    session.bypassDisabled === undefined &&
+    !session.firstRootInit &&
+    session.startupSettings
+  ) {
+    await waitForPromiseWithSignal(
+      Promise.race([
+        session.startupSettings,
+        delay(CLAUDE_STARTUP_SETTINGS_WAIT_MS, undefined, { ref: false })
+      ]),
+      signal
+    )
+  }
+  if (!claudeOwesFullAccessFallback(session)) {
+    return
+  }
+  const mode = await waitForPromiseWithSignal(
+    setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
+      timeoutMs
+    }).catch(() => null),
+    signal
+  )
+  if (mode !== null) {
+    session.appliedInputOptions.set('buildPermissionMode', mode)
+  }
 }
 
 // Bounded so an unanswered request still lets the steer through.

@@ -107,25 +107,30 @@ function claudePermissionModeLadder(
 
 /** Asks for the mode Claude allows and resolves to the mode applied, remembering what Claude
  *  accepted or refused for this process. Claude rereads its settings, so bypass or auto it
- *  allowed earlier can be refused later; that refusal is followed by the fallback. */
+ *  allowed earlier can be refused later; that refusal is followed by the fallback, and a
+ *  refusal with no fallback left is the caller's error. */
 export async function setClaudeAllowedPermissionMode(
   session: ClaudeBypassFacts & {
     connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
   },
   mode: PermissionMode,
-  options?: { timeoutMs?: number }
+  options?: { timeoutMs?: number },
+  refusedBefore: ReadonlySet<PermissionMode> = new Set()
 ): Promise<PermissionMode> {
   const ladder = claudePermissionModeLadder(session, mode)
   const writes = await Promise.allSettled(
     ladder.map((step) => session.connection.setPermissionMode(step, options))
   )
   let applied: PermissionMode | null = null
-  let refusedLast = false
+  let lastRefusal: unknown = null
+  let unexpected: { error: unknown } | null = null
+  const refused = new Set(refusedBefore)
+  // Every answer is recorded before any error is rethrown, so later steps' facts survive.
   for (const [index, write] of writes.entries()) {
     const step = ladder[index]
     if (write.status === 'fulfilled') {
       applied = step
-      refusedLast = false
+      lastRefusal = null
       if (step === 'bypassPermissions') {
         session.bypassDisabled = false
       } else if (step === 'auto') {
@@ -135,25 +140,32 @@ export async function setClaudeAllowedPermissionMode(
     }
     const refusal = claudeRefusal(write.reason)
     if (refusal === null || (refusal === 'bypass') !== (step === 'bypassPermissions')) {
-      throw write.reason
+      unexpected ??= { error: write.reason }
+      continue
     }
-    refusedLast = true
+    lastRefusal = write.reason
+    refused.add(step)
     if (refusal === 'bypass') {
       session.bypassDisabled = true
     } else {
       session.autoDisabled = true
     }
   }
-  if (applied !== null && !refusedLast) {
+  if (unexpected) {
+    throw unexpected.error
+  }
+  if (applied !== null && lastRefusal === null) {
     return applied
   }
   const next = claudeAllowedPermissionMode(session, mode)
   if (applied === next) {
     return applied
   }
-  // Every step written was refused (a refusal of a mode allowed earlier). Each refusal is a new
-  // fact, so this asks again at most twice.
-  return setClaudeAllowedPermissionMode(session, mode, options)
+  if (refused.has(next) || refused.size > 2) {
+    throw lastRefusal
+  }
+  // Only a refusal of a mode allowed earlier gets here; each one is a new fact.
+  return setClaudeAllowedPermissionMode(session, mode, options, refused)
 }
 
 /** A refused Full access chat outside Plan whose fallback no build switch has applied yet. */
@@ -220,7 +232,10 @@ export function claudeFullAccessRefusalRow(
     kind: 'status',
     tone: 'warning',
     presentation: AGENT_SESSION_TURN_NOTICE_PRESENTATION,
-    text: `Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses ${running} instead.`
+    text:
+      choice === 'ask' && session.autoDisabled === true
+        ? `Claude's settings turn off Full access and Approve for me (permissions.disableBypassPermissionsMode, disableAutoMode), so Claude uses ${running} instead.`
+        : `Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses ${running} instead.`
   }
 }
 

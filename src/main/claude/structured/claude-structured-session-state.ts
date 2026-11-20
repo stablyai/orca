@@ -150,6 +150,8 @@ export type ClaudeSession = {
   firstRootInit?: { permissionMode: string | null }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
   bypassDisabled?: boolean
+  /** The startup `get_settings` read; settles once its facts are recorded, never rejects. */
+  startupSettings?: Promise<void>
   /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */
   autoDisabled?: boolean
   /** Full access processes only: Claude's mode in wire order, ahead of `reportedOptions`. */

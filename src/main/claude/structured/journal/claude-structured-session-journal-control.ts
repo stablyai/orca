@@ -13,7 +13,8 @@ import type { ClaudeInitProof } from '../startup/claude-structured-init-proof'
 import {
   claimClaudeFullAccessRefusalNotice,
   claudeBypassRefused,
-  claudeFullAccessRefusalRow
+  claudeFullAccessRefusalRow,
+  claudeOwesFullAccessFallback
 } from '../permissions/claude-full-access-refusal'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type {
@@ -55,8 +56,10 @@ export function createClaudeSessionJournalTranslator(
         acceptStartupFailure,
         fullAccessRefusalNotice: () => {
           const session = currentSession()
+          // Held until the fallback is applied, so the row names the mode the chat keeps.
           return session &&
             claudeBypassRefused(session) &&
+            !claudeOwesFullAccessFallback(session) &&
             claimClaudeFullAccessRefusalNotice(failure.sessionId)
             ? claudeFullAccessRefusalRow(session)
             : null

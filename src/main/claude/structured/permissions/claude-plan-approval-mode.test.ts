@@ -114,4 +114,17 @@ describe('leaving Plan mode after an approved plan', () => {
     expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('auto')
     expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('auto')
   })
+
+  it('stops when Claude refuses bypass for a chat that never asked for Full access', async () => {
+    const setPermissionMode = claude(['bypassPermissions'])
+    const session = {
+      launchIntent: {},
+      firstRootInit: { permissionMode: 'bypassPermissions' },
+      connection: { setPermissionMode }
+    }
+    await expect(setClaudeAllowedPermissionMode(session, 'bypassPermissions')).rejects.toThrow(
+      BYPASS_REFUSAL
+    )
+    expect(setPermissionMode).toHaveBeenCalledTimes(1)
+  })
 })

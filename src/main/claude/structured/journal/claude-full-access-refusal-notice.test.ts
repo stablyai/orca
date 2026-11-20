@@ -10,9 +10,17 @@ import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { createClaudeInitProof } from '../startup/claude-structured-init-proof'
 import { createClaudeSessionJournalTranslator } from './claude-structured-session-journal-control'
 
-type Launch = Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'bypassDisabled'>
+type Launch = Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'bypassDisabled'> & {
+  running?: string
+}
 
-function launch(sessionId: string, session: Launch) {
+function launch(sessionId: string, facts: Launch) {
+  const { running, ...rest } = facts
+  const session = {
+    ...rest,
+    appliedInputOptions: new Map<string, string>(),
+    reportedOptions: running === undefined ? {} : { reportedPermissionMode: running }
+  }
   const bodies: AgentJournalItemBody[] = []
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (_identity, body) => bodies.push(body),
@@ -31,7 +39,7 @@ function launch(sessionId: string, session: Launch) {
       callbacks: {} as ClaudeAcquireCallbacks,
       sessionId
     },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the notice reads only launchIntent, firstRootInit and bypassDisabled, which the stub sets.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the notice reads only the permission facts, applied options and reports the stub sets.
     () => session as ClaudeSession,
     () => false
   )
@@ -48,21 +56,25 @@ function launch(sessionId: string, session: Launch) {
       }
     })
   const warnings = () => bodies.filter((body) => body.kind === 'status' && body.tone === 'warning')
-  return { init, warnings }
+  return { init, warnings, session }
 }
 
 const FULL_ACCESS = { permissionMode: 'bypassPermissions' }
 
 describe('a Full access chat whose Claude refuses bypass', () => {
-  it('gets one warning per chat, across turns and restarts', () => {
+  it('gets one warning per chat once its fallback is applied, across turns and restarts', () => {
     const opened = { launchIntent: FULL_ACCESS, firstRootInit: { permissionMode: 'default' } }
     const first = launch('refused-chat', opened)
     first.init('default')
-    first.init('default')
+    expect(first.warnings()).toHaveLength(0)
+    first.session.appliedInputOptions.set('buildPermissionMode', 'auto')
+    first.init('auto')
+    first.init('auto')
     expect(first.warnings()).toHaveLength(1)
 
     const restarted = launch('refused-chat', opened)
-    restarted.init('default')
+    restarted.session.appliedInputOptions.set('buildPermissionMode', 'auto')
+    restarted.init('auto')
     expect(restarted.warnings()).toHaveLength(0)
   })
 
@@ -70,7 +82,8 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     const planStart = launch('plan-chat', {
       launchIntent: FULL_ACCESS,
       firstRootInit: { permissionMode: 'plan' },
-      bypassDisabled: true
+      bypassDisabled: true,
+      running: 'plan'
     })
     planStart.init('plan')
     expect(planStart.warnings()).toHaveLength(1)
