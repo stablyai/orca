@@ -5,7 +5,6 @@ import {
   NO_IMPORT_PATH_MAPPINGS,
   isRelativeModuleSpecifier,
   resolveModulePath,
-  type ImportPathMapping,
   type ImportPathMappings
 } from './import-module-candidates'
 
@@ -14,9 +13,13 @@ const MAX_CONFIG_ANCESTORS = 32
 const MAX_EXTENDS_DEPTH = 4
 const MAX_REFERENCES = 8
 
+type ConfigPaths = { entries: Record<string, string[]>; originDir: string }
+type ConfigSources = { include: string[] | null; files: string[] | null; configDir: string }
+
 type ConfigMappings = {
   baseUrl: string | null
-  paths: ImportPathMapping[] | null
+  paths: ConfigPaths | null
+  sources: ConfigSources
   references: string[]
 }
 
@@ -24,6 +27,8 @@ type RawConfig = {
   extends: string[]
   baseUrl?: string
   paths?: Record<string, string[]>
+  include?: string[]
+  files?: string[]
   references: string[]
 }
 
@@ -53,6 +58,8 @@ function parseConfig(text: string): RawConfig | null {
     extends: typeof config.extends === 'string' ? [config.extends] : stringArray(config.extends),
     baseUrl: typeof options.baseUrl === 'string' ? options.baseUrl : undefined,
     paths,
+    include: Array.isArray(config.include) ? stringArray(config.include) : undefined,
+    files: Array.isArray(config.files) ? stringArray(config.files) : undefined,
     references: references.flatMap((reference) =>
       isRecord(reference) && typeof reference.path === 'string' ? [reference.path] : []
     )
@@ -79,7 +86,8 @@ async function loadConfigMappings(
   }
   const configDir = dirname(configPath)
   let inheritedBaseUrl: string | null = null
-  let inheritedPaths: ImportPathMapping[] | null = null
+  let inheritedPaths: ConfigPaths | null = null
+  let inheritedSources: ConfigSources | null = null
   if (depth < MAX_EXTENDS_DEPTH) {
     // Why: package-name bases (e.g. @tsconfig/node20) never define project aliases.
     for (const base of config.extends.filter(isPathLikeReference)) {
@@ -87,20 +95,22 @@ async function loadConfigMappings(
       const parent = await loadConfigMappings(access, basePath, depth + 1)
       inheritedBaseUrl = parent?.baseUrl ?? inheritedBaseUrl
       inheritedPaths = parent?.paths ?? inheritedPaths
+      inheritedSources =
+        parent && (parent.sources.include || parent.sources.files)
+          ? parent.sources
+          : inheritedSources
     }
   }
-  const baseUrl =
-    config.baseUrl === undefined ? inheritedBaseUrl : resolveModulePath(configDir, config.baseUrl)
-  const paths = config.paths
-    ? Object.entries(config.paths).map(([pattern, targets]) => ({
-        pattern,
-        targets,
-        baseDir: baseUrl ?? configDir
-      }))
-    : inheritedPaths
+  const ownSources = config.include || config.files
   return {
-    baseUrl,
-    paths,
+    baseUrl:
+      config.baseUrl === undefined
+        ? inheritedBaseUrl
+        : resolveModulePath(configDir, config.baseUrl),
+    paths: config.paths ? { entries: config.paths, originDir: configDir } : inheritedPaths,
+    sources: ownSources
+      ? { include: config.include ?? null, files: config.files ?? null, configDir }
+      : (inheritedSources ?? { include: null, files: null, configDir }),
     references: config.references.map((reference) => {
       const referencePath = resolveModulePath(configDir, reference)
       return referencePath.endsWith('.json')
@@ -131,7 +141,28 @@ function toMappings(config: ConfigMappings): ImportPathMappings | null {
   if (!config.paths && !config.baseUrl) {
     return null
   }
-  return { baseUrl: config.baseUrl, paths: config.paths ?? [] }
+  const paths = config.paths
+  // Why: TypeScript resolves `paths`, inherited ones included, against the effective `baseUrl`.
+  const baseDir = config.baseUrl ?? paths?.originDir ?? ''
+  return {
+    baseUrl: config.baseUrl,
+    paths: paths
+      ? Object.entries(paths.entries).map(([pattern, targets]) => ({ pattern, targets, baseDir }))
+      : []
+  }
+}
+
+/** Whether a project's `include`/`files` (TypeScript's defaults when absent) can contain `filePath`. */
+function sourcesCover({ include, files, configDir }: ConfigSources, filePath: string): boolean {
+  if (files?.some((file) => resolveModulePath(configDir, file) === filePath)) {
+    return true
+  }
+  const patterns = include ?? (files ? [] : ['**/*'])
+  return patterns.some((pattern) => {
+    const staticPrefix = pattern.split(/[*?{[]/)[0].replace(/[\\/]+$/, '')
+    const base = staticPrefix ? resolveModulePath(configDir, staticPrefix) : configDir
+    return getRelativePathInsideRoot(filePath, base) !== null
+  })
 }
 
 /** Alias rules from the nearest tsconfig/jsconfig at or above `filePath`, inside `rootPath`. */
@@ -157,12 +188,14 @@ export async function loadImportPathMappings(
     return own
   }
   // Why: solution-style roots (Vite's tsconfig.json) keep aliases in referenced project configs.
+  let fallback: ImportPathMappings | null = null
   for (const reference of config.references.slice(0, MAX_REFERENCES)) {
     const referenced = await loadConfigMappings(access, reference, 0)
     const mappings = referenced ? toMappings(referenced) : null
-    if (mappings) {
+    if (referenced && mappings && sourcesCover(referenced.sources, filePath)) {
       return mappings
     }
+    fallback ??= mappings
   }
-  return NO_IMPORT_PATH_MAPPINGS
+  return fallback ?? NO_IMPORT_PATH_MAPPINGS
 }

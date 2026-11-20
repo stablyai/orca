@@ -38,8 +38,11 @@ const MODULE_CALL = /(?<![.\w$])(?:import|require)\s*\(\s*(['"])([^'"\r\n]+)\1\s
 const LEADING_IDENTIFIER = new RegExp(`^(${IDENTIFIER})`)
 const NAMESPACE_CLAUSE = new RegExp(`\\*\\s*as\\s+(${IDENTIFIER})`)
 
-/** Blank comments and template bodies, keeping offsets, so statement patterns only see code and plain string literals. */
-export function maskNonCodeText(source: string): string {
+/**
+ * Blank comments and template bodies, keeping offsets, so statement patterns only see code and plain
+ * string literals; `blankStrings` also blanks those literals' contents for declaration lookups.
+ */
+export function maskNonCodeText(source: string, { blankStrings = false } = {}): string {
   const chars = source.split('')
   let index = 0
   const blank = (from: number, to: number): void => {
@@ -70,7 +73,7 @@ export function maskNonCodeText(source: string): string {
         }
         at += source[at] === '\\' ? 2 : 1
       }
-      if (char === '`') {
+      if (char === '`' || blankStrings) {
         blank(index + 1, Math.min(at, source.length))
       }
       index = at + 1
@@ -125,6 +128,8 @@ function importClauseBindings(clause: string, clauseOffset: number): ImportBindi
 /** Import-like statements of a JS/TS source, ordered by position. */
 export function scanImportStatements(source: string): ImportStatement[] {
   const masked = maskNonCodeText(source)
+  // Why: a statement keyword blanked here sits inside a string literal, e.g. a code sample.
+  const code = maskNonCodeText(source, { blankStrings: true })
   const statements: ImportStatement[] = []
   const covered: [number, number][] = []
   const add = (match: RegExpExecArray, specifierGroup: number, bindings: ImportBinding[]): void => {
@@ -132,7 +137,10 @@ export function scanImportStatements(source: string): ImportStatement[] {
     const specifierEnd = match.index + match[0].lastIndexOf(specifier) + specifier.length
     const start = match.index
     const end = match.index + match[0].length
-    if (covered.some(([from, to]) => start >= from && start < to)) {
+    if (
+      code[start] !== masked[start] ||
+      covered.some(([from, to]) => start >= from && start < to)
+    ) {
       return
     }
     covered.push([start, end])

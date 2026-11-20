@@ -95,18 +95,22 @@ function patternPriority(pattern: string): number {
 
 /** Module paths a bare specifier maps to through `paths`, then `baseUrl`, in TypeScript's order. */
 export function mappedModulePaths(specifier: string, mappings: ImportPathMappings): string[] {
-  const matches = mappings.paths
-    .map((mapping) => ({ mapping, captured: matchPattern(mapping.pattern, specifier) }))
-    .filter(
-      (entry): entry is { mapping: ImportPathMapping; captured: string } => entry.captured !== null
-    )
-    // Why: TypeScript prefers an exact pattern, then the longest prefix before the wildcard.
-    .sort((a, b) => patternPriority(b.mapping.pattern) - patternPriority(a.mapping.pattern))
-  const paths = matches.flatMap(({ mapping, captured }) =>
-    mapping.targets.map((target) =>
-      resolveModulePath(mapping.baseDir, target.replace('*', captured))
-    )
-  )
+  // Why: TypeScript tries only the best pattern (exact, else longest prefix), then `baseUrl`.
+  let best: { mapping: ImportPathMapping; captured: string } | null = null
+  for (const mapping of mappings.paths) {
+    const captured = matchPattern(mapping.pattern, specifier)
+    if (
+      captured !== null &&
+      (!best || patternPriority(mapping.pattern) > patternPriority(best.mapping.pattern))
+    ) {
+      best = { mapping, captured }
+    }
+  }
+  const paths = best
+    ? best.mapping.targets.map((target) =>
+        resolveModulePath(best.mapping.baseDir, target.replace('*', best.captured))
+      )
+    : []
   if (mappings.baseUrl) {
     paths.push(resolveModulePath(mappings.baseUrl, specifier))
   }

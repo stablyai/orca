@@ -73,7 +73,10 @@ async function followExport(
     return { ...module, offset: location.offset }
   }
   if (location?.kind === 'reexport') {
-    const next = await resolveModuleFile(access, module.filePath, rootPath, location.specifier)
+    const next =
+      search.remainingFiles > 0
+        ? await resolveModuleFile(access, module.filePath, rootPath, location.specifier)
+        : null
     if (!next) {
       return null
     }
@@ -82,6 +85,10 @@ async function followExport(
       : followExport(access, rootPath, next, location.name, search)
   }
   for (const specifier of starExportSpecifiers(module.content)) {
+    // Why: stop before reading another barrel target once the file budget is spent.
+    if (search.remainingFiles <= 0) {
+      return null
+    }
     const next = await resolveModuleFile(access, module.filePath, rootPath, specifier)
     const found = next ? await followExport(access, rootPath, next, name, search) : null
     if (found) {

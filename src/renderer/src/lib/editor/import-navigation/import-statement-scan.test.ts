@@ -8,6 +8,7 @@ import {
   type TrendPoint,
 } from '../api'
 const lazy = () => import('./lazy-panel')
+const sample = "import { fake } from './fake-module'"
 `
 
 function requestAt(cursor: string, definition?: string) {
@@ -37,8 +38,9 @@ describe('findImportNavigationRequest', () => {
     expect(requestAt('lazy-panel')).toEqual({ specifier: './lazy-panel', importedName: null })
   })
 
-  it('ignores commented-out imports and definitions outside import statements', () => {
+  it('ignores commented-out imports, imports quoted inside strings, and other definitions', () => {
     expect(requestAt('old', 'stale')).toBeNull()
+    expect(requestAt('fake-module', 'fake')).toBeNull()
     expect(requestAt('lazy =', 'lazy =')).toBeNull()
   })
 })

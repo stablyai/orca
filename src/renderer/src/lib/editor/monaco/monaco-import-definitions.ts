@@ -10,7 +10,8 @@ import { getRelativePathInsideRoot } from '@/lib/path'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import {
   findImportNavigationRequest,
-  scanImportStatements
+  scanImportStatements,
+  type ImportNavigationRequest
 } from '../import-navigation/import-statement-scan'
 import { resolveImportNavigationTarget } from '../import-navigation/import-target-resolution'
 import {
@@ -92,14 +93,26 @@ function importTargetModel(
   return model
 }
 
-function definitionOffsets(
+type ImportRequestCandidate = {
+  request: ImportNavigationRequest
+  /** Model paths the built-in answer named; the resolved import must be one of them. */
+  confirmPaths: string[] | null
+}
+
+function modelPath(monaco: MonacoNamespace, filePath: string): string {
+  // Why: reparsing folds drive letters the way editor model URIs do.
+  return monaco.Uri.parse(monaco.Uri.file(filePath).toString()).path
+}
+
+function importRequestCandidate(
   model: Monaco.editor.ITextModel,
   position: Monaco.Position,
   definitions: readonly Monaco.languages.Location[],
   statements: ReturnType<typeof scanImportStatements>
-): number[] {
+): ImportRequestCandidate | null {
   const modelUri = model.uri.toString()
-  const offsets = definitions
+  const cursor = model.getOffsetAt(position)
+  const sameFileOffsets = definitions
     .filter((definition) => definition.uri.toString() === modelUri)
     .map((definition) =>
       model.getOffsetAt({
@@ -107,18 +120,24 @@ function definitionOffsets(
         column: definition.range.startColumn
       })
     )
-  const word = model.getWordAtPosition(position)?.word
-  // Why: an open model can satisfy the import itself; that answer still names an imported binding.
-  if (word && definitions.some((definition) => definition.uri.toString() !== modelUri)) {
-    for (const statement of statements) {
-      for (const binding of statement.bindings) {
-        if (binding.local === word) {
-          offsets.push(binding.offset)
-        }
-      }
-    }
+  const direct = findImportNavigationRequest(statements, cursor, sameFileOffsets)
+  if (direct) {
+    return { request: direct, confirmPaths: null }
   }
-  return offsets
+  const foreignPaths = definitions
+    .filter((definition) => definition.uri.toString() !== modelUri)
+    .map((definition) => definition.uri.path)
+  const word = model.getWordAtPosition(position)?.word
+  if (!word || foreignPaths.length === 0) {
+    return null
+  }
+  // Why: an open model can satisfy the import itself, but a same-named member or library
+  // definition must keep the built-in answer, so the resolved file is confirmed later.
+  const bindingOffsets = statements.flatMap((statement) =>
+    statement.bindings.filter((binding) => binding.local === word).map((binding) => binding.offset)
+  )
+  const request = findImportNavigationRequest(statements, cursor, bindingOffsets)
+  return request ? { request, confirmPaths: foreignPaths } : null
 }
 
 async function importDefinition(
@@ -133,24 +152,31 @@ async function importDefinition(
   if (!file || !rootPath) {
     return null
   }
-  const statements = scanImportStatements(model.getValue())
-  const request = findImportNavigationRequest(
-    statements,
-    model.getOffsetAt(position),
-    definitionOffsets(model, position, definitions, statements)
+  const candidate = importRequestCandidate(
+    model,
+    position,
+    definitions,
+    scanImportStatements(model.getValue())
   )
   const state = useAppStore.getState()
-  const access = request ? createOpenFileImportNavigationAccess(state, file) : null
-  if (!request || !access) {
+  const access = candidate ? createOpenFileImportNavigationAccess(state, file) : null
+  if (!candidate || !access) {
     return null
   }
   const resolved = await resolveImportNavigationTarget(access, {
-    ...request,
+    ...candidate.request,
     fromFilePath: file.filePath,
     rootPath
   })
   const relativePath = resolved ? getRelativePathInsideRoot(resolved.filePath, rootPath) : null
-  if (!resolved || relativePath === null || token.isCancellationRequested || model.isDisposed()) {
+  if (
+    !resolved ||
+    relativePath === null ||
+    (candidate.confirmPaths &&
+      !candidate.confirmPaths.includes(modelPath(monaco, resolved.filePath))) ||
+    token.isCancellationRequested ||
+    model.isDisposed()
+  ) {
     return null
   }
   const owner = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)

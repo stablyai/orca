@@ -100,12 +100,71 @@ describe('resolveImportNavigationTarget', () => {
     expect((await fromBarrel('Card'))?.filePath).toBe('/repo/src/ui/card.tsx')
   })
 
+  it('lands on the module-level export and follows a default export of an imported binding', async () => {
+    const barrel = [
+      "import Card from './card'",
+      'const doc = "export const title = 0"',
+      'function helper() {',
+      '  const title = 1',
+      '  return title',
+      '}',
+      'const title = 2',
+      'export { title }',
+      'export default Card',
+      ''
+    ].join('\n')
+    const card = 'export default function Card() {}\n'
+    const files = memoryFiles({ '/repo/src/ui/index.ts': barrel, '/repo/src/ui/card.tsx': card })
+    const fromBarrel = (importedName: string) =>
+      resolveImportNavigationTarget(files, {
+        specifier: '../ui',
+        importedName,
+        fromFilePath: FROM,
+        rootPath: ROOT
+      })
+    expect((await fromBarrel('title'))?.offset).toBe(landing(barrel, 'title = 2'))
+    expect(await fromBarrel('default')).toEqual({
+      filePath: '/repo/src/ui/card.tsx',
+      content: card,
+      offset: landing(card, 'Card(')
+    })
+  })
+
+  it('uses the referenced project that includes the file and its effective baseUrl', async () => {
+    const files = memoryFiles({
+      '/repo/tsconfig.json':
+        '{ "files": [], "references": [{ "path": "./tsconfig.node.json" }, { "path": "./tsconfig.app.json" }] }',
+      '/repo/tsconfig.node.json':
+        '{ "include": ["vite.config.ts"], "compilerOptions": { "paths": { "@node/*": ["./tools/*"] } } }',
+      '/repo/tsconfig.app.json':
+        '{ "extends": "./config/tsconfig.base.json", "include": ["src"], "compilerOptions": { "baseUrl": "." } }',
+      '/repo/config/tsconfig.base.json': '{ "compilerOptions": { "paths": { "@/*": ["src/*"] } } }',
+      '/repo/src/button.ts': 'export const button = 1\n'
+    })
+    const target = await resolveImportNavigationTarget(files, {
+      specifier: '@/button',
+      importedName: null,
+      fromFilePath: FROM,
+      rootPath: ROOT
+    })
+    expect(target?.filePath).toBe('/repo/src/button.ts')
+  })
+
   it('declines package imports and paths outside the workspace root', async () => {
     const files = memoryFiles({ '/other/shared.ts': 'export const shared = 1\n' })
     const params = { importedName: 'x', fromFilePath: FROM, rootPath: ROOT }
     expect(await resolveImportNavigationTarget(files, { ...params, specifier: 'react' })).toBeNull()
     expect(
       await resolveImportNavigationTarget(files, { ...params, specifier: '../../../other/shared' })
+    ).toBeNull()
+    // Why: TypeScript tries only the best alias pattern, so a missed exact alias is not retried as `@/*`.
+    const aliased = memoryFiles({
+      '/repo/tsconfig.json':
+        '{ "compilerOptions": { "paths": { "@/special": ["../shared/special"], "@/*": ["./src/*"] } } }',
+      '/repo/src/special.ts': 'export const special = 1\n'
+    })
+    expect(
+      await resolveImportNavigationTarget(aliased, { ...params, specifier: '@/special' })
     ).toBeNull()
   })
 })

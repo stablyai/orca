@@ -11,23 +11,38 @@ function escapeIdentifier(name: string): string {
   return name.replace(/\$/g, '\\$')
 }
 
-function exportedDeclaration(masked: string, name: string): number | null {
+function exportedDeclaration(code: string, name: string): number | null {
   const match = new RegExp(
     `\\bexport\\s+(?:default\\s+)?${DECLARATION_KEYWORDS}\\s+(${escapeIdentifier(name)})(?![\\w$])`
-  ).exec(masked)
+  ).exec(code)
   return match ? match.index + match[0].length - name.length : null
 }
 
-function localDeclaration(masked: string, name: string): number | null {
-  const match = new RegExp(
-    `(?<![\\w$.])${DECLARATION_KEYWORDS}\\s+(${escapeIdentifier(name)})(?![\\w$])`
-  ).exec(masked)
-  return match ? match.index + match[0].length - name.length : null
+/** Prefers a module-level declaration over a same-named one nested in a function or class body. */
+function localDeclaration(code: string, name: string): number | null {
+  const pattern = new RegExp(
+    `(?<![\\w$.])${DECLARATION_KEYWORDS}\\s+(${escapeIdentifier(name)})(?![\\w$])`,
+    'g'
+  )
+  let first: number | null = null
+  let depth = 0
+  let scanned = 0
+  for (const match of code.matchAll(pattern)) {
+    for (; scanned < match.index; scanned += 1) {
+      depth += code[scanned] === '{' ? 1 : code[scanned] === '}' ? -1 : 0
+    }
+    const offset = match.index + match[0].length - name.length
+    if (depth === 0) {
+      return offset
+    }
+    first ??= offset
+  }
+  return first
 }
 
 /** Local names listed in `export { … }` (without `from`) under the exported `name`. */
-function exportListSource(masked: string, name: string): string | null {
-  for (const match of masked.matchAll(/\bexport\s+(?:type\s+)?\{([^}]*)\}(?!\s*from\b)/g)) {
+function exportListSource(code: string, name: string): string | null {
+  for (const match of code.matchAll(/\bexport\s+(?:type\s+)?\{([^}]*)\}(?!\s*from\b)/g)) {
     for (const part of match[1].split(',')) {
       const entry = /^\s*(?:type\s+)?([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?\s*$/.exec(
         part
@@ -40,45 +55,57 @@ function exportListSource(masked: string, name: string): string | null {
   return null
 }
 
+function forwardedLocal(
+  code: string,
+  statements: ReturnType<typeof scanImportStatements>,
+  local: string
+): ExportLocation | null {
+  const declared = localDeclaration(code, local)
+  if (declared !== null) {
+    return { kind: 'declaration', offset: declared }
+  }
+  // Why: `import { a } from './a'; export { a }` forwards the import rather than declaring it.
+  for (const statement of statements) {
+    const binding = statement.bindings.find((candidate) => candidate.local === local)
+    if (binding && code.slice(statement.start, statement.start + 6) === 'import') {
+      return { kind: 'reexport', specifier: statement.specifier, name: binding.imported }
+    }
+  }
+  return null
+}
+
 /** Where `source` declares its export `name`, or the module it re-exports that name from. */
 export function locateExportedName(source: string, name: string): ExportLocation | null {
-  const masked = maskNonCodeText(source)
+  const code = maskNonCodeText(source, { blankStrings: true })
+  const statements = scanImportStatements(source)
   if (name === 'default') {
-    const defaultExport = /\bexport\s+default\b/.exec(masked)
+    const defaultExport = /\bexport\s+default\b/.exec(code)
     if (defaultExport) {
+      const afterDefault = defaultExport.index + defaultExport[0].length
       const named = new RegExp(`^\\s*${DECLARATION_KEYWORDS}\\s+([A-Za-z_$][\\w$]*)`).exec(
-        masked.slice(defaultExport.index + defaultExport[0].length)
+        code.slice(afterDefault)
       )
-      return {
-        kind: 'declaration',
-        offset: named
-          ? defaultExport.index + defaultExport[0].length + named[0].length - named[1].length
-          : defaultExport.index
+      if (named) {
+        return { kind: 'declaration', offset: afterDefault + named[0].length - named[1].length }
       }
+      // Why: `export default Button` names a binding declared or imported elsewhere in the file.
+      const identifier = /^\s*([A-Za-z_$][\w$]*)\s*(?:;|\r?\n|$)/.exec(code.slice(afterDefault))
+      const forwarded = identifier ? forwardedLocal(code, statements, identifier[1]) : null
+      return forwarded ?? { kind: 'declaration', offset: defaultExport.index }
     }
   } else {
-    const declared = exportedDeclaration(masked, name)
+    const declared = exportedDeclaration(code, name)
     if (declared !== null) {
       return { kind: 'declaration', offset: declared }
     }
   }
-  const statements = scanImportStatements(source)
-  const listed = exportListSource(masked, name)
-  if (listed) {
-    const local = localDeclaration(masked, listed)
-    if (local !== null) {
-      return { kind: 'declaration', offset: local }
-    }
-    // Why: `import { a } from './a'; export { a }` forwards the import rather than declaring it.
-    for (const statement of statements) {
-      const binding = statement.bindings.find((candidate) => candidate.local === listed)
-      if (binding && masked.slice(statement.start, statement.start + 6) === 'import') {
-        return { kind: 'reexport', specifier: statement.specifier, name: binding.imported }
-      }
-    }
+  const listed = exportListSource(code, name)
+  const forwarded = listed ? forwardedLocal(code, statements, listed) : null
+  if (forwarded) {
+    return forwarded
   }
   for (const statement of statements) {
-    if (masked.slice(statement.start, statement.start + 6) !== 'export') {
+    if (code.slice(statement.start, statement.start + 6) !== 'export') {
       continue
     }
     const binding = statement.bindings.find((candidate) => candidate.local === name)
@@ -92,7 +119,8 @@ export function locateExportedName(source: string, name: string): ExportLocation
 /** Modules `source` forwards wholesale with `export * from`. */
 export function starExportSpecifiers(source: string): string[] {
   const masked = maskNonCodeText(source)
-  return [...masked.matchAll(/\bexport\s+(?:type\s+)?\*\s*from\s*(['"])([^'"\r\n]+)\1/g)].map(
-    (match) => match[2]
-  )
+  const code = maskNonCodeText(source, { blankStrings: true })
+  return [...masked.matchAll(/\bexport\s+(?:type\s+)?\*\s*from\s*(['"])([^'"\r\n]+)\1/g)]
+    .filter((match) => code[match.index] === masked[match.index])
+    .map((match) => match[2])
 }
