@@ -11,7 +11,8 @@ const CLEAR_HELD_SCREEN = '\x1b[0m\x1b[2J\x1b[3J\x1b[H'
 /** Hold refused local restores read-only with saved output while a newer daemon may own the session; release reconnects. */
 export function holdForNewerDaemon(
   session: ConnectPanePtySession,
-  sessionId: string,
+  // Null when main refused a saved id the renderer never had; such a pane has no screen to paint.
+  sessionId: string | null,
   reconnect: () => Promise<HeldPaneReopenOutcome>
 ): void {
   recordPtyConnectDiagnostic(`pane=${session.pane.id} -> HELD FOR NEWER DAEMON ${sessionId}`)
@@ -42,7 +43,7 @@ export function holdForNewerDaemon(
   })
   session.waitTeardowns.push(forget)
   // Why: a remote pane's layout restore already painted its saved buffer; local panes keep none.
-  if (session.deps.restoredViewportBlankingPanesRef?.current.has(session.pane.id)) {
+  if (!sessionId || session.deps.restoredViewportBlankingPanesRef?.current.has(session.pane.id)) {
     return
   }
   void window.api.pty

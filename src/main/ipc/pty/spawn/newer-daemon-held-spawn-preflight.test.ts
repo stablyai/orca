@@ -33,7 +33,7 @@ vi.mock('../host-env/spawn-startup-target', () => ({
   resolvePtySpawnStartupTarget: mocks.resolveStartupTarget
 }))
 
-const { heldSpawnRefusal } =
+const { heldSpawnRefusal, resolveHeldOwner } =
   await import('../../../daemon/providers/routing/daemon-router-newer-daemon-hold')
 const { createPtyIpcSpawnState } = await import('../ipc/spawn-state')
 const { preparePtyIpcSpawnPreflight } = await import('../ipc/spawn-preflight')
@@ -55,7 +55,12 @@ beforeEach(() => {
     resolve: async () => ({ kind: 'absent' })
   } as unknown as DaemonSessionOwnerResolver<DaemonPtyAdapter>
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preflight refuses before it calls anything else on the provider.
-  mocks.provider = { refuseHeldSpawn: heldSpawnRefusal(() => noOwner) } as unknown as IPtyProvider
+  mocks.provider = {
+    refuseHeldSpawn: heldSpawnRefusal(
+      () => false,
+      (opts) => resolveHeldOwner(opts.sessionId, noOwner)
+    )
+  } as unknown as IPtyProvider
 })
 
 describe('a restored pane while a newer daemon may still run its saved session', () => {
