@@ -32,6 +32,7 @@ import {
   configureRuntimeServices
 } from '../startup/runtime-startup/main-process-runtime-service'
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
+import { createRendererShutdownCheckpointService } from './renderer-shutdown-checkpoint-service'
 import { initializeMainProcessPlugins } from '../startup/plugin-startup/main-process-plugins'
 import {
   collectWorktreeTrashSweepRoots,
@@ -247,6 +248,13 @@ export async function composeDesktopCore(
     attachBrowserHost: native.attachBrowserHost,
     registerCleanup: deps.registerCleanup
   })
+  core.rendererCheckpoint = createRendererShutdownCheckpointService(
+    store,
+    (session) => runtime.quitResumeRecordsFor(session),
+    ORCA_LAYOUT_OWNER_IS_MAIN
+      ? (session, partition) => runtime.shutdownReconnectFactsFor(session, partition)
+      : undefined
+  )
   core.automations = createRuntimeAutomationService({
     store,
     runtime,

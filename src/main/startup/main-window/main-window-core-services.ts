@@ -107,7 +107,8 @@ async function installMainWindowCoreServices(
         fenceMainProcessCloudOnQuit()
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
       },
-      orcaAccount
+      orcaAccount,
+      rendererCheckpoint: state.core.rendererCheckpoint ?? undefined
     },
     state.core.pluginService ?? undefined,
     state.core.pluginMarketplaceService && state.core.pluginMarketplaceInstaller

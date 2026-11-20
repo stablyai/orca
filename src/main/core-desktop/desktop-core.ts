@@ -25,6 +25,7 @@ import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import type { createCodexSessionMigrationScheduler } from '../codex/history/backfill/codex-session-migration-scheduler'
 import type { Store } from '../persistence/loading-store/store'
+import type { RendererShutdownCheckpointService } from './renderer-shutdown-checkpoint-service'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
 import { beginProfileShutdownCheckpoint } from '../persistence/profile-shutdown-checkpoint'
 
@@ -46,7 +47,7 @@ export class DesktopCore {
   readonly serveReadinessPublisher = new ServeReadinessPublisher()
   relayHost: RelayHost | null = null
   desktopPushService: DesktopPushService | null = null
-  readonly desktopRelayStatus: MobileRelayStatusDetail = { status: 'offline' }
+  desktopRelayStatus: MobileRelayStatusDetail = { status: 'offline' }
   pendingUnpairedDeviceAuthFailure = false
   starNag: StarNagService | null = null
   uninstallRepoMaintenanceIdleGate: (() => Promise<void>) | null = null
@@ -64,6 +65,7 @@ export class DesktopCore {
   keybindings: KeybindingService | null = null
   emulatorBridge: EmulatorBridge | null = null
   skillTransactionRecovery: Promise<unknown> = Promise.resolve()
+  rendererCheckpoint: RendererShutdownCheckpointService | null = null
 
   private profileCheckpoint: Promise<void> | null = null
 
