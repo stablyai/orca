@@ -101,13 +101,38 @@ export function rawJsonBytes(value: unknown): number | null {
   return typeof rawJSON === 'string' ? Buffer.byteLength(rawJSON, 'utf8') : null
 }
 
-/** Exactly `Buffer.byteLength(JSON.stringify(value), 'utf8')` without building the string. */
+// Deeper values are rare; JSON.stringify sizes them and reports cycles.
+const MAX_WALK_DEPTH = 64
+
+/** Exactly `Buffer.byteLength(JSON.stringify(value), 'utf8')`; plain JSON data is sized without building the string. */
 export function jsonUtf8ByteLength(value: unknown): number {
-  const bytes = jsonPropertyBytes(value, '', false, [])
+  const bytes = jsonPropertyBytes(value, '', false, 0)
   if (bytes === null) {
     throw new TypeError('JSON value is not serializable')
   }
   return bytes
+}
+
+function integerDigits(value: number): number {
+  let digits = value < 0 ? 2 : 1
+  for (let rest = Math.abs(value); rest >= 10; rest = Math.floor(rest / 10)) {
+    digits += 1
+  }
+  return digits
+}
+
+/** Native serialization of one property, so toJSON, boxed values, BigInt and cycles behave exactly as JSON.stringify. */
+function serializedPropertyBytes(
+  value: unknown,
+  key: string | number,
+  inArray: boolean
+): number | null {
+  const name = String(key)
+  const serialized = JSON.stringify({ [name]: value })
+  if (serialized.length === 2) {
+    return inArray ? 4 : null
+  }
+  return Buffer.byteLength(serialized, 'utf8') - 3 - jsonStringBytes(name)
 }
 
 /** null when JSON.stringify would omit the property. */
@@ -115,69 +140,53 @@ function jsonPropertyBytes(
   value: unknown,
   key: string | number,
   inArray: boolean,
-  ancestors: object[]
+  depth: number
 ): number | null {
   switch (typeof value) {
     case 'string':
       return jsonStringBytes(value)
     case 'number':
+      if (Number.isSafeInteger(value)) {
+        return integerDigits(value)
+      }
       return Number.isFinite(value) ? String(value).length : 4
     case 'boolean':
       return value ? 4 : 5
+    case 'undefined':
+    case 'symbol':
+      return inArray ? 4 : null
     case 'object':
       if (value === null) {
         return 4
       }
       break
-    case 'bigint':
-      // JSON.stringify throws unless BigInt.prototype.toJSON exists.
-      return Buffer.byteLength(JSON.stringify(value), 'utf8')
     default:
-      return inArray ? 4 : null
+      // BigInt, and functions that may carry toJSON.
+      return serializedPropertyBytes(value, key, inArray)
   }
-  const toJSON = (value as { toJSON?: unknown }).toJSON
-  if (typeof toJSON === 'function') {
-    const converted = toJSON.call(value, String(key))
-    if (converted === null || typeof converted !== 'object') {
-      return jsonPropertyBytes(converted, key, inArray, ancestors)
-    }
-    return jsonObjectBytes(converted, ancestors)
+  if (depth >= MAX_WALK_DEPTH || typeof (value as { toJSON?: unknown }).toJSON === 'function') {
+    return serializedPropertyBytes(value, key, inArray)
   }
-  return jsonObjectBytes(value, ancestors)
-}
-
-function jsonObjectBytes(value: object, ancestors: object[]): number | null {
-  const prototype = Object.getPrototypeOf(value)
-  if (prototype !== Object.prototype && !Array.isArray(value)) {
-    const encoded = rawJsonBytes(value) ?? primitiveJsonBytes(normalizedJsonValue(value, null))
-    if (encoded !== null) {
-      return encoded
-    }
-  }
-  if (ancestors.includes(value)) {
-    throw new TypeError('Converting circular structure to JSON')
-  }
-  ancestors.push(value)
-  let bytes = 2
   if (Array.isArray(value)) {
-    for (let index = 0; index < value.length; index += 1) {
-      bytes += (index > 0 ? 1 : 0) + (jsonPropertyBytes(value[index], index, true, ancestors) ?? 4)
+    const length = value.length
+    let bytes = 2
+    for (let index = 0; index < length; index += 1) {
+      bytes += (index > 0 ? 1 : 0) + (jsonPropertyBytes(value[index], index, true, depth + 1) ?? 4)
     }
-  } else {
-    let emitted = 0
-    for (const name of Object.keys(value)) {
-      const entry = jsonPropertyBytes(
-        (value as Record<string, unknown>)[name],
-        name,
-        false,
-        ancestors
-      )
-      if (entry !== null) {
-        bytes += (emitted > 0 ? 1 : 0) + jsonStringBytes(name) + 1 + entry
-        emitted += 1
-      }
+    return bytes
+  }
+  if (Object.getPrototypeOf(value) !== Object.prototype) {
+    return serializedPropertyBytes(value, key, inArray)
+  }
+  let bytes = 2
+  let emitted = 0
+  const record = value as Record<string, unknown>
+  for (const name of Object.keys(record)) {
+    const entry = jsonPropertyBytes(record[name], name, false, depth + 1)
+    if (entry !== null) {
+      bytes += (emitted > 0 ? 1 : 0) + jsonStringBytes(name) + 1 + entry
+      emitted += 1
     }
   }
-  ancestors.pop()
   return bytes
 }
