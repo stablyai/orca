@@ -7,9 +7,11 @@ import {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { StructuredAgentSessionAcquireInput } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import { acpPrivateTempConnect } from './acp-private-temp'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 import type { AcpLaunchSpec } from './acp-launch-contract'
+import type { AcpStructuredConnection, ConnectAcpAgent } from '../process/acp-structured-connection'
 
 export function prepareAcpStructuredLaunch(
   deps: Pick<AcpStructuredSessionAdapterDeps, 'resolveLaunch'>,
@@ -56,4 +58,44 @@ export async function prepareAcpLaunch<
     closedBeforeSpawn()
   }
   return launch
+}
+
+/** Releases the launch's files once the child exits, or at once when it never spawned. */
+export function acpReleaseWithChild<
+  Args extends unknown[],
+  Connection extends Pick<AcpStructuredConnection, 'onExit'>
+>(
+  connect: (...args: Args) => Connection,
+  release: (() => Promise<void>) | undefined
+): (...args: Args) => Connection {
+  if (!release) {
+    return connect
+  }
+  return (...args) => {
+    try {
+      const connection = connect(...args)
+      connection.onExit(() => void release().catch(() => undefined))
+      return connection
+    } catch (error) {
+      void release().catch(() => undefined)
+      throw error
+    }
+  }
+}
+
+/** The connect function a launch spawns through: private temp folder, and its files released with the child. */
+export async function acpLaunchConnect<
+  Connection extends Pick<AcpStructuredConnection, 'onExit'> = AcpStructuredConnection
+>(
+  deps: Parameters<typeof acpPrivateTempConnect<Connection>>[0],
+  launch: Pick<AcpStructuredLaunch, 'release'>,
+  closedBeforeSpawn: () => void
+): Promise<ConnectAcpAgent<Connection>> {
+  const connect = deps.spec.privateTempDirectory
+    ? await acpPrivateTempConnect(deps, closedBeforeSpawn).catch((error: unknown) => {
+        void launch.release?.().catch(() => undefined)
+        throw error
+      })
+    : deps.connect
+  return acpReleaseWithChild(connect, launch.release)
 }

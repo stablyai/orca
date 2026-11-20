@@ -48,6 +48,7 @@ export async function copyAcpConversation(
   let connection: AcpStructuredConnection | null = null
   let result: AiVaultConversationCopy
   let launchEnv: Record<string, string>
+  let release: (() => Promise<void>) | undefined
   try {
     try {
       signal.throwIfAborted()
@@ -57,6 +58,7 @@ export async function copyAcpConversation(
       signal.throwIfAborted()
       const launch = await waitForPromiseWithSignal(deps.readLaunch(input.identity), signal)
       launchEnv = launch.env
+      release = launch.release
       signal.throwIfAborted()
       deps.spec.assertCopyLaunchArgs?.([], launch.prefixArgs)
       await assertCopyAccountSelected(deps, input.accountHome, launch.env, signal)
@@ -150,7 +152,10 @@ export async function copyAcpConversation(
     }
     return result
   } finally {
-    if (connection && !(await connection.close().catch(() => false))) {
+    const exited = !connection || (await connection.close().catch(() => false))
+    if (exited) {
+      await release?.().catch(() => undefined)
+    } else {
       deps.logger?.warn('ACP conversation copy child exit is unproven; retained for cleanup', {
         scope: 'acp-conversation-copy',
         sessionId: input.identity.sessionId

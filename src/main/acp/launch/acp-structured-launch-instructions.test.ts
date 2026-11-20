@@ -19,9 +19,11 @@ import type { ManagedDataAccountsState } from '../../../shared/agent-accounts/ma
 import { restoreManagedDataAccountEnvironment } from '../../../shared/agent-launch/environment/managed-data-account-environment'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { createAcpStructuredLaunchResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
+import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecFor } from './acp-launch-registry'
-import { deliverCopilotInstructions } from './acp-instructions'
+import { deliverCopilotInstructions, deliverOpenCodeInstructions } from './acp-instructions'
+import { acpReleaseWithChild } from './acp-structured-launch-preparation'
 
 const PREAMBLE = 'You are Zorblax, a bot that runs in Orca.'
 
@@ -285,6 +287,47 @@ describe('ACP launch: standing instructions', () => {
       version: null
     })
     expect(delivered).toBeNull()
+  })
+
+  it("removes an OpenCode 2.x launch's config folder on release, leaving the user's files", async () => {
+    const source = join(dataDirectory, 'opencode-release-source')
+    const folder = join(dataDirectory, 'opencode-release-folder')
+    await mkdir(source, { recursive: true })
+    await mkdir(folder, { recursive: true })
+    await writeFile(join(source, 'opencode.json'), '{}')
+    const delivered = await deliverOpenCodeInstructions({
+      text: PREAMBLE,
+      env: { OPENCODE_CONFIG_DIR: source },
+      cwd: '/unused',
+      file: async () => '/unused',
+      folder: async () => '/unused',
+      emptyFolder: async () => folder,
+      version: '2.0.14'
+    })
+    expect(await readdir(folder)).toContain('AGENTS.md')
+    await delivered?.release?.()
+    expect(await readdir(dataDirectory)).not.toContain('opencode-release-folder')
+    expect(await readFile(join(source, 'opencode.json'), 'utf8')).toBe('{}')
+  })
+
+  it('releases a launch when its child exits, or at once when the connection throws', async () => {
+    const release = vi.fn(async () => undefined)
+    let exited: Parameters<AcpStructuredConnection['onExit']>[0] = () => {}
+    const connection = {
+      onExit: (callback: Parameters<AcpStructuredConnection['onExit']>[0]): void => {
+        exited = callback
+      }
+    }
+    const spawned = acpReleaseWithChild(() => connection, release)
+    spawned()
+    expect(release).not.toHaveBeenCalled()
+    exited({ code: 0, signal: null, processless: false })
+    expect(release).toHaveBeenCalledTimes(1)
+    const failing = acpReleaseWithChild(() => {
+      throw new Error('spawn failed')
+    }, release)
+    expect(() => failing()).toThrow('spawn failed')
+    expect(release).toHaveBeenCalledTimes(2)
   })
 
   it('refuses to start an agent that has no way to take them', async () => {
