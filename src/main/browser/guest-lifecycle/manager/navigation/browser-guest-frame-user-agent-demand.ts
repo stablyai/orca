@@ -30,7 +30,8 @@ export function noteBrowserGuestSubframeNavigation(guest: Electron.WebContents, 
 
 /** When the page stops loading or an embedded frame unloads: only site iframes still showing keep it. */
 export function settleBrowserGuestSubframeDemand(guest: Electron.WebContents): void {
-  if (guest.isDestroyed() || !hasBrowserGuestFrameUserAgentDemand(guest.id)) {
+  // A loading site iframe hasn't committed its URL yet; did-stop-loading settles once it has.
+  if (guest.isDestroyed() || !hasBrowserGuestFrameUserAgentDemand(guest.id) || guest.isLoading()) {
     return
   }
   try {
@@ -48,9 +49,11 @@ export function settleBrowserGuestSubframeDemand(guest: Electron.WebContents): v
 
 /** Electron reports no frame removal, so an embedded frame's preload reports its pagehide. */
 export function noteBrowserGuestSubframeUnloaded(guest: Electron.WebContents): void {
-  if (!hasBrowserGuestFrameUserAgentDemand(guest.id) || settleTimers.has(guest.id)) {
+  if (!hasBrowserGuestFrameUserAgentDemand(guest.id)) {
     return
   }
+  // Each unload restarts the wait, so the last frame to go has left the tree when it runs.
+  clearTimeout(settleTimers.get(guest.id))
   const timer = setTimeout(() => {
     settleTimers.delete(guest.id)
     settleBrowserGuestSubframeDemand(guest)

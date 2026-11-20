@@ -303,7 +303,8 @@ describe('tab identity ownership', () => {
       framesInSubtree: []
     }
     mainFrame.framesInSubtree = [mainFrame, teamsFrame]
-    Object.assign(handle.guest, { mainFrame })
+    let loading = false
+    Object.assign(handle.guest, { mainFrame, isLoading: () => loading })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: demand keys on session identity only.
     const session = handle.guest.session as Electron.Session
     const fire = (event: string, ...args: unknown[]): void => {
@@ -326,9 +327,18 @@ describe('tab identity ownership', () => {
       teamsFrame.origin = 'null'
       fire('did-stop-loading')
       expect(hasBrowserSessionUserAgentDemand(session)).toBe(false)
-      // A working Teams iframe, removed after the page finished loading.
-      teamsFrame.origin = 'https://teams.microsoft.com'
+      // A new Teams iframe still loading (no URL committed yet) when another frame unloads.
+      loading = true
+      teamsFrame.url = ''
+      teamsFrame.origin = 'https://example.com'
       fire('did-start-navigation', {}, teamsUrl, false, false)
+      subframeUnloaded()
+      expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
+      // It commits, then is removed after the page finished loading.
+      loading = false
+      teamsFrame.url = teamsUrl
+      teamsFrame.origin = 'https://teams.microsoft.com'
+      fire('did-stop-loading')
       expect(hasBrowserSessionUserAgentDemand(session)).toBe(true)
       mainFrame.framesInSubtree = [mainFrame]
       subframeUnloaded()

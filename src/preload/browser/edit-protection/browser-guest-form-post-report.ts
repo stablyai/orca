@@ -37,18 +37,24 @@ export function installBrowserGuestFormPostReport(port: {
   })
 }
 
+const reportedWithoutSubmit = new WeakSet<HTMLFormElement>()
+
 /** The action URL of a POST that replaces the top page; null for GET or another target. */
 function postedFormAction(
   target: EventTarget | null,
   lastSubmitterByForm: WeakMap<HTMLFormElement, HTMLElement | null>
 ): string | null {
   // `new FormData(form)` fires formdata too; a submission's own entry list follows a submit event,
-  // except `form.submit()`, which only an embedded frame posting to the top page needs reported.
-  if (
-    !(target instanceof HTMLFormElement) ||
-    (!lastSubmitterByForm.has(target) && window === window.top)
-  ) {
+  // except `form.submit()`, which only an embedded frame posting to the top page needs reported,
+  // once per form: the top page's navigation replaces the frame.
+  if (!(target instanceof HTMLFormElement)) {
     return null
+  }
+  if (!lastSubmitterByForm.has(target)) {
+    if (window === window.top || reportedWithoutSubmit.has(target)) {
+      return null
+    }
+    reportedWithoutSubmit.add(target)
   }
   const submitter = lastSubmitterByForm.get(target)
   lastSubmitterByForm.delete(target)
