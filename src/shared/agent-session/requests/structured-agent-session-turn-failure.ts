@@ -1,27 +1,75 @@
-import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalStatusItem
+} from '../journal/agent-session-journal-types'
 import {
   readAgentSessionFailureFact,
   type AgentSessionFailureFact
 } from '../failures/agent-session-failure'
+import { agentSessionFailureSentence } from '../failures/agent-session-failure-words'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
+import { sanitizeCrashReportString } from '../../crash-reporting/crash-report-redaction'
+import { stripAnsiControlSequences } from '../../source-control/ai/generation/commit-message-agent-output'
+
+const MAX_FAILURE_LINE_LENGTH = 512
+
+/** One turn's own root status rows, newest first. */
+function* turnStatusRows(
+  items: readonly AgentJournalRenderItem[],
+  turnItemId: string
+): Generator<AgentJournalStatusItem> {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (
+      item?.turnScope?.kind === 'turn' &&
+      item.turnScope.turnItemId === turnItemId &&
+      isRootAgentJournalItem(item) &&
+      item.body.kind === 'status'
+    ) {
+      yield item.body
+    }
+  }
+}
 
 /** Why one turn failed, from its own newest root failure row; a retry in progress is not why. */
 export function structuredAgentSessionTurnFailure(
   items: readonly AgentJournalRenderItem[],
   turnItemId: string
 ): AgentSessionFailureFact | undefined {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index]
-    const body = item?.body
-    if (
-      item?.turnScope?.kind === 'turn' &&
-      item.turnScope.turnItemId === turnItemId &&
-      isRootAgentJournalItem(item) &&
-      body?.kind === 'status' &&
-      body.failure &&
-      body.failure.kind !== 'providerRetrying'
-    ) {
+  for (const body of turnStatusRows(items, turnItemId)) {
+    if (body.failure && body.failure.kind !== 'providerRetrying') {
       return readAgentSessionFailureFact(body.failure)
+    }
+  }
+  return undefined
+}
+
+/** One redacted line saying why one turn failed: its typed failure, or the provider's own error. */
+export function structuredAgentSessionTurnFailureLine(
+  items: readonly AgentJournalRenderItem[],
+  turnItemId: string
+): string | undefined {
+  for (const body of turnStatusRows(items, turnItemId)) {
+    const fact = readAgentSessionFailureFact(body.failure)
+    if (fact?.kind === 'providerRetrying') {
+      continue
+    }
+    const text = fact
+      ? agentSessionFailureSentence(fact, 'row')
+      : body.tone === 'error' && body.providerFrame
+        ? body.text
+        : undefined
+    // Redact before bounding; the provider's full frame stays in the Chat's disclosure.
+    const line = text
+      ? sanitizeCrashReportString(
+          stripAnsiControlSequences(text).split(/\r?\n/)[0] ?? '',
+          MAX_FAILURE_LINE_LENGTH
+        )
+          .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+          .trim()
+      : ''
+    if (line) {
+      return line
     }
   }
   return undefined

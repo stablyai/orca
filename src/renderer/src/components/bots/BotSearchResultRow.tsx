@@ -149,7 +149,6 @@ function BotResultPicture({ bot, home }: { bot: Bot; home: FolderWorkspace }): R
   const status = foldBotStatus(useWorktreeActivityStatus(folderWorkspaceKey(home.id)), bot.paused)
   const badge = {
     status: offline || status === 'inactive' ? null : status,
-    isUnread: false,
     sleeping: useBotAvatarBadgeSleeping(folderWorkspaceKey(home.id), status)
   }
   return (

@@ -83,22 +83,10 @@ describe('Jira board column reordering', () => {
   })
   afterEach(cleanup)
 
-  it('starts in the order Jira configured the board', () => {
-    mount()
-    expect(laneOrder()).toEqual(['To Do', 'In Progress', 'Done'])
-  })
-
-  it('moves a dragged lane to where it was dropped', () => {
-    mount()
-
-    dragLaneOnto('Done', 'To Do')
-
-    expect(laneOrder()).toEqual(['Done', 'To Do', 'In Progress'])
-  })
-
   it('keeps the new order after the board is reopened', () => {
     mount()
     dragLaneOnto('Done', 'To Do')
+    expect(laneOrder()).toEqual(['Done', 'To Do', 'In Progress'])
     cleanup()
 
     mount()
@@ -116,20 +104,15 @@ describe('Jira board column reordering', () => {
     expect(laneOrder()).toEqual(['To Do', 'In Progress', 'Done'])
   })
 
-  it('moves a lane with the arrow keys for keyboard users', () => {
+  it('moves a lane with the arrow keys without wrapping at the edge', () => {
     mount()
+    const handle = screen.getByRole('button', { name: 'Reorder To Do' })
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    expect(laneOrder()).toEqual(['To Do', 'In Progress', 'Done'])
 
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Reorder To Do' }), { key: 'ArrowRight' })
+    fireEvent.keyDown(handle, { key: 'ArrowRight' })
 
     expect(laneOrder()).toEqual(['In Progress', 'To Do', 'Done'])
-  })
-
-  it('ignores an arrow key that would move a lane past the end', () => {
-    mount()
-
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Reorder To Do' }), { key: 'ArrowLeft' })
-
-    expect(laneOrder()).toEqual(['To Do', 'In Progress', 'Done'])
   })
 
   it('keeps a lane that a filter hid in the place the user put it', () => {

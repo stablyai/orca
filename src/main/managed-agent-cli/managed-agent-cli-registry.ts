@@ -1,7 +1,7 @@
 // Orca's own copies of agent CLIs, for hosts without the user's own; the user's install always wins.
 
 import { delimiter, dirname } from 'node:path'
-import type { ManagedRuntime } from '../node-runtime/managed-runtime-release'
+import type { ManagedAgentCli } from '../node-runtime/managed-runtime-release'
 import {
   CLAUDE_MANAGED_RUNTIME,
   claudeManagedExecutable,
@@ -12,18 +12,35 @@ import {
   codexManagedExecutable,
   codexManagedTarget
 } from '../codex/managed-runtime/codex-managed-runtime'
+import { acpRegistryManagedRuntime } from '../acp/registry/acp-registry-managed-runtime'
+import { COPILOT_MANAGED_CLI } from '../copilot/copilot-managed-runtime'
+import { GROK_MANAGED_CLI } from '../grok/grok-managed-runtime'
+import { KIMI_MANAGED_CLI } from '../kimi/kimi-managed-runtime'
+import { OMP_MANAGED_CLI } from '../omp/omp-managed-runtime'
+import {
+  CURSOR_MINIMUM_VERSIONS,
+  OPENCODE2_MINIMUM_VERSIONS,
+  OPENCODE_MINIMUM_VERSIONS
+} from '../acp/launch/acp-minimum-versions'
 import { readInheritedPath } from '../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 
-export const MANAGED_AGENT_CLI_IDS = ['claude', 'codex'] as const
+// Hermes ships only as a git checkout its installer builds with uv, so it stays the user's own install.
+export const MANAGED_AGENT_CLI_IDS = [
+  'claude',
+  'codex',
+  'opencode',
+  'opencode2',
+  'cursor',
+  'copilot',
+  'grok',
+  'kimi',
+  'omp'
+] as const
 export type ManagedAgentCliId = (typeof MANAGED_AGENT_CLI_IDS)[number]
 
-type ManagedAgentCli = {
-  runtime: ManagedRuntime
-  /** Whether this host has a build to download. */
-  available: () => boolean
-  executable: (folder: string) => string
-}
+const openCodeBinary = (platform: NodeJS.Platform): string =>
+  platform === 'win32' ? 'opencode.exe' : 'opencode'
 
 const MANAGED_AGENT_CLIS: Record<ManagedAgentCliId, ManagedAgentCli> = {
   claude: {
@@ -35,7 +52,35 @@ const MANAGED_AGENT_CLIS: Record<ManagedAgentCliId, ManagedAgentCli> = {
     runtime: CODEX_MANAGED_RUNTIME,
     available: () => codexManagedTarget() !== null,
     executable: codexManagedExecutable
-  }
+  },
+  opencode: acpRegistryManagedRuntime({
+    label: 'OpenCode',
+    agent: 'opencode',
+    registryId: 'opencode',
+    command: openCodeBinary,
+    minimumVersions: OPENCODE_MINIMUM_VERSIONS
+  }),
+  // The 2.x listing ships the `opencode` binary; `opencode2` is the name its own installer adds.
+  opencode2: acpRegistryManagedRuntime({
+    label: 'OpenCode 2',
+    agent: 'opencode2',
+    registryId: 'opencode-v2',
+    command: openCodeBinary,
+    minimumVersions: OPENCODE2_MINIMUM_VERSIONS,
+    alias: (platform) => (platform === 'win32' ? 'opencode2.exe' : 'opencode2')
+  }),
+  cursor: acpRegistryManagedRuntime({
+    label: 'Cursor',
+    agent: 'cursor',
+    registryId: 'cursor',
+    command: (platform) =>
+      platform === 'win32' ? 'dist-package/cursor-agent.cmd' : 'dist-package/cursor-agent',
+    minimumVersions: CURSOR_MINIMUM_VERSIONS
+  }),
+  copilot: COPILOT_MANAGED_CLI,
+  grok: GROK_MANAGED_CLI,
+  kimi: KIMI_MANAGED_CLI,
+  omp: OMP_MANAGED_CLI
 }
 
 export function isManagedAgentCli(agent: string): agent is ManagedAgentCliId {

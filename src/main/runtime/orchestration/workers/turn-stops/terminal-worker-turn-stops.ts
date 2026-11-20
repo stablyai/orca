@@ -56,7 +56,7 @@ export class TerminalWorkerTurnStops {
             : {})
         }
       },
-      deliver: (stop) => void this.report(stop),
+      deliver: (stop, row) => void this.report(stop, row),
       setTimer: deps.setTimer,
       // A lead waiting on its own children is not stopped; their all-clear is.
       allClearOnly: true
@@ -88,16 +88,20 @@ export class TerminalWorkerTurnStops {
       return Promise.resolve()
     }
     const dispatchId = workerTurnStopDispatchId(resolved.target)
-    return this.report({
-      paneKey,
-      worktreeId: row.worktreeId ?? '',
-      row,
-      dispatchId,
-      mailTaken: readCoordinatorMailCount(resolved.db, dispatchId)
-    })
+    return this.report(
+      {
+        paneKey,
+        worktreeId: row.worktreeId ?? '',
+        row,
+        dispatchId,
+        mailTaken: readCoordinatorMailCount(resolved.db, dispatchId)
+      },
+      row
+    )
   }
 
-  private async report(stop: PreparedStop): Promise<void> {
+  /** `latest` is the stop's row at delivery, holding a reply read from the transcript since. */
+  private async report(stop: PreparedStop, latest: AgentStatusIpcPayload): Promise<void> {
     const stopped = this.stillStopped(stop)
     if (!stopped) {
       return
@@ -112,7 +116,7 @@ export class TerminalWorkerTurnStops {
           : 'finished'
     // A clean finish has the agent's own last words; an error or prompt is on the screen.
     const lastOutput =
-      (reason === 'finished' && stop.row.lastAssistantMessage) ||
+      (reason === 'finished' && (latest.lastAssistantMessage || stop.row.lastAssistantMessage)) ||
       (await this.readStopScreen(
         stopped.handle,
         reason === 'needs-input' && stop.row.agentType === 'claude'

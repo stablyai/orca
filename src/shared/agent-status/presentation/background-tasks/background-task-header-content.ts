@@ -19,7 +19,7 @@ type RunState = AgentSessionBackgroundTaskRunState
 /** Below this strip width in rem (16px fallback), replace multi-kind breakdowns with totals. Single-kind state forms still fit; measure the strip so split panes behave like narrow windows. */
 export const NARROW_BACKGROUND_TASKS_STRIP_REM = 24
 
-function kindCountLabel(kind: TaskKind, count: number, say: BackgroundTaskSay): string {
+export function kindCountLabel(kind: TaskKind, count: number, say: BackgroundTaskSay): string {
   switch (kind) {
     case 'agent':
       return say('countAgents', { count })

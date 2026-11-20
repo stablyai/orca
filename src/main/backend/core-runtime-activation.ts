@@ -195,6 +195,7 @@ export async function activateBackendRuntime(
     }
   })
   profileShutdown.paneGrids = runtime
+  profileShutdown.paintLedger = runtime
   runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
 
   const { installFirstWorkRenameHookSubscription } =

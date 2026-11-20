@@ -12,8 +12,12 @@ const { recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
 vi.mock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))
+vi.mock('./fatal-exception-quit', () => ({ quitAfterFatalException: vi.fn() }))
 
-import { installStdioWriteErrorSink } from './main-process-error-guards'
+import {
+  installStdioWriteErrorSink,
+  installUncaughtExceptionQuitGuard
+} from './main-process-error-guards'
 
 describe('installStdioWriteErrorSink', () => {
   let root: string
@@ -83,5 +87,73 @@ describe('installStdioWriteErrorSink', () => {
     await closed(stderr)
 
     expect(stderr.errored).toMatchObject({ code: expect.stringMatching(/^E/) })
+  })
+})
+
+const originalListeners = process.listeners('uncaughtException')
+
+function guardListener(): NodeJS.UncaughtExceptionListener | undefined {
+  return process
+    .listeners('uncaughtException')
+    .find((listener) => !originalListeners.includes(listener))
+}
+
+function fire(error: Error): void {
+  const listener = guardListener()
+  if (!listener) {
+    throw new Error('uncaughtException guard is not installed')
+  }
+  listener(error, 'uncaughtException')
+}
+
+describe('installUncaughtExceptionQuitGuard', () => {
+  afterEach(() => {
+    for (const listener of process.listeners('uncaughtException')) {
+      if (!originalListeners.includes(listener)) {
+        process.removeListener('uncaughtException', listener)
+      }
+    }
+    recordDurableCrashBreadcrumbMock.mockReset()
+  })
+
+  it('records the error once and quits once instead of leaving it to the modal handler', () => {
+    const quit = vi.fn()
+    installUncaughtExceptionQuitGuard(quit)
+
+    fire(new TypeError('boom'))
+    fire(new TypeError('during teardown'))
+
+    expect(quit).toHaveBeenCalledTimes(1)
+    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledTimes(1)
+    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith(
+      'main_uncaught_exception',
+      expect.objectContaining({ errorName: 'TypeError', errorMessage: 'boom' }),
+      'main_uncaught_exception'
+    )
+    expect(guardListener()).toBeDefined()
+  })
+
+  it('keeps running after a broken pipe or a dead local PTY', () => {
+    const quit = vi.fn()
+    installUncaughtExceptionQuitGuard(quit)
+
+    fire(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
+    fire(new Error('Pty process exited'))
+
+    expect(quit).not.toHaveBeenCalled()
+  })
+
+  it('still quits when inspecting the error throws', () => {
+    const quit = vi.fn()
+    installUncaughtExceptionQuitGuard(quit)
+    const hostile = Object.defineProperty(new Error('real fault'), 'name', {
+      get() {
+        throw new Error('name getter failed')
+      }
+    })
+
+    fire(hostile)
+
+    expect(quit).toHaveBeenCalled()
   })
 })

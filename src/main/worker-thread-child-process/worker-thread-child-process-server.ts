@@ -39,7 +39,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       stopping: boolean
       closed: boolean
       groupTerminated: boolean
-      discardingOutput?: boolean
+      discarding?: { stdout?: boolean; stderr?: boolean }
     }
   >()
 
@@ -50,6 +50,10 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     } catch (error) {
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
+    }
+    // A failed creation has no pid and reports through 'error'; Node's own 'spawn' event would come a turn later.
+    if (child.pid !== undefined) {
+      port.postMessage({ type: 'spawn', id, pid: child.pid })
     }
     const state: NonNullable<ReturnType<typeof children.get>> = {
       child,
@@ -69,13 +73,18 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     children.set(id, state)
     const postOutput = (type: 'stdout' | 'stderr', chunk: Buffer): void => {
-      if (state.discardingOutput) {
+      if (state.discarding?.[type]) {
         return
       }
       state.pendingOutputBytes += chunk.byteLength
       if (state.pendingOutputBytes >= OUTPUT_HIGH_WATER_BYTES) {
-        child.stdout?.pause()
-        child.stderr?.pause()
+        // A discarded stream keeps draining here; pausing it could fill the pipe and stall the child.
+        if (!state.discarding?.stdout) {
+          child.stdout?.pause()
+        }
+        if (!state.discarding?.stderr) {
+          child.stderr?.pause()
+        }
       }
       // Own the pipe chunk before transfer; a pooled Buffer may share its backing allocation.
       const bytes = new Uint8Array(chunk)
@@ -83,7 +92,6 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     const postError = (error: Error): void =>
       port.postMessage({ type: 'error', id, error: toErrorPayload(error) })
-    child.on('spawn', () => port.postMessage({ type: 'spawn', id, pid: child.pid }))
     child.stdout?.on('data', (chunk: Buffer) => postOutput('stdout', chunk))
     child.stderr?.on('data', (chunk: Buffer) => postOutput('stderr', chunk))
     // An unhandled stream error would take the whole worker, and every other child, down.
@@ -95,10 +103,11 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     child.on('exit', (code, signal) => port.postMessage({ type: 'exit', id, code, signal }))
     child.on('close', (code, signal) => {
       state.closed = true
-      if (!state.group || state.groupTerminated) {
+      const retained = Boolean(state.group) && !state.groupTerminated
+      if (!retained) {
         children.delete(id)
       }
-      port.postMessage({ type: 'close', id, code, signal })
+      port.postMessage({ type: 'close', id, code, signal, ...(retained ? { retained: true } : {}) })
       if (state.stopping) {
         state.group?.close()
       }
@@ -175,10 +184,15 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
           child.stderr?.resume()
         }
       } else if (request.type === 'discard-output') {
-        state.discardingOutput = true
-        state.pendingOutputBytes = 0
-        child.stdout?.resume()
-        child.stderr?.resume()
+        if (request.stream) {
+          state.discarding = { ...state.discarding, [request.stream]: true }
+          child[request.stream]?.resume()
+        } else {
+          state.discarding = { stdout: true, stderr: true }
+          state.pendingOutputBytes = 0
+          child.stdout?.resume()
+          child.stderr?.resume()
+        }
       } else if (request.type === 'stdin-write') {
         child.stdin?.write(request.data)
       } else if (request.type === 'stdin-end') {

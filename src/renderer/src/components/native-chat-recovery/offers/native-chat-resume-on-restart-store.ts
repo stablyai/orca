@@ -88,19 +88,15 @@ export async function loadNativeChatLaunchOffer(
     read = await store.readNativeChatRestartOffer()
   }
   const offered = read.candidates
-  // Failures left from an earlier launch are the status bar's to show; only a fresh offer asks.
-  if (offered.length === 0) {
+  // Failures left from an earlier launch are the status bar's to show; only a fresh offer or the
+  // host's own run is reported.
+  if (offered.length === 0 && !(hostContinues && taken.length > 0)) {
     return
   }
-  if (!autoResume || hostContinues) {
-    requestNativeChatResumeOnRestartDialog()
-    return
-  }
-  const working = launchResumeSessionIds(offered)
-  await store.continueNativeChatRestartOffer(working, 'launch')
-  // Chats left waiting on the person need them, so show the list instead of only a status-bar count.
-  if (working.length < offered.length) {
-    requestNativeChatResumeOnRestartDialog()
+  // One toast reports the launch: a Resume button when the preference is off, the outcome when on.
+  requestNativeChatResumeOnRestartDialog()
+  if (autoResume && !hostContinues) {
+    await store.continueNativeChatRestartOffer(launchResumeSessionIds(offered), 'launch')
   }
 }
 

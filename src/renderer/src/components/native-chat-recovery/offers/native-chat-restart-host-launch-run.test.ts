@@ -23,9 +23,6 @@ vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
 vi.mock('../runs/native-chat-resume-run-status-watch', () => ({
   watchResumeRunStatus: () => () => {}
 }))
-vi.mock('sonner', async () =>
-  (await import('../integration/native-chat-resume-sonner-mock.test-support')).resumeSonnerMock()
-)
 
 const row = (sessionId: string, activity?: ResumeCandidate['activity']): ResumeCandidate => ({
   sessionId,

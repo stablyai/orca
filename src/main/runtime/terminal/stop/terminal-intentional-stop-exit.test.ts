@@ -143,8 +143,26 @@ describe('intentional stops keep the pane through the exit', () => {
     await stopRendererOwnedPty(harness.deps, { id: PTY_ID })
 
     expect(harness.boundPtyId()).toBeNull()
+    expect(harness.tabIds()).toEqual([])
     expect(harness.rendererExits()).toEqual([
       { id: PTY_ID, code: 0, incarnationId: INCARNATION_ID, hostId: 'local' }
+    ])
+  })
+
+  it('keeps the tab when the renderer stops a replaced PTY whose replacement never spawned', async () => {
+    const harness = createHarness()
+
+    await stopRendererOwnedPty(harness.deps, { id: PTY_ID, replaced: true })
+
+    expect(harness.tabIds()).toEqual([TAB_ID])
+    expect(harness.rendererExits()).toEqual([
+      {
+        id: PTY_ID,
+        code: 0,
+        incarnationId: INCARNATION_ID,
+        hostId: 'local',
+        replacedByRestart: true
+      }
     ])
   })
 

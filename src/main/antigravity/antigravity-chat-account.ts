@@ -17,6 +17,7 @@ import { AcpLaunchGate } from '../acp/launch/acp-launch-gate'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { antigravityUserHome, linkAntigravityUserSkills } from './antigravity-chat-user-skills'
+import { resolveAgentPlatformProject } from './antigravity-agent-platform-project'
 
 type SignInOwner = Pick<AcpAgentConnection, 'close' | 'exited'> & {
   onExit(listener: () => void): void
@@ -75,6 +76,25 @@ export async function closeAntigravitySignInOwner(
   }
 }
 
+async function gcpProjection(
+  auth: AntigravityChatAuthConfig,
+  env: Readonly<Record<string, string>>
+): Promise<{ gcp?: { project: string; location: string } }> {
+  if (auth.method === 'oauth-business') {
+    return { gcp: { project: auth.gcpProject, location: auth.gcpLocation } }
+  }
+  if (auth.method !== 'agent-platform') {
+    return {}
+  }
+  const { project, location } = await resolveAgentPlatformProject(auth, env)
+  if (!project) {
+    throw new AntigravitySignInSentence(
+      'Google Agent Platform needs a Google Cloud project. Run `gcloud config set project <id>` or enter one in Settings.'
+    )
+  }
+  return { gcp: { project, location } }
+}
+
 // Every credential writer retries the exact retained child before preparing its account.
 export const antigravityChatAccount = {
   ...folder,
@@ -99,12 +119,7 @@ export const antigravityChatAccount = {
     await folder.prepare?.(env)
     await linkAntigravityUserSkills(home, antigravityUserHome(env))
     const path = join(home, ANTIGRAVITY_ACP_HOME, 'settings.json')
-    const projection = {
-      auth: { type: auth.method },
-      ...(auth.method === 'oauth-business'
-        ? { gcp: { project: auth.gcpProject, location: auth.gcpLocation } }
-        : {})
-    }
+    const projection = { auth: { type: auth.method }, ...(await gcpProjection(auth, env)) }
     try {
       await writeFileDurableIfCurrent(
         durableWriteTempPath(path),

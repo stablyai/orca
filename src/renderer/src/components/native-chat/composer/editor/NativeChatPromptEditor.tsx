@@ -361,7 +361,8 @@ function NativePromptEditor({
                 .run()
               editor.view.dispatch(closeHistory(editor.state.tr))
             },
-            insertMention: (from, to, token) => insertPromptMention(editor, from, to, token),
+            insertMention: (from, to, token, agent) =>
+              insertPromptMention(editor, from, to, token, agent),
             removeImageReferences: (attachmentId) => {
               const { tr } = editor.state
               editor.state.doc.descendants((node, position) => {

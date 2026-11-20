@@ -1,6 +1,7 @@
 import { ChildProcess } from 'node:child_process'
 import { once } from 'node:events'
 import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import type * as NodeChildProcess from 'node:child_process'
 import type * as WorkerChildModule from '../../../worker-thread-child-process/worker-thread-child-process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -102,10 +103,14 @@ describe('Git command tree termination', () => {
 
     await Promise.resolve()
     expect(settled).toBe(false)
-    expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '1234', '/t', '/f'], {
-      stdio: 'ignore',
-      windowsHide: true
-    })
+    expect(spawnMock).toHaveBeenCalledWith(
+      windowsSystem32Binary('taskkill.exe'),
+      ['/pid', '1234', '/t', '/f'],
+      {
+        stdio: 'ignore',
+        windowsHide: true
+      }
+    )
     killer.emit('close', 0)
     await pending
     expect(child.kill).not.toHaveBeenCalled()
@@ -119,10 +124,14 @@ describe('Git command tree termination', () => {
 
     child.receive({ type: 'spawn', id: 1, pid: 4321 })
     await Promise.resolve()
-    expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '4321', '/t', '/f'], {
-      stdio: 'ignore',
-      windowsHide: true
-    })
+    expect(spawnMock).toHaveBeenCalledWith(
+      windowsSystem32Binary('taskkill.exe'),
+      ['/pid', '4321', '/t', '/f'],
+      {
+        stdio: 'ignore',
+        windowsHide: true
+      }
+    )
     killer.emit('close', 0)
     await pending
     expect(rootKill).not.toHaveBeenCalled()
@@ -154,7 +163,7 @@ describe('Git command tree termination', () => {
     await abandoned
     expect(spawnMock).toHaveBeenCalledOnce()
     expect(spawnMock).toHaveBeenCalledWith(
-      'taskkill',
+      windowsSystem32Binary('taskkill.exe'),
       ['/pid', '4321', '/pid', '4322', '/t', '/f'],
       { stdio: 'ignore', windowsHide: true }
     )
@@ -219,7 +228,7 @@ describe('Git command tree termination', () => {
     }
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     expect(spawnMock).toHaveBeenCalledWith(
-      'taskkill',
+      windowsSystem32Binary('taskkill.exe'),
       ['/pid', '1234', '/pid', '1235', '/t', '/f'],
       { stdio: 'ignore', windowsHide: true }
     )
@@ -239,10 +248,14 @@ describe('Git command tree termination', () => {
       expect(child.kill).not.toHaveBeenCalled()
 
       child.receive({ type: 'spawn', id: 1, pid: 4321 })
-      expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '4321', '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
+      expect(spawnMock).toHaveBeenCalledWith(
+        windowsSystem32Binary('taskkill.exe'),
+        ['/pid', '4321', '/t', '/f'],
+        {
+          stdio: 'ignore',
+          windowsHide: true
+        }
+      )
       let released = false
       const abandoned = killAbandonedWorkerChildTree(child).then(() => {
         released = true

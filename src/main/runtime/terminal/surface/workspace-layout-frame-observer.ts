@@ -1,7 +1,7 @@
 // Tests check every records frame against a fresh projection and freeze partition reads; development logs structural frame mismatches, while release builds do neither.
 
 import { logLayoutFrameModelErrors } from './workspace-layout-frame-model-check'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import type { LoadedWorkspaceLayoutRead } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { WorkspaceLayoutRecordsFrame } from '../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 
@@ -31,17 +31,17 @@ export function workspaceLayoutFrameObserver(): LayoutFrameObserver | null {
   return observer ?? DEV_BUILD_CHECK
 }
 
-let partitionReadObserver: ((loaded: LoadedWorkspaceLayout) => void) | null = null
+let partitionReadObserver: ((loaded: LoadedWorkspaceLayoutRead) => void) | null = null
 
 /** Tests freeze partition reads to catch mutations; null removes the observer. */
 export function observeWorkspaceLayoutPartitionReads(
-  next: ((loaded: LoadedWorkspaceLayout) => void) | null
+  next: ((loaded: LoadedWorkspaceLayoutRead) => void) | null
 ): void {
   partitionReadObserver = next
 }
 
 export function workspaceLayoutPartitionReadObserver():
-  | ((loaded: LoadedWorkspaceLayout) => void)
+  | ((loaded: LoadedWorkspaceLayoutRead) => void)
   | null {
   return partitionReadObserver
 }

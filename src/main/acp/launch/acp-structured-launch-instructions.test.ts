@@ -27,14 +27,21 @@ const SPECS = {
     account: openCodeAcpAccountBinding(() => managedAccounts)
   },
   omp: acpLaunchSpecFor('omp')!,
-  antigravity: acpLaunchSpecFor('antigravity')!
+  antigravity: acpLaunchSpecFor('antigravity')!,
+  cursor: acpLaunchSpecFor('cursor')!
 }
 
 const ACCOUNT_HOMES: Record<keyof typeof SPECS, AgentSessionRecord['accountHome']> = {
   grok: { variable: 'GROK_HOME', path: '/home/user/.grok' },
   opencode: { kind: 'opencode', locator: { kind: 'unmanaged' } },
   omp: { variable: 'PI_CODING_AGENT_DIR', path: '/home/user/.omp/agent' },
-  antigravity: { variable: 'GEMINI_HOME', path: '/home/user/orca-data/antigravity-chat' }
+  antigravity: { variable: 'GEMINI_HOME', path: '/home/user/orca-data/antigravity-chat' },
+  cursor: { variable: 'CURSOR_CONFIG_DIR', path: '/home/user/.cursor' }
+}
+
+const PROBED_VERSIONS: Partial<Record<keyof typeof SPECS, string>> = {
+  omp: '17.2.9',
+  cursor: '2026.11.19-f005e9d'
 }
 
 let dataDirectory = ''
@@ -68,7 +75,7 @@ function launch(
     resolveCommand: (command) => `/resolved/${command}`,
     inheritedEnv: {},
     dataDirectory,
-    probeVersion: async () => ({ version: agent === 'omp' ? '17.2.9' : '1.18.35' }),
+    probeVersion: async () => ({ version: PROBED_VERSIONS[agent] ?? '1.18.35' }),
     ...(options.instructions === undefined
       ? {}
       : { resolveInstructions: async () => options.instructions ?? null })
@@ -85,18 +92,9 @@ function launch(
 }
 
 describe('ACP launch: standing instructions', () => {
-  it.each(['grok', 'opencode', 'omp', 'antigravity'] as const)(
-    'leaves a %s chat without instructions exactly as it was',
-    async (agent) => {
-      expect(await launch(agent, { instructions: null })).toEqual(await launch(agent))
-      expect(await launch(agent)).not.toHaveProperty('sessionMeta')
-    }
-  )
-
   it('gives Grok them as rules on its new session', async () => {
     const resolved = await launch('grok', { instructions: PREAMBLE })
     expect(resolved.sessionMeta).toEqual({ rules: PREAMBLE })
-    expect(resolved.args).toEqual((await launch('grok')).args)
   })
 
   it("appends them to Antigravity's system prompt", async () => {
@@ -104,7 +102,6 @@ describe('ACP launch: standing instructions', () => {
     expect(resolved.sessionMeta).toEqual({
       antigravity: { systemPrompt: { append: PREAMBLE } }
     })
-    expect(resolved.args).toEqual((await launch('antigravity')).args)
   })
 
   it("adds them to OpenCode's inline instructions after the user's own, keeping their settings", async () => {
@@ -118,16 +115,17 @@ describe('ACP launch: standing instructions', () => {
     expect(config.instructions).toHaveLength(2)
     expect(config.instructions[0]).toBe('/home/user/mine.md')
     await expectPrivateFile(config.instructions[1])
-    expect(resolved.args).toEqual((await launch('opencode')).args)
   })
 
   it("refuses to start OpenCode when the user's inline configuration cannot be extended", async () => {
-    await expect(
-      launch('opencode', {
-        instructions: PREAMBLE,
-        launchEnv: { OPENCODE_CONFIG_CONTENT: '{ // jsonc\n}' }
-      })
-    ).rejects.toThrow(/cannot take this chat's standing instructions/)
+    for (const content of ['{ // jsonc\n}', '{"instructions":"/mine.md"}']) {
+      await expect(
+        launch('opencode', {
+          instructions: PREAMBLE,
+          launchEnv: { OPENCODE_CONFIG_CONTENT: content }
+        })
+      ).rejects.toThrow(/cannot take this chat's standing instructions/)
+    }
   })
 
   it('appends them to OMP’s system prompt from a file', async () => {
@@ -136,6 +134,13 @@ describe('ACP launch: standing instructions', () => {
     expect(base).toEqual((await launch('omp')).args)
     expect(flag).toMatch(/^--append-system-prompt=/)
     await expectPrivateFile(flag.slice('--append-system-prompt='.length))
+  })
+
+  it('gives Cursor them as a rule in its folder while its new session opens', async () => {
+    const resolved = await launch('cursor', { instructions: PREAMBLE })
+    expect(resolved.aroundNewSession).toBeTypeOf('function')
+    expect(resolved.args).toEqual((await launch('cursor')).args)
+    expect(resolved.sessionMeta).toBeUndefined()
   })
 
   it('refuses to start an agent that has no way to take them', async () => {

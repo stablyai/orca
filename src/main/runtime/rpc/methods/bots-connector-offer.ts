@@ -76,7 +76,7 @@ export const BOT_CONNECTOR_OFFER_METHOD = defineMethod({
     }
     const answer: ReturnType<typeof connectorOfferReply> =
       source === 'google'
-        ? googleOfferReply(hostGoogleBotState(bot), {
+        ? googleOfferReply(await hostGoogleBotState(bot), {
             headless: runtime.servesWithoutWindow(),
             botName: bot.name
           })

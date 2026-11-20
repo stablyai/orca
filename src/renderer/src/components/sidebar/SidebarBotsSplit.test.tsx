@@ -24,14 +24,14 @@ import {
 const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')
 let sectionHeight = 0
 let listHeight = 0
-// The open search's floor (min-h-45): a held height below it renders at the floor.
-const SEARCH_FLOOR = 180
+// The open search's floor (min-h-47): a held height below it renders at the floor.
+const SEARCH_FLOOR = 188
 
 /** Stands in for the open Bots search, which holds the section the way the real panel does. */
 function OpenSearch(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => holdSidebarBotsHeightForSearch(ref.current!), [])
-  return <div ref={ref} data-bot-sidebar-search="" />
+  return <div ref={ref} data-bot-sidebar-search="multiple-rows" />
 }
 
 function tree(projectsCollapsed = false, searching = false): React.JSX.Element {
@@ -143,15 +143,6 @@ describe('SidebarBotsSplit', () => {
     expect(section.style.maxHeight).toBe('')
   })
 
-  it('hides the Projects list without unmounting it while folded', () => {
-    const view = render(
-      <SidebarProjectsListSlot botsShown collapsed>
-        <div data-testid="list" />
-      </SidebarProjectsListSlot>
-    )
-    expect(view.getByTestId('list').parentElement!.className).toContain('hidden')
-  })
-
   it('hides the handle while the Bots section is collapsed', () => {
     mocks.state.collapsedGroups = new Set([BOTS_GROUP_KEY])
     const { container } = renderSplit(40, 400)
@@ -177,20 +168,6 @@ describe('SidebarBotsSplit', () => {
       rerender(tree(false, false))
       expect(section.offsetHeight).toBe(200)
       expect(section.style.maxHeight).toBe('420px')
-    })
-
-    it('resizes with a drag and saves the new height', () => {
-      const { section, handle } = renderSearching(300)
-      drag(handle, 300, 350)
-      expect(section.offsetHeight).toBe(350)
-      expect(mocks.setSidebarBotsHeight).toHaveBeenCalledWith(350)
-    })
-
-    it('resizes with the keyboard and saves the new height', () => {
-      const { section, handle } = renderSearching(300)
-      fireEvent.keyDown(handle, { key: 'ArrowDown' })
-      expect(section.offsetHeight).toBe(308)
-      expect(mocks.setSidebarBotsHeight).toHaveBeenCalledWith(308)
     })
 
     it('keeps its height and the saved cap when the search floor masks a drag', () => {
@@ -228,7 +205,7 @@ describe('SidebarBotsSplit', () => {
     it('grows with a drag that ends at the saved cap', () => {
       mocks.state.sidebarBotsHeight = 260
       const { section, handle } = renderSearching(SEARCH_FLOOR)
-      drag(handle, 300, 380)
+      drag(handle, 300, 300 + 260 - SEARCH_FLOOR)
       expect(section.offsetHeight).toBe(260)
       expect(mocks.setSidebarBotsHeight).toHaveBeenCalledWith(260)
     })

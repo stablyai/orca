@@ -59,7 +59,17 @@ describe('launch auto-resume', () => {
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
   })
 
-  it('on an older host, resumes working chats and asks the person about chats waiting on them', async () => {
+  it("reports the host's own run in the toast, though it left nothing to ask about", async () => {
+    const { store, continued } = launchWith([])
+    const took = [candidate('working', { state: 'working', prompts: [], tasks: [] })]
+
+    await loadNativeChatLaunchOffer(store, async () => took)
+
+    expect(continued).toHaveBeenCalledWith(['working'], 'launch', took)
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
+  })
+
+  it('on an older host, resumes only working chats and opens the report toast', async () => {
     const { store, continued } = launchWith([
       candidate('working', { state: 'working', prompts: [], tasks: [] }),
       candidate('approval', {
@@ -81,14 +91,17 @@ describe('launch auto-resume', () => {
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
   })
 
-  it('on an older host, opens nothing when every offered chat was working', async () => {
+  it('on an older host, offers a Resume without sending anything when the preference is off', async () => {
     const { store, continued } = launchWith([
       candidate('working', { state: 'working', prompts: [], tasks: [] })
     ])
+    useAppStore.setState({
+      settings: { ...getDefaultSettings(''), nativeChatResumeWorkOnRestart: false }
+    })
 
     await loadNativeChatLaunchOffer(store, olderHost)
 
-    expect(continued).toHaveBeenCalledWith(['working'], 'launch')
-    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(false)
+    expect(continued).not.toHaveBeenCalled()
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
   })
 })

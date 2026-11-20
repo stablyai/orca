@@ -1,6 +1,6 @@
 // An item's Activity on a rail: comments on one quiet surface, and between them one muted line per event
 // (worker started and finished from the worker's record, edits, links and status changes).
-import { useCallback, useRef, useState } from 'react'
+import { Fragment, useCallback, useRef, useState } from 'react'
 import {
   AlarmClock,
   AlarmClockOff,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   BOT_ITEM_STATUSES,
@@ -27,12 +28,21 @@ import {
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
 import { botItemStatusName } from './bot-item-status-name'
 import { BOT_ITEM_COMMENT_ATTRIBUTE, BotItemCommentCard } from './BotItemCommentCard'
+import {
+  BotItemAwaitingRow,
+  BotItemOrphanAnswer,
+  BotItemQuestionCard,
+  botItemQuestionContext
+} from './BotItemQuestionRow'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
-import { formatBotItemSnoozeTime } from './BotItemSnooze'
+import { BotItemLinkedRefs } from './BotItemLinkedRefs'
+import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 import type { BotItemPendingComments } from './use-bot-item-pending-comments'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 const ACTOR = 'font-medium text-foreground/80'
+// Where a linked event's refs go in its translated sentence.
+const LINKS_SLOT = '\u0000'
 
 function str(value: unknown): string {
   return typeof value === 'string' ? value : ''
@@ -141,15 +151,19 @@ function EventBody({ event, item }: { event: BotItemEvent; item: BotItem }): Rea
             : t('bots.items.activity.made', 'added this item')}
         </>
       )
-    case 'linked':
+    case 'linked': {
+      // The sentence is translated around its refs, which render with their own break points.
+      const [before = '', after = ''] = t('bots.items.activity.linked', 'linked {{links}}', {
+        links: LINKS_SLOT
+      }).split(LINKS_SLOT)
       return (
         <>
-          {by}{' '}
-          {t('bots.items.activity.linked', 'linked {{links}}', {
-            links: Array.isArray(data.links) ? data.links.join(', ') : ''
-          })}
+          {by} {before}
+          <BotItemLinkedRefs links={Array.isArray(data.links) ? data.links.map(String) : []} />
+          {after}
         </>
       )
+    }
     case 'snoozed':
       return (
         <>
@@ -202,7 +216,7 @@ function WorkerBody({
 function EntryIcon({
   entry
 }: {
-  entry: Exclude<BotItemActivityEntry, { kind: 'comment' }>
+  entry: Exclude<BotItemActivityEntry, { kind: 'comment' | 'answer' }>
 }): React.JSX.Element | null {
   if (entry.kind === 'worker') {
     if (entry.phase === 'started') {
@@ -239,13 +253,19 @@ export function BotItemActivityList({
   bot,
   item,
   events,
-  pending
+  pending,
+  askShown,
+  onReplyToQuestion
 }: {
   bot: Bot
   item: BotItem
   events: readonly BotItemEvent[]
   /** Comments sent from the box the host's read doesn't show yet: last, as they were sent. */
   pending?: BotItemPendingComments
+  /** The open question's card is below Activity, taking its answer. */
+  askShown: boolean
+  /** Sends a comment, as the comment box does; absent where the item takes none (deleted). */
+  onReplyToQuestion?: (text: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const entries = botItemActivity(item, events)
@@ -263,6 +283,7 @@ export function BotItemActivityList({
     target.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' })
     target.focus({ preventScroll: true })
   }, [])
+  const last = entries.at(-1)
   // The rail runs through the event glyphs; each glyph and card sits on the panel fill over it.
   return (
     <>
@@ -270,10 +291,69 @@ export function BotItemActivityList({
         ref={list}
         className="relative flex flex-col before:absolute before:inset-y-2.5 before:left-[9.5px] before:w-px before:bg-foreground/12"
       >
-        {entries.map((entry) =>
-          entry.kind === 'comment' ? (
-            <BotItemCommentCard key={entry.key} bot={bot} item={item} entry={entry} onJump={jump} />
-          ) : (
+        {entries.map((entry) => {
+          if (entry.kind === 'answer') {
+            return <BotItemOrphanAnswer key={entry.key} event={entry.event} />
+          }
+          if (entry.kind === 'comment' && entry.question !== null) {
+            const context = botItemQuestionContext(entry.event)
+            const carded = entry.question === 'open' && askShown
+            return (
+              <Fragment key={entry.key}>
+                {context ? (
+                  <BotItemCommentCard
+                    bot={bot}
+                    item={item}
+                    entry={entry}
+                    onJump={jump}
+                    textOverride={context}
+                    // A jump to the question lands on its card when Activity draws one.
+                    jumpTarget={carded}
+                  />
+                ) : null}
+                {/* The open card sits right under Activity; here only a line marks its place
+                    when later entries came after it. */}
+                {!carded ? (
+                  <BotItemQuestionCard
+                    item={item}
+                    event={entry.event}
+                    state={entry.question}
+                    answer={entry.answer}
+                    onJump={jump}
+                    reply={
+                      entry.question === 'open' && onReplyToQuestion
+                        ? {
+                            key: `${botRefKey(bot)}:${item.uid}:${entry.event.id}`,
+                            send: onReplyToQuestion
+                          }
+                        : undefined
+                    }
+                  />
+                ) : entry === last ? null : (
+                  <div className="relative flex min-w-0 items-start gap-2">
+                    <span className="flex h-6 w-5 shrink-0 items-center justify-center bg-sidebar">
+                      <BotItemStatusIcon status="needs_you" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <BotItemAwaitingRow event={entry.event} />
+                    </div>
+                  </div>
+                )}
+              </Fragment>
+            )
+          }
+          if (entry.kind === 'comment') {
+            return (
+              <BotItemCommentCard
+                key={entry.key}
+                bot={bot}
+                item={item}
+                entry={entry}
+                onJump={jump}
+              />
+            )
+          }
+          return (
             <div
               key={entry.key}
               className="relative flex min-w-0 items-start gap-2 py-[3px] text-xs leading-[18px] text-muted-foreground"
@@ -281,7 +361,8 @@ export function BotItemActivityList({
               <span className="flex h-[18px] w-5 shrink-0 items-center justify-center bg-sidebar">
                 <EntryIcon entry={entry} />
               </span>
-              <div className="min-w-0 flex-1">
+              {/* Any long word (a path, a URL, a linked ref) wraps, so the page never scrolls sideways. */}
+              <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                 {entry.kind === 'worker' ? (
                   <WorkerBody entry={entry} />
                 ) : (
@@ -293,14 +374,14 @@ export function BotItemActivityList({
               </span>
             </div>
           )
-        )}
+        })}
         {/* Last, as sent: never placed by this machine's clock among the host's events. */}
         {pending?.shown.map(({ event, failed }) => (
           <BotItemCommentCard
             key={event.id}
             bot={bot}
             item={item}
-            entry={{ event, question: null }}
+            entry={{ event }}
             failed={
               failed
                 ? { retry: () => pending.retry(event.id), discard: () => pending.discard(event.id) }
@@ -309,7 +390,8 @@ export function BotItemActivityList({
           />
         ))}
       </div>
-      {entries.some((entry) => entry.kind === 'comment') || pending?.shown.length ? null : (
+      {entries.some((entry) => entry.kind !== 'worker' && entry.kind !== 'event') ||
+      pending?.shown.length ? null : (
         <p className="pt-0.5 text-xs leading-[18px] text-muted-foreground">
           {t('bots.items.activity.noComments', 'No comments yet.')}
         </p>

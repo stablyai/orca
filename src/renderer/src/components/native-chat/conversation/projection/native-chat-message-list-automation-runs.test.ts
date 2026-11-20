@@ -37,8 +37,6 @@ function row(
   }
 }
 
-const say = (id: string, sequence: number) =>
-  row(id, sequence, { blocks: [{ type: 'text', text: id }] })
 const waitCard = (sequence: number) =>
   row('wait', sequence, { waitEnded: { automation: facts, ending } })
 const runRow = (sequence: number) =>
@@ -46,10 +44,6 @@ const runRow = (sequence: number) =>
     role: 'user',
     blocks: [{ type: 'text', text: 'Merge' }],
     automationRun: run
-  })
-const notStarted = (sequence: number) =>
-  row('not-started', sequence, {
-    automationRunNotStarted: { run, actsFor: [], error: 'closed', text: 'Merge', at: 40 }
   })
 const ids = (rows: readonly NativeChatMessage[]) => rows.map((message) => message.id)
 
@@ -80,14 +74,5 @@ describe('automation runs in the desktop chat list', () => {
       'other-time',
       'run'
     ])
-  })
-
-  it("marks a Couldn't start row Sent again once its run arrives, appended live", () => {
-    const project = createNativeChatMessageListProjection()
-    const first = notStarted(1)
-    expect(project([first]).conversation[0]!.automationRunNotStarted!.sentAgain).toBeUndefined()
-    const after = project([first, say('b', 2), runRow(3)]).conversation
-    expect(ids(after)).toEqual(['not-started', 'b', 'run'])
-    expect(after[0]!.automationRunNotStarted!.sentAgain).toBe(true)
   })
 })

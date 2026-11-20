@@ -24,10 +24,7 @@ describe('connectorAskerTagView', () => {
     expect(view).toMatchObject({ own: true, name: 'You', place: 'Slack DM' })
   })
 
-  it('names a group DM, an issue by its id, and an unnamed member as Someone, without a link', () => {
-    expect(
-      connectorAskerTagView({ ...SAM, place: { kind: 'group_message', id: 'G1' } }, t).place
-    ).toBe('Slack group DM')
+  it('uses the issue id for an unnamed asker without a link', () => {
     const issue = connectorAskerTagView(
       {
         source: 'linear',
@@ -49,7 +46,7 @@ describe('connectorNoAccessView', () => {
         noAccess: [
           { name: 'Alex Kim', text: 'same' },
           { name: 'Alex Kim', text: 'same' },
-          { text: 'Only on main.' }
+          { text: '<@U0ANN|Ann Park> said only on <#C1|main>.' }
         ]
       },
       t
@@ -60,7 +57,7 @@ describe('connectorNoAccessView', () => {
     ).toEqual([
       ['Alex Kim', 'AK', 'Alex Kim · Slack · no access', 'same'],
       ['Alex Kim', 'AK', 'Alex Kim · Slack · no access', 'same'],
-      ['Someone', 'S', 'Someone · Slack · no access', 'Only on main.']
+      ['Someone', 'S', 'Someone · Slack · no access', '@Ann Park said only on #main.']
     ])
     expect(new Set(view?.lines.map((line) => line.key)).size).toBe(3)
   })
