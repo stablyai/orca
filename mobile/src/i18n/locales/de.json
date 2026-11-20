@@ -112,7 +112,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... oder den Code einfügen",
       "pasteCodeTitle": "Kopplungscode einfügen",
       "pasteInstead": "Stattdessen Code einfügen",
-      "pastePairingCode": "Oder Kopplungscode einfügen",
+      "pastePairingCode": "Kopplungscode einfügen",
       "scanCodeStep": "QR-Code scannen",
       "title": "Mit Desktop koppeln",
       "tryAgain": "Erneut versuchen",
@@ -146,7 +146,7 @@
       "installTitle": "Die neue App herunterladen",
       "installDescription": "Wenn dein Smartphone fragt, erlaube deinem Browser, Apps zu installieren.",
       "download": "Herunterladen",
-      "keepThisVersion": "Diese Version weiter nutzen",
+      "keepThisVersion": "Diese Version behalten",
       "keepThisVersionNote": "Dir entgehen Sicherheitskorrekturen. Wir erinnern dich in einer Woche."
     },
     "pairTitle": "Mit dem Computer koppeln",
@@ -324,7 +324,7 @@
       "triedSearchWeb": "Websuche versucht"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "Vollständige Nachricht anzeigen — Laden fehlgeschlagen, zum Wiederholen tippen",
+      "loadFailed": "Ganze Nachricht erneut laden",
       "showFullMessage": "Vollständige Nachricht anzeigen",
       "showLess": "Weniger anzeigen"
     },
@@ -390,8 +390,7 @@
       "submitSelectedOptions": "Ausgewählte Optionen absenden"
     },
     "queuedMessages": {
-      "clearAll": "Alles löschen",
-      "deleteAll": "Alle Nachrichten in der Warteschlange löschen",
+      "deleteAll": "Alle löschen",
       "editMessage": "Nachricht bearbeiten",
       "pausedState": "Pausiert",
       "queuedState": "In der Warteschlange",
@@ -789,7 +788,7 @@
       "manageShortcuts": "Tastenkürzel verwalten",
       "manageShortcutsHint": "Tastenkürzel einblenden, ausblenden oder neu anordnen",
       "modifiers": "Modifikatortasten",
-      "moreKeys": "Weitere Tasten – Tab, Pfeiltasten, F1–F12…",
+      "moreKeys": "WEITERE TASTEN",
       "navigation": "Navigation",
       "pickKey": "Taste auswählen",
       "pressEnter": "Enter drücken",
@@ -1219,7 +1218,7 @@
       "privacyHint": "Sendet einen um sensible Daten bereinigten Bericht mit begrenzter Größe. Er enthält Host-Name, Endpunkt, Versionen, Verbindungsstatus und Ereignisse, niemals Terminalinhalte oder Zugangsdaten.",
       "reconnecting": "Verbindung wird wiederhergestellt",
       "retrySending": "Erneut senden",
-      "sendDiagnostics": "Diagnosedaten an Orca senden",
+      "sendDiagnostics": "Diagnosedaten senden",
       "sending": "Wird gesendet…",
       "sent": "Diagnosedaten gesendet",
       "stateWithAttempt": "{{state}} · Versuch {{attempts}}",
@@ -1948,7 +1947,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} ist mit keinem offenen PR verknüpft.",
       "currentBranchNotLinked": "Der aktuelle Branch ist mit keinem offenen PR verknüpft.",
-      "linkExistingPullRequest": "Bestehenden Pull Request verknüpfen",
+      "linkExistingPullRequest": "Pull Request verknüpfen",
       "linkedPrUnavailable": "Verknüpfter PR #{{number}} nicht verfügbar",
       "refreshOrCreate": "Zum erneuten Prüfen aktualisieren oder einen neuen PR für diesen Branch erstellen."
     },
@@ -2021,6 +2020,9 @@
       "sendFailed": "Befehl zum Fortsetzen konnte nicht gesendet werden."
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Diese Unterhaltung mit {{agent}} ist in einem Chat geöffnet. Den Sitzungsverlauf aktualisieren, um sie zu öffnen.",
+      "ownershipUnknown": "Orca konnte nicht bestätigen, wem diese {{agent}}-Unterhaltung gehört. Den Sitzungsverlauf aktualisieren und erneut versuchen.",
+      "preparationRefused": "Orca konnte diese {{agent}}-Unterhaltung nicht vorbereiten. Zum Fortfahren einen neuen Chat starten.",
       "prepareFailed": "Diese ältere Codex-Sitzung konnte nicht vorbereitet werden. Erneut versuchen, die Sitzung fortzusetzen."
     },
     "backgroundTask": {
@@ -2129,6 +2131,7 @@
     "failure": {
       "accountSwitchInProgress": "{{agent}}: Die Einrichtung auf diesem Host wird geändert. Nach Abschluss erneut versuchen.",
       "agentCommandNotRunnable": "Der Befehl für {{agent}} unter Einstellungen → Agenten muss ein Programmpfad oder -name sein, den Orca finden kann, ohne Argumente oder Variablen. Den Befehl ändern oder zurücksetzen.",
+      "agentCommandFailed": "Der Befehl für {{agent}} unter Einstellungen → Agenten hat {{agent}} nicht gestartet: {{detail}}. Den Befehl ändern oder zurücksetzen.",
       "agentCommandNotSignedIn": "Auf dem Computer, auf dem dieser Chat läuft, mit `{{loginCommand}}` bei {{agent}} anmelden.",
       "agentNotSignedIn": "Bei {{agent}} anmelden.",
       "agentStarting": "Der Agent wird noch gestartet.",
@@ -2326,8 +2329,8 @@
       "scrollToLatest": "Zur neuesten Nachricht scrollen"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "Vollständige Nachricht anzeigen – Laden fehlgeschlagen, zum Wiederholen tippen",
-      "loadOutputFailed": "Vollständige Ausgabe anzeigen – Laden fehlgeschlagen, zum Wiederholen tippen",
+      "loadMessageFailed": "Ganze Nachricht erneut laden",
+      "loadOutputFailed": "Ganze Ausgabe erneut laden",
       "partialMessage": "Ein Teil dieser Nachricht wird angezeigt.",
       "partialOutput": "{{shown}} von {{total}} werden angezeigt.",
       "showFullMessage": "Vollständige Nachricht anzeigen",
@@ -2343,8 +2346,8 @@
       "notFoundTitle": "Unterhaltung noch nicht gefunden"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "Zur Chatansicht wechseln",
-      "switchToTerminalView": "Zur Terminalansicht wechseln"
+      "switchToChatView": "Zum Chat wechseln",
+      "switchToTerminalView": "Zum Terminal wechseln"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "Der Agent wurde gestartet, aber die Notizen wurden nicht gesendet.",
@@ -3856,7 +3859,7 @@
       "issueSource": "Issue-Quelle",
       "keySecurityHint": "Der Schlüssel wird über den Schlüsselbund des Host-Betriebssystems verschlüsselt und lokal gespeichert.",
       "linearConnectSubtitle": "Persönlichen API-Schlüssel einfügen, um Issues aus diesem Arbeitsbereich anzuzeigen.",
-      "linearSettingsLink": "Linear Settings / Security / New API key",
+      "linearSettingsLink": "Linear-Einstellungen öffnen",
       "linearTeam": "Linear-Team",
       "linearTeamSubtitle": "Issue im ausgewählten Linear-Team erstellen.",
       "newIssueTitle": "Neues {{providerLabel}}-Issue",

@@ -1,4 +1,8 @@
 import { runProcess } from '@orca/process-host'
+import {
+  windowsPowerShellPath,
+  windowsSystem32Binary
+} from '@orca/process-host/windows-system-binary'
 import os from 'node:os'
 import { performance } from 'node:perf_hooks'
 import {
@@ -102,7 +106,7 @@ async function enumerateWindowsWithCim(withNames: boolean): Promise<WindowsProce
       `ForEach-Object { try { [string]::Join([char]9, @($_.ProcessId, $_.ParentProcessId, $_.WorkingSetSize, [string]$_.KernelModeTime, [string]$_.UserModeTime, $_.CreationDate.ToUniversalTime().Ticks, $_.PageFileUsage${nameField})) } catch {} }`
   ]
   try {
-    const stdout = await execFileText('powershell.exe', args)
+    const stdout = await execFileText(windowsPowerShellPath(), args)
     const parsed = parseWindowsProcessSample(stdout)
     return parsed.rows.length > 0 ? { ...parsed, sampledAtMs: performance.now() } : null
   } catch (err) {
@@ -116,7 +120,7 @@ async function enumerateWindowsWithTypeperf(
 ): Promise<WindowsProcessResourceRow[]> {
   try {
     // Immediate fallback fits the two-second poll budget without inventing CPU rates.
-    const stdout = await execFileText('typeperf.exe', [
+    const stdout = await execFileText(windowsSystem32Binary('typeperf.exe'), [
       ...TYPEPERF_COUNTERS,
       '-sc',
       '1',

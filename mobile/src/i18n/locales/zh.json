@@ -122,7 +122,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... 或粘贴配对码",
       "pasteCodeTitle": "粘贴配对码",
       "pasteInstead": "改为粘贴配对码",
-      "pastePairingCode": "或粘贴配对码",
+      "pastePairingCode": "粘贴配对码",
       "scanCodeStep": "扫描二维码",
       "title": "与桌面配对",
       "tryAgain": "重试",
@@ -156,7 +156,7 @@
       "installTitle": "下载新应用",
       "installDescription": "如果手机询问，请允许浏览器安装应用。",
       "download": "下载",
-      "keepThisVersion": "继续使用此版本",
+      "keepThisVersion": "保留此版本",
       "keepThisVersionNote": "你将收不到安全修复。我们会在一周后再提醒你。"
     },
     "pairTitle": "与电脑配对",
@@ -345,7 +345,7 @@
       "triedSearchWeb": "尝试搜索网页"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "显示完整消息——加载失败，点按重试",
+      "loadFailed": "重试加载完整消息",
       "showFullMessage": "显示完整消息",
       "showLess": "收起"
     },
@@ -417,8 +417,7 @@
       "submitSelectedOptions": "提交所选选项"
     },
     "queuedMessages": {
-      "clearAll": "全部清除",
-      "deleteAll": "删除所有排队的消息",
+      "deleteAll": "全部删除",
       "editMessage": "编辑消息",
       "showLess": "收起",
       "moreCount_one": "另外 {{count}} 条",
@@ -896,7 +895,7 @@
       "manageShortcuts": "管理快捷键",
       "manageShortcutsHint": "显示、隐藏快捷键或调整其顺序",
       "modifiers": "修饰键",
-      "moreKeys": "更多按键：Tab、方向键、F1–F12…",
+      "moreKeys": "更多按键",
       "navigation": "导航键",
       "pickKey": "选择按键",
       "pressEnter": "按下 Enter",
@@ -1417,7 +1416,7 @@
       "privacyHint": "发送一份经过脱敏且大小受限的报告，包含主机名、端点、版本、连接状态和事件，绝不包含终端内容或凭据",
       "reconnecting": "重新连接中",
       "retrySending": "重试发送",
-      "sendDiagnostics": "向 Orca 发送诊断信息",
+      "sendDiagnostics": "发送诊断信息",
       "sending": "正在发送…",
       "sent": "诊断信息已发送",
       "stateWithAttempt": "{{state}} · 第 {{attempts}} 次尝试",
@@ -2368,7 +2367,7 @@
       "branchNotLinked": "{{branch}} 未关联到开放的 PR",
       "branchRequired": "创建 PR 前，请先检出分支",
       "currentBranchNotLinked": "当前分支未关联到开放的 PR",
-      "linkExistingPullRequest": "关联现有 PR",
+      "linkExistingPullRequest": "关联 PR",
       "linkedPrUnavailable": "关联的 PR #{{number}} 不可用",
       "refreshOrCreate": "刷新以重新检查，或为此分支创建新的 PR"
     },
@@ -2445,6 +2444,9 @@
       "sendFailed": "发送恢复命令失败"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "此 {{agent}} 会话已在聊天中打开，请刷新会话历史以打开它",
+      "ownershipUnknown": "Orca 无法确认此 {{agent}} 会话的归属，请刷新会话历史并重试",
+      "preparationRefused": "Orca 无法准备此 {{agent}} 对话。请开启新聊天继续",
       "prepareFailed": "无法准备此旧版 Codex 会话。请重试恢复"
     },
     "backgroundTask": {
@@ -2565,6 +2567,7 @@
     "failure": {
       "accountSwitchInProgress": "正在此主机上更改 {{agent}} 的设置。请在完成后重试",
       "agentCommandNotRunnable": "{{agent}} 在设置 → 智能体中的命令必须是 Orca 能找到的程序路径或名称，且不能包含参数或变量。请修改或重置",
+      "agentCommandFailed": "设置 → 智能体中{{agent}}的“命令”未能启动 {{agent}}：{{detail}}。请修改或重置命令。",
       "agentCommandNotSignedIn": "请在运行此聊天的电脑上使用 `{{loginCommand}}` 登录 {{agent}}",
       "agentNotSignedIn": "请登录 {{agent}}",
       "agentStarting": "智能体仍在启动",
@@ -2773,8 +2776,8 @@
       "scrollToLatest": "滚动到最新消息"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "显示完整消息：加载失败，点按重试",
-      "loadOutputFailed": "显示完整输出：加载失败，点按重试",
+      "loadMessageFailed": "重试加载完整消息",
+      "loadOutputFailed": "重试加载完整输出",
       "partialMessage": "仅显示此消息的部分内容",
       "partialOutput": "正在显示 {{total}} 中的 {{shown}}",
       "showFullMessage": "显示完整消息",
@@ -2790,8 +2793,8 @@
       "notFoundTitle": "暂未找到此对话"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "切换到聊天视图",
-      "switchToTerminalView": "切换到终端视图"
+      "switchToChatView": "切换到聊天",
+      "switchToTerminalView": "切换到终端"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "智能体已启动，但笔记未发送",
@@ -4011,7 +4014,7 @@
       "updateBranch": "更新分支",
       "back": "返回源代码管理",
       "title": "提交记录",
-      "loadMoreFailed": "无法加载更多提交，重试",
+      "loadMoreFailed": "重试加载提交",
       "notPushed": "未推送 {{count}}",
       "onOrigin": "origin 上 {{count}}"
     },
@@ -4575,7 +4578,7 @@
       "issueSource": "议题来源",
       "keySecurityHint": "密钥通过主机操作系统的钥匙串加密，并存储在本地",
       "linearConnectSubtitle": "粘贴个人 API 密钥，即可浏览该工作区的议题",
-      "linearSettingsLink": "Linear 设置 / 安全 / 新建 API 密钥",
+      "linearSettingsLink": "打开 Linear 设置",
       "linearTeam": "Linear 团队",
       "linearTeamSubtitle": "在所选 Linear 团队中创建议题",
       "newIssueTitle": "新建 {{providerLabel}} 议题",
@@ -4650,7 +4653,7 @@
       "runSetupAndCreate": "运行设置脚本并创建",
       "setupSubtitle": "创建此工作区前，请选择是否运行 {{name}} 的设置脚本",
       "setupTitle": "运行设置脚本？",
-      "skipSetupAndCreate": "跳过设置脚本并创建",
+      "skipSetupAndCreate": "跳过设置并创建",
       "trustFailed": "无法将设置脚本设为可信"
     },
     "worktreeCreateRetry": {

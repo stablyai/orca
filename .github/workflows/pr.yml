@@ -1103,15 +1103,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # beforePack compiles provider-exec and journal-file-lock in this image; an uncached build cost ~75s inside packaging.
-      - name: Build Linux native toolchain image
-        id: native-toolchain-image
-        background: true
-        run: >-
-          node --input-type=module -e "import { spawnSync } from 'node:child_process';
-          import { linuxNativeToolchainImage } from './config/scripts/native-build/linux/build-wayland-clipboard.mjs';
-          linuxNativeToolchainImage(process.cwd(), (args) => { if (spawnSync('docker', args, { stdio: 'inherit' }).status !== 0) process.exit(1) })"
-
       # Electron and builder releases fix what this downloads; the lockfile churns far more often.
       - name: Resolve electron-builder download versions
         id: eb-versions
@@ -1148,6 +1139,24 @@ jobs:
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
+
+      - name: Restore native components
+        id: linux-native-restore
+        uses: ./.github/actions/prepare-wayland-clipboard
+        with:
+          build: 'false'
+
+      # A helper-cache miss rebuilds in this Ubuntu 20.04 image (~70s); building it now overlaps the Electron tests.
+      - name: Build Linux native toolchain image
+        id: native-toolchain-image
+        background: true
+        env:
+          CACHE_HIT: ${{ steps.linux-native-restore.outputs.cache-hit }}
+        run: |
+          if [ "$CACHE_HIT" = true ]; then exit 0; fi
+          node --input-type=module -e "import { spawnSync } from 'node:child_process';
+          import { linuxNativeToolchainImage } from './config/scripts/native-build/linux/build-wayland-clipboard.mjs';
+          linuxNativeToolchainImage(process.cwd(), (args) => { if (spawnSync('docker', args, { stdio: 'inherit' }).status !== 0) process.exit(1) })"
 
       # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
       # build resolves React Native and Expo from mobile/node_modules.
@@ -1196,11 +1205,7 @@ jobs:
           src/main/browser/extensions/actions/browser-extension-toolbar.electron.test.ts
           src/main/browser/extensions/native-messaging/browser-extension-native-messaging.electron.test.ts
 
-      - name: Restore native components
-        id: linux-native-restore
-        uses: ./.github/actions/prepare-wayland-clipboard
-        with:
-          build: 'false'
+      - wait: native-toolchain-image
 
       # The isolated glibc-floor build writes only the Wayland helper, so JavaScript can overlap.
       - name: Build native components
@@ -1277,7 +1282,7 @@ jobs:
         background: true
         run: pnpm run build:web-from-renderer
 
-      - wait: [linux-native, linux-package-tools, web-client, native-toolchain-image]
+      - wait: [linux-native, linux-package-tools, web-client]
 
       - name: Package unpacked app
         env:
@@ -1353,6 +1358,61 @@ jobs:
 
       - wait: headless-serve-shutdown
 
+  package_windows_tests:
+    name: package tests (windows)
+    needs: [code_paths]
+    if: needs.code_paths.outputs.package_windows == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          persist-native-cache: 'false'
+
+      # vitest runs here directly rather than through `pnpm test`, so the addon
+      # assertions only hold once install-node-dependencies has rebuilt natives.
+      - name: Test Windows installer process probe
+        if: needs.code_paths.outputs.windows_process_probe != 'false'
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        # Serialize the two suites so their cold PowerShell/CIM starts cannot contend.
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          --no-file-parallelism
+          config/scripts/desktop-distribution/nsis/nsis-process-check.test.mjs
+          config/scripts/performance/idle-cpu/idle-cpu-process-sampling.test.mjs
+
+      - uses: ./.github/actions/prepare-windows-package-rust
+
+      # Install Electron once: otherwise each Electron test's require('electron') extracts it into one dist concurrently (EBUSY, 0xC0000005).
+      - name: Install the Electron binary
+        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
+
+      # Files come from WINDOWS_BOUNDARY_TESTS, the same list that decides whether this job runs.
+      - name: Test Windows-specific boundaries
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_REAL_WINDOWS_SKILL_TEST: '1'
+        run: |
+          $files = node config/scripts/workflow/source-routing/pr-package-test-paths.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts @files
+
+      # Isolate slow-taskkill CPU burners so they cannot starve unrelated test files.
+      - name: Test Windows tree kill under CPU load
+        env:
+          ORCA_WINDOWS_TREE_KILL_LOAD: '1'
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
+
   package_windows:
     name: package (windows)
     needs: [code_paths]
@@ -1397,77 +1457,7 @@ jobs:
       # build resolves React Native and Expo from mobile/node_modules.
       - uses: ./.github/actions/install-mobile-dependencies
 
-      # vitest runs here directly rather than through `pnpm test`, so the addon
-      # assertions only hold once install-node-dependencies has rebuilt natives.
-      - name: Test Windows installer process probe
-        if: needs.code_paths.outputs.windows_process_probe != 'false'
-        env:
-          ORCA_BACKGROUND_LAUNCH: '1'
-        # Serialize the two suites so their cold PowerShell/CIM starts cannot contend.
-        run: >-
-          pnpm exec vitest run --config config/vitest.config.ts
-          --no-file-parallelism
-          config/scripts/desktop-distribution/nsis/nsis-process-check.test.mjs
-          config/scripts/performance/idle-cpu/idle-cpu-process-sampling.test.mjs
-
-      - name: Resolve the Windows Rust build scope
-        id: rust-scope
-        shell: bash
-        run: node config/scripts/native-build/windows/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
-
-      # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
-      - name: Cache Windows CLI launcher
-        uses: actions/cache@v5
-        with:
-          # Cache cargo registry with .build so misses do not rebuild resource crates cold.
-          path: |
-            native/windows-cli-launcher/.build
-            native/windows-cli-launcher/target
-            native/windows-agent-hook/.build
-            native/windows-agent-hook/target
-            ~/.cargo/registry
-          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs', 'config/scripts/native-build/windows/build-windows-agent-hook.mjs', 'config/scripts/native-build/windows/windows-rust-executable-build.mjs', 'config/scripts/native-build/windows/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
-          restore-keys: |
-            windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
-
-      # Require cargo early; otherwise packaged Rust launcher fails deep inside builder native hooks.
-      - name: Ensure the Rust toolchain for the Windows CLI launcher
-        shell: pwsh
-        run: |
-          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-            rustup toolchain install stable --profile minimal
-            rustup default stable
-          }
-          cargo --version
-
-      # Build agent-hook once before tests so suites share the binary instead of compiling concurrently.
-      - name: Build the Windows agent hook
-        run: node config/scripts/native-build/windows/build-windows-agent-hook.mjs
-
-      - name: Build the Windows CLI launcher
-        run: node config/scripts/native-build/windows/build-windows-cli-launcher.mjs
-
-      # Install Electron once: otherwise each Electron test's require('electron') extracts it into one dist concurrently (EBUSY, 0xC0000005).
-      - name: Install the Electron binary
-        run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
-
-      # Files come from WINDOWS_BOUNDARY_TESTS, the same list that decides whether this job runs.
-      - name: Test Windows-specific boundaries
-        env:
-          ORCA_BACKGROUND_LAUNCH: '1'
-          ORCA_REAL_WINDOWS_SKILL_TEST: '1'
-        run: |
-          $files = node config/scripts/workflow/source-routing/pr-package-test-paths.mjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts @files
-
-      # Isolate slow-taskkill CPU burners so they cannot starve unrelated test files.
-      - name: Test Windows tree kill under CPU load
-        env:
-          ORCA_WINDOWS_TREE_KILL_LOAD: '1'
-        run: >-
-          pnpm exec vitest run --config config/vitest.config.ts
-          src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
+      - uses: ./.github/actions/prepare-windows-package-rust
 
       # Use parallel Vite targets as already packaged/smoked on Linux; release behavior is otherwise identical.
       - name: Build package inputs
@@ -1614,6 +1604,7 @@ jobs:
       - managed_hook_node18
       - package
       - package_windows
+      - package_windows_tests
       - dependency_isolation
     runs-on: ubuntu-slim
     timeout-minutes: 5
@@ -1651,6 +1642,7 @@ jobs:
           PACKAGE_SHOULD_RUN: ${{ needs.code_paths.outputs.package }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
           PACKAGE_WINDOWS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows }}
+          PACKAGE_WINDOWS_TESTS: ${{ needs.package_windows_tests.result }}
           DEPENDENCY_ISOLATION: ${{ needs.dependency_isolation.result }}
           DEPENDENCY_ISOLATION_SHOULD_RUN: ${{ needs.code_paths.outputs.dependency_isolation }}
         run: |
@@ -1697,5 +1689,6 @@ jobs:
           check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
           check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
+          check_job package_windows_tests "$PACKAGE_WINDOWS_TESTS" "$PACKAGE_WINDOWS_SHOULD_RUN"
           check_job dependency_isolation "$DEPENDENCY_ISOLATION" "$DEPENDENCY_ISOLATION_SHOULD_RUN"
           exit "$failed"

@@ -16,6 +16,7 @@ import {
   readClaudeCapabilities,
   readClaudeReportedPermissionMode,
   readClaudeModels,
+  readClaudeOpenedPermissionMode,
   type ClaudeInitObservation,
   type ClaudeInitProof
 } from './claude-structured-init-proof'
@@ -133,6 +134,10 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
     session.reportedOptions.reportedPermissionMode = permission
   }
   const { init, initialization } = facts
+  const opened = readClaudeOpenedPermissionMode(initialization)
+  if (opened) {
+    session.firstRootInit ??= { permissionMode: opened }
+  }
   // Preserve a running model already reported by a turn's init frame.
   if (init?.model && session.reportedOptions.model === undefined) {
     session.reportedOptions.model = init.model

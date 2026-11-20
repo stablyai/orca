@@ -92,13 +92,11 @@ function linkedTo(
 }
 
 /**
- * From Settings, the sign-in moves to a bot's Connectors tab first: the page opens in that bot's
- * workspace, which leaves Settings, and the tab keeps the wait line and its code beside it.
+ * The sign-in moves to a bot's Connectors tab first. From Settings the browser page leaves
+ * Settings; from a chat the setup dialog closes. The tab keeps the code, the failure, and Cancel
+ * in view either way.
  */
 export function showSignInBesidePage(hostId: ExecutionHostId, bot: Bot | null): void {
-  if (useAppStore.getState().activeView !== 'settings') {
-    return
-  }
   const target = bot ?? readHostBots(hostId)[0]
   if (target) {
     openBotConnectorsTab(target)
@@ -311,7 +309,7 @@ function ServerNotice({
                     { host, name }
                   )
                 )}
-            {signInButton(t('bots.host.signIn.start', 'Sign {{host}} in to Orca', { host }))}
+            {signInButton(t('bots.host.signIn.start', 'Sign in on {{host}}', { host }))}
             {bot && lead ? null : (
               <p>
                 {t(

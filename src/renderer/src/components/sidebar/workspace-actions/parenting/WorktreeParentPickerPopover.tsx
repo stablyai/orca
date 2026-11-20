@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import React, {
   useCallback,
   useEffect,
@@ -128,7 +129,7 @@ export function WorktreeParentPickerPopover({
   const lineageById = useAppStore((s) => s.worktreeLineageById)
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
-  const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const parentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
   const suppressInitialOutsideCloseRef = useRef(false)
   const listRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)

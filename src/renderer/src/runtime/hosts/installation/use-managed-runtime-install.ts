@@ -4,6 +4,7 @@ import {
 } from '@/store/retained-views/app-state-view'
 import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useCallback, useEffect, useMemo } from 'react'
+import { useAppStore } from '@/store'
 import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -49,6 +50,9 @@ export type ManagedRuntimeInstallObservation =
       /** The host can also remove the runtime it installed. */
       removable: boolean
     }
+
+// Installs and removals whose agent list was read again; shared by every observer of one.
+const reDetectedAfter = new Set<string>()
 
 const INACTIVE: ManagedRuntimeInstallObservation = { kind: 'inactive' }
 const PENDING: ManagedRuntimeInstallObservation = { kind: 'pending' }
@@ -136,6 +140,27 @@ export function useManagedRuntimeInstall(
   }, [subject, contactEpoch, viewActive])
   const read = useCallback(() => (subject ? readManagedRuntimeInstall(subject) : null), [subject])
   const snapshot = useAppViewExternalStore(subscribeManagedRuntimeInstalls, read, read)
+  const settled =
+    snapshot?.kind === 'known' && snapshot.state.operation?.phase === 'succeeded'
+      ? snapshot.state.operation.id
+      : null
+  // Orca's installed copy is an installed agent, so every agent list of that host is dropped and
+  // the surfaces showing one read it again; a surface opened later catches an unobserved settle.
+  useEffect(() => {
+    if (!settled || reDetectedAfter.has(settled)) {
+      return
+    }
+    reDetectedAfter.add(settled)
+    const store = useAppStore.getState()
+    // Readers outside a hook (Settings, the status bar) read the host's own list, so ask for it.
+    if (environmentId === null) {
+      store.clearLocalDetectedAgents()
+      void store.ensureNativeDetectedAgents().catch(() => {})
+    } else {
+      store.clearRuntimeDetectedAgents(environmentId)
+      void store.ensureRuntimeDetectedAgents(environmentId).catch(() => {})
+    }
+  }, [settled, environmentId])
   const observation = useMemo((): ManagedRuntimeInstallObservation => {
     if (capable === false || (list === 'loaded' && !managed)) {
       return INACTIVE

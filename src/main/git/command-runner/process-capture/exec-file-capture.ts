@@ -10,7 +10,12 @@ import { endAbandonedWorkerChild, killSpawnedCommandTree } from './spawned-comma
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
-import { capturesOnWorker, spawnedExecFile, workerExecFile } from './worker-exec-file'
+import {
+  capturesOnWorker,
+  observeCapturedStderr,
+  spawnedExecFile,
+  workerExecFile
+} from './worker-exec-file'
 import { emptyExecFileOutput, isExecFileResultObject } from './exec-file-result-shape'
 import {
   isAbandonedWorkerChildError,
@@ -41,23 +46,6 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
 
 export { execFileCaptureToTermination } from './exec-file-capture-to-termination'
 
-/** A second, passive stderr listener: execFile still captures every byte. */
-function observeStderr(
-  child: ChildProcess | WorkerThreadChildProcess,
-  observer: (chunk: string) => void
-): void {
-  const onData = (chunk: string | Buffer): void => {
-    try {
-      observer(typeof chunk === 'string' ? chunk : chunk.toString('utf8'))
-    } catch (error) {
-      // Detach throwing observers so stream callbacks cannot crash main.
-      child.stderr?.off('data', onData)
-      console.warn('git stderr observer failed; detaching it', error)
-    }
-  }
-  child.stderr?.on('data', onData)
-}
-
 export function execFileCapture(
   command: string,
   args: string[],
@@ -77,16 +65,17 @@ export function execFileCapture(
     let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
     const ownedPosixGroup = options.ownedPosixGroup === true && process.platform !== 'win32'
     let useWorker = false
+    // A busy Windows spawn worker must not hold the caller's deadline; decided once the launch picks its host.
+    const callerOwnsDeadline = (): boolean => useWorker && process.platform === 'win32'
     const deadline =
       options.timeout && options.timeout > 0 ? performance.now() + options.timeout : null
     let timer: NodeJS.Timeout | null = null
     let terminationReported = false
     const reportChildTerminated = (): void => {
-      if (terminationReported) {
-        return
+      if (!terminationReported) {
+        terminationReported = true
+        options.onChildTerminated?.()
       }
-      terminationReported = true
-      options.onChildTerminated?.()
     }
     const cleanup = (): void => {
       if (timer) {
@@ -114,13 +103,18 @@ export function execFileCapture(
       }
       resolve({ stdout, stderr })
     }
-    const stop = (error: Error): void => {
-      if (settled || terminating) {
+    const stop = (error: Error, settleBeforeCleanup = false): void => {
+      if (settled) {
+        return
+      }
+      if (terminating) {
+        if (settleBeforeCleanup && callerOwnsDeadline()) {
+          finish(error)
+        }
         return
       }
       terminating = true
       if (!child) {
-        terminating = false
         reportChildTerminated()
         finish(error)
         return
@@ -139,13 +133,17 @@ export function execFileCapture(
         terminating = false
         finish(error)
       })
+      // A busy spawn worker must not hold the caller's deadline; close still owns termination proof.
+      if (settleBeforeCleanup && callerOwnsDeadline()) {
+        finish(error)
+      }
     }
 
-    const onAbort = (): void => stop(createAbortError())
+    const onAbort = (): void => stop(createAbortError(), true)
     const onDeadline = (): void => {
-      if (!settled && !terminating) {
+      if (!settled && (!terminating || callerOwnsDeadline())) {
         options.onDeadlineKill?.()
-        stop(options.createTimeoutError?.() ?? new Error(`${command} timed out.`))
+        stop(options.createTimeoutError?.() ?? new Error(`${command} timed out.`), true)
       }
     }
     // Lookup is part of the deadline; cancellation must settle even before there is a child.
@@ -299,7 +297,7 @@ export function execFileCapture(
         child.once('close', reportChildTerminated)
       }
       if (options.onStderr) {
-        observeStderr(child, options.onStderr)
+        observeCapturedStderr(child, options.onStderr)
       }
 
       // Non-interactive signers must see EOF instead of waiting on an open pipe.

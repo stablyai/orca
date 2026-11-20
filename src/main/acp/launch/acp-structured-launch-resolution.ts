@@ -45,7 +45,8 @@ import {
   type AcpLaunchVisualsDeps
 } from './acp-structured-launch-skill-roots'
 import { linkedSkillsSection } from '../../native-chat/native-chat-skill-roots'
-import { acpLaunchInstructions, type AcpInstructionsLaunch } from './acp-instructions'
+import type { AcpInstructionsLaunch } from './acp-instructions'
+import { acpInstructionsWithVisuals, visualsByInstructions } from './acp-visuals-instructions'
 import { withoutCallerIdentity } from '../../runtime/agent-session/environment/structured-session-child-env'
 
 /** The environment a launch's process gets; see `AcpLaunchSpec.sharedToolProcess`. */
@@ -70,6 +71,9 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   sessionMeta?: Record<string, unknown>
   sessionMetaOnReopen?: true
   takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
+  sessionMetaOptional?: true
+  aroundNewSession?: AcpInstructionsLaunch['aroundNewSession']
+  release?: AcpInstructionsLaunch['release']
   /** The bot's own tools, opened with each session; absent: none. */
   mcpServers?: McpServer[]
   /** The saved model the launch line carries. */
@@ -200,7 +204,7 @@ export function acpStructuredLaunchPart(
         dataDirectory: deps.dataDirectory
       })
     const cwd = await basis.launchDirectory()
-    const visuals = spec.skillRoots ? await basis.visuals() : null
+    const visuals = spec.skillRoots || visualsByInstructions(spec) ? await basis.visuals() : null
     const linked = await basis.linkedSkills()
     // Only a folder with skills: these agents read it once, so a later link reaches them as a list.
     const linkedRoot = linked.projects.length > 0 ? linked.root : null
@@ -226,19 +230,31 @@ export function acpStructuredLaunchPart(
       inherited
     })
     const loaded = skill?.loaded ?? []
-    const visualsLoaded = visuals && loaded.includes(visuals.skill) ? visuals : null
-    const instructions = await acpLaunchInstructions(spec, deps.dataDirectory, {
-      sessionId: identity.sessionId,
-      text: await basis.instructions(
-        linkedSkillsSection(
-          linked.projects,
-          linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
-        )
-      ),
-      env: childEnvironmentView({ ...env, ...skill?.env }, inherited, envToDelete)
-    })
+    const skillLoaded = visuals && loaded.includes(visuals.skill) ? visuals : null
+    const delivered = await acpInstructionsWithVisuals(
+      spec,
+      deps,
+      {
+        sessionId: identity.sessionId,
+        text: await basis.instructions(
+          linkedSkillsSection(
+            linked.projects,
+            linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
+          )
+        ),
+        env: childEnvironmentView({ ...env, ...skill?.env }, inherited, envToDelete),
+        cwd,
+        version: launchVersion.version
+      },
+      visuals && !skillLoaded ? visuals.skill : null
+    )
+    const instructions = delivered.launch
+    const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
     const fullAccess = basis.permissionMode === 'full-access'
-    const tools = await basis.toolServers()
+    const tools = await basis.toolServers().catch(async (error: unknown) => {
+      await instructions?.release?.().catch(() => undefined)
+      throw error
+    })
     const mcpServers = acpBotMcpServers(tools)
     // A managed release's receipt names its version; other programs answer the check.
     const launchedVersion = version ?? launchVersion.version
@@ -262,9 +278,14 @@ export function acpStructuredLaunchPart(
           ? {
               sessionMeta: instructions.sessionMeta,
               sessionMetaOnReopen: instructions.sessionMetaOnReopen,
-              takesSessionMeta: instructions.takesSessionMeta
+              takesSessionMeta: instructions.takesSessionMeta,
+              ...(instructions.sessionMetaOptional ? { sessionMetaOptional: true as const } : {})
             }
           : {}),
+        ...(instructions?.aroundNewSession
+          ? { aroundNewSession: instructions.aroundNewSession }
+          : {}),
+        ...(instructions?.release ? { release: instructions.release } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
         ...(model ? { launchModel: model } : {}),
         ...(launchedVersion ? { version: launchedVersion } : {}),

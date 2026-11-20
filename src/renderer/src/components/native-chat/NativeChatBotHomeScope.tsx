@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { BotFirstScreen } from '../bots/BotFirstScreen'
 import {
+  nativeChatFirstScreenSignIn,
   NativeChatBotKickoffContext,
   useNativeChatBotKickoffView,
   type NativeChatBotKickoffView
@@ -24,6 +25,10 @@ export function useNativeChatBotHome(
   const kickoff = useNativeChatBotKickoffView(session.messages, controller, transport, workspaceId)
   return {
     kickoff,
+    /** Its setup card stands in for the transcript, and offers what setup needs. */
+    setupFailed: kickoff.firstScreen?.phase === 'failed',
+    /** The sign-in its failed setup waits on, which its setup card offers. */
+    signInOwed: nativeChatFirstScreenSignIn(kickoff.firstScreen),
     stopControls: nativeChatStructuredStopControls(controller, hostExecution.stopping, kickoff)
   }
 }

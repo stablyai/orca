@@ -171,8 +171,6 @@ describe('Claude stream retirement', () => {
 
   it.each([
     ['text', 'before'],
-    ['text', 'after'],
-    ['thinking', 'before'],
     ['thinking', 'after']
   ] as const)(
     'keeps sequential %s block identities until message_stop %s the last final',

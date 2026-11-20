@@ -5,13 +5,15 @@ import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
 import type {
   ManagedRuntimeInstallState,
-  ManagedRuntimeOperation
+  ManagedRuntimeOperation,
+  ManagedRuntimeProgram
 } from '../../shared/agent-launch/installation/managed-runtime-install'
 import type { MainHttpClient } from '../network/http-client'
-import { RevisionedState } from '../runtime/events/revisioned-state'
+import { RevisionedState, type RevisionClock } from '../runtime/events/revisioned-state'
 import {
   reclaimRuntimeReleases,
   resolveInstalledRuntimeRelease,
+  runtimeReleaseMayBePublished,
   type ManagedRuntime
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
@@ -21,28 +23,42 @@ const AUTO_UPDATE_RETRY_MS = 60 * 60_000
 
 export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
+  program: ManagedRuntimeProgram
   findExternal: () => Promise<boolean>
   /** Told the release launches resolve to each time this reads the disk; null when none is whole. */
   onRelease?: (folder: string | null) => void
+  /** False while Orca shouldn't keep this copy current; absent means it should. */
+  updatesEnabled?: () => boolean
   /** Reject unless no host workload uses this runtime. */
   fence: (work: () => Promise<void>) => Promise<void>
   fetcher?: MainHttpClient['fetch']
+  /** Shared with the agent's other installation, so a stream switching between them stays ordered. */
+  revisions?: RevisionClock
 }
 
 type Run = { id: string; controller: AbortController; committed: boolean }
+
+let releasesRevision = 0
+/** Rises whenever an install or removal settles, so answers that read Orca's copies retire. */
+export function managedRuntimeReleasesRevision(): number {
+  return releasesRevision
+}
 
 const releaseChangeListeners = new Set<() => void>()
 export function onManagedRuntimeReleasesChanged(listener: () => void): () => void {
   releaseChangeListeners.add(listener)
   return () => releaseChangeListeners.delete(listener)
 }
-type InstalledFacts = Omit<ManagedRuntimeInstallState, 'agent' | 'revision' | 'operation'>
+type InstalledFacts = Omit<
+  ManagedRuntimeInstallState,
+  'agent' | 'program' | 'revision' | 'operation'
+>
 
 const unavailableText = (label: string): string =>
   `${label} is not available on ${process.platform} ${process.arch}.`
 
 export class ManagedRuntimeInstallation {
-  private readonly state = new RevisionedState<ManagedRuntimeOperation | null>(null)
+  private readonly state: RevisionedState<ManagedRuntimeOperation | null>
   private readonly root: string
   private running: Run | null = null
   private mutation: Promise<void>
@@ -55,6 +71,7 @@ export class ManagedRuntimeInstallation {
     private readonly runtime: ManagedRuntime,
     private readonly deps: ManagedRuntimeInstallationDeps
   ) {
+    this.state = new RevisionedState<ManagedRuntimeOperation | null>(null, deps.revisions)
     this.root = runtime.root(deps.dataDirectory)
     this.mutation = this.reclaim()
   }
@@ -77,7 +94,13 @@ export class ManagedRuntimeInstallation {
         this.facts = this.facts?.read === read ? null : this.facts
       })
     }
-    return { agent: this.agent, revision, ...(await facts.read), operation }
+    return {
+      agent: this.agent,
+      program: this.deps.program,
+      revision,
+      ...(await facts.read),
+      operation
+    }
   }
 
   subscribe(onChange: () => void): () => void {
@@ -104,13 +127,19 @@ export class ManagedRuntimeInstallation {
       ...(pin && !release?.current && broken.includes(pin.version) && { damaged: true }),
       canRemove: release !== null || broken.length > 0,
       source,
-      ...(this.runtime.refreshPin && { updatesAutomatically: true as const })
+      // A copy Orca isn't keeping current offers its own Update.
+      ...(this.runtime.refreshPin &&
+        this.deps.updatesEnabled?.() !== false && { updatesAutomatically: true as const })
     }
   }
 
   /** Bring Orca's own copy to the latest release; never installs one nobody asked for or touches a user's own. */
   async updateIfBehind(): Promise<void> {
-    if (!this.runtime.refreshPin || this.running) {
+    if (!this.runtime.refreshPin || this.running || this.deps.updatesEnabled?.() === false) {
+      return
+    }
+    // Nothing installed has nothing to update, so the latest release isn't looked up.
+    if (!(await runtimeReleaseMayBePublished(this.root))) {
       return
     }
     const state = await this.status()
@@ -186,6 +215,10 @@ export class ManagedRuntimeInstallation {
     return operation
   }
 
+  runs(operationId: string): boolean {
+    return this.state.get().value?.id === operationId
+  }
+
   /** Await unwinding; already-committed installs succeed despite cancellation. */
   async cancel(operationId: string): Promise<ManagedRuntimeOperation | null> {
     const current = this.state.get().value
@@ -213,6 +246,7 @@ export class ManagedRuntimeInstallation {
       if (settles) {
         // Reread the disk now so onRelease learns the outcome even when no client is watching.
         void this.status(false).catch(() => {})
+        releasesRevision += 1
         releaseChangeListeners.forEach((listener) => listener())
       }
     }

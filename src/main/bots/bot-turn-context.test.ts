@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { HELD_BOT_RULES, TAKEN } from './bot-turn-rules.test-fixture'
 import { describe, expect, it } from 'vitest'
 import type {
@@ -29,7 +29,7 @@ function home(
     readText: async (path: string) => files.get(path) ?? null,
     listNames: async (dir: string) =>
       [...files.keys()].flatMap((path) =>
-        path.startsWith(`${dir}/`) ? [path.slice(dir.length + 1)] : []
+        path.startsWith(`${dir}${sep}`) ? [path.slice(dir.length + 1)] : []
       ),
     replaceText: async () => false,
     writeText: async () => false
@@ -545,7 +545,7 @@ describe('a bot chat turn context', () => {
     })
 
     // Nothing is said; the turn only vouches for the Tools and Rules the launch gave.
-    it.each(['pi'])(
+    it.each(['pi', 'copilot'])(
       'a resumed %s conversation reads them again, so nothing is sent',
       async (provider) => {
         const { context, edit, fs, plan } = home('Old soul.', '- a fact')
