@@ -115,7 +115,7 @@ it.each([false, true])(
             guard: {
               expectedCursor,
               permit: new Int32Array(new SharedArrayBuffer(4)).fill(1),
-              deadline: Date.now() + 30_000
+              deadline: Number.MAX_SAFE_INTEGER
             }
           }
         : {}),

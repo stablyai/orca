@@ -1,4 +1,4 @@
-import { prepareLegacyTranscriptImport } from '../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import { prepareJsonlTranscriptImport } from '../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
 import { journalLifecycleItemMutation } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import {
   nativeCopyIds,
@@ -121,10 +121,12 @@ export async function catchUpClaudeTranscript(input: {
             `capacity:${input.providerSessionId}:${input.leafUuid}`
           )
         }
-        const prepared = await prepareLegacyTranscriptImport({
+        const prepared = await prepareJsonlTranscriptImport({
           agent: 'claude',
+          transcriptAgent: 'claude',
           sessionId: input.providerSessionId,
-          options: { filePath, signal }
+          filePath,
+          signal
         })
         check()
         if (!prepared.ok || !prepared.items.length) {

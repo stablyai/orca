@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, open, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
-import * as legacyImport from '../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import * as jsonlImport from '../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
 import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { readTestJournalItems } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import {
@@ -188,8 +188,8 @@ it.each(['tail', 'batch', 'metadata'] as const)(
   async (mode) => {
     const c = await chat(mode)
     if (mode === 'batch') {
-      const prepare = legacyImport.prepareLegacyTranscriptImport
-      vi.spyOn(legacyImport, 'prepareLegacyTranscriptImport').mockImplementationOnce(
+      const prepare = jsonlImport.prepareJsonlTranscriptImport
+      vi.spyOn(jsonlImport, 'prepareJsonlTranscriptImport').mockImplementationOnce(
         async (input) => {
           const prepared = await prepare(input)
           // Exercise an op-cap recovery whose retained window no longer reaches the saved leaf.
@@ -389,7 +389,7 @@ it.each([false, true])(
         { fence: 1, turnScope: { kind: 'thread' } }
       )
     }
-    vi.spyOn(legacyImport, 'prepareLegacyTranscriptImport').mockResolvedValue({
+    vi.spyOn(jsonlImport, 'prepareJsonlTranscriptImport').mockResolvedValue({
       ok: false,
       error: 'unreadable transcript'
     })
