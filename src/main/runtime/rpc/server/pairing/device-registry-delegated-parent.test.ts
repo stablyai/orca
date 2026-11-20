@@ -95,3 +95,35 @@ describe('delegated phone auth follows its parent desktop', () => {
     }
   )
 })
+
+describe('a delegated phone row stored without its token', () => {
+  it('gets a new token the phone can sign in with, keeping its row', () => {
+    const { desktop, child } = delegatedRegistry()
+    const path = join(dir, DEVICE_REGISTRY_FILENAME)
+    const rows: Record<string, unknown>[] = JSON.parse(readFileSync(path, 'utf8'))
+    writeFileSync(
+      path,
+      JSON.stringify(
+        rows.map((row) => {
+          if (row.deviceId !== child.deviceId) {
+            return row
+          }
+          // As a build that stored token hashes left it.
+          const { token: _token, ...rest } = row
+          return { ...rest, tokenHash: 'stored-hash', callerFingerprint: 'phone-fingerprint' }
+        })
+      )
+    )
+    const registry = new DeviceRegistry(dir)
+
+    const [synced] = registry.upsertDelegatedMobileDevices(desktop, [
+      { phoneKey: 'phone-1', name: 'Pixel' }
+    ])
+
+    expect(synced?.deviceId).toBe(child.deviceId)
+    expect(typeof synced?.token).toBe('string')
+    expect(synced?.credentialRevision).toBe(1)
+    expect(synced?.callerFingerprint).toBe('phone-fingerprint')
+    expect(registry.validateToken(synced!.token)?.deviceId).toBe(child.deviceId)
+  })
+})

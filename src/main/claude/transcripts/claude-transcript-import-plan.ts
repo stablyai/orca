@@ -38,8 +38,8 @@ import {
 import { createClaudeJournalTranslator } from '../structured/journal/claude-structured-journal-translation'
 import type { ClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from '../structured/turns/claude-session-state-turn-over'
-import { claudeMessageWithoutSyntheticText } from '../structured/journal/claude-internal-message-content'
 import { claudeTranscriptPrompt } from './claude-transcript-prompt'
+import { claudeTranscriptRowFrame } from './claude-local-command-reply'
 
 export function createClaudeTranscriptImportPlan(input: {
   sessionId: string
@@ -137,11 +137,7 @@ export function createClaudeTranscriptImportPlan(input: {
     restore: async (row: Record<string, unknown>) => {
       try {
         input.check()
-        const frame = claudeMessageWithoutSyntheticText({
-          ...row,
-          session_id: row.sessionId,
-          parent_tool_use_id: null
-        })
+        const frame = claudeTranscriptRowFrame(row)
         if (!frame) {
           return
         }

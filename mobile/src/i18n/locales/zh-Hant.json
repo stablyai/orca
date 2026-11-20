@@ -57,7 +57,8 @@
       "currentWorktree": "目前工作樹",
       "messages_one": "{{count}} 則訊息",
       "messages_other": "{{count}} 則訊息",
-      "resumeSession": "恢復代理程式工作階段"
+      "resumeSession": "恢復代理程式工作階段",
+      "continueInCli": "在 CLI 中繼續"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "無法連上主機",
@@ -111,7 +112,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... 或貼上配對碼",
       "pasteCodeTitle": "貼上配對碼",
       "pasteInstead": "改為貼上配對碼",
-      "pastePairingCode": "或貼上配對碼",
+      "pastePairingCode": "貼上配對碼",
       "scanCodeStep": "掃描 QR Code",
       "title": "與電腦配對",
       "tryAgain": "重試",
@@ -145,7 +146,7 @@
       "installTitle": "下載新 App",
       "installDescription": "如果手機詢問，請允許瀏覽器安裝 App。",
       "download": "下載",
-      "keepThisVersion": "繼續使用此版本",
+      "keepThisVersion": "保留此版本",
       "keepThisVersionNote": "你將收不到安全性修正。我們會在一週後再提醒你。"
     },
     "pairTitle": "與電腦配對",
@@ -165,11 +166,13 @@
       "invalidUrl": "請輸入有效的網址。"
     },
     "paneView": {
-      "dialogTitle": "瀏覽器對話方塊",
       "forward": "前進",
       "keyboardPlaceholder": "在網頁上輸入…",
       "reload": "重新載入",
-      "sendText": "傳送文字至瀏覽器"
+      "sendText": "傳送文字至瀏覽器",
+      "dialogTitleWithOrigin": "{{origin}} 顯示",
+      "dialogTitleNoOrigin": "此網頁顯示",
+      "dialogAnswer": "回答"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 點擊修飾鍵"
@@ -182,6 +185,20 @@
     "viewModeSwitch": {
       "mobileView": "顯示行動版網站",
       "webView": "顯示桌面版網站"
+    },
+    "loadFailure": {
+      "retry": "重試",
+      "connectionNotSecure": "連線不安全",
+      "certificateNameMismatch": "憑證與 {{value0}} 不相符。",
+      "certificateDateInvalid": "{{value0}} 的憑證在目前日期和時間無效。",
+      "certificateAuthorityInvalid": "Orca 不信任簽發 {{value0}} 憑證的機構。",
+      "certificateVerificationFailed": "Orca 無法驗證 {{value0}} 的憑證。",
+      "proceedUnsafe": "仍然繼續（不安全）",
+      "connecting": "正在連線…",
+      "certificateChallengeExpired": "此憑證的核准已過期。請重試此頁面以重新要求核准。",
+      "certificateChallengeChanged": "憑證要求已變更。請重試該頁面並檢視新的警告。",
+      "certificateProceedFailed": "Orca 無法核准此憑證要求。請重試該頁面後再試。",
+      "certificateChallengeUnavailable": "此憑證要求已無法使用。請重試該頁面以提出新的要求。"
     }
   },
   "chat": {
@@ -215,7 +232,8 @@
     "contextUsage": {
       "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
       "title": "上下文",
-      "estimated": "根據上一次回應的估算值。"
+      "estimated": "根據上一次回應的估算值。",
+      "deferredNote": "按需載入，不計入已用總量。"
     },
     "composerAttachments": {
       "attachedImage": "已附加的圖片",
@@ -306,7 +324,7 @@
       "triedSearchWeb": "嘗試搜尋網頁"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "顯示完整訊息 — 無法載入，點一下重試",
+      "loadFailed": "重試載入完整訊息",
       "showFullMessage": "顯示完整訊息",
       "showLess": "收合"
     },
@@ -372,8 +390,7 @@
       "submitSelectedOptions": "送出所選選項"
     },
     "queuedMessages": {
-      "clearAll": "全部清除",
-      "deleteAll": "刪除所有排隊的訊息",
+      "deleteAll": "全部刪除",
       "editMessage": "編輯訊息",
       "pausedState": "已暫停",
       "queuedState": "已排隊",
@@ -598,10 +615,6 @@
       "imageTooLarge": "圖片太大，無法附加",
       "permissionDenied": "照片存取權限遭拒"
     },
-    "agentMessage": {
-      "handedOffToAgent": "已交接給代理程式",
-      "startedAgent": "已啟動代理程式"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "無法讀取附件回應。請重試。",
       "incompleteReply": "附件已變更或回應不完整。請關閉後重試。",
@@ -649,7 +662,7 @@
       "confirm": "回溯",
       "unsupported": "此聊天無法返回到更早的訊息。",
       "historyNotPaginated": "此舊版 Codex 聊天無法返回到更早的訊息。請開始新聊天以使用「回溯到此處」。",
-      "busy": "當代理程式閒置且此聊天中沒有等待您處理的內容時可用。",
+      "busy": "聊天閒置時可用",
       "staleEpoch": "對話已發生變化。請檢視最新訊息後重試。",
       "invalidTarget": "對話無法返回到此訊息。未做任何更改。",
       "historyLimit": "此對話過長，無法回溯。未做任何更改。",
@@ -771,7 +784,7 @@
       "manageShortcuts": "管理快速鍵",
       "manageShortcutsHint": "顯示、隱藏或調整快速鍵順序",
       "modifiers": "修飾鍵",
-      "moreKeys": "更多按鍵：Tab、方向鍵、F1–F12…",
+      "moreKeys": "更多按鍵",
       "navigation": "導覽",
       "pickKey": "選擇按鍵",
       "pressEnter": "按下 Enter",
@@ -923,11 +936,11 @@
       "dismissDrawer": "關閉抽屜面板"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "鉤子",
       "label": "設定指令碼",
-      "run": "執行",
-      "runSetupCommand": "執行設定命令",
-      "skip": "跳過"
+      "runSetup": "執行設定",
+      "skip": "跳過",
+      "startAgentAfterSetup": "設定完成後再啟動代理程式",
+      "waitForSetupSaveFailed": "儲存設定啟動行為失敗"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "連線",
@@ -1131,6 +1144,9 @@
       "composer": {
         "planMode": "計畫",
         "exitPlanMode": "結束計畫模式"
+      },
+      "goal": {
+        "sentAsGoal": "作為目標傳送"
       }
     }
   },
@@ -1198,7 +1214,7 @@
       "privacyHint": "傳送經過敏感資訊遮蔽且有大小上限的報告，包含主機名稱、端點、版本、連線狀態與事件，絕不包含終端機內容或憑證。",
       "reconnecting": "重新連線中",
       "retrySending": "重新傳送",
-      "sendDiagnostics": "傳送診斷資訊至 Orca",
+      "sendDiagnostics": "傳送診斷資料",
       "sending": "正在傳送…",
       "sent": "診斷資訊已傳送",
       "stateWithAttempt": "{{state}} · 第 {{attempts}} 次嘗試",
@@ -1582,10 +1598,8 @@
   "host": {
     "edit": {
       "address": "位址",
-      "addressHint": "可輸入 IP、host:port 或 ws:// / wss://。wss:// URL 未指定連接埠時會使用 443。僅輸入位址時，會保留目前的連接埠（或使用 6768）。",
       "connectionPreview": "將連線至 {{endpoint}}",
       "goBack": "返回",
-      "help": "變更顯示名稱或連線位址。名稱留空時，會使用電腦回報的名稱。變更位址只會切換這支手機的連線位址，不會重新配對。適用於透過不同 IP 連線至同一台電腦的情況（例如家用區域網路或 Tailscale）。",
       "hostNamePlaceholder": "主機名稱",
       "hostRemoved": "此主機已從這支手機移除。",
       "loadFailed": "無法載入主機資料。",
@@ -1926,7 +1940,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} 未連結至開啟中的 PR。",
       "currentBranchNotLinked": "目前分支未連結至開啟中的 PR。",
-      "linkExistingPullRequest": "連結現有 PR",
+      "linkExistingPullRequest": "連結 PR",
       "linkedPrUnavailable": "無法取得已連結的 PR #{{number}}",
       "refreshOrCreate": "請重新整理以再次檢查，或為此分支建立新的 PR。"
     },
@@ -2107,6 +2121,7 @@
     "failure": {
       "accountSwitchInProgress": "{{agent}} 在此主機上的設定正在變更。請在完成後重試。",
       "agentCommandNotRunnable": "{{agent}} 在「設定 → 代理程式」中的命令必須是 Orca 能找到的程式路徑或名稱，且不能包含引數或變數。請修改或重設。",
+      "agentCommandFailed": "{{agent}} 在「設定 → 代理程式」中的命令未能啟動 {{agent}}：{{detail}}。請修改或重設。",
       "agentCommandNotSignedIn": "請在執行此聊天的電腦上使用 `{{loginCommand}}` 登入 {{agent}}。",
       "agentNotSignedIn": "請登入 {{agent}}。",
       "agentStarting": "代理程式仍在啟動。",
@@ -2191,6 +2206,7 @@
       "providerUnavailable": "{{agent}} 因服務忙碌而無法回覆。請選擇其他模型，或稍候片刻後重新傳送。",
       "providerSafetyStopped": "{{agent}} 在安全檢查後停止了此次回覆。請檢查您的請求後重新傳送。",
       "providerResponseFailed": "{{agent}} 未能完成此回覆。開啟詳細資料以取得更多資訊。",
+      "providerResponseFailedQuoted": "{{agent}} 未能完成此回覆：{{detail}}。",
       "selectedModel": "所選模型",
       "providerRejected": "{{agent}} 未接受此訊息。",
       "providerRejectedQuoted": "{{agent}} 未接受此訊息：{{detail}}。",
@@ -2303,8 +2319,8 @@
       "scrollToLatest": "捲動至最新內容"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "顯示完整訊息：無法載入，點按以重試",
-      "loadOutputFailed": "顯示完整輸出：無法載入，點按以重試",
+      "loadMessageFailed": "重試載入完整訊息",
+      "loadOutputFailed": "重試載入完整輸出",
       "partialMessage": "目前僅顯示此訊息的部分內容。",
       "partialOutput": "已顯示 {{shown}}，共 {{total}}。",
       "showFullMessage": "顯示完整訊息",
@@ -2320,8 +2336,8 @@
       "notFoundTitle": "目前還找不到這段對話"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "切換至聊天檢視",
-      "switchToTerminalView": "切換至終端機檢視"
+      "switchToChatView": "切換到聊天",
+      "switchToTerminalView": "切換到終端機"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "代理程式已啟動，但備註未傳送。",
@@ -2452,6 +2468,11 @@
       "sendReviewNotes": "傳送審查備註",
       "shortcut": "快速鍵",
       "terminal": "終端機",
+      "terminalWithShell": "終端機: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "命令提示字元",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "終端機名稱",
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
       "urlPrompt": "請輸入網址，或留空以開啟新分頁。",
@@ -2639,7 +2660,7 @@
       "disconnected": "貼上失敗（連線已中斷）",
       "imageTooLarge": "圖片太大，無法貼上",
       "pasteFailed": "貼上失敗",
-      "pasteTooLarge": "貼上內容太大（上限為 256 KiB）",
+      "pasteTooLarge": "貼上內容過大。",
       "terminalChanged": "已取消貼上（終端機已變更）"
     },
     "worktreeLabel": {
@@ -2769,6 +2790,12 @@
     "structuredOpen": {
       "worktreeDeleted": "工作樹已刪除。",
       "folderWorkspaceRemoved": "資料夾工作區已移除。"
+    },
+    "nativeChatView": {
+      "linkedMessageMissing": "找不到該訊息。"
+    },
+    "browserProfile": {
+      "default": "預設"
     }
   },
   "settings": {
@@ -3822,7 +3849,7 @@
       "issueSource": "議題來源",
       "keySecurityHint": "您的金鑰會透過主機作業系統的鑰匙圈加密，並儲存於本機。",
       "linearConnectSubtitle": "貼上個人 API 金鑰，即可瀏覽該工作區的議題。",
-      "linearSettingsLink": "Linear 設定 / 安全性 / 新增 API 金鑰",
+      "linearSettingsLink": "開啟 Linear 設定",
       "linearTeam": "Linear 團隊",
       "linearTeamSubtitle": "在所選 Linear 團隊中建立議題。",
       "newIssueTitle": "新增 {{providerLabel}} 議題",
@@ -4337,6 +4364,23 @@
           }
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "配對電腦",
+      "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
+      "pairAction": "配對電腦",
+      "openFailed": "無法開啟此連結",
+      "ambiguous": "此機器人位於 {{names}}。請在你想用的電腦上透過 Orca 開啟聊天。",
+      "computer": "你的電腦",
+      "updateNeeded": "請更新 {{names}} 上的 Orca 以開啟此連結。",
+      "unreachable": "無法連線至 {{names}}。請確認其中一台電腦正在執行 Orca，然後重試。",
+      "missing": "你配對的電腦上都沒有此機器人。",
+      "offline": "{{name}} 已離線。請在它重新上線後再次開啟連結。",
+      "chatOpenFailed": "{{name}} 無法開啟此聊天。請重試此連結。",
+      "unreachableSingle": "無法連線至 {{name}}。請確認該電腦正在執行 Orca，然後重試。",
+      "workspaceDeleted": "此聊天的工作區已在 {{name}} 上被刪除。"
     }
   }
 }

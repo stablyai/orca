@@ -112,7 +112,7 @@ describe('plain SSH terminal', () => {
     )
     const user = userEvent.setup()
     render(<Harness status={blocked} />)
-    await user.click(screen.getByRole('button', { name: 'Open plain SSH terminal' }))
+    await user.click(screen.getByRole('button', { name: 'Plain SSH terminal' }))
 
     expect(screen.getByText('Plain SSH · lambda')).toBeInTheDocument()
     expect(screen.getByText(/Plain SSH — unmanaged\. Not an Orca workspace/)).toBeInTheDocument()

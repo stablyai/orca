@@ -32,7 +32,7 @@ import {
 } from './terminal-output-credit'
 import { registerTerminalStreamToken } from './terminal-stream-tokens'
 export async function runTerminalBinarySubscription(args: TerminalSubscriptionArgs): Promise<void> {
-  const { runtime, registration, sendBinary, ptyId, clientId, viewerDeviceId, isMobile } = args
+  const { runtime, registration, sendBinary, ptyId, clientId, viewer, isMobile } = args
   if (!sendBinary) {
     throw new Error('binary_terminal_stream_required')
   }
@@ -196,7 +196,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     undefined,
     isMobile ? clientId : undefined,
     false,
-    viewerDeviceId
+    viewer
   )
   unsubscribeData = () => {
     releaseViewSubscriber()

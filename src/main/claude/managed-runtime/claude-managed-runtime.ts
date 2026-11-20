@@ -1,22 +1,16 @@
 // Orca's own Claude Code follows the user's Claude update channel; chats prefer the user's own install.
 
 import { readFile } from 'node:fs/promises'
-import { runProcess } from '@orca/process-host'
 import { homedir } from 'node:os'
-import { delimiter, dirname, join } from 'node:path'
-import { readInheritedPath } from '../../ipc/pty/host-env/path'
-import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { getMainHttpClient } from '../../network/http-client'
-import {
-  ManagedRuntimeStartError,
-  type ManagedRuntime,
-  type ManagedRuntimePin
-} from '../../node-runtime/managed-runtime-release'
+import type { ManagedRuntime, ManagedRuntimePin } from '../../node-runtime/managed-runtime-release'
+import { followLatestRelease } from '../../node-runtime/managed-runtime-latest-release'
+import { requireRuntimeAnswersVersion } from '../../node-runtime/managed-runtime-version-check'
+import { isMuslHost } from '../../node-runtime/linux-libc-probe'
 
 const RELEASES = 'https://downloads.claude.ai/claude-code-releases'
-const REFRESH_MS = 60 * 60_000
-const VALIDATE_TIMEOUT_MS = 60_000
 
 const manifestSchema = z.object({
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
@@ -43,16 +37,6 @@ export function claudeManagedPlatform(
     return `${platform}-${arch}`
   }
   return platform === 'linux' ? `linux-${arch}${musl ? '-musl' : ''}` : null
-}
-
-function isMuslHost(): boolean {
-  if (process.platform !== 'linux') {
-    return false
-  }
-  // glibc builds report their runtime glibc version; musl builds have none.
-  const report: unknown = process.report?.getReport()
-  const header = report && typeof report === 'object' && 'header' in report ? report.header : null
-  return !(header && typeof header === 'object' && 'glibcVersionRuntime' in header)
 }
 
 const channelSettingsSchema = z.object({
@@ -83,9 +67,6 @@ export async function claudeUpdateChannel(
   )
   return channels.findLast((channel) => channel !== undefined) ?? 'latest'
 }
-
-let latest: { pin: ManagedRuntimePin | null; at: number } | null = null
-let lookup: Promise<void> | null = null
 
 async function fetchLatestPin(signal?: AbortSignal): Promise<ManagedRuntimePin | null> {
   const platform = claudeManagedPlatform()
@@ -119,109 +100,28 @@ async function fetchLatestPin(signal?: AbortSignal): Promise<ManagedRuntimePin |
   }
 }
 
-/** Shared by every caller within the hour; a failed lookup keeps the last known release. */
-async function refreshLatestPin(signal?: AbortSignal): Promise<void> {
-  if (latest && Date.now() - latest.at < REFRESH_MS) {
-    return
-  }
-  lookup ??= fetchLatestPin(signal)
-    .then((pin) => {
-      latest = { pin, at: Date.now() }
-    })
-    .finally(() => {
-      lookup = null
-    })
-  await lookup
-}
-
 async function validateClaudeRelease(
   folder: string,
   pin: ManagedRuntimePin,
   signal: AbortSignal
 ): Promise<void> {
-  const [member] = pin.members
-  let result: Awaited<ReturnType<typeof runProcess>>
-  try {
-    result = await runProcess({
-      program: join(folder, member?.path ?? 'claude'),
-      args: ['--version'],
-      timeoutMs: VALIDATE_TIMEOUT_MS,
-      signal
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    throw new ManagedRuntimeStartError(
-      message,
-      { kind: 'exit', exit: { code: null, signal: null, processless: true }, stderr: '' },
-      { cause: error }
-    )
-  }
-  signal.throwIfAborted()
-  if (result.timedOut) {
-    throw new ManagedRuntimeStartError('Claude did not answer', {
-      kind: 'timeout',
-      timeoutMs: VALIDATE_TIMEOUT_MS
-    })
-  }
-  if (result.code !== 0) {
-    throw new ManagedRuntimeStartError('Claude exited', {
-      kind: 'exit',
-      exit: { code: result.code, signal: result.signal, processless: false },
-      stderr: result.stderr
-    })
-  }
-  const answered = result.stdout.trim()
-  if (!answered.startsWith(pin.version)) {
-    throw new ManagedRuntimeStartError('Claude answered with another version', {
-      kind: 'version',
-      answered,
-      expected: pin.version
-    })
-  }
+  await requireRuntimeAnswersVersion(
+    claudeManagedExecutable(folder),
+    'Claude',
+    pin.version,
+    (answered) => answered.startsWith(pin.version),
+    signal
+  )
 }
 
 export const CLAUDE_MANAGED_RUNTIME: ManagedRuntime = {
   label: 'Claude',
   root: (dataDirectory) => join(dataDirectory, 'agent-runtimes', 'claude'),
-  pin: () => latest?.pin ?? null,
-  refreshPin: refreshLatestPin,
+  ...followLatestRelease(fetchLatestPin),
   validate: validateClaudeRelease
 }
 
 /** The executable inside a Claude release folder. */
 export function claudeManagedExecutable(folder: string): string {
   return join(folder, process.platform === 'win32' ? 'claude.exe' : 'claude')
-}
-
-let installedFolder: string | null = null
-
-/** The installation reports each release it reads from disk, so lookups here never touch the disk. */
-export function rememberManagedClaudeRelease(folder: string | null): void {
-  installedFolder = folder
-}
-
-/** Orca's installed Claude on this host, used only when the user has none of their own. */
-export function managedClaudeCommand(): string | null {
-  return installedFolder ? claudeManagedExecutable(installedFolder) : null
-}
-
-/** Last on PATH, so `claude auth login` and CLI tabs reach Orca's copy and never shadow the user's own. */
-export function appendManagedClaudeDirToChildPath(
-  env: Record<string, string>,
-  platform: NodeJS.Platform = process.platform
-): void {
-  delete env.ORCA_MANAGED_AGENT_PATH
-  const command = managedClaudeCommand()
-  if (!command) {
-    return
-  }
-  const key = resolvePathEnvKey(env, platform)
-  const separator = platform === 'win32' ? ';' : delimiter
-  const entries = readInheritedPath(env, platform).split(separator).filter(Boolean)
-  const folder = dirname(command)
-  if (!entries.includes(folder)) {
-    env[key] = [...entries, folder].join(separator)
-  }
-  // Startup files re-add it after a login profile rebuilds PATH.
-  env.ORCA_MANAGED_AGENT_PATH = folder
 }

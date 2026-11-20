@@ -3,14 +3,13 @@ import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/a
 import Database from '../../sqlite/sync-database'
 
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/installation/structured-agent-session-journal-open'
-import { journalDatabasePath } from './database/journal-host-database'
-import { journalDomainDatabasePath } from './database/journal-domain-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './database/journal-host-database'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import { SqlAgentSessionJournal } from './journal-sql-store'
 import type { JournalSqlStoreOperation } from './journal-sql-store'
@@ -235,6 +234,7 @@ it('preserves a corrupt database on worker startup refusal', async () => {
     refusal: { details: { reason: 'journalCorrupt' } }
   })
   expect(await readFile(path)).toEqual(bytes)
+  await expect(access(journalDomainDatabasePath(root))).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 it('rechecks row-free owner death before answering an attempt-end action read', async () => {

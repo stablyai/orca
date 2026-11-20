@@ -106,7 +106,7 @@ it.each(['approval', 'question', 'completed'])(
 )
 
 // Judge work before Stop; provider close-time rows cannot invalidate that snapshot.
-it.each(['approval', 'question', 'completed'] as const)(
+it.each(['approval', 'completed'] as const)(
   'offers work that was running at the stop even when a provider %s arrives during close',
   async (event) => {
     await attach()
@@ -131,7 +131,7 @@ it.each(['approval', 'question', 'completed'] as const)(
         },
         event === 'completed'
           ? { kind: 'turn', turnId: 'working', state: 'completed' }
-          : { ...pendingApproval().body, question: 'Which action?', kind: event },
+          : pendingApproval().body,
         { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       return true

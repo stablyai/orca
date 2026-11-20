@@ -30,8 +30,8 @@ export abstract class OrcaRuntimeWithMainLayoutAgentLaunchTabs extends OrcaRunti
   ): RuntimePtyWorktreeRecord | null
 
   /** Whether a running process holds this pane now: such a pane is attached to, never launched into. */
-  hasLiveTerminalForPaneKey(paneKey: string): boolean {
-    const pty = this.getPtyRecordForPaneKey(paneKey)
+  hasLiveTerminalForPaneKey(paneKey: string, context?: TerminalIdentityReadContext): boolean {
+    const pty = this.getPtyRecordForPaneKey(paneKey, context)
     // Main's bound terminal may survive listing gaps; only certified exit frees its pane.
     return ORCA_LAYOUT_OWNER_IS_MAIN
       ? !!pty && this.getPtyLivenessVerdict(pty.ptyId)?.status !== 'exited'

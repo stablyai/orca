@@ -12,6 +12,7 @@ type SheetPrimaryButtonProps = {
   testID?: string
   /** Merge keeps desktop's merge green for the one action that lands a pull request. */
   tone?: 'default' | 'merge'
+  size?: 'default' | 'compact'
   icon?: LucideIcon
 }
 
@@ -23,6 +24,7 @@ export function SheetPrimaryButton({
   busy = false,
   testID,
   tone = 'default',
+  size = 'default',
   icon: Icon
 }: SheetPrimaryButtonProps) {
   useMobileColorScheme()
@@ -32,11 +34,13 @@ export function SheetPrimaryButton({
       style={({ pressed }) => [
         sheetPrimaryButtonStyles.button,
         tone === 'merge' && sheetPrimaryButtonStyles.merge,
+        size === 'compact' && sheetPrimaryButtonStyles.compact,
         pressed && sheetPrimaryButtonStyles.pressed,
         disabled && !busy && sheetPrimaryButtonStyles.disabled
       ]}
       disabled={disabled || busy}
       onPress={onPress}
+      hitSlop={size === 'compact' ? 8 : undefined}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled, busy }}
@@ -47,7 +51,14 @@ export function SheetPrimaryButton({
       ) : (
         <>
           {Icon ? <Icon size={17} color={foreground} strokeWidth={2.2} /> : null}
-          <Text style={[sheetPrimaryButtonStyles.label, { color: foreground }]} numberOfLines={1}>
+          <Text
+            style={[
+              sheetPrimaryButtonStyles.label,
+              size === 'compact' && sheetPrimaryButtonStyles.compactLabel,
+              { color: foreground }
+            ]}
+            numberOfLines={1}
+          >
             {label}
           </Text>
         </>
@@ -67,6 +78,8 @@ export const sheetPrimaryButtonStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg
   },
+  compact: { height: 32, paddingHorizontal: spacing.md },
+  compactLabel: { fontSize: 13 },
   merge: { backgroundColor: colors.mergeGreen },
   pressed: { opacity: feedback.pressedOpacity },
   disabled: { opacity: feedback.disabledOpacity },

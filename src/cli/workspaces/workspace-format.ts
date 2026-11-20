@@ -1,56 +1,12 @@
 import { formatAddressLines, formatParentLine, type WorkspaceAnnotation } from './workspace-address'
 import type {
   RuntimeWorktreeListResult,
-  RuntimeWorktreePsResult,
   RuntimeWorktreeRecord
 } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   formatListingHostScope,
   type WithAnnotatedHostScope
 } from '../hosts/omitted-host-scope-selectors'
-import { formatWorktreePsTerminalFields } from './worktree-ps-terminal-verdict'
-import { formatWorktreePsProgramStatus } from './worktree-ps-program-status'
-
-type AnnotatedPsRow = RuntimeWorktreePsResult['worktrees'][number] & Partial<WorkspaceAnnotation>
-
-export function formatWorktreePs(
-  result: WithAnnotatedHostScope<
-    Omit<RuntimeWorktreePsResult, 'worktrees'> & { worktrees: AnnotatedPsRow[] }
-  >
-): string {
-  const scope = formatListingHostScope(result.hostScope)
-  if (result.worktrees.length === 0) {
-    return `No worktrees found.\n${scope}`
-  }
-  const body = result.worktrees
-    .map(
-      (worktree) =>
-        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${formatWorktreePsLocation(worktree)}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
-    )
-    .join('\n\n')
-  const bodyWithScope = `${body}\n\n${scope}`
-  return result.truncated
-    ? `${bodyWithScope}\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
-    : bodyWithScope
-}
-
-function formatWorktreePsLocation(worktree: AnnotatedPsRow): string {
-  const annotation = workspaceAnnotationOf(worktree)
-  return annotation
-    ? `${formatParentLine(annotation)}${formatAddressLines(annotation)}`
-    : formatWorktreePsParent(worktree)
-}
-
-/** The parent line, in the sidebar's precedence: worktree, then folder workspace, then another machine. */
-function formatWorktreePsParent(worktree: RuntimeWorktreePsResult['worktrees'][number]): string {
-  const parent =
-    worktree.parentWorktreeId ??
-    worktree.workspaceLineage?.parentWorkspaceKey ??
-    (worktree.crossStoreParent
-      ? `${worktree.crossStoreParent.parent.workspaceKey} on another machine`
-      : null)
-  return parent ? `\nparent: ${parent}` : ''
-}
 
 export function formatWorktreeList(
   result: WithAnnotatedHostScope<RuntimeWorktreeListResult>
@@ -73,7 +29,9 @@ export function formatWorktreeList(
 
 const ANNOTATION_KEYS = new Set(['environment', 'address', 'addressUnavailable', 'parent'])
 
-function workspaceAnnotationOf(record: Partial<WorkspaceAnnotation>): WorkspaceAnnotation | null {
+export function workspaceAnnotationOf(
+  record: Partial<WorkspaceAnnotation>
+): WorkspaceAnnotation | null {
   const { environment, address, addressUnavailable, parent } = record
   return environment
     ? {
