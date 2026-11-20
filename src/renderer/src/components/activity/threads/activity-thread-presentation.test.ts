@@ -19,5 +19,11 @@ describe('activityThreadRowIdentity', () => {
     expect(
       activityThreadRowIdentity(thread('acme', { displayName: 'acme', branch: '' }), 'status')
     ).toEqual({ showProject: true, showWorkspace: false })
+    expect(
+      activityThreadRowIdentity(
+        thread('acme-app', { displayName: '', branch: 'acme_app' }),
+        'status'
+      )
+    ).toEqual({ showProject: true, showWorkspace: true })
   })
 })

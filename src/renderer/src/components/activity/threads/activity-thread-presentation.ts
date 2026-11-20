@@ -309,11 +309,11 @@ export function activityThreadRowIdentity(
   // Why: the worktree group header shows the raw display name, which can be empty.
   const headerNamesWorkspace =
     groupBy === 'worktree' && Boolean(thread.worktree.displayName?.trim())
-  // Why: a folder workspace without a custom name falls back to the project name.
+  // Why: a folder workspace without a custom name falls back to the project name; the chip lowercases it.
   const repeatsProject =
     showProject &&
-    normalizeScanLabel(getActivityThreadWorkspaceTitle(thread.worktree)) ===
-      normalizeScanLabel(thread.repo?.displayName ?? '')
+    getActivityThreadWorkspaceTitle(thread.worktree).toLowerCase() ===
+      thread.repo?.displayName.trim().toLowerCase()
   return {
     showProject,
     showWorkspace: !showProject || !(headerNamesWorkspace || repeatsProject)
