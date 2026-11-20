@@ -92,7 +92,7 @@ function useLocalSignInKey(): string {
  * computer's sign-in last changed, says the link is ok; the automatic reply needs the same.
  */
 export function SignInOffer({ bot, offer, messageId }: SignInOfferProps): React.JSX.Element {
-  useTranslation()
+  const t = useTranslate()
   const answering = useNativeChatOffer(bot.id, messageId)
   // Signed in only while Orca Cloud takes this computer's sign-in, not merely while it has one.
   const needsSignIn = useOrcaCloudNeedsSignIn()
@@ -108,14 +108,12 @@ export function SignInOffer({ bot, offer, messageId }: SignInOfferProps): React.
       // Any sign-in change before the read lands voids it, even a sign-out and back into the same account.
       let signInChanged = false
       const stopWatching = useAppStore.subscribe((state, previous) => {
-        signInChanged ||= localSignInKey(state) !== localSignInKey(previous)
+        if (localSignInKey(state) !== localSignInKey(previous)) {
+          signInChanged = true
+        }
       })
       const mark = Math.max(botHostLinkReadMark(), link.mark)
-      try {
-        await refreshBotHost(LOCAL_EXECUTION_HOST_ID)
-      } finally {
-        stopWatching()
-      }
+      await refreshBotHost(LOCAL_EXECUTION_HOST_ID).finally(stopWatching)
       if (
         !signInChanged &&
         !readOrcaCloudSignedOut() &&
@@ -135,7 +133,7 @@ export function SignInOffer({ bot, offer, messageId }: SignInOfferProps): React.
     return (
       <p className="text-xs text-muted-foreground">
         {offer.source === 'webhook'
-          ? translate(
+          ? t(
               'bots.cloudSignIn.webhooksNotReaching',
               'Orca Cloud isn’t reaching {{name}}, so it can’t make webhooks yet.',
               { name: bot.name }
