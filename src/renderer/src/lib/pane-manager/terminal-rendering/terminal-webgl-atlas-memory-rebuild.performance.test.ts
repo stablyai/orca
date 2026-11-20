@@ -19,7 +19,8 @@ vi.mock('../pane-manager-registry', () => ({
 
 type AtlasModule = typeof AtlasMemoryRebuild
 
-type FakeAtlas = { readonly label?: string }
+type FakeAtlas = { readonly pages: unknown[] }
+const newAtlas = (): FakeAtlas => ({ pages: [] })
 
 function fakePane(atlasModule: AtlasModule, atlas: FakeAtlas, visible = true, displayed = true) {
   const terminal = { modes: { synchronizedOutputMode: false } }
@@ -62,7 +63,7 @@ describe('terminal WebGL atlas-memory rebuild', () => {
 
   it('never rebuilds an atlas that grew without PTY output into it', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const { pane } = fakePane(atlas, {})
+    const { pane } = fakePane(atlas, newAtlas())
     for (let i = 0; i < 20; i++) {
       atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, pane)
       await vi.advanceTimersByTimeAsync(60_000)
@@ -72,11 +73,11 @@ describe('terminal WebGL atlas-memory rebuild', () => {
 
   it('counts output that arrives before or after the large page', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const first = fakePane(atlas, {})
+    const first = fakePane(atlas, newAtlas())
     first.output()
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, first.pane)
     await vi.advanceTimersByTimeAsync(0)
-    const second = fakePane(atlas, {})
+    const second = fakePane(atlas, newAtlas())
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, second.pane)
     second.output()
     await vi.advanceTimersByTimeAsync(10_000)
@@ -85,12 +86,12 @@ describe('terminal WebGL atlas-memory rebuild', () => {
 
   it('rebuilds at most once per 10 s under sustained output', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    let current = fakePane(atlas, {})
+    let current = fakePane(atlas, newAtlas())
     for (let i = 0; i < 60; i++) {
       if (rebuilds.at(-1)?.[0] === current.pane) {
         // A rebuild retires the atlas; the reattached renderer gets a fresh one.
         atlas.untrackTerminalWebglAtlasPane(current.pane)
-        current = fakePane(atlas, {})
+        current = fakePane(atlas, newAtlas())
       }
       current.output()
       atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, current.pane)
@@ -102,10 +103,10 @@ describe('terminal WebGL atlas-memory rebuild', () => {
 
   it('rebuilds only the panes that share the grown atlas, re-armed only by their own output', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const grown = {}
+    const grown = newAtlas()
     const a = fakePane(atlas, grown)
     const b = fakePane(atlas, grown, false)
-    const other = fakePane(atlas, {})
+    const other = fakePane(atlas, newAtlas())
     a.output()
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, a.pane)
     await vi.advanceTimersByTimeAsync(0)
@@ -120,7 +121,7 @@ describe('terminal WebGL atlas-memory rebuild', () => {
 
   it('waits for a visible synchronized-output frame, retrying on its own a bounded number of times', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const visible = fakePane(atlas, {})
+    const visible = fakePane(atlas, newAtlas())
     visible.terminal.modes.synchronizedOutputMode = true
     visible.output()
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
@@ -137,7 +138,7 @@ describe('terminal WebGL atlas-memory rebuild', () => {
 
   it('catches a frame that closes without further output', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const visible = fakePane(atlas, {})
+    const visible = fakePane(atlas, newAtlas())
     visible.terminal.modes.synchronizedOutputMode = true
     visible.output()
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
@@ -149,7 +150,7 @@ describe('terminal WebGL atlas-memory rebuild', () => {
 
   it('keeps deferred attempts 10 s apart however many chunks arrive', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const visible = fakePane(atlas, {})
+    const visible = fakePane(atlas, newAtlas())
     visible.terminal.modes.synchronizedOutputMode = true
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
     for (let i = 0; i < 600; i++) {
@@ -163,7 +164,7 @@ describe('terminal WebGL atlas-memory rebuild', () => {
 
   it('ignores a hidden pane mid synchronized-output frame', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const hidden = fakePane(atlas, {}, false)
+    const hidden = fakePane(atlas, newAtlas(), false)
     hidden.terminal.modes.synchronizedOutputMode = true
     hidden.output()
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, hidden.pane)
@@ -173,7 +174,7 @@ describe('terminal WebGL atlas-memory rebuild', () => {
 
   it('reattaches only panes on screen', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const grown = {}
+    const grown = newAtlas()
     const shown = fakePane(atlas, grown)
     const hiddenTab = fakePane(atlas, grown, false)
     const expandedSibling = fakePane(atlas, grown, true, false)
@@ -188,7 +189,7 @@ describe('terminal WebGL atlas-memory rebuild', () => {
   it('reattaches nothing while the window is hidden', async () => {
     vi.stubGlobal('document', { visibilityState: 'hidden' })
     const atlas = await loadModule({ userAgent: MAC_AGENT })
-    const shown = fakePane(atlas, {})
+    const shown = fakePane(atlas, newAtlas())
     shown.terminal.modes.synchronizedOutputMode = true
     shown.output()
     atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, shown.pane)
@@ -199,16 +200,16 @@ describe('terminal WebGL atlas-memory rebuild', () => {
 
   it('ignores other page sizes, touch Apple devices and other platforms', async () => {
     const mac = await loadModule({ userAgent: MAC_AGENT })
-    const macPane = fakePane(mac, {})
+    const macPane = fakePane(mac, newAtlas())
     macPane.output()
     mac.handleTerminalWebglAtlasPage({ width: 2048 }, macPane.pane)
     mac.handleTerminalWebglAtlasPage({ width: 16384 }, macPane.pane)
     const ipad = await loadModule({ userAgent: MAC_AGENT, maxTouchPoints: 5 })
-    const ipadPane = fakePane(ipad, {})
+    const ipadPane = fakePane(ipad, newAtlas())
     ipadPane.output()
     ipad.handleTerminalWebglAtlasPage(LARGE_PAGE, ipadPane.pane)
     const windows = await loadModule({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' })
-    const windowsPane = fakePane(windows, {})
+    const windowsPane = fakePane(windows, newAtlas())
     windowsPane.output()
     windows.handleTerminalWebglAtlasPage(LARGE_PAGE, windowsPane.pane)
     await vi.advanceTimersByTimeAsync(60_000)

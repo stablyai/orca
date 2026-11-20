@@ -15,7 +15,7 @@ const ATLAS_MEMORY_REBUILD_ENABLED =
   !(navigator.maxTouchPoints > 0)
 
 // xterm's shared TextureAtlas, read from the addon's private renderer; only its identity is used.
-type GlyphAtlas = object
+type GlyphAtlas = { readonly pages: readonly unknown[] }
 type PaneFilter = (pane: ManagedPaneInternal) => boolean
 type AtlasRebuilder = (panes: ManagedPaneInternal[], shouldReattach: PaneFilter) => void
 
@@ -38,8 +38,13 @@ function atlasOf(pane: ManagedPaneInternal): GlyphAtlas | undefined {
   if (typeof renderer !== 'object' || renderer === null || !('_charAtlas' in renderer)) {
     return undefined
   }
-  const atlas = renderer._charAtlas
-  return typeof atlas === 'object' && atlas !== null ? atlas : undefined
+  return isGlyphAtlas(renderer._charAtlas) ? renderer._charAtlas : undefined
+}
+
+function isGlyphAtlas(value: unknown): value is GlyphAtlas {
+  return (
+    typeof value === 'object' && value !== null && 'pages' in value && Array.isArray(value.pages)
+  )
 }
 
 /** Wired by the reattach module, which owns detaching and reattaching pane renderers. */
