@@ -1,6 +1,8 @@
 import {
   GRAB_NATIVE_KEY_POLICY,
   GRAB_NATIVE_KEY_REPORT,
+  GRAB_CHORD_POLICY,
+  GRAB_CHORD_QUERY,
   guestFocusTakesTyping,
   type GrabNativeKeyPolicy
 } from '../../../shared/browser/element-grab/browser-grab-native-keys'
@@ -14,8 +16,13 @@ import {
 export function installBrowserGuestNativeToolKeys(port: {
   on: (channel: string, listener: (payload: unknown) => void) => void
   send: (channel: string, payload: unknown) => void
+  sendSync: (channel: string, payload: unknown) => unknown
 }): void {
   let policy: GrabNativeKeyPolicy | null = null
+  let chordEnabled = false
+  port.on(GRAB_CHORD_POLICY, (enabled) => {
+    chordEnabled = enabled === true
+  })
   port.on(GRAB_NATIVE_KEY_POLICY, (payload) => {
     if (
       !payload ||
@@ -35,6 +42,33 @@ export function installBrowserGuestNativeToolKeys(port: {
   window.addEventListener(
     'keydown',
     (event) => {
+      if (
+        chordEnabled &&
+        event.isTrusted &&
+        !event.repeat &&
+        !event.isComposing &&
+        event.keyCode !== 229 &&
+        !event.getModifierState('AltGraph') &&
+        !guestFocusTakesTyping() &&
+        !/^(Alt|Control|Meta|Shift)$/.test(event.key)
+      ) {
+        const selection = window.getSelection()
+        if (
+          !(selection?.type === 'Range' && selection.toString().trim()) &&
+          port.sendSync(GRAB_CHORD_QUERY, {
+            key: event.key,
+            code: event.code,
+            control: event.ctrlKey,
+            meta: event.metaKey,
+            alt: event.altKey,
+            shift: event.shiftKey
+          }) === true
+        ) {
+          event.preventDefault()
+          event.stopImmediatePropagation()
+          return
+        }
+      }
       if (
         !policy?.enabled ||
         !event.isTrusted ||

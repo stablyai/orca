@@ -13,7 +13,8 @@ export type ElectronFixtureRun = Awaited<ReturnType<typeof runProcess>> & {
 /** Bundles a main-process fixture and runs it in a real, background Electron. */
 export async function runElectronFixture(
   entry: string,
-  env: NodeJS.ProcessEnv = {}
+  env: NodeJS.ProcessEnv = {},
+  options: { isolatedEnvironment?: boolean } = {}
 ): Promise<ElectronFixtureRun> {
   // Inside the repo, so a package the bundle leaves external resolves from its node_modules.
   const cache = join(import.meta.dirname, '../../../../node_modules/.cache')
@@ -46,10 +47,44 @@ export async function runElectronFixture(
       display: process.env.DISPLAY
     })
     const { ELECTRON_RUN_AS_NODE: _runAsNode, ...inherited } = process.env
+    const baseEnvironment = options.isolatedEnvironment
+      ? Object.fromEntries(
+          Object.entries(inherited).filter(([key]) =>
+            [
+              'PATH',
+              'Path',
+              'SystemRoot',
+              'WINDIR',
+              'ComSpec',
+              'PATHEXT',
+              'LANG',
+              'LC_ALL',
+              'LC_CTYPE',
+              'DISPLAY',
+              'XAUTHORITY'
+            ].includes(key)
+          )
+        )
+      : inherited
+    if (options.isolatedEnvironment) {
+      if (!env.HOME) {
+        throw new Error('Isolated fixture requires its own HOME')
+      }
+      await mkdir(join(root, 'tmp'), { recursive: true })
+      Object.assign(baseEnvironment, {
+        TMPDIR: join(root, 'tmp'),
+        TEMP: join(root, 'tmp'),
+        TMP: join(root, 'tmp'),
+        USERPROFILE: env.HOME,
+        APPDATA: join(env.HOME, 'appData'),
+        LOCALAPPDATA: join(env.HOME, 'localAppData'),
+        XDG_CACHE_HOME: join(env.HOME, 'cache')
+      })
+    }
     const result = await runProcess({
       program: executable,
       args,
-      env: { ...inherited, ...env, ORCA_BACKGROUND_LAUNCH: '1' },
+      env: { ...baseEnvironment, ...env, ORCA_BACKGROUND_LAUNCH: '1' },
       timeoutMs: 45_000
     })
     let output: unknown = null

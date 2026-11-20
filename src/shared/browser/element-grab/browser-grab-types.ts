@@ -227,6 +227,7 @@ export function parseGrabLabelAvoidArea(
 export type BrowserGrabPickedElementPresentArgs = {
   browserPageId: string
   selectionId: string
+  interactive?: boolean
 }
 
 export type BrowserAwaitGrabSelectionArgs = {

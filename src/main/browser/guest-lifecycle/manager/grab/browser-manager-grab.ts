@@ -2,7 +2,7 @@ import { isAgentInjectingInput } from '../../../cdp/input/agent-input-injection'
 import { GrabNativeKeySession } from '../../../element-grab/grab-native-key-session'
 import { isPickedElementPresent } from '../../../element-grab/grab-picked-element'
 import { webContents } from 'electron'
-import { executeGrabScript } from '../../../element-grab/grab-guest-execution'
+import { executeGrabScript, requestGrabExecution } from '../../../element-grab/grab-guest-execution'
 import { buildGuestOverlayScript } from '../../../element-grab/grab-guest-script'
 import { buildGrabLabelAvoidScript } from '../../../element-grab/grab-guest-overlay-script'
 import { clampGrabPayload } from '../../../element-grab/browser-grab-payload'
@@ -21,8 +21,12 @@ import type {
 } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewport } from '../viewport/browser-manager-viewport'
 
-function runOverlayScript(guest: Electron.WebContents, mode: 'arm' | 'teardown'): Promise<boolean> {
-  return executeGrabScript(guest, () => guest.executeJavaScript(buildGuestOverlayScript(mode)))
+function runOverlayScript(
+  guest: Electron.WebContents,
+  mode: 'arm' | 'teardown',
+  signal?: AbortSignal
+): Promise<boolean | null> {
+  return executeGrabScript(guest, buildGuestOverlayScript(mode), { signal })
 }
 
 // A stalled or throttled renderer has not established a clean frame: fail rather than capture old pixels.
@@ -33,19 +37,22 @@ const PAINTED_FRAME_SCRIPT = `new Promise((resolve) => {
   setTimeout(() => finish(false), 500)
 })`
 
-function waitForPaintedFrame(guest: Electron.WebContents): Promise<boolean> {
-  return executeGrabScript(guest, () => guest.executeJavaScript(PAINTED_FRAME_SCRIPT))
+function waitForPaintedFrame(
+  guest: Electron.WebContents,
+  signal?: AbortSignal
+): Promise<boolean | null> {
+  return executeGrabScript(guest, PAINTED_FRAME_SCRIPT, { signal })
 }
 
 // Fire-and-forget: a page that is gone or mid-navigation simply has no picker to tell.
-function sendLabelAvoidArea(
+async function sendLabelAvoidArea(
   guest: Electron.WebContents,
   area: BrowserGrabLabelAvoidArea | null
-): void {
+): Promise<boolean> {
   if (guest.isDestroyed()) {
-    return
+    return false
   }
-  guest.executeJavaScript(buildGrabLabelAvoidScript(area)).catch(() => {})
+  return (await executeGrabScript(guest, buildGrabLabelAvoidScript(area))) === true
 }
 
 export abstract class BrowserManagerGrab extends BrowserManagerViewport {
@@ -56,15 +63,19 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
   >()
   /** Private preload key ownership for the current document and hosting renderer. */
   private readonly nativeKeysByTabId = new Map<string, GrabNativeKeySession>()
-  isGrabPickedElementPresent(selectionId: string, guest: Electron.WebContents): Promise<boolean> {
-    return isPickedElementPresent(guest, selectionId)
+  isGrabPickedElementPresent(
+    selectionId: string,
+    guest: Electron.WebContents,
+    interactive = false
+  ): Promise<boolean | null> {
+    return isPickedElementPresent(guest, selectionId, interactive)
   }
 
-  setGrabLabelAvoidArea(
+  async setGrabLabelAvoidArea(
     browserTabId: string,
     area: BrowserGrabLabelAvoidArea | null,
     rendererWebContentsId: number
-  ): boolean {
+  ): Promise<boolean> {
     const guest = this.getAuthorizedGuest(browserTabId, rendererWebContentsId)
     const retained = this.grabLabelAvoidAreaByTabId.get(browserTabId)
     // Guest loss permits only its recorded owner to clear the retained footprint.
@@ -77,7 +88,7 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
       this.grabLabelAvoidAreaByTabId.delete(browserTabId)
     }
     if (guest) {
-      sendLabelAvoidArea(guest, area)
+      return sendLabelAvoidArea(guest, area)
     }
     return true
   }
@@ -117,8 +128,12 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     enabled: boolean,
     guest: Electron.WebContents,
     host?: Electron.WebContents,
-    canDeliver?: () => boolean
+    canDeliver?: () => boolean,
+    signal?: AbortSignal
   ): Promise<boolean> {
+    if (signal?.aborted || canDeliver?.() === false) {
+      return false
+    }
     this.nativeKeysByTabId.get(browserTabId)?.stop()
     this.nativeKeysByTabId.delete(browserTabId)
     if (!enabled) {
@@ -126,14 +141,22 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
       // Why always await a teardown, also right after cancelling a running pick: the page runs scripts in order, so
       // this settles only once the cancelled pick's own teardown has run too. Draw captures the page after this
       // resolves and must never freeze the picker's highlight into the screenshot.
-      const tornDown = await runOverlayScript(guest, 'teardown')
-      return tornDown && (await waitForPaintedFrame(guest))
+      const tornDown = await runOverlayScript(guest, 'teardown', signal)
+      return tornDown === true && (await waitForPaintedFrame(guest, signal)) === true
     }
     // Arm eagerly so hover feedback appears before selection starts.
-    const armed = await runOverlayScript(guest, 'arm')
+    const armed = await runOverlayScript(guest, 'arm', signal)
+    if (signal?.aborted || canDeliver?.() === false) {
+      if (armed) {
+        void runOverlayScript(guest, 'teardown')
+      }
+      return false
+    }
     const area = this.grabLabelAvoidAreaByTabId.get(browserTabId)?.area
     if (armed && area) {
-      sendLabelAvoidArea(guest, area)
+      if (!(await sendLabelAvoidArea(guest, area))) {
+        return false
+      }
     }
     if (armed) {
       if (host) {
@@ -151,25 +174,39 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
         this.nativeKeysByTabId.set(browserTabId, keys)
         if (!(await keys.setEnabled(!isAgentInjectingInput(guest)))) {
           keys.stop()
-          this.nativeKeysByTabId.delete(browserTabId)
+          if (this.nativeKeysByTabId.get(browserTabId) === keys) {
+            this.nativeKeysByTabId.delete(browserTabId)
+          }
           return false
         }
       }
     }
-    return armed
+    return armed === true
   }
 
-  awaitGrabSelection(
+  async awaitGrabSelection(
     browserTabId: string,
     opId: string,
     guest: Electron.WebContents
   ): Promise<BrowserGrabResult> {
-    return this.grabSessionController.awaitGrabSelection(browserTabId, opId, guest)
+    const keys = this.nativeKeysByTabId.get(browserTabId)
+    const result = await this.grabSessionController.awaitGrabSelection(browserTabId, opId, guest)
+    if (
+      result.kind !== 'selected' &&
+      result.kind !== 'context-selected' &&
+      !this.grabSessionController.hasActiveGrabOp(browserTabId) &&
+      this.nativeKeysByTabId.get(browserTabId) === keys
+    ) {
+      keys?.stop()
+      this.nativeKeysByTabId.delete(browserTabId)
+    }
+    return result
   }
 
   cancelGrabOp(browserTabId: string, reason: BrowserGrabCancelReason): void {
+    this.nativeKeysByTabId.get(browserTabId)?.stop()
+    this.nativeKeysByTabId.delete(browserTabId)
     if (reason === 'evicted' || reason === 'navigation') {
-      this.nativeKeysByTabId.get(browserTabId)?.stop()
       this.grabLabelAvoidAreaByTabId.delete(browserTabId)
     }
     this.grabSessionController.cancelGrabOp(browserTabId, reason)
@@ -194,7 +231,11 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     guest: Electron.WebContents
   ): Promise<BrowserGrabPayload | null> {
     try {
-      const rawPayload = await guest.executeJavaScript(buildGuestOverlayScript('extractHover'))
+      const execution = await requestGrabExecution(guest, buildGuestOverlayScript('extractHover'))
+      if (!execution.ok) {
+        return null
+      }
+      const rawPayload = execution.value
       if (!rawPayload || typeof rawPayload !== 'object') {
         return null
       }

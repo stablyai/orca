@@ -1,4 +1,5 @@
 import { installBrowserGuestNativeToolKeys } from './browser/element-grab/browser-guest-native-tool-keys'
+import { installBrowserGuestExecution } from './browser/element-grab/browser-guest-execution'
 import type { ContextBridge, IpcRenderer, WebFrame } from 'electron'
 import { installBrowserPasswordDetector } from './browser/passwords/browser-password-detector'
 import {
@@ -22,7 +23,15 @@ installNativeChatVisualGuestTheme(ipcRenderer, electron.webFrame)
 
 // Subframe window.close() is already inert; preserve the frame's own implementation.
 if (process.isMainFrame) {
+  installBrowserGuestExecution(
+    {
+      send: (channel, payload) => ipcRenderer.send(channel, payload),
+      on: (channel, listener) => ipcRenderer.on(channel, (_event, payload) => listener(payload))
+    },
+    electron.webFrame
+  )
   installBrowserGuestNativeToolKeys({
+    sendSync: (channel, payload) => ipcRenderer.sendSync(channel, payload),
     send: (channel, payload) => ipcRenderer.send(channel, payload),
     on: (channel, listener) =>
       ipcRenderer.on(channel, (_event, payload: unknown) => listener(payload))

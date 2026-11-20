@@ -7,6 +7,7 @@ import {
   revokeAllDocPreviewGrants
 } from '../../../document-preview/doc-preview-grant-registry'
 import { buildDocPreviewUrl } from '../../../../../shared/document-preview/doc-preview-scheme'
+import { attachGrabExecutionTransport } from '../../../element-grab/testing/grab-execution-transport-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: () => null },
@@ -22,7 +23,7 @@ vi.mock('electron', () => ({
 afterEach(() => revokeAllDocPreviewGrants())
 
 describe('palette footprint ownership', () => {
-  it('rejects another renderer clearing a footprint, including after guest loss, while its owner can still clear it', () => {
+  it('rejects another renderer clearing a footprint, including after guest loss, while its owner can still clear it', async () => {
     const manager = new BrowserManager()
     const grant = mintDocPreviewGrant({
       owner: { kind: 'ssh', connectionId: 'synthetic-host' },
@@ -31,31 +32,33 @@ describe('palette footprint ownership', () => {
       browserPageId: 'preview-page'
     })
     let destroyed = false
-    const guest = Object.assign(new EventEmitter(), {
-      isDestroyed: () => destroyed,
-      getURL: () => buildDocPreviewUrl(grant.id, 'index.html'),
-      setWindowOpenHandler: () => {},
-      setWebRTCIPHandlingPolicy: () => {},
-      executeJavaScript: async () => true
-    })
+    const guest = attachGrabExecutionTransport(
+      Object.assign(new EventEmitter(), {
+        isDestroyed: () => destroyed,
+        getURL: () => buildDocPreviewUrl(grant.id, 'index.html'),
+        setWindowOpenHandler: () => {},
+        setWebRTCIPHandlingPolicy: () => {},
+        executeJavaScript: async () => true
+      })
+    )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the document policy and footprint delivery only use the members above.
     const contents = guest as unknown as Electron.WebContents
     const dispose = installDocPreviewGuestPolicy(contents, { id: 17, send: () => {} })
     try {
-      expect(
+      await expect(
         manager.setGrabLabelAvoidArea(
           'preview-page',
           { x: 10, y: 20, width: 100, height: 40, frameWidth: 640, frameHeight: 480 },
           17
         )
-      ).toBe(true)
-      expect(manager.setGrabLabelAvoidArea('preview-page', null, 23)).toBe(false)
+      ).resolves.toBe(true)
+      await expect(manager.setGrabLabelAvoidArea('preview-page', null, 23)).resolves.toBe(false)
 
       destroyed = true
       guest.emit('destroyed')
 
-      expect(manager.setGrabLabelAvoidArea('preview-page', null, 23)).toBe(false)
-      expect(manager.setGrabLabelAvoidArea('preview-page', null, 17)).toBe(true)
+      await expect(manager.setGrabLabelAvoidArea('preview-page', null, 23)).resolves.toBe(false)
+      await expect(manager.setGrabLabelAvoidArea('preview-page', null, 17)).resolves.toBe(true)
     } finally {
       dispose()
     }

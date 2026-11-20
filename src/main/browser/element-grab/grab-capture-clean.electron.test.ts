@@ -25,7 +25,8 @@ describe("Draw's capture after the picker turns off", () => {
         ORCA_BROWSER_GUEST_PRELOAD: join(preloadRoot, 'browser-guest-preload.cjs'),
         HOME: join(preloadRoot, 'home'),
         XDG_CONFIG_HOME: join(preloadRoot, 'home', 'config')
-      }
+      },
+      { isolatedEnvironment: true }
     )
     for (const line of result.stderr
       .split('\n')
@@ -41,6 +42,14 @@ describe("Draw's capture after the picker turns off", () => {
     }
     expect(result.output).toEqual({
       pickedKinds: ['selected', 'selected'],
+      recovery: {
+        loadingObserved: true,
+        slowLoadFinished: true,
+        cancelledLoad: null,
+        obsoleteCodeAbsent: true,
+        processLoss: null,
+        recovered: true
+      },
       'awaiting-idle': states,
       'confirming-idle': states,
       'awaiting-busy': states,

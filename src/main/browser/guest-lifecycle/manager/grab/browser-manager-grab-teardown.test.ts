@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserManager } from '../browser-manager'
+import { attachGrabExecutionTransport } from '../../../element-grab/testing/grab-execution-transport-fixture'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: () => null },
@@ -17,21 +18,23 @@ vi.mock('electron', () => ({
 function heldGuest() {
   const mainWorld: (() => void)[] = []
   const isolatedReplies: ((value: boolean | null) => void)[] = []
-  const guest = Object.assign(new EventEmitter(), {
-    id: 7,
-    isDestroyed: () => false,
-    // Overlay scripts wait for the test; the painted-frame wait answers at once (proven in real Electron).
-    executeJavaScript: (script: string) =>
-      script.includes('requestAnimationFrame')
-        ? Promise.resolve(true)
-        : new Promise<unknown>((resolve) => {
-            mainWorld.push(() => resolve(true))
-          }),
-    executeJavaScriptInIsolatedWorld: (_world: number, scripts: { code: string }[]) =>
-      scripts[0]?.code.includes('current.await(')
-        ? new Promise<boolean | null>((resolve) => isolatedReplies.push(resolve))
-        : Promise.resolve(true)
-  })
+  const guest = attachGrabExecutionTransport(
+    Object.assign(new EventEmitter(), {
+      id: 7,
+      isDestroyed: () => false,
+      // Overlay scripts wait for the test; the painted-frame wait answers at once (proven in real Electron).
+      executeJavaScript: (script: string) =>
+        script.includes('requestAnimationFrame')
+          ? Promise.resolve(true)
+          : new Promise<unknown>((resolve) => {
+              mainWorld.push(() => resolve(true))
+            }),
+      executeJavaScriptInIsolatedWorld: (_world: number, scripts: { code: string }[]) =>
+        scripts[0]?.code.includes('current.await(')
+          ? new Promise<boolean | null>((resolve) => isolatedReplies.push(resolve))
+          : Promise.resolve(true)
+    })
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setGrabMode and the watch only call executeJavaScript, executeJavaScriptInIsolatedWorld, on/off/once and isDestroyed, which this fixture implements.
   const page = guest as unknown as Electron.WebContents
   return { guest, page, mainWorld, isolatedReplies }

@@ -1,3 +1,4 @@
+import { verifyGrabSelectionReplacement } from './grab-selection-replacement-electron-fixture'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
@@ -12,6 +13,7 @@ const PAGE = `<!doctype html><meta charset="utf-8"><title>Keys</title>
 const root = document.getElementById('host').attachShadow({ mode: 'open' });
 root.innerHTML = '<textarea id="note"></textarea>';
 window.__pageKeys = []; window.__submits = 0; document.getElementById('form').addEventListener('submit', e => { e.preventDefault(); window.__submits++ });
+window.__copySeen = false; document.addEventListener('copy', e => { window.__copySeen = true; e.preventDefault(); });
 document.addEventListener('keydown', (e) => window.__pageKeys.push(e.key), true);
 </script>`
 
@@ -76,12 +78,19 @@ async function run(): Promise<void> {
   }
   const manager = new BrowserManager()
   const forwarded: string[] = []
+  const chordPages: string[] = []
   const recorder = {
     id: window.webContents.id,
     on: window.webContents.on.bind(window.webContents),
     off: window.webContents.off.bind(window.webContents),
     isDestroyed: () => false,
-    send: (_channel: string, args: { key: string }) => forwarded.push(args.key)
+    send: (channel: string, args: { key: string } | string) => {
+      if (channel === 'browser:grabModeToggle' && typeof args === 'string') {
+        chordPages.push(args)
+      } else if (typeof args !== 'string') {
+        forwarded.push(args.key)
+      }
+    }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the forwarder only calls send on the renderer, which this recorder implements.
   const renderer = recorder as unknown as Electron.WebContents
@@ -192,6 +201,58 @@ async function run(): Promise<void> {
   await wait(80)
   const altEdges = forwarded.filter((key) => key.startsWith('alt'))
 
+  const chord = async (): Promise<void> => {
+    const modifiers: ('meta' | 'control')[] = [process.platform === 'darwin' ? 'meta' : 'control']
+    page.sendInputEvent({ type: 'keyDown', keyCode: 'C', modifiers })
+    page.sendInputEvent({ type: 'keyUp', keyCode: 'C', modifiers })
+    await wait(80)
+  }
+  await evalPage(
+    "document.getElementById('buy').focus();window.__copySeen=false;window.__pageKeys=[]"
+  )
+  await chord()
+  const chordOffField = {
+    pages: [...chordPages],
+    pageSawChord: await evalPage("window.__pageKeys.some(key=>key.toLowerCase()==='c')"),
+    copySeen: await evalPage('window.__copySeen')
+  }
+  chordPages.length = 0
+  await evalPage(
+    "const field=document.getElementById('search');field.value='synthetic';field.focus();field.select();window.__copySeen=false;window.__pageKeys=[]"
+  )
+  await chord()
+  const chordInField = {
+    pages: [...chordPages],
+    pageSawChord: await evalPage("window.__pageKeys.some(key=>key.toLowerCase()==='c')")
+  }
+
+  const replacement = await verifyGrabSelectionReplacement(
+    page,
+    manager,
+    renderer,
+    forwarded,
+    press
+  )
+  await manager.setGrabMode('page-1', true, page, renderer)
+
+  await evalPage("document.getElementById('buy').focus();window.__pageKeys=[]")
+  const selection = manager.awaitGrabSelection('page-1', 'cancel-from-page', page)
+  while (!(await evalPage('Boolean(window.__orcaGrab?.cancelAwait)'))) {
+    if (Date.now() > deadline + 10_000) {
+      throw new Error('Selection did not start')
+    }
+    await wait(20)
+  }
+  await evalPage('window.__orcaGrab.cancelAwait()')
+  const cancelled = await selection
+  const beforeRetired = forwarded.length
+  await press('g')
+  const afterCancellation = {
+    kind: cancelled.kind,
+    forwarded: forwarded.slice(beforeRetired),
+    pageSawKey: await evalPage("window.__pageKeys.includes('g')")
+  }
+
   await manager.setGrabMode('page-1', false, page)
 
   process.stdout.write(
@@ -208,12 +269,21 @@ async function run(): Promise<void> {
       offFieldBody,
       pageSawToolKey,
       altEdges,
-      agentForwarded
+      agentForwarded,
+      chordOffField,
+      chordInField,
+      replacement,
+      afterCancellation
     })}\n`
   )
   process.stderr.write(
     `[palette-proof] ${JSON.stringify({
       pid: process.pid,
+      environmentKeys: Object.keys(process.env).sort(),
+      chordOffField,
+      chordInField,
+      replacement,
+      afterCancellation,
       children: app.getAppMetrics().map((metric) => ({ pid: metric.pid, type: metric.type })),
       home: app.getPath('home'),
       appData: app.getPath('appData'),

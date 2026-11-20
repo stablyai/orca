@@ -152,7 +152,8 @@ export const browserPageInteractionAndSessionsApi = {
   grabPickedElementPresent: (args: {
     browserPageId: string
     selectionId: string
-  }): Promise<boolean> => ipcRenderer.invoke('browser:grabPickedElementPresent', args),
+    interactive?: boolean
+  }): Promise<boolean | null> => ipcRenderer.invoke('browser:grabPickedElementPresent', args),
   captureSelectionScreenshot: (args: {
     browserPageId: string
     rect: { x: number; y: number; width: number; height: number }

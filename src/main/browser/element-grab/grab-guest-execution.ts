@@ -1,58 +1,240 @@
-import type { WebContents } from 'electron'
+import { randomUUID } from 'node:crypto'
+import type { WebContents, WebFrameMain } from 'electron'
+import {
+  GRAB_EXECUTION_REQUEST,
+  GRAB_EXECUTION_REPORT,
+  type GrabExecutionResult
+} from '../../../shared/browser/element-grab/grab-execution-protocol'
 
-type ScriptGuest = Pick<WebContents, 'isDestroyed' | 'on' | 'off'>
-const executing = new WeakSet<ScriptGuest>()
+type Options = { worldId?: number; background?: boolean; signal?: AbortSignal; selection?: boolean }
+type Task = {
+  id: string
+  code: string
+  options: Options
+  frame: WebFrameMain | null
+  documentId: string | null
+  started: boolean
+  live: boolean
+  timer?: ReturnType<typeof setTimeout>
+  resolve: (result: GrabExecutionResult) => void
+  stopWaiting: () => void
+}
 
-/** A stalled script retains its admission slot until it settles; retries cannot accumulate page work. */
-export function executeGrabScript(
-  guest: ScriptGuest,
-  execute: () => Promise<unknown>,
-  timeoutMs = 2_000
-): Promise<boolean> {
-  if (guest.isDestroyed() || executing.has(guest)) {
-    return Promise.resolve(false)
+const sessions = new WeakMap<WebContents, GrabGuestExecution>()
+
+/** At most one active and one waiting request per lane; background checks never queue. */
+class GrabGuestExecution {
+  private script: Task | null = null
+  private selection: Task | null = null
+  private waiting: Task | null = null
+  private waitingSelection: Task | null = null
+
+  constructor(private readonly guest: WebContents) {
+    guest.on('ipc-message', this.onReport)
+    guest.on('did-start-navigation', this.onNavigation)
+    guest.on('render-process-gone', this.retire)
+    guest.once('destroyed', this.destroy)
   }
-  executing.add(guest)
-  return new Promise((resolve) => {
-    let settled = false
-    const finish = (success: boolean): void => {
-      if (settled) {
+
+  run(code: string, options: Options): Promise<GrabExecutionResult> {
+    if (this.guest.isDestroyed() || options.signal?.aborted) {
+      return Promise.resolve({ ok: false })
+    }
+    if (options.background && (this.guest.isLoadingMainFrame() || !this.guest.getURL())) {
+      return Promise.resolve({ ok: false })
+    }
+    const occupied = options.selection ? this.selection : this.script
+    const waiting = options.selection ? this.waitingSelection : this.waiting
+    if (occupied && (options.background || waiting || (options.selection && occupied.live))) {
+      return Promise.resolve({ ok: false })
+    }
+    return new Promise((resolve) => {
+      const task: Task = {
+        id: randomUUID(),
+        code,
+        options,
+        frame: null,
+        documentId: null,
+        started: false,
+        live: true,
+        resolve,
+        stopWaiting: () => {}
+      }
+      const abort = (): void => this.finish(task, { ok: false }, !task.started)
+      options.signal?.addEventListener('abort', abort, { once: true })
+      task.stopWaiting = () => options.signal?.removeEventListener('abort', abort)
+      if (occupied) {
+        if (options.selection) {
+          this.waitingSelection = task
+        } else {
+          this.waiting = task
+        }
+        task.timer = setTimeout(abort, 2_000)
+      } else {
+        this.begin(task)
+      }
+    })
+  }
+
+  private begin(task: Task): void {
+    if (task.options.selection) {
+      this.selection = task
+    } else {
+      this.script = task
+    }
+    const loaded = (): void => {
+      this.guest.off('did-stop-loading', loaded)
+      if (!task.live || this.guest.isDestroyed()) {
         return
       }
-      settled = true
-      clearTimeout(timer)
-      guest.off('destroyed', fail)
-      guest.off('did-start-navigation', onNavigation)
-      resolve(success)
-    }
-    const fail = (): void => finish(false)
-    const onNavigation = (
-      _event: unknown,
-      _url: unknown,
-      isInPlace: boolean,
-      isMainFrame: boolean
-    ): void => {
-      if (isMainFrame && !isInPlace) {
-        fail()
+      try {
+        task.frame = this.guest.mainFrame
+        task.timer = setTimeout(() => this.finish(task, { ok: false }, !task.started), 2_000)
+        task.frame.send(GRAB_EXECUTION_REQUEST, { kind: 'hello', id: task.id })
+      } catch {
+        this.finish(task, { ok: false }, true)
       }
     }
-    const timer = setTimeout(fail, timeoutMs)
-    guest.on('destroyed', fail)
-    guest.on('did-start-navigation', onNavigation)
-    try {
-      void execute().then(
-        (result) => {
-          executing.delete(guest)
-          finish(result === true)
-        },
-        () => {
-          executing.delete(guest)
-          fail()
-        }
-      )
-    } catch {
-      executing.delete(guest)
-      fail()
+    if (this.guest.isLoadingMainFrame() || !this.guest.getURL()) {
+      const stop = task.stopWaiting
+      task.stopWaiting = () => {
+        stop()
+        this.guest.off('did-stop-loading', loaded)
+      }
+      this.guest.on('did-stop-loading', loaded)
+    } else {
+      loaded()
     }
-  })
+  }
+
+  private finish(task: Task, result: GrabExecutionResult, release: boolean): void {
+    if (task.live) {
+      task.live = false
+      clearTimeout(task.timer)
+      task.stopWaiting()
+      task.code = ''
+      task.resolve(result)
+      task.resolve = () => {}
+    }
+    if (!release) {
+      return
+    }
+    if (this.selection === task) {
+      this.selection = null
+    }
+    if (this.script === task) {
+      this.script = null
+    }
+    if (this.waiting === task) {
+      this.waiting = null
+    }
+    if (this.waitingSelection === task) {
+      this.waitingSelection = null
+    }
+    if (!this.script && this.waiting) {
+      const next = this.waiting
+      this.waiting = null
+      clearTimeout(next.timer)
+      this.begin(next)
+    }
+    if (!this.selection && this.waitingSelection) {
+      const next = this.waitingSelection
+      this.waitingSelection = null
+      clearTimeout(next.timer)
+      this.begin(next)
+    }
+  }
+
+  private readonly onReport = (
+    event: Electron.IpcMainEvent,
+    channel: string,
+    payload: { id?: string; documentId?: string; ready?: boolean; result?: GrabExecutionResult }
+  ): void => {
+    if (channel !== GRAB_EXECUTION_REPORT || !payload || typeof payload.documentId !== 'string') {
+      return
+    }
+    const task = [this.script, this.selection].find((candidate) => candidate?.id === payload.id)
+    if (!task || event.senderFrame !== task.frame || this.guest.mainFrame !== task.frame) {
+      return
+    }
+    if (payload.ready && task.live && !task.started) {
+      task.documentId = payload.documentId
+      task.started = true
+      clearTimeout(task.timer)
+      task.timer = setTimeout(
+        () => this.finish(task, { ok: false }, false),
+        task.options.selection ? 120_000 : 2_000
+      )
+      try {
+        task.frame?.send(GRAB_EXECUTION_REQUEST, {
+          kind: 'execute',
+          id: task.id,
+          documentId: task.documentId,
+          code: task.code,
+          worldId: task.options.worldId ?? 0,
+          lane: task.options.selection ? 'selection' : 'script',
+          expiresAt: Date.now() + 2_000
+        })
+      } catch {
+        this.finish(task, { ok: false }, true)
+      }
+      task.code = ''
+    } else if (payload.documentId === task.documentId && payload.result) {
+      this.finish(task, payload.result, true)
+    }
+  }
+
+  private readonly onNavigation = (
+    _event: unknown,
+    _url: unknown,
+    inPlace: boolean,
+    main: boolean
+  ): void => {
+    if (main && !inPlace) {
+      this.retire()
+    }
+  }
+
+  private readonly retire = (): void => {
+    const tasks = [this.script, this.selection, this.waiting, this.waitingSelection]
+    this.script = this.selection = this.waiting = this.waitingSelection = null
+    for (const task of tasks) {
+      if (task) {
+        this.finish(task, { ok: false }, true)
+      }
+    }
+  }
+
+  private readonly destroy = (): void => {
+    this.retire()
+    this.guest.off('ipc-message', this.onReport)
+    this.guest.off('did-start-navigation', this.onNavigation)
+    this.guest.off('render-process-gone', this.retire)
+    sessions.delete(this.guest)
+  }
+}
+
+export function requestGrabExecution(
+  guest: WebContents,
+  code: string,
+  options: Options = {}
+): Promise<GrabExecutionResult> {
+  if (guest.isDestroyed()) {
+    return Promise.resolve({ ok: false })
+  }
+  let session = sessions.get(guest)
+  if (!session) {
+    session = new GrabGuestExecution(guest)
+    sessions.set(guest, session)
+  }
+  return session.run(code, options)
+}
+
+export async function executeGrabScript(
+  guest: WebContents,
+  code: string,
+  options: Options = {}
+): Promise<boolean | null> {
+  const result = await requestGrabExecution(guest, code, options)
+  return result.ok && typeof result.value === 'boolean' ? result.value : null
 }

@@ -18,9 +18,10 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       }
     }
 
-    // The overlay blocks the press and hands it here; a later await replaces this one.
+    if (grab.cancelAwait) grab.cancelAwait(false);
     grab.onPick = function(e) {
       grab.onPick = null;
+      grab.cancelAwait = null;
       var el = grab.getCurrentElement();
       if (!el) {
         grab.cleanup();
@@ -35,8 +36,10 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       resolve(e.type === 'contextmenu' ? { __orcaContextMenu: true, payload: payload } : payload);
     };
 
-    grab.cancelAwait = function() {
-      grab.cleanup();
+    grab.cancelAwait = function(removeOverlay) {
+      grab.onPick = null;
+      grab.cancelAwait = null;
+      if (removeOverlay !== false) grab.cleanup();
       // Resolve cancellation to avoid guest-console errors during normal teardown.
       resolve({ __orcaCancelled: true });
     };

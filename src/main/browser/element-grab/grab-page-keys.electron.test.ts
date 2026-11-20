@@ -28,7 +28,8 @@ describe('tool letters from a real page during a pick', () => {
           ORCA_BROWSER_GUEST_PRELOAD: join(runRoot, 'browser-guest-preload.cjs'),
           HOME: join(runRoot, 'home'),
           XDG_CONFIG_HOME: join(runRoot, 'home', 'config')
-        }
+        },
+        { isolatedEnvironment: true }
       )
       for (const line of result.stderr
         .split('\n')
@@ -50,7 +51,16 @@ describe('tool letters from a real page during a pick', () => {
         offFieldBody: ['d'],
         pageSawToolKey: false,
         altEdges: ['alt-down', 'alt-up'],
-        agentForwarded: []
+        agentForwarded: [],
+        chordOffField: { pages: ['page-1'], pageSawChord: false, copySeen: false },
+        chordInField: { pages: [], pageSawChord: true },
+        replacement: {
+          oldKind: 'cancelled',
+          newKind: 'selected',
+          forwarded: ['g'],
+          pageSawKey: false
+        },
+        afterCancellation: { kind: 'cancelled', forwarded: [], pageSawKey: true }
       })
     },
     60_000

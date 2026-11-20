@@ -3,6 +3,7 @@ import type {
   BrowserGrabResult
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import { retainPickedElement } from './grab-picked-element'
+import { executeGrabScript, requestGrabExecution } from './grab-guest-execution'
 import { buildGuestOverlayScript } from './grab-guest-script'
 import { clampGrabPayload } from './browser-grab-payload'
 import { readDocPreviewGuestDocumentUrl } from '../document-preview/doc-preview-guest-policy'
@@ -50,6 +51,7 @@ function getGuestErrorMessage(err: unknown): string {
 
 export class BrowserGrabSessionController {
   private readonly activeGrabOps = new Map<string, ActiveGrabOp>()
+  private readonly replacing = new Set<string>()
 
   constructor(private readonly onSettled?: (pageId: string, guest: Electron.WebContents) => void) {}
 
@@ -78,6 +80,9 @@ export class BrowserGrabSessionController {
     opId: string,
     guest: Electron.WebContents
   ): Promise<BrowserGrabResult> {
+    if (this.replacing.has(browserTabId)) {
+      return Promise.resolve({ opId, kind: 'cancelled', reason: 'user' })
+    }
     const existing = this.activeGrabOps.get(browserTabId)
     if (existing) {
       // Preserve the shared overlay: teardown would race the replacement awaitClick script.
@@ -86,6 +91,7 @@ export class BrowserGrabSessionController {
     }
 
     return new Promise<BrowserGrabResult>((resolve) => {
+      const abort = new AbortController()
       const guestWebContentsId = guest.id
       let settled = false
 
@@ -104,7 +110,38 @@ export class BrowserGrabSessionController {
 
       const awaitGuestClick = async (): Promise<void> => {
         try {
-          const rawPayload = await guest.executeJavaScript(buildGuestOverlayScript('awaitClick'))
+          if (existing) {
+            this.replacing.add(browserTabId)
+            try {
+              const cancelled = await executeGrabScript(
+                guest,
+                '(function(){const grab=window.__orcaGrab;if(grab?.cancelAwait)grab.cancelAwait(false);return true})()',
+                { signal: abort.signal }
+              )
+              if (cancelled !== true || settled) {
+                settleOnce({ opId, kind: 'cancelled', reason: 'user' })
+                return
+              }
+            } finally {
+              this.replacing.delete(browserTabId)
+            }
+          }
+          const execution = await requestGrabExecution(
+            guest,
+            buildGuestOverlayScript('awaitClick'),
+            {
+              selection: true,
+              signal: abort.signal
+            }
+          )
+          if (settled) {
+            return
+          }
+          if (!execution.ok) {
+            settleOnce({ opId, kind: 'error', reason: 'Guest selection unavailable' })
+            return
+          }
+          const rawPayload = execution.value
           if (!rawPayload || typeof rawPayload !== 'object') {
             settleOnce({ opId, kind: 'cancelled', reason: 'user' })
             return
@@ -129,8 +166,13 @@ export class BrowserGrabSessionController {
           if (settled) {
             return
           }
-          if (!(await retainPickedElement(guest, payload.page.capturedAt))) {
-            settleOnce({ opId, kind: 'cancelled', reason: 'user' })
+          const retained = await retainPickedElement(guest, payload.page.capturedAt)
+          if (retained !== true) {
+            settleOnce(
+              retained === false
+                ? { opId, kind: 'cancelled', reason: 'user' }
+                : { opId, kind: 'error', reason: 'Guest selection unavailable' }
+            )
             return
           }
           settleOnce({
@@ -176,6 +218,7 @@ export class BrowserGrabSessionController {
       guest.on('destroyed', handleDestroyed)
 
       const cleanup = (preserveOverlay?: boolean): void => {
+        abort.abort()
         try {
           guest.off('did-start-navigation', handleNavigation)
           guest.off('destroyed', handleDestroyed)
@@ -187,7 +230,7 @@ export class BrowserGrabSessionController {
         }
         try {
           if (!guest.isDestroyed()) {
-            void guest.executeJavaScript(buildGuestOverlayScript('teardown'))
+            void executeGrabScript(guest, buildGuestOverlayScript('teardown'))
           }
         } catch {
           // Best-effort overlay removal

@@ -22,36 +22,79 @@ import {
 } from '../../../shared/browser/element-grab/browser-grab-types'
 
 const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
-const grabModeOperationByPageId = new Map<string, Promise<void>>()
+type GrabModeRequest = {
+  run: (signal: AbortSignal) => Promise<BrowserSetGrabModeResult>
+  resolve: (result: BrowserSetGrabModeResult) => void
+}
+type GrabModeAdmission = { active: AbortController | null; pending: GrabModeRequest | null }
+const grabModeOperationByPageId = new Map<string, GrabModeAdmission>()
 const GRAB_REGISTRATION_WAIT_MS = 1_000
+const MAX_GRAB_MODE_ADMISSIONS = 32
+const supersededGrabMode = (): BrowserSetGrabModeResult => ({ ok: false, reason: 'not-ready' })
+
+function retireGrabModeAdmission(state: GrabModeAdmission): void {
+  state.active?.abort()
+  state.pending?.resolve(supersededGrabMode())
+  state.pending = null
+}
 
 function queueGrabModeOperation(
   browserPageId: string,
-  operation: () => Promise<BrowserSetGrabModeResult>
+  operation: GrabModeRequest['run']
 ): Promise<BrowserSetGrabModeResult> {
-  const previous = grabModeOperationByPageId.get(browserPageId) ?? Promise.resolve()
-  const result = previous.then(operation)
-  const completion = result.then(
-    () => {},
-    () => {}
-  )
-  grabModeOperationByPageId.set(browserPageId, completion)
-  return result.finally(() => {
-    if (grabModeOperationByPageId.get(browserPageId) === completion) {
-      grabModeOperationByPageId.delete(browserPageId)
+  let state = grabModeOperationByPageId.get(browserPageId)
+  const created = !state
+  if (!state) {
+    if (grabModeOperationByPageId.size >= MAX_GRAB_MODE_ADMISSIONS) {
+      return Promise.resolve(supersededGrabMode())
     }
+    state = { active: null, pending: null }
+    grabModeOperationByPageId.set(browserPageId, state)
+  }
+  retireGrabModeAdmission(state)
+  const admission = state
+  const result = new Promise<BrowserSetGrabModeResult>((resolve) => {
+    admission.pending = { run: operation, resolve }
   })
+  if (created) {
+    void (async () => {
+      while (admission.pending) {
+        const request = admission.pending
+        admission.pending = null
+        const abort = new AbortController()
+        admission.active = abort
+        try {
+          request.resolve(await request.run(abort.signal))
+        } catch {
+          request.resolve({ ok: false, reason: 'injection-failed' })
+        } finally {
+          admission.active = null
+        }
+      }
+      if (grabModeOperationByPageId.get(browserPageId) === admission) {
+        grabModeOperationByPageId.delete(browserPageId)
+      }
+    })()
+  }
+  return result
 }
 
 export function resetGrabModeState(): void {
+  disposePreviewGrantSubscription?.()
+  disposePreviewGrantSubscription = null
   grabModeIntentByPageId.clear()
-  // Retired registrations must not leave chains blocking new operations.
+  for (const state of grabModeOperationByPageId.values()) {
+    retireGrabModeAdmission(state)
+  }
   grabModeOperationByPageId.clear()
 }
 
 export function disposeGrabModeStateForPage(browserPageId: string): void {
   grabModeIntentByPageId.delete(browserPageId)
-  // Reused page IDs must not queue behind destroyed guests.
+  const state = grabModeOperationByPageId.get(browserPageId)
+  if (state) {
+    retireGrabModeAdmission(state)
+  }
   grabModeOperationByPageId.delete(browserPageId)
 }
 
@@ -83,6 +126,13 @@ export function registerBrowserGrabHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'not-authorized' }
       }
+      if (
+        typeof args?.browserPageId !== 'string' ||
+        args.browserPageId.length > 256 ||
+        typeof args.enabled !== 'boolean'
+      ) {
+        return supersededGrabMode()
+      }
       const intent = {
         generation: (grabModeIntentByPageId.get(args.browserPageId)?.generation ?? 0) + 1,
         enabled: args.enabled
@@ -90,42 +140,38 @@ export function registerBrowserGrabHandlers(): void {
       grabModeIntentByPageId.set(args.browserPageId, intent)
       const isCurrentIntent = (): boolean =>
         grabModeIntentByPageId.get(args.browserPageId) === intent
-      let guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      if (!guest && args.enabled) {
-        // Fast file pages can expose tools before guest registration reaches main.
-        await waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS).catch(
-          () => {}
-        )
-        if (!isCurrentIntent()) {
-          return { ok: true }
+      return queueGrabModeOperation(args.browserPageId, async (signal) => {
+        let guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+        if (!guest && args.enabled) {
+          await waitForNextTabRegistration(
+            args.browserPageId,
+            GRAB_REGISTRATION_WAIT_MS,
+            signal
+          ).catch(() => {})
+          guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
         }
-        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      }
-      if (!guest) {
-        if (!args.enabled) {
-          return { ok: true }
+        if (!isCurrentIntent() || signal.aborted) {
+          return supersededGrabMode()
         }
-        return { ok: false, reason: 'not-ready' }
-      }
-      return queueGrabModeOperation(args.browserPageId, async () => {
-        if (!isCurrentIntent()) {
-          return { ok: true }
-        }
-        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
         if (!guest) {
-          return args.enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
+          return args.enabled ? supersededGrabMode() : { ok: true }
         }
         const success = await browserManager.setGrabMode(
           args.browserPageId,
           args.enabled,
           guest,
           event.sender,
-          () => browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id) === guest
+          () => browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id) === guest,
+          signal
         )
-        if (!isCurrentIntent()) {
-          return { ok: true }
+        if (!isCurrentIntent() || signal.aborted) {
+          return supersededGrabMode()
         }
         return success ? { ok: true } : { ok: false, reason: 'injection-failed' }
+      }).finally(() => {
+        if (grabModeIntentByPageId.get(args.browserPageId) === intent) {
+          grabModeIntentByPageId.delete(args.browserPageId)
+        }
       })
     }
   )
@@ -147,7 +193,7 @@ export function registerBrowserGrabHandlers(): void {
 
   ipcMain.handle(
     'browser:setGrabLabelAvoidArea',
-    (event, args: BrowserSetGrabLabelAvoidAreaArgs): boolean => {
+    async (event, args: BrowserSetGrabLabelAvoidAreaArgs): Promise<boolean> => {
       if (!isTrustedBrowserRenderer(event.sender) || typeof args?.browserPageId !== 'string') {
         return false
       }
@@ -161,7 +207,7 @@ export function registerBrowserGrabHandlers(): void {
 
   ipcMain.handle(
     'browser:grabPickedElementPresent',
-    async (event, args: BrowserGrabPickedElementPresentArgs): Promise<boolean> => {
+    async (event, args: BrowserGrabPickedElementPresentArgs): Promise<boolean | null> => {
       // Unavailable identity cannot authorize a held-pick action.
       if (
         !isTrustedBrowserRenderer(event.sender) ||
@@ -173,7 +219,13 @@ export function registerBrowserGrabHandlers(): void {
         return false
       }
       const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
-      return guest ? browserManager.isGrabPickedElementPresent(args.selectionId, guest) : false
+      return guest
+        ? browserManager.isGrabPickedElementPresent(
+            args.selectionId,
+            guest,
+            args.interactive === true
+          )
+        : null
     }
   )
 

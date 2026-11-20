@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { app, BrowserWindow, webContents, nativeImage } from 'electron'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
+import { verifyGrabExecutionRecovery } from './grab-execution-recovery-electron-fixture'
 
 // A page that is one flat colour everywhere: any other pixel in a capture is the picker's highlight or label.
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Flat</title>
@@ -72,6 +73,7 @@ async function run(): Promise<void> {
     await wait(20)
   }
   const manager = new BrowserManager()
+  const recovery = await verifyGrabExecutionRecovery(page, manager, PAGE)
   const center = { x: 280, y: 180 }
   const pickedKinds: string[] = []
 
@@ -154,10 +156,12 @@ async function run(): Promise<void> {
     }
   }
 
-  process.stdout.write(`${JSON.stringify({ pickedKinds, ...results })}\n`)
+  process.stdout.write(`${JSON.stringify({ pickedKinds, recovery, ...results })}\n`)
   process.stderr.write(
     `[palette-proof] ${JSON.stringify({
       pid: process.pid,
+      environmentKeys: Object.keys(process.env).sort(),
+      recovery,
       children: app.getAppMetrics().map((metric) => ({ pid: metric.pid, type: metric.type })),
       home: app.getPath('home'),
       appData: app.getPath('appData'),

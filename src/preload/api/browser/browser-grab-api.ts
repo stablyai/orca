@@ -22,7 +22,7 @@ export type BrowserGrabApi = {
   /** Where the annotate palette covers the page, so the picker's hover label stays clear of it. */
   setGrabLabelAvoidArea: (args: BrowserSetGrabLabelAvoidAreaArgs) => Promise<boolean>
   /** False only when the page answers that no element matches; unknown counts as present. */
-  grabPickedElementPresent: (args: BrowserGrabPickedElementPresentArgs) => Promise<boolean>
+  grabPickedElementPresent: (args: BrowserGrabPickedElementPresentArgs) => Promise<boolean | null>
   captureSelectionScreenshot: (
     args: BrowserCaptureSelectionScreenshotArgs
   ) => Promise<BrowserCaptureSelectionScreenshotResult>

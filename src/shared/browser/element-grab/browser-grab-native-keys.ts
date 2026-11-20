@@ -1,5 +1,7 @@
 export const GRAB_NATIVE_KEY_POLICY = 'browser:grab-native-key-policy'
 export const GRAB_NATIVE_KEY_REPORT = 'browser:grab-native-key-report'
+export const GRAB_CHORD_POLICY = 'browser:grab-chord-policy'
+export const GRAB_CHORD_QUERY = 'browser:grab-chord-query'
 
 export type GrabNativeKeyPolicy = { token: string; revision: number; enabled: boolean }
 
