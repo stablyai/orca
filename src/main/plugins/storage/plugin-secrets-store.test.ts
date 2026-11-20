@@ -17,6 +17,7 @@ const storageMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
+  app: { commandLine: { appendSwitch: vi.fn() } },
   safeStorage: {
     isEncryptionAvailable: () => storageMocks.available,
     encryptString: storageMocks.encryptString,
@@ -64,6 +65,21 @@ describe('PluginSecretsStore', () => {
 
     expect(store.set('token', 'plaintext')).toMatchObject({ ok: false })
     expect(store.get('token')).toMatchObject({ ok: true, value: null })
+    await expect(readFile(join(root, 'acme.demo', 'secrets.json.enc'))).rejects.toMatchObject({
+      code: 'ENOENT'
+    })
+  })
+
+  it('refuses the macOS dev mock keychain and writes no file', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    vi.resetModules()
+    const { configureDevKeychain } =
+      await import('../../startup/chromium-policy/configure-dev-keychain')
+    const { PluginSecretsStore: FreshStore } = await import('./plugin-secrets-store')
+    configureDevKeychain(true)
+    const root = await tempRoot()
+
+    expect(new FreshStore(root, 'acme.demo').set('token', 'secret')).toMatchObject({ ok: false })
     await expect(readFile(join(root, 'acme.demo', 'secrets.json.enc'))).rejects.toMatchObject({
       code: 'ENOENT'
     })

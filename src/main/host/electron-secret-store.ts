@@ -1,5 +1,6 @@
 import { safeStorage } from 'electron'
 import { guardedSafeStorage, safeStorageWithheldReason } from './safe-storage-availability'
+import { usesDevMockKeychain } from '../startup/chromium-policy/configure-dev-keychain'
 import type { SecretSealing, SecretStore } from '../../shared/secure-storage/secret-store'
 
 export class ElectronSecretStore implements SecretStore {
@@ -26,7 +27,7 @@ export class ElectronSecretStore implements SecretStore {
   }
 }
 
-/** `os`: sealed by the OS keyring; `obfuscated`: Linux basic_text built-in key; `unavailable`: no sealing. */
+/** `os`: sealed by the OS keyring; `obfuscated`: built-in key (Linux basic_text, macOS dev mock keychain); `unavailable`: no sealing. */
 export type SecretProtectionLevel = 'os' | 'obfuscated' | 'unavailable'
 
 export type SecretProtectionAssessment = {
@@ -59,6 +60,13 @@ export function assessSecretProtection(): SecretProtectionAssessment {
           ? // Chromium may leave an installed secret service unselected on unrecognized tiling desktops.
             `Orca could not tell which keyring service this desktop uses${describeDesktop()}, so secrets are stored unencrypted — even if a secret service is already running. Start Orca with --password-store=gnome-libsecret (or --password-store=kwallet6 on KDE) to name one.`
           : 'The OS keyring is unavailable, so secrets are stored unencrypted. Install and unlock gnome-keyring or kwallet to seal them.'
+    }
+  }
+  // The dev mock keychain also seals with a fixed key: same tier as basic_text.
+  if (usesDevMockKeychain()) {
+    return {
+      level: 'obfuscated',
+      gap: 'This dev build uses a built-in test keychain key, so secrets are obfuscated, not protected by the macOS Keychain. Restart with ORCA_DEV_USE_KEYCHAIN=1 to use the Keychain.'
     }
   }
   // basic_text uses a built-in password: report the gap without stranding credentials by disabling sealing.

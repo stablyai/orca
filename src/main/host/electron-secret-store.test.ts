@@ -7,7 +7,10 @@ const safeStorageMock = vi.hoisted(() => ({
   getSelectedStorageBackend: vi.fn(() => 'gnome_libsecret')
 }))
 
-vi.mock('electron', () => ({ safeStorage: safeStorageMock }))
+vi.mock('electron', () => ({
+  app: { commandLine: { appendSwitch: vi.fn() } },
+  safeStorage: safeStorageMock
+}))
 
 const { ElectronSecretStore } = await import('./electron-secret-store')
 
@@ -40,6 +43,19 @@ describe('ElectronSecretStore', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
     withPlatform('darwin', () => {
       expect(new ElectronSecretStore().describeSealing()).toMatchObject({ kind: 'none' })
+    })
+  })
+
+  it('reports the dev mock keychain as obfuscated, like basic_text', async () => {
+    vi.resetModules()
+    const { configureDevKeychain } =
+      await import('../startup/chromium-policy/configure-dev-keychain')
+    const fresh = await import('./electron-secret-store')
+    withPlatform('darwin', () => {
+      expect(fresh.assessSecretProtection().level).toBe('os')
+      configureDevKeychain(true)
+      expect(fresh.assessSecretProtection().level).toBe('obfuscated')
+      expect(new fresh.ElectronSecretStore().describeSealing()).toMatchObject({ kind: 'none' })
     })
   })
 })

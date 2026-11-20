@@ -94,12 +94,15 @@ export class PluginSecretsStore {
     if (!safeStorage.isEncryptionAvailable()) {
       return { ok: false, error: 'OS-backed encryption is unavailable; secret not stored' }
     }
-    // Why: Linux basic_text seals with a built-in key, which is plaintext to anyone reading the file.
-    if (pluginSecretsProtection().level === 'obfuscated') {
+    // Why: a built-in key (Linux basic_text, macOS dev mock keychain) is plaintext to anyone reading the file.
+    const protection = pluginSecretsProtection()
+    if (protection.level === 'obfuscated') {
       return {
         ok: false,
         error:
-          'OS keyring is unavailable (Linux basic_text backend); secret not stored. Install and unlock gnome-keyring or kwallet, then restart Orca.'
+          process.platform === 'linux'
+            ? 'OS keyring is unavailable (Linux basic_text backend); secret not stored. Install and unlock gnome-keyring or kwallet, then restart Orca.'
+            : `OS keychain protection is unavailable; secret not stored. ${protection.gap}`
       }
     }
     const file = this.read()
