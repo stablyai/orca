@@ -61,20 +61,21 @@ export type NewBotPicture = {
   reset: () => void
 }
 
-/** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own; `host` says
- *  whether the host stores a tile color and an outfit. */
+/** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own; `look` opens
+ *  the mascot on a shared bot's tile color and outfit; `host` says whether the host stores them. */
 export function useNewBotPicture(
   host: { colors: boolean; outfits: boolean },
   mascot?: string,
-  initialUpload?: string
+  initialUpload?: string,
+  look?: { color?: string; outfit?: BotAvatarOutfit | null }
 ): NewBotPicture {
   const t = useTranslate()
   const [value, setValue] = useState<BotPictureValue>(() =>
     initialUpload ? { kind: 'custom' } : firstMascot(mascot)
   )
-  const [picked, setColor] = useState<string | null>(null)
+  const [picked, setColor] = useState<string | null>(look?.color ?? null)
   const color = host.colors ? picked : null
-  const [pickedOutfit, setOutfit] = useState<BotAvatarOutfit | null>(null)
+  const [pickedOutfit, setOutfit] = useState<BotAvatarOutfit | null>(look?.outfit ?? null)
   const outfit = host.outfits ? pickedOutfit : null
   const [upload, setUpload] = useState<NewBotUpload | null>(() =>
     initialUpload ? { png: initialUpload, after: -1 } : null

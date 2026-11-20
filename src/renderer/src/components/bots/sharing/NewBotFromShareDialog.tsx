@@ -42,6 +42,7 @@ import { useBotCreateHost } from '../bot-create-hosts'
 import { reviewBotShare } from './bot-share-rpc'
 import { useBotAgentSetup } from '../use-bot-agent-setup'
 import { useNewBotPicture } from '../use-new-bot-picture'
+import { wornBotOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
 import { toolHost } from './bot-share-review-parts'
 import { Tick } from './BotShareTick'
 
@@ -157,15 +158,15 @@ export function NewBotFromShareDialog({
   const menu = useBotAgentMenu(hostId, true)
   const agentSetup = useBotAgentSetup(menu.choices, hostId)
   const sharedPng = review.avatarDataUrl?.slice(review.avatarDataUrl.indexOf(',') + 1)
-  const sharedMascot =
-    review.bot.avatar && 'mascot' in review.bot.avatar ? review.bot.avatar.mascot : undefined
+  const shared = review.bot.avatar && 'mascot' in review.bot.avatar ? review.bot.avatar : undefined
   const picture = useNewBotPicture(
     {
       colors: useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
       outfits: useBotHostHas(hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
     },
-    sharedMascot,
-    sharedPng
+    shared?.mascot,
+    sharedPng,
+    { color: shared?.color, outfit: wornBotOutfit(shared?.outfit) }
   )
   const trimmedName = name.trim()
 

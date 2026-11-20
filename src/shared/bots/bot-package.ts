@@ -4,7 +4,9 @@ import * as z from 'zod'
 import type { AutomationBotResultsTo } from '../automation-bot-target'
 import { AUTOMATION_EVENT_KINDS } from '../automation-event-triggers'
 import { GOOGLE_EVENT_SOURCES } from '../automation-google-triggers'
-import { BOT_MASCOT_IDS, BOT_AVATAR_FILE, mascotAvatar } from '../bot-avatar'
+import { BOT_MASCOT_IDS, BOT_AVATAR_FILE, mascotAvatar, type BotMascotId } from '../bot-avatar'
+import { BotAvatarColorSchema } from './bot-avatar-color'
+import { BotStoredOutfitSchema, wornBotOutfit, type BotAvatarOutfit } from './bot-avatar-outfit'
 import { BOT_TOOL_HEADER_NAME_PATTERN, BOT_TOOL_NAME_PATTERN, BotToolUrl } from '../bot-tools'
 import { BOT_AGENTS, BotNameSchema, type BotAgent } from '../bot-types'
 import { validateSkillPackageName } from '../skills/packages/skill-package-manifest'
@@ -54,10 +56,15 @@ const EventSuggestionSchema = z
 export const BotPackageV1Schema = z.object({
   schemaVersion: z.literal(BOT_PACKAGE_SCHEMA_VERSION),
   name: BotNameSchema,
-  /** A mascot by id, or the archive's avatar.png; absent, the recipient's default mascot. */
+  /** A mascot by id, with its tile color and outfit, or the archive's avatar.png; absent, the recipient's
+   *  default mascot. An older importer drops the color and outfit and lists them as not included. */
   avatar: z
     .union([
-      z.object({ mascot: z.enum(BOT_MASCOT_IDS) }),
+      z.object({
+        mascot: z.enum(BOT_MASCOT_IDS),
+        color: BotAvatarColorSchema.optional().catch(undefined),
+        outfit: BotStoredOutfitSchema.optional().catch(undefined)
+      }),
       z.object({ image: z.literal(BOT_PACKAGE_AVATAR_PATH) })
     ])
     .optional(),
@@ -194,7 +201,13 @@ export function skillsFolderFor(agent: BotAgent): string {
 }
 
 export type BotPackagePlan = {
-  create: { name: string; agent: BotAgent; avatar?: string }
+  create: {
+    name: string
+    agent: BotAgent
+    avatar?: string
+    avatarColor?: string
+    avatarOutfit?: BotAvatarOutfit
+  }
   /** The archive's avatar.png, set as the upload; null keeps `create.avatar` or the default mascot. */
   avatarImage: string | null
   /** Every archive file but bot.json and the avatar, and the home path it is written to. */
@@ -205,6 +218,31 @@ export type BotPackagePlan = {
   eventSuggestions: BotPackageV1['eventSuggestions']
   connectors: BotPackageConnector[]
   setupNote: string | null
+}
+
+/** What a shared mascot carries of the sharer's look: its tile color and outfit. */
+export function packagedMascotLook(bot: {
+  avatarColor?: string | null
+  avatarOutfit?: string | null
+}): { color?: string; outfit?: string } {
+  return {
+    ...(bot.avatarColor ? { color: bot.avatarColor } : {}),
+    ...(bot.avatarOutfit ? { outfit: bot.avatarOutfit } : {})
+  }
+}
+
+/** A shared mascot as a new bot's picture; an outfit this version doesn't know is left off. */
+function sharedMascotLook(avatar: {
+  mascot: BotMascotId
+  color?: string
+  outfit?: string
+}): Pick<BotPackagePlan['create'], 'avatar' | 'avatarColor' | 'avatarOutfit'> {
+  const outfit = wornBotOutfit(avatar.outfit)
+  return {
+    avatar: mascotAvatar(avatar.mascot),
+    ...(avatar.color ? { avatarColor: avatar.color } : {}),
+    ...(outfit ? { avatarOutfit: outfit } : {})
+  }
 }
 
 /** The bot a package creates, and where each of its files goes. `inventory` is the archive's files;
@@ -234,7 +272,7 @@ export function planBotFromPackage(
     create: {
       name: bot.name,
       agent: choice.agent,
-      ...(bot.avatar && 'mascot' in bot.avatar ? { avatar: mascotAvatar(bot.avatar.mascot) } : {})
+      ...(bot.avatar && 'mascot' in bot.avatar ? sharedMascotLook(bot.avatar) : {})
     },
     avatarImage: bot.avatar && 'image' in bot.avatar ? bot.avatar.image : null,
     files,
