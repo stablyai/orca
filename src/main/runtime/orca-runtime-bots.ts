@@ -1,4 +1,5 @@
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
+import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
 import type { Worktree } from '../../shared/worktree/types'
 import type { Bot } from '../../shared/bot-types'
@@ -302,7 +303,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     return {
       isMuted: (scope: Muted[1], news: Muted[2]) =>
         isStructuredAttentionMuted(muteDeps, scope, news),
-      readBotGroupRoom: (sessionId: string) => this.botSessions.groupRoomOf(sessionId)
+      readBotGroupRoom: (sessionId: string) => this.botSessions.groupRoomOf(sessionId),
+      repliesInSlack: (id: string) => !!this.store && sessionRepliesInSlack(this.store, id)
     }
   }
 
