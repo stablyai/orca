@@ -78,9 +78,9 @@ function navigate(guest: FakeGuest, requestId: number, url: string): void {
     timestamp: 0
   }
   reportBrowserSessionWebRequest(guest.session, 'onBeforeRequest', details)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: carries every field the decision path reads.
   answerBrowserSessionBeforeRequest(
     guest.session,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: carries every field the decision path reads.
     details as Electron.OnBeforeRequestListenerDetails,
     () => {}
   )
