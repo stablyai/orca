@@ -1,35 +1,49 @@
 // A member's reply that names other members as @Name wakes them under the same person's post.
 import type { Nodes } from 'mdast'
-import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
-import type { BotGroupMessage, BotGroupTurn } from '../../shared/bots/bot-group'
+import {
+  fitBotGroupContext,
+  type BotGroupMessage,
+  type BotGroupTurn
+} from '../../shared/bots/bot-group'
 import { botGroupReplyMentions } from '../../shared/bots/bot-group-mentions'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { BOT_GROUP_HANDOFF_LIMIT, deliverTurn } from './bot-group-delivery'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import type { BotGroupRuntime } from './bot-group-runtime'
 
-const markdown = unified().use(remarkParse).use(remarkGfm)
+// Code and block quotes are core CommonMark; GFM's extensions add none and triple the parse.
+const markdown = unified().use(remarkParse)
 
-/** `reply` with its Markdown code (fenced, indented, inline) blanked in place, lines and offsets kept. */
+/** `reply` with its Markdown code (fenced, indented, inline) and block quotes blanked in place,
+ *  lines and offsets kept; text with no `@` has nothing to blank. */
 export function blankMarkdownCode(reply: string): string {
+  if (!reply.includes('@')) {
+    return reply
+  }
   const ranges: [number, number][] = []
   const pending: Nodes[] = [markdown.parse(reply)]
   for (let node = pending.pop(); node; node = pending.pop()) {
     const { start, end } = node.position ?? {}
-    if ((node.type === 'code' || node.type === 'inlineCode') && start && end) {
-      ranges.push([start.offset ?? 0, end.offset ?? 0])
+    const masked = node.type === 'code' || node.type === 'inlineCode' || node.type === 'blockquote'
+    if (masked && start?.offset !== undefined && end?.offset !== undefined) {
+      ranges.push([start.offset, end.offset])
     } else if ('children' in node) {
-      pending.push(...node.children)
+      for (const child of node.children) {
+        pending.push(child)
+      }
     }
   }
-  let prose = reply
-  for (const [start, end] of ranges) {
-    const code = prose.slice(start, end).replace(/[^\n]/gu, ' ')
-    prose = prose.slice(0, start) + code + prose.slice(end)
+  // Masked nodes never nest (their children are not walked), so one pass in source order builds it.
+  const parts: string[] = []
+  let cursor = 0
+  for (const [start, end] of ranges.toSorted((left, right) => left[0] - right[0])) {
+    parts.push(reply.slice(cursor, start), reply.slice(start, end).replace(/[^\n]/gu, ' '))
+    cursor = end
   }
-  return prose
+  parts.push(reply.slice(cursor))
+  return parts.join('')
 }
 
 /** A finished member turn's reply: whole, as mentions read it, and as saved for room history. */
@@ -69,20 +83,28 @@ export async function handOffGroupMentions(
           (member.stoppedThroughSequence ?? 0) < rootSequence
       )
     const bots = groups.runtime.bots.list()
-    const targets = active(turn.botId, turn.sessionId)
+    const named = active(turn.botId, turn.sessionId)
       ? botGroupReplyMentions(blankMarkdownCode(reply.full), room, bots, turn.botId).filter(
-          (botId) => active(botId) && bots.some((bot) => bot.id === botId && !bot.paused)
+          ({ id }) => active(id) && bots.some((bot) => bot.id === id && !bot.paused)
         )
       : []
+    const targets = named.map(({ id }) => id)
     if (targets.length === 0) {
+      // Saved empty too: a replay after a named member resumes or joins still wakes no one.
+      markHandedOff(groups, message.id, turn.operationId, [])
       return []
     }
     const used = root.handoffs ?? 0
     const waking = targets.slice(0, Math.max(0, BOT_GROUP_HANDOFF_LIMIT - used))
     const { turns, contexts } = await reserveGroupTurns(groups, room, threadId, bots, waking)
-    // A member whose context was reserved after a later post still sees the reply that named it.
-    for (const [operationId, context] of contexts) {
-      contexts.set(operationId, withSpeakerReply(context, turn, reply.saved))
+    // Each woken member sees the part of the reply that named it, however long the reply or late
+    // its history was taken.
+    for (const woken of turns) {
+      const start = named.find(({ id }) => id === woken.botId)?.start ?? 0
+      const context = contexts.get(woken.operationId)
+      if (context !== undefined) {
+        contexts.set(woken.operationId, withNamingReply(context, turn, reply, start))
+      }
     }
     const place = { groupId, ...(threadId ? { threadId } : {}), rootRequestId, rootSequence }
     const speaker = { kind: 'bot' as const, id: turn.botId, name: turn.botName }
@@ -91,17 +113,7 @@ export async function handOffGroupMentions(
     // The marker, the count, each woken line with its owed delivery and the paused line commit
     // together; each record is read as it stands now, after the reservation's reads.
     groups.store.transaction(() => {
-      const source = groups.store.message(message.id)
-      if (source) {
-        groups.store.update({
-          ...source,
-          turns: source.turns.map((candidate) =>
-            candidate.operationId === turn.operationId
-              ? { ...candidate, handedOff: targets }
-              : candidate
-          )
-        })
-      }
+      markHandedOff(groups, message.id, turn.operationId, targets)
       const post = groups.store.message(rootRequestId)
       if (post) {
         groups.store.update({ ...post, handoffs: used + turns.length })
@@ -146,18 +158,54 @@ export async function handOffGroupMentions(
   }
 }
 
-/** `context` (the quoted history lines) with the speaker's reply as its last line, unless it has it. */
-function withSpeakerReply(context: string, speaker: BotGroupTurn, reply: string): string {
+function markHandedOff(
+  groups: BotGroupRuntime,
+  messageId: string,
+  operationId: string,
+  handedOff: string[]
+): void {
+  const source = groups.store.message(messageId)
+  if (source) {
+    groups.store.update({
+      ...source,
+      turns: source.turns.map((turn) =>
+        turn.operationId === operationId ? { ...turn, handedOff } : turn
+      )
+    })
+  }
+}
+
+/** Around a mention past the saved tail of a long reply: what a woken member is asked to do. */
+const EXCERPT_BEFORE = 1_000
+const EXCERPT_AFTER = 3_000
+
+/** `context` (the quoted history lines) holding the speaker's reply where it names this member: the
+ *  saved reply when the mention is in it, else an excerpt around the mention. That line is kept
+ *  and older lines go first to fit the room-history budget. */
+function withNamingReply(
+  context: string,
+  speaker: BotGroupTurn,
+  reply: GroupMemberReply,
+  mentionAt: number
+): string {
   const lines: unknown[] = JSON.parse(context)
   const author = { kind: 'bot', id: speaker.botId, name: speaker.botName }
-  const has = lines.some(
+  const inSaved = mentionAt >= reply.full.length - reply.saved.length
+  const from = Math.max(0, mentionAt - EXCERPT_BEFORE)
+  const to = mentionAt + EXCERPT_AFTER
+  const text = inSaved
+    ? reply.saved
+    : `${from > 0 ? '…' : ''}${reply.full.slice(from, to)}${to < reply.full.length ? '…' : ''}`
+  const at = lines.findIndex(
     (line) =>
       typeof line === 'object' &&
       line !== null &&
       'text' in line &&
-      line.text === reply &&
+      line.text === text &&
       'author' in line &&
       JSON.stringify(line.author) === JSON.stringify(author)
   )
-  return has ? context : JSON.stringify([...lines, { author, text: reply }])
+  return at === -1
+    ? fitBotGroupContext([...lines, { author, text }], 1)
+    : fitBotGroupContext(lines, lines.length - at)
 }

@@ -22,6 +22,8 @@ const LEADING_GAP = /^[\s,:!?]*$/u
 // A member's reply addresses `@Name` wherever the name is not run into more word characters.
 const REPLY_MENTION_END = /^(?![\p{L}\p{N}_])/u
 const QUOTED_ROOM_HISTORY = /<quoted_room_history>[\s\S]*?(?:<\/quoted_room_history>|(?![\s\S]))/gu
+// A parsed reply's code and block quotes come blanked already; its quoted strings stay data.
+const QUOTED_STRINGS = /\u201c[^\u201d]*\u201d|"[^"\n]*"/gu
 // Code and quoted prose is data, never an address; blanked to keep every offset in place.
 const UNADDRESSED_PROSE =
   /```[\s\S]*?(?:```|(?![\s\S]))|~~~[\s\S]*?(?:~~~|(?![\s\S]))|`[^`\n]*`|^[ \t]*>.*$|\u201c[^\u201d]*\u201d|"[^"\n]*"/gmu
@@ -88,32 +90,38 @@ function roomMentions(
   text: string,
   group: Pick<Room, 'members'>,
   bots: readonly Named[],
-  nameEnd?: RegExp
+  nameEnd?: RegExp,
+  unaddressed = UNADDRESSED_PROSE
 ): BotGroupMention[] {
   return botGroupMentions(
     text
       .replace(FILE_REFERENCE, (file) => ' '.repeat(file.length))
-      .replace(UNADDRESSED_PROSE, (prose) => ' '.repeat(prose.length)),
+      .replace(unaddressed, (prose) => ' '.repeat(prose.length)),
     bots.filter((bot) => group.members.some((member) => member.botId === bot.id)),
     group.members.map((member) => member.botId),
     nameEnd
   )
 }
 
-/** The other members a member's reply hands off to: each `@Name` it spells outside code and quoted
- *  history, in order. `@everyone` and an ambiguous name reach no one; the speaker never itself. */
+/** The other members a member's reply hands off to, each with where it is first named: every
+ *  `@Name` outside quoted strings and quoted history, in order. `prose` already has its Markdown
+ *  code and block quotes blanked in place. `@everyone` and an ambiguous name reach no one; the
+ *  speaker never itself. */
 export function botGroupReplyMentions(
-  reply: string,
+  prose: string,
   group: Pick<Room, 'members'>,
   bots: readonly Named[],
   speakerId: string
-): string[] {
-  const prose = reply.replace(QUOTED_ROOM_HISTORY, (quoted) => ' '.repeat(quoted.length))
-  return unique(
-    roomMentions(prose, group, bots, REPLY_MENTION_END).filter(
-      (mention) => mention.match === 'member'
-    )
-  ).filter((id) => id !== speakerId)
+): { id: string; start: number }[] {
+  const unquoted = prose.replace(QUOTED_ROOM_HISTORY, (quoted) => ' '.repeat(quoted.length))
+  const named = new Map<string, number>()
+  for (const mention of roomMentions(unquoted, group, bots, REPLY_MENTION_END, QUOTED_STRINGS)) {
+    const [id] = mention.ids
+    if (mention.match === 'member' && id !== undefined && id !== speakerId && !named.has(id)) {
+      named.set(id, mention.start)
+    }
+  }
+  return [...named].map(([id, start]) => ({ id, start }))
 }
 
 /** Who the room's reply mode reaches when no one is mentioned; a default that left reaches no one. */

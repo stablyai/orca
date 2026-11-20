@@ -6,6 +6,13 @@ import { noteBotGroupMemberReply } from './bot-group-latest'
 
 const mocks = groupNativeMocks()
 
+/** The prompt delivered for a group operation, once it was sent. */
+async function sentPrompt(operationId: string): Promise<string> {
+  const sent = () => mocks.send.mock.calls.find((call) => call[0].turn.operationId === operationId)
+  await vi.waitFor(() => expect(sent()).toBeDefined())
+  return sent()![0].turn.body.blocks[0].text
+}
+
 /** A room of Scout and Forge whose members' chats answer with the replies `reply` records. */
 async function room() {
   const { groups, runtime } = fixture()
@@ -79,15 +86,7 @@ describe('group @Name hand-offs', () => {
     const asked = await post('@Scout plan')
     await post('@Forge something else')
     await reply(asked, 'Plan X is ready. @Forge review it.')
-    const operationId = newest().turns[0]!.operationId
-    await vi.waitFor(() =>
-      expect(mocks.send).toHaveBeenCalledWith(
-        expect.objectContaining({ turn: expect.objectContaining({ operationId }) })
-      )
-    )
-    const sent = mocks.send.mock.calls.find((call) => call[0].turn.operationId === operationId)
-    const prompt: string = sent![0].turn.body.blocks[0].text
-    expect(prompt).toContain('Plan X is ready.')
+    expect(await sentPrompt(newest().turns[0]!.operationId)).toContain('Plan X is ready.')
   })
 
   it('ignores names in code and pauses once after six hand-offs until a person posts', async () => {
@@ -142,11 +141,36 @@ describe('group @Name hand-offs', () => {
     expect(newest()).toMatchObject({ mentioned: true, rootRequestId: first.id })
   })
 
-  it('reads mentions in the whole reply, past the room history cut', async () => {
+  it('reads the whole reply and hands the woken member the part that names it', async () => {
     const { post, reply, newest } = await room()
     const asked = await post('@Scout write it up')
-    await reply(asked, `@Forge review this.\n\n${'detail '.repeat(4_000)}`)
+    await reply(asked, `@Forge verify checksum X.\n\n${'detail '.repeat(4_000)}`)
     expect(newest().turns.map((turn) => turn.botId)).toEqual(['bot-1'])
+    expect(await sentPrompt(newest().turns[0]!.operationId)).toContain('verify checksum X')
+  })
+
+  it('fits the naming excerpt inside the room-history budget, dropping older lines', async () => {
+    const { post, reply, newest } = await room()
+    const asked = await post('@Scout plan')
+    await post('@Forge note this')
+    await post(`@Scout ${'context '.repeat(2_800)}`)
+    await reply(asked, `@Forge verify checksum X.\n\n${'detail '.repeat(4_000)}`)
+    const prompt = await sentPrompt(newest().turns[0]!.operationId)
+    const history = /<quoted_room_history>\n([\s\S]*)\n<\/quoted_room_history>/u.exec(prompt)![1]!
+    expect(history.length).toBeLessThanOrEqual(24_000)
+    expect(history).toContain('verify checksum X')
+    expect(history).not.toContain('context context')
+  })
+
+  it('wakes no one when a reply that reached nobody is replayed after its member resumes', async () => {
+    const { groups, post, ended, reply, lines } = await room()
+    const forge = groups.runtime.bots.list().find((bot) => bot.id === 'bot-1')!
+    forge.paused = true
+    const asked = await post('@Scout plan')
+    await reply(asked, '@Forge review')
+    forge.paused = false
+    await ended(asked)
+    expect(lines()).toHaveLength(1)
   })
 
   it('reserves nothing when the hand-off cannot all be saved', async () => {

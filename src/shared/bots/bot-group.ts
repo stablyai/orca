@@ -299,8 +299,20 @@ export function botGroupContext(
         : []
     })
   ])
-  while (lines.length > 0 && JSON.stringify(lines).length > 24_000) {
-    lines.shift()
+  return fitBotGroupContext(lines)
+}
+
+const BOT_GROUP_CONTEXT_MAX = 24_000
+
+/** Room history lines serialized under the context budget: the oldest go first, never the last
+ *  `kept` (lines a turn must see, such as the reply that handed it the turn). */
+export function fitBotGroupContext(lines: readonly unknown[], kept = 0): string {
+  let start = 0
+  while (
+    start < lines.length - kept &&
+    JSON.stringify(lines.slice(start)).length > BOT_GROUP_CONTEXT_MAX
+  ) {
+    start += 1
   }
-  return JSON.stringify(lines)
+  return JSON.stringify(lines.slice(start))
 }

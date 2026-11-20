@@ -1,41 +1,45 @@
 import { describe, expect, it } from 'vitest'
 import { botGroupRoomOrder } from './bot-group-room-order'
 
-const post = (id: string) => ({ id, author: { kind: 'owner' as const } })
-const bot = { kind: 'bot' as const, id: 'scout', name: 'Scout' }
-const handoff = (id: string, root: string) => ({
+let sequence = 0
+const post = (id: string) => ({ id, sequence: ++sequence })
+const line = (id: string, root: string, rootSequence: number) => ({
   id,
-  author: bot,
+  sequence: ++sequence,
   rootRequestId: root,
-  mentioned: true as const
+  rootSequence
 })
 
 describe('room order', () => {
-  it("puts a late hand-off and paused line under the post they continue, before the next person's post", () => {
+  it('keeps every line that continues a post under that post, in stored order', () => {
+    sequence = 0
     const lines = [
       post('a'),
       post('b'),
-      { id: 'mail', author: bot, rootRequestId: 'b' },
-      handoff('h1', 'a'),
-      { id: 'paused', author: bot, rootRequestId: 'a', pausedAfter: 6 },
-      handoff('h2', 'b')
+      line('b-mail', 'b', 2),
+      line('a-handoff', 'a', 1),
+      line('a-peer-mail', 'a', 1),
+      line('a-paused', 'a', 1)
     ]
-    expect(botGroupRoomOrder(lines).map((line) => line.id)).toEqual([
+    expect(botGroupRoomOrder(lines).map(({ id }) => id)).toEqual([
       'a',
-      'h1',
-      'paused',
+      'a-handoff',
+      'a-peer-mail',
+      'a-paused',
       'b',
-      'mail',
-      'h2'
+      'b-mail'
     ])
   })
 
-  it('leads the page with a hand-off whose post is on an earlier page', () => {
+  it('leads the page with each earlier-page post’s lines together, oldest post first', () => {
+    sequence = 10
     const lines = [
-      { id: 'mail', author: bot, rootRequestId: 'old' },
+      line('y-1', 'y', 5),
+      line('x-1', 'x', 3),
       post('c'),
-      handoff('h', 'old')
+      line('y-2', 'y', 5),
+      line('x-2', 'x', 3)
     ]
-    expect(botGroupRoomOrder(lines).map((line) => line.id)).toEqual(['mail', 'h', 'c'])
+    expect(botGroupRoomOrder(lines).map(({ id }) => id)).toEqual(['x-1', 'x-2', 'y-1', 'y-2', 'c'])
   })
 })
