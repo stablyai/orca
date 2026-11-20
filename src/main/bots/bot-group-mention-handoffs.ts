@@ -1,7 +1,6 @@
 // A member's reply that names other members as @Name wakes them under the same person's post.
 import type { Nodes } from 'mdast'
-import { gfmTableFromMarkdown } from 'mdast-util-gfm-table'
-import { gfmTable } from 'micromark-extension-gfm-table'
+import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import {
@@ -16,15 +15,8 @@ import { BOT_GROUP_HANDOFF_LIMIT, deliverTurn } from './bot-group-delivery'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import type { BotGroupRuntime } from './bot-group-runtime'
 
-// Core CommonMark plus GFM tables, whose cells end inline code at a pipe. The other GFM
-// extensions add no code or quotes and triple the parse.
-const markdown = unified()
-  .use(remarkParse)
-  .use(function gfmTables() {
-    const data = this.data()
-    ;(data.micromarkExtensions ??= []).push(gfmTable())
-    ;(data.fromMarkdownExtensions ??= []).push(gfmTableFromMarkdown())
-  })
+// GFM, as replies render: table cells end inline code at a pipe.
+const markdown = unified().use(remarkParse).use(remarkGfm)
 
 /** `reply` with its Markdown code (fenced, indented, inline) and block quotes blanked in place,
  *  lines and offsets kept; text with no `@` has nothing to blank. */

@@ -542,15 +542,9 @@ importers:
       marked:
         specifier: ^17.0.1
         version: 17.0.6
-      mdast-util-gfm-table:
-        specifier: ^2.0.0
-        version: 2.0.0(supports-color@7.2.0)
       mermaid:
         specifier: ^11.17.2
         version: 11.17.2(patch_hash=eca98bdc7624d4074bc520d90046001ab0fd9e2446da76893b2a91b651430c8c)
-      micromark-extension-gfm-table:
-        specifier: ^2.1.2
-        version: 2.1.2
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1(patch_hash=53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636)
@@ -13651,7 +13645,7 @@ snapshots:
       devlop: 1.1.0
       markdown-table: 3.0.4
       mdast-util-from-markdown: 2.0.3(supports-color@7.2.0)
-      mdast-util-to-markdown: 2.2.3
+      mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
 
