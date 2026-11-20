@@ -1,7 +1,6 @@
-// A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, and
-// the text as Markdown. An agent's Needs you question is a comment too: its body, then its question
-// footer (BotItemQuestionLines). A reply to a question quotes it, and leads back to it.
-import { useContext } from 'react'
+// A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, then
+// the text as Markdown, its images and its file links. An agent's Needs you question is a comment too:
+// its body and attachments, then its question footer (BotItemQuestionLines). A reply to a question quotes it, and leads back to it.
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
@@ -12,9 +11,9 @@ import {
   type BotItem,
   type BotItemEvent
 } from '../../../../../shared/bots/bot-items'
-import { NativeChatMarkdownImageOwnerContext } from '../../native-chat/media/images/native-chat-markdown-image-owner'
-import { NativeChatTextAttachments } from '../../native-chat/media/text/NativeChatTextAttachments'
+import { botItemCommentFiles } from '../../../../../shared/bots/bot-item-comment-files'
 import { BotItemCommentImages } from './BotItemCommentImages'
+import { BotItemCommentFiles } from './BotItemCommentFiles'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { botInitial } from '../../../../../shared/bots/bot-avatar-fallback'
 import { BotAvatar, BotAvatarTile } from '../BotAvatar'
@@ -79,13 +78,14 @@ export function BotItemCommentCard({
   quickReplies?: BotItemQuickReplyActions
 }): React.JSX.Element {
   const t = useTranslate()
-  const runtimeContext = useContext(NativeChatMarkdownImageOwnerContext)?.runtimeContext ?? null
   const { event, replyTo } = entry
   const waiting = entry.waiting === true
   const images = botItemCommentImages(event.data)
   const shape = botItemQuestionShape(event.data)
-  // Its images show above the words, so the [Image #N] its send wrote go, as in chat's sent messages.
-  const text = stripSentImagePromptMarkers(shape.body, images.length)
+  // Its images show after the words, so the [Image #N] its send wrote go, as in chat's sent messages.
+  // Its files show as links after them, so their `@path`s go from the words.
+  const { words } = botItemCommentFiles(stripSentImagePromptMarkers(shape.body, images.length))
+  const { files } = botItemCommentFiles(typeof event.data.text === 'string' ? event.data.text : '')
   const name = botItemActorName(event, item, t)
   const format = uiDateTimeFormat(TIME)
   const jump =
@@ -135,24 +135,17 @@ export function BotItemCommentCard({
           </button>
         ) : null}
         <div className="pl-7">
+          {words.trim() ? (
+            // 8 lines of 19 px; a question's footer follows, so its Show more reads as the body's.
+            <BotItemClampedText
+              text={words}
+              clampClassName="max-h-[152px]"
+              fade
+              quietToggle={waiting || shape.decisions.length > 0}
+            />
+          ) : null}
           <BotItemCommentImages images={images} />
-          {/* Files keep their `@path` in the text, with chat's opener for text-like ones. */}
-          <NativeChatTextAttachments
-            content={text}
-            structured
-            runtimeContext={runtimeContext}
-            renderText={(shown) =>
-              !shown.trim() ? null : (
-                // 8 lines of 19 px; a question's footer follows, so its Show more reads as the body's.
-                <BotItemClampedText
-                  text={shown}
-                  clampClassName="max-h-[152px]"
-                  fade
-                  quietToggle={waiting || shape.decisions.length > 0}
-                />
-              )
-            }
-          />
+          <BotItemCommentFiles paths={files} />
           {shape.decisions.length > 0 ? (
             <BotItemQuestionLines
               shape={shape}

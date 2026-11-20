@@ -4,6 +4,10 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import type { AppState } from '../../types'
 import {
+  runtimeStatusSubscriptionsFor,
+  type RuntimeStatusStore
+} from '../../slices/runtime-status/views/runtime-status-subscriptions'
+import {
   beginHostPRAutoRefreshCadenceRead,
   endHostPRAutoRefreshCadenceRead,
   forgetHostPRAutoRefreshCadence,
@@ -15,7 +19,7 @@ import {
 const READ_TIMEOUT_MS = 15_000
 
 type HostStore = {
-  getState: () => Pick<AppState, 'runtimeEnvironments' | 'runtimeStatusByEnvironmentId'>
+  getState: () => Pick<AppState, 'runtimeEnvironments'> & ReturnType<RuntimeStatusStore['getState']>
   subscribe: (listener: (state: AppState, previous: AppState) => void) => () => void
 }
 
@@ -124,7 +128,7 @@ export function installRemoteHostPRAutoRefreshCadenceSync(
 ): () => void {
   const watched = new Map<string, () => void>()
   const readIfLive = (environmentId: string): void => {
-    const entry = store.getState().runtimeStatusByEnvironmentId.get(environmentId)
+    const entry = runtimeStatusSubscriptionsFor(store).readStatuses().get(environmentId)
     if (runtimeHostContactForEntry(entry).verdict === 'live') {
       void readHostPRAutoRefreshCadence(environmentId, reader)
     }

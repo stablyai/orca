@@ -55,11 +55,8 @@ export function useNativeChatInstallSlot(
 } {
   const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
-  const observation = useManagedRuntimeInstall(
-    props.target,
-    props.agent,
-    props.isVisible && !hostProgram
-  )
+  // Chats on the host program follow it too: Orca's copy of agy may be what they need installed.
+  const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
   const slot = nativeChatInstallSlotState(observation, layout, hostProgram)
   // Once Orca's own runtime is ready, chats still need its sign-in; the host's agy signs itself in.
   const signsIn =
@@ -85,20 +82,56 @@ export function useNativeChatInstallSlot(
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
     unavailableHint,
     antigravityAuth: signsIn
-      ? { host: props.target, backend: 'managed' }
+      ? {
+          host: props.target,
+          backend: 'managed',
+          managedVersion:
+            observation.snapshot.kind === 'known'
+              ? observation.snapshot.state.installedVersion
+              : null
+        }
       : props.agent === 'antigravity' && props.isVisible && hostProgram
-        ? { host: props.target, backend: 'agy' }
+        ? {
+            host: props.target,
+            backend: 'agy',
+            ...orcasAgy(observation),
+            // Until the host says which agy is there, or while none is, the chip names none.
+            programPending:
+              slot.kind === 'install' ||
+              observation.kind === 'pending' ||
+              (observation.kind === 'active' && observation.snapshot.kind === 'unknown')
+          }
         : null
   }
 }
 
-/** A chat running the host's own program needs no managed install, whatever its state. */
+/** Orca's installed agy is the one a chat on the host program runs; the person's own wins. */
+function orcasAgy(observation: ManagedRuntimeInstallObservation) {
+  const state =
+    observation.kind === 'active' && observation.snapshot.kind === 'known'
+      ? observation.snapshot.state
+      : null
+  return state?.program === 'cli' && state.source === 'managed'
+    ? { orcasAgy: true, managedVersion: state.installedVersion }
+    : {}
+}
+
+/** A chat on the host's own program needs an install only when that program is Orca's missing
+ *  copy; an unanswered status never holds its sends. */
 export function nativeChatInstallSlotState(
   observation: ManagedRuntimeInstallObservation,
   layout: ManagedRuntimeInstallLayout,
   hostProgram: boolean
 ): NativeChatInstallSlotState {
-  if (hostProgram || observation.kind === 'inactive') {
+  if (hostProgram) {
+    return observation.kind === 'active' &&
+      observation.snapshot.kind === 'known' &&
+      observation.snapshot.state.program === 'cli' &&
+      observation.snapshot.state.source === null
+      ? { kind: 'install', observation, state: observation.snapshot.state, layout }
+      : NONE
+  }
+  if (observation.kind === 'inactive') {
     return NONE
   }
   if (observation.kind === 'pending') {
@@ -135,14 +168,15 @@ function installSlotSendBlockedReason(
 export function NativeChatInstallSlot(props: {
   install: { slot: NativeChatInstallSlotState; signIn: NativeChatSignInStripState | null }
   agentLabel: string
+  /** A new bot's setup card offers the install and the sign-in itself. */
+  inCard?: boolean
 }): React.JSX.Element | null {
   const { slot, signIn } = props.install
-  const strip =
-    slot.kind === 'install' && slot.layout === 'strip' ? (
-      <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
-    ) : signIn ? (
-      <NativeChatSignInStrip state={signIn} agentLabel={props.agentLabel} />
-    ) : null
+  const strip = props.inCard ? null : slot.kind === 'install' && slot.layout === 'strip' ? (
+    <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
+  ) : signIn ? (
+    <NativeChatSignInStrip state={signIn} agentLabel={props.agentLabel} />
+  ) : null
   if (!strip) {
     return null
   }

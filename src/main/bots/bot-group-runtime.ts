@@ -120,6 +120,11 @@ export class BotGroupRuntime {
   readonly queues = new Map<string, Promise<void>>()
   /** Operations whose native admission is in flight. */
   readonly deliveries = new Set<string>()
+  /** Mail turns being checked for a dead attempt, last found open, or whose chat answers for them now. */
+  readonly mailTurnChecks = new Map<
+    string,
+    { state: 'checking' | 'answered' | 'open'; at: number }
+  >()
 
   constructor(readonly runtime: OrcaRuntimeService) {
     this.store = new BotGroupStore(runtime.getOrchestrationDb().db)

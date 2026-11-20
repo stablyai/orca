@@ -109,7 +109,7 @@ export const shortWindowMetricDetails = defineFixture({
   },
   render: () => (
     <div className="flex h-90 items-end justify-end">
-      <ResourceUsageStatusSegment iconOnly={false} />
+      <ResourceUsageStatusSegment />
     </div>
   ),
   interact: async (frame) => {

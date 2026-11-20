@@ -12334,6 +12334,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS 鑰匙圈（cursor-agent）",
+            "keyring": "Linux 鑰匙圈（cursor-agent）",
             "cli": "Cursor CLI 認證檔案",
             "desktop": "Cursor IDE"
           },
@@ -18662,7 +18663,6 @@
         "stoppedUpdate_other": "Orca 更新時有 {{count}} 個聊天已停止。",
         "stoppedRestart_other": "Orca 關閉時有 {{count}} 個聊天已停止。",
         "promptsNotResent": "恢復不會重新傳送你的提示。",
-        "promptsNotSent": "你的提示沒有被重新傳送。",
         "resume": "恢復",
         "details": "詳情",
         "close": "關閉",
@@ -18888,7 +18888,8 @@
       "install": {
         "checking": "正在檢查 {{agent}} 是否已在此主機上準備就緒…",
         "cliInstall": "安裝",
-        "cliRecheck": "再次檢查"
+        "cliRecheck": "再次檢查",
+        "openAgentSettings": "開啟設定"
       },
       "reasoning": "推理",
       "failureWords": {
@@ -18922,6 +18923,7 @@
         "claudeAccountFolderMissing": "所選 Claude 帳戶的資料夾不存在。請重新登入該帳戶或選擇其他帳戶。",
         "claudeAccountSetupFailed": "無法設定所選 Claude 帳戶。請重試或選擇其他帳戶。",
         "agentCommandNotRunnable": "{{agent}} 在「設定 → 代理程式」中的命令必須是 Orca 能找到的程式路徑或名稱，且不能包含引數或變數。請修改或重設。",
+        "agentCommandFailed": "{{agent}} 在「設定 → 代理程式」中的命令未能啟動 {{agent}}：{{detail}}。請修改或重設。",
         "runtimeNotInstalled": "執行此聊天的電腦上未安裝 {{agent}}。請在新版 Orca 中從聊天裡安裝。",
         "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
         "launchPreparationFailed": "Orca 無法在執行此聊天的電腦上準備啟動 {{agent}}。",
@@ -20534,7 +20536,6 @@
       "cancelFailed": "無法取消安裝。請再試一次。",
       "install": "安裝 {{agent}}",
       "installManaged": "安裝 Orca 提供的副本",
-      "installed": "已安裝",
       "notInstalled": "尚未安裝。",
       "progress": "{{agent}} 下載",
       "readFailed": "無法檢查此主機上的 {{agent}}。正在重試。",
@@ -23311,7 +23312,6 @@
       "chip": "機器人",
       "chipLabel": "機器人，顯示全部",
       "searchEverything": "在全部內容中搜尋「{{text}}」",
-      "searchBotsFor": "在機器人中搜尋「{{text}}」",
       "noMatch": "沒有符合「{{text}}」的機器人",
       "noBotsYet": "還沒有機器人",
       "filtersPaused": "篩選僅適用於工作區，不適用於機器人",
@@ -23326,7 +23326,7 @@
       "browse": "瀏覽範本"
     },
     "new": {
-      "fromTemplate": "使用範本"
+      "fromTemplate": "範本"
     },
     "apps": {
       "paste": {

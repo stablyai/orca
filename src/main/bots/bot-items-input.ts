@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import {
   BOT_ITEM_LIMITS,
   type BotItemActor,
+  type BotItemCommentImage,
   type BotItemLinkKind,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
@@ -45,6 +46,8 @@ export type BotItemSetInput = {
   comment?: string
   /** With Needs you: the question line (`--ask`), its quick replies (`--option`) and its context. */
   ask?: BotItemAsk
+  /** On the comment `comment` or `ask` writes; admitted and claimed on the host first. */
+  images?: readonly BotItemCommentImage[]
 }
 
 /** What a write did. */

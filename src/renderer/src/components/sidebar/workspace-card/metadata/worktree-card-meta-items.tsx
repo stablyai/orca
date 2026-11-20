@@ -13,9 +13,9 @@ import { getDirectoryName } from '../controller/worktree-card-model'
 export function WorktreeCardMetaRepoBadge({ repo }: { repo: Repo }): React.JSX.Element {
   return (
     // Why: keep a 6rem name floor (+1.625rem chrome) so the branch shrinks first; grow only into width the branch leaves free.
-    <div className="flex min-w-0 max-w-max shrink-0 grow basis-[7.625rem] items-center gap-1.5 px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
+    <div className="flex min-w-0 max-w-max shrink-0 grow basis-[7.625rem] items-center gap-1.5 px-1.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
       <RepoBadgeMark color={repo.badgeColor} />
-      <span className="min-w-0 truncate text-[10px] font-semibold text-foreground leading-none lowercase">
+      <span className="min-w-0 truncate text-[10px] font-semibold text-foreground leading-3.5 lowercase">
         {repo.displayName}
       </span>
     </div>
@@ -25,7 +25,7 @@ export function WorktreeCardMetaRepoBadge({ repo }: { repo: Repo }): React.JSX.E
 export function WorktreeCardFolderPath({ path }: { path: string }): React.JSX.Element {
   return (
     <span
-      className="min-w-0 truncate font-mono text-[11px] leading-none text-muted-foreground"
+      className="-my-0.5 min-w-0 truncate font-mono text-[11px] leading-3.75 text-muted-foreground"
       title={path}
     >
       {getDirectoryName(path)}

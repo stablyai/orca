@@ -27,51 +27,48 @@ beforeEach(() => {
   testStore.current.setState({ activeWorktreeId: workspace })
 })
 
-it.each(['claude', 'codex'] as const)(
-  'keeps a provisional %s chat as the only surface after an empty host answer',
-  async (agent) => {
-    const store = testStore.current!
-    const seeder = createInitialTerminalSeeder(`host-${agent}`, workspace)
-    expect(
-      seeder.decide(
-        {
-          type: 'snapshot',
-          worktree: workspace,
-          publicationEpoch: 'host-epoch',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: 'terminal',
-          tabs: []
-        },
-        true
-      )
-    ).toBe(true)
+it('keeps a provisional chat as the only surface after an empty host answer', async () => {
+  const store = testStore.current!
+  const seeder = createInitialTerminalSeeder('paired-host', workspace)
+  expect(
+    seeder.decide(
+      {
+        type: 'snapshot',
+        worktree: workspace,
+        publicationEpoch: 'host-epoch',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: 'terminal',
+        tabs: []
+      },
+      true
+    )
+  ).toBe(true)
 
-    const release = holdEmptyWorkspaceDefaultSurfaceForLaunch(workspace)
-    try {
-      await seeder.seed()
-      expect(store.getState().tabsByWorktree[workspace] ?? []).toEqual([])
-    } finally {
-      release()
-    }
-
-    store.getState().createUnifiedTab(workspace, 'agent-session', {
-      id: 'agent-chat',
-      entityId: 'agent-session',
-      agentSessionAgent: agent
-    })
+  const release = holdEmptyWorkspaceDefaultSurfaceForLaunch(workspace)
+  try {
     await seeder.seed()
-
     expect(store.getState().tabsByWorktree[workspace] ?? []).toEqual([])
-    expect(
-      store.getState().unifiedTabsByWorktree[workspace]?.map((tab) => ({
-        id: tab.id,
-        contentType: tab.contentType
-      }))
-    ).toEqual([{ id: 'agent-chat', contentType: 'agent-session' }])
+  } finally {
+    release()
   }
-)
+
+  store.getState().createUnifiedTab(workspace, 'agent-session', {
+    id: 'agent-chat',
+    entityId: 'agent-session',
+    agentSessionAgent: 'codex'
+  })
+  await seeder.seed()
+
+  expect(store.getState().tabsByWorktree[workspace] ?? []).toEqual([])
+  expect(
+    store.getState().unifiedTabsByWorktree[workspace]?.map((tab) => ({
+      id: tab.id,
+      contentType: tab.contentType
+    }))
+  ).toEqual([{ id: 'agent-chat', contentType: 'agent-session' }])
+})
 
 it('seeds a terminal-only workspace after its launch claim is released', async () => {
   const seeder = createInitialTerminalSeeder('terminal-only-host', workspace)

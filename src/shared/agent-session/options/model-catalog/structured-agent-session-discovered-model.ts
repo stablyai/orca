@@ -7,7 +7,7 @@ import type { AgentSessionOptionChoice } from '../../agent-session-wire'
 import type { AgentSessionOptionsResult } from '../protocol/agent-session-options-result'
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
 import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
-import { labelFromModelId } from './model-id-label'
+import { unlistedModelLabel } from './model-id-label'
 
 export function structuredModelEfforts(
   model: AgentSessionOptionsResult['models'][number]
@@ -111,7 +111,7 @@ export function structuredAgentSessionOptionCatalog(
   if (result.current.model && !models.some((model) => model.id === result.current.model)) {
     models.push({
       id: result.current.model,
-      label: labelFromModelId(result.current.model),
+      label: unlistedModelLabel(agent, result.current.model),
       description: result.current.model,
       options: seed.unknownModelOptions ?? []
     })

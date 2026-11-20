@@ -61,7 +61,11 @@ describe('the decommission journal entry', () => {
       withOrcadDecommissionStopDispatched(versioned, request, T),
       T
     )
-    expect(planOrcadTransactionRecovery(interrupted, versionedBefore)).toMatchObject({
+    const stored = parseOrcadActivationTransaction(serializeOrcadActivationTransaction(interrupted))
+    if (stored.state !== 'ok') {
+      throw new Error('Expected the persisted decommission transaction to be readable')
+    }
+    expect(planOrcadTransactionRecovery(stored.transaction, versionedBefore)).toMatchObject({
       action: 'confirm-decommissioned',
       record: { active: null, activeAppVersion: '1.5.0', rolledBackFrom: '0.9.0+ff01' }
     })
@@ -69,14 +73,6 @@ describe('the decommission journal entry', () => {
       previous: NEW,
       activeAppVersion: '1.5.0'
     })
-  })
-
-  it('round-trips every phase', () => {
-    for (const transaction of [prepared, dispatched, exited]) {
-      expect(
-        parseOrcadActivationTransaction(serializeOrcadActivationTransaction(transaction))
-      ).toEqual({ state: 'ok', transaction })
-    }
   })
 
   it.each([

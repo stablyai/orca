@@ -1628,7 +1628,8 @@
       },
       "composer": {
         "planMode": "Plan",
-        "exitPlanMode": "Exit plan mode"
+        "exitPlanMode": "Exit plan mode",
+        "pastedTextLabel": "Pasted text"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -2941,6 +2942,7 @@
       "claudeAccountFolderMissing": "The selected Claude account's folder is missing. Sign in to it again or choose another account.",
       "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
       "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must be a program path or name Orca can find, with no arguments or variables. Change it or reset it.",
+      "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
       "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
       "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
       "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
@@ -3568,7 +3570,9 @@
       "saveFailed": "Couldn't save image",
       "shareFailed": "Couldn't share image",
       "photosAccessDenied": "Allow Orca to add photos in Settings",
-      "imageTooLarge": "This image is too large"
+      "imageTooLarge": "This image is too large",
+      "previousImage": "Previous image",
+      "nextImage": "Next image"
     },
     "nativeChatVisual": {
       "defaultTitle": "Visualization",
@@ -3781,6 +3785,11 @@
         "createdTookOverSome": "Created · took over {{taken}} of {{count}} workspaces",
         "createdTookOverOne": "Created · took over 1 workspace",
         "createdTookOverMany": "Created · took over {{count}} workspaces",
+        "askedOne": "Asked to take over 1 workspace",
+        "askedMany": "Asked to take over {{count}} workspaces",
+        "tookOverSome": "Took over {{taken}} of {{count}} workspaces",
+        "tookOverOne": "Took over 1 workspace",
+        "tookOverMany": "Took over {{count}} workspaces",
         "deleted": "Created, then deleted",
         "nameTaken": "You already have a bot named {{name}}.",
         "rename": "Rename",
@@ -5388,7 +5397,9 @@
       "showMoreWorkers_other": "Show {{count}} more workers",
       "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
-      "readFailedTitle": "Couldn’t load chats"
+      "readFailedTitle": "Couldn’t load chats",
+      "waitingCount": "{{count}} waiting",
+      "runningCount": "{{count}} running"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
@@ -5503,7 +5514,9 @@
         "add": "Add a comment…",
         "submit": "Comment",
         "reply": "Reply in your own words",
-        "replyTo": "Reply to {{name}}…"
+        "replyTo": "Reply to {{name}}…",
+        "showLess": "Show less",
+        "fileOnComputer": "Open {{name}} on your computer."
       },
       "link": {
         "notRead": "Not read yet",

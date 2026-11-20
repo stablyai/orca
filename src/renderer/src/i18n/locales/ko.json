@@ -11920,7 +11920,8 @@
           "source": {
             "cli": "Cursor CLI 인증 파일",
             "desktop": "Cursor IDE",
-            "keychain": "macOS 키체인(cursor-agent)"
+            "keychain": "macOS 키체인(cursor-agent)",
+            "keyring": "Linux 키링(cursor-agent)"
           },
           "staleUsage": "마지막으로 확인된 사용량 — 최신 새로고침이 실패했습니다: {{reason}}",
           "subtitle": "이 컴퓨터에 이미 있는 로그인에서 Cursor 플랜 사용량을 보여줍니다. Orca는 읽기만 하며 Cursor 로그인을 변경하지 않습니다.",
@@ -18215,7 +18216,6 @@
         "stoppedUpdate_other": "Orca 업데이트로 채팅 {{count}}개가 중지되었습니다.",
         "stoppedRestart_other": "Orca 종료로 채팅 {{count}}개가 중지되었습니다.",
         "promptsNotResent": "재개해도 프롬프트는 다시 전송되지 않습니다.",
-        "promptsNotSent": "프롬프트는 다시 전송되지 않았습니다.",
         "resume": "재개",
         "details": "세부 정보",
         "close": "닫기",
@@ -18430,7 +18430,8 @@
       "install": {
         "checking": "이 호스트에서 {{agent}}이(가) 준비되었는지 확인하는 중…",
         "cliInstall": "설치",
-        "cliRecheck": "다시 확인"
+        "cliRecheck": "다시 확인",
+        "openAgentSettings": "설정 열기"
       },
       "reasoning": "추론",
       "contextMenu": {
@@ -18471,6 +18472,7 @@
         "claudeAccountFolderMissing": "선택한 Claude 계정의 폴더가 없습니다. 다시 로그인하거나 다른 계정을 선택하세요.",
         "claudeAccountSetupFailed": "선택한 Claude 계정을 설정할 수 없습니다. 다시 시도하거나 다른 계정을 선택하세요.",
         "agentCommandNotRunnable": "설정 → 에이전트에서 {{agent}}의 명령은 Orca가 찾을 수 있는 프로그램으로 시작해야 합니다. 변수, 파이프 및 기타 셸 구문은 지원되지 않습니다. 변수는 환경 설정을 사용하세요. 명령을 변경하거나 초기화하세요.",
+        "agentCommandFailed": "설정 → 에이전트에서 {{agent}}의 명령이 {{agent}}를 시작하지 못했습니다: {{detail}}. 명령을 변경하거나 초기화하세요.",
         "runtimeNotInstalled": "{{agent}}이(가) 이 채팅을 실행하는 컴퓨터에 설치되어 있지 않습니다. 최신 버전의 Orca에서 채팅을 통해 설치하세요.",
         "fullAccessAsRoot": "{{agent}}은(는) root로 실행되는 동안 전체 액세스를 사용하지 않습니다. 이 채팅을 실행하는 컴퓨터의 설정 → 에이전트에서 {{agent}}에 다른 권한을 선택한 다음 새 채팅을 시작하세요.",
         "launchPreparationFailed": "Orca가 이 채팅을 실행하는 컴퓨터에서 {{agent}} 시작을 준비하지 못했습니다.",
@@ -20117,7 +20119,6 @@
       "cancelFailed": "설치를 취소하지 못했습니다. 다시 시도하세요.",
       "install": "{{agent}} 설치",
       "installManaged": "Orca 사본 설치",
-      "installed": "설치됨",
       "notInstalled": "설치되지 않았습니다.",
       "progress": "{{agent}} 다운로드",
       "readFailed": "이 호스트에서 {{agent}}을(를) 확인할 수 없습니다. 다시 시도하는 중입니다.",
@@ -23511,7 +23512,6 @@
       "chip": "봇",
       "chipLabel": "봇, 모두 표시",
       "searchEverything": "전체에서 \"{{text}}\" 검색",
-      "searchBotsFor": "\"{{text}}\"(으)로 봇 검색",
       "noMatch": "\"{{text}}\"와(과) 일치하는 봇이 없습니다",
       "noBotsYet": "아직 봇이 없습니다",
       "filtersPaused": "필터는 봇이 아닌 워크스페이스에 적용됩니다",
@@ -23526,7 +23526,7 @@
       "browse": "템플릿 둘러보기"
     },
     "new": {
-      "fromTemplate": "템플릿 사용"
+      "fromTemplate": "템플릿"
     },
     "googleSetup": {
       "otherAccount": "계정 전환"
