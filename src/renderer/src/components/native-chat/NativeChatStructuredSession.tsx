@@ -6,7 +6,7 @@ import {
 import { NativeChatUsageLimitActionsProvider } from './usage/NativeChatUsageLimitActions'
 import { useNativeChatHandOff } from './pane/actions/use-native-chat-hand-off'
 import { useNativeChatStructuredPaneNotices } from '@/components/native-chat/messages/notices/use-native-chat-structured-pane-notices'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from './session/structured/use-structured-chat-live-session'
 import { NativeChatStructuredPromptCard } from './prompts/NativeChatStructuredPromptCard'
@@ -52,6 +52,7 @@ import { useNativeChatProvisionalLaunch } from './host-access/use-native-chat-pr
 import { useNativeChatRewindHost } from './messages/actions/use-native-chat-rewind-host'
 import { NativeChatRowActionsProvider } from './messages/actions/NativeChatRowActionsProvider'
 import { NativeChatQueuedMessageList } from './queue/NativeChatQueuedMessageList'
+import { NativeChatWaitingAgentMailContext } from './queue/NativeChatWaitingAgentMailActions'
 import { cancelStructuredPrompt } from './session/structured/writes/native-chat-structured-stop-controls'
 import { useNativeChatBotHome } from './NativeChatBotHomeScope'
 import { useStructuredAgentSessionHostExecution } from '@/components/native-chat/session/status/structured-agent-session-status-hooks'
@@ -255,6 +256,18 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     hostNotice: botServerDown ? null : hostNotice,
     kickoffSignIn: bot.signInOwed
   })
+  const queued = submits.queuedMessages
+  const steerHeld = bot.stopControls.stopping || hostHeld
+  const waitingAgentMail = useMemo(
+    () => ({
+      steer: queued.steer,
+      remove: queued.remove,
+      pending: queued.pending,
+      isWorking: queued.isWorking,
+      steerHeld
+    }),
+    [queued.steer, queued.remove, queued.pending, queued.isWorking, steerHeld]
+  )
   return (
     <NativeChatAntigravityAuthProvider target={install.antigravityAuth}>
       <NativeChatSlackMirrorContext.Provider value={slackMirror}>
@@ -282,6 +295,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                     tabId={props.tabId}
                   />
                 ) : (
+                  <NativeChatWaitingAgentMailContext.Provider value={waitingAgentMail}>
                   <NativeChatRowActionsProvider pane={props} chat={controller} forks={forks}>
                     <NativeChatUsageLimitActionsProvider
                       recovery={controller}
@@ -328,6 +342,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                       </NativeChatHostSetupContext.Provider>
                     </NativeChatUsageLimitActionsProvider>
                   </NativeChatRowActionsProvider>
+                  </NativeChatWaitingAgentMailContext.Provider>
                 )}
               </NativeChatContextClearFade>
             </div>
@@ -339,7 +354,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   chatWorktreeId={ownerWorktreeId ?? null}
                   agentName={agentLabel}
                   statedFailures={startFailures}
-                  steerHeld={bot.stopControls.stopping || hostHeld}
+                  steerHeld={steerHeld}
                   focusComposer={focusComposer}
                   editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
                 />

@@ -26,6 +26,7 @@ import {
   headSteerableQueuedMessageCard,
   projectQueuedMessageCards,
   queuedMessagesQueuePause,
+  waitingAgentMailEchoes,
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import {
@@ -66,6 +67,8 @@ export type StructuredAgentSessionQueuedMessagesController = {
   steerHead: (() => boolean) | undefined
   /** The agent is working, so a card's send steers into its turn. */
   isWorking: boolean
+  /** The host still holds this message: a card here, or another agent's mail the transcript draws. */
+  holds: (messageId: string) => boolean
 }
 
 export type QueuedMessagesPendingAction = 'send' | 'delete' | 'resume' | 'clear'
@@ -108,7 +111,8 @@ export function useStructuredAgentSessionQueuedMessages(args: {
         // A command card offers no send while the agent works.
         agentWorking: isWorking,
         queuePaused: queuePause !== null,
-        steersInTranscript: true
+        steersInTranscript: true,
+        agentMailInTranscript: true
       }),
       ...sendingQueuedMessageCards(
         pendingQueueSendsOnTheirWay(
@@ -229,6 +233,21 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     [mutate, run]
   )
   const pause = useMemo(() => queuedMessagesQueuePause(cards, queuePause), [cards, queuePause])
+  const waitingAgentMailIds = useMemo(
+    () =>
+      new Set(waitingAgentMailEchoes(queuedMessages, submissions).map((echo) => echo.clientMessageId)),
+    [queuedMessages, submissions]
+  )
+  const holds = useCallback(
+    (messageId: string): boolean =>
+      waitingAgentMailIds.has(messageId) ||
+      reordered.cards.some((card) => card.messageId === messageId),
+    [reordered.cards, waitingAgentMailIds]
+  )
+  const pending = useCallback(
+    (messageId: string): QueuedMessagesPendingAction | null => inFlight.get(messageId) ?? null,
+    [inFlight]
+  )
 
   const clearCapable = !cards.some(
     (card) => card.hold === 'sending' || inFlight.has(card.messageId)
@@ -289,13 +308,14 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     resume,
     clear,
     queuePending: inFlight.get(QUEUE_KEY) ?? null,
-    pending: (messageId) => inFlight.get(messageId) ?? null,
+    pending,
     steer,
     remove,
     edit: editing.begin,
     editCapable: editing.capable,
     editor: editing.editor,
     steerHead: headSteers ? steerHead : undefined,
-    isWorking
+    isWorking,
+    holds
   }
 }

@@ -30,6 +30,7 @@ import {
   type AgentMessageSource
 } from '../journal/agent-session-message-source'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
+import type { StructuredAgentSessionOptimisticMessage } from './structured-agent-session-message-projection'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
   nativeChatImageLabel,
@@ -88,6 +89,42 @@ type QueuedMessageCardSession = {
   agentWorking?: boolean
   /** Draw a steer on its way into the running turn as the person's message, not as a card. */
   steersInTranscript?: true
+  /** Draw another agent's waiting message at the transcript's end, not as a card. */
+  agentMailInTranscript?: true
+}
+
+/** Another agent's message waiting its turn: drawn at the transcript's end in its delivered shape.
+ *  One that failed to send or came back stays a card, where its caption says why. */
+export function queuedMessageIsWaitingAgentMail(message: AgentSessionQueuedMessage): boolean {
+  return (
+    message.state === 'waiting' &&
+    !message.paused &&
+    message.body.command === undefined &&
+    readAgentMessageSource(message.body.from) !== undefined
+  )
+}
+
+/** Waiting agent mail as transcript rows, in queue order, until a hand-off's own row replaces it. */
+export function waitingAgentMailEchoes(
+  queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
+  submissions: readonly AgentJournalSubmission[]
+): StructuredAgentSessionOptimisticMessage[] {
+  const waiting = (queuedMessages ?? []).filter(queuedMessageIsWaitingAgentMail)
+  if (waiting.length === 0) {
+    return []
+  }
+  const handedOff = handedOffQueuedMessageIds(
+    submissions.filter((submission) => submission.dispatchState !== 'rejected')
+  )
+  return waiting
+    .filter((message) => !handedOff.has(message.messageId))
+    .sort((left, right) => left.position - right.position)
+    .map((message) => ({
+      clientMessageId: message.messageId,
+      body: message.body,
+      queuedAt: null,
+      waitingAgentMail: true as const
+    }))
 }
 
 /** A person's steer the running turn will take in: never a card where the transcript draws it. */
@@ -97,6 +134,7 @@ export function queuedMessageSteersIn(
 ): boolean {
   return (
     message.steers === true &&
+    !queuedMessageIsWaitingAgentMail(message) &&
     message.state === 'waiting' &&
     !message.paused &&
     session.agentWorking === true &&
@@ -115,6 +153,7 @@ export function projectQueuedMessageCards(
   )
   const ordered = [...(queuedMessages ?? [])]
     .filter((message) => !session.steersInTranscript || !queuedMessageSteersIn(message, session))
+    .filter((message) => !session.agentMailInTranscript || !queuedMessageIsWaitingAgentMail(message))
     // Orca's own sends draw nothing in the chat, so they wait unseen; one on hold needs the person, so it shows.
     .filter(
       (message) =>
@@ -230,7 +269,7 @@ export function queuedMessagesQueuePause(
 }
 
 /** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */
-export function queuedMessageCardSteers(card: QueuedMessageCard): boolean {
+export function queuedMessageCardSteers(card: Pick<QueuedMessageCard, 'hold' | 'command'>): boolean {
   return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
 }
 

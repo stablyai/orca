@@ -60,6 +60,7 @@ export function mobileQueuedMessageCards(
   facts: {
     agentWorking?: boolean
     queuePaused?: boolean
+    agentMailInTranscript?: true
     agentName?: string
     statedFailures?: readonly AgentSessionFailureFact[]
   } = {}

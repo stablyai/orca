@@ -12,6 +12,7 @@ import {
   agentMessagePrimarySender,
   agentMessageCanCopy,
   agentMessageSenderCanOpen,
+  agentMessageWaitingQueuedId,
   type AgentMessageHeading
 } from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
 import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-display-copy'
@@ -28,6 +29,7 @@ import {
   useMobileAgentMessageName,
   useMobileAgentMessageView
 } from './mobile-agent-message-context'
+import { MobileWaitingAgentMailActions } from './MobileWaitingAgentMailActions'
 import {
   MobileNativeChatEventName,
   MobileNativeChatEventRow
@@ -93,17 +95,31 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
     several ||
     merged.length > 0 ||
     message.blocks.some((block) => block.type === 'image-ref')
-  return (
+  // Not taken by the agent yet: dimmed, with no time, until its delivered row replaces it in place.
+  const waiting = message.queued === true
+  const waitingId = agentMessageWaitingQueuedId(message)
+  const open =
+    sender && !several ? <OpenSender from={from} sender={sender} unnamed={unnamed} /> : null
+  const row = (
     <MobileNativeChatEventRow
-      testID="agent-message-card"
+      testID={waiting ? 'agent-message-card-waiting' : 'agent-message-card'}
       icon={<SenderMark agentType={view.agentType} />}
       // The live state never marks a row failed: a restarted worker would un-fail it.
       badge={view.dot === 'working' ? 'running' : null}
-      label={`${words} ${sender ? senderName : unnamed}${more > 0 ? ` +${more}` : ''}`}
+      label={`${words} ${sender ? senderName : unnamed}${more > 0 ? ` +${more}` : ''}${
+        waiting ? `, ${t('chat.agentMessage.row.notSentYet', 'not sent yet')}` : ''
+      }`}
       action={
-        sender && !several ? <OpenSender from={from} sender={sender} unnamed={unnamed} /> : null
+        waitingId ? (
+          <View style={styles.waitingActions}>
+            {open}
+            <MobileWaitingAgentMailActions queuedMessageId={waitingId} />
+          </View>
+        ) : (
+          open
+        )
       }
-      timestamp={message.timestamp}
+      timestamp={waiting ? null : message.timestamp}
       disclosureKey={`agent-message:${message.id}`}
       fontScale={fontScale}
       onLongPress={onLongPress}
@@ -182,6 +198,7 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
       {more > 0 ? ` +${more}` : null}
     </MobileNativeChatEventRow>
   )
+  return waiting ? <View style={styles.waiting}>{row}</View> : row
 })
 
 /** Stands in so the name hook runs in every render; its answer is unused without a sender. */
@@ -250,6 +267,8 @@ function SenderMark({
 
 const styles = themedStyleSheet(() => ({
   copy: { alignSelf: 'flex-start' },
+  waiting: { opacity: 0.7 },
+  waitingActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   mergedEntry: { gap: spacing.xs },
   mergedMeta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   mergedWords: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },

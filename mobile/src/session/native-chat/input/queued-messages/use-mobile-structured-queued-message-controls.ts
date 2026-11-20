@@ -15,7 +15,10 @@ import type {
   AgentSessionQueuePause
 } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionSendResult } from '../../../../../../src/shared/agent-session/agent-session-wire'
-import { queuedMessagesQueuePause } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
+import {
+  queuedMessagesQueuePause,
+  waitingAgentMailEchoes
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   mobileQueuedMessageCards,
   type MobileQueuedMessageCard
@@ -42,6 +45,8 @@ export type MobileStructuredQueuedMessageControls = {
   pause: AgentSessionQueuePause | null
   resume: () => Promise<boolean>
   sessionKey: string
+  /** The host still holds this message: a card here, or another agent's mail the transcript draws. */
+  holds: (messageId: string) => boolean
 }
 
 export function useMobileStructuredQueuedMessageControls(args: {
@@ -89,6 +94,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   const cards = useMemo(() => {
     const visibleCards = mobileQueuedMessageCards(queuedMessages, submissions, {
       agentWorking,
+      agentMailInTranscript: true,
       queuePaused: queuePause !== null,
       agentName: args.agentName,
       statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
@@ -242,6 +248,16 @@ export function useMobileStructuredQueuedMessageControls(args: {
     [mutate, resolved]
   )
   const pause = queuedMessagesQueuePause(cards, queuePause)
+  const waitingAgentMailIds = useMemo(
+    () =>
+      new Set(waitingAgentMailEchoes(queuedMessages, submissions).map((echo) => echo.clientMessageId)),
+    [queuedMessages, submissions]
+  )
+  const holds = useCallback(
+    (messageId: string): boolean =>
+      waitingAgentMailIds.has(messageId) || cards.some((card) => card.messageId === messageId),
+    [cards, waitingAgentMailIds]
+  )
   return {
     cards,
     send,
@@ -252,6 +268,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
     move: composerActions.move,
     pause,
     resume,
-    sessionKey
+    sessionKey,
+    holds
   }
 }

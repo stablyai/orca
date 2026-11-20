@@ -20,6 +20,7 @@ import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispa
 import { isStructuredAgentSessionStartFailureRow } from '../failures/structured-agent-session-start-failure-row-key'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import { nativeChatMessageSenderFields } from '../../native-chat-message-sender-fields'
 import {
   automationResultMarks,
   withAutomationResultMarks
@@ -43,6 +44,8 @@ export type StructuredAgentSessionOptimisticMessage = {
   options?: Readonly<Record<string, string>>
   /** Sent while the chat read Stopping: drawn after the turn being stopped. */
   sentWhileStopping?: true
+  /** Another agent's message the host holds until the agent takes it; `clientMessageId` is its queued id. */
+  waitingAgentMail?: true
 }
 
 export function structuredAgentSessionCommandItemIds(
@@ -265,6 +268,18 @@ export function projectStructuredAgentSessionMessageRows(
         const hostPending =
           submission?.dispatchState === 'pending' &&
           submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
+        if (entry.waitingAgentMail) {
+          return {
+            id,
+            role: 'user',
+            source: 'transcript',
+            timestamp: null,
+            blocks: entry.body.blocks,
+            ...nativeChatMessageSenderFields(entry.body, 'user'),
+            queued: true,
+            queuedMessageId: entry.clientMessageId
+          }
+        }
         return {
           id,
           role: 'user',

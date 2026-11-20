@@ -2,6 +2,7 @@ import { useMobileStructuredAsyncQuestions } from './use-mobile-structured-async
 import { useMobileUnresolvedFailureRows } from '../status/use-mobile-unresolved-failure-rows'
 import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
+import { waitingAgentMailEchoes } from '../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import { isFinalAgentSessionReadRefusal } from '../../../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
@@ -130,7 +131,12 @@ export function useMobileStructuredAgentSession(
     onSendError,
     confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
-  const transcript = useMobileStructuredTranscript(agent, state, sends.optimistic, sessionKey)
+  // Other agents' waiting mail follows this phone's sends at the transcript's end, as on desktop.
+  const optimistic = useMemo(() => {
+    const agentMail = waitingAgentMailEchoes(queuedMessages, state.submissions)
+    return agentMail.length > 0 ? [...sends.optimistic, ...agentMail] : sends.optimistic
+  }, [queuedMessages, sends.optimistic, state.submissions])
+  const transcript = useMobileStructuredTranscript(agent, state, optimistic, sessionKey)
   const { clearing, transcriptItems, messages, receipts } = transcript
   const timing = useMobileStructuredAgentTurnTiming({ ...state, items: transcriptItems }, turnId)
   const isWorking = mobileStructuredAgentSessionWorking(state)

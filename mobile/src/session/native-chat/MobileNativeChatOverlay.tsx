@@ -1,3 +1,4 @@
+import { MobileWaitingAgentMailContext } from './transcript/agent-messages/MobileWaitingAgentMailActions'
 import { slackPeopleOf } from '../../../../src/shared/connectors/slack-mention-tokens'
 import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
 import { MobileMarkdownSlackPeopleContext } from '../../components/markdown/parsing/mobile-markdown-mentions'
@@ -138,6 +139,16 @@ function MobileNativeChatOverlayContent({
   const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
   const streaming = controller.nativeChatStreamingText ?? null
   const queued = controller.nativeChatQueued
+  const steerHeld = controller.nativeChatTurnIndicator?.stopping === true
+  const waitingAgentMail = useMemo(
+    () => ({
+      send: queued.send,
+      delete: queued.delete,
+      agentWorking: controller.nativeChatTurnActive,
+      steerHeld
+    }),
+    [queued.send, queued.delete, controller.nativeChatTurnActive, steerHeld]
+  )
   const composerTray = useMobileNativeChatComposerTray({
     queued: {
       cards: queued.cards,
@@ -151,7 +162,7 @@ function MobileNativeChatOverlayContent({
       onResume: queued.resume,
       sessionKey: queued.sessionKey,
       // Hold steering while Stop ends the turn; use the session’s single display-status decision.
-      steerHeld: controller.nativeChatTurnIndicator?.stopping === true,
+      steerHeld,
       agentWorking: controller.nativeChatTurnActive
     },
     taskList,
@@ -288,6 +299,7 @@ function MobileNativeChatOverlayContent({
               <MobileNativeChatRootItemSourceContext.Provider value={detailSource}>
                 <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
                   <MobileNativeChatNoticeContext.Provider value={noticeView}>
+                    <MobileWaitingAgentMailContext.Provider value={waitingAgentMail}>
                     <MobileNativeChatView
                       itemNavigation={session.itemNavigation}
                       messages={session.messages}
@@ -391,6 +403,7 @@ function MobileNativeChatOverlayContent({
                       structuredComposer={structuredComposer}
                       keyboardInset={keyboardInset}
                     />
+                    </MobileWaitingAgentMailContext.Provider>
                   </MobileNativeChatNoticeContext.Provider>
                 </MobileNativeChatReplyRevealsContext.Provider>
               </MobileNativeChatRootItemSourceContext.Provider>
