@@ -16,11 +16,7 @@ import {
   getAgentSessionAttachmentStore
 } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { hasAttachmentStoreReference } from './bot-attachment-images'
-import {
-  admitBotGroupMessageAttachments,
-  botGroupMessageSummary,
-  sameBotGroupImages
-} from './bot-group-attachments'
+import { admitBotGroupMessageAttachments, botGroupMessageSummary } from './bot-group-attachments'
 import { completedGroupReplies } from './bot-group-completed-replies'
 import { botMessageBody, requireStructuredHost } from './bot-chat-session'
 import { requireGroupBots } from './bot-group-membership'
@@ -37,7 +33,6 @@ export async function sendBotGroupMessage(
   input: z.infer<typeof BotGroupSend>,
   options: SendBotGroupMessageOptions = {}
 ): Promise<BotGroupMessage> {
-  const local = options.local === true
   const message = await runKeyedSerializedOperation(groups.queues, input.groupId, async () => {
     const existing = groups.store.message(input.messageId)
     if (existing) {
@@ -45,7 +40,7 @@ export async function sendBotGroupMessage(
         existing.groupId !== input.groupId ||
         existing.threadId !== input.threadId ||
         existing.text !== input.text ||
-        !sameBotGroupImages(existing.images, input.images, local)
+        (existing.images?.length ?? 0) !== new Set(input.images).size
       ) {
         throw new Error('Message identity was already used.')
       }
@@ -69,12 +64,12 @@ export async function sendBotGroupMessage(
       bots
     )
     if (requestedImages.length > 0 || hasAttachmentStoreReference(input.text)) {
-      await groups.runtime.ensureStructuredAgentSessionHost?.().catch(() => undefined)
+      await groups.runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
     }
     const images = await admitBotGroupMessageAttachments(
       {
         store: getAgentSessionAttachmentStore(),
-        local,
+        local: options.local === true,
         claim: getAgentSessionAttachmentClaimer(),
         memberSessionIds: group.members.map((member) => member.sessionId)
       },

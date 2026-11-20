@@ -189,7 +189,6 @@ export function MobileBotGroupRoom({
           <View key={message.id}>
             {message.author.kind === 'owner' ? (
               <MobileNativeChatMessage
-                structuredActivityUi
                 message={{
                   id: message.id,
                   role: 'user',

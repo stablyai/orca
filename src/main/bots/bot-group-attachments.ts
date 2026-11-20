@@ -1,8 +1,6 @@
 // A group post's chat attachments, admitted on the group's host as chat and item comments admit
 // theirs: images live in this host's attachment store under chat's limits, and every referenced
 // upload is claimed for each current room member so it outlives individual turns and sweeps with the room.
-import { createHash } from 'node:crypto'
-import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../../shared/agent-session/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { BotGroupMessage, BotGroupMessageImage } from '../../shared/bots/bot-group'
 import { stripSentImagePromptMarkers } from '../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -31,10 +29,6 @@ export type BotGroupAttachmentDeps = {
   memberSessionIds: readonly string[]
 }
 
-function pathDigest(path: string): string {
-  return createHash('sha256').update(path).digest('hex')
-}
-
 /** Validates, copies (when local), and claims every upload a group message names. */
 export async function admitBotGroupMessageAttachments(
   deps: BotGroupAttachmentDeps,
@@ -50,27 +44,11 @@ export async function admitBotGroupMessageAttachments(
     }
     return []
   }
-  if (paths.length > AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT) {
-    throw refused(`Group messages take up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT} images.`)
-  }
   const uniquePaths = [...new Set(paths)]
-  const copiedFrom = new Map<string, string>()
   const stored = deps.local
-    ? await Promise.all(
-        uniquePaths.map(async (sourcePath) => {
-          const destPath = await copyLocalAttachmentToStore(store, sourcePath, refused)
-          if (destPath !== sourcePath) {
-            copiedFrom.set(destPath, pathDigest(sourcePath))
-          }
-          return destPath
-        })
-      )
+    ? await Promise.all(uniquePaths.map((path) => copyLocalAttachmentToStore(store, path, refused)))
     : uniquePaths
-  const admitted = await admitStoredAttachmentImages(store, stored, GROUP_IMAGE_LABELS, refused)
-  const images: BotGroupMessageImage[] = admitted.map((image) => {
-    const sourceDigest = copiedFrom.get(image.path)
-    return sourceDigest ? { ...image, sourceDigest } : image
-  })
+  const images = await admitStoredAttachmentImages(store, stored, GROUP_IMAGE_LABELS, refused)
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
@@ -91,26 +69,6 @@ export async function admitBotGroupMessageAttachments(
     refused
   })
   return images
-}
-
-/** Matches a replayed messageId's requested paths against the admitted store paths or original source digests. */
-export function sameBotGroupImages(
-  existing: readonly BotGroupMessageImage[] | undefined,
-  requested: readonly string[] | undefined,
-  local: boolean
-): boolean {
-  const stored = existing ?? []
-  const uniqueRequested = [...new Set(requested ?? [])]
-  if (stored.length !== uniqueRequested.length) {
-    return false
-  }
-  return stored.every((image, index) => {
-    const candidate = uniqueRequested[index]
-    return (
-      image.path === candidate ||
-      (local && image.sourceDigest !== undefined && image.sourceDigest === pathDigest(candidate))
-    )
-  })
 }
 
 /** One-line summary for thread titles and sidebar previews, handling image-only posts. */
