@@ -1,5 +1,5 @@
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   BrowserGrabPayload,
   GrabIntent
@@ -33,10 +33,10 @@ export function useHeldGrabPick({
   currentUrl: string | undefined
 }): BrowserGrabPayload | null {
   const [held, setHeld] = useState<HeldPick | null>(null)
-  const lastPickerPickRef = useRef<BrowserGrabPayload | null>(null)
+  const [lastPickerPick, setLastPickerPick] = useState<BrowserGrabPayload | null>(null)
   const pickerPick = grab.state === 'confirming' && grabIntent === 'copy' ? grab.payload : null
-  if (pickerPick && pickerPick !== lastPickerPickRef.current) {
-    lastPickerPickRef.current = pickerPick
+  if (pickerPick && pickerPick !== lastPickerPick) {
+    setLastPickerPick(pickerPick)
     setHeld({ payload: pickerPick, owner })
   }
   if (held && (activeTool !== 'copy' || held.owner !== owner)) {
@@ -44,14 +44,12 @@ export function useHeldGrabPick({
   }
   const heldPayload = held && activeTool === 'copy' && held.owner === owner ? held.payload : null
 
-  const checkedUrlRef = useRef(currentUrl)
-  const routeChangedRef = useRef(false)
-  if (checkedUrlRef.current !== currentUrl) {
-    checkedUrlRef.current = currentUrl
-    routeChangedRef.current = true
+  const [route, setRoute] = useState({ url: currentUrl, changed: false })
+  if (route.url !== currentUrl) {
+    setRoute({ url: currentUrl, changed: true })
   }
   useEffect(() => {
-    if (!routeChangedRef.current || !heldPayload) {
+    if (!route.changed || !heldPayload) {
       return
     }
     let current = true
@@ -86,7 +84,7 @@ export function useHeldGrabPick({
       current = false
       stopChecking()
     }
-  }, [currentUrl, heldPayload, pageId])
+  }, [currentUrl, heldPayload, pageId, route.changed])
 
   return heldPayload
 }
