@@ -216,36 +216,42 @@ const pointerAt = (x: number, y: number): void => {
   document.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y }))
 }
 
-it('keeps the card open while the pointer crosses the gap from the row to it', async () => {
-  vi.useFakeTimers()
-  try {
-    const { open } = renderPanelRow(100)
-    await hoverOpen(open)
-    vi.spyOn(cardElement()!, 'getBoundingClientRect').mockReturnValue(cardBox())
-    fireEvent.pointerLeave(open, {
-      pointerType: 'mouse',
-      clientX: 776,
-      clientY: 110
-    })
-    pointerAt(760, 112)
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300)
-    })
-    pointerAt(744, 130)
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300)
-    })
-    expect(cardElement()).not.toBeNull()
-    // Off the path to the card (down the panel to another row), it closes.
-    act(() => pointerAt(790, 300))
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(300)
-    })
-    expect(cardElement()).toBeNull()
-  } finally {
-    vi.useRealTimers()
+it.each(['elsewhere in the panel', 'outside the window'])(
+  'keeps the card open across the gap until the pointer moves %s',
+  async (destination) => {
+    vi.useFakeTimers()
+    try {
+      const { open } = renderPanelRow(100)
+      await hoverOpen(open)
+      vi.spyOn(cardElement()!, 'getBoundingClientRect').mockReturnValue(cardBox())
+      fireEvent.pointerLeave(open, {
+        pointerType: 'mouse',
+        clientX: 776,
+        clientY: 110
+      })
+      pointerAt(760, 112)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300)
+      })
+      pointerAt(744, 130)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300)
+      })
+      expect(cardElement()).not.toBeNull()
+      if (destination === 'outside the window') {
+        fireEvent.pointerLeave(document.documentElement, { relatedTarget: null })
+      } else {
+        act(() => pointerAt(790, 300))
+      }
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300)
+      })
+      expect(cardElement()).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   }
-})
+)
 
 it('closes the card after its delay when the pointer leaves the row away from it', async () => {
   vi.useFakeTimers()

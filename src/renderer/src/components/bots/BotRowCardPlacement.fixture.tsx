@@ -171,7 +171,7 @@ function hoverRow(name: string, place: Place, intoCard = false, tab: 'chats' | n
       }
     }
     if (!row) {
-      return
+      throw new Error(`Fixture row did not appear: ${name}`)
     }
     const panel = frame.querySelector<HTMLElement>('[data-right-sidebar-panel]')
     if (panel && place === 'last') {
@@ -184,17 +184,23 @@ function hoverRow(name: string, place: Place, intoCard = false, tab: 'chats' | n
     pointerTo(row, null)
     const rowBox = row.getBoundingClientRect()
     await wait(700)
+    const card = document.querySelector<HTMLElement>(
+      '[data-slot="hover-card-content"][data-state="open"]'
+    )
+    if (!card) {
+      throw new Error(`Preview did not open for fixture row: ${name}`)
+    }
     if (!intoCard) {
       drawPointer(frame, rowBox.left + 60, rowBox.top + rowBox.height / 2)
       return
     }
-    const card = document.querySelector<HTMLElement>('[data-slot="hover-card-content"]')
-    if (card) {
-      pointerTo(card, row)
-      const cardBox = card.getBoundingClientRect()
-      await wait(400)
-      drawPointer(frame, cardBox.left + 40, cardBox.bottom - 18)
+    pointerTo(card, row)
+    const cardBox = card.getBoundingClientRect()
+    await wait(400)
+    if (!card.isConnected || card.dataset.state !== 'open') {
+      throw new Error(`Preview closed on pointer entry for fixture row: ${name}`)
     }
+    drawPointer(frame, cardBox.left + 40, cardBox.bottom - 18)
   }
 }
 
