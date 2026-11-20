@@ -320,11 +320,17 @@ describe('legacy session copy swap', () => {
       join(runtimeHome(), 'thread-writer-locks')
     ]
 
-    // A resume joins the pass's window rather than being refused by it.
-    await legacyCopyLocks.whileUnlocked(lockFolders, [], () =>
-      swapLegacySessionCopy({ managedHome: runtimeHome(), relativePath: RELATIVE_PATH })
-    )
+    // A pass inside its window for longer than a refused hold is retried; the resume runs beside it.
+    const pass = legacyCopyLocks.whileUnlocked(lockFolders, [], async () => {
+      await new Promise((resolve) => setTimeout(resolve, 400))
+    })
+    const resume = swapLegacySessionCopy({
+      managedHome: runtimeHome(),
+      relativePath: RELATIVE_PATH
+    })
 
+    expect(await resume).toBe('swapped')
+    await pass
     expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
   })
 
