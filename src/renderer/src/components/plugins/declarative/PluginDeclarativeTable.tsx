@@ -117,6 +117,9 @@ export function PluginDeclarativeTable({
     count: rows.length + (showLoading ? 1 : 0),
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
+    // The sticky header sits above the rows inside the scroller, one row tall.
+    scrollMargin: ROW_HEIGHT,
+    scrollPaddingStart: ROW_HEIGHT,
     getItemKey: (index) => rows[index]?.key ?? '#loading',
     overscan: 8
   })
@@ -145,6 +148,14 @@ export function PluginDeclarativeTable({
         : COLUMN_WIDTH[column.width ?? 'auto']
     )
     .join(' ')
+  // Header and rows share this floor, so they scroll sideways together and rows paint full width.
+  const minWidth = `calc(${columns
+    .map((column) =>
+      (column.width ?? 'auto') === 'auto'
+        ? PLUGIN_TABLE_MIN_WIDTHS[column.minWidth ?? 'auto']
+        : COLUMN_WIDTH[column.width ?? 'auto']
+    )
+    .join(' + ')})`
   const select = (key: string, toggle: boolean, extend: boolean): void => {
     const row = rows.find((entry) => entry.key === key)
     if (mode === 'none' || !row || row.disabled) {
@@ -196,7 +207,10 @@ export function PluginDeclarativeTable({
           select(row.key, true, false)
           return
         }
-        const page = Math.max(1, Math.floor((scrollRef.current?.clientHeight ?? 0) / ROW_HEIGHT))
+        const page = Math.max(
+          1,
+          Math.floor((scrollRef.current?.clientHeight ?? 0) / ROW_HEIGHT) - 1
+        )
         const next = nextTableRow(event.key, activeIndex, rows.length, page)
         if (next !== null) {
           event.preventDefault()
@@ -209,55 +223,59 @@ export function PluginDeclarativeTable({
       }}
     >
       <div
-        role="row"
-        aria-rowindex={1}
-        className="grid border-b border-border bg-muted/50"
-        style={{ gridTemplateColumns: template }}
+        ref={scrollRef}
+        data-max-height={props.maxHeight ?? 'md'}
+        className="scrollbar-sleek relative min-h-0 overflow-auto data-[max-height=lg]:max-h-[32rem] data-[max-height=md]:max-h-96 data-[max-height=sm]:max-h-64"
       >
-        {columns.map((column) => {
-          const direction = props.sort?.column === column.key ? props.sort.direction : null
-          return (
-            <div
-              key={column.key}
-              role="columnheader"
-              aria-sort={
-                direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : undefined
-              }
-              data-align={column.align ?? 'start'}
-              className="flex h-8 min-w-0 items-center px-2 text-2xs font-semibold tracking-wider text-muted-foreground uppercase data-[align=center]:justify-center data-[align=end]:justify-end"
-            >
-              {column.sortable && props.onSortChange ? (
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  className="flex min-w-0 cursor-pointer items-center gap-1 uppercase hover:text-foreground"
-                  onClick={() => sortBy(column)}
-                >
+        <div
+          role="row"
+          aria-rowindex={1}
+          className="sticky top-0 z-10 grid border-b border-border bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))]"
+          style={{ gridTemplateColumns: template, minWidth }}
+        >
+          {columns.map((column) => {
+            const direction = props.sort?.column === column.key ? props.sort.direction : null
+            return (
+              <div
+                key={column.key}
+                role="columnheader"
+                aria-sort={
+                  direction === 'asc'
+                    ? 'ascending'
+                    : direction === 'desc'
+                      ? 'descending'
+                      : undefined
+                }
+                data-align={column.align ?? 'start'}
+                className="flex h-8 min-w-0 items-center px-2 text-2xs font-semibold tracking-wider text-muted-foreground uppercase data-[align=center]:justify-center data-[align=end]:justify-end"
+              >
+                {column.sortable && props.onSortChange ? (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="flex min-w-0 cursor-pointer items-center gap-1 uppercase hover:text-foreground"
+                    onClick={() => sortBy(column)}
+                  >
+                    <span className="truncate" title={column.label}>
+                      {column.label}
+                    </span>
+                    <SortGlyph direction={direction} />
+                  </button>
+                ) : (
                   <span className="truncate" title={column.label}>
                     {column.label}
                   </span>
-                  <SortGlyph direction={direction} />
-                </button>
-              ) : (
-                <span className="truncate" title={column.label}>
-                  {column.label}
-                </span>
-              )}
-            </div>
-          )
-        })}
-      </div>
-      <div
-        ref={scrollRef}
-        data-max-height={props.maxHeight ?? 'md'}
-        className="scrollbar-sleek relative min-h-0 overflow-y-auto data-[max-height=lg]:max-h-[32rem] data-[max-height=md]:max-h-96 data-[max-height=sm]:max-h-64"
-      >
+                )}
+              </div>
+            )
+          })}
+        </div>
         {rows.length === 0 && !showLoading ? (
           <div className="px-2 py-3 text-center text-muted-foreground">
             {props.emptyText ?? t('auto.components.plugins.declarative.Table.empty', 'No rows')}
           </div>
         ) : (
-          <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+          <div className="relative w-full" style={{ height: virtualizer.getTotalSize(), minWidth }}>
             {items.map((item) => {
               const row = rows[item.index]
               if (!row) {
@@ -266,7 +284,7 @@ export function PluginDeclarativeTable({
                     key={item.key}
                     role="row"
                     className="absolute inset-x-0 flex items-center gap-2 px-2 text-muted-foreground"
-                    style={{ top: item.start, height: ROW_HEIGHT }}
+                    style={{ top: item.start - ROW_HEIGHT, height: ROW_HEIGHT }}
                   >
                     <LoadingSpinner className="size-3.5" />
                     {t('auto.components.plugins.declarative.Table.loading', 'Loading more…')}
@@ -285,7 +303,11 @@ export function PluginDeclarativeTable({
                   data-current={isSelected}
                   data-active={item.index === activeIndex}
                   className="absolute inset-x-0 grid cursor-default items-center border-b border-border/60 hover:bg-accent group-focus-visible/grid:data-[active=true]:ring-1 group-focus-visible/grid:data-[active=true]:ring-ring/40 group-focus-visible/grid:data-[active=true]:ring-inset data-[current=true]:bg-accent aria-disabled:opacity-50"
-                  style={{ top: item.start, height: ROW_HEIGHT, gridTemplateColumns: template }}
+                  style={{
+                    top: item.start - ROW_HEIGHT,
+                    height: ROW_HEIGHT,
+                    gridTemplateColumns: template
+                  }}
                   onClick={(event) => {
                     setActive(item.index)
                     select(row.key, IS_MAC ? event.metaKey : event.ctrlKey, event.shiftKey)
