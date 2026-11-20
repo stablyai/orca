@@ -5,7 +5,7 @@ import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useBots } from '@/lib/bot-catalog'
 import { useBotGitHub } from '@/lib/bot-github-state'
 import { slackTeamState, useBotSlack } from '@/lib/bot-slack-state'
@@ -29,6 +29,9 @@ import {
 } from './NativeChatCardFrame'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
 import { OrcaCloudSignInLine } from '../bots/orca-cloud-sign-in'
+import { BotHostSignInControl } from '../bots/BotConnectorsHostNotice'
+import { useBotHostLabel } from '../bots/use-bot-host-label'
+import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
 import { useOrcaCloudSignedOut } from '../bots/orca-cloud-signed-out'
 
 type OfferProps = {
@@ -174,52 +177,86 @@ function OfferCard({
   )
 }
 
-/** Signed out of Orca: one line with Sign in, which tells the bot once signed in so it saves what it held. */
-function SignInOffer({
-  bot,
-  offer,
-  messageId
+type SignInOfferProps = { bot: Bot; offer: ConnectorOffer; messageId: string }
+
+function signInOfferText(offer: ConnectorOffer, t: Translate): string {
+  return offer.source === 'webhook'
+    ? t('bots.cloudSignIn.webhooksChat', 'Webhooks need Orca sign-in. I’ll make it once you’re in.')
+    : t(
+        'bots.cloudSignIn.eventsChat',
+        '{{source}} events need Orca sign-in. I’ll save this rule once you’re in.',
+        { source: CONNECTOR_OFFER_NAMES[offer.source] }
+      )
+}
+
+/** Signed in: Continue tells the bot, so it saves what it held. */
+function SignedInLine({
+  answering
 }: {
-  bot: Bot
-  offer: ConnectorOffer
-  messageId: string
+  answering: ReturnType<typeof useNativeChatOffer>
 }): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <p className="flex min-w-0 flex-1 items-center gap-1">
+        <Check className="size-3" aria-hidden />
+        {t('bots.cloudSignIn.signedIn', 'Signed in to Orca')}
+      </p>
+      {answering.sent ? null : (
+        <Button type="button" variant="outline" size="xs" onClick={() => tellBot(answering)}>
+          {t('bots.cloudSignIn.continue', 'Continue')}
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function tellBot(answering: ReturnType<typeof useNativeChatOffer>): void {
+  answering.send(translate('bots.cloudSignIn.toldBot', 'I’m signed in to Orca now.'), [])
+}
+
+/** This computer signed out of Orca: one line with Sign in, which tells the bot once signed in. */
+function SignInOffer({ bot, offer, messageId }: SignInOfferProps): React.JSX.Element {
   const t = useTranslate()
   const answering = useNativeChatOffer(bot.id, messageId)
   const signedOut = useOrcaCloudSignedOut(bot.hostId)
-  const tellBot = (): void =>
-    answering.send(t('bots.cloudSignIn.toldBot', 'I’m signed in to Orca now.'), [])
   if (!signedOut || answering.sent) {
-    return (
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <p className="flex min-w-0 flex-1 items-center gap-1">
-          <Check className="size-3" aria-hidden />
-          {t('bots.cloudSignIn.signedIn', 'Signed in to Orca')}
-        </p>
-        {answering.sent ? null : (
-          <Button type="button" variant="outline" size="xs" onClick={tellBot}>
-            {t('bots.cloudSignIn.continue', 'Continue')}
-          </Button>
-        )}
-      </div>
-    )
+    return <SignedInLine answering={answering} />
   }
   return (
-    <OrcaCloudSignInLine
-      text={
-        offer.source === 'webhook'
-          ? t(
-              'bots.cloudSignIn.webhooksChat',
-              'Webhooks need Orca sign-in. I’ll make it once you’re in.'
-            )
-          : t(
-              'bots.cloudSignIn.eventsChat',
-              '{{source}} events need Orca sign-in. I’ll save this rule once you’re in.',
-              { source: CONNECTOR_OFFER_NAMES[offer.source] }
-            )
-      }
-      onSignedIn={tellBot}
-    />
+    <OrcaCloudSignInLine text={signInOfferText(offer, t)} onSignedIn={() => tellBot(answering)} />
+  )
+}
+
+/** The server the bot runs on signed out of Orca: Sign in on that server, as its Connectors notice does. */
+function ServerSignInOffer({
+  bot,
+  offer,
+  messageId,
+  host,
+  fallback
+}: SignInOfferProps & { host: string; fallback: string }): React.JSX.Element {
+  const t = useTranslate()
+  const answering = useNativeChatOffer(bot.id, messageId)
+  const account = useBotHostOrcaAccount(bot.hostId)
+  // An Orca that can't say its sign-in, or can't sign in, keeps its own line.
+  if (!account || account.state === 'unconfigured') {
+    return <p className="text-sm text-chat-foreground-faint">{fallback}</p>
+  }
+  if (account.state === 'signed-in' || answering.sent) {
+    return <SignedInLine answering={answering} />
+  }
+  return (
+    <div role="status" className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+      <p>{signInOfferText(offer, t)}</p>
+      <BotHostSignInControl
+        hostId={bot.hostId}
+        host={host}
+        bot={bot}
+        label={t('bots.host.signIn.start', 'Sign in on {{host}}', { host })}
+        firstSignIn={account.state === 'signed-out'}
+      />
+    </div>
   )
 }
 
@@ -234,13 +271,23 @@ export function NativeChatConnectorOfferCard({
   fallback: string
 }): React.JSX.Element {
   const bot = useBots().find((entry) => entry.id === offer.botId)
+  const host = useBotHostLabel(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID)
   if (!bot) {
     return <p className="text-sm text-chat-foreground-faint">{fallback}</p>
   }
   if (offer.signIn || offer.source === 'webhook') {
-    // Sign in here signs in only this desktop; another host's bot keeps the host's own line.
-    return bot.hostId === LOCAL_EXECUTION_HOST_ID ? (
-      <SignInOffer bot={bot} offer={offer} messageId={messageId} />
+    // The sign-in is the one of the computer the bot runs on; a server this window can't name keeps its line.
+    if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {
+      return <SignInOffer bot={bot} offer={offer} messageId={messageId} />
+    }
+    return host ? (
+      <ServerSignInOffer
+        bot={bot}
+        offer={offer}
+        messageId={messageId}
+        host={host}
+        fallback={fallback}
+      />
     ) : (
       <p className="text-sm text-chat-foreground-faint">{fallback}</p>
     )

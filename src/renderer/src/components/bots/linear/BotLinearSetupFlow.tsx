@@ -177,8 +177,9 @@ export function BotLinearSetupFlow({
     </div>
   )
 
-  // The cloud said signed out (a sign-in that lapsed while open): the same ask, then setup again.
-  if (step.kind === 'failed' && step.code === BOT_SLACK_DESKTOP_ERRORS.signedOut) {
+  // This computer's sign-in lapsed while open: the same ask, then setup again. A server's failed
+  // step signs in that server instead.
+  if (step.kind === 'failed' && step.code === BOT_SLACK_DESKTOP_ERRORS.signedOut && !hostName) {
     return (
       <OrcaCloudSignInDialogBody
         title={title}
