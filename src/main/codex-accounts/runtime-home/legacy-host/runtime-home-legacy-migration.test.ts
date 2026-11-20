@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readlinkSync,
@@ -29,6 +30,17 @@ vi.mock('electron', () => ({
 }))
 beforeEach(() => installFakeAppEnvironment({ getPath: () => testState.userDataDir }))
 
+const fsHooks = vi.hoisted(() => ({ afterRead: new Map<string, () => void>() }))
+vi.mock(import('node:fs'), async (importOriginal) => {
+  const actual = await importOriginal()
+  const readFileSync = ((...args: Parameters<typeof actual.readFileSync>) => {
+    const contents = actual.readFileSync(...args)
+    fsHooks.afterRead.get(String(args[0]))?.()
+    return contents
+  }) as typeof actual.readFileSync
+  return { ...actual, default: { ...actual, readFileSync }, readFileSync }
+})
+
 vi.mock(import('node:os'), async (importOriginal) => {
   const actual = await importOriginal()
   return {
@@ -43,6 +55,7 @@ describe('CodexRuntimeHomeService', () => {
   })
 
   afterEach(() => {
+    fsHooks.afterRead.clear()
     teardownRuntimeHomeTest()
   })
 
@@ -171,5 +184,52 @@ describe('CodexRuntimeHomeService', () => {
       .split('\n')
     expect(diagnostics).toHaveLength(2)
     expect(diagnostics[0]).toContain('"type":"session-conflict"')
+  })
+
+  it('keeps history lines Codex appends while legacy history is merged', async () => {
+    const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
+    writeFileSync(runtimeHistoryPath, '{"id":"shared-1"}\n', 'utf-8')
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      '{"account":"managed"}\n'
+    )
+    const legacyHistoryPath = join(managedHomePath, 'history.jsonl')
+    writeFileSync(legacyHistoryPath, '{"id":"managed-2"}\n', 'utf-8')
+    fsHooks.afterRead.set(legacyHistoryPath, () =>
+      appendFileSync(runtimeHistoryPath, '{"id":"codex-live"}\n', 'utf-8')
+    )
+    const store = createStore(createSettings())
+
+    const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe(
+      '{"id":"shared-1"}\n{"id":"codex-live"}\n{"id":"managed-2"}\n'
+    )
+  })
+
+  it('never overwrites an existing preserved session copy', async () => {
+    const runtimeSessionsDir = join(getRuntimeCodexHomePath(), 'sessions')
+    mkdirSync(runtimeSessionsDir, { recursive: true })
+    writeFileSync(join(runtimeSessionsDir, 'session.json'), '{"turns":[1]}', 'utf-8')
+    const occupiedPreservedPath = join(runtimeSessionsDir, 'session.orca-legacy-account-1.json')
+    writeFileSync(occupiedPreservedPath, '{"turns":["kept"]}', 'utf-8')
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      '{"account":"managed"}\n'
+    )
+    mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
+    writeFileSync(join(managedHomePath, 'sessions', 'session.json'), '{"turns":[1,2]}', 'utf-8')
+    const store = createStore(createSettings())
+
+    const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    expect(readFileSync(occupiedPreservedPath, 'utf-8')).toBe('{"turns":["kept"]}')
+    expect(
+      readFileSync(join(runtimeSessionsDir, 'session.orca-legacy-account-1-1.json'), 'utf-8')
+    ).toBe('{"turns":[1,2]}')
   })
 })

@@ -1,5 +1,6 @@
 import {
   appendFileSync,
+  constants,
   copyFileSync,
   existsSync,
   mkdirSync,
@@ -9,6 +10,7 @@ import {
 } from 'node:fs'
 import { dirname, extname, join, parse, relative } from 'node:path'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
+import { nodeFileContentsEqualSync } from '../../../../shared/file-content/node-file-content-equality'
 import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-migration'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
@@ -105,23 +107,28 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     }
 
     const runtimeHistoryPath = join(this.getRuntimeHomePath(), 'history.jsonl')
-    const existingLines = existsSync(runtimeHistoryPath)
-      ? readFileSync(runtimeHistoryPath, 'utf-8').split('\n').filter(Boolean)
-      : []
-    const mergedLines = [...existingLines]
-    const seenLines = new Set(existingLines)
+    const existingHistory = existsSync(runtimeHistoryPath)
+      ? readFileSync(runtimeHistoryPath, 'utf-8')
+      : ''
+    const seenLines = new Set(existingHistory.split('\n').filter(Boolean))
+    const missingLines: string[] = []
     for (const line of readFileSync(legacyHistoryPath, 'utf-8').split('\n')) {
       if (!line || seenLines.has(line)) {
         continue
       }
       seenLines.add(line)
-      mergedLines.push(line)
+      missingLines.push(line)
     }
 
-    if (mergedLines.length === 0) {
+    if (missingLines.length === 0) {
       return
     }
-    writeFileAtomically(runtimeHistoryPath, `${mergedLines.join('\n')}\n`)
+    // Append instead of rewriting a snapshot so lines a running Codex adds meanwhile survive.
+    const separator = existingHistory && !existingHistory.endsWith('\n') ? '\n' : ''
+    appendFileSync(runtimeHistoryPath, `${separator}${missingLines.join('\n')}\n`, {
+      encoding: 'utf-8',
+      mode: 0o600
+    })
   }
 
   protected migrateLegacySessions(managedHomePath: string, accountId: string): void {
@@ -136,25 +143,52 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       const relativePath = relative(legacySessionsRoot, legacyFilePath)
       const runtimeFilePath = join(runtimeSessionsRoot, relativePath)
       mkdirSync(dirname(runtimeFilePath), { recursive: true })
-      if (!existsSync(runtimeFilePath)) {
-        copyFileSync(legacyFilePath, runtimeFilePath)
+      if (this.copyLegacyFileWithoutOverwrite(legacyFilePath, runtimeFilePath) !== 'conflict') {
         continue
       }
 
-      const legacyContents = readFileSync(legacyFilePath)
-      const runtimeContents = readFileSync(runtimeFilePath)
-      if (runtimeContents.equals(legacyContents)) {
-        continue
+      for (let attempt = 0; ; attempt++) {
+        const preservedPath = this.getPreservedLegacySessionPath(
+          runtimeFilePath,
+          accountId,
+          attempt
+        )
+        const result = this.copyLegacyFileWithoutOverwrite(legacyFilePath, preservedPath)
+        if (result === 'conflict') {
+          continue
+        }
+        if (result === 'copied') {
+          this.appendMigrationDiagnostic({
+            type: 'session-conflict',
+            accountId,
+            runtimeFilePath,
+            preservedPath
+          })
+        }
+        break
       }
+    }
+  }
 
-      const preservedPath = this.getPreservedLegacySessionPath(runtimeFilePath, accountId)
-      copyFileSync(legacyFilePath, preservedPath)
-      this.appendMigrationDiagnostic({
-        type: 'session-conflict',
-        accountId,
-        runtimeFilePath,
-        preservedPath
-      })
+  /** Exclusive create never replaces or writes through a name, even one that appears after a check. */
+  protected copyLegacyFileWithoutOverwrite(
+    legacyFilePath: string,
+    targetPath: string
+  ): 'copied' | 'identical' | 'conflict' {
+    try {
+      copyFileSync(legacyFilePath, targetPath, constants.COPYFILE_EXCL)
+      return 'copied'
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        throw error
+      }
+    }
+    const legacyContents = readFileSync(legacyFilePath)
+    try {
+      return nodeFileContentsEqualSync(targetPath, legacyContents) ? 'identical' : 'conflict'
+    } catch {
+      // A dangling link or directory at this name still occupies it.
+      return 'conflict'
     }
   }
 
@@ -185,10 +219,15 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     }
   }
 
-  protected getPreservedLegacySessionPath(runtimeFilePath: string, accountId: string): string {
+  protected getPreservedLegacySessionPath(
+    runtimeFilePath: string,
+    accountId: string,
+    attempt: number
+  ): string {
     const extension = extname(runtimeFilePath)
     const basename = runtimeFilePath.slice(0, runtimeFilePath.length - extension.length)
-    return `${basename}.orca-legacy-${accountId}${extension}`
+    const suffix = attempt === 0 ? '' : `-${attempt}`
+    return `${basename}.orca-legacy-${accountId}${suffix}${extension}`
   }
 
   protected appendMigrationDiagnostic(record: Record<string, string>): void {

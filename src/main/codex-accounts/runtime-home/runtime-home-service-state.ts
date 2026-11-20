@@ -205,8 +205,13 @@ export abstract class CodexRuntimeHomeState {
   protected abstract appendListedFiles(target: string[], source: readonly string[]): void
   protected abstract getPreservedLegacySessionPath(
     runtimeFilePath: string,
-    accountId: string
+    accountId: string,
+    attempt: number
   ): string
+  protected abstract copyLegacyFileWithoutOverwrite(
+    legacyFilePath: string,
+    targetPath: string
+  ): 'copied' | 'identical' | 'conflict'
   protected abstract appendMigrationDiagnostic(record: Record<string, string>): void
 
   protected abstract captureSystemDefaultSnapshot(options: { force: boolean }): void
