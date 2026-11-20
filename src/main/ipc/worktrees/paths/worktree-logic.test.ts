@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeWorktreeName } from './worktree-logic'
+import { getWorktreeCreationLayout, sanitizeWorktreeName } from './worktree-logic'
 import { sanitizeWorktreeDisplayName } from '../creation/worktree-display-name'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 
@@ -21,5 +21,43 @@ describe('sanitizeWorktreeDisplayName', () => {
 describe('areWorktreePathsEqual', () => {
   it('keeps WSL-owned POSIX paths case-sensitive on Windows', () => {
     expect(areWorktreePathsEqual('/home/dev/Repo', '/home/dev/repo', 'win32')).toBe(false)
+  })
+})
+
+describe('host workspace directory', () => {
+  const clientDefault = '/home/dev/orca/workspaces'
+
+  it('uses the host override instead of the client default', () => {
+    expect(
+      getWorktreeCreationLayout(
+        { path: '/srv/app', executionHostId: 'runtime:docker' },
+        {
+          nestWorkspaces: true,
+          workspaceDir: clientDefault,
+          hostSettingOverrides: {
+            'runtime:docker': { defaultWorktreeLocation: '/workspaces' }
+          }
+        }
+      ).path
+    ).toBe('/workspaces')
+  })
+
+  it('keeps a repo-specific base ahead of the host override', () => {
+    expect(
+      getWorktreeCreationLayout(
+        {
+          path: '/srv/app',
+          executionHostId: 'runtime:docker',
+          worktreeBasePath: '/repo-base'
+        },
+        {
+          nestWorkspaces: true,
+          workspaceDir: clientDefault,
+          hostSettingOverrides: {
+            'runtime:docker': { defaultWorktreeLocation: '/workspaces' }
+          }
+        }
+      ).path
+    ).toBe('/repo-base')
   })
 })
