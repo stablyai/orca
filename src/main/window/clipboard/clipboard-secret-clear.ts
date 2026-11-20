@@ -5,7 +5,7 @@ import { publishClipboardText } from './clipboard-text-publisher'
 export const SECRET_CLIPBOARD_CLEAR_MS = 60_000
 
 type SecretClipboardDeps<Timer> = {
-  readText: () => string
+  readText: () => Promise<string>
   clear: () => Promise<void>
   setTimer: (run: () => void, ms: number) => Timer
   clearTimer: (timer: Timer) => void
@@ -21,11 +21,12 @@ export function createSecretClipboardClearer<Timer>(
     }
     pending = deps.setTimer(() => {
       pending = null
-      if (deps.readText() === text) {
-        void deps.clear().catch((error: unknown) => {
+      void deps
+        .readText()
+        .then((current) => (current === text ? deps.clear() : undefined))
+        .catch((error: unknown) => {
           console.error('[clipboard] secret clear failed', error)
         })
-      }
     }, SECRET_CLIPBOARD_CLEAR_MS)
   }
 }
