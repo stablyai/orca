@@ -152,10 +152,11 @@ function ProjectRow(props: {
 
 /** Which agents load a skill, from the agent folders that reach it; no label when both do. */
 function loadedByLabel(
-  loadedBy: readonly BotAgentSkillsFolder[],
+  loadedBy: readonly BotAgentSkillsFolder[] | undefined,
   t: ReturnType<typeof useTranslate>
 ): string | undefined {
-  if (loadedBy.includes('claude') && loadedBy.includes('agents')) {
+  // Unknown (a host that doesn't say), or both: no label.
+  if (!loadedBy || (loadedBy.includes('claude') && loadedBy.includes('agents'))) {
     return undefined
   }
   if (loadedBy.length === 0) {

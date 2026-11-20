@@ -17,12 +17,13 @@ export type BotOwnSkillsView = {
   /** What Open folder shows: skills/, or for an older bot with none there, the agent folder its skills are in. */
   skillsDir: string
   /** One per real folder (`folder` tells two skills of one name apart), with each agent folder that
-   *  loads it: empty when something else holds both of its names. */
+   *  loads it: empty when something else holds both of its names, absent (unknown) from an earlier
+   *  development build. */
   skills: {
     name: string
     description: string | null
     folder: string
-    loadedBy: BotAgentSkillsFolder[]
+    loadedBy?: BotAgentSkillsFolder[]
   }[]
   /** Skills kept in the agents' own folders, the same way. */
   agentOnly: {

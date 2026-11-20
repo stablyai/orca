@@ -397,6 +397,42 @@ describe('what a bot export may read', () => {
     expect(paths.filter((path) => path.includes('/archive/'))).toEqual([])
   })
 
+  it("keeps a SKILL.md that declares no skill as one of its parent skill's documents", async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const references = join(home, '.claude/skills/changelog-style/references')
+    await mkdir(references, { recursive: true })
+    await writeFile(join(references, 'SKILL.md'), 'Plain notes on writing skills.\n')
+    await writeFile(join(references, 'checklist.md'), 'Check the dates.\n')
+    const candidate = await new BotShareCandidates(join(root, 'candidates')).prepare({
+      bot,
+      shareable: await readBotShareable({ bot, home, automations: [] }),
+      selection: {},
+      packageId: 'pkg-1'
+    })
+    const paths = candidate.files.map((file) => file.path)
+    expect(paths).toContain('skills/changelog-style/references/SKILL.md')
+    expect(paths).toContain('skills/changelog-style/references/checklist.md')
+  })
+
+  it('shares a skill whose nested skill holds a file over the size limit', async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const nested = join(home, '.claude/skills/changelog-style/archive/bulky')
+    await mkdir(nested, { recursive: true })
+    await writeFile(join(nested, 'SKILL.md'), '---\nname: bulky\ndescription: Big\n---\n')
+    await writeFile(join(nested, 'data.bin'), Buffer.alloc(5 * 1024 * 1024))
+    const candidate = await new BotShareCandidates(join(root, 'candidates')).prepare({
+      bot,
+      shareable: await readBotShareable({ bot, home, automations: [] }),
+      selection: { skills: ['changelog-style'] },
+      packageId: 'pkg-1'
+    })
+    const paths = candidate.files.map((file) => file.path)
+    expect(paths).toContain('skills/changelog-style/SKILL.md')
+    expect(paths.filter((path) => path.includes('/archive/'))).toEqual([])
+  })
+
   it('leaves a binary skill file out, so a key in it never goes out', async () => {
     const home = join(root, 'home')
     await writeHome(home)
