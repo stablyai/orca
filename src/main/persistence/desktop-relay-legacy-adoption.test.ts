@@ -93,4 +93,29 @@ describe('adopting relay ids saved before ownership was recorded', () => {
       adoptionFor(LOCAL_EXECUTION_HOST_ID)(store.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID))
     ).toEqual({ 'tab-a': 'ssh:box@@relay-a' })
   })
+
+  it('adopts by where rows were at startup, after a first save moved the row out', () => {
+    const partitions = new Map<string, Partial<WorkspaceSessionState>>([
+      [
+        LOCAL_EXECUTION_HOST_ID,
+        {
+          tabsByWorktree: {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adoption reads tab ids only.
+            'repo-ssh::/w': [tab('tab-a')] as WorkspaceSessionState['tabsByWorktree'][string]
+          }
+        }
+      ],
+      [SSH, { tabsByWorktree: {}, remoteSessionIdsByTabId: { 'tab-a': 'ssh:box@@relay-a' } }]
+    ])
+    const store = storeWith(partitions)
+    const baseline = captureLegacyRelayBaseline(store)
+    // The window's first save writes local first, routing the row to its SSH partition.
+    partitions.set(LOCAL_EXECUTION_HOST_ID, { tabsByWorktree: {} })
+
+    expect(
+      legacyRelayAdoptionBatch(store, baseline, [SSH])(SSH)(store.getWorkspaceSession(SSH))
+    ).toEqual({
+      'tab-a': 'ssh:box@@relay-a'
+    })
+  })
 })

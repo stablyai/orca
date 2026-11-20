@@ -14,22 +14,40 @@ import {
 
 type AdoptionStore = Pick<Store, 'getRepos' | 'getWorkspaceSession' | 'getWorkspaceSessionHostIds'>
 
-/** Relay ids saved before ownership was recorded, read once before any window or main writer runs, so
- *  an id main writes later is never mistaken for one an older build's window wrote. */
-export type LegacyRelayBaseline = Map<ExecutionHostId, Record<string, string>>
+/** Relay ids saved before ownership was recorded, with where each tab row and relay id lived, all read
+ *  once before any window or main writer runs: an id main writes later is never mistaken for one an
+ *  older build's window wrote, and a first save moving rows between partitions can't hide them. */
+export type LegacyRelayBaseline = {
+  /** Partitions still awaiting adoption, with their saved ids. */
+  relaysByHost: Map<ExecutionHostId, Record<string, string>>
+  tabHosts: ReadonlyMap<string, ExecutionHostId>
+  relaysAtStart: ReadonlyMap<ExecutionHostId, Record<string, string> | undefined>
+}
 
 export function captureLegacyRelayBaseline(store: AdoptionStore): LegacyRelayBaseline {
-  const baseline: LegacyRelayBaseline = new Map()
+  const relaysByHost = new Map<ExecutionHostId, Record<string, string>>()
   for (const hostId of store.getWorkspaceSessionHostIds()) {
     const session = store.getWorkspaceSession(hostId)
     const adopted =
       (session.desktopRelayAdoptionVersion ?? 0) >= DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
     const saved = session.remoteSessionIdsByTabId
     if (!adopted && saved && Object.keys(saved).length > 0) {
-      baseline.set(hostId, { ...saved })
+      relaysByHost.set(hostId, { ...saved })
     }
   }
-  return baseline
+  // Nothing to adopt (every launch after the first upgrade): read no rows.
+  if (relaysByHost.size === 0) {
+    return { relaysByHost, tabHosts: new Map(), relaysAtStart: new Map() }
+  }
+  return {
+    relaysByHost,
+    tabHosts: uniqueSshRepoTabHosts(store),
+    relaysAtStart: new Map(
+      store
+        .getWorkspaceSessionHostIds()
+        .map((hostId) => [hostId, store.getWorkspaceSession(hostId).remoteSessionIdsByTabId])
+    )
+  }
 }
 
 /** The host each tab row's relay id belongs to, when the row is in exactly one partition under a
@@ -63,51 +81,40 @@ function uniqueSshRepoTabHosts(store: AdoptionStore): Map<string, ExecutionHostI
   return unique
 }
 
-/** One apply batch's adoption: the fleet's tab rows are indexed at most once, against the partitions as
- *  they were when the batch began. An id is adopted when it still equals its pre-upgrade value and
- *  belongs to an SSH repo tab whose row is uniquely attributable, in the row's partition or (an older
- *  build's split) another partition holding the same id or the only copy. Folder, ambiguous and
+/** One apply batch's adoption. An id is adopted when it still equals its pre-upgrade value and belongs
+ *  to an SSH repo tab whose row was uniquely attributable at startup, in the row's partition or (an
+ *  older build's split) another partition holding the same id or the only copy. Folder, ambiguous and
  *  unattributable ids stay main's. */
 export function legacyRelayAdoptionBatch(
   store: AdoptionStore,
   baseline: LegacyRelayBaseline,
-  // The partitions this batch writes; only one still awaiting adoption makes it read the others.
+  // The partitions this batch writes.
   hostIds: readonly ExecutionHostId[]
 ): (hostId: ExecutionHostId) => LegacyRelayAdoption {
   // A partition's stored version records its adoption; drop it from the baseline only then, so a
   // write that failed to store still adopts on its retry.
   for (const hostId of hostIds) {
     if (
-      baseline.has(hostId) &&
+      baseline.relaysByHost.has(hostId) &&
       (store.getWorkspaceSession(hostId).desktopRelayAdoptionVersion ?? 0) >=
         DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
     ) {
-      baseline.delete(hostId)
+      baseline.relaysByHost.delete(hostId)
     }
   }
-  let tabHosts: Map<string, ExecutionHostId> | null = null
-  // Read before this batch patches any partition.
-  const relaysAtStart = new Map(
-    hostIds.some((hostId) => baseline.has(hostId))
-      ? store
-          .getWorkspaceSessionHostIds()
-          .map((hostId) => [hostId, store.getWorkspaceSession(hostId).remoteSessionIdsByTabId])
-      : []
-  )
-  const relaysOf = (hostId: ExecutionHostId) => relaysAtStart.get(hostId)
+  const { tabHosts, relaysAtStart } = baseline
   return (hostId) => () => {
-    const legacy = baseline.get(hostId)
+    const legacy = baseline.relaysByHost.get(hostId)
     if (!legacy) {
       return {}
     }
-    tabHosts ??= uniqueSshRepoTabHosts(store)
     const adopted: Record<string, string> = {}
     for (const [tabId, relayId] of Object.entries(legacy)) {
       const rowHost = tabHosts.get(tabId)
-      if (!rowHost || !parseAppSshPtyId(relayId) || relaysOf(hostId)?.[tabId] !== relayId) {
+      if (!rowHost || !parseAppSshPtyId(relayId)) {
         continue
       }
-      const rowCopy = rowHost === hostId ? relayId : relaysOf(rowHost)?.[tabId]
+      const rowCopy = rowHost === hostId ? relayId : relaysAtStart.get(rowHost)?.[tabId]
       if (rowCopy === undefined || rowCopy === relayId) {
         adopted[tabId] = relayId
       }
