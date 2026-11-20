@@ -5862,7 +5862,7 @@
           "638a2d221d": "Ocultar en reposo",
           "f506a1262a": "Filtrar espacios de trabajo",
           "75405270ed": "Editar filtros ({{value0}} activo)",
-          "489d1c8c9f": "Buscar proyectos...",
+          "489d1c8c9f": "Buscar proyectos (*, ||)...",
           "ee240a39eb": "Editar filtros",
           "automationCreated": "Ocultar creados por automatizaciones",
           "cliCreated": "Hide CLI-created",

@@ -6146,7 +6146,7 @@
           "638a2d221d": "Masquer les espaces en veille",
           "f506a1262a": "Filtrer les espaces de travail",
           "75405270ed": "Modifier les filtres ({{value0}} actifs)",
-          "489d1c8c9f": "Rechercher des projets...",
+          "489d1c8c9f": "Rechercher des projets (*, ||)...",
           "ee240a39eb": "Modifier les filtres",
           "automationCreated": "Masquer ceux créés par l'automatisation",
           "cliCreated": "Masquer ceux créés par le CLI",

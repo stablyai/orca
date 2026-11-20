@@ -12217,7 +12217,7 @@
           "638a2d221d": "Ocultar em suspensão",
           "f506a1262a": "Filtrar espaços de trabalho",
           "75405270ed": "Editar filtros ({{value0}} ativo(s))",
-          "489d1c8c9f": "Buscar projetos...",
+          "489d1c8c9f": "Buscar projetos (*, ||)...",
           "ee240a39eb": "Editar filtros",
           "automationCreated": "Ocultar criados por automação",
           "cliCreated": "Ocultar criados por CLI",

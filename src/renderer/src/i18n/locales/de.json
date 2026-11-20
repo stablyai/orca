@@ -6292,7 +6292,7 @@
           "638a2d221d": "Ruhende Arbeitsbereiche ausblenden",
           "f506a1262a": "Arbeitsbereiche filtern",
           "75405270ed": "Filter bearbeiten ({{value0}} aktiv)",
-          "489d1c8c9f": "Projekte suchen…",
+          "489d1c8c9f": "Projekte suchen (*, ||)…",
           "ee240a39eb": "Filter bearbeiten",
           "automationCreated": "Durch Automatisierungen erstellte Arbeitsbereiche ausblenden",
           "cliCreated": "Per CLI erstellte Arbeitsbereiche ausblenden",
