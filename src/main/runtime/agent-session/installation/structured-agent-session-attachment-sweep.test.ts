@@ -42,10 +42,11 @@ it('expires a failed unadopted chat upload after its original journal is moved a
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const { db: source } = openJournalDatabase(journalDatabasePath(root))
   await initializeJournalDomainDatabase(root)
-  source.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('failed-chat', '{')
+  source.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('failed-chat', '{}')
   source
     .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
     .run('claimed', 'failed-chat', 100)
+  source.exec('DROP TABLE journal_sessions')
   source.close()
   const now = 2_000_000_000_000
   const old = new Date(now - 8 * 24 * 60 * 60 * 1000)
