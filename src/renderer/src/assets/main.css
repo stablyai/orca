@@ -1499,7 +1499,7 @@ html.native-shell .app-layout {
   color: #fff;
 }
 
-/* Reserve 3 × 46px so the fixed window controls cannot obscure preceding titlebar content. */
+/* Keep preceding titlebar content clear of the fixed window controls. */
 .window-controls-titlebar-spacer {
   flex-shrink: 0;
   width: var(--window-controls-width, 0px);
@@ -1512,6 +1512,21 @@ html.native-shell .app-layout {
 
 [data-terminal-focus-release-surface='true'] {
   -webkit-app-region: drag;
+}
+
+.app-layout[data-linux-tiling-window-mode]
+  :is(.workspace-tab-drag-strip, .workspace-tab-drag-handle) {
+  display: none;
+}
+
+.app-layout[data-linux-tiling-window-mode]
+  :is(
+    .titlebar,
+    .titlebar-left,
+    .right-sidebar-header-drag,
+    [data-terminal-focus-release-surface='true']
+  ) {
+  -webkit-app-region: no-drag;
 }
 
 /* Hidden workspaces stay laid out at opacity 0; Chromium skips only visibility:hidden app-regions, so their strips would steal visible tab clicks. */

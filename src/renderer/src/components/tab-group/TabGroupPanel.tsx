@@ -307,7 +307,7 @@ export default function TabGroupPanel({
               <div className="min-w-10 flex-1 h-full">{tabBar}</div>
               {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it. */}
               {reserveRightTitlebarSpace ? (
-                <div className="w-10 min-w-0 @max-[203px]/tab-strip:hidden" />
+                <div className="workspace-tab-drag-handle w-10 min-w-0 @max-[203px]/tab-strip:hidden" />
               ) : null}
               <div
                 className={actionChromeClassName}
