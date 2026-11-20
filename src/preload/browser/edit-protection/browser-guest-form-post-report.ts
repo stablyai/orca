@@ -29,6 +29,12 @@ export function installBrowserGuestFormPostReport(port: {
     },
     true
   )
+  // Form events stay inside a shadow root; the frame's own navigation still carries the POST body.
+  window.navigation?.addEventListener('navigate', (event) => {
+    if (event.isTrusted && event.formData && !event.hashChange) {
+      port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost: event.destination.url })
+    }
+  })
 }
 
 /** The action URL of a POST that replaces the top page; null for GET or another target. */

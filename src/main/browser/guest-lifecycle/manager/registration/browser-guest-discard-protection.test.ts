@@ -307,3 +307,61 @@ it('keeps a page an embedded form POSTed to the top from being discarded', () =>
     stop()
   }
 })
+
+it('lets the page a form POST redirects to (Post/Redirect/Get) be discarded', () => {
+  let url = 'https://example.test/login'
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
+  const guest = Object.assign(new EventEmitter(), {
+    id: 9,
+    mainFrame,
+    session: {},
+    getURL: () => url,
+    isDestroyed: () => false,
+    isCrashed: () => false,
+    isCurrentlyAudible: () => false
+  }) as unknown as Electron.WebContents
+  const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
+  const settle = (): void => {
+    guest.emit('dom-ready')
+    guest.emit(
+      'ipc-message',
+      { sender: guest, senderFrame: mainFrame },
+      BROWSER_GUEST_PROTECTION_REPORT,
+      {
+        generation: mainFrame.send.mock.lastCall?.[1],
+        dirty: false,
+        pictureInPicture: false,
+        contentType: 'text/html'
+      }
+    )
+  }
+  try {
+    guest.emit('did-navigate', {}, url, 200, 'OK')
+    settle()
+    guest.emit(
+      'ipc-message',
+      { sender: guest, senderFrame: mainFrame },
+      BROWSER_GUEST_PROTECTION_REPORT,
+      {
+        formPost: 'https://example.test/session'
+      }
+    )
+    guest.emit('did-start-navigation', {
+      url: 'https://example.test/session',
+      isMainFrame: true,
+      isSameDocument: false
+    })
+    // 303 to the dashboard, which loads with GET.
+    guest.emit('did-redirect-navigation', {
+      url: 'https://example.test/dashboard',
+      isMainFrame: true
+    })
+    url = 'https://example.test/dashboard'
+    guest.emit('did-navigate', {}, url, 200, 'OK')
+    settle()
+    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
+  } finally {
+    stop()
+  }
+})

@@ -18,6 +18,7 @@ function withoutHash(rawUrl: string): string {
 export function createFormPostNavigationTracker(): {
   submitted: (actionUrl: string) => void
   started: (url: string, current: { url: string; post: boolean }) => void
+  redirected: () => void
   isPost: () => boolean
 } {
   let submitted: { url: string; at: number } | null = null
@@ -26,8 +27,7 @@ export function createFormPostNavigationTracker(): {
     submitted: (actionUrl) => {
       submitted = { url: withoutHash(actionUrl), at: performance.now() }
     },
-    // Errs toward protecting: a redirected POST keeps the mark (307/308 keep the method), and
-    // so does reloading a POST result, which posts again without a new submission.
+    // Reloading a POST result posts again without a new submission.
     started: (url, current) => {
       post =
         (submitted !== null &&
@@ -35,6 +35,11 @@ export function createFormPostNavigationTracker(): {
           withoutHash(url) === submitted.url) ||
         (current.post && withoutHash(url) === withoutHash(current.url))
       submitted = null
+    },
+    // A POST's redirect (Post/Redirect/Get) loads its target with GET; Electron doesn't report the
+    // status, and the method-keeping 307/308 are rare for form results.
+    redirected: () => {
+      post = false
     },
     isPost: () => post
   }

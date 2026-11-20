@@ -30,8 +30,11 @@ export class BrowserSessionCertificateDecisions {
     if (existing) {
       return sameIdentity(existing, identity)
     }
-    if (accepted && accepted.size >= MAX_CERTIFICATE_GRANTS) {
-      return false
+    // Bounded like the browser's own exception list: the oldest approval makes room.
+    const oldest =
+      accepted && accepted.size >= MAX_CERTIFICATE_GRANTS ? accepted.keys().next() : null
+    if (accepted && oldest && !oldest.done) {
+      accepted.delete(oldest.value)
     }
     if (!accepted) {
       accepted = new Map()
