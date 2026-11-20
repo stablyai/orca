@@ -79,11 +79,13 @@ export function selectAcpHostAccountHomeForCatalog(
   shellEnv: Readonly<Record<string, string>>,
   stateDirectory: string,
   settings: AcpHostBackendSettings,
+  needsStandingInstructions = false,
   now = Date.now()
 ): Promise<AgentSessionAccountHome | null> {
   const key = JSON.stringify([
     stateDirectory,
     settings,
+    needsStandingInstructions,
     spec.hostBackend?.selectionRevision?.(),
     shellEnv.PATH ?? shellEnv.Path,
     shellEnv.HOME ?? shellEnv.USERPROFILE
@@ -92,7 +94,13 @@ export function selectAcpHostAccountHomeForCatalog(
   if (remembered?.key === key && now - remembered.at < CATALOG_SELECTION_MS) {
     return remembered.home
   }
-  const home = selectAcpHostAccountHome(spec, shellEnv, stateDirectory, settings)
+  const home = selectAcpHostAccountHome(
+    spec,
+    shellEnv,
+    stateDirectory,
+    settings,
+    needsStandingInstructions
+  )
   catalogSelections.set(spec.agent, { key, at: now, home })
   return home
 }
@@ -103,6 +111,7 @@ export async function selectAcpHostAccountHome(
   shellEnv: Readonly<Record<string, string>>,
   stateDirectory: string,
   settings: AcpHostBackendSettings,
+  needsStandingInstructions = false,
   inherited: NodeJS.ProcessEnv = process.env
 ): Promise<AgentSessionAccountHome | null> {
   const backend = spec.hostBackend
@@ -118,6 +127,14 @@ export async function selectAcpHostAccountHome(
   const homePath = env.HOME ?? env.USERPROFILE ?? homedir()
   const { command } = resolveAcpLaunchCommand(backend.spec, env, { homePath, dataDirectory: null })
   return isAbsolute(command)
-    ? backend.select({ command, env, envToDelete, homePath, stateDirectory, settings })
+    ? backend.select({
+        command,
+        env,
+        envToDelete,
+        homePath,
+        stateDirectory,
+        settings,
+        needsStandingInstructions
+      })
     : null
 }

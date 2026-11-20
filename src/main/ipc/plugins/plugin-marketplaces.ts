@@ -94,7 +94,11 @@ export function registerPluginMarketplaceHandlers(
     void services.marketplace.seedCommunitySource().catch(() => undefined)
     // Why: browsing a catalog is what keeps it current when nothing is installed from one.
     const refresh = refreshStaleCatalogs(PLUGIN_AUTO_UPDATE_INTERVAL_MS).catch(() => undefined)
-    // Why bounded: show fresh listings on this visit when the fetch is quick, cached ones otherwise.
+    // Why: cached listings must not wait on a refresh of some other stale source.
+    if ((await services.marketplace.listSources()).every(({ marketplace }) => marketplace)) {
+      return
+    }
+    // Why bounded: a source with nothing cached shows its fresh listing when the fetch is quick.
     let timer: ReturnType<typeof setTimeout> | undefined
     await Promise.race([
       refresh,

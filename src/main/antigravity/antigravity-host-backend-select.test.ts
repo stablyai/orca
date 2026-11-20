@@ -32,7 +32,8 @@ describe('Antigravity host backend selection', () => {
       envToDelete: [],
       homePath,
       stateDirectory,
-      settings: {}
+      settings: {},
+      needsStandingInstructions: false
     })
 
     expect(home).toEqual({ variable: 'GEMINI_HOME', path: join(homePath, '.gemini') })

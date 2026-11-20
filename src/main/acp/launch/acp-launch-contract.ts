@@ -121,6 +121,8 @@ export type AcpHostBackend = {
     stateDirectory: string
     /** The account type Orca's own Chat signs in with, saved on this host. */
     settings: AcpHostBackendSettings
+    /** The chat's standing instructions ride the agent's system prompt, so the host must take them. */
+    needsStandingInstructions: boolean
   }): Promise<AgentSessionAccountHome | null>
   /** Changes whenever a sign-in that `select` weighs changes, so remembered answers are retired. */
   selectionRevision?(): number

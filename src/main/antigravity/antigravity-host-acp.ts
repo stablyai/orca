@@ -43,9 +43,7 @@ export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse):
     capabilities?.loadSession === true &&
     Boolean(capabilities.sessionCapabilities?.resume) &&
     // Readiness is checked by listing sessions.
-    Boolean(capabilities.sessionCapabilities?.list) &&
-    // A managed agent's identity rides the system prompt; without it Orca's own server runs.
-    antigravityTakesSystemPrompt(initialized)
+    Boolean(capabilities.sessionCapabilities?.list)
   )
 }
 
@@ -64,7 +62,13 @@ export function isAntigravityHostAccountHome(home: AgentSessionAccountHome): boo
 }
 
 // Keyed by the binary's identity so an upgrade or reinstall is checked again.
-type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number; version?: string }
+type HostCheck = {
+  identity: string
+  answer: Promise<boolean>
+  retryAt?: number
+  version?: string
+  takesSystemPrompt?: boolean
+}
 const checks = new Map<string, HostCheck>()
 
 class IncompatibleHostAcp extends Error {}
@@ -91,6 +95,7 @@ export async function antigravityHostAcpReady(
   command: string,
   env: Record<string, string>,
   envToDelete: string[],
+  needsStandingInstructions = false,
   now = Date.now
 ): Promise<boolean> {
   const stats = await stat(command).catch(() => null)
@@ -101,9 +106,10 @@ export async function antigravityHostAcpReady(
   const cached = checks.get(command)
   if (cached?.identity === identity && (cached.retryAt === undefined || now() < cached.retryAt)) {
     latestAsked = cached
-    return cached.answer
+    return answeredFor(cached, needsStandingInstructions)
   }
   let answered = false
+  let takesSystemPrompt = false
   const check: HostCheck = {
     identity,
     retryAt: now() + RECHECK_MS,
@@ -116,6 +122,7 @@ export async function antigravityHostAcpReady(
         if (!isCompatibleAntigravityHostAcp(initialized)) {
           throw new IncompatibleHostAcp()
         }
+        takesSystemPrompt = antigravityTakesSystemPrompt(initialized)
         // A present keychain item does not prove agy can sign in silently; session requests
         // answer "Authentication required" until it has. Unlike session/new, listing writes no
         // conversation into agy's history.
@@ -124,6 +131,7 @@ export async function antigravityHostAcpReady(
     ).then(
       (initialized) => {
         check.version = initialized.agentInfo?.version
+        check.takesSystemPrompt = takesSystemPrompt
         return true
       },
       (error: unknown) => {
@@ -140,7 +148,12 @@ export async function antigravityHostAcpReady(
   }
   checks.set(command, check)
   latestAsked = check
-  return check.answer
+  return answeredFor(check, needsStandingInstructions)
+}
+
+// A bot's identity rides the system prompt; without it Orca's own server runs that chat.
+async function answeredFor(check: HostCheck, needsStandingInstructions: boolean): Promise<boolean> {
+  return (await check.answer) && (!needsStandingInstructions || check.takesSystemPrompt === true)
 }
 
 /** Whether agy's settings select an API-key model provider; host chats drop inherited keys. */

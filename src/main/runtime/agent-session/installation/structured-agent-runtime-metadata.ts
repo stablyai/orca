@@ -104,7 +104,7 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
     // New chats and their model catalog prefer a compatible host program, which a chat's account
     // home then pins; reads such as Orca's own sign-in keep the agent's account.
     resolveAccountHome: async (
-      { launchEnv, purpose, permissionMode },
+      { launchEnv, purpose, permissionMode, bot },
       { stateDirectory, hostLaunchEnvironment, hostSettings }
     ) => {
       // A host program without the chat's permission mode never takes it; `own` sets none.
@@ -118,7 +118,13 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
               .then((env) =>
                 (purpose === 'catalog'
                   ? selectAcpHostAccountHomeForCatalog
-                  : selectAcpHostAccountHome)(spec, env, stateDirectory, hostSettings())
+                  : selectAcpHostAccountHome)(
+                  spec,
+                  env,
+                  stateDirectory,
+                  hostSettings(),
+                  bot === true
+                )
               )
               .catch(() => null)
           : null

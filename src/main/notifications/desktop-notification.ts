@@ -65,28 +65,34 @@ function checkLinuxNotificationService(): Promise<boolean> {
   return serviceCheck
 }
 
-export function showDesktopNotification(notification: Notification, beforeShow?: () => void): void {
+/** Whether the notification was submitted to the system; Linux answers after its service check. */
+export function showDesktopNotification(
+  notification: Notification,
+  beforeShow?: () => void
+): boolean | Promise<boolean> {
   if (process.platform !== 'linux') {
     beforeShow?.()
     notification.show()
-    return
+    return true
   }
 
   // Electron's libnotify calls block while D-Bus waits for a pending activation.
   pendingShows.add(notification)
-  void checkLinuxNotificationService().then((ready) => {
+  return checkLinuxNotificationService().then((ready) => {
     if (!pendingShows.delete(notification)) {
-      return
+      return false
     }
     if (!ready) {
       notification.emit('failed', undefined, 'Linux notification service did not respond')
-      return
+      return false
     }
     try {
       beforeShow?.()
       notification.show()
+      return true
     } catch (error) {
       notification.emit('failed', undefined, String(error))
+      return false
     }
   })
 }

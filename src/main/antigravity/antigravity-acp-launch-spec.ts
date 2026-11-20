@@ -212,11 +212,11 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
     // A signed-in agy wins over Orca's own sign-in, so chats use the account Accounts switches and
     // the usage meter reads (#44613). It needs a sign-in that serves sessions, not an API-key
     // provider whose key the host launch drops.
-    select: async ({ command, env, envToDelete, homePath, settings }) =>
+    select: async ({ command, env, envToDelete, homePath, settings, needsStandingInstructions }) =>
       savedChatAuthIsPersonal(settings.antigravityChatAuth) &&
       !(await agyUsesApiKey(homePath)) &&
       (await hasAgyCredential(homePath)) &&
-      (await antigravityHostAcpReady(command, env, envToDelete))
+      (await antigravityHostAcpReady(command, env, envToDelete, needsStandingInstructions))
         ? antigravityHostAccountHome(homePath)
         : null
   }

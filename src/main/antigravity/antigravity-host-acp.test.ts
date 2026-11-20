@@ -32,14 +32,9 @@ describe('isCompatibleAntigravityHostAcp', () => {
     }
   })
 
-  it("leaves an agy that can't append to its system prompt to Orca's own server", () => {
-    expect(
-      isCompatibleAntigravityHostAcp(
-        agyInitialize({ antigravity: { tier: true, systemPrompt: { append: true } } })
-      )
-    ).toBe(true)
+  it('accepts an agy that cannot append to its system prompt for personal chats', () => {
     expect(isCompatibleAntigravityHostAcp(agyInitialize({ antigravity: { tier: true } }))).toBe(
-      false
+      true
     )
   })
 })

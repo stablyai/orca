@@ -131,6 +131,10 @@ function observe(owner: RuntimeClientTarget): () => void {
   return () => {
     entry.observers -= 1
     observedHosts -= 1
+    // Why: a host nothing observes any more must not stay in the focus-refresh walk.
+    if (entry.observers === 0 && entries.get(hostKey(owner)) === entry) {
+      entries.delete(hostKey(owner))
+    }
     if (observedHosts === 0) {
       removeFocusListener?.()
       removeFocusListener = null
