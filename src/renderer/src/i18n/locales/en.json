@@ -27136,7 +27136,8 @@
         "linkOnce": "(works once).",
         "tryIt": "Try it in any channel or direct message",
         "connectAnother": "Connect another Slack workspace",
-        "connect": "Connect Slack"
+        "connect": "Connect Slack",
+        "openInSlack": "Message it in Slack"
       },
       "connection": {
         "appSettings": "Slack app settings",
