@@ -29,7 +29,7 @@ export const DEVIN_EVENTS = [
 
 export function getDevinConfigPath(): string {
   if (process.platform === 'win32') {
-    const appData = process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming')
+    const appData = process.env.APPDATA?.trim() || join(homedir(), 'AppData', 'Roaming')
     return join(appData, 'devin', 'config.json')
   }
   return join(homedir(), '.config', 'devin', 'config.json')

@@ -82,8 +82,8 @@ export abstract class CliInstallLocation {
     this.appPathValue = options.appPath ?? getAppEnvironment().getAppPath()
     this.homePath = options.homePath ?? homedir()
     this.localAppDataPath =
-      options.localAppDataPath ??
-      process.env.LOCALAPPDATA ??
+      options.localAppDataPath?.trim() ||
+      process.env.LOCALAPPDATA?.trim() ||
       join(this.homePath, 'AppData', 'Local')
     this.processPathEnv = options.processPathEnv ?? process.env.PATH ?? process.env.Path ?? null
     this.commandPathOverride =

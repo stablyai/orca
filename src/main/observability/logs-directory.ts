@@ -13,7 +13,7 @@ function getUserDataDir(): string {
     return join(home, 'Library', 'Application Support', 'Orca')
   }
   if (platform() === 'win32') {
-    return join(process.env.APPDATA ?? home, 'Orca')
+    return join(process.env.APPDATA?.trim() || home, 'Orca')
   }
   return join(home, '.config', 'Orca')
 }

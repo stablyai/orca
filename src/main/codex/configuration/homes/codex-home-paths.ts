@@ -72,17 +72,18 @@ export function getCodexSessionBackfillStateDirPath(): string {
 }
 
 export function getOrcaUserDataPath(): string {
-  if (process.env.ORCA_USER_DATA_PATH) {
-    return process.env.ORCA_USER_DATA_PATH
+  const override = process.env.ORCA_USER_DATA_PATH?.trim()
+  if (override) {
+    return override
   }
   // Offline CLI hooks run outside Electron and must resolve the same userData path.
   if (process.platform === 'darwin') {
     return join(homedir(), 'Library', 'Application Support', 'orca')
   }
   if (process.platform === 'win32') {
-    return join(process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming'), 'orca')
+    return join(process.env.APPDATA?.trim() || join(homedir(), 'AppData', 'Roaming'), 'orca')
   }
-  return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
+  return join(process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), '.config'), 'orca')
 }
 
 export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
