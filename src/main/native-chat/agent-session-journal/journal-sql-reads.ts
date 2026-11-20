@@ -275,7 +275,9 @@ export function journalSqlReads(
           kind: 'items-by-kind',
           kinds: filter.kinds,
           afterOrdinal,
-          limit: VISIT_PAGE
+          limit: VISIT_PAGE,
+          // Visits weigh kinds, identities and positions, never what a tool printed.
+          withoutStoredOutput: true
         })
         for (const entry of page.items) {
           visit(entry.itemId, entry.sequence, entry.body, entry, entry)

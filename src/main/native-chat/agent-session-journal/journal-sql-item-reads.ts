@@ -46,6 +46,8 @@ export type JournalSqlItemRead =
       kinds: readonly AgentJournalItemBody['kind'][]
       afterOrdinal: number
       limit: number
+      /** A stored output or patch stays its preview: for inventories of kinds and positions. */
+      withoutStoredOutput?: boolean
     }
   | { kind: 'history-items'; itemIds: readonly string[]; options?: JournalHistoryReadOptions }
   | { kind: 'claude-history-prompts'; sessionId: string; uuids: readonly string[] }
@@ -186,7 +188,10 @@ export function readJournalDomainItems(
         .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
       const chosen = headers.slice(0, operation.limit)
       const next = headers.length > operation.limit ? Number(chosen.at(-1)!.ordinal) : null
-      return { kind: 'items-by-kind', ...readItemsByKindPage(db, prefix, chosen, next) }
+      return {
+        kind: 'items-by-kind',
+        ...readItemsByKindPage(db, prefix, chosen, next, operation.withoutStoredOutput)
+      }
     }
     case 'context-floor': {
       const row = db

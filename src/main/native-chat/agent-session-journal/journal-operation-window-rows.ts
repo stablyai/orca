@@ -15,9 +15,17 @@ import { journalStoredTextBytesSql } from './journal-stored-output-rows'
 const DROPS_TOOL_OUTPUT = `kind='tool-call' AND json_valid(payload_json)
   AND json_extract(payload_json,'$.body.name') IS NOT 'Diff'`
 const WITHOUT_TOOL_OUTPUT = `CASE WHEN ${DROPS_TOOL_OUTPUT}
-  THEN json_remove(json_replace(payload_json,'$.body.output.head','','$.body.output.truncated',json('true')),
-    '$.body.output.stored')
+  THEN ${emptied('output')}
   ELSE payload_json END`
+const DROPS_EVERY_OUTPUT = `kind IN ('tool-call','diff') AND json_valid(payload_json)`
+const WITHOUT_EVERY_OUTPUT = `CASE WHEN kind='tool-call' AND json_valid(payload_json) THEN ${emptied('output')}
+  WHEN kind='diff' AND json_valid(payload_json) THEN ${emptied('patch')}
+  ELSE payload_json END`
+
+function emptied(field: 'output' | 'patch'): string {
+  return `json_remove(json_replace(payload_json,'$.body.${field}.head','',
+    '$.body.${field}.truncated',json('true')),'$.body.${field}.stored')`
+}
 
 // Stored rows read back with their whole text, so they are sized at it.
 const STORED_TEXT = journalStoredTextBytesSql('payload_json')
@@ -38,9 +46,15 @@ const CUTTABLE = `kind IN ('tool-call','diff')`
 export function readOperationWindowItems(
   scope: JournalSqlScope,
   start: number,
-  anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'turnShape'>
+  anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'withoutPatches' | 'turnShape'>
 ): AgentJournalRenderItem[] {
-  const projected = anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'
+  const dropsAll = anchors.withoutToolOutput && anchors.withoutPatches
+  const projected = !anchors.withoutToolOutput
+    ? 'payload_json'
+    : dropsAll
+      ? WITHOUT_EVERY_OUTPUT
+      : WITHOUT_TOOL_OUTPUT
+  const drops = dropsAll ? DROPS_EVERY_OUTPUT : DROPS_TOOL_OUTPUT
   const projectedStoredText = journalStoredTextBytesSql(projected)
   const rows = `FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? ${anchors.turnShape ? TURN_SHAPE : ''}`
@@ -146,7 +160,7 @@ export function readOperationWindowItems(
         THEN COALESCE(${cutJson}, ${projected}) ELSE ${projected} END`
     : projected
   // Only rows that still carry a stored marker read their blob; a dropped output needs none.
-  const blob = `CASE WHEN output_blob IS NULL${anchors.withoutToolOutput ? ` OR (${DROPS_TOOL_OUTPUT})` : ''} THEN NULL ELSE output_blob END`
+  const blob = `CASE WHEN output_blob IS NULL${anchors.withoutToolOutput ? ` OR (${drops})` : ''} THEN NULL ELSE output_blob END`
   const restoredCut = new Set(storedCut)
   return scope.db
     .prepare(
