@@ -2,12 +2,15 @@ import { isSameClaudeLogin } from '../../sign-in/claude-account-folder'
 import type { ClaudeProfileRouter } from './claude-profile-router'
 import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-auth-types'
 import type { ClaudeFolderLogin } from '../../sign-in/claude-account-folder'
-import { claudeSystemDefaultUsageAccountId } from '../../../../shared/agent-accounts/claude/claude-system-default-usage-account'
+import {
+  CLAUDE_USAGE_ACCOUNT_ID_ENV,
+  claudeSystemDefaultUsageAccountId
+} from '../../../../shared/agent-accounts/claude/claude-system-default-usage-account'
 
 export function claudeWorkspaceUsageAccountId(
   profileAccountId: string | undefined,
   systemDefaultLogin: ClaudeFolderLogin | null
-): string {
+): string | null {
   return (
     profileAccountId ??
     claudeSystemDefaultUsageAccountId(
@@ -15,6 +18,14 @@ export function claudeWorkspaceUsageAccountId(
       systemDefaultLogin?.organizationUuid
     )
   )
+}
+
+export function claudeUsageAccountEnv(
+  profileAccountId: string | undefined,
+  systemDefaultLogin: ClaudeFolderLogin | null
+): Record<string, string> {
+  const accountId = claudeWorkspaceUsageAccountId(profileAccountId, systemDefaultLogin)
+  return accountId ? { [CLAUDE_USAGE_ACCOUNT_ID_ENV]: accountId } : {}
 }
 
 /** Usage reads use the same login route as account launches. */

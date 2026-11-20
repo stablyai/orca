@@ -49,17 +49,22 @@ export async function forkHistoryConversation(input: {
         { skipExisting: true }
       )
     } catch (error) {
-      await Promise.all([
-        rm(copy.filePath, { force: true }),
-        rm(join(input.targetHome, 'projects', bucket, copy.sessionId), {
-          recursive: true,
-          force: true
-        }),
-        rm(join(input.targetHome, 'file-history', copy.sessionId), {
-          recursive: true,
-          force: true
-        })
+      const cleanupPaths = [
+        copy.filePath,
+        join(input.targetHome, 'projects', bucket, copy.sessionId),
+        join(input.targetHome, 'file-history', copy.sessionId)
+      ]
+      const cleanup = await Promise.allSettled([
+        rm(cleanupPaths[0]!, { force: true }),
+        rm(cleanupPaths[1]!, { recursive: true, force: true }),
+        rm(cleanupPaths[2]!, { recursive: true, force: true })
       ])
+      const leftovers = cleanup.flatMap((result, index) =>
+        result.status === 'rejected' ? [cleanupPaths[index]] : []
+      )
+      if (leftovers.length > 0) {
+        console.warn('[history-continuation] Failed to remove partial Claude copy:', leftovers)
+      }
       throw error
     }
     return { sessionId: copy.sessionId, filePath: copy.filePath }

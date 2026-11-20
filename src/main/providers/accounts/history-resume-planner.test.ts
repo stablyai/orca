@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { appendFile, mkdir, mkdtemp, realpath, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -65,6 +65,7 @@ beforeEach(async () => {
   }
 })
 afterEach(async () => {
+  vi.useRealTimers()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -212,7 +213,9 @@ it('recovers an unacknowledged open after a host restart and accepts the commit 
 
 it('persists the successful open timestamp across host restart and commit retry', async () => {
   const opened = await open('work')
-  const committedAt = 1_900_000_000_000
+  vi.useFakeTimers()
+  const committedAt = Date.now() + 1_000
+  vi.setSystemTime(committedAt)
   planner = new HistoryResumePlanner(plannerDeps)
   await planner.prepare({
     ...args,

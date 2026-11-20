@@ -98,6 +98,20 @@ export function installProviderWorkspaceSessionResume(
             return claude.router.systemDefaultHome()
           }
           return (await claude.prepareAccountFolder(accountId, { runtime: 'host' })).configDir
+        },
+        freshSystemDefaultIdentity: (provider) => {
+          if (provider !== 'claude') {
+            return undefined
+          }
+          const login = claude.router.systemDefaultLogin()
+          const email = login?.email
+          if (!email && !login?.organizationUuid) {
+            return null
+          }
+          return {
+            label: email ? `System default · ${email}` : 'System default',
+            identity: JSON.stringify([login?.email ?? null, login?.organizationUuid ?? null])
+          }
         }
       })
     )

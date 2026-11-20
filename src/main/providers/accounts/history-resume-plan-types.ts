@@ -29,6 +29,9 @@ export type HistoryResumePlannerDeps = {
     workspaceId: string
   ): { accounts: HistoryResumeAccount[]; workspaceAccountId?: string | null }
   prepareAccount(provider: Provider, accountId: string | null): Promise<string>
+  freshSystemDefaultIdentity?(
+    provider: Provider
+  ): { label: string; identity: string } | null | undefined
   fork?: typeof forkHistoryConversation
   heal?: typeof healPendingCodexAccountThreads
 }

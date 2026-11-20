@@ -135,7 +135,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     }
     if (
       snapshot.configDir !== this.lastClaudeAuthSnapshot?.configDir ||
-      snapshot.provenance !== this.lastClaudeAuthSnapshot?.provenance
+      snapshot.provenance !== this.lastClaudeAuthSnapshot?.provenance ||
+      snapshot.accountId !== this.lastClaudeAuthSnapshot?.accountId
     ) {
       this.liveClaudeUsage = null
     }
@@ -152,7 +153,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     )
     if (
       (event.accountId && event.accountId !== activeSnapshot?.accountId && !reportingAccount) ||
-      (!event.accountId && activeSnapshot?.accountId?.startsWith('system-default:host:'))
+      (!event.accountId &&
+        activeSnapshot?.accountId?.startsWith('system-default:host:') &&
+        !reportingAccount)
     ) {
       return
     }
@@ -160,7 +163,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       ? event.accountId === activeSnapshot?.accountId
         ? null
         : reportingAccount
-      : eventDir !== activeSnapshot?.configDir
+      : reportingAccount && eventDir !== activeSnapshot?.configDir
         ? reportingAccount
         : null
     const snapshot = inactiveAccount
@@ -193,6 +196,16 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     const incomingWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
     const freshSession = keepIfNewer(incomingSession, previous?.session)
     const freshWeekly = keepIfNewer(incomingWeekly, previous?.weekly)
+    if (inactiveAccount && (freshSession || freshWeekly)) {
+      const times = this.inactiveClaudeLiveWindowAt.get(inactiveAccount.accountId) ?? {
+        session: 0,
+        weekly: 0
+      }
+      this.inactiveClaudeLiveWindowAt.set(inactiveAccount.accountId, {
+        session: freshSession ? now : times.session,
+        weekly: freshWeekly ? now : times.weekly
+      })
+    }
     if (!freshSession && !freshWeekly) {
       return
     }

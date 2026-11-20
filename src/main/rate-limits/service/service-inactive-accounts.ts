@@ -47,7 +47,10 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         }
         try {
           const startedAt = Date.now()
-          const liveAtStart = this.inactiveClaudeLiveUsage.get(account.id) ?? null
+          const liveWindowsAtStart = this.inactiveClaudeLiveWindowAt.get(account.id) ?? {
+            session: 0,
+            weekly: 0
+          }
           const fresh = await fetchInactiveClaudeAccountUsage(account, {
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
@@ -67,20 +70,26 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           }
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
           const live = this.inactiveClaudeLiveUsage.get(account.id) ?? null
+          const liveWindowTimes = this.inactiveClaudeLiveWindowAt.get(account.id) ?? {
+            session: 0,
+            weekly: 0
+          }
           const newerLive = live && live.updatedAt >= startedAt ? live : null
+          const liveSessionArrived =
+            liveWindowTimes.session >= startedAt &&
+            liveWindowTimes.session > liveWindowsAtStart.session
+          const liveWeeklyArrived =
+            liveWindowTimes.weekly >= startedAt &&
+            liveWindowTimes.weekly > liveWindowsAtStart.weekly
           const merged = newerLive
             ? {
                 ...fresh,
-                session:
-                  newerLive.session !== liveAtStart?.session ? newerLive.session : fresh.session,
-                weekly: newerLive.weekly !== liveAtStart?.weekly ? newerLive.weekly : fresh.weekly,
+                session: liveSessionArrived ? newerLive.session : fresh.session,
+                weekly: liveWeeklyArrived ? newerLive.weekly : fresh.weekly,
                 updatedAt: Math.max(fresh.updatedAt, newerLive.updatedAt),
                 usageMetadata: {
                   ...fresh.usageMetadata,
-                  ...(newerLive.session !== liveAtStart?.session ||
-                  newerLive.weekly !== liveAtStart?.weekly
-                    ? newerLive.usageMetadata
-                    : {})
+                  ...(liveSessionArrived || liveWeeklyArrived ? newerLive.usageMetadata : {})
                 }
               }
             : fresh
@@ -223,6 +232,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
   evictInactiveClaudeCache(accountId: string): void {
     this.inactiveClaudeAccountsGeneration += 1
     this.inactiveClaudeCache.delete(accountId)
+    this.inactiveClaudeLiveUsage.delete(accountId)
+    this.inactiveClaudeLiveWindowAt.delete(accountId)
     this.inactiveClaudeFetching.delete(accountId)
     this.pushToRenderer()
   }
@@ -246,11 +257,18 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     for (const accountId of this.inactiveClaudeCache.keys()) {
       if (!currentIds.has(accountId)) {
         this.inactiveClaudeCache.delete(accountId)
+        this.inactiveClaudeLiveWindowAt.delete(accountId)
       }
     }
     for (const accountId of this.inactiveClaudeFetching) {
       if (!currentIds.has(accountId)) {
         this.inactiveClaudeFetching.delete(accountId)
+      }
+    }
+    for (const accountId of this.inactiveClaudeLiveWindowAt.keys()) {
+      if (!currentIds.has(accountId)) {
+        this.inactiveClaudeLiveWindowAt.delete(accountId)
+        this.inactiveClaudeLiveUsage.delete(accountId)
       }
     }
   }

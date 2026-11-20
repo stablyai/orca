@@ -48,6 +48,7 @@ export class HistoryResumePlanner {
     }
     if (
       retained &&
+      retained.entry.committedAt === undefined &&
       (retained.entry.preparedAt ?? retained.entry.openedAt) + 1_800_000 <= Date.now()
     ) {
       throw new Error('The History account choice expired. Resume again from History.')
@@ -55,9 +56,7 @@ export class HistoryResumePlanner {
     const confirmedLabel = retained?.entry.confirmedAccountLabel ?? receipt?.confirmedAccountLabel
     const confirmedIdentity =
       retained?.entry.confirmedAccountIdentity ?? receipt?.confirmedAccountIdentity
-    const currentAccount = this.deps
-      .accounts(provider, workspaceId ?? '')
-      .accounts.find((account) => account.id === entry.accountId)
+    const currentAccount = this.currentReceiptAccount(provider, workspaceId ?? '', entry.accountId)
     if (
       (confirmedLabel !== undefined && currentAccount?.label !== confirmedLabel) ||
       (confirmedIdentity !== undefined && currentAccount?.identity !== confirmedIdentity)
@@ -74,9 +73,7 @@ export class HistoryResumePlanner {
       )
     }
     const home = await realpath(await this.deps.prepareAccount(provider, entry.accountId))
-    const confirmedAgain = this.deps
-      .accounts(provider, workspaceId ?? '')
-      .accounts.find((account) => account.id === entry.accountId)
+    const confirmedAgain = this.currentReceiptAccount(provider, workspaceId ?? '', entry.accountId)
     if (
       !confirmedAgain?.available ||
       (confirmedLabel !== undefined && confirmedAgain.label !== confirmedLabel) ||
@@ -88,6 +85,20 @@ export class HistoryResumePlanner {
       throw new Error('The chosen History account home changed. Resume again from History.')
     }
     return { accountId: entry.accountId, home }
+  }
+
+  private currentReceiptAccount(provider: Provider, workspaceId: string, accountId: string | null) {
+    const account = this.deps
+      .accounts(provider, workspaceId)
+      .accounts.find((candidate) => candidate.id === accountId)
+    if (accountId !== null || !account) {
+      return account
+    }
+    const fresh = this.deps.freshSystemDefaultIdentity?.(provider)
+    if (fresh === null) {
+      return undefined
+    }
+    return fresh ? { ...account, ...fresh } : account
   }
   async prepare(args: AiVaultPrepareSessionResumeArgs): Promise<AiVaultPrepareSessionResumeResult> {
     this.prune()
@@ -112,10 +123,10 @@ export class HistoryResumePlanner {
             return { useRealCodexHome: false }
           }
           const preparedAt = retained.entry.preparedAt ?? retained.entry.openedAt
-          if (preparedAt + 1_800_000 > Date.now()) {
+          if (retained.entry.committedAt !== undefined || preparedAt + 1_800_000 > Date.now()) {
             const openedAt = await this.deps.ledger.launchReceipts.setCommitTimestamp(
               args.commitToken,
-              args.commitTimestamp ?? Date.now()
+              Date.now()
             )
             if (!openedAt) {
               throw new Error('The resume receipt expired. Refresh History.')
@@ -126,13 +137,13 @@ export class HistoryResumePlanner {
         }
         throw new Error('The resume receipt expired. Refresh History.')
       }
-      const openedAt =
-        (await this.deps.ledger.launchReceipts.setCommitTimestamp(
-          args.commitToken,
-          args.commitTimestamp ?? Date.now()
-        )) ??
-        args.commitTimestamp ??
+      const openedAt = await this.deps.ledger.launchReceipts.setCommitTimestamp(
+        args.commitToken,
         Date.now()
+      )
+      if (openedAt === undefined) {
+        throw new Error('The resume receipt expired. Refresh History.')
+      }
       for (const entry of receipt.entries) {
         await this.deps.ledger.record({ ...entry, openedAt: entry.openedAt ? openedAt : 0 })
       }

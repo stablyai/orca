@@ -2,7 +2,7 @@ import { claudeAccountRequiresPrivateHistory } from '../setup/claude-profile-his
 import {
   claudeAccountUsagePreparation,
   claudeSystemDefaultRunsAnotherAccount,
-  claudeWorkspaceUsageAccountId
+  claudeUsageAccountEnv
 } from './claude-account-usage-preparation'
 import { ClaudeProfileSetupQueue } from '../setup/claude-profile-setup-queue'
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
@@ -50,7 +50,6 @@ import {
   type ClaudeFolderLogin
 } from '../../sign-in/claude-account-folder'
 import { resolveLoginShellEnvironment } from '../../../startup/shell-environment/login-shell-environment'
-import { CLAUDE_USAGE_ACCOUNT_ID_ENV } from '../../../../shared/agent-accounts/claude/claude-system-default-usage-account'
 
 export type { ClaudeProfileRouterSettings } from './claude-profile-router-settings'
 
@@ -266,14 +265,12 @@ export class ClaudeProfileRouter {
     }
     return report
   }
-
   launchEnv(): ClaudeEnvPatch {
     const home = this.routedHome()
     const profile = this.routedProfile()
-    const login = profile ? null : this.systemDefaultLogin()
     return {
       [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath,
-      [CLAUDE_USAGE_ACCOUNT_ID_ENV]: claudeWorkspaceUsageAccountId(profile?.accountId, login),
+      ...claudeUsageAccountEnv(profile?.accountId, profile ? null : this.systemDefaultLogin()),
       // Preserve the user's inherited CLAUDE_CONFIG_DIR for System default.
       ...(home ? { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home } : {})
     }

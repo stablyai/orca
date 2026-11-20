@@ -94,6 +94,10 @@ export abstract class RateLimitServiceState {
   protected claudeUsageAbortController = new AbortController()
   protected liveClaudeUsage: ProviderRateLimits | null = null
   protected readonly inactiveClaudeLiveUsage = new Map<string, ProviderRateLimits>()
+  protected readonly inactiveClaudeLiveWindowAt = new Map<
+    string,
+    { session: number; weekly: number }
+  >()
   // Why: cached display receipts cannot establish when the selected account was last checked.
   protected lastClaudeCheckCompletedAt: number | null = null
   // Capture account attribution once per cycle instead of rerunning auth preparation on every post.

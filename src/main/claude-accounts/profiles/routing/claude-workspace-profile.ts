@@ -67,6 +67,9 @@ export class ClaudeWorkspaceProfiles {
         ? posix.join(guestHome, '.claude')
         : this.router.systemDefaultHome()
       const login = !distro ? this.router.systemDefaultLogin() : null
+      const usageAccountId = distro
+        ? null
+        : claudeSystemDefaultUsageAccountId(login?.email, login?.organizationUuid)
       return {
         configDir: distro ? toWindowsWslPath(configDir, distro) : configDir,
         runtime: distro ? 'wsl' : 'host',
@@ -74,14 +77,7 @@ export class ClaudeWorkspaceProfiles {
         wslLinuxConfigDir: distro ? configDir : null,
         envPatch: {
           CLAUDE_CONFIG_DIR: configDir,
-          ...(distro
-            ? {}
-            : {
-                [CLAUDE_USAGE_ACCOUNT_ID_ENV]: claudeSystemDefaultUsageAccountId(
-                  login?.email,
-                  login?.organizationUuid
-                )
-              }),
+          ...(usageAccountId ? { [CLAUDE_USAGE_ACCOUNT_ID_ENV]: usageAccountId } : {}),
           [CLAUDE_PROFILE_POINTER_ENV]: '',
           [CLAUDE_INJECTED_CONFIG_DIR_ENV]: configDir
         },

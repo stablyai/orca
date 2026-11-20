@@ -45,7 +45,10 @@ export class HistoryLaunchReceipts {
       const rows = schema.parse(
         Object.fromEntries(
           Object.entries(await this.read()).filter(
-            ([, row]) => (row.entry.preparedAt ?? row.entry.openedAt) + 1_800_000 > now
+            ([, row]) =>
+              (row.entry.committedAt !== undefined &&
+                row.entry.committedAt + 2_592_000_000 > now) ||
+              (row.entry.preparedAt ?? row.entry.openedAt) + 1_800_000 > now
           )
         )
       )

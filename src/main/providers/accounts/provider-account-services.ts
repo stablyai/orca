@@ -191,11 +191,12 @@ export function createProviderAccountServices(
         WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID
       )
     const login = previewSystemDefault ? claudeRuntimeAuth.router.systemDefaultLogin(5_000) : null
+    const systemDefaultId = claudeSystemDefaultUsageAccountId(login?.email, login?.organizationUuid)
     return [
-      ...(previewSystemDefault
+      ...(previewSystemDefault && systemDefaultId
         ? [
             {
-              id: claudeSystemDefaultUsageAccountId(login?.email, login?.organizationUuid)
+              id: systemDefaultId
             }
           ]
         : []),

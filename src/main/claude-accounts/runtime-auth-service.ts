@@ -71,16 +71,14 @@ export class ClaudeRuntimeAuthService {
       if (!pinned.accountId) {
         await this.router.environmentReady
       }
+      const login = pinned.accountId ? null : this.router.systemDefaultLogin()
+      const usageAccountId =
+        pinned.accountId ?? claudeSystemDefaultUsageAccountId(login?.email, login?.organizationUuid)
       return {
         configDir: pinned.home,
         envPatch: {
           CLAUDE_CONFIG_DIR: pinned.home,
-          [CLAUDE_USAGE_ACCOUNT_ID_ENV]:
-            pinned.accountId ??
-            claudeSystemDefaultUsageAccountId(
-              this.router.systemDefaultLogin()?.email,
-              this.router.systemDefaultLogin()?.organizationUuid
-            ),
+          ...(usageAccountId ? { [CLAUDE_USAGE_ACCOUNT_ID_ENV]: usageAccountId } : {}),
           ORCA_CLAUDE_PROFILE_POINTER: '',
           ORCA_CLAUDE_INJECTED_CONFIG_DIR: pinned.home
         },

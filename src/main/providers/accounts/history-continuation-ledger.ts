@@ -73,7 +73,10 @@ export class HistoryContinuationLedger {
       await writeFileDurable(
         durableWriteTempPath(this.path),
         this.path,
-        JSON.stringify([...retained, { ...previous, ...entry }]),
+        JSON.stringify([
+          ...retained,
+          { ...previous, ...entry, openedAt: Math.max(previous?.openedAt ?? 0, entry.openedAt) }
+        ]),
         0o600
       )
     })
