@@ -1,3 +1,4 @@
+import { createClaudeSideloadProbe } from './claude-sideload-probe-cache'
 import { realpath, stat } from 'node:fs/promises'
 import { defaultClaudeConfigDir } from '../structured/launch/claude-config-dir-pin'
 import { claudeVersionReaches, probeClaudeCliVersion } from './claude-hook-event-versions'
@@ -62,8 +63,8 @@ function refusedOptions(message: string): { options: string[]; perAccount: boole
 const MAX_REMEMBERED = 32
 
 export type ClaudeCliLaunch = {
-  /** Execution-host identity for binaries that cannot be statted on this host. */
-  binaryKey?: string
+  hostKey?: string
+  accountConfigDir?: string
   command: string
   prefixArgs?: readonly string[]
   cwd: string
@@ -91,6 +92,9 @@ export type ClaudeCliFlagCheck = (
 ) => Promise<ClaudeCliFlagFact>
 
 export type ClaudeCliFlagSupport = {
+  sideloadRefused?: (
+    launch: Pick<ClaudeCliLaunch, 'env' | 'hostKey' | 'accountConfigDir'>
+  ) => boolean
   probeSideload?: (
     launch: ClaudeCliLaunch,
     run: () => Promise<{ code: number | null; stdout: string; stderr: string; timedOut?: boolean }>
@@ -135,8 +139,6 @@ async function within<T>(pending: Promise<T>, ms: number): Promise<T | undefined
 type BinaryFacts = {
   version?: string
   refused: Set<string>
-  refusedByAccount: Map<string, Set<string>>
-  sideloadChecked: Map<string, number>
 }
 
 export function createClaudeCliFlagSupport(
@@ -152,20 +154,21 @@ export function createClaudeCliFlagSupport(
     now: () => performance.now()
   }
 ): ClaudeCliFlagSupport {
-  const keyOf = async (
-    launch: Pick<ClaudeCliLaunch, 'command' | 'prefixArgs' | 'cwd' | 'binaryKey'>
-  ) => {
-    const key = launch.binaryKey ?? (await deps.keyOf(launch.command, launch.cwd))
+  const keyOf = async (launch: Pick<ClaudeCliLaunch, 'command' | 'prefixArgs' | 'cwd'>) => {
+    const key = await deps.keyOf(launch.command, launch.cwd)
     return key === null ? null : JSON.stringify([key, launch.prefixArgs ?? []])
   }
   const known = new Map<string, BinaryFacts>()
-  const sideloadProbing = new Map<string, Promise<ClaudeCliFlagFact>>()
+  const refusedByAccount = new Map<string, Set<string>>()
+  const accountKey = (launch: Pick<ClaudeCliLaunch, 'env' | 'hostKey' | 'accountConfigDir'>) =>
+    JSON.stringify([
+      launch.hostKey ?? 'local',
+      launch.accountConfigDir || defaultClaudeConfigDir(launch.env)
+    ])
   const probing = new Map<string, { settled: Promise<void>; startedAt: number }>()
   const touch = (key: string): BinaryFacts => {
     const facts = known.get(key) ?? {
-      refused: new Set<string>(),
-      refusedByAccount: new Map<string, Set<string>>(),
-      sideloadChecked: new Map<string, number>()
+      refused: new Set<string>()
     }
     known.delete(key)
     known.set(key, facts)
@@ -189,7 +192,7 @@ export function createClaudeCliFlagSupport(
     const facts = known.get(key)
     if (
       facts?.refused.has(flag.option) ||
-      facts?.refusedByAccount.get(defaultClaudeConfigDir(launch.env))?.has(flag.option)
+      refusedByAccount.get(accountKey(launch))?.has(flag.option)
     ) {
       return 'unsupported'
     }
@@ -221,70 +224,40 @@ export function createClaudeCliFlagSupport(
     if (options.length === 0) {
       return
     }
-    const key = await keyOf(launch)
-    if (key === null) {
-      return
-    }
-    const facts = touch(key)
-    let refused = facts.refused
+    let refused: Set<string>
     if (perAccount) {
-      const account = defaultClaudeConfigDir(launch.env)
-      refused = facts.refusedByAccount.get(account) ?? new Set<string>()
-      facts.refusedByAccount.set(account, refused)
+      const account = accountKey(launch)
+      refused = refusedByAccount.get(account) ?? new Set<string>()
+      refusedByAccount.set(account, refused)
+      for (const stale of refusedByAccount.keys()) {
+        if (refusedByAccount.size <= MAX_REMEMBERED) {
+          break
+        }
+        refusedByAccount.delete(stale)
+      }
+    } else {
+      const key = await keyOf(launch)
+      if (key === null) {
+        return
+      }
+      refused = touch(key).refused
     }
     options.forEach((option) => refused.add(option))
   }
 
   return {
-    probeSideload: async (launch, run) => {
-      const key = await keyOf(launch)
-      if (key === null) {
-        return 'unknown'
-      }
-      const account = defaultClaudeConfigDir(launch.env)
-      const refused = () => answer(key, CLAUDE_PLUGIN_DIR_FLAG, launch) === 'unsupported'
-      if (refused()) {
+    sideloadRefused: (launch) =>
+      refusedByAccount.get(accountKey(launch))?.has(CLAUDE_PLUGIN_DIR_FLAG.option) === true,
+    probeSideload: createClaudeSideloadProbe({
+      accountKey,
+      refused: (launch) =>
+        refusedByAccount.get(accountKey(launch))?.has(CLAUDE_PLUGIN_DIR_FLAG.option) === true,
+      remember
+    }),
+    check: async (flag, launch, budgetMs = deps.budgetMs, startProbe = true) => {
+      if (refusedByAccount.get(accountKey(launch))?.has(flag.option)) {
         return 'unsupported'
       }
-      const checkedAt = touch(key).sideloadChecked.get(account)
-      if (checkedAt !== undefined && deps.now() - checkedAt < 5 * 60_000) {
-        return 'supported'
-      }
-      const probeKey = JSON.stringify([key, account])
-      const existing = sideloadProbing.get(probeKey)
-      if (existing) {
-        return existing
-      }
-      const pending = (async (): Promise<ClaudeCliFlagFact> => {
-        try {
-          const result = await run()
-          if (result.timedOut) {
-            return 'unknown'
-          }
-          await remember(launch, new Error(`${result.stderr}\n${result.stdout}`))
-          if (refused()) {
-            return 'unsupported'
-          }
-          if (
-            result.code !== 0 &&
-            result.stderr.includes(
-              'Input must be provided either through stdin or as a prompt argument when using --print'
-            )
-          ) {
-            touch(key).sideloadChecked.set(account, deps.now())
-            return 'supported'
-          }
-          return 'unknown'
-        } catch {
-          return 'unknown'
-        } finally {
-          sideloadProbing.delete(probeKey)
-        }
-      })()
-      sideloadProbing.set(probeKey, pending)
-      return pending
-    },
-    check: async (flag, launch, budgetMs = deps.budgetMs, startProbe = true) => {
       // Include binary lookup in the launch's wait budget.
       const deadline = deps.now() + budgetMs
       const key = await within(keyOf(launch), budgetMs)

@@ -1,7 +1,4 @@
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
-import { prepareClaudeTerminalSideload } from '../../../claude/agent-view/claude-terminal-sideload'
-import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveWindowsShellStartupFamily } from '../../../../shared/shell/launch/windows-terminal-shell'
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -106,6 +103,7 @@ export function configureLocalPtyProvider(args: {
         settings: ptySettings
       }),
       launchCommand: ctx?.command,
+      cwd: ctx?.cwd,
       launchAgent: ctx?.launchAgent,
       shellPath: ctx?.shellPath,
       isWsl: ctx?.isWsl,
@@ -141,16 +139,7 @@ export function configureLocalPtyProvider(args: {
     if (ctx?.isWsl === true) {
       addOrcaWslInteropEnv(env)
     }
-    await prepareClaudeTerminalSideload({
-      env,
-      command: ctx?.command,
-      cwd: ctx?.cwd,
-      shell: resolveStartupShell(
-        ctx?.isWsl ? 'linux' : process.platform,
-        process.platform === 'win32' ? resolveWindowsShellStartupFamily(ctx?.shellPath) : undefined
-      ),
-      ...(ctx?.isWsl ? { wsl: { distro: ctx.wslDistro ?? undefined } } : {})
-    })
+
     return env
   }
   localProvider.configure({

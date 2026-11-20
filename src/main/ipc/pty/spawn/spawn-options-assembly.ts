@@ -163,7 +163,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   )
   const launchCommand = connectionId
     ? openCodeLaunch.command
-    : await prepareClaudeTerminalLaunch({
+    : prepareClaudeTerminalLaunch({
         env,
         command: openCodeLaunch.command,
         cwd: input.cwd,

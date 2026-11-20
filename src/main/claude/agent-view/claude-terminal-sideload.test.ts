@@ -1,6 +1,9 @@
 import { delimiter } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { prepareClaudeTerminalSideload } from './claude-terminal-sideload'
+import {
+  prewarmClaudeTerminalSideload,
+  prepareClaudeTerminalSideload
+} from './claude-terminal-sideload'
 import {
   CLAUDE_PLUGIN_DIR_FLAG,
   createClaudeCliFlagSupport
@@ -18,11 +21,6 @@ function fixture(stderr = refusal) {
     budgetMs: 1000,
     now: () => performance.now()
   })
-  const resolveLaunch = async (input: { env: Record<string, string> }) => ({
-    command: '/bin/claude',
-    cwd: '/project',
-    env: input.env
-  })
   const run = vi.fn(async (_options: unknown) => ({
     code: 1,
     stdout: '',
@@ -31,7 +29,12 @@ function fixture(stderr = refusal) {
     signal: null,
     environmentResolved: true
   }))
-  const deps = { support, resolveLaunch, runProcess: run, runWslProcess: run }
+  const deps = {
+    support,
+    resolveCommandOnLocalPath: async () => '/bin/claude',
+    runProcess: run,
+    runWslProcess: run
+  }
   return { support, deps, run }
 }
 
@@ -50,10 +53,11 @@ function input(account = '/account/locked') {
 }
 
 describe('terminal Claude under managed sideload policy', () => {
-  it('drops both Orca carriers before the first terminal command and shares refusal with chat', async () => {
+  it('remembers background refusal for the next terminal and native chat across folders', async () => {
     const { deps, support, run } = fixture()
     const launch = input()
-    await prepareClaudeTerminalSideload(launch, deps)
+    await prewarmClaudeTerminalSideload(launch, deps)
+    prepareClaudeTerminalSideload(launch, support)
     expect(launch.env).toEqual({
       CLAUDE_CONFIG_DIR: '/account/locked',
       CLAUDE_CODE_PLUGIN_DIRS: ''
@@ -61,7 +65,7 @@ describe('terminal Claude under managed sideload policy', () => {
     expect(
       await support.check(CLAUDE_PLUGIN_DIR_FLAG, {
         command: '/bin/claude',
-        cwd: '/project',
+        cwd: '/another-project',
         env: { CLAUDE_CONFIG_DIR: '/account/locked' }
       })
     ).toBe('unsupported')
@@ -86,7 +90,8 @@ describe('terminal Claude under managed sideload policy', () => {
       signal: null,
       environmentResolved: true
     })
-    await prepareClaudeTerminalSideload(other, deps)
+    await prewarmClaudeTerminalSideload(other, deps)
+    prepareClaudeTerminalSideload(other, support)
     expect(other.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBe('/orca/plugin')
   })
 
@@ -98,15 +103,17 @@ describe('terminal Claude under managed sideload policy', () => {
     )
     const launch = input()
     launch.env.CLAUDE_CODE_PLUGIN_DIRS = ['/user/plugin', '/orca/plugin'].join(delimiter)
-    await prepareClaudeTerminalSideload(launch, deps)
+    await prewarmClaudeTerminalSideload(launch, deps)
+    prepareClaudeTerminalSideload(launch, support)
     expect(launch.env.CLAUDE_CODE_PLUGIN_DIRS).toBe('/user/plugin')
     expect(run).not.toHaveBeenCalled()
   })
 
-  it('leaves unknown failures retryable and passes guest launches through the WSL runner', async () => {
-    const { deps } = fixture('unrelated startup failure')
+  it('leaves unrelated failures unknown and isolates guest refusal memory from native launches', async () => {
+    const { deps, support } = fixture('unrelated startup failure')
     const launch = input()
-    await prepareClaudeTerminalSideload(launch, deps)
+    await prewarmClaudeTerminalSideload(launch, deps)
+    prepareClaudeTerminalSideload(launch, support)
     expect(launch.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBe('/orca/plugin')
     deps.runWslProcess.mockResolvedValueOnce({
       code: 1,
@@ -116,12 +123,32 @@ describe('terminal Claude under managed sideload policy', () => {
       signal: null,
       environmentResolved: true
     })
-    await prepareClaudeTerminalSideload({ ...launch, wsl: { distro: 'work' } }, deps)
+    await prewarmClaudeTerminalSideload({ ...launch, wsl: { distro: 'work' } }, deps)
+    prepareClaudeTerminalSideload({ ...launch, wsl: { distro: 'work' } }, support)
     expect(launch.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBeUndefined()
     expect(deps.runWslProcess.mock.calls[1][0]).toMatchObject({
       distro: 'work',
-      program: '/bin/claude',
+      program: 'claude',
       input: ''
     })
   })
+})
+
+it('checks the sequenced child under the login-shell config folder', async () => {
+  const { deps, support, run } = fixture()
+  const launch = {
+    command: `bash -lc 'eval "$ORCA_SEQUENCED_STARTUP_SCRIPT"'`,
+    cwd: '/project',
+    shell: 'posix' as const,
+    env: {
+      ORCA_SEQUENCED_STARTUP_COMMAND: 'claude --resume session',
+      ORCA_CLAUDE_CONFIG_DIR: '/account/login-shell',
+      ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR: '/orca/plugin',
+      CLAUDE_CODE_PLUGIN_DIRS: '/orca/plugin'
+    }
+  }
+  await prewarmClaudeTerminalSideload(launch, deps)
+  prepareClaudeTerminalSideload(launch, support)
+  expect(run.mock.calls[0][0]).toMatchObject({ env: { CLAUDE_CONFIG_DIR: '/account/login-shell' } })
+  expect(launch.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBeUndefined()
 })
