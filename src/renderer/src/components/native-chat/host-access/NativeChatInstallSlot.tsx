@@ -136,11 +136,11 @@ export function NativeChatInstallSlot(props: {
   install: { slot: NativeChatInstallSlotState; signIn: NativeChatSignInStripState | null }
   agentLabel: string
   /** A new bot's setup card offers the install itself. */
-  installShownElsewhere?: boolean
+  inCard?: boolean
 }): React.JSX.Element | null {
   const { slot, signIn } = props.install
   const strip =
-    slot.kind === 'install' && slot.layout === 'strip' && !props.installShownElsewhere ? (
+    slot.kind === 'install' && slot.layout === 'strip' && !props.inCard ? (
       <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
     ) : signIn ? (
       <NativeChatSignInStrip state={signIn} agentLabel={props.agentLabel} />

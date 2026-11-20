@@ -192,10 +192,12 @@ function TryAgain({ bot }: { bot: Bot }): React.JSX.Element {
  *  its first message, each with the agent's latest retry or failure line and, once failed, Try again. */
 function BotSetupSteps({
   bot,
-  firstScreen
+  firstScreen,
+  isVisible
 }: {
   bot: Bot
   firstScreen: NativeChatFirstScreen
+  isVisible: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const agentReady =
@@ -228,7 +230,7 @@ function BotSetupSteps({
   ]
   const failed = start.state === 'failed' || reply.state === 'failed'
   const retry = useCallback(() => void tryAgain(bot), [bot])
-  const install = useBotSetupInstall(bot, failed, retry)
+  const install = useBotSetupInstall(bot, failed && isVisible, retry)
   return (
     <div className="mt-6 w-96 max-w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
       <ol className="flex flex-col">
@@ -306,7 +308,7 @@ export function BotFirstScreen({
           agent: botAgentLabel(bot.agent)
         })}
       </span>
-      <BotSetupSteps bot={bot} firstScreen={firstScreen} />
+      <BotSetupSteps bot={bot} firstScreen={firstScreen} isVisible={isVisible} />
       {rows.length > 0 ? (
         <div className="flex w-96 max-w-full flex-col gap-2 pt-6">
           <span className="text-xs text-chat-foreground-faint">

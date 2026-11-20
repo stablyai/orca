@@ -382,7 +382,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   <NativeChatInstallSlot
                     install={install}
                     agentLabel={agentLabel}
-                    installShownElsewhere={bot.kickoff.firstScreen?.phase === 'failed'}
+                    inCard={viewState.kind === 'ready' && bot.setupFailed}
                   />
                 )}
                 {subagents.statusBar}
