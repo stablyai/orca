@@ -44,7 +44,11 @@ export async function settleBrowserExtensionResume(
     await restore
     claimBrowserExtensionIdleState(profileId, extension.id)
   } catch (error) {
-    if (!isBrowserExtensionResuming(profileId, extension.id)) {
+    // Why loaded too: a disable or uninstall during the restore is not a failed resume.
+    if (
+      !isBrowserExtensionResuming(profileId, extension.id) ||
+      !sess.extensions.getExtension(extension.id)
+    ) {
       throw error
     }
     console.warn(`[browser-extensions] Could not resume ${extension.id}; starting it clean:`, error)

@@ -16,7 +16,8 @@ const idleUnloadedProfileIds = new Set<string>()
 const reloadedWhileIdle = new Map<string, Set<string>>()
 /**
  * Profile → extensions whose session can't resume: they used chrome.storage.session (unloading
- * empties it), lost an open native messaging connection, or had a call refused as they unloaded.
+ * empties it), lost open native messaging connections or notifications, or had a call still being
+ * handled when they unloaded.
  * They start clean, with onStartup, instead.
  */
 const cleanStartNeeded = new Map<string, Set<string>>()

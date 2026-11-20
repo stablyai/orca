@@ -224,12 +224,19 @@ export async function restartBrowserExtensionContentScripts(
 ): Promise<void> {
   forgetBrowserExtensionContentScriptRestore(session, extension.id)
   forgetBrowserExtensionSessionContentScripts(profileId, extension.id)
-  await runBrowserExtensionNativePage({
+  const state = stateFor(session, extension.id)
+  const unregistered = runBrowserExtensionNativePage({
     session,
     extensionId: extension.id,
     code: `(${unregisterAllNativeScripts.toString()})()`,
-    timeoutMs
+    timeoutMs,
+    signal: state.signal
   })
+  // Why first in the fresh owner's queue: a call arriving meanwhile must not restore before it.
+  state.queue = unregistered.catch((error: unknown) => {
+    state.failed = error instanceof Error ? error : new Error(String(error))
+  })
+  await unregistered
   await restoreBrowserExtensionContentScripts(session, profileId, extension, timeoutMs)
 }
 
