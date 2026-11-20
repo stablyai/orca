@@ -54,5 +54,5 @@ it('refuses a leftover whose record predates marker identity', async () => {
 
   await expect(
     assertLeftoverIsRecordedCheckout({ worktreePath, gitdir: undefined })
-  ).rejects.toThrow('A different checkout is now at')
+  ).rejects.toThrow('cannot confirm')
 })
