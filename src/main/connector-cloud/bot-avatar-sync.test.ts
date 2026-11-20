@@ -79,6 +79,27 @@ describe('BotAvatarSync', () => {
     await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
   })
 
+  it('waits for the next bot write after the cloud says it doesn’t know the bot', async () => {
+    vi.useFakeTimers()
+    try {
+      const { sync, call } = harness([{ avatar: 'mascot:K2', github: {} }])
+      call.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        error: 'unknown_bot',
+        retryAfterMs: null
+      })
+      sync.changed()
+      await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1))
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(call).toHaveBeenCalledTimes(1)
+      sync.changed()
+      await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(2))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('sends one picture at a time per bot, ending on the latest', async () => {
     const { sync, call, list } = harness([{ avatar: 'mascot:K2', slack: SLACK }])
     let answer!: (value: unknown) => void

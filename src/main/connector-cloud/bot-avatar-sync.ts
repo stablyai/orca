@@ -18,6 +18,8 @@ export class BotAvatarSync {
   private readonly sent = new Map<string, string>()
   // One send per bot at a time, so an older picture never lands after a newer one.
   private readonly sending = new Set<string>()
+  // Per bot, the avatar the cloud refused as an unknown bot: not sent again until the next bot write.
+  private readonly refused = new Map<string, string>()
   private retry: ReturnType<typeof setTimeout> | null = null
 
   constructor(
@@ -31,6 +33,12 @@ export class BotAvatarSync {
 
   /** After any bot write, and once at start for changes made while signed out or offline. */
   changed(): void {
+    // A write may be what registers a refused bot with the cloud: everything is tried again.
+    this.refused.clear()
+    this.pass()
+  }
+
+  private pass(): void {
     if (!this.deps.bots.enabled()) {
       return
     }
@@ -39,6 +47,7 @@ export class BotAvatarSync {
         (bot.slack || bot.github) &&
         bot.avatar &&
         this.sent.get(bot.id) !== bot.avatar &&
+        this.refused.get(bot.id) !== bot.avatar &&
         !this.sending.has(bot.id)
       ) {
         void this.send(bot, bot.avatar)
@@ -58,25 +67,31 @@ export class BotAvatarSync {
     }
     this.sending.add(bot.id)
     let sent = false
+    let refused = false
     try {
       const png = parsed.kind === 'upload' ? await this.deps.bots.readAvatarImage(bot.id) : null
       const body: ConnectorBotAvatarRequest | null =
         parsed.kind === 'mascot'
           ? { v: 1, kind: 'mascot', id: parsed.id }
           : png && { v: 1, kind: 'upload', version: parsed.version, png: png.toString('base64') }
-      sent = body !== null && (await botsCloudClient(cloud).setAvatar(bot.id, body)).ok
+      const result = body && (await botsCloudClient(cloud).setAvatar(bot.id, body))
+      sent = result?.ok === true
+      refused = result?.ok === false && result.error === 'unknown_bot'
     } catch (error) {
-      console.error('Failed to send the bot’s picture to Slack:', error)
+      console.error('Failed to send the bot’s picture to the cloud:', error)
     }
     this.sending.delete(bot.id)
     if (sent) {
       this.sent.set(bot.id, avatar)
       // The picture may have changed while this one was on its way.
-      this.changed()
+      this.pass()
+    } else if (refused) {
+      // The cloud doesn't know this bot: asking every minute won't change that, a bot write may.
+      this.refused.set(bot.id, avatar)
     } else {
       this.retry ??= setTimeout(() => {
         this.retry = null
-        this.changed()
+        this.pass()
       }, RETRY_MS)
       this.retry.unref?.()
     }
