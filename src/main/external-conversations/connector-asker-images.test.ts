@@ -162,6 +162,26 @@ describe('connectorAskerImages', () => {
     expect(read).not.toHaveBeenCalled()
   })
 
+  it('hands back what it stored when a later write never finishes', async () => {
+    const { read } = images({ F0A: { bytes: PNG }, F0B: { bytes: PNG } })
+    let writes = 0
+    const get = connectorAskerImages({
+      read,
+      store: (name) =>
+        ++writes === 1 ? Promise.resolve(`/attachments/${name}`) : new Promise(() => {}),
+      fetch: async () => new Response(new Uint8Array(PNG)),
+      budgetMs: 50
+    })
+    expect(
+      await get({
+        botId: 'b',
+        conversation,
+        asker: asker('[image: a.png, file F0A]\n[image: b.png, file F0B]'),
+        signal
+      })
+    ).toEqual(['/attachments/F0A.png'])
+  })
+
   it('stops at its budget and hands back what it has', async () => {
     const stored: string[] = []
     const get = connectorAskerImages({

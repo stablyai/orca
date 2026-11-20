@@ -144,7 +144,8 @@ export function connectorAskerImages(deps: {
         }
         const named = typeof download?.name === 'string' ? download.name : fileId
         const base = named.slice(0, named.length - extname(named).length) || fileId
-        paths.push(await deps.store(`${base}${extension}`, bytes))
+        // The disk is bounded too: a write that hangs must not hold the turn.
+        paths.push(await within(deps.store(`${base}${extension}`, bytes), bounded))
       } catch {
         // Out of time, or the cloud or the disk refused: the turn goes on with what it has.
         if (bounded.aborted) {
