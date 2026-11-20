@@ -55,8 +55,8 @@ device.
 | Rotate device            | `ORCA emulator rotate landscape_left --json`                | The orientation persists for subsequent gestures.                                                                                                                     |
 | Accessibility tree       | `ORCA emulator ax --json`                                   | serve-sim node tree, capped at 500 nodes, frames normalized 0..1 with a top-left origin. Needs an active session.                                                     |
 | Raw passthrough          | `ORCA emulator exec --command "ca-debug blended on" --json` | serve-sim subcommand string, without a `serve-sim` prefix.                                                                                                            |
-| Stop the helper          | `ORCA emulator kill --json`                                 | Leaves the device booted.                                                                                                                                             |
-| Stop and power off       | `ORCA emulator shutdown --json`                             | Stops the helper and shuts the simulator device down.                                                                                                                 |
+| Stop the helper          | `ORCA emulator kill --json`                                 | Leaves the device booted and drops Orca's session, so closing the pane or quitting Orca no longer shuts it down.                                                      |
+| Stop and power off       | `ORCA emulator shutdown --json`                             | Stops the helper and shuts the simulator device down. What to run when you are done with a device you booted.                                                         |
 
 ## Targeting
 
@@ -88,7 +88,15 @@ and retry.
   Mac's current layout and restores it when the helper stops.
 - The pane and the CLI share one stream and one helper, so closing the pane can stop the
   stream.
-- Run `kill` when you are done. A helper left running holds the device until Orca quits.
+- Leave each device as you found it. Check `ORCA emulator devices --json` before you attach.
+  When you are done, run `shutdown` on a simulator that was `shutdown` then (`attach` boots
+  it), and `kill` on one that was already `booted`, which someone else is using. A booted
+  simulator holds a gigabyte or more of memory whether or not anything streams it.
+- Never end with `kill` on a simulator you booted. `kill` stops the helper and drops Orca's
+  session, and Orca never shuts down a device it has no session for, so the simulator stays
+  booted until someone shuts it down or the Mac restarts.
+- Keep a device running only while the user is looking at it in the pane. Orca shuts down a
+  device it attached when the worktree's last emulator pane closes, and when Orca quits.
 - The iOS backend drives private simulator APIs, so an Xcode update can change its behavior.
 - While Xcode's Device Hub is running, the simulator drops Orca's touch and keyboard input, so
   `tap`, `type`, and `gesture` fail with `emulator_input_blocked`. Quit Device Hub, which shuts
@@ -107,7 +115,7 @@ ORCA emulator type "user@example.com" --json
 ORCA emulator button home --json
 ORCA emulator ax --json
 ORCA emulator exec --command "ca-debug blended on" --json
-ORCA emulator kill --device "iPhone 16 Pro" --json
+ORCA emulator shutdown --device "iPhone 16 Pro" --json
 ```
 
 See also: `orca-emulator-android` for Android devices, `orca-cli` for terminals, worktrees,
