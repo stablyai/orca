@@ -18,6 +18,19 @@ export type BotLookHold = () => () => unknown
 
 const lookSaves = new Map<string, LookSaves>()
 
+// The window can't wait for a save on its way when it goes, so picks waiting behind one go at once, as each
+// pick did before they queued; left waiting, they would be lost on quit or reload.
+function sendWaitingLooks(): void {
+  for (const saves of lookSaves.values()) {
+    const next = saves.waiting
+    if (next) {
+      saves.waiting = null
+      void saves.update(next).catch(() => undefined)
+    }
+  }
+}
+let sendsOnLeave = false
+
 /** Saves `look` after any save already on its way; `onDrained` runs once nothing for this bot is left. */
 export function saveBotLook(
   key: string,
@@ -41,6 +54,10 @@ export function saveBotLook(
     drained: new Set(onDrained ? [onDrained] : [])
   }
   lookSaves.set(key, saves)
+  if (!sendsOnLeave && typeof window !== 'undefined') {
+    sendsOnLeave = true
+    window.addEventListener('pagehide', sendWaitingLooks)
+  }
   const release = hold?.()
   void (async () => {
     while (saves.waiting) {

@@ -131,8 +131,8 @@ export function useNewBotPicture(
           )
         : bot,
     reset: () => {
-      setColor(null)
-      setOutfit(null)
+      setColor(look?.color ?? null)
+      setOutfit(look?.outfit ?? null)
       setValue(initialUpload ? { kind: 'custom' } : firstMascot(mascot))
       setUpload(initialUpload ? { png: initialUpload, after: -1 } : null)
     }

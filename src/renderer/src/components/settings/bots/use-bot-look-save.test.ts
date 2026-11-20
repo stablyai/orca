@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import { saveBotLook, type BotLookUpdate } from './use-bot-look-save'
 
@@ -50,5 +51,17 @@ describe('saveBotLook', () => {
     release()
     await drained
     expect(events).toEqual(['hold', 'send #f4c4cf', 'send party', 'release'])
+  })
+
+  it('sends a pick still waiting behind a slow save when the window goes, so quitting keeps it', () => {
+    const sent: BotLookUpdate[] = []
+    const update = (look: BotLookUpdate): Promise<unknown> => {
+      sent.push(look)
+      return new Promise(() => {})
+    }
+    saveBotLook('local:b3', { avatarColor: '#f4c4cf' }, update)
+    saveBotLook('local:b3', { avatarOutfit: 'tie' }, update)
+    window.dispatchEvent(new Event('pagehide'))
+    expect(sent).toEqual([{ avatarColor: '#f4c4cf' }, { avatarOutfit: 'tie' }])
   })
 })

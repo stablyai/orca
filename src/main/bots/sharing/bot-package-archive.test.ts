@@ -269,6 +269,14 @@ describe('bot package export and archive', () => {
 })
 
 describe('what a bot export may read', () => {
+  it("carries the mascot's tile color and outfit", async () => {
+    const home = join(root, 'home')
+    await writeHome(home)
+    const dressed = { ...bot, avatarColor: '#f4c4cf', avatarOutfit: 'tie' }
+    const shareable = await readBotShareable({ bot: dressed, home, automations: [] })
+    expect(shareable.avatar).toEqual({ mascot: 'H1', color: '#f4c4cf', outfit: 'tie' })
+  })
+
   it('never follows a link out of the bot home', async () => {
     const home = join(root, 'home')
     await writeHome(home)

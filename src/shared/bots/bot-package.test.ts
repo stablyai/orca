@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseBotPackage, planBotFromPackage } from './bot-package'
+import { parseBotPackage } from './bot-package'
 
-function sharedBot(avatar: Record<string, unknown>): Record<string, unknown> {
-  return {
+function sharedAvatar(avatar: Record<string, unknown>) {
+  const { bot, droppedKeys } = parseBotPackage({
     schemaVersion: 1,
     name: 'Release notes',
     avatar,
@@ -14,42 +14,28 @@ function sharedBot(avatar: Record<string, unknown>): Record<string, unknown> {
     schedules: [],
     eventSuggestions: [],
     memory: []
-  }
-}
-
-function plan(avatar: Record<string, unknown>) {
-  const { bot, droppedKeys } = parseBotPackage(sharedBot(avatar))
-  return {
-    create: planBotFromPackage(bot, [], { agent: 'claude', toolIds: [] }).create,
-    droppedKeys
-  }
+  })
+  return { avatar: bot.avatar, droppedKeys }
 }
 
 describe('a shared mascot look', () => {
-  it("carries the sharer's tile color and outfit to the new bot", () => {
-    expect(plan({ mascot: 'H1', color: '#f4c4cf', outfit: 'tie' })).toEqual({
-      create: {
-        name: 'Release notes',
-        agent: 'claude',
-        avatar: 'mascot:H1',
-        avatarColor: '#f4c4cf',
-        avatarOutfit: 'tie'
-      },
+  it("reads the sharer's tile color and outfit", () => {
+    expect(sharedAvatar({ mascot: 'H1', color: '#f4c4cf', outfit: 'tie' })).toEqual({
+      avatar: { mascot: 'H1', color: '#f4c4cf', outfit: 'tie' },
       droppedKeys: []
     })
   })
 
-  it('opens a package from a sharer without colors or outfits on the plain mascot', () => {
-    expect(plan({ mascot: 'H1' })).toEqual({
-      create: { name: 'Release notes', agent: 'claude', avatar: 'mascot:H1' },
+  it('opens a package from a sharer without colors or outfits', () => {
+    expect(sharedAvatar({ mascot: 'H1' })).toEqual({
+      avatar: { mascot: 'H1' },
       droppedKeys: []
     })
   })
 
-  it("leaves off an outfit this version doesn't know and a field it doesn't read", () => {
-    // A newer sharer's extras, as an older importer meets color and outfit: dropped and listed.
-    expect(plan({ mascot: 'H1', outfit: 'aviator', sparkle: true })).toEqual({
-      create: { name: 'Release notes', agent: 'claude', avatar: 'mascot:H1' },
+  it('drops a color it cannot read and lists a field it does not know, as an older importer does', () => {
+    expect(sharedAvatar({ mascot: 'H1', color: 'pink', sparkle: true })).toEqual({
+      avatar: { mascot: 'H1' },
       droppedKeys: ['avatar.sparkle']
     })
   })

@@ -4,9 +4,9 @@ import * as z from 'zod'
 import type { AutomationBotResultsTo } from '../automation-bot-target'
 import { AUTOMATION_EVENT_KINDS } from '../automation-event-triggers'
 import { GOOGLE_EVENT_SOURCES } from '../automation-google-triggers'
-import { BOT_MASCOT_IDS, BOT_AVATAR_FILE, mascotAvatar, type BotMascotId } from '../bot-avatar'
+import { BOT_MASCOT_IDS, BOT_AVATAR_FILE, mascotAvatar } from '../bot-avatar'
 import { BotAvatarColorSchema } from './bot-avatar-color'
-import { BotStoredOutfitSchema, wornBotOutfit, type BotAvatarOutfit } from './bot-avatar-outfit'
+import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { BOT_TOOL_HEADER_NAME_PATTERN, BOT_TOOL_NAME_PATTERN, BotToolUrl } from '../bot-tools'
 import { BOT_AGENTS, BotNameSchema, type BotAgent } from '../bot-types'
 import { validateSkillPackageName } from '../skills/packages/skill-package-manifest'
@@ -201,13 +201,7 @@ export function skillsFolderFor(agent: BotAgent): string {
 }
 
 export type BotPackagePlan = {
-  create: {
-    name: string
-    agent: BotAgent
-    avatar?: string
-    avatarColor?: string
-    avatarOutfit?: BotAvatarOutfit
-  }
+  create: { name: string; agent: BotAgent; avatar?: string }
   /** The archive's avatar.png, set as the upload; null keeps `create.avatar` or the default mascot. */
   avatarImage: string | null
   /** Every archive file but bot.json and the avatar, and the home path it is written to. */
@@ -228,20 +222,6 @@ export function packagedMascotLook(bot: {
   return {
     ...(bot.avatarColor ? { color: bot.avatarColor } : {}),
     ...(bot.avatarOutfit ? { outfit: bot.avatarOutfit } : {})
-  }
-}
-
-/** A shared mascot as a new bot's picture; an outfit this version doesn't know is left off. */
-function sharedMascotLook(avatar: {
-  mascot: BotMascotId
-  color?: string
-  outfit?: string
-}): Pick<BotPackagePlan['create'], 'avatar' | 'avatarColor' | 'avatarOutfit'> {
-  const outfit = wornBotOutfit(avatar.outfit)
-  return {
-    avatar: mascotAvatar(avatar.mascot),
-    ...(avatar.color ? { avatarColor: avatar.color } : {}),
-    ...(outfit ? { avatarOutfit: outfit } : {})
   }
 }
 
@@ -272,7 +252,7 @@ export function planBotFromPackage(
     create: {
       name: bot.name,
       agent: choice.agent,
-      ...(bot.avatar && 'mascot' in bot.avatar ? sharedMascotLook(bot.avatar) : {})
+      ...(bot.avatar && 'mascot' in bot.avatar ? { avatar: mascotAvatar(bot.avatar.mascot) } : {})
     },
     avatarImage: bot.avatar && 'image' in bot.avatar ? bot.avatar.image : null,
     files,
