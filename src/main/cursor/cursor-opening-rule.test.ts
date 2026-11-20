@@ -42,7 +42,7 @@ describe('Cursor opening rule', () => {
       secondPlaced = true
       return undo
     })
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // The second open waits on the first's undo before touching the folder, so nothing else can move it.
     expect(secondPlaced).toBe(false)
     expect(await readFile(rulePath(), 'utf8')).toContain('first')
     await first()
