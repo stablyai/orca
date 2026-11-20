@@ -17,11 +17,15 @@ import { repaintTerminalAfterImageAdded } from './terminal-image-added-repaint'
 const panesAwaitingImageAddon = new Set<ManagedPaneInternal>()
 
 // Key by terminal: PTY public pane wrappers lack imageAddon and differ from internal panes.
-const terminalsRenderingInlineImages = new WeakSet<Terminal>()
+const terminalsRenderingInlineImages = new WeakMap<Terminal, ImageAddon>()
 const imageRepaintByPane = new WeakMap<ManagedPaneInternal, { dispose(): void }>()
 
 export function terminalRendersInlineImages(terminal: Terminal): boolean {
   return terminalsRenderingInlineImages.has(terminal)
+}
+
+export function terminalHasStoredInlineImages(terminal: Terminal): boolean {
+  return (terminalsRenderingInlineImages.get(terminal)?.storageUsage ?? 0) > 0
 }
 
 setTerminalImageAddonLoadHandlers({
@@ -64,7 +68,7 @@ export function attachInlineImages(pane: ManagedPaneInternal): void {
     if (repaint) {
       imageRepaintByPane.set(pane, repaint)
     }
-    terminalsRenderingInlineImages.add(pane.terminal)
+    terminalsRenderingInlineImages.set(pane.terminal, imageAddon)
   } catch (err) {
     console.warn('[terminal] inline-image addon failed to attach for pane', pane.id, err)
     try {

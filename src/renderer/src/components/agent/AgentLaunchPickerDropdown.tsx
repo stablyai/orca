@@ -1,4 +1,5 @@
 import { useState, type Ref } from 'react'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import { AgentLaunchSurfaceButtons } from './AgentLaunchSetupFooter'
@@ -40,6 +41,7 @@ type AgentLaunchPickerDropdownProps = {
   draftForEntry?: (entry: AgentPickerEntry) => AgentPickerDraft
   draftScope: AgentPickerDraftOwner
   disabled?: boolean
+  selectAgentOnTab?: boolean
   initialQuery?: string
   searchInputRef?: Ref<HTMLInputElement>
   defaultAgent?: Agent | 'blank' | null
@@ -56,6 +58,7 @@ type AgentLaunchPickerDropdownProps = {
 
 /** A form's agent dropdown: agent tabs over the shared setup card, then where the agent opens. */
 export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps) {
+  const t = useTranslate()
   const { entries, agent, draftScope, onPaneChange, blankTerminal } = props
   useRetiredAgentPickerDrafts(entries, draftScope, 'select')
   const [paneAgent, setPaneAgent] = useState(agent)
@@ -76,7 +79,21 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
     onPaneChange(next)
   }
   if (!pane) {
-    return null
+    if (!props.selectAgentOnTab) {
+      return null
+    }
+    return props.choices?.length ? (
+      props.choices.map((choice) => (
+        <DropdownMenuItem key={choice.id} onSelect={choice.onSelect}>
+          {choice.icon}
+          {choice.label}
+        </DropdownMenuItem>
+      ))
+    ) : (
+      <DropdownMenuItem disabled>
+        {t('auto.components.tab.bar.QuickLaunchButton.e518f544b1', 'No agents detected')}
+      </DropdownMenuItem>
+    )
   }
   return (
     <div
@@ -107,6 +124,9 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
         onSelect={(next) => {
           setTerminalPane(false)
           showPane(next)
+          if (props.selectAgentOnTab && next !== agent) {
+            props.onPick(next)
+          }
         }}
       />
       {terminalPane && blankTerminal ? (
@@ -137,6 +157,7 @@ function AgentLaunchPickerPane({
   draftForEntry,
   draftScope,
   disabled,
+  selectAgentOnTab,
   initialQuery,
   searchInputRef,
   choices,
@@ -254,15 +275,15 @@ function AgentLaunchPickerPane({
       }}
       onDraftChange={(draft, edit) => {
         setup.change(draft)
-        // Effort and speed apply at once to the agent in use; another agent's wait for its pick.
-        if (current && (edit === 'choice' || edit === 'speed')) {
+        // Effort, speed and a kept permission apply at once to the agent in use; another agent's wait.
+        if (current && (edit === 'choice' || edit === 'speed' || edit === 'permission')) {
           commit(false)
         }
       }}
       onPickModel={pickModel}
       onUse={(draft) => commit(true, draft.surface)}
     >
-      {entry.textGeneration ? null : (
+      {selectAgentOnTab || entry.textGeneration ? null : (
         <AgentLaunchOpenAs
           entry={entry}
           disabled={disabled}

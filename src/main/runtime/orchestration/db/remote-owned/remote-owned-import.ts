@@ -195,6 +195,14 @@ function importWorkerMail(
     payload: mail.message.payload ?? undefined,
     runId: link.run_id
   })
+  if (mail.dispatchId && mail.taskId) {
+    // After the insert, so its peer-Run queue trigger never carries a server's Dispatch onward.
+    db.db
+      .prepare(
+        'INSERT OR IGNORE INTO message_dispatch_provenance (message_id, dispatch_id, task_id) VALUES (?, ?, ?)'
+      )
+      .run(mail.id, mail.dispatchId, mail.taskId)
+  }
   return { to, type: mail.message.type }
 }
 

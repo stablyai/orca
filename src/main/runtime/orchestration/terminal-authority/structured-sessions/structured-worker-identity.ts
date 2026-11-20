@@ -1,3 +1,12 @@
+export {
+  STRUCTURED_WORKER_INCARNATION_PREFIX,
+  sessionIdFromStructuredWorkerIncarnation,
+  structuredWorkerProcessIncarnation
+} from './structured-worker-incarnation'
+import {
+  sessionIdFromStructuredWorkerIncarnation,
+  structuredWorkerProcessIncarnation
+} from './structured-worker-incarnation'
 import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 /** Structured workers have no PTY; register their bearer handle, pane key and host scope as orchestration authority.
  * Random handles and leaves prevent session ids exposed in tab ids from yielding caller-supplied keys that read/consume worker mail. */
@@ -29,8 +38,6 @@ import {
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
 } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
-
-export const STRUCTURED_WORKER_INCARNATION_PREFIX = 'structured:'
 
 export type StructuredWorkerIdentity = {
   handle: string
@@ -82,21 +89,6 @@ function persistedStructuredWorkerPaneKeyIsValid(
     parsed.tabId === structuredAgentSessionTabId(sessionId) &&
     isTerminalLeafId(parsed.leafId)
   )
-}
-
-/** Use stable session lineage for process continuity; transparent crash recovery bumps the owner fence and must not wedge the same worker as identity_unproven. */
-export function structuredWorkerProcessIncarnation(sessionId: string): string {
-  return `${STRUCTURED_WORKER_INCARNATION_PREFIX}${sessionId}`
-}
-
-export function sessionIdFromStructuredWorkerIncarnation(
-  processIncarnation: string | null | undefined
-): string | null {
-  if (!processIncarnation?.startsWith(STRUCTURED_WORKER_INCARNATION_PREFIX)) {
-    return null
-  }
-  const sessionId = processIncarnation.slice(STRUCTURED_WORKER_INCARNATION_PREFIX.length)
-  return sessionId.length > 0 ? sessionId : null
 }
 
 /** The Orca session id a `structured:<sessionId>` incarnation names; null for any other. */

@@ -7,6 +7,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
 
 import { workspaceSessionPatchNeedsFullNormalization } from './terminal-session-cleanup'
@@ -102,8 +103,38 @@ export class SessionSnapshotOperations {
     this.publishSession(next, resolved)
   }
 
-  private publishSession(session: WorkspaceSessionState, hostId: ExecutionHostId): void {
-    session = orderTerminalRowsByTabGroups(session)
+  /** Drops one pane's saved resume when `retire` accepts it. Topology is untouched, so rows keep
+   *  their order and the next coalesced save persists it. */
+  retireSleepingAgentSession(
+    paneKey: string,
+    retire: (saved: SleepingAgentSessionRecord) => boolean,
+    hostId?: string | null
+  ): boolean {
+    const resolved = resolveHostId(hostId)
+    const session = this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved)
+    const records = session.sleepingAgentSessionsByPaneKey
+    const saved = records?.[paneKey]
+    if (!records || !saved || !retire(saved)) {
+      return false
+    }
+    this.assertSnapshotAdmission()
+    const { [paneKey]: _retired, ...kept } = records
+    let next: WorkspaceSessionState = { ...session, sleepingAgentSessionsByPaneKey: kept }
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      next = keepWslMoveFrozenSessionsForStore(next, session)
+    }
+    this.publishSession(next, resolved, false)
+    return true
+  }
+
+  private publishSession(
+    session: WorkspaceSessionState,
+    hostId: ExecutionHostId,
+    topologyChanged = true
+  ): void {
+    if (topologyChanged) {
+      session = orderTerminalRowsByTabGroups(session)
+    }
     const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
     if (hostId === LOCAL_EXECUTION_HOST_ID) {
       runtime.state.workspaceSession = session

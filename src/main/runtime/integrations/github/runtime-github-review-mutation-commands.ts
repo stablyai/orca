@@ -134,7 +134,8 @@ export class RuntimeGitHubReviewMutationCommands {
     repoSelector: string,
     prNumber: number,
     method?: 'merge' | 'squash' | 'rebase',
-    prRepo?: GitHubOwnerRepo | null
+    prRepo?: GitHubOwnerRepo | null,
+    expectedHeadSha?: string | null
   ): Promise<Awaited<ReturnType<typeof mergePR>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return mergePR(
@@ -143,6 +144,7 @@ export class RuntimeGitHubReviewMutationCommands {
       method,
       getRepoRoutingConnectionId(repo),
       prRepo ?? null,
+      expectedHeadSha ?? null,
       ...this.deps.getLocalGitArgs(repo)
     )
   }

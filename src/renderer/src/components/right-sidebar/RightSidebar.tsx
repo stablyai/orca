@@ -6,6 +6,7 @@ import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { getTopActivityBarLayout } from './activity-bar/activity-bar-overflow'
+import { measureTabTitle } from './right-sidebar-tab-title-width'
 import { ActivityBarButton } from './activity-bar/activity-bar-buttons'
 import { getActiveChecksStatus } from './checks-panel/status/active-checks-status'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
@@ -29,10 +30,15 @@ import {
   useActivityBarContextPlugin
 } from './activity-bar/activity-bar-position-menu'
 import { RightSidebarTopActivityBar } from './activity-bar/right-sidebar-top-activity-bar'
+import {
+  RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_PADDING,
+  RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_PADDING
+} from './layout/right-sidebar-titlebar-drag-regions'
 import { useRightSidebarActivityItems } from './activity-bar/use-right-sidebar-activity-items'
 import { useRightSidebarTabRouting } from './activity-bar/use-right-sidebar-tab-routing'
 import { useWindowWidth } from './layout/use-window-width'
 import { useRightSidebarReturnFocus } from './use-right-sidebar-return-focus'
+import { useBotPanelMemory } from '../bots/use-bot-panel-memory'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 
@@ -41,6 +47,7 @@ function RightSidebarInner(): React.JSX.Element {
   const t = useTranslate()
   const contextPlugin = useActivityBarContextPlugin()
   useUiLanguageRevision()
+  useBotPanelMemory()
   const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
     platform: getRendererAppPlatform(),
     isWebClient: isPairedWebClientWindow()
@@ -71,14 +78,16 @@ function RightSidebarInner(): React.JSX.Element {
     activeFolderWorkspaceKey,
     pluginSystemEnabled,
     pluginFetchStatus,
-    installedPluginTabKeys
+    installedPluginTabKeys,
+    isBotPage
   } = useRightSidebarActivityItems({ rightSidebarOpen })
   const { effectiveTab, selectActivityTab } = useRightSidebarTabRouting({
     visibleItems,
     activeFolderWorkspaceKey,
     pluginSystemEnabled,
     pluginFetchStatus,
-    installedPluginTabKeys
+    installedPluginTabKeys,
+    isBotPage
   })
 
   useEffect(() => {
@@ -160,8 +169,17 @@ function RightSidebarInner(): React.JSX.Element {
   ) : null
 
   const topActivityLayout = useMemo(
-    () => getTopActivityBarLayout(visibleItems, topActivityStripWidth, effectiveTab),
-    [visibleItems, topActivityStripWidth, effectiveTab]
+    () =>
+      getTopActivityBarLayout(
+        visibleItems,
+        topActivityStripWidth,
+        effectiveTab,
+        hasDesktopWindowChrome
+          ? RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_PADDING
+          : RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_PADDING,
+        measureTabTitle
+      ),
+    [visibleItems, topActivityStripWidth, effectiveTab, hasDesktopWindowChrome]
   )
 
   const sideActivityBarIcons = visibleItems.map((item) => (

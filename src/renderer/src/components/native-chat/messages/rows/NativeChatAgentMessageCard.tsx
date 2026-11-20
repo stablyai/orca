@@ -1,62 +1,67 @@
-import { useId } from 'react'
-import { ChevronDown } from 'lucide-react'
-import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
+import {
+  agentMessageSendersShown,
+  type AgentMessageSource
+} from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   agentMessageHeading,
   agentMessagePrimarySender,
   agentMessageCanCopy
 } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
-import { NativeChatAgentMessageSenders } from '../agent-senders/NativeChatAgentMessageSenders'
+import { agentMessageSessionWorker } from '../../../../../../shared/agent-session/view/messages/agent-message-dispatch'
+import {
+  sessionWorkerIsRunning,
+  type OrchestrationSessionWorker
+} from '../../../../../../shared/orchestration-session-workers'
+import {
+  NativeChatAgentMessageSenderNames,
+  NativeChatAgentMessageSenderOpen
+} from '../agent-senders/NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from '../agent-senders/native-chat-agent-message-sender-view'
+import {
+  unnamedSenderLabel,
+  useAgentMessageSenderBot,
+  useAgentMessageSenderLabel
+} from '../agent-senders/native-chat-agent-message-sender-label'
+import { BotAvatar, CarriedBotAvatar } from '@/components/bots/BotAvatar'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
-import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
-import { NativeChatExpandable } from '../disclosure/NativeChatExpandable'
+import { useNativeChatWorkers } from '../../native-chat-workers-context'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
-import { NativeChatCopyButton } from '../actions/NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
+import { NativeChatEventRow, type NativeChatEventBadge } from '../events/NativeChatEventRow'
 
-function heading(
+function lead(
   from: AgentMessageSource,
   message: NativeChatMessage,
   t: Translate = translate
 ): string {
   switch (agentMessageHeading(from, message)) {
     case 'started':
-      return t('components.native-chat.agentMessage.startedWorker', 'Started worker')
-    case 'reopened-worker':
-      return t('components.native-chat.agentMessage.reopenedWorker', 'Reopened worker')
-    case 'followed-up-worker':
-      return t(
-        'components.native-chat.agentMessage.sentFollowUpToWorker',
-        'Sent follow-up to worker'
-      )
-    case 'handed-off':
-      return t('components.native-chat.agentMessage.handedOffToAgent', 'Handed off to agent')
     case 'started-agent':
-      return t('components.native-chat.agentMessage.startedAgent', 'Started agent')
+      return t('components.native-chat.agentMessage.row.started', 'Started')
+    case 'reopened-worker':
+      return t('components.native-chat.agentMessage.row.reopened', 'Reopened')
+    case 'followed-up-worker':
+      return t('components.native-chat.agentMessage.row.followedUp', 'Sent follow-up to')
+    case 'handed-off':
+      return t('components.native-chat.agentMessage.row.handedOff', 'Handed off to')
     case 'task':
-      return t('components.native-chat.agentMessage.taskFromCoordinator', 'Task from coordinator')
-    case 'coordinator':
-      return t(
-        'components.native-chat.agentMessage.messageFromCoordinator',
-        'Message from coordinator'
-      )
+      return t('components.native-chat.agentMessage.row.task', 'Task from')
     case 'worker':
-      return t('components.native-chat.agentMessage.updateFromWorker', 'Update from worker')
+      return t('components.native-chat.agentMessage.row.update', 'Update from')
+    case 'coordinator':
     case 'generic':
-      return t('components.native-chat.agentMessage.messageFrom', 'Message from')
+      return t('components.native-chat.agentMessage.row.message', 'Message from')
   }
 }
 
@@ -68,6 +73,8 @@ type AgentMessageCardProps = {
   onRefolded: () => void
 }
 
+/** A message between agents (a start, a task, a worker's update) as one status row: the sender's
+ *  agent mark with its worker's state, "Update from <name>", and the message itself opening below. */
 export function NativeChatAgentMessageCard({
   message,
   from,
@@ -80,130 +87,189 @@ export function NativeChatAgentMessageCard({
   const worktreeId = owner?.worktreeId ?? runtimeContext?.worktreeId ?? null
   const target = owner?.target ?? runtimeContext?.target
   const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
-  const disclosure = useNativeChatDisclosure(`agent-message:${message.id}`, false)
-  const labelId = useId()
-  const bodyId = useId()
+  const worker = agentMessageSessionWorker(message, useNativeChatWorkers())
+  const sender = agentMessagePrimarySender(from)
+  const dispatchId = message.agentStartDispatchId ?? worker?.dispatchId
+  const { shown, more } = agentMessageSendersShown(from)
+  const canCopy = agentMessageCanCopy(text)
+  // Mail from several senders opens each from its details.
+  const several = shown.length > 1
+  const merged = message.mergedEvents ?? []
   const expandable =
-    agentMessageCanCopy(text) || message.blocks.some((block) => block.type === 'image-ref')
-  const toggle = () => {
-    disclosure.setOpen(!disclosure.open)
-    if (disclosure.open) {
-      requestAnimationFrame(onRefolded)
-    }
-  }
+    canCopy ||
+    several ||
+    merged.length > 0 ||
+    message.blocks.some((block) => block.type === 'image-ref')
+  const words = lead(from, message, t)
+  const senderName = useAgentMessageSenderLabel(sender ?? NO_SENDER, worktreeId, target, dispatchId)
+  const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
   return (
-    <div className="group @container w-full rounded-xl border border-border bg-card text-sm text-card-foreground">
-      <div
-        className="relative flex min-w-0 items-center gap-2 px-3 py-1.5"
-        data-state={disclosure.open ? 'open' : 'closed'}
-      >
-        {expandable ? (
-          <button
-            type="button"
-            aria-labelledby={labelId}
-            aria-controls={bodyId}
-            aria-expanded={disclosure.open}
-            onClick={toggle}
-            className="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          />
-        ) : null}
-        <div className="pointer-events-none">
-          <AgentMessageAvatar
-            sender={agentMessagePrimarySender(from)}
-            dispatchId={message.agentStartDispatchId}
-            worktreeId={worktreeId}
-            target={target}
-          />
-        </div>
-        <span
-          id={labelId}
-          className="pointer-events-none max-w-1/3 shrink-0 truncate text-xs text-muted-foreground"
-        >
-          {heading(from, message, t)}
-        </span>
-        <div className="pointer-events-none relative min-w-0 flex-1 [&_button]:pointer-events-auto">
-          <NativeChatAgentMessageSenders
-            compact
-            dispatchId={message.agentStartDispatchId}
+    <NativeChatEventRow
+      className="w-full"
+      icon={
+        <AgentMessageAvatar
+          sender={sender}
+          dispatchId={dispatchId}
+          agentType={worker?.agent ?? view.agentType}
+          worktreeId={worktreeId}
+          target={target}
+        />
+      }
+      badge={agentMessageBadge(worker, view.dot)}
+      label={expandable ? `${words} ${sender ? senderName : unnamedSenderLabel(t)}` : undefined}
+      timestamp={message.timestamp}
+      disclosureKey={`agent-message:${message.id}`}
+      onOpenChange={(open) => {
+        if (!open) {
+          requestAnimationFrame(onRefolded)
+        }
+      }}
+      action={
+        sender && !several ? (
+          <NativeChatAgentMessageSenderOpen
             from={from}
+            sender={sender}
+            dispatchId={dispatchId}
             chatWorktreeId={worktreeId}
             target={target}
           />
-        </div>
-        {agentMessageCanCopy(text) ? (
-          <NativeChatCopyButton
-            text={text}
-            className="relative transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100"
-          />
-        ) : null}
-        <div className={cn('pointer-events-none shrink-0', expandable && 'hidden @sm:block')}>
-          <NativeChatMessageTimestamp
-            timestamp={message.timestamp}
-            className="text-muted-foreground"
-          />
-        </div>
-        {expandable ? (
-          <ChevronDown
-            aria-hidden
-            className={cn(
-              'pointer-events-none size-3.5 shrink-0 text-muted-foreground',
-              disclosure.open && 'rotate-180'
-            )}
-          />
-        ) : null}
-      </div>
-      <NativeChatExpandable open={expandable && disclosure.open}>
-        <div id={bodyId} className="space-y-2 px-3 pb-3">
-          <NativeChatImageAttachments
-            blocks={message.blocks}
-            runtimeContext={runtimeContext}
-            enablePreview={runtimeContext !== undefined}
-          />
-          <NativeChatTextAttachments
-            content={textAttachmentContent ?? text}
-            structured={textAttachmentContent !== undefined}
-            runtimeContext={runtimeContext}
-            renderText={() => (
-              <NativeChatMarkdown
-                rowKey={message.id}
-                content={text}
-                variant="document"
-                className="text-sm"
-                renderCodeBlock={NativeChatCodeBlock}
-              />
-            )}
-          />
-          <NativeChatMessageTimestamp
-            timestamp={message.timestamp}
-            className="text-muted-foreground @sm:hidden"
-          />
-        </div>
-      </NativeChatExpandable>
-    </div>
+        ) : null
+      }
+      details={
+        expandable ? (
+          <>
+            {several ? (
+              <span className="-ml-1.5 flex flex-wrap gap-1">
+                {shown.map((each) => (
+                  <NativeChatAgentMessageSenderOpen
+                    key={each.party.address}
+                    from={from}
+                    sender={each}
+                    chatWorktreeId={worktreeId}
+                    target={target}
+                    named
+                  />
+                ))}
+              </span>
+            ) : null}
+            <NativeChatImageAttachments
+              blocks={message.blocks}
+              runtimeContext={runtimeContext}
+              enablePreview={runtimeContext !== undefined}
+            />
+            <NativeChatTextAttachments
+              content={textAttachmentContent ?? text}
+              structured={textAttachmentContent !== undefined}
+              runtimeContext={runtimeContext}
+              renderText={() => (
+                <NativeChatMarkdown
+                  rowKey={message.id}
+                  content={text}
+                  variant="document"
+                  className="text-sm"
+                  renderCodeBlock={NativeChatCodeBlock}
+                />
+              )}
+            />
+            {merged.map((earlier) => (
+              <MergedAgentMessage key={earlier.id} message={earlier} newerLead={words} />
+            ))}
+          </>
+        ) : null
+      }
+    >
+      {words}{' '}
+      {shown.length === 0 ? (
+        unnamedSenderLabel(t)
+      ) : (
+        <NativeChatAgentMessageSenderNames
+          shown={shown}
+          chatWorktreeId={worktreeId}
+          target={target}
+          dispatchId={dispatchId}
+        />
+      )}
+      {more > 0 ? ` +${more}` : null}
+    </NativeChatEventRow>
   )
 }
+
+/** An earlier message about the same Dispatch, under the newer row it merged into: its time (and
+ *  its lead when it differs, as "Started"), then its words. */
+function MergedAgentMessage({
+  message,
+  newerLead
+}: {
+  message: NativeChatMessage
+  newerLead: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const from = message.from
+  const words = from ? lead(from, message, t) : null
+  const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
+  return (
+    <>
+      <p className="flex items-center gap-1 text-xs text-chat-foreground-faint">
+        {words && words !== newerLead ? <span>{words}</span> : null}
+        <NativeChatMessageTimestamp timestamp={message.timestamp} />
+      </p>
+      {text.trim() ? (
+        <NativeChatMarkdown
+          rowKey={message.id}
+          content={text}
+          variant="document"
+          className="text-sm"
+          renderCodeBlock={NativeChatCodeBlock}
+        />
+      ) : null}
+    </>
+  )
+}
+
+/** Stands in so the name hook runs in every render; its answer is unused without a sender. */
+const NO_SENDER: AgentMessageSource['senders'][number] = {
+  party: { address: '', terminalHandle: null, orcaSessionId: null },
+  name: null
+}
+
+const BOT_TILE = 'size-3.5 rounded-sm border-0 text-3xs'
 
 function AgentMessageAvatar({
   dispatchId,
   sender,
+  agentType,
   worktreeId,
   target
 }: {
   dispatchId?: string
   sender: AgentMessageSource['senders'][number] | undefined
+  agentType: ReturnType<typeof useAgentMessageSenderView>['agentType']
   worktreeId: string | null
   target?: RuntimeClientTarget
 }): React.JSX.Element {
-  const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
-  return (
-    <div className="relative flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
-      <AgentTypeIcon agentType={view.agentType} size={16} />
-      {view.dot ? (
-        // Flex square: the chat line box would stretch a shrink-wrapped badge into a pill.
-        <span className="absolute -right-0.5 -bottom-0.5 flex size-3.5 items-center justify-center rounded-full border border-border bg-card">
-          <AgentStateDot state={view.dot} size="md" progress={view.progress} />
-        </span>
-      ) : null}
-    </div>
+  const bot = useAgentMessageSenderBot(sender, worktreeId, target, dispatchId)
+  return bot ? (
+    <BotAvatar bot={bot} className={BOT_TILE} />
+  ) : sender?.bot && sender.host ? (
+    // A paired computer's agent, which this computer's catalog doesn't hold.
+    <CarriedBotAvatar
+      name={sender.name ?? ''}
+      avatar={sender.botAvatar ?? null}
+      className={BOT_TILE}
+    />
+  ) : (
+    <AgentTypeIcon agentType={agentType} size={14} />
   )
+}
+
+/** The worker's Dispatch as its host records it decides the badge, so a restarted worker never
+ *  un-fails an old row; a sender the chat didn't start falls back to its live state, never to failed. */
+function agentMessageBadge(
+  worker: OrchestrationSessionWorker | undefined,
+  liveDot: AgentDotState | null | undefined
+): NativeChatEventBadge | null {
+  if (worker) {
+    return sessionWorkerIsRunning(worker) ? 'running' : worker.state === 'failed' ? 'failed' : null
+  }
+  return liveDot === 'working' ? 'running' : null
 }

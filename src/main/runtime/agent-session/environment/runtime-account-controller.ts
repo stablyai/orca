@@ -1,7 +1,10 @@
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import type { ClaudeAccountService } from '../../../claude-accounts/service'
 import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
 import type {
+  ClaudeAccountSelectedHandler,
+  ClaudeAccountSelectResult,
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest,
@@ -26,7 +29,7 @@ import type { CodexResetCreditExpectedScope } from '../../../../shared/agent-acc
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   getClaudeSelectionTargetForAccount,
-  getSelectedClaudeAccountIdForTarget,
+  getSelectedClaudeAccountIdInState,
   type ClaudeAccountSelectionTarget
 } from '../../../claude-accounts/selection/runtime-selection'
 import {
@@ -37,7 +40,6 @@ import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
 import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
 import { subscribeRuntimeAccountChanges } from './runtime-account-change-subscription'
 import type { ManagedAccountNameProvider } from '../../../../shared/agent-accounts/managed-account-display-names'
-import type { RuntimeNotifier } from '../../client/events/runtime-notifier-contract'
 
 export type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
@@ -65,14 +67,14 @@ export type CodexRateLimitResetRpcResult = {
     }
 )
 
-type ClaudeSelectionNotifier = Pick<RuntimeNotifier, 'claudeAccountSelected'>
-
 export class RuntimeAccountController {
   private services: RuntimeAccountServices | null = null
   private commitMessageAgentEnvironment: CommitMessageAgentEnvironmentResolvers | null = null
   private readonly hostAccounts = new HostAccountLaunchEnvState(() => this.services !== null)
 
-  constructor(private readonly getNotifier: () => ClaudeSelectionNotifier | null = () => null) {}
+  constructor(
+    private readonly onClaudeAccountSelected: ClaudeAccountSelectedHandler = async () => undefined
+  ) {}
 
   setServices(services: RuntimeAccountServices): void {
     this.services = services
@@ -207,27 +209,34 @@ export class RuntimeAccountController {
     ])
   }
 
-  /** Desktop switches go through IPC and handle their own sessions; this path tells the window. */
+  /** Desktop switches go through IPC and handle their own sessions; this path moves the others. */
   async selectClaude(
     accountId: string | null,
-    options: { movesRunningSessions?: true } = {}
-  ): Promise<ClaudeRateLimitAccountsState> {
+    options: {
+      movesRunningSessions?: true
+      runningSessions?: ClaudeAccountSwitchRunningSessions
+      answersAsk?: true
+    } = {}
+  ): Promise<ClaudeAccountSelectResult> {
     const { claudeAccounts } = this.requireServices()
     if (options.movesRunningSessions) {
       return claudeAccounts.selectAccount(accountId)
     }
     const before = claudeAccounts.listAccounts()
-    const after = await claudeAccounts.selectAccount(accountId)
+    // An answer to Ask selects nothing, so it can never undo a later switch.
+    const after = options.answersAsk ? before : await claudeAccounts.selectAccount(accountId)
     const account = before.accounts.find((candidate) => candidate.id === accountId)
     const target: ClaudeAccountSelectionTarget = account
       ? getClaudeSelectionTargetForAccount(account)
       : { runtime: 'host' }
-    this.getNotifier()?.claudeAccountSelected?.({
+    const runningSessions = await this.onClaudeAccountSelected({
       target,
-      before: { state: before, accountId: selectedClaudeAccountId(before, target) },
-      after: { state: after, accountId: selectedClaudeAccountId(after, target) }
+      before: { state: before, accountId: getSelectedClaudeAccountIdInState(before, target) },
+      after: { state: after, accountId: getSelectedClaudeAccountIdInState(after, target) },
+      ...(options.runningSessions ? { runningSessions: options.runningSessions } : {}),
+      ...(options.answersAsk ? { answersAskFor: accountId } : {})
     })
-    return after
+    return runningSessions ? { ...after, runningSessions } : after
   }
 
   selectCodex(accountId: string | null): Promise<CodexRateLimitAccountsState> {
@@ -331,17 +340,4 @@ export class RuntimeAccountController {
     }
     return this.services
   }
-}
-
-function selectedClaudeAccountId(
-  state: ClaudeRateLimitAccountsState,
-  target: ClaudeAccountSelectionTarget
-): string | null {
-  return getSelectedClaudeAccountIdForTarget(
-    {
-      activeClaudeManagedAccountId: state.activeAccountId,
-      activeClaudeManagedAccountIdsByRuntime: state.activeAccountIdsByRuntime
-    },
-    target
-  )
 }

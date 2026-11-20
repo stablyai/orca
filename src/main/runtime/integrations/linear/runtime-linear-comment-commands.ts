@@ -10,7 +10,6 @@ import { getCommentByUuidForAgent as getLinearCommentByUuidForAgent } from '../.
 import { isLinearUuid } from '../../../../shared/linear/uuid'
 import { LinearWriteFailure } from '../../../linear/issues/linear-issue-write-support'
 import { linearError } from '../../../linear/issues/context/linear-access-errors'
-import { linearNotConnectedError } from '../../../linear/issues/context/linear-not-connected-error'
 import type { LinearAgentAccessError } from '../../../linear/issues/context/linear-access-errors'
 import type {
   LinearCommentAddRequest,
@@ -22,7 +21,7 @@ import type {
 } from '../../../../shared/linear/agent-access'
 import type * as LinearAgentResults from '../../../../shared/linear/agent-result-types'
 import { RuntimeLinearCreateCommands } from './runtime-linear-create-commands'
-import { getConnectedWorkspaces } from '../../../linear/issues/context/issue-context-resolution'
+import { requireConnectedWorkspaces } from '../../../linear/issues/context/linear-connected-workspaces'
 import { resolveWorkspaceSelector } from '../../../linear/issues/context/workspace-selector-resolution'
 
 export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
@@ -242,10 +241,7 @@ export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
     if (!isLinearUuid(params.commentId)) {
       throw this.linearCommentNotFound(params.commentId)
     }
-    const workspaces = getConnectedWorkspaces()
-    if (workspaces.length === 0) {
-      throw linearNotConnectedError()
-    }
+    const workspaces = requireConnectedWorkspaces()
     const selected = resolveWorkspaceSelector(params, workspaces)
     const missing = this.linearCommentNotFound(params.commentId)
     try {
