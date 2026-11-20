@@ -10,6 +10,7 @@ import {
   getOptionalPositiveIntegerFlag,
   getOptionalRepoKind,
   getOptionalStringFlag,
+  getOptionalStringFlagAllowingEmpty,
   getRequiredStringFlag
 } from '../arguments/flags'
 import { resolveRepoPathArgument } from './repo-path-arguments'
@@ -42,7 +43,8 @@ function getOptionalChoiceFlag<const T extends string>(
   name: string,
   choices: readonly T[]
 ): T | undefined {
-  const value = getOptionalStringFlag(flags, name)
+  // An empty value is an error, not an omitted flag, so it cannot be skipped silently.
+  const value = getOptionalStringFlagAllowingEmpty(flags, name)
   if (value === undefined) {
     return undefined
   }

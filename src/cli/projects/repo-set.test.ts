@@ -83,4 +83,13 @@ describe('repo set', () => {
         'This Orca host does not support per-repo agent startup policies and per-repo workspace cleanup, so only the worktree visibility was saved. Update Orca on that host.'
     })
   })
+
+  it('rejects an empty value instead of saving the other settings', async () => {
+    await expect(
+      repoSet(['--setup-agent-startup=', '--workspace-cleanup', 'off'], {})
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: '--setup-agent-startup must be wait-for-setup or start-immediately.'
+    })
+  })
 })
