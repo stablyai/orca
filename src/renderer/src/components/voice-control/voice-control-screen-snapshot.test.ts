@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 import {
   buildVoiceScreenSnapshot,

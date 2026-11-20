@@ -1,6 +1,6 @@
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { resolveFloatingTerminalCwd } from '../ipc/floating-workspace-directory'
+import { resolveFloatingTerminalCwd } from '../ipc/worktrees/floating-workspace-directory'
 import { detectInstalledAgentsWithShellPathHydration } from '../preflight/agent-detection'
 import type {
   VoiceControlAgentActivityEvent,

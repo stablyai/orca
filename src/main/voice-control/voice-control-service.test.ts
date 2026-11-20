@@ -138,8 +138,8 @@ function createHarness(overrides: Partial<VoiceControlServiceDeps> = {}) {
         return Promise.resolve(sdpResponse('call_1'))
       }
     },
-    hasApiKey: () => true,
-    readApiKey: () => 'sk-real',
+    hasApiKey: async () => true,
+    readApiKey: async () => 'sk-real',
     getRoster: () => Promise.resolve(emptyRoster()),
     getSettings: () => SETTINGS,
     emitState: (event) => states.push(event),
@@ -168,7 +168,7 @@ async function flushMicrotasks(): Promise<void> {
 
 describe('VoiceControlService', () => {
   it('refuses to start without an API key', async () => {
-    const { service, states } = createHarness({ hasApiKey: () => false })
+    const { service, states } = createHarness({ hasApiKey: async () => false })
     const failure = await service.start('s1')
     expect(failure?.kind).toBe('key-missing')
     expect(service.getState().state).toBe('idle')
@@ -178,7 +178,7 @@ describe('VoiceControlService', () => {
   it('classifies an undecryptable stored key instead of surfacing unknown', async () => {
     // The blob can exist but be sealed under another app identity (dev vs prod).
     const { service, states } = createHarness({
-      readApiKey: () => {
+      readApiKey: async () => {
         throw new Error('OpenAI API key could not be decrypted')
       }
     })

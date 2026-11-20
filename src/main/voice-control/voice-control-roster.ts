@@ -1,5 +1,5 @@
 import type { RuntimeWorktreePsSummary } from '../../shared/worktree/catalog/runtime-worktree-contracts'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 /**

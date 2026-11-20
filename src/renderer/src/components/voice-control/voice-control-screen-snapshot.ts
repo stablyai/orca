@@ -1,5 +1,5 @@
 import type { VoiceScreenSnapshot } from '../../../../shared/voice-control-types'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/row-display/git-identity-display'
 import { useAppStore } from '@/store'

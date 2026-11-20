@@ -8,13 +8,13 @@ import userEvent from '@testing-library/user-event'
 import {
   getDefaultVoiceControlSettings,
   getDefaultVoiceSettings
-} from '../../../../../shared/constants'
+} from '../../../../../shared/orca-profiles/constants'
 import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import { OPENAI_REALTIME_VOICES } from '../../../../../shared/voice-control-types'
 import { VoiceControlSettingsSection } from './VoiceControlSettingsSection'
 
 const { useShortcutLabelMock } = vi.hoisted(() => ({ useShortcutLabelMock: vi.fn() }))
-vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: useShortcutLabelMock }))
+vi.mock('@/lib/keyboard/useShortcutLabel', () => ({ useShortcutLabel: useShortcutLabelMock }))
 
 useShortcutLabelMock.mockReturnValue('⌘⇧V')
 

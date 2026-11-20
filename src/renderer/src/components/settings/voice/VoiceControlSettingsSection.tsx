@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import type {
   OpenAiRealtimeVoice,
@@ -7,7 +7,7 @@ import type {
   VoiceControlSettings
 } from '../../../../../shared/voice-control-types'
 import { OPENAI_REALTIME_VOICES } from '../../../../../shared/voice-control-types'
-import { getDefaultVoiceControlSettings } from '../../../../../shared/constants'
+import { getDefaultVoiceControlSettings } from '../../../../../shared/orca-profiles/constants'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { Switch } from '../../ui/switch'

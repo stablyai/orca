@@ -16,8 +16,8 @@ import type { VoiceTranscriptEntry } from './voice-control-transcript-log'
 /** Seam surface of the voice control service — see the service for the lifecycle. */
 export type VoiceControlServiceDeps = {
   http: Pick<MainHttpClient, 'fetch'>
-  hasApiKey: () => boolean
-  readApiKey: () => string
+  hasApiKey: () => Promise<boolean>
+  readApiKey: () => Promise<string>
   getRoster: () => Promise<RuntimeWorktreePsSummary[]>
   getSettings: () => VoiceControlSettings
   emitState: (event: VoiceControlStateChangedEvent) => void

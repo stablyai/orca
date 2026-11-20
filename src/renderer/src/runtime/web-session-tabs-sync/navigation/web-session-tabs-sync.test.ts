@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import {
   clearWebSessionCloseIntent,
   isWebSessionCloseIntentPending,
@@ -10,7 +10,7 @@ import {
 } from '../closing/web-session-close-intent'
 import { recordWebSessionReorderIntent } from './web-session-reorder-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../../native-chat/local-sessions/local-structured-session-owner'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 import {
@@ -18,14 +18,17 @@ import {
   nextReceivedSessionTabsFrame,
   type WebSessionTabsSyncState
 } from '../state'
-import { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsSnapshot } from '../snapshot-api'
-import { clearWebSessionTabsTrackingForEnvironment } from '../tracking-lifecycle'
-import { resolveHostSessionTabIdForWebSessionTab } from '../tracking-mappings'
-import { shouldApplyWebSessionTabsSnapshot } from '../tracking-decisions'
+import {
+  applyFreshWebSessionTabsSnapshot,
+  applyWebSessionTabsSnapshot
+} from '../snapshots/snapshot-api'
+import { clearWebSessionTabsTrackingForEnvironment } from '../tracking/tracking-lifecycle'
+import { resolveHostSessionTabIdForWebSessionTab } from '../identity/tracking-mappings'
+import { shouldApplyWebSessionTabsSnapshot } from '../tracking/tracking-decisions'
 import {
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
-} from '../tracking'
+} from '../tracking/tracking'
 import {
   ENV,
   HOST_SURFACE_ID,

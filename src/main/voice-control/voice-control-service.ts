@@ -55,12 +55,12 @@ export class VoiceControlService {
     if (this.state !== 'idle') {
       return { kind: 'unknown', error: 'voice_control_already_active' }
     }
-    if (!this.deps.hasApiKey()) {
+    if (!(await this.deps.hasApiKey())) {
       return { kind: 'key-missing', error: 'OpenAI API key is not configured' }
     }
     let apiKey: string
     try {
-      apiKey = this.deps.readApiKey()
+      apiKey = await this.deps.readApiKey()
     } catch {
       // The blob can exist but be unreadable (sealed under another app's Keychain
       // identity, e.g. dev vs prod) — hasApiKey is existence-only, so classify here.
@@ -202,7 +202,7 @@ export class VoiceControlService {
       (event) => sidebandRef?.send(event),
       this.deps.gateObserver ?? voiceControlGateObserver
     )
-    const sideband = createSideband(this.deps.readApiKey(), callId, {
+    const sideband = createSideband(await this.deps.readApiKey(), callId, {
       onEvent: (event) => {
         const kind = routeVoiceControlSidebandEvent({
           sessionId,
