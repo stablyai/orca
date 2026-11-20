@@ -6,19 +6,17 @@ import { BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL } from '../../../../shared/browse
 import { installBrowserGuestPageVisibilityReport } from '../../../../preload/browser/visibility/browser-guest-page-visibility-report'
 import { listenForBrowserGuestPageVisibility } from './browser-guest-page-visibility'
 
-type PageRead = {
-  visibilityState: string
-  hidden: boolean
-  lastEvent: string | null
-  events: number
-}
+type FrameRead = { visibilityState: string; hidden: boolean; events: string[] }
 
-const page = encodeURIComponent(
-  '<script>window.__events=[];document.addEventListener("visibilitychange",()=>__events.push(document.visibilityState))</script>'
+const recordEvents =
+  "window.__events=[];document.addEventListener('visibilitychange',()=>__events.push(document.visibilityState))"
+const plainPage = encodeURIComponent(`<script>${recordEvents}</script>`)
+const framedPage = encodeURIComponent(
+  `<script>${recordEvents}</script><iframe srcdoc="<script>${recordEvents}</script>"></iframe>`
 )
 const host = `<!doctype html><body>
-<webview id="first" src="data:text/html,${page}" style="width:300px;height:200px"></webview>
-<div id="second-tab" style="display:none"><webview id="second" src="data:text/html,${page}" style="width:300px;height:200px"></webview></div>
+<webview id="first" src="data:text/html,${framedPage}" style="width:300px;height:200px"></webview>
+<div id="second-tab" style="display:none"><webview id="second" src="data:text/html,${plainPage}" style="width:300px;height:200px"></webview></div>
 </body>`
 
 async function until(predicate: () => Promise<boolean>): Promise<void> {
@@ -38,7 +36,7 @@ async function run(): Promise<void> {
   writeFileSync(
     preload,
     `const { ipcRenderer } = require('electron')
-if (process.isMainFrame) (${installBrowserGuestPageVisibilityReport.toString()})((state) => ipcRenderer.send(${JSON.stringify(BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL)}, state))`
+;(${installBrowserGuestPageVisibilityReport.toString()})((state) => ipcRenderer.send(${JSON.stringify(BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL)}, state))`
   )
   listenForBrowserGuestPageVisibility()
   const window = new BrowserWindow({
@@ -51,6 +49,7 @@ if (process.isMainFrame) (${installBrowserGuestPageVisibilityReport.toString()})
     preferences.preload = preload
     preferences.sandbox = true
     preferences.contextIsolation = true
+    preferences.nodeIntegrationInSubFrames = true
   })
   await window.loadURL(`data:text/html,${encodeURIComponent(host)}`)
   const guest = async (id: string): Promise<Electron.WebContents> => {
@@ -69,55 +68,77 @@ if (process.isMainFrame) (${installBrowserGuestPageVisibilityReport.toString()})
   }
   const first = await guest('first')
   const second = await guest('second')
-  const read = (target: Electron.WebContents): Promise<PageRead> =>
-    target.executeJavaScript(
-      '({ visibilityState: document.visibilityState, hidden: document.hidden, lastEvent: window.__events?.at(-1) ?? null, events: window.__events?.length ?? 0 })'
+  const frames = (target: Electron.WebContents): Electron.WebFrameMain[] => [
+    target.mainFrame,
+    ...target.mainFrame.frames
+  ]
+  const read = (target: Electron.WebContents): Promise<FrameRead[]> =>
+    Promise.all(
+      frames(target).map((frame) =>
+        frame.executeJavaScript(
+          '({ visibilityState: document.visibilityState, hidden: document.hidden, events: window.__events ?? [] })'
+        )
+      )
     )
-  const settle = (target: Electron.WebContents, state: string): Promise<void> =>
-    until(
+  // Every frame of the page, settled on one state: [visibilityState, hidden, last event].
+  const settle = async (target: Electron.WebContents, state: string): Promise<unknown> => {
+    await until(
       async () =>
         !target.isLoading() &&
-        (await target.executeJavaScript('document.readyState')) === 'complete' &&
-        (await read(target)).visibilityState === state
+        frames(target).length === (target === first ? 2 : 1) &&
+        (await read(target)).every((frame) => frame.visibilityState === state)
     ).catch(() => undefined)
+    return (await read(target)).map((frame) => [
+      frame.visibilityState,
+      frame.hidden,
+      frame.events.at(-1) ?? null
+    ])
+  }
+  const eventCounts = async (target: Electron.WebContents): Promise<number[]> =>
+    (await read(target)).map((frame) => frame.events.length)
 
-  await settle(first, 'visible')
-  await settle(second, 'hidden')
-  const loaded = { first: await read(first), second: await read(second) }
+  const loaded = { first: await settle(first, 'visible'), second: await settle(second, 'hidden') }
 
   // What BrowserWindow emits when the window is restored: Electron sends it to every guest.
+  const before = await eventCounts(second)
   window.webContents.emit('-window-visibility-change', 'visible')
   await new Promise((resolve) => setTimeout(resolve, 300))
-  const windowShown = {
-    first: (await read(first)).events - loaded.first.events,
-    second: (await read(second)).events - loaded.second.events
-  }
+  const backgroundEventsOnRestore = (await eventCounts(second)).map(
+    (count, index) => count - before[index]
+  )
+
+  // Minimizing the window hides the shown tab even when Chromium keeps it painted.
+  window.webContents.emit('-window-visibility-change', 'hidden')
+  const windowHidden = await until(
+    async () => (await read(first))[0].visibilityState === 'hidden'
+  ).then(
+    async () => (await read(first))[0].visibilityState,
+    () => 'visible'
+  )
+  window.webContents.emit('-window-visibility-change', 'visible')
+  const windowRestored = await until(
+    async () => (await read(first))[0].visibilityState === 'visible'
+  ).then(
+    async () => (await read(first))[0].visibilityState,
+    () => 'hidden'
+  )
 
   await window.webContents.executeJavaScript(
     `document.getElementById('first').style.display = 'none'; document.getElementById('second-tab').style.display = 'block'`
   )
-  await settle(first, 'hidden')
-  await settle(second, 'visible')
-  const switched = { first: await read(first), second: await read(second) }
+  const switched = { first: await settle(first, 'hidden'), second: await settle(second, 'visible') }
 
   first.reload()
-  await settle(first, 'hidden')
-  const { visibilityState, hidden } = await read(first)
+  const reloadedInBackground = await settle(first, 'hidden')
 
-  const state = ({ visibilityState, hidden, lastEvent }: PageRead) => ({
-    visibilityState,
-    hidden,
-    lastEvent
-  })
   console.log(
     JSON.stringify({
-      loaded: {
-        first: { visibilityState: loaded.first.visibilityState, hidden: loaded.first.hidden },
-        second: { visibilityState: loaded.second.visibilityState, hidden: loaded.second.hidden }
-      },
-      windowShown,
-      switched: { first: state(switched.first), second: state(switched.second) },
-      reloadedInBackground: { visibilityState, hidden }
+      loaded,
+      backgroundEventsOnRestore,
+      windowHidden,
+      windowRestored,
+      switched,
+      reloadedInBackground
     })
   )
 }

@@ -1,16 +1,18 @@
-/** Reports Chromium's visibility for this document, which Electron's webview hides from document.visibilityState. */
+/** Reports Chromium's visibility for this frame's document, which Electron's webview hides from document.visibilityState. */
 export function installBrowserGuestPageVisibilityReport(
   send: (state: DocumentVisibilityState) => void
 ): void {
-  let reported: DocumentVisibilityState | null = null
-  const report = (): void => {
+  let reported: unknown = null
+  const report = (force: boolean): void => {
     // Electron overrides visibilityState and hidden but leaves the prefixed property alone.
     const state: unknown = Reflect.get(document, 'webkitVisibilityState')
-    if ((state === 'visible' || state === 'hidden') && state !== reported) {
+    if ((state === 'visible' || state === 'hidden') && (force || state !== reported)) {
       reported = state
       send(state)
     }
   }
-  document.addEventListener('visibilitychange', report)
-  report()
+  document.addEventListener('visibilitychange', () => report(false))
+  // Electron drops a reply that reaches the document before its element exists, or before main sees the commit.
+  document.addEventListener('DOMContentLoaded', () => report(true), { once: true })
+  report(false)
 }

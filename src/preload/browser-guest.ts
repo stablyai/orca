@@ -26,14 +26,15 @@ if (process.isMainFrame) {
     on: (channel, listener) =>
       ipcRenderer.on(channel, (_event, payload: unknown) => listener(payload))
   })
-  installBrowserGuestPageVisibilityReport((state) =>
-    ipcRenderer.send(BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL, state)
-  )
   contextBridge.executeInMainWorld({
     func: installBrowserWindowCloseGuard,
     args: [() => ipcRenderer.sendToHost(PRELOAD_BROWSER_GUEST_WINDOW_CLOSE_CHANNEL)]
   })
 }
+// Electron's visibilityState override runs in every frame of the guest.
+installBrowserGuestPageVisibilityReport((state) =>
+  ipcRenderer.send(BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL, state)
+)
 // Every frame this preload runs in also got Electron's throwing prompt.
 contextBridge.executeInMainWorld({ func: installBrowserWindowPrompt, args: [] })
 

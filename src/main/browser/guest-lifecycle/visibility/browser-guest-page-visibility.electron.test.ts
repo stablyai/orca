@@ -9,18 +9,31 @@ describe('browser guest page visibility in real Electron webviews', () => {
     )
     expect(result.timedOut).toBe(false)
     expect(result.code, `${result.signal}\n${result.stdout}\n${result.stderr}`).toBe(0)
+    // Per frame (the top document, then the first tab's iframe): [visibilityState, hidden, last event].
     expect(result.output).toEqual({
+      // A document can start in the right state, so loading may fire no event.
       loaded: {
-        first: { visibilityState: 'visible', hidden: false },
-        second: { visibilityState: 'hidden', hidden: true }
+        first: [
+          ['visible', false, expect.toBeOneOf([null, 'visible'])],
+          ['visible', false, expect.toBeOneOf([null, 'visible'])]
+        ],
+        second: [['hidden', true, expect.toBeOneOf([null, 'hidden'])]]
       },
       // Electron sends every guest 'visible' when the window is restored; a background tab must not flash.
-      windowShown: { first: 0, second: 0 },
+      backgroundEventsOnRestore: [0],
+      windowHidden: 'hidden',
+      windowRestored: 'visible',
       switched: {
-        first: { visibilityState: 'hidden', hidden: true, lastEvent: 'hidden' },
-        second: { visibilityState: 'visible', hidden: false, lastEvent: 'visible' }
+        first: [
+          ['hidden', true, 'hidden'],
+          ['hidden', true, 'hidden']
+        ],
+        second: [['visible', false, 'visible']]
       },
-      reloadedInBackground: { visibilityState: 'hidden', hidden: true }
+      reloadedInBackground: [
+        ['hidden', true, expect.toBeOneOf([null, 'hidden'])],
+        ['hidden', true, expect.toBeOneOf([null, 'hidden'])]
+      ]
     })
   }, 60_000)
 })
