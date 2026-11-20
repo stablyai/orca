@@ -12,6 +12,7 @@ import {
   type BotItemQuestionShape
 } from './bot-item-ask'
 import type { BotItem, BotItemEvent } from './bot-items'
+import { IMAGE_PROMPT_MARKER } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 
 export type BotItemQuestionAnswers = {
   shape: BotItemQuestionShape
@@ -150,10 +151,9 @@ export function botItemQuestionPairing(
       answers[line] = event
       byOrder[line] = guessed
     }
-    // It quotes the first line it answers.
-    const first = lines[0]
-    if (first !== undefined) {
-      replies.set(event.id, { questionId: current.id, decision: shape.decisions[first]! })
+    const quoted = quotedLine(shape, event, lines)
+    if (quoted !== undefined) {
+      replies.set(event.id, { questionId: current.id, decision: shape.decisions[quoted]! })
     }
   }
   if (current) {
@@ -168,6 +168,20 @@ export function botItemQuestionPairing(
       (item.question?.eventId === current.id || started)
   }
   return { questions, replies }
+}
+
+/** The line a reply quotes: the one its image is on, else the last it answers (answers held for
+ *  earlier lines post ahead of the one just given). */
+function quotedLine(
+  shape: BotItemQuestionShape,
+  reply: BotItemEvent,
+  lines: readonly number[]
+): number | undefined {
+  const named = botItemNamedAnswers(
+    shape,
+    typeof reply.data.text === 'string' ? reply.data.text : ''
+  )
+  return lines.find((line) => IMAGE_PROMPT_MARKER.test(named[line] ?? '')) ?? lines.at(-1)
 }
 
 /** The agent comment that came with this Needs you move: the last comment before it in its write. */

@@ -36,12 +36,14 @@ const SSH_KEY = 'repo-ssh::/srv/api'
 const homeOf = (key: string): ExecutionHostId => (key === SSH_KEY ? SSH : 'local')
 const leafOf = (index: number) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
 const directories: string[] = []
+const stores: Store[] = []
 
 /** Tabs `tab-<workspace>-<n>` in each workspace, its panes unbound until a test binds one. */
 async function storeWith(tabs: Record<string, number>): Promise<Store> {
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-frames-'))
   directories.push(directory)
   const store = await openTopologyStore(directory, emptyTerminalSessionProfile())
+  stores.push(store)
   const sessions = new Map<ExecutionHostId, WindowSession>()
   let leaf = 0
   for (const [workspace, count] of Object.entries(tabs)) {
@@ -85,8 +87,12 @@ beforeEach(() => {
   check = installLayoutFrameModelCheck()
 })
 
-afterEach(() => {
+afterEach(async () => {
   check.uninstall()
+  // Windows refuses to delete a directory whose SQLite file is still open.
+  for (const store of stores.splice(0)) {
+    await store.freezeWritesAsync()
+  }
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
