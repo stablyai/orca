@@ -21,12 +21,21 @@ afterEach(async () => {
   await fs.rm(home, { recursive: true, force: true })
 })
 
-it('refuses missing, empty, multiple and incomplete inventories without mutating another candidate', async () => {
-  await expect(renameClaudeTranscript(home, conversation, 'Missing')).rejects.toThrow(
-    'no transcript'
-  )
+it('writes the name into the one transcript that already exists', async () => {
+  await fs.writeFile(transcript, 'old\n')
+  await renameClaudeTranscript(home, conversation, 'Kept')
+  const text = await fs.readFile(transcript, 'utf8')
+  expect(text.startsWith('old\n')).toBe(true)
+  expect(text).toContain('"type":"agent-name"')
+  expect(text).toContain('"agentName":"Kept"')
+})
+
+it('skips a chat with no transcript yet, and still refuses an ambiguous or unreadable one', async () => {
+  await expect(renameClaudeTranscript(home, conversation, 'Missing')).resolves.toBeUndefined()
+  await expect(fs.access(transcript)).rejects.toThrow()
   await fs.writeFile(transcript, '')
-  await expect(renameClaudeTranscript(home, conversation, 'Empty')).rejects.toThrow('no transcript')
+  await expect(renameClaudeTranscript(home, conversation, 'Empty')).resolves.toBeUndefined()
+  expect(await fs.readFile(transcript, 'utf8')).toBe('')
   await fs.writeFile(transcript, 'old\n')
   const second = join(home, 'projects', 'hash-or-worktree')
   await fs.mkdir(second)

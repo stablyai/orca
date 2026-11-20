@@ -43,7 +43,9 @@ export async function renameClaudeTranscript(
           transcript = candidate
         }
         if (!transcript) {
-          throw new Error('Claude naming found no transcript in the launch home')
+          // Nothing has been written yet. The chat name is already stored; a missing
+          // transcript is not a failed rename (#45541).
+          return
         }
         await appendTranscriptEntries(transcript, [
           ...entries,
