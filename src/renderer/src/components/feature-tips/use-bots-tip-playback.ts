@@ -85,6 +85,8 @@ export function useBotsTipPlayback(active: boolean): BotsTipPlayback {
     let lastPaint = last
     let nextCue = nextBotsTipCue(page, elapsedRef.current)
     const tick = (now: number): void => {
+      // A capped step means a stall the pill's CSS clock ran through; publishing resyncs the pill.
+      const stalled = now - last > MAX_STEP_MS
       elapsedRef.current += Math.min(now - last, MAX_STEP_MS) / 1000
       last = now
       const at = elapsedRef.current
@@ -93,7 +95,7 @@ export function useBotsTipPlayback(active: boolean): BotsTipPlayback {
         return
       }
       const continuous = botsTipFrameIsContinuous(page, at)
-      if (at >= nextCue || (continuous && now - lastPaint >= FRAME_MS)) {
+      if (at >= nextCue || stalled || (continuous && now - lastPaint >= FRAME_MS)) {
         lastPaint = now
         nextCue = nextBotsTipCue(page, at)
         setElapsed(at)
