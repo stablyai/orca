@@ -108,7 +108,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     setTimer: unrefTimer
   })
   // The execution host observes its own panes, so local, SSH and paired-server workers are all seen.
-  private readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
+  protected readonly terminalWorkerTurnStops = new TerminalWorkerTurnStops({
     ...this.workerTurnStopReportDeps,
     ...this.terminalWorkerResolution,
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),

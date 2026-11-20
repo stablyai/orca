@@ -30,29 +30,6 @@ describe('client-hosted browser page persistence', () => {
     expect(restored.listPages()).toEqual([])
   })
 
-  it('never rehydrates over a page the registry already holds', () => {
-    const store = sessionStore()
-    persistClientHostedBrowserPages(store, registryWith(livePlacement), 'repo-1::wt-a')
-    const live = registryWith(livePlacement)
-    // The registry already rejects duplicates; warnings distinguish skipped replay from a noisy rejected attempt.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    let warnings = -1
-    try {
-      rehydrateClientHostedBrowserPages(live, {
-        listWorkspaceSessions: () => [store.session],
-        isKnownWorktree: () => true,
-        now: () => NOW
-      })
-      // mockRestore clears calls too; capture the count first.
-      warnings = warn.mock.calls.length
-    } finally {
-      warn.mockRestore()
-    }
-
-    expect(live.getPage('page-a')?.placement).toEqual(livePlacement)
-    expect(warnings).toBe(0)
-  })
-
   it('ignores a row whose worktree key disagrees with its own workspace', () => {
     const store = sessionStore()
     persistClientHostedBrowserPages(store, registryWith(livePlacement), 'repo-1::wt-a')

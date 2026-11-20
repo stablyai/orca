@@ -17595,6 +17595,7 @@
             "e518f544b1": "Nenhum agente detectado",
             "8dea9b5cdf": "Nenhum agente habilitado",
             "chatNotInstalled": "Não instalado",
+            "chatInstallRequired": "Instalação necessária",
             "chatNotOverSsh": "Chat indisponível via SSH",
             "chatNotInWsl": "Chat indisponível no WSL",
             "chatNotInSubfolder": "Chat indisponível em subpasta",
@@ -18535,10 +18536,6 @@
           "hideOtherClients": "Ocultar agentes de outros clientes"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Caminho copiado para a área de transferência",
-          "copyPathFailed": "Falha ao copiar o caminho",
-          "workspace": "Espaço de Trabalho",
-          "copyPath": "Copiar caminho",
           "jumpToWorkspace": "Ir para o espaço de trabalho"
         },
         "ActivityThreadRow": {
@@ -18641,7 +18638,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "A colagem é muito grande para a entrada de teclado do emulador.",
-            "unsupportedPasteText": "A colagem do teclado do emulador só suporta texto de teclado americano (US).",
             "pasteTargetUnavailable": "A colagem do teclado do emulador falhou porque o dispositivo não está pronto."
           }
         }
@@ -20380,7 +20376,6 @@
         "stoppedRestart_many": "{{count}} chats parados ao fechar o Orca.",
         "stoppedRestart_other": "{{count}} chats parados ao fechar o Orca.",
         "promptsNotResent": "Retomar não reenviará seus prompts.",
-        "promptsNotSent": "Seus prompts não foram reenviados.",
         "resume": "Retomar",
         "details": "Detalhes",
         "close": "Fechar",
@@ -22402,7 +22397,6 @@
       "cancelFailed": "Não foi possível cancelar a instalação. Tente novamente.",
       "install": "Instalar {{agent}}",
       "installManaged": "Instalar a cópia do Orca",
-      "installed": "Instalado",
       "notInstalled": "Não instalado.",
       "progress": "Download do {{agent}}",
       "readFailed": "Não foi possível verificar o {{agent}} neste host. Tentando novamente.",
@@ -24773,7 +24767,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, mostrar tudo",
       "searchEverything": "Buscar em tudo por \"{{text}}\"",
-      "searchBotsFor": "Buscar bots por \"{{text}}\"",
       "noMatch": "Nenhum bot corresponde a \"{{text}}\"",
       "noBotsYet": "Ainda não há bots",
       "filtersPaused": "Os filtros se aplicam a worktrees, não a bots",
@@ -24790,7 +24783,7 @@
       "browse": "Ver modelos"
     },
     "new": {
-      "fromTemplate": "Usar modelo"
+      "fromTemplate": "Modelo"
     },
     "googleSetup": {
       "otherAccount": "Trocar de conta"

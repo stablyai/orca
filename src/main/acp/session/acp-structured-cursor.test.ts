@@ -183,6 +183,81 @@ it("shows Cursor's plan and accepts it, which ends the turn without building", a
   )
 })
 
+it("uses Cursor's legacy model setter for Auto and preserves inherited object names as model IDs", () => {
+  const options = new AcpStructuredOptions(CURSOR.dialect)
+  options.adoptSession({ configOptions: OPUS_OPTIONS }, 'new')
+  const legacy = new AcpStructuredOptions(CURSOR.dialect)
+  legacy.adoptSession(
+    {
+      models: {
+        currentModelId: 'grok-4.7',
+        availableModels: [{ modelId: 'default', name: 'Auto' }]
+      }
+    },
+    'new'
+  )
+  expect(legacy.write('model', 'auto')).toEqual({ method: 'model', modelId: 'default' })
+  // Only Cursor's own aliases map; a name an object inherits is a model id like any other.
+  for (const id of ['constructor', '__proto__', 'toString']) {
+    expect(options.write('model', id)).toMatchObject({ value: id })
+  }
+})
+
+/** Cursor's model option, set to `value`. */
+const modelOn = (value: string): SessionConfigOption[] =>
+  OPUS_OPTIONS.slice(0, 1).map((option) =>
+    option.type === 'select' ? { ...option, currentValue: value } : option
+  )
+
+/** A Cursor chat that sends one message with `model`, its session opened on `current`. */
+async function sendOnModel(model: string | undefined, current: string, reopened: boolean) {
+  const configOptions = modelOn(current)
+  const rig = await openAcpAdapterRig({
+    spec: CURSOR,
+    launch: reopened
+      ? {
+          resume: {
+            sessionId: PROVIDER_SESSION,
+            key: 'acp:cursor:saved',
+            mayBeUnsaved: async () => false,
+            lossKeys: []
+          }
+        }
+      : {},
+    script: (agent) => {
+      for (const method of ['session/new', 'session/load']) {
+        agent.on(method, (frame) =>
+          agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions })
+        )
+      }
+      agent.on('session/set_config_option', (frame) => {
+        const { value } = CONFIG_WRITE.parse(frame.params)
+        agent.reply(frame, { configOptions: modelOn(value) })
+      })
+      agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+    }
+  })
+  await rig.acquire()
+  await rig.adapter.dispatch({
+    sessionId: SESSION,
+    clientMessageId: 'send-1',
+    fence: 1,
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+    ...(model ? { executionOptions: { model } } : {})
+  })
+  await waitFor(() => expect(rig.sent('session/prompt')).toHaveLength(1))
+  return rig.sent('session/set_config_option').map(({ params }) => CONFIG_WRITE.parse(params).value)
+}
+
+it('sends a message on an explicit Auto, writing it as `default`; no pick writes nothing', async () => {
+  expect(await sendOnModel('auto', 'claude-opus-4-8', false)).toEqual(['default'])
+  expect(await sendOnModel(undefined, 'claude-opus-4-8', false)).toEqual([])
+})
+
+it('reopens a chat saved on Auto without writing its model again', async () => {
+  expect(await sendOnModel('auto', 'default', true)).toEqual([])
+})
+
 it('writes effort to the effort levels, not the thinking switch, and Fast to its own option', () => {
   const options = new AcpStructuredOptions(CURSOR.dialect)
   options.adoptSession({ configOptions: OPUS_OPTIONS }, 'new')

@@ -7,6 +7,8 @@ import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource
 export const memoryApi = {
   getSnapshot: (admission?: ResourceViewAdmission): Promise<MemorySnapshot> =>
     ipcRenderer.invoke('memory:getSnapshot', admission),
+  countHiddenBrowserPages: (hiddenForMs: number): Promise<number> =>
+    ipcRenderer.invoke('memory:countHiddenBrowserPages', hiddenForMs),
   resourceWindowVisible: (): Promise<boolean> => ipcRenderer.invoke('memory:resourceWindowVisible'),
   onResourceWindowVisibility: (callback: (visible: boolean) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, visible: boolean): void =>

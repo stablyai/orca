@@ -1,6 +1,10 @@
 import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
 import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
+import {
+  closeDesktopNotification,
+  showDesktopNotification
+} from '../notifications/desktop-notification'
 import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
 import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
@@ -18,20 +22,28 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     }
     const notification = new Notification({ title, body })
     if (notificationId) {
-      mailboxAnnouncements.get(notificationId)?.close()
+      const previous = mailboxAnnouncements.get(notificationId)
+      if (previous) {
+        closeDesktopNotification(previous)
+      }
       mailboxAnnouncements.set(notificationId, notification)
-      notification.once('close', () => {
+      const forget = () => {
         if (mailboxAnnouncements.get(notificationId) === notification) {
           mailboxAnnouncements.delete(notificationId)
         }
-      })
+      }
+      notification.once('close', forget)
+      notification.once('failed', forget)
     }
-    notification.show()
+    showDesktopNotification(notification)
     return true
   },
   dismissNotification: (id) => {
-    mailboxAnnouncements.get(id)?.close()
+    const notification = mailboxAnnouncements.get(id)
     mailboxAnnouncements.delete(id)
+    if (notification) {
+      closeDesktopNotification(notification)
+    }
   },
   sendToRenderers: (channel, payload) => {
     for (const window of BrowserWindow.getAllWindows()) {

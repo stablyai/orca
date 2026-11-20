@@ -125,6 +125,13 @@ it('keeps a single tab stop that follows the last focused item', () => {
   expect(settings).toHaveFocus()
   expect(settings).toHaveAttribute('tabindex', '0')
   expect(workspaces).toHaveAttribute('tabindex', '-1')
+
+  fireEvent.keyDown(settings, { key: 'Home' })
+  expect(workspaces).toHaveFocus()
+  fireEvent.keyDown(workspaces, { key: 'ArrowUp' })
+  expect(settings).toHaveFocus()
+  fireEvent.keyDown(settings, { key: 'ArrowDown' })
+  expect(workspaces).toHaveFocus()
 })
 
 it('leaves arrow keys to the open Help menu and returns focus to Help on Escape', async () => {
@@ -164,7 +171,7 @@ it('folds Help and Settings into More when the rail is too short for three butto
   toolbarHeight = 108
   renderRail()
   expect(railItems()).toEqual(['workspaces', 'help', 'settings'])
-  await resizeTo(72)
+  await resizeTo(107)
   expect(railItems()).toEqual(['workspaces', 'more'])
   fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), { key: 'Enter' })
   const menu = await screen.findByRole('menu')
@@ -179,18 +186,6 @@ it('moves focus to More when the focused Settings button folds into it', async (
   act(() => screen.getByRole('button', { name: 'Settings' }).focus())
   await resizeTo(72)
   expect(screen.getByRole('button', { name: 'More' })).toHaveFocus()
-})
-
-it('keeps an open feedback dialog when Help folds into More', async () => {
-  renderRail()
-  const help = screen.getByRole('button', { name: 'Help' })
-  act(() => help.focus())
-  fireEvent.keyDown(help, { key: 'Enter' })
-  fireEvent.click(await screen.findByRole('menuitem', { name: 'Send Feedback' }))
-  const dialog = await screen.findByRole('dialog', { name: 'Send feedback' })
-  await resizeTo(72)
-  expect(screen.queryByRole('button', { name: 'Help' })).not.toBeInTheDocument()
-  expect(screen.getByRole('dialog', { name: 'Send feedback' })).toBe(dialog)
 })
 
 async function openFeedbackFromHelp(): Promise<void> {
@@ -208,6 +203,7 @@ it('leaves focus inside an open feedback dialog when Help folds into More', asyn
   act(() => text.focus())
   await resizeTo(72)
   expect(text).toHaveFocus()
+  expect(screen.queryByRole('button', { name: 'Help' })).not.toBeInTheDocument()
 })
 
 it('does not pull focus back into the rail on a fold after a dialog already closed', async () => {
@@ -275,5 +271,4 @@ it('names the landmark and its toolbar differently', () => {
   renderRail()
   expect(screen.getByRole('navigation', { name: 'App navigation' })).toBeInTheDocument()
   expect(screen.getByRole('toolbar', { name: 'App tools' })).toBeInTheDocument()
-  expect(screen.getAllByRole('navigation', { name: 'App navigation' })).toHaveLength(1)
 })

@@ -24,6 +24,8 @@ export function useNativeChatBotHome(
   const kickoff = useNativeChatBotKickoffView(session.messages, controller, transport, workspaceId)
   return {
     kickoff,
+    /** Its setup card stands in for the transcript, and offers what setup needs. */
+    setupFailed: kickoff.firstScreen?.phase === 'failed',
     stopControls: nativeChatStructuredStopControls(controller, hostExecution.stopping, kickoff)
   }
 }

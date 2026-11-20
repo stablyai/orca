@@ -231,9 +231,11 @@ export function createRetainedAgentAttentionReceiver(deps: {
     WorkspaceSessionState,
     'activeWorktreeId' | 'activeWorkspaceExecutionHostId'
   >
+  /** Notices the runtime already holds, presented as the receiver starts. */
+  retained?: readonly RetainedAgentAttention[]
 }) {
   const presented = new Map<string, string>()
-  return (notificationId: string, notice: RetainedAgentAttention | null): void => {
+  const receive = (notificationId: string, notice: RetainedAgentAttention | null): void => {
     if (!notice) {
       presented.delete(notificationId)
       deps.dismiss(notificationId)
@@ -265,4 +267,8 @@ export function createRetainedAgentAttentionReceiver(deps: {
         !session.activeWorkspaceExecutionHostId?.startsWith('runtime:')
     })
   }
+  for (const notice of deps.retained ?? []) {
+    receive(notice.notificationId, notice)
+  }
+  return receive
 }

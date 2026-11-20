@@ -127,7 +127,12 @@ export function registerTelemetryHandlers(store: Store): void {
     if (!storeRef) {
       return
     }
-    if (!consumeConsentMutationToken()) {
+    // Why no-op: a repeat opt-out must not re-emit telemetry_opted_out or rewrite settings.
+    if (!optedIn && storeRef.getSettings().telemetry?.optedIn === false) {
+      return
+    }
+    // Why opt-in only: a rate limit must never silently keep telemetry on after the user turns it off (#45214).
+    if (optedIn && !consumeConsentMutationToken()) {
       return
     }
     // Read provenance before consent mutation changes the pending-notice state.

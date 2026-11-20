@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { stubBots } from '../../component-fixtures/fixture-bots'
+import { useAppStore } from '@/store'
+import { PortalContainerContext } from '../ui/portal-container-context'
 import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
 import { templateProposal, type BotProposal } from '../../../../shared/bots/bot-proposal'
 import { NewBotDialog } from './NewBotDialog'
@@ -92,4 +95,93 @@ export const proposalLongPurpose = defineFixture({
     },
     'Proposed by CoS'
   )
+})
+
+// Review shots at a 340 and a 480 px dialog. The dialog is fixed, so it portals into a transformed box
+// that wide (plus its 1rem margins) instead of the page's wide viewport.
+function Stage({ width }: { width: 340 | 480 }): React.JSX.Element {
+  const [box, setBox] = useState<HTMLElement | null>(null)
+  return (
+    <div
+      ref={setBox}
+      className="relative h-[620px] translate-x-0 bg-background"
+      style={{ width: width + 32 }}
+    >
+      {box ? (
+        <PortalContainerContext.Provider value={box}>
+          <NewBotDialog open onOpenChange={() => {}} />
+        </PortalContainerContext.Provider>
+      ) : null}
+    </div>
+  )
+}
+
+const LONG_COMPUTER = 'build-runner-02.eu-west.internal'
+
+const seeded = (computer?: string) => (): void => {
+  stubBots([])
+  useAppStore.setState((state) => ({
+    detectedAgentIds: ['claude', 'codex'],
+    localDetectedAgentIdsByContext: {
+      host: ['claude', 'codex'],
+      'host\u0000all-agents': ['claude', 'codex']
+    },
+    ensureDetectedAgents: async () => ['claude', 'codex'],
+    isDetectingAgents: false,
+    settings: state.settings && {
+      ...state.settings,
+      hostSettingOverrides: computer ? { local: { displayLabel: computer } } : {}
+    }
+  }))
+}
+
+const named = (name: string, identity: string) => async (): Promise<void> => {
+  await typeInto('[role="dialog"] input[autocomplete="off"]', name)()
+  await typeInto('[role="dialog"] textarea', identity)()
+  document.querySelector<HTMLElement>('[role="dialog"]')?.focus()
+}
+
+const openPicker = async (): Promise<void> => {
+  document.querySelector<HTMLButtonElement>('button[aria-label="Change picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+
+const openComputerMenu = async (): Promise<void> => {
+  document.querySelector<HTMLInputElement>('input[role="combobox"][aria-label="Computer"]')?.focus()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+
+const review = (width: 340 | 480, computer?: string) => ({
+  width: width + 32,
+  setup: seeded(computer),
+  render: () => <Stage width={width} />
+})
+
+const FILLED = named('Atlas', 'Triage new bugs and post a daily summary in #eng.')
+const LONGEST = named(
+  'Customer Escalations Concierge for the Platform Team',
+  [
+    'Owns customer escalations.',
+    'Triages new bugs tagged customer.',
+    'Finds the owner from CODEOWNERS.',
+    'Pages the on-call engineer in #oncall.',
+    'Posts a summary once it is fixed.'
+  ].join('\n')
+)
+
+export const empty340 = defineFixture(review(340))
+export const empty480 = defineFixture(review(480))
+export const filled340 = defineFixture({ ...review(340), interact: FILLED })
+export const filled480 = defineFixture({ ...review(480), interact: FILLED })
+export const longest340 = defineFixture({ ...review(340, LONG_COMPUTER), interact: LONGEST })
+export const longest480 = defineFixture({ ...review(480, LONG_COMPUTER), interact: LONGEST })
+export const picker340 = defineFixture({ ...review(340), interact: openPicker })
+export const picker480 = defineFixture({ ...review(480), interact: openPicker })
+export const computerMenu340 = defineFixture({
+  ...review(340, LONG_COMPUTER),
+  interact: openComputerMenu
+})
+export const computerMenu480 = defineFixture({
+  ...review(480, LONG_COMPUTER),
+  interact: openComputerMenu
 })

@@ -1,7 +1,10 @@
 import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { hookRowAgentPhase } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
+import {
+  hookRowAgentPhase,
+  hookRowTransition
+} from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import type { RuntimeTerminalRead } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   TerminalAgentTurnNews,
@@ -11,12 +14,11 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {
-  reportWorkerTurnStop,
   workerTurnStopDispatchId,
   type WorkerTurnStopDispatch,
-  type WorkerTurnStopReason,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import { observeWorker, type WorkerRest } from './worker-presence-report'
 import { firstWithin } from '../approvals/first-within'
 import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
@@ -63,6 +65,39 @@ export class TerminalWorkerTurnStops {
 
   observe(change: AgentPaneChange): void {
     this.news.observe(change)
+    // A turn starting is the worker's own news: once per edge, not per hook post.
+    const working =
+      change.kind === 'moved'
+        ? change.to === 'working'
+        : change.kind === 'seeded' && change.phase === 'working'
+    if (working && !this.deps.readHookRow(change.paneKey)?.structuredHost) {
+      const resolved = this.resolve(change.paneKey)
+      if (resolved) {
+        observeWorker(resolved.db, resolved.target, { presence: 'working' }, this.deps)
+      }
+    }
+  }
+
+  /** A pane restored at rest: its stop came while Orca was down, so no live edge announced it. A turn
+   *  its user stopped, or a session boundary, is no news here either, as it is live. */
+  reportRestingPane(paneKey: string): Promise<void> {
+    const row = this.deps.readHookRow(paneKey)
+    const news = row && hookRowTransition('working', hookRowAgentPhase(row), row) !== null
+    const resolved = news ? this.resolve(paneKey) : null
+    if (!row || !resolved) {
+      return Promise.resolve()
+    }
+    const dispatchId = workerTurnStopDispatchId(resolved.target)
+    return this.report(
+      {
+        paneKey,
+        worktreeId: row.worktreeId ?? '',
+        row,
+        dispatchId,
+        mailTaken: readCoordinatorMailCount(resolved.db, dispatchId)
+      },
+      row
+    )
   }
 
   /** `latest` is the stop's row at delivery, holding a reply read from the transcript since. */
@@ -71,7 +106,9 @@ export class TerminalWorkerTurnStops {
     if (!stopped) {
       return
     }
-    const reason: WorkerTurnStopReason =
+    // A relaunched agent in the same pane is a new process, whatever its hook clock says.
+    const incarnation = this.deps.getProcessIncarnation(stopped.handle) ?? stopped.handle
+    const reason: WorkerRest['reason'] =
       hookRowAgentPhase(stop.row) === 'needs-you'
         ? 'needs-input'
         : agentVerdictDisplayMark(stop.row) === 'failed'
@@ -92,20 +129,28 @@ export class TerminalWorkerTurnStops {
         : null
     // Both reads awaited: the worker may have resumed, reported, or been handed a new Dispatch since.
     const resolved = this.stillStopped(stop)
-    if (!resolved) {
+    if (
+      !resolved ||
+      (this.deps.getProcessIncarnation(resolved.handle) ?? resolved.handle) !== incarnation
+    ) {
       return
     }
-    const sent = reportWorkerTurnStop(
+    const sent = observeWorker(
       resolved.db,
       resolved.target,
       {
-        from: resolved.handle,
-        stopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
-        turnStartedAt: stop.row.turnStartedAt,
-        reason,
-        mailTaken: stop.mailTaken,
-        lastOutput,
-        ...(approval ? { approval } : {})
+        presence: 'at-rest',
+        // An approval seen on a prompt already reported is news of its own.
+        fence: `${incarnation}:${stop.row.stateStartedAt}${approval ? `:approval:${approval.approvalId}` : ''}`,
+        legacyStopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
+        rest: {
+          from: resolved.handle,
+          turnStartedAt: stop.row.turnStartedAt,
+          reason,
+          mailTaken: stop.mailTaken,
+          lastOutput,
+          ...(approval ? { approval } : {})
+        }
       },
       this.deps
     )

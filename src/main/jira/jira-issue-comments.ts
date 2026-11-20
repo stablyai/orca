@@ -126,7 +126,7 @@ export async function getIssueComments(
     mediaRequest = await collectCommentMediaRequest(entry, key, comments, mediaFormat)
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] getIssueComments failed:', error)

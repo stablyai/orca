@@ -821,6 +821,21 @@
       "moreActions": "More actions",
       "automations": "Automations"
     },
+    "deleteConfirm": {
+      "changes_one": "{{count}} uncommitted change",
+      "changes_other": "{{count}} uncommitted changes",
+      "changesAndIgnoredLost": "{{what}} and ignored files will be lost",
+      "lost": "{{what}} will be lost",
+      "ignoredLost": "Ignored files will be lost",
+      "checking": "Checking for changes…",
+      "unchecked": "Changes could not be checked",
+      "ignoredNamesMore": "{{names}} and more",
+      "ignoredNamesCount": "{{names}} +{{value0}}",
+      "ignoredUnchecked": "Ignored files could not be fully checked",
+      "needsUpdate": "Update Orca on your computer to delete this workspace from your phone.",
+      "removeTitle": "Remove Workspace",
+      "removeFolderMessage": "Remove \"{{name}}\" from Orca? The folder on disk is kept."
+    },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Delete \"{{name}}\" ({{branch}})?",
       "deleteDestroysEnvironment": "This also destroys the environment \"{{environment}}\" that Orca created for it, with any uncommitted work and running terminals on it.",
@@ -1613,7 +1628,8 @@
       },
       "composer": {
         "planMode": "Plan",
-        "exitPlanMode": "Exit plan mode"
+        "exitPlanMode": "Exit plan mode",
+        "pastedTextLabel": "Pasted text"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -3553,7 +3569,9 @@
       "saveFailed": "Couldn't save image",
       "shareFailed": "Couldn't share image",
       "photosAccessDenied": "Allow Orca to add photos in Settings",
-      "imageTooLarge": "This image is too large"
+      "imageTooLarge": "This image is too large",
+      "previousImage": "Previous image",
+      "nextImage": "Next image"
     },
     "nativeChatVisual": {
       "defaultTitle": "Visualization",
@@ -5476,11 +5494,6 @@
         "workerStarted": "Worker started:",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
-        "waitingOnYou": "Waiting on you",
-        "reply": "Reply",
-        "asksYou": "asks you",
-        "askedYou": "asked you",
-        "answered": "Answered",
         "noComments": "No comments yet.",
         "snoozed": "snoozed this until {{when}}",
         "snoozedBare": "snoozed this",
@@ -5491,7 +5504,11 @@
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
         "label": "Comment",
         "add": "Add a comment…",
-        "submit": "Comment"
+        "submit": "Comment",
+        "reply": "Reply in your own words",
+        "replyTo": "Reply to {{name}}…",
+        "showLess": "Show less",
+        "fileOnComputer": "Open {{name}} on your computer."
       },
       "link": {
         "notRead": "Not read yet",
@@ -5613,7 +5630,8 @@
       },
       "readFailedTitle": "Couldn’t load items",
       "ask": {
-        "youAnswered": "You answered:"
+        "recommended": "Recommended",
+        "typeAnswer": "Type your answer"
       }
     },
     "needs": {

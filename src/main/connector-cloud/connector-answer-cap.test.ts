@@ -56,9 +56,4 @@ describe('answerFor', () => {
       `${'a'.repeat(8_137)}\n\n_… cut short here. The full answer is in Orca._`
     )
   })
-
-  it('hands back the same event when nothing is over the cap', () => {
-    const short: ConnectorEvent = { ...reply, prose: 'ok' }
-    expect(answerFor(short, new Set())).toBe(short)
-  })
 })

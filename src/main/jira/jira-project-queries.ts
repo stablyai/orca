@@ -49,7 +49,7 @@ export async function listProjects(
         return await readProjectsForClient(entry)
       } catch (error) {
         if (isAuthError(error)) {
-          await clearToken(entry.site.id)
+          await clearToken(entry)
           if (shouldSurfaceSiteFailure(siteId, entries.length)) {
             throw error
           }

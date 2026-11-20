@@ -3765,6 +3765,7 @@
             "e518f544b1": "감지된 agents가 없습니다.",
             "8dea9b5cdf": "활성화된 agents가 없습니다.",
             "chatNotInstalled": "설치되지 않음",
+            "chatInstallRequired": "설치 필요",
             "startChat": "{{value0}} 채팅 시작",
             "chatNotOverSsh": "SSH에서는 채팅을 사용할 수 없음",
             "chatNotOnHost": "이 호스트에서는 채팅을 사용할 수 없음",
@@ -15362,7 +15363,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "붙여넣을 내용이 에뮬레이터 키보드 입력에 비해 너무 큽니다.",
-            "unsupportedPasteText": "에뮬레이터 키보드 붙여넣기는 US 키보드 텍스트만 지원합니다.",
             "pasteTargetUnavailable": "기기가 준비되지 않아 에뮬레이터 키보드 붙여넣기에 실패했습니다."
           }
         }
@@ -17435,10 +17435,6 @@
           "standaloneTerminal": "독립형 터미널"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "경로가 클립보드에 복사되었습니다.",
-          "copyPathFailed": "경로를 복사하지 못했습니다.",
-          "workspace": "워크스페이스",
-          "copyPath": "경로 복사",
           "jumpToWorkspace": "워크스페이스로 이동"
         },
         "ActivityThreadContextMenu": {
@@ -18219,7 +18215,6 @@
         "stoppedUpdate_other": "Orca 업데이트로 채팅 {{count}}개가 중지되었습니다.",
         "stoppedRestart_other": "Orca 종료로 채팅 {{count}}개가 중지되었습니다.",
         "promptsNotResent": "재개해도 프롬프트는 다시 전송되지 않습니다.",
-        "promptsNotSent": "프롬프트는 다시 전송되지 않았습니다.",
         "resume": "재개",
         "details": "세부 정보",
         "close": "닫기",
@@ -20121,7 +20116,6 @@
       "cancelFailed": "설치를 취소하지 못했습니다. 다시 시도하세요.",
       "install": "{{agent}} 설치",
       "installManaged": "Orca 사본 설치",
-      "installed": "설치됨",
       "notInstalled": "설치되지 않았습니다.",
       "progress": "{{agent}} 다운로드",
       "readFailed": "이 호스트에서 {{agent}}을(를) 확인할 수 없습니다. 다시 시도하는 중입니다.",
@@ -23515,7 +23509,6 @@
       "chip": "봇",
       "chipLabel": "봇, 모두 표시",
       "searchEverything": "전체에서 \"{{text}}\" 검색",
-      "searchBotsFor": "\"{{text}}\"(으)로 봇 검색",
       "noMatch": "\"{{text}}\"와(과) 일치하는 봇이 없습니다",
       "noBotsYet": "아직 봇이 없습니다",
       "filtersPaused": "필터는 봇이 아닌 워크스페이스에 적용됩니다",
@@ -23530,7 +23523,7 @@
       "browse": "템플릿 둘러보기"
     },
     "new": {
-      "fromTemplate": "템플릿 사용"
+      "fromTemplate": "템플릿"
     },
     "googleSetup": {
       "otherAccount": "계정 전환"

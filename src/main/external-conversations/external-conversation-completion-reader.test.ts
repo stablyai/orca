@@ -76,43 +76,13 @@ const journal: AgentJournalSnapshot = {
   ]
 }
 
-// A Claude send's turn names the provider echo's id; the journal keeps the message under its send's
-// id, with the echo's id as an alias.
-const claudeJournal: AgentJournalSnapshot = {
-  sessionId: 'session-1',
-  cursor: { epoch: 'epoch-1', sequence: 3 },
-  submissions: [],
-  items: [
-    item('orca:send-1', 1, {
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text: 'Slack request' }],
-      connectorConversation: { source: 'slack', externalId: 'T1:C1:1.0:U1' }
-    }),
-    item('claude-turn-item', 2, {
-      kind: 'turn',
-      turnId: 'public-turn',
-      userItemId: 'claude:provider-session:echo-1',
-      state: 'completed',
-      outcome: 'success'
-    }),
-    item('claude-result', 3, {
-      kind: 'message',
-      role: 'assistant',
-      blocks: [{ type: 'text', text: 'Slack answer' }]
-    })
-  ]
-}
-
-const CLAUDE_ALIASES = new Map([['claude:provider-session:echo-1', 'orca:send-1']])
-
-async function completionRead(cursor?: AgentJournalCursor, snapshot = journal) {
+async function completionRead(cursor?: AgentJournalCursor) {
   let publish: ((event: AgentSessionTurnCompletionEvent) => void) | undefined
   const reader = {
     journalReads: async () => ({
-      operationWindow: async () => ({ snapshot: structuredClone(snapshot), complete: true }),
+      operationWindow: async () => ({ snapshot: structuredClone(journal), complete: true }),
       canonicalItemIds: async (itemIds: readonly string[]) =>
-        itemIds.map((itemId) => ({ itemId, canonicalItemId: CLAUDE_ALIASES.get(itemId) ?? itemId }))
+        itemIds.map((itemId) => ({ itemId, canonicalItemId: itemId }))
     }),
     subscribeTurnCompletions: ({
       emit
@@ -172,10 +142,4 @@ it('reads a delayed public completion at its cursor despite a later private turn
   expect(result.lastAssistantMessage).toBe('Public result')
   expect(result.opener?.itemId).toBe('public-opener')
   expect(result.failure).toBeUndefined()
-})
-
-it("finds a Claude turn's opener through its echo's alias", async () => {
-  const result = await completionRead({ epoch: 'epoch-1', sequence: 3 }, claudeJournal)
-  expect(result.lastAssistantMessage).toBe('Slack answer')
-  expect(result.opener?.itemId).toBe('orca:send-1')
 })

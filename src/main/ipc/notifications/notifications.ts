@@ -1,5 +1,6 @@
 import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../../notifications/desktop-away-state'
+import { closeDesktopNotification } from '../../notifications/desktop-notification'
 import type { Store } from '../../persistence/loading-store/store'
 import type {
   NotificationAttentionAcknowledgement,
@@ -107,7 +108,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     for (const entry of entries) {
       const native = activeNotificationsById.get(entry.id)
       if (native) {
-        native.notification.close()
+        closeDesktopNotification(native.notification)
         native.release()
         dismissed += 1
       }
@@ -271,7 +272,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   const receiveAttention = createRetainedAgentAttentionReceiver({
     dispatch: deliveryService.dispatch,
     dismiss: (id) => retireAnnouncements(announced.takeNotification(id)),
-    readWorkspaceSession: () => store.getWorkspaceSession()
+    readWorkspaceSession: () => store.getWorkspaceSession(),
+    retained: runtime?.getRetainedAgentAttention?.()
   })
   stopRuntimeAttentionEvents?.()
   stopRuntimeAttentionEvents = runtime?.onClientEvent?.(
@@ -284,9 +286,6 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     },
     { consumesTerminalSideEffects: false }
   )
-  for (const notice of runtime?.getRetainedAgentAttention?.() ?? []) {
-    receiveAttention(notice.notificationId, notice)
-  }
 
   // A cleared remote prompt must also retire alerts forwarded to this desktop's phones.
   ipcMain.removeHandler('notifications:settleStructuredPrompts')

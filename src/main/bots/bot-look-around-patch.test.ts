@@ -5,7 +5,10 @@ import { makeTestBot } from './bot.test-fixture'
 describe('a Look around edit', () => {
   it('changes only the fields it names, so quick edits keep each other', () => {
     const bot = makeTestBot({ id: 'b1', agent: 'claude' })
-    const edit = BotUpdate.parse({ botId: 'b1', updates: { lookAround: { weekdaysOnly: false } } })
+    const edit = BotUpdate.parse({
+      botId: 'b1',
+      updates: { lookAround: { weekdaysOnly: false, since: 1 } }
+    })
     expect(edit.updates).toEqual({ lookAround: { weekdaysOnly: false } })
     const first = applyBotUpdates(bot, edit.updates)
     const second = applyBotUpdates(first, { lookAround: { focus: 'CI on main' } })
@@ -37,11 +40,5 @@ describe('a Look around edit', () => {
     expect(edited.lookAround?.since).toBe(stamped)
     expect(edited.tidyUp?.since).toBe(stamped)
     vi.useRealTimers()
-  })
-
-  it('never takes a since from a client', () => {
-    expect(
-      BotUpdate.parse({ botId: 'b1', updates: { lookAround: { on: true, since: 1 } } }).updates
-    ).toEqual({ lookAround: { on: true } })
   })
 })

@@ -1,4 +1,5 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useCallback, useEffect } from 'react'
 import { Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-status/title/agent-title-decoration'
@@ -73,6 +74,7 @@ export default function SortableTab({
   nativeChat,
   namingFailure,
   closable = true,
+  sizing = 'terminal',
   canContinueInTerminal = true,
   identityIcon,
   identityDetail,
@@ -82,17 +84,26 @@ export default function SortableTab({
   const t = useTranslate()
   const canClose = closable && !isPinned
   const naming = useNativeChatNamingFailure(namingFailure)
+  // A chat's status and unread rows still name it by its session's pane address.
+  const statusTabId = nativeChat
+    ? structuredAgentSessionAddressTabId(tab.id, nativeChat.sessionId)
+    : tab.id
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
   const hasUnreadActivity = useAppStore(
     (s) =>
       unread ||
       terminalTabHasUnreadActivity({
         terminalTabId: tab.id,
+        completionTabId: statusTabId,
         unreadTerminalTabs: s.unreadTerminalTabs,
         unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
       })
   )
-  const { activityStatus, programProgress } = useTerminalTabActivity(tab)
+  const { activityStatus, programProgress } = useTerminalTabActivity({
+    id: statusTabId,
+    title: tab.title,
+    launchAgent: tab.launchAgent
+  })
 
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
@@ -169,7 +180,7 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive, 'terminal')
+  const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
   const tabTitle = tab.customTitle ?? tab.title
   const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
