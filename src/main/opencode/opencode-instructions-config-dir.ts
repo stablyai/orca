@@ -77,7 +77,8 @@ export async function writeOpenCodeInstructionsConfigDir(
     }
     await linkEntry(join(source, name), join(folder, name)).catch((error: unknown) => {
       const code = error instanceof Error && 'code' in error ? error.code : undefined
-      if (code !== 'EEXIST' && code !== 'ERR_FS_CP_EEXIST') {
+      const collides = code === 'EEXIST' || code === 'ERR_FS_CP_EEXIST'
+      if (!collides || name.toLowerCase() !== GLOBAL_INSTRUCTIONS_FILE.toLowerCase()) {
         throw error
       }
     })
