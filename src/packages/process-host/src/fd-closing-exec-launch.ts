@@ -70,8 +70,9 @@ export function fdClosingLaunch(
 }
 
 /**
- * Holds 'spawn' until the helper's exec succeeds. A failed exec emits the 'error' a direct spawn
- * would have (code, errno, syscall, path, spawnargs) instead, then the helper's exit.
+ * Holds 'spawn', 'exit' and 'close' until the helper's exec settles, then replays them in order.
+ * A failed exec instead emits what a direct spawn would: 'error' (code, errno, syscall, path,
+ * spawnargs), then 'close' with the negative errno, and no 'spawn' or 'exit'.
  */
 export function watchFdClosingExec<T extends ChildProcess>(child: T, launch: FdClosingLaunch): T {
   const status = child.stdio[launch.target.statusFd]
@@ -79,12 +80,17 @@ export function watchFdClosingExec<T extends ChildProcess>(child: T, launch: FdC
     return child
   }
   const emit = child.emit.bind(child)
-  let held = false
+  const held: [string | symbol, unknown[]][] = []
   let settled = false
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every event unchanged except a 'spawn' held until the exec status settles.
+  let failure: NodeJS.ErrnoException | null = null
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every event unchanged except lifecycle events held until the exec status settles.
   child.emit = ((event: string | symbol, ...rest: unknown[]): boolean => {
-    if (event === 'spawn' && !settled) {
-      held = true
+    const lifecycle = event === 'spawn' || event === 'exit' || event === 'close'
+    if (failure && lifecycle) {
+      return event === 'close' ? emit('close', failure.errno, null) : true
+    }
+    if (!settled && lifecycle) {
+      held.push([event, rest])
       return true
     }
     return emit(event, ...rest)
@@ -98,9 +104,15 @@ export function watchFdClosingExec<T extends ChildProcess>(child: T, launch: FdC
     settled = true
     const errno = Number.parseInt(report, 10)
     if (Number.isInteger(errno) && errno > 0) {
-      emit('error', execError(errno, launch.target))
-    } else if (held) {
-      emit('spawn')
+      failure = execError(errno, launch.target)
+      emit('error', failure)
+      if (held.some(([event]) => event === 'close')) {
+        emit('close', failure.errno, null)
+      }
+      return
+    }
+    for (const [event, rest] of held) {
+      emit(event, ...rest)
     }
   })
   return child

@@ -70,7 +70,7 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
     }
   })
 
-  it('reports exec failures as the error a direct spawn gives, and wraps what runs', async () => {
+  it('reports exec failures as an error and a close, never spawn or exit 127', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-fd-closing-'))
     const script = join(dir, 'broken-interpreter')
     await writeFile(script, '#!/orca-fd-closing-missing-interpreter\n')
@@ -100,14 +100,15 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
         [busy, ['ETXTBSY']]
       ] as const) {
         const child = spawnProcess({ program, closeInheritedFds: true, stdio: 'ignore' })
-        let spawned = false
-        child.once('spawn', () => {
-          spawned = true
-        })
+        const events: string[] = []
+        for (const event of ['spawn', 'exit', 'error'] as const) {
+          child.on(event, () => events.push(event))
+        }
         const [error] = await once(child, 'error')
+        const [code] = await once(child, 'close')
         // A noexec tmpdir makes the direct spawn report EACCES instead; still an error, not 127.
         expect([...codes, 'EACCES']).toContain(error.code)
-        expect({ program, spawned }).toEqual({ program, spawned: false })
+        expect({ program, events, code }).toEqual({ program, events: ['error'], code: error.errno })
       }
       const wrapped = spawnProcess({
         program: '/bin/true',
