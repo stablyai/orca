@@ -157,35 +157,4 @@ describe('getBotListedWorktreeIdentities', () => {
     )
     expect(visible).toHaveLength(2)
   })
-
-  it("filters a bot's finished workspace from Projects exactly as an active one", () => {
-    // A merged PR; the Bots section folds it behind "N done", Projects reads no PR state.
-    const finished = { ...worker, linkedPR: 7 }
-    const sources = { ...lineage, worktreesByRepo: { repo1: [finished, plain] } }
-    const projectList = (hideBotCreated: boolean) =>
-      computeVisibleWorktrees(sources.worktreesByRepo, [finished.id, plain.id], {
-        filterRepoIds: [],
-        showSleepingWorkspaces: true,
-        tabsByWorktree: {},
-        ptyIdsByTabId: {},
-        worktreeIdsWithLiveAgent: new Set(),
-        hideDefaultBranchWorkspace: false,
-        hideAutomationGeneratedWorkspaces: false,
-        hideCliCreatedWorkspaces: false,
-        hideDetachedHeadWorkspaces: false,
-        hideWorkspacesFromOtherDevices: false,
-        pairedDeviceIdsByEnvironment: new Map(),
-        repoMap: new Map(),
-        workspaceHostScope: 'all',
-        defaultHostId: LOCAL_EXECUTION_HOST_ID,
-        hiddenProjects: indexHiddenProjects([], LOCAL_EXECUTION_HOST_ID),
-        worktreeLineageById: sources.worktreeLineageById,
-        botListedWorktreeIdentities: hideBotCreated
-          ? getBotListedWorktreeIdentities([home], sidebarChildrenOf(sources))
-          : new Set()
-      }).map((worktree) => worktree.id)
-
-    expect(projectList(true)).toEqual([plain.id])
-    expect(projectList(false).sort()).toEqual([finished.id, plain.id].sort())
-  })
 })

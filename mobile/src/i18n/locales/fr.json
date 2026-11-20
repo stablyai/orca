@@ -114,7 +114,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... ou collez le code",
       "pasteCodeTitle": "Coller le code d'appairage",
       "pasteInstead": "Coller plutôt le code",
-      "pastePairingCode": "Ou coller le code d'appairage",
+      "pastePairingCode": "Coller le code d'appairage",
       "scanCodeStep": "Scannez le QR code",
       "title": "Appairer un ordinateur",
       "tryAgain": "Réessayer",
@@ -150,7 +150,7 @@
       "installTitle": "Téléchargez la nouvelle app",
       "installDescription": "Si votre téléphone le demande, autorisez votre navigateur à installer des apps.",
       "download": "Télécharger",
-      "keepThisVersion": "Continuer avec cette version",
+      "keepThisVersion": "Garder cette version",
       "keepThisVersionNote": "Vous ne recevrez plus les correctifs de sécurité. Nous vous le rappellerons dans une semaine."
     },
     "pairTitle": "Appairez-la avec votre ordinateur",
@@ -328,7 +328,7 @@
       "triedSearchWeb": "A tenté de rechercher sur le web"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "Afficher le message complet — chargement impossible, touchez pour réessayer",
+      "loadFailed": "Réessayer le message complet",
       "showFullMessage": "Afficher le message complet",
       "showLess": "Afficher moins"
     },
@@ -394,8 +394,7 @@
       "submitSelectedOptions": "Valider les options sélectionnées"
     },
     "queuedMessages": {
-      "clearAll": "Tout effacer",
-      "deleteAll": "Supprimer tous les messages en file d'attente",
+      "deleteAll": "Tout supprimer",
       "editMessage": "Modifier le message",
       "pausedState": "En pause",
       "queuedState": "En file d'attente",
@@ -825,7 +824,7 @@
       "manageShortcuts": "Gérer les raccourcis",
       "manageShortcutsHint": "Afficher, masquer ou réordonner les touches de raccourci",
       "modifiers": "Modificateurs",
-      "moreKeys": "Autres touches — Tab, flèches, F1–F12…",
+      "moreKeys": "PLUS DE TOUCHES",
       "navigation": "Navigation",
       "pickKey": "Choisir une touche",
       "pressEnter": "Appuyer sur Entrée",
@@ -979,12 +978,10 @@
       "dismissDrawer": "Fermer le panneau"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Script de setup",
-      "run": "Exécuter",
-      "runSetupCommand": "Exécuter la commande de setup",
+      "runSetup": "Exécuter le setup",
       "skip": "Ignorer",
-      "waitForSetup": "Attendre la fin du setup avant de démarrer l'agent",
+      "startAgentAfterSetup": "Démarrer l'agent après le setup",
       "waitForSetupSaveFailed": "Échec de l'enregistrement du comportement de démarrage de la configuration."
     },
     "newWorkspaceSshConnectionField": {
@@ -1260,7 +1257,7 @@
       "privacyHint": "Envoie un rapport expurgé de taille limitée contenant le nom de l'hôte, le point de terminaison, les versions, l'état de la connexion et les événements — jamais le contenu des terminaux ni les identifiants de connexion.",
       "reconnecting": "reconnexion en cours",
       "retrySending": "Réessayer l'envoi",
-      "sendDiagnostics": "Envoyer les diagnostics à Orca",
+      "sendDiagnostics": "Envoyer les diagnostics",
       "sending": "Envoi…",
       "sent": "Diagnostics envoyés",
       "stateWithAttempt": "{{state}} · tentative {{attempts}}",
@@ -1646,10 +1643,8 @@
   "host": {
     "edit": {
       "address": "Adresse",
-      "addressHint": "Accepte une adresse IP, host:port ou ws:// / wss://. Une URL wss:// sans port utilise le port 443. Une adresse seule conserve le port actuel (ou 6768).",
       "connectionPreview": "Connexion à {{endpoint}}",
       "goBack": "Précédent",
-      "help": "Modifiez le nom affiché ou l'adresse de connexion. Laissez le nom vide pour utiliser celui indiqué par l'hôte. Modifier l'adresse change uniquement l'adresse à laquelle ce téléphone se connecte, sans nouvel appairage. Utilisez cette option si le même hôte est accessible à une autre adresse IP (par exemple, via le LAN domestique ou Tailscale).",
       "hostNamePlaceholder": "Nom de l'hôte",
       "hostRemoved": "Cet hôte a été supprimé de ce téléphone.",
       "loadFailed": "Impossible de charger l'hôte.",
@@ -2006,7 +2001,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} n'est pas liée à une PR ouverte.",
       "currentBranchNotLinked": "La branche actuelle n'est pas liée à une PR ouverte.",
-      "linkExistingPullRequest": "Lier une pull request existante",
+      "linkExistingPullRequest": "Lier la pull request",
       "linkedPrUnavailable": "PR liée #{{number}} indisponible",
       "refreshOrCreate": "Actualisez pour vérifier à nouveau, ou créez une nouvelle PR pour cette branche."
     },
@@ -2401,8 +2396,8 @@
       "scrollToLatest": "Faire défiler jusqu'au dernier message"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "Afficher le message complet — échec du chargement, appuyez pour réessayer",
-      "loadOutputFailed": "Afficher la sortie complète — échec du chargement, appuyez pour réessayer",
+      "loadMessageFailed": "Réessayer le message complet",
+      "loadOutputFailed": "Réessayer la sortie complète",
       "partialMessage": "Affichage d'une partie de ce message.",
       "partialOutput": "Affichage de {{shown}} sur {{total}}.",
       "showFullMessage": "Afficher le message complet",
@@ -2418,8 +2413,8 @@
       "notFoundTitle": "Conversation introuvable pour le moment"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "Passer à la vue du chat",
-      "switchToTerminalView": "Passer à la vue du terminal"
+      "switchToChatView": "Passer au chat",
+      "switchToTerminalView": "Passer au terminal"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "L'agent a démarré, mais les notes n'ont pas été envoyées.",
@@ -3958,7 +3953,7 @@
       "issueSource": "Source des issues",
       "keySecurityHint": "Votre clé est chiffrée via le trousseau du système d'exploitation de l'hôte et stockée localement.",
       "linearConnectSubtitle": "Collez une clé d'API personnelle pour parcourir les tickets de cet espace de travail.",
-      "linearSettingsLink": "Paramètres Linear / Sécurité / Nouvelle clé d'API",
+      "linearSettingsLink": "Ouvrir les paramètres Linear",
       "linearTeam": "Équipe Linear",
       "linearTeamSubtitle": "Créez un ticket dans l'équipe Linear sélectionnée.",
       "newIssueTitle": "Nouveau ticket {{providerLabel}}",
@@ -4033,7 +4028,7 @@
       "runSetupAndCreate": "Exécuter le setup et créer",
       "setupSubtitle": "Choisissez si vous souhaitez exécuter le setup de {{name}} avant de créer cet espace de travail.",
       "setupTitle": "Exécuter le script de setup ?",
-      "skipSetupAndCreate": "Ignorer le setup et créer",
+      "skipSetupAndCreate": "Créer sans configuration",
       "trustFailed": "Échec de l'approbation du script de setup."
     },
     "worktreeCreateRetry": {

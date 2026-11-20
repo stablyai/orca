@@ -450,12 +450,12 @@ describe('a Google setup card in the chat', () => {
     mocks.run.current = run({ state: 'done', account: 'a@x.com', kind: 'work' })
     show('connected')
     expect(screen.getByText('Ivy can use Gmail.')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Share setup with teammates' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Share setup' }))
     expect(mocks.share).toHaveBeenCalledWith({ kind: 'local' }, 'p')
     cleanup()
     mocks.run.current = run({ state: 'done', account: 'a@x.com', kind: 'personal' })
     show('connected')
-    expect(screen.queryByRole('button', { name: 'Share setup with teammates' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Share setup' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Add a service' })).toBeTruthy()
   })
 
@@ -499,7 +499,7 @@ describe('a Google setup card in the chat', () => {
       steps: { account: { status: 'done', at: 2, by: 'bot', note: 'Already signed in as a@x.com' } }
     })
     show('progress')
-    fireEvent.click(screen.getByRole('button', { name: 'Use a different account' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Switch account' }))
     await waitFor(() =>
       expect(mocks.answer).toHaveBeenCalledWith(expect.objectContaining({ id: 'ivy' }), 'account', [
         'other'
@@ -514,7 +514,7 @@ describe('a Google setup card in the chat', () => {
       }
     })
     show('progress')
-    expect(screen.queryByRole('button', { name: 'Use a different account' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Switch account' })).toBeNull()
   })
 
   describe('getting unstuck', () => {

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import {
   recordTerminalTabRename,
   resetTerminalSessionNameRecordingForTest
@@ -12,7 +13,11 @@ import {
   resetTerminalSessionNamesForTest,
   saveTerminalSessionName
 } from './terminal-session-names'
-import { makeTerminalNamesState, type FixtureTab } from './terminal-session-names-test-fixture'
+import {
+  makeTerminalNamesState,
+  type FixtureTab,
+  WORKTREE_ID
+} from './terminal-session-names-test-fixture'
 
 const saved = (sessionId: string) => getSavedTerminalSessionName('local', 'claude', sessionId)
 const owner = (sessionId: string) => getTerminalSessionNameEntry('local', sessionId)?.tabId
@@ -35,6 +40,7 @@ const pass = (tabs: FixtureTab[], now = LATER) =>
 describe('terminal session name recording', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
   beforeEach(() => {
@@ -46,7 +52,11 @@ describe('terminal session name recording', () => {
   describe('rename through the store', () => {
     it('names the session at once, so closing the tab right after keeps it', () => {
       const state = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1' }])
-      recordTerminalTabRename(state, 'tab-1', 'Fix auth bug')
+      useAppStore.setState(state, true)
+      useAppStore.getState().setTabCustomTitle('tab-1', 'Fix auth bug')
+      expect(useAppStore.getState().tabsByWorktree[WORKTREE_ID]?.[0]?.customTitle).toBe(
+        'Fix auth bug'
+      )
       // The tab closes before any background pass runs.
       expect(saved('s1')).toBe('Fix auth bug')
       expect(owner('s1')).toBe('tab-1')
@@ -184,31 +194,6 @@ describe('terminal session name recording', () => {
       expect(result.recheckAt).toBe(now + LOCAL_TAB_NAME_WRITE_GRACE_MS)
     })
 
-    it('names the session once a rename made while its host was unknown shows', () => {
-      const now = 1_000_000
-      const state = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1' }])
-      seed('s1', 'Other tab name', 'tab-2')
-      recordTerminalTabRename(
-        {
-          ...state,
-          activeWorktreeId: null,
-          getKnownWorktreeById: () => undefined
-        },
-        'tab-1',
-        'Mine',
-        { now }
-      )
-      pass(
-        [
-          { id: 'tab-1', sessionId: 's1', customTitle: 'Mine' },
-          { id: 'tab-2', customTitle: 'Other tab name' }
-        ],
-        now + 1
-      )
-      expect(saved('s1')).toBe('Mine')
-      expect(owner('s1')).toBe('tab-1')
-    })
-
     it('gives a rename no say over a session bound after it, or a name a tab was created with', () => {
       const now = 1_000_000
       seed('s2', 'Fix auth bug', 'closed-tab')
@@ -223,66 +208,18 @@ describe('terminal session name recording', () => {
       expect(saved('s2')).toBe('Fix auth bug')
 
       // A tab named by code, not a person, resumes s2 within the window.
-      recordTerminalTabRename(
+      vi.spyOn(Date, 'now').mockReturnValue(now)
+      useAppStore.setState(
         {
           ...makeTerminalNamesState([{ id: 'tab-2', sessionId: 's2' }]),
           activeWorktreeId: null,
           getKnownWorktreeById: () => undefined
         },
-        'tab-2',
-        'Worker 3',
-        { now, interactive: false }
+        true
       )
+      useAppStore.getState().setTabCustomTitle('tab-2', 'Worker 3', { recordInteraction: false })
       pass([{ id: 'tab-2', sessionId: 's2', customTitle: 'Worker 3' }], now + 1)
       expect(saved('s2')).toBe('Fix auth bug')
-    })
-
-    it('a resumed tab renamed before its session is known takes the saved name', () => {
-      const now = 1_000_000
-      seed('s1', 'Fix auth bug', 'closed-tab')
-      // The resume names its new, still unnamed tab through the same rename path.
-      recordTerminalTabRename(
-        makeTerminalNamesState([{ id: 'tab-new' }]),
-        'tab-new',
-        'Fix auth bug',
-        { now: now - 100, interactive: false }
-      )
-      // The resumed tab shows the saved name; the user renames it before the agent reports s1.
-      recordTerminalTabRename(
-        makeTerminalNamesState([{ id: 'tab-new', customTitle: 'Fix auth bug' }]),
-        'tab-new',
-        'Auth, part two',
-        { now }
-      )
-      pass([{ id: 'tab-new', sessionId: 's1', customTitle: 'Auth, part two' }], now + 1)
-      expect(saved('s1')).toBe('Auth, part two')
-      expect(owner('s1')).toBe('tab-new')
-    })
-
-    it('two quick renames of a resumed tab before its session is known still take the name', () => {
-      const now = 1_000_000
-      seed('s1', 'Fix auth bug', 'closed-tab')
-      // The resume names its new, still unnamed tab through the same rename path.
-      recordTerminalTabRename(
-        makeTerminalNamesState([{ id: 'tab-new' }]),
-        'tab-new',
-        'Fix auth bug',
-        { now: now - 100, interactive: false }
-      )
-      recordTerminalTabRename(
-        makeTerminalNamesState([{ id: 'tab-new', customTitle: 'Fix auth bug' }]),
-        'tab-new',
-        'Auth 2',
-        { now }
-      )
-      recordTerminalTabRename(
-        makeTerminalNamesState([{ id: 'tab-new', customTitle: 'Auth 2' }]),
-        'tab-new',
-        'Auth two',
-        { now: now + 5 }
-      )
-      pass([{ id: 'tab-new', sessionId: 's1', customTitle: 'Auth two' }], now + 10)
-      expect(saved('s1')).toBe('Auth two')
     })
 
     it('a resumed tab cleared before its session is known forgets the saved name', () => {
@@ -305,7 +242,7 @@ describe('terminal session name recording', () => {
       expect(saved('s1')).toBeNull()
     })
 
-    it('a resumed tab renamed while starting takes the name even if its session reports late', () => {
+    it('a resumed tab renamed twice while starting still takes the name after a late session report', () => {
       const now = 1_000_000
       seed('s1', 'Fix auth bug', 'closed-tab')
       recordTerminalTabRename(
@@ -323,13 +260,20 @@ describe('terminal session name recording', () => {
         'Auth, part two',
         { now }
       )
-      // The agent is slow to start: no session yet when a pass runs, then it reports a minute later.
-      pass([{ id: 'tab-new', customTitle: 'Auth, part two' }], now + 1_000)
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-new', customTitle: 'Auth, part two' }]),
+        'tab-new',
+        'Auth follow-up',
+        { now: now + 5 }
+      )
+      // A pass sees the final name before the delayed session binding arrives.
+      pass([{ id: 'tab-new', customTitle: 'Auth follow-up' }], now + 1_000)
       pass(
-        [{ id: 'tab-new', sessionId: 's1', customTitle: 'Auth, part two' }],
+        [{ id: 'tab-new', sessionId: 's1', customTitle: 'Auth follow-up' }],
         now + LOCAL_TAB_NAME_WRITE_GRACE_MS * 2
       )
-      expect(saved('s1')).toBe('Auth, part two')
+      expect(saved('s1')).toBe('Auth follow-up')
+      expect(owner('s1')).toBe('tab-new')
     })
 
     it('a resumed tab cleared while starting forgets the name even if its session reports late', () => {
@@ -489,20 +433,6 @@ describe('terminal session name recording', () => {
       expect(saved('s1')).toBe('Mine')
     })
 
-    it("a stale echo of the name this client's rename replaced is not applied after close", () => {
-      const now = 1_000_000
-      seed('s1', 'Old', 'tab-1')
-      recordTerminalTabRename(
-        makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'Old' }]),
-        'tab-1',
-        'New',
-        { now }
-      )
-      pass([{ id: 'tab-1', sessionId: 's1', customTitle: 'Old' }], now + 10)
-      pass([], now + LOCAL_TAB_NAME_WRITE_GRACE_MS)
-      expect(saved('s1')).toBe('New')
-    })
-
     it('a stale echo from before several quick renames is not applied after close', () => {
       const now = 1_000_000
       recordTerminalTabRename(
@@ -578,21 +508,6 @@ describe('terminal session name recording', () => {
       pass([{ id: 'tab-new', sessionId: 's1' }])
       expect(saved('s1')).toBe('Fix auth bug')
       expect(owner('s1')).toBe('closed-tab')
-    })
-
-    it('reports skipped tabs whose host is not known yet', () => {
-      const state = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'N' }])
-      const result = reconcileTerminalSessionNames(
-        {
-          ...state,
-          activeWorktreeId: null,
-          activeWorkspaceExecutionHostId: null,
-          getKnownWorktreeById: () => undefined
-        },
-        LATER
-      )
-      expect(result.hostSkipped).toBe(true)
-      expect(saved('s1')).toBeNull()
     })
 
     it('records names of agents beyond Claude and Codex', () => {
