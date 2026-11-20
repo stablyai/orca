@@ -1,18 +1,23 @@
 type Box = { top: number; bottom: number; left: number; right: number }
 export type GrabSegment = { top: number; height: number }
 
-// Why: rendered edges are fractional; a row whose left edge is within this of the seam starts at it.
-const EDGE_TOLERANCE_PX = 2
 // Why: keep a press on the row's edge pixel with the row.
 const ROW_SLACK_PX = 1
 
 /**
  * Grab-area pieces of a vertical seam, in px from its top: its whole length minus every rendered tab
- * row that starts at the seam's right edge, so tabs and their buttons keep their presses.
+ * row that reaches into the grab band (the seam plus `reachPx` to its right), so tabs and their
+ * buttons keep their presses. A row beside a narrow nested column can start a few px past the seam.
  */
-export function getThinSeamGrabSegments(seam: Box, rows: readonly Box[]): GrabSegment[] {
+export function getThinSeamGrabSegments(
+  seam: Box,
+  rows: readonly Box[],
+  reachPx: number
+): GrabSegment[] {
   const gaps = rows
-    .filter((row) => Math.abs(row.left - seam.right) <= EDGE_TOLERANCE_PX && row.bottom > row.top)
+    .filter(
+      (row) => row.left < seam.right + reachPx && row.right > seam.left && row.bottom > row.top
+    )
     .map((row) => ({
       top: row.top - seam.top - ROW_SLACK_PX,
       bottom: row.bottom - seam.top + ROW_SLACK_PX

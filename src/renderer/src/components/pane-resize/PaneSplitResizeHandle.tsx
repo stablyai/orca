@@ -8,6 +8,8 @@ import {
 } from './thin-seam-grab-segments'
 
 const TAB_ROW_SELECTOR = '[data-tab-group-strip-id]'
+// Matches --divider-grab-reach in main.css, for when the variable can't be read.
+const DEFAULT_GRAB_REACH_PX = 7
 const WHOLE_SEAM: React.CSSProperties[] = [{}]
 
 /**
@@ -27,11 +29,14 @@ function useTabRowGrabSegments(
       setSegments(null)
       return
     }
+    const reachPx =
+      Number.parseFloat(getComputedStyle(handle).getPropertyValue('--divider-grab-reach')) ||
+      DEFAULT_GRAB_REACH_PX
     const measure = (): void => {
       const rows = Array.from(secondPane.querySelectorAll(TAB_ROW_SELECTOR), (row) =>
         row.getBoundingClientRect()
       )
-      const next = getThinSeamGrabSegments(handle.getBoundingClientRect(), rows)
+      const next = getThinSeamGrabSegments(handle.getBoundingClientRect(), rows, reachPx)
       setSegments((previous) => (previous && sameGrabSegments(previous, next) ? previous : next))
     }
     measure()
