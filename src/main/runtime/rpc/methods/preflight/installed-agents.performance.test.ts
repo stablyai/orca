@@ -9,6 +9,8 @@ import type { WorktreeMeta } from '../../../../../shared/worktree/meta-types'
 import type { HostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
 import * as detection from '../../../../preflight/workspace-agent-detection'
 import { listInstalledWorkspaceAgents } from './installed-agents'
+import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
+import * as worktreeRouting from '../../../workspaces/catalog/worktree-launch-host-repo'
 
 const scan = vi.hoisted(() => vi.fn())
 vi.mock('../../../workspaces/catalog/repo-worktree-resolution-scan', () => ({
@@ -59,5 +61,26 @@ describe('installed-agent workspace resolution bound', () => {
 
     expect(result.agents).toEqual(['codex'])
     expect(resolve).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([12, 120])('builds the detection owner index once among %i repos', async (count) => {
+    const repos = Array.from({ length: count }, (_, index) =>
+      storeRepo({ id: `repo-${index}`, path: `/work/repo-${index}` })
+    )
+    const runtime = new OrcaRuntimeService(partialRuntimeStore({ getRepos: () => repos }))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: detection reads only the selected row's ownership and path.
+    const selected = { repoId: 'repo-0', path: '/work/repo-0', hostId: 'local' } as Awaited<
+      ReturnType<OrcaRuntimeService['showManagedWorktree']>
+    >
+    const routing = vi.spyOn(worktreeRouting, 'resolveWorktreeHostRouting')
+
+    const host = await resolveQualifiedAgentDetectionHost(
+      runtime,
+      { worktreeId: 'repo-0::/work/repo-0', worktreeHostId: 'local' },
+      selected
+    )
+
+    expect(host.kind).toBe('local')
+    expect(routing).toHaveBeenCalledTimes(1)
   })
 })

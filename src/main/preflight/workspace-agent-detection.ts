@@ -25,7 +25,10 @@ import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
 } from '../ipc/preflight/preflight-runtime-target'
-import { resolveWorktreeHostRouting } from '../runtime/workspaces/catalog/worktree-launch-host-repo'
+import {
+  resolveWorktreeHostRouting,
+  type WorktreeHostRouting
+} from '../runtime/workspaces/catalog/worktree-launch-host-repo'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import {
   detectInstalledAgentsWithShellPathHydration,
@@ -62,12 +65,13 @@ type ResolvedWorkspace =
 /** Resolve from host-owned workspace settings; unplaced workspaces retain the legacy host default. */
 export function resolveWorkspaceAgentDetectionHost(
   store: WorkspaceAgentDetectionStore,
-  workspace: AgentDetectionWorkspace
+  workspace: AgentDetectionWorkspace,
+  worktreeRouting?: WorktreeHostRouting<Repo>
 ): AgentDetectionHost {
   const resolved =
     workspace.kind === 'folder'
       ? resolveFolderWorkspace(store, workspace.folderWorkspaceId)
-      : resolveWorktree(store, workspace)
+      : resolveWorktree(store, workspace, worktreeRouting)
   if (!resolved) {
     return HOST_DEFAULT_AGENT_DETECTION
   }
@@ -82,10 +86,11 @@ export function resolveWorkspaceAgentDetectionHost(
 
 function resolveWorktree(
   store: WorkspaceAgentDetectionStore,
-  worktree: Extract<AgentDetectionWorkspace, { kind: 'worktree' }>
+  worktree: Extract<AgentDetectionWorkspace, { kind: 'worktree' }>,
+  resolvedRouting?: WorktreeHostRouting<Repo>
 ): ResolvedWorkspace | null {
   // Same repo IDs can exist on several hosts; resolve the worktree owner rather than take the first.
-  const routing = resolveWorktreeHostRouting(store.getRepos?.() ?? [], worktree)
+  const routing = resolvedRouting ?? resolveWorktreeHostRouting(store.getRepos?.() ?? [], worktree)
   if (routing.kind === 'ambiguous') {
     throw new Error('worktree_execution_host_unresolved')
   }

@@ -49,5 +49,5 @@ export async function resolveQualifiedAgentDetectionHost(
   if (routing.kind !== 'resolved' || !routing.repo || routing.hostId !== hostId) {
     throw new Error('worktree_execution_host_unresolved')
   }
-  return resolveWorkspaceAgentDetectionHost(store, { kind: 'worktree', ...worktree })
+  return resolveWorkspaceAgentDetectionHost(store, { kind: 'worktree', ...worktree }, routing)
 }
