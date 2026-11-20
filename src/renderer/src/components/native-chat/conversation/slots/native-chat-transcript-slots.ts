@@ -107,8 +107,8 @@ export type NativeChatMessageSlot = {
   workRun?: readonly NativeChatMessage[]
   /** Consecutive quiet item notes drawn close together, with message as the first. */
   itemNotes?: readonly NativeChatMessage[]
-  /** The next slot carries on these notes, 4 px below instead of a row gap below. */
-  continuesNotes?: boolean
+  /** Carries on the run of notes in the slot before: drawn 4 px below it, not a row gap below. */
+  followsNotes?: boolean
 }
 
 const NO_SUBAGENT_HEADS: readonly NativeChatSubagentHead[] = []

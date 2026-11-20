@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { BotItemNoteEntry } from '../../../../../shared/bots/bot-item-note'
-import type { NativeChatMessageSlot } from '../conversation/slots/native-chat-transcript-slots'
+import type {
+  NativeChatMessageSlot,
+  NativeChatTranscriptSlot
+} from '../conversation/slots/native-chat-transcript-slots'
 import {
   MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER,
-  nativeChatBotItemNoteClusters
+  nativeChatBotItemNoteClusters,
+  nativeChatSlotJoinsNotesAbove
 } from './native-chat-bot-item-note-clusters'
 
 const entry: BotItemNoteEntry = {
@@ -46,6 +50,16 @@ function note(id: string, by: 'bot' | 'owner', entries: BotItemNoteEntry[] = [en
     source: 'transcript',
     blocks: [],
     botItemNote: { noteId: id, by, entries }
+  })
+}
+
+/** Clustering yields only message slots here; anything else is a test failure, not a cast. */
+function messageSlots(slots: readonly NativeChatTranscriptSlot[]): NativeChatMessageSlot[] {
+  return slots.map((entry) => {
+    if (entry.kind !== 'message') {
+      throw new Error(`expected a message slot, got ${entry.kind}`)
+    }
+    return entry
   })
 }
 
@@ -117,40 +131,88 @@ describe('item lines on the desktop', () => {
     expect(
       clustered.map((entry) =>
         entry.kind === 'message'
-          ? [entry.itemNotes?.length, entry.continuesNotes, entry.estimatedHeight]
+          ? [entry.itemNotes?.length, entry.followsNotes, entry.estimatedHeight]
           : null
       )
     ).toEqual([
-      // Eight notes and seven 6 px gaps, less the row gap the next slot closes (20 - 4, scaled).
+      // Eight notes and seven 6 px gaps.
+      [8, undefined, 8 * 24 + 7 * 6],
+      // Each later slot also pulls up into the row gap all but the notes' own gap (20 - 4, scaled).
       [8, true, 8 * 24 + 7 * 6 - 16 * 1.5],
-      [8, true, 8 * 24 + 7 * 6 - 16 * 1.5],
-      [3, undefined, 3 * 24 + 2 * 6]
+      [3, true, 3 * 24 + 2 * 6 - 16 * 1.5]
     ])
+  })
+
+  it('leaves a full slot exactly as it was when the next note starts a new one', () => {
+    const run = Array.from({ length: MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER }, (_, index) =>
+      note(`n${index}`, 'bot')
+    )
+    const [before] = nativeChatBotItemNoteClusters(run)
+    const [after, started] = nativeChatBotItemNoteClusters([...run, note('ninth', 'bot')])
+
+    // The window may hold this slot's measurement long after it scrolls away; nothing about it moves.
+    expect(after).toEqual(before)
+    expect(started).toMatchObject({ itemNotes: [{ id: 'ninth' }], followsNotes: true })
   })
 
   it('keeps earlier slots of a run as they were when a note arrives', () => {
     const run = Array.from({ length: MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER + 2 }, (_, index) =>
       note(`n${index}`, 'bot')
     )
-    const keys = (slots: ReturnType<typeof nativeChatBotItemNoteClusters>) =>
-      slots.map((entry) =>
-        entry.kind === 'message' ? entry.itemNotes?.map((member) => member.id) : null
-      )
-    const before = keys(nativeChatBotItemNoteClusters(run))
-    const after = keys(nativeChatBotItemNoteClusters([...run, note('late', 'bot')]))
+    const before = nativeChatBotItemNoteClusters(run)
+    const after = nativeChatBotItemNoteClusters([...run, note('late', 'bot')])
 
     expect(after.slice(0, -1)).toEqual(before.slice(0, -1))
-    expect(after.at(-1)).toEqual([...before.at(-1)!, 'late'])
+    expect(after.at(-1)).toMatchObject({
+      itemNotes: [...messageSlots(before).at(-1)!.itemNotes!, { id: 'late' }]
+    })
   })
 
-  it('draws a slot of a run as a whole row gap only after the run’s last slot', () => {
+  it('starts a run afresh after anything that ends it', () => {
     const run = Array.from({ length: MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER + 1 }, (_, index) =>
       note(`n${index}`, 'bot')
     )
     const clustered = nativeChatBotItemNoteClusters([...run, prose, note('after', 'bot')])
 
     expect(
-      clustered.map((entry) => (entry.kind === 'message' ? entry.continuesNotes === true : null))
-    ).toEqual([true, false, false, false])
+      clustered.map((entry) => (entry.kind === 'message' ? entry.followsNotes === true : null))
+    ).toEqual([false, true, false, false])
+  })
+})
+
+describe('a slot that carries on a run of notes', () => {
+  const run = Array.from({ length: MAX_NATIVE_CHAT_ITEM_NOTE_CLUSTER + 1 }, (_, index) =>
+    note(`n${index}`, 'bot')
+  )
+  const [first, second] = messageSlots(nativeChatBotItemNoteClusters(run))
+  const joins = (overrides: Partial<Parameters<typeof nativeChatSlotJoinsNotesAbove>[0]> = {}) =>
+    nativeChatSlotJoinsNotesAbove({
+      slot: second!,
+      previous: first,
+      timedRowsAfter: undefined,
+      markerKey: undefined,
+      leavesWhole: false,
+      ...overrides
+    })
+
+  it('sits 4 px below the notes before it', () => {
+    expect(joins()).toBe(true)
+    // The run's first slot keeps the row gap above it.
+    expect(joins({ slot: first!, previous: prose })).toBe(false)
+  })
+
+  it('keeps the whole row gap below an approval card drawn after the slot before', () => {
+    const card = { key: 'approval', at: 1, node: null }
+    expect(joins({ timedRowsAfter: new Map([[first!.message.id, [card]]]) })).toBe(false)
+    expect(joins({ timedRowsAfter: new Map([['elsewhere', [card]]]) })).toBe(true)
+  })
+
+  it('keeps the whole row gap where the "New" marker opens either row', () => {
+    expect(joins({ markerKey: second!.message.id })).toBe(false)
+    expect(joins({ markerKey: first!.message.id })).toBe(false)
+  })
+
+  it('keeps the whole row gap while it fades out whole', () => {
+    expect(joins({ leavesWhole: true })).toBe(false)
   })
 })
