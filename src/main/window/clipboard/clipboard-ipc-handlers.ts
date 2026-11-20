@@ -276,7 +276,7 @@ export function registerClipboardHandlers(
       await clipboard.selection.writeText(safeText)
     }
   })
-  ipcMain.handle('clipboard:writeImage', async (event, dataUrl: string) => {
+  ipcMain.handle('clipboard:writeImage', (event, dataUrl: string) => {
     assertTrustedClipboardSender(event)
     // Validate PNG data URIs in main too; renderer checks cannot constrain direct IPC.
     // Why: reject every refusal so callers never report a copy that left the clipboard unchanged.
