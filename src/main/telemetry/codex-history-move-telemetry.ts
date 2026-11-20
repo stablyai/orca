@@ -79,10 +79,11 @@ export class CodexHistoryMoveReport {
 
   private async reportIfComplete(homes: string[]): Promise<void> {
     const platform = process.platform
+    const complete = (): boolean =>
+      homes.length > 0 && homes.every((home) => this.outcomes.has(home))
     if (
       (platform !== 'darwin' && platform !== 'win32' && platform !== 'linux') ||
-      homes.length === 0 ||
-      homes.some((home) => !this.outcomes.has(home)) ||
+      !complete() ||
       !isTelemetryEnabled()
     ) {
       return
@@ -92,7 +93,8 @@ export class CodexHistoryMoveReport {
       saved?.version === version ? saved : { version, sent: [] }
     )
     const marker = await this.marker
-    if (marker.sent.length >= MAX_SENDS_PER_VERSION) {
+    // An unshare may have forgotten a home while the marker loaded.
+    if (marker.sent.length >= MAX_SENDS_PER_VERSION || !complete()) {
       return
     }
     const tally = (outcome: CodexHistoryMoveOutcome): number =>

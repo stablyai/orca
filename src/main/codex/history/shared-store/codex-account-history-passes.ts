@@ -56,6 +56,7 @@ export class CodexAccountHistoryPasses {
     }
   ) {}
 
+  private censusWaiting = false
   private readonly moveReport = new CodexHistoryMoveReport({
     wslHomeCount: () => this.homes.wslHomeCount(),
     markerPath: () => join(getOrcaUserDataPath(), 'codex-account-history', 'move-status-sent.json')
@@ -157,11 +158,18 @@ export class CodexAccountHistoryPasses {
   /** Every home's pass in the background; once all settle, the move report from this one listing. */
   runAll(accountHomes: string[], shared: boolean): void {
     const passes = accountHomes.map((home) => this.run(home, shared).catch(() => {}))
-    if (shared) {
-      void Promise.all(passes).then(() =>
+    // One census waits at a time: a pass that never settles must not gather one per launch.
+    if (!shared || this.censusWaiting) {
+      return
+    }
+    this.censusWaiting = true
+    void Promise.all(passes)
+      .then(() =>
         this.moveReport.report(accountHomes.map((home) => normalizeRuntimePathForComparison(home)))
       )
-    }
+      .finally(() => {
+        this.censusWaiting = false
+      })
   }
 
   /** Copies the import folder's conversations that ~/.codex lacks into it (see the runner). */
