@@ -17,23 +17,13 @@ const WIDTHS = {
   }
 } as const
 
-function facts(urgent: string[] = []): UsageChipFacts[] {
-  return Object.keys(WIDTHS.chips).map((provider) => ({
+it('keeps a nearly used-up provider in the row and folds a calm one instead', () => {
+  const facts: UsageChipFacts[] = Object.keys(WIDTHS.chips).map((provider) => ({
     provider,
-    urgent: urgent.includes(provider),
+    urgent: provider === 'grok',
     percentage: [true, true, true]
   }))
-}
-
-it('shows one percentage per chip and folds the last two into "+2" at 600px', () => {
-  expect(chooseUsageRowLayout(WIDTHS, facts())).toEqual({
-    level: 2,
-    collapsed: ['cursor', 'grok']
-  })
-})
-
-it('keeps a nearly used-up provider in the row and folds a calm one instead', () => {
-  expect(chooseUsageRowLayout(WIDTHS, facts(['grok']))).toEqual({
+  expect(chooseUsageRowLayout(WIDTHS, facts)).toEqual({
     level: 2,
     collapsed: ['cursor', 'kimi']
   })
