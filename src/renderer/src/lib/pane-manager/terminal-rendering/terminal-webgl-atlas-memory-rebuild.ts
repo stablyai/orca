@@ -3,6 +3,7 @@ import type { ForegroundTerminalOutputTarget } from '../terminal-output/pane-ter
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { getVisiblePaneTerminals } from '../pane-manager-registry'
 import { getWindowParkVisible } from '../../window-activity/window-park-visibility'
+import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/native-chat-covered-pane'
 
 // A 4096² merged page means the shared atlas reached ~64 MiB; on Apple GPUs each context keeps its upload memory until the context is destroyed (GiBs across panes).
 const ATLAS_REBUILD_PAGE_SIZE = 4096
@@ -34,6 +35,8 @@ const atlasOwners = new WeakMap<GlyphAtlas, Set<ManagedPaneInternal>>()
 const paneAtlases = new WeakMap<ManagedPaneInternal, GlyphAtlas>()
 // Strong only until rebuilt or ownerless.
 const dueAtlases = new Set<GlyphAtlas>()
+// Chat-covered panes a rebuild left detached; the cover's unmount gives them WebGL back.
+const coveredDetachedPanes = new WeakMap<unknown, ManagedPaneInternal>()
 
 function atlasOf(pane: ManagedPaneInternal): GlyphAtlas | undefined {
   const addon = pane.webglAddon
@@ -98,8 +101,8 @@ export function setTerminalWebglAtlasRebuilder(rebuilder: AtlasRebuilder): void 
   rebuildPanes = rebuilder
 }
 
-/** On screen: window shown, tab shown, and the pane laid out (not an expanded split's hidden sibling). */
-function onScreenPaneFilter(): PaneFilter {
+/** Shown: window shown, tab shown, and the pane laid out (not an expanded split's hidden sibling). */
+function shownPaneFilter(): PaneFilter {
   if (!getWindowParkVisible()) {
     return () => false
   }
@@ -113,7 +116,8 @@ function rebuildDueAtlases(): void {
     return
   }
   lastAttemptAt = Date.now()
-  const onScreen = onScreenPaneFilter()
+  const shown = shownPaneFilter()
+  const onScreen: PaneFilter = (pane) => shown(pane) && !paneIsCoveredByNativeChat(pane)
   const panes: ManagedPaneInternal[] = []
   let retry = false
   for (const atlas of dueAtlases) {
@@ -151,7 +155,17 @@ function rebuildDueAtlases(): void {
     reason: 'atlas-memory'
   })
   // Decided before any detach: detaching changes layout, and reading rects afterwards forces one layout per pane.
-  const reattach = new Set(panes.filter(onScreen))
+  const reattach = new Set<ManagedPaneInternal>()
+  for (const pane of panes) {
+    if (!shown(pane)) {
+      continue
+    }
+    if (paneIsCoveredByNativeChat(pane)) {
+      coveredDetachedPanes.set(pane.terminal, pane)
+    } else {
+      reattach.add(pane)
+    }
+  }
   // Every owner of a due atlas detaches before any reattaches, or a remaining owner keeps it alive; only on-screen owners reattach now.
   rebuildPanes?.(panes, (pane) => reattach.has(pane))
 }
@@ -167,10 +181,18 @@ function scheduleRebuild(): void {
 
 /** Tracks an attached WebGL pane for the renderer's lifetime. */
 export function trackTerminalWebglAtlasPane(pane: ManagedPaneInternal): void {
+  coveredDetachedPanes.delete(pane.terminal)
   if (ATLAS_MEMORY_REBUILD_ENABLED) {
     attachedPanes.set(pane.terminal, pane)
     indexOwner(pane)
   }
+}
+
+/** The pane a rebuild left detached under this chat cover, if it is still shown and should get WebGL back now. */
+export function takeCoveredDetachedPane(terminal: unknown): ManagedPaneInternal | undefined {
+  const pane = coveredDetachedPanes.get(terminal)
+  coveredDetachedPanes.delete(terminal)
+  return pane && shownPaneFilter()(pane) ? pane : undefined
 }
 
 /** Forgets a detached pane so a closed pane is not kept alive. */

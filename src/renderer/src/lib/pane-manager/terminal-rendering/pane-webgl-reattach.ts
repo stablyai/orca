@@ -1,7 +1,11 @@
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import { attachWebgl, clearTerminalWebglAttachBackoff, disposeWebgl } from './pane-webgl-renderer'
 import { canRetryPaneWebglAfterContextLoss } from './pane-webgl-context-loss-policy'
-import { setTerminalWebglAtlasRebuilder } from './terminal-webgl-atlas-memory-rebuild'
+import {
+  setTerminalWebglAtlasRebuilder,
+  takeCoveredDetachedPane
+} from './terminal-webgl-atlas-memory-rebuild'
+import { isXtermInstanceDisposed } from '../terminal-output/xterm-instance-disposed'
 import { paintReplacementCanvasNow } from './terminal-render-pause-release'
 
 export function clearPaneWebglContextLossForRetry(pane: ManagedPaneInternal): boolean {
@@ -38,6 +42,19 @@ export function rebuildAttachedWebgl(pane: ManagedPaneInternal): void {
   pane.webglRebuildDeferred = false
   disposeWebgl(pane)
   reattachDetachedWebgl(pane)
+}
+
+/** Gives WebGL back to a pane an atlas rebuild left detached under a chat cover that is now closing. */
+export function restoreWebglAfterChatCover(terminal: unknown): void {
+  const pane = takeCoveredDetachedPane(terminal)
+  if (
+    pane &&
+    !pane.webglAddon &&
+    !isXtermInstanceDisposed(pane.terminal) &&
+    pane.container.isConnected
+  ) {
+    reattachWebglIfNeeded(pane)
+  }
 }
 
 /** Detaches every renderer and returns the reattach step, so no pane can keep a shared atlas alive. */

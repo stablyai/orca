@@ -22,16 +22,25 @@ type AtlasModule = typeof AtlasMemoryRebuild
 type FakeAtlas = { readonly pages: unknown[] }
 const newAtlas = (): FakeAtlas => ({ pages: [] })
 
-function fakePane(atlasModule: AtlasModule, atlas: FakeAtlas, visible = true, displayed = true) {
+function fakePane(
+  atlasModule: AtlasModule,
+  atlas: FakeAtlas,
+  visible = true,
+  displayed = true,
+  covered = false
+) {
   const terminal = { modes: { synchronizedOutputMode: false } }
   if (visible) {
     visibleTerminals.add(terminal)
   }
   const renderer = { _charAtlas: atlas }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module reads only terminal modes, container rects and the addon's atlas identity, all supplied here.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module reads only terminal modes, container rects, chat cover and the addon's atlas identity, all supplied here.
   const pane = {
     terminal,
-    container: { getClientRects: () => (displayed ? [{}] : []) },
+    container: {
+      getClientRects: () => (displayed ? [{}] : []),
+      querySelector: () => (covered ? {} : null)
+    },
     webglAddon: { _renderer: renderer }
   } as unknown as ManagedPaneInternal
   atlasModule.trackTerminalWebglAtlasPane(pane)
@@ -227,6 +236,21 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(rebuilds).toEqual([[shown.pane, hiddenTab.pane, expandedSibling.pane]])
     expect(reattached).toEqual([[shown.pane]])
+  })
+
+  it('leaves a chat-covered pane detached until its cover closes', async () => {
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const grown = newAtlas()
+    const shown = fakePane(atlas, grown)
+    const covered = fakePane(atlas, grown, true, true, true)
+    covered.terminal.modes.synchronizedOutputMode = true
+    shown.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, shown.pane)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rebuilds).toEqual([[shown.pane, covered.pane]])
+    expect(reattached).toEqual([[shown.pane]])
+    expect(atlas.takeCoveredDetachedPane(covered.terminal)).toBe(covered.pane)
+    expect(atlas.takeCoveredDetachedPane(covered.terminal)).toBeUndefined()
   })
 
   it('reattaches nothing while the window is hidden', async () => {
