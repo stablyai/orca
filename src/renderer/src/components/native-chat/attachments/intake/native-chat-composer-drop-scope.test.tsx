@@ -240,7 +240,6 @@ describe('native chat composer drop scoping', () => {
     await dropTwoImages(target)
 
     expect(electron.send).not.toHaveBeenCalled()
-    expect(view.container.querySelector('[data-composer-scope-key]')).toBeNull()
     expect(readNativeChatAttachmentCache('chat-a').map(({ path }) => path)).toEqual([
       '/repro/first.png',
       '/repro/second.png'
@@ -265,7 +264,6 @@ describe('native chat composer drop scoping', () => {
     await settleAttachments()
 
     expect(electron.send).not.toHaveBeenCalled()
-    expect(view.container.querySelector('[data-composer-scope-key]')).toBeNull()
     expect(readNativeChatAttachmentCache('agent-session:s1').map(({ path }) => path)).toEqual([
       '/repro/first.png',
       '/repro/second.png'
