@@ -5,6 +5,7 @@ import {
 } from './schemas/telemetry-onboarding-language-schemas'
 import { agentTokenUsageSchema } from './schemas/telemetry-agent-token-usage-schema'
 import { codexHistoryCleanupSweepSchema } from './schemas/telemetry-codex-history-cleanup-event-schemas'
+import { codexLegacyHistoryImportSchema } from './schemas/telemetry-codex-legacy-history-event-schemas'
 import {
   agentDashboardActiveSchema,
   agentDashboardEnabledSchema,
@@ -268,6 +269,7 @@ export const eventSchemas = {
   wsl_usage_snapshot: wslUsageSnapshotSchema,
 
   codex_history_cleanup_sweep: codexHistoryCleanupSweepSchema,
+  codex_legacy_history_import: codexLegacyHistoryImportSchema,
 
   plugin_installed: pluginInstalledSchema,
 

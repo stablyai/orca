@@ -15,6 +15,11 @@ import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-mi
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
 import { CodexRuntimeHomePaths } from '../runtime-home-service-paths'
+import {
+  appendMissingLegacyHistory,
+  importLegacyHistoryWhenNoCodexIsLive,
+  type LegacyMigrationMarker
+} from './legacy-prompt-history-import'
 
 export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePaths {
   protected safeMigrateLegacySharedAuth(): void {
@@ -57,7 +62,11 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
   }
 
   protected migrateLegacyManagedStateIfNeeded(): void {
-    if (existsSync(this.getMigrationMarkerPath())) {
+    const existingMarker = this.readMigrationMarker()
+    if (existingMarker) {
+      if (existingMarker.historyPending) {
+        void this.importLegacyHistoryWhenNoCodexIsLive(existingMarker)
+      }
       return
     }
 
@@ -69,15 +78,51 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       if (!accountId) {
         continue
       }
-      this.migrateLegacyHistory(managedHomePath)
       this.migrateLegacySessions(managedHomePath, accountId)
     }
 
+    const historyPending = managedHomes.some((home) => existsSync(join(home, 'history.jsonl')))
+    const marker: LegacyMigrationMarker = {
+      completedAt: Date.now(),
+      migratedHomeCount: managedHomes.length,
+      ...(historyPending ? { historyPending } : {})
+    }
     // Mark completion so later startups cannot replay stale managed-home state.
-    writeFileAtomically(
-      this.getMigrationMarkerPath(),
-      `${JSON.stringify({ completedAt: Date.now(), migratedHomeCount: managedHomes.length })}\n`
-    )
+    this.writeMigrationMarker(marker)
+    if (historyPending) {
+      void this.importLegacyHistoryWhenNoCodexIsLive(marker)
+    }
+  }
+
+  protected importLegacyHistoryWhenNoCodexIsLive(marker: LegacyMigrationMarker): Promise<void> {
+    return importLegacyHistoryWhenNoCodexIsLive({
+      runtimeHomePath: this.getRuntimeHomePath(),
+      importHistory: () => {
+        for (const managedHomePath of this.getLegacyManagedHomes()) {
+          this.migrateLegacyHistory(managedHomePath)
+        }
+        const { historyPending: _imported, ...completed } = marker
+        this.writeMigrationMarker(completed)
+      }
+    })
+  }
+
+  protected readMigrationMarker(): LegacyMigrationMarker | null {
+    const markerPath = this.getMigrationMarkerPath()
+    if (!existsSync(markerPath)) {
+      return null
+    }
+    try {
+      const parsed: unknown = JSON.parse(readFileSync(markerPath, 'utf-8'))
+      return parsed && typeof parsed === 'object' ? (parsed as LegacyMigrationMarker) : {}
+    } catch {
+      // An unreadable marker still means the one-time migration ran.
+      return {}
+    }
+  }
+
+  protected writeMigrationMarker(marker: LegacyMigrationMarker): void {
+    writeFileAtomically(this.getMigrationMarkerPath(), `${JSON.stringify(marker)}\n`)
   }
 
   protected getLegacyManagedHomes(): string[] {
@@ -102,33 +147,12 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
 
   protected migrateLegacyHistory(managedHomePath: string): void {
     const legacyHistoryPath = join(managedHomePath, 'history.jsonl')
-    if (!existsSync(legacyHistoryPath)) {
-      return
+    if (existsSync(legacyHistoryPath)) {
+      appendMissingLegacyHistory(
+        legacyHistoryPath,
+        join(this.getRuntimeHomePath(), 'history.jsonl')
+      )
     }
-
-    const runtimeHistoryPath = join(this.getRuntimeHomePath(), 'history.jsonl')
-    const existingHistory = existsSync(runtimeHistoryPath)
-      ? readFileSync(runtimeHistoryPath, 'utf-8')
-      : ''
-    const seenLines = new Set(existingHistory.split('\n').filter(Boolean))
-    const missingLines: string[] = []
-    for (const line of readFileSync(legacyHistoryPath, 'utf-8').split('\n')) {
-      if (!line || seenLines.has(line)) {
-        continue
-      }
-      seenLines.add(line)
-      missingLines.push(line)
-    }
-
-    if (missingLines.length === 0) {
-      return
-    }
-    // Append instead of rewriting a snapshot so lines a running Codex adds meanwhile survive.
-    const separator = existingHistory && !existingHistory.endsWith('\n') ? '\n' : ''
-    appendFileSync(runtimeHistoryPath, `${separator}${missingLines.join('\n')}\n`, {
-      encoding: 'utf-8',
-      mode: 0o600
-    })
   }
 
   protected migrateLegacySessions(managedHomePath: string, accountId: string): void {

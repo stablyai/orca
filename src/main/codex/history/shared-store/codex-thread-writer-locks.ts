@@ -225,6 +225,36 @@ export async function moveIdleThreadLockFolder(
 }
 
 // A Codex that started meanwhile: a file it opened (Windows) or the folder it recreated mid-swap.
+/**
+ * Runs `action` only when no Codex thread is live in `codexHome`, with its coordination held so none
+ * can start until `action` returns; otherwise says why it didn't run.
+ */
+export async function runWhileNoCodexThreadIsLive<T>(
+  codexHome: string,
+  action: () => T
+): Promise<{ ran: true; value: T } | { ran: false; reason: 'held' | LockFolderBusy }> {
+  const locks = join(codexHome, WRITER_LOCKS)
+  await mkdir(locks, { recursive: true })
+  const hold = await startProbe([locks], true)
+  if (hold?.answer === 'held') {
+    return { ran: false, reason: 'held' }
+  }
+  if (hold?.answer === 'unavailable') {
+    return { ran: false, reason: 'no-helper' }
+  }
+  if (!hold || !('release' in hold)) {
+    return { ran: false, reason: 'busy' }
+  }
+  try {
+    if (!hold.stillHeld()) {
+      return { ran: false, reason: 'busy' }
+    }
+    return { ran: true, value: action() }
+  } finally {
+    await hold.release()
+  }
+}
+
 function isStartingCodexError(error: unknown): boolean {
   if (error instanceof DirectoryLinkError) {
     return error.code === 'link-failed'
