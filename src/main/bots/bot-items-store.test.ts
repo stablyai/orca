@@ -319,7 +319,7 @@ describe('bot items store', () => {
     store.set(uid, { status: 'needs_you', comment: 'First?' }, owner)
     const ask = store.get(uid)?.questionEvent ?? -1
     store.ownerComment(uid, 'Yes', { kind: 'owner' })
-    store.set(uid, { status: 'needs_you', comment: 'Parking this' }, { kind: 'owner' })
+    store.ownerStatus({ uids: [uid], to: 'needs_you', comment: 'Parking this' }, { kind: 'owner' })
 
     store.ownerComment(uid, 'Second answer', { kind: 'owner' }, [], undefined, undefined, ask)
 

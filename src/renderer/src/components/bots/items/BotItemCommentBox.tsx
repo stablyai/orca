@@ -13,7 +13,7 @@ import {
 } from 'react'
 import { ArrowUp } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { useBotItemFill } from './use-bot-item-fill'
+import { caretToEndOf, useBotItemLineLead } from './use-bot-item-line-lead'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { NativeChatComposerPrimaryButton } from '../../native-chat/composer/controls/NativeChatComposerPrimaryButton'
@@ -232,26 +232,27 @@ export function BotItemCommentBox({
     reply.show()
     composer.current?.focus({ caretAtEnd: true, glow: true })
   }
-  const { caretToEnd, fill, lineLead, startLine } = useBotItemFill(
-    scopeKey,
-    draft,
-    setDraft,
-    input,
-    answer
-  )
+  const fillBox = (next: string): void => {
+    setDraft(next)
+    if (input.current) {
+      input.current.value = next
+    }
+    caretToEndOf(input.current)
+  }
+  const { leadOnly, startLine } = useBotItemLineLead(draft, fillBox, answer)
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
-    focusEnd: caretToEnd,
+    focusEnd: () => caretToEndOf(input.current),
     type: (typed) => void composer.current?.insertTypedText(typed),
     answer,
     startLine,
-    fill
+    fill: (text) => fillBox(`${text} `)
   }))
   const images = attachments.imageAttachments
   // The thumbnails' order numbers their pills, as in chat.
   const imageRow = useMemo(() => images.map(({ id }) => id), [images])
   const pending = images.some((image) => image.pending) || attachments.pastedTextSaving
-  const empty = (!draft.trim() || draft.trim() === lineLead) && images.length === 0
+  const empty = (!draft.trim() || leadOnly) && images.length === 0
   const send = (): void => {
     if (empty || pending) {
       return
