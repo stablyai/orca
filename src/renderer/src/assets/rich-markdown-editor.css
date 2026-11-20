@@ -240,8 +240,40 @@
   }
 }
 
-.rich-markdown-editor-shell.has-rich-markdown-review-notes .rich-markdown-editor {
-  padding-right: clamp(252px, 28%, 308px);
+/* Why: % in these unregistered properties resolves where each is used (scroller or shell), not here. */
+.rich-markdown-editor-shell {
+  --rich-md-measure: calc(
+    var(--markdown-reading-measure-em) * (14px + var(--editor-font-zoom-level, 0) * 1px)
+  );
+  --rich-md-pad-end: 32px;
+  --rich-md-inset-end: max(0px, (100% - var(--rich-md-measure)) / 2 - var(--rich-md-pad-end));
+}
+
+.rich-markdown-editor-shell.has-rich-markdown-review-notes {
+  --rich-md-pad-end: clamp(252px, 28%, 308px);
+}
+
+/* Why: centre with the editor's own padding so clicks in the side margin still land in ProseMirror. */
+.rich-markdown-editor-shell .rich-markdown-editor {
+  --rich-md-pad-start: max(
+    32px,
+    min((100% - var(--rich-md-measure)) / 2, 100% - var(--rich-md-measure) - var(--rich-md-pad-end))
+  );
+  padding-left: var(--rich-md-pad-start);
+  padding-right: max(
+    var(--rich-md-pad-end),
+    100% - var(--rich-md-measure) - var(--rich-md-pad-start)
+  );
+}
+
+/* Why: these are placed from the pane's right edge; shift them so they stay beside the centred column. */
+.rich-markdown-editor-shell .rich-markdown-review-note-layer {
+  right: calc(16px + var(--rich-md-inset-end));
+}
+
+.rich-markdown-editor-shell > .rich-markdown-comment-add-btn,
+.rich-markdown-editor-shell > .orca-diff-comment-popover {
+  margin-left: calc(-1 * var(--rich-md-inset-end));
 }
 
 .rich-markdown-review-rail-actions {
