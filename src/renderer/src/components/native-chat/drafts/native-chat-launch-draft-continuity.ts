@@ -1,5 +1,8 @@
-import type { SshRepoReadoption } from '../../../../../shared/ssh-types'
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import type { SshRepoReadoption } from '../../../../../shared/remote-runtime/ssh/ssh-types'
+import {
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import {

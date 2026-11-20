@@ -4,8 +4,11 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from '../../session-scanner'
-import { isolatedScanRoots, writeAntigravityTranscript } from '../../session-scanner-test-fixtures'
-import { antigravitySessionOrigin } from '../../../../shared/antigravity-session-origin'
+import {
+  isolatedScanRoots,
+  writeAntigravityTranscript
+} from '../../scanner-fixtures/session-scanner-test-fixtures'
+import { antigravitySessionOrigin } from '../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import './session-scanner-antigravity-history'
 import './session-scanner-antigravity-metadata'
 
@@ -110,6 +113,70 @@ describe('Antigravity IDE history discovery', () => {
       const origin = antigravitySessionOrigin(session.filePath)
       expect(session.cwd).toBe(origin === 'antigravity' ? null : `/projects/${origin}`)
     }
+  })
+
+  it('places a chat by its sole metadata workspace URI only when no other source names a folder', async () => {
+    const home = await temporaryHome()
+    const brain = join(home, '.gemini', 'antigravity-cli', 'brain')
+    await writeAntigravityTranscript(brain, 'chat-one-folder', records('Opened from Orca chat'))
+    await writeAntigravityTranscript(brain, 'chat-two-folders', records('Opened in two folders'))
+    await writeAntigravityTranscript(brain, 'chat-windows-folder', records('Opened on Windows'))
+    await writeAntigravityTranscript(brain, 'chat-conflicted-project', records('Shared project'))
+    await writeAntigravityTranscript(brain, 'cli-with-history', records('Opened in a terminal'))
+    await writeFile(
+      join(dirname(brain), 'history.jsonl'),
+      `${JSON.stringify({
+        display: 'Opened in a terminal',
+        workspace: '/private/tmp/cli',
+        timestamp: 1_790_000_000,
+        conversationId: 'cli-with-history'
+      })}\n`
+    )
+    const cache = join(dirname(brain), 'cache')
+    await mkdir(cache, { recursive: true })
+    await writeFile(
+      join(cache, 'conversation_metadata.json'),
+      JSON.stringify({
+        conversations: {
+          'chat-one-folder': {
+            summary: {
+              ProjectID: 'default-cli-project',
+              WorkspaceURIs: ['file:///projects/chat%20app']
+            }
+          },
+          'chat-two-folders': {
+            summary: {
+              ProjectID: 'default-cli-project',
+              WorkspaceURIs: ['file:///projects/a', 'file:///projects/b']
+            }
+          },
+          'chat-windows-folder': {
+            summary: { ProjectID: 'default-cli-project', WorkspaceURIs: ['file:///c%3A/src/app'] }
+          },
+          'chat-conflicted-project': {
+            summary: { ProjectID: 'shared-project', WorkspaceURIs: ['file:///projects/a'] }
+          },
+          'cli-with-history': {
+            summary: { ProjectID: 'default-cli-project', WorkspaceURIs: ['file:///tmp/cli'] }
+          }
+        }
+      })
+    )
+    await writeFile(
+      join(cache, 'projects.json'),
+      JSON.stringify({ '/projects/a': 'shared-project', '/projects/b': 'shared-project' })
+    )
+    const result = await scanAiVaultSessions({
+      ...isolatedScanRoots(home),
+      antigravityBrainDir: brain,
+      antigravityAppHome: home
+    })
+    const cwdById = new Map(result.sessions.map((session) => [session.sessionId, session.cwd]))
+    expect(cwdById.get('chat-one-folder')).toBe('/projects/chat app')
+    expect(cwdById.get('chat-two-folders')).toBeNull()
+    expect(cwdById.get('chat-windows-folder')).toBe('c:\\src\\app')
+    expect(cwdById.get('chat-conflicted-project')).toBeNull()
+    expect(cwdById.get('cli-with-history')).toBe('/private/tmp/cli')
   })
 
   it('discovers IDE and 2.0 history in the selected WSL home without falling into sibling artifacts', async () => {

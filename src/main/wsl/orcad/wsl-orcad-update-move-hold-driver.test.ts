@@ -7,9 +7,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
-import { setAppEnvironment } from '../../../shared/app-environment'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
-import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../shared/wsl-host-types'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
+import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslMoveResult } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
 import { resetOrcadUpdateFailuresForTests } from '../../managed-server/lifecycle/orcad-managed-update-failure-memory'
@@ -83,7 +83,7 @@ vi.mock('../../managed-server/install/orcad-remote-context', () => ({
 vi.mock('../../managed-server/activation/orcad-activation-recovery', () => ({
   recoverInterruptedOrcadActivation: async () => ({ outcome: 'none' })
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({
+vi.mock('../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
 vi.mock('../../managed-server/install/orcad-remote-deploy', () => ({ deployOrcad: host.deploy }))
@@ -144,8 +144,7 @@ function transport(target: WslOrcadHostTarget): OrcadHostTransport {
   return { getTarget: () => target } as unknown as OrcadHostTransport
 }
 
-/** The host's server launched from Settings (Update) or by a connect (its activation). */
-function launchServer(intent: 'update' | 'connect') {
+function launchServer(intent: 'update' | 'connect' | 'force') {
   return deployAndLaunchWslOrcad(DISTRO, {
     intent,
     holder: holder(),
@@ -251,7 +250,7 @@ async function moveAtStage(): Promise<{
 
 async function expectHeld(): Promise<void> {
   expect(isWslMoveUnderwayOnHost(rig.userDataPath, DISTRO)).toBe(true)
-  for (const intent of ['update', 'connect'] as const) {
+  for (const intent of ['update', 'connect', 'force'] as const) {
     const launched = await launchServer(intent)
     // The running server keeps serving the move; Settings shows the code as "Not done: a project
     // is moving onto this server…".

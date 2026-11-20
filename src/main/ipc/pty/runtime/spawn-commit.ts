@@ -1,13 +1,13 @@
-import '../spawn-outcome'
+import '../spawn/spawn-outcome'
 import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
 import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal/output/terminal-model-query-authority'
 import { normalizeValidPaneKey } from '../pane/key-state'
 import type { RuntimePtySpawnState } from './spawn-state'
-import { startupCwdFallbackOutcome } from '../spawn-startup-target'
-import { commitPtySpawn } from '../spawn-commit-assembly'
-import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
+import { startupCwdFallbackOutcome } from '../host-env/spawn-startup-target'
+import { commitPtySpawn } from '../spawn/spawn-commit-assembly'
+import type { PtySpawnPaneBinding } from '../spawn/spawn-commit-binding'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/terminal-bindings/pty-binding-span'
-import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
+import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/startup-prompts/opencode-startup-prompt-owner'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   return commitPtyWithOpenCodePromptIntent(ctx, () => {

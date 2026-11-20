@@ -1,10 +1,11 @@
 import type { Session } from 'electron'
 
-import { toSecureCertificateEndpoint } from '../../../shared/browser-url'
+import { toSecureCertificateEndpoint } from '../../../shared/browser/navigation/browser-url'
 import { getProxySessionApplicationReadiness } from '../../network/proxy-settings'
 import { MAX_CERTIFICATE_GRANTS, type CertificateTrustGrant } from './browser-certificate-challenge'
 import { answerBrowserSessionBeforeRequest } from '../sessions/requests/browser-session-request-decisions'
 import { reportBrowserSessionWebRequest } from '../sessions/requests/browser-session-web-request-observer'
+import { holdBrowserSessionWebRequest } from '../sessions/requests/browser-session-web-request-owner'
 
 type CertificateIdentity = Pick<
   CertificateTrustGrant,
@@ -37,40 +38,46 @@ function certificateIdentitiesMatch(
 export class BrowserCertificateRequestGuard {
   private readonly grantsByGuestId = new Map<number, CertificateTrustGrant>()
   private readonly grantSessionByGuestId = new Map<number, Session>()
-  private readonly guardedSessions = new Set<Session>()
+  private readonly releaseByGuardedSession = new Map<Session, () => void>()
   private readonly acceptedIdentityBySession = new Map<Session, Map<string, CertificateIdentity>>()
 
   constructor(private readonly dependencies: RequestGuardDependencies) {}
 
   installSession(session: Session): void {
-    if (this.guardedSessions.has(session)) {
+    if (this.releaseByGuardedSession.has(session)) {
       return
     }
     // Chromium caches trust per session; gate requests to preserve approval per WebContents.
-    session.webRequest.onBeforeRequest((details, callback) => {
-      reportBrowserSessionWebRequest(session, 'onBeforeRequest', details)
-      const readiness = getProxySessionApplicationReadiness(session)
-      const answer = (ready: boolean): void => {
-        if (!ready || this.shouldBlockRequest(session, details)) {
-          callback({ cancel: true })
+    const release = holdBrowserSessionWebRequest(
+      session,
+      'onBeforeRequest',
+      (details, callback) => {
+        reportBrowserSessionWebRequest(session, 'onBeforeRequest', details)
+        const readiness = getProxySessionApplicationReadiness(session)
+        const answer = (ready: boolean): void => {
+          if (!ready || this.shouldBlockRequest(session, details)) {
+            callback({ cancel: true })
+          } else {
+            answerBrowserSessionBeforeRequest(session, details, callback)
+          }
+        }
+        if (typeof readiness === 'boolean') {
+          answer(readiness)
         } else {
-          answerBrowserSessionBeforeRequest(session, details, callback)
+          void readiness.then(answer)
         }
       }
-      if (typeof readiness === 'boolean') {
-        answer(readiness)
-      } else {
-        void readiness.then(answer)
-      }
-    })
-    this.guardedSessions.add(session)
+    )
+    this.releaseByGuardedSession.set(session, release)
   }
 
   removeSession(session: Session): void {
-    if (!this.guardedSessions.delete(session)) {
+    const release = this.releaseByGuardedSession.get(session)
+    if (!release) {
       return
     }
-    session.webRequest.onBeforeRequest(null)
+    this.releaseByGuardedSession.delete(session)
+    release()
     this.acceptedIdentityBySession.delete(session)
     for (const [webContentsId, grantSession] of this.grantSessionByGuestId) {
       if (grantSession === session) {
@@ -80,7 +87,7 @@ export class BrowserCertificateRequestGuard {
   }
 
   canOfferCertificate(session: Session, identity: CertificateIdentity): boolean {
-    if (!this.guardedSessions.has(session)) {
+    if (!this.releaseByGuardedSession.has(session)) {
       return false
     }
     const accepted = this.acceptedIdentityBySession.get(session)?.get(identity.secureEndpoint)
@@ -89,7 +96,7 @@ export class BrowserCertificateRequestGuard {
   }
 
   grant(session: Session, grant: CertificateTrustGrant): boolean {
-    if (!this.guardedSessions.has(session)) {
+    if (!this.releaseByGuardedSession.has(session)) {
       return false
     }
     let acceptedByEndpoint = this.acceptedIdentityBySession.get(session)
@@ -121,7 +128,7 @@ export class BrowserCertificateRequestGuard {
     identity: CertificateIdentity
   ): boolean {
     if (
-      !this.guardedSessions.has(session) ||
+      !this.releaseByGuardedSession.has(session) ||
       this.grantSessionByGuestId.get(webContentsId) !== session ||
       !certificateIdentitiesMatch(this.grantsByGuestId.get(webContentsId), identity)
     ) {

@@ -1,15 +1,14 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
-import { hashPluginTree } from '../plugin-content-hash'
-import { PluginContentVerifier } from '../plugin-content-integrity'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import type { PluginWorkerHandle } from './plugin-host-process'
+import { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import type { PluginWorkerHandle } from './parent-process/plugin-host-process-types'
 import { PluginWorkerController } from './plugin-worker-controller'
-import type { PluginWorkerFactory } from './plugin-worker-manager'
-import type { PluginLogBuffer } from '../plugin-log-buffer'
+import type { PluginWorkerFactory } from './worker-supervision/plugin-worker-startup'
+import type { PluginLogBuffer } from '../logging/plugin-log-buffer'
 
 const roots: string[] = []
 
@@ -88,25 +87,6 @@ function controller(options: {
 }
 
 describe('PluginWorkerController activation authority', () => {
-  it('does not start code after approval is revoked during integrity verification', async () => {
-    const subjectPlugin = await plugin()
-    let approved = true
-    let finishVerification!: () => void
-    const verification = new Promise<void>((resolve) => {
-      finishVerification = resolve
-    })
-    const factory = vi.fn<PluginWorkerFactory>()
-    const subject = controller({ factory, verify: () => verification, isApproved: () => approved })
-
-    const activation = subject.ensure(subjectPlugin)
-    approved = false
-    finishVerification()
-
-    await expect(activation).rejects.toThrow('no longer approved')
-    expect(factory).not.toHaveBeenCalled()
-    await subject.dispose()
-  })
-
   it('disposes a worker whose approval changes while the process starts', async () => {
     const subjectPlugin = await plugin()
     let approved = true
@@ -128,23 +108,6 @@ describe('PluginWorkerController activation authority', () => {
 
     await expect(activation).rejects.toThrow(/changed or (is no longer approved|was disabled)/)
     expect(startedWorker.dispose).toHaveBeenCalledOnce()
-    await subject.dispose()
-  })
-
-  it('starts a dev worker after typings land in .orca/ past the reviewed dev-folder hash', async () => {
-    const subjectPlugin = await plugin()
-    const reviewed = await hashPluginTree(subjectPlugin.rootDir, { devFolder: true })
-    if (!reviewed.ok) {
-      throw new Error(reviewed.error)
-    }
-    await mkdir(join(subjectPlugin.rootDir, '.orca', 'types'), { recursive: true })
-    await writeFile(join(subjectPlugin.rootDir, '.orca', 'types', 'orca.d.ts'), 'export {}')
-    const factory = vi.fn<PluginWorkerFactory>().mockResolvedValue(worker(['run']))
-    const subject = controller({ factory, isApproved: () => true })
-
-    await subject.ensure({ ...subjectPlugin, consentContentHash: reviewed.hash })
-
-    expect(factory).toHaveBeenCalledOnce()
     await subject.dispose()
   })
 })

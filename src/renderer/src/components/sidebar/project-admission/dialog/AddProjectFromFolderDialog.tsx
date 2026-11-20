@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from '../completion/project-added-default-checkout'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -28,7 +28,6 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   const openModal = useAppStore((s) => s.openModal)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
 
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -93,8 +92,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         source: runtimeEnvironmentId ? 'runtime_server_path' : 'local_folder_picker',
         selectedPath: folderPath,
         executionHostId: ownerOptions.executionHostId,
-        closeModal,
-        setHideDefaultBranchWorkspace
+        closeModal
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -120,8 +118,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     isAdding,
     mountedRef,
     openNonGitConfirmation,
-    runtimeEnvironmentId,
-    setHideDefaultBranchWorkspace
+    runtimeEnvironmentId
   ])
 
   const handleOpenChange = useCallback(

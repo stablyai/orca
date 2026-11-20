@@ -7,10 +7,11 @@ import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
-import type { CursorAccountStatus } from '../../../../../../shared/rate-limit-types'
+import type { CursorAccountStatus } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 
 const CURSOR_USAGE_DASHBOARD_URL = 'https://cursor.com/dashboard/spending'
 const SEARCH_KEYWORDS = ['cursor', 'usage', 'plan', 'spend', 'billing', 'rate limit']
@@ -105,7 +106,7 @@ export function CursorAccountsSection(): React.JSX.Element {
       : null
 
   return (
-    <div id="accounts-cursor" className="scroll-mt-6">
+    <div id={ACCOUNTS_SECTION_IDS.cursor} className="scroll-mt-6">
       <SettingsGroup
         title={
           <span className="flex items-center gap-2">

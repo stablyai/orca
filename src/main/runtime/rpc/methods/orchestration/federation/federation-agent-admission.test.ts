@@ -8,7 +8,7 @@ import '../../../../orchestration/db/attempt-outcome-projection'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { ORCHESTRATION_FEDERATION_ATTACH_METHODS } from '../../../../orchestration/legacy-remote/federation'
 import type { TerminalWorkspaceLaunchScope } from '../../../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
+import { configureFederationWorkerRuntime } from './testing/federation-runtime.test-support'
 
 const folder: TerminalWorkspaceLaunchScope = {
   id: 'folder:worker',

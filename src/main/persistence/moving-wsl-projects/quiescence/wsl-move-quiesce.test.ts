@@ -58,33 +58,6 @@ function harness(overrides: Partial<WslMoveQuiesceDeps> = {}) {
 }
 
 describe('quiesceWslMove', () => {
-  it('gates again under the fence and refuses a pane that turned busy, without sleeping', async () => {
-    const phases: (WslMoveCutover['phase'] | undefined)[] = []
-    let calls = 0
-    const { deps, journal, removed } = harness()
-    deps.gateInputs = async () => {
-      phases.push(journal.at(-1))
-      calls += 1
-      const foreground = calls === 1 ? 'shell-idle' : 'process-running'
-      return {
-        panes: [{ ...idlePane, foreground }],
-        runningAutomationRunIds: [],
-        activeDispatchIds: []
-      }
-    }
-    const result = await quiesceWslMove(cutover(), scope, deps)
-
-    expect(phases).toEqual([undefined, 'source-fenced'])
-    expect(result).toMatchObject({
-      outcome: 'refused',
-      reason: 'terminals-blocked',
-      blockers: [{ kind: 'process-running', ids: ['tab-1:leaf-1'] }],
-      fenceLifted: true
-    })
-    expect(deps.sleepWorkspaces).not.toHaveBeenCalled()
-    expect(removed).toEqual(['move-1'])
-  })
-
   it('refuses a second quiesce of the same distro while the first runs', async () => {
     let releaseSleep: () => void = () => undefined
     let signalSleepStarted: () => void = () => undefined

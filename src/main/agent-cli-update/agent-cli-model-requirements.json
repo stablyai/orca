@@ -1,0 +1,12 @@
+{
+  "models": [
+    { "agent": "claude", "id": "claude-fable-5-2", "name": "Fable 5.2", "minVersion": "2.1.321" },
+    { "agent": "claude", "id": "claude-haiku-5-5", "name": "Haiku 5.5", "minVersion": "2.1.293" },
+    { "agent": "claude", "id": "claude-sonnet-5-5", "name": "Sonnet 5.5", "minVersion": "2.1.284" },
+    { "agent": "claude", "id": "claude-opus-5-5", "name": "Opus 5.5", "minVersion": "2.1.280" },
+    { "agent": "codex", "id": "gpt-6.2-sol", "name": "GPT-6.2-Sol", "minVersion": "0.169.1" },
+    { "agent": "codex", "id": "gpt-6.2-astra", "name": "GPT-6.2-Astra", "minVersion": "0.169.1" },
+    { "agent": "codex", "id": "gpt-6.1-terra", "name": "GPT-6.1 Terra", "minVersion": "0.165.0" },
+    { "agent": "codex", "id": "gpt-6-luna", "name": "GPT-6-Luna", "minVersion": "0.156.1" }
+  ]
+}

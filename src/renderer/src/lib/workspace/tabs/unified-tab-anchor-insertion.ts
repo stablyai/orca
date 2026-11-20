@@ -1,5 +1,5 @@
 import { useAppStore } from '../../../store/index'
-import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-order'
+import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 
 /** Move `tabId` to sit immediately after `anchorTabId`; no-op unless both share a live group. */
 export function insertUnifiedTabAfterAnchor(

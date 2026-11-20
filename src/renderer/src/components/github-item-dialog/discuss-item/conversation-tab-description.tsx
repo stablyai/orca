@@ -3,11 +3,11 @@ import type { GitHubImageUploadAddress } from '@/components/github/github-image-
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export function ConversationTabDescription({

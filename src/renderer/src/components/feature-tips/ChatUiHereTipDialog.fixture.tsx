@@ -1,4 +1,4 @@
-import { FEATURE_TIPS } from '../../../../shared/feature-tips'
+import { FEATURE_TIPS } from '../../../../shared/feature-education/feature-tips'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
 

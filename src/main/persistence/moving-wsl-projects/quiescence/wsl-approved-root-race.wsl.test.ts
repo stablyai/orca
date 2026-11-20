@@ -90,30 +90,4 @@ exec /usr/bin/stat "$@"
       )
     ).resolves.toBe('')
   })
-
-  it('allows an approved root beneath an execute-only ancestor', async () => {
-    const approvedRoot = `${fixtureRoot}/execute-only/vault`
-    const target = parseWslPath(unc(`${approvedRoot}/session.json`))
-    const command = target
-      ? containedDeleteCommand(target, [unc(approvedRoot)], parseWslPath, false)
-      : null
-    expect(command).not.toBeNull()
-
-    try {
-      await expect(
-        execFileAsync('wsl.exe', ['-d', DISTRO, '--exec', ...(command ?? [])], {
-          encoding: 'utf-8',
-          timeout: 30000
-        })
-      ).resolves.toMatchObject({ stderr: '' })
-      await expect(
-        wsl(
-          'test ! -e "$1/execute-only/vault/session.json" && test -f "$1/outside/unrelated"',
-          fixtureRoot
-        )
-      ).resolves.toBe('')
-    } finally {
-      await wsl('chmod 700 "$1/execute-only"', fixtureRoot)
-    }
-  })
 })

@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
@@ -8,8 +8,8 @@ import type {
 } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { supportsHostedReviewCreation } from '../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { normalizeHostedReviewBaseRef } from '../../shared/source-control/hosted-review/hosted-review-refs'
-import { getRepoSlug } from '../github/client'
-import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
+import { getRepoSlug } from '../github/client/fetch/repo-slug-upstream'
+import { isDefaultGitHubHost } from '../../shared/github/repositories/repository-identity-key'
 import {
   detectHostedReviewProvider,
   getForgeProviderForRepository
@@ -19,7 +19,7 @@ import { getHostedReviewForBranch } from './hosted-review'
 import { blockedEligibilityToCreateResult } from './hosted-review-creation-blocking'
 import {
   baseRefExistsOnRemote,
-  getCurrentBranch,
+  getCurrentBranchAndHead,
   getDefaultBaseRef,
   getHostedReviewUpstreamStatus,
   hasUncommittedChanges,
@@ -50,7 +50,11 @@ async function validateCurrentBranchCanCreateReview(
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateHostedReviewResult | null> {
   const requestedHead = input.head ? stripRefPrefix(input.head).trim() : ''
-  const currentBranch = await getCurrentBranch(repoPath, executionHostId, options)
+  const { branch: currentBranch, headOid } = await getCurrentBranchAndHead(
+    repoPath,
+    executionHostId,
+    options
+  )
   const copy = reviewCopy(input.provider)
   if (requestedHead && requestedHead !== currentBranch) {
     return {
@@ -75,6 +79,7 @@ async function validateCurrentBranchCanCreateReview(
       hasUpstream: upstreamStatus.hasUpstream,
       ahead: upstreamStatus.ahead,
       behind: upstreamStatus.behind,
+      currentHeadOid: headOid,
       executionHostId,
       // Providers use submitted base verbatim; recheck remote resolvability at creation.
       enforceBaseOnRemote: true,
@@ -137,6 +142,7 @@ export async function getHostedReviewCreationEligibility(
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null,
+      currentHeadOid: args.currentHeadOid ?? null,
       executionHostId: args.executionHostId,
       // The acted-on worktree earns active pacing so external review creation promptly blocks duplicates (#11532).
       active: true,

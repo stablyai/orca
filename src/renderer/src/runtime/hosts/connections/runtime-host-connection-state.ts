@@ -1,7 +1,9 @@
 import { runtimeHostContactFromSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import type { RuntimeHostStatusSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
-import '../../../../../shared/runtime-workspace-window-availability'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import '../../../../../shared/remote-runtime/session-graph/runtime-workspace-window-availability'
+import { REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE } from '../../../../../shared/remote-runtime/remote-runtime-connect-bound'
+import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 
 import {
   type RuntimeHostConnectionState,
@@ -52,5 +54,28 @@ export function runtimeHostConnectionStateForEntry(
     // Connecting is ongoing negotiation; unknown is never attempted and may remain so permanently. Calling unknown checking hides Connect and pins the spinner forever.
     ...(snapshot?.transport === 'connecting' ? { transportStatus: 'checking' as const } : {}),
     remoteControl: entry?.remoteControl ?? entry?.status?.remoteControl ?? null
+  })
+}
+
+/** Checked at least once, with no live socket and no verified answer, so a request would only wait out the
+ *  connect bound. Transport, not the status verdict, decides: a ready socket whose status probe keeps
+ *  failing must not flip in and out of this on every retry. A host still on its first check is asked. */
+export function isRuntimeHostKnownUnreachable(
+  snapshot: RuntimeHostStatusSnapshot | undefined
+): boolean {
+  return Boolean(
+    snapshot?.checkedAt && snapshot.transport !== 'ready' && snapshot.verification !== 'verified'
+  )
+}
+
+/** What a request to such a host would fail with, given without dialling it. */
+export function knownUnreachableRuntimeHostError(method: string): RuntimeRpcCallError {
+  return new RuntimeRpcCallError({
+    id: method,
+    ok: false,
+    error: {
+      code: 'remote_runtime_unavailable',
+      message: `${REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE}.`
+    }
   })
 }

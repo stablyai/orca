@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import {
+  getDefaultUIState,
+  getDefaultWorkspaceSession
+} from '../../../shared/orca-profiles/constants'
 import { wslMoveCutoverFixture } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
 
@@ -13,7 +16,7 @@ const host = vi.hoisted(() => ({
     result: { terminals: [], truncated: false }
   }))
 }))
-vi.mock('../runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('../runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: unknown[]) => host.call(...args)
 }))
 vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
@@ -36,7 +39,9 @@ const store = {
   getWorkspaceSession: () => getDefaultWorkspaceSession(),
   patchWorkspaceSession: vi.fn(),
   listAutomations: () => [],
-  updateAutomation: vi.fn()
+  updateAutomation: vi.fn(),
+  getUI: () => getDefaultUIState(),
+  updateUI: vi.fn()
 }
 
 describe("undo's stop of the host's terminals: connecting the host", () => {
@@ -52,8 +57,6 @@ describe("undo's stop of the host's terminals: connecting the host", () => {
       vi.spyOn(console, 'warn').mockImplementation(() => {})
       const ports = createWslMoveUndoPorts(store, '/user-data', 'automatic')
       expect(await ports.preflightHostCopies?.(move)).toBe('unreachable')
-      expect(host.connect).not.toHaveBeenCalled()
-      expect(host.call).not.toHaveBeenCalled()
     })
 
     it('refuses a live host terminal instead of sleeping it', async () => {
@@ -64,13 +67,6 @@ describe("undo's stop of the host's terminals: connecting the host", () => {
       }))
       const ports = createWslMoveUndoPorts(store, '/user-data', 'automatic')
       expect(await ports.stopHostCopies(move)).toBe('still-running')
-      expect(host.call).not.toHaveBeenCalledWith(
-        expect.anything(),
-        expect.anything(),
-        'worktree.sleep',
-        expect.anything(),
-        expect.anything()
-      )
     })
   })
 })

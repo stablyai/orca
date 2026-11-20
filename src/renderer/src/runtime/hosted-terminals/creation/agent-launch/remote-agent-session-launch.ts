@@ -1,5 +1,5 @@
-import { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import type { RuntimeCapability } from '../../../../../../shared/protocol-version'
+import { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import type { RuntimeCapability } from '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { RuntimeRpcCallError } from '../../../rpc/calls/runtime-rpc-result'
 import { runtimeEnvironmentSupportsCapability } from '../../../rpc/compatibility/runtime-capability-proof'
 import { isRuntimeCompatBlockError } from '../../../rpc/compatibility/runtime-protocol-compat'

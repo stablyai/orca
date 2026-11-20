@@ -8,20 +8,21 @@ import {
   type AiVaultPrepareSessionResumeResult,
   isPerAccountManagedCodexHome
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   appendCodexSessionHealAuditRecord,
   createCodexSessionBackfillAuditWriter
 } from '../backfill/codex-session-backfill-audit'
 import {
-  copySessionFileWithoutOverwrite,
-  isAtomicNoReplaceUnsupportedError
-} from '../backfill/codex-session-backfill-copy'
+  AtomicNoReplaceUnsupportedError,
+  copyCodexRolloutWithoutOverwrite
+} from '../rollouts/codex-rollout-copy'
 import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-backfill'
 import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
+import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
   'Orca could not safely move this legacy Codex session into your system Codex home. Retry resume; if it still fails, check that both Codex session folders are readable and writable.'
@@ -167,28 +168,12 @@ async function materializeLegacyRollout(
   if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
     throw new Error('Legacy rollout source is not a regular file.')
   }
-  await mkdir(dirname(targetPath), { recursive: true })
-  try {
-    await link(sourcePath, targetPath)
-  } catch (linkError) {
-    if (isExistsError(linkError)) {
-      await assertMatchingExistingTarget(sourcePath, targetPath)
-    } else {
-      try {
-        await copySessionFileWithoutOverwrite(sourcePath, targetPath)
-      } catch (copyError) {
-        if (isExistsError(copyError)) {
-          await assertMatchingExistingTarget(sourcePath, targetPath)
-        } else {
-          if (isAtomicNoReplaceUnsupportedError(copyError)) {
-            throw new Error('The target filesystem cannot safely install this rollout.', {
-              cause: copyError
-            })
-          }
-          throw copyError
-        }
-      }
-    }
+  // A cleanup deleting every name of this rollout would miss one installed meanwhile.
+  if (
+    (await linkCodexRolloutUnlessHeld(sourcePath, () => installRollout(sourcePath, targetPath))) ===
+    'held'
+  ) {
+    throw new Error('This rollout is being deleted with its workspace.')
   }
 
   const summary = {
@@ -209,6 +194,31 @@ async function materializeLegacyRollout(
     summary,
     { action: 'targeted-resume', source: sourcePath, target: targetPath }
   )
+}
+
+async function installRollout(sourcePath: string, targetPath: string): Promise<void> {
+  await mkdir(dirname(targetPath), { recursive: true })
+  try {
+    await link(sourcePath, targetPath)
+  } catch (linkError) {
+    if (isExistsError(linkError)) {
+      await assertMatchingExistingTarget(sourcePath, targetPath)
+    } else {
+      try {
+        const outcome = await copyCodexRolloutWithoutOverwrite(sourcePath, targetPath)
+        if (outcome === 'existing') {
+          await assertMatchingExistingTarget(sourcePath, targetPath)
+        }
+      } catch (copyError) {
+        if (copyError instanceof AtomicNoReplaceUnsupportedError) {
+          throw new Error('The target filesystem cannot safely install this rollout.', {
+            cause: copyError
+          })
+        }
+        throw copyError
+      }
+    }
+  }
 }
 
 async function assertMatchingExistingTarget(sourcePath: string, targetPath: string): Promise<void> {

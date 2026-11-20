@@ -1,11 +1,11 @@
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
-import type { DiffCommentBaseMutation } from '../../../../shared/diff-comment-mutation'
+import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
 
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { toWorkspaceLineageRow } from '../../../../shared/worktree/worktree-lineage-workspace-row'
+import { toWorkspaceLineageRow } from '../../../../shared/worktree/lineage/worktree-lineage-workspace-row'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../workspaces/removal/worktree-removal-repo-owner'
@@ -13,7 +13,7 @@ import {
   type WorkspaceKey,
   folderWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../shared/workspace-scope'
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { workspaceSessionPartitionIdsForHost } from '../../restoring-sessions/session-owner-removal'
 import { workspaceSessionPartitionHostId as workspaceSessionOwnerPartitionForHost } from '../../../../shared/workspace-session/workspace-session-partition-owner'
 import type { StoreRuntimeState } from '../store-runtime-state'
@@ -36,6 +36,7 @@ import {
   setWorktreeMetaForHost as setWorktreeMetaForHostOperation
 } from '../worktree-metadata/worktree-identity-metadata'
 import * as saved from '../../profile-save-domains'
+import { releaseMatchingLineage } from './workspace-lineage-release'
 import {
   pruneSessionlessMissingLocalWorktreeMetadataForRepo as pruneSessionlessMissingLocalWorktreeMetadataForRepoOperation,
   selectProbeableLocalWorktreeMetadataCandidates as selectProbeableLocalWorktreeMetadataCandidatesOperation
@@ -307,6 +308,15 @@ export class MetadataLineageOperations {
     saveDomains(this, ['workspaceLineageByChildKey', 'crossStoreLineageByChildKey'])
     return lineage
   }
+
+  /** Drops the workspace links that match; returns the children it released. */
+  removeWorkspaceLineage(matches: (lineage: WorkspaceLineage) => boolean): WorkspaceKey[] {
+    const { runtime, scheduling } = this[metadataLineageOperationsContext]
+    const links = runtime.state.workspaceLineageByChildKey
+    return releaseMatchingLineage(links, Object.values(links), matches, () =>
+      scheduleSave(scheduling, saved.WORKSPACE_LINEAGE_DOMAINS)
+    )
+  }
 }
 
 // The first host stamp owns raw-ID metadata and lineage buckets.
@@ -327,13 +337,5 @@ export function removeWorkspaceLineageForRemovedFolder(
   delete owner[metadataLineageOperationsContext].runtime.state.crossStoreLineageByChildKey?.[
     folderKey
   ]
-  for (const [childKey, lineage] of Object.entries(
-    owner[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey
-  )) {
-    if (lineage.parentWorkspaceKey === folderKey) {
-      delete owner[metadataLineageOperationsContext].runtime.state.workspaceLineageByChildKey[
-        childKey as WorkspaceKey
-      ]
-    }
-  }
+  owner.removeWorkspaceLineage((lineage) => lineage.parentWorkspaceKey === folderKey)
 }

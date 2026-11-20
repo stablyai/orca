@@ -1,8 +1,8 @@
 // Require exact host row on removal: unique-candidate/focused fallbacks can destroy the other host’s same-ID project (#13071).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '../testing/app-store-test-fixture'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>

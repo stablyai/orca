@@ -17,6 +17,7 @@ import {
 import { disableMsbuildFileTrackingOnWindows } from '../windows/msbuild-file-tracking.mjs'
 import { warnAboutNodeModulesAboveSharedStore } from '../../node-resolution/ancestor-modules/store-ancestor-node-modules.mjs'
 import {
+  nativeRuntimeModules,
   isSharedNativePackage,
   nodePtyBuildArtifactPaths,
   resolveNativePackageDir
@@ -67,13 +68,7 @@ if (ignoreModules.length > 0) {
 }
 
 // Explicit onlyModules bypasses unreliable pnpm-store walker so every native module uses Electron’s Node ABI.
-const NATIVE_MODULES = [
-  'node-pty',
-  'cpu-features',
-  ...(rebuildPlatform === 'win32'
-    ? ['@orca/windows-registry', '@orca/windows-security', '@vscode/windows-process-tree']
-    : [])
-]
+const NATIVE_MODULES = ['cpu-features', ...nativeRuntimeModules(rebuildPlatform)]
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
 // Global pnpm store shares packages across worktrees; publish per-ABI build beside build/Release instead of mutating it.
 const sharedModules = new Set(onlyModules.filter((m) => isSharedNativePackage(m, projectDir)))
@@ -570,6 +565,10 @@ if (failures.length > 0) {
 }
 
 function loadNativeModule(moduleName) {
+  if (moduleName === '@orca/windows-notifications') {
+    projectRequire(moduleName).getFocusAssistState()
+    return
+  }
   if (moduleName === '@orca/windows-registry') {
     const registry = projectRequire(moduleName)
     // Why: the package defers loading its .node addon until the first registry call.

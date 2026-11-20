@@ -3,7 +3,7 @@ import type {
   OrcaCloudOrgSummary,
   OrcaProfileCloudSummary,
   OrcaProfileListState
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import { linkOrcaProfileToCloud } from '../cloud-auth/profile-cloud-index'
 import { getOrcaProfileListState, loadOrCreateProfileIndex } from '../profile-index-store'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
@@ -92,20 +92,46 @@ export function takeCloudSessionTicket(
   return { generation: owner.generation, linkVersion: owner.linkVersion }
 }
 
-export function signInCloudSession(
-  profileId: string,
-  userDataPath: string,
-  exchange: OrcaCloudSessionExchangeResponse
-): void {
-  saveOrcaCloudSession(profileId, userDataPath, {
+export function sessionFromExchange(exchange: OrcaCloudSessionExchangeResponse): OrcaCloudSession {
+  return {
     accessToken: exchange.accessToken,
     refreshToken: exchange.refreshToken,
     expiresAt: exchange.expiresAt,
     organizations: exchange.organizations,
-    capabilities: exchange.capabilities
-  })
+    capabilities: exchange.capabilities,
+    identity: { userId: exchange.cloud.userId, cloudProfileId: exchange.cloud.cloudProfileId }
+  }
+}
+
+/** `requireSealed` refuses memory-only and plaintext saves instead of falling back. */
+export function signInCloudSession(
+  profileId: string,
+  userDataPath: string,
+  exchange: OrcaCloudSessionExchangeResponse,
+  options: { requireSealed?: boolean } = {}
+): void {
+  saveOrcaCloudSession(profileId, userDataPath, sessionFromExchange(exchange), options)
   invalidateCloudSessionChanges(profileId, userDataPath)
   ownerOf(profileId, userDataPath).signedOut = false
+}
+
+/** Puts back the session an unfinished account change replaced; with none, signs out. */
+export function restoreCloudSession(
+  profileId: string,
+  userDataPath: string,
+  previous: OrcaCloudSessionReadResult
+): void {
+  if (previous.status === 'found') {
+    try {
+      saveOrcaCloudSession(profileId, userDataPath, previous.session)
+      invalidateCloudSessionChanges(profileId, userDataPath)
+      ownerOf(profileId, userDataPath).signedOut = false
+      return
+    } catch {
+      // The replacement's identity stamp keeps it from being used as the profile's account.
+    }
+  }
+  signOutCloudSession(profileId, userDataPath)
 }
 
 export function invalidateCloudSessionChanges(profileId: string, userDataPath: string): void {
@@ -167,7 +193,12 @@ export function commitCloudSessionRotation(
   }
   const linkUnmoved = owner.linkVersion === ticket.linkVersion
   const next = linkUnmoved
-    ? { ...tokens, organizations: rotated.organizations, capabilities: rotated.capabilities }
+    ? {
+        ...tokens,
+        organizations: rotated.organizations,
+        capabilities: rotated.capabilities,
+        identity: current.session.identity
+      }
     : { ...current.session, ...tokens }
   saveOrcaCloudSession(profileId, userDataPath, next, { spentOnFailure: true })
   if (linkUnmoved) {

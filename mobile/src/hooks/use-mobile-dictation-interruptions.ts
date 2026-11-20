@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from 'react'
 import { AppState } from 'react-native'
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
-import type { DictationCapture } from '../platform/dictation-capture-contract'
+import type { DictationCapture } from '../platform/audio-capture/dictation-capture-contract'
 import type { MobileDictationAudioPhase } from './mobile-dictation-audio-chunk'
 import type { DictationStatus } from './mobile-dictation-session-state'
 

@@ -222,12 +222,9 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
     const input = mailbox(aliases)
     return (input.questions ??= db ? readCrewQuestions(db, aliases) : [])
   }
-  // Closed approvals stay as receipts for as long as traffic counts as recent.
-  const approvals = (aliases: string[], now: number) => {
+  const approvals = (aliases: string[]) => {
     const input = mailbox(aliases)
-    return (input.approvals ??= db
-      ? readCrewApprovals(db, aliases, new Date(now - AGENT_STATUS_STALE_AFTER_MS).toISOString())
-      : [])
+    return (input.approvals ??= db ? readCrewApprovals(db, aliases) : [])
   }
   const invalidateTraffic = (addresses?: ReadonlySet<string>) => {
     for (const [key, input] of mail) {
@@ -236,8 +233,17 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
       }
     }
   }
+  /** A patched assignment row replaces the copy read as some party's creator. */
+  const replaceAssignments = (rows: Iterable<CrewAssignmentRow>) => {
+    for (const row of rows) {
+      if (creatorAssignments.has(row.id)) {
+        creatorAssignments.set(row.id, Object.freeze(row))
+      }
+    }
+  }
   return {
     parentInputs,
+    replaceAssignments,
     provenance,
     runInputs,
     activeRemoteAttachmentForPane,

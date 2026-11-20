@@ -1,6 +1,8 @@
 import type { IDisposable } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { installFilePathLinkClickFallback } from './files/terminal-link-handlers'
+import { handleOscLink } from './terminal-osc-link-routing'
+import type { TerminalLinkActionRequest } from './terminal-link-action-request'
 import { openFilePathLinkAtBufferPosition } from './files/terminal-file-link-hit-testing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -40,6 +42,51 @@ vi.mock('@/lib/workspace/ownership/connection-context', () => ({
 }))
 
 installTerminalLinkTestEnvironment(doubles)
+
+describe('Windows OSC file links', () => {
+  // A Mac client reaches Windows drive paths through an SSH or paired Windows host.
+  it.each([
+    { platform: 'Windows', worktreePath: 'D:/project' },
+    { platform: 'Macintosh', worktreePath: 'D:/project' },
+    { platform: 'Windows', worktreePath: '\\\\server\\share\\project' },
+    { platform: 'Windows', worktreePath: 'D:/project', startupCwd: '/d/project' }
+  ])(
+    'reveals the drive path of a slash-prefixed OSC 8 link ($platform, $worktreePath, $startupCwd)',
+    async ({ platform, worktreePath, startupCwd }) => {
+      setPlatform(platform)
+      const reveal = vi.fn().mockResolvedValue({ ok: true })
+      window.api.shell.openInFileManager = reveal
+      const request = vi.fn<(action: TerminalLinkActionRequest) => void>()
+      const sourceOwner = { kind: 'local' } as const
+
+      const handled = handleOscLink(
+        '/C:/Users/test/report.txt:12:3',
+        { button: 0, ctrlKey: false, metaKey: false, preventDefault: vi.fn() },
+        {
+          worktreeId: 'wt-1',
+          worktreePath,
+          startupCwd,
+          runtimeEnvironmentId: null,
+          wslDistro: null,
+          sourceOwner,
+          linkActionContext: {
+            paneId: 1,
+            pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+            claimPtyMouse: () => true,
+            request,
+            focusTerminal: vi.fn(),
+            sourceOwner
+          }
+        }
+      )
+
+      expect(handled).toBe(true)
+      const revealAction = request.mock.calls[0]?.[0].secondaryActions?.find((row) => row.external)
+      await revealAction?.run()
+      expect(reveal).toHaveBeenCalledWith('C:/Users/test/report.txt', 'local')
+    }
+  )
+})
 
 describe('createFilePathLinkProvider range bounds', () => {
   it('opens a wrapped continuation-row html path from a direct modifier-click fallback', async () => {
@@ -170,7 +217,8 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     expect(openFilePathMock).toHaveBeenCalledWith(
       '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt',
-      'local'
+      'local',
+      undefined
     )
     expect(preventDefault).toHaveBeenCalled()
     expect(stopPropagation).toHaveBeenCalled()
@@ -180,7 +228,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp, { capture: true })
   })
 
-  it('opens a deeply wrapped absolute path from its final short continuation row', async () => {
+  it('opens a deeply wrapped absolute path at its line from its final short continuation row', async () => {
     setPlatform('Macintosh')
     const rows = [
       makeBufferLine('/private/tmp/or'),
@@ -194,7 +242,7 @@ describe('createFilePathLinkProvider range bounds', () => {
       makeBufferLine('/modules/twoway'),
       makeBufferLine('audio/ExpoTwoW'),
       makeBufferLine('ayAudioLifeCyc'),
-      makeBufferLine('leListener.kt')
+      makeBufferLine('leListener.kt:12:3')
     ]
 
     const opened = openFilePathLinkAtBufferPosition(makeBuffer(rows), { x: 4, y: 12 }, 15, {
@@ -209,7 +257,8 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(opened).toBe(true)
     expect(openFilePathMock).toHaveBeenCalledWith(
       '/private/tmp/orca-setup-e2e.hOW01f/workspaces/test-wt-5/mobile/packages/expo-two-way-audio/android/src/main/java/expo/modules/twowayaudio/ExpoTwoWayAudioLifeCycleListener.kt',
-      'local'
+      'local',
+      { line: 12, column: 3 }
     )
   })
 

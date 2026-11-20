@@ -1,6 +1,6 @@
-import { TaskPageJiraStatusFilters } from './TaskPageJiraStatusFilters'
-import { TaskPageJiraSavedFilters } from './TaskPageJiraSavedFilters'
-import { TaskPageJiraFavouriteFilters } from './TaskPageJiraFavouriteFilters'
+import { TaskPageJiraStatusFilters } from './filters/TaskPageJiraStatusFilters'
+import { TaskPageJiraSavedFilters } from './filters/TaskPageJiraSavedFilters'
+import { TaskPageJiraFavouriteFilters } from './filters/TaskPageJiraFavouriteFilters'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -11,7 +11,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { LoaderCircle, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
-import { JiraProjectPicker } from '@/components/jira-project-picker'
+import { JiraProjectPicker } from '@/components/task-page/jira/project-selection/jira-project-picker'
 import { matchesJiraProject } from '../../../../../shared/jira/jira-project-reference'
 export function TaskPageJiraFilters({
   model

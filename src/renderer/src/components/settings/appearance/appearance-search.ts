@@ -32,8 +32,11 @@ export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] 
   }
 ])
 
+export const APPEARANCE_EDITOR_THEME_SETTING_ID = 'appearance-editor-theme'
+
 export const getCodeEditorThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
+    targetSectionId: APPEARANCE_EDITOR_THEME_SETTING_ID,
     title: translate('settings.appearance.editorTheme.title', 'Editor theme'),
     description: translate(
       'settings.appearance.editorTheme.description',
@@ -231,6 +234,24 @@ export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry
   }
 ])
 
+export function getTilingWindowModeEntry(t: Translate = translate): SettingsSearchEntry {
+  return {
+    title: t('settings.appearance.tilingWindowMode.title', 'Tiling window manager mode'),
+    description: t(
+      'settings.appearance.tilingWindowMode.description',
+      'Hide the minimize and maximize buttons and bring workspace tabs to the top edge. Move and resize the window with your window manager.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.bed343b03e',
+        'titlebar',
+        { aliases: ['Linux', 'Hyprland', 'Sway', 'i3'] },
+        t
+      )
+    ]
+  }
+}
+
 /** Search entries for every Status Bar control, including the per-provider toggles. */
 export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   getUsagePercentageDisplayEntry(),
@@ -262,6 +283,7 @@ type AppearancePaneSearchOptions = {
   showDesktopThemeImports?: boolean
   showSystemTray?: boolean
   showMenuBarIcon?: boolean
+  showTilingWindowMode?: boolean
 }
 
 export function getAppearancePaneSearchEntries(
@@ -277,6 +299,7 @@ export function getAppearancePaneSearchEntries(
     ...getTerminalAppearanceSearchEntries(options),
     ...getLayoutEntries(),
     ...getTitlebarEntries(),
+    ...(options.showTilingWindowMode ? [getTilingWindowModeEntry()] : []),
     ...getReduceVisualEffectsEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),

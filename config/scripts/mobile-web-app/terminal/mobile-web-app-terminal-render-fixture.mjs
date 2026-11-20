@@ -78,7 +78,7 @@ export async function startTerminalRenderFixture() {
     // Extensionless import selects web sibling; explicit .tsx would mount browser-incompatible WebView wrapper.
     await writeFile(
       join(routeDir, 'terminal-probe.tsx'),
-      probeRouteSource(join(mobileDir, 'src', 'terminal', 'TerminalWebView'))
+      probeRouteSource(join(mobileDir, 'src', 'terminal', 'webview', 'TerminalWebView'))
     )
     const built = await buildMobileWebAppBundle({
       appDir,

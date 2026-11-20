@@ -1,7 +1,7 @@
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { codexStopTarget } from './codex-structured-turn-open-wait'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionAdmitFreshInput,
@@ -10,7 +10,7 @@ import {
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { readCodexAutoSandbox } from '../launch/codex-structured-auto-sandbox'
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import type { CodexSandboxPolicy } from '../launch/codex-structured-sandbox-policy'
 
 type PermissionHost = {
@@ -124,12 +124,23 @@ export async function admitCodexTurnPermission(
   }
 }
 
+/** Codex applies a pick when its next turn starts. */
+export function codexRunningPermissionMode(
+  sessions: ReadonlyMap<string, CodexSession>
+): NonNullable<StructuredAgentSessionAdapter['runningPermissionMode']> {
+  return (sessionId) => {
+    const state = sessions.get(sessionId)?.permissions
+    return state && (state.appliedMode ?? state.acquiredMode)
+  }
+}
+
 export function codexNativeResumeRequirement(
   sessions: ReadonlyMap<string, CodexSession>
 ): NonNullable<StructuredAgentSessionAdapter['permissionModeRequiresAcquisition']> {
+  const running = codexRunningPermissionMode(sessions)
   return (sessionId, mode) => {
-    const state = sessions.get(sessionId)?.permissions
-    return mode === 'own' && !!state && (state.appliedMode ?? state.acquiredMode) !== 'own'
+    const current = running(sessionId)
+    return mode === 'own' && current !== undefined && current !== 'own'
   }
 }
 

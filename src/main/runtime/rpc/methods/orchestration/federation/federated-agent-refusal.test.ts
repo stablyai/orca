@@ -7,8 +7,8 @@ import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-start'
-import { mapRuntimeError } from '../../../errors'
-import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import { mapRuntimeError } from '../../../responses/rpc-response'
+import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
@@ -43,7 +43,7 @@ describe('federated launcher refusal classification', () => {
       'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     )
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(null)
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
       environmentId: 'environment_worker',
       name: 'worker',
       peerFingerprint: 'worker_peer',

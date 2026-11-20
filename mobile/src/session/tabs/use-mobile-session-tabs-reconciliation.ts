@@ -8,11 +8,11 @@ import {
   type SessionTabsApplyOutcome,
   type SessionTabsStreamSource
 } from './mobile-session-tabs-stream-health'
-import { PendingTerminalHandleRecoveryBudget } from '../../terminal/session/pending-terminal-handle-recovery'
+import { PendingTerminalHandleRecoveryBudget } from '../../terminal/session/inventory/pending-terminal-handle-recovery'
 import {
   useMobileTerminalInventoryRecovery,
   type MobileTerminalInventoryRefreshOptions
-} from '../../terminal/session/use-mobile-terminal-inventory-recovery'
+} from '../../terminal/session/inventory/use-mobile-terminal-inventory-recovery'
 
 type Params<Result, Tab> = {
   client: RpcClient | null
@@ -150,22 +150,45 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
     [controller, suspendTerminalInventoryRecovery]
   )
 
-  useEffect(() => {
-    if (!client || !controller || connState !== 'connected') {
-      return
-    }
-    resetPendingTerminalRecovery()
-    const subscription = controller.beginSubscription()
-    const unsubscribe = client.subscribe(
-      'session.tabs.subscribe',
-      { worktree: `id:${worktreeId}` },
-      subscription.listener
-    )
-    return () => {
-      subscription.cancel()
-      unsubscribe()
-    }
-  }, [client, connState, controller, resetPendingTerminalRecovery, worktreeId])
+  useFocusEffect(
+    useCallback(() => {
+      if (!client || !controller || connState !== 'connected') {
+        return
+      }
+      let unsubscribe: (() => void) | null = null
+      const updatePresence = (active: boolean): void => {
+        if (!active) {
+          unsubscribe?.()
+          unsubscribe = null
+          return
+        }
+        // Already holding: a repeated 'active' must not restart the stream.
+        if (unsubscribe) {
+          return
+        }
+        resetPendingTerminalRecovery()
+        const subscription = controller.beginSubscription()
+        const stop = client.subscribe(
+          'session.tabs.subscribe',
+          { worktree: `id:${worktreeId}` },
+          subscription.listener
+        )
+        unsubscribe = () => {
+          subscription.cancel()
+          stop()
+        }
+      }
+      // The host counts this stream as the phone viewing the workspace, so hold it only while the screen is in front.
+      updatePresence(AppState.currentState === 'active')
+      const appStateSubscription = AppState.addEventListener('change', (state) => {
+        updatePresence(state === 'active')
+      })
+      return () => {
+        appStateSubscription.remove()
+        updatePresence(false)
+      }
+    }, [client, connState, controller, resetPendingTerminalRecovery, worktreeId])
+  )
 
   useFocusEffect(
     useCallback(() => {

@@ -7,15 +7,15 @@ import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
   BrowserPage as BrowserPageState
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser/browser-slice-contract'
-import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-url'
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
-import type { MarkupModeController } from '../annotate/useMarkupMode'
+import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
-import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
+import { ReopenBrowserPageOnServerButton } from '../navigate/reopen-on-server/ReopenBrowserPageOnServerButton'
 import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import {
@@ -24,10 +24,15 @@ import {
 } from './remote-browser-stream-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
+import {
+  BrowserPageFeedbackBadge,
+  type BrowserPageFeedbackBadgeHandle
+} from '../assemble-chrome/feedback/browser-page-feedback-badge'
 
 export function RemoteBrowserPageViewport({
   remoteViewportRef,
   imageRef,
+  feedbackBadgeRef,
   frameUrl,
   frameMetadata,
   busy,
@@ -46,6 +51,7 @@ export function RemoteBrowserPageViewport({
   onGoto,
   onNavigateToUrl,
   onReconnect,
+  onBeforeProceedCertificate,
   handleRemotePointerDown,
   handleRemotePointerUp,
   handleRemoteContextMenu,
@@ -54,6 +60,7 @@ export function RemoteBrowserPageViewport({
 }: {
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
   imageRef: React.RefObject<HTMLImageElement | null>
+  feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
   frameUrl: string | null
   frameMetadata: BrowserScreencastFrameMetadata | null
   busy: boolean
@@ -73,6 +80,7 @@ export function RemoteBrowserPageViewport({
   /** The address bar's submit path, which also parks a URL typed before the host page exists. */
   onNavigateToUrl: (url: string) => void
   onReconnect: () => void
+  onBeforeProceedCertificate: () => void
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
@@ -102,6 +110,7 @@ export function RemoteBrowserPageViewport({
       // Why a size container: the frame letterboxes itself in cq units of this pane.
       className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"
     >
+      <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
       {markup.isActive && markup.baseImage ? (
         // Why the frame's own box: markup draws over the letterboxed page, not the whole pane.
         <div className="absolute top-0 left-0" style={remoteFrameStyle}>
@@ -180,6 +189,7 @@ export function RemoteBrowserPageViewport({
             ) {
               return { ok: false, reason: 'missing' }
             }
+            onBeforeProceedCertificate()
             return callRuntimeRpc<BrowserCertificateProceedResult>(
               target,
               'browser.certificate.proceed',
@@ -208,7 +218,7 @@ export function RemoteBrowserPageViewport({
             <ReopenBrowserPageOnServerButton
               environmentId={remotePageHandle.environmentId}
               worktreeId={worktreeId}
-              lastCommittedUrl={browserTab.url}
+              reopenUrl={browserTab.url}
               className="h-6 shrink-0 px-2 text-xs"
             />
           ) : null}

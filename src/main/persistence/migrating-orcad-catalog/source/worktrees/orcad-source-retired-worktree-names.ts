@@ -1,14 +1,14 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationDormantStatePayload
 } from '../../../../../shared/orcad-migration/orcad-migration-manifest'
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
 import {
   isEmptyRetiredNameRegistry,
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
-} from '../../../../../shared/worktree/retired-name-registry'
+} from '../../../../../shared/worktree/naming/retired-name-registry'
 import { getRemoteRetirementNamespaceKey } from '../../../../workspaces/removal/retirement/worktree-name-retirement'
 import {
   swapRetirementNamespaceHost,

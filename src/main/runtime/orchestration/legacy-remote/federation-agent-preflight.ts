@@ -1,8 +1,8 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../orchestration-error'
-import { assertOrchestrationWorktreeCreationSupported } from '../../rpc/methods/orchestration/worker/folder-worktree-placement'
+import { assertOrchestrationWorktreeCreationSupported } from '../../rpc/methods/orchestration/worker/start/placement/folder-worktree-placement'
 
 export async function validateFederatedCreationPreflight(
   runtime: OrcaRuntimeService,

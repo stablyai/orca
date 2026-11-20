@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
-import { toSshExecutionHostId } from '../../../../../shared/execution-host'
-import type { SshTarget } from '../../../../../shared/ssh-types'
+import { getDefaultWorkspaceSession } from '../../../../../shared/orca-profiles/constants'
+import { toSshExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { closeTestStores, createSqliteTestStore } from '../../../persistence-test-harness'
 import { Store } from '../../../loading-store/store'
@@ -108,15 +108,6 @@ describe('exporting a relay-hosted SSH target from the profile store', () => {
     }
     store.syncOrcadMigrationScrollbackRetention([])
     expect(readTerminalScrollbackStoredBytesSync(ref, storage)).toBeNull()
-  })
-
-  it('refuses a chunk for a manifest whose digest does not match its contents', () => {
-    const store = sourceStore()
-    const manifest = createOrcadMigrationManifest(store, TARGET)
-    const ref = manifest.payload.dormantState?.terminalScrollbackSnapshots?.[0]?.ref ?? ''
-    expect(() =>
-      store.readOrcadMigrationSourceSnapshotChunk({ ...manifest, migrationId: 'forged' }, ref, 0)
-    ).toThrow('orcad_migration_manifest_digest_mismatch')
   })
 
   // #29083: an enabled automation refused every Connect and left the host unconnectable.

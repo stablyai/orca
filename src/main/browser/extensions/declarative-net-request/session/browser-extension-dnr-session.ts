@@ -82,6 +82,8 @@ export class DnrSessionRuntime {
   /** Chrome holds requests until rulesets load; at startup that includes extensions still loading. */
   holdForStartup(startupLoad: () => Promise<void>): void {
     this.startupLoad = startupLoad
+    // Why: a hold built before a reattach waits on the old loads, so later requests get a new one.
+    this.loadHold = null
   }
 
   addExtension(extension: Electron.Extension): Promise<void> {
@@ -175,7 +177,10 @@ export class DnrSessionRuntime {
       ])
       this.loadHold = hold
       void hold.then(() => {
-        this.startupLoad = null
+        // A reattach may have re-armed the hold meanwhile; that one stays.
+        if (this.startupLoad === startup) {
+          this.startupLoad = null
+        }
         if (this.loadHold === hold) {
           this.loadHold = null
         }
@@ -268,15 +273,20 @@ export function attachBrowserExtensionDnr(
   profileId: string,
   enabledExtensionIds: readonly string[]
 ): void {
-  if (runtimes.has(session)) {
-    return
-  }
-  const runtime = new DnrSessionRuntime(session, profileId)
-  runtimes.set(session, runtime)
   const installs = getBrowserExtensionInstallStore()
   const expectsRules = enabledExtensionIds.some((id) =>
     installs.get(id)?.permissions.some((permission) => DNR_PERMISSIONS.includes(permission))
   )
+  const existing = runtimes.get(session)
+  // A session attached again (idle profile reopened, extensions turned back on) holds requests again.
+  if (existing) {
+    if (expectsRules) {
+      existing.holdForStartup(() => whenBrowserExtensionProfileLoaded(profileId))
+    }
+    return
+  }
+  const runtime = new DnrSessionRuntime(session, profileId)
+  runtimes.set(session, runtime)
   if (expectsRules) {
     runtime.holdForStartup(() => whenBrowserExtensionProfileLoaded(profileId))
   }

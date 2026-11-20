@@ -10,7 +10,7 @@ import type { CodexSettingsPromotionHomes } from './config-settings-promotion'
 import type {
   CodexConfigSyncStallReason,
   CodexConfigSyncStatus
-} from '../../../../shared/codex-config-sync-types'
+} from '../../../../shared/agent-accounts/codex/codex-config-sync-types'
 
 /** Diagnose settings withheld by a stalled mirror from the current file observations. */
 export function getCodexConfigSyncStatus(

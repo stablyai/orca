@@ -31,6 +31,7 @@
           {
             "allow": [
               "comment-md-*",
+              "bt-*",
               "compact-agent-*",
               "feature-wall-*",
               "is-*",

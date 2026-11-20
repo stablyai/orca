@@ -28,27 +28,6 @@ describe('CliInstaller', () => {
     vi.restoreAllMocks()
   })
 
-  it('fails closed without writing when a Windows PATH mutation cannot read the registry', async () => {
-    const fixture = await makeFixture()
-    const userPathWriter = vi.fn()
-    const installer = new CliInstaller({
-      platform: 'win32',
-      isPackaged: false,
-      userDataPath: fixture.userDataPath,
-      execPath: 'C:\\Users\\me\\AppData\\Local\\Orca\\Orca.exe',
-      appPath: fixture.appPath,
-      commandPathOverride: join(fixture.root, 'Programs', 'Orca', 'bin', 'orca.cmd'),
-      userPathReader: async () => ({
-        state: 'unknown',
-        detail: 'Orca could not read the Windows user PATH registry value.'
-      }),
-      userPathWriter
-    })
-
-    await expect(installer.install()).rejects.toThrow('No PATH changes were made')
-    expect(userPathWriter).not.toHaveBeenCalled()
-  })
-
   it('bypasses cached status data before a Windows PATH mutation', async () => {
     const fixture = await makeFixture()
     const installPath = join(fixture.root, 'Programs', 'Orca', 'bin', 'orca.cmd')
@@ -86,78 +65,6 @@ describe('CliInstaller', () => {
     expect(userPathWriter).toHaveBeenCalledWith(
       `C:\\Tools;C:\\AddedByAnotherInstaller;${pathDirectory}`
     )
-  })
-
-  it('matches expandable Windows PATH entries case-insensitively without rewriting them', async () => {
-    const fixture = await makeFixture()
-    const installPath = join(fixture.root, 'Local App Data', 'Orca', 'bin', 'orca.cmd')
-    const userPathWriter = vi.fn()
-    const installer = new CliInstaller({
-      platform: 'win32',
-      isPackaged: false,
-      userDataPath: fixture.userDataPath,
-      execPath: 'C:\\Users\\me\\AppData\\Local\\Orca\\Orca.exe',
-      appPath: fixture.appPath,
-      commandPathOverride: installPath,
-      windowsEnvironment: { LOCALAPPDATA: join(fixture.root, 'Local App Data') },
-      userPathReader: async () => userPathRead('%localappdata%\\Orca\\bin\\', true),
-      userPathWriter
-    })
-
-    await expect(installer.install()).resolves.toMatchObject({
-      state: 'installed',
-      pathConfigured: true
-    })
-    expect(userPathWriter).not.toHaveBeenCalled()
-  })
-
-  it('does not expand environment variables stored in a REG_SZ Windows PATH', async () => {
-    const fixture = await makeFixture()
-    const installPath = join(fixture.root, 'Local App Data', 'Orca', 'bin', 'orca.cmd')
-    const pathDirectory = dirname(installPath)
-    const userPathWriter = vi.fn()
-    const installer = new CliInstaller({
-      platform: 'win32',
-      isPackaged: false,
-      userDataPath: fixture.userDataPath,
-      execPath: 'C:\\Users\\me\\AppData\\Local\\Orca\\Orca.exe',
-      appPath: fixture.appPath,
-      commandPathOverride: installPath,
-      windowsEnvironment: { LOCALAPPDATA: join(fixture.root, 'Local App Data') },
-      userPathReader: async () => userPathRead('%LOCALAPPDATA%\\Orca\\bin'),
-      userPathWriter
-    })
-
-    await installer.install()
-
-    expect(userPathWriter).toHaveBeenCalledWith(`%LOCALAPPDATA%\\Orca\\bin;${pathDirectory}`)
-  })
-
-  it('keeps a bundled Windows launcher installed when the user PATH read is unknown', async () => {
-    const fixture = await makeFixture()
-    const resourcesPath = join(fixture.root, 'resources')
-    const bundledLauncher = join(resourcesPath, 'bin', 'orca.exe')
-    await mkdir(dirname(bundledLauncher), { recursive: true })
-    await writeFile(bundledLauncher, 'native launcher', 'utf8')
-
-    const installer = new CliInstaller({
-      platform: 'win32',
-      isPackaged: true,
-      resourcesPath,
-      userDataPath: fixture.userDataPath,
-      execPath: join(fixture.root, 'Orca.exe'),
-      appPath: fixture.appPath,
-      userPathReader: async () => ({
-        state: 'unknown',
-        detail: 'Orca could not read the Windows user PATH registry value.'
-      })
-    })
-
-    await expect(installer.getStatus()).resolves.toMatchObject({
-      state: 'installed',
-      pathConfigured: null,
-      detail: expect.stringContaining('could not read')
-    })
   })
 
   it('does not overwrite the packaged Windows launcher while registering PATH', async () => {

@@ -2,14 +2,14 @@ import { useEffect } from 'react'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   agentsWithSavedModelPick,
   HOST_MODEL_CATALOG_ACCOUNT_SETTINGS,
   hostReadsSavedModelCatalogsOnly
-} from '../../../../../shared/agent-session/options/host-model-catalog-snapshot-rules'
+} from '../../../../../shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {
@@ -27,8 +27,9 @@ import {
   subscribeLocalRuntimeCapabilitiesKnown
 } from '../../hosts/capabilities/local-runtime-capabilities'
 import { localStructuredChatsInUse } from '../local-sessions/local-structured-chats'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeRuntimeHostContactRegained } from '../../hosts/connections/runtime-host-contact-regained'
+import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 
 const LOCAL = { kind: 'local' } as const
 
@@ -123,18 +124,10 @@ export function installHostModelCatalogSnapshotsSync(): () => void {
   const stopLocal = subscribeLocalRuntimeCapabilitiesKnown(() => void preloadLocal(false))
   const stopAgents = subscribeHostStructuredAgents(preloadHostsWithNewAgents)
   const contactStops = new Map<string, () => void>()
-  const watchPairedHosts = (state: AppState): void => {
-    for (const [environmentId, stop] of contactStops) {
-      if (state.removedRuntimeEnvironmentIds.has(environmentId)) {
-        stop()
-        contactStops.delete(environmentId)
-        // A same-id re-add is a new host: its first status must not inherit these lists.
-        forgetHostModelCatalogSnapshots({ kind: 'environment', environmentId })
-        preloadedFrom.delete(toRuntimeExecutionHostId(environmentId))
-      }
-    }
-    for (const environmentId of state.runtimeStatusByEnvironmentId.keys()) {
+  const watchHosts = (state: AppState, environmentIds: Iterable<string>): void => {
+    for (const environmentId of environmentIds) {
       if (
+        state.runtimeStatusByEnvironmentId.has(environmentId) &&
         !state.removedRuntimeEnvironmentIds.has(environmentId) &&
         !contactStops.has(environmentId)
       ) {
@@ -145,12 +138,25 @@ export function installHostModelCatalogSnapshotsSync(): () => void {
       }
     }
   }
+  const watchPairedHosts = (state: AppState): void => {
+    for (const [environmentId, stop] of contactStops) {
+      if (state.removedRuntimeEnvironmentIds.has(environmentId)) {
+        stop()
+        contactStops.delete(environmentId)
+        // A same-id re-add is a new host: its first status must not inherit these lists.
+        forgetHostModelCatalogSnapshots({ kind: 'environment', environmentId })
+        preloadedFrom.delete(toRuntimeExecutionHostId(environmentId))
+      }
+    }
+    watchHosts(state, state.runtimeStatusByEnvironmentId.keys())
+  }
   watchPairedHosts(useAppStore.getState())
+  // A status write can only add hosts to watch, so it visits just the hosts it touched.
+  const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges((change) =>
+    watchHosts(useAppStore.getState(), change.ids)
+  )
   const stopStore = useAppStore.subscribe((state, previous) => {
-    if (
-      state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
-      state.removedRuntimeEnvironmentIds !== previous.removedRuntimeEnvironmentIds
-    ) {
+    if (state.removedRuntimeEnvironmentIds !== previous.removedRuntimeEnvironmentIds) {
       watchPairedHosts(state)
     }
     if (accountSettingsChanged(state, previous)) {
@@ -161,6 +167,7 @@ export function installHostModelCatalogSnapshotsSync(): () => void {
   return () => {
     stopLocal()
     stopAgents()
+    stopStatuses()
     stopStore()
     contactStops.forEach((stop) => stop())
     preloadedFrom.clear()

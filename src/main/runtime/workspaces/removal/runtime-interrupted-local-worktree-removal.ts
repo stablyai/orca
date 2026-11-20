@@ -1,14 +1,20 @@
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../../shared/concurrency/abort-signal-reason'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   releaseStartupRemovalFence,
   type BackgroundWorktreeRemovalJob
 } from '../../../workspaces/removal/worktree-background-removal'
-import { resolveWorktreeRemovalMetadata } from '../../../workspaces/removal/worktree-removal-repo-owner'
+import {
+  resolveWorktreeRemovalMetadata,
+  resolveWorktreeRemovalRepoOwner
+} from '../../../workspaces/removal/worktree-removal-repo-owner'
 import type { RuntimePreservedBranchCleanup } from '../../repositories/runtime-preserved-branch-cleanup'
-import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { listWorktreesSharedStrict as listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import {
   authorizeWindowsCheckout,
   usesNativeWindowsRemoval
@@ -20,10 +26,16 @@ import {
 } from '../../../git/worktrees/removal/worktree-removal'
 import { getErrorCode } from '../../../git/worktrees/worktree-operation-options'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
+import { removeUnregisteredHostCheckout } from '../../../filesystem/host-tree-removal'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
+import {
+  findRegisteredDeletableWorktree,
+  ORPHANED_WORKTREE_DIRECTORY_MESSAGE
+} from '../../../workspaces/removal/worktree-removal-safety'
 import {
   assertUnregisteredCheckoutGone,
+  assertUnregisteredLeftoverRemovable,
+  isLeftoverStillRemovable,
   isRecordedCheckout,
   differentCheckoutAtPathError
 } from '../../../workspaces/removal/worktree-removal-leftover'
@@ -34,7 +46,6 @@ import {
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import {
   getLocalWorktreePathAccess,
-  toLocalWorktreeRuntimePath,
   type LocalWorktreeFilesystemOptions
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
@@ -101,19 +112,7 @@ export function interruptedLocalWorktreeRemovalJob(
       host.onRemoved(record)
       return result
     },
-    publish: () => host.publish(record.repoId),
-    cleanupPushTargetRemote: async () => {
-      const repo = host.store.getRepo(record.repoId)
-      if (repo) {
-        await cleanupUnusedWorktreePushTargetRemote(
-          repo.path,
-          record.worktreeId,
-          resolveRemovedPushTarget(),
-          host.store,
-          getLocalProjectWorktreeGitOptions(host.store, repo)
-        )
-      }
-    }
+    publish: () => host.publish(record.repoId)
   }
 }
 
@@ -133,7 +132,7 @@ async function finishInterruptedLocalWorktreeRemoval(
   args: InterruptedLocalWorktreeRemovalArgs
 ): Promise<RemoveWorktreeResult> {
   const { record, store } = args
-  const repo = store.getRepo(record.repoId)
+  const repo = localRemovalRepo(store, record.repoId)
   if (!repo) {
     console.warn(`[worktrees] dropping removal of ${record.worktreePath}: its repo is gone`)
     return {}
@@ -151,7 +150,11 @@ async function finishInterruptedLocalWorktreeRemoval(
     deleteBranch: record.deleteBranch,
     target: { id: record.worktreeId }
   }
-  const worktrees = await listWorktreesStrict(repo.path, localOptions)
+  const worktrees = await listWorktreesStrict(repo.path, {
+    ...localOptions,
+    signal: args.stopSignal
+  })
+  throwIfSignalAborted(args.stopSignal)
   const registered = worktrees.some((worktree) =>
     areWorktreePathsEqual(worktree.path, record.worktreePath)
   )
@@ -181,7 +184,15 @@ async function finishInterruptedLocalWorktreeRemoval(
     },
     checkoutDeleteSignal: args.stopSignal
   }
-  if (!native && deletable && (await isCheckoutMissingGitLink(deletable.path, localOptions))) {
+  if (
+    !native &&
+    deletable &&
+    (await waitForPromiseWithSignal(
+      isCheckoutMissingGitLink(deletable.path, localOptions),
+      args.stopSignal
+    ))
+  ) {
+    throwIfSignalAborted(args.stopSignal)
     // If Git deleted .git first, it cannot remove/validate the checkout; prune registration only and keep all files for the checks below.
     await removeStaleLocalWorktreeRegistration({
       canonicalWorktreePath: deletable.path,
@@ -193,8 +204,12 @@ async function finishInterruptedLocalWorktreeRemoval(
     deletable = undefined
   }
   // Check before teardown so refused folders retain terminals/watchers.
-  if (!native && !deletable) {
-    await assertUnregisteredCheckoutGone(record.worktreePath, worktrees)
+  const leftover =
+    !native &&
+    !deletable &&
+    (await assertUnregisteredLeftoverRemovable(repo.path, record.worktreePath, worktrees))
+  if (leftover && !record.force) {
+    throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }
   if (native) {
     await authorizeWindowsCheckout(
@@ -205,14 +220,15 @@ async function finishInterruptedLocalWorktreeRemoval(
       true
     )
   }
+  throwIfSignalAborted(args.stopSignal)
   const gate = await args.acquireWatcherRemoval(record.worktreePath)
-  if (args.stopPtys) {
-    try {
-      await args.stopPtys()
-    } catch (error) {
-      await gate.finish(false)
-      throw error
-    }
+  try {
+    throwIfSignalAborted(args.stopSignal)
+    await args.stopPtys?.()
+    throwIfSignalAborted(args.stopSignal)
+  } catch (error) {
+    await gate.finish(false)
+    throw error
   }
   if (deletable) {
     return finishRuntimeLocalWorktreeRemoval(finishArgs, deletable, gate, args.stopSignal)
@@ -234,6 +250,13 @@ async function finishInterruptedLocalWorktreeRemoval(
         localOptions
       )
     } else {
+      // Teardown awaited: re-read Git so a checkout registered at or inside the folder since survives.
+      if (
+        leftover &&
+        (await isLeftoverStillRemovable(repo.path, record, localOptions, args.stopSignal))
+      ) {
+        await removeUnregisteredHostCheckout(record.worktreePath, args.stopSignal)
+      }
       result = await finishUnregisteredWorktreeRemoval(
         repo.path,
         record.worktreePath,
@@ -259,8 +282,7 @@ async function isCheckoutMissingGitLink(
   checkoutPath: string,
   options: LocalWorktreeFilesystemOptions
 ): Promise<boolean> {
-  const { statPath } = getLocalWorktreePathAccess(options)
-  const stat = (path: string) => statPath(toLocalWorktreeRuntimePath(path, options))
+  const { statPath: stat } = getLocalWorktreePathAccess(options)
   try {
     await stat(checkoutPath)
   } catch {
@@ -273,4 +295,9 @@ async function isCheckoutMissingGitLink(
   } catch (error) {
     return getErrorCode(error) === 'ENOENT'
   }
+}
+
+function localRemovalRepo(store: RuntimeStore, repoId: string) {
+  const owner = resolveWorktreeRemovalRepoOwner(store, repoId, LOCAL_EXECUTION_HOST_ID)
+  return owner.kind === 'resolved' ? owner.repo : undefined
 }

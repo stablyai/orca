@@ -1,0 +1,110 @@
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import path from 'node:path'
+import { buildPosixFallbackPathPrelude } from '../../../shared/shell/command-resolution/posix-version-manager-bin-dirs'
+import { buildPosixCommandPathLookupScript } from '../../../shared/shell/command-resolution/posix-command-path-lookup'
+import { runWslProcess } from '../../wsl/execution/wsl-runner'
+
+const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
+const WSL_AGENT_BOOT_TIMEOUT_MS = 60_000
+const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
+
+export type WslPreflightTarget = {
+  distro?: string
+}
+
+export async function detectWslCommandsOnPath(
+  wslTarget: WslPreflightTarget,
+  commands: readonly string[],
+  options: { failOnProbeError?: boolean } = {}
+): Promise<Set<string>> {
+  const uniqueCommands = [...new Set(commands.filter(Boolean))]
+  if (uniqueCommands.length === 0 && !options.failOnProbeError) {
+    return new Set()
+  }
+
+  const commandList = uniqueCommands.map(quotePosixShell).join(' ')
+  const lookupScript = buildPosixCommandPathLookupScript(
+    { kind: 'shell-variable', name: 'cmd' },
+    // Skip Windows mounts while walking so an interop binary cannot hide a later guest install (#9725).
+    { skipWindowsMountDirs: true }
+  )
+  // Newlines keep the loop valid in every POSIX shell used here.
+  const script = [
+    // Reuse the common version-manager fallback and executable lookup, including directory rejection.
+    buildPosixFallbackPathPrelude(),
+    `for raw_cmd in ${commandList}; do`,
+    'cmd="$raw_cmd"',
+    'case "$cmd" in "~/"*) cmd="$HOME/${cmd#\\~/}" ;; esac',
+    lookupScript,
+    'if [ -n "$resolved" ]; then',
+    `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$raw_cmd" "$resolved";`,
+    'fi',
+    'done'
+  ].join('\n')
+
+  try {
+    if (options.failOnProbeError) {
+      // Cold boot must finish before the short login-PATH and inventory deadlines begin.
+      const ready = await runWslProcess({
+        distro: wslTarget.distro,
+        loginPath: 'none',
+        script: ':',
+        shell: 'sh',
+        timeoutMs: WSL_AGENT_BOOT_TIMEOUT_MS
+      })
+      if (ready.environmentResolved === false || ready.timedOut || ready.code !== 0) {
+        throw new Error('The WSL execution host did not become ready.')
+      }
+    }
+    if (uniqueCommands.length === 0) {
+      return new Set()
+    }
+    // Use cached login PATH without shell startup banners.
+    const result = await runWslProcess({
+      distro: wslTarget.distro,
+      loginPath: 'preferred',
+      script,
+      // POSIX `command -v` loop; declared because the payload is opaque here.
+      shell: 'sh',
+      timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
+    })
+    // Failed probes cannot establish a complete launcher inventory.
+    if (result.environmentResolved === false || result.timedOut || result.code !== 0) {
+      if (options.failOnProbeError) {
+        throw new Error('The WSL execution host probe failed.')
+      }
+      return new Set()
+    }
+    return parseWslDetectedCommands(result.stdout)
+  } catch (error) {
+    if (options.failOnProbeError) {
+      throw Object.assign(new Error('The WSL execution host is unavailable.'), {
+        code: 'remote_runtime_unavailable',
+        cause: error
+      })
+    }
+    return new Set()
+  }
+}
+
+function parseWslDetectedCommands(stdout: string): Set<string> {
+  const found = new Set<string>()
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line.startsWith(WSL_AGENT_DETECTION_PREFIX)) {
+      continue
+    }
+    const payload = line.slice(WSL_AGENT_DETECTION_PREFIX.length)
+    const separatorIndex = payload.indexOf('\t')
+    if (separatorIndex <= 0) {
+      continue
+    }
+    const command = payload.slice(0, separatorIndex)
+    const resolvedPath = payload.slice(separatorIndex + 1)
+    // Guest executables resolve to POSIX-absolute paths; reject Windows-style output.
+    if (path.posix.isAbsolute(resolvedPath)) {
+      found.add(command)
+    }
+  }
+  return found
+}

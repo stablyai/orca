@@ -26,15 +26,18 @@ vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({ browserManager
 vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: () => ({ label: 'Work' }),
+    attachExtensions: () => {},
     getEnabledExtensionIds: () => [],
     updateEnabledExtensionIds: vi.fn()
   }
 }))
 vi.mock('../browser-extension-management', () => ({ removeBrowserExtension: vi.fn() }))
 vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
+  getBrowserExtensionProfile: () => null,
   getBrowserExtensionSessionForProfile: () => ({}),
   loadBrowserExtensionIntoProfile: () => state.load(),
-  unloadBrowserExtensionEverywhere: vi.fn()
+  unloadBrowserExtensionEverywhere: vi.fn(),
+  whenBrowserExtensionProfileUnloaded: () => Promise.resolve()
 }))
 vi.mock('../browser-extension-support', () => ({ isBrowserExtensionSupportEnabled: () => true }))
 vi.mock('../web-store/browser-extension-webstore-download', () => ({
@@ -47,6 +50,7 @@ vi.mock('../web-store/browser-extension-webstore-events', () => ({
   notifyChromeWebStoreUninstalled: vi.fn()
 }))
 vi.mock('../installation/browser-extension-load-directory', () => ({
+  forgetPreparedBrowserExtensionDirectory: vi.fn(),
   refuseOrcaFileCollisions: vi.fn(async () => {})
 }))
 vi.mock('../web-store/browser-extension-held-updates', () => ({

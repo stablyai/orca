@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import type { Automation } from '../../shared/automations/automation-definition'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 import type { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { wslMoveCutoverFixture as cutover } from '../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
@@ -18,17 +18,20 @@ import { resetWslMoveDesktopRewriteStoresForTests } from '../persistence/moving-
 import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-main-rewrite-stores'
 import { registerWslMoveOrchestrationHistoryStore } from '../persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite'
 import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/wsl-host-internal-gate'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import '../runtime/orchestration/db/contract-constants'
 import '../runtime/orchestration/db/messages/mailbox-routing-page'
 import '../runtime/orchestration/db/dispatch-row-writer'
 import '../runtime/orchestration/db/attempt-outcome-projection'
 import Database from '../sqlite/sync-database'
-import { AutomationService } from './service'
-import { tickAt } from './automation-service-tick.test-fixture'
+import { AutomationService } from './automation-service'
+import { tickAt } from './testing/automation-service-tick.test-fixture'
 
-import type * as PrecheckRunner from './precheck-runner'
+import type * as PrecheckRunner from './dispatch/precheck-runner'
+
+// These tests write times on the host's clock, so the automation lives in the host's zone.
+const HOST_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
 
@@ -43,7 +46,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./precheck-runner', async (importOriginal) => ({
+vi.mock('./dispatch/precheck-runner', async (importOriginal) => ({
   ...(await importOriginal<typeof PrecheckRunner>()),
   runAutomationPrecheck: runAutomationPrecheckMock
 }))
@@ -65,7 +68,7 @@ function seedAutomation(store: Store, precheck = false): Automation {
     agentId: 'claude',
     projectId: 'r1',
     workspaceMode: 'new_per_run',
-    timezone: 'UTC',
+    timezone: HOST_TIMEZONE,
     rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
     dtstart: new Date('2026-05-12T00:00:00').getTime()
   })

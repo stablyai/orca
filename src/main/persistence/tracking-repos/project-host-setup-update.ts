@@ -1,6 +1,9 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type {
+  ProjectHostSetup,
+  ProjectHostSetupUpdateArgs
+} from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepoUpdatePersistenceOperations } from './repo-update-operations'
 
 export type ProjectHostSetupUpdateOperations = {

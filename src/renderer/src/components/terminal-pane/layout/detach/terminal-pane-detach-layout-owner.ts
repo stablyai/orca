@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
-} from '../../../../../../shared/workspace-layout/terminal-leaf-move'
+} from '../../../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 
 /** Ask the layout-owning main to move the pane and name its tab; use paired main only when its frames draw the workspace. Fall back to window moves for unowned or legacy tab/pane identities main lacks. */
 export function moveLeafThroughLayoutOwner(

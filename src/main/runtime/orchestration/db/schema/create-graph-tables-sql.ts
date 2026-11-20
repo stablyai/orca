@@ -101,6 +101,10 @@ CREATE TABLE IF NOT EXISTS federation_relay_items (
 CREATE INDEX IF NOT EXISTS idx_federation_relay_pending
   ON federation_relay_items(dispatch_id, direction, acked_at, sequence);
 
+-- Holds only what is still unacknowledged, so a paired Orca's mail pull costs what is pending, not every conversation it ever had.
+CREATE INDEX IF NOT EXISTS idx_federation_relay_unacked
+  ON federation_relay_items(direction, dispatch_id) WHERE acked_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS remote_questions (
   message_id        TEXT PRIMARY KEY,
   dispatch_id       TEXT NOT NULL,
@@ -194,6 +198,10 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   creator_pane_key    TEXT,
   -- Same form as assignee_orca_session_id: the id the creator is addressed by (a lineage root's).
   creator_orca_session_id TEXT,
+  -- 'connector' when the creator chat's turn was its connector conversation's, so reports go back there.
+  creator_turn_source TEXT,
+  -- What its creator started it for, opaque here (bot items: bot-item:<uid>); retries inherit it.
+  origin_ref          TEXT,
   host_scope          TEXT,
   status              TEXT NOT NULL DEFAULT 'pending'
     CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken')),

@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultPersistedState } from '../../../../../shared/constants'
+import { getDefaultPersistedState } from '../../../../../shared/orca-profiles/constants'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { orcadMigrationCutoverFixture } from '../../../../managed-server/migration/cutover/testing/orcad-migration-cutover-fixture'
 import { subtractOrcadSourceCatalogState } from './orcad-source-catalog-subtraction'
-import { orcadSourceFolderWorkspaceIds, repoBelongsToOrcadSource } from './orcad-source-ownership'
 
 const TARGET = 'ssh-win'
 
@@ -65,17 +64,6 @@ function windowsCatalog() {
 }
 
 describe('orcad migration source ownership on a Windows SSH host', () => {
-  it('owns repos by either host spelling and folders the way the app attributes them', () => {
-    const catalog = windowsCatalog()
-    expect(
-      catalog.repos.filter((entry) => repoBelongsToOrcadSource(entry, TARGET)).map(({ id }) => id)
-    ).toEqual(['repo-app', 'repo-unified'])
-    expect([...orcadSourceFolderWorkspaceIds(catalog, TARGET)].sort()).toEqual([
-      'fw-explicit',
-      'fw-inferred'
-    ])
-  })
-
   it('retires a folder owned through its repo even though the repo goes first', () => {
     const catalog = windowsCatalog()
     const state = { ...getDefaultPersistedState('C:/Users/Ann'), ...catalog }

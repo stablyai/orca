@@ -12,12 +12,12 @@ import { hydrateShellPathForAgentDetection } from '../ipc/command-path/agent-det
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
-} from '../ipc/preflight-runtime-target'
+} from '../ipc/preflight/preflight-runtime-target'
 import { detectAgentCommandsOnHost } from './agent-command-detection'
 import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
-import { extractExecutableToken } from '../../shared/managed-agent-command-token'
+import { extractExecutableToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
 
 export type InstalledAgentDetectionOptions = {
   /** Agents disabled in Settings → Agents. Background callers skip probing them entirely. */

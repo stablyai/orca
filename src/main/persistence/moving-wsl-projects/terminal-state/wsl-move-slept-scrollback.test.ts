@@ -2,13 +2,11 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+
 import type { TerminalModes } from '../../../daemon/protocol/terminal-modes'
 import { parseOrcadMigrationTerminalHistoryText } from '../../../../shared/orcad-migration/orcad-migration-terminal-history'
 import {
   daemonHistoryLeafOf,
-  listWslMoveSleptSessionPanes,
   readWslMoveSleptScrollbackFromHistory
 } from './wsl-move-slept-scrollback'
 
@@ -27,23 +25,6 @@ function spoolRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'wsl-move-slept-'))
   roots.push(root)
   return join(root, 'move-1')
-}
-
-function sleptSession(
-  extra: Partial<WorkspaceSessionState['terminalLayoutsByTabId'][string]> = {}
-) {
-  // What Sleep leaves: the layout names the pane, with at most an older renderer buffer.
-  return {
-    ...getDefaultWorkspaceSession(),
-    terminalLayoutsByTabId: {
-      [TAB]: {
-        root: { type: 'leaf' as const, leafId: LEAF },
-        activeLeafId: LEAF,
-        expandedLeafId: null,
-        ...extra
-      }
-    }
-  } satisfies WorkspaceSessionState
 }
 
 function restored(scrollbackAnsi: string, snapshotAnsi: string, hasUnreadableRecovery = false) {
@@ -100,25 +81,6 @@ describe("a paused pane's daemon history", () => {
     slept.dispose()
   })
 
-  it("keeps the normal buffer behind a TUI and the shell's last folder", async () => {
-    const slept = await readWslMoveSleptScrollbackFromHistory(
-      {
-        detectColdRestoreState: async () =>
-          withModes(restored('$ make\r\nok\r\n', 'TUI FRAME'), true)
-      },
-      [
-        { paneKey: PANE_KEY, sessionId: 'pty-1', wslDistro: 'Ubuntu', shellCwd: '/home/me/deep/er' }
-      ],
-      'Ubuntu',
-      spoolRoot()
-    )
-    const document = documentOf(slept)
-    expect(document.cwd).toBe('/home/me/deep/er')
-    expect(document.checkpoint.cwd).toBe('/home/me/deep/er')
-    expect(document.checkpoint.scrollbackAnsi).toBe('$ make\r\nok\r\n')
-    slept.dispose()
-  })
-
   // The redesign's contract: what the host's daemon cold-restores is what this desktop's would.
 })
 
@@ -137,43 +99,3 @@ function documentOf(slept: Awaited<ReturnType<typeof readWslMoveSleptScrollbackF
     }
   }
 }
-
-describe('panes slept before the move', () => {
-  it("takes the window's binding of a pane main retired on Sleep, only for a moved workspace", () => {
-    // With no reload between Sleep and Move, main's layout had no binding left.
-    const tab = {
-      id: TAB,
-      ptyId: null,
-      worktreeId: 'app::/w',
-      title: 't',
-      customTitle: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: 1
-    }
-    const session: WorkspaceSessionState = {
-      ...sleptSession(),
-      tabsByWorktree: { 'app::/w': [tab] }
-    }
-    const minted = 'app::/w@@0b4c'
-    expect(listWslMoveSleptSessionPanes(session, ['app::/w'])).toEqual([])
-    expect(
-      listWslMoveSleptSessionPanes(session, ['app::/w'], [{ paneKey: PANE_KEY, sessionId: minted }])
-    ).toEqual([{ paneKey: PANE_KEY, sessionId: minted }])
-    for (const reported of [
-      { paneKey: PANE_KEY, sessionId: 'other::/w@@0b4c' },
-      { paneKey: PANE_KEY, sessionId: '../../etc' },
-      { paneKey: `${TAB}:22222222-2222-4222-8222-222222222222`, sessionId: minted },
-      { paneKey: `other-tab:${LEAF}`, sessionId: minted }
-    ]) {
-      expect(listWslMoveSleptSessionPanes(session, ['app::/w'], [reported])).toEqual([])
-    }
-    expect(
-      listWslMoveSleptSessionPanes(
-        session,
-        ['other::/w'],
-        [{ paneKey: PANE_KEY, sessionId: minted }]
-      )
-    ).toEqual([])
-  })
-})

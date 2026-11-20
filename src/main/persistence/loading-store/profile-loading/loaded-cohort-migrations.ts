@@ -1,10 +1,10 @@
-import { randomInt, randomUUID } from 'node:crypto'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import { randomUUID } from 'node:crypto'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import {
   parseChatUiLaunchTipAudience,
   type ChatUiLaunchTipAudience
-} from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
-import { carriedChatUiLaunchSettings } from '../../../../shared/native-chat/native-chat-providers'
+} from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
+import { carriedChatUiLaunchSettings } from '../../../../shared/native-chat/settings/native-chat-providers'
 import { savedChatUiWithTerminalDefaultView } from '../../applying-settings/terminal-settings-migrations'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
@@ -16,13 +16,7 @@ export class LoadedCohortMigrationOperations {
 
   /** Freezes each rollout's new-or-existing cohort on first load, before a save makes a fresh install look existing. */
   migrateCohortSeeds(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
-    // Secondary profiles start with only the install's telemetry consent, before their first load.
-    const telemetryOnly =
-      Object.keys(state).length === 1 &&
-      isRecord(state.settings) &&
-      Object.keys(state.settings).length === 1 &&
-      isRecord(state.settings.telemetry)
-    const existingProfile = fileExistedOnLoad && !telemetryOnly
+    const existingProfile = fileExistedOnLoad && !isTelemetryOnlyProfile(state)
     for (const key of [
       'tabSwitchKeybindingSeed',
       'searchKeybindingSeed',
@@ -118,6 +112,24 @@ export class LoadedCohortMigrationOperations {
     return { ...state, settings: { ...state.settings, nativeChatResumeWorkOnRestart: false } }
   }
 
+  /** New cards are the default for new profiles; profiles saved before without a choice keep Classic. */
+  seedWorktreeCardStyle(state: PersistedState, savedProfile: unknown): PersistedState {
+    if (!isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)) {
+      // Why: a new profile starts on the new cards, so there is nothing to try or announce.
+      this.runtime.loadNeedsSave = true
+      return {
+        ...state,
+        ui: { ...state.ui, worktreeCardsIntroNoticeSeen: true, worktreeCardsUpdateNoticeSeen: true }
+      }
+    }
+    const saved = isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    if (typeof saved?.experimentalNewWorktreeCardStyle === 'boolean') {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return { ...state, settings: { ...state.settings, experimentalNewWorktreeCardStyle: false } }
+  }
+
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     return this.seedMilestoneInstallCohort(
       this.migrateTelemetryIdentity(state, fileExistedOnLoad),
@@ -164,16 +176,10 @@ export class LoadedCohortMigrationOperations {
     ) {
       return state
     }
-    // Resolve cohort once so partial new-user state cannot change its default mid-migration.
     const resolvedExistedBefore =
       typeof existing?.existedBeforeTelemetryRelease === 'boolean'
         ? existing.existedBeforeTelemetryRelease
         : fileExistedOnLoad
-    const onboardingLanguageCohort = !fileExistedOnLoad
-      ? randomInt(2) === 0
-        ? 'control'
-        : 'treatment'
-      : undefined
     this.runtime.loadNeedsSave = true
     return {
       ...state,
@@ -181,7 +187,6 @@ export class LoadedCohortMigrationOperations {
         ...state.settings,
         telemetry: {
           ...existing,
-          ...(onboardingLanguageCohort ? { onboardingLanguageCohort } : {}),
           existedBeforeTelemetryRelease: resolvedExistedBefore,
           // Preserve explicit true, false and null; only absence uses the cohort default.
           optedIn:
@@ -198,6 +203,18 @@ export class LoadedCohortMigrationOperations {
       }
     }
   }
+}
+
+/** Secondary profiles start with only the install's telemetry consent, before their first load. */
+function isTelemetryOnlyProfile(profile: unknown): boolean {
+  const settings = isRecord(profile) ? profile.settings : undefined
+  return (
+    isRecord(profile) &&
+    Object.keys(profile).length === 1 &&
+    isRecord(settings) &&
+    Object.keys(settings).length === 1 &&
+    isRecord(settings.telemetry)
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

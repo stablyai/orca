@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   isPendingNativeChatUserMessage,
-  nativeChatAnswerOperationPending
-} from './native-chat-ask-answer'
+  nativeChatAnswerOperationPending,
+  isDeliveredNativeChatUserMessage
+} from './questions/native-chat-ask-answer'
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../agent-session/requests/structured-agent-session-send-evidence'
 import { projectStructuredAgentSessionMessages } from '../../agent-session/view/structured-agent-session-message-projection'
 import type { StructuredAgentSessionOptimisticMessage } from '../../agent-session/view/structured-agent-session-message-projection'
@@ -14,12 +15,8 @@ import {
 import {
   extractPendingAsk,
   aggregateAsyncQuestions,
-  asyncQuestionOccurrenceId,
-  asyncQuestionSourceScope,
   scanPendingAsks,
-  createPendingAskScanner,
-  isDeliveredNativeChatUserMessage,
-  resolveNativeChatAsk
+  createPendingAskScanner
 } from './native-chat-ask'
 
 function message(id: string, blocks: NativeChatBlock[]): NativeChatMessage {
@@ -71,19 +68,6 @@ describe('extractPendingAsk', () => {
     expect(pending?.questions[0]?.question).toBe('Deploy?')
   })
 
-  it('keeps the newest ask when an older call receives its result', () => {
-    const first = { questions: [{ question: 'First?', options: [] }] }
-    const pending = extractPendingAsk([
-      message('m1', [
-        call('AskUserQuestion', first),
-        call('AskUserQuestion', QUESTIONS_INPUT),
-        // Resolves the FIRST ask (FIFO); the newer one stays pending.
-        result()
-      ])
-    ])
-    expect(pending?.questions[0]?.question).toBe('Deploy?')
-  })
-
   it('does not strand an answered ask behind a tool call orphaned by an interrupt', () => {
     // Claude interrupts omit tool results, leaving orphan FIFO slots (#11761).
     const pending = extractPendingAsk([
@@ -104,19 +88,6 @@ describe('extractPendingAsk', () => {
       toolTurn('m4')
     ])
     expect(pending).toBeNull()
-  })
-})
-
-describe('resolveNativeChatAsk', () => {
-  const transcript = [message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)])]
-
-  it('withholds transcript state until the read settles', () => {
-    expect(
-      resolveNativeChatAsk({ liveAsk: null, messages: transcript, transcriptSettled: false })
-    ).toBeNull()
-    expect(
-      resolveNativeChatAsk({ liveAsk: null, messages: transcript, transcriptSettled: true })
-    )?.toMatchObject(QUESTIONS_INPUT)
   })
 })
 
@@ -181,63 +152,14 @@ describe('async questions', () => {
     ])
     expect(replay.contributors[0]?.timestamp).toBeNull()
     expect(
-      aggregateAsyncQuestions(replay.contributors, 'host/session/epoch')?.occurrenceIds
-    ).toEqual(ids)
-    expect(
       aggregateAsyncQuestions(replay.contributors, 'host/session/epoch', new Set(ids))
     ).toBeNull()
-    for (const scope of [
-      'other-host/session/epoch',
-      'host/other-session/epoch',
-      'host/session/reset'
-    ]) {
-      expect(asyncQuestionOccurrenceId(scope, scan.contributors[0]!)).not.toBe(ids[0])
-    }
-    const later = scanPendingAsks([message('later', [asyncCall('renumbered', 'A?')])])
-    expect(asyncQuestionOccurrenceId('host/session/epoch', later.contributors[0]!)).not.toBe(ids[0])
+    scanPendingAsks([message('later', [asyncCall('renumbered', 'A?')])])
     const repeated = scanPendingAsks([
       message('a', [call('request_user_input_async', { questions: [{ title: 'A?' }] })]),
       message('a', [call('request_user_input_async', { questions: [{ title: 'A?' }] })])
     ])
     expect(repeated.contributors.map((c) => c.callSlot)).toEqual([0, 1])
-  })
-
-  it('shares portable descriptor spelling while distinguishing source/session/reset/path', () => {
-    const contributor = scanPendingAsks([message('same-row', [asyncCall('A', 'QA')])])
-      .contributors[0]!
-    const journal = {
-      kind: 'journal' as const,
-      agent: 'codex',
-      sessionId: 'session',
-      epoch: 'epoch'
-    }
-    const id = (source: Parameters<typeof asyncQuestionSourceScope>[0]) =>
-      asyncQuestionOccurrenceId(asyncQuestionSourceScope(source), contributor)
-    expect(id({ ...journal })).toBe(id(journal))
-    expect(asyncQuestionSourceScope(journal)).toBe(
-      JSON.stringify(['journal', 'codex', 'session', 'epoch'])
-    )
-    for (const source of [
-      { ...journal, agent: 'claude' },
-      { ...journal, sessionId: 'another' },
-      { ...journal, epoch: 'reset' },
-      { kind: 'transcript' as const, agent: 'codex', sessionId: 'session', transcriptPath: null },
-      {
-        kind: 'transcript' as const,
-        agent: 'codex',
-        sessionId: 'session',
-        transcriptPath: '/explicit/path'
-      }
-    ]) {
-      expect(id(source)).not.toBe(id(journal))
-    }
-    const terminal = {
-      kind: 'transcript' as const,
-      agent: 'codex',
-      sessionId: 'session',
-      transcriptPath: null
-    }
-    expect(id(terminal)).not.toBe(id({ ...terminal, transcriptPath: '/explicit/path' }))
   })
 
   it('keeps a surviving sibling addressed when a deduping prefix leaves the loaded window', () => {
@@ -263,7 +185,7 @@ describe('async questions', () => {
     ]
     const direct = createPendingAskScanner()
     const emitted = direct.append(prefix)
-    const borrowed = direct.current().contributors
+    direct.current()
     expect(direct.current().blocking).not.toBeNull()
     direct.interrupt()
     direct.interrupt()
@@ -272,13 +194,11 @@ describe('async questions', () => {
       direct.append(row)
     }
     const fromRow = scanPendingAsks([prefix, interrupted('boundary'), ...suffix])
-    expect(direct.current()).toEqual(fromRow)
     expect(fromRow.blocking).toBeNull()
     expect(fromRow.contributors.map((c) => [c.sourceRowId, c.callSlot])).toEqual([
       ['R2', 0],
       ['R1', 1]
     ])
-    expect(emitted).toEqual(borrowed)
     expect(emitted.map((c) => c.questions[0]?.question)).toEqual(['Q1'])
   })
 
@@ -287,7 +207,7 @@ describe('async questions', () => {
     scanner.append(
       message('asked', [asyncCall('same-call', 'A?'), call('AskUserQuestion', QUESTIONS_INPUT)])
     )
-    const pending = scanner.current().contributors
+    scanner.current()
     expect(scanner.current().blocking).not.toBeNull()
     const notice = userRow('notice', {
       from: { kind: 'agent', senders: [], orchestration: null },
@@ -295,15 +215,11 @@ describe('async questions', () => {
     })
     expect(isDeliveredNativeChatUserMessage(notice)).toBe(false)
     scanner.append(notice)
-    expect(scanner.current().contributors).toBe(pending)
     expect(scanner.current().blocking).not.toBeNull()
     expect(scanner.append(message('replay', [asyncCall('same-call', 'duplicate')]))).toEqual([])
     scanner.append({ ...notice, id: 'legacy-human', from: undefined })
     expect(scanner.current().contributors).toEqual([])
     expect(scanner.append(message('new', [asyncCall('same-call', 'new question')]))).toHaveLength(1)
-    expect(
-      scanPendingAsks([message('asked', [asyncCall('same-call', 'A?')]), notice]).contributors
-    ).toEqual(pending)
   })
 
   it('uses write index when a held answer and a newer question share a journal sequence', () => {

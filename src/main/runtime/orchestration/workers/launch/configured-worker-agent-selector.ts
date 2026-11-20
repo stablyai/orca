@@ -1,5 +1,5 @@
-import { extractLeadingEnvAssignments } from '../../../../../shared/command-environment'
-import { getCommandTokenPathBasename } from '../../../../../shared/command-token-scanner'
+import { extractLeadingEnvAssignments } from '../../../../../shared/shell/launch/command-environment'
+import { getCommandTokenPathBasename } from '../../../../../shared/shell/command-resolution/command-token-scanner'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
@@ -11,8 +11,8 @@ import { OrchestrationError } from '../../orchestration-error'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RuntimeStore } from '../../../construction/runtime-store-contract'
 import { agentLaunchPlatformForScope } from '../../../terminal/launch/agent-launch-scope-runtime'
-import { getRepoRoutingConnectionId } from '../../../../../shared/execution-host'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
+import { getRepoRoutingConnectionId } from '../../../../../shared/execution-host/execution-host'
+import { resolveLocalWindowsAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 
 export function resolveConfiguredWorkerAgent(
   selector: string,

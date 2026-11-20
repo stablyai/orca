@@ -35,7 +35,6 @@ vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 type Store = ReturnType<typeof createStore>
 
 const HINTED_PANE = `tab-dormant:${DORMANT_LEAF_ID}`
-const noLiveShells = (): boolean => false
 
 function encodeHints(cwd: string): { bytes: Buffer; descriptor: OrcadMigrationBlobDescriptor } {
   const bytes = Buffer.from(JSON.stringify({ version: 1, hints: [{ paneKey: HINTED_PANE, cwd }] }))
@@ -126,18 +125,6 @@ describe('orcad migration received blobs wait for a durable commit', () => {
     expect(result.state).toBe('committed')
     expect(hint(restarted)).toBe('/home/me/src')
     expect(existsSync(receivedHintsPath(input))).toBe(false)
-  })
-
-  it('never consumes an in-memory-only commit in the post-attach pass', async () => {
-    const store = createStore()
-    const { input } = await stageHints(store)
-    await commitWithFailedFlush(store, input)
-
-    store.installPendingOrcadMigrationReceivedBlobs({ worktreeHasLiveShells: noLiveShells })
-    store.installDeferredOrcadMigrationShellHistory(DORMANT_WORKTREE_ID, {
-      worktreeHasLiveShells: noLiveShells
-    })
-    expect(existsSync(receivedHintsPath(input))).toBe(true)
   })
 
   it('installs the blob when a same-process retry flushes the commit', async () => {

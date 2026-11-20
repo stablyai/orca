@@ -5,6 +5,7 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import * as SelectPrimitive from 'radix-ui/select'
 import { cva, type VariantProps } from 'class-variance-authority'
 
+import { usePortalContainer } from './portal-container-context'
 import { cn } from '@/lib/class-names'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
@@ -82,7 +83,7 @@ function SelectContent({
 }) {
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(props.ref)
   return (
-    <SelectPrimitive.Portal container={portalContainer ?? undefined}>
+    <SelectPrimitive.Portal container={usePortalContainer(portalContainer) ?? undefined}>
       <OverlayFocusScope value={scope}>
         <SelectPrimitive.Content
           data-slot="select-content"
@@ -119,8 +120,12 @@ function SelectContent({
 function SelectItem({
   className,
   children,
+  description,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Item>) {
+}: React.ComponentProps<typeof SelectPrimitive.Item> & {
+  /** A muted second line shown only in the list, never in the trigger. */
+  description?: React.ReactNode
+}) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -138,7 +143,14 @@ function SelectItem({
           <CheckIcon className="size-4" />
         </SelectPrimitive.ItemIndicator>
       </span>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      {description ? (
+        <div className="flex min-w-0 flex-col">
+          <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+          <span className="text-xs text-muted-foreground">{description}</span>
+        </div>
+      ) : (
+        <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      )}
     </SelectPrimitive.Item>
   )
 }

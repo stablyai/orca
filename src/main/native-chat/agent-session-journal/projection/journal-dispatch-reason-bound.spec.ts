@@ -1,3 +1,4 @@
+import { readTestJournalSubmissions } from '../journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +12,7 @@ import {
 import { JOURNAL_DISPATCH_REASON_LIMITS } from '../item-lifecycle/journal-payload-bounds'
 import type { openAgentSessionJournal } from '../journal-store-factory'
 import { createTrackedJournalOpener } from '../store-lifecycle/journal-host-database-test-support'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export function registerJournalDispatchReasonBoundTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -54,7 +55,7 @@ export function registerJournalDispatchReasonBoundTests(): void {
       reason,
       fence: 1
     })
-    return journal.snapshot().submissions[0]?.reason ?? null
+    return (await readTestJournalSubmissions(journal))[0]?.reason ?? null
   }
 
   beforeEach(async () => {

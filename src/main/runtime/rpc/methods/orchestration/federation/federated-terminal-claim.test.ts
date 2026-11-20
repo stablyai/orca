@@ -7,7 +7,7 @@ import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import { refuseClaimedWorkerTerminal } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
+import { configureFederationWorkerRuntime } from './testing/federation-runtime.test-support'
 
 const TERMINAL = 'term_windows_worker'
 

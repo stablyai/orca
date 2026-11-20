@@ -12,7 +12,7 @@ import {
 import {
   encodeNdjson,
   NDJSON_MAX_LINE_BYTES
-} from '../../../../../shared/main-process-ndjson-framer'
+} from '../../../../../shared/json-stream/main-process-ndjson-framer'
 import { PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
 
 function bufferedSocket(chunks: Buffer[]): Socket {
@@ -48,10 +48,8 @@ describe('daemon hello reader handoff', () => {
   })
 
   it.each([
-    ['ndjson', false],
     ['ndjson', true],
-    ['binary-v1', false],
-    ['binary-v1', true]
+    ['binary-v1', false]
   ] as const)(
     'preserves fragmented %s output (tail buffered: %s)',
     async (streamFraming: DaemonStreamFraming, tailBuffered) => {

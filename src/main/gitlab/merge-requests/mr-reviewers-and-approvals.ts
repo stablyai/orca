@@ -1,8 +1,11 @@
-import type { GitLabAssignableUser, GitLabMRApprovalState } from '../../../shared/gitlab-types'
+import type {
+  GitLabAssignableUser,
+  GitLabMRApprovalState
+} from '../../../shared/gitlab/gitlab-types'
 import { mapGitLabUser, type GitLabRawUser } from '../projects/gitlab-assignable-user-mapping'
 import { encodedProject } from '../projects/project-path-encoding'
 import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'
 

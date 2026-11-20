@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getSecretStore, setSecretStore } from '../../../../shared/secret-store'
+import { getSecretStore, setSecretStore } from '../../../../shared/secure-storage/secret-store'
 import { fixture } from './profile-state-delayed-authority-fixture'
 
 export function registerProfileStateWorkerSecretRetentionTests(): void {
@@ -48,7 +48,7 @@ export function registerProfileStateWorkerSecretRetentionTests(): void {
     const write = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     await gate.started.promise
     const save = vi.fn()
-    store.migrateLegacyOpenCodeGoApiKey({ has: () => false, read: () => null, save })
+    await store.migrateLegacyOpenCodeGoApiKey({ has: () => false, read: () => null, save })
     encryptionAvailable = false
     gate.finish.resolve()
     await write

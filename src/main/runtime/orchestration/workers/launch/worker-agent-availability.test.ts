@@ -8,7 +8,7 @@ import {
 } from './worker-agent-availability'
 import type { WorkerAgentSettings } from './worker-agent-availability'
 import type { TerminalWorkspaceLaunchScope } from '../../terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 const { detectInstalled, detectWsl } = vi.hoisted(() => ({
   detectInstalled: vi.fn<() => Promise<string[]>>(),
@@ -17,7 +17,7 @@ const { detectInstalled, detectWsl } = vi.hoisted(() => ({
 vi.mock('../../../../preflight/installed-agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalled
 }))
-vi.mock('../../../../ipc/preflight-wsl-agent-detection', () => ({
+vi.mock('../../../../ipc/preflight/preflight-wsl-agent-detection', () => ({
   detectWslCommandsOnPath: detectWsl
 }))
 

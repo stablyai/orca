@@ -2,18 +2,20 @@ import {
   selectWorktreesByRepo,
   selectFolderWorkspaces
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react'
+import { useEffect, useRef, useState, type ComponentProps, type Ref } from 'react'
 import { useAppStore } from '@/store/index'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { Input } from '@/components/ui/input'
 import { Terminal } from 'lucide-react'
 import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
+import { AgentPickerResultsScroller } from './AgentPickerResultsScroller'
 import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPickerMenuRow'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { choiceMatches, type AgentPickerChoice } from './agent-picker-search-rows'
 import { useTranslate } from '@/i18n/use-translate'
 import { retireAgentPickerDrafts, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
-import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
+import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
 import {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
@@ -24,8 +26,51 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import type {
   AgentPickerDraft,
+  AgentPickerDraftOwner,
   AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+
+/** Drops kept setups whose workspace, repo or host is gone. */
+export function useRetiredAgentPickerDrafts(
+  entries: readonly AgentPickerEntry[],
+  draftScope: AgentPickerDraftOwner | undefined,
+  mode: 'launch' | 'select' | undefined,
+  setupDisabled?: boolean
+) {
+  useEffect(() => {
+    if (setupDisabled) {
+      return
+    }
+    const state = useAppStore.getState()
+    // Built only for drafts that name a workspace or repo; a floating picker (a bot's) scans none.
+    let workspaces: Set<string> | undefined
+    let repos: Set<string> | undefined
+    const hasWorkspace = (id: string) =>
+      (workspaces ??= new Set([
+        ...Object.values(selectWorktreesByRepo(state) ?? {})
+          .flat()
+          .map((row) => row.id),
+        ...(selectFolderWorkspaces(state) ?? []).map((row) => `folder:${row.id}`)
+      ])).has(id)
+    const hasRepo = (id: string) =>
+      (repos ??= new Set((state.repos ?? []).map((repo) => repo.id))).has(id)
+    retireAgentPickerDrafts(
+      entries,
+      draftScope,
+      (target) => {
+        const host = parseExecutionHostId(target.executionHostId)
+        return (
+          !(
+            host?.kind === 'runtime' && state.removedRuntimeEnvironmentIds?.has(host.environmentId)
+          ) &&
+          (!target.worktreeId || hasWorkspace(target.worktreeId)) &&
+          (!target.repoId || hasRepo(target.repoId))
+        )
+      },
+      mode
+    )
+  }, [entries, draftScope, mode, setupDisabled])
+}
 
 export function AgentLaunchPickerMenu({
   model,
@@ -45,7 +90,7 @@ export function AgentLaunchPickerMenu({
   defaultAgent,
   onSetDefault,
   onSelectBlankTerminal,
-  leadingItems
+  choices
 }: {
   model?: NewTabAgentMenuModel
   draftScope?: object
@@ -66,37 +111,11 @@ export function AgentLaunchPickerMenu({
   defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
   onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
   onSelectBlankTerminal?: () => void
-  leadingItems?: ReactNode
+  /** Non-agent rows; a search lists the ones it matches and Enter can pick them. */
+  choices?: readonly AgentPickerChoice[]
 }) {
   const t = useTranslate()
-  useEffect(() => {
-    if (setupDisabled) {
-      return
-    }
-    const state = useAppStore.getState()
-    const workspaces = new Set([
-      ...Object.values(selectWorktreesByRepo(state) ?? {})
-        .flat()
-        .map((row) => row.id),
-      ...(selectFolderWorkspaces(state) ?? []).map((row) => `folder:${row.id}`)
-    ])
-    const repos = new Set((state.repos ?? []).map((repo) => repo.id))
-    retireAgentPickerDrafts(
-      entries,
-      draftScope,
-      (target) => {
-        const host = parseExecutionHostId(target.executionHostId)
-        return (
-          !(
-            host?.kind === 'runtime' && state.removedRuntimeEnvironmentIds?.has(host.environmentId)
-          ) &&
-          (!target.worktreeId || workspaces.has(target.worktreeId)) &&
-          (!target.repoId || repos.has(target.repoId))
-        )
-      },
-      mode
-    )
-  }, [entries, draftScope, mode, setupDisabled])
+  useRetiredAgentPickerDrafts(entries, draftScope, mode, setupDisabled)
   const terminalBlocked = mode !== 'select' && model?.state === 'settled' && model.terminalPending
   const [query, setQuery] = useState(initialQuery)
   const [searchFocused, setSearchFocused] = useState(false)
@@ -149,6 +168,9 @@ export function AgentLaunchPickerMenu({
   const firstSetup =
     showBlankTerminal || firstEntry ? undefined : setups.find((setup) => enabled(setup.entry))
   const showSearchDefault = searchFocused && query.trim().length > 0
+  const shownChoices = (choices ?? []).filter(
+    (choice) => !query.trim() || choiceMatches(choice, query)
+  )
   return (
     <div ref={root} data-agent-launch-picker="true">
       {!hideSearch ? (
@@ -194,8 +216,7 @@ export function AgentLaunchPickerMenu({
           />
         </div>
       ) : null}
-      <div data-agent-picker-results className="max-h-64 overflow-y-auto scrollbar-sleek">
-        {leadingItems}
+      <AgentPickerResultsScroller>
         <div data-agent-picker-agent-results>
           {showBlankTerminal ? (
             <AgentDefaultContextMenu
@@ -204,7 +225,6 @@ export function AgentLaunchPickerMenu({
             >
               <DropdownMenuItem
                 variant="launch"
-                className="h-9"
                 disabled={disabled}
                 data-search-default={showSearchDefault || undefined}
                 onSelect={onSelectBlankTerminal}
@@ -263,13 +283,19 @@ export function AgentLaunchPickerMenu({
               />
             )
           })}
-          {!showBlankTerminal && !visible.length && !setups.length ? (
+          {shownChoices.map((choice) => (
+            <DropdownMenuItem key={choice.id} disabled={disabled} onSelect={choice.onSelect}>
+              {choice.icon}
+              {choice.label}
+            </DropdownMenuItem>
+          ))}
+          {!showBlankTerminal && !visible.length && !setups.length && !shownChoices.length ? (
             <DropdownMenuItem disabled>
               {t('auto.components.agent.AgentCombobox.579c768bde', 'No agents match your search.')}
             </DropdownMenuItem>
           ) : null}
         </div>
-      </div>
+      </AgentPickerResultsScroller>
     </div>
   )
 }

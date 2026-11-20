@@ -23,14 +23,14 @@ vi.mock('../../../filesystem/durable-file-write', async (importOriginal) => {
 
 import {
   beginAgentSessionRuntimeRecord,
+  previousAgentSessionRuntimeStartedAt,
   readAgentSessionRuntimeEnds,
-  recordAgentSessionRuntimeEnd,
-  recordAgentSessionRuntimeEndOnExit
+  recordAgentSessionRuntimeEnd
 } from './agent-session-runtime-end-record'
 import {
   tearDownRuntime,
   type InstalledRuntime
-} from '../structured-agent-session-runtime-teardown'
+} from '../installation/structured-agent-session-runtime-teardown'
 
 const RUNTIME_A = '0000000a-0000-4000-8000-000000000000'
 const RUNTIME_B = '0000000b-0000-4000-8000-000000000000'
@@ -79,6 +79,13 @@ describe('what a runtime records about itself', () => {
     expect(readAgentSessionRuntimeEnds(directory)?.get(RUNTIME_B)).toBe('quit')
   })
 
+  it('does not name an older run as the last one while a newer record cannot be read', async () => {
+    beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)
+    recordAgentSessionRuntimeEnd('quit', 2)
+    await writeFile(join(runtimesDirectory(), `${RUNTIME_B}.json`), '{not json')
+    expect(await previousAgentSessionRuntimeStartedAt(directory, 'current-runtime')).toBeUndefined()
+  })
+
   it('names no cause when the records cannot be listed', async () => {
     await writeFile(runtimesDirectory(), 'not a directory')
     expect(readAgentSessionRuntimeEnds(directory)).toBeNull()
@@ -109,15 +116,6 @@ describe('what a runtime records about itself', () => {
     writes.fail = true
     recordAgentSessionRuntimeEnd('quit', 2)
     expect(readAgentSessionRuntimeEnds(directory)?.has(RUNTIME_A)).toBe(false)
-  })
-
-  it('reads a clean process exit nothing else recorded as a quit, and any other exit as nothing', () => {
-    beginAgentSessionRuntimeRecord(directory, RUNTIME_A, 1)
-    expect(process.listeners('exit')).toContain(recordAgentSessionRuntimeEndOnExit)
-    recordAgentSessionRuntimeEndOnExit(1)
-    expect(readAgentSessionRuntimeEnds(directory)?.get(RUNTIME_A)).toBe('crash')
-    recordAgentSessionRuntimeEndOnExit(0)
-    expect(readAgentSessionRuntimeEnds(directory)?.get(RUNTIME_A)).toBe('quit')
   })
 })
 

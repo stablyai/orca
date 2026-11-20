@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -8,10 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({
   app: { isPackaged: true, getPath: () => tmpdir(), getAppPath: () => tmpdir() }
 }))
-import {
-  installLinuxBareOrcaDispatcher,
-  removeLinuxBareOrcaDispatcher
-} from './linux-bare-orca-dispatcher'
+import { installLinuxBareOrcaDispatcher } from './linux-bare-orca-dispatcher'
 
 const created: string[] = []
 
@@ -92,19 +89,5 @@ describe.runIf(process.platform !== 'win32')('the bare orca dispatcher as a shel
     expect(
       runOrca(fixture, [binDir, fixture.screenReaderDir], { ORCA_CLI_BIN_DIR: '/x' }).stdout
     ).toBe('ORCA_CLI status\n')
-  })
-})
-
-describe.runIf(process.platform !== 'win32')('removing the bare orca dispatcher', () => {
-  it("removes Orca's dispatcher and keeps a user's own `orca`", async () => {
-    const fixture = await makeFixture()
-
-    await expect(removeLinuxBareOrcaDispatcher(fixture.homePath)).resolves.toBe(true)
-    expect(existsSync(fixture.dispatcherPath)).toBe(false)
-    await expect(removeLinuxBareOrcaDispatcher(fixture.homePath)).resolves.toBe(false)
-
-    await writeProgram(fixture.dispatcherPath, 'MINE')
-    await expect(removeLinuxBareOrcaDispatcher(fixture.homePath)).resolves.toBe(false)
-    expect(await readFile(fixture.dispatcherPath, 'utf8')).toContain('MINE')
   })
 })

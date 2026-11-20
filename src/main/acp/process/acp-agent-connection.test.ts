@@ -1,6 +1,7 @@
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { PipedProcessSpec } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { createFakePipedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import type { terminateProviderProcessTree } from '../../provider-process/provider-process-teardown'
 import {
@@ -12,6 +13,11 @@ import { AcpAgentExitedError, AcpAuthRequiredError } from '../transport/acp-erro
 import { acpStartFailure } from '../session/start/acp-startup-outcome'
 import captures from '../../native-chat/agent-session-wire/__fixtures__/startup-protocol-rejections.json'
 import { AcpScriptedAgent, deferred, tick } from './testing/acp-scripted-agent.test-support'
+
+// Protocol fixtures supply a provider child, not the native bootstrap's control pipes.
+vi.mock('../../provider-process/provider-process-spawn', () => ({
+  spawnProviderProcess: (spec: PipedProcessSpec, spawn: ProviderProcessSpawner) => spawn(spec)
+}))
 
 const teardown = vi.hoisted(() =>
   vi.fn<typeof terminateProviderProcessTree>(async () => 'unverifiable')
@@ -40,7 +46,7 @@ function fixture(
     stderr: new PassThrough(),
     kill: vi.fn(() => true)
   })
-  const spawn = vi.fn<PipedProcessSpawner>(() => {
+  const spawn = vi.fn<ProviderProcessSpawner>(() => {
     return child
   })
   agent.on('initialize', (frame) => agent.reply(frame, { protocolVersion: 1 }))
@@ -113,6 +119,41 @@ describe('ACP process-owning connection', () => {
     connection.onExit(late)
     expect(late).toHaveBeenCalledOnce()
     await expect(connection.close()).resolves.toBe(true)
+  })
+
+  it('redacts credentials the agent printed from the stderr its exit reports (#41170)', async () => {
+    const { connection, child } = fixture()
+    await connection.start(start)
+    const rejected = connection.prompt([...prompt]).catch((error: unknown) => String(error))
+    child.stderr.write('OPENROUTER_API_KEY=sk-or-v1-0123456789abcdef0123456789abcdef\n')
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    const reason = await rejected
+    expect(reason).not.toContain('0123456789abcdef')
+    expect(connection.stderrTail()).not.toContain('0123456789abcdef')
+  })
+
+  it('drops a credential the stderr tail cut through, which redaction can no longer recognise', async () => {
+    const { connection, child } = fixture()
+    await connection.start(start)
+    child.stderr.write(`sk-or-v1-${'0'.repeat(30)}${'Q7'.repeat(12)}\n`)
+    // Leaves the last 24 key characters and their newline at the start of the 8 KiB tail.
+    child.stderr.write(`${'x'.repeat(8166)}\n`)
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    expect(connection.stderrTail()).not.toContain('Q7Q7')
+  })
+
+  it('drops a private key body the stderr tail cut from its BEGIN marker', async () => {
+    const { connection, child } = fixture()
+    await connection.start(start)
+    const body = `${'K9'.repeat(32)}\n`.repeat(4)
+    child.stderr.write(`-----BEGIN PRIVATE KEY-----\n${body}-----END PRIVATE KEY-----\n`)
+    // Leaves part of the second body line, the last two and the END marker in the 8 KiB tail.
+    child.stderr.write(`${'x'.repeat(8025)}\n`)
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    expect(connection.stderrTail()).not.toContain('K9K9')
   })
 
   it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {

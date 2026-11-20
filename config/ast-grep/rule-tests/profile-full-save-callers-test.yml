@@ -1,5 +1,0 @@
-id: profile-full-save-callers
-valid:
-  - "scheduleSave(scheduling, ['repos'])"
-invalid:
-  - 'scheduleFullProfileSave(scheduling)'

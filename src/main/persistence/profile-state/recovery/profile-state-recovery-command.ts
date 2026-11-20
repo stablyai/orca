@@ -4,7 +4,7 @@ import {
   type ProfileStateRecoverySelector,
   type ProfileStateExportsResult,
   type ProfileStateRollbackResult
-} from '../../../../shared/profile-state-recovery-command'
+} from '../../../../shared/orca-profiles/profile-state-recovery-command'
 import { getActiveProfileStateLocation } from '../offline-access/profile-state-active-location'
 import {
   profileStateJsonExportPath,
@@ -36,7 +36,7 @@ import { profileHasPendingProjectMove } from '../../../orca-profiles/project-tra
 import {
   invalidateHttp1CompatibilityMarker,
   writeHttp1CompatibilityMarker
-} from '../../../startup/http1-compatibility-marker'
+} from '../../../startup/network-compatibility/http1-compatibility-marker'
 
 export function getProfileStateExports(
   userDataPath: string,

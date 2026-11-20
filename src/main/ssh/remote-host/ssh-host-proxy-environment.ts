@@ -1,4 +1,4 @@
-import { PROXY_ENVIRONMENT_KEYS } from '../../../shared/network-proxy'
+import { PROXY_ENVIRONMENT_KEYS } from '../../../shared/network/network-proxy'
 import {
   execCommand,
   isSshCommandExitError,
