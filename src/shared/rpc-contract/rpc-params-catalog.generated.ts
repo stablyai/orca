@@ -790,6 +790,10 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './workspaces/worktree-params'
 import { WorktreeAdoptProvisionedRoot } from './workspaces/worktree-provisioned-root-params'
+import {
+  ZotzAgentQueueSnapshotParams,
+  ZotzAgentQueueSubscribeParams
+} from './zotz/zotz-agent-queue-params'
 import { RepoIconDataUrlsParams } from '../sidebar-list/catalog/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/feed/sidebar-inputs-feed-contract'
 import {
@@ -1700,7 +1704,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.set': WorktreeSet,
   'worktree.show': WorktreeShow,
   'worktree.sleep': WorktreeSleepParams,
-  'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
+  'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams,
+  'zotz.agentQueue.snapshot': ZotzAgentQueueSnapshotParams,
+  'zotz.agentQueue.subscribe': ZotzAgentQueueSubscribeParams
 } as const
 
 // Why: these methods bind a schema the shared contract cannot hold because its value

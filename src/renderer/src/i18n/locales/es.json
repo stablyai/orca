@@ -24266,6 +24266,7 @@
       "waitPressure": "La máquina tiene poca memoria; nada nuevo arranca hasta que se libere.",
       "waitStarting": "Revisando la memoria…",
       "autoStart": "El agente arranca solo cuando haya lugar. No se pierde nada si esperas.",
+      "onHost": "En {{host}}",
       "cancel": "Cancelar",
       "forceStart": "Lanzar de todos modos",
       "board": {

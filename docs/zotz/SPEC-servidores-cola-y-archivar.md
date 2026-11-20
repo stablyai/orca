@@ -74,8 +74,8 @@ Llamadas nuevas, solo se agregan (no se renombra nada existente):
 
 ## 4. Fases y PRs
 
-1. **PR 1:** este spec + Parte A (archivar principales).
-2. **PR 2:** Parte B de lectura: RPC `snapshot`/`subscribe`, capability, store por host y la interfaz que lo muestra.
+1. **PR 1 (#26, mergeado):** este spec + Parte A (archivar principales).
+2. **PR 2 (lectura):** RPC `snapshot`/`subscribe` y capability, store por servidor, aviso de cola en el chat de un servidor (solo lectura, con "En MSI Server") y reloj de arena en la barra lateral. **Pendiente para después:** las tarjetas sobre terminales de un servidor (hay que comprobar que la clave de panel coincide entre la laptop y el servidor) y el tablero con una sección por máquina.
 3. **PR 3:** Parte B de acciones: `cancel`, `forceStart`, `dismissCanceled` desde la laptop.
 
 Cada PR pasa `pnpm check:changed`, sale a `main` y, para macOS, el release se arma según el procedimiento de firma local (el runner `macos-15` de GitHub suele no estar disponible).
@@ -86,12 +86,15 @@ Cada PR pasa `pnpm check:changed`, sale a `main` y, para macOS, el release se ar
 - Pruebas solo donde fallen al revertir el cambio: ids inválidos rechazados por la RPC; el store de host olvida un servidor desconectado y se re-suscribe al recuperar contacto; la lista de archivadas incluye principales.
 - Manual con la MSI: bajar el libre mínimo en la MSI hasta que encole, comprobar que la laptop ve la marca, la cola y el tablero; cancelar y _Launch anyway_ desde la laptop; repetirlo con la MSI en el release viejo (no debe romper nada).
 
-## 6. Preguntas abiertas
+## 6. Decisiones y preguntas abiertas
 
-1. ¿Los límites de la MSI (libre mínimo 15% con piso de 2 GiB, 35% por agente, tope de 6 GiB) son los correctos para esa máquina? Se decide al ver sus números en el tablero.
-2. ¿Una principal archivada debe des-archivarse sola cuando se arranca un agente en ella? Propuesta: no.
-3. ¿`zotzAgentQueueEnabled` de un servidor se puede cambiar desde la laptop? Fuera de este spec; por ahora cada máquina lo decide en sus propios ajustes.
-4. El chip de dispositivo usa el nombre del servidor tal como se guardó (`MSI Server`). Cambiarlo es un ajuste de Remote Zotz Servers, no un cambio de código.
+**Decidido (Hugo, 2026-11-20):** los límites de memoria de cada servidor salen solo de su RAM, como ya quedó en #24 (solo decide la RAM; sin tope por cantidad de agentes). Este spec no los cambia: cada máquina calcula los suyos y la laptop solo los muestra.
+
+Abiertas:
+
+1. ¿Una principal archivada debe des-archivarse sola cuando se arranca un agente en ella? Propuesta: no.
+2. ¿`zotzAgentQueueEnabled` de un servidor se puede cambiar desde la laptop? Fuera de este spec; por ahora cada máquina lo decide en sus propios ajustes.
+3. El chip de dispositivo usa el nombre del servidor tal como se guardó (`MSI Server`). Cambiarlo es un ajuste de Remote Zotz Servers, no un cambio de código.
 
 ## 7. Fuera de alcance
 

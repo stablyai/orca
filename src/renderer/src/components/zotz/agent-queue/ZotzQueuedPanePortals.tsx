@@ -39,13 +39,17 @@ function waitDetail(task: QueuedTask, snapshot: ZotzAgentQueueSnapshot, t: Trans
 export function ZotzQueuedPaneCard({
   task,
   snapshot,
+  hostLabel,
   onCancel,
   onForceStart
 }: {
   task: QueuedTask
   snapshot: ZotzAgentQueueSnapshot
-  onCancel: () => void
-  onForceStart: () => void
+  /** The machine the agent waits on, shown when it is not this one. */
+  hostLabel?: string
+  /** Both absent when the wait belongs to another machine whose controls this window does not drive. */
+  onCancel?: () => void
+  onForceStart?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const now = useNow(30_000)
@@ -72,6 +76,11 @@ export function ZotzQueuedPaneCard({
               })}
             </span>
           </div>
+          {hostLabel ? (
+            <div className="text-xs font-medium text-foreground">
+              {t('zotz.agentQueue.onHost', 'On {{host}}', { host: hostLabel })}
+            </div>
+          ) : null}
           <div className="text-xs text-muted-foreground">{waitDetail(task, snapshot, t)}</div>
           <div className="text-xs text-muted-foreground">
             {t(
@@ -81,16 +90,18 @@ export function ZotzQueuedPaneCard({
           </div>
         </div>
       </div>
-      <div className="flex justify-end gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={onCancel}>
-          <X className="size-3.5" />
-          {t('zotz.agentQueue.cancel', 'Cancel')}
-        </Button>
-        <Button type="button" size="sm" onClick={onForceStart}>
-          <Play className="size-3.5" />
-          {t('zotz.agentQueue.forceStart', 'Launch anyway')}
-        </Button>
-      </div>
+      {onCancel && onForceStart ? (
+        <div className="flex justify-end gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={onCancel}>
+            <X className="size-3.5" />
+            {t('zotz.agentQueue.cancel', 'Cancel')}
+          </Button>
+          <Button type="button" size="sm" onClick={onForceStart}>
+            <Play className="size-3.5" />
+            {t('zotz.agentQueue.forceStart', 'Launch anyway')}
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }

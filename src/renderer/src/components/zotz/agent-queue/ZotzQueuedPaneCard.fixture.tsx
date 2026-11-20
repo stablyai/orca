@@ -75,3 +75,11 @@ export const thirdUnderPressure = defineFixture({
     />
   )
 })
+
+/** A chat whose agent runs on another machine: its wait shows, but this window has no buttons for it. */
+export const waitingOnAnotherMachine = defineFixture({
+  width: 520,
+  render: () => (
+    <ZotzQueuedPaneCard task={task(1, 'pressure')} snapshot={SNAPSHOT} hostLabel="MSI Server" />
+  )
+})

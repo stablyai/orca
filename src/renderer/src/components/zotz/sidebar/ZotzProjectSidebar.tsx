@@ -31,6 +31,7 @@ import {
 } from './zotz-project-conversations'
 import { useZotzGitHubRepoIcons } from './use-zotz-github-repo-icons'
 import { useZotzAgentQueue } from '../agent-queue/zotz-agent-queue-store'
+import { useZotzHostAgentQueues } from '../agent-queue/zotz-host-agent-queue-store'
 import { ZotzConversationMenu } from './ZotzConversationMenu'
 import { ZotzProjectMenu } from './ZotzProjectMenu'
 import HiddenProjectsSection from '../../sidebar/hidden-projects/HiddenProjectsSection'
@@ -130,18 +131,24 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
   }, [allThreads])
   useZotzGitHubRepoIcons(repos)
   const queueSnapshot = useZotzAgentQueue()
+  const hostQueues = useZotzHostAgentQueues()
+  // Workspace ids are the same on every machine, so this machine's queue and each server's merge by label.
+  const allQueues = useMemo(
+    () => [queueSnapshot, ...hostQueues.values()],
+    [queueSnapshot, hostQueues]
+  )
   const canceledWorkspaces = useMemo(
-    () => new Set(queueSnapshot.canceled.map((launch) => launch.label)),
-    [queueSnapshot.canceled]
+    () => new Set(allQueues.flatMap((queue) => queue.canceled.map((launch) => launch.label))),
+    [allQueues]
   )
   // Oldest wait per workspace: its agent has not started, whatever its threads say.
   const queuedSince = useMemo(() => {
     const result = new Map<string, number>()
-    for (const task of queueSnapshot.queued) {
+    for (const task of allQueues.flatMap((queue) => queue.queued)) {
       result.set(task.label, Math.min(result.get(task.label) ?? Infinity, task.enqueuedAt))
     }
     return result
-  }, [queueSnapshot.queued])
+  }, [allQueues])
 
   const sections = useMemo(
     () =>
