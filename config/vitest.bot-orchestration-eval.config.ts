@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 // Real agent CLIs as bots; never part of the unit run. Knobs: ORCA_BOT_EVAL_AGENT (claude|codex),
@@ -7,6 +8,7 @@ import { defineConfig } from 'vitest/config'
 // ORCA_BOT_EVAL_MODEL (pins the agent's model; the report names it and the CLI version).
 // Needs zsh as the login shell, as the automation eval does.
 export default defineConfig({
+  tsconfig: resolve(import.meta.dirname, 'tsconfig.vitest-transform.json'),
   test: {
     include: ['src/cli/bot-orchestration-eval/*.eval.ts'],
     environment: 'node',
