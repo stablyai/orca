@@ -118,7 +118,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     <div
       className={cn(
         'flex flex-col gap-5',
-        slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3'
+        slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3',
+        // The row gap (gap-5) less the notes' own gap (gap-1).
+        slot.continuesNotes && '-mb-4'
       )}
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}
