@@ -130,9 +130,11 @@ export function managedAgentCommandFor(
   if (!isManagedAgentCli(agent) || !managedAgentStandsInFor(agent, command)) {
     return null
   }
-  if (use) {
-    return managedAgentCommand(agent)
-  }
+  return use ? managedAgentCommand(agent) : installedManagedAgentCommand(agent)
+}
+
+/** Orca's installed copy of `agent`, read without counting as use. */
+export function installedManagedAgentCommand(agent: ManagedAgentCliId): string | null {
   const folder = installedFolders.get(agent)
   return folder ? MANAGED_AGENT_CLIS[agent].executable(folder) : null
 }

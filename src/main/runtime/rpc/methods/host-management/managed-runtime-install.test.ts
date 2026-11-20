@@ -210,3 +210,26 @@ it('acts on the program the client showed, not the one the host now prefers', as
   expect(state).toMatchObject({ agent: 'antigravity', program: 'cli' })
   await rm(host.dataDirectory, { recursive: true, force: true })
 })
+
+it("lists Orca's installed agy as an installed agent only while it may run", async () => {
+  const { reclaimManagedRuntimeReleasesAtLaunch } = await import('./managed-runtime-install')
+  const { readInstalledManagedAgents } =
+    await import('../../../../preflight/managed-agent-detection')
+  const { rememberManagedAgentRelease } =
+    await import('../../../../managed-agent-cli/managed-agent-cli-registry')
+  host.dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-detect-rpc-'))
+  let settings: Record<string, unknown> = {}
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the settings store is read.
+  const runtime = {
+    requireStore: () => ({ getSettings: () => settings })
+  } as unknown as Parameters<typeof reclaimManagedRuntimeReleasesAtLaunch>[0]
+  reclaimManagedRuntimeReleasesAtLaunch(runtime)
+  rememberManagedAgentRelease('antigravity', join(host.dataDirectory, 'agy', '1.5.13'))
+
+  expect(readInstalledManagedAgents()).toContain('antigravity')
+  settings = { antigravityManagedAgyEnabled: false }
+  expect(readInstalledManagedAgents()).not.toContain('antigravity')
+
+  rememberManagedAgentRelease('antigravity', null)
+  await rm(host.dataDirectory, { recursive: true, force: true })
+})

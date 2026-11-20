@@ -29,12 +29,14 @@ import {
   MANAGED_AGENT_CLI_IDS,
   managedAgentCli,
   onManagedAgentUse,
+  installedManagedAgentCommand,
   managedAgentStandsInFor,
   rememberManagedAgentRelease,
   type ManagedAgentCliId
 } from '../../../../managed-agent-cli/managed-agent-cli-registry'
 import { createRevisionClock, type RevisionClock } from '../../../events/revisioned-state'
 import { streamManagedRuntimeInstall } from './managed-runtime-install-stream'
+import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
 import { hasExplicitTuiLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 
 const installations = new Map<string, ManagedRuntimeInstallation>()
@@ -153,6 +155,19 @@ function acpInstallation(
   })
 }
 
+/** ACP agents name their own program and search their installers' folders after PATH, as launches
+ *  do; an agent with a host program is looked for as that program. */
+function standInSpec(agent: ManagedAgentCliId) {
+  const outer = acpLaunchSpecFor(agent)
+  return [outer, outer?.hostBackend?.spec].find(
+    (each) => each && managedAgentStandsInFor(agent, each.command)
+  )
+}
+
+function managedCopyMayRun(agent: ManagedAgentCliId, runtime: OrcaRuntimeService): boolean {
+  return standInSpec(agent)?.managedCopyAllowed?.(runtime.requireStore().getSettings()) !== false
+}
+
 /** These chats run the user's own install when the host has one, so Orca's copy is the fallback. */
 function agentCliInstallation(
   agent: ManagedAgentCliId,
@@ -161,12 +176,7 @@ function agentCliInstallation(
 ): ManagedRuntimeInstallation {
   const managedRuntime = managedAgentCli(agent).runtime
   const dataDirectory = getProfileUserDataPath()
-  // ACP agents name their own program and search their installers' folders after PATH, as launches
-  // do; an agent with a host program is looked for as that program.
-  const outer = acpLaunchSpecFor(agent)
-  const spec = [outer, outer?.hostBackend?.spec].find(
-    (each) => each && managedAgentStandsInFor(agent, each.command)
-  )
+  const spec = standInSpec(agent)
   const findExternal = async (): Promise<boolean> => {
     const settings = runtime.requireStore().getSettings()
     if (!spec?.ignoreAgentCommandSetting && hasExplicitTuiLaunchCommand(settings, agent)) {
@@ -182,8 +192,7 @@ function agentCliInstallation(
     dataDirectory,
     program: 'cli',
     findExternal,
-    updatesEnabled: () =>
-      spec?.managedCopyAllowed?.(runtime.requireStore().getSettings()) !== false,
+    updatesEnabled: () => managedCopyMayRun(agent, runtime),
     onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
     // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.
     fence: (work) => stopStructuredAgentChats(agent, managedRuntime.label).then(work),
@@ -193,6 +202,12 @@ function agentCliInstallation(
 
 /** Each installation reclaims stale releases when created, so create them every launch, not only when a client asks. */
 export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
+  // An installed copy that may run is an installed agent to menus and Settings.
+  provideInstalledManagedAgents(() =>
+    MANAGED_AGENT_CLI_IDS.filter(
+      (agent) => installedManagedAgentCommand(agent) !== null && managedCopyMayRun(agent, runtime)
+    )
+  )
   const agents = new Set([
     ...ACP_LAUNCH_SPECS.filter((spec) => spec.managedRuntime).map((spec) => spec.agent),
     ...MANAGED_AGENT_CLI_IDS
