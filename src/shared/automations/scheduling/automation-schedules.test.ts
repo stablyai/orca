@@ -7,20 +7,16 @@ import {
 import { isValidAutomationSchedule } from './automation-schedule-parsing'
 
 describe('automation schedules', () => {
-  it.each([
-    ['\u001b[2J', '\\x1b[2J'],
-    ['\u001b]52;c;ZXZpbA==\u0007', '\\x1b]52;c;ZXZpbA==\\x07'],
-    ['\u009b2J', '\\x9b2J'],
-    ['\t\r\n', '\\x09\\x0d\\x0a']
-  ])('renders accepted control bytes as printable schedule text', (control, escaped) => {
-    const prefix = 'FREQ=WEEKLY;BYDAY=TU,TH;BYHOUR=8;BYMINUTE=0;X='
-    const expression = `${prefix}${control};Y=keep`
-    const expected = `${prefix}${escaped};Y=keep`
+  it.each(['\u001b[2J', '\u001b]52;c;ZXZpbA==\u0007', '\u009b2J', '\t\r\n'])(
+    'never renders control bytes from a refused rule',
+    (control) => {
+      const expression = `FREQ=WEEKLY;BYDAY=TU,TH;BYHOUR=8;BYMINUTE=0;X=${control};Y=keep`
 
-    expect(isValidAutomationSchedule(expression)).toBe(true)
-    expect(formatAutomationSchedule(expression)).toBe(expected)
-    expect(describeAutomationSchedule(expression)).toEqual({ kind: 'custom', expression: expected })
-  })
+      expect(isValidAutomationSchedule(expression)).toBe(false)
+      expect(formatAutomationSchedule(expression)).toBe('Invalid schedule')
+      expect(describeAutomationSchedule(expression)).toEqual({ kind: 'invalid' })
+    }
+  )
 
   it('computes custom cron schedules', () => {
     const next = nextAutomationOccurrenceAfter(

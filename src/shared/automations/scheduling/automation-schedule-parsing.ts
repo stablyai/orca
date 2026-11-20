@@ -14,6 +14,7 @@ export const AUTOMATION_CRON_EXPRESSION_MAX_BYTES = 2 * 1024
 export type ParsedRrule = {
   kind: 'rrule'
   freq: 'HOURLY' | 'DAILY' | 'WEEKLY'
+  interval: number
   byDay: string[]
   byHour: number
   byMinute: number
@@ -36,27 +37,62 @@ export type { CronParseOptions }
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR'] as const
 
-function parseRrule(rrule: string): ParsedRrule {
-  const entries = new Map<string, string>()
-  for (const part of rrule.split(';')) {
-    const [key, value] = part.split('=')
-    if (key && value) {
-      entries.set(key.toUpperCase(), value)
-    }
+// Parts each FREQ can actually run; anything else is refused rather than silently ignored.
+const RRULE_PARTS: Record<ParsedRrule['freq'], readonly string[]> = {
+  HOURLY: ['FREQ', 'INTERVAL', 'BYMINUTE'],
+  DAILY: ['FREQ', 'INTERVAL', 'BYHOUR', 'BYMINUTE'],
+  WEEKLY: ['FREQ', 'INTERVAL', 'BYDAY', 'BYHOUR', 'BYMINUTE']
+}
+
+function parseRruleInteger(
+  value: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+  message: string
+): number {
+  if (value === undefined) {
+    return fallback
   }
-  const freq = entries.get('FREQ')
+  const parsed = Number(value)
+  if (!/^\d+$/.test(value) || parsed < min || parsed > max) {
+    throw new Error(message)
+  }
+  return parsed
+}
+
+function parseRrule(rrule: string): ParsedRrule {
+  const parts = rrule.split(';')
+  if (parts.at(-1) === '') {
+    parts.pop()
+  }
+  const entries = parts.map((part) => {
+    const separator = part.indexOf('=')
+    return separator === -1
+      ? { key: part.toUpperCase(), value: undefined }
+      : { key: part.slice(0, separator).toUpperCase(), value: part.slice(separator + 1) }
+  })
+  const freq = entries.find((entry) => entry.key === 'FREQ')?.value
   if (freq !== 'HOURLY' && freq !== 'DAILY' && freq !== 'WEEKLY') {
     throw new Error('Unsupported automation recurrence.')
   }
-  const byHour = Number(entries.get('BYHOUR') ?? '9')
-  const byMinute = Number(entries.get('BYMINUTE') ?? '0')
-  if (!Number.isInteger(byHour) || byHour < 0 || byHour > 23) {
-    throw new Error('Invalid recurrence hour.')
+  const values = new Map<string, string>()
+  for (const { key, value } of entries) {
+    if (value === undefined || values.has(key) || !RRULE_PARTS[freq].includes(key)) {
+      throw new Error(`Unsupported RRULE part "${key}" for FREQ=${freq}.`)
+    }
+    values.set(key, value)
   }
-  if (!Number.isInteger(byMinute) || byMinute < 0 || byMinute > 59) {
-    throw new Error('Invalid recurrence minute.')
-  }
-  const byDay = (entries.get('BYDAY') ?? '').split(',').filter(Boolean)
+  const interval = parseRruleInteger(
+    values.get('INTERVAL'),
+    1,
+    1,
+    52,
+    'Invalid recurrence interval.'
+  )
+  const byHour = parseRruleInteger(values.get('BYHOUR'), 9, 0, 23, 'Invalid recurrence hour.')
+  const byMinute = parseRruleInteger(values.get('BYMINUTE'), 0, 0, 59, 'Invalid recurrence minute.')
+  const byDay = (values.get('BYDAY') ?? '').split(',').filter(Boolean)
   if (
     freq === 'WEEKLY' &&
     (byDay.length === 0 ||
@@ -64,7 +100,7 @@ function parseRrule(rrule: string): ParsedRrule {
   ) {
     throw new Error('Invalid recurrence day.')
   }
-  return { kind: 'rrule', freq, byDay, byHour, byMinute }
+  return { kind: 'rrule', freq, interval, byDay, byHour, byMinute }
 }
 
 export function parseCronExpression(
@@ -166,6 +202,25 @@ export function parseSchedule(schedule: string, options: CronParseOptions = {}):
   return parseCronExpression(trimmed, options)
 }
 
+export function automationScheduleParseError(schedule: string): string | null {
+  try {
+    parseSchedule(schedule)
+    return null
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+}
+
+/** True when only a scheduler with the newer rule support can run this schedule. */
+export function needsScheduleRulesCapability(schedule: string): boolean {
+  try {
+    const parsed = parseSchedule(schedule)
+    return parsed.kind === 'rrule' && parsed.interval > 1
+  } catch {
+    return false
+  }
+}
+
 function scheduleRuns(schedule: string, options: CronParseOptions): boolean {
   try {
     const parsed = parseSchedule(schedule, options)
@@ -208,6 +263,10 @@ export function parseAutomationRrule(rrule: string): {
   dayOfWeek: number
 } {
   const rule = parseRrule(rrule)
+  // An interval rule has no preset; describing it as one would hide that it skips periods.
+  if (rule.interval > 1) {
+    throw new Error('No preset for this recurrence.')
+  }
   if (rule.freq === 'HOURLY') {
     return { preset: 'hourly', hour: rule.byHour, minute: rule.byMinute, dayOfWeek: 1 }
   }
