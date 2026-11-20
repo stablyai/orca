@@ -11,8 +11,7 @@ import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-us
 import { isOpenInCodex } from './codex-rollout-writer-lock'
 import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/codex/codex-rollout-history-source'
 import {
-  earliestForkDate,
-  scanCodexRolloutHistoryReferences,
+  createCodexRolloutHistoryReferences,
   type CodexRolloutHistoryReferences
 } from './codex-rollout-history-references'
 import {
@@ -183,7 +182,7 @@ async function deleteRollout(
   target: RolloutTarget,
   listHomes: () => Promise<RolloutHomes>,
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
-  references: (homes: readonly string[]) => Promise<CodexRolloutHistoryReferences>,
+  references: CodexRolloutHistoryReferences,
   result: DeleteResult,
   deletedPaths: string[]
 ): Promise<DeleteOutcome> {
@@ -209,11 +208,11 @@ async function deleteRollout(
     if (!rolloutId) {
       return 'done'
     }
-    const index = await references(homes)
-    if (!index.complete) {
+    // Unreadable rollouts prove nothing unreferenced: keep this one.
+    if (!(await references.refresh(homes))) {
       return 'done'
     }
-    if (index.isReferenced(rolloutId)) {
+    if (references.isReferenced(rolloutId)) {
       return { referencedId: rolloutId }
     }
     const found = await readNames(names)
@@ -239,6 +238,13 @@ async function deleteRollout(
       current.some((state) => versions.get(state.path) !== state.version)
     ) {
       return 'done'
+    }
+    // The checks above take a while: a fork Codex started meanwhile is in today's folders.
+    if (!(await references.refresh(homes))) {
+      return 'done'
+    }
+    if (references.isReferenced(rolloutId)) {
+      return { referencedId: rolloutId }
     }
     const removed: NameState[] = []
     // Links first: removing a link's target first would read as the link having changed.
@@ -268,7 +274,7 @@ async function deleteRollout(
     result.deleted += 1
     // A name left (in the import folder) still reads its own parent.
     if ((await readNames(names)).length === 0) {
-      index.forget(rolloutId)
+      references.forget(rolloutId)
     }
     // A name another process links meanwhile is a fresh candidate for the next sweep's full checks.
     await removeCopyMarker(
@@ -293,18 +299,16 @@ export async function deleteCodexRolloutsPermanently(
   targets: readonly RolloutTarget[],
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
   listHomes: () => Promise<RolloutHomes>,
-  signal?: AbortSignal
+  // A sweep shares one across its batches and saves it; alone, this call saves its own.
+  sweepReferences?: CodexRolloutHistoryReferences
 ): Promise<DeleteResult> {
   const result: DeleteResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const deletedPaths: string[] = []
-  const since = earliestForkDate(targets.map((target) => target.filePath))
-  let scan: Promise<CodexRolloutHistoryReferences> | undefined
-  // Scanned once per batch, and only once a rollout is otherwise ready to go.
-  const references = (homes: readonly string[]) =>
-    (scan ??= scanCodexRolloutHistoryReferences(homes, since, signal))
+  const references = sweepReferences ?? createCodexRolloutHistoryReferences()
   let pending = [...targets]
+  const waiting = new Map<string, RolloutTarget[]>()
+  // A parent is retried only once its last fork went, so a chain takes one attempt per link.
   while (pending.length > 0) {
-    const referenced: { target: RolloutTarget; rolloutId: string }[] = []
     for (const target of pending) {
       const outcome = await deleteRollout(
         target,
@@ -315,18 +319,20 @@ export async function deleteCodexRolloutsPermanently(
         deletedPaths
       )
       if (outcome !== 'done') {
-        referenced.push({ target, rolloutId: outcome.referencedId })
+        waiting.set(outcome.referencedId, [...(waiting.get(outcome.referencedId) ?? []), target])
       }
     }
-    const index = await scan?.catch(() => undefined)
-    // Only a parent whose last fork went in this pass can go now.
-    pending = index
-      ? referenced
-          .filter(({ rolloutId }) => !index.isReferenced(rolloutId))
-          .map(({ target }) => target)
-      : []
+    pending = []
+    for (const [rolloutId, waitingTargets] of waiting) {
+      if (!references.isReferenced(rolloutId)) {
+        waiting.delete(rolloutId)
+        pending.push(...waitingTargets)
+      }
+    }
   }
-  await (await scan?.catch(() => undefined))?.save()
+  if (!sweepReferences) {
+    await references.save()
+  }
   await invalidateDeletedAiVaultSessionPaths(deletedPaths)
   if (deletedPaths.length > 0) {
     forgetCodexHistoryDiskUsage()

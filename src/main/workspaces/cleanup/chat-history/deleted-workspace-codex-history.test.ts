@@ -243,6 +243,23 @@ describe('deleteCodexRolloutsPermanently with forked chats', () => {
     ])
     expect(result.deleted).toBe(2)
     expect(result.failed).toBe(0)
+
+    // Codex creates a fork's file empty and writes its header seconds later.
+    const nextParent = write(join(home, ...DATED, NAME('b')), rollout('/gone'))
+    const forkPath = join(home, ...DATED, NAME('c'))
+    writeFileSync(forkPath, '')
+    const sweep = () =>
+      deleteCodexRolloutsPermanently(
+        [{ agent: 'codex', filePath: nextParent }],
+        async () => true,
+        async () => ({ homes: [home], protectedRoots: [] })
+      )
+    await sweep()
+    writeFileSync(forkPath, fork('/live', '0000000b-0000-4000-8000-000000000000'))
+    utimesSync(forkPath, WRITTEN, WRITTEN)
+    await sweep()
+
+    expect(exists(nextParent)).toBe(true)
   })
 })
 

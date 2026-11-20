@@ -27,6 +27,7 @@ import { isCodexRolloutStillIdleInGoneFolder } from './codex-rollout-last-cwd'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { deleteCodexRolloutsPermanently } from '../../../codex/history/cleanup/codex-rollout-permanent-delete'
 import { listHostCodexRolloutHomes } from '../../../codex/history/cleanup/codex-host-rollout-homes'
+import { createCodexRolloutHistoryReferences } from '../../../codex/history/cleanup/codex-rollout-history-references'
 
 export type { ChatHistorySweepResult }
 
@@ -150,6 +151,8 @@ export function deleteChatHistoryOfDeletedWorkspaces(
   store: RuntimeStore,
   signal: AbortSignal
 ): Promise<ChatHistorySweepResult> {
+  // One fork index for the whole sweep: each gone folder's batch reuses it.
+  const references = createCodexRolloutHistoryReferences(signal)
   return sweepDeletedWorkspaceChatHistory({
     store,
     now: Date.now(),
@@ -176,7 +179,7 @@ export function deleteChatHistoryOfDeletedWorkspaces(
               codex,
               shouldDelete,
               () => listHostCodexRolloutHomes(store.getSettings()),
-              signal
+              references
             )
           : empty
       return {
@@ -188,5 +191,5 @@ export function deleteChatHistoryOfDeletedWorkspaces(
     listNativeChats: listHostNativeChats,
     forgetNativeChats: forgetHostNativeChats,
     isEnabled: () => store.getSettings().deleteChatHistoryWithWorkspace === true
-  })
+  }).finally(() => references.save())
 }

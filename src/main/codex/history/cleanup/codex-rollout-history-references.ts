@@ -1,188 +1,162 @@
-import { readdir, readFile, realpath, rename, writeFile } from 'node:fs/promises'
+import { open, readdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
+import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 import { parseJsonObject } from '../../../ai-vault/parsing/session-json-object'
 import { extractString } from '../../../../shared/text/trimmed-string'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/codex/codex-rollout-history-source'
 import { readCodexRolloutBytes } from '../../../native-chat/transcript-history/codex/codex-rollout-history-stream'
 import { splitTranscriptStreamLines } from '../../../native-chat/transcript-streaming/transcript-stream-lines'
 
 const SESSION_META_MAX_BYTES = 16 * 1024 * 1024
+const HEAD_BYTES = 64 * 1024
 const CACHE_FILE = 'codex-rollout-history-bases.json'
-const ROLLOUT_DATE = /^rollout-(\d{4}-\d{2}-\d{2})T/
+const CACHE_CHECKPOINT_READS = 2000
+// Codex creates a rollout empty and writes its header after collecting git info.
+const UNFINISHED_HEADER_GRACE_MS = 10 * 60 * 1000
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /**
- * Which rollouts other rollouts read their history prefix from (`session_meta.history_base`).
- * A forked chat stores only its own turns and reads the rest from its parent's file.
- * `complete` is false when some folder or header couldn't be read: nothing is proven unreferenced.
+ * Which rollouts other rollouts read their history prefix from (`session_meta.history_base`); a
+ * forked chat stores only its own turns and reads the rest from its parent's file. One per sweep.
  */
 export type CodexRolloutHistoryReferences = {
-  complete: boolean
+  /**
+   * Brings the index up to date with these homes: every folder once in full, then only the
+   * folders Codex names new rollouts in. False when anything couldn't be read, so no rollout is
+   * proven unreferenced.
+   */
+  refresh(homes: readonly string[]): Promise<boolean>
   isReferenced(rolloutId: string): boolean
   forget(rolloutId: string): void
   save(): Promise<void>
 }
 
-/** [rollout date from its name, the rollout id its history_base names]. */
-type CachedBase = [date: string | null, base: string | null]
+/** A header's base: cacheable once session metadata (or the first response) was read. */
+type HeaderBase = { base: string | null; definitive: boolean } | 'unknown'
 
-/** The YYYY-MM-DD a rollout's name carries: Codex names it when the thread starts. */
-function codexRolloutNameDate(path: string): string | null {
-  return path.split(/[\\/]/).at(-1)?.match(ROLLOUT_DATE)?.[1] ?? null
-}
-
-/**
- * The first date a fork of these rollouts can carry, two days early: a rollout's name carries the
- * local date it started, and time zones move.
- */
-export function earliestForkDate(paths: readonly string[]): string | null {
-  let earliest: string | null = null
-  for (const path of paths) {
-    const date = codexRolloutNameDate(path)
-    if (!date) {
-      return null
-    }
-    earliest = earliest === null || date < earliest ? date : earliest
-  }
-  if (earliest === null) {
-    return null
-  }
-  const time = Date.parse(`${earliest}T00:00:00Z`)
-  return Number.isFinite(time)
-    ? new Date(time - 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-    : null
+function baseOf(record: Record<string, unknown>): string | null {
+  const base = asRecord(asRecord(record.payload)?.history_base)
+  return extractString(base?.thread_id)?.toLowerCase() ?? null
 }
 
 /** Like Codex's metadata reader: lines before session_meta are skipped until a response item. */
-async function readHistoryBase(path: string): Promise<string | null | undefined> {
+async function streamHistoryBase(path: string): Promise<HeaderBase> {
+  for await (const { line, terminated } of splitTranscriptStreamLines(
+    readCodexRolloutBytes(path),
+    SESSION_META_MAX_BYTES
+  )) {
+    if (!line.trim()) {
+      continue
+    }
+    const record = parseJsonObject(line)
+    if (!record) {
+      if (!terminated) {
+        return 'unknown'
+      }
+      continue
+    }
+    if (record.type === 'session_meta') {
+      return { base: baseOf(record), definitive: true }
+    }
+    if (record.type === 'response_item') {
+      return { base: null, definitive: true }
+    }
+  }
+  return { base: null, definitive: false }
+}
+
+async function readHistoryBase(path: string): Promise<HeaderBase> {
   try {
-    for await (const { line, terminated } of splitTranscriptStreamLines(
-      readCodexRolloutBytes(path),
-      SESSION_META_MAX_BYTES
-    )) {
-      if (!line.trim()) {
-        continue
-      }
-      // Most headers name no base: skip parsing their base instructions.
-      if (
-        terminated &&
-        line.includes('"type":"session_meta"') &&
-        !line.includes('"history_base"')
-      ) {
-        return null
-      }
-      const record = parseJsonObject(line)
-      if (!record) {
-        // A header still being written is unknown; a broken earlier line is skipped, as in Codex.
-        if (!terminated) {
-          return undefined
+    if (!path.endsWith('.zst')) {
+      // Most headers fit the first read and name no base: no decoding or parsing for those.
+      const handle = await open(path, 'r')
+      const head = Buffer.allocUnsafe(HEAD_BYTES)
+      const { bytesRead } = await handle.read(head, 0, HEAD_BYTES, 0).finally(() => handle.close())
+      const end = head.subarray(0, bytesRead).indexOf(10)
+      const line = end > 0 ? head.subarray(0, end) : null
+      if (line?.includes('"type":"session_meta"')) {
+        if (!line.includes('"history_base"')) {
+          return { base: null, definitive: true }
         }
-        continue
-      }
-      if (record.type === 'session_meta') {
-        const base = asRecord(asRecord(record.payload)?.history_base)
-        return extractString(base?.thread_id)?.toLowerCase() ?? null
-      }
-      if (record.type === 'response_item') {
-        return null
+        const record = parseJsonObject(line.toString('utf8'))
+        if (record?.type === 'session_meta') {
+          return { base: baseOf(record), definitive: true }
+        }
       }
     }
-    return null
+    return await streamHistoryBase(path)
   } catch (error) {
-    // A rollout removed meanwhile references nothing; any other failure leaves it unknown.
-    return isDefinitiveAbsence(error) ? null : undefined
+    return isDefinitiveAbsence(error) ? { base: null, definitive: false } : 'unknown'
   }
 }
 
-function isCachedEntry(entry: unknown): entry is [string, string | null, string | null] {
+function isCachedEntry(entry: unknown): entry is [string, string | null] {
   return (
     Array.isArray(entry) &&
     typeof entry[0] === 'string' &&
-    (entry[1] === null || typeof entry[1] === 'string') &&
-    (entry[2] === null || typeof entry[2] === 'string')
+    (entry[1] === null || typeof entry[1] === 'string')
   )
 }
 
-async function readCache(path: string): Promise<Map<string, CachedBase>> {
+async function readCache(path: string): Promise<Map<string, string | null>> {
   try {
     const bases = asRecord(JSON.parse(await readFile(path, 'utf-8')))?.bases
-    return new Map(
-      (Array.isArray(bases) ? bases : [])
-        .filter(isCachedEntry)
-        .map(([id, date, base]) => [id, [date, base]])
-    )
+    return new Map((Array.isArray(bases) ? bases : []).filter(isCachedEntry))
   } catch {
     return new Map()
   }
 }
 
-async function writeCache(path: string, cache: Map<string, CachedBase>): Promise<void> {
-  const tmpPath = `${path}.${process.pid}.${randomUUID()}.tmp`
-  const bases = [...cache].map(([id, [date, base]]) => [id, date, base])
-  await writeFile(tmpPath, JSON.stringify({ version: 1, bases }), 'utf-8')
-  await rename(tmpPath, path)
+/** The dated session folders Codex can be naming new rollouts in now, in local time. */
+function recentDatedFolders(): string[][] {
+  const now = Date.now()
+  return [-3, -2, -1, 0, 1].map((offset) => {
+    const day = new Date(now + offset * DAY_MS)
+    return [
+      String(day.getFullYear()),
+      String(day.getMonth() + 1).padStart(2, '0'),
+      String(day.getDate()).padStart(2, '0')
+    ]
+  })
 }
 
-/** Null when the folder is missing; throws when it can't be read. */
-async function readFolder(path: string) {
-  try {
-    return await readdir(path, { withFileTypes: true })
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return null
-    }
-    throw error
-  }
-}
-
-/** Dated folders (YYYY/MM/DD) wholly before `since` hold no rollout started on or after it. */
-function isDatedFolderBefore(parts: readonly string[], since: string | null): boolean {
-  if (!since || parts.length === 0 || parts.length > 3) {
-    return false
-  }
-  if (!parts.every((part, index) => (index === 0 ? /^\d{4}$/ : /^\d{2}$/).test(part))) {
-    return false
-  }
-  const prefix = parts.join('-')
-  return prefix < since.slice(0, prefix.length)
-}
-
-/**
- * Mirrors Codex's own delete, which refuses a rollout that another rollout's history still reads.
- * A fork starts after its parent, so rollouts named before `since` are not read. Each rollout's base
- * is cached on disk by rollout id: Codex writes that header once, so it never changes.
- */
-export async function scanCodexRolloutHistoryReferences(
-  homes: readonly string[],
-  since: string | null,
+export function createCodexRolloutHistoryReferences(
   signal?: AbortSignal
-): Promise<CodexRolloutHistoryReferences> {
+): CodexRolloutHistoryReferences {
   const cachePath = join(getOrcaUserDataPath(), CACHE_FILE)
-  const cache = await readCache(cachePath)
+  let cache: Map<string, string | null> | undefined
   let dirty = false
-  let complete = true
+  let unsavedReads = 0
+  let warned = false
   const seen = new Set<string>()
   const childrenByBase = new Map<string, Set<string>>()
   const baseByChild = new Map<string, string>()
+  const walkedFolders = new Set<string>()
+  let everyFolderWalked = true
+  let pruned = false
 
-  const visitRollout = async (path: string, rolloutId: string, date: string | null) => {
-    if (seen.has(rolloutId)) {
+  const save = async (): Promise<void> => {
+    if (!dirty || !cache) {
       return
     }
-    const cached = cache.get(rolloutId)
-    const base = cached ? cached[1] : await readHistoryBase(path)
-    if (base === undefined) {
-      complete = false
-      return
+    dirty = false
+    unsavedReads = 0
+    const tmpPath = `${cachePath}.${process.pid}.${randomUUID()}.tmp`
+    try {
+      await writeFile(tmpPath, JSON.stringify({ version: 2, bases: [...cache] }), 'utf-8')
+      await rename(tmpPath, cachePath)
+    } catch (error) {
+      console.warn('[workspace-cleanup] Could not save the Codex fork scan:', error)
     }
+  }
+
+  const link = (rolloutId: string, base: string | null): void => {
     seen.add(rolloutId)
-    if (!cached) {
-      cache.set(rolloutId, [date, base])
-      dirty = true
-    }
     if (base === null || base === rolloutId) {
       return
     }
@@ -192,78 +166,142 @@ export async function scanCodexRolloutHistoryReferences(
     childrenByBase.set(base, children)
   }
 
-  const walk = async (folder: string, parts: string[]): Promise<void> => {
-    signal?.throwIfAborted()
-    for (const entry of (await readFolder(folder)) ?? []) {
+  /** False when this rollout's header can't be settled yet. */
+  const visitRollout = async (path: string, rolloutId: string): Promise<boolean> => {
+    if (seen.has(rolloutId)) {
+      return true
+    }
+    const cached = cache!.get(rolloutId)
+    if (cached !== undefined) {
+      link(rolloutId, cached)
+      return true
+    }
+    // Opening a link into a WSL distro can start it; a fork lives in a Codex home, not there.
+    if (process.platform === 'win32' && parseWslUncPath(await realpath(path).catch(() => path))) {
+      return true
+    }
+    const header = await readHistoryBase(path)
+    if (header === 'unknown') {
+      return false
+    }
+    if (!header.definitive) {
+      const modified = await stat(path).then(
+        (entry) => entry.mtimeMs,
+        () => 0
+      )
+      // A header still being written may name a base; an old empty file never will.
+      return Date.now() - modified >= UNFINISHED_HEADER_GRACE_MS
+    }
+    link(rolloutId, header.base)
+    cache!.set(rolloutId, header.base)
+    dirty = true
+    if (++unsavedReads >= CACHE_CHECKPOINT_READS) {
+      await save()
+    }
+    return true
+  }
+
+  /** False when anything under the folder couldn't be read. */
+  const walk = async (folder: string, visitedFolders: Set<string>): Promise<boolean> => {
+    let entries: Dirent[]
+    try {
+      entries = await readdir(folder, { withFileTypes: true })
+    } catch (error) {
+      return isDefinitiveAbsence(error)
+    }
+    let complete = true
+    for (const entry of entries) {
+      signal?.throwIfAborted()
       const path = join(folder, entry.name)
-      if (entry.isDirectory()) {
-        if (!isDatedFolderBefore([...parts, entry.name], since)) {
-          await walk(path, [...parts, entry.name])
-        }
+      const rolloutId = codexPhysicalRolloutId(entry.name)
+      if (entry.isFile() && rolloutId) {
+        complete = (await visitRollout(path, rolloutId)) && complete
         continue
       }
-      const rolloutId = codexPhysicalRolloutId(entry.name)
-      const date = codexRolloutNameDate(entry.name)
-      if (rolloutId && (!since || !date || date >= since)) {
-        await visitRollout(path, rolloutId, date)
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) {
+        continue
+      }
+      const target = await stat(path).catch(() => null)
+      if (!target) {
+        continue
+      }
+      if (target.isFile() && rolloutId) {
+        complete = (await visitRollout(path, rolloutId)) && complete
+      } else if (target.isDirectory()) {
+        const real = await realpath(path).catch(() => path)
+        if (!visitedFolders.has(real)) {
+          visitedFolders.add(real)
+          complete = (await walk(path, visitedFolders)) && complete
+        }
       }
     }
+    return complete
   }
 
-  // Accounts that share history link the same folders, so each real folder is walked once.
-  const walked = new Set<string>()
-  try {
-    for (const home of homes) {
-      for (const name of ['sessions', 'archived_sessions']) {
-        let folder: string
-        try {
-          folder = await realpath(join(home, name))
-        } catch (error) {
-          if (isDefinitiveAbsence(error)) {
+  const refresh = async (homes: readonly string[]): Promise<boolean> => {
+    try {
+      cache ??= await readCache(cachePath)
+      let complete = true
+      const visitedFolders = new Set<string>()
+      for (const home of homes) {
+        for (const name of ['sessions', 'archived_sessions']) {
+          let folder: string
+          try {
+            folder = await realpath(join(home, name))
+          } catch (error) {
+            complete &&= isDefinitiveAbsence(error)
             continue
           }
-          throw error
-        }
-        if (!walked.has(folder)) {
-          walked.add(folder)
-          await walk(folder, [])
+          if (visitedFolders.has(folder)) {
+            continue
+          }
+          visitedFolders.add(folder)
+          if (!walkedFolders.has(folder)) {
+            const walked = await walk(folder, visitedFolders)
+            walkedFolders.add(folder)
+            everyFolderWalked &&= walked
+            complete &&= walked
+          } else if (name === 'sessions') {
+            for (const parts of recentDatedFolders()) {
+              complete = (await walk(join(folder, ...parts), visitedFolders)) && complete
+            }
+          }
         }
       }
-    }
-  } catch (error) {
-    signal?.throwIfAborted()
-    console.warn('[workspace-cleanup] Could not read Codex rollouts to find forks:', error)
-    complete = false
-  }
-  // Rollouts in the range just read that no home has any more.
-  if (complete) {
-    for (const [id, [date]] of cache) {
-      if (!seen.has(id) && (!since || !date || date >= since)) {
-        cache.delete(id)
-        dirty = true
+      // Once every folder was read in full, cached rollouts no home has any more drop out.
+      if (complete && everyFolderWalked && !pruned) {
+        pruned = true
+        for (const id of cache.keys()) {
+          if (!seen.has(id)) {
+            cache.delete(id)
+            dirty = true
+          }
+        }
       }
+      if ((!complete || !everyFolderWalked) && !warned) {
+        warned = true
+        console.warn(
+          '[workspace-cleanup] Some Codex rollouts could not be read; keeping forks safe'
+        )
+      }
+      return complete && everyFolderWalked
+    } catch (error) {
+      await save()
+      throw error
     }
   }
 
-  const save = async (): Promise<void> => {
-    if (!dirty) {
-      return
-    }
-    dirty = false
-    await writeCache(cachePath, cache).catch((error: unknown) => {
-      console.warn('[workspace-cleanup] Could not save Codex fork scan:', error)
-    })
-  }
-  await save()
   return {
-    complete,
+    refresh,
     isReferenced: (rolloutId) => (childrenByBase.get(rolloutId)?.size ?? 0) > 0,
     forget: (rolloutId) => {
       const base = baseByChild.get(rolloutId)
       if (base) {
         childrenByBase.get(base)?.delete(rolloutId)
       }
-      dirty = cache.delete(rolloutId) || dirty
+      if (cache?.delete(rolloutId)) {
+        dirty = true
+      }
     },
     save
   }
