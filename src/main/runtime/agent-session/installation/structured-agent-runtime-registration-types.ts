@@ -107,6 +107,8 @@ export type StructuredAgentLaunchCheck = {
   minimumVersions: readonly string[]
   /** Arguments before `--version`. */
   versionArgs?: readonly string[]
+  /** Orca's copy that a launch runs when `command` is too old; absent or null keeps `command`. */
+  standIn?: (command: string, commandSettings: StructuredAgentCommandSettings) => string | null
 }
 
 export type StructuredAgentChatProgram = {

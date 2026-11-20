@@ -36,24 +36,32 @@ export async function checkAcpLaunchVersion(
   return result
 }
 
+/** Orca's copy that serves when `command` is too old, or null where the spec doesn't let it run. */
+export function acpStandInCopy(
+  spec: Pick<AcpLaunchSpec, 'agent' | 'command' | 'managedCopyAllowed'>,
+  command: string,
+  settings: ManagedCopySettings | undefined
+): string | null {
+  if (!spec.managedCopyAllowed?.(settings ?? {})) {
+    return null
+  }
+  const copy = managedAgentCommandFor(spec.agent, spec.command)
+  return copy && copy !== command ? copy : null
+}
+
 /** The launch's version check, standing Orca's copy in for a user's own program that is too old,
  *  where the spec lets Orca's copy run: an own agy older than the floor would refuse every chat
  *  that Orca's current copy can serve. */
 export async function checkAcpLaunchVersionOrCopy(
   spec: AcpLaunchSpec,
-  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>,
+  launch: Parameters<typeof checkAcpLaunchVersion>[1],
   wantVersion: boolean,
   read: AgentCliVersionReader | undefined,
   settings: ManagedCopySettings | undefined
 ): Promise<{ command: string; prefixArgs: string[]; check: AgentCliVersionCheck }> {
   const check = await checkAcpLaunchVersion(spec, launch, wantVersion, read)
-  const copy =
-    check.status === 'tooOld' &&
-    spec.managedCopyAllowed !== undefined &&
-    spec.managedCopyAllowed(settings ?? {})
-      ? managedAgentCommandFor(spec.agent, spec.command)
-      : null
-  if (!copy || copy === launch.command) {
+  const copy = check.status === 'tooOld' ? acpStandInCopy(spec, launch.command, settings) : null
+  if (!copy) {
     return { command: launch.command, prefixArgs: launch.prefixArgs, check }
   }
   const copyCheck = await checkAcpLaunchVersion(

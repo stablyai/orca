@@ -78,15 +78,24 @@ export async function observeStructuredAgentLaunch(
     refreshShellOnMiss ? refreshHostAgentBaseEnvironmentAfterMiss : undefined,
     { env: ({ env }) => env, cwd: once }
   )
-  return checkAgentCliVersion(
-    {
-      program: launch.command,
-      prefixArgs: [...launch.prefixArgs, ...(check.versionArgs ?? [])],
-      cwd: await once(),
-      env: launch.env
-    },
-    check.minimumVersions
-  )
+  const read = async (program: string, prefixArgs: readonly string[]) =>
+    checkAgentCliVersion(
+      {
+        program,
+        prefixArgs: [...prefixArgs, ...(check.versionArgs ?? [])],
+        cwd: await once(),
+        env: launch.env
+      },
+      check.minimumVersions
+    )
+  const found = await read(launch.command, launch.prefixArgs)
+  // The launch itself runs Orca's copy for a too-old own program, so admission asks the copy too.
+  const copy = found.status === 'tooOld' ? check.standIn?.(launch.command, settings) : null
+  if (!copy) {
+    return found
+  }
+  const copyCheck = await read(copy, [])
+  return copyCheck.status === 'tooOld' ? found : copyCheck
 }
 
 /** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary keeps the

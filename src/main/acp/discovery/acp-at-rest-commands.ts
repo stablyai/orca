@@ -21,7 +21,7 @@ import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { createAcpAgentConnection } from '../process/acp-agent-connection'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import { supportsAcpStructuredLocation } from '../session/acp-structured-location-support'
-import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { checkAcpLaunchVersionOrCopy } from '../launch/acp-launch-version'
 import {
   resolveAcpLaunchInvocation,
   type AcpLaunchInvocationDeps
@@ -130,12 +130,14 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               ]
             }
             // A version reader owns work too; retain admission until it drains after cancellation.
-            const version = await checkAcpLaunchVersion(
+            const settled = await checkAcpLaunchVersionOrCopy(
               spec,
               launch,
               acpListingDependsOnRelease(spec.modelDiscovery),
-              deps.probeVersion
+              deps.probeVersion,
+              deps.resolveCommandSettings?.()
             )
+            const version = settled.check
             check()
             if (version.status === 'tooOld') {
               throw new Error('ACP command discovery unavailable')
@@ -176,9 +178,10 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
             }
             const connection = (deps.connect ?? createAcpAgentConnection)({
               ...launch,
+              command: settled.command,
               env: { ...launch.env, ...skill?.env },
               args: [
-                ...invocation.prefixArgs,
+                ...settled.prefixArgs,
                 ...spec.args({ fullAccess: false, pluginDirs: skill?.pluginDirs ?? [] }),
                 ...folderArgs
               ]

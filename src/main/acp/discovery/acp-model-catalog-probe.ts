@@ -27,7 +27,7 @@ import { ORCA_ACP_CLIENT_INFO } from '../launch/acp-client-info'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import { acpListingDependsOnRelease, acpModelListingForRelease } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
-import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { checkAcpLaunchVersionOrCopy } from '../launch/acp-launch-version'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
 import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import {
@@ -74,28 +74,28 @@ export function createAcpModelCatalogProbe(
     }
     // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
-    const { command, prefixArgs, env, envToDelete, antigravityChatAuth } =
-      await resolveAcpLaunchInvocation(spec, accountHome, {
-        ...deps,
-        ...(lookup !== 'recover'
-          ? {
-              resolveEnvironment: deps.resolveSavedEnvironment ?? deps.resolveEnvironment,
-              refreshEnvironmentAfterMiss: undefined
-            }
-          : {}),
-        operation,
-        resolveWorkingDirectory: () => cwd
-      })
+    const invocation = await resolveAcpLaunchInvocation(spec, accountHome, {
+      ...deps,
+      ...(lookup !== 'recover'
+        ? {
+            resolveEnvironment: deps.resolveSavedEnvironment ?? deps.resolveEnvironment,
+            refreshEnvironmentAfterMiss: undefined
+          }
+        : {}),
+      operation,
+      resolveWorkingDirectory: () => cwd
+    })
+    const { env, envToDelete, antigravityChatAuth } = invocation
+    // The program found; a too-old one may run Orca's copy instead (checkAcpLaunchVersionOrCopy).
+    const found = { command: invocation.command, prefixArgs: invocation.prefixArgs }
     assertStructuredAgentResolutionCurrent(operation)
     return {
-      identity: { command, prefixArgs, cwd, workspace },
+      identity: { ...found, cwd, workspace },
       inputStamp: JSON.stringify(
         await Promise.all(
           [
             ...new Set([cwd, ...(discovery.kind === 'command' && workspace ? [workspace] : [])])
-          ].map((directory) =>
-            agentModelCatalogInputStamp({ command, prefixArgs, cwd: directory, env })
-          )
+          ].map((directory) => agentModelCatalogInputStamp({ ...found, cwd: directory, env }))
         )
       ),
       run: async (
@@ -107,12 +107,14 @@ export function createAcpModelCatalogProbe(
         const options = { signal, operation: runOperation, selectedModels }
         const operation = runOperation
         assertStructuredAgentResolutionCurrent(operation)
-        const release = await checkAcpLaunchVersion(
+        const settled = await checkAcpLaunchVersionOrCopy(
           spec,
-          { command, prefixArgs, cwd, env, operation },
+          { ...found, cwd, env, operation },
           acpListingDependsOnRelease(discovery),
-          deps.probeVersion ?? ((input) => readAgentCliVersion({ ...input, timeoutMs: null }))
+          deps.probeVersion ?? ((input) => readAgentCliVersion({ ...input, timeoutMs: null })),
+          deps.resolveCommandSettings?.()
         )
+        const { command, prefixArgs, check: release } = settled
         assertStructuredAgentResolutionCurrent(operation)
         if (release.status === 'tooOld') {
           throw new Error(`${spec.agent} at ${command} does not run structured chats`)

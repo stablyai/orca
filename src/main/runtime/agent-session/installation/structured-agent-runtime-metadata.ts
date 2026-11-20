@@ -2,6 +2,7 @@ import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecy
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
+import { acpStandInCopy } from '../../../acp/launch/acp-launch-version'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
   acpHostProgramTakesNewChats,
@@ -90,7 +91,8 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
               return { ...invocation, env }
             },
             minimumVersions,
-            ...(spec.versionArgs ? { versionArgs: spec.versionArgs } : {})
+            ...(spec.versionArgs ? { versionArgs: spec.versionArgs } : {}),
+            standIn: (command, commandSettings) => acpStandInCopy(spec, command, commandSettings)
           }
         }
       : {}),
