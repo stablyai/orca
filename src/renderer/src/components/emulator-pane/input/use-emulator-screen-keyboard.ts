@@ -87,7 +87,9 @@ export function useEmulatorScreenKeyboard({
       return
     }
     const syncId = ++layoutSyncIdRef.current
-    pendingKeyPressesRef.current ??= []
+    if (pendingKeyPressesRef.current === null) {
+      pendingKeyPressesRef.current = []
+    }
     void callRuntimeRpc<{ physicalKeys: boolean }>(
       { kind: 'local' },
       'emulator.syncKeyboardLayout',
