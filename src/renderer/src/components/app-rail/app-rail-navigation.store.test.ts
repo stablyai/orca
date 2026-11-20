@@ -71,3 +71,17 @@ it('keeps the cursor when no earlier workspace exists', () => {
   expect(useAppStore.getState().activeView).toBe('terminal')
   expect(useAppStore.getState().worktreeNavHistoryIndex).toBe(0)
 })
+
+it('toggles the open workspace list from the terminal', () => {
+  useAppStore.setState({ activeView: 'terminal', sidebarBody: 'workspaces', sidebarOpen: true })
+  activateWorkspacesRailItem(useAppStore)
+  expect(useAppStore.getState().sidebarOpen).toBe(false)
+  activateWorkspacesRailItem(useAppStore)
+  expect(useAppStore.getState().sidebarOpen).toBe(true)
+})
+
+it('switches an open Agents list to Workspaces without collapsing it', () => {
+  useAppStore.setState({ activeView: 'terminal', sidebarBody: 'agents', sidebarOpen: true })
+  activateWorkspacesRailItem(useAppStore)
+  expect(useAppStore.getState()).toMatchObject({ sidebarBody: 'workspaces', sidebarOpen: true })
+})

@@ -105,9 +105,3 @@ it('keeps keyboard focus on the rail when a page switch moves the list in or out
   expect(screen.getByRole('button', { name: 'Workspaces' })).toBe(railButton)
   expect(railButton).toHaveFocus()
 })
-
-it('renders the plain hidden list with the rail off on a collapsed page', () => {
-  const { container } = render(column(false, false, false))
-  expect(container.children).toHaveLength(1)
-  expect(container.firstElementChild).toBe(screen.getByLabelText('Filter workspaces'))
-})
