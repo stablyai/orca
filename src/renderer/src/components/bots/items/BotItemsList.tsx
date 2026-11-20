@@ -406,6 +406,8 @@ function BotItemGroup({
               getRowKey={rowKey}
               renderRow={(item) => (
                 <div
+                  // Short groups render unwindowed, where this key keeps each row on its item.
+                  key={item.uid}
                   className="pb-0.5"
                   ref={focusing && item.uid === items[focusIndex]?.uid ? focusRow : undefined}
                 >

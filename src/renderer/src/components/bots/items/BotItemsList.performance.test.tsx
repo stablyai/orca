@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Perf contract (bot Home panel items list): a shown group mounted every row (900 rows for 10 visible
+// Perf contract (#45971, bot Home panel items list): a shown group mounted every row (900 rows for 10 visible
 // at 600 open items), and every item update re-rendered every mounted row. Rows mounted stay near what
 // the panel shows, and one changed item re-renders one row.
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -70,8 +70,11 @@ function Panel({ items }: { items: readonly BotItem[] }): React.JSX.Element {
 }
 
 /** The host's answer as the read gets it: fresh objects, newest activity first. */
-function hostAnswer(changed: { number: number; title: string } | null): BotItem[] {
-  const items = Array.from({ length: OPEN }, (_, index) =>
+function hostAnswer(
+  changed: { number: number; title: string } | null,
+  count = OPEN
+): BotItem[] {
+  const items = Array.from({ length: count }, (_, index) =>
     makeTestBotItem(index + 1, { status: 'planned', lastActivityAt: NOW - (index + 1) * 1000 })
   )
   if (changed) {
@@ -100,7 +103,7 @@ async function showWholePlannedGroup(items: readonly BotItem[]) {
   const view = render(<Panel items={items} />, { wrapper: TooltipProvider })
   fireEvent.click(screen.getByRole('button', { name: /^Planned/ }))
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: `Show ${OPEN - 5} more` }))
+    fireEvent.click(screen.getByRole('button', { name: `Show ${items.length - 5} more` }))
   })
   return view
 }
@@ -113,12 +116,19 @@ it('mounts about what the panel shows of a 600-row group, not every row', async 
   expect(mounted).toBeLessThanOrEqual(40)
 })
 
-it('re-renders only the changed row when an update moves it to the top', async () => {
-  const first = hostAnswer(null)
-  const view = await showWholePlannedGroup(first)
-  rowRenders.clear()
-  // Item 300 gets a comment: the host's next answer is all-new objects, and it now sorts first.
-  const next = reuseEqualJson(first, hostAnswer({ number: 300, title: 'Item 300, updated' }))
-  view.rerender(<Panel items={next} />)
-  expect([...rowRenders.entries()]).toEqual([[300, 1]])
-})
+// A long group renders windowed, a short one in full: both keep each row on its item.
+it.each([
+  { count: OPEN, changed: 300 },
+  { count: 20, changed: 15 }
+])(
+  're-renders only the changed row when an update moves it to the top ($count rows)',
+  async ({ count, changed }) => {
+    const first = hostAnswer(null, count)
+    const view = await showWholePlannedGroup(first)
+    rowRenders.clear()
+    // The item gets a comment: the host's next answer is all-new objects, and it now sorts first.
+    const next = reuseEqualJson(first, hostAnswer({ number: changed, title: 'Updated' }, count))
+    view.rerender(<Panel items={next} />)
+    expect([...rowRenders.entries()]).toEqual([[changed, 1]])
+  }
+)
