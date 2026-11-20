@@ -166,8 +166,11 @@ export class OrchestrationDbCompaction {
     if (!counted || this.stopped) {
       return
     }
-    // Best effort, off main; the truncation moves the stamp, so it comes first.
-    await this.runChild(undefined, MIN_COPY_BUDGET_MS)
+    // A WAL a passive checkpoint drained keeps its size, which quit would read as pending work. Truncated
+    // off main, and only then: it takes the writer lock for a moment. It moves the stamp, so it comes first.
+    if (((await sizeOf(`${this.filename}-wal`)) ?? 0) > MAX_WAL_BYTES) {
+      await this.runChild(undefined, MIN_COPY_BUDGET_MS)
+    }
     if (this.stopped) {
       return
     }
