@@ -131,9 +131,40 @@ it("keeps the run working when agy's done lands while a sibling subagent still w
   programDone()
   await subagentIdleStop()
 
-  vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 2)
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 2)
   expect(state()).toBe('working')
   await agyHook('Stop', { ...child, conversationId: 'sibling', fullyIdle: true })
-  vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(state()).toBe('working')
+  await vi.advanceTimersByTimeAsync(1001)
   expect(state()).toBe('done')
+})
+
+it('discards an earlier refused done when a new root prompt opens', async () => {
+  await parentStopsWhileSubagentRuns()
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  programDone()
+  await vi.advanceTimersByTimeAsync(4001)
+  await agyHook('PreInvocation', { lastUserInput: 'a new task' })
+  await subagentIdleStop()
+  await vi.advanceTimersByTimeAsync(4001)
+  expect(state()).toBe('working')
+})
+
+it('discards a refused done when the program reports new work', async () => {
+  await parentStopsWhileSubagentRuns()
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  programDone()
+  await vi.advanceTimersByTimeAsync(4001)
+  server.ingestTerminalStatus({
+    paneKey: PANE,
+    tabId: 'tab-1',
+    worktreeId: 'wt-1',
+    connectionId: null,
+    fromProgramStatus: true,
+    payload: { prompt: '', state: 'working', agentType: 'antigravity' }
+  })
+  await subagentIdleStop()
+  await vi.advanceTimersByTimeAsync(4001)
+  expect(state()).toBe('working')
 })

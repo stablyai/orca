@@ -13,7 +13,7 @@ export const ANTIGRAVITY_PARENT_WAKE_GRACE_MS = 2000
 type TerminalStatusEventIdentity = { paneKey: string }
 const retriedAntigravityDones = new WeakSet<TerminalStatusEventIdentity>()
 
-function isAntigravityHelperHeldDone(
+export function isAntigravityHelperHeldDone(
   previous: EnrichedAgentHookEventPayload,
   payload: ParsedAgentStatusPayload
 ): boolean {
@@ -65,7 +65,8 @@ export function programStatusHookYieldEndsAt(
   previous: EnrichedAgentHookEventPayload | undefined,
   payload: ParsedAgentStatusPayload,
   programWorkingSince?: number,
-  antigravityHelpersIdleAt?: number
+  antigravityHelpersIdleAt?: number,
+  antigravityLeadObservedAt?: number
 ): number | undefined {
   if (previous?.observation?.origin !== 'hook' || previous.providerSessionOnly === true) {
     return undefined
@@ -98,7 +99,8 @@ export function programStatusHookYieldEndsAt(
   // A parent wake follows the run's latest hook, which may be a busy Stop after the subagent's.
   if (antigravityHelpersIdleAt !== undefined && isAntigravityHelperHeldDone(previous, payload)) {
     return (
-      Math.max(antigravityHelpersIdleAt, previous.receivedAt) + ANTIGRAVITY_PARENT_WAKE_GRACE_MS
+      Math.max(antigravityHelpersIdleAt, antigravityLeadObservedAt ?? previous.receivedAt) +
+      ANTIGRAVITY_PARENT_WAKE_GRACE_MS
     )
   }
   // Hook and program child rosters cannot settle or reopen each other's turns.

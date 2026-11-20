@@ -28,6 +28,7 @@ import {
   CODEX_SUBAGENT_POLL_MS
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
+import { wakeAntigravityDone } from './program-status/program-status-recheck'
 
 type TranscriptPoll = {
   source: AgentHookSource
@@ -189,6 +190,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main stores enriched accepted rows; the shared view exposes their base event type.
         poll.original as EnrichedAgentHookEventPayload
       )
+      wakeAntigravityDone(this.state, source, poll.original.paneKey, this.hookSilenceRechecks)
     }
   }
 
@@ -240,6 +242,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     const update = transcriptPollUpdate(source, original, normalized)
     const next = update ? this.applyNormalizedStatus(update) : original
     if (next) {
+      wakeAntigravityDone(this.state, source, paneKey, this.hookSilenceRechecks)
       const quiet = !update && museLogOffset(this.state, paneKey) === logOffset
       const delayMs =
         source === 'muse' || source === 'antigravity'

@@ -1,3 +1,4 @@
+import { discardAntigravityDone } from './program-status/program-status-recheck'
 import {
   retainOpenCodeWriterTopology,
   retainTmuxHookWriterTopology
@@ -97,6 +98,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   ): EnrichedAgentHookEventPayload | undefined {
     const applied = super.applyNormalizedStatus(...args)
     const [incoming, , origin = 'hook'] = args
+    discardAntigravityDone(this.hookSilenceRechecks, incoming, applied)
     // Claude can still block the prompt after this hook, and its idle may already have landed.
     if (
       applied?.payload.agentType === 'claude' &&

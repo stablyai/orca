@@ -12,6 +12,7 @@ import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-status/l
 import { AgentHookServerIngestLaunch } from './server-ingest-launch'
 import {
   antigravityRefusedDoneRetryMs,
+  isAntigravityHelperHeldDone,
   programStatusHookYieldEndsAt
 } from './program-status/hook-precedence'
 import { deferProgramStatusRecheck } from './program-status/program-status-recheck'
@@ -177,10 +178,16 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       }
       return
     }
-    const helpersIdleAt = this.state.antigravityChildWorkByPaneKey.get(paneKey)?.helpersIdleAt
+    const antigravity = this.state.antigravityChildWorkByPaneKey.get(paneKey)
     const yieldEndsAt =
       event.fromProgramStatus === true
-        ? programStatusHookYieldEndsAt(previous, payload, workingSince, helpersIdleAt)
+        ? programStatusHookYieldEndsAt(
+            previous,
+            payload,
+            workingSince,
+            antigravity?.helpersIdleAt,
+            antigravity?.leadObservedAt
+          )
         : undefined
     const hookOwnsAgent = yieldEndsAt !== undefined && now < yieldEndsAt
     if (event.fromProgramStatus === true) {
@@ -194,6 +201,11 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         paneKey,
         yieldedTo: previous?.receivedAt,
         delayMs,
+        preserveAntigravityDone:
+          hookOwnsAgent &&
+          previous !== undefined &&
+          (payload.agentType === undefined || payload.agentType === 'antigravity') &&
+          isAntigravityHelperHeldDone(previous, payload),
         event,
         reoffer: (retried) => this.ingestTerminalStatus(retried)
       })

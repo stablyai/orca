@@ -139,6 +139,7 @@ export function normalizeAntigravityEvent(
   }
 
   const paneState = getOrCreateAntigravityPaneState(state, paneKey)
+  paneState.leadObservedAt = now
   const toolName = readAntigravityToolCall(hookPayload).toolName
   const brainDir = resolveAntigravityBrainDirectory(hookPayload, transcriptPath)
   if (
@@ -171,7 +172,7 @@ export function normalizeAntigravityEvent(
     paneState.discoversChildren = true
   }
   if (eventName === 'PreToolUse' && isAntigravityHelperSpawnTool(toolName)) {
-    paneState.awaitingInitialHelperDiscovery = new Set(paneState.children.keys())
+    paneState.awaitingInitialHelperDiscovery = true
   }
   const finishedBackgroundCommand = trackAntigravityBackgroundCommand(
     paneState,

@@ -133,3 +133,30 @@ it.each([10, 100])('retires %s verified siblings without traversing the roster',
     entries.mockRestore()
   }
 })
+
+it.each([10, 100])(
+  'does not copy %s existing candidate IDs when another helper starts',
+  (children) => {
+    const state = createHookListenerState()
+    const root = { conversationId: 'root', lastUserInput: 'Task' }
+    normalizeAntigravityEvent(state, 'PreInvocation', 'Task', 'pane', root, 'root')
+    const pane = state.antigravityChildWorkByPaneKey.get('pane')!
+    for (let i = 0; i < children; i++) {
+      recordAntigravityChildHook(pane, `child-${i}`, 'PreInvocation', {}, 1)
+    }
+    const keys = vi.spyOn(pane.children, 'keys')
+    try {
+      normalizeAntigravityEvent(
+        state,
+        'PreToolUse',
+        '',
+        'pane',
+        { ...root, toolCall: { name: 'invoke_subagent' } },
+        'root'
+      )
+      expect(keys).toHaveBeenCalledTimes(0)
+    } finally {
+      keys.mockRestore()
+    }
+  }
+)

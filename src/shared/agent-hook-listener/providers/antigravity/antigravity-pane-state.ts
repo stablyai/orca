@@ -33,10 +33,11 @@ export type AntigravityPaneChildState = {
   rootBrainDir?: string
   rootTranscriptPath?: string
   discoversChildren?: boolean
-  awaitingInitialHelperDiscovery?: Set<string>
+  awaitingInitialHelperDiscovery?: true
   helpersIdleAt?: number
   leadState?: AgentStatusState
   leadStateStartedAt?: number
+  leadObservedAt?: number
   leadModel?: string
   commands?: Set<number>
   children: Map<string, TrackedAntigravityChild>

@@ -1,4 +1,8 @@
-type PaneTimer = { timer: ReturnType<typeof setTimeout>; paneKey: string }
+type PaneTimer = {
+  timer?: ReturnType<typeof setTimeout>
+  paneKey: string
+  run: (paneKey: string) => void
+}
 
 /** One unref'd timer per pane; remints move the callback to its current key. */
 export class PaneTimers {
@@ -12,6 +16,18 @@ export class PaneTimers {
   deferUnlessPending(paneKey: string, delayMs: number, run: (paneKey: string) => void): void {
     if (!this.byPaneKey.has(paneKey)) {
       this.start(paneKey, delayMs, run)
+    }
+  }
+
+  park(paneKey: string, run: (paneKey: string) => void): void {
+    this.cancel(paneKey)
+    this.byPaneKey.set(paneKey, { paneKey, run })
+  }
+
+  wake(paneKey: string): void {
+    const entry = this.byPaneKey.get(paneKey)
+    if (entry && entry.timer === undefined) {
+      this.start(paneKey, 0, entry.run)
     }
   }
 
@@ -29,7 +45,9 @@ export class PaneTimers {
   cancel(paneKey: string): void {
     const entry = this.byPaneKey.get(paneKey)
     if (entry !== undefined) {
-      clearTimeout(entry.timer)
+      if (entry.timer !== undefined) {
+        clearTimeout(entry.timer)
+      }
       this.byPaneKey.delete(paneKey)
     }
   }
@@ -44,6 +62,7 @@ export class PaneTimers {
   private start(paneKey: string, delayMs: number, run: (paneKey: string) => void): void {
     const entry: PaneTimer = {
       paneKey,
+      run,
       timer: setTimeout(
         () => {
           this.byPaneKey.delete(entry.paneKey)
@@ -52,7 +71,7 @@ export class PaneTimers {
         Math.max(0, delayMs)
       )
     }
-    entry.timer.unref?.()
+    entry.timer?.unref?.()
     this.byPaneKey.set(paneKey, entry)
   }
 }
