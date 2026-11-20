@@ -14,6 +14,7 @@ import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-
 import type { SessionRelevantField } from './workspace-session'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { AcknowledgedDesktopRelays } from './desktop-relay-acknowledged-hosts'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 export type DesktopRelayApi = {
   desktopRelaysVersion?: () => Promise<number>
@@ -162,7 +163,10 @@ export function sendDesktopRelayWrite(
   if (!api.applyDesktopRelays) {
     return null
   }
-  const { write, acknowledge } = acknowledgedRelays.narrow(full)
+  // Main-owned layout recomputes every host's relay ids from each save, so it gets every host.
+  const { write, acknowledge } = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? { write: full, acknowledge: () => {} }
+    : acknowledgedRelays.narrow(full)
   if (write.hosts.length === 0) {
     return null
   }

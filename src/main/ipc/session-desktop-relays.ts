@@ -84,11 +84,12 @@ export function registerDesktopRelayHandlers(
           result.skipped.push(hostId)
           continue
         }
+        existing ??= new Set(store.getWorkspaceSessionHostIds())
         if (ORCA_LAYOUT_OWNER_IS_MAIN && parseExecutionHostId(hostId)?.kind !== 'runtime') {
-          patchWindowRelays(
-            { remoteSessionIdsByTabId: windowRelayMap(store.getWorkspaceSession(hostId), host) },
-            hostId
-          )
+          const relays = windowRelayMap(store.getWorkspaceSession(hostId), host)
+          if (existing.has(hostId) || Object.keys(relays).length > 0) {
+            patchWindowRelays({ remoteSessionIdsByTabId: relays }, hostId)
+          }
           result.applied.push(hostId)
           continue
         }
@@ -100,7 +101,6 @@ export function registerDesktopRelayHandlers(
         if (refused) {
           result.refused.push(hostId)
         }
-        existing ??= new Set(store.getWorkspaceSessionHostIds())
         // Never materialize a partition just to record that it holds nothing.
         if (patch && (existing.has(hostId) || patch.remoteSessionIdsByTabId)) {
           store.patchWorkspaceSessionRelays(patch, hostId)

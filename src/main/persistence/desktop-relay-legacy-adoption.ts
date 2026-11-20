@@ -70,13 +70,15 @@ export function legacyRelayAdoptionBatch(
   baseline: LegacyRelayBaseline
 ): (hostId: ExecutionHostId) => LegacyRelayAdoption {
   let tabHosts: Map<string, ExecutionHostId> | null = null
-  const relaysAtStart = new Map<ExecutionHostId, Record<string, string> | undefined>()
-  const relaysOf = (hostId: ExecutionHostId) => {
-    if (!relaysAtStart.has(hostId)) {
-      relaysAtStart.set(hostId, store.getWorkspaceSession(hostId).remoteSessionIdsByTabId)
-    }
-    return relaysAtStart.get(hostId)
-  }
+  // Read before this batch patches any partition; empty once every partition has adopted.
+  const relaysAtStart = new Map(
+    baseline.size === 0
+      ? []
+      : store
+          .getWorkspaceSessionHostIds()
+          .map((hostId) => [hostId, store.getWorkspaceSession(hostId).remoteSessionIdsByTabId])
+  )
+  const relaysOf = (hostId: ExecutionHostId) => relaysAtStart.get(hostId)
   return (hostId) => () => {
     const legacy = baseline.get(hostId)
     // Adopted once; the record's version keeps it from running again after a restart.

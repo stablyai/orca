@@ -45,18 +45,26 @@ function sessionsWithDesktopRelays(
       relays: 'separate'
     })
   }))
-  const stagedHosts = new Set(staged.map(({ resolved }) => resolved))
-  for (const hostId of relaysByHost.keys()) {
-    if (!stagedHosts.has(hostId)) {
-      staged.push({ hostId, resolved: hostId, state: store.getWorkspaceSession(hostId) })
-    }
-  }
-  return staged.map(({ state, hostId, resolved }) => {
+  // No legacy adoption here: the snapshot may move rows the stored partitions still place elsewhere.
+  const withRelays = staged.map(({ state, hostId, resolved }) => {
     const relays = relaysByHost.get(resolved)
-    // No legacy adoption here: the snapshot may move rows the stored partitions still place elsewhere.
     const patch = relays && applyDesktopRelayWrite(state, relays, null).patch
     return { state: patch ? { ...state, ...patch } : state, hostId }
   })
+  const stagedHosts = new Set(staged.map(({ resolved }) => resolved))
+  const existing = new Set(store.getWorkspaceSessionHostIds())
+  for (const [hostId, relays] of relaysByHost) {
+    if (stagedHosts.has(hostId)) {
+      continue
+    }
+    const stored = store.getWorkspaceSession(hostId)
+    const { patch } = applyDesktopRelayWrite(stored, relays, null)
+    // Never materialize a partition just to record that it holds nothing.
+    if (patch && (existing.has(hostId) || patch.remoteSessionIdsByTabId)) {
+      withRelays.push({ state: { ...stored, ...patch }, hostId })
+    }
+  }
+  return withRelays
 }
 
 export type QuitResumeRecordsFor = (session: WorkspaceSessionState) => SleepingAgentSessionRecord[]
