@@ -38,6 +38,19 @@ export function clipActivityText(text: string): string {
   return line.length <= max ? line : `${line.slice(0, max - 1).trimEnd()}…`
 }
 
+/** Text a thread's readers may see: URL queries dropped, nothing when it looks like it holds a secret. */
+function shareableText(text: string): string {
+  const { text: shown, leftOut } = redactBotText(text)
+  return leftOut === 0 ? shown : ''
+}
+
+export const ACTIVITY_STEP_LEFT_OUT = 'Step left out: it looked like it held a secret'
+
+/** A plan step's title as a thread shows it; the agent writes steps freely, so they are filtered as tool input is. */
+export function connectorTurnActivityStepTitle(content: string): string {
+  return clipActivityText(shareableText(content)) || ACTIVITY_STEP_LEFT_OUT
+}
+
 /**
  * The line a thread shows for the tool a bot's turn is inside ("Running pnpm test", "Reading
  * slack-edge.ts"), from the status row's tool name and input preview. An input that looks like it
@@ -52,7 +65,7 @@ export function connectorTurnActivityLine(
     return undefined
   }
   const input = (toolInput ?? '').split('\n')[0]!.trim()
-  const detail = input && redactBotText(input).leftOut === 0 ? input : ''
+  const detail = shareableText(input)
   const key = toolKey(name)
   let line: string
   if (isCommandToolName(name)) {

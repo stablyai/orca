@@ -39,13 +39,16 @@ type InstalledCursorHooks = {
 const EXPECTED_CURSOR_HOOK_STDOUT = {
   beforeSubmitPrompt: { continue: true },
   stop: {},
-  preToolUse: { permission: 'allow' },
+  preToolUse: {},
   postToolUse: {},
   postToolUseFailure: {},
-  beforeShellExecution: { permission: 'allow' },
-  beforeMCPExecution: { permission: 'allow' },
+  beforeShellExecution: {},
+  beforeMCPExecution: {},
   afterAgentResponse: {}
 } satisfies Record<CursorEvent, Record<string, unknown>>
+
+// Every event runs the same script with one of these three responses; one event per response covers the quoting.
+const RESPONSE_SHAPE_EVENTS = ['beforeSubmitPrompt', 'stop', 'preToolUse'] as const
 
 function readInstalledCursorHooks(homeDir: string): InstalledCursorHooks {
   return JSON.parse(
@@ -144,7 +147,7 @@ describe('CursorHookService', () => {
 
   // Execute the registered command: installer-shape checks missed invalid stdout (#15462).
   it(
-    'emits protocol-valid JSON on stdout for every managed event, including empty stdin (#15462)',
+    'emits protocol-valid JSON on stdout for every response shape, including empty stdin (#15462)',
     () => {
       expect(new CursorHookService().install().state).toBe('installed')
       const config = readInstalledCursorHooks(homeDir)
@@ -154,6 +157,9 @@ describe('CursorHookService', () => {
       ]
 
       for (const eventName of CURSOR_EVENTS) {
+        requireRegisteredCommand(config, eventName)
+      }
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         for (const payloadFor of payloads) {
           const result = runRegisteredCursorHook(command, payloadFor(eventName))
@@ -168,6 +174,37 @@ describe('CursorHookService', () => {
     HOOK_CASE_TIMEOUT_MS
   )
 
+  it(
+    'rewrites only existing outdated managed entries on script refresh, without CLI detection',
+    async () => {
+      const configPath = join(homeDir, '.cursor', 'hooks.json')
+      mkdirSync(dirname(configPath), { recursive: true })
+      const oldScript = join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME)
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          version: 1,
+          hooks: {
+            beforeShellExecution: [
+              { command: '/usr/local/bin/user-hook' },
+              { command: `printf '{"permission":"allow"}'; # ${oldScript}` }
+            ]
+          }
+        })
+      )
+
+      await new CursorHookService().refreshManagedScripts()
+
+      const config = readInstalledCursorHooks(homeDir)
+      expect(Object.keys(config.hooks)).toEqual(['beforeShellExecution'])
+      expect(config.hooks.beforeShellExecution[0].command).toBe('/usr/local/bin/user-hook')
+      const command = config.hooks.beforeShellExecution[1]?.command ?? ''
+      expect(JSON.parse(runRegisteredCursorHook(command, '').stdout)).toEqual({})
+    },
+    // Spawns the installed hook through cmd.exe on Windows, which can exceed the default budget.
+    HOOK_CASE_TIMEOUT_MS
+  )
+
   it.each(['ordinary', 'spaced'] as const)(
     'emits protocol-valid JSON when the script is missing in a %s profile (#15462)',
     (profileKind) => {
@@ -178,7 +215,7 @@ describe('CursorHookService', () => {
       const config = readInstalledCursorHooks(installHome)
       unlinkSync(join(installHome, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME))
 
-      for (const eventName of CURSOR_EVENTS) {
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         const result = runRegisteredCursorHook(command, '')
         expect(result.status, `${eventName} missing-script exit`).toBe(0)
@@ -197,7 +234,7 @@ describe('CursorHookService', () => {
       expect(new CursorHookService().install().state).toBe('installed')
       const config = readInstalledCursorHooks(homeDir)
 
-      for (const eventName of ['beforeSubmitPrompt', 'preToolUse', 'stop'] as const) {
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         const result = runRegisteredCursorHook(
           command,

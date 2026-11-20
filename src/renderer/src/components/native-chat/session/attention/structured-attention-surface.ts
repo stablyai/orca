@@ -10,8 +10,12 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isTabOnScreen, isWorkspaceOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
-import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import {
+  findTabByIdOrChatAlias,
+  isStructuredTab
+} from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { readBotBackgroundSessionTabs } from '../../../bots/bot-background-sessions'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
@@ -34,9 +38,7 @@ function findSubjectTab(
   if (!parsed) {
     return null
   }
-  const tab = structuredTabsIn(state, workspaceId).find(
-    (candidate) => candidate.id === parsed.tabId
-  )
+  const tab = findTabByIdOrChatAlias(structuredTabsIn(state, workspaceId), parsed.tabId)
   if (!tab || structuredAgentSessionPaneKey(tab.id, tab.entityId) !== surfaceKey) {
     return null
   }
@@ -51,9 +53,7 @@ function admitStructuredSession(
   if (!parsed) {
     return { admitted: false, cause: 'unknown-surface' }
   }
-  const tab = structuredTabsIn(state, subject.workspaceId).find(
-    (candidate) => candidate.id === parsed.tabId
-  )
+  const tab = findTabByIdOrChatAlias(structuredTabsIn(state, subject.workspaceId), parsed.tabId)
   if (!tab) {
     return { admitted: false, cause: 'unknown-surface' }
   }
@@ -86,7 +86,7 @@ export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAtt
     isWorkspaceViewed: (workspaceId) => isWorkspaceOnScreen(state, workspaceId),
     isWorkspaceActive: (workspaceId) => state.activeWorktreeId === workspaceId,
     isWorkspaceMuted: (workspaceId) =>
-      isWorkspaceNotificationMutedBySidebarFilters(state, workspaceId),
+      isWorkspaceNotificationMutedBySidebarFilters(state, readRuntimeStatuses(), workspaceId),
     resolveViewedSubjectKey: (groupId) => {
       // A stand-in is viewed through the room that shows its session.
       const tab = [

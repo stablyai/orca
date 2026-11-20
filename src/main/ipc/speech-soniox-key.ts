@@ -16,11 +16,11 @@ export function registerSonioxSpeechKeyHandlers(): void {
 
   ipcMain.handle('speech:saveSonioxApiKey', async (_event, apiKey: string) => {
     await saveVerifiedSonioxSpeechApiKey(apiKey)
-    return { configured: true, protection: getSonioxSpeechApiKeyProtection() }
+    return { configured: true, protection: await getSonioxSpeechApiKeyProtection() }
   })
 
-  ipcMain.handle('speech:clearSonioxApiKey', () => {
-    clearSonioxSpeechApiKey()
+  ipcMain.handle('speech:clearSonioxApiKey', async () => {
+    await clearSonioxSpeechApiKey()
     return { configured: false, protection: null }
   })
 }

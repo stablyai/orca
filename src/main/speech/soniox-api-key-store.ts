@@ -13,17 +13,17 @@ export const clearSonioxSpeechApiKey = store.clear
 export const getSonioxSpeechApiKeyProtection = store.protection
 export const sonioxSpeechApiKeyEnvelopeFile = store.envelopeFile
 
-export function saveSonioxSpeechApiKey(apiKey: string): void {
+export async function saveSonioxSpeechApiKey(apiKey: string): Promise<void> {
   const trimmed = apiKey.trim()
   if (!trimmed) {
     throw new Error('Soniox API key is required')
   }
-  store.save(trimmed)
+  await store.save(trimmed)
 }
 
-export function readSonioxSpeechApiKey(): string {
+export async function readSonioxSpeechApiKey(): Promise<string> {
   // The store caches what it read; another process (desktop vs orca serve) may have removed the file since.
-  const key = store.has() ? store.read() : null
+  const key = (await store.has()) ? await store.read() : null
   if (!key) {
     throw new Error('Soniox API key is not configured')
   }
@@ -31,6 +31,8 @@ export function readSonioxSpeechApiKey(): string {
 }
 
 /** Headless hosts may not open a desktop-sealed file; checks the disk quietly, since readiness is polled. */
-export function canReadSonioxSpeechApiKey(): boolean {
-  return store.has() && savedCredentialUnreadable(store.envelopeFile()) === undefined
+export async function canReadSonioxSpeechApiKey(): Promise<boolean> {
+  return (
+    (await store.has()) && (await savedCredentialUnreadable(store.envelopeFile())) === undefined
+  )
 }

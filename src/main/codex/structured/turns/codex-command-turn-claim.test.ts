@@ -126,7 +126,7 @@ const resultRows = (writes: readonly Written[]) =>
   writes.filter((write) => write.body.kind === 'status')
 
 describe('a Codex turn a conversation command claims', () => {
-  it("ends a captured failed compaction on its completion, below one row of Codex's own", () => {
+  it('settles a failed compaction and lets the next turn write its own rows', () => {
     // Captured app-server sequence: two retries, a fatal error, then failed completion.
     const captured: { case: string; t: number; method: string; params: object }[] = readFileSync(
       join(__dirname, '../../__fixtures__/codex-app-server-turn-endings.jsonl'),
@@ -178,16 +178,7 @@ describe('a Codex turn a conversation command claims', () => {
         }
       }
     ])
-  })
 
-  it('leaves the next turn to write its own record after a failed compaction', () => {
-    const { writes, translator, emit } = harness()
-    translator.beginCommand(COMMAND)
-    emit(notification('turn/started', { turn: { id: PROVIDER_TURN } }))
-    emit(
-      notification('error', { turnId: PROVIDER_TURN, willRetry: false, error: { message: 'x' } })
-    )
-    emit(notification('turn/completed', { turn: { id: PROVIDER_TURN, status: 'failed' } }))
     emit(notification('turn/started', { turn: { id: 'ordinary' } }))
     emit(notification('turn/completed', { turn: { id: 'ordinary', status: 'completed' } }))
 
@@ -196,20 +187,13 @@ describe('a Codex turn a conversation command claims', () => {
     ).toEqual(['ordinary', 'ordinary'])
   })
 
-  it('names no provider turn for a Stop until Codex opens one, then the one it opened', () => {
-    const { translator, emit } = harness()
-    translator.beginCommand(COMMAND)
-    expect(translator.commandProviderTurnId(COMMAND.turnId)).toBeUndefined()
-    emit(notification('turn/started', { turn: { id: PROVIDER_TURN } }))
-    expect(translator.commandProviderTurnId(COMMAND.turnId)).toBe(PROVIDER_TURN)
-    expect(translator.commandProviderTurnId('ordinary')).toBe('ordinary')
-  })
-
   it('claims the same provider turn when the refused start is retried', () => {
     const { writes, translator, emit } = harness(1)
     translator.beginCommand(COMMAND)
     const started = notification('turn/started', { turn: { id: PROVIDER_TURN } })
 
+    expect(translator.commandProviderTurnId(COMMAND.turnId)).toBeUndefined()
+    expect(translator.commandProviderTurnId('ordinary')).toBe('ordinary')
     expect(emit(started)).toEqual({ accepted: false, reason: 'backpressure' })
     expect(emit(started)).toEqual(ACCEPTED)
 

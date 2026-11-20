@@ -90,5 +90,5 @@ export async function saveVerifiedSonioxSpeechApiKey(apiKey: string): Promise<vo
       throw new Error(refusal)
     }
   }
-  saveSonioxSpeechApiKey(apiKey)
+  await saveSonioxSpeechApiKey(apiKey)
 }

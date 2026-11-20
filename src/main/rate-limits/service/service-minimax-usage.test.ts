@@ -92,13 +92,13 @@ describe('RateLimitService', () => {
       .mockRejectedValueOnce(new Error('MiniMax unavailable'))
 
     await service.refresh()
-    expect(service.getState().minimax?.session?.usedPercent).toBe(40)
+    expect((await service.getState()).minimax?.session?.usedPercent).toBe(40)
 
     apiKey = 'sk-account-b'
     await service.refresh()
 
-    expect(service.getState().minimax?.status).toBe('error')
-    expect(service.getState().minimax?.session).toBeNull()
+    expect((await service.getState()).minimax?.status).toBe('error')
+    expect((await service.getState()).minimax?.session).toBeNull()
     expect(fetchMiniMaxRateLimits).toHaveBeenLastCalledWith(
       expect.objectContaining({ apiKey: 'sk-account-b' })
     )

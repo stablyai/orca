@@ -45,19 +45,19 @@ class FakeSocket implements SonioxSocket {
   }
 }
 
-function setup(apiKey = 'soniox-test-key-123') {
+async function setup(apiKey = 'soniox-test-key-123') {
   const socket = new FakeSocket()
   const events: SttEvent[] = []
   const failures: string[] = []
   const session = new SonioxRealtimeSession({
-    readApiKey: () => apiKey,
+    readApiKey: async () => apiKey,
     language: 'uk',
     terms: ['Orca'],
     sink: (event) => events.push(event),
     onFailure: (error) => failures.push(error),
     openSocket: () => socket
   })
-  session.start()
+  await session.start()
   return { socket, events, failures, session }
 }
 
@@ -68,8 +68,8 @@ afterEach(() => {
 })
 
 describe('SonioxRealtimeSession', () => {
-  it('queues audio until the stream opens, then sends the config first', () => {
-    const { socket, session } = setup()
+  it('queues audio until the stream opens, then sends the config first', async () => {
+    const { socket, session } = await setup()
     session.feedAudio(new Float32Array(160), 16_000)
     expect(socket.sent).toHaveLength(0)
     socket.open()
@@ -78,8 +78,8 @@ describe('SonioxRealtimeSession', () => {
     expect(socket.sent[1]).toHaveLength(320)
   })
 
-  it('streams partials and commits finalized text at each pause', () => {
-    const { socket, events } = setup()
+  it('streams partials and commits finalized text at each pause', async () => {
+    const { socket, events } = await setup()
     socket.open()
     socket.frame({ tokens: [token('Hello', true), token(' wor', false)] })
     socket.frame({ tokens: [token(' world', true), token('<end>', true)] })
@@ -92,7 +92,7 @@ describe('SonioxRealtimeSession', () => {
   })
 
   it('returns the text after the last pause once Soniox finishes', async () => {
-    const { socket, session, events } = setup()
+    const { socket, session, events } = await setup()
     socket.open()
     session.feedAudio(new Float32Array(160), 16_000)
     socket.frame({
@@ -109,8 +109,8 @@ describe('SonioxRealtimeSession', () => {
     expect(events.filter((e) => e.type === 'final')).toEqual([{ type: 'final', text: 'one' }])
   })
 
-  it('ends a dictation whose stream breaks before stop, redacting the key', () => {
-    const { socket, failures, events } = setup('secret-key-abcdef')
+  it('ends a dictation whose stream breaks before stop, redacting the key', async () => {
+    const { socket, failures, events } = await setup('secret-key-abcdef')
     socket.open()
     socket.frame({
       error_code: 401,
@@ -121,15 +121,15 @@ describe('SonioxRealtimeSession', () => {
     expect(socket.listenerCount('message')).toBe(0)
   })
 
-  it('treats a close before the end frame as a failure', () => {
-    const { socket, failures } = setup()
+  it('treats a close before the end frame as a failure', async () => {
+    const { socket, failures } = await setup()
     socket.open()
     socket.emit('close', 1000, Buffer.from('session limit'))
     expect(failures).toEqual(['Soniox closed the stream (1000: session limit).'])
   })
 
   it('reports a failure during finish through finish, not onFailure', async () => {
-    const { socket, session, failures } = setup()
+    const { socket, session, failures } = await setup()
     socket.open()
     session.feedAudio(new Float32Array(160), 16_000)
     const finished = session.finish()
@@ -140,7 +140,7 @@ describe('SonioxRealtimeSession', () => {
 
   it('gives up on a stream that never finishes', async () => {
     vi.useFakeTimers()
-    const { socket, session } = setup()
+    const { socket, session } = await setup()
     socket.open()
     session.feedAudio(new Float32Array(160), 16_000)
     socket.frame({ tokens: [token('partly', true)] })
@@ -150,7 +150,7 @@ describe('SonioxRealtimeSession', () => {
   })
 
   it('returns nothing and sends no end frame when no audio came', async () => {
-    const { socket, session } = setup()
+    const { socket, session } = await setup()
     socket.open()
     await expect(session.finish()).resolves.toBe('')
     expect(socket.sent).toHaveLength(1)

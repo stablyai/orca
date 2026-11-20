@@ -8,7 +8,7 @@ import { mountedTerminalTabEntries } from '../hosted-terminals/mounted-surfaces/
 type GridSize = { cols: number; rows: number }
 
 /** Metrics a new tab's pane will have, read from a mounted pane shaped like one: default font size
- *  (a zoomed pane has its own cells) and no title or banner (either pushes its xterm host down). */
+ *  (a zoomed pane has its own cells) and no header inset or banner. */
 function readDefaultPaneFit(
   defaultFontSize: number
 ): { metrics: TerminalFitMetrics; inset: { width: number; height: number } } | null {
@@ -17,7 +17,7 @@ function readDefaultPaneFit(
       const cell = readTerminalStableCellSize(terminal)
       if (
         terminal.options.fontSize !== defaultFontSize ||
-        container.hasAttribute('data-has-title') ||
+        container.matches('[data-has-title], [data-has-recent-images]') ||
         container.querySelector(':scope > .pane-top-banner') ||
         !terminal.element ||
         !cell ||

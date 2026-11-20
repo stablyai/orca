@@ -29,7 +29,7 @@ export const SONIOX_FINISH_TIMEOUT_MS = 10_000
 const MAX_BUFFERED_BYTES = 2 * 1024 * 1024
 
 export type SonioxRealtimeSessionOptions = {
-  readApiKey: () => string
+  readApiKey: () => Promise<string>
   language: string | undefined
   /** Spellings the dictation's dictionary expects; Soniox biases toward them. */
   terms: readonly string[]
@@ -63,8 +63,12 @@ export class SonioxRealtimeSession implements CloudDictationSession {
   constructor(private readonly options: SonioxRealtimeSessionOptions) {}
 
   /** Opens the stream; throws when the key can't be read, so the dictation fails to start instead. */
-  start(): void {
-    this.apiKey = this.options.readApiKey()
+  async start(): Promise<void> {
+    this.apiKey = await this.options.readApiKey()
+    // Canceled while the key was read.
+    if (this.closed) {
+      return
+    }
     const socket = (this.options.openSocket ?? openSonioxSocket)(SONIOX_REALTIME_URL, this.apiKey)
     this.socket = socket
     socket.on('open', () => {

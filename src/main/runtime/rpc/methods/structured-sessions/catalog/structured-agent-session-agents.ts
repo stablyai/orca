@@ -9,10 +9,7 @@ import {
   AGENT_SESSION_AVAILABILITY_METHOD,
   type AgentSessionAvailabilityFrame
 } from '../../../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
-import {
-  hostHasManagedRuntime,
-  STRUCTURED_AGENT_RUNTIME_METADATA
-} from '../../../../agent-session/installation/structured-agent-runtime-metadata'
+import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../../../../agent-session/installation/structured-agent-runtime-metadata'
 import { defineMethod, defineStreamingMethod } from '../../../core'
 import { requireStructuredCapability } from '../creation/structured-agent-session-gate'
 import {
@@ -40,7 +37,7 @@ export const STRUCTURED_AGENT_SESSION_AGENTS_METHODS = [
         ).map(({ definition }) => ({
           agent: definition.agent,
           capabilities: { ...definition.capabilities },
-          ...(hostHasManagedRuntime(definition.agent) ? { managedRuntime: true as const } : {})
+          ...(definition.managedRuntime?.() ? { managedRuntime: true as const } : {})
         }))
       }
     }

@@ -36,6 +36,7 @@ import {
   isRuntimeEnvironmentManuallyDisconnected
 } from './runtime-environment-manual-disconnect'
 import { callRuntimeEnvironment } from '../requests/runtime-environment-transport-routing'
+import { rendererOrchestrationEnvelope } from '../connections/runtime-environment-shared-control-envelope'
 import { getRuntimeEnvironmentStatus } from '../status/runtime-environment-status-probe'
 import { noteRuntimeEnvironmentConnectRequested } from '../pairing/runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from '../catalog/runtime-environment-host-key'
@@ -290,7 +291,7 @@ function registerPassiveCallHandler(
           accounts.params,
           args.timeoutMs,
           args.expectedEnvironmentPairingRevision,
-          undefined,
+          rendererOrchestrationEnvelope(args.method, accounts.params),
           { expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId }
         )
       } catch (error) {

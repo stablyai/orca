@@ -229,6 +229,7 @@ export function MobileBotPanel(props: {
           client={props.client}
           bot={bot}
           rows={props.routeBot.activity.automations ?? null}
+          waits={props.routeBot.activity.waits}
           showToast={showToast}
           onNewAutomation={props.onNewAutomation}
           online={props.online}

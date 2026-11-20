@@ -37,11 +37,15 @@ type Props = {
   // Use option indices so Claude’s selector can navigate without pasting labels.
   onAnswer: (selections: AskAnswerSelection[], onCreated?: (id: string) => void) => Promise<boolean>
   onCancel?: () => Promise<boolean>
+  /** The footer's Cancel, named for what `onCancel` does there. */
+  cancelLabel?: string
   // Collapse writes nothing to the agent.
   onCollapse?: () => void
   /** Per question; structured prompts hide "Other…" where the provider takes no free text. */
   allowOther?: readonly boolean[]
   freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
+  /** Tapping a choice is the whole answer: no Cancel or Skip, only the fold chevron. */
+  choiceOnly?: true
 }
 
 function confirmLabels(t: Translate) {
@@ -61,9 +65,11 @@ export function MobileNativeChatAsk({
   answerSendSource,
   onAnswer,
   onCancel,
+  cancelLabel,
   onCollapse,
   allowOther,
-  freeTextInputs
+  freeTextInputs,
+  choiceOnly
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -284,6 +290,7 @@ export function MobileNativeChatAsk({
             key={`${optIndex}:${opt.label}`}
             label={opt.label}
             description={opt.description}
+            recommended={opt.recommended}
             preview={opt.preview}
             onPreview={() => {
               autoAdvance.cancel()
@@ -323,34 +330,38 @@ export function MobileNativeChatAsk({
         ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Pressable
-          style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
-          onPress={() => void cancel()}
-          disabled={sending}
-          hitSlop={8}
-        >
-          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
-        </Pressable>
-        {total > 1 ? (
-          <Text style={styles.progress}>
-            {index + 1}/{total}
-          </Text>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [
-            styles.next,
-            confirmSkips && styles.nextSkip,
-            pressed && pressedStyle
-          ]}
-          onPress={confirm}
-          disabled={submitting}
-        >
-          <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
-            {confirmLabels(t)[confirmLabel]}
-          </Text>
-        </Pressable>
-      </View>
+      {choiceOnly ? (
+        <View style={styles.choiceOnlyEnd} />
+      ) : (
+        <View style={styles.footer}>
+          <Pressable
+            style={({ pressed }) => [styles.cancel, pressed && pressedStyle]}
+            onPress={() => void cancel()}
+            disabled={sending}
+            hitSlop={8}
+          >
+            <Text style={styles.cancelText}>{cancelLabel ?? t('common.cancel', 'Cancel')}</Text>
+          </Pressable>
+          {total > 1 ? (
+            <Text style={styles.progress}>
+              {index + 1}/{total}
+            </Text>
+          ) : null}
+          <Pressable
+            style={({ pressed }) => [
+              styles.next,
+              confirmSkips && styles.nextSkip,
+              pressed && pressedStyle
+            ]}
+            onPress={confirm}
+            disabled={submitting}
+          >
+            <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
+              {confirmLabels(t)[confirmLabel]}
+            </Text>
+          </Pressable>
+        </View>
+      )}
       <MobileNativeChatOptionPreviewSheet
         options={q.options}
         viewedIndex={viewedOption}

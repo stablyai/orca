@@ -1,5 +1,9 @@
+import { createReadStream } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  agentSessionRefusalError,
+  isAgentSessionRefusalError
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -17,6 +21,8 @@ import {
   isClaudeProjectOwnBucketName
 } from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
 import { grokEncodedCwdDirName } from '../../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
+import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
+import { decodeTranscriptStream } from '../../transcript-streaming/transcript-stream-lines'
 
 export type AdoptedTranscriptSource = {
   providerSessionId: string
@@ -159,4 +165,57 @@ export async function validateAdoptedOpenCodeSource(
     true,
     signal
   )
+}
+
+// Agents record their folder in the opening records, so a large transcript stays quick to check.
+const ADOPTED_FOLDER_HEAD_BYTES = 1024 * 1024
+
+function folderCheckedTranscriptAgent(agent: AgentType) {
+  const transcriptAgent = agent === 'pi' ? 'omp' : resolveNativeChatTranscriptAgent(agent)
+  return transcriptAgent === 'codex' ? null : transcriptAgent
+}
+
+/** Whether the import refuses a conversation saved in another folder. */
+export function importChecksAdoptedFolder(agent: AgentType): boolean {
+  return folderCheckedTranscriptAgent(agent) !== null
+}
+
+/** The import's other-folder refusal, read from the transcript's opening records only; any other
+ *  outcome is left to the full import. */
+export async function assertAdoptedTranscriptFolder(input: {
+  agent: AgentType
+  filePath: string
+  source: AdoptedTranscriptSource
+  signal?: AbortSignal
+}): Promise<void> {
+  const transcriptAgent = folderCheckedTranscriptAgent(input.agent)
+  try {
+    if (transcriptAgent === 'opencode') {
+      await validateAdoptedOpenCodeSource(input.filePath, input.source, input.signal)
+    } else if (transcriptAgent) {
+      const observer = adoptedTranscriptSourceObserver({
+        ...input,
+        maxSourceBytes: ADOPTED_FOLDER_HEAD_BYTES
+      })
+      await decodeTranscriptStream(
+        createReadStream(input.filePath, {
+          end: ADOPTED_FOLDER_HEAD_BYTES - 1,
+          signal: input.signal
+        }),
+        input.filePath,
+        0,
+        (line) => {
+          observer.observe(line)
+          return null
+        },
+        false
+      )
+      await observer.validate()
+    }
+  } catch (error) {
+    const refusal = isAgentSessionRefusalError(error) ? error.refusal : null
+    if (refusal?.code === 'agent_session_identity_required' && refusal.details?.otherFolder) {
+      throw error
+    }
+  }
 }

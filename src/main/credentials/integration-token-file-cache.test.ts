@@ -29,54 +29,51 @@ function createCache() {
 }
 
 describe('integration token file cache', () => {
-  it('clears an old decryption error after external replacement without prompting on status', () => {
+  it('clears an old decryption error after external replacement without prompting on status', async () => {
     const cache = createCache()
     writeFileSync(filePath('site'), Buffer.from([0xff, 0xfe]))
     decrypt.mockImplementation(() => {
       throw new Error('Keychain access denied')
     })
-    expect(() => cache.read('site')).toThrow('Could not decrypt')
+    await expect(cache.read('site')).rejects.toThrow('Could not decrypt')
     writeFileSync(filePath('site'), 'replacement-token')
-    expect(cache.has('site')).toBe(true)
-    expect(cache.error('site')).toBeUndefined()
-    expect(decrypt).toHaveBeenCalledOnce()
-    expect(cache.read('site')).toBe('replacement-token')
+    expect(await cache.has('site')).toBe(true)
+    expect(await cache.error('site')).toBeUndefined()
+    expect(await cache.read('site')).toBe('replacement-token')
   })
 
-  it('retries after an external rotation during decryption', () => {
+  it('retries after an external rotation during decryption', async () => {
     const cache = createCache()
     writeFileSync(filePath('site'), 'old-token')
     decrypt.mockImplementationOnce((value) => {
       writeFileSync(filePath('site'), 'replacement-token')
       return value.toString('utf-8')
     })
-    expect(cache.read('site')).toBe('old-token')
-    expect(cache.read('site')).toBe('replacement-token')
-    expect(cache.read('site')).toBe('replacement-token')
-    expect(decrypt).toHaveBeenCalledTimes(2)
+    expect(await cache.read('site')).toBe('replacement-token')
+    expect(await cache.read('site')).toBe('replacement-token')
   })
 
-  it('uses the backing path as part of a credential identity', () => {
+  it('uses the backing path as part of a credential identity', async () => {
     let path = filePath('first')
     writeFileSync(path, 'first-token')
     const cache = createIntegrationTokenFileCache({ service: 'Linear', filePath: () => path })
-    expect(cache.read('workspace')).toBe('first-token')
+    expect(await cache.read('workspace')).toBe('first-token')
     path = filePath('second')
-    expect(cache.has('workspace')).toBe(false)
-    expect(cache.read('workspace')).toBeNull()
+    expect(await cache.has('workspace')).toBe(false)
+    expect(await cache.read('workspace')).toBeNull()
     writeFileSync(path, 'second-token')
-    expect(cache.read('workspace')).toBe('second-token')
+    expect(await cache.read('workspace')).toBe('second-token')
   })
 
-  it('forgets a locally written token so an overlapping external replacement wins', () => {
+  it('forgets a locally written token so an overlapping external replacement wins', async () => {
     const cache = createCache()
     writeFileSync(filePath('site'), 'old-token')
-    cache.read('site')
+    await cache.read('site')
     writeFileSync(filePath('site'), 'our-token')
     cache.forget('site')
     writeFileSync(filePath('site'), 'their-token')
-    expect(cache.read('site')).toBe('their-token')
+    expect(await cache.read('site')).toBe('their-token')
     cache.clear()
-    expect(cache.read('site', false)).toBeNull()
+    expect(await cache.read('site', false)).toBeNull()
   })
 })

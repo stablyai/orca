@@ -8,7 +8,7 @@ import { mainProcessState as state } from '../main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
 import { preserveAgentAuthBeforeRestart } from '../../providers/accounts/agent-auth-restart-preservation'
-import { preserveStateBeforeUpdateRestart } from '../../updater/update-restart-preservation'
+import { preserveStateBeforeUpdateRestart } from '../../core-desktop/update-restart-preservation'
 import {
   emitPluginWorktreeLifecycle,
   handleCodexHomePtySpawned,
@@ -49,18 +49,20 @@ async function installMainWindowCoreServices(
     throw new Error('Main window closed while preparing services')
   }
   const store = state.store
-  const runtime = state.runtime
-  const stats = state.stats
-  const codexAccounts = state.codexAccounts
-  const claudeAccounts = state.claudeAccounts
-  const rateLimits = state.rateLimits
-  const automations = state.automations
-  const keybindings = state.keybindings
-  const codexRuntimeHome = state.codexRuntimeHome
-  const claudeRuntimeAuth = state.claudeRuntimeAuth
-  const orcaAccount = state.orcaAccount
+  const nativeSettings = state.nativeSettings
+  const runtime = state.core.runtime
+  const stats = state.core.stats
+  const codexAccounts = state.core.codexAccounts
+  const claudeAccounts = state.core.claudeAccounts
+  const rateLimits = state.core.rateLimits
+  const automations = state.core.automations
+  const keybindings = state.core.keybindings
+  const codexRuntimeHome = state.core.codexRuntimeHome
+  const claudeRuntimeAuth = state.core.claudeRuntimeAuth
+  const orcaAccount = state.core.orcaAccount
   if (
     !store ||
+    !nativeSettings ||
     !runtime ||
     !stats ||
     !codexAccounts ||
@@ -107,19 +109,20 @@ async function installMainWindowCoreServices(
         fenceMainProcessCloudOnQuit()
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
       },
-      orcaAccount
+      orcaAccount,
+      rendererCheckpoint: state.core.rendererCheckpoint ?? undefined
     },
-    state.pluginService ?? undefined,
-    state.pluginMarketplaceService && state.pluginMarketplaceInstaller
+    state.core.pluginService ?? undefined,
+    state.core.pluginMarketplaceService && state.core.pluginMarketplaceInstaller
       ? {
-          marketplace: state.pluginMarketplaceService,
-          installer: state.pluginMarketplaceInstaller,
-          ...(state.pluginAutoUpdater ? { autoUpdater: state.pluginAutoUpdater } : {}),
-          ...(state.pluginInstallStatsService
-            ? { installStats: state.pluginInstallStatsService }
+          marketplace: state.core.pluginMarketplaceService,
+          installer: state.core.pluginMarketplaceInstaller,
+          ...(state.core.pluginAutoUpdater ? { autoUpdater: state.core.pluginAutoUpdater } : {}),
+          ...(state.core.pluginInstallStatsService
+            ? { installStats: state.core.pluginInstallStatsService }
             : {}),
-          ...(state.pluginUpdateReviewNotices
-            ? { reviewNotices: state.pluginUpdateReviewNotices }
+          ...(state.core.pluginUpdateReviewNotices
+            ? { reviewNotices: state.core.pluginUpdateReviewNotices }
             : {})
         }
       : undefined
@@ -131,6 +134,7 @@ async function installMainWindowCoreServices(
   await attachMainWindowServices(
     window,
     store,
+    nativeSettings,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
     (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),

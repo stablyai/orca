@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import { AGENT_CHAT_PERMISSION_MODES } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
 import { botMemberSource, type BotMember } from '../../../src/shared/bot-types'
@@ -20,10 +20,8 @@ import {
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botUpdate, removeEveryoneWhoCanAsk } from './bot-sheet-operations'
 import { MobileBotTextButton } from './MobileBotTextButton'
-import {
-  MobileBotSettingsOffline,
-  MobileBotSettingsSection as Section
-} from './MobileBotSettingsSection'
+import { MobileBotSettingsOffline } from './MobileBotSettingsOffline'
+import { SettingsNote, SettingsSection as Section } from '../settings/settings-screen-frame'
 import {
   MobileLookAroundPage,
   MobileLookAroundSection,
@@ -262,10 +260,7 @@ export function MobileBotSettingsTab(props: {
     {
       id: 'inherit',
       label: inherit,
-      description: t(
-        'bots.settings.sameAsChatsDetail',
-        'Starts like any new chat, from your chat permission setting.'
-      )
+      description: t('bots.settings.sameAsChatsDetail', 'Uses your chat permission setting.')
     },
     ...modes.map((mode) => ({ id: mode, ...agentChatPermissionModeCopy(bot.agent, mode) }))
   ]
@@ -280,12 +275,6 @@ export function MobileBotSettingsTab(props: {
           }}
         />
         {offlineBanner}
-        <Text style={[optionStyles.optionRowDetail, optionStyles.optionPageTitle]}>
-          {t(
-            'bots.settings.permissionsDetail',
-            'The starting permission for new sessions. Anything beyond it asks in the session.'
-          )}
-        </Text>
         <ChoiceRows
           choices={permissionChoices}
           selected={bot.permissionMode ?? 'inherit'}
@@ -299,6 +288,12 @@ export function MobileBotSettingsTab(props: {
             }
           }}
         />
+        <SettingsNote>
+          {t(
+            'bots.settings.permissionsDetail',
+            'The starting permission for new sessions. Anything beyond it asks in the session.'
+          )}
+        </SettingsNote>
       </>
     )
   }
@@ -383,8 +378,7 @@ export function MobileBotSettingsTab(props: {
           label={t('bots.settings.needsPermission', 'Needs permission')}
           detail={t(
             'bots.settings.needsPermissionDetail',
-            'When the bot or a worker needs your approval.',
-            { name: bot.name }
+            'When it or a worker needs your approval.'
           )}
           value={bot.notifications.needsPermission}
           disabled={locked}
@@ -392,10 +386,7 @@ export function MobileBotSettingsTab(props: {
         />
         <SwitchRow
           label={t('bots.settings.taskComplete', 'Task complete')}
-          detail={t(
-            'bots.settings.taskCompleteDetail',
-            'When a thread, automation or worker finishes.'
-          )}
+          detail={t('bots.settings.taskCompleteDetail', 'A thread, automation or worker finishes.')}
           value={bot.notifications.taskComplete}
           disabled={locked}
           onChange={notify('taskComplete')}

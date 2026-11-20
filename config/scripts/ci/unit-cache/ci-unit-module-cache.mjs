@@ -236,6 +236,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         })
         const previous = JSON.parse(readFileSync(CACHE_REPORT, 'utf8'))
         writeAssignment(CACHE_REPORT, { ...previous, produced: result })
+        // The repository shares one 10 GB cache; a runaway shard must not evict dependency caches.
+        const maxBytes = Number(process.env.ORCA_UNIT_CACHE_MAX_BYTES ?? 250e6)
+        if (result.bytes > maxBytes) {
+          throw new Error(`${result.bytes} bytes exceeds the ${maxBytes}-byte shard cap`)
+        }
         output({ ready: true })
         console.log(JSON.stringify(result))
       } catch (error) {

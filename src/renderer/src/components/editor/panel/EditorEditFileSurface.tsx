@@ -33,6 +33,8 @@ import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plug
 import { PluginEditorSourceFallbackNotice } from '../plugin-editors/PluginEditorNeedsDesktopNotice'
 import PluginCustomEditorFrame from '../plugin-editors/PluginCustomEditorFrame'
 import PluginBytesCustomEditorSurface from '../plugin-editors/PluginBytesCustomEditorSurface'
+import { ExternalFileChangeBanner } from '../external-changes/ExternalFileChangeBanner'
+import { isEditorWritableView } from '../save/queue/editor-save-writer-view'
 
 // Retry is a user act: it may start a stopped WSL distro.
 
@@ -174,15 +176,28 @@ export function EditorEditFileSurface({
     }
     if (fileContent.isImage) {
       return (
-        <ImageViewer
-          content={fileContent.content}
-          src={fileContent.mediaUrl}
-          byteSize={fileContent.size}
-          filePath={activeFile.filePath}
-          mimeType={fileContent.mimeType}
-          preferenceKey={pdfPreferenceKey}
-          scrollCacheKey={pdfViewStateKey}
-        />
+        <div className="flex h-full min-h-0 flex-col">
+          {activeFile.externalMutation === 'changed' ? (
+            <ExternalFileChangeBanner
+              file={activeFile}
+              currentContent=""
+              reloadContent={reloadContent}
+              binary
+            />
+          ) : null}
+          <div className="min-h-0 flex-1">
+            <ImageViewer
+              content={fileContent.content}
+              src={fileContent.mediaUrl}
+              byteSize={fileContent.size}
+              filePath={activeFile.filePath}
+              mimeType={fileContent.mimeType}
+              preferenceKey={pdfPreferenceKey}
+              scrollCacheKey={pdfViewStateKey}
+              editFileId={isEditorWritableView(activeFile) ? activeFile.id : null}
+            />
+          </div>
+        </div>
       )
     }
     return (

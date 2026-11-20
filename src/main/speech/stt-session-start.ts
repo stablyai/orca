@@ -95,7 +95,7 @@ export async function startSttDictation(
       await requireModelReady(state, modelId)
       // A cloud dictation needs no recognizer; free one nobody else uses.
       await teardownIdleSttEngine(state)
-      session.cloud = startCloudSession(state, session, manifest, language)
+      session.cloud = await startCloudSession(state, session, manifest, language)
     }
     throwIfCanceled(state, session)
     session.phase = 'active'
@@ -108,12 +108,12 @@ export async function startSttDictation(
   }
 }
 
-function startCloudSession(
+async function startCloudSession(
   state: SttSessionState,
   session: SttSession,
   manifest: SpeechModelManifest,
   language: string | undefined
-): CloudDictationSession {
+): Promise<CloudDictationSession> {
   const dictationLanguage = engineDictationLanguage(manifest, language)
   if (manifest.provider !== 'soniox') {
     return new OpenAiTranscriptionSession(
@@ -129,7 +129,7 @@ function startCloudSession(
     sink: (event) => session.sink(event),
     onFailure: (error) => failCloudSession(state, session, error)
   })
-  stream.start()
+  await stream.start()
   return stream
 }
 
