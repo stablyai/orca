@@ -10,7 +10,11 @@ import type {
 } from '../environment-transport'
 import { pairedOrchestrationPeers } from '../environment-transport'
 import type { PairedRuntimeConnection } from '../../../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type {
+  RuntimeRequestGuard,
+  RuntimeRpcResponse
+} from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { prepareCurrentRuntimeRequest } from '../../../../../shared/remote-runtime/requests/remote-runtime-request-preparation'
 import { classifyWorkerPlacementCatalog } from './worker-placement-eligibility'
 import { OrchestrationError } from '../../orchestration-error'
 import * as environmentStore from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
@@ -24,6 +28,41 @@ let notify: (() => void) | undefined
 let response: (method: string) => Promise<RuntimeRpcResponse<unknown>>
 let owner: WorkerPlacementCatalogOwner
 let registry: OrchestrationEnvironmentTransport
+const catalogConnection: PairedRuntimeConnection = {
+  endpoint: 'ws://server',
+  hostPublicKeyB64: Buffer.from('server-key').toString('base64'),
+  credential: { kind: 'token', deviceToken: 'home-token' }
+}
+
+async function pendingCatalogGuard() {
+  server = {
+    ...server,
+    ...pairedOrchestrationPeers(catalogConnection.hostPublicKeyB64, 'home-token')
+  }
+  let capture!: (guard: RuntimeRequestGuard) => void
+  const captured = new Promise<RuntimeRequestGuard>((resolve) => {
+    capture = resolve
+  })
+  registry.call = async (_id, _method, _params, _timeout, _envelope, _revision, options) => {
+    capture(options!.prepareGuard!)
+    return await new Promise(() => {})
+  }
+  const discovery = owner.discover('server')
+  return { guard: await captured, discovery }
+}
+
+function prepareCatalogRequest(guard: RuntimeRequestGuard, consume: () => void) {
+  return prepareCurrentRuntimeRequest({
+    connection: catalogConnection,
+    guard,
+    current: () => true,
+    deadline: Infinity,
+    expire: () => {
+      throw new Error('Unexpected transport expiry')
+    },
+    consume
+  })
+}
 
 function ok(result: unknown): RuntimeRpcResponse<unknown> {
   return { id: 'read', ok: true, result, _meta: { runtimeId: 'peer' } }
@@ -475,6 +514,121 @@ it('retains a safe late reply after the watcher fires and the full pairing is re
   finish()
   await vi.advanceTimersByTimeAsync(0)
   expect((await owner.discover())[0]).toMatchObject({ status: 'fresh', observedAt: 1795204805000 })
+})
+
+it.each([
+  { terminal: 'disposal', phase: 'before preparation' },
+  { terminal: 'hard expiry', phase: 'before preparation' },
+  { terminal: 'disposal', phase: 'during preparation' },
+  { terminal: 'hard expiry', phase: 'during preparation' },
+  { terminal: 'disposal', phase: 'at commit' },
+  { terminal: 'hard expiry', phase: 'at commit' }
+] as const)(
+  'terminates catalog socket preparation on $terminal $phase',
+  async ({ terminal, phase }) => {
+    const { guard, discovery } = await pendingCatalogGuard()
+    const terminate = (): void => {
+      if (terminal === 'disposal') {
+        owner.dispose()
+      } else {
+        // Model a wall-clock jump ahead of the transport's performance-based deadline.
+        vi.setSystemTime(Date.now() + 15_001)
+      }
+    }
+    let finish!: (value: OrchestrationWorkerServer) => void
+    let entered!: () => void
+    const preparing = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    if (phase === 'during preparation') {
+      registry.resolve = () =>
+        new Promise((resolve) => {
+          finish = resolve
+          entered()
+        })
+    }
+    if (phase === 'before preparation') {
+      terminate()
+    }
+    let consumed = false
+    const request = expect(
+      prepareCatalogRequest(
+        async (connection) => {
+          const commit = await guard(connection)
+          if (phase === 'at commit') {
+            terminate()
+          }
+          return () => {
+            const allowed = commit()
+            // Fail immediately if terminal authority loss is accidentally made retryable again.
+            expect(allowed).not.toBe(false)
+            return allowed
+          }
+        },
+        () => {
+          consumed = true
+        }
+      )
+    ).rejects.toMatchObject({
+      code: terminal === 'disposal' ? 'runtime_environment_changed' : 'runtime_timeout',
+      data: { effectsApplied: false }
+    })
+    if (phase === 'during preparation') {
+      await preparing
+      terminate()
+      finish({ ...server })
+    }
+    await request
+    expect(consumed).toBe(false)
+    await vi.advanceTimersByTimeAsync(15_000)
+    await discovery
+    expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+  }
+)
+
+it.each(['registry', 'generation'] as const)(
+  'safely retries a catalog socket guard after recoverable %s proof invalidation',
+  async (proof) => {
+    const { guard, discovery } = await pendingCatalogGuard()
+    let generation = 0
+    vi.spyOn(environmentStore, 'environmentStoreWriteCount').mockImplementation(() => generation)
+    let invalidate: (() => void) | undefined = () => {
+      if (proof === 'registry') {
+        notify!()
+      } else {
+        generation++
+      }
+    }
+    let consumed = false
+    await prepareCatalogRequest(
+      async (connection) => {
+        const commit = await guard(connection)
+        invalidate?.()
+        invalidate = undefined
+        return commit
+      },
+      () => {
+        consumed = true
+      }
+    )
+    expect(consumed).toBe(true)
+    await vi.advanceTimersByTimeAsync(15_000)
+    await discovery
+  }
+)
+
+it('preserves pairing mismatch refusal through catalog socket preparation', async () => {
+  const { guard, discovery } = await pendingCatalogGuard()
+  server = { ...server, pairingRevision: 2 }
+  let consumed = false
+  await expect(
+    prepareCatalogRequest(guard, () => {
+      consumed = true
+    })
+  ).rejects.toMatchObject({ code: 'server_pairing_changed' })
+  expect(consumed).toBe(false)
+  await vi.advanceTimersByTimeAsync(15_000)
+  await discovery
 })
 
 it('spends only the remaining discovery budget after a slow registry enumeration', async () => {

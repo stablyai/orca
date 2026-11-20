@@ -9,12 +9,99 @@ import {
   storeRepo
 } from '../../../construction/test-context/runtime-store-partial-fixture'
 import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
-import type { OrchestrationEnvironmentTransport } from '../environment-transport'
+import {
+  pairedOrchestrationPeers,
+  type OrchestrationEnvironmentTransport
+} from '../environment-transport'
+import type { PairedRuntimeConnection } from '../../../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import type { RuntimeRequestGuard } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { prepareCurrentRuntimeRequest } from '../../../../../shared/remote-runtime/requests/remote-runtime-request-preparation'
+import * as environmentStore from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
 })
+
+// #45148 F4: terminal catalog authority must stop socket preparation instead of busy-retrying.
+it.each(['disposed', 'hard-deadline', 'stale-proof'] as const)(
+  'bounds actual transport preparation and pairing reads for %s catalog authority',
+  async (phase) => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    const connection: PairedRuntimeConnection = {
+      endpoint: 'ws://server',
+      hostPublicKeyB64: Buffer.from('server-key').toString('base64'),
+      credential: { kind: 'token', deviceToken: 'home-token' }
+    }
+    const resolve = vi.fn<OrchestrationEnvironmentTransport['resolve']>(async () => ({
+      environmentId: 'server',
+      name: 'server',
+      pairingRevision: 1,
+      ...pairedOrchestrationPeers(connection.hostPublicKeyB64, 'home-token')
+    }))
+    let capture!: (guard: RuntimeRequestGuard) => void
+    const captured = new Promise<RuntimeRequestGuard>((resolve) => {
+      capture = resolve
+    })
+    const owner = new WorkerPlacementCatalogOwner(db, {
+      list: async () => [{ environmentId: 'server', name: 'server' }],
+      resolve,
+      call: async (_id, _method, _params, _timeout, _envelope, _revision, options) => {
+        capture(options!.prepareGuard!)
+        return await new Promise(() => {})
+      }
+    })
+    try {
+      const discovery = owner.discover()
+      const prepare = await captured
+      resolve.mockClear()
+      let generation = 0
+      vi.spyOn(environmentStore, 'environmentStoreWriteCount').mockImplementation(() => generation)
+      if (phase === 'disposed') {
+        owner.dispose()
+      } else if (phase === 'hard-deadline') {
+        vi.setSystemTime(Date.now() + 15_001)
+      }
+      const guard = vi.fn<RuntimeRequestGuard>(async (selected) => {
+        const commit = await prepare(selected)
+        if (phase === 'stale-proof') {
+          generation = 1
+        }
+        return commit
+      })
+      let consumed = false
+      const request = prepareCurrentRuntimeRequest({
+        connection,
+        guard,
+        current: () => guard.mock.calls.length < 25,
+        deadline: Infinity,
+        expire: () => {},
+        consume: () => {
+          consumed = true
+        }
+      })
+      if (phase === 'stale-proof') {
+        await request
+        expect(consumed).toBe(true)
+        expect(guard).toHaveBeenCalledTimes(2)
+        expect(resolve).toHaveBeenCalledTimes(2)
+      } else {
+        await expect(request).rejects.toMatchObject({
+          code: phase === 'disposed' ? 'runtime_environment_changed' : 'runtime_timeout',
+          data: { effectsApplied: false }
+        })
+        expect(consumed).toBe(false)
+        expect(guard).toHaveBeenCalledTimes(1)
+        expect(resolve).toHaveBeenCalledTimes(0)
+      }
+      await vi.advanceTimersByTimeAsync(15_000)
+      await discovery
+    } finally {
+      db.close()
+    }
+  }
+)
 
 // #45148: overlapping discovery and unresponsive peers must not multiply reads or catalog scans.
 it('shares one list pair per server across concurrent discoveries and keeps timed-out work in its slot', async () => {

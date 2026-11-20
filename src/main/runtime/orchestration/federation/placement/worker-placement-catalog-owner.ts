@@ -6,16 +6,13 @@ import {
   type RetainedPlacementCatalog
 } from '../../db/remote-owned/worker-placement-catalog-store'
 import { remoteServerPin, remoteRunLinkPinMatches } from '../../db/remote-owned/remote-run-links'
-import {
-  pairedOrchestrationPeers,
-  type OrchestrationEnvironmentTransport,
-  type OrchestrationWorkerServer
+import type {
+  OrchestrationEnvironmentTransport,
+  OrchestrationWorkerServer
 } from '../environment-transport'
-import { OrchestrationError } from '../../orchestration-error'
-import { environmentStoreWriteCount } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
-import type { RuntimeRequestGuard } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { CatalogReadFailure } from './worker-placement-catalog'
 import { readWorkerPlacementCatalog } from './worker-placement-catalog-read'
+import { workerPlacementCatalogGuard } from './worker-placement-catalog-guard'
 import {
   CatalogDeadline,
   CatalogOwnerRead,
@@ -206,35 +203,12 @@ export class WorkerPlacementCatalogOwner {
   ): Promise<ReadResult> {
     const transport = this.transport!
     const pin = remoteServerPin(server)
-    const prepareGuard: RuntimeRequestGuard = async (connection) => {
-      const observation = await this.registry!.resolve(server.environmentId, deadline)
-      const generation = environmentStoreWriteCount()
-      const peers = pairedOrchestrationPeers(
-        connection.hostPublicKeyB64,
-        connection.credential.deviceToken
-      )
-      return () => {
-        if (
-          this.stopped ||
-          !deadline.active ||
-          !this.registry!.isCurrent(observation) ||
-          generation !== environmentStoreWriteCount()
-        ) {
-          return false
-        }
-        if (
-          !remoteRunLinkPinMatches(pin, remoteServerPin(observation.value)) ||
-          peers.peerFingerprint !== pin.peer_fingerprint ||
-          peers.homePeerFingerprint !== pin.home_fingerprint
-        ) {
-          throw new OrchestrationError(
-            'server_pairing_changed',
-            'Catalog read belongs to an earlier pairing.'
-          )
-        }
-        return true
-      }
-    }
+    const prepareGuard = workerPlacementCatalogGuard(
+      this.registry!,
+      server,
+      deadline,
+      () => this.stopped
+    )
     const read = await readWorkerPlacementCatalog(transport, server, prepareGuard)
     if (this.stopped || !deadline.active) {
       return { kind: 'failed', reason: 'no_answer' }
