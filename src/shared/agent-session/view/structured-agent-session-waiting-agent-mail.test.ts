@@ -232,3 +232,47 @@ describe("another agent's message while the chat is busy", () => {
     })
   })
 })
+
+describe("worker mail, which the host delivers past a Stop and ahead of the person's queue", () => {
+  const mailNotice: AgentMessageSource = {
+    ...FROM,
+    orchestration: {
+      message: 'mail-notice',
+      mailbox: 'orca_session_id:chat',
+      dispatchId: null,
+      messages: [{ messageId: 'msg_1', runId: '', from: 'orca_session_id:worker' }]
+    }
+  }
+
+  it("after Stop goes solid as the host sends it, while the person's held follow-up keeps its card", () => {
+    const queued = [personCard('follow-up', 1), card('mail', 2, {}, mailNotice)]
+    expect(drawn({ queued, queuePaused: true })).toEqual({
+      rows: [waitingRow('mail')],
+      cards: ['follow-up']
+    })
+    expect(
+      drawn({
+        queued,
+        submissions: [handOff('mail', { handedOverAt: 3 })],
+        items: [sentRow('mail', 5)],
+        queuePaused: true
+      })
+    ).toEqual({
+      rows: [{ id: 'orca:mail-send', by: 'agent', waiting: false, actsOn: null }],
+      cards: ['follow-up']
+    })
+  })
+
+  it("steered into the running turn ahead of the person's earlier follow-up, it leaves that card waiting", () => {
+    expect(
+      drawn({
+        queued: [personCard('follow-up', 1), card('mail', 2, {}, mailNotice)],
+        submissions: [handOff('mail')],
+        items: [sentRow('mail', 5)]
+      })
+    ).toEqual({
+      rows: [{ id: 'orca:mail-send', by: 'agent', waiting: false, actsOn: null }],
+      cards: ['follow-up']
+    })
+  })
+})
