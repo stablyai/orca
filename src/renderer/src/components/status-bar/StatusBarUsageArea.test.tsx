@@ -54,7 +54,8 @@ vi.mock('./usage/AntigravityUsageMenu', async () => ({
   AntigravityUsageMenu: (await submenus).Submenu
 }))
 
-const NOW = Date.now()
+// A fixed clock: the reset countdown reads Date.now(), pinned to this in beforeEach.
+const NOW = Date.UTC(2026, 10, 20, 12)
 const PROVIDERS = (['claude', 'codex', 'opencode-go', 'kimi', 'grok', 'cursor'] as const).map(
   (provider, index): ProviderRateLimits => ({
     provider,
@@ -84,6 +85,7 @@ function flushResizeObservers(): void {
 }
 
 beforeEach(() => {
+  vi.setSystemTime(NOW)
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -116,6 +118,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   observers.clear()
