@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises'
 import { once } from 'node:events'
 import { join } from 'node:path'
 import { app } from 'electron'
@@ -23,7 +24,7 @@ failure_log=$3
 shift 3
 [ "$runtime" -ef "$1" ] || runtime=
 sleep_path=$(type -P sleep)
-if [ ! -x "$sleep_path" ]; then printf 'sleep unavailable\\n'; exit 1; fi
+if [ ! -x "$sleep_path" ] || ! "$sleep_path" 0.0; then printf 'sleep unavailable\\n'; exit 1; fi
 if [ ! -f "$1" ] || [ ! -x "$1" ]; then printf 'AppImage unavailable\\n'; exit 1; fi
 printf 'ready\\n' || exit 1
 IFS= read -r request && [ "$request" = restart ] || exit 0
@@ -35,7 +36,9 @@ report_failure() {
 set -o noclobber
 umask 077
 # The extract-and-run parent may still be cleaning up after Electron exits.
+deadline=$(( SECONDS + 60 ))
 while [ -e "$electron" ] || { [ -n "$runtime" ] && [ -e "$runtime" ]; }; do
+  if (( SECONDS >= deadline )); then report_failure 'Timed out waiting for the old Orca process.'; fi
   "$sleep_path" 0.1 || report_failure 'Could not wait for the old Orca process.'
 done
 # The file can still be moved or replaced between this check and exec.
@@ -58,7 +61,11 @@ async function resolveRestartArtifact(): Promise<string | null> {
   return result.value
 }
 
-export type PreparedAppRelaunch = { commit(): Promise<void>; cancel(): void }
+export type PreparedAppRelaunch = {
+  commit(): Promise<void>
+  cancel(): void
+  reportFailure(error: unknown): Promise<void>
+}
 
 export async function prepareAppImageRelaunch(
   args: string[],
@@ -81,7 +88,7 @@ export async function prepareAppImageRelaunch(
     while (env.XDG_DATA_DIRS?.endsWith(APP_RUN_DATA_DIRS)) {
       env.XDG_DATA_DIRS = env.XDG_DATA_DIRS.slice(0, -APP_RUN_DATA_DIRS.length)
     }
-    if (env.XDG_DATA_DIRS === APP_RUN_DATA_DIRS.slice(1)) {
+    if (!env.XDG_DATA_DIRS || env.XDG_DATA_DIRS === APP_RUN_DATA_DIRS.slice(1)) {
       delete env.XDG_DATA_DIRS
     }
     // The AppImage runtime consumes --appimage-extract-and-run before starting Electron.
@@ -138,6 +145,19 @@ export async function prepareAppImageRelaunch(
     }
     return {
       cancel,
+      async reportFailure(error) {
+        const message = error instanceof Error ? error.message : String(error)
+        const result = await settleWithinMs(
+          writeFile(failureLog, `Could not restart Orca: ${message}\nReopen Orca manually.\n`, {
+            flag: 'wx',
+            mode: 0o600
+          }),
+          RELAUNCH_CHECK_TIMEOUT_MS
+        )
+        if (result.outcome !== 'settled') {
+          console.error('[app] Could not save the AppImage restart diagnostic:', result)
+        }
+      },
       async commit() {
         try {
           if ((await resolveRestartArtifact()) !== appImagePath) {

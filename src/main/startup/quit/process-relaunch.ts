@@ -1,7 +1,6 @@
 import { app, type Event } from 'electron'
 import { isEphemeralAppImageRuntime } from '../../updater/linux-package/appimage-runtime-identity'
 import { mainProcessState } from '../main-process-state'
-import { runWithLaunchPath } from '../shell-environment/hydrate-shell-path'
 import { prepareAppImageRelaunch, type PreparedAppRelaunch } from './appimage-relaunch'
 import { isHostShuttingDown } from './host-shutdown-state'
 import { quitProcess } from './process-quit-request'
@@ -33,40 +32,47 @@ export function cancelProcessRelaunch(): void {
   }
 }
 
-export function cancelProcessRelaunchPreparation(): void {
+export function skipBeforeQuitForRelaunch(
+  event: Pick<Event, 'defaultPrevented' | 'preventDefault'>
+): boolean {
+  if (active?.phase === 'committing') {
+    event.preventDefault()
+    return true
+  }
   if (active?.phase === 'preparing') {
     cancelProcessRelaunch()
   }
+  return event.defaultPrevented
 }
 
-export type ProcessRelaunch = {
+export type AppImageProcessRelaunch = {
+  readonly signal: AbortSignal
   quit(): Promise<void>
-  exit(code: number, beforeExit?: () => void): Promise<void>
+  exit(code: number, beforeExit?: () => void | Promise<void>): Promise<void>
   cancel(): void
 }
 
-export async function prepareProcessRelaunch(
+export function prepareProcessRelaunch(
   options?: Electron.RelaunchOptions
-): Promise<ProcessRelaunch> {
+): Promise<AppImageProcessRelaunch> | undefined {
+  if (!app.isPackaged || options?.execPath !== undefined || !isEphemeralAppImageRuntime()) {
+    return undefined
+  }
+  return prepareAppImageProcessRelaunch(options?.args ?? process.argv.slice(1))
+}
+
+async function prepareAppImageProcessRelaunch(args: string[]): Promise<AppImageProcessRelaunch> {
   if (active || mainProcessState.isQuitting || isHostShuttingDown()) {
     throw new Error('Orca is already restarting or quitting.')
   }
   const attempt: RelaunchAttempt = { abort: new AbortController(), phase: 'preparing' }
   active = attempt
   try {
-    const launcher =
-      app.isPackaged && options?.execPath === undefined && isEphemeralAppImageRuntime()
-        ? await prepareAppImageRelaunch(
-            options?.args ?? process.argv.slice(1),
-            attempt.abort.signal
-          )
-        : {
-            commit: async () => runWithLaunchPath(() => app.relaunch(options)),
-            cancel: () => {}
-          }
+    const launcher = await prepareAppImageRelaunch(args, attempt.abort.signal)
     attempt.launcher = launcher
     attempt.abort.signal.throwIfAborted()
     return {
+      signal: attempt.abort.signal,
       cancel() {
         if (attempt.phase === 'preparing') {
           cancel(attempt)
@@ -88,7 +94,7 @@ export async function prepareProcessRelaunch(
         app.prependOnceListener('before-quit', captureQuitEvent)
         try {
           quitProcess()
-          if (quitEvent?.defaultPrevented) {
+          if (!quitEvent || quitEvent.defaultPrevented) {
             mainProcessState.isQuitting = false
             cancel(attempt)
           }
@@ -113,7 +119,7 @@ export async function prepareProcessRelaunch(
           throw error
         }
         try {
-          beforeExit?.()
+          await beforeExit?.()
         } finally {
           app.exit(code)
         }
@@ -125,17 +131,38 @@ export async function prepareProcessRelaunch(
   }
 }
 
-/** Called after will-quit has passed the renderer vetoes and completed teardown. */
-export async function commitGracefulProcessRelaunch(): Promise<void> {
+export function isGracefulAppImageRelaunch(): boolean {
+  return active?.phase === 'quitting'
+}
+
+export async function finishGracefulAppImageRelaunch(): Promise<void> {
   const attempt = active
-  if (attempt?.phase === 'quitting') {
-    attempt.phase = 'committing'
-    try {
-      await attempt.launcher?.commit()
-      attempt.quitResult?.resolve()
-    } catch (error) {
-      attempt.quitResult?.reject(error)
-      throw error
-    }
+  if (attempt?.phase !== 'quitting') {
+    return
+  }
+  attempt.phase = 'committing'
+  try {
+    await attempt.launcher?.commit()
+    attempt.quitResult?.resolve()
+  } catch (error) {
+    console.error('[app] Committed AppImage restart failed. Reopen Orca manually.', error)
+    await attempt.launcher?.reportFailure(error)
+    attempt.quitResult?.reject(error)
+  } finally {
+    // Teardown has finished. A second before-quit veto would strand the authorized launcher.
+    app.exit(0)
+  }
+}
+
+export async function relaunchProcessAndExit(
+  options: Electron.RelaunchOptions,
+  code: number
+): Promise<void> {
+  const preparation = prepareProcessRelaunch(options)
+  if (preparation) {
+    await (await preparation).exit(code)
+  } else {
+    app.relaunch(options)
+    app.exit(code)
   }
 }

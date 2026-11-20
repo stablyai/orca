@@ -1,5 +1,5 @@
 import 'node:fs'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
@@ -9,13 +9,12 @@ import { OrcaAccountService } from '../../orca-profiles/orca-account-service'
 
 const orcaAccount = new OrcaAccountService({ openBrowser: async () => {} })
 
-const { handlers, quit, select } = vi.hoisted(() => ({
+const { handlers, select, prepare } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => Promise<unknown>>(),
-  quit: vi.fn(async () => {}),
+  prepare: vi.fn(),
   select: vi.fn()
 }))
 vi.mock('electron', () => ({
-  app: { quit },
   ipcMain: {
     handle: (channel: string, handler: (event: unknown, args: unknown) => Promise<unknown>) => {
       handlers.set(channel, handler)
@@ -23,8 +22,9 @@ vi.mock('electron', () => ({
   }
 }))
 vi.mock('../../startup/quit/app-relaunch', () => ({
-  prepareAppRelaunch: vi.fn(async () => ({ quit, cancel: vi.fn() })),
-  runBeforeRelaunchCleanup: vi.fn(async () => {})
+  prepareAppRelaunch: prepare,
+  relaunchAppAndQuit: vi.fn(),
+  runBeforeRelaunchCleanup: async (cleanup?: () => Promise<void>) => cleanup?.()
 }))
 vi.mock('../../orca-profiles/profile-index-store', () => ({
   getOrcaProfileListState: () => ({ activeProfileId: 'source', profiles: [] }),
@@ -43,6 +43,11 @@ vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
+
+afterEach(() => {
+  vi.useRealTimers()
+  select.mockClear()
+})
 
 describe('plain profile switch persistence', () => {
   it('preserves shutdown changes when quit starts during the switch checkpoint', async () => {
@@ -82,5 +87,28 @@ describe('plain profile switch persistence', () => {
       settings: { theme: 'dark' },
       workspaceSession: { activeTabId: 'last-tab' }
     })
+  })
+
+  it('leaves the startup profile unchanged if quit cancels an AppImage switch during preparation', async () => {
+    const { store } = await createWorkerMaintenanceFixture()
+    const started = maintenanceBarrier()
+    const release = maintenanceBarrier()
+    const controller = new AbortController()
+    prepare.mockResolvedValueOnce({ signal: controller.signal, cancel: vi.fn() })
+    registerOrcaProfileHandlers(store, orcaAccount, {
+      onBeforeRelaunch: async () => {
+        started.resolve()
+        await release.promise
+      }
+    })
+    const sender = { isDestroyed: () => false, send: vi.fn() }
+    const switching = handlers.get('orcaProfiles:switch')?.({ sender }, { profileId: 'target' })
+    const rejected = expect(switching).rejects.toThrow('Orca restart was canceled.')
+    await started.promise
+    controller.abort(new Error('Orca restart was canceled.'))
+    release.resolve()
+    await rejected
+    expect(select).not.toHaveBeenCalled()
+    expect(sender.send).not.toHaveBeenCalled()
   })
 })

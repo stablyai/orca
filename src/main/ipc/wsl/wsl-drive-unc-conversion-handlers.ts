@@ -9,7 +9,7 @@ import type {
   WslDriveUncConversionRequest,
   WslDriveUncConversionResult
 } from '../../../shared/wsl-move/wsl-drive-unc-conversion-types'
-import { prepareAppRelaunch } from '../../startup/quit/app-relaunch'
+import { relaunchApp } from '../../startup/quit/app-relaunch'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { readProfileProjectTransferState } from '../../orca-profiles/project-transfer/profile-project-domain-state'
 import { getOrcaProfileListState } from '../../orca-profiles/profile-index-store'
@@ -17,6 +17,7 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import type { Store } from '../../persistence/loading-store/store'
 import { pauseWslMoveScope } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-pause'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { quitProcess } from '../../startup/quit/process-quit-request'
 import { startWslDriveUncConversion } from '../../wsl/filesystem/wsl-drive-unc-conversion-run'
 import {
   lastWslDriveUncConversionOutcomes,
@@ -80,9 +81,8 @@ export function registerWslDriveUncConversionHandlers(
             }
             // Quit, not exit: the window and the store flush the slept panes on the way out.
             setTimeout(() => {
-              void prepareAppRelaunch('wsl-drive-conversion')
-                .then((restart) => restart.quit())
-                .catch((error: unknown) => console.error('[wsl] Could not restart Orca:', error))
+              relaunchApp('wsl-drive-conversion')
+              quitProcess()
             }, 150)
           },
           newMigrationId: () => randomUUID(),

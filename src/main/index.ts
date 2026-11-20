@@ -1,5 +1,5 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
-import { prepareProcessRelaunch } from './startup/quit/process-relaunch'
+import { relaunchProcessAndExit } from './startup/quit/process-relaunch'
 import { isRoutedOrcaDeepLink } from './startup/open-routing/orca-deep-link-url'
 import { createMacAppActivationHandler } from './window/activation/macos-app-activation'
 import {
@@ -239,13 +239,15 @@ if (preflightReady) {
             })
             if (choice !== undefined) {
               // Recovery needs both profile locks, which only a fresh process can own safely.
-              const restart = await prepareProcessRelaunch({
-                args: profileStateDesktopRecoveryArgs(process.argv, {
-                  userDataPath,
-                  selector: { kind: choice }
-                })
-              })
-              await restart.exit(1)
+              await relaunchProcessAndExit(
+                {
+                  args: profileStateDesktopRecoveryArgs(process.argv, {
+                    userDataPath,
+                    selector: { kind: choice }
+                  })
+                },
+                1
+              )
               return
             }
             app.exit(1)
@@ -263,17 +265,19 @@ if (preflightReady) {
                 translate: translateMain
               })
             ) {
-              const restart = await prepareProcessRelaunch({
-                args: profileStateDesktopRecoveryArgs(process.argv, {
-                  userDataPath,
-                  profileId: error.profileId,
-                  selector: {
-                    kind: 'repair',
-                    sections: sections.map(profileStateRepairSectionApproval)
-                  }
-                })
-              })
-              await restart.exit(1)
+              await relaunchProcessAndExit(
+                {
+                  args: profileStateDesktopRecoveryArgs(process.argv, {
+                    userDataPath,
+                    profileId: error.profileId,
+                    selector: {
+                      kind: 'repair',
+                      sections: sections.map(profileStateRepairSectionApproval)
+                    }
+                  })
+                },
+                1
+              )
               return
             }
             app.exit(1)

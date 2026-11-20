@@ -1,5 +1,6 @@
 import { app, type BrowserWindow } from 'electron'
-import { prepareAppRelaunch } from '../quit/app-relaunch'
+import { relaunchApp } from '../quit/app-relaunch'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import { destroySystemTray } from '../../tray/system-tray'
 import { applyGpuFallbackCommandLineSwitches } from './gpu-fallback-switches'
 import {
@@ -93,6 +94,20 @@ export function maybeApplyGpuFallbackForThisLaunch(): void {
   })
 }
 
+function restartForGpuFallback(data: CrashReportBreadcrumbData): void {
+  state.isQuitting = true
+  try {
+    relaunchApp('gpu-fallback', data)
+  } catch (error) {
+    state.isQuitting = false
+    state.gpuCrashFallbackTracker.disengage()
+    console.error('[gpu-fallback] Could not restart Orca:', error)
+    return
+  }
+  destroySystemTray()
+  app.exit(0)
+}
+
 export async function presentGpuFallbackRecoveredLaunchPrompt(
   window: BrowserWindow
 ): Promise<void> {
@@ -129,12 +144,10 @@ export async function presentGpuFallbackRecoveredLaunchPrompt(
         crashesInWindow: marker.crashesInWindow
       }),
     restartWithHardware: () => {
-      void prepareAppRelaunch('gpu-fallback', {
+      restartForGpuFallback({
         mode: 'hardware-retry',
         crashesInWindow: marker.crashesInWindow
       })
-        .then((restart) => restart.exit(0, destroySystemTray))
-        .catch((error: unknown) => console.error('[gpu-fallback] Could not restart Orca:', error))
     }
   })
 }
@@ -230,9 +243,7 @@ export async function handleGpuChildCrash(
       onRestartDeferred: () =>
         recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData),
       restartIntoSafeGraphics: () => {
-        void prepareAppRelaunch('gpu-fallback', fallbackData)
-          .then((restart) => restart.exit(0, destroySystemTray))
-          .catch((error: unknown) => console.error('[gpu-fallback] Could not restart Orca:', error))
+        restartForGpuFallback(fallbackData)
       }
     }
   )

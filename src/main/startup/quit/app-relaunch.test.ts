@@ -1,18 +1,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { appRelaunchMock, hasSwitchMock } = vi.hoisted(() => ({
-  appRelaunchMock: vi.fn(),
-  hasSwitchMock: vi.fn<(name: string) => boolean>(() => false)
-}))
+const { appRelaunchMock, hasSwitchMock, exitMock, isEphemeral, prepare, fence, state } = vi.hoisted(
+  () => ({
+    appRelaunchMock: vi.fn(),
+    exitMock: vi.fn(),
+    isEphemeral: vi.fn(() => false),
+    prepare: vi.fn(),
+    fence: vi.fn(),
+    state: { isQuitting: false },
+    hasSwitchMock: vi.fn<(name: string) => boolean>(() => false)
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
     isPackaged: true,
-    exit: vi.fn(),
+    exit: exitMock,
     relaunch: appRelaunchMock,
     commandLine: { hasSwitch: hasSwitchMock }
   }
 }))
+vi.mock('../main-process-state', () => ({ mainProcessState: state }))
+vi.mock('../cloud-startup/main-process-connector-startup', () => ({
+  fenceMainProcessCloudOnQuit: fence
+}))
+vi.mock('../../tray/system-tray', () => ({ destroySystemTray: vi.fn() }))
+vi.mock('../../updater/linux-package/appimage-runtime-identity', () => ({
+  isEphemeralAppImageRuntime: isEphemeral
+}))
+vi.mock('./appimage-relaunch', () => ({ prepareAppImageRelaunch: prepare }))
 vi.mock('../../windows/windows-administrator-status', () => ({
   getWindowsAdministratorStatus: vi.fn(async () => true)
 }))
@@ -29,6 +45,10 @@ import { _resetHydrateShellPathCache } from '../shell-environment/hydrate-shell-
 beforeEach(() => {
   appRelaunchMock.mockReset()
   hasSwitchMock.mockReset().mockReturnValue(false)
+  exitMock.mockReset()
+  fence.mockReset()
+  isEphemeral.mockReturnValue(false)
+  state.isQuitting = false
   vi.resetModules()
 })
 
@@ -59,21 +79,68 @@ describe('relaunchApp', () => {
       nextArgs = options?.args ?? nativeArgv.slice(1)
     })
 
-    const { prepareAppRelaunch } = await import('./app-relaunch')
-    await (await prepareAppRelaunch('renderer-request')).exit(0)
+    const { relaunchApp } = await import('./app-relaunch')
+    relaunchApp('renderer-request')
     expect(nextArgs).toEqual(['--user-data-dir=C:\\Orca profile'])
     await restartLocalTerminalsAfterElevation(new AbortController().signal)
     expect(process.argv).not.toContain(flag)
     expect(nativeArgv).toContain(flag)
-    vi.resetModules()
-    const afterConsumption = await import('./app-relaunch')
-    await (await afterConsumption.prepareAppRelaunch('profile-switch')).exit(0)
+    relaunchApp('profile-switch')
     expect(nextArgs).toEqual(['--user-data-dir=C:\\Orca profile'])
 
     const custom = { execPath: 'administrator-launcher.exe', args: ['restart', flag] }
-    vi.resetModules()
-    const explicit = await import('./app-relaunch')
-    await (await explicit.prepareAppRelaunch('windows-administrator', undefined, custom)).exit(0)
+    relaunchApp('windows-administrator', undefined, custom)
     expect(appRelaunchMock).toHaveBeenLastCalledWith(custom)
+  })
+})
+
+describe('renderer direct restart', () => {
+  it.each([false, true])(
+    'fences cloud work before exit cleanup (AppImage: %s)',
+    async (appImage) => {
+      const order: string[] = []
+      isEphemeral.mockReturnValue(appImage)
+      prepare.mockResolvedValue({
+        commit: async () => {
+          expect(state.isQuitting).toBe(false)
+          order.push('authorize')
+        },
+        cancel: vi.fn()
+      })
+      appRelaunchMock.mockImplementation(() => order.push('authorize'))
+      fence.mockImplementation(() => {
+        expect(state.isQuitting).toBe(true)
+        order.push('fence')
+      })
+      exitMock.mockImplementation(() => order.push('exit'))
+      const { prepareAppRelaunch, relaunchRendererAndExit } = await import('./app-relaunch')
+
+      const restart = await prepareAppRelaunch('renderer-request')
+      await relaunchRendererAndExit(restart, async () => {
+        await Promise.resolve()
+        order.push('notifications closed')
+      })
+
+      expect(order).toEqual(['authorize', 'fence', 'notifications closed', 'exit'])
+    }
+  )
+
+  it('leaves services live when the prepared AppImage cannot be committed', async () => {
+    isEphemeral.mockReturnValue(true)
+    prepare.mockResolvedValue({
+      commit: async () => {
+        throw new Error('AppImage moved')
+      },
+      cancel: vi.fn()
+    })
+    const cleanup = vi.fn()
+    const { prepareAppRelaunch, relaunchRendererAndExit } = await import('./app-relaunch')
+    const restart = await prepareAppRelaunch('renderer-request')
+
+    await expect(relaunchRendererAndExit(restart, cleanup)).rejects.toThrow('AppImage moved')
+    expect(state.isQuitting).toBe(false)
+    expect(fence).not.toHaveBeenCalled()
+    expect(cleanup).not.toHaveBeenCalled()
+    expect(exitMock).not.toHaveBeenCalled()
   })
 })

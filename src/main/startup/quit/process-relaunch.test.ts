@@ -22,7 +22,7 @@ vi.mock('./appimage-relaunch', () => ({ prepareAppImageRelaunch: prepare }))
 import { app } from 'electron'
 
 function launcher() {
-  return { commit: vi.fn(async () => {}), cancel: vi.fn() }
+  return { commit: vi.fn(async () => {}), cancel: vi.fn(), reportFailure: vi.fn() }
 }
 
 beforeEach(() => {
@@ -41,53 +41,50 @@ describe('process relaunch', () => {
     const second = launcher()
     prepare.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
     const restart = await lifecycle.prepareProcessRelaunch({ args: ['--first'] })
-    const quitting = restart.quit()
+    const quitting = restart?.quit()
     lifecycle.cancelProcessRelaunch()
     await expect(quitting).rejects.toThrow('Orca restart was canceled.')
-    await lifecycle.commitGracefulProcessRelaunch()
+    await lifecycle.finishGracefulAppImageRelaunch()
     expect(first.commit).not.toHaveBeenCalled()
+    expect(electron.exit).not.toHaveBeenCalled()
 
     const retry = await lifecycle.prepareProcessRelaunch({ args: ['--retry', 'new file'] })
     expect(prepare).toHaveBeenLastCalledWith(['--retry', 'new file'], expect.any(AbortSignal))
-    const retryQuit = retry.quit()
-    await lifecycle.commitGracefulProcessRelaunch()
-    await lifecycle.commitGracefulProcessRelaunch()
+    const retryQuit = retry?.quit()
+    await lifecycle.finishGracefulAppImageRelaunch()
+    await lifecycle.finishGracefulAppImageRelaunch()
     await retryQuit
     expect(second.commit).toHaveBeenCalledTimes(1)
     expect(electron.relaunch).not.toHaveBeenCalled()
   })
 
-  it('does not arm an explicit executable during a vetoed before-quit', async () => {
+  it('cancels the helper when before-quit is vetoed', async () => {
     const lifecycle = await import('./process-relaunch')
-    const options = { execPath: '/opt/replacement', args: ['--custom'] }
+    const replacement = launcher()
+    prepare.mockResolvedValueOnce(replacement)
     app.on('before-quit', (event: { defaultPrevented: boolean }) => {
       event.defaultPrevented = true
     })
-    const restart = await lifecycle.prepareProcessRelaunch(options)
-    await expect(restart.quit()).rejects.toThrow('Orca restart was canceled.')
-    await lifecycle.commitGracefulProcessRelaunch()
-    expect(electron.relaunch).not.toHaveBeenCalled()
-    const retry = await lifecycle.prepareProcessRelaunch(options)
-    await retry.exit(0)
-    expect(electron.relaunch).toHaveBeenCalledWith(options)
-    expect(electron.exit).toHaveBeenCalledWith(0)
+    const restart = await lifecycle.prepareProcessRelaunch()
+    await expect(restart?.quit()).rejects.toThrow('Orca restart was canceled.')
+    await lifecycle.finishGracefulAppImageRelaunch()
+    expect(replacement.cancel).toHaveBeenCalled()
+    expect(replacement.commit).not.toHaveBeenCalled()
+    expect(electron.exit).not.toHaveBeenCalled()
   })
 
-  it('rejects concurrent AppImage, default and explicit requests while the first is preparing', async () => {
+  it('rejects a competing AppImage request during preparation and quit', async () => {
     const lifecycle = await import('./process-relaunch')
     const first = launcher()
     const pending = Promise.withResolvers<ReturnType<typeof launcher>>()
     prepare.mockReturnValueOnce(pending.promise)
     const request = lifecycle.prepareProcessRelaunch({ args: ['--first'] })
     await expect(lifecycle.prepareProcessRelaunch()).rejects.toThrow('already restarting')
-    await expect(lifecycle.prepareProcessRelaunch({ execPath: '/other' })).rejects.toThrow(
-      'already restarting'
-    )
     pending.resolve(first)
     const restart = await request
-    const quitting = restart.quit()
+    const quitting = restart?.quit()
     await expect(lifecycle.prepareProcessRelaunch()).rejects.toThrow('already restarting')
-    await lifecycle.commitGracefulProcessRelaunch()
+    await lifecycle.finishGracefulAppImageRelaunch()
     await quitting
     expect(first.commit).toHaveBeenCalledTimes(1)
     expect(electron.relaunch).not.toHaveBeenCalled()
@@ -99,10 +96,11 @@ describe('process relaunch', () => {
     const pending = Promise.withResolvers<ReturnType<typeof launcher>>()
     prepare.mockReturnValueOnce(pending.promise)
     const request = lifecycle.prepareProcessRelaunch()
-    lifecycle.cancelProcessRelaunchPreparation()
+    lifecycle.skipBeforeQuitForRelaunch({ defaultPrevented: false, preventDefault: vi.fn() })
     pending.resolve(stale)
     await expect(request).rejects.toThrow('Orca restart was canceled.')
-    await lifecycle.commitGracefulProcessRelaunch()
+    await lifecycle.finishGracefulAppImageRelaunch()
+    expect(stale.cancel).toHaveBeenCalled()
     expect(stale.commit).not.toHaveBeenCalled()
     expect(electron.relaunch).not.toHaveBeenCalled()
   })
@@ -120,8 +118,23 @@ describe('process relaunch', () => {
     expect(electron.exit).not.toHaveBeenCalled()
     expect(electron.relaunch).not.toHaveBeenCalled()
     const restart = await lifecycle.prepareProcessRelaunch({ args: ['--recovery'] })
-    await restart.exit(1)
+    await restart?.exit(1)
     expect(replacement.commit).toHaveBeenCalledTimes(1)
     expect(electron.exit).toHaveBeenCalledWith(1)
+  })
+
+  it('reports a failed commit and exits after graceful teardown', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const lifecycle = await import('./process-relaunch')
+    const replacement = launcher()
+    replacement.commit.mockRejectedValueOnce(new Error('AppImage disappeared'))
+    prepare.mockResolvedValueOnce(replacement)
+    const restart = await lifecycle.prepareProcessRelaunch()
+    const rejected = expect(restart?.quit()).rejects.toThrow('AppImage disappeared')
+    await lifecycle.finishGracefulAppImageRelaunch()
+    await rejected
+    expect(replacement.reportFailure).toHaveBeenCalledWith(new Error('AppImage disappeared'))
+    expect(electron.exit).toHaveBeenCalledWith(0)
+    vi.restoreAllMocks()
   })
 })

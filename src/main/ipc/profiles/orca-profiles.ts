@@ -1,7 +1,12 @@
 import { ipcMain, type WebContents } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import { prepareAppRelaunch, runBeforeRelaunchCleanup } from '../../startup/quit/app-relaunch'
-import type { ProcessRelaunch } from '../../startup/quit/process-relaunch'
+import {
+  prepareAppRelaunch,
+  relaunchAppAndQuit,
+  runBeforeRelaunchCleanup,
+  type AppRelaunchReason
+} from '../../startup/quit/app-relaunch'
+import type { AppImageProcessRelaunch } from '../../startup/quit/process-relaunch'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -112,12 +117,19 @@ function createCloudLinkedProfileArgsFromUnknown(args: unknown): CreateCloudLink
   }
 }
 
-function finishProfileRelaunch(restart: ProcessRelaunch, sender: WebContents): void {
+function scheduleProfileRelaunch(
+  reason: Extract<AppRelaunchReason, `profile-${string}`>,
+  sender: WebContents,
+  restart: AppImageProcessRelaunch | undefined
+): void {
   if (!sender.isDestroyed()) {
     sender.send('app:restart-committed')
   }
   setTimeout(() => {
-    // Normal quit preserves renderer scrollback and final daemon checkpoints.
+    if (!restart) {
+      relaunchAppAndQuit(reason)
+      return
+    }
     void restart
       .quit()
       .catch((error: unknown) =>
@@ -166,11 +178,17 @@ export function registerOrcaProfileHandlers(
       try {
         // Flush the source before switching the startup index.
         await flushActiveProfileBeforeRelaunch(store)
+        if (restart) {
+          await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+          restart.signal.throwIfAborted()
+        }
         setActiveOrcaProfile(profileId)
-        await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
-        finishProfileRelaunch(restart, event.sender)
+        if (!restart) {
+          await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+        }
+        scheduleProfileRelaunch('profile-switch', event.sender, restart)
       } catch (error) {
-        restart.cancel()
+        restart?.cancel()
         throw error
       }
 
@@ -212,9 +230,9 @@ export function registerOrcaProfileHandlers(
           return result
         } finally {
           if (mustRestart) {
-            finishProfileRelaunch(restart, event.sender)
+            scheduleProfileRelaunch('profile-transfer', event.sender, restart)
           } else {
-            restart.cancel()
+            restart?.cancel()
           }
         }
       }
