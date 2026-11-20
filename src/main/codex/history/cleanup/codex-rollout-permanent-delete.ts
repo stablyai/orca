@@ -11,8 +11,9 @@ import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-us
 import { isOpenInCodex } from './codex-rollout-writer-lock'
 import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/codex/codex-rollout-history-source'
 import {
-  createCodexRolloutHistoryReferenceScan,
-  type ScanCodexRolloutHistoryReferences
+  earliestForkDate,
+  scanCodexRolloutHistoryReferences,
+  type CodexRolloutHistoryReferences
 } from './codex-rollout-history-references'
 import {
   isOutsideProtectedRoots,
@@ -176,13 +177,13 @@ async function removeCopyMarker(
   }
 }
 
-type DeleteOutcome = 'done' | 'referenced'
+type DeleteOutcome = 'done' | { referencedId: string }
 
 async function deleteRollout(
   target: RolloutTarget,
   listHomes: () => Promise<RolloutHomes>,
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
-  references: ScanCodexRolloutHistoryReferences,
+  references: (homes: readonly string[]) => Promise<CodexRolloutHistoryReferences>,
   result: DeleteResult,
   deletedPaths: string[]
 ): Promise<DeleteOutcome> {
@@ -202,6 +203,19 @@ async function deleteRollout(
     }
     // After the open check: a chat still open never reads the import folder (which can start WSL).
     const protectedRoots = await resolveProtectedRoots(listed, stem)
+    // A forked chat reads its earlier turns from this file: deleting it would empty that chat.
+    // Before the eligibility checks, which must stay nearest the unlink.
+    const rolloutId = codexPhysicalRolloutId(stem)
+    if (!rolloutId) {
+      return 'done'
+    }
+    const index = await references(homes)
+    if (!index.complete) {
+      return 'done'
+    }
+    if (index.isReferenced(rolloutId)) {
+      return { referencedId: rolloutId }
+    }
     const found = await readNames(names)
     // Every name, every extension: a chat resumed or still written anywhere keeps them all.
     const checked = new Set<string>()
@@ -216,15 +230,6 @@ async function deleteRollout(
     }
     if (checked.size === 0) {
       return 'done'
-    }
-    // A forked chat reads its earlier turns from this file: deleting it would empty that chat.
-    const rolloutId = codexPhysicalRolloutId(stem)
-    if (!rolloutId) {
-      return 'done'
-    }
-    const index = await references(homes)
-    if (index.isReferenced(rolloutId)) {
-      return 'referenced'
     }
     // Reading takes a while: a name that appeared or changed meanwhile means the chat is in use.
     const current = await readNames(names)
@@ -261,8 +266,8 @@ async function deleteRollout(
       return 'done'
     }
     result.deleted += 1
-    // A name left in the import folder still reads its own parent.
-    if (removed.length === found.length) {
+    // A name left (in the import folder) still reads its own parent.
+    if ((await readNames(names)).length === 0) {
       index.forget(rolloutId)
     }
     // A name another process links meanwhile is a fresh candidate for the next sweep's full checks.
@@ -281,20 +286,25 @@ async function deleteRollout(
 
 /**
  * Deletes each Codex rollout under every name it has in the listed homes, for good. `shouldDelete` is
- * asked once per distinct file right before removal; false keeps every name of that rollout.
+ * asked once per distinct file right before removal; false keeps every name of that rollout. A
+ * rollout another rollout reads its history from stays, unless that one goes first in this batch.
  */
 export async function deleteCodexRolloutsPermanently(
   targets: readonly RolloutTarget[],
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
   listHomes: () => Promise<RolloutHomes>,
-  references: ScanCodexRolloutHistoryReferences = createCodexRolloutHistoryReferenceScan()
+  signal?: AbortSignal
 ): Promise<DeleteResult> {
   const result: DeleteResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const deletedPaths: string[] = []
+  const since = earliestForkDate(targets.map((target) => target.filePath))
+  let scan: Promise<CodexRolloutHistoryReferences> | undefined
+  // Scanned once per batch, and only once a rollout is otherwise ready to go.
+  const references = (homes: readonly string[]) =>
+    (scan ??= scanCodexRolloutHistoryReferences(homes, since, signal))
   let pending = [...targets]
-  // A parent goes only after every fork reading it went first, so retry the ones kept for that.
   while (pending.length > 0) {
-    const referenced: RolloutTarget[] = []
+    const referenced: { target: RolloutTarget; rolloutId: string }[] = []
     for (const target of pending) {
       const outcome = await deleteRollout(
         target,
@@ -304,15 +314,19 @@ export async function deleteCodexRolloutsPermanently(
         result,
         deletedPaths
       )
-      if (outcome === 'referenced') {
-        referenced.push(target)
+      if (outcome !== 'done') {
+        referenced.push({ target, rolloutId: outcome.referencedId })
       }
     }
-    if (referenced.length === pending.length) {
-      break
-    }
-    pending = referenced
+    const index = await scan?.catch(() => undefined)
+    // Only a parent whose last fork went in this pass can go now.
+    pending = index
+      ? referenced
+          .filter(({ rolloutId }) => !index.isReferenced(rolloutId))
+          .map(({ target }) => target)
+      : []
   }
+  await (await scan?.catch(() => undefined))?.save()
   await invalidateDeletedAiVaultSessionPaths(deletedPaths)
   if (deletedPaths.length > 0) {
     forgetCodexHistoryDiskUsage()

@@ -217,11 +217,12 @@ describe('deleteCodexRolloutsPermanently with forked chats', () => {
           history_base: { thread_id: parentId, end_ordinal_exclusive: 1, end_byte_offset: 10 }
         }
       })}\n`
-    // A fork continued in a live folder reads its earlier turns from the gone folder's parent.
+    // A fork continued in a live folder reads its earlier turns from the gone folder's parent;
+    // Codex reads its header with no newline after it.
     const keptParent = write(join(home, ...DATED, NAME('7')), rollout('/gone'))
     const liveFork = write(
       join(home, ...DATED, NAME('8')),
-      fork('/live', '00000007-0000-4000-8000-000000000000')
+      fork('/live', '00000007-0000-4000-8000-000000000000').trimEnd()
     )
     // Both ran only in the gone folder; the parent is listed first.
     const goneParent = write(join(home, ...DATED, NAME('9')), rollout('/gone'))
