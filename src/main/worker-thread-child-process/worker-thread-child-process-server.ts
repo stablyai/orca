@@ -1,4 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { nativeExecutableResolver } from '@orca/process-host/native-executable-resolution'
 import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { spawnProcess } from '@orca/process-host'
 import type {
@@ -120,6 +121,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     {
       request: Extract<WorkerThreadChildRequest, { type: 'spawn' }>
       early: WorkerThreadChildRequest[]
+      lookup?: Promise<unknown>
     }
   >()
   let launching = false
@@ -129,17 +131,37 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       launching = false
       return
     }
-    queued.delete(next.value.request.id)
-    spawnChild(next.value.request)
-    for (const request of next.value.early) {
-      handle(request)
+    const entry = next.value
+    const start = (): void => {
+      if (queued.get(entry.request.id) !== entry) {
+        launchNext()
+        return
+      }
+      queued.delete(entry.request.id)
+      spawnChild(entry.request)
+      for (const request of entry.early) {
+        handle(request)
+      }
+      setImmediate(launchNext)
     }
-    setImmediate(launchNext)
+    // The spawn's sync PATH lookup then hits this warm cache, so a slow PATH directory never blocks other children.
+    if (entry.lookup) {
+      void entry.lookup.then(start)
+    } else {
+      start()
+    }
   }
 
   const handle = (request: WorkerThreadChildRequest): void => {
     if (request.type === 'spawn') {
-      queued.set(request.id, { request, early: [] })
+      const { program, env } = request.spec
+      queued.set(request.id, {
+        request,
+        early: [],
+        ...(process.platform === 'darwin'
+          ? { lookup: nativeExecutableResolver.resolveAsync(program, env).catch(() => {}) }
+          : {})
+      })
       if (!launching) {
         launching = true
         setImmediate(launchNext)
