@@ -146,6 +146,11 @@ const openPicker = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 300))
 }
 
+const openComputerMenu = async (): Promise<void> => {
+  document.querySelector<HTMLInputElement>('input[role="combobox"][aria-label="Computer"]')?.focus()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+
 const review = (width: 340 | 480, computer?: string) => ({
   width: width + 32,
   setup: seeded(computer),
@@ -155,7 +160,13 @@ const review = (width: 340 | 480, computer?: string) => ({
 const FILLED = named('Atlas', 'Triage new bugs and post a daily summary in #eng.')
 const LONGEST = named(
   'Customer Escalations Concierge for the Platform Team',
-  'You own customer escalations. Triage every new bug tagged customer, find the owner from CODEOWNERS, and page the on-call engineer in #oncall. Post a summary to the customer thread once it is fixed.'
+  [
+    'Owns customer escalations.',
+    'Triages new bugs tagged customer.',
+    'Finds the owner from CODEOWNERS.',
+    'Pages the on-call engineer in #oncall.',
+    'Posts a summary once it is fixed.'
+  ].join('\n')
 )
 
 export const empty340 = defineFixture(review(340))
@@ -166,3 +177,11 @@ export const longest340 = defineFixture({ ...review(340, LONG_COMPUTER), interac
 export const longest480 = defineFixture({ ...review(480, LONG_COMPUTER), interact: LONGEST })
 export const picker340 = defineFixture({ ...review(340), interact: openPicker })
 export const picker480 = defineFixture({ ...review(480), interact: openPicker })
+export const computerMenu340 = defineFixture({
+  ...review(340, LONG_COMPUTER),
+  interact: openComputerMenu
+})
+export const computerMenu480 = defineFixture({
+  ...review(480, LONG_COMPUTER),
+  interact: openComputerMenu
+})
