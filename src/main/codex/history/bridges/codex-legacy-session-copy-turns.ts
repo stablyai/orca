@@ -1,13 +1,15 @@
-const runningForCopy = new Map<string, Promise<unknown>>()
+import type { LegacySessionCopySwap } from './codex-legacy-session-copy'
+
+const runningForCopy = new Map<string, Promise<LegacySessionCopySwap>>()
 
 /** Every write of a copy's marker or names runs one at a time per copy; a second caller shares it. */
-export function runAloneForCopy<T>(
+export function runAloneForCopy(
   copyPath: string,
-  work: () => Promise<T>
-): Promise<T | 'deferred'> {
+  work: () => Promise<LegacySessionCopySwap>
+): Promise<LegacySessionCopySwap> {
   const running = runningForCopy.get(copyPath)
   if (running) {
-    return running as Promise<T | 'deferred'>
+    return running
   }
   const task = work()
     .catch((error: unknown): 'deferred' => {

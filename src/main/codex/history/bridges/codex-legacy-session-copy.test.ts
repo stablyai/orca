@@ -322,6 +322,7 @@ describe('legacy session copy swap', () => {
 
     // A pass inside its window for longer than a refused hold is retried; the resume runs beside it.
     const pass = legacyCopyLocks.whileUnlocked(lockFolders, [], async () => {
+      // ast-grep-ignore: test-no-real-time-wait -- the holder retries a refused hold on real timers; the pass must outlast that
       await new Promise((resolve) => setTimeout(resolve, 400))
     })
     const resume = swapLegacySessionCopy({
