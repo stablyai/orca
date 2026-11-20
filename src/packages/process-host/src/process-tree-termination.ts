@@ -97,14 +97,30 @@ async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promi
   }
 }
 
-// Concurrent group waits share one table read; a read already running only reports a group as busier than it is.
-let processTableRead: Promise<string | null> | undefined
+let runningTableRead: Promise<string | null> | undefined
+let queuedTableRead: Promise<string | null> | undefined
+
+function startTableRead(): Promise<string | null> {
+  runningTableRead = readPosixProcessTable().finally(() => {
+    runningTableRead = undefined
+  })
+  return runningTableRead
+}
+
+// Concurrent group waits share a table read, but only one that starts after they ask: an earlier snapshot can miss a newer group.
+function readTableAfterNow(): Promise<string | null> {
+  if (!runningTableRead) {
+    return startTableRead()
+  }
+  queuedTableRead ??= runningTableRead.then(() => {
+    queuedTableRead = undefined
+    return startTableRead()
+  })
+  return queuedTableRead
+}
 
 function readPosixProcessGroupStates(processGroupId: number): Promise<string[] | null> {
-  processTableRead ??= readPosixProcessTable().finally(() => {
-    processTableRead = undefined
-  })
-  return processTableRead.then((output) =>
+  return readTableAfterNow().then((output) =>
     output === null
       ? null
       : output.split('\n').flatMap((line) => {

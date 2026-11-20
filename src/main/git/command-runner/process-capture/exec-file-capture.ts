@@ -10,13 +10,12 @@ import { endAbandonedWorkerChild, killSpawnedCommandTree } from './spawned-comma
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
-import { spawnedExecFile, workerExecFile } from './worker-exec-file'
+import { capturesOnWorker, spawnedExecFile, workerExecFile } from './worker-exec-file'
 import { emptyExecFileOutput, isExecFileResultObject } from './exec-file-result-shape'
 import {
   isAbandonedWorkerChildError,
   isWorkerChildStdinWriteError,
-  type WorkerThreadChildProcess,
-  whenSpawnWorkerReady
+  type WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
 export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
@@ -36,7 +35,7 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   onStderr?: (chunk: string) => void
   /** Native Git only: launch an owned group and retain it after abnormal stop until proof. */
   ownedPosixGroup?: boolean
-  /** Rechecked synchronously at the spawn call, after any async executable resolution. */
+  /** Rechecked synchronously at the spawn call, after any async executable resolution (so it keeps POSIX launches on main). */
   canStart?: () => boolean
 }
 
@@ -160,8 +159,7 @@ export function execFileCapture(
 
     const launch = async (): Promise<void> => {
       try {
-        // Process creation blocks its calling loop: uv_spawn's fork/exec, and CreateProcessW for seconds under endpoint security (#11161, #27362).
-        useWorker = await whenSpawnWorkerReady()
+        useWorker = await capturesOnWorker(options.canStart)
         if (settled) {
           return
         }

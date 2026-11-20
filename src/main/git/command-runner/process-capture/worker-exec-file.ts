@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import {
   isWorkerChildStdinWriteError,
   spawnProcessOnWorkerThread,
+  whenSpawnWorkerReady,
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
@@ -23,6 +24,12 @@ type CaptureCallback = (
   stdout: string | Buffer,
   stderr: string | Buffer
 ) => void
+
+/** Process creation blocks its calling loop (fork/exec; CreateProcessW for seconds under endpoint security, #11161, #27362).
+ * A queued worker launch can't recheck canStart at creation, so a gated POSIX launch stays on main. */
+export async function capturesOnWorker(canStart: (() => boolean) | undefined): Promise<boolean> {
+  return (process.platform === 'win32' || !canStart) && whenSpawnWorkerReady()
+}
 
 /** Capture a worker-owned child; the caller still owns deadlines and aborts. */
 export function workerExecFile(

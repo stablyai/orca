@@ -156,6 +156,19 @@ describe.skipIf(process.platform === 'win32')('POSIX captured Git on the worker'
     proxy.mockRestore()
   })
 
+  it('starts a launch with a start gate on main, where the gate is checked at creation', async () => {
+    await createHost()
+    const proxy = vi.spyOn(state.host!, 'spawn')
+    const { stdout } = await execFileCapture('sh', ['-c', 'printf gated'], {
+      ownedPosixGroup: true,
+      encoding: 'utf8',
+      canStart: () => true
+    })
+    expect(stdout).toBe('gated')
+    expect(proxy).not.toHaveBeenCalled()
+    proxy.mockRestore()
+  })
+
   it('returns output far past the worker high-water mark intact', async () => {
     await createHost()
     const { stdout } = await execFileCapture(
