@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
+import { watch, type FSWatcher } from 'node:fs'
 import { link, open, rename, rm, stat, statfs } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
@@ -16,7 +17,6 @@ const ATTEMPTS_PER_SESSION = 3
 const ATTEMPT_SPACING_MS = 60 * 60_000
 // The copy blocks no one; this only bounds the disk and CPU it uses.
 const COPY_BUDGET_MS = 120_000
-const WRITE_WATCH_MS = 50
 // journal_size_limit: closing at quit checkpoints at most this much.
 const MAX_WAL_BYTES = 8 * MIB
 const SWAP_CAP_MS = 2_000
@@ -27,26 +27,34 @@ export type OrchestrationDbSwap =
   | { kind: 'compacted'; beforeBytes: number; afterBytes: number; ms: number }
   | { kind: 'failed'; error: string }
 
-/** Changes with any write to the file: this connection's rows, another connection's commit, the schema. */
-function writeFingerprint(db: Database.Database): string | null {
-  // An open transaction's rows count before they commit, so a copy taken now could miss them.
-  if (db.isTransaction) {
-    return null
-  }
-  const changes = db.prepare('SELECT total_changes() AS changes').get()?.changes
-  const pragmas = ['data_version', 'schema_version', 'user_version'].map((name) =>
-    db.pragma(name, { simple: true })
-  )
-  return [changes, ...pragmas].join(':')
+// One cached statement: this connection's write counters and the header's page counts (page 1 only).
+const FILE_STATE_SQL = `SELECT total_changes() AS changes, d.data_version, s.schema_version, u.user_version,
+  a.auto_vacuum, p.page_size, c.page_count, f.freelist_count
+  FROM pragma_data_version AS d, pragma_schema_version AS s, pragma_user_version AS u,
+    pragma_auto_vacuum AS a, pragma_page_size AS p, pragma_page_count AS c, pragma_freelist_count AS f`
+
+type FileState = {
+  /** Changes with any write: this connection's rows, another connection's commit, the schema. */
+  fingerprint: string | null
+  legacy: boolean
+  /** Live bytes when enough pages are free to be worth a copy. */
+  worthCopyingLiveBytes: number | null
 }
 
-/** Live bytes of a file made before incremental auto-vacuum with enough free pages to be worth a copy. */
-function legacyLiveBytes(db: Database.Database): number | null {
-  const pageSize = Number(db.pragma('page_size', { simple: true }))
-  const pages = Number(db.pragma('page_count', { simple: true }))
-  const freePages = Number(db.pragma('freelist_count', { simple: true }))
+function readFileState(db: Database.Database): FileState {
+  const row = db.prepare(FILE_STATE_SQL).get() ?? {}
+  const pageSize = Number(row.page_size)
+  const pages = Number(row.page_count)
+  const freePages = Number(row.freelist_count)
   const warranted = freePages * pageSize >= MIN_FREE_BYTES && freePages >= pages * MIN_FREE_FRACTION
-  return warranted ? (pages - freePages) * pageSize : null
+  return {
+    // An open transaction's rows count before they commit, so a copy taken now could miss them.
+    fingerprint: db.isTransaction
+      ? null
+      : [row.changes, row.data_version, row.schema_version, row.user_version].join(':'),
+    legacy: Number(row.auto_vacuum) === 0,
+    worthCopyingLiveBytes: warranted ? (pages - freePages) * pageSize : null
+  }
 }
 
 async function availableBytesIn(dir: string): Promise<number> {
@@ -121,11 +129,12 @@ export class OrchestrationDbCompaction {
       return
     }
     const { db } = this.orchestrationDb
-    if (Number(db.pragma('auto_vacuum', { simple: true })) !== 0) {
+    const state = readFileState(db)
+    if (!state.legacy) {
       this.finished = true
       return
     }
-    const fingerprint = writeFingerprint(db)
+    const { fingerprint } = state
     this.quietTicks =
       fingerprint !== null && fingerprint === this.lastFingerprint ? this.quietTicks + 1 : 0
     this.lastFingerprint = fingerprint
@@ -148,7 +157,7 @@ export class OrchestrationDbCompaction {
     ) {
       return
     }
-    const liveBytes = legacyLiveBytes(db)
+    const liveBytes = state.worthCopyingLiveBytes
     if (liveBytes === null) {
       return
     }
@@ -157,13 +166,13 @@ export class OrchestrationDbCompaction {
       return
     }
     // Read again after the await, right before the child takes its snapshot: any later write shows.
-    if (this.stopped || fingerprint === null || writeFingerprint(db) !== fingerprint) {
+    if (this.stopped || fingerprint === null || readFileState(db).fingerprint !== fingerprint) {
       return
     }
     this.attempts++
     this.lastAttemptAt = Date.now()
     const copied = await this.copy(fingerprint)
-    if (copied && !this.stopped && writeFingerprint(db) === fingerprint) {
+    if (copied && !this.stopped && readFileState(db).fingerprint === fingerprint) {
       this.ready = { fingerprint }
     } else if (!this.stopped) {
       await removeQuietly(this.copyPath)
@@ -194,18 +203,24 @@ export class OrchestrationDbCompaction {
       this.copying = child
       const budget = setTimeout(() => child.kill('SIGKILL'), COPY_BUDGET_MS)
       // A write makes the copy stale, so stop it then: its disk traffic can slow the runtime's later
-      // commits (seen on a busy Linux disk).
-      const watch = setInterval(() => {
-        let stale = true
-        try {
-          stale = writeFingerprint(this.orchestrationDb.db) !== fingerprint
-        } catch {
-          // A closed database: nothing left to copy for.
-        }
-        if (stale) {
-          child.kill('SIGKILL')
-        }
-      }, WRITE_WATCH_MS)
+      // commits (seen on a busy Linux disk). Every commit touches the WAL; the fingerprint stays the judge.
+      let walWatch: FSWatcher | undefined
+      try {
+        walWatch = watch(`${this.filename}-wal`, () => {
+          let stale = true
+          try {
+            stale = readFileState(this.orchestrationDb.db).fingerprint !== fingerprint
+          } catch {
+            // A closed database: nothing left to copy for.
+          }
+          if (stale) {
+            child.kill('SIGKILL')
+          }
+        })
+        walWatch.on('error', () => walWatch?.close())
+      } catch {
+        // No events on this file system: the check after the copy still drops a stale one.
+      }
       // Any exit, update installs included: a child left running would hold the app's executable open.
       const killOnExit = (): void => {
         child.kill('SIGKILL')
@@ -213,7 +228,7 @@ export class OrchestrationDbCompaction {
       process.once('exit', killOnExit)
       const done = (copied: boolean): void => {
         clearTimeout(budget)
-        clearInterval(watch)
+        walWatch?.close()
         process.off('exit', killOnExit)
         this.copying = undefined
         resolve(copied)
@@ -252,7 +267,7 @@ export class OrchestrationDbCompaction {
         return { kind: 'busy' }
       }
       // Synchronously before the close, so nothing can write in between.
-      if (writeFingerprint(this.orchestrationDb.db) !== ready.fingerprint) {
+      if (readFileState(this.orchestrationDb.db).fingerprint !== ready.fingerprint) {
         await removeQuietly(copy)
         return { kind: 'stale' }
       }
