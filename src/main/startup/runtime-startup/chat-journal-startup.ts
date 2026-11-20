@@ -2,6 +2,7 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { isHostShuttingDown } from '../quit/host-shutdown-state'
 import { mainProcessState as state } from '../main-process-state'
 import {
+  provideManagedAgentDetection,
   reclaimManagedRuntimeReleasesAtLaunch,
   startManagedRuntimeAutoUpdates
 } from '../../runtime/rpc/methods/host-management/managed-runtime-install'
@@ -13,9 +14,11 @@ let windowFence: Promise<unknown> = Promise.resolve()
 
 /** Serve boots the saved-chat writer now; desktop waits for the first-window fence, so window creation keeps the disk. */
 export function beginChatJournalStartup(
-  runtime: Pick<OrcaRuntimeService, 'beginStructuredAgentSessionStartupOpen'>,
+  runtime: Pick<OrcaRuntimeService, 'beginStructuredAgentSessionStartupOpen' | 'requireStore'>,
   serveMode: boolean
 ): void {
+  // Detection counts Orca's copies from launch, before the release reclaim in chatJournalHostServing.
+  provideManagedAgentDetection(runtime)
   if (serveMode) {
     runtime.beginStructuredAgentSessionStartupOpen(serving.promise)
     return
