@@ -228,6 +228,10 @@ export class SimulatorHardwareKeyboardSync {
       pasteKeyCode: 'KeyV'
     }
     this.devices.set(udid, state)
+    // While Orca holds no rewrite, what the guest has now is the user's own setting.
+    if (!state.rewritten) {
+      state.original = current
+    }
     // A Mac layout iOS lacks puts back the user's own layouts without dropping keyboards added since.
     const next = hardwareLayout
       ? withHardwareLayout(current, hardwareLayout)
