@@ -41,7 +41,8 @@ describe('createEventLoopStallSummary', () => {
         stallsSeen: 2,
         stalledMsSeen: 5_300,
         cpuMs: 5_000,
-        uncountedMaxGapMs: 0
+        uncountedMaxGapMs: 0,
+        idleTickMaxCpuMs: 0
       }
     ])
   })
@@ -64,7 +65,8 @@ describe('createEventLoopStallSummary', () => {
         stallsSeen: 0,
         stalledMsSeen: 0,
         cpuMs: 0,
-        uncountedMaxGapMs: 7_199_500
+        uncountedMaxGapMs: 7_199_500,
+        idleTickMaxCpuMs: 0
       }
     ])
   })
@@ -101,34 +103,49 @@ describe('createEventLoopStallSummary', () => {
         stallsSeen: 1,
         stalledMsSeen: 1_500,
         cpuMs: 0,
-        uncountedMaxGapMs: 0
+        uncountedMaxGapMs: 0,
+        idleTickMaxCpuMs: 0
       }
     ])
   })
 
-  it('ticks rarely while main is idle and measures a stall against that slower tick', () => {
+  it('ticks rarely only after main has been quiet, and still reports what the slow ticks hid', () => {
     const windows: EventLoopStallWindow[] = []
-    const summary = createEventLoopStallSummary(0, { ...MINUTE, idleTickMs: 10_000 }, (window) =>
-      windows.push(window)
+    const summary = createEventLoopStallSummary(
+      0,
+      { ...MINUTE, idle: { afterMs: 30_000, tickMs: 10_000 } },
+      (window) => windows.push(window)
     )
-    expect(summary.tick(500, 0)).toBe(10_000)
-    expect(summary.tick(10_500, 1)).toBe(10_000)
-    // A 2 s block that overlapped the idle tick: busy again, so back to 500 ms.
-    expect(summary.tick(22_500, 2_001)).toBe(500)
-    expect(summary.tick(23_000, 2_001)).toBe(10_000)
-    summary.tick(33_000, 2_001)
-    summary.tick(43_000, 2_001)
-    summary.tick(53_000, 2_001)
-    summary.tick(63_000, 2_001)
+    onTimeUntil(summary, 500, 29_000)
+    expect(summary.tick(29_500, 0)).toBe(500)
+    expect(summary.tick(30_000, 0)).toBe(10_000)
+    // A 2 s block between idle ticks: the tick lands on time, but its CPU is kept and busy ticking resumes.
+    expect(summary.tick(40_000, 2_000)).toBe(500)
+    expect(summary.tick(40_500, 2_000)).toBe(500)
+    onTimeUntil(summary, 41_000, 69_500, 2_000)
+    expect(summary.tick(70_000, 2_000)).toBe(10_000)
+    // No suspend event: the clock ran on through 65 s of sleep after an idle tick.
+    expect(summary.tick(135_000, 2_000)).toBe(500)
     expect(windows).toEqual([
       {
-        windowMs: 63_000,
-        maxGapMs: 2_000,
-        maxGapCpuMs: 2_000,
-        stallsSeen: 1,
-        stalledMsSeen: 2_000,
-        cpuMs: 2_001,
-        uncountedMaxGapMs: 0
+        windowMs: 60_000,
+        maxGapMs: 0,
+        maxGapCpuMs: 0,
+        stallsSeen: 0,
+        stalledMsSeen: 0,
+        cpuMs: 2_000,
+        uncountedMaxGapMs: 0,
+        idleTickMaxCpuMs: 2_000
+      },
+      {
+        windowMs: 75_000,
+        maxGapMs: 0,
+        maxGapCpuMs: 0,
+        stallsSeen: 0,
+        stalledMsSeen: 0,
+        cpuMs: 0,
+        uncountedMaxGapMs: 55_000,
+        idleTickMaxCpuMs: 0
       }
     ])
   })
