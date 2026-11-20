@@ -6,7 +6,7 @@ import { mainProcessState as state } from '../main-process-state'
 
 // Push authenticates by host keypair, so accountless hosts must register phones too; shared startup state supplies the runtime in both modes.
 export function startDesktopPushService(runtimeRpc: OrcaRuntimeRpcServer): void {
-  const runtime: OrcaRuntimeService | null = state.runtime
+  const runtime: OrcaRuntimeService | null = state.core.runtime
   if (!runtime) {
     console.warn('[push] Background push startup skipped: runtime not started')
     return
@@ -18,7 +18,7 @@ export function startDesktopPushService(runtimeRpc: OrcaRuntimeRpcServer): void 
       gatewayUrl: getOrcaPushGatewayUrl()
     })
     pushService?.start()
-    state.desktopPushService = pushService
+    state.core.desktopPushService = pushService
   } catch (error) {
     console.warn(
       '[push] Background push startup unavailable:',

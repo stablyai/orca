@@ -38,6 +38,7 @@ import {
   restoreLocalWatcherAfterFailedRemoval
 } from './filesystem-watcher-local-removal'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher-handlers'
+import { getLocalWatcherRoot, normalizeWatcherEventPath } from './filesystem-watcher-paths'
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { subscribeViaWatcherProcess } from '../watcher-process/parcel-watcher-process'
@@ -134,8 +135,14 @@ describe('local filesystem watcher unsubscribe cleanup', () => {
     replacementCallback(null, [{ type: 'update', path: '/tmp/repo/retry.txt' }] as never)
     await vi.waitFor(() =>
       expect(replacementSender.send).toHaveBeenCalledWith('fs:changed', {
-        worktreePath: '/tmp/repo',
-        events: [{ kind: 'update', absolutePath: '/tmp/repo/retry.txt', isDirectory: true }]
+        worktreePath: getLocalWatcherRoot('/tmp/repo').path,
+        events: [
+          {
+            kind: 'update',
+            absolutePath: normalizeWatcherEventPath('/tmp/repo/retry.txt'),
+            isDirectory: true
+          }
+        ]
       })
     )
   })

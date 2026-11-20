@@ -96,49 +96,41 @@ afterEach(() => {
 })
 
 describe('linked HEAD-only watcher bursts', () => {
-  it('patches the moved head without re-listing the local catalog', async () => {
+  it('patches the moved HEAD for a local reader with a baseline and re-lists for other readers', async () => {
     const { commonDir, linkedPath } = createRepoWithLinkedWorktree()
     const watch = createWatch(commonDir)
-    await refreshWorktreeHeadIdentities(watch, watch.headIdentityRefresh, false)
+    const runtimeWatch = createWatch(commonDir, true)
+    const noBaselineWatch = createWatch(commonDir)
+    await Promise.all(
+      [watch, runtimeWatch].map((reader) =>
+        refreshWorktreeHeadIdentities(reader, reader.headIdentityRefresh, false)
+      )
+    )
     git(linkedPath, 'checkout', '-q', '--detach')
     git(linkedPath, 'commit', '-q', '--allow-empty', '-m', 'two')
     const movedHead = git(linkedPath, 'rev-parse', 'HEAD')
 
-    await flushLinkedHeadWrite(watch, commonDir)
+    await Promise.all(
+      [watch, runtimeWatch, noBaselineWatch].map((reader) =>
+        flushLinkedHeadWrite(reader, commonDir)
+      )
+    )
 
+    const expectedLinkedPath = linkedPath.replaceAll('\\', '/')
     await vi.waitFor(() =>
       expect(watch.sent).toContainEqual({
         channel: 'worktrees:headIdentitiesChanged',
         payload: {
           repoId: REPO_ID,
-          identities: [{ worktreePath: linkedPath, head: movedHead, branch: null }]
+          identities: [{ worktreePath: expectedLinkedPath, head: movedHead, branch: null }]
         }
       })
     )
     expect(channels(watch)).toContain('worktrees:gitStatusMetadataChanged')
     expect(channels(watch)).not.toContain('worktrees:changed')
-  })
-
-  it('re-lists when the renderer ignores head identities under a runtime environment', async () => {
-    const { commonDir, linkedPath } = createRepoWithLinkedWorktree()
-    const watch = createWatch(commonDir, true)
-    await refreshWorktreeHeadIdentities(watch, watch.headIdentityRefresh, false)
-    git(linkedPath, 'commit', '-q', '--allow-empty', '-m', 'two')
-
-    await flushLinkedHeadWrite(watch, commonDir)
-
-    expect(channels(watch)).toContain('worktrees:changed')
-    expect(channels(watch)).not.toContain('worktrees:headIdentitiesChanged')
-  })
-
-  it('falls back to a re-list when no baseline proves the move was published', async () => {
-    const { commonDir, linkedPath } = createRepoWithLinkedWorktree()
-    const watch = createWatch(commonDir)
-    git(linkedPath, 'commit', '-q', '--allow-empty', '-m', 'two')
-
-    await flushLinkedHeadWrite(watch, commonDir)
-
-    await vi.waitFor(() => expect(channels(watch)).toContain('worktrees:changed'))
+    expect(channels(runtimeWatch)).toContain('worktrees:changed')
+    expect(channels(runtimeWatch)).not.toContain('worktrees:headIdentitiesChanged')
+    expect(channels(noBaselineWatch)).toContain('worktrees:changed')
   })
 
   it('re-lists when the moved HEAD has no commit to publish', async () => {

@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../agent-session/agent-session-attachments'
 import { BotNameSchema } from '../bot-types'
 import { agentJournalSubmissionKey } from '../agent-session/journal/agent-session-journal-item-key'
 import type {
@@ -13,12 +14,13 @@ import {
   type BotGroupMessage
 } from './bot-group-schema'
 
-export { BotGroupReplyMode } from './bot-group-schema'
+export { BotGroupReplyMode, botGroupOwnerMessageBlocks } from './bot-group-schema'
 export type {
   BotGroup,
   BotGroupLatest,
   BotGroupMember,
   BotGroupMessage,
+  BotGroupMessageImage,
   BotGroupThread,
   BotGroupTurn
 } from './bot-group-schema'
@@ -114,8 +116,15 @@ export const BotGroupReorder = GroupId.extend({ sidebarOrder: z.number().int().n
 export const BotGroupSend = Revision.extend({
   threadId: Room.shape.threadId,
   messageId: z.string().uuid(),
-  text: z.string().trim().min(1).max(100_000)
-})
+  text: z.string().trim().max(100_000),
+  images: z
+    .array(z.string().min(1).max(4096))
+    .max(AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT, 'Group messages take up to 20 images.')
+    .optional()
+}).refine(
+  (value) => value.text.length > 0 || (value.images?.length ?? 0) > 0,
+  'Message text or image is required.'
+)
 export const BotGroupStop = Room.extend({ botId: z.string().min(1).optional() })
 export const BotGroupNewThread = GroupId.extend({})
 export const BotGroupDelete = GroupId
@@ -272,7 +281,17 @@ export function botGroupContext(
     )
   )
   const lines = messages.slice(Math.max(seen, 0)).flatMap((message, index) => [
-    ...(seen !== -1 && index === 0 ? [] : [{ author: message.author, text: message.text }]),
+    ...(seen !== -1 && index === 0
+      ? []
+      : [
+          {
+            author: message.author,
+            text: message.text,
+            ...(message.images?.length
+              ? { images: message.images.map(({ name, path }) => ({ name, path })) }
+              : {})
+          }
+        ]),
     ...message.turns.flatMap((turn) => {
       const text = completed.get(turn.operationId)
       return text && turn.botId !== member.botId

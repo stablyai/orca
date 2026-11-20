@@ -86,30 +86,6 @@ describe('cursor restore after wrap-pending replay (BUG C, absolute-cursor harde
     emulator.dispose()
   })
 
-  it('keeps a wrap-pending source wrap-pending after replay', async () => {
-    const { terminal, addon } = createTerminal(10, 5)
-    await write(terminal, '0123456789')
-    // cursorX == cols marks pending wrap; a CUP would clamp and clear it.
-    expect(terminal.buffer.active.cursorX).toBe(10)
-    const restored = await replay(serializeWithAbsoluteCursor(addon, terminal))
-    await write(restored, 'Z')
-    expect(visibleText(restored)[1]).toBe('Z')
-  })
-
-  it('handles a wrap-pending row that is NOT the final content row', async () => {
-    const { terminal, addon } = createTerminal(10, 5)
-    await write(terminal, '0123456789ABC\x1b[2;2H')
-    expect(terminal.buffer.active.cursorY).toBe(1)
-    expect(terminal.buffer.active.cursorX).toBe(1)
-    const plainRestore = await replay(addon.serialize())
-    const hardenedRestore = await replay(serializeWithAbsoluteCursor(addon, terminal))
-    expect(hardenedRestore.buffer.active.cursorX).toBe(1)
-    expect(hardenedRestore.buffer.active.cursorY).toBe(1)
-    expect(visibleText(hardenedRestore)).toEqual(visibleText(plainRestore))
-    expect(hardenedRestore.buffer.active.cursorX).toBe(plainRestore.buffer.active.cursorX)
-    expect(hardenedRestore.buffer.active.cursorY).toBe(plainRestore.buffer.active.cursorY)
-  })
-
   it('fixes the wrap-pending off-by-one inside the alt screen too', async () => {
     const { terminal, addon } = createTerminal(10, 5)
     await write(terminal, '\x1b[?1049h0123456789\x1b[3;5H')

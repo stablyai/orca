@@ -64,3 +64,16 @@ it('sends nothing for a file it cannot read or without an item', async () => {
   ).rejects.toThrow('--file goes with --to bot:<name> --item <n>')
   expect(callOrchestrationWorkerServer).not.toHaveBeenCalled()
 })
+
+it('refuses more than ten non-image files before uploading any', async () => {
+  const callOrchestrationWorkerServer = vi.fn()
+  const files = Array.from({ length: 11 }, (_, index) => join(dir, `log-${index}.txt`))
+  await expect(
+    uploadPeerMailFiles({ callOrchestrationWorkerServer }, SERVER, {
+      to: 'bot:Pixel',
+      item: '4',
+      files
+    })
+  ).rejects.toThrow('A message takes up to 10 files besides images. Nothing was sent.')
+  expect(callOrchestrationWorkerServer).not.toHaveBeenCalled()
+})

@@ -6,7 +6,7 @@ import { mainProcessState as state } from '../main-process-state'
 let watcherShutdownPromise: Promise<void> | null = null
 
 export function shutdownWatchersOnce(): Promise<void> {
-  if (state.watcherShutdownDone) {
+  if (state.core.watcherShutdownDone) {
     return Promise.resolve()
   }
   if (!watcherShutdownPromise) {
@@ -24,7 +24,7 @@ export function shutdownWatchersOnce(): Promise<void> {
         }
       })
       .then(() => {
-        state.watcherShutdownDone = true
+        state.core.watcherShutdownDone = true
       })
   }
   return watcherShutdownPromise

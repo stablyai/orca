@@ -1,8 +1,9 @@
 // Which owner comment answered each question line of an agent's ask. A quick reply names its line by
-// its words; a typed reply answers the line the comment box was "Replying to", the first one still open;
+// its words, and one comment can name several lines ("Question → answer" each); a typed reply answers the line the comment box was "Replying to", the first one still open;
 // an answer a v1.4.265 host recorded answers every line it holds. The host links only the first reply
 // to its question (that reply moves the item to In progress), so the pairing is read from the order of
 // events: the owner's comments after the ask, up to the agent's next question or the item's close.
+import { botItemNamedAnswers } from './bot-item-answer-lines'
 import {
   botItemQuestionLine,
   botItemQuestionShape,
@@ -16,6 +17,9 @@ export type BotItemQuestionAnswers = {
   shape: BotItemQuestionShape
   /** Per question line, the owner comment that answered it. */
   answers: (BotItemEvent | null)[]
+  /** Per line, answered only by order: a comment naming no line took the first open one. A later
+   *  comment naming the line takes it over. */
+  byOrder: boolean[]
   /** Lines still open, and the agent still waiting on them. */
   waiting: boolean
 }
@@ -48,35 +52,49 @@ function recordedLines(data: Record<string, unknown>, count: number): number[] |
   })
 }
 
+/** Every line answers a question the item's asks asked ("Question → answer"): such a comment never
+ *  answers a line by order (answers held for an earlier ask, sent after the agent asked again). */
+function answersAskedQuestions(text: string, asked: ReadonlySet<string>): boolean {
+  const lines = text.split('\n').filter((line) => line.trim())
+  return (
+    lines.length > 0 &&
+    lines.every((line) => [...asked].some((question) => line.trim().startsWith(`${question} →`)))
+  )
+}
+
 function answeredLines(
-  shape: BotItemQuestionShape,
-  answers: readonly (BotItemEvent | null)[],
-  reply: BotItemEvent
-): number[] {
+  entry: BotItemQuestionAnswers,
+  reply: BotItemEvent,
+  asked: ReadonlySet<string>
+): { lines: number[]; byOrder: boolean } {
+  const { shape, answers, byOrder } = entry
   const recorded = recordedLines(reply.data, shape.decisions.length)
   if (recorded) {
-    return recorded
+    return { lines: recorded, byOrder: false }
   }
   const text = typeof reply.data.text === 'string' ? reply.data.text.trim() : ''
-  const open = (index: number): boolean => !answers[index]
+  // A line read by order is open to a comment that names it.
+  const open = (index: number): boolean => !answers[index] || byOrder[index] === true
   const picked = shape.decisions.findIndex(
     (decision, index) =>
       open(index) &&
       decision.replies.some((option) => botItemQuickReplyText(shape, decision, option) === text)
   )
-  // A quick reply of several questions, edited before sending, still names its question.
-  const named =
-    picked === -1 && shape.decisions.length > 1
-      ? shape.decisions.findIndex(
-          (decision, index) =>
-            open(index) && text.startsWith(`${botItemQuestionLine(decision.question)} →`)
-        )
-      : picked
-  if (named !== -1) {
-    return [named]
+  if (picked !== -1) {
+    return { lines: [picked], byOrder: false }
+  }
+  // Several questions answered in one comment, a line each; or a quick reply edited before sending.
+  const named = botItemNamedAnswers(shape, text).flatMap((words, index) =>
+    words !== null && open(index) ? [index] : []
+  )
+  if (named.length > 0) {
+    return { lines: named, byOrder: false }
+  }
+  if (answersAskedQuestions(text, asked)) {
+    return { lines: [], byOrder: false }
   }
   const next = answers.indexOf(null)
-  return next === -1 ? [] : [next]
+  return { lines: next === -1 ? [] : [next], byOrder: true }
 }
 
 export function botItemQuestionPairing(
@@ -86,6 +104,8 @@ export function botItemQuestionPairing(
   const questions = new Map<string, BotItemQuestionAnswers>()
   const replies = new Map<string, { questionId: string; decision: BotItemDecision }>()
   let current: { id: string; entry: BotItemQuestionAnswers } | null = null
+  // Every question line asked on the item so far.
+  const asked = new Set<string>()
   for (const event of events) {
     if (isClose(event) || isNewQuestion(event)) {
       // An ask's own Needs you move comes right after it, in the same write: its window stays open.
@@ -103,9 +123,13 @@ export function botItemQuestionPairing(
         const entry: BotItemQuestionAnswers = {
           shape,
           answers: shape.decisions.map(() => null),
+          byOrder: shape.decisions.map(() => false),
           waiting: false
         }
         questions.set(event.id, entry)
+        for (const decision of shape.decisions) {
+          asked.add(botItemQuestionLine(decision.question))
+        }
         current = { id: event.id, entry }
       }
       continue
@@ -113,12 +137,18 @@ export function botItemQuestionPairing(
     if (!current) {
       continue
     }
-    const { shape, answers } = current.entry
-    const lines = answeredLines(shape, answers, event)
+    const { shape, answers, byOrder } = current.entry
+    const { lines, byOrder: guessed } = answeredLines(current.entry, event, asked)
     for (const line of lines) {
-      if (answers[line] === null) {
-        answers[line] = event
+      const taken = answers[line]
+      if (taken && byOrder[line]) {
+        // Named now: the comment read by order is a comment of its own again.
+        replies.delete(taken.id)
+      } else if (taken) {
+        continue
       }
+      answers[line] = event
+      byOrder[line] = guessed
     }
     // It quotes the first line it answers.
     const first = lines[0]

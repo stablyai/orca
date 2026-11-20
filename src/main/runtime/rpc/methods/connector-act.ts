@@ -1,4 +1,8 @@
 import type { ConnectorCloudFeature } from '../../../../shared/connectors/connector-cloud-contract'
+import {
+  CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE,
+  CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE
+} from '../../../../shared/connector-cloud-features'
 import type { ConnectorActErrorCode } from '../../../../shared/connector-action-contract'
 import { ConnectorAct } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { botOfSession } from '../../../bots/bot-session-tabs'
@@ -145,6 +149,21 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
       )
     }
     if (
+      (verb === 'pin' || verb === 'canvas' || verb === 'list' || verb === 'scheduled') &&
+      !features.has(CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE)
+    ) {
+      throw new ConnectorActError(
+        'cloud_lacks_slack_tools',
+        "Orca Cloud can't do that in Slack yet; nothing was changed. Try again after Orca Cloud updates."
+      )
+    }
+    if (args.postAt && !features.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
+      throw new ConnectorActError(
+        'cloud_lacks_schedule',
+        "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
+      )
+    }
+    if (
       (args.stage || args.files) &&
       !features.has('reply.files' satisfies ConnectorCloudFeature)
     ) {
@@ -176,6 +195,14 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
             sessionCallerOf(context.orchestrationCaller)?.sessionId
           )
         : undefined
+    // Asked again here, after the awaits above: a post for later must never go to a cloud that
+    // has stopped saying it schedules.
+    if (args.postAt && !cloud.cloudFeatures()?.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
+      throw new ConnectorActError(
+        'cloud_lacks_schedule',
+        "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
+      )
+    }
     const answer = await postConnectorAction(
       cloud,
       {

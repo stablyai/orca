@@ -41,8 +41,13 @@ export const BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY =
 // update refuses the field, so clients offer the colors only where this is advertised.
 export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as const
 
+// Host takes chat image attachments on group room posts (bots.groups.send `images`, store `@path`s in text)
+// and delivers them as image blocks to addressed members; an older host takes text only.
+export const BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY = 'bots.group-attachments.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
+  BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY,
   BOTS_CREATE_RUNTIME_CAPABILITY,
   BOTS_TOOLS_OWNED_SIGN_IN_RUNTIME_CAPABILITY,

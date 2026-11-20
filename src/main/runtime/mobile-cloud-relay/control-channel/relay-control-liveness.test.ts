@@ -28,27 +28,20 @@ describe('RelayControlLiveness', () => {
   })
 
   describe('without an alternate path (stall detector off)', () => {
-    it('sends no pings and keeps the 75s silence bound, checked every 15s', async () => {
-      const { liveness, ping, terminate } = harness()
-      liveness.start()
-
-      await vi.advanceTimersByTimeAsync(89_999)
-      expect(terminate).not.toHaveBeenCalled()
-      await vi.advanceTimersByTimeAsync(1)
-      expect(terminate).toHaveBeenCalledOnce()
-      expect(ping).not.toHaveBeenCalled()
-    })
-
-    it('stays up on relay traffic alone and never pings', async () => {
+    it('stays up while the relay sends traffic, then closes after silence without pinging', async () => {
       const { liveness, ping, terminate } = harness()
       liveness.start()
       for (let elapsed = 0; elapsed < 300_000; elapsed += 25_000) {
         await vi.advanceTimersByTimeAsync(25_000)
         liveness.noteInbound()
       }
-      expect(ping).not.toHaveBeenCalled()
       expect(terminate).not.toHaveBeenCalled()
-      liveness.stop()
+
+      await vi.advanceTimersByTimeAsync(89_999)
+      expect(terminate).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(terminate).toHaveBeenCalledOnce()
+      expect(ping).not.toHaveBeenCalled()
     })
   })
 
@@ -82,17 +75,6 @@ describe('RelayControlLiveness', () => {
       }
     })
 
-    it('never reports while pings are answered', async () => {
-      const onStall = vi.fn()
-      const { liveness, ping } = harness({ onStall })
-      ping.mockImplementation(() => liveness.notePong())
-      liveness.start()
-      await vi.advanceTimersByTimeAsync(70_000)
-      expect(ping.mock.calls.length).toBeGreaterThanOrEqual(6)
-      expect(onStall).not.toHaveBeenCalled()
-      liveness.stop()
-    })
-
     it('never reports when pongs are dropped but the 25s edge ping still arrives', async () => {
       const onStall = vi.fn()
       const { liveness } = harness({ onStall })
@@ -117,6 +99,7 @@ describe('RelayControlLiveness', () => {
       })
       liveness.start()
       await vi.advanceTimersByTimeAsync(70_000)
+      expect(ping.mock.calls.length).toBeGreaterThanOrEqual(6)
       expect(onStall).not.toHaveBeenCalled()
       liveness.stop()
     })

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
-import Database from '../sqlite/sync-database'
+import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { makeTestBot } from './bot.test-fixture'
 import { BotGroupRuntime } from './bot-group-runtime'
@@ -14,10 +14,13 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('./bot-chat-session', () => ({
   startBotSession: (...args: unknown[]) => mocks.create(...args),
-  botMessageBody: (text: string) => ({
+  botMessageBody: (text: string, options?: { images?: readonly { path: string }[] }) => ({
     kind: 'message',
     role: 'user',
-    blocks: [{ type: 'text', text }]
+    blocks: [
+      { type: 'text', text },
+      ...(options?.images ?? []).map(({ path }) => ({ type: 'image-ref' as const, path }))
+    ]
   }),
   requireStructuredHost: async () => ({
     // The whole snapshot answers each bounded read: it holds every row a window would.
@@ -44,10 +47,11 @@ vi.mock('../runtime/orchestration/turn-delivery/send-agent-turn', () => ({
 vi.mock('../runtime/agent-session/lifecycle/structured-agent-session-close', () => ({
   closeStructuredAgentSessionChild: (...args: unknown[]) => mocks.close(...args)
 }))
-const databases: Database[] = []
+const databases: OrchestrationDb[] = []
 export function fixture() {
-  const db = new Database(':memory:')
-  databases.push(db)
+  const orchestration = new OrchestrationDb(':memory:')
+  databases.push(orchestration)
+  const { db } = orchestration
   const bots = ['Scout', 'Forge', 'Sage'].map((name, index) =>
     makeTestBot({
       id: `bot-${index}`,
@@ -79,9 +83,10 @@ export function fixture() {
   const partialRuntime = {
     getOrchestrationDb: () => ({
       db,
-      getMessageById: (id: string) => mails.get(id),
+      getMessageById: (id: string) => mails.get(id) ?? orchestration.getMessageById(id),
       getBotRequest: (id: string) => requests.get(id),
-      getActiveDispatchForIdentity: () => undefined,
+      getActiveDispatchForIdentity: (handle: string) =>
+        orchestration.getActiveDispatchForIdentity(handle),
       holdsStructuredMailSendOperation: (_sessionId: string, operationId: string) =>
         heldSends.has(operationId),
       markAsDelivered
@@ -94,12 +99,50 @@ export function fixture() {
     },
     deleteFolderWorkspace: homes.remove,
     updateFolderWorkspace: homes.update,
+    ensureStructuredAgentSessionHost: vi.fn(async () => {}),
     notifyBotGroupsChanged: vi.fn()
+  }
+  /** A worker on its own terminal, as `worker-start` records it; mail it sends is from that terminal. */
+  const startWorker = (handle: string) => {
+    const run = orchestration.createRun({
+      objective: 'group work',
+      coordinatorHandle: null,
+      coordinatorPaneKey: null
+    })
+    const task = orchestration.createTask({ runId: run.id, spec: 'work' })
+    const { dispatch } = orchestration.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 8,
+      taskId: task.id,
+      startOptions: { agent: 'codex' }
+    })
+    orchestration.prepareStartingWorkerAuthority({
+      dispatchId: dispatch.id,
+      handle,
+      paneKey: `tab_${handle}:leaf`,
+      processIncarnation: 'p:1',
+      worktreeId: 'wt',
+      effects: [],
+      setupState: 'not_applicable'
+    })
+    orchestration.markWorkerDispatchReady(dispatch.id)
+    const send = (to: string, type: 'status' | 'worker_done') =>
+      orchestration.insertMessage({
+        from: handle,
+        to,
+        subject: type,
+        type,
+        runId: run.id,
+        senderDispatchId: dispatch.id
+      })
+    return { dispatchId: dispatch.id, send }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: native adapters are mocked and this fixture supplies every runtime member reached by the group service.
   const runtime = partialRuntime as unknown as OrcaRuntimeService
   return {
     db,
+    orchestration,
+    startWorker,
     runtime,
     bots,
     mails,

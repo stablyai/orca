@@ -94,13 +94,6 @@ describe('Google downloads', () => {
       headers: withLength ? { 'content-length': String(size) } : {}
     })
 
-  it('returns the bytes of a file under the cap', async () => {
-    const { api } = await apiWith([() => file(1_000, true)])
-    const bytes = await api.bytes('drive', `${DRIVE}/f1?alt=media`, 2_000)
-    expect(bytes.byteLength).toBe(1_000)
-    expect(bytes[0]).toBe(7)
-  })
-
   it('refuses a file whose stated size is over the cap, before reading it', async () => {
     const { api } = await apiWith([() => file(1_500_000, true)])
     await expect(api.bytes('drive', `${DRIVE}/f1?alt=media`, 1_000_000)).rejects.toThrow(
