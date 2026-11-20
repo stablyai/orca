@@ -162,19 +162,49 @@ describe('leaving Plan mode after an approved plan', () => {
     expect(setPermissionMode).toHaveBeenCalledTimes(1)
   })
 
-  it('asks for auto again on each send after Claude refused it only for now', async () => {
+  it('asks for auto again once the model Claude refused it for changes', async () => {
     const auto = autoForNow()
     const session = {
       launchIntent: { permissionMode: 'bypassPermissions' },
       firstRootInit: { permissionMode: 'default' },
       bypassDisabled: true,
-      appliedInputOptions: new Map<string, string>(),
+      appliedInputOptions: new Map<string, string>([['model', 'small']]),
       connection: { setPermissionMode: auto.setPermissionMode }
     }
     expect(await send(session)).toBe('default')
     expect(await send(session)).toBe('default')
     auto.available = true
+    session.appliedInputOptions.set('model', 'large')
     expect(await send(session)).toBe('auto')
+    expect(auto.setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual([
+      'default',
+      'auto',
+      'default',
+      'default',
+      'auto'
+    ])
+  })
+
+  it('falls back when Claude can not run Full access in this session', async () => {
+    for (const [code, message] of [
+      ['bypass_restricted', 'bypassPermissions not supported in restricted mode'],
+      [
+        'bypass_not_launched',
+        'Cannot set permission mode to bypassPermissions because the session was not launched with --dangerously-skip-permissions'
+      ]
+    ]) {
+      const setPermissionMode = vi.fn((mode: string) =>
+        mode === 'bypassPermissions'
+          ? Promise.reject(new Error(message, { cause: { errorCode: code } }))
+          : Promise.resolve()
+      )
+      const session = {
+        launchIntent: { permissionMode: 'bypassPermissions' },
+        firstRootInit: { permissionMode: 'bypassPermissions' },
+        connection: { setPermissionMode }
+      }
+      expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('auto')
+    }
   })
 
   it('records no fallback when the auto switch goes unanswered, and asks again next send', async () => {

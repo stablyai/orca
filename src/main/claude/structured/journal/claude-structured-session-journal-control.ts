@@ -10,11 +10,7 @@ import type { ClaudeStreamJsonConnection } from '../../claude-stream-json-connec
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeInitProof } from '../startup/claude-structured-init-proof'
-import {
-  claimClaudeFullAccessRefusalNotice,
-  claudeFullAccessRefusalNoticeDue,
-  claudeFullAccessRefusalRow
-} from '../permissions/claude-full-access-refusal'
+import { claimClaudeFullAccessRefusalNotice } from '../permissions/claude-full-access-refusal-notice'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type {
   ClaudeAcquisitionAttempt,
@@ -55,11 +51,7 @@ export function createClaudeSessionJournalTranslator(
         acceptStartupFailure,
         fullAccessRefusalNotice: () => {
           const session = currentSession()
-          return session &&
-            claudeFullAccessRefusalNoticeDue(session) &&
-            claimClaudeFullAccessRefusalNotice(failure.sessionId)
-            ? claudeFullAccessRefusalRow(session)
-            : null
+          return session ? claimClaudeFullAccessRefusalNotice(failure.sessionId, session) : null
         },
         steerAwaitingEcho: () =>
           currentSession()?.dispatchWaiters.some((waiter) => waiter.steers) ?? false
