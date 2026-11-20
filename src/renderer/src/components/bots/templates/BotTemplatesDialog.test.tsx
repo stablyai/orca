@@ -140,7 +140,7 @@ describe('BotTemplatesDialog', () => {
     const identity = within(newBot).getByRole('textbox', { name: 'Identity' })
     expect(identity).toHaveProperty(
       'value',
-      'Watches pull requests waiting on your review, in the repos you pick. Review each one and list risky changes and missing tests, with file and line. Reports here, when a review is requested.'
+      'Watches pull requests waiting on your review, in the repos you pick. Reviews each one and lists risky changes and missing tests, with file and line. Reports here, when a review is requested.'
     )
 
     fireEvent.change(identity, {

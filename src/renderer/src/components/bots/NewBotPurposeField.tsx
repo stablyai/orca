@@ -21,10 +21,14 @@ export function NewBotPurposeField({
   const t = useTranslate()
   return (
     <div className="space-y-1">
-      {/* The field's frame holds the padding, so the scrolling text shows exactly five whole lines. */}
+      {/* The field's frame holds the padding, so the scrolling text shows whole lines. */}
       <div className="rounded-md border border-input px-3 py-2 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
         <ImeTextarea
-          className="block h-[5lh] w-full resize-none border-0 bg-transparent p-0 text-sm leading-5 outline-none scrollbar-sleek placeholder:text-muted-foreground"
+          className={cn(
+            'block w-full resize-none border-0 bg-transparent p-0 text-sm leading-5 outline-none scrollbar-sleek placeholder:text-muted-foreground',
+            // A template's text shows whole, up to seven lines, before it scrolls.
+            prefilled === undefined ? 'h-[5lh]' : 'max-h-[7lh] min-h-[5lh] [field-sizing:content]'
+          )}
           rows={5}
           autoComplete="off"
           aria-label={t('bots.new.purposeLabel', 'Identity')}

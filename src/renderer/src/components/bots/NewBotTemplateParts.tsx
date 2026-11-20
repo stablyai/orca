@@ -34,7 +34,7 @@ function PartsChip({
 }: {
   label: string
   icon: React.ReactNode
-  /** Kept inside New bot, so a narrow dialog never cuts it off. */
+  /** Kept inside New bot's content column, so a narrow dialog never cuts it off. */
   boundary: Element | null
   /** `partial`: some parts switched off. `needs`: apps still to set up. */
   tone?: 'plain' | 'partial' | 'needs'
@@ -64,7 +64,7 @@ function PartsChip({
         aria-label={label}
         className="w-72 max-w-[calc(100vw-2rem)]"
         collisionBoundary={boundary}
-        collisionPadding={8}
+        collisionPadding={20}
       >
         <ul className="p-1">{children}</ul>
       </PopoverContent>

@@ -41,7 +41,7 @@ describe('a proposed bot', () => {
       seed: {
         purpose: 'Turns feedback into a weekly list of themes.',
         watches: 'Slack feedback channels',
-        does: 'Group feedback into themes with quotes and counts. Link existing Linear issues.',
+        does: 'Groups feedback into themes with quotes and counts, and links existing Linear issues.',
         reports: 'Here, Mondays at 9 AM',
         templateId: 'feedback'
       },

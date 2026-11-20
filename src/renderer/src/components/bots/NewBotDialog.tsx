@@ -283,7 +283,13 @@ export function NewBotDialog({
         onOpenAutoFocus={(event) => {
           // The name, not Radix's first tabbable (the picture), so typing names the bot.
           event.preventDefault()
-          nameRef.current?.focus()
+          const field = nameRef.current
+          field?.focus()
+          // A filled-in name (a template's) shows from its start, not scrolled to its end.
+          field?.setSelectionRange(0, 0)
+          if (field) {
+            field.scrollLeft = 0
+          }
         }}
         onCloseAutoFocus={(event) => {
           // The new bot's page is opening and its composer takes focus; the New bot button must not.
