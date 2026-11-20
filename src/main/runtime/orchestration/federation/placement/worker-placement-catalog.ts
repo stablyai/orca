@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
@@ -7,9 +8,7 @@ import {
 export const CATALOG_MAX_BYTES = 2 * 1024 * 1024
 export const CATALOG_MAX_ROWS = 5_000
 const text = z.string().max(4096)
-const host = z
-  .union([z.literal('local'), z.string().startsWith('ssh:'), z.string().startsWith('runtime:')])
-  .pipe(text)
+const host = text.refine((value) => parseExecutionHostId(value)?.id === value)
 const repoSchema = z.object({
   id: text.min(1),
   path: text,

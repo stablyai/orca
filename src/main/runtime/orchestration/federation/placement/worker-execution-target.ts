@@ -3,7 +3,7 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import { ALL_TUI_AGENTS } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkerExecutionTarget } from '../../../../../shared/project/host-setup/worker-execution-target'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { isOriginalRepoOnCatalogHost } from '../../../../../shared/execution-host/execution-host'
 import { executionRuntimePlatform } from '../../../../../shared/agent-launch/startup/agent-launch-runtime'
 import {
   effectiveAgentLaunchProjectRuntime,
@@ -52,9 +52,8 @@ export function projectSetupsWithWorkerExecutionTargets(
       project &&
       project.id === setup.projectId &&
       setup.hostId === 'local' &&
-      !setup.connectionId &&
-      (!setup.executionHostId || setup.executionHostId === 'local') &&
-      getRepoExecutionHostId(repo) === 'local'
+      isOriginalRepoOnCatalogHost(setup) &&
+      isOriginalRepoOnCatalogHost(repo)
     ) {
       target = targets.get(repo.id) ?? resolveTarget(repo, project)
       targets.set(repo.id, target)

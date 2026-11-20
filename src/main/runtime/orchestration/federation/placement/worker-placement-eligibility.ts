@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { isOriginalRepoOnCatalogHost } from '../../../../../shared/execution-host/execution-host'
 import type { WorkerPlacementCatalog, PlacementCatalogSetup } from './worker-placement-catalog'
 
 export type PlacementIneligibility =
@@ -36,8 +36,13 @@ export function classifyWorkerPlacementCatalog(
             ? 'duplicate_repo_id'
             : setup.kind === 'folder' || repo.kind === 'folder'
               ? 'folder'
-              : (executionHostReason(getRepoExecutionHostId(repo), undefined, undefined) ??
-                (setup.workerExecutionTarget?.kind !== 'native' ? 'unsupported_target' : null)))
+              : !isOriginalRepoOnCatalogHost(repo)
+                ? repo.executionHostId?.startsWith('runtime:')
+                  ? 'other_runtime'
+                  : 'ssh_host'
+                : setup.workerExecutionTarget?.kind !== 'native'
+                  ? 'unsupported_target'
+                  : null)
     return {
       setup,
       classification: hostReason ? 'other_host' : reason ? 'registered_not_usable' : 'usable',
@@ -55,7 +60,7 @@ function executionHostReason(
   if (connectionId || hostId.startsWith('ssh:') || executionHostId?.startsWith('ssh:')) {
     return 'ssh_host'
   }
-  return hostId !== 'local' || (executionHostId && executionHostId !== 'local')
+  return hostId !== 'local' || !isOriginalRepoOnCatalogHost({ executionHostId, connectionId })
     ? 'other_runtime'
     : null
 }

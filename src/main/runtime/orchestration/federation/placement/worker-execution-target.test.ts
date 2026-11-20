@@ -161,6 +161,82 @@ it('refuses original host twins and conflicting project associations', () => {
   ).toEqual({ kind: 'unknown' })
 })
 
+it.each([
+  { name: 'legacy absent repo host', repoHost: {}, setupHost: {}, target: 'native' },
+  {
+    name: 'legacy null repo host',
+    repoHost: { executionHostId: null, connectionId: null },
+    setupHost: {},
+    target: 'native'
+  },
+  {
+    name: 'explicit local agreement',
+    repoHost: { executionHostId: 'local' as const },
+    setupHost: { executionHostId: 'local' as const },
+    target: 'native'
+  },
+  {
+    name: 'local repo with SSH connection',
+    repoHost: { executionHostId: 'local' as const, connectionId: 'box' },
+    setupHost: {},
+    target: 'unknown'
+  },
+  {
+    name: 'whitespace SSH connection',
+    repoHost: { connectionId: ' ' },
+    setupHost: {},
+    target: 'unknown'
+  },
+  ...(['ssh:', 'runtime:', 'ssh:%', 'runtime:%E0%A4%A'] as const).map((executionHostId) => ({
+    name: `malformed repo host ${executionHostId}`,
+    repoHost: { executionHostId },
+    setupHost: {},
+    target: 'unknown'
+  })),
+  {
+    name: 'SSH repo with local setup',
+    repoHost: { executionHostId: 'ssh:box' as const },
+    setupHost: {},
+    target: 'unknown'
+  },
+  {
+    name: 'runtime repo with local setup',
+    repoHost: { executionHostId: 'runtime:box' as const },
+    setupHost: {},
+    target: 'unknown'
+  },
+  {
+    name: 'local setup with SSH connection',
+    repoHost: {},
+    setupHost: { connectionId: 'box' },
+    target: 'unknown'
+  },
+  {
+    name: 'local setup with SSH execution host',
+    repoHost: {},
+    setupHost: { executionHostId: 'ssh:box' as const },
+    target: 'unknown'
+  },
+  {
+    name: 'local setup with runtime execution host',
+    repoHost: {},
+    setupHost: { executionHostId: 'runtime:box' as const },
+    target: 'unknown'
+  }
+])(
+  'requires original hosts before producing evidence: $name',
+  ({ repoHost, setupHost, target }) => {
+    const repo = storeRepo({ id: 'repo', path: 'C:\\src\\repo', ...repoHost })
+    const store = partialRuntimeStore({
+      getProjects: () => [storeProject({ id: setup.projectId, sourceRepoIds: ['repo'] })]
+    })
+    expect(
+      projectSetupsWithWorkerExecutionTargets(store, [repo], [{ ...setup, ...setupHost }])[0]
+        .workerExecutionTarget
+    ).toEqual({ kind: target })
+  }
+)
+
 it('preserves native launch policy on non-Windows owners', () => {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   const repo = storeRepo({ id: 'repo', path: '/src/repo' })

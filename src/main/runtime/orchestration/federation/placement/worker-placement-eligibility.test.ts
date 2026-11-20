@@ -66,6 +66,107 @@ it('counts repo twins before host filtering and preserves independent usable che
   ])
 })
 
+it.each([
+  { name: 'legacy absent repo host', repoHost: {}, setupHost: {}, reason: null },
+  {
+    name: 'legacy null repo host',
+    repoHost: { executionHostId: null, connectionId: null },
+    setupHost: {},
+    reason: null
+  },
+  {
+    name: 'explicit local agreement',
+    repoHost: { executionHostId: 'local' },
+    setupHost: { executionHostId: 'local' },
+    reason: null
+  },
+  {
+    name: 'local repo with SSH connection',
+    repoHost: { executionHostId: 'local', connectionId: 'box' },
+    setupHost: {},
+    reason: 'ssh_host'
+  },
+  {
+    name: 'legacy SSH repo',
+    repoHost: { connectionId: 'box' },
+    setupHost: {},
+    reason: 'ssh_host'
+  },
+  ...(['ssh:', 'ssh:%'] as const).map((executionHostId) => ({
+    name: `malformed repo host ${executionHostId}`,
+    repoHost: { executionHostId },
+    setupHost: {},
+    reason: 'ssh_host'
+  })),
+  ...(['runtime:', 'runtime:%E0%A4%A'] as const).map((executionHostId) => ({
+    name: `malformed repo host ${executionHostId}`,
+    repoHost: { executionHostId },
+    setupHost: {},
+    reason: 'other_runtime'
+  })),
+  {
+    name: 'explicit blank repo host',
+    repoHost: { executionHostId: '' },
+    setupHost: {},
+    reason: 'ssh_host'
+  },
+  {
+    name: 'explicit blank setup execution host',
+    repoHost: {},
+    setupHost: { executionHostId: '' },
+    reason: 'other_runtime'
+  },
+  {
+    name: 'whitespace SSH connection',
+    repoHost: { connectionId: ' ' },
+    setupHost: {},
+    reason: 'ssh_host'
+  },
+  {
+    name: 'SSH repo with local setup',
+    repoHost: { executionHostId: 'ssh:box' },
+    setupHost: {},
+    reason: 'ssh_host'
+  },
+  {
+    name: 'runtime repo with local setup',
+    repoHost: { executionHostId: 'runtime:box' },
+    setupHost: {},
+    reason: 'other_runtime'
+  },
+  {
+    name: 'local setup with SSH connection',
+    repoHost: {},
+    setupHost: { connectionId: 'box' },
+    reason: 'ssh_host'
+  },
+  {
+    name: 'local setup with SSH execution host',
+    repoHost: {},
+    setupHost: { executionHostId: 'ssh:box' },
+    reason: 'ssh_host'
+  },
+  {
+    name: 'local setup with runtime execution host',
+    repoHost: {},
+    setupHost: { executionHostId: 'runtime:box' },
+    reason: 'other_runtime'
+  }
+])(
+  'requires original host agreement despite native evidence: $name',
+  ({ repoHost, setupHost, reason }) => {
+    const [result] = classifyWorkerPlacementCatalog({
+      repos: [{ ...repo, ...repoHost }],
+      setups: [{ ...setup, ...setupHost }]
+    })
+    expect(result.explicitStart).toEqual(reason ? { usable: false, reason } : { usable: true })
+    expect(result.automaticPlacement).toEqual({
+      available: false,
+      reason: reason ?? 'explicit_only'
+    })
+  }
+)
+
 it('rejects malformed lists without salvaging or manufacturing local hosts', () => {
   expect(reducePlacementCatalog([repo], [{ ...setup, hostId: undefined }])).toBeNull()
   expect(reducePlacementCatalog([repo, { id: 1 }], [setup])).toBeNull()

@@ -10,6 +10,8 @@ import type {
 } from '../environment-transport'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { classifyWorkerPlacementCatalog } from './worker-placement-eligibility'
+import { OrchestrationError } from '../../orchestration-error'
+import * as environmentStore from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 
 let db: OrchestrationDb
 let root: string
@@ -19,6 +21,7 @@ let list: { environmentId: string; name: string }[]
 let notify: (() => void) | undefined
 let response: (method: string) => Promise<RuntimeRpcResponse<unknown>>
 let owner: WorkerPlacementCatalogOwner
+let registry: OrchestrationEnvironmentTransport
 
 function ok(result: unknown): RuntimeRpcResponse<unknown> {
   return { id: 'read', ok: true, result, _meta: { runtimeId: 'peer' } }
@@ -78,11 +81,13 @@ beforeEach(() => {
   }
   list = [{ environmentId: 'server', name: 'server' }]
   response = complete
-  owner = new WorkerPlacementCatalogOwner(db, transport())
+  registry = transport()
+  owner = new WorkerPlacementCatalogOwner(db, registry)
 })
 afterEach(() => {
   db.close()
   vi.useRealTimers()
+  vi.restoreAllMocks()
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -168,6 +173,190 @@ it('a late complete reply updates retention without changing the completed disco
   expect((await owner.discover())[0]).toMatchObject({ status: 'fresh', observedAt: 1795204805000 })
   expect(answer[0]).toMatchObject({ status: 'unchecked' })
 })
+
+it('ends discovery when registry enumeration stalls', async () => {
+  registry.list = () => new Promise(() => {})
+  const discovery = expect(owner.discover()).rejects.toMatchObject({
+    code: 'runtime_timeout',
+    data: { effectsApplied: false, reason: 'discovery_incomplete', phase: 'registry' }
+  })
+  await vi.advanceTimersByTimeAsync(5_000)
+  await discovery
+})
+
+it('returns an empty discovery only after successfully enumerating an empty registry', async () => {
+  list = []
+  expect(await owner.discover()).toEqual([])
+})
+
+it('preserves a typed registry failure without reporting absence', async () => {
+  await vi.advanceTimersByTimeAsync(0)
+  const error = new OrchestrationError('runtime_environment_changed', 'Pairing registry changed.')
+  registry.list = async () => {
+    throw error
+  }
+  await expect(owner.discover()).rejects.toBe(error)
+})
+
+it('wraps an untyped registry failure without reporting absence', async () => {
+  await vi.advanceTimersByTimeAsync(0)
+  registry.list = async () => {
+    throw new Error('Registry storage unavailable.')
+  }
+  await expect(owner.discover()).rejects.toMatchObject({
+    code: 'runtime_error',
+    data: { effectsApplied: false, reason: 'discovery_incomplete', phase: 'registry' }
+  })
+})
+
+it('does not read servers from a registry enumeration completed after discovery expired', async () => {
+  let finish!: (value: typeof list) => void
+  registry.list = () =>
+    new Promise((resolve) => {
+      finish = resolve
+    })
+  const discovery = expect(owner.discover()).rejects.toMatchObject({ code: 'runtime_timeout' })
+  await vi.advanceTimersByTimeAsync(5_000)
+  await discovery
+  finish(list)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+})
+
+it('returns unchecked when initial pairing resolution stalls even with a retained catalog', async () => {
+  await owner.discover()
+  registry.resolve = () => new Promise(() => {})
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+  expect(db.db.prepare('SELECT observed_at FROM worker_placement_catalogs').get()).toEqual({
+    observed_at: 1795204800000
+  })
+})
+
+it('returns unchecked when final snapshot validation cannot establish the current pairing', async () => {
+  await owner.discover()
+  await vi.advanceTimersByTimeAsync(30_001)
+  registry.resolve = vi
+    .fn()
+    .mockResolvedValueOnce({ ...server })
+    .mockResolvedValueOnce({ ...server })
+    .mockImplementation(() => new Promise(() => {}))
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+})
+
+it('keeps valid retention at the soft deadline while the current full pin remains proven', async () => {
+  await owner.discover()
+  await vi.advanceTimersByTimeAsync(30_001)
+  response = () => new Promise(() => {})
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(await discovery).toMatchObject([
+    {
+      status: 'retained',
+      reason: 'no_answer',
+      observedAt: 1795204800000
+    }
+  ])
+})
+
+it('returns unchecked at the soft deadline when the proven pairing generation changed', async () => {
+  let generation = 0
+  vi.spyOn(environmentStore, 'environmentStoreWriteCount').mockImplementation(() => generation)
+  await owner.discover()
+  await vi.advanceTimersByTimeAsync(30_001)
+  response = () => new Promise(() => {})
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(0)
+  generation = 1
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+})
+
+it('spends only the remaining discovery budget after a slow registry enumeration', async () => {
+  let finish!: (value: typeof list) => void
+  registry.list = () =>
+    new Promise((resolve) => {
+      finish = resolve
+    })
+  registry.resolve = () => new Promise(() => {})
+  const discovery = owner.discover()
+  await vi.advanceTimersByTimeAsync(4_000)
+  finish(list)
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+})
+
+it('discards an initial pairing resolution completed after discovery expired', async () => {
+  let finish!: (value: OrchestrationWorkerServer) => void
+  registry.resolve = () =>
+    new Promise((resolve) => {
+      finish = resolve
+    })
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+  finish(server)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+})
+
+it('rejects late retention after the owning database is disposed', async () => {
+  let finish!: () => void
+  const wait = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  response = async (method) => {
+    await wait
+    return complete(method)
+  }
+  const discovery = owner.discover()
+  await vi.advanceTimersByTimeAsync(5_000)
+  await discovery
+  db.close()
+  db = new OrchestrationDb(path)
+  finish()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+  expect(await owner.discover()).toEqual([])
+})
+
+it.each(['lists', 'validation'] as const)(
+  'rejects retention when %s complete past the hard deadline',
+  async (phase) => {
+    let finish!: () => void
+    const wait = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    if (phase === 'lists') {
+      response = async (method) => {
+        await wait
+        return complete(method)
+      }
+    } else {
+      let validating = false
+      registry.resolve = async () => {
+        if (validating) {
+          await wait
+        }
+        return { ...server }
+      }
+      response = async (method) => {
+        validating = true
+        return complete(method)
+      }
+    }
+    const discovery = owner.discover('server')
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(await discovery).toMatchObject([{ status: 'unchecked' }])
+    await vi.advanceTimersByTimeAsync(10_000)
+    finish()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+  }
+)
 
 it.each(['removed', 'repaired'] as const)(
   'discards replies arriving after the pairing was %s',

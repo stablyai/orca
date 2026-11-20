@@ -12,11 +12,16 @@ import {
   type OrchestrationWorkerServer
 } from '../environment-transport'
 import { OrchestrationError } from '../../orchestration-error'
-import { observeEnvironmentStoreReads } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-read-observation'
 import { environmentStoreWriteCount } from '../../../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import type { RuntimeRequestGuard } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { CatalogReadFailure } from './worker-placement-catalog'
 import { readWorkerPlacementCatalog } from './worker-placement-catalog-read'
+import {
+  CatalogDeadline,
+  CatalogOwnerRead,
+  CatalogOwnerRegistry,
+  type PairingObservation
+} from './worker-placement-catalog-deadline'
 
 const FRESH_MS = 30_000
 const DISCOVERY_MS = 5_000
@@ -34,11 +39,16 @@ export type PlacementCatalogSnapshot = {
   | { status: 'unsupported' }
 )
 
-type Flight = { server: OrchestrationWorkerServer; promise: Promise<ReadResult> }
+type Flight = { server: OrchestrationWorkerServer; pending: CatalogOwnerRead<ReadResult> }
+
+function isCurrent(observation: PairingObservation | undefined): observation is PairingObservation {
+  return !!observation?.current && observation.generation === environmentStoreWriteCount()
+}
 
 /** Shipped discovery owner, idle until queried; no sidebar, worker-start or Run dependency. */
 export class WorkerPlacementCatalogOwner {
   private readonly flights = new Map<string, Flight>()
+  private readonly registry: CatalogOwnerRegistry | undefined
   private readonly retained = new Map<
     string,
     { server: OrchestrationWorkerServer; value: RetainedPlacementCatalog | undefined }
@@ -52,9 +62,13 @@ export class WorkerPlacementCatalogOwner {
     readonly db: OrchestrationDb,
     private readonly transport: OrchestrationEnvironmentTransport | null
   ) {
+    this.registry = transport ? new CatalogOwnerRegistry(transport) : undefined
     const reconcile = (): void => {
       this.dirty = true
-      this.reconciliation ??= this.reconcileUntilCurrent().finally(() => {
+      if (this.reconciliation) {
+        return
+      }
+      this.reconciliation = this.reconcileUntilCurrent().finally(() => {
         this.reconciliation = undefined
       })
       void this.reconciliation.catch((error: unknown) =>
@@ -91,21 +105,26 @@ export class WorkerPlacementCatalogOwner {
     if (this.stopped || !this.transport) {
       return []
     }
-    let expire: ReturnType<typeof setTimeout> | undefined
-    const budget = new Promise<null>((resolve) => {
-      expire = setTimeout(() => resolve(null), DISCOVERY_MS)
-    })
+    const deadline = new CatalogDeadline(DISCOVERY_MS)
     try {
-      const servers = environmentId
-        ? [{ environmentId, name: environmentId }]
-        : ((await this.transport.list?.()) ?? [])
+      const registered = await this.registry!.list(deadline)
+      const selected = environmentId
+        ? registered.find((server) => server.environmentId === environmentId)
+        : undefined
+      if (environmentId && !selected) {
+        return [
+          {
+            server: { environmentId, name: environmentId },
+            status: 'unchecked',
+            reason: 'no_answer'
+          }
+        ]
+      }
+      const servers = selected ? [selected] : registered
       const snapshots = await Promise.all(
         servers.map(async ({ environmentId, name }): Promise<PlacementCatalogSnapshot> => {
-          const initial = await observeEnvironmentStoreReads(
-            async () => await this.transport!.resolve(environmentId),
-            environmentStoreWriteCount
-          ).catch(() => null)
-          if (this.stopped || !initial?.current) {
+          const initial = await this.registry!.resolve(environmentId, deadline)
+          if (this.stopped || !isCurrent(initial)) {
             return { server: { environmentId, name }, status: 'unchecked', reason: 'no_answer' }
           }
           const server = initial.value
@@ -114,14 +133,13 @@ export class WorkerPlacementCatalogOwner {
           if (retained && Date.now() - retained.observedAt < FRESH_MS) {
             return { server, status: 'fresh', ...retained } satisfies PlacementCatalogSnapshot
           }
-          const result = await Promise.race([this.read(server), budget])
-          const current = await observeEnvironmentStoreReads(
-            async () => await this.transport!.resolve(environmentId),
-            environmentStoreWriteCount
-          ).catch(() => null)
+          const result = await this.read(server, deadline)
+          const current = deadline.active
+            ? await this.registry!.resolve(environmentId, deadline)
+            : initial
           if (
             this.stopped ||
-            !current?.current ||
+            !isCurrent(current) ||
             !remoteRunLinkPinMatches(pin, remoteServerPin(current.value))
           ) {
             return {
@@ -149,54 +167,51 @@ export class WorkerPlacementCatalogOwner {
       )
       return snapshots
     } finally {
-      clearTimeout(expire)
+      deadline.close()
     }
   }
 
-  private read(server: OrchestrationWorkerServer): Promise<ReadResult> {
+  private read(
+    server: OrchestrationWorkerServer,
+    deadline: CatalogDeadline
+  ): Promise<ReadResult | undefined> {
+    if (!deadline.active || this.stopped) {
+      return Promise.resolve(undefined)
+    }
     const previous = this.flights.get(server.environmentId)
     if (previous) {
       return remoteRunLinkPinMatches(remoteServerPin(previous.server), remoteServerPin(server))
-        ? previous.promise
+        ? previous.pending.wait(deadline)
         : Promise.resolve({ kind: 'failed', reason: 'no_answer' })
     }
-    const flight: Flight = {
-      server,
-      promise: Promise.resolve({ kind: 'failed', reason: 'no_answer' })
-    }
-    this.flights.set(server.environmentId, flight)
-    let timedOut = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const timeout = new Promise<ReadResult>((resolve) => {
-      timer = setTimeout(() => {
-        timedOut = true
-        resolve({ kind: 'failed', reason: 'no_answer' })
-      }, READ_MS)
-    })
-    const work = this.fetch(server, () => !timedOut)
-      .catch((): ReadResult => ({ kind: 'failed', reason: 'no_answer' }))
-      .finally(() => {
-        clearTimeout(timer)
-        // Keep a timed-out transport occupying its slot until it actually settles.
-        if (this.flights.get(server.environmentId) === flight) {
+    const pending = new CatalogOwnerRead<ReadResult>(async () => {
+      const hard = new CatalogDeadline(READ_MS)
+      const work = new CatalogOwnerRead<ReadResult>(async () => {
+        try {
+          if (!deadline.active || this.stopped) {
+            return { kind: 'failed', reason: 'no_answer' }
+          }
+          return await this.fetch(server, hard)
+        } finally {
+          hard.close()
+          // A stalled transport keeps its slot even after its response deadline.
           this.flights.delete(server.environmentId)
         }
       })
-    flight.promise = Promise.race([work, timeout])
-    return flight.promise
+      return (await work.wait(hard)) ?? { kind: 'failed', reason: 'no_answer' }
+    })
+    this.flights.set(server.environmentId, { server, pending })
+    return pending.wait(deadline)
   }
 
   private async fetch(
     server: OrchestrationWorkerServer,
-    withinDeadline: () => boolean
+    deadline: CatalogDeadline
   ): Promise<ReadResult> {
     const transport = this.transport!
     const pin = remoteServerPin(server)
     const prepareGuard: RuntimeRequestGuard = async (connection) => {
-      const observation = await observeEnvironmentStoreReads(
-        async () => await transport.resolve(server.environmentId),
-        environmentStoreWriteCount
-      )
+      const observation = await this.registry!.resolve(server.environmentId, deadline)
       const generation = environmentStoreWriteCount()
       const peers = pairedOrchestrationPeers(
         connection.hostPublicKeyB64,
@@ -205,8 +220,8 @@ export class WorkerPlacementCatalogOwner {
       return () => {
         if (
           this.stopped ||
-          !withinDeadline() ||
-          !observation.current ||
+          !deadline.active ||
+          !isCurrent(observation) ||
           generation !== environmentStoreWriteCount()
         ) {
           return false
@@ -225,17 +240,14 @@ export class WorkerPlacementCatalogOwner {
       }
     }
     const read = await readWorkerPlacementCatalog(transport, server, prepareGuard)
-    if (this.stopped || !withinDeadline()) {
+    if (this.stopped || !deadline.active) {
       return { kind: 'failed', reason: 'no_answer' }
     }
-    const current = await observeEnvironmentStoreReads(
-      async () => await transport.resolve(server.environmentId),
-      environmentStoreWriteCount
-    )
+    const current = await this.registry!.resolve(server.environmentId, deadline)
     if (
       this.stopped ||
-      !withinDeadline() ||
-      !current.current ||
+      !deadline.active ||
+      !isCurrent(current) ||
       !remoteRunLinkPinMatches(pin, remoteServerPin(current.value))
     ) {
       return { kind: 'failed', reason: 'no_answer' }
@@ -257,33 +269,39 @@ export class WorkerPlacementCatalogOwner {
   private async reconcileUntilCurrent(): Promise<void> {
     do {
       this.dirty = false
-      const transport = this.transport!
-      const servers = (await transport.list?.()) ?? []
-      const live = new Set(servers.map((server) => server.environmentId))
-      for (const id of this.retained.keys()) {
-        if (!live.has(id)) {
-          this.retained.delete(id)
+      const deadline = new CatalogDeadline()
+      try {
+        const servers = await this.registry!.list(deadline)
+        if (this.stopped) {
+          return
         }
+        const live = new Set(servers.map((server) => server.environmentId))
+        for (const id of this.retained.keys()) {
+          if (!live.has(id)) {
+            this.retained.delete(id)
+          }
+        }
+        const rows = this.db.db
+          .prepare('SELECT environment_id FROM worker_placement_catalogs')
+          .all()
+        await Promise.all(
+          rows.map(async ({ environment_id }) => {
+            if (typeof environment_id !== 'string') {
+              return
+            }
+            if (!live.has(environment_id)) {
+              deleteRetainedPlacementCatalog(this.db, environment_id)
+              return
+            }
+            const current = await this.registry!.resolve(environment_id, deadline)
+            if (!this.stopped && isCurrent(current)) {
+              this.retainedCatalog(current.value)
+            }
+          })
+        )
+      } finally {
+        deadline.close()
       }
-      if (this.stopped) {
-        return
-      }
-      const rows = this.db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()
-      await Promise.all(
-        rows.map(async ({ environment_id }) => {
-          if (typeof environment_id !== 'string') {
-            return
-          }
-          if (!live.has(environment_id)) {
-            deleteRetainedPlacementCatalog(this.db, environment_id)
-            return
-          }
-          const current = await transport.resolve(environment_id)
-          if (!this.stopped) {
-            this.retainedCatalog(current)
-          }
-        })
-      )
     } while (this.dirty && !this.stopped)
   }
 }

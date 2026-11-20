@@ -49,6 +49,110 @@ it('shares one list pair per server across concurrent discoveries and keeps time
   }
 })
 
+it.each(['registry', 'initial pairing', 'validation', 'snapshot validation'] as const)(
+  'bounds stalled %s work across concurrent and repeated discovery deadlines',
+  async (phase) => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    let validating = false
+    let validatedRead = false
+    let finishRegistry!: (servers: readonly { environmentId: string; name: string }[]) => void
+    const list = vi.fn<NonNullable<OrchestrationEnvironmentTransport['list']>>(() =>
+      phase === 'registry'
+        ? new Promise((resolve) => {
+            finishRegistry = resolve
+          })
+        : Promise.resolve([{ environmentId: 'server', name: 'server' }])
+    )
+    const resolve = vi.fn<OrchestrationEnvironmentTransport['resolve']>(() => {
+      if (
+        phase === 'initial pairing' ||
+        (validating && (phase !== 'snapshot validation' || validatedRead))
+      ) {
+        return new Promise(() => {})
+      }
+      validatedRead ||= validating
+      return Promise.resolve({
+        environmentId: 'server',
+        name: 'server',
+        peerFingerprint: 'peer',
+        homePeerFingerprint: 'home',
+        pairingRevision: 1
+      })
+    })
+    const call = vi.fn<OrchestrationEnvironmentTransport['call']>(async (_id, method) => {
+      validating = true
+      return {
+        id: 'read',
+        ok: true,
+        _meta: { runtimeId: 'peer' },
+        result: method === 'repo.list' ? { repos: [] } : { setups: [] }
+      }
+    })
+    const owner = new WorkerPlacementCatalogOwner(db, { list, resolve, call })
+    try {
+      for (let wave = 0; wave < 4; wave++) {
+        const pending = Promise.allSettled([owner.discover(), owner.discover(), owner.discover()])
+        await vi.advanceTimersByTimeAsync(5_000)
+        expect(await pending).toEqual(
+          phase === 'registry'
+            ? [
+                {
+                  status: 'rejected',
+                  reason: expect.objectContaining({ code: 'runtime_timeout' })
+                },
+                {
+                  status: 'rejected',
+                  reason: expect.objectContaining({ code: 'runtime_timeout' })
+                },
+                { status: 'rejected', reason: expect.objectContaining({ code: 'runtime_timeout' }) }
+              ]
+            : [
+                { status: 'fulfilled', value: [expect.objectContaining({ status: 'unchecked' })] },
+                { status: 'fulfilled', value: [expect.objectContaining({ status: 'unchecked' })] },
+                { status: 'fulfilled', value: [expect.objectContaining({ status: 'unchecked' })] }
+              ]
+        )
+      }
+      expect(list).toHaveBeenCalledTimes(phase === 'registry' ? 1 : 4)
+      expect(resolve).toHaveBeenCalledTimes(
+        phase === 'registry' ? 0 : phase === 'initial pairing' ? 1 : phase === 'validation' ? 2 : 3
+      )
+      expect(call).toHaveBeenCalledTimes(
+        phase === 'validation' || phase === 'snapshot validation' ? 2 : 0
+      )
+      if (phase === 'registry') {
+        finishRegistry([{ environmentId: 'server', name: 'server' }])
+        await vi.advanceTimersByTimeAsync(0)
+        expect(resolve).toHaveBeenCalledTimes(0)
+        expect(call).toHaveBeenCalledTimes(0)
+      }
+    } finally {
+      db.close()
+    }
+  }
+)
+
+it('does not allocate pairing reads for concurrent queries naming unregistered environments', async () => {
+  vi.useFakeTimers()
+  const db = new OrchestrationDb(':memory:')
+  const list = vi.fn<NonNullable<OrchestrationEnvironmentTransport['list']>>(async () => [])
+  const resolve = vi.fn<OrchestrationEnvironmentTransport['resolve']>(() => new Promise(() => {}))
+  const call = vi.fn<OrchestrationEnvironmentTransport['call']>(() => new Promise(() => {}))
+  const owner = new WorkerPlacementCatalogOwner(db, { list, resolve, call })
+  try {
+    const pending = Array.from({ length: 100 }, (_, index) => owner.discover(`missing-${index}`))
+    expect((await Promise.all(pending)).every((answer) => answer[0].status === 'unchecked')).toBe(
+      true
+    )
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(resolve).toHaveBeenCalledTimes(0)
+    expect(call).toHaveBeenCalledTimes(0)
+  } finally {
+    db.close()
+  }
+})
+
 it('indexes a full-size shared project once and resolves a shared worktree scope once', () => {
   const resolve = vi.spyOn(resolution, 'resolveLocalWorkspaceRuntime')
   const repos = Array.from({ length: 5_000 }, (_, index) =>
