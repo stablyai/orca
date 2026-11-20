@@ -7,7 +7,6 @@ import {
   pruneCreatedWorktreeRoots
 } from './registered-worktree-root-probes'
 import {
-  isDescendantOrEqual,
   isDescendantOrEqualAsync,
   normalizeExistingPath
 } from '../../../filesystem/local-file-io/filesystem-path-containment'
@@ -263,16 +262,6 @@ function refreshRegisteredWorktreeRoots(): void {
   replaceRegisteredWorktreeRootSet(registeredWorktreeRoots, registeredOwners.values())
 }
 
-export function isRegisteredWorktreePath(targetPath: string, store: Store): boolean {
-  synchronizeOwners(store)
-  for (const root of registeredWorktreeRoots) {
-    if (isDescendantOrEqual(targetPath, root)) {
-      return true
-    }
-  }
-  return false
-}
-
 export async function isRegisteredWorktreePathAsync(
   targetPath: string,
   store: Store
@@ -280,7 +269,8 @@ export async function isRegisteredWorktreePathAsync(
   synchronizeOwners(store)
   const generation = invalidationGeneration
   for (const root of registeredWorktreeRoots) {
-    if (await isDescendantOrEqualAsync(targetPath, root)) {
+    const contained = isDescendantOrEqualAsync(targetPath, root)
+    if (typeof contained === 'boolean' ? contained : await contained) {
       synchronizeOwners(store)
       return generation === invalidationGeneration && registeredWorktreeRoots.has(root)
     }

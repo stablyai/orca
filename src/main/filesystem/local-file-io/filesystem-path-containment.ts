@@ -14,19 +14,20 @@ export function isDescendantOrEqual(resolvedTarget: string, resolvedBase: string
 }
 
 /** Preserve Unicode identity checks without blocking an async authorization request. */
-export async function isDescendantOrEqualAsync(
+export function isDescendantOrEqualAsync(
   resolvedTarget: string,
   resolvedBase: string
-): Promise<boolean> {
+): boolean | Promise<boolean> {
   if (isDescendantOrEqualExact(resolvedTarget, resolvedBase)) {
     return true
   }
   const ancestor = foldedContainmentAncestor(resolvedTarget, resolvedBase)
-  if (ancestor === null) {
-    return false
-  }
+  return ancestor === null ? false : isSameFilesystemObjectAsync(ancestor, resolvedBase)
+}
+
+async function isSameFilesystemObjectAsync(pathA: string, pathB: string): Promise<boolean> {
   try {
-    const [target, base] = await Promise.all([stat(ancestor), stat(resolvedBase)])
+    const [target, base] = await Promise.all([stat(pathA), stat(pathB)])
     return target.ino !== 0 && target.dev === base.dev && target.ino === base.ino
   } catch {
     return false

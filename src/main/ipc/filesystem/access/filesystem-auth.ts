@@ -51,7 +51,8 @@ export async function isPathAllowed(
     return true
   }
   for (const root of await (allowedRoots?.getCanonicalizable() ?? getAllowedRoots(store))) {
-    if (await isDescendantOrEqualAsync(resolvedTarget, root)) {
+    const contained = isDescendantOrEqualAsync(resolvedTarget, root)
+    if (typeof contained === 'boolean' ? contained : await contained) {
       return true
     }
   }
@@ -224,7 +225,8 @@ async function isPathAllowedByCanonicalAllowedRoot(
   }
   for (const root of await (allowedRoots?.getCanonicalizable() ?? getAllowedRoots(store))) {
     const resolvedRoot = resolve(root)
-    if (!(await isDescendantOrEqualAsync(sourcePath, resolvedRoot))) {
+    const contained = isDescendantOrEqualAsync(sourcePath, resolvedRoot)
+    if (!(typeof contained === 'boolean' ? contained : await contained)) {
       continue
     }
     // Resolve macOS /var symlinks only for the matching root, not every repo.
