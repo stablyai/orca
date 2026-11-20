@@ -143,12 +143,15 @@ function Viewer({
     }
   }, [read, images, index])
   // Shown until the next image's bytes arrive, so a step never closes the viewer.
-  const last = useRef<string | null>(null)
-  const uri = reads.uris[image.path] ?? last.current
+  const [shown, setShown] = useState<string | null>(null)
+  const fresh = reads.uris[image.path]
+  if (fresh && fresh !== shown) {
+    setShown(fresh)
+  }
+  const uri = fresh ?? shown
   if (!uri) {
     return null
   }
-  last.current = uri
   const many = images.length > 1
   return (
     <MobileImageViewer
