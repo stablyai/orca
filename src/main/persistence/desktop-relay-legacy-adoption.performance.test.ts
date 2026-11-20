@@ -8,8 +8,7 @@ import type { Repo } from '../../shared/repository/repo-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
+  LOCAL_EXECUTION_HOST_ID
 } from '../../shared/execution-host/execution-host'
 
 // Perf contract: the legacy relay ids captured at startup live only until their workspace is
@@ -27,7 +26,7 @@ it("releases a removed workspace's captured legacy relay ids", () => {
   const repos = [{ id: 'repo-ssh', connectionId: 'box' }] as Repo[]
   const store = {
     getRepos: () => repos,
-    getWorkspaceSessionHostIds: (): ExecutionHostId[] => [ssh, LOCAL_EXECUTION_HOST_ID],
+    getWorkspaceSessionHostIds: () => [ssh, LOCAL_EXECUTION_HOST_ID],
     getWorkspaceSession: (hostId?: string | null) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an absent partition is empty here.
       hostId === ssh ? partition : ({} as WorkspaceSessionState)
