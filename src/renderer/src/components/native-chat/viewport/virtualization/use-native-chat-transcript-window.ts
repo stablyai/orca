@@ -332,16 +332,33 @@ export function useNativeChatTranscriptWindow({
     }
   }, [isAlignHeld, reconcileReaderScroll])
 
+  // Overscan rows sit outside the scroller's clip; their loops would still draw every frame. A hidden
+  // (display: none) transcript runs no animations, so its rows are observed only while it shows.
+  const rowObservations = useRef(new Map<HTMLDivElement, (() => void) | null>())
+  const isVisibleRef = useRef(isVisible)
+  useLayoutEffect(() => {
+    isVisibleRef.current = isVisible
+    for (const [row, stop] of rowObservations.current) {
+      if (isVisible && stop === null) {
+        rowObservations.current.set(row, observeOffscreenRow(row))
+      } else if (!isVisible && stop !== null) {
+        stop()
+        rowObservations.current.set(row, null)
+      }
+    }
+  }, [isVisible])
+
   const measureRow = useCallback(
     (element: HTMLDivElement | null) => {
       virtualizer.measureElement(element)
       if (element === null) {
         return undefined
       }
-      // Overscan rows sit outside the scroller's clip; their loops would still draw every frame.
-      const stopObserving = observeOffscreenRow(element)
+      const observations = rowObservations.current
+      observations.set(element, isVisibleRef.current ? observeOffscreenRow(element) : null)
       return () => {
-        stopObserving()
+        observations.get(element)?.()
+        observations.delete(element)
         virtualizer.measureElement(null)
       }
     },
