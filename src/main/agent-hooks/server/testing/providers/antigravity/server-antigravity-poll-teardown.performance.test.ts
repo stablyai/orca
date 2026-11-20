@@ -75,7 +75,7 @@ it.each([10, 100])(
       }
     }
     await vi.waitFor(() => expect(reads.count).toBe(panes), { timeout: 10000 })
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
     server.setStatusHooksEnabled(false)
     reads.release()
     await vi.waitFor(() => expect(reads.finished).toBe(panes), { timeout: 10000 })

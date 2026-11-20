@@ -119,7 +119,8 @@ describe('RelayAgentHookServer', () => {
             tabId: 'tab-1',
             source: 'antigravity',
             payload: { ...payload, hookEventName },
-            receivedAt: 1_000 + index
+            // ast-grep-ignore: test-no-wall-clock -- the spool drops hooks older than AGENT_HOOK_SPOOL_MAX_AGE_MS
+            receivedAt: Date.now() + index
           })
         )
         .join('\n')}\n`
