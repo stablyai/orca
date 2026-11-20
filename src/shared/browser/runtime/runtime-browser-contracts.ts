@@ -115,6 +115,8 @@ export type BrowserEvalResult = { result: string; origin: string }
 export type BrowserTabInfo = {
   generation?: number
   browserPageId: string
+  /** The workspace tab showing this page: what Copy Tab ID copies as `orcaTabId`. Older hosts omit it. */
+  unifiedTabId?: string
   index: number
   url: string
   title: string

@@ -5,6 +5,8 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote
 /** A browser tab as the tab bar shows it, whether or not its page has loaded. */
 export type BrowserTabBarEntry = {
   browserPageId: string
+  /** The workspace tab showing the page; inventory-only pages have none. */
+  unifiedTabId?: string
   worktreeId: string
   active?: boolean
   title: string
@@ -48,6 +50,7 @@ export function readBrowserTabBar(
       listed.add(tab.browserPageId)
       result.push({
         browserPageId: tab.browserPageId,
+        unifiedTabId: tab.id,
         active: tab.id === snapshot.activeTabId,
         worktreeId: snapshot.worktree,
         title: saved?.title ?? tab.title,
@@ -94,11 +97,13 @@ export function mergeBrowserTabListing(input: {
     }
     listed.add(entry.browserPageId)
     const live = liveById.get(entry.browserPageId)
+    const unifiedTabId = entry.unifiedTabId ? { unifiedTabId: entry.unifiedTabId } : {}
     fromBar.push(
       live
-        ? { ...live, loaded: true }
+        ? { ...live, ...unifiedTabId, loaded: true }
         : {
             browserPageId: entry.browserPageId,
+            ...unifiedTabId,
             index: 0,
             url: entry.url,
             title: entry.title,

@@ -26,6 +26,7 @@ import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
 } from '../identity/terminal-identity'
+import { resolveTerminalReference } from '../../tab-reference/copied-tab-reference'
 
 const WORKER_DONE_UNAVAILABLE_RETRY_MS = 120_000
 
@@ -84,7 +85,9 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     const { flags, client, cwd, json } = ctx
     await refuseAgentServerRoute('send', ctx)
     await requirePeerMailCarrier(ctx)
-    const to = getOptionalStringFlag(flags, 'to')
+    const toFlag = getOptionalStringFlag(flags, 'to')
+    // A copied terminal tab id names the agent's tab; send to the terminal it holds.
+    const to = toFlag ? await resolveTerminalReference(client, toFlag) : toFlag
     const type = getOptionalStringFlag(flags, 'type')
     if (to) {
       rejectLifecycleGroupRecipient(type, to)
