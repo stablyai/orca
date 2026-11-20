@@ -172,25 +172,12 @@ async function publishSourceOverCopy({
   if (!current || !isUnchangedCopy(current, copy) || !(await isCopyIdle(args))) {
     return 'deferred'
   }
-  const asideName = `${basename(copyPath)}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}.${randomBytes(6).toString('hex')}`
-  const asidePath = join(dirname(copyPath), asideName)
-  // Recorded before the move, so a pass that stops after it finds the copy and gives its name back.
-  await writeMarker(markerPath, { ...marker, aside: asideName })
-  // Reserved exclusively: the rename below replaces only this empty file of ours.
-  const reserved = await open(asidePath, 'wx').then(async (file) => {
-    const reservation = await file.stat({ bigint: true })
-    await file.close()
-    return reservation
-  })
-  try {
-    if (!(await supportsHardLinks(asidePath))) {
-      return 'kept'
-    }
-    // A rename never leaves the copy's bytes unnamed; on Windows it fails while a writer holds it.
-    await rename(copyPath, asidePath)
-  } finally {
-    await removeUnusedReservation(asidePath, reserved)
+  const asidePath = await reserveAside(copyPath, markerPath, marker)
+  if (!(await supportsHardLinks(asidePath))) {
+    return 'kept'
   }
+  // A rename never leaves the copy's bytes unnamed; on Windows it fails while a writer holds it.
+  await rename(copyPath, asidePath)
   const moved = await lstatIfPresent(asidePath)
   if (!moved || !isUnchangedCopy(moved, copy)) {
     // Replaced or written in the moment before the rename: the name goes back to what was moved.
@@ -261,27 +248,42 @@ async function restoreName(asidePath: string, path: string): Promise<void> {
   await linkUnlessTaken(asidePath, path)
 }
 
-/** Only our own empty reservation, when the copy never moved into it. */
-async function removeUnusedReservation(path: string, reserved: BigIntStats): Promise<void> {
-  const current = await lstatIfPresent(path)
-  if (current && sameFile(current, reserved) && current.size === 0n) {
-    await unlinkIfPresent(path)
+/**
+ * An empty file of ours the copy moves onto, recorded before the move so a pass that stops after it
+ * finds the copy. An earlier attempt's unused one is reused, so nothing of ours is ever removed.
+ */
+async function reserveAside(
+  copyPath: string,
+  markerPath: string,
+  marker: LegacyCopiedSessionMarker
+): Promise<string> {
+  if (marker.aside) {
+    const earlier = join(dirname(copyPath), marker.aside)
+    const reservation = await lstatIfPresent(earlier)
+    if (reservation?.isFile() && reservation.size === 0n) {
+      return earlier
+    }
   }
+  const asideName = `${basename(copyPath)}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}.${randomBytes(6).toString('hex')}`
+  await writeMarker(markerPath, { ...marker, aside: asideName })
+  const asidePath = join(dirname(copyPath), asideName)
+  await (await open(asidePath, 'wx')).close()
+  return asidePath
 }
 
-/** Probed on our own empty reservation, before anything of the user's moves. */
+/** Probed on our own empty reservation, before anything of the user's moves; the probe name stays. */
 async function supportsHardLinks(reservedPath: string): Promise<boolean> {
-  const probePath = `${reservedPath}.probe`
   try {
-    await link(reservedPath, probePath)
+    await link(reservedPath, `${reservedPath}.probe`)
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code
     if (code === 'EXDEV' || code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'EPERM') {
       return false
     }
-    throw error
+    if (code !== 'EEXIST') {
+      throw error
+    }
   }
-  await unlinkIfPresent(probePath)
   return true
 }
 

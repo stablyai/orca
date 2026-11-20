@@ -78,7 +78,7 @@ function legacyCopy(sourceText: string, copyText: string): void {
 function asides(): string[] {
   const name = basename(copyPath)
   return readdirSync(dirname(copyPath))
-    .filter((entry) => entry.startsWith(`${name}.orca-legacy-copy.`))
+    .filter((entry) => entry.startsWith(`${name}.orca-legacy-copy.`) && !entry.endsWith('.probe'))
     .map((entry) => join(dirname(copyPath), entry))
 }
 
