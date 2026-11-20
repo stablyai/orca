@@ -62,10 +62,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       const link =
         proc && rest[0] === 'fd' && proc.uid === OWN_UID ? proc.fds[Number(rest[1])] : undefined
       return link === undefined ? missing() : Promise.resolve(link)
-    },
-    stat: (path: string) => {
-      const [proc] = processAt(path)
-      return proc ? Promise.resolve({ uid: proc.uid }) : missing()
     }
   }
 })
@@ -100,22 +96,21 @@ describe('Linux listener owner lookup', () => {
       host: '127.0.0.1',
       port: 8080,
       pid: 100,
-      socketId: '5001',
       processName: 'node',
       commandLine: 'node server.js',
       cwd: '/repo'
     }
-    const sshPort = { host: '127.0.0.1', port: 22, pid: undefined, socketId: '6001' }
+    const sshPort = { host: '127.0.0.1', port: 22, pid: undefined }
 
     fakeProc.readdirPaths = []
     const first = await scanPlatformListeningPorts({})
     expect(first.ports).toEqual([expectedPort, sshPort])
-    expect(fakeProc.readdirPaths).toEqual(['/proc', '/proc/100/fd', '/proc/200/fd'])
+    expect(fakeProc.readdirPaths).toEqual(['/proc', '/proc/100/fd', '/proc/200/fd', '/proc/300/fd'])
 
     // root's sshd socket gets one retry walk; the cached owner's fds are not read twice.
     fakeProc.readdirPaths = []
     await scanPlatformListeningPorts({})
-    expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd', '/proc', '/proc/200/fd'])
+    expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd', '/proc', '/proc/200/fd', '/proc/300/fd'])
 
     fakeProc.readdirPaths = []
     const third = await scanPlatformListeningPorts({})
@@ -131,6 +126,6 @@ describe('Linux listener owner lookup', () => {
       [22, undefined],
       [8081, 200]
     ])
-    expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd', '/proc', '/proc/200/fd'])
+    expect(fakeProc.readdirPaths).toEqual(['/proc/100/fd', '/proc', '/proc/200/fd', '/proc/300/fd'])
   })
 })

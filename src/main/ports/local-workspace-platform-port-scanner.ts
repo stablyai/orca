@@ -176,34 +176,25 @@ async function scanLinuxProcPorts(
   const sockets = [...tcp4, ...tcp6]
   const inodeToPid = await resolveLinuxSocketOwners(
     new Set(sockets.map((socket) => socket.inode)),
-    { ownUid, fresh: options.requireMetadata }
+    { fresh: options.requireMetadata }
   )
-  // comm is read every scan so an exec in a listening process invalidates reused metadata.
-  const processNames = new Map<number, string | undefined>()
-  for (const pid of new Set(inodeToPid.values())) {
-    processNames.set(pid, (await readTextIfAvailable(`/proc/${pid}/comm`))?.trim() || undefined)
-  }
-  const ports = dedupeRawPorts(
-    sockets.map((socket) => {
-      const pid = inodeToPid.get(socket.inode)
-      return {
-        host: socket.host,
-        port: socket.port,
-        pid,
-        socketId: String(socket.inode),
-        processName: pid === undefined ? undefined : processNames.get(pid)
-      }
-    })
-  )
-  const { hydrated, pidsNeedingMetadata } = partitionListenersNeedingMetadata(ports, options)
   const metadata = new Map<number, ProcessMetadata>()
-  for (const pid of pidsNeedingMetadata) {
-    metadata.set(pid, await loadLinuxProcessMetadata(pid))
+  const rawPorts: RawListeningPort[] = []
+
+  for (const socket of sockets) {
+    const pid = inodeToPid.get(socket.inode)
+    if (pid != null && !metadata.has(pid)) {
+      metadata.set(pid, await loadLinuxProcessMetadata(pid))
+    }
+    rawPorts.push({
+      host: socket.host,
+      port: socket.port,
+      pid,
+      ...metadata.get(pid ?? -1)
+    })
   }
-  return {
-    ports: hydrated.map((port) => ({ ...port, ...metadata.get(port.pid ?? -1) })),
-    metadataAvailable: true
-  }
+
+  return { ports: dedupeRawPorts(rawPorts), metadataAvailable: true }
 }
 
 async function readProcNet(
@@ -218,11 +209,13 @@ async function readProcNet(
 }
 
 async function loadLinuxProcessMetadata(pid: number): Promise<ProcessMetadata> {
-  const [cmdline, cwd] = await Promise.all([
+  const [comm, cmdline, cwd] = await Promise.all([
+    readTextIfAvailable(`/proc/${pid}/comm`),
     readTextIfAvailable(`/proc/${pid}/cmdline`),
     readlink(`/proc/${pid}/cwd`).catch(() => undefined)
   ])
   return {
+    processName: comm?.trim() || undefined,
     commandLine: cmdline?.split('\u0000').join(' ').trim() || undefined,
     cwd
   }
