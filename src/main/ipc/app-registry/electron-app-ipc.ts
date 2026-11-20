@@ -120,12 +120,13 @@ export function createElectronAppIpcHost(
       }
       let window = windows.get(source)
       if (!window) {
+        const lifecycle: NodeJS.EventEmitter = source
         window = {
           id: source.id,
           isDestroyed: () => source.isDestroyed(),
-          on: (event, listener) => source.on(event, listener),
-          once: (event, listener) => source.once(event, listener),
-          removeListener: (event, listener) => source.removeListener(event, listener)
+          on: (event, listener) => lifecycle.on(event, listener),
+          once: (event, listener) => lifecycle.once(event, listener),
+          removeListener: (event, listener) => lifecycle.removeListener(event, listener)
         }
         windows.set(source, window)
       }
