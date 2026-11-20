@@ -1,5 +1,5 @@
 // @protected-copy
-import { useLayoutEffect, useRef, useState, type JSX } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, type JSX } from 'react'
 import { Check, CircleAlert } from 'lucide-react'
 import { DialogDisclosure } from '@/components/ui/dialog-parts'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -87,14 +87,28 @@ export function DeleteWorktreeChangesSummary({
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [clipped, setClipped] = useState(false)
+  const [wasExpandable, setWasExpandable] = useState(false)
   const textRef = useRef<HTMLSpanElement>(null)
   const noteRef = useRef<HTMLSpanElement>(null)
   // A long translation can clip the one fixed line; the full sentence then moves into the panel.
-  useLayoutEffect(() => {
+  const measureClipped = useCallback(() => {
     setClipped(
       [textRef.current, noteRef.current].some((el) => el != null && el.scrollWidth > el.clientWidth)
     )
-  })
+  }, [])
+  // Text changes don't fire ResizeObserver, so remeasure after every render too.
+  useLayoutEffect(measureClipped)
+  const observeRow = useCallback(
+    (row: HTMLDivElement | null) => {
+      if (!row || typeof ResizeObserver === 'undefined') {
+        return
+      }
+      const observer = new ResizeObserver(measureClipped)
+      observer.observe(row)
+      return () => observer.disconnect()
+    },
+    [measureClipped]
+  )
   const key = worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
   const changeCount = dirtyChanges.counts.get(key)
   const checkState = dirtyChanges.checkStates.get(key)
@@ -126,14 +140,16 @@ export function DeleteWorktreeChangesSummary({
     : changesFailed
       ? ['warning', failedLabel]
       : changesChecking || (ignoredChecking && checkState !== 'complete')
-        ? ['checking', checkingLabel]
+        ? [ignoredUnchecked ? 'warning' : 'checking', checkingLabel]
         : // An open panel outlives its last loss (e.g. an autosave), so it never collapses on its own.
-          checkState === 'complete' || open
+          checkState === 'complete'
           ? [
               ignoredUnchecked ? 'warning' : 'clean',
               t('components.workspace.delete.changes.none', 'No uncommitted changes')
             ]
-          : [null, null]
+          : wasExpandable
+            ? ['clean', t('components.workspace.delete.changes.noUnsaved', 'No unsaved files')]
+            : [null, null]
   const stillChecking = tone !== 'checking' && (changesChecking || ignoredChecking)
   // Secondary facts stay on the collapsed line so a failed check never hides a known loss.
   const note = [
@@ -147,8 +163,11 @@ export function DeleteWorktreeChangesSummary({
   const changedFiles = preview?.files ?? []
   const ignoredPaths = atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []
   const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0 || ignoredPaths.length > 0
-  // Stay mounted while open, so an autosave that empties the list never collapses it under the user.
-  const expandable = hasDetails || clipped || open
+  // Once a toggle, always a toggle: an autosave that empties the list must not collapse or unfocus it.
+  const expandable = wasExpandable || hasDetails || clipped
+  if (expandable && !wasExpandable) {
+    setWasExpandable(true)
+  }
   if (!tone) {
     return null
   }
@@ -189,7 +208,7 @@ export function DeleteWorktreeChangesSummary({
       ? 'text-status-warning-text hover:text-status-warning-text'
       : 'text-muted-foreground'
   return (
-    <div aria-live="polite" className="min-w-0">
+    <div ref={observeRow} aria-live="polite" className="min-w-0">
       {expandable ? (
         // A fixed open height: results that land after opening scroll inside instead of moving Delete.
         <DialogDisclosure
@@ -201,7 +220,7 @@ export function DeleteWorktreeChangesSummary({
           open={open}
           onOpenChange={setOpen}
         >
-          {clipped ? (
+          {clipped || !hasDetails ? (
             <p className="mb-2 font-sans text-[13px] text-foreground">
               {note ? `${text} · ${note}` : text}
             </p>

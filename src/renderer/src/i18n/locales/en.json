@@ -22866,7 +22866,8 @@
           "checking": "Checking for changes…",
           "checkingDetails": "Checking…",
           "unavailableDetails": "Details unavailable",
-          "none": "No uncommitted changes"
+          "none": "No uncommitted changes",
+          "noUnsaved": "No unsaved files"
         },
         "unsavedEdits": {
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",

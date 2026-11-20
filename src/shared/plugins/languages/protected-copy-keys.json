@@ -1263,6 +1263,7 @@
     "components.workspace.cleanup.stopAgents.descriptionOne",
     "components.workspace.delete.changes.checking",
     "components.workspace.delete.changes.checkingDetails",
+    "components.workspace.delete.changes.noUnsaved",
     "components.workspace.delete.changes.none",
     "components.workspace.delete.changes.unavailable",
     "components.workspace.delete.changes.unavailableDetails",
