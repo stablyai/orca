@@ -73,8 +73,8 @@ it.each([10, 100])(
     })
     state.db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_attachment_claims
     WHEN refused_attempt() BEGIN SELECT RAISE(ABORT,'upload unavailable'); END`)
-    reconcileJournalLegacySource(state.root, state.db)
     source.close()
+    reconcileJournalLegacySource(state.root, state.db)
     writes = 0
     let eligibility = 0
     for (let launch = 0; launch < 3; launch++) {
