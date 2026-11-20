@@ -12,9 +12,11 @@ import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { listCodexSessionJsonlFilesIncrementally } from '../rollouts/codex-session-file-listing'
+import {
+  listCodexSessionJsonlFiles,
+  listCodexSessionJsonlFilesIncrementally
+} from '../rollouts/codex-session-file-listing'
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
-import { replaceCopyWithSourceLink } from './codex-legacy-session-copy'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
 
 type LegacyCopiedSessionMarker = {
@@ -37,6 +39,19 @@ export type CodexSessionBridgeSummary = {
 }
 
 let backgroundSessionBridgeTask: Promise<void> | null = null
+
+/** Custom CODEX_HOME changes history discovery only. */
+export function syncSystemCodexSessionsIntoManagedHome(sourceCodexHomePath?: string): void {
+  const systemSessionsRoot = join(sourceCodexHomePath || getSystemCodexHomePath(), 'sessions')
+  if (!existsSync(systemSessionsRoot)) {
+    return
+  }
+
+  const managedSessionsRoot = join(getOrcaManagedCodexHomePath(), 'sessions')
+  for (const systemSessionFilePath of listCodexSessionJsonlFiles(systemSessionsRoot)) {
+    bridgeSystemCodexSessionFile(systemSessionsRoot, managedSessionsRoot, systemSessionFilePath)
+  }
+}
 
 export function startSystemCodexSessionBridgeInBackground(
   options: CodexSessionBridgeIncrementalOptions = {},
@@ -76,11 +91,7 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
   )) {
     summary.scannedFiles += 1
     if (
-      await bridgeSystemCodexSessionFile(
-        systemSessionsRoot,
-        managedSessionsRoot,
-        systemSessionFilePath
-      )
+      bridgeSystemCodexSessionFile(systemSessionsRoot, managedSessionsRoot, systemSessionFilePath)
     ) {
       summary.linkedFiles += 1
     }
@@ -88,11 +99,11 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
   return summary
 }
 
-async function bridgeSystemCodexSessionFile(
+function bridgeSystemCodexSessionFile(
   systemSessionsRoot: string,
   managedSessionsRoot: string,
   systemSessionFilePath: string
-): Promise<boolean> {
+): boolean {
   const relativePath = relative(systemSessionsRoot, systemSessionFilePath)
   const managedSessionFilePath = join(managedSessionsRoot, relativePath)
   if (existsSync(managedSessionFilePath)) {
@@ -105,12 +116,7 @@ async function bridgeSystemCodexSessionFile(
     ) {
       return true
     }
-    await migrateLegacyCopiedSessionBridge(
-      dirname(systemSessionsRoot),
-      systemSessionFilePath,
-      managedSessionFilePath,
-      relativePath
-    )
+    forgetLinkedLegacyCopy(managedSessionFilePath, relativePath)
     return false
   }
   mkdirSync(dirname(managedSessionFilePath), { recursive: true })
@@ -169,35 +175,15 @@ function replaceSymlinkSessionBridgeWithHardlink(
   return false
 }
 
-async function migrateLegacyCopiedSessionBridge(
-  sourceHomePath: string,
-  sourcePath: string,
-  targetPath: string,
-  relativePath: string
-): Promise<void> {
-  const marker = readLegacyCopiedSessionMarker(relativePath)
-  if (!marker || marker.sourcePath !== sourcePath) {
-    return
-  }
+// An old copy is never swapped for a link: a turn written to it, or lines its source lacks, would be
+// lost. Only a copy something already turned into a link drops its marker.
+function forgetLinkedLegacyCopy(targetPath: string, relativePath: string): void {
   try {
-    const targetStat = lstatSync(targetPath)
-    if (targetStat.isSymbolicLink()) {
+    if (lstatSync(targetPath).isSymbolicLink()) {
       clearLegacyCopiedSessionMarker(relativePath)
-      return
-    }
-    if (!fileStatsMatchMarker(targetStat, marker, 'target')) {
-      return
     }
   } catch {
-    return
-  }
-  const replaced = await replaceCopyWithSourceLink({
-    sourcePath,
-    copyPath: targetPath,
-    threadHomes: [getOrcaManagedCodexHomePath(), sourceHomePath]
-  })
-  if (replaced) {
-    clearLegacyCopiedSessionMarker(relativePath)
+    // Left for a later pass.
   }
 }
 

@@ -145,7 +145,7 @@
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 6 src/main/codex/configuration/toml/config-toml-atomic-write.ts
 4 src/main/codex/history/backfill/codex-session-backfill-marker.ts
-13 src/main/codex/history/bridges/codex-session-bridge.ts
+14 src/main/codex/history/bridges/codex-session-bridge.ts
 5 src/main/codex/history/index/codex-session-index-heal-state.ts
 2 src/main/codex/history/index/codex-state-db.ts
 2 src/main/codex/history/resume/codex-session-resume-home.ts
