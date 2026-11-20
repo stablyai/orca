@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { parseGrabLabelAvoidArea } from '../../../../../../shared/browser/element-grab/browser-grab-types'
-import { measureGrabLabelAvoidArea } from './use-grab-label-avoid-area'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { measureGrabLabelAvoidArea, useGrabLabelAvoidArea } from './use-grab-label-avoid-area'
 
 function elementAt(left: number, top: number, width: number, height: number): HTMLElement {
   const element = document.createElement('div')
@@ -51,5 +52,55 @@ describe('validating a footprint from the renderer', () => {
     expect(parseGrabLabelAvoidArea({ ...valid, frameWidth: 0 })).toBeUndefined()
     expect(parseGrabLabelAvoidArea({ ...valid, height: -1 })).toBeUndefined()
     expect(parseGrabLabelAvoidArea({ ...valid, x: 1e9 })).toBeUndefined()
+  })
+})
+
+afterEach(cleanup)
+
+it('keeps the newer mount footprint after an older mount finishes and withdraws', async () => {
+  let release: (() => void) | undefined
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let applied: unknown = null
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      browser: {
+        setGrabLabelAvoidArea: async ({ area }: { area: { x: number } | null }) => {
+          if (area?.x === 300) {
+            await held
+          }
+          applied = area
+          return true
+        }
+      }
+    }
+  })
+  const mount = (left: number) =>
+    renderHook(() =>
+      useGrabLabelAvoidArea({
+        pageId: 'same-mounted-page',
+        enabled: true,
+        layoutKey: 'steady',
+        frameRef: { current: elementAt(100, 50, 800, 600) },
+        paletteRef: { current: elementAt(left, 58, 240, 38) },
+        hintRef: { current: null }
+      })
+    )
+  const old = mount(400)
+  old.unmount()
+  mount(500)
+  await act(async () => {
+    release?.()
+    await held
+  })
+  expect(applied).toEqual({
+    x: 400,
+    y: 8,
+    width: 240,
+    height: 38,
+    frameWidth: 800,
+    frameHeight: 600
   })
 })

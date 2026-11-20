@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
+import { useLayoutEffect, useRef, type RefObject } from 'react'
 import type { BrowserGrabLabelAvoidArea } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 
 // Until the page is registered with main (a fresh page), the area is refused; try again for a few seconds.
@@ -52,10 +52,51 @@ function sameArea(
   )
 }
 
-/**
- * Tells the page's picker where the palette and its hint sit, so the hover label is never placed under them.
- * Why measured and sent: the palette moves (drag, find bar), wraps and changes width; a fixed band can't cover that.
- */
+type Producer = {
+  owner: object | null
+  active: boolean
+  dirty: boolean
+  pending: { owner: object | null; area: BrowserGrabLabelAvoidArea | null } | null
+  accepted: BrowserGrabLabelAvoidArea | null
+  notify: ((accepted: boolean) => void) | null
+}
+const producers = new Map<string, Producer>()
+
+function drain(pageId: string, producer: Producer): void {
+  if (producer.active) {
+    return
+  }
+  producer.active = true
+  void (async () => {
+    while (producer.pending) {
+      const update = producer.pending
+      producer.pending = null
+      if (update.area) {
+        producer.dirty = true
+      }
+      let accepted = false
+      try {
+        accepted = await window.api.browser.setGrabLabelAvoidArea({
+          browserPageId: pageId,
+          area: update.area
+        })
+      } catch {}
+      if (accepted && update.area === null) {
+        producer.dirty = false
+      }
+      if (producer.owner === update.owner && !producer.pending) {
+        producer.accepted = accepted ? update.area : null
+        producer.notify?.(accepted)
+      }
+    }
+    producer.active = false
+    if (!producer.owner && producers.get(pageId) === producer) {
+      producers.delete(pageId)
+    }
+  })()
+}
+
+/** One in-flight delivery and one latest footprint per page, shared across palette mounts. */
 export function useGrabLabelAvoidArea({
   pageId,
   frameRef,
@@ -65,68 +106,87 @@ export function useGrabLabelAvoidArea({
   layoutKey
 }: {
   pageId: string
-  /** The page's frame (its webview); the area is relative to it. */
   frameRef: RefObject<HTMLElement | null> | undefined
   paletteRef: RefObject<HTMLElement | null>
   hintRef: RefObject<HTMLElement | null>
-  /** False while nothing is being picked (Draw), or mid-drag; the last area stays meanwhile. */
   enabled: boolean
-  /** Changes whenever the palette's place or shape does (position, top, fit, hint shown). */
   layoutKey: string
 }): void {
-  // What main has accepted for which page. Only a successful send counts: before the page is registered main refuses
-  // the area, and an unchanged palette would otherwise never send it again.
-  const sentRef = useRef<BrowserGrabLabelAvoidArea | null>(null)
-  const sentPageRef = useRef<string | null>(null)
-  const reportedPageRef = useRef<string | null>(null)
-  const deliveryRef = useRef<Promise<unknown>>(Promise.resolve())
+  const leaseRef = useRef<{ producer: Producer; owner: object } | null>(null)
+  useLayoutEffect(() => {
+    let producer = producers.get(pageId)
+    if (!producer) {
+      producer = {
+        owner: null,
+        active: false,
+        dirty: false,
+        pending: null,
+        accepted: null,
+        notify: null
+      }
+      producers.set(pageId, producer)
+    }
+    const owner = {}
+    producer.owner = owner
+    producer.accepted = null
+    producer.notify = null
+    // A newer mount supersedes an older cleanup that has not yet been delivered.
+    producer.pending = null
+    leaseRef.current = { producer, owner }
+    return () => {
+      if (producer.owner !== owner) {
+        return
+      }
+      producer.owner = null
+      producer.notify = null
+      if (producer.dirty || producer.active || producer.pending) {
+        producer.pending = { owner: null, area: null }
+        drain(pageId, producer)
+      } else if (producers.get(pageId) === producer) {
+        producers.delete(pageId)
+      }
+    }
+  }, [pageId])
 
   useLayoutEffect(() => {
     const frame = frameRef?.current
     const palette = paletteRef.current
-    if (!enabled || !frame || !palette) {
+    const lease = leaseRef.current
+    if (!enabled || !frame || !palette || !lease) {
       return
     }
+    const { producer, owner } = lease
     let disposed = false
     let retryTimer: number | undefined
     let retries = 0
-    let latest: BrowserGrabLabelAvoidArea | null = null
     const report = (): void => {
       window.clearTimeout(retryTimer)
-      const area = measureGrabLabelAvoidArea(frame, [palette, hintRef.current])
-      if (area === null || (sentPageRef.current === pageId && sameArea(area, sentRef.current))) {
+      if (disposed || producer.owner !== owner) {
         return
       }
-      latest = area
-      // An outstanding send can replace the last accepted area, even if the new measurement returns to it.
-      sentRef.current = null
-      reportedPageRef.current = pageId
-      const delivery = deliveryRef.current.then(() => {
-        if (disposed || latest !== area) {
-          return false
-        }
-        return window.api.browser.setGrabLabelAvoidArea({ browserPageId: pageId, area })
-      })
-      deliveryRef.current = delivery.catch(() => false)
-      const retry = (): void => {
-        if (!disposed && latest === area && retries < MAX_RETRIES) {
-          retries += 1
-          retryTimer = window.setTimeout(report, RETRY_MS)
-        }
+      const area = measureGrabLabelAvoidArea(frame, [palette, hintRef.current])
+      if (
+        !area ||
+        (!producer.active && sameArea(area, producer.accepted)) ||
+        (producer.pending?.owner === owner && sameArea(area, producer.pending.area))
+      ) {
+        return
       }
-      void delivery.then((accepted) => {
-        // A newer measurement, a closed palette or another page supersedes this reply.
-        if (disposed || latest !== area) {
-          return
-        }
-        if (accepted) {
-          sentRef.current = area
-          sentPageRef.current = pageId
-          retries = 0
-          return
-        }
-        retry()
-      }, retry)
+      producer.pending = { owner, area }
+      drain(pageId, producer)
+    }
+    producer.notify = (accepted) => {
+      if (disposed) {
+        return
+      }
+      if (accepted) {
+        retries = 0
+        return
+      }
+      if (retries < MAX_RETRIES) {
+        retries += 1
+        retryTimer = window.setTimeout(report, RETRY_MS)
+      }
     }
     report()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report)
@@ -136,23 +196,9 @@ export function useGrabLabelAvoidArea({
       disposed = true
       window.clearTimeout(retryTimer)
       observer?.disconnect()
+      if (producer.owner === owner) {
+        producer.notify = null
+      }
     }
   }, [enabled, frameRef, hintRef, layoutKey, pageId, paletteRef])
-
-  // The palette closed or moved to another page: the old page's picker no longer needs to step around it.
-  useEffect(
-    () => () => {
-      if (reportedPageRef.current === pageId) {
-        sentRef.current = null
-        sentPageRef.current = null
-        reportedPageRef.current = null
-        deliveryRef.current = deliveryRef.current
-          .then(() =>
-            window.api.browser.setGrabLabelAvoidArea({ browserPageId: pageId, area: null })
-          )
-          .catch(() => false)
-      }
-    },
-    [pageId]
-  )
 }
