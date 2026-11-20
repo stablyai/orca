@@ -1,20 +1,34 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { resetDarwinProcessGroupSizesForTests } from '../../../shared/process-observation/darwin/darwin-process-group-sizes'
+import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
 import {
   setLibprocAddonForTests,
   type LibprocProcessRow
 } from '../../../shared/process-observation/darwin/libproc-addon'
 import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 import type { Session } from '../sessions/session'
+import { resetIdleShellGroupSizesForTests } from './terminal-host-idle-shell-proof'
 import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
 
 // Guards PR #45713: idle shell panes polled every few seconds read the whole machine's process table each time.
-const tables = vi.hoisted(() => ({ strict: vi.fn(), cheap: vi.fn() }))
+type LastCapture = { capture: Promise<{ rows: ProcessTableRow[] }>; at: number }
+const tables = vi.hoisted((): { strict: Mock; cheap: Mock; last: LastCapture | null } => ({
+  strict: vi.fn(),
+  cheap: vi.fn(),
+  last: null
+}))
 vi.mock(
   '../../../shared/process-observation/tables/process-table-snapshot-reader',
   async (importOriginal) => ({
     ...(await importOriginal<object>()),
-    getStrictProcessTableSnapshotWithAge: tables.strict
+    getStrictProcessTableSnapshotWithAge: () => {
+      const capture = tables.strict()
+      tables.last = { capture, at: Date.now() }
+      return capture
+    },
+    // A capture serves later readers for 500 ms, as the shared reader's cache does.
+    peekStrictProcessTableSnapshot: () =>
+      tables.last && Date.now() - tables.last.at < 500
+        ? tables.last.capture.then((snapshot) => snapshot.rows)
+        : null
   })
 )
 vi.mock(
@@ -48,7 +62,8 @@ function kinfo(pid: number, pgid: number): LibprocProcessRow {
 beforeEach(() => {
   shellGroupMembers = 1
   groupReads.mockReset()
-  resetDarwinProcessGroupSizesForTests()
+  tables.last = null
+  resetIdleShellGroupSizesForTests()
   setLibprocAddonForTests({
     readProcessTable: async (query) => {
       groupReads(query)
@@ -75,6 +90,7 @@ function pane(options: {
   root: number
   shellIsRootChild: boolean
   foregroundGroup: number
+  foreground?: string
 }): Session {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a steady POSIX poll reads only these members
   return {
@@ -85,8 +101,14 @@ function pane(options: {
     shellIsRootChild: options.shellIsRootChild,
     outputChunks: 0,
     readForegroundGroup: () => options.foregroundGroup,
-    getForegroundProcess: () => 'zsh'
+    getForegroundProcess: () => options.foreground ?? 'zsh'
   } as unknown as Session
+}
+
+/** Let a poll's round-join wait elapse on the fake clock, then take its result. */
+async function settle<T>(pending: Promise<T>): Promise<T> {
+  await vi.advanceTimersByTimeAsync(100)
+  return pending
 }
 
 /** Ten steady polls of a pane with no tracked agent, 15 s apart (the quiet-pane cadence). */
@@ -97,14 +119,16 @@ async function pollQuietPane(
 ): Promise<number> {
   tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
   for (let poll = 0; poll < 10; poll++) {
-    await inspectTerminalHostProcess({
-      sessionId: 'pane-1',
-      session,
-      steadyState: true,
-      jobMembershipOnly: true,
-      authorityGeneration: 'generation-1',
-      nextObservationEpoch: () => poll
-    })
+    await settle(
+      inspectTerminalHostProcess({
+        sessionId: 'pane-1',
+        session,
+        steadyState: true,
+        jobMembershipOnly: true,
+        authorityGeneration: 'generation-1',
+        nextObservationEpoch: () => poll
+      })
+    )
     between(poll)
     vi.advanceTimersByTime(15_000)
   }
@@ -173,7 +197,8 @@ it('captures every poll when the native reader cannot read groups', async () => 
 
 it('shares one group read per round however many idle panes poll in it', async () => {
   async function pollRounds(panes: number): Promise<{ captures: number; groupReads: number }> {
-    resetDarwinProcessGroupSizesForTests()
+    tables.last = null
+    resetIdleShellGroupSizesForTests()
     groupReads.mockReset()
     const shells = Array.from({ length: panes }, (_, i) => 10_000 + i)
     const sessions = shells.map((pid) =>
@@ -189,16 +214,18 @@ it('shares one group read per round however many idle panes poll in it', async (
     // One capture serves the whole round, already 200 ms old when later panes join it.
     tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 200 })
     for (let round = 0; round < 10; round++) {
-      await Promise.all(
-        sessions.map((session, i) =>
-          inspectTerminalHostProcess({
-            sessionId: `pane-${i}`,
-            session,
-            steadyState: true,
-            jobMembershipOnly: true,
-            authorityGeneration: 'generation-1',
-            nextObservationEpoch: () => round
-          })
+      await settle(
+        Promise.all(
+          sessions.map((session, i) =>
+            inspectTerminalHostProcess({
+              sessionId: `pane-${i}`,
+              session,
+              steadyState: true,
+              jobMembershipOnly: true,
+              authorityGeneration: 'generation-1',
+              nextObservationEpoch: () => round
+            })
+          )
         )
       )
       vi.advanceTimersByTime(15_000)
@@ -209,4 +236,48 @@ it('shares one group read per round however many idle panes poll in it', async (
   expect(await pollRounds(30)).toEqual({ captures: 90, groupReads: 7 })
   expect(await pollRounds(300)).toEqual({ captures: 900, groupReads: 7 })
   expect(groupReads).toHaveBeenCalledWith({ command: false })
+})
+
+it('takes group sizes from the full capture an ordinary command already needs in the same round', async () => {
+  async function pollRounds(panes: number): Promise<{ captures: number; groupReads: number }> {
+    resetIdleShellGroupSizesForTests()
+    groupReads.mockReset()
+    tables.last = null
+    const shells = Array.from({ length: panes }, (_, i) => 10_000 + i)
+    const idle = shells.map((pid) =>
+      pane({ root: pid, shellIsRootChild: false, foregroundGroup: pid })
+    )
+    const editor = pane({
+      root: 9_000,
+      shellIsRootChild: false,
+      foregroundGroup: 9_001,
+      foreground: 'vim'
+    })
+    const rows = [
+      ...shells.map((pid) => ({ ...row(pid, 1, pid, '-zsh'), tpgid: pid })),
+      { ...row(9_000, 1, 9_000, '-zsh'), tpgid: 9_001 },
+      { ...row(9_001, 9_000, 9_001, 'vim'), tpgid: 9_001 }
+    ]
+    tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 0 })
+    const poll = (session: Session, id: string, round: number) =>
+      inspectTerminalHostProcess({
+        sessionId: id,
+        session,
+        steadyState: true,
+        jobMembershipOnly: true,
+        authorityGeneration: 'generation-1',
+        nextObservationEpoch: () => round
+      })
+    for (let round = 0; round < 10; round++) {
+      // The editor's poll arrives after the idle panes', inside the round's join window.
+      const idlePolls = idle.map((session, i) => poll(session, `pane-${i}`, round))
+      await vi.advanceTimersByTimeAsync(5)
+      await settle(Promise.all([...idlePolls, poll(editor, 'editor', round)]))
+      vi.advanceTimersByTime(15_000)
+    }
+    return { captures: tables.strict.mock.calls.length, groupReads: groupReads.mock.calls.length }
+  }
+  // The editor captures every round, as before; idle panes re-prove once a minute and add no read of their own.
+  expect(await pollRounds(30)).toEqual({ captures: 10 + 3 * 30, groupReads: 0 })
+  expect(await pollRounds(300)).toEqual({ captures: 10 + 3 * 300, groupReads: 0 })
 })

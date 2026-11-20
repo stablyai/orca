@@ -6,7 +6,7 @@ import type {
   WindowsFence
 } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import {
-  buildProcessTableIndex,
+  getProcessTableIndex,
   type ProcessTableIndex
 } from '../../../shared/process-observation/tables/process-table-index'
 import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
@@ -56,7 +56,7 @@ export function resolveRemoteForegroundEvidenceFromRows(
   if (!hasControllingTty(root.tty) || root.tpgid <= 0 || !root.startTime) {
     return { ...metadata, verdict: 'unverifiable', reason: 'fence_incomplete' }
   }
-  const index = buildProcessTableIndex(rows)
+  const index = getProcessTableIndex(rows)
   const resolved = resolveForegroundProcesses(index, [request])[0]
   if (!resolved?.available) {
     return {

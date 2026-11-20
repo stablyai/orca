@@ -108,7 +108,10 @@ export async function inspectTerminalHostProcess(args: {
     process.platform === 'darwin' &&
     !session.processNameIsSpawnFile
   ) {
-    const shell = await readProvenIdleShell(session)
+    const shell = await readProvenIdleShell(
+      session,
+      () => !args.currentSession || args.currentSession() === session
+    )
     if (shell !== null) {
       args.onTier?.('cheap')
       return { foregroundProcess: shell, hasChildProcesses: false }

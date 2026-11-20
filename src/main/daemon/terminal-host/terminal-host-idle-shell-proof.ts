@@ -4,7 +4,12 @@ import {
 } from '../../../shared/shell/command-resolution/command-token-scanner'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { monotonicNow } from '../../../shared/concurrency/deadline-settle-notifier'
-import { getDarwinProcessGroupSizes } from '../../../shared/process-observation/darwin/darwin-process-group-sizes'
+import { readDarwinProcessGroupSizes } from '../../../shared/process-observation/darwin/darwin-process-group-sizes'
+import {
+  createProcessTableSnapshotReader,
+  peekStrictProcessTableSnapshot,
+  withEvidenceBudget
+} from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { getProcessTableIndex } from '../../../shared/process-observation/tables/process-table-index'
 import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 import { getPaneOccupancy } from '../../providers/foreground/agent-process-batch'
@@ -13,10 +18,34 @@ import type { Session } from '../sessions/session'
 /** A full capture re-proves the shell is alone this often; polls in between re-count its group from a cheap read. */
 const IDLE_SHELL_PROOF_MAX_AGE_MS = 60_000
 
+// Long enough for every pane polled in one round to arrive, so a full capture one of them starts serves all.
+const ROUND_JOIN_MS = 25
+
 type IdleShellProof = { shellPid: number; provedAt: number; outputChunks: number }
 
 // Keyed by Session so a new session or recycled PID cannot inherit an old proof.
 const proofs = new WeakMap<Session, IdleShellProof>()
+
+/** Group sizes for a round: from a full capture another pane's poll already needs, else one kinfo-only read. */
+const groupSizesReader = createProcessTableSnapshotReader<ReadonlyMap<number, number>>({
+  runPs: async () => {
+    await new Promise((resolve) => setTimeout(resolve, ROUND_JOIN_MS))
+    const full = peekStrictProcessTableSnapshot()
+    if (!full) {
+      return readDarwinProcessGroupSizes()
+    }
+    const groups = getPaneOccupancy(await full)
+    if (groups.processGroupsIncomplete) {
+      throw new Error('process groups incomplete')
+    }
+    return groups.rowsByProcessGroup
+  },
+  now: () => Date.now()
+})
+
+export function resetIdleShellGroupSizesForTests(): void {
+  groupSizesReader.reset()
+}
 
 function commandName(row: ProcessTableRow): string {
   return getCommandTokenPathBasename(getFirstCommandToken(row.command)).replace(/^-/, '')
@@ -30,6 +59,11 @@ export function rememberIdleShellProof(
   capturedAgeMs: number,
   outputChunks: number
 ): void {
+  const name = session.getForegroundProcess({ rawFallback: true })
+  if (!name || !isShellProcess(name)) {
+    proofs.delete(session)
+    return
+  }
   const index = getProcessTableIndex(rows)
   const shell = session.shellIsRootChild
     ? index.childrenByPpid.get(session.pid)?.find((row) => row.pid === row.pgid)
@@ -52,9 +86,14 @@ export function rememberIdleShellProof(
   }
 }
 
-function proofHolds(session: Session, proof: IdleShellProof): string | null {
+function provenShellName(
+  session: Session,
+  proof: IdleShellProof,
+  isCurrent: () => boolean
+): string | null {
   if (
     !session.isAlive ||
+    !isCurrent() ||
     monotonicNow() - proof.provedAt >= IDLE_SHELL_PROOF_MAX_AGE_MS ||
     session.outputChunks !== proof.outputChunks
   ) {
@@ -68,18 +107,21 @@ function proofHolds(session: Session, proof: IdleShellProof): string | null {
 
 /** The shell's name while a recent full capture proved it alone, its group still owns the terminal, and the group
  * still holds only the shell (job control off lets a silent command join it). */
-export async function readProvenIdleShell(session: Session): Promise<string | null> {
+export async function readProvenIdleShell(
+  session: Session,
+  isCurrent: () => boolean
+): Promise<string | null> {
   const proof = proofs.get(session)
-  if (!proof || proofHolds(session, proof) === null) {
+  if (!proof || provenShellName(session, proof, isCurrent) === null) {
     return null
   }
   try {
-    if ((await getDarwinProcessGroupSizes()).get(proof.shellPid) !== 1) {
+    if ((await withEvidenceBudget(groupSizesReader.getSnapshot())).get(proof.shellPid) !== 1) {
       return null
     }
   } catch {
     return null
   }
   // Re-read after the await: output or a new foreground job may have arrived meanwhile.
-  return proofHolds(session, proof)
+  return provenShellName(session, proof, isCurrent)
 }
