@@ -1,7 +1,12 @@
+import { windowsSystemRoot } from '@orca/process-host/windows-system-binary'
+
 // Absolute forward-slash paths prevent PATH hijacking and survive cmd.exe and Git Bash.
-export function getWindowsSystem32Path(relativePath: string): string {
-  const systemRoot = process.env.SystemRoot || 'C:\\Windows'
-  return `${systemRoot.replaceAll('\\', '/')}/System32/${relativePath}`
+export function getWindowsSystem32Path(
+  relativePath: string,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  // A cloned env (MSYS/Git Bash) often carries SYSTEMROOT or windir instead of SystemRoot.
+  return `${windowsSystemRoot(env).replaceAll('\\', '/')}/System32/${relativePath}`
 }
 
 export function getWindowsPowerShellExecutablePath(): string {

@@ -2,8 +2,13 @@
 import { win32 as pathWin32 } from 'node:path'
 
 // Absolute system paths avoid stripped or shadowed Electron PATH entries.
-function systemRoot(env: NodeJS.ProcessEnv = process.env): string {
+/** Windows spells this root three ways in practice: process.env, cloned plain objects (MSYS/Git Bash), and windir. */
+export function windowsSystemRoot(env: NodeJS.ProcessEnv = process.env): string {
   return env.SystemRoot ?? env.SYSTEMROOT ?? env.windir ?? 'C:\\Windows'
+}
+
+function systemRoot(env: NodeJS.ProcessEnv = process.env): string {
+  return windowsSystemRoot(env)
 }
 
 export function windowsPowerShellPath(env: NodeJS.ProcessEnv = process.env): string {

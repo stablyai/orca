@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { link, lstat, mkdir, readFile, readlink, unlink, writeFile } from 'node:fs/promises'
 import { join, win32 } from 'node:path'
 import { promisify } from 'node:util'
+import { windowsSystemRoot } from '@orca/process-host/windows-system-binary'
 
 const runtimeHostIdentity = `runtime:${randomUUID()}`
 const runtimeProcessIdentity = `runtime:${randomUUID()}`
@@ -13,17 +14,11 @@ const HOST_TOKEN_PATTERN = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-
 const WINDOWS_PROCESS_IDENTITY_TIMEOUT_MS = 5_000
 
 function getWindowsPowerShellPath(): string {
-  return win32.join(
-    process.env.SystemRoot ?? 'C:\\Windows',
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe'
-  )
+  return win32.join(windowsSystemRoot(), 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
 }
 
 function getWindowsRegistryPath(): string {
-  return win32.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'reg.exe')
+  return win32.join(windowsSystemRoot(), 'System32', 'reg.exe')
 }
 
 function hasCode(error: unknown, code: string): boolean {

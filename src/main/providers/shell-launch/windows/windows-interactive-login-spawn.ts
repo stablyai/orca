@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, win32 } from 'node:path'
+import { windowsSystemRoot } from '@orca/process-host/windows-system-binary'
 import {
   getSpawnArgsForWindows,
   wrapWindowsStartWait
@@ -99,7 +100,7 @@ export function buildWindowsHostInteractiveLoginSpawn(
   const pidFilePath = join(tmpdir(), `orca-interactive-login-${relayId}.pid`)
   const exitCodeFilePath = join(tmpdir(), `orca-interactive-login-${relayId}.exit`)
   const powershell = win32.join(
-    process.env.SystemRoot ?? 'C:\\Windows',
+    windowsSystemRoot(),
     'System32',
     'WindowsPowerShell',
     'v1.0',

@@ -3,13 +3,13 @@ import { join } from 'node:path'
 import { expandWindowsEnvironmentVariables } from '../../../shared/shell/launch/windows-environment-expansion'
 import { loadWindowsNativeRegistry } from '../../windows/windows-native-registry'
 import { stripTrailingComment } from './shell-startup-env'
+import { windowsSystemRoot } from '@orca/process-host/windows-system-binary'
 
 // Windows PowerShell and PowerShell 7 have separate profiles; all-users profiles precede user profiles.
 const POWERSHELL_EDITIONS = [
   {
     documentsSubdir: 'WindowsPowerShell',
-    psHome: () =>
-      join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0')
+    psHome: () => join(windowsSystemRoot(), 'System32', 'WindowsPowerShell', 'v1.0')
   },
   {
     documentsSubdir: 'PowerShell',
