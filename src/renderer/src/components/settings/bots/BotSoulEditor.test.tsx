@@ -31,29 +31,18 @@ function file(
 }
 
 describe('BotSoulEditor', () => {
-  it('saves on blur over the text it started from', async () => {
-    const soul = file('# Reviewer\n')
-    const { getByLabelText } = render(<BotSoulEditor file={soul} label="Soul" />)
-    const editor = getByLabelText('Soul')
-    fireEvent.change(editor, { target: { value: '# Reviewer\n\nReview PRs.\n' } })
-    fireEvent.blur(editor)
-    await waitFor(() =>
-      expect(soul.write).toHaveBeenCalledWith('# Reviewer\n\nReview PRs.\n', '# Reviewer\n')
-    )
-  })
-
   it('keeps typing done while a save is in flight', async () => {
     let finish: (value: BotHomeFileWrite) => void = () => {}
     const write = vi.fn(() => new Promise<BotHomeFileWrite>((resolve) => (finish = resolve)))
     const { getByLabelText, rerender } = render(
-      <BotSoulEditor file={file('a', write)} label="Soul" />
+      <BotSoulEditor file={file('a', write)} label="Soul" defaultMode="edit" />
     )
     const editor = getByLabelText('Soul')
     fireEvent.change(editor, { target: { value: 'ab' } })
     fireEvent.blur(editor)
     fireEvent.change(editor, { target: { value: 'abc' } })
     // The hook reports its own write as the new disk text.
-    rerender(<BotSoulEditor file={file('ab', write)} label="Soul" />)
+    rerender(<BotSoulEditor file={file('ab', write)} label="Soul" defaultMode="edit" />)
     finish('saved')
     await waitFor(() => expect(write).toHaveBeenCalledTimes(1))
     expect(getByLabelText('Soul')).toHaveProperty('value', 'abc')
@@ -62,19 +51,26 @@ describe('BotSoulEditor', () => {
   it('builds a second save on the first while it is in flight', async () => {
     let finish: (value: BotHomeFileWrite) => void = () => {}
     const write = vi.fn(() => new Promise<BotHomeFileWrite>((resolve) => (finish = resolve)))
-    const { getByLabelText } = render(<BotSoulEditor file={file('a', write)} label="Soul" />)
+    const { getByLabelText } = render(
+      <BotSoulEditor file={file('a', write)} label="Soul" defaultMode="edit" />
+    )
     const editor = getByLabelText('Soul')
     fireEvent.change(editor, { target: { value: 'ab' } })
     fireEvent.blur(editor)
     fireEvent.change(editor, { target: { value: 'abc' } })
     fireEvent.blur(editor)
-    expect(write).toHaveBeenLastCalledWith('abc', 'ab')
+    expect(write.mock.calls).toEqual([
+      ['ab', 'a'],
+      ['abc', 'ab']
+    ])
     finish('saved')
   })
 
   it('saves a revert made while the edit it undoes is still saving', () => {
     const write = vi.fn(() => new Promise<BotHomeFileWrite>(() => {}))
-    const { getByLabelText } = render(<BotSoulEditor file={file('a', write)} label="Soul" />)
+    const { getByLabelText } = render(
+      <BotSoulEditor file={file('a', write)} label="Soul" defaultMode="edit" />
+    )
     const editor = getByLabelText('Soul')
     fireEvent.change(editor, { target: { value: 'ab' } })
     fireEvent.blur(editor)
@@ -85,7 +81,9 @@ describe('BotSoulEditor', () => {
 
   it('saves an unsaved edit when Settings closes without a blur', () => {
     const soul = file('old')
-    const { getByLabelText, unmount } = render(<BotSoulEditor file={soul} label="Soul" />)
+    const { getByLabelText, unmount } = render(
+      <BotSoulEditor file={soul} label="Soul" defaultMode="edit" />
+    )
     fireEvent.change(getByLabelText('Soul'), { target: { value: 'new' } })
     unmount()
     expect(soul.write).toHaveBeenCalledWith('new', 'old')
@@ -93,16 +91,16 @@ describe('BotSoulEditor', () => {
 
   it('does not write when nothing changed', () => {
     const soul = file('# Reviewer\n')
-    const { getByLabelText } = render(<BotSoulEditor file={soul} label="Soul" />)
+    const { getByLabelText } = render(<BotSoulEditor file={soul} label="Soul" defaultMode="edit" />)
     fireEvent.blur(getByLabelText('Soul'))
     expect(soul.write).not.toHaveBeenCalled()
   })
 
   it('follows the disk while there is no unsaved edit', () => {
     const { getByLabelText, rerender, queryByRole } = render(
-      <BotSoulEditor file={file('old')} label="Soul" />
+      <BotSoulEditor file={file('old')} label="Soul" defaultMode="edit" />
     )
-    rerender(<BotSoulEditor file={file('the bot wrote this')} label="Soul" />)
+    rerender(<BotSoulEditor file={file('the bot wrote this')} label="Soul" defaultMode="edit" />)
     expect(getByLabelText('Soul')).toHaveProperty('value', 'the bot wrote this')
     expect(queryByRole('alert')).toBeNull()
   })
@@ -110,10 +108,10 @@ describe('BotSoulEditor', () => {
   it('says so when the file changed under an unsaved edit, and keeps either side', async () => {
     const write = vi.fn(async (): Promise<BotHomeFileWrite> => 'saved')
     const { getByLabelText, getByRole, rerender, queryByRole } = render(
-      <BotSoulEditor file={file('old', write)} label="Soul" />
+      <BotSoulEditor file={file('old', write)} label="Soul" defaultMode="edit" />
     )
     fireEvent.change(getByLabelText('Soul'), { target: { value: 'mine' } })
-    rerender(<BotSoulEditor file={file('theirs', write)} label="Soul" />)
+    rerender(<BotSoulEditor file={file('theirs', write)} label="Soul" defaultMode="edit" />)
     expect(getByRole('alert').textContent).toContain('SOUL.md changed on disk.')
     // Blur must not overwrite the bot's change unasked.
     fireEvent.blur(getByLabelText('Soul'))
@@ -126,20 +124,34 @@ describe('BotSoulEditor', () => {
 
   it('takes the disk text on Use theirs', () => {
     const { getByLabelText, getByRole, rerender, queryByRole } = render(
-      <BotSoulEditor file={file('old')} label="Soul" />
+      <BotSoulEditor file={file('old')} label="Soul" defaultMode="edit" />
     )
     fireEvent.change(getByLabelText('Soul'), { target: { value: 'mine' } })
-    rerender(<BotSoulEditor file={file('theirs')} label="Soul" />)
+    rerender(<BotSoulEditor file={file('theirs')} label="Soul" defaultMode="edit" />)
     fireEvent.click(getByRole('button', { name: 'Use theirs' }))
     expect(getByLabelText('Soul')).toHaveProperty('value', 'theirs')
     expect(queryByRole('alert')).toBeNull()
+  })
+
+  it('opens non-empty SOUL.md in Read preview and switches to Edit on click', () => {
+    const content = '# Reviewer\nKeep answers concise.\n## Rules\n- Be brief.'
+    const { getByRole, getByText, queryByLabelText, getByLabelText } = render(
+      <BotSoulEditor file={file(content)} label="Soul" />
+    )
+    expect(getByRole('heading', { level: 1, name: 'Reviewer' })).toBeTruthy()
+    expect(getByText('Keep answers concise.')).toBeTruthy()
+    expect(getByRole('heading', { level: 2, name: 'Rules' })).toBeTruthy()
+    expect(getByText('Be brief.')).toBeTruthy()
+    expect(queryByLabelText('Soul')).toBeNull()
+    fireEvent.click(getByRole('tab', { name: 'Edit' }))
+    expect(getByLabelText('Soul')).toHaveProperty('value', content)
   })
 
   describe('leaving its settings page during a conflict', () => {
     function inView(guards: BotSettingsLeaveGuards, soul: BotHomeFile & { disk: string }) {
       return (
         <BotSettingsLeaveGuardContext.Provider value={guards}>
-          <BotSoulEditor file={soul} label="Soul" />
+          <BotSoulEditor file={soul} label="Soul" defaultMode="edit" />
         </BotSettingsLeaveGuardContext.Provider>
       )
     }

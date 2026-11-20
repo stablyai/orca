@@ -17,6 +17,7 @@ import {
 } from '@/components/native-chat/pane/routing/native-chat-layout-actions'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { NativeChatSplitDirection } from '@/components/native-chat/pane/routing/native-chat-pane-shortcut'
@@ -104,6 +105,7 @@ export function getActiveWorktreeSshStatus(
   state: RuntimeAwareSshStatusState &
     Pick<AppState, 'repos' | 'worktreesByRepo'> &
     Partial<Pick<AppState, 'activeWorkspaceExecutionHostId'>>,
+  statuses: RuntimeStatuses,
   activeWorktree: Worktree | null
 ): SshConnectionStatus | null {
   if (!activeWorktree) {
@@ -126,6 +128,7 @@ export function getActiveWorktreeSshStatus(
   // Why: a paired server owns its workspaces' SSH state, and unknown state must not hide the action.
   return selectRuntimeAwareSshStatus(
     state,
+    statuses,
     activeWorktree.runtimeOwnerEnvironmentId ?? null,
     connectionId
   )
@@ -178,6 +181,7 @@ export function getCurrentWorkspaceActionAvailability(
 
 export function buildCmdJQuickActionContext(args: {
   state: AppState
+  statuses: RuntimeStatuses
   activeGroupSnapshot: CmdJActiveGroupSnapshot | null
   openNewBrowserTab: (groupId: string, splitDirection?: TabSplitDirection) => Promise<void>
   openBrowserUrl: (groupId: string, url: string) => Promise<void>
@@ -221,7 +225,7 @@ export function buildCmdJQuickActionContext(args: {
     activeWorktreeId,
     activeWorktree,
     isLoading,
-    sshStatus: getActiveWorktreeSshStatus(args.state, activeWorktree),
+    sshStatus: getActiveWorktreeSshStatus(args.state, args.statuses, activeWorktree),
     runtimeMode,
     managedBrowserCreationEnabled,
     activeGroupId,

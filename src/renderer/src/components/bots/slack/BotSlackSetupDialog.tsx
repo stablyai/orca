@@ -12,12 +12,16 @@ import { isMac } from '@/app-shell/chrome/app-window-chrome'
 import { botSlackApps, type Bot } from '../../../../../shared/bot-types'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
-import { botSlackErrorMessage, slackHowToAsk, slackSetupIntro } from './bot-slack-copy'
-import { BotWhoCanAskInsetList } from '../BotWhoCanAskInsetList'
+import { botSlackErrorMessage } from './bot-slack-copy'
+import { ConnectorTryIt } from '../ConnectorTryIt'
 import { readBotSlack, slackTeamState } from '@/lib/bot-slack-state'
-import { BotSlackSection } from './BotSlackSection'
-import { useSlackWhoCanAsk } from './use-slack-who-can-ask'
-import { ConnectorSetupHeader, ConnectorWorkspacePicker } from '../connector-connect-parts'
+import { BotSlackPostAs } from './BotSlackPostAs'
+import {
+  ConnectorSetupHeader,
+  ConnectorWorkspacePicker,
+  connectorSetupFor
+} from '../connector-connect-parts'
+import { SlackOpenAppButton } from './SlackOpenAppButton'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
 import { SlackTeamName } from './SlackWorkspacesSettings'
 import { BotHostSignInButton } from '../BotHostSignInButton'
@@ -88,13 +92,14 @@ function BotSlackSetupFlow({
   const view = readBotSlack(bot)
   const installedState =
     installed && view.status === 'ready' ? slackTeamState(view.slack, step.teamId) : null
+  // Progressive disclosure: until installed, the header names only the bot; how to ask waits for Done.
   const header = (
     <ConnectorSetupHeader
       connector={SLACK}
       title={
         installed ? t('bots.slack.setup.isIn', '{{name}} is in Slack', { name: bot.name }) : title
       }
-      intro={installed ? slackHowToAsk(bot) : slackSetupIntro(bot, hostName)}
+      intro={installed ? '' : connectorSetupFor(bot, hostName)}
       line={
         installedState?.state === 'installed'
           ? t('bots.slack.connection.installedBy', 'installed by {{installer}}', {
@@ -150,7 +155,7 @@ function BotSlackSetupFlow({
             }))}
             another={
               <Button variant="ghost" onClick={pasteToken}>
-                {t('bots.slack.setup.another', 'Connect another Slack workspace')}
+                {t('bots.slack.setup.another', 'Connect another workspace')}
               </Button>
             }
           />
@@ -313,14 +318,19 @@ function BotSlackSetupFlow({
           </div>
         )
       case 'installed':
+        // Who can ask is edited later in the Slack connector's settings (BotSlackCard), not here.
+        // Post as stays: this install's link applies the pick at once, later it needs Slack's approval.
         return (
           <div className="space-y-4">
+            <ConnectorTryIt
+              heading={t('bots.slack.setup.tryIt', 'Try it in any channel or direct message')}
+              ways={[{ key: 'mention', shown: `@${bot.name}` }]}
+            />
             {installedState?.state === 'installed' ? (
-              <BotSlackSection bot={bot} slack={installedState} setupState={step.setupState} />
-            ) : (
-              <InstalledPeople bot={bot} teamId={step.teamId} />
-            )}
+              <BotSlackPostAs bot={bot} slack={installedState} setupState={step.setupState} />
+            ) : null}
             <DialogFooter>
+              <SlackOpenAppButton bot={bot} slack={installedState} onOpenedInOrca={onClose} />
               <Button autoFocus onClick={onClose}>
                 {t('bots.slack.setup.done', 'Done')}
               </Button>
@@ -356,11 +366,6 @@ function BotSlackSetupFlow({
   )
 }
 
-/** Once installed in a workspace, before its state is read: who there may ask the bot. */
-function InstalledPeople({ bot, teamId }: { bot: Bot; teamId: string }): React.JSX.Element {
-  return <BotWhoCanAskInsetList bot={bot} service={useSlackWhoCanAsk(bot, teamId)} />
-}
-
 /** "Add connector → Slack" for one bot: the first bot in a workspace pastes a token, later ones are one click. */
 export function BotSlackSetupDialog({
   bot,
@@ -384,13 +389,9 @@ export function BotSlackSetupDialog({
     return () => forgetOpenedSlackPages(bot)
   }, [open, bot])
   const title =
-    teamId !== undefined
-      ? t('bots.slack.setup.titleOn', 'Set up {{name}} in Slack', { name: bot.name })
-      : botSlackApps(bot).length > 0
-        ? t('bots.slack.setup.titleAnother', 'Add {{name}} to another Slack workspace', {
-            name: bot.name
-          })
-        : t('bots.slack.setup.title', 'Add {{name}} to Slack', { name: bot.name })
+    teamId === undefined && botSlackApps(bot).length > 0
+      ? t('bots.slack.setup.connectAnother', 'Connect another Slack workspace')
+      : t('bots.slack.setup.connect', 'Connect Slack')
   // Away while Slack's page is in Orca's browser; the flow says when to come back.
   const aside = useSetupStepAside()
   return (

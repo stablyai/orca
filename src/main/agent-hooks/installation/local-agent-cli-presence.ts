@@ -16,6 +16,7 @@ import {
   TUI_AGENT_CONFIG
 } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
+import { normalizePathEntry } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   hydrateShellPath,
   mergePathSegments
@@ -82,8 +83,15 @@ async function isExecutableFile(filePath: string, platform: NodeJS.Platform): Pr
   }
 }
 
-function pathEntries(pathEnv: string, delimiter: string): string[] {
-  return [...new Set(pathEnv.split(delimiter).filter(Boolean))]
+function pathEntries(pathEnv: string, delimiter: string, platform: NodeJS.Platform): string[] {
+  return [
+    ...new Set(
+      pathEnv
+        .split(delimiter)
+        .map((entry) => normalizePathEntry(platform, entry))
+        .filter(Boolean)
+    )
+  ]
 }
 
 function windowsPathExts(value: string | undefined): string[] {
@@ -204,7 +212,7 @@ export async function detectLocalManagedAgentCliPresence<K extends string = Agen
   const platform = options.platform ?? process.platform
   const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
   const guestMounts = options.guestWindowsDriveMounts ?? readGuestWindowsDriveMounts()
-  const dirs = pathEntries(await resolveSearchPath(options, platform), delimiter).filter(
+  const dirs = pathEntries(await resolveSearchPath(options, platform), delimiter, platform).filter(
     (dir) => !isUnderWindowsDriveMount(dir, guestMounts)
   )
   const homeDir = options.homeDir ?? homedir()

@@ -1,4 +1,6 @@
 import { stringifyRouteHref } from '../../navigation/route-href'
+import { parseMobileSessionItemTarget } from '../../session/mobile-session-item-target'
+import { nextPaneIntent, SESSION_PANE_INTENT_PARAM } from '../../session/session-pane-intent'
 
 export type NativeStackState = Readonly<{
   key?: string
@@ -143,7 +145,12 @@ export function nativeStackReturn(
     : null
 }
 
-export type NativeSessionReturn = NativeStackReturn & Readonly<{ routeKey: string }>
+/** The entry to return to, and the pane request it takes: the pane, and the bot item or none. */
+export type NativeSessionReturn = NativeStackReturn &
+  Readonly<{
+    routeKey: string
+    params: { paneKey: string; botItem: string | undefined; paneIntent: string }
+  }>
 
 const SESSION_HREF = /^\/h\/[^/?#]+\/session\/[^/?#]+(?:[?#]|$)/
 
@@ -152,9 +159,14 @@ export function nativeSessionReturn(
   state: NativeStackState,
   href: string
 ): NativeSessionReturn | null {
-  if (!SESSION_HREF.test(href)) {
+  const paneKey = hrefQuery(href).get('paneKey')
+  if (!paneKey || !SESSION_HREF.test(href)) {
     return null
   }
+  // A newer request without a valid item clears any earlier one the entry still holds.
+  const botItem = hrefQuery(href).get('botItem') ?? undefined
+  // A page's own pane href is a new request even when it names no intent.
+  const paneIntent = hrefQuery(href).get(SESSION_PANE_INTENT_PARAM) ?? nextPaneIntent()
   const wanted = sessionKey(hrefParts(href))
   const match = matchWithin(
     state,
@@ -168,6 +180,11 @@ export function nativeSessionReturn(
     target: match.target,
     source: match.source,
     count: match.count,
-    routeKey: match.routeKey
+    routeKey: match.routeKey,
+    params: {
+      paneKey,
+      botItem: parseMobileSessionItemTarget(botItem) ? botItem : undefined,
+      paneIntent
+    }
   }
 }

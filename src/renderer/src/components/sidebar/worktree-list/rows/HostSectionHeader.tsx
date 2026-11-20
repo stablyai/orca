@@ -143,7 +143,7 @@ export function HostSectionHeader({
         <div className="flex min-w-0 flex-1 items-center gap-1.5">
           <span
             className={cn(
-              'min-w-0 truncate text-[12px] font-semibold leading-none',
+              'min-w-0 truncate text-[12px] font-semibold leading-4',
               isDisconnected || isSuspended ? 'text-muted-foreground' : 'text-foreground'
             )}
           >
@@ -152,7 +152,7 @@ export function HostSectionHeader({
           {detail ? (
             <span
               className={cn(
-                'shrink-0 truncate text-[10px] leading-none',
+                'shrink-0 truncate text-[10px] leading-3.5',
                 detail.isWarning ? 'text-destructive' : 'text-muted-foreground/70'
               )}
             >

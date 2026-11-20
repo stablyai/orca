@@ -51,13 +51,18 @@ describe('BotWorkStore', () => {
     expect(store.live('bot-1', THREAD)?.rowId).toBe(second.rowId)
   })
 
-  it('replaces a live row in one step, and leaves it live when the swap loses', () => {
+  it('replaces the current row without closing it, and refuses a stale replacement', () => {
     const store = BotWorkStore.open(':memory:')
     const first = store.bind(bind())!
     const next = store.replace(first, bind({ dispatchId: 'dispatch-2' }))
     expect(next?.generation).toBe(2)
     expect(store.replace(first, bind({ dispatchId: 'dispatch-3' }))).toBeNull()
-    expect(store.live('bot-1', THREAD)?.dispatchId).toBe('dispatch-2')
+    expect(store.addressRows('bot-1', THREAD).map((row) => [row.dispatchId, row.current])).toEqual([
+      ['dispatch-2', true],
+      ['dispatch-1', false]
+    ])
+    expect(store.isOpen(first)).toBe(true)
+    expect(store.live('bot-1', THREAD)?.rowId).toBe(next?.rowId)
   })
 
   it('leaves the old row live when Orca dies between the close and the new row', () => {
@@ -68,18 +73,6 @@ describe('BotWorkStore', () => {
     }
     expect(() => store.replace(first, bind({ dispatchId: 'dispatch-2' }))).toThrow('killed')
     expect(store.live('bot-1', THREAD)?.rowId).toBe(first.rowId)
-  })
-
-  it('keeps a replaced row live beside the current one', () => {
-    const store = BotWorkStore.open(':memory:')
-    const first = store.bind(bind())!
-    const second = store.replace(first, bind({ dispatchId: 'dispatch-2' }))!
-    expect(store.addressRows('bot-1', THREAD).map((row) => [row.dispatchId, row.current])).toEqual([
-      ['dispatch-2', true],
-      ['dispatch-1', false]
-    ])
-    expect(store.isOpen(first)).toBe(true)
-    expect(store.live('bot-1', THREAD)?.rowId).toBe(second.rowId)
   })
 
   it('keeps rows across a reopen of the file', () => {

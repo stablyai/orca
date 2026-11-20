@@ -3,12 +3,6 @@ import { colors, feedback, spacing } from '../theme/mobile-theme'
 
 // Only what the option rows lack; rows, groups and labels are in mobile-bot-option-styles.
 export const sheetStyles = themedStyleSheet(() => ({
-  heading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flexShrink: 1
-  },
   textButton: {
     minHeight: 32,
     justifyContent: 'center',

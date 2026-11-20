@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { BotGroupMessage } from '../../shared/bots/bot-group'
 import type { StructuredMailboxPointerHost } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
-import { fixture } from './bot-group-native-runtime.test-fixture'
+import { fixture, groupNativeMocks } from './bot-group-native-runtime.test-fixture'
+import { BOT_GROUP_MAIL_NEVER_STARTED } from './bot-group-dead-mail-turns'
 
 /** Two members, a peer request mailed from Scout to Forge for each human post given. */
 async function room(posts: number) {
@@ -74,34 +75,16 @@ describe('group mail roots', () => {
       'peer-0'
     ])
     groups.reserveMailTurn(notice('first', ['peer-0']))
-    expect(groups.store.message('mail:first')?.rootRequestId).toBe(roots[0].id)
+    expect(groups.store.operationMessage('first')?.rootRequestId).toBe(roots[0].id)
     expect(ids(groups.narrowMailBatch(target.sessionId, [row('peer-1')]))).toEqual(['peer-1'])
     groups.reserveMailTurn(notice('second', ['peer-1']))
-    expect(groups.store.message('mail:second')?.rootRequestId).toBe(roots[1].id)
+    expect(groups.store.operationMessage('second')?.rootRequestId).toBe(roots[1].id)
     expect(() => groups.reserveMailTurn(notice('mixed', ['peer-0', 'peer-1']))).toThrow(
       /outside the active group/
     )
   })
 
-  it('retires a stopped root and still offers the live one beside it', async () => {
-    const { groups, group, target, row, peer, notice } = await room(1)
-    await groups.stop(group.id)
-    const live = await groups.send({
-      groupId: group.id,
-      revision: groups.store.get(group.id).revision,
-      messageId: randomUUID(),
-      text: '@Scout after the stop'
-    })
-    peer('peer-live', live)
-    expect(groups.narrowMailBatch(target.sessionId, [row('peer-0'), row('peer-live')])).toEqual({
-      messages: [row('peer-live')],
-      ended: ['peer-0']
-    })
-    groups.reserveMailTurn(notice('live', ['peer-live']))
-    expect(groups.store.message('mail:live')?.rootRequestId).toBe(live.id)
-  })
-
-  it('reaches live mail behind a full page of stopped-root mail', async () => {
+  it('retires a full page of stopped mail and reserves the live root behind it', async () => {
     const { groups, group, target, row, peer, roots } = await room(1)
     for (let index = 0; index < 50; index += 1) {
       peer(`stopped-${index}`, roots[0])
@@ -176,11 +159,82 @@ describe('group mail roots', () => {
     })
     delivery.deliverForHandle('mailbox')
     await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
-    const sent = send.mock.calls[0][0].body.from?.orchestration
+    const input = send.mock.calls[0][0]
+    const sent = input.body.from?.orchestration
     expect(sent?.message === 'mail-notice' && sent.messages.map((mail) => mail.messageId)).toEqual([
       'mail-51'
     ])
-    expect(delivered.size).toBe(51)
+    expect(delivered).toEqual(new Set(inbox.map((mail) => mail.id)))
+    groups.reserveMailTurn(input)
+    expect(groups.store.operationMessage(input.operationId)?.rootRequestId).toBe(live.id)
+  })
+
+  it('keeps one mail line on the attempt that runs when the lane retries under a new id', async () => {
+    const { groups, group, notice } = await room(1)
+    groups.reserveMailTurn(notice('refused', ['peer-0']))
+    // The host refused that id, which would only replay its refusal: the lane mints another.
+    groups.reserveMailTurn(notice('retried', ['peer-0']))
+    const lines = groups.store.messages(group.id).filter((message) => message.turns[0]?.mailbox)
+    expect(lines.map((line) => line.turns.map((turn) => turn.operationId))).toEqual([['retried']])
+    expect(groups.store.operationMessage('retried')?.id).toBe(lines[0].id)
+  })
+
+  it('settles a mail turn nothing holds or owes any more, and leaves the others alone', async () => {
+    const { groups, group, notice, heldSends, mails } = await room(4)
+    const { sendAnswer } = groupNativeMocks()
+    groups.reserveMailTurn(notice('dead', ['peer-0']))
+    groups.reserveMailTurn(notice('in-lane', ['peer-1']))
+    groups.reserveMailTurn(notice('queued', ['peer-2']))
+    groups.reserveMailTurn(notice('parked', ['peer-3']))
+    heldSends.add('in-lane')
+    // Refused and parked for the chat's next edge: its mail is still unread, so still owed.
+    mails.set('peer-3', { ...mails.get('peer-3')!, read: 0 })
+    sendAnswer.mockImplementation(async (_sessionId: string, operationId: string) => ({
+      kind: operationId === 'queued' ? 'waiting' : 'refused'
+    }))
+    const error = (operationId: string) =>
+      groups.store.operationMessage(operationId)?.turns[0]?.error
+    groups.read(group.id)
+    await vi.waitFor(() => expect(error('dead')).toBe(BOT_GROUP_MAIL_NEVER_STARTED))
+    for (const operationId of ['in-lane', 'parked']) {
+      expect(sendAnswer).not.toHaveBeenCalledWith(expect.anything(), operationId)
+      expect(error(operationId)).toBeUndefined()
+    }
+    expect(error('queued')).toBeUndefined()
+    // The mail's next attempt takes the same line back from its settled state.
+    const dead = groups.store.operationMessage('dead')!
+    groups.reserveMailTurn(notice('next', ['peer-0']))
+    const next = groups.store.operationMessage('next')
+    expect(next?.id).toBe(dead.id)
+    expect(next?.turns[0]).not.toHaveProperty('error')
+  })
+
+  it('gives mail back after its turn ran a line of its own, which then follows retries', async () => {
+    const { groups, notice } = await room(1)
+    groups.reserveMailTurn(notice('ran', ['peer-0']))
+    const ran = groups.store.operationMessage('ran')!
+    groups.store.update({ ...ran, turns: ran.turns.map((turn) => ({ ...turn, reply: 'done' })) })
+    groups.reserveMailTurn(notice('again', ['peer-0']))
+    groups.reserveMailTurn(notice('again-retried', ['peer-0']))
+    expect(groups.store.operationMessage('ran')?.turns[0]?.operationId).toBe('ran')
+    const again = groups.store.operationMessage('again-retried')
+    expect(again?.id).not.toBe(ran.id)
+    expect(again?.turns.map((turn) => turn.operationId)).toEqual(['again-retried'])
+  })
+
+  it('takes a resend of a line saved under its operation id without a second line', async () => {
+    const { groups, group, notice } = await room(2)
+    groups.reserveMailTurn(notice('template', ['peer-1']))
+    const { sequence: _sequence, ...template } = groups.store.operationMessage('template')!
+    // As builds before lines were keyed by mail saved one: `mail:<operation id>`.
+    groups.store.append({
+      ...template,
+      id: 'mail:legacy',
+      turns: template.turns.map((turn) => ({ ...turn, operationId: 'legacy' }))
+    })
+    expect(() => groups.reserveMailTurn(notice('legacy', ['peer-0']))).not.toThrow()
+    const lines = groups.store.messages(group.id).filter((message) => message.turns[0]?.mailbox)
+    expect(lines.map((line) => line.id)).toEqual([template.id, 'mail:legacy'])
   })
 
   it('holds a worker report that arrives before its worker is recorded', async () => {

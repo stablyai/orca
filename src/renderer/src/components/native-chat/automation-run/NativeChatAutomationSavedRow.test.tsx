@@ -69,7 +69,8 @@ const hostAnswer = (_target: unknown, method: string) =>
 
 const OWNER = { target: { kind: 'local' }, sessionId: 's1', worktreeId: 'folder:fw-1' } as const
 
-const renderInChat = (saved: Saved) =>
+// The URL is in the opened row.
+const renderInChat = (saved: Saved) => {
   render(
     <TooltipProvider>
       <NativeChatVisualOwnerContext.Provider value={OWNER}>
@@ -77,6 +78,8 @@ const renderInChat = (saved: Saved) =>
       </NativeChatVisualOwnerContext.Provider>
     </TooltipProvider>
   )
+  fireEvent.click(screen.getByRole('button', { expanded: false }))
+}
 
 const HOOKED: Saved = {
   change: 'created',
@@ -90,15 +93,21 @@ const HOOKED: Saved = {
 
 describe('NativeChatAutomationSavedRow', () => {
   // The URL carries the hook's key, so it's read on click and never kept in the transcript.
-  it("copies a saved edit's webhook URL, read from its host on click", async () => {
-    hookState = 'live'
+  it("enables Copy URL when a saved edit's hook goes live and only reveals it on click", async () => {
+    hookState = 'pending'
     renderInChat({ ...HOOKED, change: 'updated' })
+    expect(await screen.findByRole('button', { name: 'Getting the URL…' })).toBeDisabled()
+
+    hookState = 'live'
+    notifyWebhooksChanged()
+    const copy = await screen.findByRole('button', { name: 'Copy URL' })
+    expect(copy).toBeEnabled()
     expect(callWebhookHost).not.toHaveBeenCalledWith(
       expect.anything(),
       'webhooks.reveal',
       expect.anything()
     )
-    fireEvent.click(await screen.findByRole('button', { name: 'Copy URL' }))
+    fireEvent.click(copy)
     await vi.waitFor(() =>
       expect(copyWebhookSecret).toHaveBeenCalledWith(
         'https://hooks.test/hooks/wh_7Kx2pQ9mZbV4tL1r/k',
@@ -108,17 +117,6 @@ describe('NativeChatAutomationSavedRow', () => {
     expect(callWebhookHost).toHaveBeenCalledWith({ kind: 'local' }, 'webhooks.reveal', {
       hookId: 'wh_7Kx2pQ9mZbV4tL1r'
     })
-  })
-
-  // No bot step: the shared hook read polls, and the button fills in once Orca Cloud takes the hook.
-  it("says it's getting the URL until the hook is live, then offers Copy URL", async () => {
-    hookState = 'pending'
-    renderInChat(HOOKED)
-    const waiting = await screen.findByRole('button', { name: 'Getting the URL…' })
-    expect(waiting).toBeDisabled()
-    hookState = 'live'
-    notifyWebhooksChanged()
-    expect(await screen.findByRole('button', { name: 'Copy URL' })).toBeEnabled()
   })
 })
 

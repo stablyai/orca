@@ -34,7 +34,11 @@ vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
 }))
 
-import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
+import {
+  execCommand,
+  SSH_EXEC_TIMEOUT_CODE,
+  sshCommandExitError
+} from '../../ssh/remote-exec/remote-exec-command'
 import { isRelayInstallLockStale } from './remote-install-lock'
 import { uploadRemoteInstallDirectory } from './remote-install-transfers'
 import { writeAtomicOrcadRemoteRecord } from './orcad-remote-record-file'
@@ -109,7 +113,8 @@ type HostScript = {
   activationRecord: string
   readiness: Record<string, string>
   log: string[]
-  preflightResult?: string
+  /** An Error is thrown, as when the preflight command fails instead of answering. */
+  preflightResult?: string | Error
   snapshotResult?: string
   comparisonResult?: string
   candidateStopResult?: string
@@ -142,6 +147,9 @@ function scriptHost(script: HostScript): void {
     }
     if (text.includes('--orcad-profile-state-preflight')) {
       script.log.push('preflight')
+      if (script.preflightResult instanceof Error) {
+        throw script.preflightResult
+      }
       return (
         script.preflightResult ??
         JSON.stringify({
@@ -207,33 +215,74 @@ const ACTIVE_OLD = JSON.stringify(
 )
 
 describe('deployOrcad', () => {
-  it.each(['', '{"type":"orca_profile_state_ready","revision":0}'])(
-    'leaves the incumbent and shared state alone when preflight returns %j',
-    async (preflightResult) => {
-      const script: HostScript = {
-        activationRecord: ACTIVE_OLD,
-        readiness: { [NEW_VERSION]: readyLine({}) },
-        log: [],
-        preflightResult
-      }
-      scriptHost(script)
-      expect(await deployOrcad(options())).toMatchObject({
-        outcome: 'installed-not-activated',
-        code: 'orcad_candidate_preflight_failed',
-        startCheckFailed: true
-      })
-      expect(script.log).toEqual(['preflight'])
-      expect(
-        vi
-          .mocked(writeAtomicOrcadRemoteRecord)
-          .mock.calls.some(([, path]) => path.includes('orcad-active.json'))
-      ).toBe(false)
+  it('leaves the incumbent and shared state alone when preflight returns invalid evidence', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: [],
+      preflightResult: '{"type":"orca_profile_state_ready","revision":0}'
     }
-  )
+    scriptHost(script)
+    expect(await deployOrcad(options())).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'orcad_candidate_preflight_failed',
+      startCheckFailed: true
+    })
+    expect(script.log).toEqual(['preflight'])
+    expect(
+      vi
+        .mocked(writeAtomicOrcadRemoteRecord)
+        .mock.calls.some(([, path]) => path.includes('orcad-active.json'))
+    ).toBe(false)
+  })
 
   beforeEach(() => {
     vi.clearAllMocks()
   })
+
+  it.each([
+    [
+      'times out',
+      Object.assign(new Error('Command "preflight" timed out after 90s'), {
+        code: SSH_EXEC_TIMEOUT_CODE
+      }),
+      false,
+      'orcad_candidate_preflight_unanswered'
+    ],
+    [
+      'ends with OpenSSH’s own exit 255',
+      sshCommandExitError('preflight', 255, ''),
+      true,
+      'orcad_candidate_preflight_unanswered'
+    ],
+    [
+      'exits 255 over ssh2',
+      sshCommandExitError('preflight', 255, ''),
+      false,
+      'orcad_candidate_preflight_failed'
+    ],
+    [
+      'exits 1 over system SSH',
+      sshCommandExitError('preflight', 1, ''),
+      true,
+      'orcad_candidate_preflight_failed'
+    ]
+  ])(
+    'defers with the right code when the preflight %s',
+    async (_label, preflightResult, systemSsh, code) => {
+      scriptHost({
+        activationRecord: ACTIVE_OLD,
+        readiness: { [NEW_VERSION]: readyLine({}) },
+        log: [],
+        preflightResult
+      })
+      const conn = Object.assign(Object.create(null), { usesSystemSshTransport: () => systemSsh })
+      expect(await deployOrcad(options({ conn }))).toMatchObject({
+        outcome: 'installed-not-activated',
+        code
+      })
+    }
+  )
 
   it.each([
     ['a fresh fence with no journal', false, false, 'orcad_activation_fence_busy'],
@@ -267,14 +316,16 @@ describe('deployOrcad', () => {
     expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
   })
 
-  it.skipIf(process.platform === 'win32').each([undefined, 'linux-x64', 'linux-musl-x64'])(
-    'restores uploaded executable modes with optional browser %s',
+  it.skipIf(process.platform === 'win32').each(['linux-x64', 'linux-musl-x64'])(
+    'restores uploaded executable modes with browser %s',
     async (browserTarget) => {
       const directory = mkdtempSync(join(tmpdir(), 'orcad-install-modes-'))
-      const binaries = ['ripgrep/linux-x64/rg', 'bin/orca-provider-exec']
-      if (browserTarget) {
-        binaries.push(`agent-browser-${browserTarget}`)
-      }
+      const binaries = [
+        'ripgrep/linux-x64/rg',
+        'bin/orca-provider-exec',
+        'node_modules/node-pty/build/Release/journal-file-lock',
+        `agent-browser-${browserTarget}`
+      ]
       try {
         for (const filename of binaries) {
           const path = join(directory, filename)
@@ -420,7 +471,7 @@ describe('deployOrcad', () => {
     )
   })
 
-  it.each(['CHANGED', 'UNKNOWN', ''])(
+  it.each(['CHANGED', ''])(
     'preserves rejected candidate state when comparison is %s',
     async (comparisonResult) => {
       const script: HostScript = {

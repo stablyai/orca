@@ -78,7 +78,7 @@ export function NativeChatResumeInCliButton({
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
   const label = t(
     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-    'Continue with Terminal Agent'
+    'Continue in terminal'
   )
   if (!executionHostScope || !agent) {
     return null

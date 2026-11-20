@@ -21,6 +21,7 @@ import { botItemGroupName } from '../../../../src/shared/bots/bot-item-status-na
 import {
   MobileLoadErrorState,
   MobileNoMatchState,
+  MobileOfflineState,
   MobileStateView
 } from '../../components/feedback/MobileStateView'
 import { FilterChip } from '../../components/nav-bar/FilterChip'
@@ -37,6 +38,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { MobileBotItemRow } from './MobileBotItemRow'
 import { MobileBotNeedsYouGroup } from './MobileBotNeedsYouGroup'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { openPhoneAsk, type PhoneAsk, type PhoneAskOpeners } from './phone-needs-you-asks'
 import type { BotItemSheet } from './MobileBotItemSheets'
 import type { PhoneBotItems } from './use-phone-bot-items'
@@ -51,13 +53,16 @@ export function MobileBotItemsTab({
   seenEventId,
   now,
   online,
+  hostName,
   selected,
   onSelected,
   onOpen,
   setSheet,
   after,
   asks,
-  askOpeners
+  askOpeners,
+  client,
+  showToast
 }: {
   botName: string
   items: PhoneBotItems
@@ -70,6 +75,7 @@ export function MobileBotItemsTab({
   seenEventId: string
   now: number
   online: boolean
+  hostName: string
   /** Checked rows; empty when not selecting. */
   selected: ReadonlySet<string>
   onSelected: (next: ReadonlySet<string>) => void
@@ -80,10 +86,13 @@ export function MobileBotItemsTab({
   /** Orca's asks the phone reads, as the filter keeps them; they lead Needs you whatever the items say. */
   asks: readonly PhoneAsk[]
   askOpeners: PhoneAskOpeners
+  client: RpcClient | null
+  showToast: (message: string) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { read } = items
+  const failed = items.error !== null
   const all = useMemo(() => mergeBotItemsByUid(read?.items ?? [], items.items), [read, items.items])
   const shown = useMemo(() => filterBotItems(all, filter), [all, filter])
   const groups = useMemo(
@@ -110,6 +119,8 @@ export function MobileBotItemsTab({
       disabled={!online}
       renderItem={() => null}
       onOpenAsk={(ask) => openPhoneAsk(ask, askOpeners)}
+      client={client}
+      onSkipFailed={showToast}
     />
   )
   if (!read) {
@@ -117,9 +128,11 @@ export function MobileBotItemsTab({
       <>
         {chip}
         {asksOnly}
-        {items.failed ? (
+        {!online ? (
+          <MobileOfflineState hostName={hostName} />
+        ) : failed ? (
           <MobileLoadErrorState
-            error={null}
+            error={items.error}
             title={t('bots.items.readFailedTitle', 'Couldn’t load items')}
             onRetry={items.retry}
           />
@@ -179,7 +192,7 @@ export function MobileBotItemsTab({
       />
     )
   } else {
-    const disabled = items.failed || !online
+    const disabled = failed || !online
     const row = (item: BotItem, id: BotItemGroupId) => (
       <MobileBotItemRow
         key={item.uid}
@@ -203,6 +216,8 @@ export function MobileBotItemsTab({
           disabled={disabled}
           renderItem={(item) => row(item, id)}
           onOpenAsk={(ask) => openPhoneAsk(ask, askOpeners)}
+          client={client}
+          onSkipFailed={showToast}
         />
       ) : (
         <ItemGroup
@@ -214,7 +229,7 @@ export function MobileBotItemsTab({
           seenEventId={seenEventId}
           renderItem={(item) => row(item, id)}
           onCancelAll={
-            id === 'stale' && groups.stale.length > 0 && !items.failed && online
+            id === 'stale' && groups.stale.length > 0 && !failed && online
               ? () => setSheet({ kind: 'stale', items: groups.stale, reason: staleReason })
               : null
           }
@@ -225,8 +240,8 @@ export function MobileBotItemsTab({
   return (
     <>
       {chip}
-      {items.failed ? <ReadFailed onRetry={items.retry} /> : null}
-      <View style={items.failed ? styles.dimmed : undefined}>{body}</View>
+      {failed ? <ReadFailed onRetry={items.retry} /> : null}
+      <View style={failed ? styles.dimmed : undefined}>{body}</View>
       {after}
     </>
   )

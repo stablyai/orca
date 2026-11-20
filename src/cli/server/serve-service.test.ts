@@ -1,7 +1,7 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installServeService, uninstallServeService, type ServeServiceDeps } from './serve-service'
 import { resolveServiceCommand } from '../runtime/app-launch/serve-app-launcher'
@@ -30,7 +30,7 @@ describe('orca serve service', () => {
   const deps = (platform: NodeJS.Platform): ServeServiceDeps => ({
     platform,
     env: {
-      PATH: `/nonexistent:${bin}`,
+      PATH: ['/nonexistent', bin].join(delimiter),
       ORCA_USER_DATA_PATH: join(home, 'profile'),
       ELECTRON_RUN_AS_NODE: '1'
     },
@@ -76,7 +76,7 @@ describe('orca serve service', () => {
     expect(
       resolveServiceCommand(null, {
         platform: 'darwin',
-        env: { PATH: `${scoped}:${bin}`, ORCA_USER_DATA_PATH: join(home, 'profile') }
+        env: { PATH: [scoped, bin].join(delimiter), ORCA_USER_DATA_PATH: join(home, 'profile') }
       })
     ).toBe(join(bin, 'orca'))
     // Linux takes only orca-ide, never a bare `orca` (often the screen reader).

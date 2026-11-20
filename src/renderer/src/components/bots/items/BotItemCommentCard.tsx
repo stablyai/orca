@@ -1,7 +1,7 @@
-// A comment in an item's Activity: a card with its author's avatar, name and time, and the text as
-// Markdown. The bot's open question stays outlined with Waiting on you until it is answered.
-import { useContext } from 'react'
-import { Check, CornerDownRight } from 'lucide-react'
+// A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, then
+// the text as Markdown, its images and its file links. An agent's Needs you question is a comment too:
+// its body and attachments, then its question footer (BotItemQuestionLines). A reply to a question quotes it, and leads back to it.
+import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { cn } from '@/lib/class-names'
@@ -11,18 +11,18 @@ import {
   type BotItem,
   type BotItemEvent
 } from '../../../../../shared/bots/bot-items'
-import { NativeChatMarkdownImageOwnerContext } from '../../native-chat/media/images/native-chat-markdown-image-owner'
-import { NativeChatTextAttachments } from '../../native-chat/media/text/NativeChatTextAttachments'
+import { botItemCommentFiles } from '../../../../../shared/bots/bot-item-comment-files'
 import { BotItemCommentImages } from './BotItemCommentImages'
+import { BotItemCommentFiles } from './BotItemCommentFiles'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { botInitial } from '../../../../../shared/bots/bot-avatar-fallback'
 import { BotAvatar, BotAvatarTile } from '../BotAvatar'
 import { BotOwnerAvatar } from '../bot-connector-people'
 import { BotItemClampedText } from './BotItemClampedText'
-import { BotItemMarkdown } from './BotItemMarkdown'
-import { BotItemStatusIcon } from './BotItemStatusIcon'
-import type { BotItemQuestionState } from '../../../../../shared/bots/bot-item-activity'
+import type { BotItemActivityEntry } from '../../../../../shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
+import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
+import { BotItemQuestionLines, type BotItemQuickReplyActions } from './BotItemQuestionLines'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 
@@ -51,96 +51,125 @@ function Avatar({
   )
 }
 
+type CommentEntry = Pick<
+  Extract<BotItemActivityEntry, { kind: 'comment' }>,
+  'event' | 'replyTo' | 'answers'
+> & { waiting?: boolean }
+
+/** Marks a card so a jump can find and focus it. */
+export const BOT_ITEM_COMMENT_ATTRIBUTE = 'data-bot-item-comment-id'
+
 export function BotItemCommentCard({
   bot,
   item,
-  event,
-  question,
-  onReply
+  entry,
+  onJump,
+  failed,
+  quickReplies
 }: {
   bot: Bot
   item: BotItem
-  event: BotItemEvent
-  question: BotItemQuestionState | null
-  onReply: () => void
+  entry: CommentEntry
+  /** Scrolls to and focuses another comment, by its event id. */
+  onJump?: (eventId: string) => void
+  /** A comment sent from the box that the host refused. */
+  failed?: { retry: () => void; discard: () => void }
+  /** On the question the item waits on, until the owner replies. */
+  quickReplies?: BotItemQuickReplyActions
 }): React.JSX.Element {
   const t = useTranslate()
-  const runtimeContext = useContext(NativeChatMarkdownImageOwnerContext)?.runtimeContext ?? null
-  const mine = event.actor.kind === 'owner'
+  const { event, replyTo } = entry
+  const waiting = entry.waiting === true
   const images = botItemCommentImages(event.data)
-  // Its images show above the words, so the [Image #N] its send wrote go, as in chat's sent messages.
-  const text = stripSentImagePromptMarkers(
-    typeof event.data.text === 'string' ? event.data.text : '',
-    images.length
-  )
+  const shape = botItemQuestionShape(event.data)
+  // Its images show after the words, so the [Image #N] its send wrote go, as in chat's sent messages.
+  // Its files show as links after them, so their `@path`s go from the words.
+  const { words } = botItemCommentFiles(stripSentImagePromptMarkers(shape.body, images.length))
+  const { files } = botItemCommentFiles(typeof event.data.text === 'string' ? event.data.text : '')
   const name = botItemActorName(event, item, t)
-  const time = (
-    <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
-      {uiDateTimeFormat(TIME).format(event.at)}
-    </span>
-  )
+  const format = uiDateTimeFormat(TIME)
+  const jump =
+    'rounded-sm outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring/50'
   return (
-    // Opaque under the card's tint so the Activity rail never shows through.
-    <div className="relative my-2 rounded-[10px] bg-sidebar">
+    // Opaque under the surface's tint so the Activity rail never shows through. It bleeds past the
+    // column so the avatar and time sit on the event rows' glyph and time edges.
+    <div className="relative -mx-2 my-1 rounded-[10px] bg-sidebar">
       <div
-        data-bot-item-comment={mine ? 'mine' : 'bot'}
+        {...{ [BOT_ITEM_COMMENT_ATTRIBUTE]: event.id }}
+        tabIndex={-1}
+        role="article"
+        aria-label={t('bots.items.activity.commentLabel', '{{name}}, {{time}}', {
+          name,
+          time: format.format(event.at)
+        })}
         className={cn(
-          'rounded-[10px] border px-3 pb-2.5 pt-2',
-          mine ? 'border-chat-user-border bg-chat-user-surface' : 'border-border bg-foreground/3',
-          question === 'open' && 'border-foreground/25'
+          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]',
+          // A question's chips end the card: more room under them.
+          shape.decisions.length > 0 ? 'pb-3.5' : 'pb-2'
         )}
       >
-        {question === 'open' ? (
-          <div className="mb-2 flex items-center gap-2 border-b border-border pb-2">
-            <span className="flex items-center gap-1.5 text-2xs font-medium text-foreground">
-              <BotItemStatusIcon status="needs_you" />
-              {t('bots.items.activity.waitingOnYou', 'Waiting on you')}
-            </span>
-            <button
-              type="button"
-              className="ml-auto flex items-center gap-1 text-xs font-medium text-foreground hover:underline"
-              onClick={onReply}
-            >
-              <CornerDownRight className="size-3" />
-              {t('bots.items.activity.reply', 'Reply')}
-            </button>
-          </div>
-        ) : null}
-        <div className="mb-1.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        <div className="mb-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <Avatar bot={bot} event={event} name={name} />
           <b className="shrink-0 text-[13px] font-medium text-foreground">{name}</b>
-          {question ? (
-            <span className="min-w-0 truncate">
-              {question === 'open'
-                ? t('bots.items.activity.asksYou', 'asks you')
-                : t('bots.items.activity.askedYou', 'asked you')}
-            </span>
-          ) : null}
-          <span className="ml-auto flex shrink-0 items-center gap-2">
-            {question === 'answered' ? (
-              <span className="flex items-center gap-1 text-2xs">
-                <Check className="size-3" />
-                {t('bots.items.activity.answered', 'Answered')}
-              </span>
-            ) : null}
-            {time}
-          </span>
+          <span className="ml-auto shrink-0 text-2xs tabular-nums">{format.format(event.at)}</span>
         </div>
-        <BotItemCommentImages images={images} />
-        {/* Files keep their `@path` in the text, with chat's opener for text-like ones. */}
-        <NativeChatTextAttachments
-          content={text}
-          structured
-          runtimeContext={runtimeContext}
-          renderText={(shown) =>
-            !shown.trim() ? null : question === 'open' ? (
-              <BotItemMarkdown text={shown} />
-            ) : (
-              // 12 lines of 19 px.
-              <BotItemClampedText text={shown} clampClassName="max-h-[228px]" fade />
-            )
-          }
-        />
+        {replyTo ? (
+          <button
+            type="button"
+            className={cn(
+              'mb-0.5 flex max-w-full min-w-0 items-center gap-1 pl-7 text-xs text-muted-foreground',
+              jump
+            )}
+            aria-label={t(
+              'bots.items.activity.replyingTo',
+              'Replying to: {{question}}. Go to the question',
+              {
+                question: replyTo.text.slice(0, 80)
+              }
+            )}
+            disabled={!onJump}
+            onClick={() => onJump?.(replyTo.eventId)}
+          >
+            <CornerDownRight className="size-3 shrink-0" />
+            <span className="min-w-0 truncate">{replyTo.text}</span>
+          </button>
+        ) : null}
+        <div className="pl-7">
+          {words.trim() ? (
+            // 8 lines of 19 px; a question's footer follows, so its Show more reads as the body's.
+            <BotItemClampedText
+              text={words}
+              clampClassName="max-h-[152px]"
+              fade
+              quietToggle={waiting || shape.decisions.length > 0}
+            />
+          ) : null}
+          <BotItemCommentImages images={images} />
+          <BotItemCommentFiles paths={files} />
+          {shape.decisions.length > 0 ? (
+            <BotItemQuestionLines
+              shape={shape}
+              waiting={waiting}
+              answers={entry.answers}
+              actions={quickReplies}
+            />
+          ) : null}
+          {failed ? (
+            <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{t('bots.items.activity.notSent', 'Not sent.')}</span>
+              <button
+                type="button"
+                className="font-medium text-foreground hover:underline"
+                onClick={failed.retry}
+              >
+                {t('bots.items.activity.retry', 'Retry')}
+              </button>
+              <button type="button" className="hover:underline" onClick={failed.discard}>
+                {t('bots.items.activity.discard', 'Discard')}
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )

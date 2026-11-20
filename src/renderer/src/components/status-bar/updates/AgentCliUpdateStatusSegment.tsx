@@ -37,11 +37,7 @@ function runRow(row: AgentCliUpdateRow): void {
 }
 
 /** Shown while the user's own Claude Code or Codex CLI on a host has a newer release out. */
-export function AgentCliUpdateStatusSegment({
-  iconOnly
-}: {
-  iconOnly: boolean
-}): React.JSX.Element | null {
+export function AgentCliUpdateStatusSegment(): React.JSX.Element | null {
   const t = useTranslate()
   const hosts = useAppStore((s) => s.agentCliUpdates)
   const hostNames = useAppStore(useShallow(remoteHostNames))
@@ -87,10 +83,10 @@ export function AgentCliUpdateStatusSegment({
         }
       : {
           icon: <Download className="size-3 text-muted-foreground" />,
-          label:
-            rows.length === 1
-              ? t('agentCliUpdate.statusOne', 'CLI update')
-              : t('agentCliUpdate.statusCount', '{{count}} CLI updates', { count: rows.length }),
+          label: t('agentCliUpdate.statusCount', '{{count}} CLI updates', {
+            count: rows.length,
+            defaultValue_one: '{{count}} CLI update'
+          }),
           tooltip: t('agentCliUpdate.statusTooltip', 'Newer agent CLI versions are out')
         }
 
@@ -102,10 +98,9 @@ export function AgentCliUpdateStatusSegment({
             <button
               type="button"
               className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label={iconOnly ? segment.label : undefined}
             >
               {segment.icon}
-              {!iconOnly ? <span className="text-2xs tabular-nums">{segment.label}</span> : null}
+              <span className="text-2xs tabular-nums">{segment.label}</span>
             </button>
           </PopoverTrigger>
         </TooltipTrigger>

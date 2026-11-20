@@ -28,13 +28,6 @@ describe('writeChatLink', () => {
       title: 'Why did the nightly build fail?'
     })
   })
-
-  it('leaves the title off when no message started it', () => {
-    const { store } = fakeLinkStore()
-
-    writeChatLink(store, THREAD, chat('s1'))
-    expect(findLink(store, THREAD)?.link).not.toHaveProperty('title')
-  })
 })
 
 describe('markThreadSeen', () => {
@@ -43,8 +36,10 @@ describe('markThreadSeen', () => {
     folders.push({ id: 'bot-home' })
     const home = { ...chat('s1'), worktreeId: 'folder:bot-home' }
 
-    writeChatLink(store, THREAD, home, 'hi')
-    expect(findLink(store, THREAD)?.link.seenAt).toBeNull()
+    writeChatLink(store, THREAD, home)
+    const link = findLink(store, THREAD)?.link
+    expect(link?.seenAt).toBeNull()
+    expect(link).not.toHaveProperty('title')
     expect(markThreadSeen(store, 'other', 5)).toBe(false)
     expect(markThreadSeen(store, 's1', 5)).toBe(true)
     expect(markThreadSeen(store, 's1', 9)).toBe(false)

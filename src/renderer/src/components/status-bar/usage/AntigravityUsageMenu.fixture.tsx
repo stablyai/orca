@@ -60,7 +60,6 @@ export const savedAccounts = defineFixture({
           <AntigravityUsageMenu
             antigravity={live}
             accounts={accounts}
-            compact={false}
             triggerContent="Antigravity"
             onManageAccounts={() => {}}
           />

@@ -1,5 +1,6 @@
 import type { HostedReviewProvider } from '../../shared/source-control/hosted-review/hosted-review-contracts'
-import { isRemoteKnownMissing, withSharedRemoteUrlReads } from '../git/remotes/remote-url-probe'
+import { withSharedRemoteUrlReads } from '../git/remotes/remote-url-probe'
+import { isRemoteListedAbsent } from '../git/remotes/remote-name-listing'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { getHostedReviewLocalGitOptions } from './hosted-review-git-options'
 import {
@@ -29,15 +30,12 @@ export async function getForgeProviderForRepository(
 }
 
 function isOriginKnownMissing(context: ForgeProviderRepositoryContext): Promise<boolean> {
-  const { wslDistro, admissionTier } = getHostedReviewLocalGitOptions(context)
-  return isRemoteKnownMissing(
-    {
-      repoPath: context.repoPath,
-      connectionId: hostedReviewSshConnectionId(context.executionHostId),
-      ...(wslDistro ? { wslDistro } : {}),
-      ...(admissionTier ? { admissionTier } : {})
-    },
-    'origin'
+  const { wslDistro } = getHostedReviewLocalGitOptions(context)
+  return isRemoteListedAbsent(
+    context.repoPath,
+    'origin',
+    hostedReviewSshConnectionId(context.executionHostId),
+    wslDistro ? { wslDistro } : {}
   )
 }
 

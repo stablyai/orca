@@ -1,4 +1,5 @@
 import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import type { ChildProcess } from 'node:child_process'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
@@ -33,10 +34,14 @@ export function killCodexAppServerProcessTree(
     }
     try {
       // npm launchers wrap Codex; killing only the wrapper leaves the app-server alive.
-      const killer = spawnImpl('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
+      const killer = spawnImpl(
+        windowsSystem32Binary('taskkill.exe'),
+        ['/pid', String(child.pid), '/t', '/f'],
+        {
+          stdio: 'ignore',
+          windowsHide: true
+        }
+      )
       let fellBack = false
       const killDirectChild = (): void => {
         if (!fellBack) {

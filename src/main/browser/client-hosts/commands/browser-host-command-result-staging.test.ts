@@ -55,21 +55,14 @@ function largestUnstagedValueBytes(command: BrowserClientHostCommandEvent): numb
 }
 
 describe('stageBrowserHostCommandResult for a host without staging', () => {
-  it('sends the largest unstaged value in a request the host frame accepts', async () => {
-    const result = completed(largestUnstagedValueBytes(largestIdentityCommand))
+  it('sends the largest unstaged value but refuses one byte more', async () => {
+    const limit = largestUnstagedValueBytes(largestIdentityCommand)
+    const result = completed(limit)
     await expect(stage(largestIdentityCommand, result)).resolves.toBe(result)
     expect(() =>
       commandResultRequestJson(largestIdentityCommand, result, 't'.repeat(256))
     ).not.toThrow()
-  })
-
-  it('reports a value one byte larger as too large', async () => {
-    await expect(
-      stage(
-        largestIdentityCommand,
-        completed(largestUnstagedValueBytes(largestIdentityCommand) + 1)
-      )
-    ).resolves.toMatchObject({
+    await expect(stage(largestIdentityCommand, completed(limit + 1))).resolves.toMatchObject({
       status: 'failed',
       errorCode: 'browser_host_command_result_too_large'
     })

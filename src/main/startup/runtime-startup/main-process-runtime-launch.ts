@@ -9,6 +9,7 @@ import {
 import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
 import { resolveServePinnedBindHost } from '../serve-launch/serve-pinned-bind-host'
 import { isOrcadSidecarLaunch } from '../../window/activation/foreground-activation-policy'
+import type { MainWindowOpenOptions } from '../../window/main-window/main-window-contracts'
 import { registerMobileHandlers } from '../../ipc/mobile'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../../ipc/runtime-environments/mobile-relay/runtime-environment-mobile-relay-hosts'
 import { registerHeadlessPtyRuntime } from '../../ipc/pty/register-headless-runtime'
@@ -60,9 +61,7 @@ import { e2eHeadlessServeWithoutBrowser } from '../serve-launch/e2e-headless-ser
 type RuntimeService = NonNullable<typeof state.runtime>
 
 export type MainProcessRuntimeLaunchOptions = {
-  openMainWindow: (options?: {
-    revealOnDidFinishLoad?: boolean
-  }) => BrowserWindow | Promise<BrowserWindow>
+  openMainWindow: (options?: MainWindowOpenOptions) => BrowserWindow | Promise<BrowserWindow>
   handleMacAppActivation: () => void
 }
 
@@ -173,6 +172,7 @@ async function launchServeMode(
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
   runtime.startupWorkerAuthority.finish()
+  void runtime.reportWorkerStopsAcrossRestartOnce()
   // Main places unshown live terminals before any client attaches.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     await placeUnshownLiveTerminalsBestEffort(runtime)
@@ -306,7 +306,12 @@ export async function initializeMainProcessRuntimeLaunch(
   if (process.platform === 'win32' && app.isPackaged && !serveOptions) {
     const desktopStartup = startWindowsDesktopBeforeShellPathReady({
       bindServices: bindTerminalRuntimeStartupServices,
-      openWindow: () => options.openMainWindow({ revealOnDidFinishLoad: true }),
+      openWindow: (onLoadSettled) =>
+        options.openMainWindow({
+          revealOnDidFinishLoad: true,
+          // A failed load has nothing left to protect, so terminals should not wait out the fallback.
+          loadObserver: { onLoaded: onLoadSettled, onError: onLoadSettled }
+        }),
       shellPathReady,
       startServices: startTerminalRuntimeStartupServices
     })

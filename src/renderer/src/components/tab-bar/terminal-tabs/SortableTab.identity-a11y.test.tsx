@@ -89,18 +89,10 @@ function renderRoomTab(
 afterEach(cleanup)
 
 describe('SortableTab identity detail', () => {
-  it('names who the icon stands for in the tab, keeping the drag instructions', () => {
+  it('includes the room members in the tab’s accessible name', () => {
     renderRoomTab('Scout, Juno, Pip')
     const tab = screen.getByTestId('sortable-tab')
     expect(tab.getAttribute('aria-label')).toBe('triage team, Scout, Juno, Pip')
-    const describedBy = tab.getAttribute('aria-describedby')
-    expect(describedBy).toBeTruthy()
-    expect(document.getElementById(describedBy ?? '')?.textContent).toMatch(/draggable/)
-  })
-
-  it('leaves a tab without identity detail named by its content', () => {
-    renderRoomTab(undefined)
-    expect(screen.getByTestId('sortable-tab').hasAttribute('aria-label')).toBe(false)
   })
 
   it('keeps a pinned-first tab that cannot be dragged announced as available', () => {

@@ -34,6 +34,7 @@ function sshStatus(
       sshStateByEnvironment: new Map(),
       worktreesByRepo: {}
     },
+    new Map(),
     makeWorktree({ id: 'wt', repoId: TEST_REPO.id, ...worktree })
   )
 }
@@ -74,6 +75,7 @@ describe('active workspace SSH status', () => {
         sshStateByEnvironment: new Map(),
         worktreesByRepo: {}
       },
+      new Map(),
       makeWorktree({ id: 'wt', repoId: TEST_REPO.id, hostId: 'local' })
     )
     expect(status).toBeNull()
@@ -93,6 +95,7 @@ describe('active workspace SSH status', () => {
           worktreesByRepo: {},
           ...(selectedHostId ? { activeWorkspaceExecutionHostId: selectedHostId } : {})
         },
+        new Map(),
         makeWorktree({ id: 'wt', repoId: TEST_REPO.id })
       )
 
@@ -148,9 +151,9 @@ describe('active workspace SSH status', () => {
           repos: [TEST_REPO],
           sshConnectionStates: new Map(local ? [['box', connection(local)]] : []),
           sshStateByEnvironment: environments,
-          runtimeStatusByEnvironmentId: reachable,
           worktreesByRepo: {}
         },
+        reachable,
         worktree
       )
     }
@@ -192,6 +195,7 @@ describe('active workspace SSH status', () => {
     })
     const context = buildCmdJQuickActionContext({
       state: store.getState(),
+      statuses: new Map(),
       activeGroupSnapshot: null,
       openNewBrowserTab: async () => {},
       openBrowserUrl: async () => {},

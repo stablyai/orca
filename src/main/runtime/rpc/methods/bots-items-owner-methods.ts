@@ -46,7 +46,9 @@ const LIST = defineMethod({
     ownerActor(context)
     const { botItems } = context.runtime
     const store = botItems.store()
-    const chat = params.chatId !== undefined ? { chatId: params.chatId } : {}
+    // An older client names one chat; a group's panel names its rooms' member sessions.
+    const chatIds = params.chatIds ?? (params.chatId !== undefined ? [params.chatId] : undefined)
+    const chat = chatIds ? { chatIds } : {}
     // Every open item, however many, then closed ones a page at a time.
     const open: BotItemRecord[] = []
     let cursor: { at: number; number: number } | undefined
@@ -141,7 +143,7 @@ const COMMENT = defineMethod({
     }
     // Admitted and claimed for the item's chat before the event: a failed write leaves only a claim
     // that chat already prunes, and a retry re-claims the same uploads.
-    const images = await admitBotItemCommentAttachments(
+    const { images } = await admitBotItemCommentAttachments(
       {
         store: getAgentSessionAttachmentStore(),
         // This host's own window: a dropped on-disk image is copied in; a paired client sends store paths.
@@ -152,9 +154,19 @@ const COMMENT = defineMethod({
       params.text,
       params.images ?? []
     )
-    const outcome = await store.ownerComment(item.uid, params.text, actor, images)
+    const outcome = await store.ownerComment(
+      item.uid,
+      params.text,
+      actor,
+      images,
+      undefined,
+      params.requestId
+    )
     botItems.changed([item.ownerBotId])
-    await botItems.sendOwedMail()
+    // The comment is stored and its mail owed: the reply never waits on the chat taking it.
+    void botItems
+      .sendOwedMail()
+      .catch((error: unknown) => console.warn('[bots] items: mailing a comment failed', error))
     return { eventId: outcome.eventId === null ? null : botItemEventId(outcome.eventId) }
   }
 })

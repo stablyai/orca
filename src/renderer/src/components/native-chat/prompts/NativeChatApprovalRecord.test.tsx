@@ -95,36 +95,25 @@ describe('NativeChatApprovalRecord', () => {
     expect(record).toHaveTextContent('docs-copy-pass')
   })
 
-  it("falls back to the prompt's title when the agent names no tool", () => {
+  it("uses the prompt title and opens the coordinator's allow reason and command", () => {
     const record = show(
       workerApprovalRecordLine(
         workerApproval(
-          { by: 'person', decision: 'allow', reason: null, reasonDelivered: false },
-          { title: 'Apply file changes?', tool: undefined }
+          {
+            by: 'coordinator',
+            decision: 'allow',
+            reason: 'Read-only listing.',
+            reasonDelivered: true
+          },
+          { title: 'Run a read-only command?', tool: undefined }
         ),
-        'docs-copy-pass',
-        AT,
-        translate
-      )
-    )
-    expect(record).toHaveAttribute('data-native-chat-approval-record', 'allowed')
-    expect(record).toHaveTextContent('Apply file changes?')
-  })
-
-  it("opens the coordinator's allow reason and the command under the line", () => {
-    show(
-      workerApprovalRecordLine(
-        workerApproval({
-          by: 'coordinator',
-          decision: 'allow',
-          reason: 'Read-only listing.',
-          reasonDelivered: true
-        }),
         'github-install-dialog',
         AT,
         translate
       )
     )
+    expect(record).toHaveAttribute('data-native-chat-approval-record', 'allowed')
+    expect(record).toHaveTextContent('Run a read-only command?')
     expect(screen.queryByText('Read-only listing.')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { expanded: false }))
     expect(screen.getByText('Read-only listing.')).toBeInTheDocument()

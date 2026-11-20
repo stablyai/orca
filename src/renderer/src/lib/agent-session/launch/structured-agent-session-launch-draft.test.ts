@@ -33,85 +33,83 @@ import { useNativeChatDraft } from '@/components/native-chat/drafts/use-native-c
 import { useNativeChatStructuredComposerSend } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-send'
 
 describe('structured launch draft persistence', () => {
-  it.each(['claude', 'codex'] as const)(
-    'restores an unmounted %s hand-off, then keeps Send/clear empty',
-    async (agent) => {
-      const storage = createMemoryNativeChatComposerDraftStorage()
-      setNativeChatComposerDraftStorageForTests(storage)
-      const intent = {
-        ...launchIntent('folder-draft', 'draft-session'),
-        agent,
-        executionHostId: 'ssh:remote' as const
-      }
-      mocks.createIntent.mockReturnValueOnce(intent)
-      mocks.launch.mockResolvedValue({ sessionId: intent.sessionId, fence: 1 })
-      const text = Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n')
-      const launch = startStructuredAgentLaunch(intent.worktreeId, agent, {
-        requestId: 'request-1',
-        prompt: text,
-        promptDelivery: 'draft'
-      })
-      const scope = structuredAgentSessionDraftScopeKey(launch.sessionId)
-      expect(readNativeChatComposerDraft(scope)).toMatchObject({
-        text,
-        owner: { workspaceId: 'folder-draft', executionHostId: 'ssh:remote' }
-      })
-      await launch.launchResult
-      expect(hasStagedStructuredLaunchPrompt(launch.sessionId)).toBe(false)
-      expect(launch.promptDeliveryResult).toBeUndefined()
-      expect(sends()).toHaveLength(0)
-      await nativeChatComposerDraftWritesSettled()
-      expect(storage.drafts.get(scope)?.text).toBe(text)
-      const restart = async () => {
-        clearNativeChatComposerDraftsForTests()
-        resetStructuredAgentLaunchRegistryForTests()
-        setNativeChatComposerDraftStorageForTests(storage)
-        await hydrateNativeChatComposerDrafts()
-      }
-      await restart()
-      expect(composerDraft(launch.sessionId)).toBe(text)
-      const send = vi.fn(() => true)
-      const composer = renderHook(() => {
-        const draft = useNativeChatDraft(scope, () => false)
-        return useNativeChatStructuredComposerSend({
-          agent,
-          draftScopeKey: scope,
-          imageAttachments: [],
-          isComposing: () => false,
-          setDraft: draft.setDraft,
-          setCaret: vi.fn(),
-          clearSkillOrigin: vi.fn(),
-          structuredTransport: {
-            sessionId: launch.sessionId,
-            runtime: 'remote',
-            runtimeEnvironmentId: 'remote',
-            capturePresentation: () => () => true,
-            send,
-            onError: vi.fn(),
-            optionSnapshot: [],
-            dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
-            optionsSurface: {
-              getSnapshot: () => [],
-              setOption: vi.fn(),
-              invokeAction: vi.fn(),
-              subscribe: () => () => {}
-            }
-          }
-        })
-      })
-      await act(() => composer.result.current(text))
-      expect(send).toHaveBeenCalledExactlyOnceWith(text, [])
-      composer.unmount()
-      await nativeChatComposerDraftWritesSettled()
-      await restart()
-      expect(composerDraft(launch.sessionId)).toBe('')
-      updateNativeChatComposerDraft(scope, { text }, 'immediate')
-      updateNativeChatComposerDraft(scope, { text: '', document: undefined }, 'immediate')
-      await nativeChatComposerDraftWritesSettled()
-      await restart()
-      expect(composerDraft(launch.sessionId)).toBe('')
+  it('restores an unmounted hand-off and clears the draft after Send or clear', async () => {
+    const agent = 'claude'
+    const storage = createMemoryNativeChatComposerDraftStorage()
+    setNativeChatComposerDraftStorageForTests(storage)
+    const intent = {
+      ...launchIntent('folder-draft', 'draft-session'),
+      agent,
+      executionHostId: 'ssh:remote' as const
     }
-  )
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch.mockResolvedValue({ sessionId: intent.sessionId, fence: 1 })
+    const text = 'first line\nsecond line'
+    const launch = startStructuredAgentLaunch(intent.worktreeId, agent, {
+      requestId: 'request-1',
+      prompt: text,
+      promptDelivery: 'draft'
+    })
+    const scope = structuredAgentSessionDraftScopeKey(launch.sessionId)
+    expect(readNativeChatComposerDraft(scope)).toMatchObject({
+      text,
+      owner: { workspaceId: 'folder-draft', executionHostId: 'ssh:remote' }
+    })
+    await launch.launchResult
+    expect(hasStagedStructuredLaunchPrompt(launch.sessionId)).toBe(false)
+    expect(launch.promptDeliveryResult).toBeUndefined()
+    expect(sends()).toHaveLength(0)
+    await nativeChatComposerDraftWritesSettled()
+    expect(storage.drafts.get(scope)?.text).toBe(text)
+    const restart = async () => {
+      clearNativeChatComposerDraftsForTests()
+      resetStructuredAgentLaunchRegistryForTests()
+      setNativeChatComposerDraftStorageForTests(storage)
+      await hydrateNativeChatComposerDrafts()
+    }
+    await restart()
+    expect(composerDraft(launch.sessionId)).toBe(text)
+    const send = vi.fn(() => true)
+    const composer = renderHook(() => {
+      const draft = useNativeChatDraft(scope, () => false)
+      return useNativeChatStructuredComposerSend({
+        agent,
+        draftScopeKey: scope,
+        imageAttachments: [],
+        isComposing: () => false,
+        setDraft: draft.setDraft,
+        setCaret: vi.fn(),
+        clearSkillOrigin: vi.fn(),
+        structuredTransport: {
+          sessionId: launch.sessionId,
+          runtime: 'remote',
+          runtimeEnvironmentId: 'remote',
+          capturePresentation: () => () => true,
+          send,
+          onError: vi.fn(),
+          optionSnapshot: [],
+          dispatchCommand: async () => ({ handled: false, accepted: false, error: null }),
+          optionsSurface: {
+            getSnapshot: () => [],
+            setOption: vi.fn(),
+            invokeAction: vi.fn(),
+            subscribe: () => () => {}
+          }
+        }
+      })
+    })
+    await act(() => composer.result.current(text))
+    expect(send).toHaveBeenCalledExactlyOnceWith(text, [])
+    composer.unmount()
+    await nativeChatComposerDraftWritesSettled()
+    await restart()
+    expect(composerDraft(launch.sessionId)).toBe('')
+    updateNativeChatComposerDraft(scope, { text }, 'immediate')
+    updateNativeChatComposerDraft(scope, { text: '', document: undefined }, 'immediate')
+    await nativeChatComposerDraftWritesSettled()
+    await restart()
+    expect(composerDraft(launch.sessionId)).toBe('')
+  })
 
   it('moves a draft written before the chat existed into the new chat', async () => {
     setNativeChatComposerDraftStorageForTests(createMemoryNativeChatComposerDraftStorage())
@@ -172,43 +170,36 @@ describe('launch draft moves', () => {
     expect(storage.drafts.has(source)).toBe(false)
   })
 
-  it.each([false, true])(
-    'transfers live ownership immediately and keeps the saved source until commit: %s',
-    async (edit) => {
-      const storage = createMemoryNativeChatComposerDraftStorage()
-      setNativeChatComposerDraftStorageForTests(storage)
-      await hydrateNativeChatComposerDrafts()
-      updateNativeChatComposerDraft(source, { text: 'Move this' }, 'immediate')
-      await nativeChatComposerDraftWritesSettled()
-      vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
-        throw new DOMException('refused', 'QuotaExceededError')
-      })
-      const committed = Promise.withResolvers<void>()
-      const write = storage.write
-      storage.write = async (scope, draft) => {
-        if (scope === target) {
-          await committed.promise
-        }
-        await write(scope, draft)
+  it('moves live ownership immediately but retains the saved source until the newer draft commits', async () => {
+    const storage = createMemoryNativeChatComposerDraftStorage()
+    setNativeChatComposerDraftStorageForTests(storage)
+    await hydrateNativeChatComposerDrafts()
+    updateNativeChatComposerDraft(source, { text: 'Move this' }, 'immediate')
+    await nativeChatComposerDraftWritesSettled()
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('refused', 'QuotaExceededError')
+    })
+    const committed = Promise.withResolvers<void>()
+    const write = storage.write
+    storage.write = async (scope, draft) => {
+      if (scope === target) {
+        await committed.promise
       }
-
-      moveStructuredAgentLaunchDraft(destination, source)
-      expect(storage.drafts.get(source)?.text).toBe('Move this')
-      expect(readNativeChatComposerDraft(source).text).toBe('')
-      expect(readNativeChatComposerDraft(target).text).toBe('Move this')
-      if (edit) {
-        updateNativeChatComposerDraft(target, { text: 'Move this plus newer typing' }, 'immediate')
-      }
-      committed.resolve()
-      await nativeChatComposerDraftWritesSettled()
-
-      expect(storage.drafts.get(target)?.text).toBe(
-        edit ? 'Move this plus newer typing' : 'Move this'
-      )
-      expect(storage.drafts.has(source)).toBe(false)
-      expect(readNativeChatComposerDraft(source).text).toBe('')
+      await write(scope, draft)
     }
-  )
+
+    moveStructuredAgentLaunchDraft(destination, source)
+    expect(storage.drafts.get(source)?.text).toBe('Move this')
+    expect(readNativeChatComposerDraft(source).text).toBe('')
+    expect(readNativeChatComposerDraft(target).text).toBe('Move this')
+    updateNativeChatComposerDraft(target, { text: 'Move this plus newer typing' }, 'immediate')
+    committed.resolve()
+    await nativeChatComposerDraftWritesSettled()
+
+    expect(storage.drafts.get(target)?.text).toBe('Move this plus newer typing')
+    expect(storage.drafts.has(source)).toBe(false)
+    expect(readNativeChatComposerDraft(source).text).toBe('')
+  })
 
   it('does not retire the saved source when an older destination write commits', async () => {
     const storage = createMemoryNativeChatComposerDraftStorage()

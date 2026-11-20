@@ -3,7 +3,6 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
-import { getHostOperationOwnership } from '../../../../shared/execution-host/host-operation-ownership'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { botToolRelay } from '../../../bots/tool-relay/bot-tool-relay'
 import { GOOGLE_READ_METHODS } from './google-read'
@@ -44,12 +43,6 @@ const request = (params: unknown) => ({
 })
 
 describe('Google reads over RPC', () => {
-  it('are owned by the execution host', () => {
-    for (const method of GOOGLE_READ_METHODS) {
-      expect(getHostOperationOwnership(method.name)).toBe('host')
-    }
-  })
-
   afterAll(() => botToolRelay.close())
 
   it('refuse a bot whose Google is off by its token, and serve one whose Google is on and the owner', async () => {

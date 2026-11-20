@@ -6,6 +6,7 @@ import {
 } from '@/lib/source-control/graph/git-graph-tab'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
 import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-context'
 import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
@@ -150,6 +151,7 @@ export function useWorktreeJumpPaletteQuickActions({
     () =>
       buildCmdJQuickActionContext({
         state: useAppStore.getState(),
+        statuses: readRuntimeStatuses(),
         activeGroupSnapshot: activeGroupSnapshotRef.current,
         openNewBrowserTab: openNewBrowserTabInActiveWorkspace,
         openBrowserUrl: openBrowserUrlAction,

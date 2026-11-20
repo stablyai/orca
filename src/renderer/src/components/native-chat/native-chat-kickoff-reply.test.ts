@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   nativeChatFirstScreen,
+  nativeChatFirstScreenSignIn,
   nativeChatKickoffEnded,
   nativeChatKickoffRefusal
 } from './native-chat-bot-kickoff-view'
@@ -81,30 +82,51 @@ describe('nativeChatFirstScreen', () => {
   })
 })
 
-describe('nativeChatKickoffEnded', () => {
-  it('ends a kickoff its agent failed to start, before any turn opened, with the host’s reason', () => {
-    const refused = {
-      isWorking: false,
-      latestTurn: null,
-      submissions: [{ dispatchState: 'rejected' as const, reason: 'Claude Code could not start.' }]
-    }
-    expect(nativeChatKickoffEnded(refused)).toBe(true)
-    expect(
-      nativeChatFirstScreen(
-        [kickoff],
-        nativeChatKickoffEnded(refused),
-        nativeChatKickoffRefusal(refused)
-      )
-    ).toEqual({ phase: 'failed', turn: [], refused: 'Claude Code could not start.' })
+it('shows a pending kickoff until the host refuses it before a turn opens', () => {
+  const pending = {
+    isWorking: false,
+    latestTurn: null,
+    submissions: [{ dispatchState: 'pending' as const, reason: null }]
+  }
+  expect(
+    nativeChatFirstScreen(
+      [kickoff],
+      nativeChatKickoffEnded(pending),
+      nativeChatKickoffRefusal(pending)
+    )
+  ).toEqual({ phase: 'starting', turn: [], refused: null })
+
+  const refused = {
+    ...pending,
+    submissions: [{ dispatchState: 'rejected' as const, reason: 'Claude Code could not start.' }]
+  }
+  expect(
+    nativeChatFirstScreen(
+      [kickoff],
+      nativeChatKickoffEnded(refused),
+      nativeChatKickoffRefusal(refused)
+    )
+  ).toEqual({ phase: 'failed', turn: [], refused: { reason: 'Claude Code could not start.' } })
+})
+
+describe('nativeChatFirstScreenSignIn', () => {
+  const failedTurn = (kind: 'notSignedIn' | 'startFailed'): NativeChatMessage => ({
+    ...message('f', 'system', 'Antigravity isn’t signed in.'),
+    blocks: [
+      {
+        type: 'text',
+        text: 'Antigravity isn’t signed in.',
+        failure: { kind, account: 'system' }
+      }
+    ]
   })
 
-  it('keeps a kickoff starting while it is on its way', () => {
-    const pending = {
-      isWorking: false,
-      latestTurn: null,
-      submissions: [{ dispatchState: 'pending' as const, reason: null }]
-    }
-    expect(nativeChatKickoffEnded(pending)).toBe(false)
-    expect(nativeChatKickoffRefusal(pending)).toBeNull()
+  it('asks for agy’s sign-in only when the first turn failed signed out', () => {
+    expect(
+      nativeChatFirstScreenSignIn(nativeChatFirstScreen([kickoff, failedTurn('notSignedIn')], true))
+    ).toEqual({ account: 'system' })
+    expect(
+      nativeChatFirstScreenSignIn(nativeChatFirstScreen([kickoff, failedTurn('startFailed')], true))
+    ).toBeNull()
   })
 })

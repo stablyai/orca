@@ -208,6 +208,8 @@ describe('a reconnect while a shown prompt is still pending', () => {
 
     expect(entry).toMatchObject({
       paneKey: PANE,
+      working: false,
+      turnId: null,
       prompt: { kind: 'approval', promptId: asked.itemId },
       trace: { prompt: 'restated', standing: 'unknown' }
     })
@@ -235,16 +237,6 @@ describe('a reconnect while a shown prompt is still pending', () => {
       prompt: { promptId: asked.itemId },
       trace: { prompt: 'restated' }
     })
-  })
-
-  it('restates the prompt itself, never a turn or work', async () => {
-    const asked = await askedFromThread()
-    asked.swap.install(null)
-
-    const entry = asked.reconnect()
-
-    expect(entry?.working).toBe(false)
-    expect(entry?.turnId).toBeNull()
   })
 
   it('drops the prompt once the chat proves it over', async () => {
@@ -334,11 +326,32 @@ describe('a reconnect while a shown prompt is still pending', () => {
 
   it('keeps no prompt a connector answer took, unless the answer did not land', async () => {
     const asked = await askedFromThread()
-    await expect(
-      asked.seam.answer(asked.conversationHost, KEY, asked.itemId, 'allow')
-    ).resolves.toEqual({ outcome: 'accepted' })
-    asked.swap.install(null)
+    const answer = (optionId: string) =>
+      asked.seam.answer(asked.conversationHost, KEY, asked.itemId, optionId)
+    const expectRestated = () => {
+      asked.swap.install(null)
+      expect(asked.reconnect()).toMatchObject({ prompt: { promptId: asked.itemId } })
+      asked.swap.install(asked.host)
+    }
 
+    await expect(answer('deny')).resolves.toEqual({
+      outcome: 'refused',
+      reason: 'option_not_offered'
+    })
+    expectRestated()
+
+    const respond = vi.spyOn(asked.host, 'respondToPrompt')
+    respond.mockRejectedValueOnce(new Error('Writer lost'))
+    await expect(answer('allow')).resolves.toEqual({ outcome: 'unknown', reason: 'writer_failed' })
+    expectRestated()
+
+    const work = vi.spyOn(asked.host, 'currentWork')
+    work.mockRejectedValueOnce(new Error('Reader lost'))
+    await expect(answer('allow')).rejects.toThrow('Reader lost')
+    expectRestated()
+
+    await expect(answer('allow')).resolves.toEqual({ outcome: 'accepted' })
+    asked.swap.install(null)
     expect(asked.reconnect()).toMatchObject({ prompt: null })
   })
 })

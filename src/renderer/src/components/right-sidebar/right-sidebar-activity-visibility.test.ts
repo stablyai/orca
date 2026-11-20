@@ -81,7 +81,7 @@ describe('getVisibleRightSidebarActivityItems', () => {
     ).toEqual(['explorer', 'bot-activity', 'vault', 'source-control'])
   })
 
-  it("drops the attached-worktree, PR-check and Source Control panels on a bot group's home", () => {
+  it("keeps only Items on a bot group's home", () => {
     expect(
       ids(
         getVisibleRightSidebarActivityItems(items, {
@@ -92,6 +92,6 @@ describe('getVisibleRightSidebarActivityItems', () => {
           isGroupHome: true
         })
       )
-    ).toEqual(['explorer', 'vault'])
+    ).toEqual(['bot-activity'])
   })
 })

@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeBrowserCommandHost } from '../../runtime/browser/commands/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from '../../runtime/browser/client-pages/runtime-browser-page-registry'
+import { BrowserHostLeaseRegistry } from '../../runtime/browser-host/leases/browser-host-lease-registry'
+import { BrowserHostRequestRegistry } from '../../runtime/browser-host/leases/browser-host-request-registry'
 import { orcadClientPageCommand } from './orcad-client-page-commands'
 
 function unexpected(name: string): () => never {
@@ -53,5 +55,40 @@ describe('orcad client page commands', () => {
       profileId: 'default',
       profileLabel: 'Default'
     })
+  })
+
+  it("opens an agent's tab in the engine nobody sees only when it asks with --headless", async () => {
+    const leases = new BrowserHostLeaseRegistry({
+      authorityRuntimeId: 'orcad',
+      authorityEpoch: 'e'
+    })
+    const volunteers = new BrowserHostRequestRegistry()
+    const host: RuntimeBrowserCommandHost = {
+      getRuntimeId: () => 'orcad',
+      resolveWorkspaceSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
+      resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
+      resolveBrowserNetworkExecutionHost: unexpected('execution host'),
+      getAgentBrowserBridge: () => null,
+      getRuntimeBrowserPageRegistry: () => new RuntimeBrowserPageRegistry(),
+      getBrowserHostLeaseRegistry: () => leases,
+      getBrowserHostRequestRegistry: () => volunteers,
+      getAvailableAuthoritativeWindow: () => null,
+      getOffscreenBrowserBackend: () => null,
+      getAuthoritativeWindow: unexpected('window')
+    }
+    const engine = vi.fn(async () => ({ browserPageId: 'engine-page' }))
+    const create = orcadClientPageCommand(host, 'browserTabCreate', engine, () => true)!
+
+    await expect(create({ worktree: 'id:wt-1', url: 'https://example.com' })).rejects.toMatchObject(
+      { code: 'browser_host_unavailable' }
+    )
+    await expect(create({ worktree: 'id:wt-1', url: 'file:///tmp/a.html' })).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+    expect(engine).not.toHaveBeenCalled()
+
+    await expect(
+      create({ worktree: 'id:wt-1', url: 'https://example.com', placement: { kind: 'server' } })
+    ).resolves.toEqual({ browserPageId: 'engine-page' })
   })
 })

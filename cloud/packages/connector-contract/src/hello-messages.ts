@@ -184,6 +184,18 @@ export const CONNECTOR_CLOUD_WEBHOOKS_FEATURE = 'webhooks'
 // its conversation didn't ask for may be sent. Kept out of CONNECTOR_CLOUD_FEATURES: only the code
 // that honours raisedBy lists it, so a contract bump alone never advertises it.
 export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
+// The cloud takes a turn's answer up to maxLongAnswerBytes; a machine sends one over
+// maxLastAssistantMessageBytes only to a cloud that lists it.
+export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'
+// The cloud takes a post's `postAt` and has the source post it then. Kept out of
+// CONNECTOR_CLOUD_FEATURES: only the code that schedules lists it.
+export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
+// The cloud takes the verbs for Slack's own surfaces (pin, canvas, list, scheduled). Kept out of
+// CONNECTOR_CLOUD_FEATURES, as post.schedule is.
+export const CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE = 'slack.tools'
+// The cloud takes the `activity` event and shows it on a working thread. Kept out of
+// CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that reads the event lists it.
+export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 // Listed by a machine that keeps a reply outbox, and by a cloud that takes its `reply` events (kept
 // out of CONNECTOR_CLOUD_FEATURES: the cloud lists it only while its switch is on). Under a hello
 // whose answer doesn't list it, the machine posts the same outcomes through replies instead.
