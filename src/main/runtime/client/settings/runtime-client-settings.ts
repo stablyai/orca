@@ -184,7 +184,8 @@ export class RuntimeClientSettingsController {
     )
     const settings = this.store.getSettings()
     await getClaudeAgentViewService().reconcile(settings)
-    if (updates.worktreeVisibilityDefaults !== undefined) {
+    // Nesting moves the worktree roots the base-directory watcher follows.
+    if (updates.worktreeVisibilityDefaults !== undefined || updates.nestWorkspaces !== undefined) {
       this.notifyReposChanged?.()
     }
     if (
