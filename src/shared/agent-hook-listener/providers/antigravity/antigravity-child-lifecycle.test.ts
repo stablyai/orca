@@ -87,6 +87,19 @@ beforeEach(() => {
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
+it('keeps the run working when one of two subagents stops while the root transcript is unreadable', () => {
+  state = createHookListenerState()
+  rmSync(join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'))
+  hook('root', 'PreInvocation', { lastUserInput: 'Task', modelName: 'model-a' })
+  for (const id of ['first', 'second']) {
+    transcript(id)
+    spawn()
+    hook(id, 'PreInvocation')
+  }
+  expect(hook('first', 'Stop', { fullyIdle: true })).toBeNull()
+  expect(row.payload.state).toBe('working')
+})
+
 it('wakes a retired child again and releases its command hold when disk reports it killed', async () => {
   transcript('child')
   descriptor('child')

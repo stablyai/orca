@@ -158,8 +158,9 @@ export function normalizeAntigravityEvent(
   if (
     conversationId &&
     !paneState.rootConversationId &&
+    // An unreadable root transcript must not leave its subagents to finish the run as cold children.
     (origin === 'root' ||
-      (!transcriptPath &&
+      (origin === 'unknown' &&
         (Boolean(promptText || readFirstString(hookPayload, ['lastUserInput'])) ||
           isAntigravitySubagentTool(toolName))))
   ) {
