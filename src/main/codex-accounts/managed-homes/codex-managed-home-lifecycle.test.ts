@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -73,15 +74,38 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     const f = fixture()
     mkdirSync(join(f.home, '..backup'))
     writeFileSync(join(f.home, '..backup', 'prompts.jsonl'), '{"text":"only prompt"}\n')
-    symlinkSync('..backup', join(f.home, 'current'))
-    symlinkSync(join('current', 'prompts.jsonl'), join(f.home, 'history.jsonl'))
+    mkdirSync(join(f.home, 'middle'))
+    symlinkSync(join('..', '..backup'), join(f.home, 'middle', 'next'))
+    symlinkSync(join('middle', 'next'), join(f.home, 'bridge'))
+    symlinkSync(join('bridge', 'prompts.jsonl'), join(f.home, 'history.jsonl'))
     writeFileSync(join(f.home, 'auth.json'), '{}')
 
     await f.lifecycle.safeRemove(f.home, 'a')
 
-    expect(readdirSync(f.home).sort()).toEqual(['..backup', 'current', 'history.jsonl'])
+    expect(readdirSync(f.home).sort()).toEqual(['..backup', 'bridge', 'history.jsonl', 'middle'])
     expect(readFileSync(join(f.home, 'history.jsonl'), 'utf8')).toBe('{"text":"only prompt"}\n')
   })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'removes nothing when a linked prompt history cannot be followed',
+    async () => {
+      const f = fixture()
+      const outside = join(f.accountsRoot, 'outside')
+      mkdirSync(outside)
+      writeFileSync(join(f.home, 'prompts.saved'), '{"text":"only prompt"}\n')
+      symlinkSync(join(f.home, 'prompts.saved'), join(outside, 'link'))
+      symlinkSync(join(outside, 'link'), join(f.home, 'history.jsonl'))
+      writeFileSync(join(f.home, 'auth.json'), '{}')
+      chmodSync(outside, 0o000)
+      try {
+        await f.lifecycle.safeRemove(f.home, 'a')
+      } finally {
+        chmodSync(outside, 0o755)
+      }
+
+      expect(readdirSync(f.home).sort()).toEqual(['auth.json', 'history.jsonl', 'prompts.saved'])
+    }
+  )
 
   it('removes a home that never shared history entirely', async () => {
     const f = fixture()

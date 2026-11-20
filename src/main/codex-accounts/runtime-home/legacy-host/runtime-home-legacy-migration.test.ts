@@ -321,7 +321,7 @@ describe('CodexRuntimeHomeService', () => {
         historyImportInputs: await legacyHistoryInputsKey(
           join(testState.userDataDir, 'codex-accounts')
         ),
-        historyImportGaveUpAt: Date.now() - 25 * 60 * 60 * 1000
+        historyImportGaveUpAt: 0
       }),
       'utf-8'
     )

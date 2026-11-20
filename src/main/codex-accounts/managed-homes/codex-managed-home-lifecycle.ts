@@ -15,7 +15,7 @@ import type {
 } from '../account-management/codex-account-service-types'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { MERGE_PENDING_SUFFIX, removeDirectoryLink } from '../../filesystem/merged-directory-link'
-import { linkedHistoryEntries } from './linked-history-entries'
+import { LINKED_HISTORY_ENTRIES_SCRIPT, linkedHistoryEntries } from './linked-history-entries'
 import {
   CODEX_DATABASE_FILE,
   HISTORY_CLEANUP_MANIFEST,
@@ -44,25 +44,7 @@ const KEPT_HISTORY = [
 const KEEP_ON_REMOVAL_SCRIPT = [
   'set -u',
   'home=$1',
-  // A linked prompt history keeps every top-level entry it reaches: each link and the final file.
-  'real_home=$(readlink -f -- "$home" 2>/dev/null || printf %s "$home")',
-  'history_entries=/',
-  'keep_entry() {',
-  '  for root in "$home" "$real_home"; do',
-  '    case "$1" in "$root"/?*) rest=${1#"$root"/}; first=${rest%%/*}',
-  '      case "$first" in .|..) ;; *) history_entries="$history_entries$first/"; return ;; esac ;; esac',
-  '  done',
-  '}',
-  'path="$home/history.jsonl"',
-  'hop=0',
-  'while [ -L "$path" ] && [ "$hop" -lt 40 ]; do',
-  '  next=$(readlink -- "$path") || break',
-  '  case "$next" in /*) path=$next ;; *) path=${path%/*}/$next ;; esac',
-  '  keep_entry "$path"',
-  '  hop=$((hop + 1))',
-  'done',
-  'final=$(readlink -f -- "$home/history.jsonl" 2>/dev/null || true)',
-  '[ -n "$final" ] && keep_entry "$final"',
+  ...LINKED_HISTORY_ENTRIES_SCRIPT,
   'kept() {',
   '  case "$history_entries" in *"/${1##*/}/"*) return 0 ;; esac',
   '  case "${1##*/}" in',
