@@ -79,16 +79,14 @@ export function interruptedLocalWorktreeRemovalJob(
     )?.pushTarget
   return {
     run: async (stopSignal) => {
-      expectation?.check()
-      if (expectation) {
-        await expectation.verifyResumedCheckout(record.worktreePath)
-      }
+      // A reviewed checkout Git already deleted leaves only bookkeeping, finished without its guard.
+      const checkoutGone = (await expectation?.resumeCheckout(record.worktreePath)) === 'gone'
       const removedPushTarget = resolveRemovedPushTarget()
       const result = await finishInterruptedLocalWorktreeRemoval({
         record,
         store: host.store,
         stopSignal,
-        expectation,
+        expectation: checkoutGone ? undefined : expectation,
         removedPushTarget,
         acquireWatcherRemoval: (path) => {
           // Take the gate in the same tick as the loading fence so no spawn can enter between them.

@@ -36,19 +36,15 @@ function resumed(root: string): WorktreeRemovalExpectation {
   })
 }
 
-it('asks for a retry when Git already deleted the reviewed checkout before a restart', async () => {
+it('reports a reviewed checkout Git already deleted before a restart as gone', async () => {
   dir = mkdtempSync(join(tmpdir(), 'orca-resume-'))
   const gone = join(dir, 'removed-checkout')
-  const verification = resumed(gone).verifyResumedCheckout(gone)
-  await expect(verification).rejects.toThrow(
-    'The reviewed workspace folder is already gone. Retry deletion to finish cleanup.'
-  )
-  await expect(verification).rejects.not.toMatchObject({ code: 'ERR_ORCA_WORKTREE_CHANGED' })
+  expect(await resumed(gone).resumeCheckout(gone)).toBe('gone')
 })
 
 it('still refuses a checkout that exists but is not the reviewed one', async () => {
   dir = mkdtempSync(join(tmpdir(), 'orca-resume-'))
-  await expect(resumed(dir).verifyResumedCheckout(dir)).rejects.toMatchObject({
+  await expect(resumed(dir).resumeCheckout(dir)).rejects.toMatchObject({
     code: 'ERR_ORCA_WORKTREE_CHANGED'
   })
 })

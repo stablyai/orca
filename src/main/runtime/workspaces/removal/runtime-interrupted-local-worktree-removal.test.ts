@@ -106,6 +106,8 @@ async function finishAfterRestart(
     force?: boolean
     deleteBranch?: boolean
     stopPtys?: () => Promise<void>
+    /** A cleanup removal: bound to the reviewed instance and its checkout proof. */
+    reviewed?: Pick<WorktreeRemovalRecord, 'expectedInstanceId' | 'expectedCheckoutIdentity'>
   } = {}
 ): Promise<{
   outcome: FinishOutcome
@@ -122,7 +124,8 @@ async function finishAfterRestart(
     head: options.head ?? (await git(['rev-parse', 'feature'])).trim(),
     deleteBranch: options.deleteBranch ?? true,
     force: options.force ?? false,
-    requestedAt: 1
+    requestedAt: 1,
+    ...options.reviewed
   }
   await writeWorktreeRemovalRecords(recordsDir, () => [record])
   await loadWorktreeRemovalRecords(recordsDir)
@@ -213,6 +216,28 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     expect(records).toEqual([])
     expect(existsSync(join(worktreePath, 'work.txt'))).toBe(true)
     expect(purged).toEqual([])
+  })
+
+  it('finishes a reviewed cleanup removal whose checkout Git already deleted before the restart', async () => {
+    await git(['worktree', 'remove', worktreePath])
+    // A stale proof: it can't match anything, and is never read once the checkout is gone.
+    const expectedCheckoutIdentity = {
+      instanceId: 'removal-fixture',
+      root: worktreePath,
+      rootKey: 'recorded',
+      markerKey: 'recorded',
+      gitDir: join(repoPath, '.git', 'worktrees', 'feature'),
+      adminKey: 'recorded',
+      nonce: '00000000-0000-0000-0000-000000000000'
+    }
+
+    const { outcome, purged, records } = await finishAfterRestart({
+      reviewed: { expectedInstanceId: 'removal-fixture', expectedCheckoutIdentity }
+    })
+
+    expect(outcome).toMatchObject({ status: 'removed' })
+    expect(purged).toEqual([`repo-1::${worktreePath}`])
+    expect(records).toEqual([])
   })
 })
 

@@ -4,7 +4,6 @@ import {
 } from './worktree-checkout-identity'
 import {
   WorktreeRemovalIncarnationChangedError,
-  isWorktreeIncarnationChanged,
   type WorktreeCheckoutIdentity
 } from '../../../shared/worktree/removal/worktree-checkout-identity'
 import { worktreeCheckoutExists } from './worktree-removal-table'
@@ -75,20 +74,15 @@ export class WorktreeRemovalExpectation {
     this.check()
   }
 
-  /** Resuming after a restart: a checkout Git already deleted proves nothing, but there is nothing
-   * left to protect either, so the removal fails with a retry instead of a silent refusal. */
-  async verifyResumedCheckout(root: string): Promise<void> {
+  /** Resuming after a restart: Git may already have deleted the reviewed checkout, which leaves only
+   * bookkeeping that deletes no files. A checkout still on disk must be the reviewed one. */
+  async resumeCheckout(root: string): Promise<'present' | 'gone'> {
     this.check()
-    try {
-      await this.verifyCheckout(root)
-    } catch (error) {
-      if (isWorktreeIncarnationChanged(error) && !(await worktreeCheckoutExists(root))) {
-        throw new Error(
-          'The reviewed workspace folder is already gone. Retry deletion to finish cleanup.'
-        )
-      }
-      throw error
+    if (!(await worktreeCheckoutExists(root))) {
+      return 'gone'
     }
+    await this.verifyCheckout(root)
+    return 'present'
   }
 
   async bindCheckout(root: string, repoPath: string): Promise<void> {
