@@ -11,7 +11,7 @@ import {
 
 describe('strict RRULE parsing', () => {
   it.each([
-    ['FREQ=WEEKLY;WKST=MO;BYDAY=WE', 'Unsupported RRULE part "WKST" for FREQ=WEEKLY.'],
+    ['FREQ=WEEKLY;WKST=SU;BYDAY=WE', 'Unsupported RRULE part "WKST" for FREQ=WEEKLY.'],
     ['FREQ=DAILY;COUNT=2', 'Unsupported RRULE part "COUNT" for FREQ=DAILY.'],
     ['FREQ=DAILY;UNTIL=20271231T000000Z', 'Unsupported RRULE part "UNTIL" for FREQ=DAILY.'],
     ['FREQ=WEEKLY;BYDAY=MO;BYDAY=TU', 'Unsupported RRULE part "BYDAY" for FREQ=WEEKLY.'],
@@ -63,6 +63,19 @@ describe('strict RRULE parsing', () => {
     expect(needsScheduleRulesCapability(rule)).toBe(true)
     expect(needsScheduleRulesCapability('FREQ=WEEKLY;INTERVAL=1;BYDAY=WE')).toBe(false)
     expect(needsScheduleRulesCapability('0 9 * * 1')).toBe(false)
+  })
+
+  it('accepts WKST=MO without changing the parsed rule', () => {
+    const rule = 'FREQ=WEEKLY;INTERVAL=2;BYDAY=WE;WKST=MO;BYHOUR=11;BYMINUTE=0'
+    expect(parseSchedule(rule)).toEqual({
+      kind: 'rrule',
+      freq: 'WEEKLY',
+      interval: 2,
+      byDay: ['WE'],
+      byHour: 11,
+      byMinute: 0
+    })
+    expect(isValidAutomationSchedule('FREQ=DAILY;WKST=MO;BYHOUR=9')).toBe(true)
   })
 
   it('escapes control bytes in the refused part it names', () => {

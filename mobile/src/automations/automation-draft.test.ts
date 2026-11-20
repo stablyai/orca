@@ -1,5 +1,5 @@
 import { loadAutomationTargets, workspaceMatchesSetup } from './automation-target-inventory'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { automationDraftPatch, newAutomationDraft } from './automation-draft'
 
 import { automationClient, automationTargets } from './automation-test-fixtures'
@@ -53,6 +53,7 @@ describe('mobile automation host contracts', () => {
 })
 
 describe('automation setup pin writes', () => {
+  afterEach(() => vi.useRealTimers())
   const original = { ...newAutomationDraft(), name: 'Nightly', setupDecision: 'run' as const }
 
   it('keeps the saved pin on an ordinary edit', () => {
@@ -68,7 +69,6 @@ describe('automation setup pin writes', () => {
       rrule,
       dtstart: Date.parse('2026-11-12T15:00:00Z')
     })
-    vi.useRealTimers()
   })
 
   it('names the decision when setup was re-approved without a pin', () => {

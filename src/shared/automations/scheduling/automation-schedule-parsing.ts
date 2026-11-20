@@ -39,10 +39,11 @@ const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR'] as const
 
 // Parts each FREQ can actually run; anything else is refused rather than silently ignored.
+// WKST is accepted only as MO, the week start interval matching already assumes.
 const RRULE_PARTS: Record<ParsedRrule['freq'], readonly string[]> = {
-  HOURLY: ['FREQ', 'INTERVAL', 'BYMINUTE'],
-  DAILY: ['FREQ', 'INTERVAL', 'BYHOUR', 'BYMINUTE'],
-  WEEKLY: ['FREQ', 'INTERVAL', 'BYDAY', 'BYHOUR', 'BYMINUTE']
+  HOURLY: ['FREQ', 'INTERVAL', 'BYMINUTE', 'WKST'],
+  DAILY: ['FREQ', 'INTERVAL', 'BYHOUR', 'BYMINUTE', 'WKST'],
+  WEEKLY: ['FREQ', 'INTERVAL', 'BYDAY', 'BYHOUR', 'BYMINUTE', 'WKST']
 }
 
 function parseRruleInteger(
@@ -79,7 +80,12 @@ function parseRrule(rrule: string): ParsedRrule {
   }
   const values = new Map<string, string>()
   for (const { key, value } of entries) {
-    if (value === undefined || values.has(key) || !RRULE_PARTS[freq].includes(key)) {
+    if (
+      value === undefined ||
+      values.has(key) ||
+      !RRULE_PARTS[freq].includes(key) ||
+      (key === 'WKST' && value !== 'MO')
+    ) {
       // Schedules can come from synced hosts, and this message is printed by the CLI and editor.
       const shownKey = escapeTerminalControlCharacters(key, true)
       throw new Error(`Unsupported RRULE part "${shownKey}" for FREQ=${freq}.`)

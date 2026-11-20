@@ -14,9 +14,9 @@ describe('buildAutomationEditDraft', () => {
   })
 
   it('opens a refused saved rule as Custom with the part named, so a rename still saves', () => {
-    const rrule = 'FREQ=WEEKLY;WKST=MO;BYDAY=WE'
+    const rrule = 'FREQ=DAILY;UNTIL=20271231T000000Z'
     const draft = buildAutomationEditDraft(makeAutomation({ rrule }))
     expect(draft).toMatchObject({ preset: 'custom', customSchedule: rrule, savedSchedule: rrule })
-    expect(draft.scheduleWarning).toContain('"WKST"')
+    expect(draft.scheduleWarning).toContain('"UNTIL"')
   })
 })

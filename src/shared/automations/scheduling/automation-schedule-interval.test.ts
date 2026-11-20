@@ -44,6 +44,14 @@ describe.skipIf(process.platform === 'win32').each(MODES)(
       ])
     })
 
+    it('runs biweekly across the year boundary', () => {
+      expect(runs(BIWEEKLY, '2026-12-23T00:00:00-05:00', '2026-12-23T00:00:00-05:00', 3)).toEqual([
+        '2026-12-23T16:00:00.000Z',
+        '2027-01-06T16:00:00.000Z',
+        '2027-01-20T16:00:00.000Z'
+      ])
+    })
+
     it('keeps 11:00 wall time across fall back', () => {
       expect(runs(BIWEEKLY, '2026-10-28T00:00:00-04:00', '2026-10-28T00:00:00-04:00', 2)).toEqual([
         '2026-10-28T15:00:00.000Z',

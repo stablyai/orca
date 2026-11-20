@@ -117,7 +117,7 @@ describe('orca automations schedule rules', () => {
     await expect(
       run('automations create', client, [
         ...BOT_CREATE,
-        ['trigger', 'FREQ=WEEKLY;WKST=MO;BYDAY=WE']
+        ['trigger', 'FREQ=WEEKLY;WKST=SU;BYDAY=WE']
       ])
     ).rejects.toThrow('"WKST"')
   })
