@@ -33,13 +33,13 @@ function workForTitleWrite(workspaces: number): {
   rescanHashes: number
 } {
   let sleepLookups = 0
-  // Each scanned chat looks itself up here, so this counts chats a pass visits.
-  const sleptAt = new Proxy(
+  // Each scanned chat looks itself up here, so this counts chats a pass visits; none is asleep.
+  const sleptAt = new Proxy<Record<string, number | null>>(
     {},
     {
-      get(target, key, receiver) {
+      get() {
         sleepLookups++
-        return Reflect.get(target, key, receiver)
+        return undefined
       }
     }
   )

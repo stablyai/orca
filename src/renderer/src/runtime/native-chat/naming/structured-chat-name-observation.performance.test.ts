@@ -10,13 +10,17 @@ import { getStructuredChatTabNames } from './structured-chat-name-observation'
 // because the name snapshot was keyed on the whole tab map rather than the chat list.
 
 let chatReads = 0
-function counted(tab: Tab): Tab {
-  return new Proxy(tab, {
-    get(target, key, receiver) {
-      chatReads++
-      return Reflect.get(target, key, receiver)
-    }
-  })
+function counted<T extends object>(row: T): T {
+  for (const [key, value] of Object.entries(row)) {
+    Object.defineProperty(row, key, {
+      enumerable: true,
+      get: () => {
+        chatReads++
+        return value
+      }
+    })
+  }
+  return row
 }
 
 function workspaceTabs(worktreeId: string): Tab[] {

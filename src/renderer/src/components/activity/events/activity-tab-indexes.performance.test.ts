@@ -16,12 +16,16 @@ import {
 
 let reads = 0
 function counted<T extends object>(row: T): T {
-  return new Proxy(row, {
-    get(target, key, receiver) {
-      reads++
-      return Reflect.get(target, key, receiver)
-    }
-  })
+  for (const [key, value] of Object.entries(row)) {
+    Object.defineProperty(row, key, {
+      enumerable: true,
+      get: () => {
+        reads++
+        return value
+      }
+    })
+  }
+  return row
 }
 
 function terminal(worktreeId: string, title: string): TerminalTab {
