@@ -112,6 +112,11 @@ it('rejects unknown renewals and expires only at the earliest lease deadline', a
   expect(bridge.receive({ ...identity, action: 'renew' })).toEqual({ registered: true })
   expect(frames).toHaveLength(3)
   expect(vi.getTimerCount()).toBe(1)
+  // The renewal moved the first deadline later; the armed timer finds nothing to expire and re-arms.
+  await vi.advanceTimersToNextTimerAsync()
+  expect(Date.now()).toBe(150_000)
+  expect(frames).toHaveLength(3)
+  expect(vi.getTimerCount()).toBe(1)
   await vi.advanceTimersToNextTimerAsync()
   expect(Date.now()).toBe(160_000)
   expect(frames.at(-1)).toEqual([

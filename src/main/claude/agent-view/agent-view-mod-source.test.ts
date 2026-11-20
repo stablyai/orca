@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { afterEach, expect, it, vi } from 'vitest'
-import { bindings, fixture } from './agent-view-mod-fixture'
+import { bindings, fixture } from './agent-view-mod.test-fixture'
 import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from './agent-view-mod-source'
 
 it.each(['not-json'])(

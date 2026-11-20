@@ -276,21 +276,28 @@ export class ClaudeAgentViewBridge {
       session.pending?.finish({ status: 'unavailable' })
     }
     this.sessions.clear()
-    this.armExpiry()
+    clearTimeout(this.expiryTimer)
+    this.expiryTimer = undefined
     this.publish()
   }
 
+  // Renewals only move deadlines later, so a pending timer may fire early but never late.
   private armExpiry(): void {
-    clearTimeout(this.expiryTimer)
-    this.expiryTimer = undefined
-    if (this.sessions.size === 0) {
+    if (this.expiryTimer || this.sessions.size === 0) {
       return
     }
     let deadline = Infinity
     for (const session of this.sessions.values()) {
       deadline = Math.min(deadline, session.seenAt + SESSION_TTL_MS)
     }
-    this.expiryTimer = setTimeout(() => this.prune(), Math.max(0, deadline - Date.now()))
+    this.expiryTimer = setTimeout(
+      () => {
+        this.expiryTimer = undefined
+        this.prune()
+        this.armExpiry()
+      },
+      Math.max(0, deadline - Date.now())
+    )
     this.expiryTimer.unref()
   }
 
@@ -303,7 +310,6 @@ export class ClaudeAgentViewBridge {
       }
     }
     if (this.sessions.size !== size) {
-      this.armExpiry()
       this.publish()
     }
   }

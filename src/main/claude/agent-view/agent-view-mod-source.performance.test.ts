@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { fixture, paneKey } from './agent-view-mod-fixture'
+import { fixture, paneKey } from './agent-view-mod.test-fixture'
 
 afterEach(() => {
   vi.clearAllTimers()
