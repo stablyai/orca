@@ -55,6 +55,8 @@ function NativeChatBridgeView({
   const {
     entry: agentStatusEntry,
     saved,
+    shellForeground,
+    restoredPtyId,
     paneKey
   } = useNativeChatStatusEntry(terminalTabId, preferredPaneKey)
   return (
@@ -64,6 +66,8 @@ function NativeChatBridgeView({
       resolvedAgent={resolvedAgent}
       agentStatusEntry={agentStatusEntry}
       saved={saved}
+      shellForeground={shellForeground}
+      restoredPtyId={restoredPtyId}
       ptyId={targetPtyId}
     >
       {(resolution) => (

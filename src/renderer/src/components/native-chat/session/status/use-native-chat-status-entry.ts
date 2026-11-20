@@ -7,27 +7,25 @@ export function useNativeChatStatusEntry(
   terminalTabId: string,
   preferredPaneKey: string | undefined
 ) {
-  const { entry, saved } = useAppStore(
+  return useAppStore(
     useShallow((state) => {
       const entry = preferredPaneKey
         ? state.agentStatusByPaneKey.get(preferredPaneKey)
         : findTabAgentEntry(state.agentStatusByPaneKey, terminalTabId)
+      const paneKey = preferredPaneKey ?? entry?.paneKey ?? `${terminalTabId}:`
+      const shellForeground = state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground === true
+      const resume = state.terminalPaneResumeOutcomesByPaneKey[paneKey]
+      const restoredPtyId = resume?.outcome === 'restored' ? resume.ptyId : undefined
       const record = preferredPaneKey
         ? state.sleepingAgentSessionsByPaneKey[preferredPaneKey]
         : undefined
       const saved =
         record?.agent === 'claude' &&
         !record.connectionId &&
-        !state.paneForegroundAgentByPaneKey[record.paneKey]?.shellForeground &&
         tryRuntimeTargetForWorktreeOwner(state, record.worktreeId)?.kind === 'local'
           ? record
           : undefined
-      return { entry, saved }
+      return { entry, saved, paneKey, shellForeground, restoredPtyId }
     })
   )
-  return {
-    entry,
-    saved,
-    paneKey: preferredPaneKey ?? entry?.paneKey ?? `${terminalTabId}:`
-  }
 }

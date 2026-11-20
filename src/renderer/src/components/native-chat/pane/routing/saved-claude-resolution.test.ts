@@ -20,6 +20,17 @@ it('recovers the exact local Claude pane and skips other panes, providers, and r
     sessionId: 'saved',
     transcriptPath: '/tmp/session.jsonl'
   })
+  const previous = resolveNativeChatSession(input)
+  const replacement = { ...input, ptyId: 'new-pty' }
+  const pending = resolveNativeChatSession(replacement, previous)
+  expect(pending?.sessionId).toBeNull()
+  expect(resolveNativeChatSession(replacement, pending)?.sessionId).toBeNull()
+  expect(
+    resolveNativeChatSession({ ...replacement, restoredPtyId: 'pty' }, pending)?.sessionId
+  ).toBeNull()
+  expect(
+    resolveNativeChatSession({ ...replacement, restoredPtyId: 'new-pty' }, pending)?.sessionId
+  ).toBe('saved')
   expect(
     resolveNativeChatSession({
       ...input,
