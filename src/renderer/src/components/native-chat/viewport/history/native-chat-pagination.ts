@@ -63,7 +63,7 @@ export function withHeldOlderHistory(
     const same =
       base.length - inBase === window.length &&
       window.every((message, i) => JSON.stringify(message) === JSON.stringify(base[inBase + i]))
-    return same ? (base as NativeChatMessage[]) : [...base.slice(0, inBase), ...window]
+    return same ? base : [...base.slice(0, inBase), ...window]
   }
   const inTail = heldAt(liveTail)
   if (inTail < 0 || !nativeChatLiveTailJoinsBase(agent, base, liveTail)) {

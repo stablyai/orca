@@ -1,6 +1,6 @@
 import { useNativeChatOlderHistory } from '../../../viewport/history/use-native-chat-older-history'
-import { useNativeChatHistoryTrim } from '../../../viewport/history/use-native-chat-history-trim'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { trimNativeChatHistory } from '../../../viewport/history/native-chat-history-trim'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type NativeChatMessage
@@ -262,22 +262,26 @@ export function useNativeChatLiveSession(
     setHasMore
   })
 
-  const trimHistory = useNativeChatHistoryTrim({
-    sessionId,
-    transport,
-    read,
-    appendMergerRef,
-    limitRef,
-    latestEnabled,
-    latestSessionId,
-    latestTransport,
-    transcriptEpochRef,
-    setOlderHistoryGeneration,
-    setLoadingEarlier,
-    setRead,
-    setAppended,
-    setHasMore
-  })
+  const trimHistory = useCallback(
+    () =>
+      trimNativeChatHistory({
+        sessionId,
+        transport,
+        read,
+        appendMergerRef,
+        limitRef,
+        latestEnabled,
+        latestSessionId,
+        latestTransport,
+        transcriptEpochRef,
+        setOlderHistoryGeneration,
+        setLoadingEarlier,
+        setRead,
+        setAppended,
+        setHasMore
+      }),
+    [read, sessionId, transport]
+  )
 
   // Keep status-only hook updates from rerunning the assembler.
   const baseMessages = read.phase === 'ready' ? read.messages : EMPTY_MESSAGES
