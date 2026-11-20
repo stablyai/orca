@@ -29,6 +29,9 @@ vi.mock('../webauthn/browser-passkey-requests', () => ({
 vi.mock('../guest-lifecycle/prompts/browser-system-dialogs', () => ({
   listenForBrowserSystemDialogs: vi.fn()
 }))
+vi.mock('../guest-lifecycle/visibility/browser-guest-page-visibility', () => ({
+  listenForBrowserGuestPageVisibility: vi.fn()
+}))
 
 import { initializeBrowserSessionsForApp } from './browser-session-startup'
 

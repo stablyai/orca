@@ -78,8 +78,21 @@ function noteBlockedMainFrame(
     details.resourceType === 'mainFrame' &&
     details.webContentsId !== undefined
   ) {
-    blockedMainFrameWatchers.get(details.webContentsId)?.(details.url, reason)
+    const onBlocked = blockedMainFrameWatchers.get(details.webContentsId)
+    reportingBlockedRequestId = details.id
+    try {
+      onBlocked?.(details.url, reason)
+    } finally {
+      reportingBlockedRequestId = null
+    }
   }
+}
+
+let reportingBlockedRequestId: number | null = null
+
+/** While the failure for an extension-blocked main frame is reported, that request's id. */
+export function blockedMainFrameRequestBeingReported(): number | null {
+  return reportingBlockedRequestId
 }
 
 /** Answers an onBeforeRequest that Orca's own policy let through. */

@@ -47,6 +47,9 @@ const EXPECTED_CURSOR_HOOK_STDOUT = {
   afterAgentResponse: {}
 } satisfies Record<CursorEvent, Record<string, unknown>>
 
+// Every event runs the same script with one of these three responses; one event per response covers the quoting.
+const RESPONSE_SHAPE_EVENTS = ['beforeSubmitPrompt', 'stop', 'preToolUse'] as const
+
 function readInstalledCursorHooks(homeDir: string): InstalledCursorHooks {
   return JSON.parse(
     readFileSync(join(homeDir, '.cursor', 'hooks.json'), 'utf8')
@@ -144,7 +147,7 @@ describe('CursorHookService', () => {
 
   // Execute the registered command: installer-shape checks missed invalid stdout (#15462).
   it(
-    'emits protocol-valid JSON on stdout for every managed event, including empty stdin (#15462)',
+    'emits protocol-valid JSON on stdout for every response shape, including empty stdin (#15462)',
     () => {
       expect(new CursorHookService().install().state).toBe('installed')
       const config = readInstalledCursorHooks(homeDir)
@@ -154,6 +157,9 @@ describe('CursorHookService', () => {
       ]
 
       for (const eventName of CURSOR_EVENTS) {
+        requireRegisteredCommand(config, eventName)
+      }
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         for (const payloadFor of payloads) {
           const result = runRegisteredCursorHook(command, payloadFor(eventName))
@@ -178,7 +184,7 @@ describe('CursorHookService', () => {
       const config = readInstalledCursorHooks(installHome)
       unlinkSync(join(installHome, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME))
 
-      for (const eventName of CURSOR_EVENTS) {
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         const result = runRegisteredCursorHook(command, '')
         expect(result.status, `${eventName} missing-script exit`).toBe(0)
@@ -197,7 +203,7 @@ describe('CursorHookService', () => {
       expect(new CursorHookService().install().state).toBe('installed')
       const config = readInstalledCursorHooks(homeDir)
 
-      for (const eventName of ['beforeSubmitPrompt', 'preToolUse', 'stop'] as const) {
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         const result = runRegisteredCursorHook(
           command,

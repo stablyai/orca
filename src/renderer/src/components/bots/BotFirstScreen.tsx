@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
 import { botTarget } from '@/lib/bot-hosts'
 import { toast } from 'sonner'
@@ -16,7 +16,12 @@ import { useNativeChatVisualOwner } from '../native-chat/media/visuals/native-ch
 import { useBotForWorkspace } from './bot-workspace'
 import { BotAvatar } from './BotAvatar'
 import { StepIcon } from '../worktree-creation/WorktreeSetupSteps'
+import { NativeChatDetailsDisclosure } from '../native-chat/messages/diagnostics/NativeChatProviderDetails'
+import { openAgentSettingsAction } from '../settings/navigation/open-agent-settings'
 import { useStructuredAgentSessionHostExecutionPhase } from '../native-chat/session/status/structured-agent-session-status-hooks'
+import { NativeChatInstallStrip } from '../native-chat/host-access/NativeChatInstallStrip'
+import { NativeChatSignInStrip } from '../native-chat/host-access/NativeChatSignInStrip'
+import { useBotSetupInstall } from './BotSetupInstall'
 
 /** Shown by name; more are counted. */
 const NAMES_SHOWN = 3
@@ -161,14 +166,27 @@ async function tryAgain(bot: Bot): Promise<void> {
   }
 }
 
-function TryAgain({ bot }: { bot: Bot }): React.JSX.Element {
+function TryAgain({
+  bot,
+  commandSetting
+}: {
+  bot: Bot
+  /** The agent's Command setting is why it failed, so its fix is one press away. */
+  commandSetting: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const [asked, setAsked] = useState(false)
+  const settingsAction = openAgentSettingsAction(botTarget(bot), t)
   return (
     <div className="mt-1 flex items-center gap-2 border-t border-border pt-2">
       <span className="min-w-0 flex-1 text-xs text-muted-foreground">
         {t('bots.firstScreen.failed', 'Couldn’t finish setting up')}
       </span>
+      {commandSetting ? (
+        <Button variant="outline" size="xs" onClick={settingsAction.onClick}>
+          {settingsAction.label}
+        </Button>
+      ) : null}
       <Button
         variant="outline"
         size="xs"
@@ -189,10 +207,12 @@ function TryAgain({ bot }: { bot: Bot }): React.JSX.Element {
  *  its first message, each with the agent's latest retry or failure line and, once failed, Try again. */
 function BotSetupSteps({
   bot,
-  firstScreen
+  firstScreen,
+  isVisible
 }: {
   bot: Bot
   firstScreen: NativeChatFirstScreen
+  isVisible: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const agentReady =
@@ -224,6 +244,8 @@ function BotSetupSteps({
     { id: 'reply', step: reply, label: t('bots.firstScreen.stepReply', 'First message') }
   ]
   const failed = start.state === 'failed' || reply.state === 'failed'
+  const retry = useCallback(() => void tryAgain(bot), [bot])
+  const { install, signIn } = useBotSetupInstall(bot, failed && isVisible, retry)
   return (
     <div className="mt-6 w-96 max-w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground">
       <ol className="flex flex-col">
@@ -241,15 +263,38 @@ function BotSetupSteps({
                 {label}
               </span>
             </div>
-            {step.detail ? (
+            {/* Install says what is missing; the host's sentence points at a chat this card covers. */}
+            {step.detail && !((install || signIn) && id === 'start') ? (
               <p className="ml-5.5 line-clamp-3 break-words text-xs text-muted-foreground">
                 {step.detail}
               </p>
             ) : null}
+            {step.providerDetail ? (
+              <div className="ml-4">
+                <NativeChatDetailsDisclosure
+                  summary={t('components.native-chat.notices.details', 'Details')}
+                >
+                  {step.providerDetail}
+                </NativeChatDetailsDisclosure>
+              </div>
+            ) : null}
           </li>
         ))}
       </ol>
-      {failed ? <TryAgain bot={bot} /> : null}
+      {install || signIn ? (
+        <div className="mt-1 border-t border-border pt-2 pb-1">
+          {install ? (
+            <NativeChatInstallStrip slot={install} agentLabel={agent} />
+          ) : signIn ? (
+            <NativeChatSignInStrip state={signIn} agentLabel={agent} />
+          ) : null}
+        </div>
+      ) : failed ? (
+        <TryAgain
+          bot={bot}
+          commandSetting={firstScreen.refused?.kind === 'agentCommandNotRunnable'}
+        />
+      ) : null}
     </div>
   )
 }
@@ -285,7 +330,7 @@ export function BotFirstScreen({
           agent: botAgentLabel(bot.agent)
         })}
       </span>
-      <BotSetupSteps bot={bot} firstScreen={firstScreen} />
+      <BotSetupSteps bot={bot} firstScreen={firstScreen} isVisible={isVisible} />
       {rows.length > 0 ? (
         <div className="flex w-96 max-w-full flex-col gap-2 pt-6">
           <span className="text-xs text-chat-foreground-faint">

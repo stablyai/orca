@@ -31,7 +31,6 @@ import {
 import { botMembersFrom, type Bot } from '../../../../../shared/bot-types'
 import { botLookAround, lookAroundSupported } from '../../../../../shared/bots/bot-look-around'
 import { botTidyUp } from '../../../../../shared/bots/bot-tidy-up'
-import { botToolsSupported } from '../../../../../shared/bot-tools'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import type { BotHome } from '../../settings/bots/bot-home-files'
 import { useBotMemoryTopicCount } from '../../settings/bots/use-bot-memory-topics'
@@ -192,7 +191,7 @@ function AccessGroup({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const lines = useAccessLines(bot)
-  const { view } = useBotTools(botToolsSupported(bot.agent) ? bot : null, 'finished')
+  const { view } = useBotTools(bot, 'finished')
   const repos = useAppStore((state) => state.repos)
   const skills = namesLine(
     (bot.skillProjects ?? []).flatMap(

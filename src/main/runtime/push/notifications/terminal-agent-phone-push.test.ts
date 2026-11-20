@@ -106,6 +106,90 @@ describe('TerminalAgentPhonePush on a windowless host', () => {
     ])
   })
 
+  it("carries a finish's reply that its transcript read adds within the quiet window", () => {
+    const host = windowlessHost()
+    const pane = 'tab-1:leaf-1'
+    const turn = {
+      paneKey: pane,
+      agentType: 'droid',
+      connectionId: null,
+      prompt: 'fix it'
+    } as const
+    host.hookRows.set(pane, {
+      ...turn,
+      state: 'working',
+      receivedAt: host.now(),
+      stateStartedAt: host.now()
+    })
+    host.push.observe({
+      kind: 'observed',
+      paneKey: pane,
+      workspace,
+      phase: 'working',
+      at: host.now()
+    })
+    const done: AgentStatusIpcPayload = {
+      ...turn,
+      state: 'done',
+      receivedAt: host.now(),
+      stateStartedAt: host.now(),
+      turnCompletedAt: host.now()
+    }
+    host.hookRows.set(pane, done)
+    host.moved(pane, 'done', 'turn-finished')
+    host.advance(20)
+    host.hookRows.set(pane, { ...done, lastAssistantMessage: 'All tests pass.' })
+    host.advance(1500)
+    expect(host.sent.map((event) => event.body)).toEqual([
+      expect.stringContaining('All tests pass.')
+    ])
+  })
+
+  it("keeps a finish's reply when /clear starts a new session within the quiet window", () => {
+    const host = windowlessHost()
+    const pane = 'tab-1:leaf-1'
+    const turn = {
+      paneKey: pane,
+      agentType: 'claude',
+      connectionId: null,
+      prompt: 'fix it'
+    } as const
+    host.hookRows.set(pane, {
+      ...turn,
+      state: 'working',
+      receivedAt: host.now(),
+      stateStartedAt: host.now()
+    })
+    host.push.observe({
+      kind: 'observed',
+      paneKey: pane,
+      workspace,
+      phase: 'working',
+      at: host.now()
+    })
+    const done: AgentStatusIpcPayload = {
+      ...turn,
+      state: 'done',
+      lastAssistantMessage: 'All tests pass.',
+      receivedAt: host.now(),
+      stateStartedAt: host.now(),
+      turnCompletedAt: host.now()
+    }
+    host.hookRows.set(pane, done)
+    host.moved(pane, 'done', 'turn-finished')
+    host.advance(200)
+    host.hookRows.set(pane, {
+      ...turn,
+      state: 'done',
+      receivedAt: host.now(),
+      stateStartedAt: done.stateStartedAt
+    })
+    host.advance(1500)
+    expect(host.sent.map((event) => event.body)).toEqual([
+      expect.stringContaining('All tests pass.')
+    ])
+  })
+
   it('rings a bell its finish held once the agent resumes work instead', () => {
     const host = windowlessHost()
     const idle: TerminalSideEffectFact = { kind: 'agent-idle', title: '◇ Ready (gemini)' }

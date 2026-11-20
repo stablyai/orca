@@ -20,7 +20,8 @@ function owner(
       { id: 'linux-1', name: 'linux 1' },
       { id: 'windows-2', name: 'windows 2' }
     ],
-    runtimeStatusByEnvironmentId
+    runtimeStatusByEnvironmentId,
+    sshTargetLabels: new Map()
   } as unknown as BotCreateHostsInput
 }
 
@@ -36,6 +37,34 @@ const shape = (rows: ReturnType<typeof botCreateHostRows>) =>
   rows.map((row) => [row.host.label, row.group, row.meta, row.action])
 
 describe('botCreateHostRows', () => {
+  it('lists configured SSH hosts and uses the paired server route for a managed SSH host', () => {
+    const state = owner()
+    const hosts = botCreateHosts({
+      ...state,
+      runtimeEnvironments: [
+        {
+          ...state.runtimeEnvironments[0],
+          name: 'Managed server',
+          orcadDeployment: {
+            sshTargetId: 'g16-ssh',
+            sshTargetGeneration: 1,
+            localPort: 8000,
+            remotePort: 8000
+          }
+        }
+      ],
+      sshTargetLabels: new Map([
+        ['g16-ssh', 'g16'],
+        ['lab-ssh', 'Lab'],
+        ['runtime-ssh-vm', 'VM tunnel']
+      ])
+    })
+    expect(hosts.map((host) => host.hostId)).toEqual(['local', 'runtime:g16', 'ssh:lab-ssh'])
+    expect(hosts[1]).toMatchObject({ label: 'g16', platform: 'win32' })
+    expect(hosts[1].blocked).toBeUndefined()
+    expect(hosts[2].blocked).toBe('needs-server')
+  })
+
   it('puts ready hosts first with their OS and other account, then the rest with only their fix', () => {
     const rows = botCreateHostRows(
       botCreateHosts(owner()),

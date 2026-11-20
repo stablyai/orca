@@ -5,6 +5,7 @@ import type { HandlerContext } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getOptionalStringFlagAllowingEmpty,
   getRequiredStringFlag
 } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -32,6 +33,60 @@ export async function readMessageText(
     throw new RuntimeClientError('invalid_argument', 'The text is empty.')
   }
   return text
+}
+
+const AHEAD = /^\+(\d{1,4})([mhd])$/
+const UNIT_SECONDS = { m: 60, h: 3_600, d: 86_400 } as const
+// A time with its zone, so it means one moment wherever the machine is.
+const ZONED = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/
+/** Slack's own limits on a scheduled message: not in the past, at most 120 days ahead. */
+const MAX_AHEAD_SECONDS = 120 * 86_400
+const MIN_AHEAD_SECONDS = 60
+
+// The parser rolls a day a month doesn't have into the next one (Nov 31 becomes Dec 1): a date
+// that isn't on the calendar is refused instead, by reading it back.
+function realDate(zoned: string): boolean {
+  const [year, month, day] = zoned.slice(0, 10).split('-').map(Number)
+  const read = new Date(Date.UTC(year ?? 0, (month ?? 0) - 1, day ?? 0))
+  return (
+    read.getUTCFullYear() === year && read.getUTCMonth() + 1 === month && read.getUTCDate() === day
+  )
+}
+
+/** `--at` as the moment to post (epoch seconds): a while from now (+30m, +2h, +3d) or a time with
+ *  its zone. Nothing when the flag is absent. */
+export function scheduledFor(at: string | undefined, nowMs: number): { postAt?: number } {
+  if (at === undefined) {
+    return {}
+  }
+  const now = Math.floor(nowMs / 1000)
+  const ahead = AHEAD.exec(at.trim())
+  const unit = ahead?.[2]
+  const postAt =
+    ahead && (unit === 'm' || unit === 'h' || unit === 'd')
+      ? now + Number(ahead[1]) * UNIT_SECONDS[unit]
+      : ZONED.test(at.trim()) && realDate(at.trim())
+        ? Math.floor(Date.parse(at.trim()) / 1000)
+        : Number.NaN
+  if (!Number.isSafeInteger(postAt)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--at takes a while from now (+30m, +2h, +3d) or a time with its zone (2026-12-01T09:00:00-08:00).'
+    )
+  }
+  if (postAt < now + MIN_AHEAD_SECONDS) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--at must be at least a minute from now. Leave it out to post now.'
+    )
+  }
+  if (postAt > now + MAX_AHEAD_SECONDS) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Slack schedules a post at most 120 days ahead.'
+    )
+  }
+  return { postAt }
 }
 
 /** The verbs `orca slack` sends in one call, as connector.act names them; attach takes several. */
@@ -66,7 +121,12 @@ export async function actionArgs(
       return { text: await readMessageText(flags, cwd, true) }
     case 'post':
       // Minted once here, so the host's retries after a lost answer post it at most once.
-      return { text: await readMessageText(flags, cwd, true), postId: randomUUID() }
+      return {
+        text: await readMessageText(flags, cwd, true),
+        postId: randomUUID(),
+        // Read with its blank kept: `--at ""` is a mistake to refuse, never a post sent now.
+        ...scheduledFor(getOptionalStringFlagAllowingEmpty(flags, 'at'), Date.now())
+      }
     case 'check':
       return flags.get('join') === true ? { join: true } : {}
     case 'find': {

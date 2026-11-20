@@ -98,6 +98,16 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && (entry.paneSleep || entry.receivedAt >= ttlCutoff)) {
+        // A shared host still runs this conversation after the restart.
+        if (
+          entry.providerSession &&
+          typeof rawResolvedEntry === 'object' &&
+          rawResolvedEntry !== null &&
+          'executionHost' in rawResolvedEntry &&
+          rawResolvedEntry.executionHost === 'shared'
+        ) {
+          entry.executionHost = 'shared'
+        }
         const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
         if (launchTokenHash) {
           this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, launchTokenHash)

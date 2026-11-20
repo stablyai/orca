@@ -36,7 +36,7 @@ export function MobileRelaySignInPanel({
         {reconnectRequired
           ? t(
               'auto.components.settings.MobilePairingConnectionOptions.signInAgain',
-              'Sign in again for Relay'
+              'Sign in again'
             )
           : t(
               'auto.components.settings.MobilePairingConnectionOptions.signIn',

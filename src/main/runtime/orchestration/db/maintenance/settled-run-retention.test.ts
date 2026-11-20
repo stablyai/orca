@@ -103,6 +103,12 @@ describe('settled Run retention', () => {
          VALUES (?, ?, ?, ?, 'released', 'released')`
       )
       .run(`resource_${objective}`, dispatchId, dispatchId, `term_worker_${objective}`)
+    db.db
+      .prepare(
+        `INSERT INTO worker_presence (dispatch_id, presence, generation, report)
+         VALUES (?, 'resting', 1, '{"from":"worker","reason":"finished"}')`
+      )
+      .run(dispatchId)
     return { run, task, dispatchId }
   }
 
@@ -151,7 +157,8 @@ describe('settled Run retention', () => {
       'federated_dispatches WHERE dispatch_id = ?',
       'worker_terminal_resources WHERE owner_dispatch_id = ?',
       'remote_questions WHERE dispatch_id = ?',
-      'federation_relay_items WHERE dispatch_id = ?'
+      'federation_relay_items WHERE dispatch_id = ?',
+      'worker_presence WHERE dispatch_id = ?'
     ]) {
       expect(count(table, settled.dispatchId)).toBe(0)
     }
@@ -161,6 +168,7 @@ describe('settled Run retention', () => {
     expect(db!.getTask(live.task.id)).toBeDefined()
     expect(db!.getWorkerDispatch(live.dispatchId)).toBeDefined()
     expect(count('worker_terminal_resources WHERE owner_dispatch_id = ?', live.dispatchId)).toBe(1)
+    expect(count('worker_presence WHERE dispatch_id = ?', live.dispatchId)).toBe(1)
   })
 
   it('deletes a large settled Run a bounded page at a time, its Run row last', () => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useSessionRouteRequest } from './use-session-route-request'
+import { SESSION_PANE_INTENT_PARAM } from './session-pane-intent'
 import {
   parseMobileSessionItemTarget,
   type MobileSessionItemLink,
@@ -11,7 +12,8 @@ import {
 export function useMobileSessionItemLink(
   showToast: (message: string) => void
 ): MobileSessionItemLink {
-  const arrival = useSessionRouteRequest('botItem')
+  // Each pane request's intent brings its item or none; acknowledgements keep the intent.
+  const arrival = useSessionRouteRequest('botItem', SESSION_PANE_INTENT_PARAM, 'paneKey')
   const t = useMobileTranslation()
   const [request, setRequest] = useState(() => {
     const target = parseMobileSessionItemTarget(arrival?.value)

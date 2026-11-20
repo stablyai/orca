@@ -22,7 +22,6 @@ import {
   type BotChatSearchAsk
 } from '../../../../shared/bots/use-bot-chat-search'
 import type { BotChatSearchResult } from '../../../../shared/bots/bot-chat-search'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { BotChatTreeGroup } from './BotChatTreeGroup'
 import {
   BotUsageLimitStopsContext,
@@ -39,6 +38,7 @@ import { BotPanelHeader } from './BotPanelHeader'
 import { useBotNeedsYouCount, useBotNow } from './use-bot-now'
 import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
+import { BotChatsSkeleton } from './BotChatsSkeleton'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
@@ -55,34 +55,14 @@ function OfflineHeader({ bot }: { bot: Bot }): React.JSX.Element {
   )
 }
 
-/** Why no chats show yet: still reading, the read failed, or the bot's host can't list them here. */
-function ChatsReadNote({
-  state,
-  retry
-}: {
-  state: 'loading' | 'failed' | 'unsupported'
-  retry: () => void
-}): React.JSX.Element {
+/** Why this bot's chats couldn't be listed. */
+function ChatsReadNote({ retry }: { retry: () => void }): React.JSX.Element {
   const t = useTranslate()
-  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
-  if (state === 'loading') {
-    return <p className={NOTE}>{t('bots.chats.loading', 'Loading chats…')}</p>
-  }
-  if (state === 'failed') {
-    return (
-      <p className={NOTE}>
-        {t('bots.chats.readFailed', "Couldn't read this bot's chats.")}{' '}
-        <Button variant="link" size="inlineText" onClick={retry}>
-          {t('bots.chats.searchRetry', 'Try again')}
-        </Button>
-      </p>
-    )
-  }
   return (
     <p className={NOTE}>
-      {t('bots.chats.unsupported', "This bot's computer runs an older Orca that can't list chats.")}{' '}
-      <Button variant="link" size="inlineText" onClick={() => setRightSidebarTab('bot-activity')}>
-        {t('bots.chats.seeItems', 'See its work in Home')}
+      {t('bots.chats.readFailed', "Couldn't read this bot's chats.")}{' '}
+      <Button variant="link" size="inlineText" onClick={retry}>
+        {t('bots.chats.searchRetry', 'Try again')}
       </Button>
     </p>
   )
@@ -137,9 +117,6 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
         botId,
         query: text
       }).catch((error: unknown) => {
-        if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
-          return 'unsupported' as const
-        }
         console.error('Failed to search bot chats:', error)
         throw error
       }),
@@ -204,7 +181,11 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
             </Button>
           </div>
           {chats.length === 0 && tree.state !== 'ready' ? (
-            <ChatsReadNote state={tree.state} retry={tree.retry} />
+            tree.state === 'loading' ? (
+              <BotChatsSkeleton />
+            ) : (
+              <ChatsReadNote retry={tree.retry} />
+            )
           ) : null}
           {searching && chatHits.length > 0 ? (
             <div className={HEADING}>{t('bots.chats.title', 'Chats')}</div>

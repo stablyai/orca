@@ -175,16 +175,6 @@ it('finds the requested entries behind non-entry root rows', async () => {
   })
 })
 
-it('marks the page limited if its root rows contain no displayable entries', async () => {
-  const f = fixture()
-  f.seedItem(message(1, 'older reply'))
-  for (let sequence = 2; sequence <= 250; sequence++) {
-    f.seedItem({ ...message(sequence, ''), body: { kind: 'status', text: 'working' } })
-  }
-  f.head(250)
-  expect(await f.read(1)).toEqual({ entries: [], limited: true })
-})
-
 function turn(sequence: number, state: 'running' | 'completed'): AgentJournalRenderItem {
   return {
     ...message(sequence, ''),

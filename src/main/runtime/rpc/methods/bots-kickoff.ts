@@ -6,8 +6,8 @@ import { requireStructuredHost, runtimeBotChats } from '../../../bots/bot-chat-s
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 
 /** A kickoff retry reads each send's fingerprint first, and the chat from its start only once that
- *  shows it holds nothing but Orca's kickoff, so the chat is just those turns. Naming every send
- *  keeps a refused one that left no row. */
+ *  shows Orca's kickoff (and, on Try again, the owner's sends to check none reached the agent).
+ *  Naming every send keeps a refused one that left no row. */
 function kickoffReads(runtime: RpcContext['runtime']) {
   const reads = async (id: string) => (await requireStructuredHost(runtime)).journalReads(id)
   return {

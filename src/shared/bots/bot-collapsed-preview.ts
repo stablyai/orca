@@ -22,7 +22,11 @@ export function botPreviewSignal(bot: BotPreviewFacts): BotPreviewSignal {
 const PRIORITY = { attention: 0, unread: 1, working: 2 }
 
 /** Only the collapsed preview ranks bots; ties retain the host's saved order. */
-export function collapsedBotPreview<T extends BotPreviewFacts>(bots: readonly T[], limit = 5) {
+export function collapsedBotPreview<T extends BotPreviewFacts>(
+  bots: readonly T[],
+  limit = 5,
+  current?: T
+) {
   const ranked = bots
     .map((bot, index) => ({
       bot,
@@ -33,6 +37,13 @@ export function collapsedBotPreview<T extends BotPreviewFacts>(bots: readonly T[
     .map(({ bot }) => bot)
   const shown = ranked.slice(0, Math.max(0, Math.min(5, Math.floor(limit))))
   const hidden = ranked.slice(shown.length)
+  // Keep the current chat visible without shifting faces that already fit.
+  const hiddenIndex = current ? hidden.indexOf(current) : -1
+  if (current && shown.length > 0 && hiddenIndex >= 0) {
+    hidden.splice(hiddenIndex, 1)
+    hidden.unshift(shown.at(-1)!)
+    shown[shown.length - 1] = current
+  }
   return {
     shown,
     hidden,

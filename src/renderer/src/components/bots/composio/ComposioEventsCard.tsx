@@ -5,6 +5,7 @@ import { Webhook } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
+  NativeChatCardActions,
   NativeChatCardAvatar,
   NativeChatCardFrame
 } from '@/components/native-chat/NativeChatCardFrame'
@@ -64,13 +65,29 @@ export function ComposioEventsCardView({
           </NativeChatCardAvatar>
         }
         heading={t('bots.composio.card.heading', 'Composio')}
+        title={t('bots.composio.events.title', 'Have Composio call {{bot}} on {{trigger}}', {
+          bot: botName,
+          trigger: triggerName
+        })}
+        footer={
+          done || byHand ? undefined : (
+            <NativeChatCardActions>
+              <Button size="sm" variant="outline" disabled={busy} onClick={onByHand}>
+                {t('bots.composio.events.byHand', 'Manual setup')}
+              </Button>
+              <Button
+                size="sm"
+                disabled={busy || view.status === 'loading'}
+                onClick={() => onSetUp(other)}
+              >
+                {other
+                  ? t('bots.composio.events.replace', 'Replace and set up')
+                  : t('bots.composio.events.setUp', 'Set it up')}
+              </Button>
+            </NativeChatCardActions>
+          )
+        }
       >
-        <div className="mt-0.5 text-sm font-medium text-foreground">
-          {t('bots.composio.events.title', 'Have Composio call {{bot}} on {{trigger}}', {
-            bot: botName,
-            trigger: triggerName
-          })}
-        </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {other
             ? t(
@@ -88,24 +105,7 @@ export function ComposioEventsCardView({
             {shownError}
           </p>
         ) : null}
-        {done ? null : byHand ? (
-          byHandSteps
-        ) : (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <Button
-              size="xs"
-              disabled={busy || view.status === 'loading'}
-              onClick={() => onSetUp(other)}
-            >
-              {other
-                ? t('bots.composio.events.replace', 'Replace and set up')
-                : t('bots.composio.events.setUp', 'Set it up')}
-            </Button>
-            <Button size="xs" variant="ghost" disabled={busy} onClick={onByHand}>
-              {t('bots.composio.events.byHand', 'I’ll do it in Composio')}
-            </Button>
-          </div>
-        )}
+        {done || !byHand ? null : byHandSteps}
       </NativeChatCardFrame>
       {done ? (
         <GoogleSetupReceipt text={t('bots.composio.events.done', '✓ Set up')} />

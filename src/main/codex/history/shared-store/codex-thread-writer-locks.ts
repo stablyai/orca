@@ -4,14 +4,22 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { DirectoryLinkError, lstatIfPresent } from '../../../filesystem/merged-directory-link'
+import {
+  COORDINATION_LOCK,
+  PERL_PROBE,
+  POWERSHELL_PROBE,
+  SH_PROBE,
+  THREAD_LOCK_NAME
+} from './codex-thread-lock-probe-scripts'
 
 export const WRITER_LOCKS = 'thread-writer-locks'
-export const COORDINATION_LOCK = '.coordination.lock'
 const PROBE_TIMEOUT_MS = 10_000
 
-type ProbeAnswer = 'held' | 'idle' | 'unknown'
+// `unavailable`: no helper program could start (no perl, no flock(1), no PowerShell).
+type ProbeAnswer = 'held' | 'idle' | 'unknown' | 'unavailable'
 type LockHold =
   | { answer: ProbeAnswer }
   | {
@@ -21,74 +29,8 @@ type LockHold =
       release: () => Promise<void>
     }
 
-const HELPER_ANSWERS = new Set(['held', 'idle', 'unknown', 'ready', 'released'])
-const THREAD_LOCK_NAME =
-  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})\.lock$/i
-
-// Codex's own stale-lock sweep (writer_lock.rs): with coordination held exclusively, every
-// `<thread id>.lock` is opened read-write and tried without waiting; a free one is released and
-// deleted. Codex takes coordination before opening a thread lock, so nothing can start between the
-// listing and the try, and a Codex that needs coordination meanwhile waits for it instead of failing.
-// Every folder's coordination is taken first; only the first folder's held locks count. In `hold`
-// mode an idle answer is `ready`, and coordination stays held until stdin closes.
-const PERL_PROBE = `
-use Fcntl qw(:flock);
-my ($mode, @dirs) = @ARGV;
-$| = 1;
-sub answer { print "$_[0]\\n"; exit 0 }
-my @coordination;
-for my $dir (@dirs) {
-  open(my $c, '+>>', "$dir/${COORDINATION_LOCK}") or answer('unknown');
-  flock($c, LOCK_EX | LOCK_NB) or answer('unknown');
-  push @coordination, $c;
-}
-my $held = 0;
-for my $i (0 .. $#dirs) {
-  my $dir = $dirs[$i];
-  opendir(my $d, $dir) or answer('unknown');
-  for my $name (readdir $d) {
-    next unless $name =~ /${THREAD_LOCK_NAME.source}/i;
-    my $path = "$dir/$name";
-    my $l;
-    unless (open($l, '+<', $path)) { next if $!{ENOENT}; answer('unknown') }
-    if (flock($l, LOCK_EX | LOCK_NB)) { flock($l, LOCK_UN); close $l; unlink $path; next }
-    $!{EWOULDBLOCK} ? ($held ||= $i == 0) : answer('unknown');
-  }
-}
-answer('held') if $held;
-answer('idle') if $mode ne 'hold';
-print "ready\\n";
-if ((<STDIN> // '') =~ /^first/) { close($coordination[0]); print "released\\n"; <STDIN> }
-`
-
-// The same sweep with LockFileEx (FileStream.Lock), sharing everything Codex's own opens share, so
-// a Codex opening a lock meanwhile never meets a sharing violation. Lock violation (33) = contended;
-// PowerShell wraps .NET errors, so it's read from the base exception.
-const POWERSHELL_PROBE = [
-  "$ErrorActionPreference = 'Stop'",
-  "$dirs = $env:ORCA_CODEX_THREAD_LOCKS -split '\\|'",
-  'function Answer($a) { [Console]::Out.WriteLine($a); exit 0 }',
-  '$coordination = @()',
-  `foreach ($dir in $dirs) { try { $c = [IO.File]::Open((Join-Path $dir '${COORDINATION_LOCK}'), 'OpenOrCreate', 'ReadWrite', 'ReadWrite, Delete'); $c.Lock(0, 1); $coordination += $c } catch { Answer 'unknown' } }`,
-  `$pattern = '${THREAD_LOCK_NAME.source}'`,
-  '$held = $false',
-  'for ($i = 0; $i -lt $dirs.Count; $i++) {',
-  "  try { $paths = [IO.Directory]::GetFiles($dirs[$i]) } catch { Answer 'unknown' }",
-  '  foreach ($path in $paths) {',
-  '    if ([IO.Path]::GetFileName($path) -notmatch $pattern) { continue }',
-  "    try { $l = [IO.File]::Open($path, 'Open', 'ReadWrite', 'ReadWrite, Delete') }",
-  "    catch [IO.FileNotFoundException] { continue } catch { Answer 'unknown' }",
-  '    $free = $false',
-  "    try { $l.Lock(0, 1); $l.Unlock(0, 1); $free = $true } catch { if (($_.Exception.GetBaseException().HResult -band 0xFFFF) -eq 33) { if ($i -eq 0) { $held = $true } } else { $l.Dispose(); Answer 'unknown' } } finally { $l.Dispose() }",
-  '    if ($free) { try { [IO.File]::Delete($path) } catch {} }',
-  '  }',
-  '}',
-  "if ($held) { Answer 'held' }",
-  "if ($env:ORCA_CODEX_HOLD -ne '1') { Answer 'idle' }",
-  "[Console]::Out.WriteLine('ready')",
-  // `first`: let go of the first folder's coordination only (it's about to be renamed).
-  "if ([Console]::In.ReadLine() -eq 'first') { $coordination[0].Dispose(); [Console]::Out.WriteLine('released'); [void][Console]::In.ReadLine() }"
-].join('\n')
+// `no-flock`: the sh helper found no flock(1) to run.
+const HELPER_ANSWERS = new Set(['held', 'idle', 'unknown', 'ready', 'released', 'no-flock'])
 
 async function perlProgram(): Promise<string> {
   // Not every distro ships /usr/bin/perl (NixOS keeps it elsewhere); the spawn then searches PATH.
@@ -100,32 +42,55 @@ async function perlProgram(): Promise<string> {
     : 'perl'
 }
 
-// null when the helper couldn't run or answer: no perl, no PowerShell, a timeout.
+type ProbeSpec = { program: string; args: string[]; env?: NodeJS.ProcessEnv }
+
+// null when a helper started but gave no usable answer (a timeout, a crash, a spawn error that
+// may pass); `unavailable` only when no helper program exists here.
 async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | null> {
-  const spec =
-    process.platform === 'win32'
-      ? {
-          program: 'powershell.exe',
-          args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', POWERSHELL_PROBE],
-          env: {
-            ...process.env,
-            ORCA_CODEX_THREAD_LOCKS: dirs.join('|'),
-            ORCA_CODEX_HOLD: hold ? '1' : '0'
-          }
+  if (process.platform === 'win32') {
+    return runProbe(
+      {
+        program: windowsPowerShellPath(),
+        args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', POWERSHELL_PROBE],
+        env: {
+          ...process.env,
+          ORCA_CODEX_THREAD_LOCKS: dirs.join('|'),
+          ORCA_CODEX_HOLD: hold ? '1' : '0'
         }
-      : {
-          program: await perlProgram(),
-          args: ['-e', PERL_PROBE, '--', hold ? 'hold' : 'sweep', ...dirs]
-        }
+      },
+      hold
+    )
+  }
+  const args = [hold ? 'hold' : 'sweep', ...dirs]
+  const perl = await runProbe(
+    { program: await perlProgram(), args: ['-e', PERL_PROBE, '--', ...args] },
+    hold
+  )
+  return perl?.answer === 'unavailable'
+    ? runProbe({ program: '/bin/sh', args: ['-c', SH_PROBE, 'sh', ...args] }, hold)
+    : perl
+}
+
+// A missing or unrunnable program; any other spawn error (EAGAIN, EMFILE) may pass, so stays busy.
+function isMissingProgram(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return code === 'ENOENT' || code === 'EACCES'
+}
+
+async function runProbe(spec: ProbeSpec, hold: boolean): Promise<LockHold | null> {
   let child: ChildProcessWithoutNullStreams
   try {
     child = spawnProcess({ ...spec, stdio: 'pipe' })
-  } catch {
-    return null
+  } catch (error) {
+    return isMissingProgram(error) ? { answer: 'unavailable' } : null
   }
+  let failedToStart = false
   const closed = new Promise<null>((resolve) => {
     child.once('close', () => resolve(null))
-    child.once('error', () => resolve(null))
+    child.once('error', (error) => {
+      failedToStart = child.pid === undefined && isMissingProgram(error)
+      resolve(null)
+    })
   })
   for (const stream of [child.stdin, child.stdout, child.stderr]) {
     stream.on('error', () => {})
@@ -183,6 +148,9 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
     }
   }
   await stop()
+  if ((answer === null && failedToStart) || answer === 'no-flock') {
+    return { answer: 'unavailable' }
+  }
   if (answer === 'ready' || timedOut) {
     return null
   }
@@ -198,8 +166,13 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
  */
 async function sweepCodexThreadLocks(locksDir: string): Promise<boolean> {
   const probe = await startProbe([locksDir], false)
-  return probe ? probe.answer !== 'idle' : keepsThreadLock(locksDir)
+  return probe && probe.answer !== 'unavailable'
+    ? probe.answer !== 'idle'
+    : keepsThreadLock(locksDir)
 }
+
+// `no-helper`: busy because no helper can run here to hold coordination.
+export type LockFolderBusy = 'busy' | 'no-helper'
 
 /**
  * Moves the account's lock folder into the store's (`move`) with both folders' coordination held
@@ -207,18 +180,22 @@ async function sweepCodexThreadLocks(locksDir: string): Promise<boolean> {
  * so no thread ends up guarded by two files (a release deletes its lock by path, which the link
  * would point at the other writer's file). `held`: a Codex holds a thread lock in the account; the
  * store's own held locks don't count. `busy`: coordination was taken, or a thread is locked in both.
+ * `no-helper`: no helper can run here, and moving unheld could link around a lock taken meanwhile.
  */
 export async function moveIdleThreadLockFolder(
   accountHome: string,
   storeHome: string,
   move: () => Promise<unknown>
-): Promise<'moved' | 'held' | 'busy'> {
+): Promise<'moved' | 'held' | LockFolderBusy> {
   const accountLocks = join(accountHome, WRITER_LOCKS)
   // A coordination file a Codex created mid-move would go unheld.
   await mkdir(accountLocks, { recursive: true })
   const hold = await startProbe([accountLocks, join(storeHome, WRITER_LOCKS)], true)
   if (hold?.answer === 'held') {
     return 'held'
+  }
+  if (hold?.answer === 'unavailable') {
+    return 'no-helper'
   }
   // Without both coordination locks the move could link around a lock taken meanwhile.
   if (!hold || !('release' in hold)) {

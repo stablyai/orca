@@ -31,7 +31,7 @@ export function BotHostSignInButton({
           void startBotHostSignIn(bot.hostId, bot)
         }}
       >
-        {t('bots.host.signIn.start', 'Sign {{host}} in to Orca', { host })}
+        {t('bots.host.signIn.start', 'Sign in on {{host}}', { host })}
       </Button>
     )
   }

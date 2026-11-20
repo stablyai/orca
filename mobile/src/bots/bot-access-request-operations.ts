@@ -48,7 +48,11 @@ export async function decideBotAccessRequest(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const answer = accessRequestDecide.interpret(
-      await accessRequestDecide.request(client, { requestId, decision })
+      await accessRequestDecide.request(
+        client,
+        { requestId, decision },
+        { failWhenDisconnected: true }
+      )
     )
     return answer.ok ? { ok: true } : { ok: false, error: answer.error }
   } catch {

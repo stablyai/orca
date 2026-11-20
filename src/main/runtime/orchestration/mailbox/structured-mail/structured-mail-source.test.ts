@@ -239,7 +239,7 @@ it("sends another bot's answer to a thread ask back to that thread, and only to 
   }
 })
 
-it("gives a chat the owner's item comment images as image blocks, and only Orca's item mail", () => {
+it("gives a chat the images of item mail and of a bot request about an item as image blocks, and only Orca's payloads", () => {
   const root = '/srv/orca/agent-session-attachments'
   const shot = `${root}/0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01/shot.png`
   setAgentSessionAttachmentStore(new AgentSessionAttachmentStore(root, { hasSession: () => true }))
@@ -250,7 +250,7 @@ it("gives a chat the owner's item comment images as image blocks, and only Orca'
       coordinatorHandle: 'term_bot',
       coordinatorPaneKey: null
     })
-    const blocks = (from: string, images: string[]) =>
+    const blocks = (from: string, images: string[], kind = 'botItems') =>
       structuredMailMessage({
         db,
         mailboxHandle: 'term_bot',
@@ -261,7 +261,7 @@ it("gives a chat the owner's item comment images as image blocks, and only Orca'
           to: 'term_bot',
           subject: 'Your owner commented',
           type: 'status',
-          payload: JSON.stringify({ botItems: [], images })
+          payload: JSON.stringify({ [kind]: kind === 'botItems' ? [] : {}, images })
         }),
         cliCommand: 'orca',
         senderSnapshot: () => ({ name: 'Sender', agent: null }),
@@ -272,6 +272,8 @@ it("gives a chat the owner's item comment images as image blocks, and only Orca'
       { type: 'image-ref', path: shot }
     ])
     expect(blocks('term_worker', [shot])).toEqual([])
+    expect(blocks('term_worker', [shot], 'botRequest')).toEqual([{ type: 'image-ref', path: shot }])
+    expect(blocks('term_worker', [shot], 'task')).toEqual([])
   } finally {
     db.close()
     setAgentSessionAttachmentStore(null)
