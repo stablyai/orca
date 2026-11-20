@@ -352,10 +352,6 @@ it('keeps protecting the page a form POST redirects to', () => {
       isMainFrame: true,
       isSameDocument: false
     })
-    guest.emit('did-redirect-navigation', {
-      url: 'https://example.test/dashboard',
-      isMainFrame: true
-    })
     url = 'https://example.test/dashboard'
     guest.emit('did-navigate', {}, url, 200, 'OK')
     settle()

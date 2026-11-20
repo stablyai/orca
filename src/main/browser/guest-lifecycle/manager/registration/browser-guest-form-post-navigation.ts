@@ -29,6 +29,7 @@ export function createFormPostNavigationTracker(): {
   let post = false
   // The mark came only from a remembered POST result, which a fresh GET navigation disproves.
   let fromMemory = false
+  let startTarget = ''
   const postResultUrls = new Set<string>()
   return {
     submitted: (actionUrl) => {
@@ -36,6 +37,7 @@ export function createFormPostNavigationTracker(): {
     },
     started: (url) => {
       const target = withoutHash(url)
+      startTarget = target
       fromMemory = target !== submitted && postResultUrls.has(target)
       post = target === submitted || fromMemory
       submitted = null
@@ -44,7 +46,8 @@ export function createFormPostNavigationTracker(): {
       const isPost = method !== null ? method !== 'GET' : post
       const target = withoutHash(url)
       fromMemory = fromMemory && method === null
-      if (isPost) {
+      // A remembered address that redirected elsewhere proves nothing about the new address.
+      if (isPost && !(fromMemory && target !== startTarget)) {
         postResultUrls.delete(target)
         postResultUrls.add(target)
         if (postResultUrls.size > MAX_POST_RESULT_URLS) {
