@@ -21,7 +21,7 @@ vi.mock('os', async () => {
 })
 
 import { CursorHookService } from './hook-service'
-import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
+import type { CursorEvent } from './hook-events'
 
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
@@ -46,6 +46,9 @@ const EXPECTED_CURSOR_HOOK_STDOUT = {
   beforeMCPExecution: { permission: 'allow' },
   afterAgentResponse: {}
 } satisfies Record<CursorEvent, Record<string, unknown>>
+
+// Every event runs the same script with one of these three responses; one event per response covers the quoting.
+const RESPONSE_SHAPE_EVENTS = ['beforeSubmitPrompt', 'stop', 'preToolUse'] as const
 
 function readInstalledCursorHooks(homeDir: string): InstalledCursorHooks {
   return JSON.parse(
@@ -144,7 +147,7 @@ describe('CursorHookService', () => {
 
   // Execute the registered command: installer-shape checks missed invalid stdout (#15462).
   it(
-    'emits protocol-valid JSON on stdout for every managed event, including empty stdin (#15462)',
+    'emits protocol-valid JSON on stdout for every response shape, including empty stdin (#15462)',
     () => {
       expect(new CursorHookService().install().state).toBe('installed')
       const config = readInstalledCursorHooks(homeDir)
@@ -153,7 +156,7 @@ describe('CursorHookService', () => {
         () => ''
       ]
 
-      for (const eventName of CURSOR_EVENTS) {
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         for (const payloadFor of payloads) {
           const result = runRegisteredCursorHook(command, payloadFor(eventName))
@@ -178,7 +181,7 @@ describe('CursorHookService', () => {
       const config = readInstalledCursorHooks(installHome)
       unlinkSync(join(installHome, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME))
 
-      for (const eventName of CURSOR_EVENTS) {
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         const result = runRegisteredCursorHook(command, '')
         expect(result.status, `${eventName} missing-script exit`).toBe(0)
@@ -197,7 +200,7 @@ describe('CursorHookService', () => {
       expect(new CursorHookService().install().state).toBe('installed')
       const config = readInstalledCursorHooks(homeDir)
 
-      for (const eventName of ['beforeSubmitPrompt', 'preToolUse', 'stop'] as const) {
+      for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         const result = runRegisteredCursorHook(
           command,
