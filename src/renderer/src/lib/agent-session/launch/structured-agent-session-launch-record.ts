@@ -57,7 +57,7 @@ export type StructuredAgentLaunchPersistedRecord = {
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
   forkFrom?: StructuredAgentSessionForkSource
-  /** The chat's minted slot id; older records lack it and keep the legacy id. */
+  /** The chat tab's id the create carries; absent, the tab keeps the legacy id. */
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
   explicitLaunchOptions?: Readonly<Record<string, string>>

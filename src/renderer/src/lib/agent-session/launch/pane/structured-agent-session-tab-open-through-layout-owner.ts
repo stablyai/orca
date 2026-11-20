@@ -13,7 +13,7 @@ export type AgentSessionTabOpen = {
   worktreeId: string
   executionHostId: ExecutionHostId
   sessionId: string
-  /** The chat's slot id, minted by the caller. */
+  /** The chat tab's id, as the launch records it. */
   tabId: string
   agent: TuiAgent
   targetGroupId?: string

@@ -8,7 +8,7 @@ export type StructuredLaunchSlotOwner = Pick<
   'unifiedTabsByWorktree' | 'groupsByWorktree' | 'reorderUnifiedTabs'
 >
 
-/** The id a launch's chat tab takes: its create's minted id, else (older launches) the legacy one. */
+/** The id a launch's chat tab takes: the one its create carries, else the legacy one. */
 export function structuredLaunchSlotTabId(sessionId: string, tabId?: string): string {
   return (
     tabId ??

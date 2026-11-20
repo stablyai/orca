@@ -198,7 +198,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   expectedRuntimeFence: number | null
   resumeFrom?: StructuredAgentSessionResumeSource
   forkFrom?: StructuredAgentSessionForkSource
-  /** The chat's minted slot id, part of the recorded create. */
+  /** The chat tab's id the recorded create carries, when it names one. */
   tabId?: string
   /** A paired server's seed, kept with the launch so a reload shows what create runs. */
   explicitLaunchOptions?: Readonly<Record<string, string>>
