@@ -212,7 +212,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   captureForegroundObservation(ptyId: string) {
     const incarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
     const capture = this.state.foreground.captureForegroundObservation.bind(this.state.foreground)
-    return incarnation ? capture(ptyId, incarnation, this.deps.agentUnprovable?.(ptyId)) : undefined
+    return incarnation ? capture(ptyId, incarnation, this.deps.unheldMail?.(ptyId)) : undefined
   }
 
   isForegroundHeld(ptyId: string): boolean {

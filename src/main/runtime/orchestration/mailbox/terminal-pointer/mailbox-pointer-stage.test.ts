@@ -322,3 +322,21 @@ describe('retiring a pty mid-delivery', () => {
     }
   })
 })
+
+it('an agent exit seen behind a shell never holds mail for a title-only agent', () => {
+  const db = new OrchestrationDb(':memory:')
+  const deps = {
+    ...pointerDeps(db, () => WRITE_ACCEPTED),
+    unheldMail: () => ({ holdExempt: true })
+  }
+  const delivery = new OrchestrationMailboxPointerDelivery(deps)
+  try {
+    expect(
+      delivery.applyForeground('pty-1', delivery.captureForegroundObservation('pty-1'), 'shell')
+    ).toBe(true)
+    expect(delivery.isForegroundHeld('pty-1')).toBe(false)
+  } finally {
+    delivery.retirePty('pty-1')
+    db.close()
+  }
+})

@@ -40,4 +40,5 @@ export abstract class RuntimeMailboxDeliveryServices extends RuntimeAgentStatusR
     agent?: TuiAgent
   ): Promise<MailboxForeground | MailboxForegroundInspection>
   abstract launchedAgentHostProvesAgent(ptyId: string): boolean
+  protected abstract isMailHoldExempt(ptyId: string): boolean
 }

@@ -54,8 +54,8 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
     agent?: TuiAgent
   ) => Promise<MailboxForeground | MailboxForegroundInspection>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
-  /** The pane's host can never name an agent in front, so it never holds mail. */
-  agentUnprovable?: (ptyId: string) => boolean
+  /** Why mail must not hold for the pane: its host can never name an agent in front, or its agent cannot show its return. */
+  unheldMail?: (ptyId: string) => { agentUnprovable?: boolean; holdExempt?: boolean }
   isForegroundCandidate?: (terminal: OrchestrationMailboxTerminal) => boolean
   needsForegroundEvaluation?: (ptyId: string) => boolean
   onDeliveryDecision: (ptyId: string, decision?: MailboxDeliveryDecision) => void

@@ -1,5 +1,6 @@
 import { selectExplicitAgentIdentityRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { readAgentTerminalComposerTypedText } from '../../terminal/wait/terminal-delivery-refusal'
+import { isHoldExemptAgent } from '../../terminal/wait/mailbox-unheld-foreground'
 import type {
   MailboxForeground,
   MailboxForegroundInspection
@@ -37,6 +38,10 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
     const row = join ? selectExplicitAgentIdentityRow(join) : null
     const floor = this.agentPromptExplicitStatusFloorByPtyId.get(ptyId)
     return row && (floor === undefined || row.receivedAt > floor) ? row.agentType : null
+  }
+
+  protected isMailHoldExempt(ptyId: string): boolean {
+    return isHoldExemptAgent(this.mailDeliveryAgent(ptyId))
   }
 
   protected async readMailboxForeground(
