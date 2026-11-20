@@ -1,4 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { AgentSessionMcpServer } from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import type { AgentSessionMcpPanelState } from '../../../../../shared/agent-session/view/use-agent-session-mcp-panel'
 import { NativeChatThreadGoalBanner } from '../session/goals/NativeChatThreadGoalBanner'
@@ -59,10 +60,18 @@ const GOAL = {
 // The composer box is mocked, as the worker lifetime fixture does.
 function fixture(
   state: Partial<AgentSessionMcpPanelState>,
-  options: { runtime?: 'local' | 'remote'; underGoal?: boolean } = {}
+  options: {
+    runtime?: 'local' | 'remote'
+    underGoal?: boolean
+    width?: number
+    uiLanguage?: 'en' | 'de' | 'ru'
+  } = {}
 ) {
   return defineFixture({
-    width: 640,
+    width: options.width ?? 640,
+    store: options.uiLanguage
+      ? { settings: { ...getDefaultSettings('/tmp'), uiLanguage: options.uiLanguage } }
+      : undefined,
     render: () => (
       <div className="native-chat-appearance bg-background py-3">
         {options.underGoal ? (
@@ -144,5 +153,19 @@ export const codexBeforeStart = fixture({
 export const notRunning = fixture({ result: { status: 'not-running' } })
 
 export const readFailed = fixture({ result: { status: 'failed', message: null } })
+
+const LONG_READ_ERROR =
+  'The agent host did not answer the MCP server list request within 30 seconds; check the host connection and try again.'
+
+// 360px is the narrowest chat pane; the failed header must still show its words and keep Retry.
+const narrowReadFailed = (uiLanguage: 'en' | 'de' | 'ru', message: string | null) =>
+  fixture({ result: { status: 'failed', message } }, { width: 360, uiLanguage })
+
+export const readFailedNarrowEn = narrowReadFailed('en', null)
+export const readFailedNarrowDe = narrowReadFailed('de', null)
+export const readFailedNarrowRu = narrowReadFailed('ru', null)
+export const readFailedNarrowLongEn = narrowReadFailed('en', LONG_READ_ERROR)
+export const readFailedNarrowLongDe = narrowReadFailed('de', LONG_READ_ERROR)
+export const readFailedNarrowLongRu = narrowReadFailed('ru', LONG_READ_ERROR)
 
 export const underGoal = fixture({ servers: SIGN_IN_SERVERS }, { underGoal: true })

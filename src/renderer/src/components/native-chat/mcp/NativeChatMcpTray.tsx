@@ -94,6 +94,7 @@ export function NativeChatMcpTrayView(props: McpTrayViewProps): React.JSX.Elemen
   const title = t('components.native-chat.mcp.title', 'MCP servers')
   const closeLabel = t('components.native-chat.mcp.close', 'Close')
   const listed = props.state.result?.status === 'ok' && props.state.servers.length > 0
+  const failed = props.state.result?.status === 'failed'
   return (
     <NativeChatComposerTabStrip layout="stack" data-native-chat-mcp-tray="">
       <section
@@ -107,12 +108,16 @@ export function NativeChatMcpTrayView(props: McpTrayViewProps): React.JSX.Elemen
           props.onClose()
         }}
       >
-        <div className="flex h-8 items-center gap-2 pr-1 pl-3">
-          <p className="min-w-0 flex-1 truncate" aria-live="polite">
+        {/* A failure's words wrap to a second line in narrow panes, so they never hide behind Retry. */}
+        <div className={cn('flex items-center gap-2 pr-1 pl-3', failed ? 'min-h-8 py-1' : 'h-8')}>
+          <p
+            className={cn('min-w-0 flex-1', failed ? 'line-clamp-2 break-words' : 'truncate')}
+            aria-live="polite"
+          >
             <span className="font-medium text-foreground">{title}</span>
             <McpTrayStatus {...props} />
           </p>
-          {props.state.result?.status === 'failed' ? (
+          {failed ? (
             <Button
               type="button"
               variant="outline"
