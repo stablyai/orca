@@ -118,6 +118,16 @@ export const notificationsApi = {
 } satisfies PreloadApi['notifications']
 
 // Why: main delivers retained agent alerts itself, and a custom sound can only play in this page.
+// One at a time: a burst would otherwise load the same cold sound file once per alert.
+let deliveredSoundPlaying = false
 ipcRenderer.on('notifications:playDeliveredSound', (_event, volume: unknown) => {
-  void notificationsApi.playSound(typeof volume === 'number' ? { volume } : undefined)
+  if (deliveredSoundPlaying) {
+    return
+  }
+  deliveredSoundPlaying = true
+  void notificationsApi
+    .playSound(typeof volume === 'number' ? { volume } : undefined)
+    .finally(() => {
+      deliveredSoundPlaying = false
+    })
 })

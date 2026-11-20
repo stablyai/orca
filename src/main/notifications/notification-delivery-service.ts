@@ -234,12 +234,14 @@ export function createRetainedAgentAttentionReceiver(deps: {
   /** Notices the runtime already holds, presented as the receiver starts. */
   retained?: readonly RetainedAgentAttention[]
   /** Why: a custom sound plays in the renderer, which this main-side delivery bypasses. */
-  onDelivered?: (isLive: () => boolean) => void
+  onDelivered?: (notificationId: string) => void
+  onRetired?: (notificationId: string) => void
 }) {
   const presented = new Map<string, string>()
   const receive = (notificationId: string, notice: RetainedAgentAttention | null): void => {
     if (!notice) {
       presented.delete(notificationId)
+      deps.onRetired?.(notificationId)
       deps.dismiss(notificationId)
       return
     }
@@ -269,8 +271,8 @@ export function createRetainedAgentAttentionReceiver(deps: {
         !session.activeWorkspaceExecutionHostId?.startsWith('runtime:')
     })
     void Promise.resolve(delivery).then((result) => {
-      if (result.delivered) {
-        deps.onDelivered?.(() => presented.get(notificationId) === signature)
+      if (result.delivered && presented.get(notificationId) === signature) {
+        deps.onDelivered?.(notificationId)
       }
     })
   }

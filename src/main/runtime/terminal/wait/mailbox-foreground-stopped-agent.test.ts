@@ -66,6 +66,9 @@ it('a native install back in front under its bare version name is the agent, so 
   await expect(read('2.1.316', ['claude'], 'claude', '2.1.316')).resolves.toMatchObject({
     foreground: 'non-shell'
   })
+  await expect(read('2.1.316', undefined, 'codex', '2.1.316')).resolves.toMatchObject({
+    foreground: 'unknown'
+  })
 })
 
 it('a plainly named program in front is judged without a host-wide confirmation', async () => {

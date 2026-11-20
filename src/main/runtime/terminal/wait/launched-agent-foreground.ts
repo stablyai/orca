@@ -63,6 +63,8 @@ const NAME_COMPLETES_EVIDENCE: ReadonlySet<string> = new Set([
 ])
 
 const NATIVE_VERSION_NAME = /(?:^|[/\\])v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?$/i
+// Agents whose native install runs as a bare version (`…/claude/versions/2.1.316`).
+const VERSION_NAMED_NATIVE_AGENTS: ReadonlySet<TuiAgent> = new Set(['claude'])
 
 // A relay's cached snapshot is up to one TTL old plus its capture time, which a busy host keeps under another TTL.
 const EVIDENCE_MAX_AGE_MS = 2 * PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
@@ -190,6 +192,8 @@ async function inspectLaunchedAgentForeground(
           // behind it, it is the agent come back, and holding mail on it would never release.
           return front === 'unknown' &&
             agent &&
+            !host.remote &&
+            VERSION_NAMED_NATIVE_AGENTS.has(agent) &&
             NATIVE_VERSION_NAME.test(observation.processName ?? '')
             ? await identify(agent)
             : front

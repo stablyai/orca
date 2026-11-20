@@ -70,37 +70,74 @@ export function registerNotificationSoundHandlers(store: Store): void {
   })
 }
 
-// One load listener per page; each entry asks whether its alert is still showing.
-const awaitingLoad = new WeakMap<WebContents, (() => boolean)[]>()
+// Alerts delivered while a page loads, by id; one load listener per page plays for any still showing.
+const awaitingLoad = new WeakMap<WebContents, Set<string>>()
+// Pages with a sound already queued for this turn, so a burst of alerts sends one.
+const queued = new WeakSet<WebContents>()
 
-function sendIfCustom(store: Store, renderer: WebContents): void {
-  const settings = store.getSettings().notifications
-  if (usesCustomNotificationSound(getEffectiveNotificationSoundId(settings))) {
-    renderer.send('notifications:playDeliveredSound', settings.customSoundVolume)
+function wantsCustomSound(store: Store): boolean {
+  return usesCustomNotificationSound(
+    getEffectiveNotificationSoundId(store.getSettings().notifications)
+  )
+}
+
+function sendOnce(store: Store, renderer: WebContents): void {
+  if (queued.has(renderer)) {
+    return
   }
+  queued.add(renderer)
+  setImmediate(() => {
+    queued.delete(renderer)
+    if (!renderer.isDestroyed() && wantsCustomSound(store)) {
+      renderer.send(
+        'notifications:playDeliveredSound',
+        store.getSettings().notifications.customSoundVolume
+      )
+    }
+  })
 }
 
 /** Plays the selected custom sound for an alert main delivered itself; the renderer owns audio. */
-export function playDeliveredSound(store: Store, isLive: () => boolean): void {
+export function playDeliveredSound(store: Store, notificationId: string): void {
   const renderer = getTrustedUIRendererWebContents()
-  if (!renderer) {
+  if (!renderer || !wantsCustomSound(store)) {
     return
   }
   if (!renderer.isLoading()) {
-    sendIfCustom(store, renderer)
+    sendOnce(store, renderer)
     return
   }
-  // Why: a reloading page has no listener yet, so one sound waits for it, and only for alerts still showing.
+  // Why: a reloading page has no listener yet, so the sound waits for it, and only for alerts still showing.
   const waiting = awaitingLoad.get(renderer)
-  awaitingLoad.set(renderer, [...(waiting ?? []).filter((live) => live()), isLive])
   if (waiting) {
+    waiting.add(notificationId)
     return
   }
+  awaitingLoad.set(renderer, new Set([notificationId]))
   renderer.once('did-finish-load', () => {
-    const live = awaitingLoad.get(renderer)?.some((check) => check())
+    const live = (awaitingLoad.get(renderer)?.size ?? 0) > 0
     awaitingLoad.delete(renderer)
     if (live) {
-      sendIfCustom(store, renderer)
+      sendOnce(store, renderer)
     }
   })
+}
+
+/** A cleared alert no longer earns the sound a loading page owes it. */
+export function retireDeliveredSound(notificationId: string): void {
+  const renderer = getTrustedUIRendererWebContents()
+  if (renderer) {
+    awaitingLoad.get(renderer)?.delete(notificationId)
+  }
+}
+
+/** The retained-attention receiver's sound callbacks for main-delivered alerts. */
+export function deliveredSoundHooks(store: Store): {
+  onDelivered: (notificationId: string) => void
+  onRetired: (notificationId: string) => void
+} {
+  return {
+    onDelivered: (notificationId) => playDeliveredSound(store, notificationId),
+    onRetired: retireDeliveredSound
+  }
 }
