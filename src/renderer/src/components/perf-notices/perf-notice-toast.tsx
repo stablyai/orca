@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { Trans } from 'react-i18next'
+import { i18n, translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { TRAILING_ACTIONS_CLASS_NAMES } from '@/components/ui/sonner'
 import { getEffectiveBrowserMemorySaverHours } from '../../../../shared/browser/guest-lifecycle/browser-memory-saver'
@@ -46,22 +47,26 @@ function copyFor(notice: PerfNotice): Copy {
         // Why: name the Resource Manager so users can find cleanup again after the toast is gone.
         description: (
           <p>
-            {translate(
-              'perfNotices.disk.description',
-              '{{free}} left. Clean up workspaces you no longer need in',
-              { free: notice.freeLabel }
-            )}{' '}
-            <button
-              type="button"
-              onClick={() => {
-                useAppStore.getState().openModal('workspace-cleanup')
-                toast.dismiss(perfNoticeToastId(notice.id))
+            <Trans
+              i18n={i18n}
+              defaults={translate(
+                'perfNotices.disk.description',
+                '{{free}} left. Clean up workspaces you no longer need in <link>the Resource Manager</link>.',
+                { free: notice.freeLabel }
+              )}
+              components={{
+                link: (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      useAppStore.getState().openModal('workspace-cleanup')
+                      toast.dismiss(perfNoticeToastId(notice.id))
+                    }}
+                    className="cursor-pointer font-medium text-popover-foreground underline underline-offset-2 hover:text-primary"
+                  />
+                )
               }}
-              className="cursor-pointer font-medium text-popover-foreground underline underline-offset-2 hover:text-primary"
-            >
-              {translate('perfNotices.disk.resourceManagerLink', 'the Resource Manager')}
-            </button>
-            .
+            />
           </p>
         )
       }

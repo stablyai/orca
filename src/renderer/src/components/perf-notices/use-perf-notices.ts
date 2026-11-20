@@ -12,7 +12,8 @@ import {
   type PerfNoticeId
 } from '../../../../shared/perf-notices/perf-notice-settings'
 import { canShowPerfNotice } from './perf-notice-ledger'
-import { HIDDEN_TAB_MIN, isDiskAlmostFull } from './perf-notice-rules'
+import { isDiskAlmostFull } from '../../../../shared/diagnostics/perf-notice-signals'
+import { HIDDEN_TAB_MIN } from './perf-notice-rules'
 import { memorySaverHours, showPerfNotice, type PerfNotice } from './perf-notice-toast'
 
 const MINUTE = 60_000
@@ -48,7 +49,7 @@ async function nextNotice(
     if (blocked()) {
       return null
     }
-    if (signals?.disk && isDiskAlmostFull(signals)) {
+    if (signals?.disk && isDiskAlmostFull(signals.disk)) {
       return { id: 'disk-almost-full', freeLabel: formatMemory(signals.disk.freeBytes) }
     }
   }

@@ -18,9 +18,7 @@ export function registerMemoryHandlers(store: Store): void {
       return collectMemorySnapshot(store)
     }
   )
-  ipcMain.handle('memory:readPerfNoticeSignals', () =>
-    readPerfNoticeSignals(store.getSettings().workspaceDir)
-  )
+  ipcMain.handle('memory:readPerfNoticeSignals', () => readPerfNoticeSignals(store))
   ipcMain.handle('memory:countHiddenBrowserPages', (_event, hiddenForMs: unknown) =>
     countHiddenBrowserPages(typeof hiddenForMs === 'number' ? hiddenForMs : 0)
   )
