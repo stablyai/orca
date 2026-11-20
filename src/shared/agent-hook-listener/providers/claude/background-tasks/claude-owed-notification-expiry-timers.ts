@@ -96,13 +96,15 @@ export class ClaudeOwedNotificationExpiryTimers {
     }
     const lead = this.state.claudeLeadStateByPaneKey.get(paneKey)
     const heldDeadline = claudeUnclassifiedTurnEndDeadline(lead)
+    // Read before the release, which can expire the debt it measures.
+    const owedDeadline = this.owedDeadline(paneKey)
     // The turn's prompt event never arrived, so nothing says a task wakeup started it.
     if (
       lead &&
       heldDeadline !== undefined &&
       heldDeadline <= Date.now() &&
       !releaseClaudeUnclassifiedTurnEnd(this.state, paneKey, lead) &&
-      (this.owedDeadline(paneKey) ?? Infinity) > Date.now()
+      (owedDeadline ?? Infinity) > Date.now()
     ) {
       // Only private evidence retired: nothing public changed, so wait for the owed deadline.
       this.rearmIfDue(paneKey, publish)
