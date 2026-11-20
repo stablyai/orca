@@ -140,3 +140,22 @@ it('writes a ledger its own reader accepts even with maximum-length offer ids', 
     await automaticLedger.readAutomaticReservationLedger(join(directory, 'capsule.json'))
   ).not.toBeNull()
 })
+
+it('sheds old continuation records before passed-over offers when the ledger is too large', async () => {
+  const taken = Object.fromEntries(
+    Array.from({ length: 1500 }, (_, index) => [
+      `${index}`.padEnd(512, 's'),
+      [{ at: index, work: `turn:${'w'.repeat(500)}` }]
+    ])
+  )
+  const path = join(directory, 'capsule.json')
+
+  await automaticLedger.writeAutomaticRestartLedger(path, {
+    taken,
+    passed: ['session-a:td:1'],
+    dismissed: []
+  })
+
+  const read = await automaticLedger.readAutomaticReservationLedger(path)
+  expect(read?.passed).toEqual(['session-a:td:1'])
+})

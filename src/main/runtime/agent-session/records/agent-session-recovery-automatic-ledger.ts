@@ -59,14 +59,28 @@ async function readLedger(capsulePath: string): Promise<AutomaticRestartLedger |
   }
 }
 
-/** Offer keys carry up to 512-character ids; drop the oldest until the file fits well inside its read limit. */
+function dropOldestTaken(taken: AutomaticRestartLedger['taken']): AutomaticRestartLedger['taken'] {
+  const entries = Object.entries(taken).flatMap(([sessionId, list]) =>
+    list.map((entry) => ({ sessionId, entry }))
+  )
+  entries.sort((a, b) => a.entry.at - b.entry.at)
+  const kept: AutomaticRestartLedger['taken'] = {}
+  for (const { sessionId, entry } of entries.slice(Math.ceil(entries.length / 10))) {
+    kept[sessionId] = [...(kept[sessionId] ?? []), entry]
+  }
+  return kept
+}
+
+/** Offer ids can be 512 characters; shed the least harmful records first (old continuations, then dismissals, then passed-over offers) until the file fits well inside its read limit. */
 function fitLedgerToReadLimit(ledger: AutomaticRestartLedger): AutomaticRestartLedger {
   const fitted = { ...ledger }
   while (Buffer.byteLength(JSON.stringify(fitted)) > MAX_LEDGER_BYTES / 2) {
-    if (fitted.passed.length > 0) {
-      fitted.passed = fitted.passed.slice(Math.ceil(fitted.passed.length / 10))
+    if (Object.keys(fitted.taken).length > 0) {
+      fitted.taken = dropOldestTaken(fitted.taken)
     } else if (fitted.dismissed.length > 0) {
       fitted.dismissed = fitted.dismissed.slice(Math.ceil(fitted.dismissed.length / 10))
+    } else if (fitted.passed.length > 0) {
+      fitted.passed = fitted.passed.slice(Math.ceil(fitted.passed.length / 10))
     } else {
       break
     }
@@ -164,6 +178,6 @@ export function passOverAutomaticOffers(
       : []
   )
   const stillPassed = reserved.map(offerKey).filter((key) => ledger.passed.includes(key))
-  const passed = [...new Set([...waiting.map(offerKey), ...stillPassed])].slice(-PASSED_LIMIT)
+  const passed = [...new Set([...stillPassed, ...waiting.map(offerKey)])].slice(-PASSED_LIMIT)
   return { ...ledger, passed }
 }
