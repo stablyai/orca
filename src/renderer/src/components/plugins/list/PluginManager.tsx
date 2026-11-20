@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -256,20 +256,6 @@ export function PluginManager({
   const openedEntry = openKey
     ? [...entries.installed, ...entries.available].find((entry) => entry.pluginKey === openKey)
     : null
-  // Why: listing returns cached catalogs at once, so a link to a newly published plugin refreshes once.
-  const refreshedForKey = useRef<string | null>(null)
-  const missingOpenKey = openKey && !openedEntry && !pluginsLoading && !catalog.loading
-  const { loadMarketplaceData } = catalog
-  useEffect(() => {
-    if (!missingOpenKey || refreshedForKey.current === openKey) {
-      return
-    }
-    refreshedForKey.current = openKey
-    void window.api.plugins
-      .refreshMarketplaces()
-      .then(loadMarketplaceData)
-      .catch(() => undefined)
-  }, [missingOpenKey, openKey, loadMarketplaceData])
   const dialogs = (
     <>
       <PluginUpdateAllDialog
