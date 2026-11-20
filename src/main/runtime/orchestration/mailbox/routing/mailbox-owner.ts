@@ -117,6 +117,10 @@ export class OrchestrationMailboxOwner {
   }
 
   /** The terminal's mailbox, then every other Run it coordinates that has mail, so an input edge wakes each. */
+  forgetPane(paneKey: string): void {
+    this.paneRunMail.forget(paneKey)
+  }
+
   resolveAll(
     terminal: OrchestrationMailboxTerminal,
     options: { routeDirectMail?: boolean } = {}

@@ -2,9 +2,6 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { CrewInvalidation } from '../../crew/crew-changes'
 import { paneKeyMatchSuffix } from '../../db/pane-key-match'
 
-/** Bounds the cache when many panes come and go; an evicted pane only queries again. */
-const MAX_CACHED_PANES = 256
-
 /** Each pane's Run mailboxes that owe pointer work, until a change that could add some.
  * Why: held-mail retries ask on a timer, and the query visits every Run ever bound to the pane. */
 export class PaneRunMailCache {
@@ -28,9 +25,6 @@ export class PaneRunMailCache {
     const cached = this.bySuffix.get(suffix)
     if (!cached) {
       const mailboxes = db.runMailboxesWithPointerWorkForPane(paneKey)
-      if (this.bySuffix.size >= MAX_CACHED_PANES) {
-        this.bySuffix.delete(this.bySuffix.keys().next().value ?? suffix)
-      }
       this.bySuffix.set(suffix, mailboxes)
       return mailboxes
     }
@@ -45,6 +39,11 @@ export class PaneRunMailCache {
     const remaining = cached.filter((mailbox) => live.has(mailbox))
     this.bySuffix.set(suffix, remaining)
     return remaining
+  }
+
+  /** A retired terminal's pane holds no entry; a pane that returns only queries again. */
+  forget(paneKey: string): void {
+    this.bySuffix.delete(paneKeyMatchSuffix(paneKey))
   }
 
   /** New mail to a Run touches only its coordinator's pane; any other change (routing, rebinding, resets) clears all. */

@@ -11,7 +11,7 @@ import {
 import { SSH_EXIT_UNCONFIRMED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RetiredTerminalSurface } from '../surface/mobile-session-terminal-retirement'
-import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
@@ -226,6 +226,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitWorkerObser
       this.orchestrationMailboxNotifications.retirePty(ptyId)
       // Repoint retained handle/pane mailbox pointers away from the retired session.
       for (const leaf of this.getLeavesForPty(ptyId)) {
+        this.orchestrationMailboxOwner.forgetPane(makePaneKey(leaf.tabId, leaf.leafId))
         const mailboxHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
         if (mailboxHandle) {
           this.mailPointerRepointScheduler.schedule(mailboxHandle)

@@ -17,18 +17,29 @@ export type MailboxPointerReservationTarget = {
   processIncarnation: string
 }
 
+const PENDING_POINTER_SQL = `SELECT * FROM messages
+       WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'`
+
+/** Reservations first, then uncertain rows, so a crash-left reservation is never starved behind a
+ * full batch of uncertain ones; each read visits at most one batch through its partial index. */
 export function getPendingMailboxPointerMessages(
   this: OrchestrationDb,
   mailboxHandle: string
 ): MessageRow[] {
-  return this.db
-    .prepare(
-      `SELECT * FROM messages
-       WHERE to_handle = ? AND read = 0 AND pointer_enter_pending > 0
-         AND delivery_contract = 'current_delivery'
-       ORDER BY pointer_enter_pending = ${MAILBOX_POINTER_RESERVED} DESC, sequence LIMIT ?`
-    )
-    .all(mailboxHandle, ORCHESTRATION_DELIVERY_BATCH_LIMIT) as MessageRow[]
+  const read = (phase: string, limit: number): MessageRow[] => {
+    const sql = `${PENDING_POINTER_SQL} AND ${phase} ORDER BY sequence LIMIT ?`
+    const rows = this.db.prepare(sql).all(mailboxHandle, limit)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * FROM messages yields MessageRow columns.
+    return rows as MessageRow[]
+  }
+  const reserved = read(
+    `pointer_enter_pending = ${MAILBOX_POINTER_RESERVED}`,
+    ORCHESTRATION_DELIVERY_BATCH_LIMIT
+  )
+  const room = ORCHESTRATION_DELIVERY_BATCH_LIMIT - reserved.length
+  const uncertain =
+    room > 0 ? read(`pointer_enter_pending > ${MAILBOX_POINTER_RESERVED}`, room) : []
+  return [...reserved, ...uncertain].sort((a, b) => a.sequence - b.sequence)
 }
 
 export function getPendingMailboxPointerHandles(this: OrchestrationDb): string[] {
