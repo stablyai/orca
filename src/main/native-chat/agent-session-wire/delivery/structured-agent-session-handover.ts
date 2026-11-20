@@ -72,7 +72,7 @@ export async function beginSubmissionHandover(
   const rideAlong = structuredAgentSessionRideAlong(ctx, submission, body)
   const fitted = new Map<string, string>()
   const fitImages = (body: AgentJournalMessageItem, signal?: AbortSignal) =>
-    fitAgentMessageImages(body, signal, fitted)
+    fitAgentMessageImages(body, signal, fitted, ctx.record()?.provider)
   const outgoing = (): AgentJournalMessageItem =>
     rideAlong.outgoing(carried ? withStoppedHistory(body, carried.messages) : body)
   let ownsChild = stillCurrent

@@ -1,10 +1,10 @@
-import { agentImageSourceContext } from '../../input/composer/agent-image-paste'
+import { imageDeliveryRow, pendingImagePrefixes } from './native-chat-image-delivery-row'
 import { nativeChatContinuationSendText } from './native-chat-continuation-send'
 import {
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
 } from '../images/native-chat-image-transcript-markers'
-import { isImageRefBlock, type NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatMessage } from '../../native-chat-types'
 
 export type NativeChatPendingOccurrence = {
   text: string
@@ -31,16 +31,6 @@ export function nativeChatPendingContentKey(
   return imagePaths.length > 0 ? `images:${JSON.stringify(imagePaths)}` : 'empty'
 }
 
-function pendingImagePrefixes(
-  original: readonly string[] = [],
-  delivered: readonly string[] = []
-): string[] {
-  return [original, delivered].flatMap((candidate) => {
-    const normalized = candidate.filter(Boolean).map(normalizeNativeChatPendingText)
-    return [normalized.join(' '), normalized.join('')]
-  })
-}
-
 function nativeChatUserMessageContentKey(
   message: NativeChatMessage,
   sentImagePaths: readonly string[] | undefined,
@@ -50,20 +40,17 @@ function nativeChatUserMessageContentKey(
   if (message.role !== 'user') {
     return null
   }
-  let text = normalizedNativeChatUserMessageText(message) ?? ''
-  const context = normalizeNativeChatPendingText(
-    agentImageSourceContext(sentImagePaths ?? [], deliveredImagePaths ?? [])
-  )
-  if (context && text.endsWith(context)) {
-    text = text.slice(0, -context.length).trimEnd()
-  }
-  // Some CLIs retain pasted attachment paths as prompt text instead of image markers.
+  const row = imageDeliveryRow(message)
+  let text = row.text
   const paths = sentImagePaths?.filter(Boolean) ?? []
-  for (const prefix of prefixes) {
+  for (const prefix of row.prefixes.length ? row.prefixes : prefixes) {
     if (prefix && (text === prefix || text.startsWith(`${prefix} `))) {
       text = text.slice(prefix.length).trimStart()
       if (!text) {
-        return nativeChatPendingContentKey({ text: '', imagePaths: paths })
+        return nativeChatPendingContentKey({
+          text: '',
+          imagePaths: row.original.length ? row.original : paths
+        })
       }
       break
     }
@@ -71,10 +58,7 @@ function nativeChatUserMessageContentKey(
   if (text) {
     return `text:${text}`
   }
-  const imagePaths = message.blocks
-    .filter(isImageRefBlock)
-    .map((block) => block.path)
-    .filter((path): path is string => Boolean(path))
+  const imagePaths = row.original.length ? row.original : row.paths
   const matchesDelivered =
     deliveredImagePaths?.length === imagePaths.length &&
     imagePaths.every((path, index) => path === deliveredImagePaths[index])

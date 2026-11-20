@@ -129,3 +129,27 @@ it.each([10, 100])(
     await expect(fitAgentImagePath(source)).resolves.toBe('/fitted.png')
   }
 )
+
+it.each(['claude', 'pi'])(
+  'leaves known image-count refusals to %s before preparing copies',
+  async (provider) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-image-count-'))
+    roots.push(root)
+    const source = join(root, 'shot.png')
+    await writeFile(source, Buffer.alloc(6 * 1024 * 1024))
+    const body: AgentJournalMessageItem = {
+      kind: 'message',
+      role: 'user',
+      blocks: Array.from({ length: 21 }, () => ({ type: 'image-ref', path: source }))
+    }
+    expect(await fitAgentMessageImages(body, undefined, undefined, provider)).toBe(body)
+    expect(worker.dispatch).not.toHaveBeenCalled()
+    await fitAgentMessageImages(
+      { ...body, blocks: body.blocks.slice(0, 20) },
+      undefined,
+      undefined,
+      provider
+    )
+    expect(worker.dispatch).toHaveBeenCalledTimes(1)
+  }
+)

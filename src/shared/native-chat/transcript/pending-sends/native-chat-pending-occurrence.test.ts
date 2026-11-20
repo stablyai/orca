@@ -188,16 +188,99 @@ it('retires each delivered version of the same original filename once across pru
   ]
   const transcript: NativeChatMessage[] = [
     message('boundary', 'assistant', 'ready', 90),
-    { ...message('u1', 'user', '', 120), blocks: [{ type: 'image-ref', path: '/temp/v1.png' }] },
+    {
+      ...message(
+        'u1',
+        'user',
+        '[Image source file: "/repo/shot.png"; attached viewing copy: "/temp/v1.png"]',
+        120
+      ),
+      blocks: [
+        { type: 'image-ref', path: '/temp/v1.png' },
+        {
+          type: 'text',
+          text: '[Image source file: "/repo/shot.png"; attached viewing copy: "/temp/v1.png"]'
+        }
+      ]
+    },
     message('a1', 'assistant', 'first', 130)
   ]
   const remaining = prunePendingSends(pending, transcript)
   expect(remaining.map((entry) => entry.id)).toEqual(['p2'])
   transcript.push({
     ...message('u2', 'user', '', 140),
-    blocks: [{ type: 'image-ref', path: '/temp/v2.png' }]
+    blocks: [
+      { type: 'image-ref', path: '/temp/v2.png' },
+      {
+        type: 'text',
+        text: '[Image source file: "/repo/shot.png"; attached viewing copy: "/temp/v2.png"]'
+      }
+    ]
   })
   expect(pendingSendsAsMessages(remaining, transcript)).toEqual([])
   transcript.push(message('a2', 'assistant', 'second', 150))
   expect(prunePendingSends(remaining, transcript)).toEqual([])
+})
+
+it('reconciles repeated captions across different source files and viewing copies', () => {
+  const pending: NativeChatPendingSend[] = [
+    {
+      id: 'p1',
+      text: 'look',
+      imagePaths: ['/repo/a.png'],
+      deliveredImagePaths: ['/temp/a.png'],
+      sentAt: 100,
+      afterMessageId: 'boundary'
+    },
+    {
+      id: 'p2',
+      text: 'look',
+      imagePaths: ['/repo/b.png'],
+      deliveredImagePaths: ['/temp/b.png'],
+      sentAt: 110,
+      afterMessageId: 'boundary',
+      matchingOccurrence: 2
+    }
+  ]
+  const transcript: NativeChatMessage[] = [
+    message('boundary', 'assistant', 'ready', 90),
+    message(
+      'u1',
+      'user',
+      'look\n\n[Image source file: "/repo/a.png"; attached viewing copy: "/temp/a.png"]',
+      120
+    ),
+    message(
+      'u2',
+      'user',
+      'look\n\n[Image source file: "/repo/b.png"; attached viewing copy: "/temp/b.png"]',
+      130
+    ),
+    message('a1', 'assistant', 'done', 140)
+  ]
+  expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
+  expect(prunePendingSends(pending, transcript)).toEqual([])
+})
+
+it('does not reuse an unfitted image row for a later fitted version of that file', () => {
+  const pending: NativeChatPendingSend[] = [
+    { id: 'p1', text: '', imagePaths: ['/repo/shot.png'], sentAt: 100, afterMessageId: 'boundary' },
+    {
+      id: 'p2',
+      text: '',
+      imagePaths: ['/repo/shot.png'],
+      deliveredImagePaths: ['/temp/v2.png'],
+      sentAt: 110,
+      afterMessageId: 'boundary',
+      matchingOccurrence: 2
+    }
+  ]
+  const transcript: NativeChatMessage[] = [
+    message('boundary', 'assistant', 'ready', 90),
+    { ...message('u1', 'user', '', 120), blocks: [{ type: 'image-ref', path: '/repo/shot.png' }] },
+    message('a1', 'assistant', 'first', 130)
+  ]
+  const remaining = prunePendingSends(pending, transcript)
+  expect(remaining.map((entry) => entry.id)).toEqual(['p2'])
+  expect(pendingSendsAsMessages(remaining, transcript).map((row) => row.id)).toEqual(['pending:p2'])
 })

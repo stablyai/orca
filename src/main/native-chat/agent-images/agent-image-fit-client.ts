@@ -1,5 +1,8 @@
 import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
-import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
+import {
+  AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT
+} from '../../../shared/agent-session/agent-session-attachments'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { toLinuxPath, toWindowsWslDrivePath } from '../../../shared/file-access/wsl-paths'
 import { stat } from 'node:fs/promises'
@@ -116,8 +119,16 @@ export async function fitAgentImagePath(path: string, signal?: AbortSignal): Pro
 export async function fitAgentMessageImages(
   body: AgentJournalMessageItem,
   signal?: AbortSignal,
-  fitted = new Map<string, string>()
+  fitted = new Map<string, string>(),
+  provider?: string
 ): Promise<AgentJournalMessageItem> {
+  if (
+    (provider === 'claude' || provider === 'pi') &&
+    body.blocks.filter((block) => block.type === 'image-ref').length >
+      AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT
+  ) {
+    return body
+  }
   const blocks: AgentJournalMessageItem['blocks'] = []
   for (const block of body.blocks) {
     if (block.type !== 'image-ref' || !block.path || block.url) {

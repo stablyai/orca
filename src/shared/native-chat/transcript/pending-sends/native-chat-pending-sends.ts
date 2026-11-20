@@ -137,9 +137,9 @@ function gluedCandidateRows(
   })
 }
 
-// Claim image-only rows once, oldest first, including delivered copies with a new content identity.
+// Pathless image rows (Claude queued prompts) cannot name their send, so each is claimed once, oldest send first.
 // Failed or uncertain writes never claim one, so another send's image cannot hide them.
-function claimImageRow(
+function claimPathlessImageRow(
   entry: NativeChatPendingSend,
   allMessages: readonly NativeChatMessage[],
   claimed: Set<string>,
@@ -149,9 +149,7 @@ function claimImageRow(
   if (
     count === 0 ||
     // Only a real row boundary or a proven-empty session; client-clock boundaries could bind old images.
-    (typeof entry.afterMessageId !== 'string' &&
-      !entry.afterEmptyTranscriptSessionId &&
-      !hasDeliveredImageCopies(entry)) ||
+    (typeof entry.afterMessageId !== 'string' && !entry.afterEmptyTranscriptSessionId) ||
     entry.delivery !== undefined ||
     entry.writeUnconfirmedAt !== undefined ||
     normalizeNativeChatPendingText(entry.text)
@@ -169,31 +167,16 @@ function claimImageRow(
       return false
     }
     const images = message.blocks.filter(isImageRefBlock)
-    const pathless =
+    return (
       images.length === count &&
       images.every((image) => !image.path) &&
       !normalizedNativeChatUserMessageText(message)
-    return (
-      pathless ||
-      (hasDeliveredImageCopies(entry) &&
-        matchingNativeChatUserContentCounts(
-          [message],
-          entry.imagePaths,
-          entry.deliveredImagePaths
-        ).has(nativeChatPendingContentKey(entry)))
     )
   })
   if (row) {
     claimed.add(row.id)
   }
   return Boolean(row)
-}
-
-function hasDeliveredImageCopies(entry: NativeChatPendingSend): boolean {
-  return (
-    !normalizeNativeChatPendingText(entry.text) &&
-    entry.deliveredImagePaths?.some((path, index) => path !== entry.imagePaths?.[index]) === true
-  )
 }
 
 function carriedImageRowClaims(pending: readonly NativeChatPendingSend[]): Set<string> {
@@ -212,9 +195,6 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
   const claimedImageRows = carriedImageRowClaims(pending)
   const carriedClaimCount = claimedImageRows.size
   const exactKeep = pending.map((entry) => {
-    if (hasDeliveredImageCopies(entry)) {
-      return !claimImageRow(entry, messages, claimedImageRows, true)
-    }
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
     const available =
@@ -226,7 +206,7 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
-    return occurrence > available && !claimImageRow(entry, messages, claimedImageRows, true)
+    return occurrence > available && !claimPathlessImageRow(entry, messages, claimedImageRows, true)
   })
   // Lost Enter can glue sends into one transcript row; retire them after the assistant advances.
   const stillOpen = pending.filter((_, index) => exactKeep[index])
@@ -263,9 +243,6 @@ export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
   const consumed = new Map<string, number>()
   const claimedImageRows = carriedImageRowClaims(pending)
   const exactVisible = pending.map((entry) => {
-    if (hasDeliveredImageCopies(entry)) {
-      return !claimImageRow(entry, existingMessages, claimedImageRows, false)
-    }
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
     const represented =
@@ -278,7 +255,8 @@ export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
     return (
-      occurrence > represented && !claimImageRow(entry, existingMessages, claimedImageRows, false)
+      occurrence > represented &&
+      !claimPathlessImageRow(entry, existingMessages, claimedImageRows, false)
     )
   })
   // Hide glued echoes once their user row exists, before assistant advancement permits pruning.

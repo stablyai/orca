@@ -76,12 +76,12 @@ export function agentImageSourceContext(
   original: readonly string[],
   delivered: readonly string[]
 ): string {
-  const sources = original.flatMap((path, index) =>
-    delivered[index] && delivered[index] !== path
-      ? [
-          `Image source file: ${JSON.stringify(path)}; attached viewing copy: ${JSON.stringify(delivered[index])}`
-        ]
-      : []
+  if (!original.some((path, index) => delivered[index] && delivered[index] !== path)) {
+    return ''
+  }
+  const sources = original.map(
+    (path, index) =>
+      `Image source file: ${JSON.stringify(path)}; attached viewing copy: ${JSON.stringify(delivered[index] ?? path)}`
   )
   return sources.length ? `[${sources.join('\n')}]` : ''
 }
@@ -93,4 +93,37 @@ export function agentImageDeliveryText(
 ): string {
   const context = agentImageSourceContext(original, delivered)
   return context ? `${text}${text.trim() ? '\n\n' : ''}${context}` : text
+}
+
+export function readAgentImageSourceContext(text: string): {
+  text: string
+  original: string[]
+  delivered: string[]
+} {
+  const unchanged = { text, original: [], delivered: [] }
+  const start = text.lastIndexOf('[Image source file: ')
+  if (start === -1 || !text.endsWith(']')) {
+    return unchanged
+  }
+  const content = text.slice(start + 1, -1)
+  const pattern =
+    /Image source file: ("(?:[^"\\]|\\.)*"); attached viewing copy: ("(?:[^"\\]|\\.)*")/g
+  const original: string[] = []
+  const delivered: string[] = []
+  let cursor = 0
+  for (const match of content.matchAll(pattern)) {
+    if (content.slice(cursor, match.index).trim()) {
+      return unchanged
+    }
+    try {
+      original.push(JSON.parse(match[1]))
+      delivered.push(JSON.parse(match[2]))
+    } catch {
+      return unchanged
+    }
+    cursor = match.index + match[0].length
+  }
+  return original.length && !content.slice(cursor).trim()
+    ? { text: text.slice(0, start).trimEnd(), original, delivered }
+    : unchanged
 }
