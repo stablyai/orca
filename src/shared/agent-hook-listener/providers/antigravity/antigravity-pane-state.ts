@@ -121,10 +121,18 @@ export function recordAntigravityChildHook(
   if (eventName === 'Stop' && !isAntigravityStopStillBusy(payload)) {
     if (existing && pane.verifiedChildren.has(id)) {
       retireAntigravityChild(pane, id)
-    } else if (existing && !existing.stopped) {
+    } else if (!existing?.stopped) {
       // Retire only after the poll proves ownership, so a verified finish still starts the parent's grace.
-      existing.stopped = true
-      existing.revision++
+      // A Stop whose earlier hooks were missed is tracked too, or its spawn would never settle.
+      const child: TrackedAntigravityChild = existing ?? {
+        id,
+        startedAt: now,
+        revision: 0,
+        state: 'working'
+      }
+      child.stopped = true
+      child.revision++
+      pane.children.set(id, child)
       pane.dirty = true
     }
     return

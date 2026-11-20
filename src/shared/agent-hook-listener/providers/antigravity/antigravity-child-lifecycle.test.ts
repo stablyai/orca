@@ -340,6 +340,17 @@ it('tracks a child that first reports after a background command finished the ro
   expect((await poll())?.payload.subagents).toBeUndefined()
 })
 
+it('finishes the run when the only hook received from a subagent is its final Stop', async () => {
+  transcript('child')
+  descriptor('child')
+  spawn()
+  expect(hook('root', 'Stop', { fullyIdle: false })?.payload.antigravitySpawnPending).toBe(true)
+  hook('child', 'Stop', { fullyIdle: true })
+  const polled = await poll()
+  expect(polled?.payload.antigravitySpawnPending).toBeUndefined()
+  expect(polled?.payload.mainAgent?.state).toBe('done')
+})
+
 it('ignores a child that wakes after the root finished', async () => {
   transcript('child')
   descriptor('child')
