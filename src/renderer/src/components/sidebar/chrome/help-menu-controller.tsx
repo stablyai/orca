@@ -26,6 +26,7 @@ import {
   getUpdateCheckClickOptions,
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
+import { navigateFromRail } from '@/components/app-rail/app-rail-navigation'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 // Keep feedback off the boot graph; menu warming and selection share the same lazy module entry.
@@ -67,7 +68,7 @@ function ExternalMenuItem({
   icon: React.ReactNode
 }): React.JSX.Element {
   return (
-    <DropdownMenuItem onSelect={() => openAppHttpLink(url)}>
+    <DropdownMenuItem onSelect={() => navigateFromRail(() => openAppHttpLink(url))}>
       {icon}
       {label}
       <ExternalLink className="ml-auto size-3 text-muted-foreground" />
