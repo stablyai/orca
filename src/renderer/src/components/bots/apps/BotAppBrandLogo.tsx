@@ -9,9 +9,11 @@ import gitlabLogo from '@/assets/connector-brands/gitlab.svg'
 import googleLogo from '@/assets/connector-brands/google.svg'
 import neonLogo from '@/assets/connector-brands/neon.svg'
 import netlifyLogo from '@/assets/connector-brands/netlify.svg'
+import netlifyDarkLogo from '@/assets/connector-brands/netlify-dark.svg'
 import notionLogo from '@/assets/connector-brands/notion.svg'
 import playwrightLogo from '@/assets/connector-brands/playwright.svg'
 import posthogLogo from '@/assets/connector-brands/posthog.svg'
+import posthogDarkLogo from '@/assets/connector-brands/posthog-dark.svg'
 import sentryLogo from '@/assets/connector-brands/sentry.svg'
 import slackLogo from '@/assets/connector-brands/slack.svg'
 import stripeLogo from '@/assets/connector-brands/stripe.svg'
@@ -21,7 +23,7 @@ import { GitHubIcon } from '../../icons/GitHubIcon'
 import { GoogleIcon } from '../../icons/GoogleIcon'
 import { SlackIcon } from '../../icons/SlackIcon'
 import { LinearIcon } from '../../icons/LinearIcon'
-import { BARE_LOGO_BOX, BareImageLogo, BotAppLogo, BotLogoBare } from './BotAppRow'
+import { BARE_LOGO_BOX, BotAppLogo, BotLogoBare } from './BotAppRow'
 import { cn } from '@/lib/class-names'
 import { LOGO_TILES } from './brand-logo-tiles'
 
@@ -32,8 +34,8 @@ type BotAppBrand = {
   Icon?: ComponentType<{ className?: string }>
   /** The logo is a white mark for a dark tile: bare, a light theme draws it black. */
   whiteMark?: true
-  /** The logo has near-black ink: bare, a dark theme keeps a small white tile behind it. */
-  darkInk?: true
+  /** The logo with its near-black ink in white: bare, a dark theme draws it in place of `logo`. */
+  darkLogo?: string
 }
 
 /** By connector id or BOT_MCP_APPS id; a new MCP app adds its logo here, and its tile to LOGO_TILES.brand. */
@@ -45,11 +47,11 @@ const BRANDS: Readonly<Record<string, BotAppBrand>> = {
   vercel: { logo: vercelLogo, whiteMark: true },
   sentry: { logo: sentryLogo, whiteMark: true },
   datadog: { logo: datadogLogo },
-  posthog: { logo: posthogLogo, darkInk: true },
+  posthog: { logo: posthogLogo, darkLogo: posthogDarkLogo },
   cloudflare: { logo: cloudflareLogo },
   supabase: { logo: supabaseLogo },
   neon: { logo: neonLogo },
-  netlify: { logo: netlifyLogo, darkInk: true },
+  netlify: { logo: netlifyLogo, darkLogo: netlifyDarkLogo },
   gitlab: { logo: gitlabLogo },
   context7: { logo: context7Logo, whiteMark: true },
   atlassian: { logo: atlassianLogo },
@@ -90,18 +92,30 @@ export function BotAppBrandLogo({
   const bare = useContext(BotLogoBare)
   const brand = BRANDS[app.id]
   const Icon = app.Icon ?? brand?.Icon
-  if (bare && brand?.darkInk && brand.logo) {
-    return <BareImageLogo src={brand.logo} />
-  }
   if (size === 'xs' || bare) {
     const box = size === 'xs' ? 'size-3.5' : 'size-5'
     const mark = brand?.logo ? (
-      <img
-        src={brand.logo}
-        alt=""
-        draggable={false}
-        className={cn(box, 'object-contain', brand.whiteMark && 'brightness-0 dark:brightness-100')}
-      />
+      <>
+        <img
+          src={brand.logo}
+          alt=""
+          draggable={false}
+          className={cn(
+            box,
+            'object-contain',
+            brand.whiteMark && 'brightness-0 dark:brightness-100',
+            brand.darkLogo && 'dark:hidden'
+          )}
+        />
+        {brand.darkLogo ? (
+          <img
+            src={brand.darkLogo}
+            alt=""
+            draggable={false}
+            className={cn(box, 'hidden object-contain dark:block')}
+          />
+        ) : null}
+      </>
     ) : Icon ? (
       <Icon className={cn(box, 'text-foreground')} />
     ) : (

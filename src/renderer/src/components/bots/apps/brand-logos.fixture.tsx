@@ -22,7 +22,8 @@ const COMPOSIO_SLUGS = [
   'vercel',
   'context7',
   'netlify',
-  'playwright'
+  'playwright',
+  'github'
 ]
 
 const Cell = ({ name, children }: { name: string; children: React.ReactNode }) => (

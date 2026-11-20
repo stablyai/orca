@@ -1,7 +1,7 @@
 import React, { useContext } from 'react'
 import { cn } from '@/lib/class-names'
 import { composioLogoUrl } from '../../../../../shared/composio/composio-apps'
-import { LOGO_TILES } from './brand-logo-tiles'
+import { COMPOSIO_DARK_MARKS, LOGO_TILES } from './brand-logo-tiles'
 
 /** A coloured tile's mark colour and its hairline on a dark page; the white tile otherwise. */
 export function brandTileClass(tile: string | undefined): string {
@@ -14,10 +14,11 @@ export function brandTileClass(tile: string | undefined): string {
 export function composioLogo(
   slug: string | undefined,
   logo?: string | null
-): { src: string; fill: string | undefined } {
+): { src: string; fill: string | undefined; darkMark: boolean } {
   return {
     src: (slug && LOGO_TILES.filled[slug]) || logo || composioLogoUrl(slug ?? ''),
-    fill: slug ? LOGO_TILES.composio[slug] : undefined
+    fill: slug ? LOGO_TILES.composio[slug] : undefined,
+    darkMark: slug ? COMPOSIO_DARK_MARKS.has(slug) : false
   }
 }
 
@@ -30,25 +31,29 @@ export const BotLogoBare = React.createContext(false)
 /** A bare logo's box; see BotLogoBare. */
 export const BARE_LOGO_BOX = 'flex size-5 shrink-0 items-center justify-center'
 
-/**
- * A logo image drawn for a white tile, bare (see BotLogoBare): a full square of colour at 20 px, else its mark. Such
- * marks come in any colour, black included, so a dark theme keeps a small white tile behind them.
- */
-export function BareImageLogo({ src, fill }: { src: string; fill?: string }): React.JSX.Element {
-  return (
+/** A logo Composio serves, bare (see BotLogoBare): a full square of colour at 20 px, else its mark. */
+export function BareComposioLogo({
+  src,
+  fill,
+  darkMark
+}: ReturnType<typeof composioLogo>): React.JSX.Element {
+  return fill ? (
     <span
       style={{ backgroundColor: fill }}
       className={cn(
         BARE_LOGO_BOX,
-        'overflow-hidden rounded-[5px]',
-        fill ? 'dark:outline-1 dark:-outline-offset-1 dark:outline-white/14' : 'dark:bg-brand-mark'
+        'overflow-hidden rounded-[5px] dark:outline-1 dark:-outline-offset-1 dark:outline-white/14'
       )}
     >
+      <img src={src} alt="" draggable={false} className="size-full object-contain" />
+    </span>
+  ) : (
+    <span className={BARE_LOGO_BOX}>
       <img
         src={src}
         alt=""
         draggable={false}
-        className={cn('object-contain', fill ? 'size-full' : 'size-5 dark:size-3.5')}
+        className={cn('size-5 object-contain', darkMark && 'dark:brightness-0 dark:invert')}
       />
     </span>
   )
@@ -81,7 +86,7 @@ export function BotAppLogo({
   const background = fill ?? tile
   if (bare) {
     return image ? (
-      <BareImageLogo src={image.src} fill={fill} />
+      <BareComposioLogo {...image} />
     ) : (
       <span className={cn(BARE_LOGO_BOX, plain ? 'text-muted-foreground' : 'text-foreground')}>
         {icon}
