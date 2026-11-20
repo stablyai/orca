@@ -1,4 +1,4 @@
-import { readFile, readdir, readlink } from 'node:fs/promises'
+import { readFile, readlink } from 'node:fs/promises'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-nonblocking-args'
 import { getProcessOutputFields } from '../../shared/process-observation/process-output-field-scanner'
@@ -18,6 +18,7 @@ import {
 } from './local-workspace-port-scan-state'
 import { dedupeRawPorts, parseAddressWithPort } from './local-workspace-port-address'
 import { parseProcNetTcp, type ProcNetListener } from './linux-proc-net-listeners'
+import { resolveLinuxSocketOwners } from './linux-proc-socket-owners'
 
 export function parseLsofListeningOutput(output: string): RawListeningPort[] {
   const ports: RawListeningPort[] = []
@@ -87,7 +88,7 @@ async function dispatchPlatformListeningPortScan(
   options: WorkspacePortScanOptions
 ): Promise<PlatformListeningPortScan> {
   if (process.platform === 'linux') {
-    return scanLinuxProcPorts()
+    return scanLinuxProcPorts(options)
   }
   if (process.platform === 'darwin') {
     return scanDarwinLsofPorts(options)
@@ -164,31 +165,45 @@ async function scanWindowsNetstatPorts(
   }
 }
 
-async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
+async function scanLinuxProcPorts(
+  options: WorkspacePortScanOptions
+): Promise<PlatformListeningPortScan> {
   const ownUid = process.getuid?.()
   const [tcp4, tcp6] = await Promise.all([
     readProcNet('/proc/net/tcp', ownUid),
     readProcNet('/proc/net/tcp6', ownUid)
   ])
   const sockets = [...tcp4, ...tcp6]
-  const inodeToPid = await mapLinuxInodesToPids(new Set(sockets.map((socket) => socket.inode)))
-  const metadata = new Map<number, ProcessMetadata>()
-  const rawPorts: RawListeningPort[] = []
-
-  for (const socket of sockets) {
-    const pid = inodeToPid.get(socket.inode)
-    if (pid != null && !metadata.has(pid)) {
-      metadata.set(pid, await loadLinuxProcessMetadata(pid))
-    }
-    rawPorts.push({
-      host: socket.host,
-      port: socket.port,
-      pid,
-      ...metadata.get(pid ?? -1)
-    })
+  const inodeToPid = await resolveLinuxSocketOwners(
+    new Set(sockets.map((socket) => socket.inode)),
+    ownUid
+  )
+  // comm is read every scan so an exec in a listening process invalidates reused metadata.
+  const processNames = new Map<number, string | undefined>()
+  for (const pid of new Set(inodeToPid.values())) {
+    processNames.set(pid, (await readTextIfAvailable(`/proc/${pid}/comm`))?.trim() || undefined)
   }
-
-  return { ports: dedupeRawPorts(rawPorts), metadataAvailable: true }
+  const ports = dedupeRawPorts(
+    sockets.map((socket) => {
+      const pid = inodeToPid.get(socket.inode)
+      return {
+        host: socket.host,
+        port: socket.port,
+        pid,
+        socketId: String(socket.inode),
+        processName: pid === undefined ? undefined : processNames.get(pid)
+      }
+    })
+  )
+  const { hydrated, pidsNeedingMetadata } = partitionListenersNeedingMetadata(ports, options)
+  const metadata = new Map<number, ProcessMetadata>()
+  for (const pid of pidsNeedingMetadata) {
+    metadata.set(pid, await loadLinuxProcessMetadata(pid))
+  }
+  return {
+    ports: hydrated.map((port) => ({ ...port, ...metadata.get(port.pid ?? -1) })),
+    metadataAvailable: true
+  }
 }
 
 async function readProcNet(
@@ -202,54 +217,12 @@ async function readProcNet(
   }
 }
 
-async function mapLinuxInodesToPids(inodes: Set<number>): Promise<Map<number, number>> {
-  const result = new Map<number, number>()
-  if (inodes.size === 0) {
-    return result
-  }
-  let pids: string[]
-  try {
-    pids = (await readdir('/proc')).filter((entry) => /^\d+$/.test(entry))
-  } catch {
-    return result
-  }
-
-  for (const pidText of pids) {
-    let fds: string[]
-    try {
-      fds = await readdir(`/proc/${pidText}/fd`)
-    } catch {
-      continue
-    }
-    const pid = Number.parseInt(pidText, 10)
-    for (const fd of fds) {
-      let link: string
-      try {
-        link = await readlink(`/proc/${pidText}/fd/${fd}`)
-      } catch {
-        continue
-      }
-      const match = link.match(/^socket:\[(\d+)\]$/)
-      if (!match) {
-        continue
-      }
-      const inode = Number.parseInt(match[1], 10)
-      if (inodes.has(inode)) {
-        result.set(inode, pid)
-      }
-    }
-  }
-  return result
-}
-
 async function loadLinuxProcessMetadata(pid: number): Promise<ProcessMetadata> {
-  const [comm, cmdline, cwd] = await Promise.all([
-    readTextIfAvailable(`/proc/${pid}/comm`),
+  const [cmdline, cwd] = await Promise.all([
     readTextIfAvailable(`/proc/${pid}/cmdline`),
     readlink(`/proc/${pid}/cwd`).catch(() => undefined)
   ])
   return {
-    processName: comm?.trim() || undefined,
     commandLine: cmdline?.split('\u0000').join(' ').trim() || undefined,
     cwd
   }
