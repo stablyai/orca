@@ -82,13 +82,13 @@ describe('floating workspace directory', () => {
     await symlink(target, linkPath, process.platform === 'win32' ? 'junction' : 'dir')
   }
 
-  it.each(['unchanged', 'revoked', 'replaced', 'home-changed'])(
+  it.each(['unchanged', 'revoked', 'replaced', 'cleared', 'whitespace', 'home-changed'])(
     'uses current floating trust after home resolution: %s',
     async (change) => {
       const approved = path.join(tempRoot, 'approved')
       const store = createStore({
         floatingTerminalCwd: approved,
-        floatingTerminalTrustedCwds: [approved]
+        floatingTerminalTrustedCwds: [approved, await realpath(homeDir)]
       })
       let release = () => {}
       homeProbe.wait = new Promise<void>((resolve) => {
@@ -100,6 +100,9 @@ describe('floating workspace directory', () => {
       }
       if (change === 'replaced') {
         store.updateSettings({ floatingTerminalCwd: path.join(tempRoot, 'other') })
+      }
+      if (change === 'cleared' || change === 'whitespace') {
+        store.updateSettings({ floatingTerminalCwd: change === 'cleared' ? '' : '  ' })
       }
       if (change === 'home-changed') {
         homeDir = path.join(tempRoot, 'new-home')

@@ -92,7 +92,8 @@ export async function getFloatingWorkspaceFileRoots(store: {
   const settings = store.getSettings()
   const configuredPath =
     typeof settings.floatingTerminalCwd === 'string' ? settings.floatingTerminalCwd.trim() : ''
-  const cwd = home ? resolveFloatingWorkspacePath(configuredPath, home.real) : null
+  const cwd =
+    home && configuredPath ? resolveFloatingWorkspacePath(configuredPath, home.real) : null
   return {
     extraRoots: [getDefaultFloatingWorkspacePath()],
     // Exact: trusted entries are canonical, so a trusted cwd later replaced by a link fails closed.

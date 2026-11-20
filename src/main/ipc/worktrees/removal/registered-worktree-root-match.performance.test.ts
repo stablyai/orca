@@ -48,30 +48,35 @@ it.each([12, 120])('synchronizes %i owners once for a successful ASCII lookup', 
   expect(getRepos).toHaveBeenCalledTimes(1)
 })
 
-it('revalidates owner removal after an awaited Unicode match', async () => {
-  const repo: Repo = {
-    id: 'unicode',
-    path: '/repos/unicode',
-    displayName: 'repo',
-    badgeColor: '#000',
-    addedAt: 0
+it.each([true, false])(
+  'revalidates owner removal after an awaited Unicode result %s',
+  async (matched) => {
+    const repo: Repo = {
+      id: 'unicode',
+      path: '/repos/unicode',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    let repos = [repo]
+    const getRepos = vi.fn(() => repos)
+    const store = { getRepos }
+    registerWorktreeRootsForRepo(store, repo, ['/worktrees/café', '/worktrees/café'])
+    getRepos.mockClear()
+    let release = (_matched: boolean) => {}
+    probe.read = (_target, root) =>
+      root === resolve('/worktrees/café')
+        ? true
+        : new Promise<boolean>((resolve) => {
+            release = resolve
+          })
+    const pending = isRegisteredWorktreePathAsync(resolve('/worktrees/café/shot.png'), store)
+    repos = []
+    release(matched)
+    await expect(pending).resolves.toBe(false)
+    expect(getRepos).toHaveBeenCalledTimes(2)
   }
-  let repos = [repo]
-  const getRepos = vi.fn(() => repos)
-  const store = { getRepos }
-  registerWorktreeRootsForRepo(store, repo, ['/worktrees/café'])
-  getRepos.mockClear()
-  let release = (_matched: boolean) => {}
-  probe.read = () =>
-    new Promise<boolean>((resolve) => {
-      release = resolve
-    })
-  const pending = isRegisteredWorktreePathAsync(resolve('/worktrees/café/shot.png'), store)
-  repos = []
-  release(true)
-  await expect(pending).resolves.toBe(false)
-  expect(getRepos).toHaveBeenCalledTimes(2)
-})
+)
 
 it.each([750, 7500])(
   'keeps ASCII containment synchronous across %i registered roots',
