@@ -221,7 +221,7 @@ export function claudeStructuredLaunchPart(
       probeLaunch
     )
     const launchArgs = await deps.resolveLaunchArgs()
-    const { thinkingDisplayArgs, visuals, promptSuggestions } = await launchFlags
+    const { thinkingDisplayArgs, visuals, promptSuggestions, refused } = await launchFlags
     const linked = await basis.linkedSkills()
     const discovery = claudeDiscoveryOptions({
       configuredArgs: launchArgs,
@@ -297,7 +297,7 @@ export function claudeStructuredLaunchPart(
           ...CLAUDE_STRUCTURED_BASE_OPTIONS,
           ...permission,
           ...discovery,
-          ...(await claudeBotSessionOptions(basis, linked.projects, tools)),
+          ...(await claudeBotSessionOptions(basis, linked.projects, tools, refused)),
           ...(promptSuggestions ? { promptSuggestions } : {}),
           extraArgs: {
             ...discovery.extraArgs,
@@ -323,7 +323,7 @@ export function claudeStructuredLaunchPart(
           : {})
       },
       env,
-      inheritedEnvToDelete: [],
+      inheritedEnvToDelete: refused.envToDelete,
       // The agent runtime follows Orca's CLI directory on PATH so another orca cannot shadow it.
       cliRuntimeCommand: command
     }

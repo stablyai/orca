@@ -30,10 +30,7 @@ export function TerminalPaneResumeInChatButton({
   )
   const pending = useCliChatResumePending(source)
   const updateRequired = source?.hostUpdateRequired === true
-  const label = t(
-    'components.tab.bar.SortableTabContextMenu.switchToChatView',
-    'Continue in Chat UI'
-  )
+  const label = t('components.tab.bar.SortableTabContextMenu.switchToChatView', 'Continue in chat')
   const tooltip = updateRequired
     ? t(
         'components.native-chat.resumeInNewChat.hostUpdateRequired',

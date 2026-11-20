@@ -603,7 +603,7 @@ it('writes nothing on retries to an older host, before or after the question is 
   const notice = screen.getByRole('status')
   expect(notice.textContent).toContain('can’t record answers yet, so nothing was sent')
   expect(notice.textContent).toContain('Ship B')
-  expect(within(notice).queryByRole('button', { name: 'Put in the comment box' })).toBeNull()
+  expect(within(notice).queryByRole('button', { name: 'Draft comment' })).toBeNull()
 
   // The owner opens the card again and sends the same answer.
   fireEvent.click(screen.getByRole('button', { name: 'Expand' }))

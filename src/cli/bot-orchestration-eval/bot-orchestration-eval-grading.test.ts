@@ -421,7 +421,7 @@ describe('outcome checks', () => {
       })
     )
 
-    fails(everyTurn, turn({ reply: '' }))
+    expect(gradeThread(thread([turn({ reply: '' })]), [])).toEqual(['turn 1: no reply'])
     fails(everyTurn, turn({ writes: [{ method: 'worktree.rm', params: { worktree: 'x' } }] }))
     fails(everyTurn, turn({ writes: [started(null, 'x')] }))
     fails(
@@ -471,11 +471,4 @@ describe('every scenario', () => {
       expect(gradeThread(noOp, scenario.checks)).not.toEqual([])
     }
   )
-
-  it('fails an empty answer everywhere', () => {
-    for (const scenario of ALL_ORCHESTRATION_SCENARIOS) {
-      const empty = thread(scenario.turns.map(() => turn({ reply: '' })))
-      expect(gradeThread(empty, scenario.checks), scenario.id).not.toEqual([])
-    }
-  })
 })

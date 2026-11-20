@@ -1,10 +1,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { BotLaunchTools } from './bot-launch-tools'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  claudeLaunchServers,
   claudeMirrorArgs,
   claudeMirrorChanges,
   claudeServerConfig,
@@ -51,16 +49,7 @@ describe("a Claude Code bot's tools", () => {
     ).toHaveLength(1)
   })
 
-  it('hands a launch the servers as extra config, and mirrors one as JSON so no flag eats its name', async () => {
-    const tools = await BotLaunchTools.for(
-      { grant: async () => ({ origin: '', token: '' }) },
-      { botId: 'b', folder: '/b', agent: 'claude' },
-      [notion, time]
-    )
-    expect(claudeLaunchServers(tools)).toEqual({
-      notion: { type: 'http', url: notion.url },
-      time: { type: 'stdio', command: 'uvx', args: ['mcp-server-time'], env: { TZ: 'UTC' } }
-    })
+  it('passes a server to Claude’s local mirror as one JSON argument', () => {
     expect(claudeMirrorArgs(time)).toEqual([
       'mcp',
       'add-json',
@@ -83,15 +72,19 @@ describe("a Claude Code bot's tools", () => {
       'spike3: http://127.0.0.1:47811/mcp (HTTP) - ! Needs authentication',
       "broken: /nonexistent/bin  - ✘ Failed to connect — ENOENT: no such file or directory, posix_spawn '/nonexistent/bin'",
       'fine: https://example.com/mcp (HTTP) - ✓ Connected',
+      'starting: node server - Pending',
       'github: gh-mcp  - ✘ Failed to connect'
     ].join('\n')
-    expect(Object.fromEntries(claudeToolProblems(listing, ['spike3', 'broken', 'fine']))).toEqual({
+    const names = ['spike3', 'broken', 'fine', 'starting', 'missing']
+    expect(Object.fromEntries(claudeToolProblems(listing, names))).toEqual({
       spike3: { kind: 'sign-in' },
       broken: {
         kind: 'failed',
         detail:
           "Failed to connect — ENOENT: no such file or directory, posix_spawn '/nonexistent/bin'"
-      }
+      },
+      starting: { kind: 'unconfirmed' },
+      missing: { kind: 'unconfirmed' }
     })
   })
 
@@ -122,13 +115,5 @@ describe("a Claude Code bot's tools", () => {
     expect(claudeServerConfig({ ...server, command: 'uvx' }, 'win32')).toMatchObject({
       command: 'uvx'
     })
-  })
-  it('does not infer readiness from missing or pending list entries', () => {
-    expect(Object.fromEntries(claudeToolProblems('', ['docs']))).toEqual({
-      docs: { kind: 'unconfirmed' }
-    })
-    expect(Object.fromEntries(claudeToolProblems('docs: node server - Pending', ['docs']))).toEqual(
-      { docs: { kind: 'unconfirmed' } }
-    )
   })
 })

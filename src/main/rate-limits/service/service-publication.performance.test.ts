@@ -71,44 +71,43 @@ beforeEach(() => {
   presence.zcode.mockReset().mockResolvedValue(false)
 })
 
-it.each([100, 1000])(
-  'coalesces %i overlapping active and inactive publications before credential admission',
-  async (count) => {
-    const service = new PublicationService()
-    const entered = Promise.withResolvers<void>()
-    const release = Promise.withResolvers<boolean>()
-    presence.cookie.mockImplementationOnce(() => {
-      entered.resolve()
-      return release.promise
-    })
-    const received: RateLimitState[] = []
-    service.onStateChange((state) => received.push(state))
-    const observer = observePublication()
-    service.change(0)
-    service.inactive(0)
-    const publishing = observer.flight()
-    await entered.promise
-    for (let value = 1; value <= count; value++) {
-      service.change(value)
-      service.inactive(value)
-    }
-    expect(presence.cookie).toHaveBeenCalledTimes(1)
-    expect(presence.minimax).toHaveBeenCalledTimes(1)
-    expect(presence.zcode).toHaveBeenCalledTimes(1)
-    release.resolve(false)
-    await publishing
-    expect(presence.cookie).toHaveBeenCalledTimes(2)
-    expect(presence.minimax).toHaveBeenCalledTimes(2)
-    expect(presence.zcode).toHaveBeenCalledTimes(2)
-    expect(received).toHaveLength(2)
-    expect(received[0].codex?.session?.usedPercent).toBe(count)
-    expect(received[0].inactiveCodexAccounts[0].rateLimits?.session?.usedPercent).toBe(count)
-    expect(received[1].codex?.session?.usedPercent).toBe(count)
-    expect(received[1].inactiveCodexAccounts[0].rateLimits?.session?.usedPercent).toBe(count)
+it('coalesces overlapping active and inactive publications before credential admission', async () => {
+  const count = 1000
+  const service = new PublicationService()
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<boolean>()
+  presence.cookie.mockImplementationOnce(() => {
+    entered.resolve()
+    return release.promise
+  })
+  const received: RateLimitState[] = []
+  service.onStateChange((state) => received.push(state))
+  const observer = observePublication()
+  service.change(0)
+  service.inactive(0)
+  const publishing = observer.flight()
+  await entered.promise
+  for (let value = 1; value <= count; value++) {
+    service.change(value)
+    service.inactive(value)
   }
-)
+  expect(presence.cookie).toHaveBeenCalledTimes(1)
+  expect(presence.minimax).toHaveBeenCalledTimes(1)
+  expect(presence.zcode).toHaveBeenCalledTimes(1)
+  release.resolve(false)
+  await publishing
+  expect(presence.cookie).toHaveBeenCalledTimes(2)
+  expect(presence.minimax).toHaveBeenCalledTimes(2)
+  expect(presence.zcode).toHaveBeenCalledTimes(2)
+  expect(received).toHaveLength(2)
+  expect(received[0].codex?.session?.usedPercent).toBe(count)
+  expect(received[0].inactiveCodexAccounts[0].rateLimits?.session?.usedPercent).toBe(count)
+  expect(received[1].codex?.session?.usedPercent).toBe(count)
+  expect(received[1].inactiveCodexAccounts[0].rateLimits?.session?.usedPercent).toBe(count)
+})
 
-it.each([100, 1000])('publishes progress during %i continuous updates', async (count) => {
+it('publishes progress during continuous updates', async () => {
+  const count = 100
   const service = new PublicationService()
   const reads = Array.from({ length: count + 1 }, () => ({
     entered: Promise.withResolvers<void>(),

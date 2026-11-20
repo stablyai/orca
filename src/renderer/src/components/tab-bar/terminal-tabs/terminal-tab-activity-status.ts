@@ -289,16 +289,19 @@ export function terminalTabActivityToAgentDotState(
 /** Bell or unacked agent completion — same sources the tab strip and floating launcher use. */
 export function terminalTabHasUnreadActivity({
   terminalTabId,
+  completionTabId = terminalTabId,
   unreadTerminalTabs,
   unreadAgentCompletionPanes
 }: {
   terminalTabId: string
+  /** The tab id the tab's pane keys name, when it differs (a minted chat tab). */
+  completionTabId?: string
   unreadTerminalTabs: Record<string, ReadableAgentAttentionUnread>
   unreadAgentCompletionPanes: Record<string, ReadableAgentAttentionUnread>
 }): boolean {
   return (
     readAgentAttentionUnreadReason(unreadTerminalTabs[terminalTabId]) !== null ||
-    hasUnreadAgentCompletionForTerminalTab(unreadAgentCompletionPanes, terminalTabId)
+    hasUnreadAgentCompletionForTerminalTab(unreadAgentCompletionPanes, completionTabId)
   )
 }
 

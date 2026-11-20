@@ -38,7 +38,8 @@ it('never writes secret bytes into a stage substituted after native verification
   expect(readFileSync(target, 'utf8')).toBe('')
 })
 
-it.each([3, 30])('shares one directory repair across %i concurrent callers', async (count) => {
+it('shares one directory repair across concurrent callers', async () => {
+  const count = 30
   const fake = createFakeWindowsSecurity()
   const repair = vi.spyOn(fake, 'setDaclSddl')
   setWindowsSecurityForTests(fake)

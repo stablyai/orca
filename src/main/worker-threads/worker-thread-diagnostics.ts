@@ -25,7 +25,6 @@ import {
 } from '../native-chat/agent-session-journal/journal-sql-reader-requests'
 import { liveTextCapReachedCount } from '../native-chat/retention/subscriber-live-text-cap'
 import { observeWorkerThreads } from './worker-thread-spawn'
-import { noteMainCageHeap } from '../crash-reporting/memory/main-heap-allocation-profile'
 import {
   readWorkerHeap,
   WORKER_HEAP_BREADCRUMB_BYTES,
@@ -118,7 +117,6 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
   const total = heaps.reduce((sum, { heap }) => sum + heap, mainHeap)
   const retention = readRetention()
   annotateCrashReport(mainHeap, total, heaps, sent, retention)
-  noteMainCageHeap(total, mainHeap)
   if (total >= WORKER_HEAP_BREADCRUMB_BYTES) {
     const data: CrashReportBreadcrumbData = {
       totalHeapMB: Math.round(total / MB),

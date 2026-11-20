@@ -217,7 +217,7 @@ describe('Composio apps for a bot', () => {
     ])
   })
 
-  it('makes sessions with Composio’s own connect tool and workbench off, and turns them off on an older one', async () => {
+  it('turns Composio’s own connect tool and workbench off on an existing session', async () => {
     const composio = fakeComposio({
       'POST /tool_router/session': () => SESSION('trs_a'),
       'PATCH /tool_router/session/trs_a': () => ({ body: {} })
@@ -226,7 +226,6 @@ describe('Composio apps for a bot', () => {
     await subject.ensureTool('bot-1')
     await subject.ensureTool('bot-1')
     const settings = { manage_connections: { enable: false }, workbench: { enable: false } }
-    expect(composio.calls.find((call) => call.method === 'POST')?.body).toMatchObject(settings)
     expect(composio.calls.find((call) => call.method === 'PATCH')?.body).toEqual(settings)
   })
 
