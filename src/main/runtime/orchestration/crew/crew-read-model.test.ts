@@ -3,7 +3,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/con
 import { describe, expect, it, vi } from 'vitest'
 
 import { buildCrewSnapshot } from './crew-party-snapshot'
-import { CrewReadModel } from './crew-read-model'
+import { CREW_HOST_GRACE_MS, CrewReadModel } from './crew-read-model'
 import { subscribeCrew } from './crew-stream'
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
@@ -221,6 +221,7 @@ it('rederives exact and backwards clocks and drops unwatched one-shot truth', ()
     .prepare('UPDATE dispatch_contexts SET completed_at = ? WHERE id = ?')
     .run(new Date(completed).toISOString(), worker.id)
   const clock = vi.spyOn(Date, 'now').mockReturnValue(completed)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   try {
     const model = new CrewReadModel(() => deps, db.crewChanges.subscribe)
     const stop = model.subscribe(() => {})
@@ -232,12 +233,14 @@ it('rederives exact and backwards clocks and drops unwatched one-shot truth', ()
     clock.mockReturnValue(completed)
     expect(model.read('term_coord').sections.managing).toHaveLength(1)
     stop()
+    vi.advanceTimersByTime(CREW_HOST_GRACE_MS)
     expect(model.read('term_coord').sections.managing).toHaveLength(1)
     db.db
       .prepare("UPDATE dispatch_contexts SET completed_at = '2000-01-01' WHERE id = ?")
       .run(worker.id)
     expect(model.read('term_coord').sections.managing).toHaveLength(0)
   } finally {
+    vi.useRealTimers()
     clock.mockRestore()
   }
 })

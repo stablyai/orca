@@ -208,6 +208,27 @@ export class CrewRelevance {
 /** A terminal record write: every renderer graph publish, title and layout sync makes several. */
 export const TERMINAL_IDENTITY_CHANGE: CrewInvalidation = new Set(['identity'])
 
+/** Only bindings a row can show: an unrelated pane's row appearing or leaving rebuilds nothing. */
+export function crewShownBindings(
+  rows: CrewReadDependencies['statuses'],
+  relevance: CrewRelevance | undefined
+): Map<string, CrewReadDependencies['statuses'][number]['binding']> {
+  const shown = new Map<string, CrewReadDependencies['statuses'][number]['binding']>()
+  for (const row of rows) {
+    const { binding } = row
+    if (
+      !relevance ||
+      relevance.panes.has(row.activity.paneKey) ||
+      (binding.kind !== 'unresolved' && relevance.handles.has(binding.terminalHandle)) ||
+      (binding.kind === 'worker' && relevance.dispatches.has(binding.dispatchId)) ||
+      relevance.hasPane(row.activity.paneKey)
+    ) {
+      shown.set(row.activity.paneKey, binding)
+    }
+  }
+  return shown
+}
+
 /** What a crew's panes and handles resolve to now; equal before and after a write that moved none. */
 export function crewIdentityFingerprint(
   relevance: Pick<CrewRelevance, 'panes' | 'handles'>,
