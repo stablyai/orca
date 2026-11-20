@@ -4,6 +4,7 @@ import {
   leaveClaudePlanModeOnApproval
 } from './claude-plan-approval-mode'
 import { setClaudeAllowedPermissionMode } from './claude-full-access-refusal'
+import { ClaudeControlRequestTimeoutError } from '../../sdk-transport/claude-agent-sdk-control-requests'
 
 const BYPASS_REFUSAL =
   'Cannot set permission mode to bypassPermissions because it is disabled by settings or configuration'
@@ -173,6 +174,26 @@ describe('leaving Plan mode after an approved plan', () => {
     expect(await send(session)).toBe('default')
     expect(await send(session)).toBe('default')
     auto.available = true
+    expect(await send(session)).toBe('auto')
+  })
+
+  it('records no fallback when the auto switch goes unanswered, and asks again next send', async () => {
+    let answered = false
+    const setPermissionMode = vi.fn((mode: string) =>
+      mode === 'auto' && !answered
+        ? Promise.reject(new ClaudeControlRequestTimeoutError('set_permission_mode'))
+        : Promise.resolve()
+    )
+    const session = {
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: true,
+      appliedInputOptions: new Map<string, string>(),
+      connection: { setPermissionMode }
+    }
+    await expect(send(session)).rejects.toThrow('timed out')
+    expect(session.appliedInputOptions.has('buildPermissionMode')).toBe(false)
+    answered = true
     expect(await send(session)).toBe('auto')
   })
 

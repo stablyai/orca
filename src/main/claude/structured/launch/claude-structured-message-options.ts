@@ -75,6 +75,7 @@ export async function applyClaudeMessageOptions(
       )
       session.appliedInputOptions.set('interactionMode', 'plan')
     } else {
+      await waitForClaudeStartupSettings(session, signal)
       const leavingPlan = claudeInPlan(session)
       const mode = await waitForPromiseWithSignal(
         setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
@@ -101,12 +102,10 @@ export async function applyClaudeMessageOptions(
 
 const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000
 
-/** Claude starts a refused Full access chat in its own fallback; the chat's is Approve for me. A
- *  first send waits briefly for the startup settings read that tells, and a failed switch leaves
- *  the send to run as Claude stands (the next send tries again). */
-export async function applyClaudeFullAccessFallback(
+/** A Full access chat's first send waits briefly for the startup settings read that says
+ *  whether Claude allows it, so one write usually settles the mode. */
+async function waitForClaudeStartupSettings(
   session: ClaudeSession,
-  timeoutMs: number | undefined,
   signal: AbortSignal | undefined
 ): Promise<void> {
   if (
@@ -123,6 +122,16 @@ export async function applyClaudeFullAccessFallback(
       signal
     )
   }
+}
+
+/** Claude starts a refused Full access chat in its own fallback; the chat's is Approve for me. A
+ *  failed switch leaves the send to run as Claude stands (the next send tries again). */
+export async function applyClaudeFullAccessFallback(
+  session: ClaudeSession,
+  timeoutMs: number | undefined,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  await waitForClaudeStartupSettings(session, signal)
   if (!claudeOwesFullAccessFallback(session)) {
     return
   }

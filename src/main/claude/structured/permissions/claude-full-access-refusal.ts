@@ -10,6 +10,10 @@ import { agentChatPermissionModeCopy } from '../../../../shared/agent-session/op
 import { readClaudeReportedPermissionMode } from '../startup/claude-structured-init-proof'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import type { ClaudeJournalTranslatorDeps } from '../journal/claude-journal-translator-contract'
+import {
+  ClaudeControlRequestTimeoutError,
+  isClaudeQueryClosed
+} from '../../sdk-transport/claude-agent-sdk-control-requests'
 
 type ClaudeBypassFacts = Partial<
   Pick<
@@ -154,12 +158,17 @@ export async function setClaudeAllowedPermissionMode(
       }
       continue
     }
-    // The fallback's auto that times out or gets an unknown answer is tried again on a later send.
+    const fallbackAuto = step === 'auto' && mode === 'bypassPermissions'
+    // An answer Orca doesn't know refuses the fallback's auto for now; no answer leaves the mode
+    // unknown, so nothing is recorded and a later send asks again.
+    const answered =
+      !(write.reason instanceof ClaudeControlRequestTimeoutError) &&
+      !isClaudeQueryClosed(write.reason)
     const refusal =
-      claudeRefusal(write.reason) ??
-      (step === 'auto' && mode === 'bypassPermissions' ? 'auto-for-now' : null)
+      claudeRefusal(write.reason) ?? (fallbackAuto && answered ? 'auto-for-now' : null)
     if (refusal === null || (refusal === 'bypass') !== (step === 'bypassPermissions')) {
       unexpected ??= { error: write.reason }
+      autoForNow ||= fallbackAuto
       continue
     }
     lastRefusal = write.reason
@@ -172,12 +181,12 @@ export async function setClaudeAllowedPermissionMode(
       autoForNow = true
     }
   }
-  if (unexpected) {
-    throw unexpected.error
-  }
   // Auto refused for a reason that can pass: whatever Claude accepted stands for now, and the
   // fallback stays owed so a later send asks for auto again.
   session.autoUnsettled = autoForNow
+  if (unexpected) {
+    throw unexpected.error
+  }
   if (applied !== null && (lastRefusal === null || autoForNow)) {
     return applied
   }
