@@ -90,7 +90,8 @@ export function useNativeChatInstallSlot(
               ? observation.snapshot.state.installedVersion
               : null
         }
-      : props.agent === 'antigravity' && props.isVisible && hostProgram
+      : // No agy is on the host yet, so the chip names none; its Install says what's missing.
+        props.agent === 'antigravity' && props.isVisible && hostProgram && slot.kind !== 'install'
         ? { host: props.target, backend: 'agy', ...orcasAgy(observation) }
         : null
   }

@@ -153,6 +153,8 @@ export function useNativeChatBotKickoffView(
   const refusedReason = refusal?.reason ?? null
   const refusedDetail = refusal?.providerDetail
   const refusedKind = refusal?.kind
+  const refusedSignedOut = refusal?.notSignedIn !== undefined
+  const refusedAccount = refusal?.notSignedIn?.account
   const firstScreen = useMemo(
     () =>
       live
@@ -164,11 +166,24 @@ export function useNativeChatBotKickoffView(
               : {
                   reason: refusedReason,
                   ...(refusedDetail ? { providerDetail: refusedDetail } : {}),
-                  ...(refusedKind ? { kind: refusedKind } : {})
+                  ...(refusedKind ? { kind: refusedKind } : {}),
+                  // The setup card offers this sign-in.
+                  ...(refusedSignedOut
+                    ? { notSignedIn: refusedAccount ? { account: refusedAccount } : {} }
+                    : {})
                 }
           )
         : null,
-    [live, messages, turnEnded, refusedReason, refusedDetail, refusedKind]
+    [
+      live,
+      messages,
+      turnEnded,
+      refusedReason,
+      refusedDetail,
+      refusedKind,
+      refusedSignedOut,
+      refusedAccount
+    ]
   )
   const firstKickoffId =
     messages.find((message) => message.orcaNotice === 'bot-created')?.id ?? null
