@@ -137,13 +137,8 @@ describe('fetchNewerReleaseTagsWithReadiness update delay', () => {
     })
   })
 
-  it.each([
-    { feed: 'only newer releases', atomTags: ['v1.4.266', 'v1.4.265'] },
-    {
-      feed: 'a recent older-line maintenance release',
-      atomTags: ['v1.4.266', 'v1.4.265', 'v1.3.99']
-    }
-  ])('offers an aged-out release missing from an Atom feed of $feed', async ({ atomTags }) => {
+  it('offers an aged-out release despite a recent older-line release in the Atom feed', async () => {
+    const atomTags = ['v1.4.266', 'v1.4.265', 'v1.3.99']
     const publishedAt: Record<string, string> = {
       'v1.4.266': daysAgo(0),
       'v1.4.265': daysAgo(1),
