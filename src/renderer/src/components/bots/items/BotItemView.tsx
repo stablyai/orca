@@ -245,6 +245,20 @@ export function BotItemBody({
   )
   // The question the item waits on, as the comment box names it, until a reply is on its way.
   const waitingLine = botItemWaitingLine(item, view.events)
+  // The waiting question's comment, with its words and quick replies, is read even when it is older
+  // than the loaded page: earlier pages load until it shows.
+  const questionId = item.question?.eventId
+  const questionUnread =
+    view.eventsRead &&
+    questionId !== undefined &&
+    !view.events.some((event) => event.id === questionId)
+  const { hasEarlier, loadEarlier } = view
+  const earliest = view.events[0]?.id
+  useEffect(() => {
+    if (questionUnread && hasEarlier) {
+      loadEarlier()
+    }
+  }, [questionUnread, hasEarlier, earliest, loadEarlier])
   const waitingOn =
     waitingLine && !pending.shown.some(({ failed }) => !failed)
       ? { ...waitingLine, asker: item.owner.name ?? bot.name }

@@ -58,13 +58,22 @@ function answeredLines(
     return recorded
   }
   const text = typeof reply.data.text === 'string' ? reply.data.text.trim() : ''
+  const open = (index: number): boolean => !answers[index]
   const picked = shape.decisions.findIndex(
     (decision, index) =>
-      !answers[index] &&
+      open(index) &&
       decision.replies.some((option) => botItemQuickReplyText(shape, decision, option) === text)
   )
-  if (picked !== -1) {
-    return [picked]
+  // A quick reply of several questions, edited before sending, still names its question.
+  const named =
+    picked === -1 && shape.decisions.length > 1
+      ? shape.decisions.findIndex(
+          (decision, index) =>
+            open(index) && text.startsWith(`${botItemQuestionLine(decision.question)} →`)
+        )
+      : picked
+  if (named !== -1) {
+    return [named]
   }
   const next = answers.indexOf(null)
   return next === -1 ? [] : [next]

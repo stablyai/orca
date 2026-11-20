@@ -122,3 +122,22 @@ it('keeps each question of an ask waiting until its own reply, a quick reply or 
     { key: 'e6', replyTo: { eventId: 'e2', text: 'Ship it?' } }
   ])
 })
+
+it('keeps a quick reply edited before sending with the question it names', () => {
+  const ask = {
+    questions: [
+      { prompt: 'Ship it?', options: [{ label: 'Ship' }] },
+      { prompt: 'Tell the team?', options: [{ label: 'No' }] }
+    ]
+  }
+  const entries = botItemActivity(makeTestBotItem(6, { status: 'working' }), [
+    event('e2', 'commented', 200, { text: 'copy', ask }),
+    event('e3', 'status', 200, { from: 'working', to: 'needs_you' }),
+    owner('e4', 'commented', 250, { text: 'Tell the team? → No, tell them tomorrow' })
+  ])
+
+  expect(entries).toMatchObject([
+    { key: 'e2', waiting: true, answers: [null, { id: 'e4' }] },
+    { key: 'e4', replyTo: { text: 'Tell the team?' } }
+  ])
+})

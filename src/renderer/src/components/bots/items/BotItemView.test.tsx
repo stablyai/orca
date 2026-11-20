@@ -322,3 +322,14 @@ it('keeps focus in the item, with its arrows, when it is deleted while its comme
   expect(document.activeElement).toBe(document.querySelector('[data-bot-item-focus-home]'))
   expect(screen.getByRole('button', { name: 'Next item' })).toBeTruthy()
 })
+
+it('reads earlier pages until the waiting question shows, so its words and quick replies are there', () => {
+  show(
+    3,
+    makeTestBotItem(6, { status: 'needs_you', question: { eventId: 'e0', text: 'Ship it?' } })
+  )
+  read.current = { ...read.current!, hasEarlier: true }
+  render(<BotItemView bot={BOT} uid="uid-6" />)
+
+  expect(read.current.loadEarlier).toHaveBeenCalledOnce()
+})

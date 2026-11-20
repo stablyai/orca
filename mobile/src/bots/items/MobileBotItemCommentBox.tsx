@@ -72,8 +72,11 @@ export function MobileBotItemCommentBox({
   const input = useRef<TextInputInstance>(null)
   const cancelRef = useRef<HostInstance>(null)
   const { uid } = item
+  // Bumped on every change, so a send clears only the words it sent.
+  const revision = useRef(0)
   const setText = useCallback(
     (next: string) => {
+      revision.current += 1
       setTextState(next)
       setError(null)
       if (next) {
@@ -113,12 +116,13 @@ export function MobileBotItemCommentBox({
       return 'failed'
     }
     setSending(true)
+    const sentRevision = revision.current
     const outcome = await commentOnBotItem(client, item.uid, words)
     setSending(false)
     if (outcome.kind === 'done') {
       setError(null)
       // Words put in the box while it was sending (a quick reply's long press) stay.
-      if (typed && (drafts.get(uid) ?? '').trim() === words) {
+      if (typed && revision.current === sentRevision) {
         setText('')
       }
       return 'landed'
