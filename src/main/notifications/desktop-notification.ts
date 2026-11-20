@@ -10,8 +10,21 @@ async function probeLinuxNotificationService(): Promise<boolean> {
   const objectPath = '/org/freedesktop/Notifications'
   const method = `${name}.GetCapabilities`
   const timeoutMs = 2_000
+  const deadline = performance.now() + timeoutMs
   const probes = [
     {
+      program: 'dbus-send',
+      args: [
+        '--session',
+        '--print-reply',
+        `--reply-timeout=${timeoutMs}`,
+        `--dest=${name}`,
+        objectPath,
+        method
+      ]
+    },
+    {
+      // gdbus introspects first. Prefer the direct call on daemons that omit introspection.
       program: 'gdbus',
       args: [
         'call',
@@ -25,31 +38,24 @@ async function probeLinuxNotificationService(): Promise<boolean> {
         '--method',
         method
       ]
-    },
-    {
-      program: 'dbus-send',
-      args: [
-        '--session',
-        '--print-reply',
-        `--reply-timeout=${timeoutMs}`,
-        `--dest=${name}`,
-        objectPath,
-        method
-      ]
     }
   ]
+  let missing = true
   for (const probe of probes) {
+    const remainingMs = deadline - performance.now()
+    if (remainingMs < 1) {
+      return false
+    }
     try {
-      const result = await runProcess({ ...probe, timeoutMs, maxOutputBytes: 4_096 })
-      return result.code === 0 && !result.timedOut
+      const result = await runProcess({ ...probe, timeoutMs: remainingMs, maxOutputBytes: 4_096 })
+      return result.code === 0 && !result.timedOut && performance.now() < deadline
     } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
-        return false
-      }
+      // Process host rejects spawn errors and returns D-Bus errors as exit results.
+      missing &&= error instanceof Error && 'code' in error && error.code === 'ENOENT'
     }
   }
   // Portable installs can deliver through libnotify even when neither CLI is installed.
-  return true
+  return missing && performance.now() < deadline
 }
 
 function checkLinuxNotificationService(): Promise<boolean> {
@@ -59,8 +65,9 @@ function checkLinuxNotificationService(): Promise<boolean> {
   return serviceCheck
 }
 
-export function showDesktopNotification(notification: Notification): void {
+export function showDesktopNotification(notification: Notification, beforeShow?: () => void): void {
   if (process.platform !== 'linux') {
+    beforeShow?.()
     notification.show()
     return
   }
@@ -76,6 +83,7 @@ export function showDesktopNotification(notification: Notification): void {
       return
     }
     try {
+      beforeShow?.()
       notification.show()
     } catch (error) {
       notification.emit('failed', undefined, String(error))
@@ -83,8 +91,12 @@ export function showDesktopNotification(notification: Notification): void {
   })
 }
 
+export function cancelPendingDesktopNotification(notification: Notification): boolean {
+  return pendingShows.delete(notification)
+}
+
 export function closeDesktopNotification(notification: Notification): void {
-  if (process.platform === 'linux' && pendingShows.delete(notification)) {
+  if (cancelPendingDesktopNotification(notification)) {
     notification.emit('close', { reason: 'applicationHidden' })
     return
   }
