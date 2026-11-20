@@ -276,7 +276,7 @@ const TRANSLATION_USE = /\b(?:t|translate\w*)\(|useTranslation|i18n/
 const KEY_LITERAL = /['"`]([A-Za-z][\w-]*(?:\.[\w-]+)+)['"`]/g
 // A plain exported string may be a namespace that an unchanged consumer passes to useTranslation.
 const EXPORTED_STRING_CONSTANT =
-  /\bexport\s+(?:const|default)\b[^;]*?['"`]|^\s*const\s+\w+\s*=\s*['"`]/m
+  /\bexport\s+(?:const|default)\b[^;]*?['"`]|^\s*const\s+\w+\s*(?::[^=\n]+)?=\s*['"`]/m
 const SCRIPT_SOURCE = /\.[cm]?[jt]sx?$/
 
 function flattenCatalogKeys(value, prefix = '', keys = new Set()) {

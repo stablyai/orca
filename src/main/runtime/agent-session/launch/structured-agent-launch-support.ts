@@ -39,7 +39,12 @@ export type LaunchEnvironmentSettings = Pick<
   | 'httpProxyUrl'
   | 'httpProxyBypassRules'
 > &
-  Partial<Pick<GlobalSettings, 'agentCmdOverrides' | 'antigravityChatAuth'>> &
+  Partial<
+    Pick<
+      GlobalSettings,
+      'agentCmdOverrides' | 'antigravityChatAuth' | 'antigravityManagedAgyEnabled'
+    >
+  > &
   AgentLaunchProfileSettings
 
 /** What the check reads from the runtime asking it. */
@@ -87,8 +92,7 @@ export async function observeStructuredAgentLaunch(
 /** Whether a new chat would start on the host's own program, as its account home selects one. */
 export async function structuredAgentHostAlternativeReady(
   agent: string,
-  runtime: LaunchSettingsRuntime,
-  needsStandingInstructions = false
+  runtime: LaunchSettingsRuntime
 ): Promise<boolean> {
   const program = structuredAgentRuntimeMetadata(agent)?.chatProgram
   if (!program?.hostAlternative) {
@@ -96,7 +100,7 @@ export async function structuredAgentHostAlternativeReady(
   }
   const settings = runtime.requireStore().getSettings()
   const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
-  return program.hostAlternative(env, settings, needsStandingInstructions).catch(() => false)
+  return program.hostAlternative(env, settings).catch(() => false)
 }
 
 /** Admission's answer in the workspace `cwd` names: only a too-old or unstartable binary keeps the

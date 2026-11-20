@@ -173,13 +173,18 @@ it("keeps other agents' mail out of a turn its provider can join only by cancell
     await rig.settleAccepted(await rig.workingSend(), 'first')
     turn('running')
     await rig.host.flushStreamedEvents(SESSION)
-    await rig.send('status mail', 'queue-if-active', { internal: true, from }).result
+    const queued = rig.send('status mail', 'queue-if-active', { internal: true, from })
+    await queued.result
     await rig.host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)
     expect(rig.dispatch).toHaveBeenCalledOnce()
     expect(await rig.drafts()).toHaveLength(1)
     turn('completed')
     await rig.host.flushStreamedEvents(SESSION)
     await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
+    expect(rig.dispatch.mock.calls[1]?.[0].body).toMatchObject({
+      ...hostTestMessage('status mail'),
+      from
+    })
     expect(await rig.drafts()).toEqual([])
   } finally {
     await rig.dispose()

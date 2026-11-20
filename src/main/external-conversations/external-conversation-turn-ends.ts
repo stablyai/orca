@@ -66,6 +66,11 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
   })
 }
 
+// A turn's length by the machine's clock, when its start was seen and the clock ran forward.
+function tookOf(ended: ChatTurnEnd['ended']): { tookMs?: number } {
+  return ended.turnId !== null && ended.at > ended.turnId ? { tookMs: ended.at - ended.turnId } : {}
+}
+
 export type ChatTurnReplies = {
   /** Fills the reply outbox rows an ended turn answered (design item 125). */
   replyFill?: () => ConversationReplyFill | null
@@ -106,6 +111,7 @@ export async function endRepliedTurn(
     prose: turn.turnProse ?? '',
     bot: Boolean(link.bot),
     links: link.bot ? await links() : [],
+    ...tookOf(end.ended),
     ...failure
   }).catch((error: unknown) => {
     console.warn('[connector] could not fill reply outbox rows', error)

@@ -37,7 +37,7 @@ async function linkEntry(source: string, target: string): Promise<void> {
     await symlink(source, target, 'junction')
     return
   }
-  await link(source, target).catch(() => cp(source, target))
+  await link(source, target).catch(() => cp(source, target, { force: false, errorOnExist: true }))
 }
 
 // Followed: a dotfiles setup often links the whole config folder.
@@ -56,16 +56,31 @@ export async function writeOpenCodeInstructionsConfigDir(
   source: string,
   text: string
 ): Promise<void> {
-  let own: string | null = null
-  if (await isDirectory(source)) {
-    for (const name of await readdir(source)) {
-      if (name === GLOBAL_INSTRUCTIONS_FILE) {
-        own = await readFile(join(source, name), 'utf8').catch(() => null)
-        continue
-      }
-      await linkEntry(join(source, name), join(folder, name))
-    }
-  }
+  const sourceExists = await isDirectory(source)
+  // Read by the exact name, as OpenCode does, so the filesystem decides whether `agents.md` counts.
+  const own = sourceExists
+    ? await readFile(join(source, GLOBAL_INSTRUCTIONS_FILE), 'utf8').catch(() => null)
+    : null
   const combined = [own?.trim(), text].filter((part) => part).join('\n\n')
-  await writeFile(join(folder, GLOBAL_INSTRUCTIONS_FILE), `${combined}\n`, { mode: 0o600 })
+  // Written before any link: an entry whose name folds onto it (`agents.md` on a case-insensitive
+  // volume) then collides instead of sending this write into the user's file.
+  await writeFile(join(folder, GLOBAL_INSTRUCTIONS_FILE), `${combined}\n`, {
+    mode: 0o600,
+    flag: 'wx'
+  })
+  if (!sourceExists) {
+    return
+  }
+  for (const name of await readdir(source)) {
+    if (name === GLOBAL_INSTRUCTIONS_FILE) {
+      continue
+    }
+    await linkEntry(join(source, name), join(folder, name)).catch((error: unknown) => {
+      const code = error instanceof Error && 'code' in error ? error.code : undefined
+      const collides = code === 'EEXIST' || code === 'ERR_FS_CP_EEXIST'
+      if (!collides || name.toLowerCase() !== GLOBAL_INSTRUCTIONS_FILE.toLowerCase()) {
+        throw error
+      }
+    })
+  }
 }

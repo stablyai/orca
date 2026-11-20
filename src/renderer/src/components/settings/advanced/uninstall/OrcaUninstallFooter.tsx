@@ -203,7 +203,9 @@ export function OrcaUninstallFooter({
               !running && 'invisible'
             )}
           >
-            <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+            <Loader2
+              className={cn('size-3.5', running && 'animate-spin motion-reduce:animate-none')}
+            />
             {t('settings.uninstall.uninstalling', 'Uninstalling…')}
           </span>
         </span>

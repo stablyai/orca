@@ -4,6 +4,7 @@ import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
+  acpHostProgramTakesNewChats,
   resolveAcpLaunchCommand,
   selectAcpHostAccountHome,
   selectAcpHostAccountHomeForCatalog
@@ -57,15 +58,8 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
     ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
-          // Why strict: availability must hold for a bot's chat too, which needs standing instructions.
-          hostAlternative: async (shellEnv, settings, needsStandingInstructions = false) =>
-            (await selectAcpHostAccountHome(
-              spec,
-              shellEnv,
-              getProfileUserDataPath(),
-              settings,
-              needsStandingInstructions
-            )) !== null,
+          hostAlternative: (shellEnv, settings) =>
+            acpHostProgramTakesNewChats(spec, shellEnv, getProfileUserDataPath(), settings),
           ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
       : {})
@@ -110,7 +104,7 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
     // New chats and their model catalog prefer a compatible host program, which a chat's account
     // home then pins; reads such as Orca's own sign-in keep the agent's account.
     resolveAccountHome: async (
-      { launchEnv, purpose, permissionMode, bot },
+      { launchEnv, purpose, permissionMode },
       { stateDirectory, hostLaunchEnvironment, hostSettings }
     ) => {
       // A host program without the chat's permission mode never takes it; `own` sets none.
@@ -122,15 +116,12 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
           ? await hostLaunchEnvironment(spec.agent)
               .then((env) =>
-                (purpose === 'catalog'
-                  ? selectAcpHostAccountHomeForCatalog
-                  : selectAcpHostAccountHome)(
-                  spec,
-                  env,
-                  stateDirectory,
-                  hostSettings(),
-                  bot === true
-                )
+                purpose === 'catalog'
+                  ? selectAcpHostAccountHomeForCatalog(spec, env, stateDirectory, hostSettings())
+                  : // A chat starting is someone using the agent, so its program may be asked.
+                    selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings(), {
+                      startsProgram: true
+                    })
               )
               .catch(() => null)
           : null

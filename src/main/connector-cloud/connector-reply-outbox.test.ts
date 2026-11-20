@@ -163,6 +163,20 @@ describe('the turn end fill', () => {
     expect(store.rows[0]?.fill?.outcome).toBe(outcome)
   })
 
+  it('keeps how long an answered turn ran, and no length for a turn that wrote nothing', async () => {
+    const fill = async (fields: Parameters<typeof end>[0]) => {
+      const store = journal([row('d1')])
+      await conversationReplyFill(
+        () => store,
+        () => {}
+      )({ ...end(fields), stamps: [stamp('d1')], tookMs: 98_000 })
+      return store.rows[0]?.fill
+    }
+    expect((await fill({}))?.tookMs).toBe(98_000)
+    expect(await fill({ prose: '  ' })).not.toHaveProperty('tookMs')
+    expect(await fill({ outcome: 'failure' })).not.toHaveProperty('tookMs')
+  })
+
   it('keeps a row’s first fill and still names its conversation covered', async () => {
     const store = journal([row('d1', { ...answered('d1', 'First.'), filledAt: 1 })])
     const covered = await conversationReplyFill(
@@ -194,6 +208,20 @@ describe('the sender', () => {
     expect(store.rows).toHaveLength(150)
     await sender.accepted(pushed)
     expect(store.rows).toEqual([])
+  })
+
+  it('sends an answer with how long its turn ran, and one without when none was kept', async () => {
+    const store = journal([
+      row('d1', { ...answered('d1'), tookMs: 98_000 }),
+      row('d2', answered('d2'))
+    ])
+    const { sender: c, pushed } = client()
+    await outbox(store).via(c, true)
+    expect(pushed.map((event) => [event.answerDeliveryId, event.tookMs])).toEqual([
+      ['d1', 98_000],
+      ['d2', undefined]
+    ])
+    expect(pushed[1]).not.toHaveProperty('tookMs')
   })
 
   it('lets go of events the transport dropped, so the next drain sends them again', async () => {

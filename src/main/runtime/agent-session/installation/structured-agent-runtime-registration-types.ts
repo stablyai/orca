@@ -53,8 +53,6 @@ export type StructuredAgentAccountHomeRequest = {
   workspacePath: (() => Promise<string>) | null
   /** The permission mode a new chat starts in, when it names one. */
   permissionMode?: string
-  /** A bot's chat, whose standing instructions ride the agent's system prompt. */
-  bot?: true
 }
 
 /** What resolving an account may ask of the runtime around it. */
@@ -119,9 +117,7 @@ export type StructuredAgentChatProgram = {
   /** Whether a new chat would run a compatible program the host already has instead. */
   hostAlternative?: (
     env: Record<string, string>,
-    settings: AcpHostBackendSettings,
-    /** The program must also take a bot's standing instructions; personal chats need not. */
-    needsStandingInstructions?: boolean
+    settings: AcpHostBackendSettings
   ) => Promise<boolean>
   /** Whether no release Orca can install runs here, so chats start only on `hostAlternative`. */
   onlyHostAlternative?: () => boolean
