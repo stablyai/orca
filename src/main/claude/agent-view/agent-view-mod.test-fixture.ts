@@ -108,8 +108,12 @@ export function fixture(legacy = false) {
     await invoke('session.start', { isInteractive: true, surface: 'terminal' })
     await render()
   }
-  const view = (agentId?: string, chord = '\u001b[103;7u') =>
-    bridge.view({
+  const view = (agentId?: string, chord = '\u001b[103;7u') => {
+    // An older main also drops a registration unrenewed for 15 seconds before viewing.
+    if (legacy && Date.now() - legacySeenAt >= 15_000) {
+      bridge.clear()
+    }
+    return bridge.view({
       paneKey,
       sessionId: state.sessionId,
       agentId,
@@ -120,5 +124,6 @@ export function fixture(legacy = false) {
         return true
       }
     })
+  }
   return { bridge, api, state, posts, start, render, invoke, view }
 }

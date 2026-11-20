@@ -1,64 +1,22 @@
 import { randomUUID } from 'node:crypto'
-import { z } from 'zod'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { z } from 'zod'
 import { claudeAgentViewChord } from './agent-view-keybindings'
 import {
   CLAUDE_AGENT_VIEW_SHORTCUTS,
-  ClaudeAgentViewObservation,
+  type ClaudeAgentViewObservation,
   type ClaudeAgentViewSnapshot,
   type ClaudeAgentViewResult
 } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
+import {
+  Message,
+  type BridgeReply,
+  type PendingView,
+  type ViewSession
+} from './agent-view-bridge-protocol'
 
 const SESSION_TTL_MS = 150_000
-
-const Identity = z.object({
-  paneKey: z
-    .string()
-    .max(256)
-    .refine((value) => parsePaneKey(value) !== null),
-  sessionId: z.string().min(1).max(256),
-  instanceId: z.string().min(1).max(256)
-})
-const Message = z.discriminatedUnion('action', [
-  Identity.extend({
-    action: z.literal('register'),
-    keybindings: z.string().max(128 * 1024),
-    view: ClaudeAgentViewObservation.optional()
-  }),
-  Identity.extend({ action: z.literal('renew') }),
-  Identity.extend({ action: z.literal('observe'), view: ClaudeAgentViewObservation }),
-  Identity.extend({ action: z.literal('take') }),
-  Identity.extend({
-    action: z.literal('ack'),
-    requestId: z.string().max(64),
-    deny: z.string().max(1024).optional()
-  }),
-  Identity.extend({ action: z.literal('end') })
-])
-
-type PendingView = {
-  requestId: string
-  agentId?: string
-  expiresAt: number
-  taken: boolean
-  finish: (result: ClaudeAgentViewResult) => void
-}
-
-type ViewSession = z.infer<typeof Identity> & {
-  chord: string
-  keybindings: string
-  seenAt: number
-  pending?: PendingView
-  view?: z.infer<typeof ClaudeAgentViewObservation>
-}
-
-type BridgeReply = {
-  registered?: true
-  renew?: true
-  requestId?: string
-  agentId?: string
-  expiresAt?: number
-}
+// Expire sessions whose deadlines fall close together in one pass and one publish.
+const EXPIRY_BATCH_MS = 5_000
 
 export class ClaudeAgentViewBridge {
   private readonly sessions = new Map<string, ViewSession>()
@@ -103,10 +61,14 @@ export class ClaudeAgentViewBridge {
     }
   }
 
-  private observe(session: ViewSession, view: z.infer<typeof ClaudeAgentViewObservation>): void {
-    if (!session.view || session.view.revision < view.revision) {
-      session.view = view
+  /** Returns whether the published snapshot can change. */
+  private observe(session: ViewSession, view: z.infer<typeof ClaudeAgentViewObservation>): boolean {
+    if (session.view && session.view.revision >= view.revision) {
+      return false
     }
+    const changed = !session.view || session.view.agentId !== view.agentId
+    session.view = view
+    return changed
   }
 
   receive(body: unknown): BridgeReply {
@@ -115,7 +77,6 @@ export class ClaudeAgentViewBridge {
       return {}
     }
     const message = parsed.data
-    this.prune()
     const current = this.sessions.get(message.paneKey)
     if (message.action === 'register') {
       const chord =
@@ -134,7 +95,9 @@ export class ClaudeAgentViewBridge {
       if (!current && this.sessions.size >= 1024) {
         return {}
       }
-      if (current?.instanceId === message.instanceId && current.sessionId === message.sessionId) {
+      const known =
+        current?.instanceId === message.instanceId && current.sessionId === message.sessionId
+      if (known) {
         current.seenAt = Date.now()
         current.chord = chord
         current.keybindings = message.keybindings
@@ -150,11 +113,11 @@ export class ClaudeAgentViewBridge {
         })
       }
       const session = this.sessions.get(message.paneKey)
-      if (session && message.view) {
-        this.observe(session, message.view)
-      }
+      const viewChanged = session && message.view ? this.observe(session, message.view) : false
       this.armExpiry()
-      this.publish()
+      if (!known || viewChanged) {
+        this.publish()
+      }
       return { registered: true, renew: true }
     }
     if (
@@ -167,6 +130,10 @@ export class ClaudeAgentViewBridge {
     if (message.action === 'renew') {
       current.seenAt = Date.now()
       this.armExpiry()
+      // Carrying the view repairs a lost observe without a full registration.
+      if (message.view && this.observe(current, message.view)) {
+        this.publish()
+      }
       return { registered: true }
     }
     if (message.action === 'end') {
@@ -177,8 +144,9 @@ export class ClaudeAgentViewBridge {
       return {}
     }
     if (message.action === 'observe') {
-      this.observe(current, message.view)
-      this.publish()
+      if (this.observe(current, message.view)) {
+        this.publish()
+      }
       return {}
     }
     const request = current.pending
@@ -296,7 +264,7 @@ export class ClaudeAgentViewBridge {
         this.prune()
         this.armExpiry()
       },
-      Math.max(0, deadline - Date.now())
+      Math.max(0, deadline - Date.now()) + EXPIRY_BATCH_MS
     )
     this.expiryTimer.unref()
   }

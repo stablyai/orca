@@ -74,7 +74,7 @@ let announceAgain = false
       }
       const announcement = JSON.stringify({ ...target, keybindings })
       if (supportsRenew && lastAnnouncement === announcement) {
-        const reply = await post($, 'renew', {}, session, target)
+        const reply = await post($, 'renew', observedView?.sessionId === sessionId ? { view: observedView.view } : {}, session, target)
         if (reply.registered || identity !== session || endedSessionId === sessionId) return reply
       }
       // Until this endpoint confirms renewal support, keep the legacy lease alive.

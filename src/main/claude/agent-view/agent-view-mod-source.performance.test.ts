@@ -27,7 +27,8 @@ it.each([1024, 128 * 1024])(
           action: 'renew',
           paneKey,
           sessionId: 'session',
-          instanceId: expect.any(String)
+          instanceId: expect.any(String),
+          view: { revision: 1 }
         })
       }
     }

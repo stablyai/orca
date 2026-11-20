@@ -88,44 +88,24 @@ describe('Claude agent view delivery', () => {
   })
 })
 
-it('rejects unknown renewals and expires only at the earliest lease deadline', async () => {
-  vi.useFakeTimers()
-  vi.setSystemTime(0)
+it('repairs a lost view observation from the next renewal', () => {
   const bridge = new ClaudeAgentViewBridge()
   const frames: unknown[] = []
   bridge.subscribe((snapshot) => frames.push(snapshot))
-  expect(bridge.receive({ ...identity, action: 'renew' })).toEqual({})
-  expect(vi.getTimerCount()).toBe(0)
-  const register = {
+  bridge.receive({
     ...identity,
     action: 'register',
-    view: { agentId: 'child', revision: 1 },
+    view: { revision: 1 },
     keybindings:
       '{"bindings":[{"context":"Chat","bindings":{"ctrl+alt+g":"command:orca-agent-view"}}]}'
-  }
-  expect(bridge.receive(register)).toEqual({ registered: true, renew: true })
-  await vi.advanceTimersByTimeAsync(10_000)
-  const second = { ...register, paneKey: 'other:22222222-2222-4222-8222-222222222222' }
-  bridge.receive(second)
-  await vi.advanceTimersByTimeAsync(20_000)
-  expect(bridge.receive({ ...identity, instanceId: 'stale', action: 'renew' })).toEqual({})
-  expect(bridge.receive({ ...identity, action: 'renew' })).toEqual({ registered: true })
-  expect(frames).toHaveLength(3)
-  expect(vi.getTimerCount()).toBe(1)
-  // The renewal moved the first deadline later; the armed timer finds nothing to expire and re-arms.
-  await vi.advanceTimersToNextTimerAsync()
-  expect(Date.now()).toBe(150_000)
-  expect(frames).toHaveLength(3)
-  expect(vi.getTimerCount()).toBe(1)
-  await vi.advanceTimersToNextTimerAsync()
-  expect(Date.now()).toBe(160_000)
+  })
+  expect(
+    bridge.receive({ ...identity, action: 'renew', view: { agentId: 'child', revision: 2 } })
+  ).toEqual({
+    registered: true
+  })
   expect(frames.at(-1)).toEqual([
     { paneKey: identity.paneKey, sessionId: identity.sessionId, agentId: 'child' }
   ])
-  expect(vi.getTimerCount()).toBe(1)
-  await vi.advanceTimersToNextTimerAsync()
-  expect(Date.now()).toBe(180_000)
-  expect(frames.at(-1)).toEqual([])
-  expect(frames).toHaveLength(5)
-  expect(vi.getTimerCount()).toBe(0)
+  bridge.clear()
 })

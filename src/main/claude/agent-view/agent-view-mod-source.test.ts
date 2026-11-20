@@ -221,7 +221,7 @@ it('keeps an older runtime registration alive beyond its fifteen-second expiry',
   vi.useFakeTimers()
   const app = fixture(true)
   await app.start()
-  await vi.advanceTimersByTimeAsync(60_000)
+  await vi.advanceTimersByTimeAsync(32_000)
   expect(await app.view('child')).toEqual({ status: 'viewed' })
   app.bridge.clear()
 })
