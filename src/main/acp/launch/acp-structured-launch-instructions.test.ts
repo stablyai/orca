@@ -1,4 +1,14 @@
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  readlink,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -65,6 +75,7 @@ function launch(
     instructions?: string | null
     launchEnv?: Record<string, string>
     spec?: AcpLaunchSpec
+    version?: string
     workspacePath?: string
   } = {}
 ) {
@@ -83,7 +94,7 @@ function launch(
     resolveCommand: (command) => `/resolved/${command}`,
     inheritedEnv: {},
     dataDirectory,
-    probeVersion: async () => ({ version: PROBED_VERSIONS[agent] ?? '1.18.35' }),
+    probeVersion: async () => ({ version: options.version ?? PROBED_VERSIONS[agent] ?? '1.18.35' }),
     ...(options.instructions === undefined
       ? {}
       : { resolveInstructions: async () => options.instructions ?? null })
@@ -123,6 +134,31 @@ describe('ACP launch: standing instructions', () => {
     expect(config.instructions).toHaveLength(2)
     expect(config.instructions[0]).toBe('/home/user/mine.md')
     await expectPrivateFile(config.instructions[1])
+  })
+
+  it("gives OpenCode 2.x them after the user's own global AGENTS.md, in a config folder linking the rest of theirs", async () => {
+    const source = join(dataDirectory, 'user-opencode-config')
+    await mkdir(source, { recursive: true })
+    await writeFile(join(source, 'opencode.json'), '{"permissions":[]}')
+    await writeFile(join(source, 'AGENTS.md'), 'Mine.\n')
+    const mine = JSON.stringify({ model: 'x/y' })
+    const resolved = await launch('opencode', {
+      instructions: PREAMBLE,
+      version: '2.0.16',
+      launchEnv: { OPENCODE_CONFIG_DIR: source, OPENCODE_CONFIG_CONTENT: mine }
+    })
+    const configDir = resolved.env.OPENCODE_CONFIG_DIR ?? ''
+    expect(configDir.startsWith(join(dataDirectory, 'acp-instructions-folders'))).toBe(true)
+    expect(await readFile(join(configDir, 'AGENTS.md'), 'utf8')).toBe(`Mine.\n\n${PREAMBLE}\n`)
+    expect(await readFile(join(configDir, 'opencode.json'), 'utf8')).toBe('{"permissions":[]}')
+    if (process.platform !== 'win32') {
+      expect((await lstat(join(configDir, 'opencode.json'))).isSymbolicLink()).toBe(true)
+      expect(await readlink(join(configDir, 'opencode.json'))).toBe(join(source, 'opencode.json'))
+      expect((await stat(configDir)).mode & 0o777).toBe(0o700)
+    }
+    expect(resolved.env.OPENCODE_CONFIG_CONTENT).toBe(mine)
+    // The user's own folder is left as it was.
+    expect(await readFile(join(source, 'AGENTS.md'), 'utf8')).toBe('Mine.\n')
   })
 
   it("refuses to start OpenCode when the user's inline configuration cannot be extended", async () => {
@@ -221,7 +257,9 @@ describe('ACP launch: standing instructions', () => {
       env: {},
       cwd: '/home/user/bot',
       file: async () => '/unused',
-      folder: async () => '/home/user/Orca, Inc/acp-instructions/chat'
+      folder: async () => '/home/user/Orca, Inc/acp-instructions/chat',
+      emptyFolder: async () => '/unused',
+      version: null
     })
     expect(delivered).toBeNull()
   })
