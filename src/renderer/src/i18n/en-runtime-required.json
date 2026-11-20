@@ -1644,6 +1644,20 @@
         "confirm_other": "Cancel {{count}} stale items?"
       }
     },
+    "new": {
+      "parts": {
+        "automations_one": "{{count}} automation",
+        "automations_other": "{{count}} automations",
+        "needsApps_one": "Needs {{count}} app",
+        "needsApps_other": "Needs {{count}} apps",
+        "schedules_one": "{{count}} schedule",
+        "schedules_other": "{{count}} schedules",
+        "skillsKept_one": "{{kept}}/{{count}} skill",
+        "skillsKept_other": "{{kept}}/{{count}} skills",
+        "skills_one": "{{count}} skill",
+        "skills_other": "{{count}} skills"
+      }
+    },
     "options": {
       "activeFilters_one": "Bot options ({{count}} filter active)",
       "activeFilters_other": "Bot options ({{count}} filters active)"
@@ -2597,6 +2611,10 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
+      },
+      "goal": {
+        "checks_one": "{{count}} check",
+        "checks_other": "{{count}} checks"
       }
     },
     "onboarding": {

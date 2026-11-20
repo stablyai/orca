@@ -86,7 +86,7 @@ export function BotAvatarTile({
 }
 
 // The art's place on the 128 px tile, as a share of the tile, so it fits any tile size.
-function OutfitArt({ art }: { art: BotOutfitArt }): React.JSX.Element {
+export function OutfitArt({ art }: { art: BotOutfitArt }): React.JSX.Element {
   const [x, y, width, height] = art.at.map((v) => `${(v / 128) * 100}%`)
   return (
     <img

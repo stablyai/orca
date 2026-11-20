@@ -169,6 +169,8 @@ export class IosEmulatorBackend implements EmulatorBackend {
     })
   }
 
+  restoreHardwareKeyboardLayout = (deviceId: string): Promise<void> =>
+    this.hardwareKeyboardSync.restore(deviceId)
   async syncHardwareKeyboardLayout(deviceId: string): Promise<boolean> {
     return this.hardwareKeyboardSync.sync(await this.resolveDeviceId(deviceId))
   }

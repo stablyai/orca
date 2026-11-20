@@ -1,7 +1,11 @@
 // A conversation's native chat (structured session): its deliveries, prompts, turns and Stop.
 import { randomUUID } from 'node:crypto'
 import { isConversationReport } from './external-conversation-turn-opener'
-import { endedTurn, type EndedChatTurn } from './external-conversation-ended-turn'
+import {
+  endedTurn,
+  endedTurnAttribution,
+  type EndedChatTurn
+} from './external-conversation-ended-turn'
 export type { EndedChatTurn } from './external-conversation-ended-turn'
 import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
@@ -78,6 +82,8 @@ export type ChatNews =
       outcome: AgentJournalTurnOutcome
       /** Read in full from the journal, only for linked chats; the status row keeps a short preview. */
       readTurn: () => Promise<EndedChatTurn>
+      /** Only whom the turn acts for (its opener and the deliveries it answered), read by index. */
+      readAttribution?: () => Promise<Pick<EndedChatTurn, 'opener' | 'stamps'>>
       at: number
     }
 
@@ -103,6 +109,13 @@ export function watchChatNews(
             outcome,
             readTurn: () =>
               endedTurn(chat, sessionId, event.completion.turnId, event.completion.journalCursor),
+            readAttribution: () =>
+              endedTurnAttribution(
+                chat,
+                sessionId,
+                event.completion.turnId,
+                event.completion.journalCursor
+              ),
             at: completedAt
           })
         }

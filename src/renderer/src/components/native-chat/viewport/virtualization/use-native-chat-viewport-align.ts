@@ -23,6 +23,18 @@ export function nativeChatScrollOffsetWithin(
   return node === container ? top : null
 }
 
+/**
+ * How far a row draws above its own top: a slot that carries on a run of notes pulls up into the
+ * row gap, so the window places it a gap below the row before while its first note sits higher.
+ */
+export function nativeChatRowDrawnAbove(element: HTMLElement): number {
+  const content = element.firstElementChild
+  if (!(content instanceof HTMLElement)) {
+    return 0
+  }
+  return Math.max(0, element.getBoundingClientRect().top - content.getBoundingClientRect().top)
+}
+
 export type NativeChatAlignEdge = 'start' | 'end'
 
 /** Fallback when layout provides no offset-parent chain. */
@@ -38,12 +50,15 @@ export function useNativeChatViewportAlign({
   scrollRef,
   virtualizer,
   finishReaderTakeover,
-  programmaticScrollMarks
+  programmaticScrollMarks,
+  holdJumpDrawnAbove
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>
   finishReaderTakeover: () => void
   programmaticScrollMarks: ProgrammaticScrollMarks
+  /** Keeps the virtualizer's `scrollPaddingStart` at the held jump's `drawnAbove` across renders. */
+  holdJumpDrawnAbove: (px: number) => void
 }): {
   /** `end` brings the row's end to the viewport's bottom instead, for the newest of a run. */
   alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
@@ -80,9 +95,19 @@ export function useNativeChatViewportAlign({
       }
       finishReaderTakeover()
       const index = Number.parseInt(element.dataset.index ?? '', 10)
+      // A row drawn above its own top lands by what it draws, so its first line stays in view.
+      const drawnAbove = edge === 'start' ? nativeChatRowDrawnAbove(element) : 0
       // Use the virtualizer to replace its pending jump reconciliation instead of racing it.
       if (virtualizer.scrollElement && !Number.isNaN(index)) {
-        // Target the row's index so measurements can correct its landing offset.
+        // Target the row's index so measurements can correct its landing offset. Only these jumps
+        // align by index, so the scroll padding lands just this row by what it draws.
+        if (virtualizer.options.scrollPaddingStart !== drawnAbove) {
+          virtualizer.setOptions({
+            ...virtualizer.options,
+            scrollPaddingStart: drawnAbove
+          })
+          holdJumpDrawnAbove(drawnAbove)
+        }
         alignRef.current = {
           index,
           edge,
@@ -93,7 +118,8 @@ export function useNativeChatViewportAlign({
         return
       }
       const start =
-        nativeChatScrollOffsetWithin(element, container) ?? rectOffsetWithin(element, container)
+        (nativeChatScrollOffsetWithin(element, container) ?? rectOffsetWithin(element, container)) -
+        drawnAbove
       const top =
         edge === 'end' ? Math.max(0, start + element.offsetHeight - container.clientHeight) : start
       alignRef.current = { offset: top, arrived: false }
@@ -108,7 +134,7 @@ export function useNativeChatViewportAlign({
       }
       container.scrollTo({ top, behavior: 'auto' })
     },
-    [finishReaderTakeover, programmaticScrollMarks, scrollRef, virtualizer]
+    [finishReaderTakeover, holdJumpDrawnAbove, programmaticScrollMarks, scrollRef, virtualizer]
   )
 
   // Read actual geometry; stale scroll marks/end events can precede the jump’s first frame.

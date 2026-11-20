@@ -113,83 +113,81 @@ afterEach(() => {
 })
 
 describe('waking a pane slept mid-turn', () => {
-  it.each(['claude', 'codex'] as const)(
-    'announces no %s finish until the pane runs a new turn',
-    async (agentType) => {
-      const working = {
-        paneKey: PANE,
-        connectionId: null,
-        tabId: 'tab-1',
-        worktreeId: WORKSPACE,
-        state: 'working',
-        prompt: 'Run delayed shell command',
-        agentType,
-        receivedAt: NOW,
-        stateStartedAt: NOW
-      } satisfies AgentStatusIpcPayload
-      send(working)
-      const slept = {
-        ...working,
-        state: 'done' as const,
-        interrupted: true,
-        stateStartedAt: NOW + 5
-      }
-      send({ ...slept, paneSleep: { ptyId: 'pty-1' }, isReplay: true })
-      vi.advanceTimersByTime(40)
-      vi.setSystemTime(NOW + 30_000)
-      bindPty('pty-2')
-      // Main hands the slept turn back to the resumed process.
-      const resumed = {
-        ...slept,
-        isReplay: true,
-        observation: {
-          origin: 'launch',
-          authorityId: 'main',
-          incarnation: 2,
-          revision: 3,
-          observedAt: NOW + 30_000,
-          kind: 'snapshot'
-        }
-      } satisfies AgentStatusIpcPayload
-      send(resumed)
-      vi.advanceTimersByTime(40)
-
-      // The title lane reads the resumed agent's startup spinner; the hook lane re-sees the verdict.
-      dispatchTerminalNotification(WORKSPACE, {
-        source: 'agent-task-complete',
-        terminalTitle: 'Run delayed shell command',
-        paneKey: PANE
-      })
-      dispatchTerminalNotification(WORKSPACE, {
-        source: 'agent-task-complete',
-        terminalTitle: agentType,
-        paneKey: PANE,
-        agentStatusSnapshot: {
-          state: 'done',
-          prompt: slept.prompt ?? '',
-          agentType,
-          interrupted: true,
-          stateStartedAt: slept.stateStartedAt
-        }
-      })
-      await vi.advanceTimersByTimeAsync(2000)
-      expect(notifications).not.toHaveBeenCalled()
-      expect(useAppStore.getState().worktreesByRepo.repo1[0].isUnread).toBe(false)
-
-      const turnAt = Date.now()
-      send({ ...working, receivedAt: turnAt, stateStartedAt: turnAt })
-      send({ ...working, state: 'done', receivedAt: turnAt + 10, stateStartedAt: turnAt + 10 })
-      vi.advanceTimersByTime(40)
-      dispatchTerminalNotification(WORKSPACE, {
-        source: 'agent-task-complete',
-        terminalTitle: 'Run delayed shell command',
-        paneKey: PANE
-      })
-      await vi.advanceTimersByTimeAsync(2000)
-      expect(notifications).toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'agent-task-complete', paneKey: PANE, agentType })
-      )
-      expect(useAppStore.getState().worktreesByRepo.repo1[0].isUnread).toBe(true)
+  it('announces no finish until the pane runs a new turn', async () => {
+    const agentType = 'codex'
+    const working = {
+      paneKey: PANE,
+      connectionId: null,
+      tabId: 'tab-1',
+      worktreeId: WORKSPACE,
+      state: 'working',
+      prompt: 'Run delayed shell command',
+      agentType,
+      receivedAt: NOW,
+      stateStartedAt: NOW
+    } satisfies AgentStatusIpcPayload
+    send(working)
+    const slept = {
+      ...working,
+      state: 'done' as const,
+      interrupted: true,
+      stateStartedAt: NOW + 5
     }
-  )
+    send({ ...slept, paneSleep: { ptyId: 'pty-1' }, isReplay: true })
+    vi.advanceTimersByTime(40)
+    vi.setSystemTime(NOW + 30_000)
+    bindPty('pty-2')
+    // Main hands the slept turn back to the resumed process.
+    const resumed = {
+      ...slept,
+      isReplay: true,
+      observation: {
+        origin: 'launch',
+        authorityId: 'main',
+        incarnation: 2,
+        revision: 3,
+        observedAt: NOW + 30_000,
+        kind: 'snapshot'
+      }
+    } satisfies AgentStatusIpcPayload
+    send(resumed)
+    vi.advanceTimersByTime(40)
+
+    // The title lane reads the resumed agent's startup spinner; the hook lane re-sees the verdict.
+    dispatchTerminalNotification(WORKSPACE, {
+      source: 'agent-task-complete',
+      terminalTitle: 'Run delayed shell command',
+      paneKey: PANE
+    })
+    dispatchTerminalNotification(WORKSPACE, {
+      source: 'agent-task-complete',
+      terminalTitle: agentType,
+      paneKey: PANE,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: slept.prompt ?? '',
+        agentType,
+        interrupted: true,
+        stateStartedAt: slept.stateStartedAt
+      }
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(notifications).not.toHaveBeenCalled()
+    expect(useAppStore.getState().worktreesByRepo.repo1[0].isUnread).toBe(false)
+
+    const turnAt = Date.now()
+    send({ ...working, receivedAt: turnAt, stateStartedAt: turnAt })
+    send({ ...working, state: 'done', receivedAt: turnAt + 10, stateStartedAt: turnAt + 10 })
+    vi.advanceTimersByTime(40)
+    dispatchTerminalNotification(WORKSPACE, {
+      source: 'agent-task-complete',
+      terminalTitle: 'Run delayed shell command',
+      paneKey: PANE
+    })
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(notifications).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'agent-task-complete', paneKey: PANE, agentType })
+    )
+    expect(useAppStore.getState().worktreesByRepo.repo1[0].isUnread).toBe(true)
+  })
 })

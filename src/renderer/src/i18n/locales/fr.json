@@ -4732,13 +4732,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Somme des working sets (WS). Les pages partagées peuvent apparaître dans plusieurs processus.",
-                "footprintDescription": "Somme des empreintes mémoire, la valeur affichée par le Moniteur d’activité : la mémoire propre à chaque processus, mémoire graphique comprise. Les pages partagées entre processus ne sont pas comptées deux fois.",
-                "rssDescription": "Somme des tailles résidentes (RSS). Les pages partagées ou aliasées peuvent apparaître dans plusieurs processus.",
-                "privateBytesDescription": "Octets privés additionnés : mémoire engagée par ces processus, comptée si elle est résidente ou paginée. C'est ce que l'hôte facture par rapport à sa limite de validation, de sorte qu'elle continue d'augmenter tandis que l'ensemble de travail ci-dessus diminue sous la pagination.",
                 "memColumn": "Mém.",
-                "memorySummary": "Σ Mémoire",
-                "privateSummary": "Σ Privée"
+                "memorySummary": "Σ Mémoire"
               }
             },
             "manager": {
@@ -17318,8 +17313,6 @@
             "27d863542c": "Annotations du navigateur",
             "e48569ac6d": "Impossible d'accéder à ce site.",
             "bbe8f15e83": "Ce volet est rendu depuis le serveur runtime actif.",
-            "8b7e6d1f5a": "Les annotations du navigateur ne sont disponibles que dans les onglets locaux.",
-            "deb5293610": "Annotations du navigateur indisponibles dans un runtime distant",
             "90d021f2ad": "Ajouter",
             "0cb3bd6221": "Intention d'annotation",
             "532bac48c5": "Décrivez ce que l'agent doit modifier ici...",
@@ -22451,8 +22444,7 @@
     "refresh": "Actualiser",
     "restartLocal": "Redémarrer le daemon local",
     "killAllLocal": "Terminer toutes les sessions locales",
-    "killFailed": "Le terminal n’a pas pu être arrêté. Les sessions observées en dernier sont conservées.",
-    "metricDetails": "Détails des métriques"
+    "killFailed": "Le terminal n’a pas pu être arrêté. Les sessions observées en dernier sont conservées."
   },
   "csv": {
     "detectingDelimiter": "Détection du délimiteur…",

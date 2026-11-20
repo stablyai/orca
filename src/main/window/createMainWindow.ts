@@ -17,7 +17,7 @@ import { markSystemSessionEnding } from '../crash-reporting/process-exits/expect
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
-import type { Store } from '../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
 import { installMainWindowCloseLifecycle } from './main-window/main-window-close-lifecycle'
@@ -80,10 +80,10 @@ export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowL
 }
 
 export function createMainWindow(
-  store: Store | null,
+  nativeSettings: NativeSettingsProjection | null,
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
-  const rawSavedBounds = store?.getUI().windowBounds
+  const rawSavedBounds = nativeSettings?.getUI().windowBounds
   // Reject tiny/off-screen saved bounds so the titlebar stays reachable after display changes.
   const savedBounds =
     rawSavedBounds &&
@@ -98,8 +98,8 @@ export function createMainWindow(
       rawSavedBounds
     )
   }
-  const savedMaximized = store?.getUI().windowMaximized ?? false
-  const savedFullScreen = store?.getUI().windowFullScreen ?? false
+  const savedMaximized = nativeSettings?.getUI().windowMaximized ?? false
+  const savedFullScreen = nativeSettings?.getUI().windowFullScreen ?? false
   // Fill the primary work area on first launch; later launches honor saved bounds.
   const defaultBounds = (() => {
     try {
@@ -110,9 +110,9 @@ export function createMainWindow(
     }
   })()
 
-  const settings = store?.getSettings()
+  const settings = nativeSettings?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
-    const voice = store?.getSettings().voice
+    const voice = nativeSettings?.getSettings().voice
     // Chromium drops a page's key releases after a press cancelled here, so Hold can't see its release; the page keeps the key then.
     return voice?.enabled === true && voice.dictationMode !== 'hold'
   })
@@ -219,7 +219,7 @@ export function createMainWindow(
     revealInBackground: opts?.revealInBackground,
     savedMaximized,
     savedFullScreen,
-    store
+    nativeSettings
   })
   installMainWindowWebviewSecurity(mainWindow)
   installNativeUnloadCoordinator(mainWindow, opts?.onBeforeReload)
@@ -236,14 +236,14 @@ export function createMainWindow(
   })
   // Register after focus is initialized because the resume callback uses it.
   powerMonitor.on('resume', onSystemResume)
-  installMainWindowShortcutRouting({ focus, mainWindow, opts, store })
+  installMainWindowShortcutRouting({ focus, mainWindow, opts, nativeSettings })
   const closeLifecycle = installMainWindowCloseLifecycle({
     focus,
     mainWindow,
     opts,
     rendererWebContentsId,
     state,
-    store
+    nativeSettings
   })
 
   mainWindow.on('closed', () => {

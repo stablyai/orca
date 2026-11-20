@@ -75,6 +75,10 @@ export type BotOutfitArt = { src: string; at: readonly [number, number, number, 
 /** A mascot's picture in two layers, so a new tile color redraws only the mascot, never the outfit's art. */
 export type BotMascotLook = { src: string; outfit: BotOutfitArt | null }
 
+/** A picker tile's layers: the mascot as its bitmap on the tile color, unless the outfit redraws its face
+ *  (the eyes looking down), which only `facedSrc` shows; then the outfit's art over it. */
+export type BotMascotTileLook = { facedSrc: string | null; outfit: BotOutfitArt | null }
+
 // Bounded, since dragging the custom color makes a new one per step; an evicted entry is rebuilt on its next read.
 const MAX_CACHED = 300
 
@@ -144,24 +148,24 @@ function dressedSrc(
   )
 }
 
-function layeredLook(
+// No mascot SVG is built here unless the outfit redraws the face, so dragging the color builds none.
+function tileLook(
   id: BotMascotId,
   color: string | null,
   outfit: BotAvatarOutfit | null,
   layers: BotOutfitLayers | null | undefined,
   largeArt: BotOutfitLargeArt | null | undefined
-): BotMascotLook {
+): BotMascotTileLook {
   const layer = outfit && layers ? layers[id] : undefined
   if (!layer) {
-    return { src: plainSrc(id, color), outfit: null }
+    return { facedSrc: null, outfit: null }
   }
-  // Only an outfit that changes the face makes the mascot's own picture differ from the plain one.
-  const src = layer.face
+  const facedSrc = layer.face
     ? pictureSrc(id, color, `${outfit}|faced`, (svg) => faceMascotSvg(svg, layer))
-    : plainSrc(id, color)
+    : null
   const { art, size } = outfitArt(id, layer, largeArt)
   const image = cached(arts, `${id}|${outfit}|${size}`, () => ({ src: artSrc(art), at: layer.at }))
-  return { src, outfit: image }
+  return { facedSrc, outfit: image }
 }
 
 function tileColor(color: string | null | undefined): string | null {
@@ -185,25 +189,27 @@ export function useBotMascotSrc(
   return dressedSrc(id, tile, worn, layers, largeArt)
 }
 
-/** Each mascot's picture on `color`, wearing `outfit`, in layers: for the picker, where the color is dragged. */
-export function useBotMascotLooks(
+/** Each mascot's tile layers on `color`, wearing `outfit`: for the picker, where the color is dragged. */
+export function useBotMascotTileLooks(
   color: string | null | undefined,
   outfit: BotAvatarOutfit | null | undefined = null,
   size: BotPictureSize = 'small'
-): (id: BotMascotId) => BotMascotLook {
+): (id: BotMascotId) => BotMascotTileLook {
   const worn = outfit ?? null
   const layers = useBotOutfitLayers(worn)
   const largeArt = useBotOutfitLargeArt(worn, size === 'large')
   const tile = tileColor(color)
-  return (id) => layeredLook(id, tile, worn, layers, largeArt)
+  return (id) => tileLook(id, tile, worn, layers, largeArt)
 }
 
-/** One mascot's picture in layers, as useBotMascotLooks draws it. */
+/** One mascot's picture in layers, its SVG on `color` with the outfit's art apart from it. */
 export function useBotMascotLook(
   id: BotMascotId,
   color: string | null | undefined,
   outfit: BotAvatarOutfit | null | undefined = null,
   size: BotPictureSize = 'small'
 ): BotMascotLook {
-  return useBotMascotLooks(color, outfit, size)(id)
+  const tile = tileColor(color)
+  const look = useBotMascotTileLooks(color, outfit, size)(id)
+  return { src: look.facedSrc ?? plainSrc(id, tile), outfit: look.outfit }
 }
