@@ -165,14 +165,20 @@ export function createKeyScan(keyEnv: string, keys: ReadonlySet<string>, sinceTi
   }
 }
 
-/** Whether `pid` runs exactly `argv` (its program compared by name, as PATH may resolve it). */
+/**
+ * Whether `pid` runs `argv`: its command line ends with the spawned arguments and names the
+ * spawned program, compared by name since PATH may resolve it and an interpreter (a script's
+ * `#!` line) may run it.
+ */
 export async function runsArgv(pid: number, argv: readonly string[]): Promise<boolean> {
   try {
     const running = (await readFile(`/proc/${pid}/cmdline`, 'latin1')).split('\0').slice(0, -1)
+    const args = argv.slice(1)
+    const head = running.slice(0, running.length - args.length)
     return (
-      running.length === argv.length &&
-      basename(running[0] ?? '') === basename(argv[0] ?? '') &&
-      running.slice(1).every((arg, index) => arg === argv[index + 1])
+      head.length > 0 &&
+      running.slice(head.length).every((arg, index) => arg === args[index]) &&
+      head.some((arg) => basename(arg) === basename(argv[0] ?? ''))
     )
   } catch {
     return false

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { rm } from 'node:fs/promises'
 import type { Worker } from 'node:worker_threads'
 import { assertWslNotLatchedAbsent } from '@orca/process-host/wsl-not-installed-latch'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
@@ -87,6 +88,10 @@ export class WorkerThreadChildProcessHost {
       // A fresh worker (first use or after idle teardown) has not proven it starts yet.
       this.workerAnswered = false
       this.workerError = null
+      // An idle-retired worker's directory is empty; a lost one's went to endLost.
+      if (this.spawnRecordDir) {
+        void rm(this.spawnRecordDir, { recursive: true, force: true }).catch(() => undefined)
+      }
       this.spawnRecordDir = null
     }
     return this.host.ensure() !== null
@@ -186,6 +191,8 @@ export class WorkerThreadChildProcessHost {
    * fails to spawn instead.
    */
   private endLost(abandoned: readonly WorkerThreadChildProcess[], message: string): void {
+    const recordDir = this.spawnRecordDir
+    this.spawnRecordDir = null
     const lost = new Map<WorkerThreadChildProcess, LostSpawn>()
     for (const child of abandoned) {
       const entry = this.spawnKeys?.get(child.id)
@@ -202,7 +209,7 @@ export class WorkerThreadChildProcessHost {
     for (const child of abandoned.filter((candidate) => !lost.has(candidate))) {
       this.deliverLost(child, child.pid, child.pid !== undefined, message)
     }
-    void endLostSpawns([...lost.values()], this.spawnRecordDir, (key, pid, started) => {
+    void endLostSpawns([...lost.values()], recordDir, (key, pid, started) => {
       const child = byKey.get(key)
       if (child) {
         this.deliverLost(child, child.pid ?? pid, started, message)

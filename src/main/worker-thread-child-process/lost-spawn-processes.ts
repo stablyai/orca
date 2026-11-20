@@ -36,7 +36,8 @@ type KeyProof = { kind: 'key'; seen: boolean; quietScans: number }
 /** How a lost child is proven ended. */
 type Proof =
   | { kind: 'record' }
-  | { kind: 'group'; groupId: number }
+  /** `leaderStartTicks`: the leader's start time when known, so a reused group id is never hit. */
+  | { kind: 'group'; groupId: number; leaderStartTicks?: number }
   | { kind: 'root'; pid: number; startTicks: number }
   | KeyProof
 
@@ -63,7 +64,7 @@ async function readSpawnRecord(dir: string | null, key: string): Promise<RecordR
 function proofFor(spawn: LostSpawn, record: RecordRead, recordDir: string | null): Proof {
   if (typeof record === 'object') {
     return spawn.ownsGroup
-      ? { kind: 'group', groupId: record.pid }
+      ? { kind: 'group', groupId: record.pid, leaderStartTicks: record.startTicks }
       : { kind: 'root', pid: record.pid, startTicks: record.startTicks }
   }
   // The launcher reserves a record before it spawns and removes it only after that child, and an
@@ -102,7 +103,7 @@ async function advanceKeyProof(
       // detached into its own session (a daemon such as an ssh control master), which a local
       // stop would leave alone too.
       if (spawn.ownsGroup && entry.pid === entry.pgid && (await runsArgv(entry.pid, spawn.argv))) {
-        return { kind: 'group', groupId: entry.pid }
+        return { kind: 'group', groupId: entry.pid, leaderStartTicks: entry.startTicks }
       }
       continue
     }
@@ -123,6 +124,16 @@ async function provenEnded(proof: Proof): Promise<boolean> {
     return true
   }
   if (proof.kind === 'group') {
+    if (proof.leaderStartTicks !== undefined) {
+      const leader = await readProcStat(proof.groupId)
+      if (leader === null) {
+        return false
+      }
+      // A different process now has the leader's id: it could only get it once the group was gone.
+      if (leader !== 'gone' && leader.startTicks !== proof.leaderStartTicks) {
+        return true
+      }
+    }
     const live = await groupHasLiveMember(proof.groupId)
     if (live !== false) {
       kill(-proof.groupId)
