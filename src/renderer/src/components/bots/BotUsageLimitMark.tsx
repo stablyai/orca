@@ -5,6 +5,7 @@ import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorT
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { getIntlLocale } from '@/i18n/i18n'
 import { formatUsageLimitResetClock } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
@@ -13,9 +14,14 @@ import type {
   UsageLimitStop
 } from '../../../../shared/bots/bot-usage-limit-stop'
 
+// The UI language, not the OS locale; callers pass `t`, whose identity changes with it, so memoized text re-renders.
+function resetClock(at: number): string {
+  return formatUsageLimitResetClock(at, Date.now(), getIntlLocale())
+}
+
 /** "Continues at 9:50 PM", or "Hit limit · resets 9:50 PM" when Orca won't continue it. */
 export function usageLimitStopText(t: Translate, stop: UsageLimitStop): string {
-  const time = formatUsageLimitResetClock(stop.at)
+  const time = resetClock(stop.at)
   return stop.auto
     ? t('bots.usageLimit.continuesAt', 'Continues at {{time}}', { time })
     : t('bots.usageLimit.hitLimit', 'Hit limit · resets {{time}}', { time })
@@ -25,7 +31,7 @@ export function usageLimitStopText(t: Translate, stop: UsageLimitStop): string {
 export function usageLimitStopMeta(t: Translate, stop: UsageLimitStop): string {
   return stop.auto
     ? t('bots.usageLimit.continuesShort', 'Continues {{time}}', {
-        time: formatUsageLimitResetClock(stop.at)
+        time: resetClock(stop.at)
       })
     : t('bots.usageLimit.hitShort', 'Hit limit')
 }
@@ -37,7 +43,7 @@ export function usageLimitStopTip(
 ): string {
   if (stop.auto) {
     return t('bots.usageLimit.continuesTip', 'Continues automatically at {{time}}', {
-      time: formatUsageLimitResetClock(stop.at)
+      time: resetClock(stop.at)
     })
   }
   const agent = isTuiAgent(stop.agent)
@@ -45,7 +51,7 @@ export function usageLimitStopTip(
     : formatAgentTypeLabel(stop.agent)
   return t('bots.usageLimit.hitTip', '{{agent}} hit its usage limit · resets {{time}}', {
     agent,
-    time: formatUsageLimitResetClock(stop.at)
+    time: resetClock(stop.at)
   })
 }
 
