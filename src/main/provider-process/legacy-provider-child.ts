@@ -46,6 +46,8 @@ export class LegacyProviderChild extends EventEmitter implements ProviderChild {
   private rawExited = false
   private failure?: Promise<Error>
   private settled = false
+  // A wrapped launch whose exec fails has a pid but never spawns.
+  private spawned = false
 
   constructor(
     private readonly raw: ChildProcess,
@@ -69,9 +71,12 @@ export class LegacyProviderChild extends EventEmitter implements ProviderChild {
       ? new Promise((resolve) => raw.once('disconnect', resolve))
       : Promise.resolve()
     raw.once('message', (message: unknown) => this.observeReport(message))
-    raw.once('spawn', () => notifyProviderChild(this, 'spawn'))
+    raw.once('spawn', () => {
+      this.spawned = true
+      notifyProviderChild(this, 'spawn')
+    })
     raw.on('error', (error) => {
-      if (raw.pid !== undefined) {
+      if (this.spawned) {
         notifyProviderChild(this, 'error', error)
         return
       }
@@ -87,7 +92,7 @@ export class LegacyProviderChild extends EventEmitter implements ProviderChild {
       void this.settle(code, signal)
     })
     raw.once('close', (code, signal) => {
-      if (raw.pid === undefined) {
+      if (!this.spawned) {
         void this.settleProcessless(code, signal)
       }
     })
