@@ -268,9 +268,11 @@ it('keeps the send that acquires a restored chat queued until recovery commits, 
   ).toMatchObject({ ok: true })
   await blocked.promise
   const waiting = await readTestHostJournal(host, SESSION)
-  expect(waiting.submissions).toContainEqual(
-    expect.objectContaining({ clientMessageId: clientOperationId, handedOverAt: undefined })
+  const queued = waiting.submissions.find(
+    (submission) => submission.clientMessageId === clientOperationId
   )
+  expect(queued).toBeDefined()
+  expect(queued?.handedOverAt).toBeUndefined()
   expect(claude.connections[0]!.sent).toEqual([])
   release.resolve()
   await delivered.promise
