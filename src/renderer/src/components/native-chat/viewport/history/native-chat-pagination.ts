@@ -35,22 +35,36 @@ export function nativeChatHistoryCursor(
   return Number.isSafeInteger(cursor) && cursor! >= 0 ? cursor : undefined
 }
 
-/** A re-sent latest window keeps the held older rows when its first row is held at the same transcript position. */
+/** A re-sent latest window keeps the held older rows when its first row is held, in the base or the live tail, at the same transcript position. */
 export function withHeldOlderHistory(
   agent: AgentType,
   held: ReadState,
-  window: NativeChatMessage[]
+  liveTail: readonly NativeChatMessage[],
+  window: NativeChatMessage[],
+  hasOlder: boolean
 ): NativeChatMessage[] {
   const first = window[0]
   const cursor = nativeChatHistoryCursor(agent, first)
-  if (cursor === undefined || held.phase !== 'ready') {
+  // A window that proves nothing older exists outranks held rows.
+  if (cursor === undefined || held.phase !== 'ready' || !hasOlder) {
     return window
   }
-  const at = held.messages.findIndex((message) => message.id === first!.id)
-  if (at <= 0 || nativeChatHistoryCursor(agent, held.messages[at]) !== cursor) {
+  const heldAt = (rows: readonly NativeChatMessage[]) => {
+    const at = rows.findLastIndex((message) => message.id === first!.id)
+    return at !== -1 && nativeChatHistoryCursor(agent, rows[at]) === cursor ? at : -1
+  }
+  const base = held.messages
+  const inBase = heldAt(base)
+  if (inBase >= 0) {
+    return inBase === 0 ? window : [...base.slice(0, inBase), ...window]
+  }
+  const inTail = heldAt(liveTail)
+  if (inTail < 0 || !nativeChatLiveTailJoinsBase(agent, base, liveTail)) {
     return window
   }
-  return [...held.messages.slice(0, at), ...window]
+  const baseIds = new Set(base.map((message) => message.id))
+  const tail = liveTail.slice(0, inTail).filter((message) => !baseIds.has(message.id))
+  return [...base, ...tail, ...window]
 }
 
 /** A bounded live tail that starts after the held window's last row hides a gap only a full reread repairs. */

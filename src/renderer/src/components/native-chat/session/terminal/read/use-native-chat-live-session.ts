@@ -215,15 +215,15 @@ export function useNativeChatLiveSession(
           frameArrived = true
           transcriptLifecycleControl.replace(frame.lifecycle)
           const messages = boundNativeChatWindow(frame.messages, limitRef.current)
+          const more = frame.hasMore || messages !== frame.messages
+          const tail = appendMergerRef.current.list
+          // A reread of the latest window keeps paged-in history instead of shrinking the reader's view.
+          const base = withHeldOlderHistory(agent, heldRef.current, tail, messages, more)
           replaceList(appendMergerRef.current, messages)
           setAppended([])
-          // A reread of the latest window keeps paged-in history instead of shrinking the reader's view.
-          const base = withHeldOlderHistory(agent, heldRef.current, messages)
           heldRef.current = { phase: 'ready', messages: base }
           setRead(heldRef.current)
-          setHasMore((more) =>
-            base === messages ? frame.hasMore || messages !== frame.messages : more
-          )
+          setHasMore((current) => (base === messages ? more : current))
           return
         }
         transcriptLifecycleControl.append(frame.lifecycle)
