@@ -39,11 +39,20 @@ describe('orchestration CLI/runtime boundary', () => {
     return method.handler(parsed, ctx)
   }
 
-  function client(): CliRuntimeClient {
+  function client(supportsTaskPreferences = true): CliRuntimeClient {
     return {
       isRemote: false,
       /** Preserves terminal-handle validation while routing other calls through runtime RPC. */
       async call<T>(method: string, params?: unknown): Promise<{ result: T }> {
+        if (method === 'status.get') {
+          const status = {
+            capabilities: supportsTaskPreferences
+              ? ['orchestration.task-launch-preferences.v1']
+              : []
+          }
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the task-create status probe reads only these capabilities.
+          return { result: status as T }
+        }
         if (method === 'terminal.resolveIdentity') {
           return {
             result: { identity: { handle: objectParams(params).terminal, live: true } } as T
@@ -53,6 +62,28 @@ describe('orchestration CLI/runtime boundary', () => {
       }
     }
   }
+
+  it('persists CLI task defaults and refuses an older runtime without writing', async () => {
+    ;({ db, ctx } = h.setup())
+    process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
+    const handlers = await loadOrchestrationHandlers()
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const flags: [string, string][] = [
+      ['spec', 'Plan the change'],
+      ['model', 'gpt-6.1-sol'],
+      ['effort', 'high']
+    ]
+    await expect(
+      runCli(handlers['orchestration task-create'], client(false), flags)
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+    expect(db.listTasks()).toEqual([])
+    await runCli(handlers['orchestration task-create'], client(), flags)
+    expect(taskBySpec('Plan the change')).toMatchObject({ model: 'gpt-6.1-sol', effort: 'high' })
+    await runCli(handlers['orchestration task-list'], client(), [])
+    expect(JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))).toMatchObject({
+      result: { tasks: [{ model: 'gpt-6.1-sol', effort: 'high' }] }
+    })
+  })
 
   it('creates and gates a PowerShell-stripped dependency through CLI and runtime', async () => {
     ;({ db, ctx } = h.setup())

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { OptionalWorkerLaunchPreference } from './orchestration-worker-start-params'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -79,15 +80,22 @@ export const InboxParams = z.object({
   run: OptionalString
 })
 
-export const TaskCreateParams = z.object({
-  spec: requiredString('Missing --spec'),
-  taskTitle: OptionalString,
-  displayName: OptionalString,
-  deps: OptionalString,
-  parent: OptionalString,
-  callerTerminalHandle: OptionalString,
-  run: OptionalString
-})
+export const TaskCreateParams = z
+  .object({
+    spec: requiredString('Missing --spec'),
+    taskTitle: OptionalString,
+    displayName: OptionalString,
+    model: OptionalWorkerLaunchPreference,
+    effort: OptionalWorkerLaunchPreference,
+    deps: OptionalString,
+    parent: OptionalString,
+    callerTerminalHandle: OptionalString,
+    run: OptionalString
+  })
+  .refine((params) => !params.effort || !!params.model, {
+    path: ['effort'],
+    message: '--effort requires --model.'
+  })
 
 export const TaskListParams = z.object({
   status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']).optional(),

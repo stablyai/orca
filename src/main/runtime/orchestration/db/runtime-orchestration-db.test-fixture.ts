@@ -69,6 +69,8 @@ export function taskLineageRow(fields: Partial<TaskRuntimeLineageRow>): TaskRunt
     created_by_run_generation: null,
     task_title: null,
     display_name: null,
+    model: null,
+    effort: null,
     spec: '',
     status: 'ready',
     deps: '[]',

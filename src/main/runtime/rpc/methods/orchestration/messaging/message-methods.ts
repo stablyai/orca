@@ -72,6 +72,8 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         spec: params.spec,
         taskTitle: params.taskTitle,
         displayName: params.displayName,
+        model: params.model,
+        effort: params.effort,
         deps,
         parentId: params.parent,
         createdByTerminalHandle: creatorHandle ?? undefined,

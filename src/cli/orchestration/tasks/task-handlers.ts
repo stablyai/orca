@@ -4,6 +4,8 @@ import { printOrchestrationResult } from '../agent-view'
 import { TASK_LIST_VIEW, TASK_RECEIPT_VIEW, type TaskListResult } from './task-agent-views'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { ORCHESTRATION_TASK_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration/orchestration-task-summary'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
@@ -23,6 +25,21 @@ const TASK_STATUS_VALUES = [
 
 export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
   'orchestration task-create': async ({ flags, client, cwd, json }) => {
+    const model = getOptionalStringFlag(flags, 'model')
+    const effort = getOptionalStringFlag(flags, 'effort')
+    if (model || effort) {
+      const status = await client.call<RuntimeStatus>('status.get')
+      if (
+        !status.result.capabilities?.includes(
+          ORCHESTRATION_TASK_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
+        )
+      ) {
+        throw new RuntimeClientError(
+          'incompatible_runtime',
+          'The connected Orca runtime does not support task model or effort defaults. Update or restart Orca and try again.'
+        )
+      }
+    }
     const callerTerminalHandle = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await callOrchestrationMutation<{ task: { id: string; status: string } }>(
       client,
@@ -32,6 +49,8 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         spec: await readTextOrFileFlag(flags, cwd, 'spec', true),
         taskTitle: getOptionalStringFlag(flags, 'task-title'),
         displayName: getOptionalStringFlag(flags, 'display-name'),
+        model,
+        effort,
         deps: getOptionalStringFlag(flags, 'deps'),
         parent: getOptionalStringFlag(flags, 'parent'),
         run: getOptionalStringFlag(flags, 'run'),
