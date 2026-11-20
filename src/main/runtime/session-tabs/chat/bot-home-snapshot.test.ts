@@ -168,4 +168,41 @@ describe("a windowless paired server's bot page", () => {
       ['right', 'agent-session:other']
     ])
   })
+  it('publishes Home first after a client drags a side chat ahead of it', async () => {
+    const { runtime } = windowlessServer()
+    runtime.storeMobileSessionSnapshot(PAGE, {
+      ...savedPage(),
+      activeGroupId: 'left',
+      tabGroups: [
+        {
+          id: 'left',
+          activeTabId: 'agent-session:home',
+          tabOrder: ['agent-session:home', 'agent-session:side']
+        }
+      ],
+      tabGroupLayout: { type: 'leaf', groupId: 'left' },
+      tabs: savedPage().tabs.filter((tab) => tab.id !== REOPENED_HOME)
+    })
+    const published: string[][] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged(
+      (frame) => {
+        if (frame.worktree === PAGE) {
+          published.push(frame.tabGroups?.[0]?.tabOrder ?? [])
+        }
+      },
+      undefined,
+      'mobile'
+    )
+    try {
+      await runtime.moveMobileSessionTab(`id:${PAGE}`, {
+        kind: 'reorder',
+        tabId: 'agent-session:side',
+        targetGroupId: 'left',
+        tabOrder: ['agent-session:side', 'agent-session:home']
+      })
+    } finally {
+      unsubscribe()
+    }
+    expect(published.at(-1)).toEqual(['agent-session:home', 'agent-session:side'])
+  })
 })

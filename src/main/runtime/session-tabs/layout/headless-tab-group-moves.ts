@@ -74,8 +74,8 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
       tabs: nextTabs
     })
     this.persistHeadlessTabGroups(worktreeId, nextGroups, snapshot.tabGroupLayout)
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    // Storing can place a bot's Home; publish what was stored.
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
     return { moved: true }
   }
 
@@ -113,8 +113,7 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
       tabGroupLayout: split.layout
     }
     this.persistHeadlessTabGroups(worktreeId, groups, split.layout)
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
     return { moved: true }
   }
 
@@ -151,8 +150,7 @@ export abstract class RuntimeHeadlessTabGroups extends RuntimeHeadlessTabPropert
       tabGroupLayout: layout
     }
     this.persistHeadlessTabGroups(worktreeId, groups, layout)
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
     return { moved: true }
   }
 
