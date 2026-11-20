@@ -27,8 +27,8 @@ function fakePane(atlasModule: AtlasModule, atlas: FakeAtlas, visible = true, di
   if (visible) {
     visibleTerminals.add(terminal)
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module reads only terminal modes, container rects and the addon's atlas identity, all supplied here.
   const renderer = { _charAtlas: atlas }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module reads only terminal modes, container rects and chat cover and the addon's atlas identity, all supplied here.
   const pane = {
     terminal,
     container: { getClientRects: () => (displayed ? [{}] : []), querySelector: () => null },
