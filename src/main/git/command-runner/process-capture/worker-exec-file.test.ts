@@ -30,6 +30,7 @@ const state = vi.hoisted(() => {
 vi.mock('../../../worker-thread-child-process/worker-thread-child-process', async (original) => ({
   ...(await original<typeof WorkerChildModule>()),
   whenSpawnWorkerReady: async () => state.host !== null,
+  spawnWorkerReadyNow: () => state.host !== null,
   spawnProcessOnWorkerThread: (spec: Parameters<WorkerThreadChildProcessHost['spawn']>[0]) => {
     if (!state.host) {
       throw new Error('Test worker not initialized')

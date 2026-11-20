@@ -244,6 +244,13 @@ describe('WorkerThreadChildProcessHost availability', () => {
     await expect(makeConnectedHost().whenReady()).resolves.toBe(true)
   })
 
+  it('starts a cold worker without waiting and reports it ready only once it loaded its entry', async () => {
+    const host = makeConnectedHost()
+    expect(host.isReady()).toBe(false)
+    await expect(host.whenReady()).resolves.toBe(true)
+    expect(host.isReady()).toBe(true)
+  })
+
   it('still counts a ready message that arrives after the worker error that killed it', async () => {
     const host = new WorkerThreadChildProcessHost(() => {
       const transport = new EventEmitter()

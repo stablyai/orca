@@ -5,6 +5,7 @@ import { hasLocalCommandSelection } from '../../../ipc/command-path/command-path
 import {
   isWorkerChildStdinWriteError,
   spawnProcessOnWorkerThread,
+  spawnWorkerReadyNow,
   whenSpawnWorkerReady,
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
@@ -32,10 +33,11 @@ export async function capturesOnWorker(
   command: string,
   options: { canStart?: () => boolean }
 ): Promise<boolean> {
-  if (process.platform !== 'win32' && (options.canStart || hasLocalCommandSelection(command))) {
-    return false
+  if (process.platform === 'win32') {
+    return whenSpawnWorkerReady()
   }
-  return whenSpawnWorkerReady()
+  // A booting worker would delay this result; main spawns as before until it is ready.
+  return !options.canStart && !hasLocalCommandSelection(command) && spawnWorkerReadyNow()
 }
 
 /** A second, passive stderr listener: execFile still captures every byte. */

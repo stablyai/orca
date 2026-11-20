@@ -215,6 +215,11 @@ export class WorkerThreadChildProcessHost {
     return this.ensureWorker() && this.ready ? this.ready.promise : Promise.resolve(false)
   }
 
+  /** Starts a cold worker without waiting; its first message is 'ready', so having answered means loaded. */
+  isReady(): boolean {
+    return this.ensureWorker() && this.workerAnswered
+  }
+
   private ensureWorker(): boolean {
     // A worker that died before answering is not started again; direct spawns report it unavailable.
     if (this.failedToStart) {
@@ -333,25 +338,27 @@ function defaultWorkerFactory(): Worker {
 }
 
 let sharedHost: WorkerThreadChildProcessHost | null = null
+const shared = (): WorkerThreadChildProcessHost =>
+  (sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory))
+const workerDisabled = (): boolean => process.env.ORCA_CHILD_PROCESS_WORKER_DISABLED === '1'
 
 export function spawnProcessOnWorkerThread(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
   // The worker has its own module state, so only main knows WSL was proven absent.
   assertWslNotLatchedAbsent(spec.program)
-  sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
-  return sharedHost.spawn(spec)
+  return shared().spawn(spec)
 }
 
 /** Resolves true once a spawn would reach a worker that loaded its entry; false means spawn locally. */
 export function whenSpawnWorkerReady(): Promise<boolean> {
-  if (process.env.ORCA_CHILD_PROCESS_WORKER_DISABLED === '1') {
-    return Promise.resolve(false)
-  }
-  sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
-  return sharedHost.whenReady()
+  return workerDisabled() ? Promise.resolve(false) : shared().whenReady()
+}
+
+/** Never waits: false while the worker boots (the boot starts), so the caller spawns locally meanwhile. */
+export function spawnWorkerReadyNow(): boolean {
+  return !workerDisabled() && shared().isReady()
 }
 
 /** True when a spawn now would reach a live worker; callers that must not fail can spawn locally instead. */
 export function canSpawnOnWorkerThread(): boolean {
-  sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
-  return sharedHost.available()
+  return shared().available()
 }
