@@ -14,6 +14,7 @@ const HASHED_CONFIG_FILES = [
   '.oxfmtrc.json',
   'config/vitest.config.ts',
   'config/scripts/preflight/changed-checks/check-changed.mjs',
+  'config/scripts/preflight/changed-checks/check-changed-direct-tests.mjs',
   'config/scripts/preflight/changed-checks/check-changed-selection.mjs',
   'config/scripts/preflight/changed-checks/check-changed-pass-cache.mjs'
 ]
