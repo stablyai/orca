@@ -4,11 +4,14 @@ import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-
 
 import {
   createAgentStatusLegacyAdapter,
-  type AgentStatusLegacyAdapter,
-  type AgentStatusLegacyAdapterOptions,
-  type AgentStatusLegacyAdmissionMode
+  type AgentStatusLegacyAdapterOptions
 } from '../agent-status/transport/agent-status-legacy-adapter'
-import type { AgentStatusLegacyIngressCaller } from '../agent-status/transport/agent-status-legacy-ingress-manifest'
+import {
+  bindLegacyAgentStatusAdapter,
+  clearLegacyAgentStatuses,
+  deleteLegacyAgentStatus,
+  moveLegacyAgentStatuses
+} from './listener-legacy-agent-status'
 import type { ClaudeLaunchedBackgroundTasks } from './providers/claude/background-tasks/claude-owed-task-notifications'
 import type { ClaudeSubagentRoster } from './providers/claude/lifecycle/claude-subagent-roster'
 import type { ClaudeToolRequest } from './claude-tool-request-identity'
@@ -110,16 +113,6 @@ export type GrokActiveTurn = {
   sessionId?: string
 }
 
-const legacyStatusAdapterByState = new WeakMap<HookListenerState, AgentStatusLegacyAdapter>()
-
-function legacyStatusAdapter(state: HookListenerState): AgentStatusLegacyAdapter {
-  const adapter = legacyStatusAdapterByState.get(state)
-  if (!adapter) {
-    throw new Error('Hook listener state has no legacy agent-status adapter')
-  }
-  return adapter
-}
-
 export function createHookListenerState(
   options: AgentStatusLegacyAdapterOptions = {}
 ): HookListenerState {
@@ -162,50 +155,8 @@ export function createHookListenerState(
     hermesTurnByPaneKey: new Map(),
     dshChildSessionIdsByPaneKey: new Map()
   }
-  legacyStatusAdapterByState.set(state, adapter)
+  bindLegacyAgentStatusAdapter(state, adapter)
   return state
-}
-
-export function admitLegacyAgentStatus(
-  state: HookListenerState,
-  caller: AgentStatusLegacyIngressCaller,
-  entry: AgentHookEventPayload,
-  mode: AgentStatusLegacyAdmissionMode,
-  options?: { moveToEnd?: boolean }
-): boolean {
-  return legacyStatusAdapter(state).admit(caller, mode, entry, options)
-}
-
-export function canAdmitLegacyAgentStatusEntry(
-  state: HookListenerState,
-  caller: AgentStatusLegacyIngressCaller,
-  entry: AgentHookEventPayload,
-  mode: AgentStatusLegacyAdmissionMode
-): boolean {
-  return legacyStatusAdapter(state).canAdmit(caller, mode, entry)
-}
-
-export function deleteLegacyAgentStatus(state: HookListenerState, paneKey: string): boolean {
-  return legacyStatusAdapter(state).delete(paneKey)
-}
-
-export function clearLegacyAgentStatuses(state: HookListenerState): void {
-  legacyStatusAdapter(state).clear()
-}
-
-export function moveLegacyAgentStatuses(
-  state: HookListenerState,
-  fromPaneKey: string,
-  toPaneKey: string
-): void {
-  legacyStatusAdapter(state).move(fromPaneKey, toPaneKey)
-}
-
-export function getLegacyStatusListingOrder(
-  state: HookListenerState,
-  paneKey: string
-): number | undefined {
-  return legacyStatusAdapter(state).listingOrder(paneKey)
 }
 
 export function clearPaneProcessCacheState(state: HookListenerState, paneKey: string): void {

@@ -5,9 +5,9 @@ import { randomBytes, randomUUID } from 'node:crypto'
 
 import {
   createHookListenerState,
-  canAdmitLegacyAgentStatusEntry,
   type HookListenerState
 } from '../../../shared/agent-hook-listener/listener-state'
+import { canAdmitLegacyAgentStatusEntry } from '../../../shared/agent-hook-listener/listener-legacy-agent-status'
 import {
   createHookTransportInterferenceTracker,
   describeHookTransportInterference,

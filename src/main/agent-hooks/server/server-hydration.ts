@@ -1,7 +1,7 @@
 import {
   admitLegacyAgentStatus,
   clearLegacyAgentStatuses
-} from '../../../shared/agent-hook-listener/listener-state'
+} from '../../../shared/agent-hook-listener/listener-legacy-agent-status'
 import {
   seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots

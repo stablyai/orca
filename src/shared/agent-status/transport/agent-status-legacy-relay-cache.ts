@@ -1,8 +1,6 @@
 import type { AgentHookEventPayload } from '../../agent-hook-listener/listener-event'
-import {
-  admitLegacyAgentStatus,
-  type HookListenerState
-} from '../../agent-hook-listener/listener-state'
+import type { HookListenerState } from '../../agent-hook-listener/listener-state'
+import { admitLegacyAgentStatus } from '../../agent-hook-listener/listener-legacy-agent-status'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from './agent-status-legacy-adapter'
 
 export function cacheRelayLegacyAgentStatus(

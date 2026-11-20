@@ -1,8 +1,5 @@
-import {
-  admitLegacyAgentStatus,
-  clearPaneCacheState,
-  type HookListenerState
-} from '../listener-state'
+import { clearPaneCacheState, type HookListenerState } from '../listener-state'
+import { admitLegacyAgentStatus } from '../listener-legacy-agent-status'
 import type { AgentHookEventPayload } from '../listener-event'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../agent-status/transport/agent-status-legacy-adapter'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../agent-status/contracts/agent-status-freshness'

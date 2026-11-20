@@ -15,7 +15,7 @@ import type {
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { mainAgentState } from '../../../shared/agent-status/lifecycle/main-agent-status'
 import { previousCodexTurnContext } from '../../../shared/agent-hook-listener/providers/codex/codex-session-start'
-import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
+import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-legacy-agent-status'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
 import { AgentHookServerStatusDisposition } from './server-status-disposition'

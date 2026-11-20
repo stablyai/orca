@@ -1,10 +1,10 @@
 import { AgentHookServerPaneSleep } from './server-pane-sleep'
 import type { AgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
+import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
 import {
   admitLegacyAgentStatus,
-  clearPaneCacheState,
   deleteLegacyAgentStatus
-} from '../../../shared/agent-hook-listener/listener-state'
+} from '../../../shared/agent-hook-listener/listener-legacy-agent-status'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import type { AgentStatusCacheIdentity } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
