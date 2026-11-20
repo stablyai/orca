@@ -98,7 +98,8 @@ export function discardAntigravityDone(
 ): void {
   if (
     applied?.payload.agentType === 'antigravity' &&
-    (incoming.hasExplicitPrompt ||
+    // A prompt the apply rejected leaves the old row (and prompt), so its parked done stays.
+    ((incoming.hasExplicitPrompt && applied.payload.prompt === incoming.payload.prompt) ||
       applied.payload.state === 'done' ||
       applied.payload.mainAgent?.state !== 'done')
   ) {

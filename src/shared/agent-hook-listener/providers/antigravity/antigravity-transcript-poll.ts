@@ -122,6 +122,7 @@ export function pollAntigravityTranscriptStatus(
   if (reads.leadModel && (pane.leadModel === undefined || pane.leadModelAuto)) {
     pane.leadModel = reads.leadModel
   }
+  const proven: string[] = []
   for (const { child, revision, metadata, model } of reads.children) {
     if (pane.children.get(child.id) !== child || child.revision !== revision) {
       continue
@@ -137,7 +138,7 @@ export function pollAntigravityTranscriptStatus(
       child.model =
         metadata.model ?? (child.modelAuto ? (model ?? child.model) : (child.model ?? model))
       if (child.stopped) {
-        retireAntigravityChild(pane, child.id)
+        proven.push(child.id)
       }
     } else if (child.stopped) {
       retireAntigravityChild(pane, child.id)
@@ -145,5 +146,9 @@ export function pollAntigravityTranscriptStatus(
   }
   pane.dirty = false
   const payload = buildAntigravityFoldedStatusPayload(state, original.paneKey, pane, Date.now())
+  // Publish a child proven after it stopped once, so relayed receivers also see it end.
+  for (const id of proven) {
+    retireAntigravityChild(pane, id)
+  }
   return payload ? { ...original, hookEventName: undefined, payload } : undefined
 }
