@@ -77,29 +77,35 @@ function serverStatus(older: boolean): RuntimeEnvironmentStatus {
 
 const LONG_NAME = 'Atlas Research and Release Coordination Assistant'
 
-type HomeSceneOptions = { older?: boolean; name?: string; expect?: 'hidden' | 'visible' }
+type BotChatSceneOptions = {
+  side?: boolean
+  older?: boolean
+  name?: string
+  expect?: 'hidden' | 'visible'
+}
 
-function homeScene(
+function botChatScene(
   hostId: ExecutionHostId,
   width: number,
-  { older = false, name = bot.name, expect = 'hidden' }: HomeSceneOptions = {}
+  { side = false, older = false, name = bot.name, expect = 'hidden' }: BotChatSceneOptions = {}
 ) {
   const ruled = hostId === 'local' || !older
   const sceneBot: Bot = { ...bot, name }
+  const label = side ? 'Release notes' : 'Home'
   const tab: Tab & { contentType: 'agent-session' } = {
     id: 'fixture-home-tab',
-    entityId: 'fixture-home',
+    entityId: side ? 'fixture-side' : 'fixture-home',
     worktreeId: HOME,
     executionHostId: hostId,
     groupId: 'fixture-home-group',
     contentType: 'agent-session',
     agentSessionAgent: 'claude',
-    label: 'Home',
-    customLabel: 'Home',
+    label,
+    customLabel: label,
     color: null,
     sortOrder: 0,
     createdAt: 1,
-    isPinned: ruled
+    isPinned: ruled && !side
   }
   return defineFixture({
     width: width + 32,
@@ -225,12 +231,15 @@ function homeScene(
   })
 }
 
-export const localHomeHiddenAt260 = homeScene('local', 264)
-export const localHomeShortName = homeScene('local', 720, { name: 'Atlas', expect: 'visible' })
-export const localHomeLongName = homeScene('local', 720, { name: LONG_NAME, expect: 'visible' })
-export const localHomeNarrowLongName = homeScene('local', 300, {
+export const localHomeHiddenAt260 = botChatScene('local', 264)
+export const localHomeShortName = botChatScene('local', 720, { name: 'Atlas', expect: 'visible' })
+export const localHomeLongName = botChatScene('local', 720, { name: LONG_NAME, expect: 'visible' })
+export const localHomeNarrowLongName = botChatScene('local', 300, {
   name: LONG_NAME,
   expect: 'visible'
 })
-export const pairedHome = homeScene(PAIRED_HOST, 720)
-export const pairedHomeOlderServer = homeScene(PAIRED_HOST, 720, { older: true })
+export const pairedHome = botChatScene(PAIRED_HOST, 720)
+export const pairedHomeOlderServer = botChatScene(PAIRED_HOST, 720, { older: true })
+
+export const localSideChat = botChatScene('local', 720, { side: true, expect: 'visible' })
+export const pairedSideChat = botChatScene(PAIRED_HOST, 720, { side: true })

@@ -4,6 +4,8 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { NativeChatVisualOwnerContext } from './media/visuals/native-chat-visual-owner'
+import { NativeChatPaneHeader } from './pane/actions/NativeChatPaneHeader'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 
@@ -22,7 +24,7 @@ function botNamed(name: string): Bot {
     slack: null,
     linear: null,
     github: null,
-    chatSessionId: null,
+    chatSessionId: 'fixture',
     createdAt: 1,
     updatedAt: 1
   }
@@ -32,6 +34,21 @@ const OWNER = {
   target: { kind: 'local' as const },
   sessionId: 'fixture',
   worktreeId: folderWorkspaceKey('fw-reviewer')
+}
+
+const tab: Tab = {
+  id: 'fixture-intro-tab',
+  entityId: OWNER.sessionId,
+  worktreeId: OWNER.worktreeId,
+  executionHostId: 'local',
+  groupId: 'fixture-group',
+  contentType: 'agent-session',
+  agentSessionAgent: 'claude',
+  label: 'Home',
+  customLabel: null,
+  color: null,
+  sortOrder: 0,
+  createdAt: 1
 }
 
 const STARTED_AT = new Date().setHours(8, 50, 0, 0)
@@ -82,7 +99,15 @@ function Chat({ intro }: { intro: string }): React.JSX.Element {
   }
   return (
     <NativeChatVisualOwnerContext.Provider value={OWNER}>
-      <div className="native-chat-appearance flex h-[460px] flex-col bg-background">
+      <div className="native-chat-appearance relative flex h-[460px] flex-col bg-background">
+        <NativeChatPaneHeader
+          tabId={tab.id}
+          worktreeId={OWNER.worktreeId}
+          groupId={tab.groupId}
+          nativeChat={{ sessionId: OWNER.sessionId, agent: 'claude' }}
+          focused
+          colorScheme={undefined}
+        />
         <NativeChatMessageList
           session={session}
           isWorking={false}
@@ -99,29 +124,24 @@ function Chat({ intro }: { intro: string }): React.JSX.Element {
   )
 }
 
-const SHORT = botNamed('Eng - Reviewer')
+const SHORT = botNamed('Atlas')
 const LONG = botNamed('Engineering Reviewer for the Payments and Billing Platform Team')
 const GREETING = 'Hi! What should I review first?'
 const OLD_GREETING =
-  "Hi, I'm Eng - Reviewer. Alex shared the link that set me up to run technical design and code review for your engineering bots: I chair the review councils, give evidence-backed verdicts on PRs, and keep a single record of findings. What should I review first?"
+  "Hi, I'm Atlas. Alex shared the link that set me up to run technical design and code review for your engineering bots: I chair the review councils, give evidence-backed verdicts on PRs, and keep a single record of findings. What should I review first?"
 
-// A new bot's Chat: its pill header, start time, one-line greeting, then a later turn as usual.
-export const intro = defineFixture({
-  width: 640,
-  setup: () => stubBots([SHORT]),
-  render: () => <Chat intro={GREETING} />
-})
+function introScene(width: number, bot: Bot, greeting = GREETING) {
+  return defineFixture({
+    width,
+    store: {
+      workspaceSessionReady: true,
+      unifiedTabsByWorktree: { [OWNER.worktreeId]: [tab] }
+    },
+    setup: () => stubBots([bot]),
+    render: () => <Chat intro={greeting} />
+  })
+}
 
-// The narrowest pane with the longest name: the pill truncates it.
-export const introNarrowLongName = defineFixture({
-  width: 300,
-  setup: () => stubBots([LONG]),
-  render: () => <Chat intro={GREETING} />
-})
-
-// The greeting a bot from a shared link gave before its first-run rules were tightened.
-export const introLongGreeting = defineFixture({
-  width: 640,
-  setup: () => stubBots([SHORT]),
-  render: () => <Chat intro={OLD_GREETING} />
-})
+export const intro = introScene(640, SHORT)
+export const introNarrowLongName = introScene(300, LONG)
+export const introLongGreeting = introScene(640, SHORT, OLD_GREETING)
