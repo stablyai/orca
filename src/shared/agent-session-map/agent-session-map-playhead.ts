@@ -81,10 +81,15 @@ function lastFailedTerminalAt(
   return false
 }
 
-/** The session moved on: another node has a dated event after this node's last row. */
-function sessionMovedOn(timeline: readonly AgentMapTimelineEvent[], node: AgentMapNode): boolean {
+/** The session moved on: another node has a dated event after this node's last row,
+ *  counting only events at or before the cursor so a scrubbed view sees the past. */
+function sessionMovedOn(
+  timeline: readonly AgentMapTimelineEvent[],
+  node: AgentMapNode,
+  cursor: number
+): boolean {
   for (const event of timeline) {
-    if (event.nodeId !== node.id && event.ts > node.lastTs) {
+    if (event.nodeId !== node.id && event.ts <= cursor && event.ts > node.lastTs) {
       return true
     }
   }
@@ -125,7 +130,7 @@ function nodeStatusAt(map: AgentMap, node: AgentMapNode, cursor: number): AgentM
     if (lastFailedTerminalAt(map.timeline, node.id, cursor)) {
       return 'failed'
     }
-    if (sessionMovedOn(map.timeline, node)) {
+    if (sessionMovedOn(map.timeline, node, cursor)) {
       return 'done'
     }
   }
@@ -178,7 +183,11 @@ export function mapStateAt(map: AgentMap, ts: number | null): AgentMapViewState 
       failedToolCount,
       promptCount: promptCountAt(map.timeline, node.id, cursor),
       ...(waitingOn === undefined ? {} : { waitingOn }),
-      ...(node.lastStatusText === undefined ? {} : { lastStatusText: node.lastStatusText })
+      // A status row written after the scrubbed moment is the future, not the view.
+      ...(node.lastStatusText === undefined ||
+      (node.lastStatusTs !== undefined && node.lastStatusTs > cursor)
+        ? {}
+        : { lastStatusText: node.lastStatusText })
     })
   }
   const activeNodeIds = nodes

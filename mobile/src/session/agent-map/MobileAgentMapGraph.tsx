@@ -167,7 +167,8 @@ function MapNode(args: {
     <G
       transform={`translate(${x - AGENT_MAP_NODE_WIDTH / 2}, ${y - AGENT_MAP_NODE_HEIGHT / 2})`}
       onPress={onSelect}
-      accessibilityRole="button"
+      // No accessibilityRole="button": react-native-web would swap the SVG `g`
+      // for a `button`, which is not an SVG graphics container.
       accessibilityLabel={`${label} — ${statusLabel(status, t)}`}
     >
       {selected && (

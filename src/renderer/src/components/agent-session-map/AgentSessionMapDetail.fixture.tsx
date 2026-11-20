@@ -40,6 +40,7 @@ const node: AgentMapNode = {
   ],
   requests: [
     {
+      itemId: 'item-9',
       kind: 'question',
       detail: 'Which token format should the refactor keep?',
       resolution: 'pending',

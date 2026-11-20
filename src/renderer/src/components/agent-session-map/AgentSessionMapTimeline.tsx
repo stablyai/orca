@@ -2,17 +2,18 @@ import type { AgentMapTimelineEvent } from '../../../../shared/agent-session-map
 import { useTranslate } from '@/i18n/use-translate'
 
 /** The time scrubber: drag to replay the session up to a moment; the far right is the
- *  live edge (follow). Scrubbing is indexed over the timeline so the thumb lands on
- *  real events; the last stop is "live". */
+ *  live edge (follow). The playhead is an index into the timeline, not a timestamp:
+ *  duplicate event timestamps would make a ts round-trip lossy and stick the
+ *  keyboard slider. */
 export function AgentSessionMapTimeline({
   timeline,
-  playheadTs,
+  playheadIndex,
   onScrub
 }: {
   timeline: AgentMapTimelineEvent[]
   /** null = live edge (follow the newest event). */
-  playheadTs: number | null
-  onScrub: (ts: number | null) => void
+  playheadIndex: number | null
+  onScrub: (index: number | null) => void
 }) {
   const t = useTranslate()
   const liveLabel = t('components.agentSessionMap.timeline.live', 'Live')
@@ -21,10 +22,8 @@ export function AgentSessionMapTimeline({
     'Session time scrubber'
   )
   const lastIndex = timeline.length - 1
-  const isLive = playheadTs === null
-  const cursor = isLive ? (timeline[lastIndex]?.ts ?? 0) : playheadTs
-
-  const value = lastIndex < 0 ? 0 : isLive ? lastIndex : nearestIndexAtOrBefore(timeline, cursor)
+  const isLive = playheadIndex === null
+  const value = lastIndex < 0 ? 0 : isLive ? lastIndex : Math.min(playheadIndex, lastIndex)
 
   const handleInput = (raw: number): void => {
     if (lastIndex < 0) {
@@ -34,7 +33,7 @@ export function AgentSessionMapTimeline({
       onScrub(null)
       return
     }
-    onScrub(timeline[raw]?.ts ?? null)
+    onScrub(raw)
   }
 
   return (
@@ -94,16 +93,4 @@ function markerClass(event: AgentMapTimelineEvent): string {
     return 'bg-amber-500'
   }
   return 'bg-muted-foreground/40'
-}
-
-function nearestIndexAtOrBefore(timeline: AgentMapTimelineEvent[], ts: number): number {
-  let index = 0
-  for (let i = 0; i < timeline.length; i++) {
-    if (timeline[i]?.ts <= ts) {
-      index = i
-    } else {
-      break
-    }
-  }
-  return index
 }

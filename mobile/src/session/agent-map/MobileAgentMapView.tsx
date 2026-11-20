@@ -76,6 +76,9 @@ export function MobileAgentMapView(args: {
         : null,
     [graphWidth, map]
   )
+  // The inner (vertical) scroll is as wide as the wider of viewport and canvas,
+  // so a wide canvas scrolls horizontally instead of clipping.
+  const graphInnerWidth = Math.max(width, layout?.width ?? 0) || undefined
   const viewState: AgentMapViewState | null = useMemo(
     () => (map ? mapStateAt(map, playheadTs) : null),
     [map, playheadTs]
@@ -95,7 +98,9 @@ export function MobileAgentMapView(args: {
   const isLive = playheadTs === null
   const value =
     lastIndex < 0 ? 0 : isLive ? lastIndex : nearestIndexAtOrBefore(timeline, playheadTs)
-  const thumbX = lastIndex < 0 || trackWidth <= 0 ? 0 : (value / lastIndex) * trackWidth
+  // lastIndex 0 (single event) would divide by zero; empty and single-event
+  // timelines both pin the thumb to the start.
+  const thumbX = lastIndex <= 0 || trackWidth <= 0 ? 0 : (value / lastIndex) * trackWidth
 
   const scrubAt = (locationX: number): void => {
     if (lastIndex < 0 || trackWidth <= 0) {
@@ -140,25 +145,34 @@ export function MobileAgentMapView(args: {
           <X size={18} color={colors.textSecondary} />
         </Pressable>
       </View>
+      {/* The layout can be wider than the screen (side-by-side sub-agents): the
+          outer scroll provides the horizontal axis, the inner one the vertical. */}
       <ScrollView
+        horizontal
         style={styles.graphScroll}
-        contentContainerStyle={styles.graphContent}
+        contentContainerStyle={styles.graphOuter}
         onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-        alwaysBounceVertical={false}
+        alwaysBounceHorizontal={false}
       >
-        {map && layout && viewState ? (
-          <MobileAgentMapGraph
-            map={map}
-            layout={layout}
-            viewState={viewState}
-            selectedNodeId={selectedNodeId}
-            onSelectNode={(id) => setSelectedNodeId((prev) => (prev === id ? null : id))}
-          />
-        ) : (
-          <Text style={styles.empty}>
-            {t('session.agentMap.empty', 'No agent session in this pane')}
-          </Text>
-        )}
+        <ScrollView
+          style={[styles.graphInner, { width: graphInnerWidth }]}
+          contentContainerStyle={styles.graphContent}
+          alwaysBounceVertical={false}
+        >
+          {map && layout && viewState ? (
+            <MobileAgentMapGraph
+              map={map}
+              layout={layout}
+              viewState={viewState}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={(id) => setSelectedNodeId((prev) => (prev === id ? null : id))}
+            />
+          ) : (
+            <Text style={styles.empty}>
+              {t('session.agentMap.empty', 'No agent session in this pane')}
+            </Text>
+          )}
+        </ScrollView>
       </ScrollView>
       {map && (
         <View style={styles.scrubber}>
@@ -275,6 +289,8 @@ const styles = themedStyleSheet(() => ({
     flexShrink: 1
   },
   graphScroll: { flex: 1 },
+  graphOuter: { flexGrow: 1, justifyContent: 'center' },
+  graphInner: { height: '100%' },
   graphContent: { alignItems: 'center', justifyContent: 'center', padding: 16 },
   empty: { color: colors.textMuted, fontSize: 14, padding: 24 },
   scrubber: {

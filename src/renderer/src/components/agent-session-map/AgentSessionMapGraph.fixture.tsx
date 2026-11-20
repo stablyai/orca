@@ -104,6 +104,10 @@ function renderMap(playheadTs: number | null): React.JSX.Element {
   const map = buildAgentSessionMap(syntheticJournal())
   const layout = layoutAgentMap(map, 720, { chipRowHeight: 20 })
   const viewState = mapStateAt(map, playheadTs)
+  const playheadIndex =
+    playheadTs === null
+      ? null
+      : map.timeline.reduce((acc, event, i) => (event.ts <= playheadTs ? i : acc), 0)
   return (
     <div className="flex h-full w-full flex-col bg-background">
       <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto">
@@ -112,7 +116,7 @@ function renderMap(playheadTs: number | null): React.JSX.Element {
       <div className="border-t border-border px-4 py-3">
         <AgentSessionMapTimeline
           timeline={map.timeline}
-          playheadTs={playheadTs}
+          playheadIndex={playheadIndex}
           onScrub={() => {}}
         />
       </div>

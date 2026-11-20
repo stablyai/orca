@@ -15,6 +15,9 @@ export function MobileAgentMapOverlay(args: {
   }
   return (
     <MobileAgentMapView
+      // A session change must remount the view: the previous session's scrub
+      // position and node selection must not apply to the new one.
+      key={JSON.stringify([tab.id, agentMap.activeMapSessionId])}
       client={client}
       connected={controller.connState === 'connected'}
       agent={tab.type === 'agent-session' ? tab.agent : null}

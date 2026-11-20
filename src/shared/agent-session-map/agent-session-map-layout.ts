@@ -159,10 +159,13 @@ export function layoutAgentMap(
   const span = maxX - minX
   // Positions are node centers, so the usable band is inset by half a node on each side.
   const insetX = padding + nodeWidth / 2
-  const available = Math.max(1, width - insetX * 2)
+  // Never scale below 1: a wide tree keeps its natural spacing and the canvas grows
+  // instead, so the surface scrolls rather than overlapping nodes.
+  const canvasWidth = Math.max(width, insetX * 2 + span)
+  const available = Math.max(1, canvasWidth - insetX * 2)
   // Collapse to the center when there is a single node; otherwise scale to fit.
   const scale = span === 0 ? 0 : available / span
-  const center = width / 2
+  const center = canvasWidth / 2
   const insetY = padding + maxNodeHeight / 2
 
   const positions = new Map<AgentMapNodeId, AgentMapNodePosition>()
@@ -192,5 +195,5 @@ export function layoutAgentMap(
   }
 
   const height = padding * 2 + maxNodeHeight + maxDepth * levelHeight
-  return { positions, edges, width, height }
+  return { positions, edges, width: canvasWidth, height }
 }
