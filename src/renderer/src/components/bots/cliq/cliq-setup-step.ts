@@ -46,7 +46,12 @@ export function botCliqSetupStep(
   const linkedOrg = connect.status === 'linked' ? connect.link.org?.orgId : undefined
   if (choice.target !== null) {
     // A repair keeps its row's organization: a sign-in that reached another one never replaces it.
-    const org = orgs.find((entry) => entry.orgId === choice.target)
+    // A sign-in this trip that reached another organization failed the repair, even when the
+    // row's own (expired) sign-in is still listed.
+    const org =
+      linkedOrg === undefined || linkedOrg === choice.target
+        ? orgs.find((entry) => entry.orgId === choice.target)
+        : undefined
     if (org) {
       return org.expired ? { kind: 'expired', org } : { kind: 'turn-on', org }
     }
