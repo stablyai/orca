@@ -1,9 +1,8 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { BOT_MCP_APPS } from '../../../../../shared/bots/bot-mcp-apps'
-import type { Bot } from '../../../../../shared/bot-types'
-import { DIRECT_APPS } from './bot-app-catalog'
+import { BOT_MCP_APPS, botMcpAppUrlTag } from '../../../../../shared/bots/bot-mcp-apps'
 import { BotAppBrandLogo } from './BotAppBrandLogo'
-import { DirectAppRow, type DirectRow } from './BotAppsRows'
+import { BotAppRow } from './BotAppRow'
+import { ManageButton } from './BotAppsRows'
 import { BotAppStepHeader } from './BotAppStepParts'
 import { BotAppUrlVariableForm } from './BotAppUrlVariableForm'
 
@@ -56,19 +55,19 @@ export const onBotTags = defineFixture({
   render: () => (
     <ul className="flex flex-col rounded-xl border bg-card p-2">
       {[
-        ['datadog', 'EU'],
-        ['gitlab', 'gitlab.acme.dev'],
-        ['sentry', undefined]
-      ].map(([id, tag]) => {
-        const app = DIRECT_APPS.find((entry) => entry.route === 'mcp' && entry.id === id)!
+        { id: 'datadog', url: 'https://mcp.datadoghq.eu/v1/mcp' },
+        { id: 'gitlab', url: 'https://gitlab.acme.dev/api/v4/mcp' },
+        { id: 'sentry', url: 'https://mcp.sentry.dev/mcp' }
+      ].map(({ id, url }) => {
+        const app = BOT_MCP_APPS.find((entry) => entry.id === id)!
         return (
-          <DirectAppRow
+          <BotAppRow
             key={id}
-            bot={{ id: 'bot-builder', hostId: 'local', name: 'Bot builder' } as Bot}
-            row={{ app, name: (app as { name: string }).name, added: true, tag } as DirectRow}
-            onAdd={() => {}}
-            onAnother={() => {}}
-            onManage={() => {}}
+            logo={<BotAppBrandLogo app={app} />}
+            name={app.name}
+            tag={botMcpAppUrlTag(app, url) ?? undefined}
+            line={app.line}
+            action={<ManageButton name={app.name} onClick={() => {}} />}
           />
         )
       })}
