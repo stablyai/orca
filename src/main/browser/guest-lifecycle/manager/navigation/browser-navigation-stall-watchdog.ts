@@ -13,6 +13,10 @@ import {
 /** Long enough that a slow server or a cold dev-server compile isn't called stuck. */
 export const BROWSER_LOAD_STALL_AFTER_MS = 5_000
 
+// After a main-frame failure, how long to wait for the main frame to go idle (20 × 50 ms).
+const FAILURE_IDLE_CHECKS = 20
+const FAILURE_IDLE_CHECK_MS = 50
+
 type PendingLoad = {
   origin: string
   url: URL
@@ -214,8 +218,8 @@ export function installBrowserNavigationStallWatchdog(
     }
   }
   // A failure can belong to a navigation this one replaced (e.g. a delayed extension block), so
-  // it ends the watch only if the main frame is idle afterwards; loading iframes can delay
-  // did-stop-loading indefinitely.
+  // it ends the watch only once the main frame goes idle; loading iframes can delay
+  // did-stop-loading indefinitely, and cancellation can finish a few ticks after the failure.
   const failed = (
     _event: Electron.Event,
     _code: number,
@@ -227,12 +231,18 @@ export function installBrowserNavigationStallWatchdog(
     if (!isMainFrame || !load) {
       return
     }
-    const check = setTimeout(() => {
-      if (pending === load && !guest.isDestroyed() && !guest.isLoadingMainFrame()) {
-        finish('failed')
+    let checksLeft = FAILURE_IDLE_CHECKS
+    const check = (): void => {
+      if (pending !== load || guest.isDestroyed()) {
+        return
       }
-    }, 0)
-    check.unref?.()
+      if (!guest.isLoadingMainFrame()) {
+        finish('failed')
+      } else if (--checksLeft > 0) {
+        setTimeout(check, FAILURE_IDLE_CHECK_MS).unref?.()
+      }
+    }
+    setTimeout(check, 0).unref?.()
   }
   const closed = (): void => finish('closed')
 

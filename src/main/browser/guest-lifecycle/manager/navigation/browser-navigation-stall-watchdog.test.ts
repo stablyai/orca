@@ -77,3 +77,20 @@ it('keeps watching a same-URL load when an earlier attempt fails after another p
   ])
   dispose()
 })
+
+it('ends a failed load whose main frame goes idle a few ticks after the failure', () => {
+  const guest = fakeGuest()
+  const { reports, dispose } = watch(guest)
+  startNavigation(guest, 'http://blocked.test/')
+  vi.advanceTimersByTime(BROWSER_LOAD_STALL_AFTER_MS)
+  expect(reports).toEqual([
+    { phase: 'no-request-seen', host: 'blocked.test', hiddenSameOriginPages: 0 }
+  ])
+  // An iframe keeps the page loading, so no did-stop-loading follows the cancellation.
+  lateBlock(guest, 'http://blocked.test/')
+  vi.advanceTimersByTime(0)
+  guest.loadingMainFrame = false
+  vi.advanceTimersByTime(100)
+  expect(reports.at(-1)).toBeNull()
+  dispose()
+})
