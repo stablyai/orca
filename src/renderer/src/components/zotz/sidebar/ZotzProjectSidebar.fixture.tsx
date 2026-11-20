@@ -112,6 +112,40 @@ export const remoteProjects = defineFixture({
   )
 })
 
+export const archivedMain = defineFixture({
+  width: 300,
+  setup: () => {
+    Object.assign(window.api, {
+      zotzAgentQueue: {
+        onChanged: () => () => {},
+        snapshot: async () => EMPTY_ZOTZ_AGENT_QUEUE_SNAPSHOT
+      }
+    })
+  },
+  store: {
+    repos: [rodri],
+    runtimeEnvironments: [msiRuntime],
+    worktreesByRepo: {
+      rodri: [
+        worktree('rodri', 'main', 'rodri', { isMainWorktree: true, isArchived: true }),
+        worktree('rodri', 'feature', 'tarpon', { isArchived: true }),
+        worktree('rodri', 'wip', 'Conversación activa')
+      ]
+    }
+  },
+  interact: async (frame) => {
+    const toggle = [...frame.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Archived')
+    )
+    toggle?.click()
+  },
+  render: () => (
+    <div className="flex h-[300px] flex-col bg-worktree-sidebar">
+      <ZotzProjectSidebar />
+    </div>
+  )
+})
+
 const queuedWorktree = worktree('zotz', 'memory-limiter', 'Indicador de la cola')
 
 export const queuedConversation = defineFixture({

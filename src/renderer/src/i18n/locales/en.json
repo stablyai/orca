@@ -25958,6 +25958,7 @@
       "conversationActions": "Conversation actions",
       "archivedMerged": "Merged and archived: {{name}}",
       "viewArchived": "View archived",
+      "archiveFailed": "Could not archive: {{error}}",
       "archivedTitle": "Archived",
       "restore": "Restore {{name}}"
     },
