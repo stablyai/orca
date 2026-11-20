@@ -61,11 +61,16 @@ function hostPublishesQueue(
 }
 
 /** True when the server can also cancel or force a queued launch, so its buttons may show here. */
+export function selectZotzHostQueueControllable(
+  state: ReturnType<typeof useAppStore.getState>,
+  environmentId: string
+): boolean {
+  return hostDeclares(state, environmentId, ZOTZ_AGENT_QUEUE_CONTROL_RUNTIME_CAPABILITY)
+}
+
 export function useZotzHostQueueControllable(environmentId: string | null): boolean {
   return useAppStore(
-    (state) =>
-      environmentId !== null &&
-      hostDeclares(state, environmentId, ZOTZ_AGENT_QUEUE_CONTROL_RUNTIME_CAPABILITY)
+    (state) => environmentId !== null && selectZotzHostQueueControllable(state, environmentId)
   )
 }
 

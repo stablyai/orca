@@ -25927,7 +25927,8 @@
         "title": "Agent queue",
         "description": "Each machine has its own memory: its agents start when they fit there, the rest wait their turn.",
         "gbAmount": "{{gb}} GB",
-        "gbEstimate": "~{{gb}} GB"
+        "gbEstimate": "~{{gb}} GB",
+        "close": "Close"
       },
       "segment": {
         "withQueue": "{{free}} GB free · {{queued}} queued",
@@ -25944,9 +25945,6 @@
       "queuedFor": "Queued · {{minutes}} min",
       "machines": {
         "thisDevice": "This device",
-        "queued": "{{count}} queued",
-        "working": "{{count}} working",
-        "review": "{{count}} to review",
         "readOnly": "Update Zotz on {{host}} to cancel or launch its waits from here."
       }
     },

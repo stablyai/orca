@@ -1,7 +1,6 @@
 import type { ZotzAgentQueueSnapshot } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue-snapshot'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { ZotzAgentQueueBoard } from './ZotzAgentQueueBoard'
-import { ZotzAgentQueueMachineLane } from './ZotzAgentQueueMachineLane'
+import { ZotzAgentQueueBoard, type ZotzAgentQueueMachine } from './ZotzAgentQueueBoard'
 
 const GB = 1024 ** 3
 const MIN = 60_000
@@ -109,82 +108,60 @@ const SNAPSHOT: ZotzAgentQueueSnapshot = {
   ]
 }
 
-export const busyEvening = defineFixture({
-  width: 1000,
-  render: () => (
+const actions = { onCancel: () => {}, onForceStart: () => {} }
+
+const MSI: ZotzAgentQueueMachine = {
+  hostId: 'runtime:msi',
+  name: 'MSI Server',
+  isThisDevice: false,
+  snapshot: SNAPSHOT,
+  ...actions
+}
+
+// The Mac with one agent working and one waiting on Hugo.
+const LAPTOP: ZotzAgentQueueMachine = {
+  hostId: 'local',
+  name: 'Local Mac',
+  isThisDevice: true,
+  snapshot: {
+    memory: {
+      totalBytes: 24 * GB,
+      availableBytes: 12.5 * GB,
+      pressure: 'ok',
+      minFreeBytes: 3.6 * GB,
+      perAgentMaxBytes: 6 * GB,
+      sampledAt: NOW
+    },
+    running: [
+      { ...SNAPSHOT.running[0], paneKey: 'mac-1', worktreeId: 'zotz-cola' },
+      { ...SNAPSHOT.running[2], paneKey: 'mac-2', worktreeId: 'zotz-chat' }
+    ],
+    done: [],
+    canceled: [],
+    queued: [{ ...SNAPSHOT.queued[0], id: 'mac-q1', label: 'zotz-docs', position: 1 }]
+  },
+  ...actions
+}
+
+function board(machines: ZotzAgentQueueMachine[]): React.JSX.Element {
+  return (
     <ZotzAgentQueueBoard
-      snapshot={SNAPSHOT}
+      machines={machines}
       now={NOW}
       workspaceName={(id) => id ?? ''}
-      onForceStart={() => {}}
-      onCancel={() => {}}
       onOpenPane={() => {}}
     />
   )
+}
+
+export const busyEvening = defineFixture({
+  width: 1000,
+  render: () => board([{ ...MSI, isThisDevice: true, hostId: 'local' }])
 })
 
-// The Mac with one chat working and one waiting on Hugo; the MSI with its own line.
-const LAPTOP: ZotzAgentQueueSnapshot = {
-  memory: {
-    totalBytes: 24 * GB,
-    availableBytes: 12.5 * GB,
-    pressure: 'ok',
-    minFreeBytes: 3.6 * GB,
-    perAgentMaxBytes: 6 * GB,
-    sampledAt: NOW
-  },
-  running: SNAPSHOT.running.slice(0, 1).concat(SNAPSHOT.running.slice(2)),
-  done: [],
-  canceled: [],
-  queued: []
-}
-
-const IDLE_SERVER: ZotzAgentQueueSnapshot = { ...LAPTOP, running: [], done: [], queued: [] }
-
-function machineLanes(serverControllable: boolean): React.JSX.Element {
-  const shared = { now: NOW, onOpenPane: () => {} }
-  const actions = { onCancel: () => {}, onForceStart: () => {} }
-  return (
-    <div className="space-y-2">
-      <ZotzAgentQueueMachineLane
-        {...shared}
-        machine={{
-          hostId: 'local',
-          name: 'Local Mac',
-          isThisDevice: true,
-          snapshot: LAPTOP,
-          workspaceName: (id) => id ?? '',
-          ...actions
-        }}
-      />
-      <ZotzAgentQueueMachineLane
-        {...shared}
-        machine={{
-          hostId: 'runtime:msi',
-          name: 'MSI Server',
-          isThisDevice: false,
-          snapshot: SNAPSHOT,
-          workspaceName: (id) => id ?? '',
-          ...(serverControllable ? actions : {})
-        }}
-      />
-      <ZotzAgentQueueMachineLane
-        {...shared}
-        machine={{
-          hostId: 'runtime:avena',
-          name: 'Avena',
-          isThisDevice: false,
-          snapshot: IDLE_SERVER,
-          workspaceName: (id) => id ?? ''
-        }}
-      />
-    </div>
-  )
-}
-
-export const machines = defineFixture({ width: 1000, render: () => machineLanes(true) })
+export const machines = defineFixture({ width: 1100, render: () => board([LAPTOP, MSI]) })
 
 export const machinesReadOnlyServer = defineFixture({
-  width: 1000,
-  render: () => machineLanes(false)
+  width: 1100,
+  render: () => board([LAPTOP, { ...MSI, onCancel: undefined, onForceStart: undefined }])
 })

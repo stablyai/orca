@@ -27,6 +27,7 @@ import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
 import { WorktreeCardsUpdateNotice } from './WorktreeCardsUpdateNotice'
 import { isZotzConductorSidebar } from '../../../../shared/zotz/zotz-sidebar-layout'
 import { isZotzAutomatedLaunch } from '../zotz/zotz-machine-mode-wizard-event'
+import { useZotzAgentQueueDrawerOpen } from '../zotz/agent-queue/zotz-agent-queue-drawer-open'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
@@ -48,6 +49,9 @@ const ForgetSshWorkspaceDialog = lazyWithRetry(
   () => import('./workspace-actions/deletion/ForgetSshWorkspaceDialog')
 )
 const AgentDashboardSidebarHost = lazyWithRetry(() => import('./AgentDashboardSidebarHost'))
+const ZotzAgentQueueSidebarHost = lazyWithRetry(
+  () => import('../zotz/agent-queue/ZotzAgentQueueSidebarHost')
+)
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -161,8 +165,11 @@ function Sidebar({
     onDraftWidthChange: setSidebarLiveWidth
   })
 
+  const zotzAgentQueueOpen = useZotzAgentQueueDrawerOpen()
   const drawerCoversSeam =
-    workspaceBoardRenderedOpen || (showAgentDashboard && agentDashboardDrawerOpen)
+    workspaceBoardRenderedOpen ||
+    (showAgentDashboard && agentDashboardDrawerOpen) ||
+    zotzAgentQueueOpen
 
   useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
   // A collapsed sidebar takes no drops.
@@ -333,6 +340,14 @@ function Sidebar({
           />
         </React.Suspense>
       ) : null}
+      <React.Suspense fallback={null}>
+        <ZotzAgentQueueSidebarHost
+          workspaceBoardOpen={workspaceBoardOpen}
+          closeWorkspaceBoard={closeWorkspaceBoard}
+          leftSidebarStyle={leftSidebarStyle}
+          statusBarVisible={statusBarVisible}
+        />
+      </React.Suspense>
     </TooltipProvider>
   )
 }

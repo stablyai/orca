@@ -24301,7 +24301,8 @@
         "title": "Cola de agentes",
         "description": "Cada máquina tiene su propia memoria: sus agentes arrancan cuando caben ahí y los demás esperan su turno.",
         "gbAmount": "{{gb}} GB",
-        "gbEstimate": "~{{gb}} GB"
+        "gbEstimate": "~{{gb}} GB",
+        "close": "Cerrar"
       },
       "segment": {
         "withQueue": "{{free}} GB libres · {{queued}} en cola",
@@ -24318,9 +24319,6 @@
       "queuedFor": "En cola · {{minutes}} min",
       "machines": {
         "thisDevice": "Este equipo",
-        "queued": "{{count}} en cola",
-        "working": "{{count}} trabajando",
-        "review": "{{count}} por revisar",
         "readOnly": "Actualiza Zotz en {{host}} para cancelar o lanzar sus esperas desde aquí."
       }
     },
