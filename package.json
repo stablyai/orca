@@ -386,7 +386,7 @@
     "unified": "^11.0.5",
     "unist-util-visit-parents": "6.0.2",
     "vite": "^8.3.6",
-    "vitest": "5.0.5",
+    "vitest": "5.1.0",
     "vscode-oniguruma": "^2.0.1",
     "zustand": "^5.1.0"
   },

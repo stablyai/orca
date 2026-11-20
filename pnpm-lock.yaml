@@ -222,7 +222,7 @@ patchedDependencies:
   picomatch@4.0.7: 7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c
   prosemirror-view@1.42.3: 3340ccbcc4e3302f3ae1c0eda3911015966add2e7e0df76abd89fbef4f3902f7
   sprintf-js@1.1.3: 05316a8b01f155fe19a1e0cb4042c81d43d798a76755c407684e1199a18b1e08
-  vitest@5.0.5: 166c034c864f98267e7d479f083b8d37ea9a7b08d6662313dd38e7c69c9a3eb4
+  vitest@5.1.0: 957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9
   ws@8.22.0: 9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14
 
 importers:
@@ -367,7 +367,7 @@ importers:
         version: 3.14.13(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)
       '@testing-library/jest-dom':
         specifier: ^6.9.1
-        version: 6.9.1(vitest@5.0.5(patch_hash=166c034c864f98267e7d479f083b8d37ea9a7b08d6662313dd38e7c69c9a3eb4)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))
+        version: 6.9.1(vitest@5.1.0(patch_hash=957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))
       '@testing-library/react':
         specifier: ^16.3.3
         version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)
@@ -702,8 +702,8 @@ importers:
         specifier: ^8.3.6
         version: 8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
       vitest:
-        specifier: 5.0.5
-        version: 5.0.5(patch_hash=166c034c864f98267e7d479f083b8d37ea9a7b08d6662313dd38e7c69c9a3eb4)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        specifier: 5.1.0
+        version: 5.1.0(patch_hash=957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       vscode-oniguruma:
         specifier: ^2.0.1
         version: 2.0.1
@@ -775,8 +775,8 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
       vitest:
-        specifier: 5.0.5
-        version: 5.0.5(patch_hash=166c034c864f98267e7d479f083b8d37ea9a7b08d6662313dd38e7c69c9a3eb4)(@opentelemetry/api@1.9.1)(@types/node@18.19.130)(happy-dom@21.0.4)(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.6(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        specifier: 5.1.0
+        version: 5.1.0(patch_hash=957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9)(@opentelemetry/api@1.9.1)(@types/node@18.19.130)(happy-dom@21.0.4)(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.6(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
 packages:
 
@@ -4664,8 +4664,8 @@ packages:
       oxc-transform-react:
         optional: true
 
-  '@vitest/mocker@5.0.5':
-    resolution: {integrity: sha512-xLL3lkDegJZw+MGoGaCCsFayDZthGgpAtr3Vziyfc4p7xH89K7KRPcRBBh/kEYm0Aqkt5DtTmkYpBtRV/FrHZg==}
+  '@vitest/mocker@5.1.0':
+    resolution: {integrity: sha512-5umB9/jlWcqVS6fsrFmv5Gdnpu6wAUio/lEOwAmvB7v+lFo/IW2B9FhAD0p19GCULTgMzLCdUmuCDCnAzWgppQ==}
     peerDependencies:
       '@types/msw': '*'
       '@types/vite': '*'
@@ -4681,8 +4681,8 @@ packages:
       vite:
         optional: true
 
-  '@vitest/spy@5.0.5':
-    resolution: {integrity: sha512-lwJRExuH417257Q5wv9QYugN9IMJkoxcrKrYxGPQkBzl7wlNpTUxD/5yNX4ESKVUIShKPgkGchYPFMWOOk0wzw==}
+  '@vitest/spy@5.1.0':
+    resolution: {integrity: sha512-2DPO5OMHWKrBngC+fCmTQqemNF0gidRhp3lxbBmRhW+M1XJrfgPpqNqWVevXtn2f2ufD5ZaR1B6B641aAlcX5A==}
 
   '@vscode/ripgrep-universal@1.18.0':
     resolution: {integrity: sha512-kgrAVy1L/v/8erAjo+I720ifTf7o4rvYUwgsuEu97XAEBtPT9sk3HhcSgFpxMydvNmwdJtXo9/AVee7JjocTrg==}
@@ -8185,8 +8185,8 @@ packages:
       yaml:
         optional: true
 
-  vitest@5.0.5:
-    resolution: {integrity: sha512-cPODOMF8YnkiiYtDdHo6n4wWmBrOBBbOIYH2d33M4l3CdNn72h+qMmO6uXffUN6A5AZFXNND/d+krS9mgkXRfg==}
+  vitest@5.1.0:
+    resolution: {integrity: sha512-MzmNFnrwa8v8lF1bLxw3UJ4EREwVOVb75VqJZmUDRjJ6EluK/x9th7qTbaeDk41WxE1GxWqmTXcdsfobfH5sOA==}
     engines: {node: ^22.12.0 || ^24.0.0 || >=26.0.0}
     hasBin: true
     peerDependencies:
@@ -8204,12 +8204,12 @@ packages:
       '@types/vitest__coverage-istanbul': '*'
       '@types/vitest__coverage-v8': '*'
       '@types/vitest__ui': '*'
-      '@vitest/browser-playwright': 5.0.5
-      '@vitest/browser-preview': 5.0.5
+      '@vitest/browser-playwright': 5.1.0
+      '@vitest/browser-preview': 5.1.0
       '@vitest/browser-webdriverio': ^5.0.0-beta.5 || >=5.0.0
-      '@vitest/coverage-istanbul': 5.0.5
-      '@vitest/coverage-v8': 5.0.5
-      '@vitest/ui': 5.0.5
+      '@vitest/coverage-istanbul': 5.1.0
+      '@vitest/coverage-v8': 5.1.0
+      '@vitest/ui': 5.1.0
       happy-dom: '*'
       jsdom: '*'
       vite: ^6.4.0 || ^7.0.0 || ^8.0.0
@@ -10925,7 +10925,7 @@ snapshots:
       picocolors: 1.1.1
       pretty-format: 27.5.1
 
-  '@testing-library/jest-dom@6.9.1(vitest@5.0.5(patch_hash=166c034c864f98267e7d479f083b8d37ea9a7b08d6662313dd38e7c69c9a3eb4)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))':
+  '@testing-library/jest-dom@6.9.1(vitest@5.1.0(patch_hash=957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))':
     dependencies:
       '@adobe/css-tools': 4.5.0
       '@types/aria-query': 5.0.4
@@ -10935,7 +10935,7 @@ snapshots:
       picocolors: 1.1.1
       redent: 3.0.0
     optionalDependencies:
-      vitest: 5.0.5(patch_hash=166c034c864f98267e7d479f083b8d37ea9a7b08d6662313dd38e7c69c9a3eb4)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      vitest: 5.1.0(patch_hash=957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
   '@testing-library/react@16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)':
     dependencies:
@@ -11535,27 +11535,27 @@ snapshots:
     optionalDependencies:
       oxc-transform-react: 0.152.0
 
-  '@vitest/mocker@5.0.5(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.6(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
+  '@vitest/mocker@5.1.0(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.6(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
-      '@vitest/spy': 5.0.5
+      '@vitest/spy': 5.1.0
       estree-walker: 3.0.3
       magic-string: 1.4.3
     optionalDependencies:
       msw: 2.14.3(@types/node@18.19.130)(typescript@7.0.2)
       vite: 8.3.6(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
 
-  '@vitest/mocker@5.0.5(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
+  '@vitest/mocker@5.1.0(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
-      '@vitest/spy': 5.0.5
+      '@vitest/spy': 5.1.0
       estree-walker: 3.0.3
       magic-string: 1.4.3
     optionalDependencies:
       msw: 2.14.3(@types/node@24.19.2)(typescript@7.0.2)
       vite: 8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
 
-  '@vitest/spy@5.0.5': {}
+  '@vitest/spy@5.1.0': {}
 
   '@vscode/ripgrep-universal@1.18.0': {}
 
@@ -15723,10 +15723,10 @@ snapshots:
     transitivePeerDependencies:
       - '@types/picomatch'
 
-  vitest@5.0.5(patch_hash=166c034c864f98267e7d479f083b8d37ea9a7b08d6662313dd38e7c69c9a3eb4)(@opentelemetry/api@1.9.1)(@types/node@18.19.130)(happy-dom@21.0.4)(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.6(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  vitest@5.1.0(patch_hash=957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9)(@opentelemetry/api@1.9.1)(@types/node@18.19.130)(happy-dom@21.0.4)(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.6(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.5(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.6(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      '@vitest/mocker': 5.1.0(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.6(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       chai: 6.3.0
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -15748,10 +15748,10 @@ snapshots:
       - '@types/picomatch'
       - msw
 
-  vitest@5.0.5(patch_hash=166c034c864f98267e7d479f083b8d37ea9a7b08d6662313dd38e7c69c9a3eb4)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
+  vitest@5.1.0(patch_hash=957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9)(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(happy-dom@21.0.4)(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.5(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      '@vitest/mocker': 5.1.0(msw@2.14.3(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.6(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       chai: 6.3.0
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
