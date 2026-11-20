@@ -13,9 +13,8 @@ import { OrchestrationDbCompaction } from './orchestration-db-compaction'
 const dirs: string[] = []
 
 /** A real orchestration database as an older build left it: no auto-vacuum, `freedMiB` of free pages. */
-function legacyDatabase(): string {
+function legacyDatabase(freedMiB = 40): string {
   const keptMiB = 8
-  const freedMiB = 40
   const dir = mkdtempSync(join(tmpdir(), 'orca-orchestration-compaction-'))
   dirs.push(dir)
   const file = join(dir, 'orchestration.db')
@@ -73,7 +72,7 @@ describe('OrchestrationDbCompaction', () => {
     const before = statSync(file).size
     const { compaction } = await copiedWhileQuiet(file)
 
-    const result = await compaction.swapAtQuit(() => {})
+    const result = await compaction.swapAtQuit(async () => {})
 
     expect(result.kind).toBe('compacted')
     expect(statSync(file).size).toBeLessThan(before / 4)
@@ -86,23 +85,39 @@ describe('OrchestrationDbCompaction', () => {
     const { orchestration, compaction } = await copiedWhileQuiet(file)
     orchestration.createTask({ runId: 'run_legacy_local', spec: 'written after the copy' })
 
-    expect(await compaction.swapAtQuit(() => {})).toEqual({ kind: 'stale' })
+    expect(await compaction.swapAtQuit(async () => {})).toEqual({ kind: 'stale' })
 
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok', tasks: 2 })
     expect(existsSync(`${file}-compacted`)).toBe(false)
   })
 
-  it('stops copying a file whose copies have already cost six full rewrites', async () => {
-    const file = legacyDatabase()
-    writeFileSync(`${file}-compaction-attempts`, '6')
-    const orchestration = new OrchestrationDb(file)
-    const compaction = new OrchestrationDbCompaction(orchestration, file, () => true, 1)
+  it('waits longer after each copy that went stale, and never gives up', async () => {
+    const hour = 60 * 60_000
+    const copiesAfter = async (attempts: string): Promise<boolean> => {
+      const file = legacyDatabase()
+      writeFileSync(`${file}-compaction-attempts`, attempts)
+      const orchestration = new OrchestrationDb(file)
+      const compaction = new OrchestrationDbCompaction(orchestration, file, () => true, 1)
+      await compaction.tick()
+      await compaction.tick()
+      const copied = existsSync(`${file}-compacted`)
+      compaction.stop()
+      orchestration.close()
+      return copied
+    }
 
-    await compaction.tick()
-    await compaction.tick()
-    orchestration.close()
+    expect(await copiesAfter(`1 ${Date.now() - 0.5 * hour}`)).toBe(false)
+    expect(await copiesAfter(`1 ${Date.now() - 1.5 * hour}`)).toBe(true)
+    expect(await copiesAfter(`3 ${Date.now() - 3 * hour}`)).toBe(false)
+    expect(await copiesAfter(`9 ${Date.now() - 25 * hour}`)).toBe(true)
+  })
 
-    expect(existsSync(`${file}-compacted`)).toBe(false)
+  it('converts a legacy file with little free space', async () => {
+    const file = legacyDatabase(1)
+    const { compaction } = await copiedWhileQuiet(file)
+
+    expect((await compaction.swapAtQuit(async () => {})).kind).toBe('compacted')
+    expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok', tasks: 1 })
   })
 
   it('leaves the file alone while another connection has it open', async () => {
@@ -111,7 +126,7 @@ describe('OrchestrationDbCompaction', () => {
     const other = new DatabaseSync(file)
     other.prepare('SELECT count(*) FROM tasks').get()
 
-    expect(await compaction.swapAtQuit(() => {})).toEqual({ kind: 'busy' })
+    expect(await compaction.swapAtQuit(async () => {})).toEqual({ kind: 'busy' })
     other.close()
 
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok', tasks: 1 })
@@ -122,7 +137,7 @@ describe('OrchestrationDbCompaction', () => {
     const { orchestration, compaction } = await copiedWhileQuiet(file)
     orchestration.db.exec('CREATE TEMP TABLE scratch (x); INSERT INTO scratch VALUES (1)')
 
-    expect((await compaction.swapAtQuit(() => {})).kind).toBe('compacted')
+    expect((await compaction.swapAtQuit(async () => {})).kind).toBe('compacted')
     expect(inspect(file).autoVacuum).toBe(2)
   })
 
@@ -131,7 +146,7 @@ describe('OrchestrationDbCompaction', () => {
     const { orchestration, compaction } = await copiedWhileQuiet(file)
     let late: unknown = 'not attempted'
 
-    const result = await compaction.swapAtQuit(() => {
+    const result = await compaction.swapAtQuit(async () => {
       // As a caller that kept the connection across an await would write.
       setImmediate(() => {
         try {

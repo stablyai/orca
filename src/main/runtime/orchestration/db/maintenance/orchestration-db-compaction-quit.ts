@@ -1,5 +1,5 @@
 import type { OrchestrationDbSwap } from './orchestration-db-compaction'
-import { settlesWithin } from './orchestration-db-compaction-files'
+import { settleWithinMs } from '../../../../startup/quit/quit-teardown-deadline'
 
 // The swap renames files; this bounds quit whatever the disk does.
 const SWAP_CAP_MS = 2_000
@@ -16,8 +16,9 @@ export async function swapCompactedOrchestrationDbAtQuit(
     return
   }
   try {
-    const result = await settlesWithin(owner.swapCompactedOrchestrationDbForQuit(), SWAP_CAP_MS)
-    if (result === 'late' || result.kind === 'failed') {
+    const settled = await settleWithinMs(owner.swapCompactedOrchestrationDbForQuit(), SWAP_CAP_MS)
+    const result = settled.outcome === 'settled' ? settled.value : settled
+    if (settled.outcome !== 'settled' || result.kind === 'failed') {
       console.warn('[orchestration] database compaction failed', result)
     } else if (result.kind !== 'none') {
       console.info('[orchestration] database compaction', result)

@@ -24,7 +24,7 @@ export class OrchestrationDbMaintenance {
   private readonly stopped = new AbortController()
   private timer: NodeJS.Timeout | undefined
   private work = 0
-  private restoreCheckpoints: (() => void) | undefined
+  private restoreCheckpoints: (() => Promise<void>) | undefined
 
   constructor(
     private readonly orchestrationDb: OrchestrationDb,
@@ -38,13 +38,15 @@ export class OrchestrationDbMaintenance {
     this.arm()
   }
 
-  stop(): void {
-    this.restoreCheckpoints?.()
+  /** Resolves once the checkpoint thread, and its connection, are gone. */
+  stop(): Promise<void> {
+    const exited = this.restoreCheckpoints?.() ?? Promise.resolve()
     this.restoreCheckpoints = undefined
     this.stopped.abort()
     this.compaction?.stop()
     clearTimeout(this.timer)
     this.timer = undefined
+    return exited
   }
 
   private arm(): void {
@@ -65,7 +67,8 @@ export class OrchestrationDbMaintenance {
   }
 
   private async pass(): Promise<void> {
-    if (this.pruneIsDue() && !(await this.prune())) {
+    // A copy waiting for quit would go stale on the prune's writes; until then, nothing new needs pruning.
+    if (!this.compaction?.hasCopy && this.pruneIsDue() && !(await this.prune())) {
       return
     }
     // Converts a file made before incremental auto-vacuum, and clears what a past conversion left.

@@ -103,15 +103,16 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   }
 
   /** At the end of a clean quit: hands the open database to the swap, which closes it; never reopened. */
-  private detachOrchestrationDbForQuit(): void {
+  private detachOrchestrationDbForQuit(): Promise<void> {
     this.orchestrationDbClosedForQuit = true
-    this.orchestrationDbMaintenance?.stop()
+    const stopped = this.orchestrationDbMaintenance?.stop() ?? Promise.resolve()
     this.orchestrationDbMaintenance = undefined
     this._orchestrationDb = null
+    return stopped
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
-    this.orchestrationDbMaintenance?.stop()
+    void this.orchestrationDbMaintenance?.stop()
     this.orchestrationDbMaintenance = undefined
     this.orchestrationDbCompaction = undefined
     this.orchestrationFederation.resetForDatabaseChange()

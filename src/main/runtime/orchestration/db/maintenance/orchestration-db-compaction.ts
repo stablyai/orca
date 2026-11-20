@@ -1,34 +1,29 @@
 import type { ChildProcess } from 'node:child_process'
 import { watch, type FSWatcher } from 'node:fs'
-import { link, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { link, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import Database from '../../../../sqlite/sync-database'
 import type { OrchestrationDb } from '../orchestration-db'
 import { refuseOrchestrationDbWritesForReplacement } from '../orchestration-db-file'
 import { compactionChildSource } from './orchestration-db-compaction-child-source'
-import {
-  availableBytesIn,
-  removeQuietly,
-  settlesWithin,
-  sizeOf,
-  syncDirectory
-} from './orchestration-db-compaction-files'
+import { renameFileWithWindowsRetryAsync } from '../../../../../shared/file-write/windows-retry-file-operations'
+import { syncDirectory } from '../../../../filesystem/durable-file-write'
+import { settleWithinMs } from '../../../../startup/quit/quit-teardown-deadline'
+import { availableBytesIn, removeQuietly, sizeOf } from './orchestration-db-compaction-files'
 
 const MIB = 1024 * 1024
-const MIN_FREE_BYTES = 32 * MIB
-const MIN_FREE_FRACTION = 0.25
 // Maintenance minutes with no write before copying; a write after the copy makes it stale.
 const QUIET_TICKS = 5
-// Each copy rewrites the live data, so a file whose copies keep going stale stops after a few, for good.
-const ATTEMPTS_PER_SESSION = 3
-const ATTEMPTS_PER_FILE = 6
+// Each copy rewrites the live data, so a file whose copies keep going stale waits longer each time:
+// an hour after the first, doubling up to a day, and never gives up.
 const ATTEMPT_SPACING_MS = 60 * 60_000
-// The copy blocks no one; this only bounds the disk and CPU it uses.
-const COPY_BUDGET_MS = 120_000
+const MAX_ATTEMPT_SPACING_MS = 24 * ATTEMPT_SPACING_MS
+// The copy blocks no one; this only bounds the disk and CPU it uses, at a slow disk's pace.
+const MIN_COPY_BUDGET_MS = 120_000
+const SLOW_COPY_BYTES_PER_MS = (4 * MIB) / 1000
 // journal_size_limit: closing at quit checkpoints at most this much.
 const MAX_WAL_BYTES = 8 * MIB
-const LOCK_WAIT_MS = 300
 const UNLINK_WAIT_MS = 1_000
 
 export type OrchestrationDbSwap =
@@ -36,30 +31,22 @@ export type OrchestrationDbSwap =
   | { kind: 'compacted'; beforeBytes: number; afterBytes: number; ms: number }
   | { kind: 'failed'; error: string }
 
-// One cached statement on the runtime's connection, page 1 only: data_version moves with any other
-// connection's commit.
-const FILE_STATE_SQL = `SELECT d.data_version, a.auto_vacuum, p.page_size, c.page_count, f.freelist_count
-  FROM pragma_data_version AS d, pragma_auto_vacuum AS a, pragma_page_size AS p,
-    pragma_page_count AS c, pragma_freelist_count AS f`
+// One cached statement on the runtime's connection, page 1 only.
+const FILE_STATE_SQL = `SELECT a.auto_vacuum, p.page_size, c.page_count, f.freelist_count
+  FROM pragma_auto_vacuum AS a, pragma_page_size AS p, pragma_page_count AS c, pragma_freelist_count AS f`
 
-type FileState = {
-  othersVersion: number
-  legacy: boolean
-  /** Live bytes when enough pages are free to be worth a copy. */
-  worthCopyingLiveBytes: number | null
+function readFileState(db: Database.Database): { legacy: boolean; liveBytes: number } {
+  const row = db.prepare(FILE_STATE_SQL).get() ?? {}
+  return {
+    legacy: Number(row.auto_vacuum) === 0,
+    liveBytes: (Number(row.page_count) - Number(row.freelist_count)) * Number(row.page_size)
+  }
 }
 
-function readFileState(db: Database.Database): FileState {
-  const row = db.prepare(FILE_STATE_SQL).get() ?? {}
-  const pageSize = Number(row.page_size)
-  const pages = Number(row.page_count)
-  const freePages = Number(row.freelist_count)
-  const warranted = freePages * pageSize >= MIN_FREE_BYTES && freePages >= pages * MIN_FREE_FRACTION
-  return {
-    othersVersion: Number(row.data_version),
-    legacy: Number(row.auto_vacuum) === 0,
-    worthCopyingLiveBytes: warranted ? (pages - freePages) * pageSize : null
-  }
+function attemptSpacingMs(attempts: number): number {
+  return attempts === 0
+    ? 0
+    : Math.min(ATTEMPT_SPACING_MS * 2 ** (attempts - 1), MAX_ATTEMPT_SPACING_MS)
 }
 
 /**
@@ -71,16 +58,17 @@ function readFileState(db: Database.Database): FileState {
 export class OrchestrationDbCompaction {
   private finished = false
   private stopped = false
-  private leftoversRemoved = false
+  private started = false
   private lastActivity: string | null = null
   private quietTicks = 0
+  // Copies this file has cost across sessions, and when the last one started.
   private attempts = 0
-  private pastAttempts = 0
   private lastAttemptAt = Number.NEGATIVE_INFINITY
+  private diskShortAt = Number.NEGATIVE_INFINITY
   private copying: ChildProcess | undefined
   private ready: { stamp: string } | undefined
-  // Opened before a copy and kept until the swap: its data_version moves with every commit to the file,
-  // the runtime's included, and nothing else (the runtime's TEMP tables write at quit, for one).
+  // Read-only, opened on the first legacy minute and kept until the swap: its data_version moves with every
+  // commit to the file, the runtime's included, and nothing else (the runtime's TEMP tables write, for one).
   private observer: Database.Database | undefined
 
   constructor(
@@ -103,7 +91,7 @@ export class OrchestrationDbCompaction {
     return `${this.filename}-replaced`
   }
 
-  /** How many copies this file has cost across sessions. */
+  /** `<copies> <start of the last, ms>`, across sessions. */
   private get attemptsPath(): string {
     return `${this.filename}-compaction-attempts`
   }
@@ -113,73 +101,74 @@ export class OrchestrationDbCompaction {
     if (this.finished || this.stopped || this.copying || !this.isEnabled()) {
       return
     }
-    if (!this.leftoversRemoved) {
+    if (!this.started) {
       // From a session that quit or crashed part-way, a swapped file included.
-      this.leftoversRemoved = true
+      this.started = true
       await Promise.all([this.removeCopy(), removeQuietly(this.replacedPath)])
-      this.pastAttempts = Number(await readFile(this.attemptsPath, 'utf8').catch(() => '0')) || 0
+      const [count, at] = (await readFile(this.attemptsPath, 'utf8').catch(() => ''))
+        .split(' ')
+        .map(Number)
+      this.attempts = count || 0
+      this.lastAttemptAt = at || Number.NEGATIVE_INFINITY
     }
-    const { db } = this.orchestrationDb
-    const state = readFileState(db)
+    const state = readFileState(this.orchestrationDb.db)
     if (!state.legacy) {
       this.finished = true
+      this.closeObserver()
       await removeQuietly(this.attemptsPath)
       return
     }
-    if (this.ready) {
-      if (this.stamp() === this.ready.stamp) {
-        return
-      }
-      await this.dropCopy()
-    }
-    // Every commit, by any connection, writes the WAL.
-    const wal = await stat(`${this.filename}-wal`).catch(() => null)
-    const activity = `${state.othersVersion}:${wal?.size}:${wal?.mtimeMs}`
-    this.quietTicks = activity === this.lastActivity ? this.quietTicks + 1 : 0
-    this.lastActivity = activity
-    if (this.pastAttempts + this.attempts >= ATTEMPTS_PER_FILE) {
-      this.finished = true
+    if (this.stopped) {
       return
     }
+    this.observer ??= new Database(this.filename, { readonly: true, fileMustExist: true })
+    const activity = this.stamp()
+    if (this.ready) {
+      if (activity === this.ready.stamp) {
+        return
+      }
+      this.ready = undefined
+      await this.removeCopy()
+    }
+    this.quietTicks = activity === this.lastActivity ? this.quietTicks + 1 : 0
+    this.lastActivity = activity
+    const now = Date.now()
     if (
       this.quietTicks < this.quietTicksNeeded ||
-      this.attempts >= ATTEMPTS_PER_SESSION ||
-      Date.now() - this.lastAttemptAt < ATTEMPT_SPACING_MS
+      now - this.lastAttemptAt < attemptSpacingMs(this.attempts) ||
+      now - this.diskShortAt < ATTEMPT_SPACING_MS
     ) {
       return
     }
-    const liveBytes = state.worthCopyingLiveBytes
-    if (liveBytes === null) {
-      return
-    }
     // Room for the copy beside the file, with as much again to spare.
-    if ((await availableBytesIn(dirname(this.filename))) < 2 * liveBytes) {
+    if ((await availableBytesIn(dirname(this.filename))) < 2 * state.liveBytes) {
+      this.diskShortAt = now
       return
     }
     if (this.stopped) {
       return
     }
     this.attempts++
-    this.lastAttemptAt = Date.now()
+    this.lastAttemptAt = now
     // Counted before it starts, so a quit or crash mid-copy still counts.
-    const counted = await writeFile(
-      this.attemptsPath,
-      String(this.pastAttempts + this.attempts)
-    ).then(
+    const counted = await writeFile(this.attemptsPath, `${this.attempts} ${now}`).then(
       () => true,
       () => false
     )
     if (!counted || this.stopped) {
       return
     }
-    // Before the child takes its snapshot, so any later commit moves the stamp.
-    this.observer = new Database(this.filename, { readonly: true, fileMustExist: true })
+    // Read before the child takes its snapshot, so any later commit moves the stamp.
     const stamp = this.stamp()
-    const copied = await this.copy(stamp)
+    const budgetMs = Math.max(
+      MIN_COPY_BUDGET_MS,
+      Math.round(state.liveBytes / SLOW_COPY_BYTES_PER_MS)
+    )
+    const copied = await this.copy(stamp, budgetMs)
     if (copied && !this.stopped && this.stamp() === stamp) {
       this.ready = { stamp }
     } else if (!this.stopped) {
-      await this.dropCopy()
+      await this.removeCopy()
     }
   }
 
@@ -188,14 +177,18 @@ export class OrchestrationDbCompaction {
     return String(this.observer?.pragma('data_version', { simple: true }))
   }
 
-  private async dropCopy(): Promise<void> {
-    this.ready = undefined
+  private closeObserver(): void {
     this.observer?.close()
     this.observer = undefined
+  }
+
+  private async dropCopy(): Promise<void> {
+    this.ready = undefined
+    this.closeObserver()
     await this.removeCopy()
   }
 
-  private copy(stamp: string): Promise<boolean> {
+  private copy(stamp: string, budgetMs: number): Promise<boolean> {
     return new Promise((resolve) => {
       let child: ChildProcess
       try {
@@ -208,7 +201,7 @@ export class OrchestrationDbCompaction {
             ORCA_ORCHESTRATION_COMPACTION: JSON.stringify({
               filename: this.filename,
               target: this.copyPath,
-              budgetMs: COPY_BUDGET_MS
+              budgetMs
             })
           },
           // Never written: the child stops itself when this end closes, so it can't outlive a killed app.
@@ -219,7 +212,7 @@ export class OrchestrationDbCompaction {
         return
       }
       this.copying = child
-      const budget = setTimeout(() => child.kill('SIGKILL'), COPY_BUDGET_MS)
+      const budget = setTimeout(() => child.kill('SIGKILL'), budgetMs)
       // A write makes the copy stale, so stop it then: its disk traffic can slow the runtime's later
       // commits (seen on a busy Linux disk). Every commit touches the WAL; the stamp stays the judge.
       let walWatch: FSWatcher | undefined
@@ -273,10 +266,10 @@ export class OrchestrationDbCompaction {
 
   /**
    * At the end of a clean quit: swaps the copy in when the file is unchanged since it was taken. `detach`
-   * cuts the runtime off the database; the swap then closes the runtime's connection, so a reference kept
-   * across an await fails rather than writing after the check.
+   * cuts the runtime off the database and resolves once its checkpoint thread is gone; the swap closes the
+   * runtime's connection first, so a reference kept across an await fails rather than writing after the check.
    */
-  async swapAtQuit(detach: () => void): Promise<OrchestrationDbSwap> {
+  async swapAtQuit(detach: () => Promise<void>): Promise<OrchestrationDbSwap> {
     // Kept set until the end: detaching stops maintenance, whose stop drops an unready copy.
     const ready = this.ready
     if (!ready) {
@@ -302,25 +295,25 @@ export class OrchestrationDbCompaction {
       }
       // From here on nothing else in this process can reach the file.
       refuseOrchestrationDbWritesForReplacement(this.filename)
-      detach()
+      const detached = detach()
       this.orchestrationDb.close()
+      // No connection of this process but the observer is left, so the lock below needs no wait.
+      await detached
       // Its data_version, read before the observer's last read, counts every commit after it.
       lock = new Database(this.filename, { fileMustExist: true })
       const others = Number(lock.pragma('data_version', { simple: true }))
       const observed = this.stamp()
-      this.observer?.close()
-      this.observer = undefined
+      this.closeObserver()
       if (observed !== ready.stamp) {
         return await giveUp('stale')
       }
       try {
-        // Refused while another connection that has read the file is open (after a short wait for an exiting
-        // checkpoint thread); once held, it keeps every other reader and writer out. An external handle that
-        // never read holds no lock, so it isn't excluded (see the PR's "Not covered").
-        // The checkpoint leaves an empty WAL, so nothing of the old file can be replayed onto the copy.
+        // Refused at once while another connection that has read the file is open; once held, it keeps every
+        // other reader and writer out. An external handle that never read holds no lock, so it isn't excluded
+        // (see the PR's "Not covered"). The checkpoint leaves an empty WAL, so nothing of the old file can be
+        // replayed onto the copy.
         lock.exec(
-          `PRAGMA busy_timeout = ${LOCK_WAIT_MS}; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;
-           PRAGMA wal_checkpoint(TRUNCATE)`
+          'PRAGMA busy_timeout = 0; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT; PRAGMA wal_checkpoint(TRUNCATE)'
         )
       } catch {
         return await giveUp('busy')
@@ -337,13 +330,13 @@ export class OrchestrationDbCompaction {
       if (process.platform === 'win32') {
         closeLock()
       }
-      await rename(this.copyPath, this.filename)
+      await renameFileWithWindowsRetryAsync(this.copyPath, this.filename)
       this.ready = undefined
       closeLock()
       await syncDirectory(dirname(this.filename))
       await removeQuietly(this.attemptsPath)
       if (kept) {
-        await settlesWithin(removeQuietly(this.replacedPath), UNLINK_WAIT_MS)
+        await settleWithinMs(removeQuietly(this.replacedPath), UNLINK_WAIT_MS)
       }
       return {
         kind: 'compacted',
