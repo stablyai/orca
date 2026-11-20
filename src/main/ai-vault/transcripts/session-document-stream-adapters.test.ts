@@ -1,7 +1,6 @@
 import { expect, it } from 'vitest'
 import { parseDevinSessionDocument } from '../scanners/devin/session-scanner-devin-parser'
 import { parseGeminiSessionDocument } from '../scanners/gemini/session-scanner-gemini-parsers'
-import { parseClineSessionDocuments } from '../scanners/cline/session-scanner-cline-parser'
 
 const file = {
   path: '/sessions/identity/identity.json',
@@ -40,28 +39,5 @@ it('reads Gemini messages and timestamps from the streamed document', async () =
     updatedAt: '2026-01-03T00:00:00.000Z',
     messageCount: 2,
     totalTokens: 30
-  })
-})
-
-it('reads Cline metadata and its separate messages document', async () => {
-  const metadata =
-    '{"session_id":"id","cwd":"/repo","started_at":"2026-01-01T00:00:00Z","prompt":"fallback"}'
-  const messages =
-    '{"messages":[{"role":"user","content":"Ü🐋 first","ts":"2026-01-02T00:00:00Z"},{"role":"assistant","content":"answer","modelInfo":{"id":"sidecar"}}],"updated_at":"2026-01-03T00:00:00Z"}'
-  expect(
-    await parseClineSessionDocuments(
-      file,
-      bytes(metadata),
-      () => bytes(messages),
-      'darwin',
-      options
-    )
-  ).toMatchObject({
-    sessionId: 'id',
-    cwd: '/repo',
-    title: 'Ü🐋 first',
-    model: 'sidecar',
-    updatedAt: '2026-01-03T00:00:00.000Z',
-    messageCount: 2
   })
 })

@@ -14,9 +14,12 @@ import {
   DEFAULT_BOT_AVATAR_COLOR
 } from '../../../../shared/bots/bot-avatar-color'
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
-import { botMascotSrcs } from './bot-mascot-color'
 import { BotPictureIntakeLine, LineAction } from './BotPictureIntakeLine'
-import { useBotAvatarIntake } from './use-bot-avatar-intake'
+import {
+  useBotAvatarIntakeHost,
+  useBotAvatarIntakeState,
+  type BotAvatarIntake
+} from './use-bot-avatar-intake'
 import { BotPictureCarousel, type BotPictureFace } from './BotPictureCarousel'
 import {
   GenerateField,
@@ -25,6 +28,7 @@ import {
   useGenerateFace
 } from './AvatarGenerateFace'
 import { BotPictureRowFold } from './BotPictureRowFold'
+import { readAvatarCapability } from './avatar-generation-capability-store'
 import {
   CUSTOM_FACE,
   GENERATE_FACE,
@@ -143,7 +147,8 @@ export function BotPicturePicker({
   onUndo,
   uploadLink = false,
   color = null,
-  onColorChange
+  onColorChange,
+  intake: sharedIntake
 }: {
   value: BotPictureValue
   custom: BotPictureCustom | null
@@ -157,6 +162,9 @@ export function BotPicturePicker({
   color?: string | null
   /** Shows the color swatches under a mascot. */
   onColorChange?: (color: string | null) => void
+  /** An intake that outlives this picker (New bot's picture button), so a decode survives the popover
+   *  closing and one order holds across both surfaces; its owner places the picture. */
+  intake?: BotAvatarIntake
 }): React.JSX.Element {
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -173,25 +181,56 @@ export function BotPicturePicker({
   )
   // Generate is current while chosen, even before it holds a picture; selected is applied.
   const [onGenerate, setOnGenerate] = useState(false)
-  const face = useGenerateFace((made) => {
-    if (onGenerate) {
-      onUpload(made.png, -1)
-    }
+  const ownIntake = useBotAvatarIntakeState({
+    // A new picture replaces the custom one in place, or lands beside the mascot shown.
+    onPicture: (png) => {
+      setOnGenerate(false)
+      onUpload(png, showingCustom ? custom.after : mascotIndex)
+    },
+    undoable: onUndo !== undefined
   })
-  const withGenerate = face.agent !== null
-  const generatedCustom = withGenerate && isGeneratedCustom(custom?.src, face.result?.png ?? null)
+  const intake = sharedIntake ?? ownIntake
+  const outlinePicker = useBotAvatarIntakeHost(rootRef, intake)
+  // Read once, at mount: the face list is final from the first paint. A check still unanswered
+  // at the very first open (just after launch) means no Generate face for that open only.
+  const [withGenerate] = useState(() => (readAvatarCapability()?.length ?? 0) > 0)
+  // With Generate, the user's own picture lives in its slot: one tile, never two. An older
+  // picture with no image (an emoji) keeps its own face.
+  const customInSlot = withGenerate && Boolean(custom?.src)
   const order = pictureFaceOrder(
-    custom && !generatedCustom ? custom.after : null,
+    custom && !customInSlot ? custom.after : null,
     withGenerate ? generateSlot : null
   )
   const currentKey: PictureFaceKey =
-    withGenerate && (onGenerate || (showingCustom && generatedCustom))
+    withGenerate && (onGenerate || (showingCustom && customInSlot))
       ? GENERATE_FACE
       : showingCustom
         ? CUSTOM_FACE
         : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
   const generating = currentKey === GENERATE_FACE
-  const srcs = botMascotSrcs(PICKABLE_BOT_MASCOT_IDS, color)
+  // The description field mounts the first time Generate is current, not with every open, and stays
+  // for the fold back.
+  const [seenGenerate, setSeenGenerate] = useState(generating)
+  if (generating && !seenGenerate) {
+    setSeenGenerate(true)
+  }
+  // The intake turn a generated picture holds: one taken after it was asked for wins, in any order and
+  // even within one render, since the turn is checked when the picture arrives, not from React state.
+  const generateTurn = useRef<(() => boolean) | null>(null)
+  const face = useGenerateFace(
+    (made) => {
+      const ownTurn = generateTurn.current?.() ?? true
+      // Applied only while Generate is the current face and no picture was taken since it was asked for.
+      if (generating && ownTurn) {
+        onUpload(made.png, -1)
+      }
+      return ownTurn
+    },
+    custom?.src ? { src: custom.src, description: custom.description } : null,
+    () => {
+      generateTurn.current = intake.claim()
+    }
+  )
   const faces: BotPictureFace[] = order.map((key) =>
     key === GENERATE_FACE
       ? {
@@ -202,34 +241,36 @@ export function BotPicturePicker({
         }
       : key === CUSTOM_FACE
         ? { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
-        : { key, src: srcs[key], fallback: '' }
+        : { key, src: null, fallback: '', mascot: { id: key, color } }
   )
-  const intake = useBotAvatarIntake({
-    rootRef,
-    // A new picture replaces the custom one in place, or lands beside the mascot shown.
-    onPicture: (png) => {
-      setOnGenerate(false)
-      onUpload(png, showingCustom ? custom.after : mascotIndex)
-    },
-    undoable: onUndo !== undefined
-  })
+  // Every picture an intake takes, shared or not and even the same image again, leaves Generate and
+  // wins the slot back from a picture made earlier.
+  const [seenTaken, setSeenTaken] = useState(intake.taken)
+  if (intake.taken !== seenTaken) {
+    setSeenTaken(intake.taken)
+    setOnGenerate(false)
+    face.supersede()
+  }
   const { line } = intake
   const dropping = line.kind === 'drop'
   const select = (key: PictureFaceKey | undefined): void => {
-    if (line.kind === 'error') {
+    // Choosing a picture is the newest action, so one still being read is dropped. Browsing onto an
+    // empty Generate face chooses nothing, and a picture still being read lands as usual.
+    const chooses = key !== undefined && (key !== GENERATE_FACE || face.picture !== null)
+    if (chooses || line.kind === 'error') {
       intake.dismiss()
     }
     setOnGenerate(key === GENERATE_FACE)
     face.setEditing(false)
-    if (key === GENERATE_FACE && !face.result && byPointer.current) {
+    if (key === GENERATE_FACE && !face.picture && byPointer.current) {
       face.focusField(false)
     }
     if (key === GENERATE_FACE) {
-      // Its picture, if one was made, becomes the bot's picture again.
-      if (face.result && generatedCustom) {
+      // The slot's picture becomes the bot's picture again; one made while away is applied now.
+      if (face.made && !isGeneratedCustom(custom?.src, face.made.png)) {
+        onUpload(face.made.png, -1)
+      } else if (face.picture) {
         onChange({ kind: 'custom' })
-      } else if (face.result) {
-        onUpload(face.result.png, -1)
       }
     } else if (key === CUSTOM_FACE) {
       onChange({ kind: 'custom' })
@@ -242,6 +283,11 @@ export function BotPicturePicker({
       line={line}
       onUndo={() => {
         intake.dismiss()
+        face.supersede()
+        // An undo isn't an intake turn, so a run still going is stopped here instead.
+        if (face.run.kind === 'running') {
+          face.cancel()
+        }
         onUndo?.()
       }}
     >
@@ -281,7 +327,7 @@ export function BotPicturePicker({
   return (
     <div
       ref={rootRef}
-      data-dropping={(dropping && intake.outlinePicker) || undefined}
+      data-dropping={(dropping && outlinePicker) || undefined}
       onPointerDownCapture={() => {
         byPointer.current = true
       }}
@@ -317,7 +363,16 @@ export function BotPicturePicker({
       </BotPictureRowFold>
       {withGenerate ? (
         <BotPictureRowFold open={generating}>
-          <GenerateField face={face} />
+          {seenGenerate ? (
+            <>
+              <GenerateField face={face} />
+              {/* While the slot holds a picture, Upload stays in reach under its description, as
+                  do a new picture's Undo and errors. */}
+              <BotPictureRowFold open={face.folded || line.kind !== 'hint'}>
+                {uploadLine}
+              </BotPictureRowFold>
+            </>
+          ) : null}
         </BotPictureRowFold>
       ) : null}
       <input

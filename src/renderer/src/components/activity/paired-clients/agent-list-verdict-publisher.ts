@@ -8,6 +8,7 @@ import { isClearableActivityThread } from '../thread-list/activity-clear-complet
 import { classifyChildAgents } from '../threads/activity-thread-child-agent'
 import { activityThreadStatusId } from '../threads/activity-thread-presentation'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
+import type { AllAgentPaneThreadsStoreData } from '../threads/use-agent-pane-thread-store-data'
 import { useAllAgentPaneThreads } from '../threads/use-agent-pane-threads'
 
 const PUBLISH_INTERVAL_MS = 250
@@ -36,12 +37,17 @@ function threadVerdict(thread: AgentPaneThread): ListedVerdict {
 /** The Agents list's verdict for every pane the window knows; a pane with no thread is unlisted. */
 function buildAgentListVerdicts(
   threads: readonly AgentPaneThread[],
-  knownPaneKeys: readonly string[]
+  statuses: AllAgentPaneThreadsStoreData['agentStatusByPaneKey'],
+  acknowledgedAt: Readonly<Record<string, number>>
 ): Record<string, AgentListVerdict> {
   const { parentPaneKeyByChild, hidden } = classifyChildAgents(threads)
   const verdicts: Record<string, AgentListVerdict> = {}
-  for (const paneKey of knownPaneKeys) {
-    verdicts[paneKey] = { listed: false }
+  for (const [paneKey, entry] of statuses.entries()) {
+    // Read as the desktop's bot chat rows read it, so a closed chat's row on the phone agrees.
+    verdicts[paneKey] =
+      entry.state === 'done' && (acknowledgedAt[paneKey] ?? 0) < entry.stateStartedAt
+        ? { listed: false, unread: true }
+        : { listed: false }
   }
   for (const thread of threads) {
     const childOf = parentPaneKeyByChild.get(thread.paneKey)
@@ -118,8 +124,13 @@ export default function AgentListVerdictPublisher(): null {
     }
   }, [])
   const verdicts = useMemo(
-    () => buildAgentListVerdicts(allThreads, Array.from(storeData.agentStatusByPaneKey.keys())),
-    [allThreads, storeData.agentStatusByPaneKey]
+    () =>
+      buildAgentListVerdicts(
+        allThreads,
+        storeData.agentStatusByPaneKey,
+        storeData.acknowledgedAgentsByPaneKey
+      ),
+    [allThreads, storeData.agentStatusByPaneKey, storeData.acknowledgedAgentsByPaneKey]
   )
   useEffect(() => {
     // Unhydrated read stamps would mark every agent unread.

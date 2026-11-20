@@ -10,6 +10,7 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import type { Store } from '../../persistence/loading-store/store'
 import {
+  closeTestStores,
   createStore,
   makeRepo,
   readDataFile,
@@ -32,7 +33,8 @@ describe('host-qualified worktree metadata', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-worktree-identity-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('reloads host-specific metadata without collapsing it to the legacy locator', () => {

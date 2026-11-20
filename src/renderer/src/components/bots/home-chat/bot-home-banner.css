@@ -1,0 +1,49 @@
+/* Home's identity pill: avatar + name, always both. Header containers at most 260 CSS px wide hide it. */
+[data-bot-home-banner] {
+  position: absolute;
+  /* Center on the title bar's icon row, but never rise above the pane into the tab strip. */
+  top: max(0px, calc((var(--orca-pane-title-height) - 28px) / 2));
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 10rem);
+  /* 1px border + 3px padding = 4px around the 20px avatar, 28px tall overall. */
+  padding: 3px 10px 3px 3px;
+  border: 1px solid var(--notice-border);
+  border-radius: 9999px;
+  background: var(--notice-surface);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-notice);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+[data-bot-home-banner]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+[data-bot-home-banner-name] {
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Hide the entire pill at a header container content width of 260 CSS px or less. */
+.pane-title-bar:has(> [data-bot-home-banner]) {
+  container-type: inline-size;
+}
+
+@container (max-width: 260px) {
+  [data-bot-home-banner] {
+    display: none;
+  }
+}

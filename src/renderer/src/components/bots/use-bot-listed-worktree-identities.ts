@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useMemo } from 'react'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
 import { useAppStore } from '@/store'
@@ -16,8 +17,8 @@ export function useBotListedWorktreeIdentities(): ReadonlySet<string> {
   const bots = useBots(hideBotCreated && botsEnabled)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   // With no bot to list, Projects skip the sidebar-wide children projection.
-  const childrenByParent = useAppStore((s) =>
-    bots.length === 0 ? NO_CHILDREN : selectSidebarChildrenByParentIdentity(s)
+  const childrenByParent = useAppStoreWithHostStatuses((s, statuses) =>
+    bots.length === 0 ? NO_CHILDREN : selectSidebarChildrenByParentIdentity(s, statuses)
   )
   return useMemo(
     () =>

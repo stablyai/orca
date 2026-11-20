@@ -7,7 +7,7 @@ import {
 } from '../../mobile-web-app/mobile-web-app-bundle-test-fixture.mjs'
 import { bundleMobileWebApp } from './build-mobile-web-app-bundle.mjs'
 import { MOBILE_WEB_APP_ROUTE_ROOT } from '../../mobile-web-app/mobile-web-app-route-manifest.mjs'
-import { findRegexLookbehinds, verifyMobileWebAppBundle } from './verify-mobile-web-app-bundle.mjs'
+import { verifyMobileWebAppBundle } from './verify-mobile-web-app-bundle.mjs'
 import {
   readDesktopVersion,
   readProtocolWindow,
@@ -89,41 +89,6 @@ describeBundling('the app bundle', () => {
 })
 
 describe('the verifier', () => {
-  it('finds the regex lookbehinds iOS before 16.4 cannot run, in literals and strings', () => {
-    const source =
-      'const a = /(?<=x)y/u, b = new RegExp("(?<!<)<<"), c = `(?<!${a}|b)`, d = 4 / 2 / 1, ' +
-      'e = /(?<name>x)/, f = (() => { try { return !!new RegExp("(?<=1)(?<!1)") } catch {} })()'
-    expect(findRegexLookbehinds(source, 'assets/chunk.js')).toEqual(['(?<=x)y', '(?<!<)<<', '(?<!'])
-  })
-
-  it("allows marked's lookbehind probe and the pattern it gates only where marked guards them", () => {
-    const source =
-      'var p = (() => { try { return !!new RegExp("(?<=1)(?<!1)") } catch { return false } })(), ' +
-      'q = p ? "(?<!`)()" : "(^^|[^`])", r = new RegExp("(?<=1)(?<!1)"), s = "(?<!`)()", ' +
-      't = other ? "(?<!`)()" : "", u; ' +
-      'u = (() => { try { return !!new RegExp("(?<=1)(?<!1)") } catch { return false } })(); ' +
-      'u ? "(?<!`)()" : ""'
-    expect(findRegexLookbehinds(source, 'assets/chunk.js')).toEqual([
-      '(?<=1)(?<!1)',
-      '(?<!`)()',
-      '(?<!`)()'
-    ])
-  })
-
-  it('ignores lookbehind syntax escaped or inside a character class of a regex literal', () => {
-    const source = String.raw`const a = /[(?<=]/, b = /\(?<!x/, c = /[\]](?<=x)/, d = /[x]\[(?<!y)/`
-    expect(findRegexLookbehinds(source, 'assets/chunk.js')).toEqual([
-      String.raw`[\]](?<=x)`,
-      String.raw`[x]\[(?<!y)`
-    ])
-  })
-
-  it('fails a chunk it cannot parse, naming the asset', () => {
-    expect(() => findRegexLookbehinds('const a = (', 'assets/broken.js')).toThrow(
-      /^assets\/broken\.js could not be parsed/
-    )
-  })
-
   itBundling(
     'rejects a self-consistent bundle a fresh build does not reproduce',
     async () => {

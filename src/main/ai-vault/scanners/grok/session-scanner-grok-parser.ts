@@ -68,6 +68,15 @@ export function grokSessionCwd(summary: Record<string, unknown>): string | null 
   return extractString(asRecord(summary.info)?.cwd)
 }
 
+// Grok shows these synthetic user rows as prompts; other reasons are runtime-injected (reminders, wakes).
+const GROK_PROMPT_SYNTHETIC_REASONS = new Set([
+  'interjection',
+  'scheduler_fired',
+  'agent_message',
+  'parent_agent_message',
+  'parent_human_message'
+])
+
 async function consumeGrokChatHistory(
   accumulator: SessionAccumulator,
   transcriptPath: string,
@@ -88,6 +97,10 @@ async function consumeGrokChatHistory(
       }
 
       if (role === 'user') {
+        const syntheticReason = extractString(record.synthetic_reason)
+        if (syntheticReason && !GROK_PROMPT_SYNTHETIC_REASONS.has(syntheticReason)) {
+          continue
+        }
         const text = extractGrokFirstUserPromptText(record.content)
         if (text) {
           accumulator.title ??= normalizeTitleText(text)

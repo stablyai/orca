@@ -249,7 +249,8 @@ describe('SidebarBotsSection', () => {
 
   it('leaves the folded header without its controls, so Tab cannot reach them', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
-    threeUnplacedBots()
+    mocks.bots = [bot(), bot({ id: 'bot-2', name: 'Scout', folderWorkspaceId: 'fw-2' })]
+    useAppStore.setState({ folderWorkspaces: [home(), home({ id: 'fw-2' })] })
     useAppStore.setState({ collapsedGroups: new Set(['bots']) })
     renderSection()
     const controls = (): (HTMLElement | null)[] => [
@@ -258,9 +259,10 @@ describe('SidebarBotsSection', () => {
       screen.queryByRole('button', { name: 'New bot or group' })
     ]
     expect(controls()).toEqual([null, null, null])
+    expect(screen.queryByRole('button', { name: 'Templates' })).toBeNull()
     // The fold button and the faces stay; the folded summary still counts the rest.
     expect(screen.getByRole('button', { name: /^Expand Bots,/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Show 3 more bots' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Show 2 more bots' })).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: /^Expand Bots,/ }))
     expect(controls().every(Boolean)).toBe(true)
@@ -286,16 +288,16 @@ describe('SidebarBotsSection', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     renderSection()
     expect(screen.getByText('Bots')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Create a bot' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'New bot' })).toBeTruthy()
     // No count beside the title while there is nothing to count.
     expect(screen.queryByText('0')).toBeNull()
     const emptyHeader = screen.getByRole('button', { name: /^Collapse Bots, 0 bots/ })
     expect(emptyHeader.hasAttribute('disabled')).toBe(false)
     fireEvent.click(emptyHeader)
     expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
-    expect(screen.queryByText('Meet your AI teammate')).toBeNull()
+    expect(screen.queryByText('Your AI teammate')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /^Expand Bots, 0 bots/ }))
-    expect(screen.getByText('Meet your AI teammate')).toBeTruthy()
+    expect(screen.getByText('Your AI teammate')).toBeTruthy()
     fireEvent.keyDown(screen.getByRole('button', { name: 'New bot or group' }), { key: 'Enter' })
     expect(screen.getByRole('menuitem', { name: 'New bot' })).toBeTruthy()
     // A group needs two bots.
@@ -351,7 +353,7 @@ describe('SidebarBotsSection', () => {
     mocks.groups = [group({ members: [] })]
     useAppStore.setState({ folderWorkspaces: [home({ id: 'fw-g' })] })
     renderSection()
-    expect(screen.queryByText('Meet your AI teammate')).toBeNull()
+    expect(screen.queryByText('Your AI teammate')).toBeNull()
     expect(screen.getByText('Crew')).toBeTruthy()
   })
 

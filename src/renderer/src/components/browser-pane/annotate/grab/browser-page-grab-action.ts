@@ -34,7 +34,12 @@ export function runBrowserGrabActionShortcut({
   if (grabIntent === 'annotate') {
     return
   }
+  const operationToken = grab.getOperationToken()
+  const toolTargetId = toolTargetIdRef.current
   const copyFromPayload = (payload: BrowserGrabPayload): void => {
+    if (!grab.isCurrentOperationToken(operationToken)) {
+      return
+    }
     if (key === 'c') {
       const text = formatGrabPayloadAsText(payload)
       void window.api.ui.writeClipboardText(text)
@@ -69,14 +74,20 @@ export function runBrowserGrabActionShortcut({
   } else {
     // armed/awaiting — extract hovered element via IPC without clicking
     void (async () => {
-      let result: Awaited<ReturnType<typeof window.api.browser.extractHoverPayload>>
+      let result: Awaited<ReturnType<typeof grab.transport.extractHoverPayload>>
       try {
-        result = await window.api.browser.extractHoverPayload({
-          browserPageId: toolTargetIdRef.current
+        result = await grab.transport.extractHoverPayload({
+          browserPageId: toolTargetId
         })
       } catch {
+        if (!grab.isCurrentOperationToken(operationToken)) {
+          return
+        }
         // Why: the guest can be destroyed or the IPC channel torn down mid-shortcut; surface it like a miss instead of an unhandled rejection.
         showGrabToast('Could not read the hovered element', 'error')
+        return
+      }
+      if (!grab.isCurrentOperationToken(operationToken)) {
         return
       }
       if (!result.ok) {
@@ -87,10 +98,13 @@ export function runBrowserGrabActionShortcut({
 
       if (key === 's') {
         try {
-          const ssResult = await window.api.browser.captureSelectionScreenshot({
-            browserPageId: toolTargetIdRef.current,
+          const ssResult = await grab.transport.captureSelectionScreenshot({
+            browserPageId: toolTargetId,
             rect: payload.target.rectViewport
           })
+          if (!grab.isCurrentOperationToken(operationToken)) {
+            return
+          }
           if (ssResult.ok) {
             payload.screenshot = ssResult.screenshot as BrowserGrabScreenshot
           }

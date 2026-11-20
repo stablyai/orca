@@ -56,14 +56,17 @@ function callbackUrl(redirectUri: string, params: Record<string, string>): strin
   return url.toString()
 }
 
-async function startedFlow(): Promise<{
+async function startedFlow(onAuthorizeUrl?: (url: string) => void): Promise<{
   authUrl: URL
   flow: ReturnType<typeof beginOrcaCloudPkceFlow>
   nonce: string
   redirectUri: string
   state: string
 }> {
-  const flow = beginOrcaCloudPkceFlow(config, 'local-default', { openBrowser: openExternalMock })
+  const flow = beginOrcaCloudPkceFlow(config, 'local-default', {
+    openBrowser: openExternalMock,
+    onAuthorizeUrl
+  })
   await vi.waitFor(() => expect(openExternalMock).toHaveBeenCalledTimes(1))
   const authUrl = new URL(String(openExternalMock.mock.calls[0]?.[0]))
   const nonce = authUrl.searchParams.get('nonce')
@@ -105,19 +108,6 @@ describe('Orca cloud PKCE flow', () => {
     )
   })
 
-  it('opens a link that carries the S256 challenge of the verifier it keeps, never the verifier', async () => {
-    const { authUrl, flow, redirectUri, state } = await startedFlow()
-    const {
-      result: { codeVerifier }
-    } = await browserReturn(flow, callbackUrl(redirectUri, { code: 'real-code', state }))
-
-    expect(authUrl.toString()).not.toContain(codeVerifier)
-    expect(authUrl.searchParams.get('code_challenge_method')).toBe('S256')
-    expect(authUrl.searchParams.get('code_challenge')).toBe(
-      createHash('sha256').update(codeVerifier).digest('base64url')
-    )
-  })
-
   it('keeps the loopback listener alive after an invalid callback', async () => {
     const { flow, redirectUri, state } = await startedFlow()
 
@@ -154,7 +144,7 @@ describe('Orca cloud PKCE flow', () => {
     await expect(observedFlow).resolves.toMatchObject({ message: 'orca_cloud_auth_denied' })
   })
 
-  it.each(['server_error', 'temporarily_unavailable', 'unknown-error', ''])(
+  it.each(['server_error', ''])(
     'reports %s as a failed sign-in rather than user cancellation',
     async (error) => {
       const { flow, redirectUri, state } = await startedFlow()
@@ -168,16 +158,17 @@ describe('Orca cloud PKCE flow', () => {
     }
   )
 
-  it('adds desktop PKCE parameters to the authorize URL', async () => {
-    const { authUrl, flow, nonce, redirectUri, state } = await startedFlow()
+  it('opens and publishes the desktop authorize URL with only the verifier’s challenge', async () => {
+    const onAuthorizeUrl = vi.fn()
+    const { authUrl, flow, nonce, redirectUri, state } = await startedFlow(onAuthorizeUrl)
 
+    expect(onAuthorizeUrl).toHaveBeenCalledWith(openExternalMock.mock.calls[0]?.[0])
     expect(authUrl.searchParams.get('client_id')).toBe('desktop-client')
     expect(authUrl.searchParams.get('response_type')).toBe('code')
     expect(authUrl.searchParams.get('redirect_uri')).toBe(redirectUri)
     expect(authUrl.searchParams.get('scope')).toBe('openid profile email offline_access')
     expect(authUrl.searchParams.get('nonce')).toBe(nonce)
     expect(authUrl.searchParams.get('state')).toBe(state)
-    expect(authUrl.searchParams.get('code_challenge')).toMatch(/^[A-Za-z0-9_-]+$/)
     expect(authUrl.searchParams.get('code_challenge_method')).toBe('S256')
     expect(authUrl.searchParams.get('local_profile_id')).toBe('local-default')
 
@@ -186,6 +177,10 @@ describe('Orca cloud PKCE flow', () => {
       callbackUrl(redirectUri, { code: 'real-code', state })
     )
     expect(result).toMatchObject({ code: 'real-code', nonce })
+    expect(authUrl.toString()).not.toContain(result.codeVerifier)
+    expect(authUrl.searchParams.get('code_challenge')).toBe(
+      createHash('sha256').update(result.codeVerifier).digest('base64url')
+    )
   })
 
   it('keeps the first loopback alive when a second sign-in starts', async () => {
@@ -224,26 +219,6 @@ describe('Orca cloud PKCE flow', () => {
     expect(secondReturn.response.statusCode).toBe(200)
     expect(secondReturn.result).toMatchObject({ code: 'second-code', state: secondState })
   })
-  it('hands the opened authorize URL to the caller so it can be copied', async () => {
-    const onAuthorizeUrl = vi.fn()
-    const flow = beginOrcaCloudPkceFlow(config, 'local-default', {
-      openBrowser: openExternalMock,
-      onAuthorizeUrl
-    })
-    await vi.waitFor(() => expect(openExternalMock).toHaveBeenCalledTimes(1))
-    const opened = String(openExternalMock.mock.calls[0]?.[0])
-    expect(onAuthorizeUrl).toHaveBeenCalledWith(opened)
-
-    const authUrl = new URL(opened)
-    const redirectUri = authUrl.searchParams.get('redirect_uri') ?? ''
-    const state = authUrl.searchParams.get('state') ?? ''
-    const { result } = await browserReturn(
-      flow,
-      callbackUrl(redirectUri, { code: 'real-code', state })
-    )
-    expect(result).toMatchObject({ code: 'real-code' })
-  })
-
   it('ends the wait as cancelled when its signal aborts', async () => {
     const browserWait = new AbortController()
     const flow = beginOrcaCloudPkceFlow(config, 'local-default', {

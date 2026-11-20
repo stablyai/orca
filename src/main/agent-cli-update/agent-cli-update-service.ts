@@ -32,10 +32,14 @@ const versions = new Map<string, { stamp: string; version: string | null; at: nu
 const checks = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdate | null>>()
 const runs = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdateRunResult>>()
 
-/** Runs --version only when the installed file changed, or an unread one is due again. */
+/**
+ * Runs --version only when the installed file changed, or when an unread version (any version with
+ * `recheck`) is due again. A failed recheck keeps the version it last read.
+ */
 async function installedVersion(
   agent: AgentCliUpdateAgent,
-  cli: OwnAgentCli
+  cli: OwnAgentCli,
+  recheck = false
 ): Promise<string | null> {
   const input = {
     program: cli.program,
@@ -48,17 +52,17 @@ async function installedVersion(
     cwd: input.cwd,
     env: cli.env
   })
-  const { parseVersion, updatesOutsideLauncher } = agentCliUpdateDefinition(agent)
+  const { parseVersion } = agentCliUpdateDefinition(agent)
   const known = versions.get(cli.program)
-  if (
-    known?.stamp === stamp &&
-    ((known.version && !updatesOutsideLauncher) || Date.now() - known.at < UNREAD_RETRY_MS)
-  ) {
+  const unchanged = known?.stamp === stamp
+  if (unchanged && ((known.version && !recheck) || Date.now() - known.at < UNREAD_RETRY_MS)) {
     return known.version
   }
-  const { version } = parseVersion
+  const read = parseVersion
     ? await readAgentCliVersion(input, parseVersion)
     : await readAgentCliVersion(input)
+  // Hermes' --version can outlast the probe while it checks for updates itself.
+  const version = read.version ?? (unchanged ? known.version : null)
   versions.set(cli.program, { stamp, version, at: Date.now() })
   return version
 }
@@ -75,6 +79,17 @@ function latestRelease(agent: AgentCliUpdateAgent, installed: string): Promise<s
   return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed))
 }
 
+async function behindRelease(
+  agent: AgentCliUpdateAgent,
+  cli: OwnAgentCli,
+  recheck: boolean
+): Promise<{ version: string; latest: string } | null> {
+  const version = await installedVersion(agent, cli, recheck)
+  // Which release line is latest can depend on the installed major.
+  const latest = version ? await latestRelease(agent, version) : null
+  return version && latest && compareAppVersions(version, latest) < 0 ? { version, latest } : null
+}
+
 async function readAgentCliUpdate(
   agent: AgentCliUpdateAgent,
   settings: AgentCliUpdateSettings
@@ -83,12 +98,15 @@ async function readAgentCliUpdate(
   if (!cli) {
     return null
   }
-  const version = await installedVersion(agent, cli)
-  // Which release line is latest can depend on the installed major.
-  const latest = version ? await latestRelease(agent, version) : null
-  if (!version || !latest || compareAppVersions(version, latest) >= 0) {
+  let behind = await behindRelease(agent, cli, false)
+  // A launcher that runs a copy updated elsewhere only looks behind until its version is read again.
+  if (behind && agentCliUpdateDefinition(agent).updatesOutsideLauncher) {
+    behind = await behindRelease(agent, cli, true)
+  }
+  if (!behind) {
     return null
   }
+  const { version, latest } = behind
   const plan = updatePlan(agent, cli, version)
   const models = await readModelsNeedingCliUpdate(agent, version, latest)
   return {
