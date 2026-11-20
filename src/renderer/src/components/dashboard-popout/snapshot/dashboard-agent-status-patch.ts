@@ -52,7 +52,9 @@ export function patchDashboardSnapshotFromAgentStatus(
 
   const stateChanged = event.stateStartedAt > card.stateChangedAt
   // Why ack 0: the event is a live turn and the pop-out holds no acks; the next snapshot has them.
-  const unseen = stateChanged ? isAgentTurnUnacknowledged(0, event.stateStartedAt) : card.unseen
+  const restatesTurn = event.state === 'done' && event.sessionBoundary === true
+  const unseen =
+    stateChanged && !restatesTurn ? isAgentTurnUnacknowledged(0, event.stateStartedAt) : card.unseen
   const dotState = event.state
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined

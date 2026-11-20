@@ -2,26 +2,23 @@ import {
   readAgentAttentionUnreadReason,
   type ReadableAgentAttentionUnread
 } from './agent-attention-contract'
-
-export type AgentAttentionTurn = {
-  stateStartedAt: number
-  state?: string
-  sessionBoundary?: boolean
-  stateHistory?: readonly { startedAt: number }[]
-}
+import {
+  agentEntryCompletionAt,
+  type AgentCompletionSource
+} from '../../../shared/agent-status/lifecycle/agent-completion-time'
 
 /** Subject-keyed turn bookkeeping the acknowledgement policy reads; no surface shape here. */
 export type AgentAttentionTurnRecords = {
-  liveTurns: ReadonlyMap<string, AgentAttentionTurn> | Record<string, AgentAttentionTurn>
+  liveTurns: ReadonlyMap<string, AgentCompletionSource> | Record<string, AgentCompletionSource>
   acknowledgedTurnStartedAt: Record<string, number>
 }
 
 /** A session-boundary idle restates the turn it displaced, so it keeps that turn's identity instead of its arrival time. */
-export function agentAttentionTurnAt(entry: AgentAttentionTurn): number {
+export function agentAttentionTurnAt(entry: AgentCompletionSource): number {
   if (entry.state !== 'done' || entry.sessionBoundary !== true) {
     return entry.stateStartedAt
   }
-  return entry.stateHistory?.at(-1)?.startedAt ?? 0
+  return agentEntryCompletionAt(entry) ?? 0
 }
 
 export function readAgentAttentionTurnStartedAt(
@@ -35,7 +32,7 @@ export function readAgentAttentionTurnStartedAt(
 
 function isTurnMap(
   turns: AgentAttentionTurnRecords['liveTurns']
-): turns is ReadonlyMap<string, AgentAttentionTurn> {
+): turns is ReadonlyMap<string, AgentCompletionSource> {
   return typeof turns.get === 'function'
 }
 
