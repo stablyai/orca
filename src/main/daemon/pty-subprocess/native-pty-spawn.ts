@@ -10,6 +10,7 @@ import {
 } from '../../providers/shell-launch/macos/tcc-login-shell'
 import type { WindowsShellSpawnAttempt } from '../../providers/shell-launch/windows/shell-fallback-chain'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
+import { markPtySpawnStarted } from '../../windows/pty-spawn-time'
 import { wrapPtySpawnInTerminalScope } from '../process-scopes/terminal-scopes-runtime'
 import { spawnConptyWithInputReader, type ConptyStartupEvents } from './conpty-startup-input-reader'
 
@@ -80,6 +81,7 @@ export async function spawnNativeDaemonPty(args: {
     const attempt = Promise.withResolvers<PtyCreationDisposition>()
     args.creationWork?.join(attempt.promise)
     let proc: pty.IPty
+    const spawnStartedAt = Date.now()
     try {
       proc = nodePty.spawn(wrapped.file, wrapped.args, {
         name: args.env.TERM ?? 'xterm-256color',
@@ -94,6 +96,7 @@ export async function spawnNativeDaemonPty(args: {
       attempt.resolve({ kind: 'failed', completion: Promise.resolve() })
       throw error
     }
+    markPtySpawnStarted(proc, spawnStartedAt)
     const physical = createDaemonPtyPhysicalOwner(proc, shellPath)
     unpublishedOwner = physical
     attempt.resolve({

@@ -11,7 +11,7 @@ import {
   type WindowsProcessRow as NativeWindowsProcessRow
 } from '../../../windows/windows-process-table'
 
-import { forgetPaneRoots, orphansBornAfterRoot, rememberPaneRoot } from './exited-root-orphans'
+import { orphansBornAfterSpawn } from './exited-root-orphans'
 
 export type WindowsProcessRow = {
   pid: number
@@ -69,7 +69,12 @@ export type WindowsPaneProcessInventory = {
 
 export async function queryWindowsPaneProcessInventory(
   rootPid: number,
-  options: { fresh?: boolean; anchorPid?: number; includeOrphansOfExitedRoot?: boolean } = {}
+  options: {
+    fresh?: boolean
+    anchorPid?: number
+    /** Opts in to orphans of an exited root; only those born after the pane's spawn are returned. */
+    exitedRootPaneSpawnedAtMs?: number
+  } = {}
 ): Promise<WindowsPaneProcessInventory | null> {
   let rows: WindowsProcessRow[]
   try {
@@ -90,16 +95,16 @@ export async function queryWindowsPaneProcessInventory(
     // A pane root can exit while the agent it started keeps the console alive (Windows keeps the
     // dead parent's pid on the orphans). A fresh table still shows those orphans, which callers may
     // use as evidence of presence; an empty or stale read stays unavailable.
-    if (options.fresh !== true || options.includeOrphansOfExitedRoot !== true) {
+    const spawnedAt = options.exitedRootPaneSpawnedAtMs
+    if (options.fresh !== true || spawnedAt === undefined) {
       return null
     }
-    const orphans = orphansBornAfterRoot(rootPid, collectDescendantsFromIndex(index, rootPid))
+    const orphans = orphansBornAfterSpawn(collectDescendantsFromIndex(index, rootPid), spawnedAt)
     if (orphans.length === 0) {
       return null
     }
     return { candidates: orphans.sort((a, b) => b.depth - a.depth), anchorRow, rootExited: true }
   }
-  rememberPaneRoot(index.byPid.get(rootPid))
   return {
     candidates: collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth),
     anchorRow
@@ -108,5 +113,4 @@ export async function queryWindowsPaneProcessInventory(
 
 export function resetWindowsProcessRowsSnapshotForTests(): void {
   resetWindowsProcessTableForTests()
-  forgetPaneRoots()
 }

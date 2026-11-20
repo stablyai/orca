@@ -1,4 +1,4 @@
-import type { WindowsProcessCandidate, WindowsProcessRow } from './process-rows'
+import type { WindowsProcessCandidate } from './process-rows'
 
 const CONSOLE_HOST_NAMES = new Set(['conhost.exe', 'openconsole.exe'])
 
@@ -16,41 +16,18 @@ export function findOrphanOnInheritedConsole(
   )?.pid
 }
 
-// Creation times of pane roots seen alive, bounded; the oldest entry is dropped first.
-const rootCreationTimes = new Map<number, number>()
-const MAX_REMEMBERED_ROOTS = 512
-
-export function rememberPaneRoot(
-  row: Pick<WindowsProcessRow, 'pid' | 'creationTimeMs'> | undefined
-) {
-  if (row?.creationTimeMs === undefined) {
-    return
-  }
-  rootCreationTimes.delete(row.pid)
-  rootCreationTimes.set(row.pid, row.creationTimeMs)
-  if (rootCreationTimes.size > MAX_REMEMBERED_ROOTS) {
-    rootCreationTimes.delete(rootCreationTimes.keys().next().value!)
-  }
-}
-
-export function forgetPaneRoots(): void {
-  rootCreationTimes.clear()
-}
-
-/** Windows reuses a dead root's pid: a direct orphan born before the root was seen is a child of an
- * earlier holder of that pid, so it and its subtree are dropped. Unseen roots keep every orphan. */
-export function orphansBornAfterRoot(
-  rootPid: number,
-  orphans: WindowsProcessCandidate[]
+/** Windows keeps a dead parent's pid on its orphans and reuses pids, so a direct orphan only belongs
+ * to this pane when its creation time is known and after the pane's spawn; others drop with their subtrees. */
+export function orphansBornAfterSpawn(
+  orphans: WindowsProcessCandidate[],
+  paneSpawnedAtMs: number
 ): WindowsProcessCandidate[] {
-  const rootBorn = rootCreationTimes.get(rootPid)
-  if (rootBorn === undefined) {
-    return orphans
-  }
   const foreign = new Set<number>()
   for (const orphan of [...orphans].sort((a, b) => a.depth - b.depth)) {
-    const older = orphan.depth === 1 && (orphan.creationTimeMs ?? rootBorn) < rootBorn
-    if (older || foreign.has(orphan.ppid)) {
+    const unproven =
+      orphan.depth === 1 &&
+      (orphan.creationTimeMs === undefined || orphan.creationTimeMs < paneSpawnedAtMs)
+    if (unproven || foreign.has(orphan.ppid)) {
       foreign.add(orphan.pid)
     }
   }
