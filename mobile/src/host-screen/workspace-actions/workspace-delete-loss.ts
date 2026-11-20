@@ -86,6 +86,8 @@ export function useWorkspaceDeleteLoss(args: {
   return {
     kind: 'known',
     changeCount: status.data.status.entries.length,
-    ignoredFiles: ignored.data ?? null
+    // null is a host that predates the scan; undefined is a scan that failed, which is never "no files".
+    ignoredFiles:
+      ignored.data === undefined ? { count: 0, samplePaths: [], complete: false } : ignored.data
   }
 }
