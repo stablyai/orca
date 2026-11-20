@@ -12658,7 +12658,8 @@
           "source": {
             "cli": "Cursor CLI 认证文件",
             "desktop": "Cursor IDE",
-            "keychain": "macOS 钥匙串（cursor-agent）"
+            "keychain": "macOS 钥匙串（cursor-agent）",
+            "keyring": "Linux 密钥环（cursor-agent）"
           },
           "staleUsage": "上次已知用量 — 最近一次刷新失败：{{reason}}",
           "subtitle": "显示来自此电脑上已有登录的 Cursor 套餐用量。Orca 仅读取，不会更改您的 Cursor 登录",

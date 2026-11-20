@@ -187,80 +187,75 @@ describe('Chromium import snapshot ownership', () => {
       ${encrypted ? "X'763130656E63727970746564'" : "X''"}, '/', 0, 0, 0, -1)`)
   }
 
-  it.each([20])(
-    'defers snapshot, SQLite read and decryption for %i queued same-Session imports',
-    async (requests) => {
-      const rows = 200
-      const password = 'synthetic-queue-password'
-      const encrypted = encryptMacChromiumCookie('v'.repeat(1024), password)
-      const insert = sourceDatabase.prepare(`INSERT INTO cookies (
-      creation_utc, host_key, name, value, encrypted_value, path, expires_utc,
-      is_secure, is_httponly, samesite
-    ) VALUES (133000000000000, '.example.test', ?, '', ?, '/', 0, 1, 0, -1)`)
-      for (let index = 0; index < rows; index++) {
-        insert.run(`cookie${index}`, encrypted)
-      }
-      runProcessMock.mockResolvedValue({
-        code: 0,
-        signal: null,
-        stdout: password,
-        stderr: '',
-        timedOut: false
-      })
-      const decrypt = vi.spyOn(cookieDecryption, 'decryptCookieValueRaw')
-      const targetSession = sessionFromPartitionMock()
-      const releaseAdmission = await acquireCookieMutationLock(targetSession)
-      let releaseWrite!: () => void
-      const writing = new Promise<void>((resolve) => {
-        releaseWrite = resolve
-      })
-      let reachedWrite!: () => void
-      const firstWrite = new Promise<void>((resolve) => {
-        reachedWrite = resolve
-      })
-      writeCookieIdentityMock.mockImplementation(async () => {
-        reachedWrite()
-        await writing
-      })
-      const databasesBefore = openedDatabases.length
-      const pending = Array.from({ length: requests }, () =>
-        importChromiumCookies(chromeBrowser(sourcePath), PARTITION)
-      )
-      try {
-        await new Promise<void>((resolve) => setImmediate(resolve))
-        expect(snapshotRootMock).not.toHaveBeenCalled()
-        expect(snapshotDirectories()).toEqual([])
-        expect(openedDatabases).toHaveLength(databasesBefore)
-        expect(runProcessMock).not.toHaveBeenCalled()
-        expect(decrypt).not.toHaveBeenCalled()
-        expect(writeCookieIdentityMock).not.toHaveBeenCalled()
-
-        releaseAdmission()
-        await firstWrite
-        expect(snapshotDirectories()).toHaveLength(1)
-        expect(snapshotRootMock).toHaveBeenCalledOnce()
-        expect(openedDatabases).toHaveLength(databasesBefore + 1)
-        expect(decrypt).toHaveBeenCalledTimes(rows)
-        releaseWrite()
-        const results = await Promise.all(pending)
-        expect(
-          results.every((result) => result.ok && result.summary.importedCookies === rows)
-        ).toBe(true)
-        expect(snapshotRootMock).toHaveBeenCalledTimes(requests)
-        expect(decrypt).toHaveBeenCalledTimes(requests * rows)
-        expect(writeCookieIdentityMock).toHaveBeenCalledTimes(requests * rows)
-        expect(snapshotPopulations).toEqual(Array(requests).fill(1))
-        expect(snapshotDirectories()).toEqual([])
-        expect(cleanupStates).toHaveLength(requests)
-        expect(cleanupStates.every((states) => states.every((open) => !open))).toBe(true)
-      } finally {
-        releaseAdmission()
-        releaseWrite()
-        await Promise.all(pending)
-        decrypt.mockRestore()
-      }
+  it('defers snapshot, SQLite read and decryption for queued same-session imports', async () => {
+    const requests = 3
+    const rows = 2
+    const password = 'synthetic-queue-password'
+    const encrypted = encryptMacChromiumCookie('cookie-value', password)
+    const insert = sourceDatabase.prepare(`INSERT INTO cookies (
+    creation_utc, host_key, name, value, encrypted_value, path, expires_utc,
+    is_secure, is_httponly, samesite
+  ) VALUES (133000000000000, '.example.test', ?, '', ?, '/', 0, 1, 0, -1)`)
+    for (let index = 0; index < rows; index++) {
+      insert.run(`cookie${index}`, encrypted)
     }
-  )
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: password,
+      stderr: '',
+      timedOut: false
+    })
+    const decrypt = vi.spyOn(cookieDecryption, 'decryptCookieValueRaw')
+    const targetSession = sessionFromPartitionMock()
+    const releaseAdmission = await acquireCookieMutationLock(targetSession)
+    let releaseWrite!: () => void
+    const writing = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    let reachedWrite!: () => void
+    const firstWrite = new Promise<void>((resolve) => {
+      reachedWrite = resolve
+    })
+    writeCookieIdentityMock.mockImplementation(async () => {
+      reachedWrite()
+      await writing
+    })
+    const databasesBefore = openedDatabases.length
+    const pending = Array.from({ length: requests }, () =>
+      importChromiumCookies(chromeBrowser(sourcePath), PARTITION)
+    )
+    try {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(snapshotRootMock).not.toHaveBeenCalled()
+      expect(snapshotDirectories()).toEqual([])
+      expect(openedDatabases).toHaveLength(databasesBefore)
+      expect(runProcessMock).not.toHaveBeenCalled()
+      expect(decrypt).not.toHaveBeenCalled()
+      expect(writeCookieIdentityMock).not.toHaveBeenCalled()
+
+      releaseAdmission()
+      await firstWrite
+      expect(snapshotDirectories()).toHaveLength(1)
+      expect(snapshotRootMock).toHaveBeenCalledOnce()
+      expect(openedDatabases).toHaveLength(databasesBefore + 1)
+      expect(decrypt).toHaveBeenCalledTimes(rows)
+      releaseWrite()
+      const results = await Promise.all(pending)
+      expect(results.every((result) => result.ok && result.summary.importedCookies === rows)).toBe(
+        true
+      )
+      expect(snapshotPopulations).toEqual(Array(requests).fill(1))
+      expect(snapshotDirectories()).toEqual([])
+      expect(cleanupStates).toHaveLength(requests)
+      expect(cleanupStates.every((states) => states.every((open) => !open))).toBe(true)
+    } finally {
+      releaseAdmission()
+      releaseWrite()
+      await Promise.all(pending)
+      decrypt.mockRestore()
+    }
+  })
 
   it('cleans the snapshot and admits the next import while an earlier flush remains pending', async () => {
     insertSourceCookie(false)

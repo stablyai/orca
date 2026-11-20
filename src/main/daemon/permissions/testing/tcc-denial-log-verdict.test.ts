@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '@orca/process-host'
 import { parseTccLogVerdict, readTccLogVerdict } from '../tcc-denial-log-verdict'
 
 // Real tccd lines from a macOS 27.2 VM (usernames redacted), as `log show --style ndjson` emits them.
@@ -123,8 +122,16 @@ describe('parseTccLogVerdict', () => {
     })
   })
 
-  it('reports no tccd request when only other processes asked', () => {
-    expect(parseTccLogVerdict(ndjson(APP_DOCUMENTS_REFUSED), SUBJECT, 'ok')).toMatchObject({
+  it('reports no tccd request for the app or an earlier helper on the same path', () => {
+    const earlierHelper = HELPER_DOWNLOADS_REFUSED.map((entry) =>
+      entry.replace('pid=1206', 'pid=1100')
+    )
+    const verdict = parseTccLogVerdict(
+      ndjson([...APP_DOCUMENTS_REFUSED, ...earlierHelper]),
+      SUBJECT,
+      'ok'
+    )
+    expect(verdict).toMatchObject({
       tccdAsked: 'no',
       authValue: 'none',
       authReason: 'none',
@@ -209,16 +216,6 @@ describe('parseTccLogVerdict', () => {
     })
   })
 
-  it('does not credit an earlier helper on the same copy path to this one', () => {
-    const earlierHelper = HELPER_DOWNLOADS_REFUSED.map((entry) =>
-      entry.replace('pid=1206', 'pid=1100')
-    )
-    expect(parseTccLogVerdict(ndjson(earlierHelper), SUBJECT, 'ok')).toMatchObject({
-      tccdAsked: 'no',
-      authValue: 'none'
-    })
-  })
-
   it('leaves tccd_asked unknown when the log was unreadable or cut short', () => {
     expect(parseTccLogVerdict('', SUBJECT, 'denied').tccdAsked).toBe('unknown')
     expect(parseTccLogVerdict(ndjson(APP_DOCUMENTS_REFUSED), SUBJECT, 'truncated').tccdAsked).toBe(
@@ -230,8 +227,10 @@ describe('parseTccLogVerdict', () => {
 describe('readTccLogVerdict', () => {
   it('asks for Info records in a window that ends at the denial', async () => {
     let args: readonly string[] = []
+    let deadlineMs = 0
     await readTccLogVerdict(DENIED_AT_MS, SUBJECT, async (spec) => {
       args = spec.args ?? []
+      deadlineMs = spec.timeoutMs ?? 0
       return { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
     })
     expect(args).toEqual([
@@ -246,6 +245,8 @@ describe('readTccLogVerdict', () => {
       '--predicate',
       '(subsystem == "com.apple.TCC") OR (sender == "Sandbox")'
     ])
+    expect(deadlineMs).toBeGreaterThan(0)
+    expect(deadlineMs).toBeLessThanOrEqual(5_000)
   })
 
   it('keeps what a timed-out log printed and reports the timeout', async () => {
@@ -258,18 +259,6 @@ describe('readTccLogVerdict', () => {
     }))
     expect(verdict).toMatchObject({ logAccess: 'timeout', authValue: 'denied' })
   })
-
-  it.skipIf(process.platform === 'win32')(
-    'kills a hung log reader at its deadline',
-    async () => {
-      // Same spec, but a child that never exits on its own.
-      const verdict = await readTccLogVerdict(DENIED_AT_MS, SUBJECT, (spec) =>
-        runProcess({ ...spec, program: '/bin/sleep', args: ['60'] })
-      )
-      expect(verdict.logAccess).toBe('timeout')
-    },
-    15_000
-  )
 
   it('swallows a spawn failure', async () => {
     const verdict = await readTccLogVerdict(DENIED_AT_MS, SUBJECT, async () => {

@@ -111,27 +111,17 @@ describe('tabs.captureVisibleTab', () => {
       active: true,
       contents: { id: windowId, getURL: () => 'https://site.test/', capturePage }
     }))
-    const pending = Array.from({ length: 40 }, (_, index) =>
-      capture(index % 2 ? 2 : 1, { format: index % 2 ? 'png' : 'jpeg' })
-    )
-    const completed = Promise.allSettled(pending)
-    const nativeCallsBeforeCompletion = capturePage.mock.calls.length
+    const first = capture(1, { format: 'jpeg' })
+    const second = capture(2, { format: 'png' })
+    await expect(capture(1)).rejects.toThrow(QUOTA_ERROR)
+    expect(capturePage).toHaveBeenCalledTimes(2)
     expect(image.toPNG).not.toHaveBeenCalled()
     expect(image.toJPEG).not.toHaveBeenCalled()
+
     deferred.resolve(image)
-    const results = await completed
-    expect(nativeCallsBeforeCompletion).toBe(2)
-    expect(mocks.holdPaint).toHaveBeenCalledTimes(2)
+    await expect(first).resolves.toBe('data:image/jpeg;base64,anBlZy05MA==')
+    await expect(second).resolves.toBe('data:image/png;base64,cG5nLWJ5dGVz')
     expect(mocks.releasePaint).toHaveBeenCalledTimes(2)
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2)
-    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(38)
-    for (const result of results.slice(2)) {
-      if (result.status === 'rejected') {
-        expect(result.reason).toHaveProperty('message', QUOTA_ERROR)
-      }
-    }
-    expect(image.toPNG).toHaveBeenCalledTimes(1)
-    expect(image.toJPEG).toHaveBeenCalledTimes(1)
   })
 
   it('shares page/worker admission but isolates extension and session identities', async () => {

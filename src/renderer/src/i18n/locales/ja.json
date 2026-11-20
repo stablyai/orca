@@ -12605,7 +12605,8 @@
           "source": {
             "cli": "Cursor CLI 認証ファイル",
             "desktop": "Cursor IDE",
-            "keychain": "macOS キーチェーン（cursor-agent）"
+            "keychain": "macOS キーチェーン（cursor-agent）",
+            "keyring": "Linux キーリング（cursor-agent）"
           },
           "staleUsage": "最後に確認できた使用状況 — 最新の更新に失敗しました: {{reason}}",
           "subtitle": "このコンピュータに既にある Cursor のサインインから、Cursor プラン使用状況を表示します。Orca は読み取るだけで、Cursor のログインを変更することはありません。",

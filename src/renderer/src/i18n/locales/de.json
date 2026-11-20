@@ -12510,6 +12510,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS-Schlüsselbund (cursor-agent)",
+            "keyring": "Linux-Schlüsselbund (cursor-agent)",
             "cli": "Authentifizierungsdatei der Cursor-CLI",
             "desktop": "Cursor IDE"
           },

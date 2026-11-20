@@ -391,58 +391,33 @@ describe('lifecycle reconciliation', () => {
     })
   })
 
-  it('surfaces a heartbeat sent from a different pane without recording liveness', () => {
+  it('surfaces foreign-pane heartbeats without recording liveness, even with the assignee handle', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
     const dispatch = createRootDispatch(db, task.id, 'term_owner', `tab_w1:${LEAF_A}`)
-    const heartbeat = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'term_other_worker',
-      to: 'term_coordinator',
-      subject: 'alive',
-      type: 'heartbeat',
-      payload: JSON.stringify({ dispatchId: dispatch.id }),
-      senderPaneKey: `tab_w2:${LEAF_B}`
-    })
+    for (const from of ['term_other_worker', 'term_owner']) {
+      const heartbeat = db.insertMessage({
+        runId: 'run_legacy_local',
+        from,
+        to: 'term_coordinator',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ dispatchId: dispatch.id }),
+        senderPaneKey: `tab_w2:${LEAF_B}`
+      })
 
-    expect(reconcileLifecycleMessage(db, heartbeat)).toMatchObject({
-      action: 'rejected',
-      code: 'sender_not_assignee'
-    })
-    expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
-    expect(db.getMessageById(heartbeat.id)).toMatchObject({
-      type: 'heartbeat',
-      subject: 'Rejected heartbeat: alive'
-    })
-    // Log the rejection on coordinator reread even after send-path conversion.
-    const persisted = db.getMessageById(heartbeat.id)
-    const rereadLogs: string[] = []
-    expect(
-      persisted && reconcileLifecycleMessage(db, persisted, (line) => rereadLogs.push(line))
-    ).toMatchObject({
-      action: 'rejected'
-    })
-    expect(rereadLogs.some((line) => line.includes('Heartbeat rejected'))).toBe(true)
-  })
-
-  it('surfaces a foreign heartbeat that claims the assignee handle', () => {
-    db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
-    const dispatch = createRootDispatch(db, task.id, 'term_owner', `tab_w1:${LEAF_A}`)
-    const heartbeat = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'term_owner',
-      to: 'term_coordinator',
-      subject: 'alive',
-      type: 'heartbeat',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
-      senderPaneKey: `tab_w2:${LEAF_B}`
-    })
-
-    expect(reconcileLifecycleMessage(db, heartbeat)).toMatchObject({
-      action: 'rejected',
-      code: 'sender_not_assignee'
-    })
-    expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
+      expect(reconcileLifecycleMessage(db, heartbeat)).toMatchObject({
+        action: 'rejected',
+        code: 'sender_not_assignee'
+      })
+      expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
+      const persisted = db.getMessageById(heartbeat.id)
+      expect(persisted).toMatchObject({ type: 'heartbeat', subject: 'Rejected heartbeat: alive' })
+      const rereadLogs: string[] = []
+      expect(
+        persisted && reconcileLifecycleMessage(db, persisted, (line) => rereadLogs.push(line))
+      ).toMatchObject({ action: 'rejected' })
+      expect(rereadLogs.some((line) => line.includes('Heartbeat rejected'))).toBe(true)
+    }
   })
 })

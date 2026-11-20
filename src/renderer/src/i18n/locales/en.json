@@ -13796,6 +13796,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS Keychain (cursor-agent)",
+            "keyring": "Linux keyring (cursor-agent)",
             "cli": "Cursor CLI auth file",
             "desktop": "Cursor IDE"
           },
@@ -22561,6 +22562,8 @@
         "yourAgyVersion": "Your agy · v{{version}}",
         "orcaCopy": "Orca's copy",
         "orcaCopyVersion": "Orca's copy · v{{version}}",
+        "orcasAgy": "Orca's agy",
+        "orcasAgyVersion": "Orca's agy · v{{version}}",
         "runsOn": "Runs on: {{program}}",
         "agyItem": "agy's own login",
         "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
@@ -24977,6 +24980,12 @@
       "chatDescriptionAgy": "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't.",
       "chatDescriptionAgyVersion": "New chats run on your agy (v{{version}}) and its account below. This sign-in is used when agy isn't.",
       "chatDescriptionManagedVersion": "New chats run on Orca's copy (v{{version}}), so Chat works without agy installed.",
+      "chatDescriptionAgySignedOut": "New chats use agy, which isn't signed in yet. Run agy on this host to sign in.",
+      "chatDescriptionOrcaAgy": "Chats run on Orca's copy of agy and use agy's own sign-in.",
+      "chatDescriptionAgyOwnSignIn": "Chats run on agy and use agy's own sign-in.",
+      "chatDescriptionInstallAgy": "Install agy below to use Chat. It signs in with its own account.",
+      "chatDescriptionOrcaAgyVersion": "Chats run on Orca's agy (v{{version}}) and use agy's own sign-in.",
+      "chatDescriptionAgyOwnSignInVersion": "Chats run on your agy (v{{version}}) and use agy's own sign-in.",
       "terminalTitle": "agy in the terminal",
       "terminalDescriptionWindows": "Uses agy's own saved accounts. Switching applies to the host default agy credential.",
       "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
@@ -27150,7 +27159,8 @@
         "update": "Update in Slack",
         "installedBy": "installed by {{installer}}",
         "removeFromTitle": "Remove {{name}} from {{place}}?",
-        "signIn": "Sign in"
+        "signIn": "Sign in",
+        "updatePermissions": "Update Slack permissions…"
       },
       "token": {
         "open": "Get config token",

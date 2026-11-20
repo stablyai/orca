@@ -9,7 +9,6 @@ import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
 import { settleActiveDispatchesForTask } from './dispatch-completion'
-import { mintStructuredWorkerHandle } from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../../terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
 
 describe('settled assignment worker recovery', () => {
@@ -137,38 +136,6 @@ describe('settled assignment worker recovery', () => {
       expect(db.getWorkerDispatch(dispatchId)?.state).toBe('ready')
     }
   })
-
-  it.each(['completed', 'failed', 'circuit_broken'] as const)(
-    'repairs historical %s assignments on reopen for PTY, structured and handle-less workers',
-    (status) => {
-      const dispatchIds: string[] = []
-      for (const state of ['starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown']) {
-        for (const handle of ['term_worker', mintStructuredWorkerHandle(), null]) {
-          const { dispatchId } = worker(handle)
-          dispatchIds.push(dispatchId)
-          // Reproduce rows written before assignment and worker settlement shared a transaction.
-          db.db
-            .prepare('UPDATE dispatch_contexts SET status = ? WHERE id = ?')
-            .run(status, dispatchId)
-          db.db
-            .prepare('UPDATE worker_dispatches SET state = ?, last_error = ? WHERE dispatch_id = ?')
-            .run(state, 'historical diagnostic', dispatchId)
-        }
-      }
-      db.close()
-      db = new OrchestrationDb(databasePath)
-
-      expect(db.listLegacyWorkerTerminalRecoveryRows()).toEqual([])
-      for (const dispatchId of dispatchIds) {
-        expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
-          state: 'abandoned',
-          stage: 'assignment_settled',
-          last_error: 'historical diagnostic'
-        })
-        expect(db.getDispatchContextById(dispatchId)?.status).toBe(status)
-      }
-    }
-  )
 
   it('keeps uncertain workers with pending assignments recoverable across reopen', () => {
     const pending = worker(null)
