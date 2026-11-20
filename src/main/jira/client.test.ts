@@ -162,6 +162,65 @@ describe('Jira client credential storage', () => {
     )
   })
 
+  it('preserves a reconnected credential when an older issue request returns 401', async () => {
+    const jira = await loadClientModule()
+    const args = {
+      siteUrl: 'https://example.atlassian.net',
+      email: 'ada@example.com',
+      apiToken: 'old-token'
+    }
+    const viewer = { accountId: 'account-alpha', displayName: 'Ada' }
+    let failIssue!: (response: Response) => void
+    let issueStarted!: () => void
+    const started = new Promise<void>((resolve) => {
+      issueStarted = resolve
+    })
+    netFetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith('/myself')) {
+        return Response.json(viewer)
+      }
+      if (url.endsWith('/field')) {
+        return Response.json([])
+      }
+      issueStarted()
+      return new Promise<Response>((resolve) => {
+        failIssue = resolve
+      })
+    })
+    await expect(jira.connect(args)).resolves.toMatchObject({ ok: true })
+    const { getIssue } = await import('./jira-issue-read')
+    const pending = getIssue('ALP-1')
+    const rejected = expect(pending).rejects.toThrow('Old credential expired')
+    await started
+
+    await expect(jira.connect({ ...args, apiToken: 'replacement-token' })).resolves.toMatchObject({
+      ok: true
+    })
+    failIssue(Response.json({ errorMessages: ['Old credential expired'] }, { status: 401 }))
+    await rejected
+
+    expect((await jira.getStatus()).connected).toBe(true)
+    expect((await jira.getClients())[0]?.authorization).toBe(
+      'Basic YWRhQGV4YW1wbGUuY29tOnJlcGxhY2VtZW50LXRva2Vu'
+    )
+  })
+
+  it('disconnects the credential that actually received a 401', async () => {
+    writeJiraFiles('site-alpha', 'expired-token')
+    const jira = await loadClientModule()
+    netFetchMock.mockImplementation(async (url: string) =>
+      url.endsWith('/field')
+        ? Response.json([])
+        : Response.json({ errorMessages: ['Credential expired'] }, { status: 401 })
+    )
+    const { getIssue } = await import('./jira-issue-read')
+
+    await expect(getIssue('ALP-1')).rejects.toThrow('Credential expired')
+
+    expect((await jira.getStatus()).connected).toBe(false)
+    expect(existsSync(tokenPathForSite('site-alpha'))).toBe(false)
+  })
+
   it('removes cancelled queued reads so the request pool recovers', async () => {
     const jira = await loadClientModule()
     await Promise.all([jira.acquire(), jira.acquire(), jira.acquire(), jira.acquire()])
