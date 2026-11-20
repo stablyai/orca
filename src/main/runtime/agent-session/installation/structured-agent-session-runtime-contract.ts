@@ -1,6 +1,7 @@
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import type { BotLaunchTools } from '../../../bots/bot-launch-tools'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
+import type { ClaudeStatusLineRateLimits } from '../../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from './structured-agent-session-transport-overrides'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -56,6 +57,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveClaudeAuthPolicy: () => Promise<ClaudeStructuredAuthPolicy> | ClaudeStructuredAuthPolicy
   assertQueuedMessageAllowed?: StructuredAgentSessionHostDeps['assertQueuedMessageAllowed']
   usageLimitAutoContinue?: StructuredAgentSessionHostDeps['usageLimitAutoContinue']
+  /** Live account usage from Claude chat streams, as the terminal statusline would post it. */
+  onClaudeLiveRateLimits?: (event: ClaudeStatusLineRateLimits) => void
   idleSweep?: StructuredAgentSessionHostDeps['idleSweep']
   /** What a chat saved before its agent had modes ran with; fills that chat's mode once. */
   resolveAgentFullAccess?: (agent: string) => boolean

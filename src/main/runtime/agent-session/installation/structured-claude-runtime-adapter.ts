@@ -15,6 +15,10 @@ import type { ClaudeCommandCatalogProbe } from '../../../claude/command-catalog/
 import { openClaudeStreamJsonConnection } from '../../../claude/claude-stream-json-connection'
 import type { ClaudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
 import { prewarmClaudeCliFlags } from '../../../claude/cli-capabilities/claude-cli-flag-prewarm'
+import {
+  claudeRateLimitEventUsage,
+  type ClaudeStatusLineRateLimits
+} from '../../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
@@ -40,6 +44,8 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   onUserRenamed?: ClaudeStructuredSessionAdapterDeps['onUserRenamed']
   onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
   logger?: ClaudeStructuredSessionAdapterDeps['logger']
+  /** Chats have no statusline; their stream's usage frames feed the live usage bar instead. */
+  onClaudeLiveRateLimits?: (event: ClaudeStatusLineRateLimits) => void
 }
 
 /** The adapter events the host's lifecycle handler consumes, in the host's vocabulary. */
@@ -140,7 +146,7 @@ export function createStructuredClaudeRuntimeAdapter(
     ...(deps.onUserRenamed ? { onUserRenamed: deps.onUserRenamed } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.logger ? { logger: deps.logger } : {}),
-    ...openClaudeConnectionOf(deps),
+    ...withLiveRateLimits(openClaudeConnectionOf(deps), deps.onClaudeLiveRateLimits),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })
 }
@@ -176,5 +182,35 @@ export function openClaudeConnectionOf(
         },
         ...rest
       )
+  }
+}
+
+function withLiveRateLimits(
+  open: Pick<ClaudeStructuredSessionAdapterDeps, 'openConnection'>,
+  report: StructuredClaudeRuntimeAdapterDeps['onClaudeLiveRateLimits']
+): Pick<ClaudeStructuredSessionAdapterDeps, 'openConnection'> {
+  if (!report) {
+    return open
+  }
+  const base = open.openConnection ?? openClaudeStreamJsonConnection
+  return {
+    openConnection: (launch, handlers = {}, ...rest) => {
+      // The child's own account folder, as its statusline would report it.
+      const configDir = launch.env?.CLAUDE_CONFIG_DIR?.trim() || null
+      return base(
+        launch,
+        {
+          ...handlers,
+          onMessage: (message) => {
+            const usage = claudeRateLimitEventUsage(message, configDir)
+            if (usage) {
+              report(usage)
+            }
+            handlers.onMessage?.(message)
+          }
+        },
+        ...rest
+      )
+    }
   }
 }

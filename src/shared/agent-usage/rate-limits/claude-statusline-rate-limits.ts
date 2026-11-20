@@ -18,6 +18,8 @@ export type ClaudeStatusLineRateLimits = {
   configDir: string | null
   fiveHour: ClaudeStatusLineWindow | null
   sevenDay: ClaudeStatusLineWindow | null
+  /** Fable's weekly window; only chat streams report it. */
+  fableWeekly?: ClaudeStatusLineWindow | null
 }
 
 function finiteNumber(value: unknown): number | undefined {
@@ -78,4 +80,46 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
   }
   const configDir = typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
   return { configDir: configDir || null, fiveHour, sevenDay }
+}
+
+function rateLimitEventWindow(value: unknown): ClaudeStatusLineWindow | null {
+  if (typeof value !== 'object' || value === null || !('utilization' in value)) {
+    return null
+  }
+  const utilization = finiteNumber(value.utilization)
+  // Stream-json reports a 0–1 fraction where statusline reports a percentage.
+  return utilization === undefined
+    ? null
+    : parseWindow({
+        utilization: Math.round(utilization * 10_000) / 100,
+        resets_at: 'resetsAt' in value ? value.resetsAt : undefined
+      })
+}
+
+/** Stream-json `rate_limit_event` usage as a statusline post, so chats feed the same live bar. */
+export function claudeRateLimitEventUsage(
+  message: Record<string, unknown>,
+  configDir: string | null
+): ClaudeStatusLineRateLimits | null {
+  const info = message.rate_limit_info
+  if (
+    message.type !== 'rate_limit_event' ||
+    typeof info !== 'object' ||
+    info === null ||
+    !('unifiedWindows' in info) ||
+    typeof info.unifiedWindows !== 'object' ||
+    info.unifiedWindows === null
+  ) {
+    return null
+  }
+  const windows = info.unifiedWindows
+  const fiveHour = rateLimitEventWindow('five_hour' in windows ? windows.five_hour : undefined)
+  const sevenDay = rateLimitEventWindow('seven_day' in windows ? windows.seven_day : undefined)
+  // The model-scoped weekly window Claude reports while Fable runs.
+  const fableWeekly = rateLimitEventWindow(
+    'seven_day_overage_included' in windows ? windows.seven_day_overage_included : undefined
+  )
+  return fiveHour || sevenDay || fableWeekly
+    ? { configDir, fiveHour, sevenDay, ...(fableWeekly ? { fableWeekly } : {}) }
+    : null
 }

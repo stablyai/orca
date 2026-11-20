@@ -33,7 +33,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
 
   protected claudeUsageWithoutOAuth(): ProviderRateLimits {
     const live = this.liveClaudeUsage ? withoutResetWindows(this.liveClaudeUsage, Date.now()) : null
-    return live?.session || live?.weekly ? live : claudeOAuthUsageDisabledResult()
+    return live?.session || live?.weekly || live?.fableWeekly
+      ? live
+      : claudeOAuthUsageDisabledResult()
   }
 
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
@@ -172,7 +174,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     const incomingWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
     const freshSession = keepIfNewer(incomingSession, previous?.session)
     const freshWeekly = keepIfNewer(incomingWeekly, previous?.weekly)
-    if (!freshSession && !freshWeekly) {
+    const incomingFable = mapClaudeUsageWindow(event.fableWeekly ?? undefined, 10080)
+    const freshFable = keepIfNewer(incomingFable, previous?.fableWeekly)
+    if (!freshSession && !freshWeekly && !freshFable) {
       return
     }
     // Kept snapshots can outlive a reset; never relabel a past-reset window as live.
@@ -182,12 +186,17 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     // Partial statusline payloads leave unreported windows unchanged.
     const session = freshSession ?? inherited?.session ?? null
     const weekly = freshWeekly ?? inherited?.weekly ?? null
+    const fableWeekly = freshFable ?? inherited?.fableWeekly ?? null
     // Stale posts that repeat the surviving window must not refresh live-feed age.
-    const droppedStale = (incomingSession && !freshSession) || (incomingWeekly && !freshWeekly)
+    const droppedStale =
+      (incomingSession && !freshSession) ||
+      (incomingWeekly && !freshWeekly) ||
+      (incomingFable && !freshFable)
     if (
       droppedStale &&
       isSameClaudeUsageWindow(previous?.session ?? null, session) &&
-      isSameClaudeUsageWindow(previous?.weekly ?? null, weekly)
+      isSameClaudeUsageWindow(previous?.weekly ?? null, weekly) &&
+      isSameClaudeUsageWindow(previous?.fableWeekly ?? null, fableWeekly)
     ) {
       return
     }
@@ -196,6 +205,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       provider: 'claude',
       session: freshSession ?? priorLive?.session ?? null,
       weekly: freshWeekly ?? priorLive?.weekly ?? null,
+      fableWeekly: freshFable ?? priorLive?.fableWeekly ?? null,
       updatedAt: now,
       error: null,
       status: 'ok',
@@ -216,7 +226,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       previous.usageMetadata?.source === 'live-session' &&
       now - previous.updatedAt < LIVE_CLAUDE_INGEST_DEDUPE_MS &&
       isSameClaudeUsageWindow(previous.session, session) &&
-      isSameClaudeUsageWindow(previous.weekly, weekly)
+      isSameClaudeUsageWindow(previous.weekly, weekly) &&
+      isSameClaudeUsageWindow(previous.fableWeekly ?? null, fableWeekly)
     ) {
       return
     }
@@ -227,8 +238,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         provider: 'claude',
         session,
         weekly,
-        // Statusline lacks Fable scope and credits; retain the latest OAuth values.
-        fableWeekly: inherited?.fableWeekly ?? null,
+        // Statusline lacks Fable scope and credits; chat streams report Fable, credits stay OAuth.
+        fableWeekly,
         extraUsage: inherited?.extraUsage ?? null,
         ...(sameLogin && inherited.planType ? { planType: inherited.planType } : {}),
         updatedAt: Date.now(),

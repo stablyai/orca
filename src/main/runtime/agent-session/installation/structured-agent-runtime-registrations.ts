@@ -157,6 +157,7 @@ function createClaudeAdapter(
       logger: deps.logger
     }),
     ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
+    ...(deps.onClaudeLiveRateLimits ? { onClaudeLiveRateLimits: deps.onClaudeLiveRateLimits } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })
 }
