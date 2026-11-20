@@ -17,6 +17,7 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatComposerFieldProps } from '../../native-chat-composer-field-props'
 import { imeComposedSegment } from '@/lib/text-input/ime/ime-composed-segment'
 import { acceptNativeChatPromptSuggestion } from './native-chat-prompt-suggestion-accept'
+import { NativeChatAddressPreviews } from '../../attachments/previews/NativeChatAddressPreviews'
 
 function noop(): void {}
 
@@ -39,6 +40,7 @@ export function NativeChatComposerField({
   activeSuggestion,
   notices,
   imageAttachments,
+  addressPreviews,
   numberImages = false,
   attachmentEnvironmentId,
   sendButtonDisabled,
@@ -238,6 +240,7 @@ export function NativeChatComposerField({
               glowing && 'native-chat-composer-glow'
             )}
           >
+            {addressPreviews && <NativeChatAddressPreviews {...addressPreviews} />}
             {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
                 {imageAttachments.map((attachment, index) => (

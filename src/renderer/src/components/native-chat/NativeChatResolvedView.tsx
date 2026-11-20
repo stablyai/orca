@@ -347,7 +347,7 @@ export function NativeChatResolvedView({
           paneKey={paneKey}
           targetPtyId={targetPtyId}
           agent={agent}
-          canSend={canSend}
+          {...{ isVisible, canSend }}
           isWorking={isWorking}
           onStop={stopAgent}
           onOptimisticSend={onOptimisticSend}

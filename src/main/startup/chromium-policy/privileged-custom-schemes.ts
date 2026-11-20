@@ -2,12 +2,14 @@ import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../../browser/extensions/ap
 import { CONNECTOR_AVATAR_CUSTOM_SCHEME } from '../../connector-avatars/connector-avatar-protocol'
 import { JIRA_IMAGE_CUSTOM_SCHEME } from '../../jira/attachments/image-protocol'
 import { MEDIA_PREVIEW_CUSTOM_SCHEME } from '../../media/media-preview-protocol'
+import { CHAT_PREVIEW_PROTOCOL } from '../../media/chat-address-preview-protocol'
 import { PLUGIN_IMAGE_CUSTOM_SCHEME } from '../../plugins/media/plugin-image-scheme'
 import { PLUGIN_FRAME_CUSTOM_SCHEME } from '../../plugins/panels/guest-isolation/plugin-frame-scheme'
 
 /** Registered with doc preview's in one call: each registerSchemesAsPrivileged call replaces the last. */
 export const PRIVILEGED_CUSTOM_SCHEMES: Electron.CustomScheme[] = [
   MEDIA_PREVIEW_CUSTOM_SCHEME,
+  CHAT_PREVIEW_PROTOCOL,
   JIRA_IMAGE_CUSTOM_SCHEME,
   BROWSER_EXTENSION_API_CUSTOM_SCHEME,
   PLUGIN_IMAGE_CUSTOM_SCHEME,

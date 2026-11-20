@@ -1,4 +1,5 @@
 import type { NativeChatComposerInput } from './composer/editor/native-chat-composer-input'
+import type { NativeChatAddressPreviews } from './attachments/previews/NativeChatAddressPreviews'
 import type { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/composer/native-chat-picker-items'
@@ -37,6 +38,7 @@ export type NativeChatComposerFieldProps = {
   activeSuggestion: number
   notices: readonly NativeChatComposerNotice[]
   imageAttachments: readonly NativeChatComposerImageAttachment[]
+  addressPreviews?: React.ComponentProps<typeof NativeChatAddressPreviews>
   /** A structured chat numbers its images, as its chips in the prompt read. */
   numberImages?: boolean
   /** The paired server a structured chat runs on, which reads back files stored there. */

@@ -32,6 +32,8 @@ export function mountedMention(
   function Pane() {
     useNativeChatComposerHandle(handle, {
       textareaRef: input,
+      draft: initialValue,
+      addressPreviewsEnabled: true,
       isComposing: () => false,
       setDraft: () => {},
       setCaret: () => {},

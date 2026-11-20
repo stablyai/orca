@@ -179,9 +179,12 @@ export function BotItemCommentBox({
       blocked ? { kind: 'not-ready', notice: blocked } : ownerOfSession(),
     [blocked, ownerOfSession]
   )
-  const handlePaste = useNativeChatComposerHandle(composer, {
+  // Address previews belong to the chat composer; an item comment box only takes the paste.
+  const { handlePasteEvent: handlePaste } = useNativeChatComposerHandle(composer, {
     attachmentScopeKey: scopeKey,
     textareaRef: input,
+    draft,
+    addressPreviewsEnabled: false,
     isComposing: ime.isComposing,
     caret,
     setDraft,
