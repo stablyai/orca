@@ -43,9 +43,10 @@ export async function traceIterations(cdp, outputPath, durationMs = 2200) {
   )
   const onCompositor = events.filter((event) => compositorThreads.has(`${event.pid}:${event.tid}`))
   const perSecond = (count) => Math.round((count * 1000) / measuredMs)
-  // One slice per occurrence: skip end markers and the flow events Chromium emits beside each frame.
+  // One per occurrence: slices and instants, not end markers or the flow events Chromium emits beside each frame.
+  const OCCURRENCE_PHASES = new Set(['X', 'B', 'I', 'i'])
   const count = (list, name) =>
-    list.filter((event) => event.name === name && (event.ph === 'X' || event.ph === 'B')).length
+    list.filter((event) => event.name === name && OCCURRENCE_PHASES.has(event.ph)).length
   return {
     requestedMs: durationMs,
     measuredMs: Math.round(measuredMs),
