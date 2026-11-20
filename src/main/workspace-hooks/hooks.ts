@@ -22,7 +22,7 @@ import {
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
-import { fdClosingLaunch } from '@orca/process-host/fd-closing-exec-launch'
+import { fdClosingLaunch, watchFdClosingExec } from '@orca/process-host/fd-closing-exec-launch'
 
 const HOOK_TIMEOUT = 120_000
 
@@ -270,7 +270,14 @@ export function runHook(
     const launch = shell ? fdClosingLaunch(shell, ['-c', script], spawnOptions) : null
     // exec ignores detached; spawn creates the process group needed for tree termination.
     const child = launch
-      ? spawn(launch.file, launch.args, spawnOptions)
+      ? watchFdClosingExec(
+          spawn(launch.file, launch.args, {
+            ...spawnOptions,
+            env: launch.env,
+            stdio: launch.stdio
+          }),
+          launch
+        )
       : spawn(script, { ...spawnOptions, shell })
     const stdout = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
     const stderr = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)

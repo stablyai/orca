@@ -1,7 +1,7 @@
 import { spawnProcess } from '@orca/process-host'
 import { FD_CLOSING_EXEC_ARGS, setFdClosingExec } from '@orca/process-host/fd-closing-exec-launch'
 import { once } from 'node:events'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -70,7 +70,7 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
     }
   })
 
-  it('still reports a missing program, interpreter or loader as ENOENT', async () => {
+  it('reports exec failures as the error a direct spawn gives, and wraps what runs', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-fd-closing-'))
     const script = join(dir, 'broken-interpreter')
     await writeFile(script, '#!/orca-fd-closing-missing-interpreter\n')
@@ -83,31 +83,42 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
     elf[loaderEnd - 1] = 'X'.charCodeAt(0)
     const missingLoader = join(dir, 'missing-loader')
     await writeFile(missingLoader, elf)
-    for (const file of [script, crlfScript, missingLoader]) {
+    const busy = join(dir, 'busy')
+    await writeFile(busy, await readFile('/bin/true'))
+    for (const file of [script, crlfScript, missingLoader, busy]) {
       await chmod(file, 0o755)
     }
+    // Held open for writing, so exec fails with ETXTBSY.
+    const writer = await open(busy, 'r+')
     setFdClosingExec(helper)
     try {
-      for (const program of [
-        'orca-fd-closing-missing-program',
-        script,
-        crlfScript,
-        missingLoader
-      ]) {
+      for (const [program, codes] of [
+        ['orca-fd-closing-missing-program', ['ENOENT']],
+        [script, ['ENOENT']],
+        [crlfScript, ['ENOENT']],
+        [missingLoader, ['ENOENT']],
+        [busy, ['ETXTBSY']]
+      ] as const) {
         const child = spawnProcess({ program, closeInheritedFds: true, stdio: 'ignore' })
+        let spawned = false
+        child.once('spawn', () => {
+          spawned = true
+        })
         const [error] = await once(child, 'error')
-        // A noexec tmpdir makes the direct spawn report EACCES; either way it's an error, not 127.
-        expect(['ENOENT', 'EACCES']).toContain((error as NodeJS.ErrnoException).code)
+        // A noexec tmpdir makes the direct spawn report EACCES instead; still an error, not 127.
+        expect([...codes, 'EACCES']).toContain(error.code)
+        expect({ program, spawned }).toEqual({ program, spawned: false })
       }
-      // A program that will run is wrapped.
       const wrapped = spawnProcess({
         program: '/bin/true',
         closeInheritedFds: true,
         stdio: 'ignore'
       })
       expect(wrapped.spawnfile).toBe(helper)
+      await once(wrapped, 'spawn')
       expect((await once(wrapped, 'close'))[0]).toBe(0)
     } finally {
+      await writer.close()
       setFdClosingExec(undefined)
       await rm(dir, { recursive: true, force: true })
     }

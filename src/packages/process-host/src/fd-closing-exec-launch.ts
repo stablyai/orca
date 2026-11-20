@@ -1,17 +1,17 @@
-import { accessSync, closeSync, constants, openSync, readSync, statSync } from 'node:fs'
+import { accessSync, constants, statSync } from 'node:fs'
 import { delimiter } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { SpawnOptions } from 'node:child_process'
+import { getSystemErrorName } from 'node:util'
+import type { ChildProcess, SpawnOptions, StdioOptions } from 'node:child_process'
 
 export const FD_CLOSING_EXEC_ARGS = ['--exec-without-inherited-fds', '--'] as const
+// The helper writes a failed exec's errno to this fd; a successful exec closes it.
+const EXEC_STATUS_FD_ENV = 'ORCA_EXEC_STATUS_FD'
 
 // libuv's search path when the child's environment has no PATH.
 const DEFAULT_SEARCH_PATH = '/usr/bin:/bin'
-// Linux reads at most this much of a `#!` line, and follows at most this many interpreters.
-const SHEBANG_MAX_BYTES = 256
-const INTERPRETER_MAX_DEPTH = 4
-// Enough for the ELF header, program headers and loader path of ordinary executables.
-const HEAD_MAX_BYTES = 4096
+
+type StdioSlot = Exclude<StdioOptions, string>[number]
 
 let installedHelper: string | undefined
 let missingHelperLogged = false
@@ -21,12 +21,19 @@ export function setFdClosingExec(helper: string | undefined): void {
   installedHelper = helper
 }
 
-export type FdClosingLaunch = { file: string; args: string[] }
+export type FdClosingLaunch = {
+  file: string
+  args: string[]
+  env: NodeJS.ProcessEnv
+  stdio: StdioSlot[]
+  /** What the caller asked to run, for the error a failed exec reports. */
+  target: { file: string; args: readonly string[]; statusFd: number }
+}
 
 /**
  * Linux: run `file` through the installed fd-closing helper so the child keeps only stdio and the
- * IPC channel. Null off Linux, without a helper, or when `file` wouldn't exec, so the direct spawn
- * still fails with ENOENT/EACCES instead of the helper's exit 127.
+ * IPC channel; pass the spawned child to `watchFdClosingExec`. Null off Linux, without a helper,
+ * or when `file` isn't on PATH, so a direct spawn reports that itself.
  */
 export function fdClosingLaunch(
   file: string,
@@ -44,46 +51,97 @@ export function fdClosingLaunch(
     }
     return null
   }
-  const stdio = options.stdio
-  if (Array.isArray(stdio) && stdio.slice(3).some((slot) => slot !== 'ipc' && slot != null)) {
+  const stdio = normalizeStdio(options.stdio)
+  if (stdio.slice(3).some((slot) => slot !== 'ipc' && slot != null)) {
     throw new Error('fd-closing launches keep only stdio and IPC; extra stdio slots would close')
   }
+  if (!onSearchPath(file, options)) {
+    return null
+  }
+  const statusFd = stdio.length
   // The helper starts after the child's chdir and execvp's the same name, so argv0 is unchanged.
-  return wouldExec(file, options)
-    ? { file: helper, args: [...FD_CLOSING_EXEC_ARGS, file, ...args] }
-    : null
+  return {
+    file: helper,
+    args: [...FD_CLOSING_EXEC_ARGS, file, ...args],
+    env: { ...(options.env ?? process.env), [EXEC_STATUS_FD_ENV]: String(statusFd) },
+    stdio: [...stdio, 'pipe'],
+    target: { file, args, statusFd }
+  }
+}
+
+/**
+ * Holds 'spawn' until the helper's exec succeeds. A failed exec emits the 'error' a direct spawn
+ * would have (code, errno, syscall, path, spawnargs) instead, then the helper's exit.
+ */
+export function watchFdClosingExec<T extends ChildProcess>(child: T, launch: FdClosingLaunch): T {
+  const status = child.stdio[launch.target.statusFd]
+  if (!status) {
+    return child
+  }
+  const emit = child.emit.bind(child)
+  let held = false
+  let settled = false
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every event unchanged except a 'spawn' held until the exec status settles.
+  child.emit = ((event: string | symbol, ...rest: unknown[]): boolean => {
+    if (event === 'spawn' && !settled) {
+      held = true
+      return true
+    }
+    return emit(event, ...rest)
+  }) as T['emit']
+  let report = ''
+  status.on('data', (chunk: Buffer | string) => {
+    report += chunk.toString()
+  })
+  status.on('error', () => {})
+  status.once('close', () => {
+    settled = true
+    const errno = Number.parseInt(report, 10)
+    if (Number.isInteger(errno) && errno > 0) {
+      emit('error', execError(errno, launch.target))
+    } else if (held) {
+      emit('spawn')
+    }
+  })
+  return child
+}
+
+function execError(errno: number, target: FdClosingLaunch['target']): NodeJS.ErrnoException {
+  const code = getSystemErrorName(-errno)
+  return Object.assign(new Error(`spawn ${target.file} ${code}`), {
+    errno: -errno,
+    code,
+    syscall: `spawn ${target.file}`,
+    path: target.file,
+    spawnargs: [...target.args]
+  })
+}
+
+// Node's defaults: a string covers fds 0-2, and missing fds 0-2 are pipes.
+function normalizeStdio(stdio: SpawnOptions['stdio']): StdioSlot[] {
+  if (stdio === undefined || typeof stdio === 'string') {
+    const slot = stdio ?? 'pipe'
+    return [slot, slot, slot]
+  }
+  const slots: StdioSlot[] = [...stdio]
+  while (slots.length < 3) {
+    slots.push(undefined)
+  }
+  return slots
 }
 
 // execvp's lookup, unnormalized so symlinks and `..` resolve as the kernel does.
-function wouldExec(file: string, options: Pick<SpawnOptions, 'cwd' | 'env'>): boolean {
+function onSearchPath(file: string, options: Pick<SpawnOptions, 'cwd' | 'env'>): boolean {
   const cwd = options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd
   const inCwd = (path: string): string =>
     path.startsWith('/') || cwd === undefined ? path : `${cwd}/${path}`
   if (file.includes('/')) {
-    return isRunnable(inCwd(file), inCwd)
+    return isExecutableFile(inCwd(file))
   }
   const searchPath = (options.env ?? process.env).PATH ?? DEFAULT_SEARCH_PATH
   return searchPath
     .split(delimiter)
-    .some((directory) => isRunnable(inCwd(directory === '' ? file : `${directory}/${file}`), inCwd))
-}
-
-// Wraps only what it can predict the kernel will run: a `#!` script whose interpreter would run,
-// or an ELF for this machine whose loader exists. Anything else spawns directly, so its exec
-// failure still reaches the caller. A relative interpreter resolves from the child's cwd.
-function isRunnable(path: string, inCwd: (path: string) => string, depth = 0): boolean {
-  if (depth > INTERPRETER_MAX_DEPTH || !isExecutableFile(path)) {
-    return false
-  }
-  const head = readHead(path)
-  if (!head) {
-    return false
-  }
-  if (head.subarray(0, 2).toString('latin1') === '#!') {
-    const interpreter = shebangInterpreter(head)
-    return interpreter !== null && isRunnable(inCwd(interpreter), inCwd, depth + 1)
-  }
-  return isLoadableElf(head)
+    .some((directory) => isExecutableFile(inCwd(directory === '' ? file : `${directory}/${file}`)))
 }
 
 function isExecutableFile(path: string): boolean {
@@ -93,63 +151,4 @@ function isExecutableFile(path: string): boolean {
   } catch {
     return false
   }
-}
-
-// null: unreadable (e.g. execute-only), so exec's own checks can't be predicted.
-function readHead(path: string): Buffer | null {
-  const head = Buffer.alloc(HEAD_MAX_BYTES)
-  try {
-    const fd = openSync(path, 'r')
-    try {
-      return head.subarray(0, readSync(fd, head, 0, HEAD_MAX_BYTES, 0))
-    } finally {
-      closeSync(fd)
-    }
-  } catch {
-    return null
-  }
-}
-
-// The kernel's parse: skip spaces and tabs, end at space, tab, newline or NUL; a CR stays.
-function shebangInterpreter(head: Buffer): string | null {
-  const line = head.subarray(2, SHEBANG_MAX_BYTES).toString('utf8')
-  return /^[ \t]*([^ \t\n\0]+)/.exec(line)?.[1] ?? null
-}
-
-const ELF_MACHINE: Partial<Record<NodeJS.Architecture, number>> = {
-  x64: 62,
-  arm64: 183,
-  ia32: 3,
-  arm: 40
-}
-const PT_INTERP = 3
-
-// A little-endian ELF for this architecture whose PT_INTERP loader (if any) is present.
-function isLoadableElf(head: Buffer): boolean {
-  if (head.length < 64 || head.readUInt32BE(0) !== 0x7f454c46 || head[5] !== 1) {
-    return false
-  }
-  if (head.readUInt16LE(18) !== ELF_MACHINE[process.arch]) {
-    return false
-  }
-  const wide = head[4] === 2
-  const phoff = Number(wide ? head.readBigUInt64LE(32) : head.readUInt32LE(28))
-  const phentsize = head.readUInt16LE(wide ? 54 : 42)
-  const phnum = head.readUInt16LE(wide ? 56 : 44)
-  for (let index = 0; index < phnum; index++) {
-    const entry = phoff + index * phentsize
-    if (entry + phentsize > head.length) {
-      return false
-    }
-    if (head.readUInt32LE(entry) !== PT_INTERP) {
-      continue
-    }
-    const offset = Number(wide ? head.readBigUInt64LE(entry + 8) : head.readUInt32LE(entry + 4))
-    const size = Number(wide ? head.readBigUInt64LE(entry + 32) : head.readUInt32LE(entry + 16))
-    if (size < 2 || offset + size > head.length) {
-      return false
-    }
-    return isExecutableFile(head.subarray(offset, offset + size - 1).toString('utf8'))
-  }
-  return true
 }
