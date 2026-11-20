@@ -11,7 +11,11 @@ export type WorkspaceSessionEntriesDiff = {
   patch: WorkspaceSessionEntriesPatch
   /** Record this slice as what main now holds for its fields; call only after main accepted it. */
   acknowledge: () => void
+  /** Main skipped the slice without storing any of it: drop the values sending it claimed. */
+  retract: () => void
 }
+
+type Claim = { field: string; key: string; value: unknown }
 
 // Keyed fields other writers also save into, so a write must never replace them whole once this
 // window has saved keys there: restart reattaches the relay ids in remoteSessionIdsByTabId.
@@ -42,6 +46,7 @@ export class AcknowledgedWorkspaceSessionEntries {
     const patch: WorkspaceSessionEntriesPatch = { fields: {}, entries: {} }
     const sliceFields: Record<string, unknown> = slice
     const fields = Object.keys(slice)
+    const claims: Claim[] = []
     for (const field of fields) {
       const value = sliceFields[field]
       const record =
@@ -56,7 +61,7 @@ export class AcknowledgedWorkspaceSessionEntries {
             field,
             this.scopedChanges(field, hostId, { ...record }, remove)
           )
-          this.own(field, hostId, record, 'possible')
+          this.own(field, hostId, record, 'possible', claims)
         } else {
           Reflect.set(patch.fields, field, value)
         }
@@ -76,7 +81,7 @@ export class AcknowledgedWorkspaceSessionEntries {
         if (changed || remove.length > 0) {
           if (record) {
             Reflect.set(patch.entries, field, this.scopedChanges(field, hostId, set, remove))
-            this.own(field, hostId, set, 'possible')
+            this.own(field, hostId, set, 'possible', claims)
           } else {
             Reflect.set(patch.entries, field, { set, remove })
           }
@@ -111,6 +116,21 @@ export class AcknowledgedWorkspaceSessionEntries {
             owned?.delete(key)
           }
         }
+      },
+      retract: () => {
+        // A snapshot since may carry the same values to main, so they stay possible.
+        if (generation !== this.generation) {
+          return
+        }
+        for (const { field, key, value } of claims) {
+          const owned = this.ownedKeys.get(field)?.get(hostId)
+          const values = owned?.get(key)?.filter((known) => !sameValue(known, value))
+          if (values?.length) {
+            owned?.set(key, values)
+          } else {
+            owned?.delete(key)
+          }
+        }
       }
     }
   }
@@ -135,12 +155,14 @@ export class AcknowledgedWorkspaceSessionEntries {
     return { set, remove, removeIfStored }
   }
 
-  /** Record `record`'s keys as this window's: 'stored' when main is known to hold these values. */
+  /** Record `record`'s keys as this window's: 'stored' when main is known to hold these values.
+   *  Values newly made possible go to `claims`. */
   private own(
     field: string,
     hostId: ExecutionHostId,
     record: Record<string, unknown>,
-    certainty: 'stored' | 'possible'
+    certainty: 'stored' | 'possible',
+    claims?: Claim[]
   ): void {
     let byHost = this.ownedKeys.get(field)
     if (!byHost) {
@@ -155,11 +177,19 @@ export class AcknowledgedWorkspaceSessionEntries {
     for (const key in record) {
       const value = record[key]
       const values = owned.get(key)
-      if (certainty === 'stored' || !values) {
+      if (certainty === 'stored') {
         owned.set(key, [value])
-      } else if (!values.some((known) => sameValue(known, value))) {
-        values.push(value)
+        continue
       }
+      if (values?.some((known) => sameValue(known, value))) {
+        continue
+      }
+      if (values) {
+        values.push(value)
+      } else {
+        owned.set(key, [value])
+      }
+      claims?.push({ field, key, value })
     }
   }
 

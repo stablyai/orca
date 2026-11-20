@@ -229,7 +229,11 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   }
   const relayIdsReadByHost: [ExecutionHostId, Record<string, string>][] = []
   const localSlice = slices[LOCAL_EXECUTION_HOST_ID]
-  const sshRepoIds = new Set(repos.filter((repo) => repo.connectionId).map((repo) => repo.id))
+  // The session builder resolves each repo id to its last catalog row; resolve it the same way.
+  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+  const sshRepoIds = new Set(
+    [...repoById.values()].filter((repo) => repo.connectionId).map((repo) => repo.id)
+  )
   for (const entry of [
     ...(localSlice ? [[LOCAL_EXECUTION_HOST_ID, localSlice] as const] : []),
     ...nonLocalHostSessionEntries(slices),

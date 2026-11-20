@@ -50,12 +50,13 @@ export function patchHostSlice(
   if (!acknowledged || !api.patchEntries) {
     return api.patch(slice, target)
   }
-  const { patch, acknowledge } = acknowledged.diff(hostId, slice)
+  const { patch, acknowledge, retract } = acknowledged.diff(hostId, slice)
   // Sent even when empty: main's unchanged-save handling still has to see this partition's save.
   return api.patchEntries(patch, target).then(
     (result) => {
       if (result.status === 'skipped') {
         acknowledged.forget(hostId)
+        retract()
         return
       }
       acknowledge()

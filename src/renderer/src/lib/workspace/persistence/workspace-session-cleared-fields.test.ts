@@ -4,7 +4,10 @@ import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { applyWorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
+import {
+  applyWorkspaceSessionEntriesPatch,
+  type WorkspaceSessionEntriesPatch
+} from '../../../../../shared/workspace-session/workspace-session-entries-patch'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { createSessionWriteSubscriber } from './session-write-subscriber'
@@ -36,6 +39,9 @@ const EMPTY_PARTITION = {} as WorkspaceSessionState
 function inMemoryMain() {
   const partitions = new Map<string, WorkspaceSessionState>()
   const rejectNext = new Set<string>()
+  // Hosts whose writes main skips unapplied (a fenced source partition, a held WSL move).
+  const skipping = new Set<string>()
+  const sent: { hostId: string; patch: WorkspaceSessionEntriesPatch }[] = []
   const api: SessionApi = {
     get: async (hostId) => partitions.get(hostId ?? 'local') ?? EMPTY_PARTITION,
     patch: async () => {
@@ -43,6 +49,10 @@ function inMemoryMain() {
     },
     patchEntries: async (args, hostId) => {
       const key = hostId ?? 'local'
+      sent.push({ hostId: key, patch: args })
+      if (skipping.has(key)) {
+        return { status: 'skipped' }
+      }
       if (rejectNext.delete(key)) {
         throw new Error('partition write failed')
       }
@@ -60,7 +70,7 @@ function inMemoryMain() {
     }
     return found
   }
-  return { api, holding, partitions, rejectNext }
+  return { api, holding, partitions, rejectNext, skipping, sent }
 }
 
 function sshState(status: 'connected' | 'disconnected') {
@@ -266,6 +276,32 @@ describe('session fields a window clears', () => {
       store.setState({ lastKnownRelayPtyIdByTabId: {} })
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
 
+      expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({})
+    } finally {
+      stop()
+    }
+  })
+
+  it('a relay main skipped saving is not carried into later removals', async () => {
+    const acknowledged = new AcknowledgedWorkspaceSessionEntries()
+    const { store, main, stop } = dormantRelaySaved(acknowledged)
+    try {
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+      const hostId = getRepoExecutionHostId(SSH_REPO)
+      main.skipping.add(hostId)
+      store.setState({ lastKnownRelayPtyIdByTabId: { 'tab-a': 'relay-b' } })
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+      main.skipping.delete(hostId)
+
+      store.setState({ lastKnownRelayPtyIdByTabId: {} })
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+
+      const clear = main.sent.findLast((write) => write.hostId === hostId)
+      expect(clear?.patch.entries.remoteSessionIdsByTabId).toEqual({
+        set: {},
+        remove: ['tab-a'],
+        removeIfStored: { 'tab-a': ['relay-a'] }
+      })
       expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({})
     } finally {
       stop()
