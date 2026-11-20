@@ -5,21 +5,24 @@ import type { BotOnHost } from '@/lib/bot-hosts'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import { BOT_MASCOT_URLS } from './bot-mascots'
-import type { BotOutfitArt } from './bot-mascot-look'
+import type { BotOutfitArt, BotPictureSize } from './bot-mascot-look'
 
 /** The bot's picture, else its emoji, else its initial. */
 export function BotAvatar({
   bot,
+  size,
   className,
   style
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'> & BotOnHost
+  /** 'large' for a picture over about 48 px, so an outfit draws its large art. */
+  size?: BotPictureSize
   className?: string
   style?: React.CSSProperties
 }): React.JSX.Element {
   return (
     <BotAvatarTile
-      src={useBotAvatarSrc(bot)}
+      src={useBotAvatarSrc(bot, size)}
       fallback={botFallback(bot)}
       className={className}
       style={style}

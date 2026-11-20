@@ -8,7 +8,13 @@ import {
 } from '../../../../shared/bots/bot-avatar-color'
 import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { BOT_MASCOT_URLS } from './bot-mascots'
-import { useBotOutfitLayers, type BotOutfitLayer, type BotOutfitLayers } from './bot-outfit-art'
+import {
+  useBotOutfitLargeArt,
+  useBotOutfitLayers,
+  type BotOutfitLargeArt,
+  type BotOutfitLayer,
+  type BotOutfitLayers
+} from './bot-outfit-art'
 
 const MASCOT_SVGS = import.meta.glob<string>('../../../../shared/bot-mascots/*.svg', {
   query: '?raw',
@@ -48,16 +54,20 @@ export function faceMascotSvg(svg: string, outfit: BotOutfitLayer): string {
     : trimmed
 }
 
-/** The SVG wearing `outfit` in one picture: its face, then its art drawn over it. */
-export function dressMascotSvg(svg: string, outfit: BotOutfitLayer): string {
+/** The SVG wearing `outfit` in one picture: its face, then its art (base64 WebP) drawn over it. */
+export function dressMascotSvg(svg: string, outfit: BotOutfitLayer, art = outfit.art): string {
   const [x, y, width, height] = outfit.at
-  const art = `<image href="${artSrc(outfit)}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="none"/>`
-  return `${faceMascotSvg(svg, outfit).slice(0, -'</svg>'.length)}${art}</svg>`
+  const image = `<image href="${artSrc(art)}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="none"/>`
+  return `${faceMascotSvg(svg, outfit).slice(0, -'</svg>'.length)}${image}</svg>`
 }
 
-function artSrc(outfit: BotOutfitLayer): string {
-  return `data:image/webp;base64,${outfit.art}`
+function artSrc(art: string): string {
+  return `data:image/webp;base64,${art}`
 }
+
+/** Which bake of an outfit's art a picture draws: small for a sidebar row or chat (up to about 48 px),
+ *  large for the picker and other big pictures. */
+export type BotPictureSize = 'small' | 'large'
 
 /** An outfit's art as its own image over the picture, at x, y, width, height of the 128 px tile. */
 export type BotOutfitArt = { src: string; at: readonly [number, number, number, number] }
@@ -106,24 +116,40 @@ function plainSrc(id: BotMascotId, color: string | null): string {
   return color ? pictureSrc(id, color, '', (svg) => svg) : BOT_MASCOT_URLS[id]
 }
 
+// The art a picture of `size` draws: the large bake once it has arrived, the small one until then.
+function outfitArt(
+  id: BotMascotId,
+  layer: BotOutfitLayer,
+  largeArt: BotOutfitLargeArt | null | undefined
+): { art: string; size: BotPictureSize } {
+  const large = largeArt?.[id]
+  return large ? { art: large, size: 'large' } : { art: layer.art, size: 'small' }
+}
+
 // `layers` undefined: the outfit's art hasn't arrived (or failed), so the plain picture shows meanwhile.
 function dressedSrc(
   id: BotMascotId,
   color: string | null,
   outfit: BotAvatarOutfit | null,
-  layers: BotOutfitLayers | null | undefined
+  layers: BotOutfitLayers | null | undefined,
+  largeArt: BotOutfitLargeArt | null | undefined
 ): string {
   const layer = outfit && layers ? layers[id] : undefined
-  return layer
-    ? pictureSrc(id, color, `${outfit}|dressed`, (svg) => dressMascotSvg(svg, layer))
-    : plainSrc(id, color)
+  if (!layer) {
+    return plainSrc(id, color)
+  }
+  const { art, size } = outfitArt(id, layer, largeArt)
+  return pictureSrc(id, color, `${outfit}|dressed|${size}`, (svg) =>
+    dressMascotSvg(svg, layer, art)
+  )
 }
 
 function layeredLook(
   id: BotMascotId,
   color: string | null,
   outfit: BotAvatarOutfit | null,
-  layers: BotOutfitLayers | null | undefined
+  layers: BotOutfitLayers | null | undefined,
+  largeArt: BotOutfitLargeArt | null | undefined
 ): BotMascotLook {
   const layer = outfit && layers ? layers[id] : undefined
   if (!layer) {
@@ -133,8 +159,9 @@ function layeredLook(
   const src = layer.face
     ? pictureSrc(id, color, `${outfit}|faced`, (svg) => faceMascotSvg(svg, layer))
     : plainSrc(id, color)
-  const art = cached(arts, `${id}|${outfit}`, () => ({ src: artSrc(layer), at: layer.at }))
-  return { src, outfit: art }
+  const { art, size } = outfitArt(id, layer, largeArt)
+  const image = cached(arts, `${id}|${outfit}|${size}`, () => ({ src: artSrc(art), at: layer.at }))
+  return { src, outfit: image }
 }
 
 function tileColor(color: string | null | undefined): string | null {
@@ -145,33 +172,38 @@ function tileColor(color: string | null | undefined): string | null {
 export function useBotMascotSrc(
   id: BotMascotId | null,
   color: string | null | undefined,
-  outfit: BotAvatarOutfit | null | undefined = null
+  outfit: BotAvatarOutfit | null | undefined = null,
+  size: BotPictureSize = 'small'
 ): string | null {
-  const worn = outfit ?? null
-  const layers = useBotOutfitLayers(id ? worn : null)
+  const worn = id ? (outfit ?? null) : null
+  const layers = useBotOutfitLayers(worn)
+  const largeArt = useBotOutfitLargeArt(worn, size === 'large')
   const tile = tileColor(color)
   if (!id) {
     return null
   }
-  return dressedSrc(id, tile, worn, layers)
+  return dressedSrc(id, tile, worn, layers, largeArt)
 }
 
 /** Each mascot's picture on `color`, wearing `outfit`, in layers: for the picker, where the color is dragged. */
 export function useBotMascotLooks(
   color: string | null | undefined,
-  outfit: BotAvatarOutfit | null | undefined = null
+  outfit: BotAvatarOutfit | null | undefined = null,
+  size: BotPictureSize = 'small'
 ): (id: BotMascotId) => BotMascotLook {
   const worn = outfit ?? null
   const layers = useBotOutfitLayers(worn)
+  const largeArt = useBotOutfitLargeArt(worn, size === 'large')
   const tile = tileColor(color)
-  return (id) => layeredLook(id, tile, worn, layers)
+  return (id) => layeredLook(id, tile, worn, layers, largeArt)
 }
 
 /** One mascot's picture in layers, as useBotMascotLooks draws it. */
 export function useBotMascotLook(
   id: BotMascotId,
   color: string | null | undefined,
-  outfit: BotAvatarOutfit | null | undefined = null
+  outfit: BotAvatarOutfit | null | undefined = null,
+  size: BotPictureSize = 'small'
 ): BotMascotLook {
-  return useBotMascotLooks(color, outfit)(id)
+  return useBotMascotLooks(color, outfit, size)(id)
 }

@@ -59,7 +59,7 @@ export function ImportBotHero({
       <ArrowRight className="mb-5 size-5 shrink-0 text-muted-foreground" aria-hidden />
       {existing ? (
         <Face label={existing.name}>
-          <BotAvatar bot={existing} className="size-24 rounded-2xl text-4xl" />
+          <BotAvatar bot={existing} size="large" className="size-24 rounded-2xl text-4xl" />
         </Face>
       ) : (
         <Face label={t('bots.import.newBotLabel', 'New bot')}>

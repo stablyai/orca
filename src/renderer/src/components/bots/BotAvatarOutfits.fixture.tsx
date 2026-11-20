@@ -13,6 +13,7 @@ function OutfitSheet({ outfit }: { outfit: BotAvatarOutfit }): React.JSX.Element
           <span className="text-xs text-muted-foreground">{id}</span>
           <BotAvatar
             bot={{ id, hostId: 'local', name: id, avatar: `mascot:${id}`, avatarOutfit: outfit }}
+            size="large"
             className="size-32 rounded-2xl"
           />
           <div className="flex gap-2">

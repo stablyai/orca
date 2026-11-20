@@ -141,7 +141,7 @@ export function BotPicturePicker({
         ? CUSTOM_FACE
         : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
   const generating = currentKey === GENERATE_FACE
-  const lookOf = useBotMascotLooks(color, outfit)
+  const lookOf = useBotMascotLooks(color, outfit, 'large')
   const faces: BotPictureFace[] = order.map((key) =>
     key === GENERATE_FACE
       ? {

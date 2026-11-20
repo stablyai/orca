@@ -84,7 +84,7 @@ export function useNewBotPicture(
   const showingUpload = value.kind === 'custom' && upload !== null
   const mascotId =
     PICKABLE_BOT_MASCOT_IDS[pictureMascotIndex(value, custom)] ?? PICKABLE_BOT_MASCOT_IDS[0]
-  const mascotLook = useBotMascotLook(mascotId, color, outfit)
+  const mascotLook = useBotMascotLook(mascotId, color, outfit, 'large')
   return {
     value,
     custom,

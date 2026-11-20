@@ -1,5 +1,6 @@
-// Each outfit's art, read the first time a picture wears it: baked bitmaps are a few hundred KB per
-// outfit, too much to ship with the page for an outfit a user may never pick.
+// Each outfit's art, read the first time a picture wears it. Small art (for sidebar rows and other small
+// pictures) comes with the outfit; the large art only a big picture reads. Both are baked bitmaps, too much
+// to ship with the page for an outfit a user may never pick.
 import { useSyncExternalStore } from 'react'
 import type { BotMascotId } from '../../../../shared/bot-avatar'
 import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
@@ -8,9 +9,9 @@ import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
  *  it needs no SVG filter; an outfit that changes the face (the eyes looking down) also carries that face
  *  and the body lines it no longer draws. */
 export type BotOutfitLayer = {
-  /** Base64 WebP. */
+  /** Base64 WebP, baked for a 96 px tile. */
   art: string
-  /** Where the art sits on the 128 px tile: x, y, width, height. */
+  /** Where the art sits on the 128 px tile: x, y, width, height; the large art fills the same box. */
   at: readonly [number, number, number, number]
   face?: string
   /** Path data swapped in the mascot's body (not its defs): [from, to]. */
@@ -19,56 +20,90 @@ export type BotOutfitLayer = {
 
 export type BotOutfitLayers = Partial<Record<BotMascotId, BotOutfitLayer>>
 
-const READERS = import.meta.glob<BotOutfitLayers>('../../../../shared/bot-mascots/outfits/*.json', {
-  import: 'default'
-})
+/** Each mascot's art baked for a 384 px tile, base64 WebP. */
+export type BotOutfitLargeArt = Partial<Record<BotMascotId, string>>
 
-const outfits = new Map<BotAvatarOutfit, BotOutfitLayers>()
-const reading = new Set<BotAvatarOutfit>()
-const listeners = new Map<BotAvatarOutfit, Set<() => void>>()
-const subscribers = new Map<BotAvatarOutfit, (listener: () => void) => () => void>()
-
-function read(outfit: BotAvatarOutfit): void {
-  const reader = READERS[`../../../../shared/bot-mascots/outfits/${outfit}.json`]
-  if (!reader || outfits.has(outfit) || reading.has(outfit)) {
-    return
-  }
-  reading.add(outfit)
-  reader().then(
-    (layers) => {
-      outfits.set(outfit, layers)
-      for (const listener of listeners.get(outfit) ?? []) {
-        listener()
-      }
-    },
-    // A failed read is tried again by the next picture that wears the outfit.
-    () => reading.delete(outfit)
-  )
+/** One lazily read file per outfit, with the pictures waiting for it. */
+type OutfitFile<T> = {
+  value: T | undefined
+  reading: boolean
+  listeners: Set<() => void>
+  subscribe: (listener: () => void) => () => void
 }
 
-// One stable subscribe per outfit, so a picture listens only for the outfit it wears.
-function subscriberOf(outfit: BotAvatarOutfit): (listener: () => void) => () => void {
-  let subscribe = subscribers.get(outfit)
-  if (!subscribe) {
-    subscribe = (listener) => {
-      const own = listeners.get(outfit) ?? new Set()
-      listeners.set(outfit, own)
-      own.add(listener)
-      read(outfit)
-      return () => own.delete(listener)
+function outfitFiles<T>(
+  readers: Record<string, () => Promise<T>>,
+  pathOf: (outfit: BotAvatarOutfit) => string
+): (outfit: BotAvatarOutfit) => OutfitFile<T> | null {
+  const files = new Map<BotAvatarOutfit, OutfitFile<T>>()
+  return (outfit) => {
+    const read = readers[pathOf(outfit)]
+    if (!read) {
+      return null
     }
-    subscribers.set(outfit, subscribe)
+    const known = files.get(outfit)
+    if (known) {
+      return known
+    }
+    const file: OutfitFile<T> = {
+      value: undefined,
+      reading: false,
+      listeners: new Set(),
+      subscribe: (listener) => {
+        file.listeners.add(listener)
+        if (file.value === undefined && !file.reading) {
+          file.reading = true
+          read().then(
+            (value) => {
+              file.value = value
+              for (const waiting of file.listeners) {
+                waiting()
+              }
+            },
+            // A failed read is tried again by the next picture that wears the outfit.
+            () => {
+              file.reading = false
+            }
+          )
+        }
+        return () => file.listeners.delete(listener)
+      }
+    }
+    files.set(outfit, file)
+    return file
   }
-  return subscribe
 }
 
-const NO_OUTFIT = (): (() => void) => () => {}
+const layerFile = outfitFiles(
+  import.meta.glob<BotOutfitLayers>('../../../../shared/bot-mascots/outfits/*.json', {
+    import: 'default'
+  }),
+  (outfit) => `../../../../shared/bot-mascots/outfits/${outfit}.json`
+)
+const largeArtFile = outfitFiles(
+  import.meta.glob<BotOutfitLargeArt>('../../../../shared/bot-mascots/outfits/large/*.json', {
+    import: 'default'
+  }),
+  (outfit) => `../../../../shared/bot-mascots/outfits/large/${outfit}.json`
+)
+
+const NO_FILE = (): (() => void) => () => {}
+
+function useOutfitFile<T>(file: OutfitFile<T> | null): T | null | undefined {
+  return useSyncExternalStore(file ? file.subscribe : NO_FILE, () => (file ? file.value : null))
+}
 
 /** `outfit`'s layers, read when first worn: undefined until they arrive, null for no outfit. */
 export function useBotOutfitLayers(
   outfit: BotAvatarOutfit | null
 ): BotOutfitLayers | null | undefined {
-  return useSyncExternalStore(outfit ? subscriberOf(outfit) : NO_OUTFIT, () =>
-    outfit ? outfits.get(outfit) : null
-  )
+  return useOutfitFile(outfit ? layerFile(outfit) : null)
+}
+
+/** `outfit`'s large art, read only for a big picture: undefined until it arrives, null when not wanted. */
+export function useBotOutfitLargeArt(
+  outfit: BotAvatarOutfit | null,
+  large: boolean
+): BotOutfitLargeArt | null | undefined {
+  return useOutfitFile(outfit && large ? largeArtFile(outfit) : null)
 }
