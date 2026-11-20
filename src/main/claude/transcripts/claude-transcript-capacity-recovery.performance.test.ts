@@ -21,7 +21,6 @@ afterEach(async () => {
 it.each<'metadata' | 'uuidless-metadata'>(['metadata', 'uuidless-metadata'])(
   'recovers once across opens with a %s suffix beyond the raw cap',
   async (mode) => {
-    vi.useFakeTimers({ now: 0, toFake: ['Date'] })
     const c = await chat('batch')
     const suffix = Array.from({ length: 12 }, (_, index) =>
       JSON.stringify({
@@ -51,7 +50,16 @@ it.each<'metadata' | 'uuidless-metadata'>(['metadata', 'uuidless-metadata'])(
     })
     expect(await catchUpClaudeTranscript({ ...input, mode: 'recovery' })).toBe(false)
     expect(recovery).toHaveBeenCalledTimes(1)
-    expect(await c.items()).toContainEqual(
+    const items = await c.items()
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          kind: 'status',
+          presentation: 'continued-outside-unloaded'
+        })
+      })
+    )
+    expect(items).toContainEqual(
       expect.objectContaining({
         body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'old answer' }] }
       })
