@@ -150,7 +150,6 @@ export class DaemonSessionOwnerResolver<T extends IPtyProvider> {
     for (let attempt = 0; ; attempt++) {
       const pending = this.inventory(false, { ...opts, deadlineMs }, true)
       if (
-        opts?.deadlineMs !== undefined &&
         !(await awaitDaemonWorkWithinCallerDeadline(
           pending.then(() => {}),
           deadlineMs
