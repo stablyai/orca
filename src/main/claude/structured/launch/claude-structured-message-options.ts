@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
 import {
+  claudeBypassRefused,
   claudeOwesFullAccessFallback,
   setClaudeAllowedPermissionMode
 } from '../permissions/claude-full-access-refusal'
@@ -66,16 +67,23 @@ export async function applyClaudeMessageOptions(
   }
   throwIfSignalAborted(signal)
   if (options.interactionMode !== undefined) {
-    const mode = await waitForPromiseWithSignal(
-      options.interactionMode === 'plan'
-        ? session.connection.setPermissionMode('plan', { timeoutMs }).then(() => 'plan' as const)
-        : setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
-            timeoutMs
-          }),
-      signal
-    )
-    session.appliedInputOptions.set('interactionMode', options.interactionMode)
-    if (options.interactionMode === 'default') {
+    if (options.interactionMode === 'plan') {
+      await waitForPromiseWithSignal(
+        session.connection.setPermissionMode('plan', { timeoutMs }),
+        signal
+      )
+      session.appliedInputOptions.set('interactionMode', 'plan')
+    } else if (claudeBypassRefused(session)) {
+      await applyClaudeFullAccessFallback(session, timeoutMs, signal, true)
+      session.appliedInputOptions.set('interactionMode', options.interactionMode)
+    } else {
+      const mode = await waitForPromiseWithSignal(
+        setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
+          timeoutMs
+        }),
+        signal
+      )
+      session.appliedInputOptions.set('interactionMode', options.interactionMode)
       session.appliedInputOptions.set('buildPermissionMode', mode)
     }
   } else {
@@ -89,10 +97,11 @@ const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000
 /** Claude starts a refused Full access chat in its own fallback; the chat's is Approve for me. A
  *  first send waits briefly for the startup settings read that tells, and a failed switch leaves
  *  the send to run as Claude stands (the next send tries again). */
-async function applyClaudeFullAccessFallback(
+export async function applyClaudeFullAccessFallback(
   session: ClaudeSession,
   timeoutMs: number | undefined,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  buildPicked = false
 ): Promise<void> {
   if (
     session.launchIntent?.permissionMode === 'bypassPermissions' &&
@@ -103,12 +112,12 @@ async function applyClaudeFullAccessFallback(
     await waitForPromiseWithSignal(
       Promise.race([
         session.startupSettings,
-        delay(CLAUDE_STARTUP_SETTINGS_WAIT_MS, undefined, { ref: false })
+        delay(CLAUDE_STARTUP_SETTINGS_WAIT_MS, undefined, { ref: false, signal })
       ]),
       signal
     )
   }
-  if (!claudeOwesFullAccessFallback(session)) {
+  if (!buildPicked && !claudeOwesFullAccessFallback(session)) {
     return
   }
   const mode = await waitForPromiseWithSignal(
@@ -189,6 +198,9 @@ export async function dispatchClaudeMessage(
           : input.executionOptions
       if (messageOptions !== undefined) {
         await applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
+      } else if (input.body.from?.orchestration?.message === 'mail-notice' && !steers) {
+        // A mail notice that opens a turn keeps the chat's choices, but not Claude's refusal mode.
+        await applyClaudeFullAccessFallback(session, timeoutMs, input.signal)
       }
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()

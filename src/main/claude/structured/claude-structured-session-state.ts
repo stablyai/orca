@@ -154,6 +154,8 @@ export type ClaudeSession = {
   startupSettings?: Promise<void>
   /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */
   autoDisabled?: boolean
+  /** Claude last refused auto for a reason that can pass (availability, model, Fast mode). */
+  autoUnsettled?: boolean
   /** Full access processes only: Claude's mode in wire order, ahead of `reportedOptions`. */
   orderedPermissionMode?: (() => string | null | undefined) | null
   /** Fast was omitted from launch settings and must be applied before message input. */

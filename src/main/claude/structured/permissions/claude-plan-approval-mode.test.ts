@@ -127,4 +127,33 @@ describe('leaving Plan mode after an approved plan', () => {
     )
     expect(setPermissionMode).toHaveBeenCalledTimes(1)
   })
+
+  it('asks for auto again after Claude refused it only for now', async () => {
+    let unknownYet = true
+    const setPermissionMode = vi.fn((mode: string) =>
+      mode === 'auto' && unknownYet
+        ? Promise.reject(
+            new Error(
+              'Cannot set permission mode to auto: auto mode availability is not known yet · ask again'
+            )
+          )
+        : Promise.resolve()
+    )
+    const session: {
+      launchIntent: { permissionMode: string }
+      firstRootInit: { permissionMode: string }
+      bypassDisabled: boolean
+      autoDisabled?: boolean
+      connection: { setPermissionMode: typeof setPermissionMode }
+    } = {
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: true,
+      connection: { setPermissionMode }
+    }
+    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('default')
+    expect(session.autoDisabled).toBeUndefined()
+    unknownYet = false
+    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('auto')
+  })
 })

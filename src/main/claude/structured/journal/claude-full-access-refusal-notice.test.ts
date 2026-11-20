@@ -78,7 +78,7 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     expect(restarted.warnings()).toHaveLength(0)
   })
 
-  it('is warned after a Plan start once Claude reports bypass turned off', () => {
+  it('is warned after a Plan start once leaving Plan applied the fallback', () => {
     const planStart = launch('plan-chat', {
       launchIntent: FULL_ACCESS,
       firstRootInit: { permissionMode: 'plan' },
@@ -86,6 +86,9 @@ describe('a Full access chat whose Claude refuses bypass', () => {
       running: 'plan'
     })
     planStart.init('plan')
+    expect(planStart.warnings()).toHaveLength(0)
+    planStart.session.appliedInputOptions.set('buildPermissionMode', 'auto')
+    planStart.init('auto')
     expect(planStart.warnings()).toHaveLength(1)
   })
 
