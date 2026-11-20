@@ -244,7 +244,11 @@ export function MobileBotItemPage({
           <MobileBotItemActivity
             item={item}
             events={view.events}
-            onReply={() => comment.current?.focus()}
+            quickReplies={{
+              send: (text) => comment.current?.send(text),
+              edit: (text) => comment.current?.fill(text),
+              type: () => comment.current?.focus()
+            }}
           />
         </ScrollView>
         {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
@@ -258,6 +262,7 @@ export function MobileBotItemPage({
           item={item}
           online={online && !view.failed}
           hostName={hostName}
+          waiting={item.status === 'needs_you' && item.question !== null}
         />
       </View>
     </View>

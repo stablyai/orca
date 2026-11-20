@@ -37,19 +37,28 @@ import { botItemWriteFailure } from './use-bot-item-moves'
 // Each item's unsent text, for this app session.
 const drafts = new Map<string, string>()
 
-export type BotItemCommentBoxHandle = { focus: () => void }
+export type BotItemCommentBoxHandle = {
+  focus: () => void
+  /** Post `text` as the owner's comment, as Comment does (a quick reply). */
+  send: (text: string) => void
+  /** Put `text` in the box in place of its words, to add to before sending. */
+  fill: (text: string) => void
+}
 
 export function MobileBotItemCommentBox({
   client,
   item,
   online,
   hostName,
+  waiting = false,
   ref
 }: {
   client: RpcClient | null
   item: BotItem
   online: boolean
   hostName: string
+  /** The agent's question waits on the owner: what is sent is the reply. */
+  waiting?: boolean
   ref?: Ref<BotItemCommentBoxHandle>
 }) {
   useMobileColorScheme()
@@ -60,7 +69,6 @@ export function MobileBotItemCommentBox({
   const [error, setError] = useState<string | null>(null)
   const input = useRef<TextInputInstance>(null)
   const cancelRef = useRef<HostInstance>(null)
-  useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }))
   const { uid } = item
   const setText = useCallback(
     (next: string) => {
@@ -98,20 +106,35 @@ export function MobileBotItemCommentBox({
     })
   const micActive = mic?.micActive ?? false
   const canSend = online && text.trim().length > 0 && !micActive
-  const send = async () => {
-    if (!canSend || sending || !client) {
+  const post = async (words: string, typed: boolean) => {
+    if (!online || !words || sending || !client) {
       return
     }
     setSending(true)
-    const outcome = await commentOnBotItem(client, item.uid, text.trim())
+    const outcome = await commentOnBotItem(client, item.uid, words)
     setSending(false)
     if (outcome.kind === 'done') {
-      setText('')
+      if (typed) {
+        setText('')
+      }
       return
     }
     triggerError()
     setError(botItemWriteFailure(outcome, hostName, t))
   }
+  const send = async () => {
+    if (canSend) {
+      await post(text.trim(), true)
+    }
+  }
+  useImperativeHandle(ref, () => ({
+    focus: () => input.current?.focus(),
+    send: (words) => void post(words.trim(), false),
+    fill: (words) => {
+      setText(`${words} `)
+      input.current?.focus()
+    }
+  }))
   const notice = !online
     ? t(
         'bots.items.comment.offline',
@@ -139,7 +162,11 @@ export function MobileBotItemCommentBox({
             editable={!sending}
             multiline
             accessibilityLabel={t('bots.items.comment.label', 'Comment')}
-            placeholder={t('bots.items.comment.add', 'Add a comment…')}
+            placeholder={
+              waiting
+                ? t('bots.items.comment.reply', 'Reply in your own words')
+                : t('bots.items.comment.add', 'Add a comment…')
+            }
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.textPrimary}
           />

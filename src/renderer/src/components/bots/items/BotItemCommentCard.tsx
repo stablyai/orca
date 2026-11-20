@@ -1,6 +1,6 @@
 // A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, and
-// the text as Markdown. An agent's Needs you question is not drawn here: its row and card are chat's
-// question's. A reply to a question quotes it, and leads back to it.
+// the text as Markdown. An agent's Needs you question is a comment too: its body, then its question
+// footer (BotItemQuestionLines). A reply to a question quotes it, and leads back to it.
 import { useContext } from 'react'
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -22,6 +22,8 @@ import { BotOwnerAvatar } from '../bot-connector-people'
 import { BotItemClampedText } from './BotItemClampedText'
 import type { BotItemActivityEntry } from '../../../../../shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
+import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
+import { BotItemQuestionLines, type BotItemQuickReplyActions } from './BotItemQuestionLines'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 
@@ -50,9 +52,12 @@ function Avatar({
   )
 }
 
-type CommentEntry = Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo'>
+type CommentEntry = Pick<
+  Extract<BotItemActivityEntry, { kind: 'comment' }>,
+  'event' | 'replyTo' | 'answeredBy'
+> & { waiting?: boolean }
 
-/** Marks a card (or a question's card) so a jump can find and focus it. */
+/** Marks a card so a jump can find and focus it. */
 export const BOT_ITEM_COMMENT_ATTRIBUTE = 'data-bot-item-comment-id'
 
 export function BotItemCommentCard({
@@ -61,8 +66,7 @@ export function BotItemCommentCard({
   entry,
   onJump,
   failed,
-  textOverride,
-  jumpTarget = true
+  quickReplies
 }: {
   bot: Bot
   item: BotItem
@@ -71,20 +75,17 @@ export function BotItemCommentCard({
   onJump?: (eventId: string) => void
   /** A comment sent from the box that the host refused. */
   failed?: { retry: () => void; discard: () => void }
-  /** Words to show instead of the event's text (a question's context, without its decisions). */
-  textOverride?: string
-  /** False when another card (its question's) is where a jump to this event lands. */
-  jumpTarget?: boolean
+  /** On the question the item waits on, until the owner replies. */
+  quickReplies?: BotItemQuickReplyActions
 }): React.JSX.Element {
   const t = useTranslate()
   const runtimeContext = useContext(NativeChatMarkdownImageOwnerContext)?.runtimeContext ?? null
   const { event, replyTo } = entry
+  const waiting = entry.waiting === true
   const images = botItemCommentImages(event.data)
+  const shape = botItemQuestionShape(event.data)
   // Its images show above the words, so the [Image #N] its send wrote go, as in chat's sent messages.
-  const text = stripSentImagePromptMarkers(
-    textOverride ?? (typeof event.data.text === 'string' ? event.data.text : ''),
-    images.length
-  )
+  const text = stripSentImagePromptMarkers(shape.body, images.length)
   const name = botItemActorName(event, item, t)
   const format = uiDateTimeFormat(TIME)
   const jump =
@@ -94,7 +95,7 @@ export function BotItemCommentCard({
     // column so the avatar and time sit on the event rows' glyph and time edges.
     <div className="relative -mx-2 my-1 rounded-[10px] bg-sidebar">
       <div
-        {...(jumpTarget ? { [BOT_ITEM_COMMENT_ATTRIBUTE]: event.id } : {})}
+        {...{ [BOT_ITEM_COMMENT_ATTRIBUTE]: event.id }}
         tabIndex={-1}
         role="article"
         aria-label={t('bots.items.activity.commentLabel', '{{name}}, {{time}}', {
@@ -106,6 +107,13 @@ export function BotItemCommentCard({
         <div className="mb-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <Avatar bot={bot} event={event} name={name} />
           <b className="shrink-0 text-[13px] font-medium text-foreground">{name}</b>
+          {/* A question asked in prose has no question line to mark, so its header says it. */}
+          {waiting && shape.decisions.length === 0 ? (
+            <span className="flex items-center gap-1.5 whitespace-nowrap text-agent-question-text">
+              <span aria-hidden className="size-1.5 rounded-full bg-agent-question" />
+              {t('bots.items.activity.needsYou', 'Needs you')}
+            </span>
+          ) : null}
           <span className="ml-auto shrink-0 text-2xs tabular-nums">{format.format(event.at)}</span>
         </div>
         {replyTo ? (
@@ -138,11 +146,24 @@ export function BotItemCommentCard({
             runtimeContext={runtimeContext}
             renderText={(shown) =>
               !shown.trim() ? null : (
-                // 8 lines of 19 px.
-                <BotItemClampedText text={shown} clampClassName="max-h-[152px]" fade />
+                // 8 lines of 19 px; a question's body cuts between whole blocks, its question below it.
+                <BotItemClampedText
+                  text={shown}
+                  {...(waiting || shape.decisions.length > 0
+                    ? { blockFold: true }
+                    : { clampClassName: 'max-h-[152px]', fade: true })}
+                />
               )
             }
           />
+          {shape.decisions.length > 0 ? (
+            <BotItemQuestionLines
+              shape={shape}
+              waiting={waiting}
+              answeredBy={entry.answeredBy}
+              actions={quickReplies}
+            />
+          ) : null}
           {failed ? (
             <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
               <span>{t('bots.items.activity.notSent', 'Not sent.')}</span>
