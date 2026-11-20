@@ -297,4 +297,8 @@ it('ignores a child that wakes after the root finished', async () => {
   expect(hook('root', 'Stop', { fullyIdle: true })?.payload.state).toBe('done')
   expect(hook('child', 'PreInvocation')).toBeNull()
   expect((await poll())?.payload.state ?? row.payload.state).toBe('done')
+  hook('root', 'PreInvocation', { lastUserInput: 'Next' })
+  spawn()
+  hook('child', 'PreInvocation')
+  expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['child'])
 })
