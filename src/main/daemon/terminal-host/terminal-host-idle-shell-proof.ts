@@ -11,15 +11,15 @@ import {
   withEvidenceBudget
 } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { getProcessTableIndex } from '../../../shared/process-observation/tables/process-table-index'
-import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
+import {
+  ProcessTableCaptureError,
+  type ProcessTableRow
+} from '../../../shared/process-observation/tables/process-table-snapshot'
 import { getPaneOccupancy } from '../../providers/foreground/agent-process-batch'
 import type { Session } from '../sessions/session'
 
 /** A full capture re-proves the shell is alone this often; polls in between re-count its group from a cheap read. */
 const IDLE_SHELL_PROOF_MAX_AGE_MS = 60_000
-
-// Long enough for every pane polled in one round to arrive, so a full capture one of them starts serves all.
-const ROUND_JOIN_MS = 25
 
 type IdleShellProof = { shellPid: number; provedAt: number; outputChunks: number }
 
@@ -29,14 +29,15 @@ const proofs = new WeakMap<Session, IdleShellProof>()
 /** Group sizes for a round: from a full capture another pane's poll already needs, else one kinfo-only read. */
 const groupSizesReader = createProcessTableSnapshotReader<ReadonlyMap<number, number>>({
   runPs: async () => {
-    await new Promise((resolve) => setTimeout(resolve, ROUND_JOIN_MS))
+    // A round's requests arrive in one socket read; after them, a full capture one of them started can serve all.
+    await new Promise((resolve) => setImmediate(resolve))
     const full = peekStrictProcessTableSnapshot()
     if (!full) {
       return readDarwinProcessGroupSizes()
     }
     const groups = getPaneOccupancy(await full)
     if (groups.processGroupsIncomplete) {
-      throw new Error('process groups incomplete')
+      throw new ProcessTableCaptureError('process_groups_incomplete')
     }
     return groups.rowsByProcessGroup
   },

@@ -196,7 +196,9 @@ it('captures every poll when the native reader cannot read groups', async () => 
 })
 
 it('shares one group read per round however many idle panes poll in it', async () => {
-  async function pollRounds(panes: number): Promise<{ captures: number; groupReads: number }> {
+  async function pollRounds(
+    panes: number
+  ): Promise<{ captures: number; groupReads: number; shortTimers: number }> {
     tables.last = null
     resetIdleShellGroupSizesForTests()
     groupReads.mockReset()
@@ -213,6 +215,7 @@ it('shares one group read per round however many idle panes poll in it', async (
     })
     // One capture serves the whole round, already 200 ms old when later panes join it.
     tables.strict.mockReset().mockResolvedValue({ rows, capturedAgeMs: 200 })
+    const timers = vi.spyOn(globalThis, 'setTimeout')
     for (let round = 0; round < 10; round++) {
       await settle(
         Promise.all(
@@ -230,11 +233,18 @@ it('shares one group read per round however many idle panes poll in it', async (
       )
       vi.advanceTimersByTime(15_000)
     }
-    return { captures: tables.strict.mock.calls.length, groupReads: groupReads.mock.calls.length }
+    // Only evidence budgets (1.2 s, cleared when a read settles) may be armed: a shorter timer would wake an idle host.
+    const shortTimers = timers.mock.calls.filter(([, ms]) => (ms ?? 0) < 1_200).length
+    timers.mockRestore()
+    return {
+      captures: tables.strict.mock.calls.length,
+      groupReads: groupReads.mock.calls.length,
+      shortTimers
+    }
   }
   // Each pane re-proves once a minute (3 of 10 rounds); the other 7 rounds share one kinfo-only read each.
-  expect(await pollRounds(30)).toEqual({ captures: 90, groupReads: 7 })
-  expect(await pollRounds(300)).toEqual({ captures: 900, groupReads: 7 })
+  expect(await pollRounds(30)).toEqual({ captures: 90, groupReads: 7, shortTimers: 0 })
+  expect(await pollRounds(300)).toEqual({ captures: 900, groupReads: 7, shortTimers: 0 })
   expect(groupReads).toHaveBeenCalledWith({ command: false })
 })
 
@@ -269,9 +279,8 @@ it('takes group sizes from the full capture an ordinary command already needs in
         nextObservationEpoch: () => round
       })
     for (let round = 0; round < 10; round++) {
-      // The editor's poll arrives after the idle panes', inside the round's join window.
+      // The editor's poll arrives after the idle panes' in the same round.
       const idlePolls = idle.map((session, i) => poll(session, `pane-${i}`, round))
-      await vi.advanceTimersByTimeAsync(5)
       await settle(Promise.all([...idlePolls, poll(editor, 'editor', round)]))
       vi.advanceTimersByTime(15_000)
     }
