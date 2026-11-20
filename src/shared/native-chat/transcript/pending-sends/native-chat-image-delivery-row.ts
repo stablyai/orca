@@ -28,12 +28,21 @@ export function imageDeliveryRow(message: NativeChatMessage) {
   if (cached) {
     return cached
   }
-  const context = readAgentImageSourceContext(
-    message.blocks
-      .filter(isTextBlock)
-      .map((block) => unwrapClaudePastedContent(block.text))
-      .join(' ')
-  )
+  const text = message.blocks
+    .filter(isTextBlock)
+    .map((block) => unwrapClaudePastedContent(block.text))
+    .join(' ')
+  const candidate = readAgentImageSourceContext(text)
+  const images = message.blocks.filter(isImageRefBlock)
+  const textPrefix = normalizeNativeChatUserText(candidate.text)
+  const deliveredPrefix = candidate.delivered.map(normalizeNativeChatUserText).join(' ')
+  const hasImageEvidence =
+    (images.length === candidate.delivered.length &&
+      images.length > 0 &&
+      images.every((image, index) => !image.path || image.path === candidate.delivered[index])) ||
+    (deliveredPrefix.length > 0 &&
+      (textPrefix === deliveredPrefix || textPrefix.startsWith(`${deliveredPrefix} `)))
+  const context = hasImageEvidence ? candidate : { text, original: [], delivered: [] }
   const sources = new Map(context.delivered.map((path, index) => [path, context.original[index]]))
   const paths = message.blocks
     .filter(isImageRefBlock)

@@ -101,29 +101,34 @@ export function readAgentImageSourceContext(text: string): {
   delivered: string[]
 } {
   const unchanged = { text, original: [], delivered: [] }
-  const start = text.lastIndexOf('[Image source file: ')
-  if (start === -1 || !text.endsWith(']')) {
+  if (!text.endsWith(']')) {
     return unchanged
   }
-  const content = text.slice(start + 1, -1)
   const pattern =
     /Image source file: ("(?:[^"\\]|\\.)*"); attached viewing copy: ("(?:[^"\\]|\\.)*")/g
-  const original: string[] = []
-  const delivered: string[] = []
+  let start = -1
   let cursor = 0
-  for (const match of content.matchAll(pattern)) {
-    if (content.slice(cursor, match.index).trim()) {
-      return unchanged
+  let original: string[] = []
+  let delivered: string[] = []
+  for (const match of text.matchAll(pattern)) {
+    if (text[match.index - 1] === '[') {
+      start = match.index - 1
+      original = []
+      delivered = []
+    } else if (start === -1 || text.slice(cursor, match.index).trim()) {
+      start = -1
+      continue
     }
     try {
       original.push(JSON.parse(match[1]))
       delivered.push(JSON.parse(match[2]))
     } catch {
-      return unchanged
+      start = -1
+      continue
     }
     cursor = match.index + match[0].length
   }
-  return original.length && !content.slice(cursor).trim()
+  return start !== -1 && original.length && text.slice(cursor) === ']'
     ? { text: text.slice(0, start).trimEnd(), original, delivered }
     : unchanged
 }
