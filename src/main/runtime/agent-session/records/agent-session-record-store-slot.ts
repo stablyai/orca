@@ -11,6 +11,8 @@ import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../installation/structured-agent-session-journal-open'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { setAgentProcessOwnerReader } from '../../../memory/agent-process-registry'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 export type AgentSessionRecordStoreLocation = {
   stateDirectory: string
@@ -106,6 +108,26 @@ export function openAgentSessionRecordStoreOnce(
 export function peekOpenedAgentSessionRecordStore(): AgentSessionRecordStore | null {
   return opening?.store ?? null
 }
+
+// Resource Manager attributes each agent process tree to the chat whose lease names that process.
+setAgentProcessOwnerReader(() =>
+  (peekOpenedAgentSessionRecordStore()?.listLeaseHolders() ?? []).flatMap((record) => {
+    const owner = record.lease.ownerProcess
+    return owner &&
+      record.location.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+      record.location.wslDistro === null
+      ? [
+          {
+            pid: owner.pid,
+            agentSessionId: record.sessionId,
+            worktreeId: record.location.workspaceId,
+            agent: record.provider,
+            name: record.conversationName ?? null
+          }
+        ]
+      : []
+  })
+)
 
 async function openRecordStore(
   location: AgentSessionRecordStoreLocation

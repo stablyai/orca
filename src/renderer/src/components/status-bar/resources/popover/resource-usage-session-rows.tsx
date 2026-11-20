@@ -13,6 +13,7 @@ import type {
 } from '../workspace-attribution/resource-usage-merge-types'
 import { MetricPair, ROW_TRAILING_GUTTER_CLS, Sparkline } from './resource-usage-metrics'
 import { isResourceSessionActivationKey } from '../session-actions/resource-session-navigation'
+import { ChatRow } from './resource-usage-chat-row'
 
 export function SessionRow({
   session,
@@ -113,7 +114,8 @@ export function WorktreeRow({
   onNavigate,
   onDelete,
   onKillSession,
-  navigateToTab
+  navigateToTab,
+  onOpenChat
 }: {
   worktree: UnifiedWorktreeRow
   storeRecord: Worktree | null
@@ -124,9 +126,11 @@ export function WorktreeRow({
   onDelete: () => void
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
+  onOpenChat: (worktreeId: string, agentSessionId: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const hasResources = worktree.sessions.length > 0 || worktree.browsers.length > 0
+  const hasResources =
+    worktree.sessions.length > 0 || worktree.chats.length > 0 || worktree.browsers.length > 0
   // Why: synthetic buckets (orphan/unattributed) have no sidebar target to reveal; real and SSH-resolved worktrees stay navigable.
   const isSynthetic =
     worktree.worktreeId === ORPHAN_WORKTREE_ID || worktree.repoId === UNATTRIBUTED_REPO_ID
@@ -250,6 +254,14 @@ export function WorktreeRow({
         </div>
       </div>
 
+      {!isCollapsed &&
+        worktree.chats.map((chat) => (
+          <ChatRow
+            key={chat.agentSessionId}
+            chat={chat}
+            onOpen={(agentSessionId) => onOpenChat(worktree.worktreeId, agentSessionId)}
+          />
+        ))}
       {!isCollapsed &&
         worktree.sessions.map((session) => (
           <SessionRow

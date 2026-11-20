@@ -1,5 +1,8 @@
 import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
-import type { WorktreeMemory } from '../../../../../../shared/diagnostics/process-stats-types'
+import type {
+  ChatAgentMemory,
+  WorktreeMemory
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -43,6 +46,8 @@ export type UnifiedWorktreeRow = {
   /** Paired server that sampled this row; absent for this machine and SSH rows. */
   hostLabel?: string
   sessions: UnifiedSessionRow[]
+  /** This machine's chat agents in the workspace; paired servers count theirs in the row total. */
+  chats: ChatAgentMemory[]
   browsers: BrowserWorkspace[]
 }
 
