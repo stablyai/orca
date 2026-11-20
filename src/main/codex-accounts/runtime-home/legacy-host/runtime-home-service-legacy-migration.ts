@@ -5,12 +5,13 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  lstatSync,
   readdirSync,
-  statSync,
-  writeFileSync
+  statSync
 } from 'node:fs'
 import { dirname, extname, join, parse, relative } from 'node:path'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
+import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-migration'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
@@ -137,14 +138,20 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       }
       try {
         const keptDir = join(this.getKeptLegacyHistoryRoot(), accountId)
+        const keptPath = join(keptDir, 'history.jsonl')
+        const kept = lstatSync(keptPath, { throwIfNoEntry: false })
+        if (kept?.isFile() && kept.nlink === 1) {
+          // Kept by an earlier launch; history Codex wrote since stays in the account's own file.
+          continue
+        }
         mkdirSync(keptDir, { recursive: true })
-        // Read once rather than copied: Codex may trim it meanwhile, and a copy of a file that
-        // shrinks mid-copy never finishes.
-        this.copyLegacyFilePreservingConflicts(
-          legacyHistoryPath,
-          join(keptDir, 'history.jsonl'),
-          accountId,
-          readFileSync(legacyHistoryPath)
+        // Read once rather than copied (a copy of a file Codex trims mid-copy never finishes), then
+        // published by rename: never partial, and a link at the name is replaced, not written through.
+        writeFileDurableSync(
+          durableWriteTempPath(keptPath),
+          keptPath,
+          readFileSync(legacyHistoryPath),
+          0o600
         )
       } catch (error) {
         firstError ??= error
@@ -190,47 +197,34 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
   protected copyLegacyFilePreservingConflicts(
     legacyFilePath: string,
     targetPath: string,
-    accountId: string,
-    contents?: Buffer
+    accountId: string
   ): { path: string; preserved: boolean } {
-    if (this.copyLegacyFileWithoutOverwrite(legacyFilePath, targetPath, contents) !== 'conflict') {
+    if (this.copyLegacyFileWithoutOverwrite(legacyFilePath, targetPath) !== 'conflict') {
       return { path: targetPath, preserved: false }
     }
     for (let attempt = 0; ; attempt++) {
       const preservedPath = this.getPreservedLegacySessionPath(targetPath, accountId, attempt)
-      const result = this.copyLegacyFileWithoutOverwrite(legacyFilePath, preservedPath, contents)
+      const result = this.copyLegacyFileWithoutOverwrite(legacyFilePath, preservedPath)
       if (result !== 'conflict') {
         return { path: preservedPath, preserved: result === 'copied' }
       }
     }
   }
 
-  /**
-   * Exclusive create never replaces or writes through a name, even one that appears after a check.
-   * With `contents`, writes those bytes instead of copying the file.
-   */
+  /** Exclusive create never replaces or writes through a name, even one that appears after a check. */
   protected copyLegacyFileWithoutOverwrite(
     legacyFilePath: string,
-    targetPath: string,
-    contents?: Buffer
+    targetPath: string
   ): 'copied' | 'identical' | 'conflict' {
     try {
-      if (contents) {
-        writeFileSync(targetPath, contents, { flag: 'wx', mode: 0o600 })
-      } else {
-        copyFileSync(
-          legacyFilePath,
-          targetPath,
-          constants.COPYFILE_EXCL | constants.COPYFILE_FICLONE
-        )
-      }
+      copyFileSync(legacyFilePath, targetPath, constants.COPYFILE_EXCL | constants.COPYFILE_FICLONE)
       return 'copied'
     } catch (error) {
       if (errnoCodeOrUnknown(error) !== 'EEXIST') {
         throw error
       }
     }
-    const legacyContents = contents ?? readFileSync(legacyFilePath)
+    const legacyContents = readFileSync(legacyFilePath)
     try {
       return readFileSync(targetPath).equals(legacyContents) ? 'identical' : 'conflict'
     } catch {

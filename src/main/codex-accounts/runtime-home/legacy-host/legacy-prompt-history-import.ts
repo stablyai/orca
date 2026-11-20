@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { link, lstat, open, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { link, lstat, open, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { track } from '../../../telemetry/client'
@@ -14,21 +14,36 @@ const IMPORT_STATE_FILE = 'import-state.json'
 type ImportState = { done: boolean; attempts: number }
 
 async function readImportState(path: string): Promise<ImportState> {
+  let text: string
   try {
-    const parsed: unknown = JSON.parse(await readFile(path, 'utf-8'))
+    text = await readFile(path, 'utf-8')
+  } catch (error) {
+    // Unreadable (not missing) state never re-imports: Orca couldn't record a later outcome either.
+    return { done: errnoCodeOrUnknown(error) !== 'ENOENT', attempts: 0 }
+  }
+  try {
+    const parsed: unknown = JSON.parse(text)
     if (parsed && typeof parsed === 'object') {
       return {
         done: 'done' in parsed && parsed.done === true,
         attempts: 'attempts' in parsed && typeof parsed.attempts === 'number' ? parsed.attempts : 0
       }
     }
-  } catch (error) {
-    if (errnoCodeOrUnknown(error) !== 'ENOENT') {
-      // Unreadable state never re-imports: the shared history may exist by now anyway.
-      return { done: true, attempts: 0 }
-    }
+  } catch {
+    // Retried below: the import itself never writes into an existing shared history.
   }
   return { done: false, attempts: 0 }
+}
+
+// Temp then rename: never torn, and a link at the name is replaced rather than written through.
+async function writeImportState(path: string, state: ImportState): Promise<void> {
+  const tmpPath = `${path}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    await writeFile(tmpPath, `${JSON.stringify(state)}\n`, { encoding: 'utf-8', flag: 'wx' })
+    await rename(tmpPath, path)
+  } finally {
+    await rm(tmpPath, { force: true })
+  }
 }
 
 /**
@@ -55,7 +70,7 @@ export async function importKeptLegacyHistoriesOnce(
     done: outcome !== 'failed' || attempts >= MAX_IMPORT_ATTEMPTS,
     attempts
   }
-  await writeFile(statePath, `${JSON.stringify(next)}\n`, 'utf-8')
+  await writeImportState(statePath, next)
 }
 
 async function pathExists(path: string): Promise<boolean> {
