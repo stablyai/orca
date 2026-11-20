@@ -7,35 +7,46 @@ import type { CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES } from '../../../../shared/te
 
 type LegacyHistoryImportOutcome = (typeof CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES)[number]
 
-/** Launches that try the history import before it gives up; account histories stay either way. */
+/** Failed launches before the import waits for the account histories to change. */
 export const MAX_HISTORY_IMPORT_ATTEMPTS = 3
 
-export type LegacyMigrationMarker = {
+export type LegacyMigrationState = {
   completedAt?: number
   migratedHomeCount?: number
-  historyImportPending?: true
   historyImportAttempts?: number
+  /** The account histories' sizes and times when the import last gave up. */
+  historyImportInputs?: string
 }
 
-export function parseLegacyMigrationMarker(text: string): LegacyMigrationMarker {
+export function parseLegacyMigrationState(text: string): LegacyMigrationState {
   const parsed: unknown = JSON.parse(text)
-  const marker: LegacyMigrationMarker = {}
+  const state: LegacyMigrationState = {}
   if (!parsed || typeof parsed !== 'object') {
-    return marker
+    return state
   }
   if ('completedAt' in parsed && typeof parsed.completedAt === 'number') {
-    marker.completedAt = parsed.completedAt
+    state.completedAt = parsed.completedAt
   }
   if ('migratedHomeCount' in parsed && typeof parsed.migratedHomeCount === 'number') {
-    marker.migratedHomeCount = parsed.migratedHomeCount
-  }
-  if ('historyImportPending' in parsed && parsed.historyImportPending === true) {
-    marker.historyImportPending = true
+    state.migratedHomeCount = parsed.migratedHomeCount
   }
   if ('historyImportAttempts' in parsed && typeof parsed.historyImportAttempts === 'number') {
-    marker.historyImportAttempts = parsed.historyImportAttempts
+    state.historyImportAttempts = parsed.historyImportAttempts
   }
-  return marker
+  if ('historyImportInputs' in parsed && typeof parsed.historyImportInputs === 'string') {
+    state.historyImportInputs = parsed.historyImportInputs
+  }
+  return state
+}
+
+/** Stats only: cheap enough to ask at every launch whether the account histories changed. */
+export async function legacyHistoryInputsKey(accountsRoot: string): Promise<string> {
+  const parts: string[] = []
+  for (const historyPath of await listAccountHistories(accountsRoot)) {
+    const stats = await stat(historyPath)
+    parts.push(`${historyPath}:${stats.size}:${stats.mtimeMs}`)
+  }
+  return parts.join('|')
 }
 
 async function pathExists(path: string): Promise<boolean> {

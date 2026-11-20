@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync, type Dirent } from 'node:fs'
-import { readdir, rm } from 'node:fs/promises'
-import { join, resolve, sep } from 'node:path'
+import { readdir, realpath, rm } from 'node:fs/promises'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import {
   WINDOWS_RM_MAX_RETRIES,
@@ -43,7 +43,13 @@ const KEPT_HISTORY = [
 const KEEP_ON_REMOVAL_SCRIPT = [
   'set -u',
   'home=$1',
+  // A linked prompt history keeps the folder entry inside the home that holds what it points to.
+  'real_home=$(readlink -f -- "$home" 2>/dev/null || printf %s "$home")',
+  'history_target=$(readlink -f -- "$home/history.jsonl" 2>/dev/null || true)',
+  'history_entry=',
+  'case "$history_target" in "$real_home"/?*) rest=${history_target#"$real_home"/}; history_entry=${rest%%/*} ;; esac',
   'kept() {',
+  '  if [ -n "$history_entry" ] && [ "${1##*/}" = "$history_entry" ]; then return 0; fi',
   '  case "${1##*/}" in',
   '    *.orca-profile-merge) return 0 ;;',
   `    ${KEPT_HISTORY.join(' | ')}) return 0 ;;`,
@@ -70,11 +76,24 @@ const KEEP_ON_REMOVAL_SCRIPT = [
  * Deletes the login and private state but keeps shared history; true when anything was kept.
  * Links are removed one by one first, so no recursive delete ever meets a Windows junction.
  */
+// The top-level entry holding what a linked history.jsonl points to, when that is inside the home.
+async function linkedHistoryEntry(home: string): Promise<string | null> {
+  try {
+    const target = await realpath(join(home, 'history.jsonl'))
+    const inside = relative(await realpath(home), target)
+    return inside && !inside.startsWith('..') && !isAbsolute(inside) ? inside.split(sep)[0] : null
+  } catch {
+    return null
+  }
+}
+
 async function removeManagedHomeKeepingSharedHistory(home: string): Promise<boolean> {
   const entries = await readdir(home, { withFileTypes: true })
   const sharedOnce = entries.some((entry) => entry.name === HISTORY_CLEANUP_MANIFEST)
+  const historyEntry = await linkedHistoryEntry(home)
   const kept = (entry: Dirent): boolean =>
     KEPT_HISTORY.includes(entry.name) ||
+    entry.name === historyEntry ||
     entry.name.endsWith(MERGE_PENDING_SUFFIX) ||
     (sharedOnce && entry.isFile() && CODEX_DATABASE_FILE.test(entry.name))
   for (const entry of entries.filter((candidate) => !kept(candidate))) {

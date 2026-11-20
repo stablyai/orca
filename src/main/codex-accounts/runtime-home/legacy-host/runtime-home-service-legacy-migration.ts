@@ -17,9 +17,10 @@ import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex
 import { CodexRuntimeHomePaths } from '../runtime-home-service-paths'
 import {
   importLegacyHistoriesIfSharedAbsent,
+  legacyHistoryInputsKey,
   MAX_HISTORY_IMPORT_ATTEMPTS,
-  parseLegacyMigrationMarker,
-  type LegacyMigrationMarker
+  parseLegacyMigrationState,
+  type LegacyMigrationState
 } from './legacy-prompt-history-import'
 
 export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePaths {
@@ -63,13 +64,14 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
   }
 
   protected migrateLegacyManagedStateIfNeeded(): void {
-    const existingMarker = this.readMigrationMarker()
-    if (existingMarker) {
-      if (existingMarker.historyImportPending) {
-        void this.importLegacyHistory().then((imported) =>
-          this.recordHistoryImport(existingMarker, imported)
-        )
-      }
+    // Written only once history settles: an older build sees it alone, and must not skip a history
+    // import still owed (its account removal deletes history.jsonl).
+    if (existsSync(this.getMigrationMarkerPath())) {
+      return
+    }
+    const sessionsDone = this.readSessionsMigratedState()
+    if (sessionsDone) {
+      void this.retryLegacyHistoryImport(sessionsDone)
       return
     }
 
@@ -85,15 +87,26 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       }
     }
 
-    // Marked before the history import settles: an import that keeps failing retries alone, never
-    // the session pass above.
-    const marker: LegacyMigrationMarker = {
+    // Recorded apart from the history import: one that keeps failing retries alone, never the
+    // session pass above.
+    const state: LegacyMigrationState = {
       completedAt: Date.now(),
-      migratedHomeCount: managedHomes.length,
-      historyImportPending: true
+      migratedHomeCount: managedHomes.length
     }
-    this.writeMigrationMarker(marker)
-    void historyImported.then((imported) => this.recordHistoryImport(marker, imported))
+    this.writeSessionsMigratedState(state)
+    void historyImported.then((imported) => this.recordHistoryImport(state, imported))
+  }
+
+  // After a few failed launches, only a change to the account histories earns another attempt.
+  protected async retryLegacyHistoryImport(state: LegacyMigrationState): Promise<void> {
+    if ((state.historyImportAttempts ?? 0) >= MAX_HISTORY_IMPORT_ATTEMPTS) {
+      const inputs = await legacyHistoryInputsKey(this.getManagedAccountsRoot()).catch(() => null)
+      if (inputs === null || inputs === state.historyImportInputs) {
+        return
+      }
+      state = { ...state, historyImportAttempts: 0 }
+    }
+    await this.recordHistoryImport(state, await this.importLegacyHistory())
   }
 
   // Off the startup path; never rejects.
@@ -110,35 +123,51 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     }
   }
 
-  // Account histories are only read, so giving up after a few failed launches loses nothing.
-  protected recordHistoryImport(marker: LegacyMigrationMarker, imported: boolean): void {
-    const attempts = (marker.historyImportAttempts ?? 0) + 1
-    const { historyImportPending: _pending, historyImportAttempts: _attempts, ...settled } = marker
+  protected async recordHistoryImport(
+    state: LegacyMigrationState,
+    imported: boolean
+  ): Promise<void> {
     try {
-      this.writeMigrationMarker(
-        imported || attempts >= MAX_HISTORY_IMPORT_ATTEMPTS
-          ? settled
-          : { ...marker, historyImportAttempts: attempts }
-      )
+      if (imported) {
+        writeFileAtomically(
+          this.getMigrationMarkerPath(),
+          `${JSON.stringify({ completedAt: state.completedAt, migratedHomeCount: state.migratedHomeCount })}\n`
+        )
+        return
+      }
+      const attempts = (state.historyImportAttempts ?? 0) + 1
+      const historyImportInputs =
+        attempts >= MAX_HISTORY_IMPORT_ATTEMPTS
+          ? await legacyHistoryInputsKey(this.getManagedAccountsRoot()).catch(() => undefined)
+          : undefined
+      this.writeSessionsMigratedState({
+        ...state,
+        historyImportAttempts: attempts,
+        historyImportInputs
+      })
     } catch (error) {
       console.warn('[codex-runtime-home] Failed to record legacy Codex history import:', error)
     }
   }
 
-  protected readMigrationMarker(): LegacyMigrationMarker | null {
-    if (!existsSync(this.getMigrationMarkerPath())) {
+  protected getSessionsMigratedStatePath(): string {
+    return join(this.getRuntimeMetadataDir(), 'migration-v1-sessions.json')
+  }
+
+  protected readSessionsMigratedState(): LegacyMigrationState | null {
+    if (!existsSync(this.getSessionsMigratedStatePath())) {
       return null
     }
     try {
-      return parseLegacyMigrationMarker(readFileSync(this.getMigrationMarkerPath(), 'utf-8'))
+      return parseLegacyMigrationState(readFileSync(this.getSessionsMigratedStatePath(), 'utf-8'))
     } catch {
-      // An unreadable marker still means the one-time migration ran.
+      // Unreadable: the sessions pass still ran; the history import retries from scratch.
       return {}
     }
   }
 
-  protected writeMigrationMarker(marker: LegacyMigrationMarker): void {
-    writeFileAtomically(this.getMigrationMarkerPath(), `${JSON.stringify(marker)}\n`)
+  protected writeSessionsMigratedState(state: LegacyMigrationState): void {
+    writeFileAtomically(this.getSessionsMigratedStatePath(), `${JSON.stringify(state)}\n`)
   }
 
   protected getLegacyManagedHomes(): string[] {

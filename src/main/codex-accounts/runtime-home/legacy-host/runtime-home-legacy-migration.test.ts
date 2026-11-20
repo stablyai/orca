@@ -77,15 +77,15 @@ async function startService(): Promise<void> {
   await waitForMigrationMarker()
 }
 
-// Settled: marked, and the history import no longer pending.
+// Settled: the history import landed or was skipped, so the one-time migration is marked done.
 async function waitForMigrationMarker(): Promise<void> {
-  await vi.waitFor(
-    () => {
-      expect(existsSync(migrationMarkerPath())).toBe(true)
-      expect(readFileSync(migrationMarkerPath(), 'utf-8')).not.toContain('historyImportPending')
-    },
-    { timeout: WAIT_MS }
-  )
+  await vi.waitFor(() => expect(existsSync(migrationMarkerPath())).toBe(true), {
+    timeout: WAIT_MS
+  })
+}
+
+function sessionsMigratedStatePath(): string {
+  return join(testState.userDataDir, 'codex-runtime-home', 'migration-v1-sessions.json')
 }
 
 // Slow CI hosts take seconds to construct the service.
@@ -274,10 +274,14 @@ describe('CodexRuntimeHomeService', () => {
     await waitForImportOutcomes(['failed'])
     await vi.waitFor(
       () =>
-        expect(readFileSync(migrationMarkerPath(), 'utf-8')).toContain('"historyImportAttempts":1'),
+        expect(readFileSync(sessionsMigratedStatePath(), 'utf-8')).toContain(
+          '"historyImportAttempts":1'
+        ),
       { timeout: WAIT_MS }
     )
     expect(existsSync(runtimeHistoryPath)).toBe(false)
+    // An older build only checks this marker: it must still owe the history import.
+    expect(existsSync(migrationMarkerPath())).toBe(false)
     fsHooks.afterRead.clear()
     mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
     writeFileSync(join(managedHomePath, 'sessions', 'later.jsonl'), '{}', 'utf-8')
@@ -288,6 +292,22 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"legacy-1"}\n')
     expect(trackedImportOutcomes()).toEqual(['failed', 'imported'])
     expect(existsSync(join(getRuntimeCodexHomePath(), 'sessions', 'later.jsonl'))).toBe(false)
+  })
+
+  it('retries an import it gave up on once the account history changed', async () => {
+    writeHistory('account-1', '{"id":"legacy-1"}\n')
+    mkdirSync(join(sessionsMigratedStatePath(), '..'), { recursive: true })
+    writeFileSync(
+      sessionsMigratedStatePath(),
+      JSON.stringify({ historyImportAttempts: 3, historyImportInputs: 'before the change' }),
+      'utf-8'
+    )
+
+    await startService()
+
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
+      '{"id":"legacy-1"}\n'
+    )
   })
 
   it('does not re-run migration when marker already exists', async () => {
