@@ -2,7 +2,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import { JOURNAL_READER_REPLY_BYTE_LIMIT } from './journal-sql-reader-reply-limit'
 
 const LIMIT = JOURNAL_READER_REPLY_BYTE_LIMIT
-export const SHORTENED_HEAD_CHARS = 16 * 1024
+const SHORTENED_HEAD_CHARS = 16 * 1024
 
 /**
  * Selects stored JSON only when it fits one reader reply, so neither the reader nor main ever

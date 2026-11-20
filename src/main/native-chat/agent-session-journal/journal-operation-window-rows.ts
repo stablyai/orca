@@ -2,11 +2,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalOperationWindowAnchors } from './journal-domain-operation-window'
 import { JOURNAL_READER_REPLY_BYTE_LIMIT } from './journal-sql-reader-reply-limit'
-import {
-  SHORTENED_HEAD_CHARS,
-  shortenJournalItemHead,
-  shortenedJsonSql
-} from './journal-stored-json-bounds'
+import { shortenJournalItemHead, shortenedJsonSql } from './journal-stored-json-bounds'
 import { journalStoredTextBytesSql } from './journal-stored-output-rows'
 
 // A Diff call's patch, and so the files it edited, is its output: that one is kept. The stored
@@ -87,29 +83,33 @@ export function readOperationWindowItems(
   // A cut row may keep a large input; the window total, not a per-row bound, admits it.
   // Largest first, Diff calls last: their patch names the files they edited. Each cut is
   // counted at the size it actually comes back at, which is whole when nothing could be cut.
-  // A stored row holds at most 32 KiB, so it is restored and cut after decoding, to the same head
-  // SQL gives inline text; it is sized at that head.
+  // A stored row holds at most 32 KiB: it is restored and cut here, to the head SQL gives inline
+  // text, and sized at that head.
   const cutJson = shortenedJsonSql(projected, JOURNAL_READER_REPLY_BYTE_LIMIT)
   const cutSize = scope.db.prepare(`SELECT ${projectedStoredText} AS stored,
-      octet_length(${projected}) AS projected_bytes, octet_length(${cutJson}) AS cut_bytes
+      octet_length(${cutJson}) AS cut_bytes ${STORED_CUT_COLUMNS(projected)}
     FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
   const cut: string[] = []
-  const storedCut = new Set<string>()
+  const storedCut = new Map<string, AgentJournalRenderItem>()
   for (const row of large.toSorted(
     (a, b) => Number(a.diff) - Number(b.diff) || b.bytes - a.bytes
   )) {
     if (row.bytes > WINDOW_BYTES || (total > WINDOW_BYTES && row.bytes > CUT_ROW_BYTES)) {
       const size = cutSize.get(...scope.prefix, row.itemId)
-      const stored = Number(size?.stored ?? 0)
-      if (stored > 0) {
-        storedCut.add(row.itemId)
+      let cutBytes = size?.cut_bytes
+      if (Number(size?.stored ?? 0) > 0) {
+        const read = scope.examined(size!)
+        const item = shortenJournalItemHead(
+          scope.decode<AgentJournalRenderItem>(read.payload_json, read.output_blob)
+        )
+        storedCut.set(row.itemId, item)
+        cutBytes =
+          Number(size!.projected_bytes) -
+          Number(size!.text_field_bytes) +
+          Buffer.byteLength(JSON.stringify(journalItemTextField(item)))
       } else {
         cut.push(row.itemId)
       }
-      const cutBytes =
-        stored > 0
-          ? Number(size!.projected_bytes) + Math.min(stored, SHORTENED_HEAD_CHARS * 4)
-          : size?.cut_bytes
       if (typeof cutBytes === 'number') {
         total -= row.bytes - cutBytes
         row.bytes = cutBytes
@@ -121,21 +121,37 @@ export function readOperationWindowItems(
       `journal operation window (${total} bytes after cutting) exceeds ${JOURNAL_READER_REPLY_BYTE_LIMIT} bytes`
     )
   }
+  const restored = JSON.stringify([...storedCut.keys()])
   // A cut row whose bulk is not its output or patch comes back whole, within the total above.
-  const value = cut.length
-    ? `CASE WHEN item_id IN (SELECT value FROM json_each(?))
-        THEN COALESCE(${cutJson}, ${projected}) ELSE ${projected} END`
-    : projected
+  const value = `CASE WHEN item_id IN (SELECT value FROM json_each(?)) THEN NULL${
+    cut.length
+      ? ` WHEN item_id IN (SELECT value FROM json_each(?)) THEN COALESCE(${cutJson}, ${projected})`
+      : ''
+  } ELSE ${projected} END`
   // Only rows that still carry a stored marker read their blob; a dropped output needs none.
-  const blob = `CASE WHEN output_blob IS NULL${anchors.withoutToolOutput ? ` OR (${DROPS_TOOL_OUTPUT})` : ''} THEN NULL ELSE output_blob END`
+  const blob = `CASE WHEN output_blob IS NULL${anchors.withoutToolOutput ? ` OR (${DROPS_TOOL_OUTPUT})` : ''}
+    OR item_id IN (SELECT value FROM json_each(?)) THEN NULL ELSE output_blob END`
   return scope.db
     .prepare(
-      `SELECT ${value} AS payload_json, ${blob} AS output_blob ${rows} ORDER BY sequence,sequence_index,ordinal`
+      `SELECT item_id, ${value} AS payload_json, ${blob} AS output_blob ${rows} ORDER BY sequence,sequence_index,ordinal`
     )
-    .all(...(cut.length ? [JSON.stringify(cut)] : []), ...scope.prefix, start)
+    .all(restored, ...(cut.length ? [JSON.stringify(cut)] : []), restored, ...scope.prefix, start)
     .map((row) => {
+      const restoredItem = storedCut.get(String(row.item_id))
+      if (restoredItem) {
+        return restoredItem
+      }
       const read = scope.examined(row)
-      const item = scope.decode<AgentJournalRenderItem>(read.payload_json, read.output_blob)
-      return storedCut.has(item.itemId) ? shortenJournalItemHead(item) : item
+      return scope.decode<AgentJournalRenderItem>(read.payload_json, read.output_blob)
     })
+}
+
+// What a stored cut row is sized from: its projected row and blob, and the text field it replaces.
+const STORED_CUT_COLUMNS = (projected: string) => `, ${projected} AS payload_json, output_blob,
+  octet_length(${projected}) AS projected_bytes,
+  octet_length(COALESCE(${projected}->'$.body.output', ${projected}->'$.body.patch')) AS text_field_bytes`
+
+function journalItemTextField(item: AgentJournalRenderItem): unknown {
+  const body = item.body as { output?: unknown; patch?: unknown }
+  return body.output ?? body.patch
 }
