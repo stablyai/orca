@@ -11,13 +11,17 @@ function withoutHash(rawUrl: string): string {
   }
 }
 
+// A page can cancel a reported submission's navigation; a later visit to that address is a GET.
+// Generous, because the report and the navigation start can straddle a busy main thread.
+const SUBMISSION_TTL_MS = 10_000
+
 /**
  * Whether the current main-frame navigation is a form POST, from the preload's report of a
- * submitted form: the next navigation to that form's action URL counts. A page that loaded as a
- * POST result stays one for reloads and Back/Forward, which repeat or restore the POST. A mark
- * survives redirects: Electron doesn't report their status, and a 307/308 keeps the POST.
+ * submitted form: the next navigation to that form's action URL soon after counts. A page that
+ * loaded as a POST result stays one for reloads and Back/Forward, which repeat or restore the
+ * POST. A mark survives redirects: Electron doesn't report their status, and a 307/308 keeps it.
  */
-export function createFormPostNavigationTracker(): {
+export function createFormPostNavigationTracker(now: () => number = Date.now): {
   submitted: (actionUrl: string) => void
   started: (url: string) => void
   /** `method` is the request's own method when a request listener saw it. */
@@ -25,25 +29,36 @@ export function createFormPostNavigationTracker(): {
   /** The committed document was a fresh navigation; true if that drops a remembered POST mark. */
   freshlyNavigated: () => boolean
 } {
-  let submitted: string | null = null
+  let submitted: { url: string; at: number } | null = null
   let post = false
   // The mark came only from a remembered POST result, which a fresh GET navigation disproves.
   let fromMemory = false
   let startTarget = ''
-  // A redirect target first remembered on a memory-only mark: a reload or Back/Forward keeps it
-  // (a 307/308 re-POSTs there), a fresh navigation shows it was a GET page and forgets it.
+  // A redirect target reached on a memory-only mark: a fresh navigation shows it was a GET page;
+  // otherwise (reload or Back/Forward, where a 307/308 re-POSTs) it is remembered at the next start.
   let provisionalUrl: string | null = null
   const postResultUrls = new Set<string>()
+  const remember = (url: string): void => {
+    postResultUrls.delete(url)
+    postResultUrls.add(url)
+    if (postResultUrls.size > MAX_POST_RESULT_URLS) {
+      postResultUrls.delete(postResultUrls.values().next().value ?? url)
+    }
+  }
   return {
     submitted: (actionUrl) => {
-      submitted = withoutHash(actionUrl)
+      submitted = { url: withoutHash(actionUrl), at: now() }
     },
     started: (url) => {
+      if (provisionalUrl !== null) {
+        remember(provisionalUrl)
+        provisionalUrl = null
+      }
       const target = withoutHash(url)
       startTarget = target
-      provisionalUrl = null
-      fromMemory = target !== submitted && postResultUrls.has(target)
-      post = target === submitted || fromMemory
+      const submission = submitted?.url === target && now() - submitted.at <= SUBMISSION_TTL_MS
+      fromMemory = !submission && postResultUrls.has(target)
+      post = submission || fromMemory
       submitted = null
     },
     committed: (url, method) => {
@@ -53,11 +68,8 @@ export function createFormPostNavigationTracker(): {
       if (isPost) {
         if (fromMemory && target !== startTarget && !postResultUrls.has(target)) {
           provisionalUrl = target
-        }
-        postResultUrls.delete(target)
-        postResultUrls.add(target)
-        if (postResultUrls.size > MAX_POST_RESULT_URLS) {
-          postResultUrls.delete(postResultUrls.values().next().value ?? target)
+        } else {
+          remember(target)
         }
       }
       return isPost
@@ -69,10 +81,7 @@ export function createFormPostNavigationTracker(): {
       }
       fromMemory = false
       post = false
-      if (provisionalUrl !== null) {
-        postResultUrls.delete(provisionalUrl)
-        provisionalUrl = null
-      }
+      provisionalUrl = null
       return true
     }
   }
