@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import { botRefKey, callBotRpc } from '@/lib/bot-hosts'
+import { botRefKey } from '@/lib/bot-hosts'
+import { callBotGroupRpc } from '@/lib/bot-group-rpc'
 import { useTranslate } from '@/i18n/use-translate'
 import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -107,7 +108,7 @@ export function BotGroupMembersDialog({
     try {
       // A new group lives on its members' host.
       const host = group ?? picked[0]
-      const { group: saved } = await callBotRpc<{ group: BotGroup }>(
+      const { group: saved } = await callBotGroupRpc<{ group: BotGroup }>(
         host,
         group ? 'bots.groups.update' : 'bots.groups.create',
         group

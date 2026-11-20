@@ -27939,6 +27939,7 @@
       "filter": "Filter bots",
       "pickTwo": "Pick 2 or more bots",
       "sameComputer": "Bots in a group must be on the same computer.",
+      "homeUnavailable": "{{name}}’s home workspace on {{host}} is unavailable.",
       "nameIt": "Name the group",
       "suggestTwo": "{{a}} & {{b}}",
       "suggestThree": "{{a}}, {{b}} & {{c}}",
