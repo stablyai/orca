@@ -1,4 +1,4 @@
-import { lstat, realpath, rm, stat, unlink } from 'node:fs/promises'
+import { lstat, readdir, realpath, rm, stat, unlink } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
@@ -56,11 +56,36 @@ function rolloutNames(homes: readonly string[], stem: string): RolloutName[] {
     return [
       { path: join(sessions, ...parts), root: sessions },
       { path: `${join(sessions, ...parts)}.zst`, root: sessions },
-      { path: `${join(sessions, ...parts)}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}`, root: sessions },
       { path: join(archived, fileName), root: archived },
       { path: `${join(archived, fileName)}.zst`, root: archived }
     ]
   })
+}
+
+/** An old session copy's own bytes, kept beside the name once its source was linked in. */
+async function legacyCopyAsideNames(
+  homes: readonly string[],
+  stem: string
+): Promise<RolloutName[]> {
+  const parts = stem.split('/')
+  const prefix = `${parts.at(-1) ?? stem}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}.`
+  const names: RolloutName[] = []
+  for (const home of homes) {
+    const sessions = join(home, 'sessions')
+    const folder = join(sessions, ...parts.slice(0, -1))
+    const entries = await readdir(folder).catch((error: unknown) => {
+      if (isDefinitiveAbsence(error)) {
+        return []
+      }
+      throw error
+    })
+    for (const entry of entries) {
+      if (entry.startsWith(prefix)) {
+        names.push({ path: join(folder, entry), root: sessions })
+      }
+    }
+  }
+  return names
 }
 
 /** Null when absent; throws when it can't be proven absent, is no file, or leaves its home. */
@@ -223,7 +248,7 @@ async function deleteRollout(
       result.failed += 1
       return
     }
-    const names = rolloutNames(homes, stem)
+    const names = [...rolloutNames(homes, stem), ...(await legacyCopyAsideNames(homes, stem))]
     if (await isOpenInCodex(homes, stem)) {
       return
     }

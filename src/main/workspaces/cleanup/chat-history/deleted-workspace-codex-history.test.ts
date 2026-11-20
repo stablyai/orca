@@ -83,7 +83,7 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
       )
       // A legacy copy's own bytes, set aside when its name was pointed at the source.
       const aside = write(
-        join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy`),
+        join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy.0a1b2c3d4e5f`),
         rollout(gone, [gone])
       )
 

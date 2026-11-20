@@ -1,18 +1,23 @@
 import type { BigIntStats } from 'node:fs'
 import { link, lstat, open, readFile, rename, stat, unlink } from 'node:fs/promises'
-import { basename, join, normalize } from 'node:path'
+import { randomBytes } from 'node:crypto'
+import { basename, dirname, join, normalize } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
 import {
   legacySessionCopyMarkerPath,
   parseLegacyCopiedSessionMarker,
   protectMarker,
-  writeMarker
+  writeMarker,
+  type LegacyCopiedSessionMarker
 } from './codex-legacy-session-copy-marker'
+import { sourceStartsWithCopy } from './codex-legacy-session-copy-prefix'
 
-/** The legacy copy's own bytes stay under this name once its source is linked in. */
+/**
+ * The legacy copy's own bytes stay under `<name>.orca-legacy-copy.<attempt>` once its source is
+ * linked in; each attempt reserves a name of its own, so no step ever replaces or removes one.
+ */
 export const LEGACY_SESSION_COPY_ASIDE_SUFFIX = '.orca-legacy-copy'
-const COMPARE_CHUNK_BYTES = 1024 * 1024
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 
 /** `kept`: the copy holds bytes its source lacks, or its source can't be linked beside it, for good. */
@@ -67,11 +72,11 @@ async function swap(
   }
   // First, so no exit below leaves the marker to an older build's destructive swap.
   marker = await protectMarker(markerPath, marker)
-  const asidePath = `${copyPath}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}`
   let copy = await lstatIfPresent(copyPath)
   if (!copy) {
     // A pass stopped after moving the copy aside: its name comes back before anything else.
-    if (!(await lstatIfPresent(asidePath))?.isFile()) {
+    const asidePath = marker.aside ? join(dirname(copyPath), marker.aside) : null
+    if (!asidePath || !(await lstatIfPresent(asidePath))?.isFile()) {
       return 'none'
     }
     // Under the deletion guard: a cleanup deleting this chat must not see its name come back.
@@ -99,8 +104,6 @@ async function swap(
     await unlinkIfPresent(markerPath)
     return 'swapped'
   }
-  // A spare name a stopped pass left for the copy.
-  await removeExtraName(asidePath, copyPath)
   // Written since it was copied: a pane resumed it here, so it is its own history for good.
   const copyTimes = await lstat(copyPath)
   if (copyTimes.size !== marker.targetSize || copyTimes.mtimeMs !== marker.targetMtimeMs) {
@@ -117,7 +120,7 @@ async function swap(
     await writeMarker(markerPath, { ...marker, kept: true })
     return 'kept'
   }
-  if ((await lstatIfPresent(asidePath)) || !(await isCopyIdle(args))) {
+  if (!(await isCopyIdle(args))) {
     return 'deferred'
   }
   // The source's change time: an in-place rewrite of the same file voids the check too.
@@ -138,7 +141,7 @@ async function swap(
   }
   const settled = marker
   const outcome = await linkCodexRolloutUnlessHeld(sourcePath, () =>
-    publishSourceOverCopy({ copyPath, asidePath, sourcePath, copy, source, args })
+    publishSourceOverCopy({ copyPath, markerPath, marker: settled, sourcePath, copy, source, args })
   )
   if (outcome === 'swapped') {
     await unlinkIfPresent(markerPath)
@@ -150,30 +153,44 @@ async function swap(
 
 async function publishSourceOverCopy({
   copyPath,
-  asidePath,
+  markerPath,
+  marker,
   sourcePath,
   copy,
   source,
   args
 }: {
   copyPath: string
-  asidePath: string
+  markerPath: string
+  marker: LegacyCopiedSessionMarker
   sourcePath: string
   copy: BigIntStats
   source: BigIntStats
   args: { managedHome: string; relativePath: string }
 }): Promise<LegacySessionCopySwap> {
   const current = await lstatIfPresent(copyPath)
-  if (
-    !current ||
-    !isUnchangedCopy(current, copy) ||
-    (await lstatIfPresent(asidePath)) ||
-    !(await isCopyIdle(args))
-  ) {
+  if (!current || !isUnchangedCopy(current, copy) || !(await isCopyIdle(args))) {
     return 'deferred'
   }
-  // A rename never leaves the copy's bytes unnamed; on Windows it fails while a writer holds the file.
-  await rename(copyPath, asidePath)
+  const asideName = `${basename(copyPath)}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}.${randomBytes(6).toString('hex')}`
+  const asidePath = join(dirname(copyPath), asideName)
+  // Recorded before the move, so a pass that stops after it finds the copy and gives its name back.
+  await writeMarker(markerPath, { ...marker, aside: asideName })
+  // Reserved exclusively: the rename below replaces only this empty file of ours.
+  const reserved = await open(asidePath, 'wx').then(async (file) => {
+    const reservation = await file.stat({ bigint: true })
+    await file.close()
+    return reservation
+  })
+  try {
+    if (!(await supportsHardLinks(asidePath))) {
+      return 'kept'
+    }
+    // A rename never leaves the copy's bytes unnamed; on Windows it fails while a writer holds it.
+    await rename(copyPath, asidePath)
+  } finally {
+    await removeUnusedReservation(asidePath, reserved)
+  }
   const moved = await lstatIfPresent(asidePath)
   if (!moved || !isUnchangedCopy(moved, copy)) {
     // Replaced or written in the moment before the rename: the name goes back to what was moved.
@@ -239,64 +256,33 @@ function isUnchangedCopy(current: BigIntStats, copy: BigIntStats): boolean {
   return sameFile(current, copy) && current.size === copy.size && current.mtimeNs === copy.mtimeNs
 }
 
-async function sourceStartsWithCopy(
-  copyPath: string,
-  sourcePath: string,
-  copy: BigIntStats
-): Promise<boolean> {
-  const copyFile = await open(copyPath, 'r')
-  try {
-    const sourceFile = await open(sourcePath, 'r')
-    try {
-      const [opened, source] = await Promise.all([
-        copyFile.stat({ bigint: true }),
-        sourceFile.stat({ bigint: true })
-      ])
-      if (!sameFile(opened, copy)) {
-        throw new Error('The legacy copy changed while it was opened.')
-      }
-      const size = Number(copy.size)
-      if (source.size < copy.size) {
-        return false
-      }
-      const copyChunk = Buffer.allocUnsafe(Math.min(COMPARE_CHUNK_BYTES, size))
-      const sourceChunk = Buffer.allocUnsafe(copyChunk.length)
-      for (let offset = 0; offset < size; offset += copyChunk.length) {
-        const length = Math.min(copyChunk.length, size - offset)
-        const [fromCopy, fromSource] = await Promise.all([
-          copyFile.read(copyChunk, 0, length, offset),
-          sourceFile.read(sourceChunk, 0, length, offset)
-        ])
-        if (
-          fromCopy.bytesRead !== length ||
-          fromSource.bytesRead !== length ||
-          !copyChunk.subarray(0, length).equals(sourceChunk.subarray(0, length))
-        ) {
-          return false
-        }
-      }
-      return true
-    } finally {
-      await sourceFile.close()
-    }
-  } finally {
-    await copyFile.close()
+/** Gives the file at `asidePath` its name back unless something else took it; the aside name stays. */
+async function restoreName(asidePath: string, path: string): Promise<void> {
+  await linkUnlessTaken(asidePath, path)
+}
+
+/** Only our own empty reservation, when the copy never moved into it. */
+async function removeUnusedReservation(path: string, reserved: BigIntStats): Promise<void> {
+  const current = await lstatIfPresent(path)
+  if (current && sameFile(current, reserved) && current.size === 0n) {
+    await unlinkIfPresent(path)
   }
 }
 
-/** Gives the file at `asidePath` its name back unless something else took it; the aside goes only then. */
-async function restoreName(asidePath: string, path: string): Promise<void> {
+/** Probed on our own empty reservation, before anything of the user's moves. */
+async function supportsHardLinks(reservedPath: string): Promise<boolean> {
+  const probePath = `${reservedPath}.probe`
   try {
-    await linkUnlessTaken(asidePath, path)
+    await link(reservedPath, probePath)
   } catch (error) {
-    // A filesystem without hard links: move it back instead, unless the name was taken meanwhile.
-    if (await lstatIfPresent(path)) {
-      throw error
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    if (code === 'EXDEV' || code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'EPERM') {
+      return false
     }
-    await rename(asidePath, path)
-    return
+    throw error
   }
-  await removeExtraName(asidePath, path)
+  await unlinkIfPresent(probePath)
+  return true
 }
 
 async function linkUnlessTaken(existingPath: string, path: string): Promise<void> {
@@ -306,14 +292,6 @@ async function linkUnlessTaken(existingPath: string, path: string): Promise<void
     if ((error as NodeJS.ErrnoException | null)?.code !== 'EEXIST') {
       throw error
     }
-  }
-}
-
-/** Removes `path` only while it is a second name of the file at `otherName`. */
-async function removeExtraName(path: string, otherName: string): Promise<void> {
-  const [extra, other] = await Promise.all([lstatIfPresent(path), lstatIfPresent(otherName)])
-  if (extra?.isFile() && other?.isFile() && sameFile(extra, other)) {
-    await unlinkIfPresent(path)
   }
 }
 

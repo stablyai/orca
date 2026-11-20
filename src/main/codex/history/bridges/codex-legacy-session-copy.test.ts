@@ -6,6 +6,7 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -14,7 +15,7 @@ import {
   writeSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from './codex-session-bridge'
 import { prepareLegacySharedCodexSessionResume } from '../resume/codex-legacy-session-resume'
@@ -26,7 +27,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return {
     ...actual,
     rename: async (from: string, to: string) => {
-      if (String(to).endsWith('.orca-legacy-copy')) {
+      if (String(to).includes('.orca-legacy-copy.')) {
         renameHook.beforeAside?.()
       }
       return actual.rename(from, to)
@@ -35,6 +36,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 })
 
 const THREAD_ID = '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b'
+const BLOCKED_THREAD_ID = '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c'
 const RELATIVE_PATH = join('2026', '05', '20', `rollout-2026-05-20T10-00-00-${THREAD_ID}.jsonl`)
 const OLD_TURNS = '{"turn":1}\n'
 const NEW_TURNS = '{"turn":2}\n'
@@ -72,6 +74,14 @@ function legacyCopy(sourceText: string, copyText: string): void {
   )
 }
 
+/** The names a swap set the copy's own bytes aside under. */
+function asides(): string[] {
+  const name = basename(copyPath)
+  return readdirSync(dirname(copyPath))
+    .filter((entry) => entry.startsWith(`${name}.orca-legacy-copy.`))
+    .map((entry) => join(dirname(copyPath), entry))
+}
+
 function bridgePass(): Promise<unknown> {
   return syncSystemCodexSessionsIntoManagedHomeIncrementally({ yieldMs: 0 }, systemHome)
 }
@@ -106,9 +116,9 @@ describe('legacy session copy swap', () => {
 
     expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS + NEW_TURNS)
     expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
-    expect(readFileSync(`${copyPath}.orca-legacy-copy`, 'utf-8')).toBe(
+    expect(asides().map((path) => readFileSync(path, 'utf-8'))).toEqual([
       `${OLD_TURNS}{"late":true}\n`
-    )
+    ])
     expect(existsSync(markerPath)).toBe(false)
   })
 
@@ -119,7 +129,7 @@ describe('legacy session copy swap', () => {
 
     expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
     expect(lstatSync(copyPath).ino).not.toBe(lstatSync(sourcePath).ino)
-    expect(existsSync(`${copyPath}.orca-legacy-copy`)).toBe(false)
+    expect(asides()).toEqual([])
     // Older builds match the source by its exact path, so they skip this marker too.
     const kept = JSON.parse(readFileSync(markerPath, 'utf-8'))
     expect(kept.kept).toBe(true)
@@ -132,16 +142,17 @@ describe('legacy session copy swap', () => {
       '2026',
       '05',
       '19',
-      `rollout-2026-05-19T10-00-00-${THREAD_ID}.jsonl`
+      `rollout-2026-05-19T10-00-00-${BLOCKED_THREAD_ID}.jsonl`
     )
     const blockedSource = join(systemHome, 'sessions', blockedRelative)
     const blockedCopy = join(runtimeHome(), 'sessions', blockedRelative)
     writeFile(blockedSource, OLD_TURNS)
     writeFile(blockedCopy, OLD_TURNS)
-    // As large as a whole pass may read, with its aside name held by an unrelated file.
+    // As large as a whole pass may read.
     truncateSync(blockedCopy, 64 * 1024 * 1024)
     truncateSync(blockedSource, 64 * 1024 * 1024)
-    writeFile(`${blockedCopy}.orca-legacy-copy`, 'unrelated')
+    // Held open by a Codex for good, so it never gets as far as a read.
+    writeFile(join(runtimeHome(), 'thread-writer-locks', `${BLOCKED_THREAD_ID}.lock`), '')
     const blocked = lstatSync(blockedCopy)
     writeFile(
       join(runtimeHome(), '.orca-session-copies', `${blockedRelative}.json`),
@@ -193,17 +204,23 @@ describe('legacy session copy swap', () => {
     await bridgePass()
 
     expect(readFileSync(copyPath, 'utf-8')).toBe('{"rewritten":true}\n')
-    expect(existsSync(`${copyPath}.orca-legacy-copy`)).toBe(false)
+    // The name went back to what was moved; the attempt's aside name stays as a second name.
+    expect(asides().map((path) => lstatSync(path).ino)).toEqual([lstatSync(copyPath).ino])
   })
 
   it('finishes a swap that stopped after moving the copy aside', async () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
-    renameSync(copyPath, `${copyPath}.orca-legacy-copy`)
+    const aside = `${copyPath}.orca-legacy-copy.0a1b2c3d4e5f`
+    writeFileSync(
+      markerPath,
+      JSON.stringify({ ...JSON.parse(readFileSync(markerPath, 'utf-8')), aside: basename(aside) })
+    )
+    renameSync(copyPath, aside)
 
     await bridgePass()
 
     expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
-    expect(readFileSync(`${copyPath}.orca-legacy-copy`, 'utf-8')).toBe(OLD_TURNS)
+    expect(readFileSync(aside, 'utf-8')).toBe(OLD_TURNS)
     expect(existsSync(markerPath)).toBe(false)
   })
 

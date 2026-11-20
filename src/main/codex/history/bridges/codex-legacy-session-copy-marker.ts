@@ -11,6 +11,8 @@ export type LegacyCopiedSessionMarker = {
   kept?: true
   /** Copy and source identities a completed prefix check covered, so a retry needn't reread. */
   verified?: string
+  /** The aside name the latest attempt reserved, in the copy's folder. */
+  aside?: string
 }
 
 export function legacySessionCopyMarkerPath(managedHome: string, relativePath: string): string {
