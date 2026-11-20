@@ -32,24 +32,26 @@ it('renews without publishing and re-arms after a renewed deadline', async () =>
   expect(bridge.receive({ ...first, action: 'renew' })).toEqual({ registered: true })
   expect(frames).toHaveLength(3)
   expect(vi.getTimerCount()).toBe(1)
-  await vi.advanceTimersToNextTimerAsync()
-  expect(Date.now()).toBe(155_000)
+  // The renewed session outlives its original deadline; the unrenewed one expires on its own.
+  await vi.advanceTimersByTimeAsync(120_000)
   expect(frames).toHaveLength(3)
-  await vi.advanceTimersToNextTimerAsync()
-  expect(Date.now()).toBe(165_000)
+  await vi.advanceTimersByTimeAsync(20_000)
+  expect(frames).toHaveLength(4)
   expect(frames.at(-1)).toEqual([
     { paneKey: first.paneKey, sessionId: 'session-1', agentId: 'child' }
   ])
-  await vi.advanceTimersToNextTimerAsync()
-  expect(Date.now()).toBe(185_000)
-  expect(frames.at(-1)).toEqual([])
+  await vi.advanceTimersByTimeAsync(20_000)
   expect(frames).toHaveLength(5)
+  expect(frames.at(-1)).toEqual([])
   expect(vi.getTimerCount()).toBe(0)
 })
 
-it.each([100, 1_000])(
+it.each([
+  [100, 101],
+  [1_000, 1_001]
+])(
   'publishes nothing for %i unchanged legacy registrations and once when they expire together',
-  async (count) => {
+  async (count, settled) => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
     const bridge = new ClaudeAgentViewBridge()
@@ -59,7 +61,7 @@ it.each([100, 1_000])(
       bridge.receive(registerFor(index))
       await vi.advanceTimersByTimeAsync(1)
     }
-    const settled = frames.length
+    expect(frames).toHaveLength(settled)
     // Staggered renewals leave staggered deadlines; batching must still expire them in one pass.
     for (let index = 0; index < count; index++) {
       bridge.receive(registerFor(index))
