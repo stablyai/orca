@@ -86,9 +86,9 @@ describe("a windowless paired server's bot page", () => {
       const { runtime, writes } = windowlessServer()
       const stored = runtime.storeMobileSessionSnapshot(PAGE, savedPage())
       expect(stored.tabGroups?.map((group) => [group.id, group.tabOrder])).toEqual([
-        ['left', [REOPENED_HOME, 'agent-session:side']],
-        ['right', []]
+        ['left', [REOPENED_HOME, 'agent-session:side']]
       ])
+      expect(stored.tabGroupLayout).toEqual({ type: 'leaf', groupId: 'left' })
       expect(stored.activeGroupId).toBe('left')
       expect(stored.activeTabId).toBe(REOPENED_HOME)
 
@@ -204,5 +204,72 @@ describe("a windowless paired server's bot page", () => {
       unsubscribe()
     }
     expect(published.at(-1)).toEqual(['agent-session:home', 'agent-session:side'])
+  })
+
+  it('splits a side chat to the left without publishing the group Home left behind', async () => {
+    const { runtime } = windowlessServer()
+    runtime.storeMobileSessionSnapshot(PAGE, {
+      ...savedPage(),
+      activeGroupId: 'only',
+      tabGroups: [
+        {
+          id: 'only',
+          activeTabId: 'agent-session:home',
+          tabOrder: ['agent-session:home', 'agent-session:side']
+        }
+      ],
+      tabGroupLayout: { type: 'leaf', groupId: 'only' },
+      tabs: savedPage().tabs.filter((tab) => tab.id !== REOPENED_HOME)
+    })
+    const published: RuntimeMobileSessionTabsSnapshot[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged(
+      (frame) => {
+        if (frame.worktree === PAGE) {
+          published.push(frame)
+        }
+      },
+      undefined,
+      'mobile'
+    )
+    try {
+      await runtime.moveMobileSessionTab(`id:${PAGE}`, {
+        kind: 'split',
+        tabId: 'agent-session:side',
+        targetGroupId: 'only',
+        splitDirection: 'left'
+      })
+    } finally {
+      unsubscribe()
+    }
+    const frame = published.at(-1)
+    const [group] = frame?.tabGroups ?? []
+    expect(frame?.tabGroups).toHaveLength(1)
+    expect(group?.tabOrder).toEqual(['agent-session:home', 'agent-session:side'])
+    expect(frame?.tabGroupLayout).toEqual({ type: 'leaf', groupId: group?.id })
+    expect(frame?.activeGroupId).toBe(group?.id)
+    // The dragged side chat keeps focus; Home's stale top-level selection does not reclaim it.
+    expect(group?.activeTabId).toBe('agent-session:side')
+    expect(frame?.activeTabId).toBe('agent-session:side')
+    expect(runtime.mobileSessionTabsByWorktree.get(PAGE)?.tabGroups).toHaveLength(1)
+  })
+})
+
+describe('storing a page on a runtime with no desktop window API', () => {
+  it('stores a plain page and a bot page as orcad does when a terminal opens', () => {
+    const { runtime } = windowlessServer()
+    // orcad's runtime is this shape: no window accessor beyond the id-based authority checks.
+    expect('getAvailableAuthoritativeWindow' in runtime).toBe(false)
+    const plain = runtime.storeMobileSessionSnapshot('folder:plain', {
+      ...savedPage(),
+      worktree: 'folder:plain'
+    })
+    expect(plain.tabGroups?.map((group) => group.tabOrder)).toEqual(
+      savedPage().tabGroups?.map((group) => group.tabOrder)
+    )
+    // With no chat host to name the current Home tab, the first Home row is kept and placed first.
+    const page = runtime.storeMobileSessionSnapshot(PAGE, savedPage())
+    expect(page.tabGroups?.map((group) => group.tabOrder)).toEqual([
+      [REOPENED_HOME, 'agent-session:side']
+    ])
   })
 })

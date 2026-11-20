@@ -31,7 +31,7 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
     snapshot = reconcileChatTabIdentities(snapshot, existing)
     // Only a windowless host places Home; an attached window's own placer already did, and main-owned layouts are not yet covered.
     const homeSessionId =
-      ORCA_LAYOUT_OWNER_IS_MAIN || this.getAvailableAuthoritativeWindow()
+      ORCA_LAYOUT_OWNER_IS_MAIN || this.hasAuthoritativeWindow()
         ? null
         : botHomeSessionId(this.store, worktreeId)
     if (homeSessionId) {

@@ -1,6 +1,9 @@
 // A bot's Home holds the left of its page on every client this host serves; its side chats never pin.
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { collectTabGroupLayoutGroupIds } from '../../../../shared/workspace-layout/tab-groups/tab-group-moves'
+import {
+  collectTabGroupLayoutGroupIds,
+  removeTabGroupLayoutLeaf
+} from '../../../../shared/workspace-layout/tab-groups/tab-group-moves'
 import type { Bot } from '../../../../shared/bot-types'
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
 import { isBotsEnabled } from '../../../../shared/bots-switch'
@@ -123,6 +126,18 @@ export function placeBotHomeInSnapshot(
       }
     })
   }
+  // A group placement emptied (Home moved out, or only a duplicate lived there) closes, as a renderer move collapses it.
+  const emptied = new Set(
+    (snapshot.tabGroups ?? [])
+      .filter((group) => group.tabOrder.length > 0)
+      .map((group) => group.id)
+      .filter((id) => groups.find((group) => group.id === id)?.tabOrder.length === 0)
+  )
+  groups = groups.filter((group) => !emptied.has(group.id))
+  let tabGroupLayout = snapshot.tabGroupLayout
+  for (const id of emptied) {
+    tabGroupLayout = removeTabGroupLayoutLeaf(tabGroupLayout, id)
+  }
   // Focus on Home, its own or a dropped duplicate's, lands on the group that now holds it.
   const focusHome = activeTabId === home.id
   const homeGroupId = groups.find((group) => group.tabOrder.includes(home.id))?.id
@@ -131,11 +146,18 @@ export function placeBotHomeInSnapshot(
       group.id === homeGroupId ? { ...group, activeTabId: home.id } : group
     )
   }
+  const activeGroupId =
+    focusHome && homeGroupId
+      ? homeGroupId
+      : snapshot.activeGroupId !== null && emptied.has(snapshot.activeGroupId)
+        ? (homeGroupId ?? groups[0]?.id ?? null)
+        : snapshot.activeGroupId
   return {
     ...snapshot,
     activeTabId,
-    ...(focusHome && homeGroupId ? { activeGroupId: homeGroupId } : {}),
+    activeGroupId,
     ...(snapshot.tabGroups ? { tabGroups: groups } : {}),
+    ...(emptied.size > 0 && snapshot.tabGroupLayout !== undefined ? { tabGroupLayout } : {}),
     tabs: snapshot.tabs
       .filter((tab) => !dropped.has(tab.id))
       .map((tab) => (tab === home && focusHome && !tab.isActive ? { ...tab, isActive: true } : tab))
