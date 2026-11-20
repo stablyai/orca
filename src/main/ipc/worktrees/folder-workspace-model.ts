@@ -56,6 +56,7 @@ export function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
+    linkedGiteaIssue: meta.linkedGiteaIssue ?? null,
     linkedWorkItem: meta.linkedWorkItem ?? null,
     ...(meta.linkedItems !== undefined ? { linkedItems: meta.linkedItems } : {}),
     linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,

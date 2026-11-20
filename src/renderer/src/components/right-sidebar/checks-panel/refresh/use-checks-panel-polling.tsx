@@ -21,6 +21,7 @@ import {
   gitLabMRCommentsToPRComments
 } from '../review-data/gitlab-review-client'
 import { checksPanelLoadErrorMessage } from '../review-data/checks-panel-forge-owner'
+import { useGiteaChecksDetailsFetch } from './use-gitea-checks-details-fetch'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { isWslDistroNotRunningRefusal } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import { translate } from '@/i18n/i18n'
@@ -28,7 +29,12 @@ import { runWithFinally } from '@/lib/run-with-finally'
 
 export type ChecksPanelPollingInput = Pick<
   ChecksPanelContextState,
-  'activeGitLabReview' | 'hostedReviewCacheKey' | 'pr' | 'prCacheKey' | 'prNumber'
+  | 'activeGitLabReview'
+  | 'activeGiteaReview'
+  | 'hostedReviewCacheKey'
+  | 'pr'
+  | 'prCacheKey'
+  | 'prNumber'
 > &
   Pick<
     ChecksPanelControllerState,
@@ -57,7 +63,17 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
   useEffect(() => {
     modelRef.current = model
   })
-  const { activeGitLabReview, pr, prNumber, prCacheKey, branch, repo, hostedReviewCacheKey } = model
+  const {
+    activeGitLabReview,
+    activeGiteaReview,
+    pr,
+    prNumber,
+    prCacheKey,
+    branch,
+    repo,
+    hostedReviewCacheKey
+  } = model
+  const hostedReview = activeGitLabReview ?? activeGiteaReview
   const requestIdentity = JSON.stringify([
     repo?.id,
     repo?.path,
@@ -65,13 +81,13 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
     repo?.connectionId,
     model.activeWorktree?.hostId,
     branch,
-    activeGitLabReview ? 'gitlab' : 'github',
-    activeGitLabReview?.number ?? prNumber,
-    activeGitLabReview?.headSha ?? pr?.headSha,
+    hostedReview?.provider ?? 'github',
+    hostedReview?.number ?? prNumber,
+    hostedReview?.headSha ?? pr?.headSha,
     pr?.prRepo?.owner,
     pr?.prRepo?.repo,
     pr?.prRepo?.host,
-    activeGitLabReview ? hostedReviewCacheKey : prCacheKey
+    hostedReview ? hostedReviewCacheKey : prCacheKey
   ])
   const gitLabDetailsLoadingGenerationRef = useRef(0)
   const fetchChecks = useCallback(
@@ -307,16 +323,19 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
     []
   )
 
+  const fetchGiteaDetails = useGiteaChecksDetailsFetch(modelRef, policy)
+
   useChecksDetailTimer({
     model,
     modelRef,
     policyRef,
     requestIdentity,
     fetchChecks,
-    fetchGitLabDetails
+    fetchGitLabDetails,
+    fetchGiteaDetails
   })
 
-  return { fetchChecks, fetchGitLabDetails }
+  return { fetchChecks, fetchGitLabDetails, fetchGiteaDetails }
 }
 
 export type ChecksPanelPollingState = ReturnType<typeof useChecksPanelPolling>

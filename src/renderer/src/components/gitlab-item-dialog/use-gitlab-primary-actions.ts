@@ -1,5 +1,5 @@
-import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { useCallback } from 'react'
+import { dialogFeatureInteractionId } from './gitlab-dialog-forge'
 import { toast } from 'sonner'
 import { getCommentBodySubmitState } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
@@ -23,7 +23,8 @@ export function useGitLabPrimaryActions(
     mountedRef,
     setActionInFlight,
     setCommentDraftState,
-    setCommentSubmitting
+    setCommentSubmitting,
+    forge
   } = state
   const handleClose = useCallback(async (): Promise<void> => {
     if (!item || !repoSelector || item.type !== 'mr') {
@@ -32,14 +33,18 @@ export function useGitLabPrimaryActions(
     setActionInFlight('close')
     const ownsResult = claimDetailsOwner()
     try {
-      const res = await gitLabApiFor(repoSelector).closeMR({ ...repoSelector, iid: item.number })
+      const res = await forge.apiFor(repoSelector).closeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          useAppStore.getState().recordFeatureInteraction(dialogFeatureInteractionId(forge))
           toast.success(
-            translate('auto.components.GitLabItemDialog.9b11cd233f', 'Closed MR !{{value0}}', {
-              value0: item.number
-            })
+            forge.kind === 'gitea'
+              ? translate('auto.components.GiteaItemDialog.closedPr', 'Closed PR #{{value0}}', {
+                  value0: item.number
+                })
+              : translate('auto.components.GitLabItemDialog.9b11cd233f', 'Closed MR !{{value0}}', {
+                  value0: item.number
+                })
           )
         }
       } else {
@@ -59,7 +64,7 @@ export function useGitLabPrimaryActions(
         handleRefresh()
       }
     }
-  }, [claimDetailsOwner, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
+  }, [claimDetailsOwner, forge, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
 
   const handleReopen = useCallback(async (): Promise<void> => {
     if (!item || !repoSelector || item.type !== 'mr') {
@@ -68,14 +73,22 @@ export function useGitLabPrimaryActions(
     setActionInFlight('reopen')
     const ownsResult = claimDetailsOwner()
     try {
-      const res = await gitLabApiFor(repoSelector).reopenMR({ ...repoSelector, iid: item.number })
+      const res = await forge.apiFor(repoSelector).reopenMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          useAppStore.getState().recordFeatureInteraction(dialogFeatureInteractionId(forge))
           toast.success(
-            translate('auto.components.GitLabItemDialog.865ea2703e', 'Reopened MR !{{value0}}', {
-              value0: item.number
-            })
+            forge.kind === 'gitea'
+              ? translate('auto.components.GiteaItemDialog.reopenedPr', 'Reopened PR #{{value0}}', {
+                  value0: item.number
+                })
+              : translate(
+                  'auto.components.GitLabItemDialog.865ea2703e',
+                  'Reopened MR !{{value0}}',
+                  {
+                    value0: item.number
+                  }
+                )
           )
         }
       } else {
@@ -93,7 +106,7 @@ export function useGitLabPrimaryActions(
         handleRefresh()
       }
     }
-  }, [claimDetailsOwner, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
+  }, [claimDetailsOwner, forge, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
 
   const handleMerge = useCallback(async (): Promise<void> => {
     if (!item || !repoSelector || item.type !== 'mr') {
@@ -102,14 +115,18 @@ export function useGitLabPrimaryActions(
     setActionInFlight('merge')
     const ownsResult = claimDetailsOwner()
     try {
-      const res = await gitLabApiFor(repoSelector).mergeMR({ ...repoSelector, iid: item.number })
+      const res = await forge.apiFor(repoSelector).mergeMR({ ...repoSelector, iid: item.number })
       if (res.ok) {
         if (mountedRef.current) {
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          useAppStore.getState().recordFeatureInteraction(dialogFeatureInteractionId(forge))
           toast.success(
-            translate('auto.components.GitLabItemDialog.e089f62594', 'Merged MR !{{value0}}', {
-              value0: item.number
-            })
+            forge.kind === 'gitea'
+              ? translate('auto.components.GiteaItemDialog.mergedPr', 'Merged PR #{{value0}}', {
+                  value0: item.number
+                })
+              : translate('auto.components.GitLabItemDialog.e089f62594', 'Merged MR !{{value0}}', {
+                  value0: item.number
+                })
           )
         }
       } else {
@@ -127,7 +144,7 @@ export function useGitLabPrimaryActions(
         handleRefresh()
       }
     }
-  }, [claimDetailsOwner, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
+  }, [claimDetailsOwner, forge, handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
 
   const handleSubmitComment = useCallback(async (): Promise<void> => {
     const bodyState = getCommentBodySubmitState(commentDraft)
@@ -148,12 +165,12 @@ export function useGitLabPrimaryActions(
     try {
       const res =
         item.type === 'mr'
-          ? await gitLabApiFor(repoSelector).addMRComment({
+          ? await forge.apiFor(repoSelector).addMRComment({
               ...repoSelector,
               iid: item.number,
               body: bodyState.body
             })
-          : await gitLabApiFor(repoSelector).addIssueComment({
+          : await forge.apiFor(repoSelector).addIssueComment({
               ...repoSelector,
               number: item.number,
               body: bodyState.body
@@ -163,7 +180,7 @@ export function useGitLabPrimaryActions(
           setCommentDraftState((current) =>
             current.itemId === itemId ? { itemId, value: '' } : current
           )
-          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+          useAppStore.getState().recordFeatureInteraction(dialogFeatureInteractionId(forge))
           if (ownsResult()) {
             handleRefresh()
           }
@@ -189,6 +206,7 @@ export function useGitLabPrimaryActions(
     item,
     itemId,
     mountedRef,
+    forge,
     repoSelector,
     setCommentDraftState,
     setCommentSubmitting

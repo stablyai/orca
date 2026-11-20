@@ -10,6 +10,8 @@ export type PreflightStatus = {
   gh: { installed: boolean; authenticated: boolean }
   /** Absent on payloads predating GitLab support. */
   glab?: { installed: boolean; authenticated: boolean }
+  /** Absent on payloads predating modern Gitea CLI (gt) support. */
+  gt?: { installed: boolean; authenticated: boolean; version?: string | null }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
   azureDevOps?: {
     configured: boolean

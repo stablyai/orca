@@ -30,9 +30,9 @@ async function admittedDefaultWslCliDistro(): Promise<string | null> {
   return distro
 }
 
-/** The default distro's gh/glab for a cwd-less call whose host CLI is missing. */
+/** The default distro's gh/glab/gt for a cwd-less call whose host CLI is missing. */
 export async function resolveDefaultWslCliFallback(
-  command: 'gh' | 'glab',
+  command: 'gh' | 'glab' | 'gt',
   args: string[]
 ): Promise<ResolvedCommand | null> {
   const distro = await admittedDefaultWslCliDistro()

@@ -2,6 +2,8 @@ import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtim
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
 import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
+import { RuntimeGiteaMutationCommands } from '../integrations/gitea/runtime-gitea-mutation-commands'
+import { RuntimeGiteaQueryCommands } from '../integrations/gitea/runtime-gitea-query-commands'
 import {
   LazyRuntimeGitLabMutationCommands,
   LazyRuntimeGitLabQueryCommands
@@ -50,6 +52,7 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
         ? {
             linkedIssue: meta.linkedIssue,
             linkedGitLabIssue: meta.linkedGitLabIssue,
+            linkedGiteaIssue: meta.linkedGiteaIssue,
             linkedWorkItem: meta.linkedWorkItem
           }
         : null
@@ -113,6 +116,16 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
   })
 
   protected readonly gitHubRepositoryQueries = new RuntimeGitHubRepositoryQueryCommands({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+  })
+
+  protected readonly giteaQueryCommands = new RuntimeGiteaQueryCommands({
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
+  })
+
+  protected readonly giteaMutationCommands = new RuntimeGiteaMutationCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })

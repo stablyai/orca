@@ -51,6 +51,7 @@ export function useSmartWorkspaceNameFieldActions(
     onBranchSelect,
     onGitHubItemSelect,
     onGitLabItemSelect,
+    onGiteaItemSelect,
     onJiraIssueSelect,
     onLinearIssueSelect,
     onValueChange,
@@ -87,6 +88,8 @@ export function useSmartWorkspaceNameFieldActions(
         onGitHubItemSelect(row.item)
       } else if (row.kind === 'gitlab') {
         onGitLabItemSelect?.(row.item)
+      } else if (row.kind === 'gitea') {
+        onGiteaItemSelect?.(row.item)
       } else if (row.kind === 'branch') {
         onBranchSelect(row.refName, row.localBranchName)
       } else if (row.kind === 'jira') {
@@ -111,6 +114,7 @@ export function useSmartWorkspaceNameFieldActions(
       onBranchSelect,
       onGitHubItemSelect,
       onGitLabItemSelect,
+      onGiteaItemSelect,
       onJiraIssueSelect,
       onLinearIssueSelect,
       onValueChange,

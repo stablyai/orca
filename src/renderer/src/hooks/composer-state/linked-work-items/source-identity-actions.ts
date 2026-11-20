@@ -23,6 +23,7 @@ type SourceIdentityActionsInput = Pick<
   | 'setLinkQuery'
   | 'setLinkedGitLabIssue'
   | 'setLinkedGitLabMR'
+  | 'clearLinkedGiteaItems'
   | 'setLinkedIssue'
   | 'setLinkedPR'
   | 'setLinkedTaskSourceContext'
@@ -68,6 +69,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     setLinkQuery,
     setLinkedGitLabIssue,
     setLinkedGitLabMR,
+    clearLinkedGiteaItems,
     setLinkedIssue,
     setLinkedPR,
     setLinkedTaskSourceContext,
@@ -89,6 +91,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(item.number)
       }
+      clearLinkedGiteaItems()
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedTaskSourceContext(null)
@@ -137,6 +140,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       setBranchNameOverridePreservesNameEdits,
       setLinkedGitLabIssue,
       setLinkedGitLabMR,
+      clearLinkedGiteaItems,
       setLinkedIssue,
       setLinkedPR,
       setLinkedTaskSourceContext,

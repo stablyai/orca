@@ -35,6 +35,7 @@ import type { GithubAccountApi } from './api/github/github-account-api'
 import type { GithubPullRequestApi } from './api/github/github-pull-request-api'
 import type { GithubWorkItemApi } from './api/github/github-work-item-api'
 import type { GitLabApi } from './api/gitlab/gitlab-api'
+import type { GiteaApi } from './api/gitea/gitea-api'
 import type { BitbucketApi, HostedReviewApi } from './api/hosted-review/hosted-review-api'
 import type { JiraApi } from './api/work-items/jira-api'
 import type { LinearApi } from './api/work-items/linear-api'
@@ -118,6 +119,7 @@ export type PreloadApi = {
   gh: Merged<GithubPullRequestApi & GithubWorkItemApi & GithubAccountApi>
   hostedReview: HostedReviewApi
   gl: GitLabApi
+  gitea: GiteaApi
   bitbucket: BitbucketApi
   linear: LinearApi
   jira: JiraApi

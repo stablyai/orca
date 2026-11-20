@@ -173,6 +173,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithBots {
       repositoryIssueCommand: this.repositoryIssueCommand
     })
     installRuntimeReviewCommandSurface(this, {
+      giteaCommands: { queries: this.giteaQueryCommands, mutations: this.giteaMutationCommands },
       gitLabQueries: this.gitLabQueryCommands,
       gitLabMutations: this.gitLabMutationCommands,
       gitHubReviewQueries: this.gitHubReviewQueries,

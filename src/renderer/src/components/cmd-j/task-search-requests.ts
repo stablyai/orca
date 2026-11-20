@@ -7,6 +7,7 @@ import { jiraSearchIssuesForTarget } from '@/runtime/jira/runtime-jira-client'
 import { jiraStatusForTarget } from '@/runtime/jira/runtime-jira-project-client'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
+import { createCmdJGiteaTaskSearchRequests } from './gitea-task-search-requests'
 import { resolveJiraSourceHostId } from '../../../../shared/jira/jira-source-host'
 import { getJiraAccountLabel } from '@/lib/work-items/jira/jira-account-label'
 import {
@@ -153,6 +154,9 @@ export function createCmdJTaskSearchRequests(args: {
       })
     }
   }
+  requests.push(
+    ...createCmdJGiteaTaskSearchRequests({ query, repos: eligibleRepos, signal, hostLabels })
+  )
   const hostIds = filter.hostIds.length
     ? filter.hostIds
     : filter.repoIds.length

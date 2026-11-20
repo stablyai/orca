@@ -86,7 +86,8 @@ function TimerHost({
     policyRef,
     requestIdentity,
     fetchChecks,
-    fetchGitLabDetails: fetchChecks
+    fetchGitLabDetails: fetchChecks,
+    fetchGiteaDetails: fetchChecks
   })
   return null
 }

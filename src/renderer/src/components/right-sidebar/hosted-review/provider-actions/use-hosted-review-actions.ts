@@ -15,6 +15,7 @@ import {
   setGitHubHostedReviewAutoMerge,
   updateGitHubHostedReviewState
 } from './hosted-review-github-actions'
+import { mergeGiteaHostedReview, updateGiteaHostedReviewState } from './hosted-review-gitea-actions'
 import { translate } from '@/i18n/i18n'
 import { getHostedReviewStateChangeCopy } from './hosted-review-state-change-copy'
 import { buildGitHubPRStackMergeConfirmation } from './github-pr-stack-confirmation'
@@ -68,6 +69,7 @@ export function useHostedReviewActions({
   handleCloseReview: () => Promise<void>
   handleReopenReview: () => Promise<void>
 } {
+  const isGitea = review.provider === 'gitea'
   const confirm = useConfirmationDialog()
   const [merging, setMerging] = useState(false)
   const [stateUpdating, setStateUpdating] = useState<'open' | 'closed' | null>(null)
@@ -77,6 +79,7 @@ export function useHostedReviewActions({
     githubPR,
     repo,
     isGitLab,
+    isGitea,
     shortLabel,
     reviewLabel,
     onRefreshReview,
@@ -113,13 +116,15 @@ export function useHostedReviewActions({
               iid: review.number,
               method
             })
-          : await mergeGitHubHostedReview({
-              repo,
-              prNumber: review.number,
-              method,
-              prRepo: githubPR?.prRepo ?? null,
-              expectedHeadSha: githubPR?.headSha ?? null
-            })
+          : isGitea
+            ? await mergeGiteaHostedReview({ repo, prNumber: review.number, method })
+            : await mergeGitHubHostedReview({
+                repo,
+                prNumber: review.number,
+                method,
+                prRepo: githubPR?.prRepo ?? null,
+                expectedHeadSha: githubPR?.headSha ?? null
+              })
         if (!result.ok) {
           setActionError(codeHostErrorText(result))
         }
@@ -137,6 +142,7 @@ export function useHostedReviewActions({
       githubPR?.mergeQueueRequired,
       githubPR?.stack,
       isGitLab,
+      isGitea,
       defaultMergeMethod,
       onRefreshReview,
       repo,
@@ -146,7 +152,7 @@ export function useHostedReviewActions({
   )
 
   const handleAutoMerge = useCallback(async () => {
-    if (isGitLab || !autoMergeAction) {
+    if (isGitLab || isGitea || !autoMergeAction) {
       return
     }
     const enabled = autoMergeAction.kind === 'enable'
@@ -172,6 +178,7 @@ export function useHostedReviewActions({
   }, [
     githubPR?.prRepo,
     isGitLab,
+    isGitea,
     autoMergeAction,
     defaultMergeMethod,
     onRefreshReview,
@@ -217,12 +224,14 @@ export function useHostedReviewActions({
                 repoId: repo.id,
                 iid: review.number
               })
-          : await updateGitHubHostedReviewState({
-              repo,
-              prNumber: review.number,
-              prRepo: githubPR?.prRepo ?? null,
-              nextState
-            })
+          : isGitea
+            ? await updateGiteaHostedReviewState({ repo, prNumber: review.number, nextState })
+            : await updateGitHubHostedReviewState({
+                repo,
+                prNumber: review.number,
+                prRepo: githubPR?.prRepo ?? null,
+                nextState
+              })
         if (!result.ok) {
           const message = codeHostErrorText(result)
           setActionError(message)
@@ -255,6 +264,7 @@ export function useHostedReviewActions({
       confirm,
       githubPR?.prRepo,
       isGitLab,
+      isGitea,
       onRefreshReview,
       repo,
       review.number,

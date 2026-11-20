@@ -8,34 +8,46 @@ import { getIssue as getGitHubIssue } from '../github/issues/issues'
 export type PullRequestLinkedIssueMeta = {
   linkedIssue?: number | null
   linkedGitLabIssue?: number | null
+  linkedGiteaIssue?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
 }
+
+type IssueProvider = 'github' | 'gitlab' | 'gitea'
 
 type LocalGitOptions = Pick<GitRuntimeOptions, 'wslDistro' | 'admissionTier'>
 
 function inferIssueProvider(
   meta: PullRequestLinkedIssueMeta,
   provider?: HostedReviewProvider | null
-): 'github' | 'gitlab' | null {
-  if (provider === 'github' || provider === 'gitlab') {
+): IssueProvider | null {
+  if (provider === 'github' || provider === 'gitlab' || provider === 'gitea') {
     return provider
   }
   if (provider) {
     return null
   }
   if (meta.linkedWorkItem?.type === 'issue') {
-    if (meta.linkedWorkItem.provider === 'github' || meta.linkedWorkItem.provider === 'gitlab') {
-      return meta.linkedWorkItem.provider
+    const itemProvider = meta.linkedWorkItem.provider
+    if (itemProvider === 'github' || itemProvider === 'gitlab' || itemProvider === 'gitea') {
+      return itemProvider
     }
   }
-  const hasGitHub = isLinkedIssueNumber(meta.linkedIssue)
-  const hasGitLab = isLinkedIssueNumber(meta.linkedGitLabIssue)
-  return hasGitHub === hasGitLab ? null : hasGitHub ? 'github' : 'gitlab'
+  const present: IssueProvider[] = []
+  if (isLinkedIssueNumber(meta.linkedIssue)) {
+    present.push('github')
+  }
+  if (isLinkedIssueNumber(meta.linkedGitLabIssue)) {
+    present.push('gitlab')
+  }
+  if (isLinkedIssueNumber(meta.linkedGiteaIssue)) {
+    present.push('gitea')
+  }
+  return present.length === 1 ? present[0] : null
 }
 
 function fallbackTitle(
   meta: PullRequestLinkedIssueMeta,
-  provider: 'github' | 'gitlab',
+  provider: IssueProvider,
   number: number
 ): string {
   const item = meta.linkedWorkItem
@@ -60,9 +72,23 @@ export async function loadPullRequestLinkedIssue(args: {
       ? args.meta.linkedIssue
       : provider === 'gitlab'
         ? args.meta.linkedGitLabIssue
-        : null
+        : provider === 'gitea'
+          ? args.meta.linkedGiteaIssue
+          : null
   if (!provider || !isLinkedIssueNumber(number)) {
     return null
+  }
+
+  if (provider === 'gitea') {
+    const issue = await (
+      await import('../gitea/issues')
+    ).getGiteaIssue(args.repoPath, number, args.connectionId, args.localGitOptions)
+    return {
+      provider,
+      number,
+      title: issue?.title || fallbackTitle(args.meta, provider, number),
+      description: issue?.body ?? ''
+    }
   }
 
   const issue =

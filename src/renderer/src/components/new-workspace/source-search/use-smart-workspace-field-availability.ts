@@ -1,12 +1,19 @@
 import { useEffect, useMemo } from 'react'
 import { filterAvailableTaskProviders } from '../../../../../shared/work-items/task-providers'
-import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getMrStateFilters, getSmartWorkspaceNameModes } from './smart-workspace-localized-options'
 import {
   SEARCH_DEBOUNCE_MS,
   type NormalizedWorkItemSourceSearchProps
 } from '../name-field/smart-workspace-name-field-model'
-import { canUseGitLabSmartSource } from './smart-workspace-provider-availability'
+import {
+  canUseGitLabSmartSource,
+  canUseGiteaSmartSource
+} from './smart-workspace-provider-availability'
 import type { useWorkItemSourceState } from './use-work-item-source-state'
 import { useTranslate } from '../../../i18n/use-translate'
 
@@ -50,9 +57,14 @@ export function useSmartWorkspaceFieldAvailability({
   props: NormalizedWorkItemSourceSearchProps
   state: FieldState
   repoBackedSearchTargets: {
+    repo: Pick<Repo, 'gitRemoteIdentity' | 'executionHostId' | 'connectionId'>
     gitlabSourceContext: { hostId?: ExecutionHostId | null } | null
   }[]
-  preflightStatus: { glab?: { installed?: boolean } } | null
+  preflightStatus: {
+    glab?: { installed?: boolean }
+    gt?: { installed?: boolean }
+    gitea?: { authenticated?: boolean }
+  } | null
   preflightStatusChecked: boolean
   preflightStatusContextKey: string | null
   expectedPreflightContextKey: string
@@ -87,6 +99,18 @@ export function useSmartWorkspaceFieldAvailability({
       sourceHostId: target.gitlabSourceContext?.hostId
     })
   )
+  const localGiteaAvailable =
+    preflightStatusCurrent &&
+    (preflightStatus?.gt?.installed === true || preflightStatus?.gitea?.authenticated === true)
+  const giteaSourceAvailable = repoBackedSearchTargets.some((target) =>
+    canUseGiteaSmartSource({
+      giteaEnabled: props.giteaEnabled === true,
+      localGiteaAvailable,
+      repoBackedSourcesDisabled,
+      remoteHost: target.repo.gitRemoteIdentity?.canonicalKey.split('/')[0],
+      sourceHostId: getRepoExecutionHostId(target.repo)
+    })
+  )
   const availableTaskProviders = useMemo(
     () =>
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
@@ -105,6 +129,9 @@ export function useSmartWorkspaceFieldAvailability({
     }
     if (item.id === 'gitlab') {
       return gitlabSourceAvailable
+    }
+    if (item.id === 'gitea') {
+      return giteaSourceAvailable
     }
     if (item.id === 'linear') {
       return linearAvailable
@@ -159,6 +186,7 @@ export function useSmartWorkspaceFieldAvailability({
   return {
     mode,
     gitlabSourceAvailable,
+    giteaSourceAvailable,
     linearAvailable,
     availableModes,
     mrStateFilters

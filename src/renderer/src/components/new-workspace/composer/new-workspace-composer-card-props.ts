@@ -20,6 +20,7 @@ import type { SetupAgentStartupPolicy } from '../../../../../shared/workspace-se
 import type { SparsePreset } from '../../../../../shared/worktree/create-types'
 import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import type { GiteaWorkItem } from '../../../../../shared/gitea-types'
 import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-admission/dialog/add-repo-dialog-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -91,6 +92,7 @@ export type NewWorkspaceComposerCardProps = {
   activeFolderWorkspaceId?: string | null
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
+  onSmartGiteaItemSelect: (item: GiteaWorkItem) => void
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
   smartNameMode?: SmartNameMode

@@ -77,7 +77,7 @@ export function resolveHostGitHubCli(command: 'gh', args: string[]): ResolvedCom
   }
 }
 
-export function isHostCommandMissing(err: unknown, command: 'gh' | 'glab'): boolean {
+export function isHostCommandMissing(err: unknown, command: 'gh' | 'glab' | 'gt'): boolean {
   if (!err || typeof err !== 'object') {
     return false
   }

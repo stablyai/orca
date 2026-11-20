@@ -7,7 +7,7 @@ import { useTargetChangeActions } from './workspace-target/target-change-actions
 import { useProjectTargetActions } from './workspace-target/project-target-actions'
 import { useBranchStartPointActions } from './workspace-start-point/branch-start-point-actions'
 import { useGitHubProviderSelection } from './linked-work-items/github-provider-selection'
-import { useGitLabProviderSelection } from './linked-work-items/gitlab-provider-selection'
+import { useCodeHostProviderSelections } from './linked-work-items/code-host-provider-selections'
 import { useWorkItemSourceActions } from './workspace-start-point/work-item-source-actions'
 import { useIssueSourceActions } from './linked-work-items/issue-source-actions'
 import { useComposerNavigationActions } from './card-projection/composer-navigation-actions'
@@ -40,6 +40,7 @@ export function useComposerSourceState(
     setLinkQuery: target.asyncComposerState.setLinkQuery,
     setLinkedGitLabIssue: target.workspaceIdentityState.setLinkedGitLabIssue,
     setLinkedGitLabMR: target.workspaceIdentityState.setLinkedGitLabMR,
+    clearLinkedGiteaItems: target.workspaceIdentityState.clearLinkedGiteaItems,
     setLinkedIssue: target.workspaceIdentityState.setLinkedIssue,
     setLinkedPR: target.workspaceIdentityState.setLinkedPR,
     setLinkedTaskSourceContext: target.sourceContextState.setLinkedTaskSourceContext,
@@ -68,6 +69,7 @@ export function useComposerSourceState(
     setForkPushWarning: target.workspaceIdentityState.setForkPushWarning,
     setLinkedGitLabIssue: target.workspaceIdentityState.setLinkedGitLabIssue,
     setLinkedGitLabMR: target.workspaceIdentityState.setLinkedGitLabMR,
+    clearLinkedGiteaItems: target.workspaceIdentityState.clearLinkedGiteaItems,
     setLinkedIssue: target.workspaceIdentityState.setLinkedIssue,
     setLinkedPR: target.workspaceIdentityState.setLinkedPR,
     setLinkedTaskSourceContext: target.sourceContextState.setLinkedTaskSourceContext,
@@ -106,6 +108,7 @@ export function useComposerSourceState(
     setForkPushWarning: target.workspaceIdentityState.setForkPushWarning,
     setLinkedGitLabIssue: target.workspaceIdentityState.setLinkedGitLabIssue,
     setLinkedGitLabMR: target.workspaceIdentityState.setLinkedGitLabMR,
+    clearLinkedGiteaItems: target.workspaceIdentityState.clearLinkedGiteaItems,
     setLinkedIssue: target.workspaceIdentityState.setLinkedIssue,
     setLinkedPR: target.workspaceIdentityState.setLinkedPR,
     setLinkedTaskSourceContext: target.sourceContextState.setLinkedTaskSourceContext,
@@ -177,6 +180,7 @@ export function useComposerSourceState(
     setForkPushWarning: target.workspaceIdentityState.setForkPushWarning,
     setLinkedGitLabIssue: target.workspaceIdentityState.setLinkedGitLabIssue,
     setLinkedGitLabMR: target.workspaceIdentityState.setLinkedGitLabMR,
+    clearLinkedGiteaItems: target.workspaceIdentityState.clearLinkedGiteaItems,
     setLinkedIssue: target.workspaceIdentityState.setLinkedIssue,
     setLinkedPR: target.workspaceIdentityState.setLinkedPR,
     setLinkedTaskSourceContext: target.sourceContextState.setLinkedTaskSourceContext,
@@ -187,33 +191,11 @@ export function useComposerSourceState(
     settings: target.composerTargetStore.settings,
     smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef
   })
-  const gitlabProviderSelection = useGitLabProviderSelection({
-    smartSourceSelectionRef: target.asyncComposerState.smartSourceSelectionRef,
-    applyLinkedGitLabWorkItem: sourceIdentityActions.applyLinkedGitLabWorkItem,
-    branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
-    eligibleRepos: target.composerTargetStore.eligibleRepos,
-    handleBaseBranchMrSelect: branchStartPointActions.handleBaseBranchMrSelect,
-    isProjectGroupTarget: target.runtimeTargetSelection.isProjectGroupTarget,
-    lastAutoNameRef: target.asyncComposerState.lastAutoNameRef,
-    linkedWorkItem: target.sourceContextState.linkedWorkItem,
-    name: target.sourceContextState.name,
-    selectedRepo: target.runtimeTargetSelection.selectedRepo,
-    setBaseBranch: target.workspaceIdentityState.setBaseBranch,
-    setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
-    setBranchNameOverridePreservesNameEdits:
-      target.workspaceIdentityState.setBranchNameOverridePreservesNameEdits,
-    setCompareBaseRef: target.workspaceIdentityState.setCompareBaseRef,
-    setForkPushWarning: target.workspaceIdentityState.setForkPushWarning,
-    setLinkedGitLabIssue: target.workspaceIdentityState.setLinkedGitLabIssue,
-    setLinkedGitLabMR: target.workspaceIdentityState.setLinkedGitLabMR,
-    setLinkedIssue: target.workspaceIdentityState.setLinkedIssue,
-    setLinkedPR: target.workspaceIdentityState.setLinkedPR,
-    setLinkedTaskSourceContext: target.sourceContextState.setLinkedTaskSourceContext,
-    setLinkedWorkItem: target.sourceContextState.setLinkedWorkItem,
-    setName: target.sourceContextState.setName,
-    setPushTarget: target.workspaceIdentityState.setPushTarget,
-    setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint
-  })
+  const { gitlabProviderSelection, giteaProviderSelection } = useCodeHostProviderSelections(
+    target,
+    sourceIdentityActions,
+    branchStartPointActions
+  )
   const workItemSourceActions = useWorkItemSourceActions({
     setBranchIntent: target.workspaceIdentityState.setBranchIntent,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
@@ -254,6 +236,7 @@ export function useComposerSourceState(
     setForkPushWarning: target.workspaceIdentityState.setForkPushWarning,
     setLinkedGitLabIssue: target.workspaceIdentityState.setLinkedGitLabIssue,
     setLinkedGitLabMR: target.workspaceIdentityState.setLinkedGitLabMR,
+    clearLinkedGiteaItems: target.workspaceIdentityState.clearLinkedGiteaItems,
     setLinkedIssue: target.workspaceIdentityState.setLinkedIssue,
     setLinkedPR: target.workspaceIdentityState.setLinkedPR,
     setLinkedTaskSourceContext: target.sourceContextState.setLinkedTaskSourceContext,
@@ -287,6 +270,7 @@ export function useComposerSourceState(
     branchStartPointActions,
     githubProviderSelection,
     gitlabProviderSelection,
+    giteaProviderSelection,
     workItemSourceActions,
     issueSourceActions,
     composerNavigationActions

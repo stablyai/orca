@@ -22,6 +22,7 @@ export type CreateWorktreeCallOptions = {
   branchIntent?: CreateWorktreeArgs['branchIntent']
   /** Captured before background preparation so navigation cannot retarget creation. */
   executionHostId?: ExecutionHostId
+  linkedGiteaIssue?: number | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
@@ -139,6 +140,9 @@ function sharedCreateFields(
       ? { linkedAzureDevOpsPR: request.linkedAzureDevOpsPR }
       : {}),
     ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
+    ...(options?.linkedGiteaIssue !== undefined
+      ? { linkedGiteaIssue: options.linkedGiteaIssue }
+      : {}),
     ...(options?.linkedWorkItem !== undefined ? { linkedWorkItem: options.linkedWorkItem } : {}),
     ...(options?.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: options.linkedTaskSourceContext }

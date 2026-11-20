@@ -10,7 +10,7 @@ import {
   type CheckRunDetailsTabPatch
 } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type { OpenCheckRunDetailsState } from '../../../../../../shared/editor/views/editor-tab-view-types'
-import { loadGitLabJobLogDetails } from '@/runtime/repository-gitlab/gitlab-job-trace-client'
+import { loadCheckRunDetailsForForge } from './check-run-details-forge-loader'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import type { OpenFile } from '../types/open-file'
 import { openWorkspaceEditorItem } from '../tabs/workspace-editor-item'
@@ -266,27 +266,13 @@ export function createCheckRunDetailsActions(
       patch({ details: checkRunDetails.details, loading: true, error: null })
       try {
         const repoOwnerExecutionHostId = forgeOwnerHostIdForWorkspace(repo, worktree)
-        // GitLab jobs require GitLab trace; GitHub check-runs returns null and blanks the refreshed tab.
-        const details = check.gitlabJobId
-          ? await loadGitLabJobLogDetails({
-              repoPath: repo.path,
-              repoId: repo.id,
-              repoOwnerExecutionHostId,
-              check,
-              // Why: a fork MR's job lives in the source project, not the repo's own.
-              projectRef: checkRunDetails.gitlabProjectRef ?? null
-            })
-          : await get().fetchPRCheckDetails(
-              repo.path,
-              {
-                checkRunId: check.checkRunId,
-                workflowRunId: check.workflowRunId,
-                checkName: check.name,
-                url: check.url,
-                prRepo: checkRunDetails.githubRepository ?? null
-              },
-              { repoId: repo.id, repoOwnerExecutionHostId }
-            )
+        const details = await loadCheckRunDetailsForForge({
+          repo,
+          repoOwnerExecutionHostId,
+          check,
+          checkRunDetails,
+          fetchPRCheckDetails: get().fetchPRCheckDetails
+        })
         patch({
           details,
           loading: false,

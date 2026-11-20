@@ -25,8 +25,6 @@ import {
   WorktreeForceDeleteBranch,
   WorktreeRemove,
   WorktreePreviewNestedRemoval,
-  WorktreeResolveMrBase,
-  WorktreeResolvePrBase,
   WorktreeRunApprovedSetup,
   WorktreeShow,
   WorktreeSortOrder,
@@ -40,6 +38,7 @@ import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-li
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKSPACE_CLEANUP_SCAN_METHOD } from './workspace-cleanup-scan-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
+import { WORKTREE_REVIEW_BASE_METHODS } from './worktree-review-base-methods'
 import { runApprovedCreatedWorktreeSetup } from '../../../workspaces/creation/created-worktree-approved-setup'
 
 export const WORKTREE_METHODS = [
@@ -188,34 +187,7 @@ export const WORKTREE_METHODS = [
     handler: async (params, { runtime }) =>
       runtime.persistManagedWorktreeSortOrder(params.orderedIds, params.hostIds)
   }),
-  defineMethod({
-    name: 'worktree.resolvePrBase',
-    permission: 'workspace',
-    params: WorktreeResolvePrBase,
-    handler: async (params, { runtime }) =>
-      runtime.resolveManagedPrBase({
-        repoSelector: params.repo,
-        prNumber: params.prNumber,
-        headRefName: params.headRefName,
-        baseRefName: params.baseRefName,
-        isCrossRepository: params.isCrossRepository,
-        wakeWslDistro: params.wakeWslDistro
-      })
-  }),
-  defineMethod({
-    name: 'worktree.resolveMrBase',
-    permission: 'workspace',
-    params: WorktreeResolveMrBase,
-    handler: async (params, { runtime }) =>
-      runtime.resolveManagedMrBase({
-        repoSelector: params.repo,
-        mrIid: params.mrIid,
-        sourceBranch: params.sourceBranch,
-        targetBranch: params.targetBranch,
-        isCrossRepository: params.isCrossRepository,
-        wakeWslDistro: params.wakeWslDistro
-      })
-  }),
+  ...WORKTREE_REVIEW_BASE_METHODS,
   defineMethod({
     name: 'worktree.rm',
     permission: 'workspace',

@@ -60,7 +60,10 @@ export default function HostedReviewActions({
     (s) => getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)?.isDeleting ?? false
   )
   const isGitLab = review.provider === 'gitlab'
-  const { shortLabel, reviewLabel } = localizedHostedReviewCopy(isGitLab ? 'gitlab' : 'github', t)
+  const { shortLabel, reviewLabel } = localizedHostedReviewCopy(
+    isGitLab ? 'gitlab' : review.provider === 'gitea' ? 'gitea' : 'github',
+    t
+  )
   const stackMergeScope = useMemo(
     () => (githubPR?.stack ? getGitHubPRStackMergeScope(githubPR.stack, review.number) : null),
     [githubPR?.stack, review.number]
@@ -178,7 +181,9 @@ export default function HostedReviewActions({
     runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
   }, [worktree.hostId, worktree.id])
 
-  if (review.state === 'draft' && (review.provider === 'github' || review.provider === 'gitlab')) {
+  const canManageDraftReview =
+    review.provider === 'github' || review.provider === 'gitlab' || review.provider === 'gitea'
+  if (review.state === 'draft' && canManageDraftReview) {
     return (
       <DraftReviewActions
         shortLabel={shortLabel}

@@ -28,6 +28,7 @@ import {
   assertActiveEnvironment
 } from '../../runtime/client/web-runtime-session'
 import { callRuntimeDetectedWorktrees } from './web-runtime-worktree-catalog'
+import { resolveGiteaPrBaseViaRuntime } from './web-gitea-pr-base-resolver'
 import { createWebWorktreeRemovalCalls } from './web-worktree-removal-calls'
 import { noopUnsubscribe } from '../web-storage'
 import { runApprovedSetupOnWebHost } from './web-approved-setup'
@@ -79,6 +80,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         linkedBitbucketPR: args.linkedBitbucketPR,
         linkedAzureDevOpsPR: args.linkedAzureDevOpsPR,
         linkedGiteaPR: args.linkedGiteaPR,
+        linkedGiteaIssue: args.linkedGiteaIssue,
         displayName: args.displayName,
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
@@ -146,6 +148,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         isCrossRepository,
         ...(wakeWslDistro ? { wakeWslDistro } : {})
       }),
+    resolveGiteaPrBase: resolveGiteaPrBaseViaRuntime,
     resolveMrBase: async ({
       repoId,
       mrIid,

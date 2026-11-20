@@ -2,6 +2,7 @@ import type { GitHubPrStartPoint, GitPushTarget } from '../../../../../shared/wo
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
 import { getWorkspaceSourceProvider } from '../../../../../shared/new-workspace/workspace-source'
+import type { GiteaWorkItem } from '../../../../../shared/gitea-types'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { SmartGitHubSubmitResolution } from '@/lib/work-items/github/smart-github-submit'
 import {
@@ -30,6 +31,7 @@ export type SmartGitHubPrStartPointSelection = {
 export type SmartSourceSelection =
   | SmartGitHubPrStartPointSelection
   | { kind: 'gitlab-mr'; repoId: string; item: GitLabWorkItem }
+  | { kind: 'gitea-pr'; repoId: string; item: GiteaWorkItem }
   | { kind: 'github-submit-lookup'; query: string }
 
 export function getGitHubLinkedWorkItemIdentity(

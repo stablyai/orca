@@ -1,0 +1,80 @@
+import { useCallback, useMemo } from 'react'
+import { getTaskSourceCacheScope } from '../../../../shared/work-items/task-source-context'
+import { GitLabItemDialogView } from './gitlab-item-dialog-view'
+import type { GitLabDialogRepoSelector, GitLabItemDialogProps } from './gitlab-item-dialog-types'
+import type { GitLabDialogForge } from './gitlab-dialog-forge'
+import { useGitLabDetailsEditing } from './use-gitlab-details-editing'
+import {
+  useGitLabItemDetailsEffect,
+  useGitLabItemScopeResetEffect
+} from './use-gitlab-item-dialog-effects'
+import { useGitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { useGitLabPipelineActions } from './use-gitlab-pipeline-actions'
+import { useGitLabPrimaryActions } from './use-gitlab-primary-actions'
+import { useGitLabReviewActions } from './use-gitlab-review-actions'
+
+export function ForgeItemDialog({
+  forge,
+  item,
+  repoPath,
+  repoId,
+  sourceContext,
+  onClose,
+  onCreateWorkspace
+}: GitLabItemDialogProps & { forge: GitLabDialogForge }) {
+  const itemId = item?.id ?? null
+  // Why: one owner for provider-scoped state — the target the selector routes to (task source, project,
+  // item and repo); a provider id or IID alone repeats across sources and instances.
+  const detailsOwner = item
+    ? [
+        forge.kind,
+        sourceContext ? getTaskSourceCacheScope(sourceContext) : '',
+        item.projectRef ? `${item.projectRef.host}/${item.projectRef.path}` : '',
+        item.type,
+        item.number,
+        itemId,
+        item.repoHostId ?? '',
+        repoId ?? '',
+        repoPath ?? ''
+      ].join('\0')
+    : null
+  const state = useGitLabItemDialogState(itemId, detailsOwner, forge)
+  const { setRefreshNonce } = state
+  const repoSelector = useMemo<GitLabDialogRepoSelector | null>(() => {
+    if (!repoPath) {
+      return null
+    }
+    return {
+      repoPath,
+      ...(repoId ? { repoId } : {}),
+      ...(sourceContext ? { sourceContext } : {})
+    }
+  }, [repoId, repoPath, sourceContext])
+  const updateCommentDraft = state.updateCommentDraft
+
+  useGitLabItemDetailsEffect(item, repoSelector, state)
+  useGitLabItemScopeResetEffect(detailsOwner, state)
+
+  const handleRefresh = useCallback(() => {
+    setRefreshNonce((n) => n + 1)
+  }, [setRefreshNonce])
+  const detailsEditing = useGitLabDetailsEditing(item, repoSelector, state, handleRefresh)
+  const pipelineActions = useGitLabPipelineActions(item, repoSelector, state, handleRefresh)
+  const reviewActions = useGitLabReviewActions(item, repoSelector, state, handleRefresh)
+  const primaryActions = useGitLabPrimaryActions(item, itemId, repoSelector, state, handleRefresh)
+
+  return (
+    <GitLabItemDialogView
+      item={item}
+      onClose={onClose}
+      onCreateWorkspace={onCreateWorkspace}
+      state={state}
+      detailsEditing={detailsEditing}
+      pipelineActions={pipelineActions}
+      primaryActions={primaryActions}
+      reviewActions={reviewActions}
+      handleRefresh={handleRefresh}
+      updateCommentDraft={updateCommentDraft}
+    />
+  )
+}

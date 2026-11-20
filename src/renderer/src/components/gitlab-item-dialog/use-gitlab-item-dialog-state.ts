@@ -5,8 +5,13 @@ import type {
   GitLabWorkItemDetails
 } from '../../../../shared/gitlab/gitlab-types'
 import type { JobTraceState } from './gitlab-item-dialog-parts'
+import { GITLAB_DIALOG_FORGE, type GitLabDialogForge } from './gitlab-dialog-forge'
 
-export function useGitLabItemDialogState(itemId: string | null, detailsOwner: string | null) {
+export function useGitLabItemDialogState(
+  itemId: string | null,
+  detailsOwner: string | null,
+  forge: GitLabDialogForge = GITLAB_DIALOG_FORGE
+) {
   const [details, setDetails] = useState<GitLabWorkItemDetails | null>(null)
   const [shownOwner, setShownOwner] = useState(detailsOwner)
   if (shownOwner !== detailsOwner) {
@@ -76,6 +81,7 @@ export function useGitLabItemDialogState(itemId: string | null, detailsOwner: st
     editingDetails,
     error,
     expandedJobId,
+    forge,
     inlineCommentBody,
     inlineCommentFilePath,
     inlineCommentLine,

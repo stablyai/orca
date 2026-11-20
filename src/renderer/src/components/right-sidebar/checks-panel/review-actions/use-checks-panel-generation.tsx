@@ -97,7 +97,9 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
         connectionId: copy ? copy.connectionId : (getConnectionId(activeWorktreeId) ?? undefined),
         ownerHostId: copy?.hostId ?? null,
         jiraIssueKey:
-          (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
+          (hostedReviewCreateProvider === 'github' ||
+            hostedReviewCreateProvider === 'gitlab' ||
+            hostedReviewCreateProvider === 'gitea') &&
           activeWorktreeId
             ? getWorkspaceJiraIssueKey(
                 useAppStore

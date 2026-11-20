@@ -1,6 +1,7 @@
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
+import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
 import { refreshHostedReviewCard } from '@/store/slices/hosted-review/hosted-review-card-refresh'
@@ -16,6 +17,8 @@ import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-c
 type ChecksPanelEntryRefreshAndTitleActionsInput = Pick<
   ChecksPanelContextState,
   | 'activeGitLabReview'
+  | 'activeGiteaReview'
+  | 'isGiteaReviewContext'
   | 'activeReview'
   | 'clearTitleInputFocusTimer'
   | 'fallbackGitHubPRNumber'
@@ -54,7 +57,7 @@ type ChecksPanelEntryRefreshAndTitleActionsInput = Pick<
     | 'titleInputRef'
   > &
   Pick<ChecksPanelReviewState, 'checksFetchedAt' | 'commentsFetchedAt' | 'prFetchedAt'> &
-  Pick<ChecksPanelPollingState, 'fetchChecks' | 'fetchGitLabDetails'> &
+  Pick<ChecksPanelPollingState, 'fetchChecks' | 'fetchGitLabDetails' | 'fetchGiteaDetails'> &
   Pick<ChecksPanelReviewDataState, 'fetchComments'>
 
 export function useChecksPanelEntryRefreshAndTitleActions(
@@ -62,6 +65,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
 ) {
   const {
     activeGitLabReview,
+    activeGiteaReview,
     activeReview,
     activeWorktree,
     activeWorktreeId,
@@ -74,11 +78,13 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     fetchChecks,
     fetchComments,
     fetchGitLabDetails,
+    fetchGiteaDetails,
     fetchHostedReviewForBranch,
     fetchPRForBranch,
     hostedReviewCacheKey,
     isFolder,
     isGitLabReviewContext,
+    isGiteaReviewContext,
     isPanelVisible,
     linkedAzureDevOpsPR,
     linkedBitbucketPR,
@@ -108,7 +114,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         return
       }
       // Tab entry is automatic: preserve rate-limit guards and force only panes already known stale.
-      if (isGitLabReviewContext) {
+      if (isGitLabReviewContext || isGiteaReviewContext) {
         void fetchHostedReviewForBranch(repo.path, branch, {
           force: true,
           repoId: repo.id,
@@ -124,6 +130,8 @@ export function useChecksPanelEntryRefreshAndTitleActions(
         // Entering the tab is a user act: it may start a stopped WSL distro (E9).
         if (activeGitLabReview) {
           void fetchGitLabDetails()
+        } else if (activeGiteaReview) {
+          void fetchGiteaDetails()
         }
         return
       }
@@ -137,6 +145,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     },
     [
       activeGitLabReview,
+      activeGiteaReview,
       activeWorktree?.head,
       activeWorktreeId,
       branch,
@@ -145,8 +154,10 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       fetchChecks,
       fetchComments,
       fetchGitLabDetails,
+      fetchGiteaDetails,
       fetchHostedReviewForBranch,
       isGitLabReviewContext,
+      isGiteaReviewContext,
       linkedAzureDevOpsPR,
       linkedBitbucketPR,
       linkedGiteaPR,
@@ -159,7 +170,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
   // Check freshness on tab entry to catch external changes before TTL expiry; see docs/refresh-on-checks-tab.md.
   const entryKey =
     isPanelVisible && repo && !isFolder && branch
-      ? `${activeWorktreeId ?? ''}::${activeGitLabReview ? hostedReviewCacheKey : prCacheKey}`
+      ? `${activeWorktreeId ?? ''}::${activeGitLabReview || activeGiteaReview ? hostedReviewCacheKey : prCacheKey}`
       : ''
   const lastEntryKeyRef = useRef<string>('')
   useEffect(() => {
@@ -214,7 +225,7 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     // Details read the panel's live model, so a write that settles after a repo/link switch must not reuse its MR number.
     const requestContextKey = panelContextKey
     const isRequestCurrent = (): boolean => panelContextKeyRef.current === requestContextKey
-    if (activeReview?.provider === 'gitlab') {
+    if (activeReview?.provider === 'gitlab' || activeReview?.provider === 'gitea') {
       const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
         repoPath: repo.path,
         repoId: repo.id,
@@ -230,13 +241,21 @@ export function useChecksPanelEntryRefreshAndTitleActions(
       }).catch(() => null)
       const refreshedGitLabReview =
         refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
-      if (refreshedGitLabReview) {
+      const refreshedGiteaReview =
+        refreshedReview?.provider === 'gitea' ? refreshedReview : activeGiteaReview
+      if (activeReview.provider === 'gitlab' && refreshedGitLabReview) {
         await fetchGitLabDetails({
           mrNumberOverride: refreshedGitLabReview.number,
           headShaOverride: refreshedGitLabReview.headSha,
           // Why: not commitAsCurrent — an old or fallback MR must not claim the review the panel now shows; the
           // result-key check lets details land only on the selected review, and a new selection loads its own.
           isRequestCurrent
+        })
+      } else if (activeReview.provider === 'gitea' && refreshedGiteaReview) {
+        await fetchGiteaDetails({
+          prNumberOverride: refreshedGiteaReview.number,
+          headShaOverride: refreshedGiteaReview.headSha,
+          commitAsCurrent: true
         })
       }
       return
@@ -265,11 +284,13 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     }).catch(() => null)
   }, [
     activeGitLabReview,
+    activeGiteaReview,
     activeReview?.provider,
     activeWorktreeId,
     branch,
     fallbackGitHubPRNumber,
     fetchGitLabDetails,
+    fetchGiteaDetails,
     fetchHostedReviewForBranch,
     fetchPRForBranch,
     linkedAzureDevOpsPR,
@@ -317,17 +338,25 @@ export function useChecksPanelEntryRefreshAndTitleActions(
     }
     setTitleSaving(true)
     try {
-      if (activeReview.provider === 'gitlab') {
+      if (activeReview.provider === 'gitlab' || activeReview.provider === 'gitea') {
         const selector = {
           repoPath: repo.path,
           repoId: repo.id,
           repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree)
         }
-        const result = await gitLabApiFor(selector).updateMR({
-          ...selector,
-          iid: activeReview.number,
-          updates: { title: nextTitle }
-        })
+        const updates = { title: nextTitle }
+        const result =
+          activeReview.provider === 'gitlab'
+            ? await gitLabApiFor(selector).updateMR({
+                ...selector,
+                iid: activeReview.number,
+                updates
+              })
+            : await giteaApiFor(selector).updatePR({
+                ...selector,
+                number: activeReview.number,
+                updates
+              })
         if (!result.ok) {
           toast.error(codeHostErrorText(result))
         }

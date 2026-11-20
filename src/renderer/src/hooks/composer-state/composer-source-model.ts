@@ -1,5 +1,6 @@
 import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
+import type { GiteaWorkItem } from '../../../../shared/gitea-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
@@ -54,6 +55,7 @@ export type ComposerSourceModel = {
   handleSmartBranchSelect: (refName: string, localBranchName: string) => void
   handleSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   handleSmartGitLabItemSelect: (item: GitLabWorkItem) => void
+  handleSmartGiteaItemSelect: (item: GiteaWorkItem) => void
   handleSmartJiraIssueSelect: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   handleSmartLinearIssueSelect: (issue: LinearIssue) => void
   handleSparseSelectPreset: (preset: SparsePreset | null) => void

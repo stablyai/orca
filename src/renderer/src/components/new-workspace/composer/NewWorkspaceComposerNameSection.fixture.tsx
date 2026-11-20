@@ -32,6 +32,7 @@ function BranchReusePreview({
         onNameValueChange={setName}
         onSmartGitHubItemSelect={() => {}}
         onSmartGitLabItemSelect={() => {}}
+        onSmartGiteaItemSelect={() => {}}
         onSmartBranchSelect={() => {}}
         onSmartLinearIssueSelect={() => {}}
         smartNameSelection={buildWorkspaceSourceSelection({ linkedWorkItem: null, baseBranch })}

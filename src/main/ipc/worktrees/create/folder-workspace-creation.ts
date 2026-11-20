@@ -64,6 +64,7 @@ export async function createFolderWorkspace(
       ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+    ...(args.linkedGiteaIssue !== undefined ? { linkedGiteaIssue: args.linkedGiteaIssue } : {}),
     ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
     ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
     ...(args.linkedTaskSourceContext !== undefined

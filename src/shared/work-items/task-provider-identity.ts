@@ -14,6 +14,12 @@ export type GitLabTaskProviderIdentity = {
   webUrl?: string | null
 }
 
+export type GiteaTaskProviderIdentity = {
+  provider: 'gitea'
+  host?: string | null
+  path?: string | null
+}
+
 export type LinearTaskProviderIdentity = {
   provider: 'linear'
   workspaceId?: string | null
@@ -32,6 +38,7 @@ export type JiraTaskProviderIdentity = {
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
+  | GiteaTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
 
@@ -63,6 +70,12 @@ export function normalizeTaskProviderIdentity(
         namespace: normalizeNonEmptyString(raw.namespace),
         project: normalizeNonEmptyString(raw.project),
         webUrl: normalizeNonEmptyString(raw.webUrl)
+      }
+    case 'gitea':
+      return {
+        provider,
+        host: normalizeNonEmptyString(raw.host),
+        path: normalizeNonEmptyString(raw.path)
       }
     case 'linear':
       return {
@@ -106,6 +119,8 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
       return ['projectId', 'namespace', 'project', 'webUrl'].every((key) =>
         isNullableOptionalString(raw[key])
       )
+    case 'gitea':
+      return ['host', 'path'].every((key) => isNullableOptionalString(raw[key]))
     case 'linear':
       return ['workspaceId', 'workspaceName', 'teamId', 'teamKey'].every((key) =>
         isNullableOptionalString(raw[key])
@@ -118,6 +133,7 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
 const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
   github: ['owner', 'repo', 'host'],
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
+  gitea: ['host', 'path'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
   jira: ['siteId', 'siteUrl', 'projectKey']
 }
@@ -153,6 +169,8 @@ export function taskProviderIdentityCachePart(
       return githubRepoIdentityKey(identity)
     case 'gitlab':
       return identity.projectId ?? [identity.namespace, identity.project].filter(Boolean).join('/')
+    case 'gitea':
+      return [identity.host, identity.path].filter(Boolean).join('/')
     case 'linear':
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':

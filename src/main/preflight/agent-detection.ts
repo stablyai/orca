@@ -11,6 +11,8 @@ import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/projects/gitlab-known-host-probe'
+import { parseGtLoginStatus, _resetGtKnownHostsCache } from '../gitea/gitea-known-host-probe'
+import { _resetGiteaRepoRefCache } from '../gitea/repository-ref'
 import { mergePersistedWindowsPathAsync } from '../pty/environment/windows-environment-path'
 import type { WslPreflightTarget } from '../ipc/preflight/preflight-wsl-agent-detection'
 import {
@@ -56,6 +58,8 @@ export type PreflightStatus = {
   gh: { installed: boolean; authenticated: boolean }
   // Optional for older git/gh-only clients; GitLab consumers gate on authenticated.
   glab?: { installed: boolean; authenticated: boolean }
+  // Modern Gitea CLI (gt) support.
+  gt?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
   azureDevOps?: {
     configured: boolean
@@ -190,6 +194,34 @@ async function isGhAuthenticated(probe: CommandRuntime): Promise<boolean> {
   }
 }
 
+function gtStatusAuthenticated(stdout: string): boolean {
+  try {
+    return parseGtLoginStatus(stdout).length > 0
+  } catch {
+    return false
+  }
+}
+
+async function isGtAuthenticated(probe: CommandRuntime): Promise<boolean> {
+  try {
+    const result = probe.wslTarget
+      ? await execCommandInWslOrThrow(
+          probe.wslTarget,
+          `${quotePosixShell('gt')} auth status --json active,credential_available,error,host,user`
+        )
+      : await execLocalPreflightCommandOrThrow(probe.binary ?? 'gt', [
+          'auth',
+          'status',
+          '--json',
+          'active,credential_available,error,host,user'
+        ])
+    return gtStatusAuthenticated(result.stdout)
+  } catch (error) {
+    const stdout = (error as { stdout?: string }).stdout ?? ''
+    return gtStatusAuthenticated(stdout)
+  }
+}
+
 // glab versions split auth status across stdout/stderr; inspect both.
 async function isGlabAuthenticated(
   probe: Pick<CommandRuntime, 'wslTarget' | 'binary'>
@@ -314,26 +346,32 @@ async function executePreflightCheck(
   if (force) {
     // Refresh GitLab host discovery too, or self-hosted login stays invisible until relaunch.
     _resetKnownHostsCache()
+    _resetGtKnownHostsCache()
+    _resetGiteaRepoRefCache()
   }
 
-  const [gitProbe, ghProbe, glabProbe] = await Promise.all([
+  const [gitProbe, ghProbe, glabProbe, gtProbe] = await Promise.all([
     detectCommandRuntime('git', context),
     detectCommandRuntime('gh', context),
-    detectCommandRuntime('glab', context)
+    detectCommandRuntime('glab', context),
+    detectCommandRuntime('gt', context)
   ])
 
-  const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
-    ghProbe.installed ? isGhAuthenticated(ghProbe) : Promise.resolve(false),
-    glabProbe.installed ? isGlabAuthenticated(glabProbe) : Promise.resolve(false),
-    getBitbucketAuthStatus(),
-    getAzureDevOpsAuthStatus(),
-    getGiteaAuthStatus()
-  ])
+  const [ghAuthenticated, glabAuthenticated, gtAuthenticated, bitbucket, azureDevOps, gitea] =
+    await Promise.all([
+      ghProbe.installed ? isGhAuthenticated(ghProbe) : Promise.resolve(false),
+      glabProbe.installed ? isGlabAuthenticated(glabProbe) : Promise.resolve(false),
+      gtProbe.installed ? isGtAuthenticated(gtProbe) : Promise.resolve(false),
+      getBitbucketAuthStatus(),
+      getAzureDevOpsAuthStatus(),
+      getGiteaAuthStatus()
+    ])
 
   const status = {
     git: { installed: gitProbe.installed },
     gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
     glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
+    gt: { installed: gtProbe.installed, authenticated: gtAuthenticated },
     bitbucket,
     azureDevOps,
     gitea

@@ -7,6 +7,7 @@ import type { JiraIssue, JiraSite } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import type { GiteaWorkItem } from '../../../../../shared/gitea-types'
 import type {
   SmartNameMode,
   SmartWorkspaceSourceRow
@@ -24,6 +25,8 @@ export type SmartWorkspaceNameFieldProps = {
   onGitHubItemSelect: (item: GitHubWorkItem) => void
   /** Optional; when omitted, GitLab paste-URL detection is silently skipped. */
   onGitLabItemSelect?: (item: GitLabWorkItem) => void
+  /** Optional; when omitted, the Gitea source is hidden. */
+  onGiteaItemSelect?: (item: GiteaWorkItem) => void
   onBranchSelect: (refName: string, localBranchName: string) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
   onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
@@ -48,7 +51,16 @@ export type SmartWorkspaceNameFieldProps = {
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
+  kind:
+    | 'github-pr'
+    | 'github-issue'
+    | 'gitlab-mr'
+    | 'gitlab-issue'
+    | 'gitea-pr'
+    | 'gitea-issue'
+    | 'branch'
+    | 'linear'
+    | 'jira'
   label: string
   url?: string
 }
@@ -77,6 +89,7 @@ export type SmartWorkspaceNameFieldSearchState = {
   debouncedQuery: string
   githubItems: GitHubWorkItem[]
   gitlabItems: GitLabWorkItem[]
+  giteaItems: GiteaWorkItem[]
   branches: BaseRefSearchResult[]
   branchResultsSource: { repoId: string; query: string } | null
   linearIssues: LinearIssue[]
@@ -106,6 +119,7 @@ export type WorkItemSourceSearchProps = Pick<
 > & {
   sourceSelected?: boolean
   gitlabEnabled?: boolean
+  giteaEnabled?: boolean
   typedTextEnabled?: boolean
   defaultLinearWorkspaceId?: string
 }

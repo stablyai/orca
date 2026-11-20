@@ -37,6 +37,12 @@ export const CODE_HOST_FAILURE_COPY = {
     'GitHub resource to rerun was not found — it may have expired or been deleted.',
   'github.rerunRejected': 'Could not rerun checks — {{detail}}',
   'github.rerunFailed': 'Failed to rerun checks: {{detail}}',
+  'gitea.projectUnresolved': 'Could not resolve Gitea repository for this checkout',
+  'gitea.unexpectedResponse': 'Unexpected response from Gitea',
+  'gitea.rateLimited': 'Gitea rate limit hit. Try again in a few minutes.',
+  'gitea.issuePermissionDenied':
+    "You don't have permission to edit this issue. Check your Gitea token scopes.",
+  'gitea.jobLogFailed': 'Failed to load the job log: {{detail}}',
   'gitlab.projectUnresolved': 'Could not resolve GitLab project for this repository',
   'gitlab.unexpectedResponse': 'Unexpected response from GitLab',
   'gitlab.commentBodyRequired': 'Comment body is required',

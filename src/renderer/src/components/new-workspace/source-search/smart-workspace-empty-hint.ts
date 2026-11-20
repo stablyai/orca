@@ -18,6 +18,11 @@ export function translateSmartWorkspaceEmptyHint(mode: SmartNameMode): string {
         'auto.components.new.workspace.smart.workspace.empty.hint.b1418294ea',
         'Start typing to search GitLab MRs and issues.'
       )
+    case 'gitea':
+      return translate(
+        'auto.components.new.workspace.smart.workspace.empty.hint.giteaPr',
+        'Start typing to search Gitea PRs and issues.'
+      )
     case 'branches':
       return translate(
         'auto.components.new.workspace.smart.workspace.empty.hint.80e7791c93',

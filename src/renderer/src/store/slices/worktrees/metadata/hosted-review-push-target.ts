@@ -67,6 +67,38 @@ export async function resolveGitLabReviewPushTarget(
   }
 }
 
+export async function resolveGiteaReviewPushTarget(
+  target: RuntimeClientTarget,
+  repoId: string,
+  prNumber: number
+): Promise<GitPushTarget | undefined> {
+  try {
+    const result =
+      target.kind === 'local'
+        ? await window.api.worktrees.resolveGiteaPrBase({ repoId, prNumber })
+        : await callRuntimeRpc<
+            | { baseBranch: string; compareBaseRef?: string; pushTarget?: GitPushTarget }
+            | { error: string }
+          >(
+            target,
+            'worktree.resolveGiteaPrBase',
+            { repo: repoId, prNumber },
+            { timeoutMs: 30_000 }
+          )
+    if ('error' in result) {
+      console.warn(`Failed to resolve push target for Gitea PR #${prNumber}: ${result.error}`)
+      return undefined
+    }
+    return result.pushTarget
+  } catch (error) {
+    console.warn(
+      `Failed to resolve push target for Gitea PR #${prNumber}:`,
+      error instanceof Error ? error.message : error
+    )
+    return undefined
+  }
+}
+
 export function getHostedReviewPushTargetLookup(worktree: Worktree): {
   key: string
   resolve: (target: RuntimeClientTarget) => Promise<GitPushTarget | undefined>
@@ -84,6 +116,13 @@ export function getHostedReviewPushTargetLookup(worktree: Worktree): {
     return {
       key: `${worktree.id}:${hostScope}:gitlab:${mrIid}`,
       resolve: (target) => resolveGitLabReviewPushTarget(target, worktree.repoId, mrIid)
+    }
+  }
+  if (isPositiveHostedReviewNumber(worktree.linkedGiteaPR)) {
+    const prNumber = worktree.linkedGiteaPR
+    return {
+      key: `${worktree.id}:${hostScope}:gitea:${prNumber}`,
+      resolve: (target) => resolveGiteaReviewPushTarget(target, worktree.repoId, prNumber)
     }
   }
   return null

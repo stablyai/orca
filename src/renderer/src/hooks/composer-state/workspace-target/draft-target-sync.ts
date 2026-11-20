@@ -14,7 +14,9 @@ export type DraftTargetSyncInput = Pick<
   | 'folderSourceRepos'
   | 'isProjectGroupTarget'
   | 'linkedGitLabIssue'
+  | 'linkedGiteaIssue'
   | 'linkedGitLabMR'
+  | 'linkedGiteaPR'
   | 'linkedIssue'
   | 'linkedPR'
   | 'linkedWorkItem'
@@ -46,7 +48,9 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     folderSourceRepos,
     isProjectGroupTarget,
     linkedGitLabIssue,
+    linkedGiteaIssue,
     linkedGitLabMR,
+    linkedGiteaPR,
     linkedIssue,
     linkedPR,
     linkedWorkItem,
@@ -101,7 +105,9 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
       linkedIssue,
       linkedPR,
       linkedGitLabIssue,
+      linkedGiteaIssue,
       linkedGitLabMR,
+      linkedGiteaPR,
       ...(baseBranch !== undefined ? { baseBranch, baseBranchNamesWorkspace } : {}),
       ...(compareBaseRef !== undefined ? { compareBaseRef } : {})
     })
@@ -115,7 +121,9 @@ export function useDraftTargetSync(state: DraftTargetSyncInput): void {
     linkedIssue,
     linkedPR,
     linkedGitLabIssue,
+    linkedGiteaIssue,
     linkedGitLabMR,
+    linkedGiteaPR,
     linkedWorkItem,
     note,
     name,

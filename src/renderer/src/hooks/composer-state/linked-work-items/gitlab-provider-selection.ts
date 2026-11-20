@@ -1,6 +1,6 @@
 import type { ComposerModel } from '../composer-model'
 
-type GitLabProviderSelectionInput = Pick<
+export type GitLabProviderSelectionInput = Pick<
   ComposerModel,
   | 'applyLinkedGitLabWorkItem'
   | 'branchAutoNameRef'
@@ -18,6 +18,7 @@ type GitLabProviderSelectionInput = Pick<
   | 'setForkPushWarning'
   | 'setLinkedGitLabIssue'
   | 'setLinkedGitLabMR'
+  | 'clearLinkedGiteaItems'
   | 'setLinkedIssue'
   | 'setLinkedPR'
   | 'setLinkedTaskSourceContext'
@@ -61,6 +62,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
     setForkPushWarning,
     setLinkedGitLabIssue,
     setLinkedGitLabMR,
+    clearLinkedGiteaItems,
     setLinkedIssue,
     setLinkedPR,
     setLinkedTaskSourceContext,
@@ -79,6 +81,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
         const linkedItem = toGitLabLinkedWorkItem(item)
         setLinkedGitLabIssue(item.type === 'issue' ? item.number : null)
         setLinkedGitLabMR(item.type === 'mr' ? item.number : null)
+        clearLinkedGiteaItems()
         setLinkedIssue('')
         setLinkedPR(null)
         setLinkedTaskSourceContext(null)
@@ -200,6 +203,7 @@ export function useGitLabProviderSelection(input: GitLabProviderSelectionInput) 
       setForkPushWarning,
       setLinkedGitLabIssue,
       setLinkedGitLabMR,
+      clearLinkedGiteaItems,
       setLinkedIssue,
       setLinkedPR,
       setLinkedTaskSourceContext,

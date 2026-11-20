@@ -3,15 +3,23 @@ import { useRef, useState, useEffect, useMemo } from 'react'
 import { resolveVisibleTaskProvider } from '../../../../shared/work-items/task-providers'
 import type {
   GitLabTaskFilter,
-  GitLabIssueFilter
+  GitLabIssueFilter,
+  GiteaTaskView
 } from '@/components/task-page/task-page-localized-options'
 import type {
   GitLabMRInvolvement,
   GitLabWorkItem,
   GitLabTodo
 } from '../../../../shared/gitlab/gitlab-types'
+import type { GiteaNotification, GiteaWorkItem } from '../../../../shared/gitea-types'
 import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 import { isGitLabIssueFilter, isGitLabMRFilter } from './task-page-source-context'
+import { useTaskPageGiteaFilterState } from './use-task-page-gitea-filter-state'
+import {
+  filterGiteaWorkItems,
+  isGiteaStateFilterValidFor,
+  type GiteaStateFilter
+} from './gitea/gitea-task-filters'
 export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel) {
   const {
     settings,
@@ -105,6 +113,42 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
     }
     return gitlabItems
   }, [gitlabItems, gitlabView])
+  const [giteaFilter, setGiteaFilter] = useState<GiteaStateFilter>('opened')
+  const giteaFilterState = useTaskPageGiteaFilterState()
+  const [giteaItems, setGiteaItems] = useState<GiteaWorkItem[]>([])
+  const [giteaLoading, setGiteaLoading] = useState(false)
+  const [giteaError, setGiteaError] = useState<string | null>(null)
+  const [giteaRefreshNonce, setGiteaRefreshNonce] = useState(0)
+  const [giteaDialogItem, setGiteaDialogItem] = useState<GiteaWorkItem | null>(null)
+  const [giteaView, setGiteaView] = useState<GiteaTaskView>('prs')
+  const [giteaNotifications, setGiteaNotifications] = useState<GiteaNotification[]>([])
+  const [giteaNotificationsLoading, setGiteaNotificationsLoading] = useState(false)
+  const giteaEmptyState = useMemo(
+    () =>
+      getRepoBackedTaskEmptyState({
+        provider: 'gitea',
+        selectedRepoCount: selectedRepos.length,
+        giteaView
+      }),
+    [giteaView, selectedRepos.length]
+  )
+  // Why: Issues and PRs expose different filter sets; repair before commit so fetches never run with the other view's filter.
+  const giteaFilterIsValid = isGiteaStateFilterValidFor(giteaView, giteaFilter)
+  const activeGiteaFilter = giteaFilterIsValid ? giteaFilter : 'opened'
+  if (!giteaFilterIsValid) {
+    setGiteaFilter('opened')
+  }
+  const { giteaItemFilters } = giteaFilterState
+  const displayedGiteaItems = useMemo(
+    () =>
+      giteaView === 'notifications'
+        ? giteaItems
+        : filterGiteaWorkItems(
+            giteaItems.filter((item) => item.type === (giteaView === 'issues' ? 'issue' : 'pr')),
+            giteaItemFilters
+          ),
+    [giteaItems, giteaView, giteaItemFilters]
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every added field is assigned below before the model is returned.
   const nextModel = model as typeof model & {
     taskSourceManuallyChangedRef: typeof taskSourceManuallyChangedRef
@@ -184,6 +228,29 @@ export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel)
   nextModel.gitlabFilterIsValid = gitlabFilterIsValid
   nextModel.activeGitlabFilter = activeGitlabFilter
   nextModel.displayedGitLabItems = displayedGitLabItems
-  return nextModel
+  const giteaModel = Object.assign(nextModel, giteaFilterState, {
+    giteaFilter,
+    setGiteaFilter,
+    giteaItems,
+    setGiteaItems,
+    giteaLoading,
+    setGiteaLoading,
+    giteaError,
+    setGiteaError,
+    giteaRefreshNonce,
+    setGiteaRefreshNonce,
+    giteaDialogItem,
+    setGiteaDialogItem,
+    giteaView,
+    setGiteaView,
+    giteaNotifications,
+    setGiteaNotifications,
+    giteaNotificationsLoading,
+    setGiteaNotificationsLoading,
+    giteaEmptyState,
+    activeGiteaFilter,
+    displayedGiteaItems
+  })
+  return giteaModel
 }
 export type TaskPageProviderStateModel = ReturnType<typeof useTaskPageProviderState>

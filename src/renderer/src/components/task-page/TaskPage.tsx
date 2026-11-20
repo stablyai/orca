@@ -26,6 +26,7 @@ import { useTaskPageGitHubListProjection } from './github/listing/use-task-page-
 import { useTaskPageGitHubSearchPagination } from './github/listing/use-task-page-github-search-pagination'
 import { useTaskPageGitHubLandingRefresh } from './github/refresh/use-task-page-github-landing-refresh'
 import { useTaskPageGitHubQuietRefresh } from './github/refresh/use-task-page-github-quiet-refresh'
+import { useTaskPageGiteaLoading } from './use-task-page-gitea-loading'
 import { useTaskPageSearchActions } from './use-task-page-search-actions'
 import { useTaskPageWorkspaceActions } from './use-task-page-workspace-actions'
 import { useTaskPageGitHubIssueCreation } from './github/issue-creation/use-task-page-github-issue-creation'
@@ -57,7 +58,8 @@ export default function TaskPage(): React.JSX.Element {
   const stage13 = useTaskPageResumeRestoration(stage12)
   const stage14 = useTaskPageProviderMetadata(stage13)
   const stage15 = useTaskPageGitLabLoading(stage14)
-  const stage16 = useTaskPageLinearListSelection(stage15)
+  const stage15Gitea = useTaskPageGiteaLoading(stage15)
+  const stage16 = useTaskPageLinearListSelection(stage15Gitea)
   const stage17 = useTaskPageLinearListProjection(stage16)
   const stage18 = useTaskPageLinearBoard(stage17)
   const stage19 = useTaskPageJiraListProjection(stage18)

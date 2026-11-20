@@ -25,6 +25,14 @@ import { getWorkspaceAttachments } from '../../../../../../shared/workspace-atta
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { normalizeLinearIdentifier } from '../../../work-items/linear/linear-issue-workspace-attachment'
 import {
+  parseGiteaIssueOrPRLink,
+  type GiteaIssueOrPRLink
+} from '../../../../../../shared/new-workspace/gitea-links'
+import {
+  getGiteaTaskUrlCreatePreview,
+  matchGiteaWorktreePaletteTaskUrl
+} from './worktree-palette-gitea-url-match'
+import {
   worktreeMatchesGitLabUrl,
   type GitLabIssueOrMRLink
 } from './worktree-palette-gitlab-url-match'
@@ -37,35 +45,12 @@ export type CmdJTaskSourceUrl =
   | { provider: 'github'; link: GitHubIssueOrPRLink }
   | { provider: 'linear'; intent: LinearIssueUrlIntent }
   | { provider: 'gitlab'; link: GitLabIssueOrMRLink }
+  | { provider: 'gitea'; link: GiteaIssueOrPRLink }
   | { provider: 'jira'; parsed: ParsedJiraIssueUrl }
 
-export type CmdJTaskUrlCreatePreview = {
-  provider: 'github' | 'gitlab' | 'jira'
-  identifier: string
-  subtitle: string
-  createLabel: string
-  kindLabel: string
-  loading?: boolean
-}
-
-export function withResolvedCmdJGitHubPreview(
-  preview: CmdJTaskUrlCreatePreview,
-  resolvedTitle: string | null,
-  loading: boolean
-): CmdJTaskUrlCreatePreview {
-  if (preview.provider !== 'github') {
-    return preview
-  }
-  if (resolvedTitle) {
-    return {
-      ...preview,
-      subtitle: resolvedTitle,
-      createLabel: `${preview.createLabel}: ${resolvedTitle}`,
-      loading: false
-    }
-  }
-  return loading ? { ...preview, loading: true } : preview
-}
+export type { CmdJTaskUrlCreatePreview } from './worktree-palette-task-url-preview'
+export { withResolvedCmdJGitHubPreview } from './worktree-palette-task-url-preview'
+import type { CmdJTaskUrlCreatePreview } from './worktree-palette-task-url-preview'
 
 function githubIdentityKey(slug: RepoSlug): string {
   return githubRepoIdentityKey({
@@ -141,6 +126,12 @@ export function parseCmdJTaskSourceUrl(query: string): CmdJTaskSourceUrl | null 
     return { provider: 'linear', intent: linear }
   }
 
+  // Why: before GitHub, whose parser also accepts a Gitea host's /issues/N path.
+  const gitea = parseGiteaIssueOrPRLink(trimmed)
+  if (gitea) {
+    return { provider: 'gitea', link: gitea }
+  }
+
   const github = parseGitHubIssueOrPRLink(trimmed)
   if (github) {
     return { provider: 'github', link: github }
@@ -189,6 +180,9 @@ export function getCmdJTaskUrlCreatePreview(
       kindLabel,
       createLabel: `Create worktree from ${kindLabel} ${project}${identifier}`
     }
+  }
+  if (intent.provider === 'gitea') {
+    return getGiteaTaskUrlCreatePreview(intent.link)
   }
   return {
     provider: 'jira',
@@ -307,6 +301,9 @@ export function matchWorktreePaletteTaskUrl(args: {
       labelKind: intent.link.type === 'mr' ? 'mr' : 'issue',
       text: `${intent.link.type === 'mr' ? 'MR' : 'Issue'} #${intent.link.number}`
     })
+  }
+  if (intent.provider === 'gitea') {
+    return matchGiteaWorktreePaletteTaskUrl({ worktree, link: intent.link, repo, review })
   }
   if (!worktreeMatchesJiraUrl(worktree, intent.parsed)) {
     return null

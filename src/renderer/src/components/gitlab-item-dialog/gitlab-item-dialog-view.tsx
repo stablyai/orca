@@ -52,9 +52,10 @@ export function GitLabItemDialogView({
   updateCommentDraft
 }: Props) {
   const t = useTranslate()
-  const { actionInFlight, commentDraft, commentSubmitting, details, error, loading } = state
+  const { actionInFlight, commentDraft, commentSubmitting, details, error, forge, loading } = state
+  const isGitea = forge.kind === 'gitea'
   const Icon = item?.type === 'mr' ? GitMerge : CircleDot
-  const prefix = item?.type === 'mr' ? '!' : '#'
+  const prefix = item?.type === 'mr' && !isGitea ? '!' : '#'
   const isMR = item?.type === 'mr'
   // Why: details belong to this item (reset on switch) and a reread after a write is newer than the list row.
   const visibleState = details?.item.state ?? item?.state
@@ -78,7 +79,9 @@ export function GitLabItemDialogView({
             {item ? visibleTitle : t('auto.components.GitLabItemDialog.3a051b8ade', 'Work item')}
           </SheetTitle>
           <SheetDescription>
-            {t('auto.components.GitLabItemDialog.30c97083c2', 'GitLab work item detail')}
+            {isGitea
+              ? t('auto.components.GiteaItemDialog.workItemDetail', 'Gitea work item detail')
+              : t('auto.components.GitLabItemDialog.30c97083c2', 'GitLab work item detail')}
           </SheetDescription>
         </VisuallyHidden.Root>
 
@@ -243,7 +246,9 @@ export function GitLabItemDialogView({
                   className="gap-1.5"
                 >
                   <ExternalLink className="size-3.5" />
-                  {t('auto.components.GitLabItemDialog.f2e64d1c20', 'Open in GitLab')}
+                  {isGitea
+                    ? t('auto.components.GiteaItemDialog.openInGitea', 'Open in Gitea')
+                    : t('auto.components.GitLabItemDialog.f2e64d1c20', 'Open in GitLab')}
                 </Button>
                 <div className="flex items-center gap-2">
                   {onCreateWorkspace ? (

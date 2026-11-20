@@ -48,8 +48,9 @@ export function matchesWorkspaceAttachmentQuery(
   if (query.provider !== result.provider || query.number !== result.number) {
     return false
   }
-  // GitHub issues and PRs share numbers; GitLab issues and MRs have separate sequences.
-  if (query.type !== result.type && (query.provider !== 'github' || query.url)) {
+  // GitHub and Gitea share one number sequence; GitLab issues and MRs do not.
+  const sharesNumberSequence = query.provider === 'github' || query.provider === 'gitea'
+  if (query.type !== result.type && (!sharesNumberSequence || query.url)) {
     return false
   }
   const identifier = query.identifier ?? query.linearIdentifier ?? query.jiraIdentifier

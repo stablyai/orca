@@ -14,6 +14,7 @@ import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generati
 import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
 import { registerGitHubHandlers } from '../source-control/github'
 import { registerLazyGitLabHandlers } from '../source-control/lazy-gitlab-handlers'
+import { registerGiteaHandlers } from '../source-control/gitea'
 import { registerHostedReviewHandlers } from '../source-control/hosted-review'
 import { registerLazyLinearHandlers } from '../linear/lazy-linear-handlers'
 import { registerLazyJiraHandlers } from '../jira/lazy-jira-handlers'
@@ -143,6 +144,7 @@ export async function registerCoreHandlers(
     registerRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())
     registerGitHubHandlers(store, stats, runtime)
     registerLazyGitLabHandlers(store)
+    registerGiteaHandlers(store)
     registerHostedReviewHandlers(store, stats)
     registerLazyLinearHandlers()
     registerLazyJiraHandlers(store, commitMessageAgentEnv)

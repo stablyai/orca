@@ -91,25 +91,30 @@ export function getSmartWorkspaceNameFieldCopy(
               'auto.components.new.workspace.SmartWorkspaceNameField.searchGitLab',
               'Search GitLab MRs and issues'
             )
-          : mode === 'branches'
+          : mode === 'gitea'
             ? t(
-                'auto.components.new.workspace.SmartWorkspaceNameField.searchBranches',
-                'Search branches'
+                'auto.components.new.workspace.SmartWorkspaceNameField.searchGitea',
+                'Search Gitea PRs and issues'
               )
-            : mode === 'linear'
+            : mode === 'branches'
               ? t(
-                  'auto.components.new.workspace.SmartWorkspaceNameField.searchLinear',
-                  'Search Linear issues'
+                  'auto.components.new.workspace.SmartWorkspaceNameField.searchBranches',
+                  'Search branches'
                 )
-              : mode === 'jira'
+              : mode === 'linear'
                 ? t(
-                    'auto.components.new.workspace.SmartWorkspaceNameField.searchJira',
-                    'Search Jira issues or paste an issue URL'
+                    'auto.components.new.workspace.SmartWorkspaceNameField.searchLinear',
+                    'Search Linear issues'
                   )
-                : t(
-                    'auto.components.new.workspace.SmartWorkspaceNameField.workspaceName',
-                    'Workspace name'
-                  )
+                : mode === 'jira'
+                  ? t(
+                      'auto.components.new.workspace.SmartWorkspaceNameField.searchJira',
+                      'Search Jira issues or paste an issue URL'
+                    )
+                  : t(
+                      'auto.components.new.workspace.SmartWorkspaceNameField.workspaceName',
+                      'Workspace name'
+                    )
 
   return {
     crossRepoSwitchTitle,

@@ -182,6 +182,8 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
         openGitHubInitialTab: undefined,
         openGitLabWorkItem: undefined,
         openGitLabSourceContext: undefined,
+        openGiteaWorkItem: undefined,
+        openGiteaSourceContext: undefined,
         openLinearIssue: undefined,
         openLinearSourceContext: undefined,
         openJiraIssue: undefined,

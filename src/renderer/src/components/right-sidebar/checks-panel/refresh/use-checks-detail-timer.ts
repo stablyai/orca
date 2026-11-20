@@ -17,7 +17,8 @@ export function useChecksDetailTimer({
   policyRef,
   requestIdentity,
   fetchChecks,
-  fetchGitLabDetails
+  fetchGitLabDetails,
+  fetchGiteaDetails
 }: {
   model: ChecksPanelPollingInput
   modelRef: RefObject<ChecksPanelPollingInput>
@@ -25,9 +26,11 @@ export function useChecksDetailTimer({
   requestIdentity: string
   fetchChecks: ChecksPanelPollingState['fetchChecks']
   fetchGitLabDetails: ChecksPanelPollingState['fetchGitLabDetails']
+  fetchGiteaDetails: ChecksPanelPollingState['fetchGiteaDetails']
 }): void {
   const {
     activeGitLabReview,
+    activeGiteaReview,
     pr,
     prNumber,
     isPanelVisible,
@@ -39,6 +42,7 @@ export function useChecksDetailTimer({
     prevChecksRef
   } = model
   const isGitLabReview = activeGitLabReview !== null
+  const isGiteaReview = activeGiteaReview !== null
   // A new identity always schedules this timer's wake read, which settles what it resets. GitHub
   // comments have their own read (review data), so only a GitLab read owns comments here.
   const [readIdentity, setReadIdentity] = useState(requestIdentity)
@@ -70,7 +74,7 @@ export function useChecksDetailTimer({
       pollIntervalRef.current = 60_000
       prevChecksRef.current = ''
     }
-    if (!isPanelVisible || (!isGitLabReview && !prNumber)) {
+    if (!isPanelVisible || (!isGitLabReview && !isGiteaReview && !prNumber)) {
       wakeNextReadRef.current = true
       return
     }
@@ -87,8 +91,9 @@ export function useChecksDetailTimer({
     const policyDelay = (cadence: PRAutoRefreshCadence = ownerCadence()): number | null => {
       const current = modelRef.current
       return policyRef.current.delayMs(
-        current.activeGitLabReview?.state ?? current.pr?.state,
-        current.activeGitLabReview?.status ?? current.pr?.checksStatus,
+        (current.activeGitLabReview ?? current.activeGiteaReview)?.state ?? current.pr?.state,
+        (current.activeGitLabReview ?? current.activeGiteaReview)?.status ??
+          current.pr?.checksStatus,
         current.pollIntervalRef.current,
         cadence
       )
@@ -146,11 +151,13 @@ export function useChecksDetailTimer({
           () =>
             isGitLabReview
               ? fetchGitLabDetails(shown ? {} : { background: true })
-              : fetchChecks({
-                  force,
-                  ...(shown ? { wakeWslDistro: true } : {}),
-                  ...(background ? { background: true } : {})
-                }),
+              : isGiteaReview
+                ? fetchGiteaDetails(shown ? {} : { background: true })
+                : fetchChecks({
+                    force,
+                    ...(shown ? { wakeWslDistro: true } : {}),
+                    ...(background ? { background: true } : {})
+                  }),
           () => {
             if (inFlightRef.current?.token === token) {
               inFlightRef.current = null
@@ -218,8 +225,10 @@ export function useChecksDetailTimer({
     policyRef,
     fetchChecks,
     fetchGitLabDetails,
+    fetchGiteaDetails,
     isPanelVisible,
     isGitLabReview,
+    isGiteaReview,
     prNumber,
     pollIntervalRef,
     prevChecksRef

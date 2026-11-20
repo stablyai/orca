@@ -96,7 +96,7 @@ export function reviewCopy(provider: HostedReviewProvider): {
       shortLabel: 'PR',
       reviewLabel: 'pull request',
       providerName: 'Gitea',
-      authInstruction: 'Set ORCA_GITEA_TOKEN'
+      authInstruction: 'Run gt auth login or set ORCA_GITEA_TOKEN'
     }
   }
   if (provider === 'bitbucket') {
@@ -126,9 +126,6 @@ export async function isProviderAuthenticated(
       await import('../azure-devops/pull-request-creation')
     ).isAzureDevOpsReviewCreationAuthenticated()
   }
-  if (provider === 'gitea') {
-    return (await import('../gitea/pull-request-creation')).isGiteaReviewCreationAuthenticated()
-  }
   if (provider === 'bitbucket') {
     // Bitbucket authentication must not fall through to GitHub login requirements.
     return (
@@ -137,6 +134,13 @@ export async function isProviderAuthenticated(
   }
   // Only CLI-backed providers need host-routed Git reads; their CLIs run here. Token-backed providers do not touch the repo.
   const connectionId = hostedReviewSshConnectionId(executionHostId)
+  if (provider === 'gitea') {
+    return (await import('../gitea/pull-request-creation')).isGiteaReviewCreationAuthenticated(
+      repoPath,
+      connectionId,
+      options
+    )
+  }
   if (provider === 'gitlab') {
     return isGitLabAuthenticated(repoPath, connectionId, options)
   }

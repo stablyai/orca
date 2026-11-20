@@ -18,6 +18,7 @@ type IssueSourceActionsInput = Pick<
   | 'setForkPushWarning'
   | 'setLinkedGitLabIssue'
   | 'setLinkedGitLabMR'
+  | 'clearLinkedGiteaItems'
   | 'setLinkedIssue'
   | 'setLinkedPR'
   | 'setLinkedTaskSourceContext'
@@ -75,6 +76,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     setForkPushWarning,
     setLinkedGitLabIssue,
     setLinkedGitLabMR,
+    clearLinkedGiteaItems,
     setLinkedIssue,
     setLinkedPR,
     setLinkedTaskSourceContext,
@@ -97,6 +99,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
         setLinkedPR(null)
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
+        clearLinkedGiteaItems()
         setLinkedTaskSourceContext(null)
         setLinkedWorkItem(linkedItem)
         const suggestedName =
@@ -118,6 +121,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
+      clearLinkedGiteaItems()
       setLinkedTaskSourceContext(null)
       const linkedLinearIssue = toLinearLinkedWorkItem(issue)
       setLinkedWorkItem(linkedLinearIssue)
@@ -152,6 +156,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setForkPushWarning,
       setLinkedGitLabIssue,
       setLinkedGitLabMR,
+      clearLinkedGiteaItems,
       setLinkedIssue,
       setLinkedPR,
       setLinkedTaskSourceContext,
@@ -169,6 +174,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
+      clearLinkedGiteaItems()
       if (baseBranchNamesWorkspace) {
         setBaseBranch(undefined)
       }
@@ -209,6 +215,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setForkPushWarning,
       setLinkedGitLabIssue,
       setLinkedGitLabMR,
+      clearLinkedGiteaItems,
       setLinkedIssue,
       setLinkedPR,
       setLinkedTaskSourceContext,
@@ -225,6 +232,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     setLinkedPR(null)
     setLinkedGitLabIssue(null)
     setLinkedGitLabMR(null)
+    clearLinkedGiteaItems()
     setLinkedWorkItem(null)
     setLinkedTaskSourceContext(null)
     if (baseBranchNamesWorkspace) {
@@ -261,6 +269,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     setForkPushWarning,
     setLinkedGitLabIssue,
     setLinkedGitLabMR,
+    clearLinkedGiteaItems,
     setLinkedIssue,
     setLinkedPR,
     setLinkedTaskSourceContext,
