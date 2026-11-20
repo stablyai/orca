@@ -1,6 +1,6 @@
 import { parseBotAvatar, type BotMascotId } from '../../../src/shared/bot-avatar'
 import type { Bot } from '../../../src/shared/bot-types'
-import type { BotAvatarOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
+import { wornBotOutfit, type BotAvatarOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
 import { botFallback } from '../../../src/shared/bots/bot-avatar-fallback'
 import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
@@ -84,12 +84,13 @@ export function mobileBotAvatarSource(
   uploadUri: string | undefined
 ): MobileBotAvatarSource {
   const parsed = parseBotAvatar(bot.avatar)
+  const outfit = wornBotOutfit(bot.avatarOutfit)
   if (parsed?.kind === 'mascot') {
     return {
       kind: 'mascot',
       id: parsed.id,
       ...(bot.avatarColor ? { color: bot.avatarColor } : {}),
-      ...(bot.avatarOutfit ? { outfit: bot.avatarOutfit } : {})
+      ...(outfit ? { outfit } : {})
     }
   }
   if (parsed?.kind === 'upload' && uploadUri) {

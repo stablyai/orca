@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeTestBot } from '../main/bots/bot.test-fixture'
-import { gitHubMembersOf, withGitHubMembersTagged } from './bot-types'
+import { gitHubMembersOf, normalizePersistedBots, withGitHubMembersTagged } from './bot-types'
 import { applyBotUpdates } from './rpc-contract/bots-params'
 
 describe('GitHub people per org', () => {
@@ -31,5 +31,14 @@ describe('GitHub people per org', () => {
     })
     expect(gitHubMembersOf(after.members, '7')).toEqual([])
     expect(gitHubMembersOf(after.members, '8')).toEqual([{ ...alice, workspaceId: '8' }])
+  })
+})
+
+describe('stored outfits', () => {
+  it("keeps an outfit a newer version added through this version's load and save", () => {
+    const saved = JSON.parse(JSON.stringify([makeTestBot({ avatarOutfit: 'aviator' })]))
+    const [loaded] = normalizePersistedBots(saved)
+    expect(loaded?.avatarOutfit).toBe('aviator')
+    expect(JSON.parse(JSON.stringify(loaded)).avatarOutfit).toBe('aviator')
   })
 })

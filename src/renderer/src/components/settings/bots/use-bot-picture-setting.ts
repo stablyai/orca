@@ -21,7 +21,7 @@ import {
 } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
-import type { BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
+import { wornBotOutfit, type BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
 import { botRefKey } from '@/lib/bot-hosts'
 import { beginBotHostUpdate } from '@/lib/bot-host-refresh'
 import { useBotLookSave } from './use-bot-look-save'
@@ -342,7 +342,7 @@ export function useBotPictureSetting(
     outfit:
       look.picked && 'avatarOutfit' in look.picked
         ? (look.picked.avatarOutfit ?? null)
-        : (bot.avatarOutfit ?? null),
+        : wornBotOutfit(bot.avatarOutfit),
     pickOutfit: (outfit) => look.pick({ avatarOutfit: outfit })
   }
 }

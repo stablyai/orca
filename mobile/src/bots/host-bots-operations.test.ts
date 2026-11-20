@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { mobileBotAvatarSource } from './host-bot-row-facts'
 import { botsListRead, phoneBotSchema } from './host-bots-operations'
 
 function read(extra: Record<string, unknown> = {}) {
@@ -50,9 +51,9 @@ describe('phoneBotSchema', () => {
     expect(phoneBotSchema.parse({ ...BOT, avatarOutfit: 'tie' }).avatarOutfit).toBe('tie')
   })
 
-  it("reads a newer host's outfit the phone can't draw as none, keeping the bot", () => {
+  it("draws a newer host's outfit the phone can't draw as none, keeping the bot", () => {
     const bot = phoneBotSchema.parse({ ...BOT, avatarOutfit: 'snorkel' })
     expect(bot.id).toBe('b1')
-    expect(bot.avatarOutfit).toBeUndefined()
+    expect(mobileBotAvatarSource(bot, undefined)).toEqual({ kind: 'mascot', id: 'D1' })
   })
 })

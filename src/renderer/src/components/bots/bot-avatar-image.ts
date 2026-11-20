@@ -4,6 +4,7 @@ import { readBotAvatarPng } from '@/lib/bot-catalog'
 import { botRefKey, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
+import { wornBotOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import {
   useBotMascotLayers,
   useBotMascotSrc,
@@ -39,7 +40,7 @@ export function useBotAvatarSrc(bot: AvatarBot, size: BotPictureSize = 'small'):
   const mascotSrc = useBotMascotSrc(
     parsed?.kind === 'mascot' ? parsed.id : null,
     bot.avatarColor,
-    bot.avatarOutfit,
+    wornBotOutfit(bot.avatarOutfit),
     size
   )
   const upload = useUploadSrc(bot)
@@ -55,7 +56,7 @@ export function useBotAvatarLook(
   const mascot = useBotMascotLayers(
     parsed?.kind === 'mascot' ? parsed.id : null,
     bot.avatarColor,
-    bot.avatarOutfit,
+    wornBotOutfit(bot.avatarOutfit),
     size
   )
   const upload = useUploadSrc(bot)
