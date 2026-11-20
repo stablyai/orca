@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { createIntegrationStateFileCache } from '../../credentials/integration-state-file-cache'
 import { parseWslUncPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
+import { resolveHostCodexUserHome } from '../../codex/configuration/homes/codex-real-home-path'
 import {
   ensureCodexDaemonSocketGuard,
   syncSystemConfigIntoManagedCodexHome
@@ -23,11 +24,11 @@ export type CanonicalCodexConfig = {
 
 export class CodexConfigMirror {
   private readonly hostModelProvider = createIntegrationStateFileCache({
-    filePath: () => join(homedir(), '.codex', 'config.toml'),
+    filePath: systemDefaultConfigPath,
     readFromDisk: () => {
       try {
         return readCodexTopLevelModelProvider(
-          this.readHostConfigContents(join(homedir(), '.codex', 'config.toml'))
+          this.readHostConfigContents(systemDefaultConfigPath())
         )
       } catch (error) {
         if (!isDefinitiveAbsence(error)) {
@@ -190,6 +191,10 @@ export class CodexConfigMirror {
       return null
     }
   }
+}
+
+function systemDefaultConfigPath(): string {
+  return join(resolveHostCodexUserHome(), 'config.toml')
 }
 
 /** Runs `apply` now on a plain value, or once the promise settles. */

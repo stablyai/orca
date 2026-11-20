@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import type { CodexSystemDefaultIdentity } from '../../../shared/agent-accounts/managed-account-types'
+import { resolveHostCodexUserHome } from '../../codex/configuration/homes/codex-real-home-path'
 import {
   readCodexAuthIdentity,
   type CodexAuthIdentity as ResolvedCodexIdentity
@@ -102,12 +102,11 @@ export class CodexAccountIdentity {
     return identity
   }
 
-  // Resolve the system default live from ~/.codex rather than stored managed-account identity.
   resolveSystemDefault(provider: string | null): CodexSystemDefaultIdentity {
     const usesProviderAuth = provider !== null && PROVIDERS_WITHOUT_OPENAI_AUTH.has(provider)
     let contents: string
     try {
-      contents = readFileSync(join(homedir(), '.codex', 'auth.json'), 'utf-8')
+      contents = readFileSync(join(resolveHostCodexUserHome(), 'auth.json'), 'utf-8')
     } catch (error) {
       const code = (error as NodeJS.ErrnoException | null)?.code
       if (code === 'ENOENT' || code === 'ENOTDIR') {

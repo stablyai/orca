@@ -45,9 +45,9 @@ export type CodexManagedAccountSummary = {
   lastAuthenticatedAt: number
 }
 
-/** Read-only identity of real ~/.codex for system-default (activeAccountId:null) display/attribution; this path never writes it. */
+/** Read-only identity of the user's Codex home for system-default display and attribution. */
 export type CodexSystemDefaultIdentity = {
-  /** True when ~/.codex/auth.json exists (signed in via a token file). */
+  /** Whether the user's Codex home has an auth.json file. */
   hasAuth: boolean
   /** 'oauth' = ChatGPT sign-in with an id token (has ChatGPT usage);
    *  'api-key' = env-key/custom provider (no ChatGPT usage);

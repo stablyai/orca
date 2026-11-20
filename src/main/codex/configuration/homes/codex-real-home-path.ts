@@ -6,18 +6,29 @@ import {
 } from '../../../pty/shell-startup/shell-startup-env'
 import { readPowerShellProfileEnvValues } from '../../../pty/shell-startup/powershell-profile-env'
 
-export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env): boolean {
+export function resolveHostCodexUserHome(env: NodeJS.ProcessEnv = process.env): string {
+  return readUserCodexHomeOverride(env) ?? getSystemCodexHomePath()
+}
+
+function readUserCodexHomeOverride(env: NodeJS.ProcessEnv): string | undefined {
   const codexHome = env.CODEX_HOME?.trim()
   const orcaCodexHome = env.ORCA_CODEX_HOME?.trim()
-  const normalizedCodexHome = codexHome ? normalizePathForComparison(codexHome) : undefined
-  const normalizedOrcaCodexHome = orcaCodexHome
-    ? normalizePathForComparison(orcaCodexHome)
-    : undefined
+  if (
+    codexHome &&
+    (!orcaCodexHome ||
+      normalizePathForComparison(codexHome) !== normalizePathForComparison(orcaCodexHome))
+  ) {
+    return codexHome
+  }
+  return undefined
+}
+
+export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env): boolean {
+  const codexHome = readUserCodexHomeOverride(env)
   // Custom native homes need ownership tracking before Orca can safely mutate and clean them.
   return Boolean(
-    normalizedCodexHome &&
-    normalizedCodexHome !== normalizedOrcaCodexHome &&
-    normalizedCodexHome !== normalizePathForComparison(getSystemCodexHomePath())
+    codexHome &&
+    normalizePathForComparison(codexHome) !== normalizePathForComparison(getSystemCodexHomePath())
   )
 }
 
