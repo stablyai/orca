@@ -32,8 +32,9 @@ export function BotsTeammateTipDialog({
 }): JSX.Element {
   const t = useTranslate()
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
-  // A hidden window holds the card where it is, pill included, and resumes there.
-  const windowVisible = useWindowStreamVisible()
+  // A hidden window holds the card where it is, pill included, and resumes there. No grace: the
+  // frame clock stops at once on hide while the pill's CSS clock would run on.
+  const windowVisible = useWindowStreamVisible(0)
   const playback = useBotsTipPlayback(open && windowVisible)
   const { page, visit, pageStarts, pageTimes, reducedMotion } = playback
   // Pages you pick are announced; the auto-advance stays quiet.

@@ -74,6 +74,8 @@ export function useBotsTipPlayback(active: boolean): BotsTipPlayback {
   }, [])
 
   useEffect(() => {
+    // Pausing or resuming publishes the clock, so the progress pill restarts from where the page is.
+    setElapsed(elapsedRef.current)
     if (!playing) {
       return
     }
