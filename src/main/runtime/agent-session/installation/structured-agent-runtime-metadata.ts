@@ -57,13 +57,14 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
     ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
-          hostAlternative: async (shellEnv, settings, needsStandingInstructions = false) =>
+          // Why strict: availability must hold for a bot's chat too, which needs standing instructions.
+          hostAlternative: async (shellEnv, settings) =>
             (await selectAcpHostAccountHome(
               spec,
               shellEnv,
               getProfileUserDataPath(),
               settings,
-              needsStandingInstructions
+              true
             )) !== null,
           ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
