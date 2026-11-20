@@ -11,12 +11,20 @@ import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-se
 import { isTabOnScreen, isWorkspaceOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
-import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import {
+  findTabByIdOrChatAlias,
+  isStructuredTab
+} from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { readBotBackgroundSessionTabs } from '../../../bots/bot-background-sessions'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
 function structuredTabsIn(state: StoreSnapshot, workspaceId: string): StructuredTab[] {
-  return (state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab)
+  return [
+    ...(state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab),
+    // A bot's tabless sessions still notify; only a group member's open room shows one.
+    ...readBotBackgroundSessionTabs().filter((tab) => tab.worktreeId === workspaceId)
+  ]
 }
 
 /** Resolve a subject only while its tab still owns that session; rebound tabs reject old keys. */
@@ -29,9 +37,7 @@ function findSubjectTab(
   if (!parsed) {
     return null
   }
-  const tab = structuredTabsIn(state, workspaceId).find(
-    (candidate) => candidate.id === parsed.tabId
-  )
+  const tab = findTabByIdOrChatAlias(structuredTabsIn(state, workspaceId), parsed.tabId)
   if (!tab || structuredAgentSessionPaneKey(tab.id, tab.entityId) !== surfaceKey) {
     return null
   }
@@ -46,9 +52,7 @@ function admitStructuredSession(
   if (!parsed) {
     return { admitted: false, cause: 'unknown-surface' }
   }
-  const tab = structuredTabsIn(state, subject.workspaceId).find(
-    (candidate) => candidate.id === parsed.tabId
-  )
+  const tab = findTabByIdOrChatAlias(structuredTabsIn(state, subject.workspaceId), parsed.tabId)
   if (!tab) {
     return { admitted: false, cause: 'unknown-surface' }
   }
@@ -83,9 +87,11 @@ export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAtt
     isWorkspaceMuted: (workspaceId) =>
       isWorkspaceNotificationMutedBySidebarFilters(state, workspaceId),
     resolveViewedSubjectKey: (groupId) => {
-      const tab = Object.values(state.unifiedTabsByWorktree)
-        .flat()
-        .find((candidate) => candidate.id === groupId)
+      // A stand-in is viewed through the room that shows its session.
+      const tab = [
+        ...Object.values(state.unifiedTabsByWorktree).flat(),
+        ...readBotBackgroundSessionTabs()
+      ].find((candidate) => candidate.id === groupId)
       return tab && isStructuredTab(tab)
         ? structuredAgentSessionPaneKey(tab.id, tab.entityId)
         : null

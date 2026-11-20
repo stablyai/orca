@@ -24,10 +24,15 @@ import {
 } from './remote-browser-stream-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
+import {
+  BrowserPageFeedbackBadge,
+  type BrowserPageFeedbackBadgeHandle
+} from '../assemble-chrome/feedback/browser-page-feedback-badge'
 
 export function RemoteBrowserPageViewport({
   remoteViewportRef,
   imageRef,
+  feedbackBadgeRef,
   frameUrl,
   frameMetadata,
   busy,
@@ -55,6 +60,7 @@ export function RemoteBrowserPageViewport({
 }: {
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
   imageRef: React.RefObject<HTMLImageElement | null>
+  feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
   frameUrl: string | null
   frameMetadata: BrowserScreencastFrameMetadata | null
   busy: boolean
@@ -104,6 +110,7 @@ export function RemoteBrowserPageViewport({
       // Why a size container: the frame letterboxes itself in cq units of this pane.
       className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"
     >
+      <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
       {markup.isActive && markup.baseImage ? (
         // Why the frame's own box: markup draws over the letterboxed page, not the whole pane.
         <div className="absolute top-0 left-0" style={remoteFrameStyle}>

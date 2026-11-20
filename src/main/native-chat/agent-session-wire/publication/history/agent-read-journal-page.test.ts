@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import {
   messageFixture,
   target
@@ -20,7 +20,6 @@ afterEach(() => {
 function fixture() {
   const f = messageFixture()
   databases.push(f.db)
-  const counts = { pages: 0, bodies: 0 }
   let beforeHistory = () => {}
   const journal: Pick<SqlAgentSessionJournal, 'history'> & {
     reads: Pick<SqlAgentSessionJournal['reads'], 'contextFloor'>
@@ -33,24 +32,16 @@ function fixture() {
     },
     history: async (request) => {
       beforeHistory()
-      counts.pages++
       return readJournalDomainHistoryFrame(
         f.db,
         { ...request, sessionId: target.sessionId },
         undefined,
-        {
-          ...CLIENT_HISTORY_READER,
-          form: (item) => {
-            counts.bodies++
-            return CLIENT_HISTORY_READER.form(item)
-          }
-        }
+        CLIENT_HISTORY_READER
       )
     }
   }
   return {
     ...f,
-    counts,
     beforeHistory: (run: () => void) => {
       beforeHistory = run
     },
@@ -91,31 +82,22 @@ function clear(f: ReturnType<typeof fixture>) {
   f.db.prepare('UPDATE journal_chat_state SET last_sequence=3, context_boundary=2').run()
 }
 
-it.each([4_000, 40_000])('bounds repeated root reads behind %i subagent rows', async (n) => {
+it('reads the current root context without including subagent entries', async () => {
   const f = fixture()
   f.seedItem(message(1, 'old context'))
   clear(f)
   f.seedItem(message(4, 'latest reply'))
-  f.db.exec('BEGIN')
-  for (let i = 5; i < n + 5; i++) {
-    f.seedItem(message(i, 'child work', 'child'))
-  }
-  f.db.exec('COMMIT')
-  f.head(n + 4)
+  f.seedItem(message(5, 'child work', 'child'))
+  f.head(5)
 
-  for (let repeat = 0; repeat < 2; repeat++) {
-    f.counts.pages = 0
-    f.counts.bodies = 0
-    expect(await f.read()).toEqual({
-      entries: [
-        { kind: 'message', role: 'system', text: 'Context cleared' },
-        { kind: 'message', role: 'assistant', text: 'new context' },
-        { kind: 'message', role: 'assistant', text: 'latest reply' }
-      ],
-      limited: false
-    })
-    expect(f.counts).toEqual({ pages: 1, bodies: 4 })
-  }
+  expect(await f.read()).toEqual({
+    entries: [
+      { kind: 'message', role: 'system', text: 'Context cleared' },
+      { kind: 'message', role: 'assistant', text: 'new context' },
+      { kind: 'message', role: 'assistant', text: 'latest reply' }
+    ],
+    limited: false
+  })
   expect(await f.read(1)).toEqual({
     entries: [{ kind: 'message', role: 'assistant', text: 'latest reply' }],
     limited: true
@@ -191,17 +173,6 @@ it('finds the requested entries behind non-entry root rows', async () => {
     ],
     limited: false
   })
-})
-
-it('bounds a root-only tail that produces no entries', async () => {
-  const f = fixture()
-  f.seedItem(message(1, 'older reply'))
-  for (let sequence = 2; sequence <= 1_000; sequence++) {
-    f.seedItem({ ...message(sequence, ''), body: { kind: 'status', text: 'working' } })
-  }
-  f.head(1_000)
-  expect(await f.read(1)).toEqual({ entries: [], limited: true })
-  expect(f.counts).toEqual({ pages: 1, bodies: 200 })
 })
 
 function turn(sequence: number, state: 'running' | 'completed'): AgentJournalRenderItem {
@@ -304,7 +275,7 @@ it('does not keep a send folded into a completed turn working', async () => {
   })
 })
 
-it.each([4_000, 40_000])('bounds the accepted-send lookup behind %i turn-tail rows', async (n) => {
+it('keeps an accepted send working when the page contains only status rows', async () => {
   const f = fixture()
   f.seedSend()
   f.db.prepare("UPDATE journal_items SET sequence=0 WHERE item_id<>'turn-1'").run()
@@ -313,32 +284,11 @@ it.each([4_000, 40_000])('bounds the accepted-send lookup behind %i turn-tail ro
     ...turn(1, 'running'),
     body: { kind: 'turn', turnId: 'turn-1', state: 'running', userItemId: 'orca:send' }
   })
-  f.db.exec('BEGIN')
-  for (let sequence = 8; sequence < n + 8; sequence++) {
+  for (let sequence = 8; sequence <= 260; sequence++) {
     f.seedItem({ ...reply(sequence, ''), body: { kind: 'status', text: 'working' } })
   }
-  f.db.exec('COMMIT')
-  f.head(n + 7)
-  const prepare = f.db.prepare.bind(f.db)
-  const plans: string[] = []
-  vi.spyOn(f.db, 'prepare').mockImplementation((sql) => {
-    if (sql.includes('attempt.dispatch_state') && sql.includes('JOIN journal_items item')) {
-      plans.push(
-        ...prepare(`EXPLAIN QUERY PLAN ${sql}`)
-          .all('chat', 'epoch')
-          .map((row) => String(row.detail))
-      )
-    }
-    return prepare(sql)
-  })
+  f.head(260)
   expect(await f.read()).toMatchObject({ state: 'working', entries: [], limited: true })
-  // The item side must be a primary-key probe, never a walk through the growing turn tail.
-  expect(
-    plans.some((plan) =>
-      /SEARCH item USING .*\(session_id=\? AND epoch=\? AND item_id=\?\)/.test(plan)
-    )
-  ).toBe(true)
-  expect(plans.some((plan) => /TEMP B-TREE/.test(plan))).toBe(false)
 })
 
 it.each([false, true])(

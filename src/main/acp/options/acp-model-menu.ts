@@ -1,6 +1,7 @@
 import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import {
   acpEffortOption,
+  acpInteractionModeValue,
   acpListedModels,
   acpSelectChoices,
   acpSelectOffers,
@@ -32,20 +33,21 @@ export function buildAcpOptionWrite(input: {
   value: string
   configOptions: readonly SessionConfigOption[]
   models: SessionModelState | null
-  fastConfigId: string | undefined
+  dialect: Pick<AcpDialect, 'chatModelIds' | 'fastConfigId' | 'interactionModes'>
   buildMode: string
 }): AcpOptionWrite | null {
-  const { key, value, configOptions, models, fastConfigId, buildMode } = input
+  const { key, value, configOptions, models, dialect, buildMode } = input
   if (key === 'fastMode') {
-    const fast = acpFastOption(configOptions, fastConfigId)
+    const fast = acpFastOption(configOptions, dialect.fastConfigId)
     return fast ? { method: 'config', configId: fast.id, value } : null
   }
   if (key === 'model') {
     const option = acpSelectOption(configOptions, 'model')
+    const model = dialect.chatModelIds?.get(value) ?? value
     if (option) {
-      return { method: 'config', configId: option.id, value }
+      return { method: 'config', configId: option.id, value: model }
     }
-    return models ? { method: 'model', modelId: value } : null
+    return models ? { method: 'model', modelId: model } : null
   }
   if (key === 'effort') {
     const option = acpEffortOption(configOptions)
@@ -53,6 +55,10 @@ export function buildAcpOptionWrite(input: {
   }
   if (key === 'interactionMode' && isAgentSessionInteractionMode(value)) {
     const option = acpSelectOption(configOptions, 'mode')
+    if (dialect.interactionModes) {
+      const native = acpInteractionModeValue(dialect.interactionModes, option, value)
+      return option && native ? { method: 'config', configId: option.id, value: native } : null
+    }
     return option && acpSelectOffers(option, 'plan')
       ? { method: 'config', configId: option.id, value: value === 'plan' ? 'plan' : buildMode }
       : null
@@ -130,15 +136,16 @@ export function withFastModeOption<T extends Pick<AgentSessionOptionsResult, 'mo
 export function readAcpOptionsMenu(input: {
   configOptions: readonly SessionConfigOption[]
   models: SessionModelState | null
-  dialect: Pick<AcpDialect, 'modelEfforts' | 'familyEfforts' | 'fastConfigId'>
+  dialect: Pick<AcpDialect, 'modelEfforts' | 'familyEfforts' | 'fastConfigId' | 'interactionModes'>
   forkSupport: AgentSessionOptionsResult['forkSupport']
 }): Pick<AgentSessionOptionsResult, 'models' | 'current' | 'forkSupport' | 'fastModeSupport'> {
   const modelOption = acpSelectOption(input.configOptions, 'model')
   const effortOption = acpEffortOption(input.configOptions)
   const modeOption = acpSelectOption(input.configOptions, 'mode')
   const currentModel = (modelOption?.currentValue ?? input.models?.currentModelId) || undefined
-  const interactionMode = acpSelectOffers(modeOption, 'plan')
-    ? modeOption?.currentValue === 'plan'
+  const planMode = input.dialect.interactionModes?.plan ?? 'plan'
+  const interactionMode = acpSelectOffers(modeOption, planMode)
+    ? modeOption?.currentValue === planMode
       ? ('plan' as const)
       : ('default' as const)
     : undefined

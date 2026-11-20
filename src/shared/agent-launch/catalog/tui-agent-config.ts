@@ -254,12 +254,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmdAliases: ['mistral-vibe'],
     promptInjectionMode: 'stdin-after-start'
   },
-  'qwen-code': {
-    detectCmd: 'qwen',
-    promptInjectionMode: 'stdin-after-start',
-    // Qwen 0.24.7 drops Enter for 500ms after paste on Windows/Node <20; delayed retry is harmless if the first submit landed.
-    submitRetryDelayMs: 1200
-  },
+  // Qwen 0.24.7 drops Enter for 500ms after paste on Windows/Node <20; delayed retry is harmless if the first submit landed.
+  // prettier-ignore
+  'qwen-code': { detectCmd: 'qwen', promptInjectionMode: 'stdin-after-start', preflightTrust: 'qwen-code', submitRetryDelayMs: 1200 },
   rovo: {
     // Rovo is an acli subcommand; passing an instruction there would run one-shot.
     detectCmd: 'acli',
@@ -325,7 +322,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start',
     // Its banner animates indefinitely; wait for the input box corner instead of render quiet.
     draftPasteReadySignal: 'zcode-composer-prompt',
-    composerReadyCaptures: ['zcode-composer-ready']
+    composerReadyCaptures: ['zcode-composer-ready', 'zcode-app-cli-composer-ready']
   },
   // Why: stdin-after-start's follow-up wrote before Devin's input loop existed (#26302); `devin -- <prompt>` submits reliably.
   // prettier-ignore

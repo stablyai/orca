@@ -41,6 +41,9 @@ export type ArtifactAuthContext = {
   profileId: string
   scope: ArtifactShareScope
   assertCurrent: () => void
+  /** `assertCurrent` plus the session fence a sign-out sets before it awaits remote logout:
+   *  what must hold right before a request goes out after an awaited local write. */
+  assertCanSend: () => void
   rateLimitReplay: ArtifactRateLimitReplay
 }
 
@@ -73,22 +76,29 @@ function authContext(
       throw new Error('The signed-in Orca account changed while the artifact request was running.')
     }
   }
+  // Sign-out fences the session generation before awaiting remote logout, and a revoked
+  // session signs out without unlinking, so neither is visible to assertCurrent yet.
+  const sessionEnded = (): boolean =>
+    Boolean(expectedCloud) &&
+    (takeCloudSessionTicket(active.profile.id, userDataPath).generation !== sessionGeneration ||
+      readCloudSession(active.profile.id, userDataPath).status !== 'found')
   return {
     profileId: active.profile.id,
     scope,
     assertCurrent,
+    assertCanSend: () => {
+      assertCurrent()
+      if (sessionEnded()) {
+        throw new Error(
+          'The signed-in Orca account changed while the artifact request was running.'
+        )
+      }
+    },
     rateLimitReplay: {
       claim: allowance.claim,
       assertCanReplay: () => {
         assertCurrent()
-        // Sign-out fences the session generation before awaiting remote logout, and a revoked
-        // session signs out without unlinking, so neither is visible to assertCurrent yet.
-        if (
-          expectedCloud &&
-          (takeCloudSessionTicket(active.profile.id, userDataPath).generation !==
-            sessionGeneration ||
-            readCloudSession(active.profile.id, userDataPath).status !== 'found')
-        ) {
+        if (sessionEnded()) {
           throw new Error(
             'Signed out of Orca while waiting to retry the artifact request. Sign in and try again.'
           )

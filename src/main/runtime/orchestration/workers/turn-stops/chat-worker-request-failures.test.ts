@@ -8,6 +8,7 @@ import {
   batch
 } from './chat-worker-request-failure-rig.test-fixture'
 import { expect, it, vi } from 'vitest'
+import { observeChatWorkerWorking } from './chat-worker-turn-stops'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { structuredAgentSessionStartFailure } from '../../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
@@ -477,4 +478,34 @@ it('delivers a failure edge even when a later source step replaces its turn with
     { requestId: 'orca:transient', turnOutcome: 'failure' }
   ])
   expect(await r.journal.reads.itemBody('orca:transient')).toMatchObject({ outcome: 'success' })
+})
+
+it('does not report a failed request as a stop once the worker has started its retry', async () => {
+  const r = await rig()
+  const releaseReads = r.holdFailureReads()
+  await batch(r.journal, 'A', [turn('A', 'failure'), words('A', 'capacity from A')])
+  observeChatWorkerWorking(SESSION, {
+    getDb: () => r.db,
+    notify: r.notify,
+    isWaitingForMail: () => false
+  })
+  releaseReads()
+  await tick()
+  expect(r.mail()).toEqual([])
+})
+
+it('never mails a capability or credential a failed request echoed', async () => {
+  const r = await rig()
+  const capability = 'dcap_0123456789abcdefghijKLMN'
+  await batch(r.journal, 'A', [
+    turn('A', 'failure'),
+    words('A', `refused ${capability} at https://user:hunter2@git.example.com/repo`)
+  ])
+  await tick()
+  const [mail] = r.mail()
+  expect(mail?.body).toContain('refused [dispatch capability redacted]')
+  for (const text of [mail?.body, mail?.payload]) {
+    expect(text).not.toContain(capability)
+    expect(text).not.toContain('hunter2')
+  }
 })

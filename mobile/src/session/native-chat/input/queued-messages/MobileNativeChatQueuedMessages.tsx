@@ -189,7 +189,7 @@ export function MobileNativeChatQueuedMessages({
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: clearBusy }}
-          accessibilityLabel={t('chat.queuedMessages.deleteAll', 'Delete every queued message')}
+          accessibilityLabel={t('chat.queuedMessages.deleteAll', 'Delete all')}
           style={({ pressed }) => [
             styles.headerAction,
             pressed && styles.pressed,
@@ -199,7 +199,7 @@ export function MobileNativeChatQueuedMessages({
           onPress={clearAll}
         >
           <Trash2 size={12} color={colors.textPrimary} strokeWidth={2} />
-          <Text style={styles.actionLabel}>{t('chat.queuedMessages.clearAll', 'Clear all')}</Text>
+          <Text style={styles.actionLabel}>{t('chat.queuedMessages.deleteAll', 'Delete all')}</Text>
         </Pressable>
       ) : null}
       <Pressable
@@ -272,7 +272,7 @@ export function MobileNativeChatQueuedMessages({
   }
   const menuEditable =
     menuCard !== undefined &&
-    !menuCard.command &&
+    !menuCard.notEditable &&
     onEdit !== undefined &&
     editor === undefined &&
     !busyIds.has(menuCard.messageId)
@@ -404,7 +404,7 @@ export function MobileNativeChatQueuedMessages({
             ? [
                 {
                   id: 'clearAll',
-                  label: t('chat.queuedMessages.deleteAll', 'Delete every queued message'),
+                  label: t('chat.queuedMessages.deleteAll', 'Delete all'),
                   icon: Trash2,
                   destructive: true,
                   disabled: clearBusy,

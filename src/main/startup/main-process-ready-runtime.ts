@@ -69,7 +69,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Load interrupted deletion records before listings so first paint shows Deleting.
   await prepareWorktreeRemovalsForStore(store)
   initializeMainProcessObservers()
-  initializeMainProcessAccountServices()
+  await initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
   initializeMainProcessAutomations()
   startWorkspaceCleanupRunner(runtime, store)

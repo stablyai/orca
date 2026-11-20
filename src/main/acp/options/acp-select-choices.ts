@@ -5,6 +5,8 @@ import {
   type SessionConfigSelectOption,
   type SessionModelState
 } from '../generated/acp-protocol.generated'
+import type { AcpDialect } from '../acp-dialects/acp-dialect'
+import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 
 export type AcpSelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
@@ -69,4 +71,18 @@ export function acpEffortOption(options: readonly SessionConfigOption[]): AcpSel
     }
   }
   return effort
+}
+
+/** The agent's own mode value for Orca's interaction mode, when its mode select offers it. */
+export function acpInteractionModeValue(
+  interactionModes: AcpDialect['interactionModes'],
+  modeOption: AcpSelectOption | null,
+  value: string
+): string | null {
+  const native = isAgentSessionInteractionMode(value) ? interactionModes?.[value] : undefined
+  return native &&
+    modeOption &&
+    acpSelectChoices(modeOption).some((choice) => choice.value === native)
+    ? native
+    : null
 }

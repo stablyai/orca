@@ -6,6 +6,7 @@ import {
 } from './acp-select-choices'
 import { buildAcpOptionWrite, readAcpOptionsMenu, type AcpOptionWrite } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
+import { acpSessionSlashCommand } from './acp-session-slash-command'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
@@ -33,10 +34,13 @@ export class AcpStructuredOptions {
       | 'modelEfforts'
       | 'familyEfforts'
       | 'withheldCommands'
+      | 'chatModelIds'
       | 'effortChangesModel'
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
+      | 'skillDescription'
       | 'fastConfigId'
+      | 'interactionModes'
     > = {}
   ) {}
 
@@ -111,7 +115,9 @@ export class AcpStructuredOptions {
     this.configOptions = response.configOptions ?? []
     this.models = response.models ?? null
     const mode = this.select('mode')?.currentValue
-    this.buildMode = mode && mode !== 'plan' ? mode : 'default'
+    const planMode = this.dialect.interactionModes?.plan ?? 'plan'
+    this.buildMode =
+      mode && mode !== planMode ? mode : (this.dialect.interactionModes?.default ?? 'default')
     this.resolvesConfig = origin === 'new'
     this.appliedInput.clear()
     this.unobservedCurrent.clear()
@@ -145,7 +151,8 @@ export class AcpStructuredOptions {
     ) {
       return false
     }
-    return value.length > 0 && this.currentValues()[key] === value
+    const native = (key === 'model' && this.dialect.chatModelIds?.get(value)) || value
+    return value.length > 0 && this.currentValues()[key] === native
   }
 
   notePick(key: string): void {
@@ -165,7 +172,7 @@ export class AcpStructuredOptions {
         this.unobservedCurrent.delete('effort')
       }
       const mode = this.select('mode')?.currentValue
-      if (mode && mode !== 'plan') {
+      if (mode && mode !== (this.dialect.interactionModes?.plan ?? 'plan')) {
         this.buildMode = mode
       }
       const appliedMode = this.appliedInput.get('interactionMode')
@@ -208,13 +215,7 @@ export class AcpStructuredOptions {
     this.reportedCommands = commands
     this.commands = commands
       .filter((command) => !withheld.includes(command.name))
-      .map((command) => ({
-        name: command.name,
-        kind: 'command',
-        ...(command.description ? { description: command.description } : {}),
-        ...(command.input?.hint ? { argumentHint: command.input.hint } : {}),
-        ...(this.isBuiltin(command) ? { builtin: true as const } : {})
-      }))
+      .map((command) => acpSessionSlashCommand(command, this.dialect, this.isBuiltin(command)))
   }
 
   readCommands(): AgentSessionSlashCommand[] | undefined {
@@ -235,7 +236,7 @@ export class AcpStructuredOptions {
   }
 
   adoptBuildMode(mode: string): void {
-    if (mode !== 'plan') {
+    if (mode !== (this.dialect.interactionModes?.plan ?? 'plan')) {
       this.buildMode = mode
     }
   }
@@ -246,9 +247,18 @@ export class AcpStructuredOptions {
       value,
       configOptions: this.configOptions,
       models: this.models,
-      fastConfigId: this.dialect.fastConfigId,
+      dialect: this.dialect,
       buildMode: this.buildMode
     })
+  }
+
+  /** Unrunnable Plan is refused, unrunnable Build skipped; only Orca's confirmed write proves the mode. */
+  needsInteractionMode(value: string): boolean {
+    const write = this.write('interactionMode', value)
+    return write?.method === 'config'
+      ? this.appliedInput.get('interactionMode') !== value ||
+          this.select('mode')?.currentValue !== write.value
+      : value === 'plan'
   }
 
   /** Native choices never establish an unobserved model's capability or configured default. */
@@ -299,7 +309,7 @@ export class AcpStructuredOptions {
       return this.applied.get('permissionMode') ?? null
     }
     const mode = this.select('mode')?.currentValue
-    const current = mode === 'plan' ? this.buildMode : mode
+    const current = mode === (this.dialect.interactionModes?.plan ?? 'plan') ? this.buildMode : mode
     return current
       ? (Object.entries(values).find(([, value]) => value === current)?.[0] ?? null)
       : null
@@ -320,8 +330,9 @@ export class AcpStructuredOptions {
   }
 
   private currentInteractionMode(): 'default' | 'plan' | undefined {
-    return this.offersMode('plan')
-      ? this.select('mode')?.currentValue === 'plan'
+    const planMode = this.dialect.interactionModes?.plan ?? 'plan'
+    return this.offersMode(planMode)
+      ? this.select('mode')?.currentValue === planMode
         ? 'plan'
         : 'default'
       : undefined

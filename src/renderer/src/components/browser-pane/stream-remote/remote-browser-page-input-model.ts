@@ -1,5 +1,7 @@
+import { z } from 'zod'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
+import type { BrowserPageContextMenuState } from '../describe-page/browser-page-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   RemoteBrowserOperationToken,
@@ -20,14 +22,6 @@ export function decodeRemoteBrowserFrameUrl(url: string): Promise<void> {
     image.onload = () => resolve()
     image.onerror = () => reject(new Error('Remote browser frame failed to decode.'))
   })
-}
-
-export type RemoteBrowserContextMenu = {
-  x: number
-  y: number
-  linkUrl: string | null
-  pageUrl: string
-  selectionText: string
 }
 
 export const REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID = 'remote-browser-find-unavailable'
@@ -94,46 +88,108 @@ export function getRemoteBrowserHistoryMethod(
   return button === 3 ? 'browser.back' : button === 4 ? 'browser.forward' : null
 }
 
+const MAX_CONTEXT_MENU_IMAGE_URL_LENGTH = 256 * 1024
+
+/** What the page under a right-click offers, read in the streamed page since no ContextMenuParams cross the runtime RPC. */
 export function buildRemoteContextMenuExpression(x: number, y: number): string {
   return `(() => {
     const target = document.elementFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
-    const anchor = target && typeof target.closest === 'function' ? target.closest('a[href]') : null;
-    // Why: read the guest selection here so the remote/paired browser can offer
-    // the same Copy affordance as the local webview (there is no ContextMenuParams
-    // over the runtime RPC).
+    const closest = (selector) => target && typeof target.closest === 'function' ? target.closest(selector) : null;
+    const anchor = closest('a[href]');
+    const image = closest('img');
+    const NON_TEXT_INPUTS = ['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'];
+    const field = target instanceof HTMLTextAreaElement || (target instanceof HTMLInputElement && !NON_TEXT_INPUTS.includes(target.type)) ? target : null;
+    // A click inside a contenteditable editor lands on a descendant; its editing host is what takes focus.
+    let editableTarget = field || (target && target.isContentEditable ? target : null);
+    while (!field && editableTarget && editableTarget.parentElement && editableTarget.parentElement.isContentEditable) {
+      editableTarget = editableTarget.parentElement;
+    }
+    const writable = Boolean(editableTarget) && !(field && (field.readOnly || field.disabled));
     const selection = typeof window.getSelection === 'function' ? window.getSelection() : null;
+    // Like a native right-click, an editable field takes focus so the edit items act on it.
+    if (editableTarget && document.activeElement !== editableTarget && !editableTarget.contains(document.activeElement)) {
+      editableTarget.focus({ preventScroll: true });
+    }
+    // ...and a click outside the editor's selection moves the caret to the pointer.
+    if (!field && editableTarget && selection && typeof document.caretRangeFromPoint === 'function') {
+      const inSelection = !selection.isCollapsed && selection.rangeCount && Array.from(selection.getRangeAt(0).getClientRects()).some((rect) =>
+        ${JSON.stringify(x)} >= rect.left && ${JSON.stringify(x)} <= rect.right && ${JSON.stringify(y)} >= rect.top && ${JSON.stringify(y)} <= rect.bottom);
+      const caret = inSelection ? null : document.caretRangeFromPoint(${JSON.stringify(x)}, ${JSON.stringify(y)});
+      if (caret && editableTarget.contains(caret.startContainer)) {
+        selection.removeAllRanges();
+        selection.addRange(caret);
+      }
+    }
+    // Some input types (email, number) expose no selection offsets; the document selection still holds their text.
+    const selectionText = field && typeof field.selectionStart === 'number'
+      ? field.value.slice(field.selectionStart, field.selectionEnd)
+      : (selection ? String(selection) : '');
+    const commandEnabled = (command) => { try { return document.queryCommandEnabled(command); } catch { return true; } };
+    const hidden = field && field.type === 'password';
     return JSON.stringify({
       linkUrl: anchor && anchor.href ? anchor.href : null,
       pageUrl: location.href || 'about:blank',
-      selectionText: selection ? String(selection) : ''
+      selectionText: hidden ? '' : selectionText,
+      // Why capped: a large inline data: image would push the reply past the runtime's size limit.
+      imageUrl: image && (image.currentSrc || image.src || '').length <= ${MAX_CONTEXT_MENU_IMAGE_URL_LENGTH} ? image.currentSrc || image.src || null : null,
+      editable: editableTarget ? {
+        canUndo: writable && commandEnabled('undo'),
+        canRedo: writable && commandEnabled('redo'),
+        canCut: writable && !hidden && Boolean(selectionText),
+        canCopy: !hidden && Boolean(selectionText),
+        canPaste: writable,
+        canSelectAll: !(field && field.disabled)
+      } : null
     });
   })()`
 }
 
+const RemoteContextMenuResult = z.object({
+  linkUrl: z.string().nullable().catch(null),
+  pageUrl: z.string().catch(''),
+  selectionText: z.string().catch(''),
+  imageUrl: z.string().nullable().catch(null),
+  editable: z
+    .object({
+      canUndo: z.boolean(),
+      canRedo: z.boolean(),
+      canCut: z.boolean(),
+      canCopy: z.boolean(),
+      canPaste: z.boolean(),
+      canSelectAll: z.boolean()
+    })
+    .nullable()
+    .catch(null)
+})
+
 export function readRemoteContextMenuResult(
   result: unknown
-): Pick<RemoteBrowserContextMenu, 'linkUrl' | 'pageUrl' | 'selectionText'> | null {
-  if (!result || typeof result !== 'object') {
-    return null
-  }
-  const raw = (result as { result?: unknown }).result
+): Pick<
+  BrowserPageContextMenuState,
+  'linkUrl' | 'pageUrl' | 'selectionText' | 'editable' | 'image'
+> | null {
+  const raw = result && typeof result === 'object' && 'result' in result ? result.result : null
   if (typeof raw !== 'string') {
     return null
   }
+  let json: unknown
   try {
-    const parsed = JSON.parse(raw) as {
-      linkUrl?: unknown
-      pageUrl?: unknown
-      selectionText?: unknown
-    }
-    return {
-      linkUrl: typeof parsed.linkUrl === 'string' && parsed.linkUrl ? parsed.linkUrl : null,
-      pageUrl:
-        typeof parsed.pageUrl === 'string' && parsed.pageUrl ? parsed.pageUrl : 'about:blank',
-      selectionText: typeof parsed.selectionText === 'string' ? parsed.selectionText : ''
-    }
+    json = JSON.parse(raw)
   } catch {
     return null
+  }
+  const parsed = RemoteContextMenuResult.safeParse(json)
+  if (!parsed.success) {
+    return null
+  }
+  const { linkUrl, pageUrl, selectionText, imageUrl, editable } = parsed.data
+  return {
+    linkUrl: linkUrl || null,
+    pageUrl: pageUrl || 'about:blank',
+    selectionText,
+    // Copy Image needs the page's pixels on this machine, so streamed menus leave it out.
+    image: imageUrl ? { url: imageUrl, canCopy: false } : null,
+    editable: editable ? { ...editable, spelling: { suggestions: [], misspelledWord: '' } } : null
   }
 }
 
@@ -166,26 +222,24 @@ export function resolveRemoteBrowserCssViewport(input: {
   const deviceHeight = getPositiveFiniteNumber(input.frameMetadata?.deviceHeight)
   const requestedWidth = getPositiveFiniteNumber(input.requestedViewportSize?.width)
   const requestedHeight = getPositiveFiniteNumber(input.requestedViewportSize?.height)
+  // Sizes in device pixels cover fewer CSS pixels on a zoomed page.
+  const zoom = getPositiveFiniteNumber(input.frameMetadata?.zoomFactor) ?? 1
   const framesMatchRequest =
     (deviceWidth === null || requestedWidth === null || deviceWidth === requestedWidth) &&
     (deviceHeight === null || requestedHeight === null || deviceHeight === requestedHeight)
   if (!framesMatchRequest) {
     return {
-      width: deviceWidth ?? input.naturalSize.width,
-      height: deviceHeight ?? input.naturalSize.height
+      width: (deviceWidth ?? input.naturalSize.width) / zoom,
+      height: (deviceHeight ?? input.naturalSize.height) / zoom
     }
   }
   return {
     width:
       getPositiveFiniteNumber(input.cssViewportSize?.width) ??
-      requestedWidth ??
-      deviceWidth ??
-      input.naturalSize.width,
+      (requestedWidth ?? deviceWidth ?? input.naturalSize.width) / zoom,
     height:
       getPositiveFiniteNumber(input.cssViewportSize?.height) ??
-      requestedHeight ??
-      deviceHeight ??
-      input.naturalSize.height
+      (requestedHeight ?? deviceHeight ?? input.naturalSize.height) / zoom
   }
 }
 

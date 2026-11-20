@@ -1,3 +1,4 @@
+import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import {
   pickParsedAgentStatusPayload,
   type ParsedAgentStatusPayload
@@ -20,6 +21,8 @@ export type ConnectedPtyEvidence = {
   paneKeys: ReadonlySet<string>
   /** Join status rows to connected PTYs by issued handle; this also rescues rows whose pane binding was cleared. */
   ptyIdByTerminalHandle: ReadonlyMap<string, string>
+  /** A pane's handle when exactly one connected PTY holds it; a restored hook row has none of its own. */
+  terminalHandleByPaneKey: ReadonlyMap<string, string>
 }
 
 /** Join only the host-owned summary of this exact chat, never a remote pane with a similar id. */
@@ -53,12 +56,26 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
     RuntimeWorktreeAgentSource & { payload: ParsedAgentStatusPayload }
   >()
   let chatOrcaSessionId = args.chatOrcaSessionId
-  for (const entry of args.hookSnapshots) {
-    if (entry.restoredUnconfirmed === true || entry.providerSessionOnly === true) {
+  for (const source of args.hookSnapshots) {
+    const identity = source.structuredHost
+      ? null
+      : paneAgentIdentity({ paneKey: source.paneKey, row: source })
+    const entry = source.structuredHost ? source : identity?.status
+    if (
+      !entry ||
+      identity?.ended ||
+      entry.restoredUnconfirmed === true ||
+      source.providerSessionOnly === true
+    ) {
       continue
     }
     const hookPayload = pickParsedAgentStatusPayload(entry)
     const children = publishedStructuredChildren(entry, args.readStructuredSummary)
+    const terminalHandle =
+      entry.terminalHandle ??
+      (entry.structuredHost
+        ? undefined
+        : args.connectedPtyEvidence.terminalHandleByPaneKey.get(entry.paneKey))
     const chatSessionId =
       entry.structuredHost && entry.connectionId === null && entry.tabId
         ? structuredAgentSessionIdFromTabId(entry.tabId)
@@ -70,10 +87,10 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
         : undefined)
     rowSources.set(entry.paneKey, {
       paneKey: entry.paneKey,
-      ptyId: entry.terminalHandle
-        ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(entry.terminalHandle)
+      ptyId: terminalHandle
+        ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(terminalHandle)
         : undefined,
-      terminalHandle: entry.terminalHandle,
+      terminalHandle,
       tabId: entry.tabId,
       worktreeId: entry.worktreeId,
       connectionId: entry.connectionId,

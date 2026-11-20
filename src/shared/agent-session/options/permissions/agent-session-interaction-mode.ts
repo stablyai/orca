@@ -43,7 +43,7 @@ export function agentSessionInteractionCommand(
   draft: string
 ): AgentSessionInteractionMode | null {
   draft = draft.trimEnd()
-  if (draft === '/plan' && (agent === 'claude' || agent === 'codex' || agent === 'antigravity')) {
+  if (draft === '/plan') {
     return 'plan'
   }
   return draft === '/default' && agent === 'codex' ? 'default' : null

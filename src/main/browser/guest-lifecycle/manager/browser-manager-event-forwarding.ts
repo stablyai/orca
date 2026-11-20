@@ -1,4 +1,6 @@
 import type {
+  BrowserLoadStall,
+  BrowserLoadStallEvent,
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent
 } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
@@ -105,6 +107,27 @@ export abstract class BrowserManagerEventForwarding extends BrowserManagerBindin
       browserPageId: browserTabId,
       ...event
     } satisfies BrowserPopupEvent)
+  }
+
+  protected sendLoadStall(
+    browserPageId: string,
+    webContentsId: number,
+    stall: BrowserLoadStall | null
+  ): void {
+    this.resolveRendererForBrowserTab(browserPageId)?.send('browser:load-stall', {
+      browserPageId,
+      webContentsId,
+      stall: stall && { host: stall.host }
+    } satisfies BrowserLoadStallEvent)
+  }
+
+  protected flushPendingLoadStall(browserTabId: string, guestWebContentsId: number): void {
+    const stall = this.pendingLoadStallsByGuestId.get(guestWebContentsId)
+    if (stall) {
+      this.pendingLoadStallsByGuestId.delete(guestWebContentsId)
+      this.loadStallPageIdByGuestId.set(guestWebContentsId, browserTabId)
+      this.sendLoadStall(browserTabId, guestWebContentsId, stall)
+    }
   }
 
   protected flushPendingLoadFailure(browserTabId: string, guestWebContentsId: number): void {

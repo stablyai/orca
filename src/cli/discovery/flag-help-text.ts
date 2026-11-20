@@ -1,4 +1,6 @@
 export const FLAG_HELP_TEXT: Record<string, string> = {
+  org: '--org <id|name>        Organization to use when your Orca account has more than one',
+  switch: '--switch               Replace the Orca account this host is already signed in to',
   'external-worktree-visibility':
     '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
   'browser-profile':
@@ -31,6 +33,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   force:
     '--force                Force worktree removal when supported; does not force branch deletion',
   focus: '--focus                Reveal the created terminal session in Orca',
+  headless:
+    '--headless             On a server or SSH host, open the tab in its own headless browser',
   for: '--for exit|tui-idle    Wait condition to satisfy',
   'from-element-index': '--from-element-index <n> Source element index from get-app-state',
   'from-x': '--from-x <x>           Source window-local x coordinate',
@@ -110,7 +114,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   schedule: '--schedule <schedule>  Alias for --trigger',
   time: '--time <HH:MM>        Time used with daily/weekdays/weekly presets',
   day: '--day <0-6>           Day used with weekly preset, Sunday=0',
-  timezone: '--timezone <tz>       IANA timezone for the automation',
+  timezone:
+    '--timezone <tz>       IANA timezone its times are in on every host (default: host clock)',
   enabled: '--enabled              Enable the automation',
   disabled: '--disabled             Disable the automation',
   current: '--current              Use the current Orca worktree linked Linear issue',

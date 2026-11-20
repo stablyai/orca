@@ -19,7 +19,7 @@ export async function applyAcpMessageOptions(
   session: AcpStructuredSession,
   options: AgentSessionExecutionOptions | undefined,
   setOption: (
-    key: 'model' | 'effort' | 'fastMode' | 'interactionMode',
+    key: 'interactionMode' | 'model' | 'effort' | 'fastMode',
     value: string
   ) => Promise<unknown>,
   isCurrent: () => boolean,
@@ -30,21 +30,22 @@ export async function applyAcpMessageOptions(
   if (!options) {
     return true
   }
-  for (const key of ['model', 'effort', 'fastMode', 'interactionMode'] as const) {
+  for (const key of ['interactionMode', 'model', 'effort', 'fastMode'] as const) {
     const value = options[key]
-    if (key === 'interactionMode' && value === 'plan' && !session.options.offersMode('plan')) {
+    if (key === 'interactionMode' && value === 'plan' && !session.options.write(key, value)) {
       throw new AgentSessionOptionRejectedError(
         `${session.spec.agent} offers no session option named ${key}`
       )
     }
     if (
       value === undefined ||
-      session.options.appliedInput.get(key) === value ||
-      (key === 'fastMode'
-        ? !session.options.write(key, value)
-        : session.options.matchesNativeRestoredOption(key, value) ||
-          (key === 'effort' && !session.options.offersEffort(value)) ||
-          (key === 'interactionMode' && value !== 'plan' && !session.options.offersMode('plan')))
+      (key === 'interactionMode'
+        ? !session.options.needsInteractionMode(value)
+        : session.options.appliedInput.get(key) === value ||
+          (key === 'fastMode'
+            ? !session.options.write(key, value)
+            : session.options.matchesNativeRestoredOption(key, value) ||
+              (key === 'effort' && !session.options.offersEffort(value))))
     ) {
       continue
     }

@@ -110,53 +110,6 @@ describe('pr-refresh-coordinator', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
-  it('preserves coalesced aliases across visible follow-up refreshes', async () => {
-    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
-    getPRForBranchOutcomeMock
-      .mockResolvedValueOnce({
-        kind: 'found',
-        pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
-        fetchedAt: Date.now()
-      })
-      .mockResolvedValueOnce({
-        kind: 'found',
-        pr: makePR({ checksStatus: 'success' }),
-        fetchedAt: Date.now()
-      })
-
-    reportVisiblePRRefreshCandidates(
-      [
-        makeCandidate({
-          cacheKey: '/repo::feature/a',
-          branch: 'feature/a',
-          linkedPRNumber: 12,
-          worktreeId: 'wt-a'
-        }),
-        makeCandidate({
-          cacheKey: '/repo::feature/b',
-          branch: 'feature/b',
-          linkedPRNumber: 12,
-          worktreeId: 'wt-b'
-        })
-      ],
-      1,
-      1
-    )
-    await vi.runOnlyPendingTimersAsync()
-    await vi.advanceTimersByTimeAsync(120_000)
-
-    const outcomeEvents = sendMock.mock.calls
-      .map(([, event]) => event)
-      .filter((event) => event.outcome)
-
-    expect(outcomeEvents).toHaveLength(2)
-    expect(outcomeEvents[1].aliases.map((alias) => alias.cacheKey).sort()).toEqual([
-      '/repo::feature/a',
-      '/repo::feature/b'
-    ])
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
-  })
-
   it('keeps a shown alias alive after its co-shown alias leaves, until the last alias leaves', async () => {
     const { reportVisiblePRRefreshCandidates, pruneWorktreePRRefreshAliases } =
       await import('./pr-refresh-coordinator')
@@ -191,16 +144,23 @@ describe('pr-refresh-coordinator', () => {
     ])
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
 
-    pruneWorktreePRRefreshAliases('wt-b')
     await vi.advanceTimersByTimeAsync(120_000)
     expect(outcomes()).toHaveLength(2)
-    expect(outcomes()[1].aliases.map((alias) => alias.cacheKey)).toEqual(['/repo::feature/a'])
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    expect(outcomes()[1].aliases.map((alias) => alias.cacheKey)).toEqual([
+      '/repo::feature/a',
+      '/repo::feature/b'
+    ])
+
+    pruneWorktreePRRefreshAliases('wt-b')
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(outcomes()).toHaveLength(3)
+    expect(outcomes()[2].aliases.map((alias) => alias.cacheKey)).toEqual(['/repo::feature/a'])
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
 
     pruneWorktreePRRefreshAliases('wt-a')
     await vi.advanceTimersByTimeAsync(10 * 60_000)
-    expect(outcomes()).toHaveLength(2)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    expect(outcomes()).toHaveLength(3)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(3)
   })
 
   it('delivers a newly shown alias while automatic timers are off', async () => {

@@ -120,6 +120,8 @@ export async function installWslChatFixture(lane: WslChatHost) {
   // No Command setting: orcad must find each CLI the way a user's install is found.
   await lane.rpc('settings.update', {
     nativeChatPermissionMode: 'ask',
+    // Saved here, long before any lane stops the distro: these lanes press Continue themselves.
+    nativeChatResumeWorkOnRestart: false,
     agentDefaultEnv: {
       claude: {
         ORCA_SDK_CONTRACT_SCENARIO_PATH: `${root}/scenario.json`,
