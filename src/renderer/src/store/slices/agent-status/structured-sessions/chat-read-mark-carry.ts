@@ -52,6 +52,25 @@ export function carriedChatReadMarks(
   return patch
 }
 
+const CHAT_ADDRESS_PREFIX = chatPaneAddressTabId('')
+const tabKeyedChatMarksByRecord = new WeakMap<Record<string, number>, boolean>()
+
+/** Whether a record still holds a chat mark under a tab's key; once all have moved, carry does no tab work. */
+function holdsTabKeyedChatMarks(record: Record<string, number>): boolean {
+  let holds = tabKeyedChatMarksByRecord.get(record)
+  if (holds === undefined) {
+    holds = Object.keys(record).some((key) => {
+      if (!key.startsWith(CHAT_ADDRESS_PREFIX)) {
+        return false
+      }
+      const tabId = key.slice(0, key.lastIndexOf(':'))
+      return chatPaneKey(tabId.slice(CHAT_ADDRESS_PREFIX.length)) !== key
+    })
+    tabKeyedChatMarksByRecord.set(record, holds)
+  }
+  return holds
+}
+
 // Tab lists and mark records are replaced, never edited, so a list is rechecked only when it or
 // the marks change (a later sync can still bring tab-keyed marks from an older client).
 const checkedAgainst = new WeakMap<readonly Tab[], readonly ReadMarks[keyof ReadMarks][]>()
@@ -62,8 +81,11 @@ export function carryChatReadMarks(
   workspaceIds?: Iterable<string>
 ): void {
   const state = store.getState()
-  const tabsByWorkspace = state.unifiedTabsByWorktree
   const records = RECORDS.map((record) => state[record])
+  if (!records.some(holdsTabKeyedChatMarks)) {
+    return
+  }
+  const tabsByWorkspace = state.unifiedTabsByWorktree
   const unchecked: (readonly Tab[])[] = []
   for (const id of workspaceIds ?? Object.keys(tabsByWorkspace)) {
     const list = tabsByWorkspace[id]

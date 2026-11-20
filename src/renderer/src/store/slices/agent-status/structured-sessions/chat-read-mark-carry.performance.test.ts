@@ -111,3 +111,48 @@ it('rechecks a checked tab list when a sync brings tab-keyed marks', () => {
     [`structured-agent-session-sess-2:${LEAF}`]: 100
   })
 })
+
+it('does no tab work for retitled or reordered tabs once every saved mark has moved', () => {
+  for (const n of [100, 1000]) {
+    const tabs = Array.from({ length: n }, (_, index) =>
+      chatTab(`structured-agent-session-old-${index}`, `sess-${index}`)
+    )
+    let reads = 0
+    let state: Pick<
+      AppState,
+      | 'unifiedTabsByWorktree'
+      | 'acknowledgedAgentsByPaneKey'
+      | 'activityClearedAtByPaneKey'
+      | 'manuallyUnreadTurnsByPaneKey'
+    > = {
+      unifiedTabsByWorktree: {},
+      acknowledgedAgentsByPaneKey: { [`structured-agent-session-sess-2:${LEAF}`]: 100 },
+      activityClearedAtByPaneKey: {},
+      manuallyUnreadTurnsByPaneKey: {}
+    }
+    const store = {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the carry reads only these four fields.
+      getState: () => state as AppState,
+      setState: (patch: Partial<AppState>) => {
+        state = { ...state, ...patch }
+      }
+    }
+    for (let update = 0; update < 50; update++) {
+      // Each title change replaces the workspace's tab list.
+      const counted = new Proxy(
+        tabs.map((tab) => ({ ...tab, label: `Chat ${update}` })),
+        {
+          get(target, property, receiver) {
+            if (typeof property === 'string' && /^\d+$/.test(property)) {
+              reads++
+            }
+            return Reflect.get(target, property, receiver)
+          }
+        }
+      )
+      state = { ...state, unifiedTabsByWorktree: { wt: counted } }
+      carryChatReadMarks(store, ['wt'])
+    }
+    expect(reads).toBe(0)
+  }
+})
