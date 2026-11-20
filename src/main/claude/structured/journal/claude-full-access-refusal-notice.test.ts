@@ -91,15 +91,18 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     first.init('auto')
     expect(first.warnings()).toHaveLength(1)
 
+    // A restart that finds the chat as it started writes the same journal row, not another.
     const restarted = launch('refused-chat', opened, '2')
     restarted.session.appliedInputOptions.set('buildPermissionMode', 'auto')
     restarted.init('auto')
-    expect(restarted.warnings()).toHaveLength(0)
-    // One row per chat in the journal, whichever process or Orca run writes it.
-    expect(first.ids).toEqual(['full-access-refused:claude:settings:auto'])
+    restarted.init('auto')
+    expect([...first.ids, ...restarted.ids]).toEqual([
+      'full-access-refused:claude:settings:auto',
+      'full-access-refused:claude:settings:auto'
+    ])
   })
 
-  it('warns again when Claude moves the chat to another mode, once per mode', () => {
+  it('warns again each time Claude moves the chat to another mode', () => {
     const moved = launch('moved-chat', {
       launchIntent: FULL_ACCESS,
       firstRootInit: { permissionMode: 'default' }
@@ -110,7 +113,15 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     moved.session.appliedInputOptions.set('buildPermissionMode', 'default')
     moved.status()
     moved.status()
-    expect(moved.warnings()).toEqual([
+    Object.assign(moved.session, { autoUnsettled: undefined })
+    moved.session.appliedInputOptions.set('buildPermissionMode', 'auto')
+    moved.status()
+    expect(moved.ids).toEqual([
+      'full-access-refused:claude:settings:auto',
+      'full-access-refused:claude:settings:auto->settings:ask:auto-for-now',
+      'full-access-refused:claude:settings:ask:auto-for-now->settings:auto'
+    ])
+    expect(moved.warnings().slice(0, 2)).toEqual([
       expect.objectContaining({
         text: "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses Approve for me instead."
       }),

@@ -159,6 +159,8 @@ export type ClaudeSession = {
   bypassDisabled?: boolean
   /** Why Claude refused a bypass switch, where one told; a settings read or start says settings. */
   bypassRefusal?: ClaudeBypassRefusal
+  /** The Full access refusal warning this process last wrote, so each change gets one row. */
+  fullAccessRefusalNoticeId?: string
   /** The startup `get_settings` read; settles once its facts are recorded, never rejects. */
   startupSettings?: Promise<void>
   /** Claude's settings turn auto mode off for this process (startup `get_settings`, or a refusal). */

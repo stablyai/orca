@@ -185,6 +185,34 @@ describe('leaving Plan mode after an approved plan', () => {
     ])
   })
 
+  it('opens the fallback with Ask, so a refusal of auto for now needs no later write', async () => {
+    const auto = autoForNow()
+    const session = {
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: true,
+      autoDisabled: false,
+      connection: { setPermissionMode: auto.setPermissionMode }
+    }
+    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('default')
+    expect(auto.setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual(['default', 'auto'])
+  })
+
+  it('takes the mode Claude accepted after an earlier switch went unanswered', async () => {
+    const setPermissionMode = vi.fn((mode: string) =>
+      mode === 'default'
+        ? Promise.reject(new ClaudeControlRequestTimeoutError('set_permission_mode'))
+        : Promise.resolve()
+    )
+    const session = {
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: true,
+      connection: { setPermissionMode }
+    }
+    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('auto')
+  })
+
   it('falls back when Claude can not run Full access in this session', async () => {
     for (const [code, message] of [
       ['bypass_restricted', 'bypassPermissions not supported in restricted mode'],

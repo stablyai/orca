@@ -82,29 +82,23 @@ function claudeFullAccessRefusalRow(
   }
 }
 
-const MAX_ANNOUNCED = 1_000
-const announced = new Set<string>()
-
-/** The warning this chat is due and has not had while Orca runs. The row's journal identity is
- *  stable per chat and warning, so a relaunch or an evicted entry revises the same row. */
+/** The warning this chat is due when it differs from the last one this process wrote. The row's
+ *  journal identity names the change, so a relaunch that finds the chat as it started revises
+ *  the first row instead of adding another, and each later change lands in the current turn. */
 export function claimClaudeFullAccessRefusalNotice(
-  sessionId: string,
-  session: ClaudeNoticeFacts
+  session: ClaudeNoticeFacts & Pick<ClaudeSession, 'fullAccessRefusalNoticeId'>
 ): ClaudeFullAccessRefusalNotice | null {
   const id = claudeFullAccessRefusalNoticeId(session)
   const applied = session.appliedInputOptions?.get('buildPermissionMode')
-  const key = `${sessionId}:${id}`
-  if (id === null || applied === undefined || announced.has(key)) {
+  const previous = session.fullAccessRefusalNoticeId
+  if (id === null || applied === undefined || id === previous) {
     return null
   }
-  announced.add(key)
-  if (announced.size > MAX_ANNOUNCED) {
-    const oldest = announced.values().next().value
-    if (oldest !== undefined) {
-      announced.delete(oldest)
-    }
+  session.fullAccessRefusalNoticeId = id
+  return {
+    id: previous === undefined ? id : `${previous}->${id}`,
+    body: claudeFullAccessRefusalRow(session, applied)
   }
-  return { id, body: claudeFullAccessRefusalRow(session, applied) }
 }
 
 /** Checked on every root frame; writes only the warning the chat is due. */

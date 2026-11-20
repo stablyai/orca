@@ -85,7 +85,7 @@ export async function applyClaudeMessageOptions(
           if (leavingPlan || !claudeBypassRefused(session)) {
             throw error
           }
-          return null
+          return forgetClaudeFallback(session)
         }),
         signal
       )
@@ -101,6 +101,12 @@ export async function applyClaudeMessageOptions(
 }
 
 const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000
+
+/** A failed switch leaves Claude's mode unknown: the warning waits and the next send asks again. */
+function forgetClaudeFallback(session: ClaudeSession): null {
+  session.appliedInputOptions.delete('buildPermissionMode')
+  return null
+}
 
 /** A Full access chat's first send waits briefly for the startup settings read that says
  *  whether Claude allows it, so one write usually settles the mode. */
@@ -138,7 +144,7 @@ export async function applyClaudeFullAccessFallback(
   const mode = await waitForPromiseWithSignal(
     setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
       timeoutMs
-    }).catch(() => null),
+    }).catch(() => forgetClaudeFallback(session)),
     signal
   )
   if (mode !== null) {

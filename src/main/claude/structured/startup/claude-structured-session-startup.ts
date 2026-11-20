@@ -236,6 +236,13 @@ export async function openClaudeSession(input: {
   return result
 }
 
+function settledClaudeRefusalFact(
+  known: boolean | undefined,
+  read: boolean | undefined
+): boolean | undefined {
+  return known === true || read === true ? true : (known ?? read)
+}
+
 async function settleClaudeStartupSettings(
   input: Parameters<typeof openClaudeSession>[0],
   initialized: ClaudeInitializeFacts
@@ -245,10 +252,17 @@ async function settleClaudeStartupSettings(
   const token = { pending: session.settingsObservation?.pending ?? false }
   session.settingsObservation = token
   const settings = await input.readSettings()
-  // A process policy fact: a newer option write cannot make it stale.
+  // A process policy fact: a newer option write cannot make it stale, and a refusal Claude already
+  // gave outranks a read that may predate it.
   if (input.isCurrent()) {
-    session.bypassDisabled = readClaudeSettingsBypassDisabled(settings) ?? session.bypassDisabled
-    session.autoDisabled = readClaudeSettingsAutoDisabled(settings) ?? session.autoDisabled
+    session.bypassDisabled = settledClaudeRefusalFact(
+      session.bypassDisabled,
+      readClaudeSettingsBypassDisabled(settings)
+    )
+    session.autoDisabled = settledClaudeRefusalFact(
+      session.autoDisabled,
+      readClaudeSettingsAutoDisabled(settings)
+    )
   }
   if (!input.isCurrent() || token.pending || session.settingsObservation !== token) {
     return

@@ -51,7 +51,7 @@ export function createClaudeSessionJournalTranslator(
         acceptStartupFailure,
         fullAccessRefusalNotice: () => {
           const session = currentSession()
-          return session ? claimClaudeFullAccessRefusalNotice(failure.sessionId, session) : null
+          return session ? claimClaudeFullAccessRefusalNotice(session) : null
         },
         steerAwaitingEcho: () =>
           currentSession()?.dispatchWaiters.some((waiter) => waiter.steers) ?? false

@@ -143,8 +143,9 @@ export function claudeAutoRetryDue(session: ClaudeBypassFacts, now = Date.now())
 }
 
 /** The modes to write in order, the last one Claude accepts winning (Claude answers them in the
- *  order sent): a step whose answer is unknown goes out right behind its fallback, so a refusal
- *  never needs a late write that could land after a newer choice. */
+ *  order sent): a step whose answer is unknown goes out right behind its fallback, and the
+ *  fallback always opens with Ask, so a refusal never needs a late write that could land after a
+ *  newer choice. */
 function claudePermissionModeLadder(
   session: ClaudeBypassFacts,
   mode: PermissionMode
@@ -163,9 +164,7 @@ function claudePermissionModeLadder(
     session.autoDisabled === true ||
     (session.autoUnsettled !== undefined && !claudeAutoRetryDue(session))
       ? ['default']
-      : session.autoDisabled === false && session.autoUnsettled === undefined
-        ? ['auto']
-        : ['default', 'auto']
+      : ['default', 'auto']
   return bypassKnown ? fallback : [...fallback, 'bypassPermissions']
 }
 
@@ -187,8 +186,9 @@ export async function setClaudeAllowedPermissionMode(
   )
   const now = Date.now()
   let applied: PermissionMode | null = null
+  let appliedIndex = -1
   let lastRefusal: unknown = null
-  let unexpected: { error: unknown } | null = null
+  let unexpected: { error: unknown; index: number } | null = null
   let autoForNow = false
   const refused = new Set(refusedBefore)
   // Every answer is recorded before any error is rethrown, so later steps' facts survive.
@@ -196,6 +196,7 @@ export async function setClaudeAllowedPermissionMode(
     const step = ladder[index]
     if (write.status === 'fulfilled') {
       applied = step
+      appliedIndex = index
       lastRefusal = null
       if (step === 'bypassPermissions') {
         session.bypassDisabled = false
@@ -216,7 +217,7 @@ export async function setClaudeAllowedPermissionMode(
       claudeRefusal(write.reason) ??
       (fallbackAuto && answered ? { kind: 'auto-for-now', code: undefined } : null)
     if (refusal === null || (refusal.kind === 'bypass') !== (step === 'bypassPermissions')) {
-      unexpected ??= { error: write.reason }
+      unexpected = { error: write.reason, index }
       if (fallbackAuto) {
         autoForNow = true
         session.autoUnsettled = { kind: 'time', retryAt: now }
@@ -236,18 +237,15 @@ export async function setClaudeAllowedPermissionMode(
       session.autoUnsettled = claudeAutoUnsettled(session, refusal.code, now)
     }
   }
-  if (unexpected) {
+  // A mode Claude accepted after a failed write is the one it runs, so only a failure after the
+  // last acceptance leaves the outcome unknown.
+  if (unexpected && unexpected.index > appliedIndex) {
     throw unexpected.error
   }
   // Auto refused for a reason that can pass: whatever Claude accepted stands for now, and the
   // fallback stays owed so a later send asks for auto again once that can change the answer.
   if (applied !== null && (lastRefusal === null || autoForNow)) {
     return applied
-  }
-  if (autoForNow && applied === null && mode === 'bypassPermissions') {
-    // The fallback's auto that worked earlier is refused for now: Ask until a later send asks again.
-    await session.connection.setPermissionMode('default', options)
-    return 'default'
   }
   const next = claudeAllowedPermissionMode(session, mode)
   if (applied === next) {
