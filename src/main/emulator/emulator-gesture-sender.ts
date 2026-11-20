@@ -6,9 +6,17 @@ import {
 
 export type EmulatorGesturePoint = ServeSimTouchFrame
 
-export async function sendEmulatorGestureSequence(
+export function sendEmulatorGestureSequence(
   wsUrl: string,
   points: EmulatorGesturePoint[]
+): Promise<void> {
+  return sendServeSimFrameSequence(wsUrl, points.map(encodeServeSimTouchFrame))
+}
+
+/** Sends encoded helper frames 16 ms apart over one socket, then closes it. */
+export async function sendServeSimFrameSequence(
+  wsUrl: string,
+  frames: readonly Uint8Array[]
 ): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const ws = new WebSocket(wsUrl)
@@ -21,7 +29,7 @@ export async function sendEmulatorGestureSequence(
       }
     }
     const sendNext = (): void => {
-      if (index >= points.length) {
+      if (index >= frames.length) {
         cleanup()
         timer = setTimeout(() => {
           resolve()
@@ -29,8 +37,7 @@ export async function sendEmulatorGestureSequence(
         }, 50)
         return
       }
-      const point = points[index++]
-      ws.send(Buffer.from(encodeServeSimTouchFrame(point)))
+      ws.send(Buffer.from(frames[index++]))
       timer = setTimeout(sendNext, 16)
     }
     ws.on('open', sendNext)
@@ -40,7 +47,7 @@ export async function sendEmulatorGestureSequence(
     })
     ws.on('close', () => {
       cleanup()
-      reject(new Error('Emulator gesture stream closed before sequence completion'))
+      reject(new Error('Emulator input stream closed before sequence completion'))
     })
   })
 }

@@ -6,6 +6,7 @@ import type { BotGroup } from '../../../../shared/bots/bot-group'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
+import { isBotHomeTab } from '../../../../shared/bots/bot-home-tab'
 
 export function findBotByWorkspace(bots: readonly Bot[], workspaceId: string | null): Bot | null {
   return botOfHomeWorkspace(bots, workspaceId)
@@ -37,10 +38,7 @@ export function isBotChatSession(bots: readonly Bot[], sessionId: string): boole
   return bots.some((bot) => bot.chatSessionId === sessionId)
 }
 
-export function isBotChatTab(tab: Pick<Tab, 'contentType' | 'entityId'>): boolean {
-  return (
-    readBotsEnabled() &&
-    tab.contentType === 'agent-session' &&
-    isBotChatSession(readBots(), tab.entityId)
-  )
+/** Whether `tab` is the Home of the bot whose page holds it; with bots off there is no Home. */
+export function isBotChatTab(tab: Pick<Tab, 'contentType' | 'entityId' | 'worktreeId'>): boolean {
+  return readBotsEnabled() && isBotHomeTab(tab, findBotByWorkspace(readBots(), tab.worktreeId))
 }

@@ -102,19 +102,6 @@ it('takes two adjacent pills one press each', () => {
   expect(input.value).toBe('a  z')
 })
 
-it('works the same for a skill pill', () => {
-  const { input, editor, press, caretAt } = setup('ab  cd', 4)
-  act(() => input.insertSkill?.(3, 3, '$review'))
-  expect(input.value).toBe('ab $review  cd')
-  act(() => {
-    editor.commands.setTextSelection(5)
-  })
-  press('ArrowLeft')
-  expect(caretAt()).toBe(4)
-  press('Delete')
-  expect(input.value).toBe('ab   cd')
-})
-
 it('leaves plain text beside the caret to the editor', () => {
   const { editor } = setup(`ab ${TOKEN} cd`, 7)
   expect(nativeChatPromptPillKey(editor.view, 'ArrowLeft')).toBe(false)

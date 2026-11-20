@@ -6,7 +6,13 @@ import type { AgentJournalSubmission } from '../../../../shared/agent-session/jo
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatBotCardsOf } from '../../../../shared/native-chat/bot-cards/native-chat-bot-card-kind'
 import { useBotForWorkspace } from '../bots/bot-workspace'
+import type { BotSetupRefusal } from '../../../../shared/bots/bot-setup-steps'
+import {
+  agentSessionFailureDetailText,
+  readAgentSessionFailureFact
+} from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { NativeChatStructuredComposerTransport } from './composer/submit/native-chat-structured-composer-transport'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 
 export type NativeChatBotKickoffView = {
   /** The owner hasn't written since the latest kickoff. */
@@ -28,7 +34,7 @@ export type NativeChatBotKickoffView = {
 export type NativeChatFirstScreen = {
   phase: 'starting' | 'failed'
   turn: readonly NativeChatMessage[]
-  refused: string | null
+  refused: BotSetupRefusal | null
 }
 
 export const NativeChatBotKickoffContext = createContext<NativeChatBotKickoffView | null>(null)
@@ -42,7 +48,7 @@ function nativeChatKickoffLive(messages: readonly NativeChatMessage[]): boolean 
 export function nativeChatFirstScreen(
   messages: readonly NativeChatMessage[],
   turnEnded: boolean,
-  refused: string | null = null
+  refused: BotSetupRefusal | null = null
 ): NativeChatFirstScreen | null {
   // The latest kickoff: Try again sends another.
   const notice = messages.findLastIndex((message) => message.orcaNotice === 'bot-created')
@@ -78,13 +84,43 @@ export function nativeChatFirstScreen(
 type KickoffSession = {
   isWorking: boolean
   latestTurn?: AgentSessionLatestTurn | null
-  submissions?: readonly Pick<AgentJournalSubmission, 'dispatchState' | 'reason'>[]
+  submissions?: readonly Pick<AgentJournalSubmission, 'dispatchState' | 'reason' | 'rejection'>[]
 }
 
 /** The host's reason when it refused the latest send before any turn opened; else null. */
-export function nativeChatKickoffRefusal(session: KickoffSession): string | null {
+export function nativeChatKickoffRefusal(session: KickoffSession): BotSetupRefusal | null {
   const latest = session.isWorking ? undefined : session.submissions?.at(-1)
-  return latest?.dispatchState === 'rejected' ? (latest.reason ?? '') : null
+  if (latest?.dispatchState !== 'rejected') {
+    return null
+  }
+  const fact = readAgentSessionFailureFact(latest.rejection)
+  const providerDetail = agentSessionFailureDetailText(fact)
+  return {
+    reason: latest.reason ?? '',
+    ...(providerDetail ? { providerDetail } : {}),
+    ...(fact ? { kind: fact.kind } : {}),
+    ...(fact?.kind === 'notSignedIn'
+      ? { notSignedIn: fact.account ? { account: fact.account } : {} }
+      : {})
+  }
+}
+
+/** The sign-in a failed first screen is waiting on: the kickoff's refusal, or its turn's failure
+ *  line; null when it failed for another reason. */
+export function nativeChatFirstScreenSignIn(
+  firstScreen: NativeChatFirstScreen | null
+): { account?: AgentSessionAccountKind } | null {
+  if (firstScreen?.phase !== 'failed') {
+    return null
+  }
+  if (firstScreen.refused) {
+    return firstScreen.refused.notSignedIn ?? null
+  }
+  const failure = firstScreen.turn
+    .flatMap((message) => message.blocks)
+    .findLast((block) => block.type === 'text' && block.failure !== undefined)
+  const fact = failure?.type === 'text' ? failure.failure : undefined
+  return fact?.kind === 'notSignedIn' ? (fact.account ? { account: fact.account } : {}) : null
 }
 
 /** Ended once the host has a turn record that no longer runs, or refused the kickoff before any turn
@@ -112,10 +148,42 @@ export function useNativeChatBotKickoffView(
   }, [transport])
   const live = useMemo(() => bot !== null && nativeChatKickoffLive(messages), [bot, messages])
   const turnEnded = nativeChatKickoffEnded(session)
-  const refused = nativeChatKickoffRefusal(session)
+  const refusal = nativeChatKickoffRefusal(session)
+  // Keyed by its words, so a new object for the same refusal keeps the first screen.
+  const refusedReason = refusal?.reason ?? null
+  const refusedDetail = refusal?.providerDetail
+  const refusedKind = refusal?.kind
+  const refusedSignedOut = refusal?.notSignedIn !== undefined
+  const refusedAccount = refusal?.notSignedIn?.account
   const firstScreen = useMemo(
-    () => (live ? nativeChatFirstScreen(messages, turnEnded, refused) : null),
-    [live, messages, turnEnded, refused]
+    () =>
+      live
+        ? nativeChatFirstScreen(
+            messages,
+            turnEnded,
+            refusedReason === null
+              ? null
+              : {
+                  reason: refusedReason,
+                  ...(refusedDetail ? { providerDetail: refusedDetail } : {}),
+                  ...(refusedKind ? { kind: refusedKind } : {}),
+                  // The setup card offers this sign-in.
+                  ...(refusedSignedOut
+                    ? { notSignedIn: refusedAccount ? { account: refusedAccount } : {} }
+                    : {})
+                }
+          )
+        : null,
+    [
+      live,
+      messages,
+      turnEnded,
+      refusedReason,
+      refusedDetail,
+      refusedKind,
+      refusedSignedOut,
+      refusedAccount
+    ]
   )
   const firstKickoffId =
     messages.find((message) => message.orcaNotice === 'bot-created')?.id ?? null

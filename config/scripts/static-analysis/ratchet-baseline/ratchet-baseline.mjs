@@ -190,11 +190,17 @@ export function pruneCountBaseline(root, baselinePath, header, current) {
   const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
   const baseline = parseCountBaseline(text)
   const notes = parseCountNotes(text)
-  for (const [from, to] of renamedSinceBase(root)) {
-    if (baseline.has(from) && !baseline.has(to) && !current.get(from)) {
-      baseline.set(to, baseline.get(from))
-      if (notes.has(from)) {
-        notes.set(to, notes.get(from))
+  for (const [fromFile, toFile] of renamedSinceBase(root)) {
+    // Rows keyed `file:detail` move with their file too.
+    for (const from of [...baseline.keys()].filter(
+      (key) => key === fromFile || key.startsWith(`${fromFile}:`)
+    )) {
+      const to = `${toFile}${from.slice(fromFile.length)}`
+      if (!baseline.has(to) && !current.get(from)) {
+        baseline.set(to, baseline.get(from))
+        if (notes.has(from)) {
+          notes.set(to, notes.get(from))
+        }
       }
     }
   }

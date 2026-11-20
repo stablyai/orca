@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState, type SetStateAction } from 'rea
 import { useWorktreeGitOwnerTarget } from '../../source-control/sync/worktree-git-owner-target'
 import { useWorktreeGitCopyHostId } from '@/lib/workspace/ownership/worktree-git-copy'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { AppState } from '@/store/types'
 import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { selectReviewRepositoryForWorkspace } from '@/store/slices/hosted-review/workspace-review-repository'
@@ -213,7 +214,12 @@ export function useChecksPanelControllerState() {
   // Quote for the workspace owner's OS, where the agent actually runs (#27971).
   const activeSourceControlLaunchPlatform =
     activeWorktree && repo
-      ? resolveRepoWorktreeLaunchPlatform(useAppStore.getState(), repo, activeWorktree)
+      ? resolveRepoWorktreeLaunchPlatform(
+          useAppStore.getState(),
+          readRuntimeStatuses(),
+          repo,
+          activeWorktree
+        )
       : undefined
   const runtimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)

@@ -34,7 +34,7 @@ export function accountHost() {
   }
   const listeners = new Set<(state: RateLimitState) => void>()
   const claudeList = vi.fn(() => structuredClone(snapshot.claude))
-  const codexList = vi.fn(() => structuredClone(snapshot.codex))
+  const codexList = vi.fn(async () => structuredClone(snapshot.codex))
   const ClaudeAccounts = vi.fn<new () => RuntimeAccountServices['claudeAccounts']>()
   const CodexAccounts = vi.fn<new () => RuntimeAccountServices['codexAccounts']>()
   const RateLimits = vi.fn<new () => RuntimeAccountServices['rateLimits']>()
@@ -45,7 +45,7 @@ export function accountHost() {
   }
   services.claudeAccounts.listAccounts = claudeList
   services.codexAccounts.listAccounts = codexList
-  services.rateLimits.getState = () => snapshot.rateLimits
+  services.rateLimits.getState = async () => snapshot.rateLimits
   services.rateLimits.onStateChange = (listener) => {
     listeners.add(listener)
     return () => listeners.delete(listener)
@@ -103,7 +103,7 @@ export function accountTransport(
     const close = vi.fn(release)
     streams.push({ host: args.selector, callbacks, close, send })
     if (autoReady) {
-      queueMicrotask(() => send(host.controller.getStreamSnapshot()))
+      void host.controller.getStreamSnapshot().then(send)
     }
     return { unsubscribe: close, sendBinary: () => false }
   })

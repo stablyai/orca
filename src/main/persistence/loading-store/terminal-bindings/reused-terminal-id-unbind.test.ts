@@ -56,7 +56,7 @@ function bindNewTerminal(session: WorkspaceSessionState): WorkspaceSessionState 
     session,
     WORKTREE,
     `new-tab:${NEW_LEAF}`
-  )
+  ).session
 }
 
 function panesBinding(session: WorkspaceSessionState, ptyId: string): string[] {
@@ -109,7 +109,7 @@ describe('a spawn commit binding a reused terminal id (switch on)', () => {
       saved,
       WORKTREE,
       `saved-tab:${NEW_LEAF}`
-    )
+    ).session
 
     expect(panesBinding(session, 'pty-3')).toEqual([`saved-tab:${NEW_LEAF}`])
     expect(session.tabsByWorktree[WORKTREE]?.[0]?.ptyId).toBe('pty-3')

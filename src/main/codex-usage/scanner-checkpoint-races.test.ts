@@ -231,8 +231,9 @@ describe('Codex checkpoint file races', () => {
     expect(second.dailyAggregates).toEqual(cold.dailyAggregates)
   })
 
-  it('rejects an unchanged file stream that stops early before claiming partial history', async () => {
-    writeFileSync(rolloutPath, transcript('session-stable', 40))
+  it('rejects short cold and suffix reads without publishing partial history', async () => {
+    const prefix = transcript('session-stable', 40)
+    writeFileSync(rolloutPath, prefix)
     mutation.endBeforeEOF = Buffer.byteLength(transcript('session-stable', 10)) - 1
     const commitEventKey = vi.fn()
 
@@ -242,14 +243,9 @@ describe('Codex checkpoint file races', () => {
     expect(mutation.endBeforeEOF).toBeNull()
     expect(offsets()).toEqual([0])
     expect(commitEventKey).not.toHaveBeenCalled()
-    const cold = await scanCodexUsageFiles([], [])
-    expect(cold.sessions[0]?.eventCount).toBe(40)
-  })
-
-  it('leaves the previous scan intact when an unchanged suffix stream stops early', async () => {
-    const prefix = transcript('session-stable', 40)
-    writeFileSync(rolloutPath, prefix)
     const previous = await scanCodexUsageFiles([], [])
+    expect(previous.sessions[0]?.eventCount).toBe(40)
+
     appendFileSync(rolloutPath, records(40, 42))
     mutation.endBeforeEOF = Buffer.byteLength(prefix + records(40, 41)) - 1
     parseReads.length = 0

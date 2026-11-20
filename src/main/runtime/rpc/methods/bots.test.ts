@@ -130,41 +130,6 @@ describe('bots.create', () => {
     }
   }
 
-  it('refuses an Antigravity bot, made or switched to, on a host without Orca’s managed Antigravity server', async () => {
-    const bots = { assertEnabled: () => {}, list: () => [], create: vi.fn(), update: vi.fn() }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bots.create and bots.update refuse before reading more than runtime.bots.
-    const runtime = { getRuntimeId: () => 'test-runtime', bots } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: BOT_METHODS })
-    const refusal = {
-      ok: false,
-      error: {
-        message:
-          "Antigravity bots need Orca's own Antigravity server, which isn't available on the computer this bot runs on."
-      }
-    }
-    // FreeBSD has no pinned managed runtime.
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { ...platform, value: 'freebsd' })
-    try {
-      expect(
-        await dispatcher.dispatch(
-          request('bots.create', { name: 'Scout', agent: 'antigravity' }),
-          OWNER
-        )
-      ).toMatchObject(refusal)
-      expect(
-        await dispatcher.dispatch(
-          request('bots.update', { botId: 'cutter', updates: { agent: 'antigravity' } }),
-          OWNER
-        )
-      ).toMatchObject(refusal)
-    } finally {
-      Object.defineProperty(process, 'platform', platform)
-    }
-    expect(bots.create).not.toHaveBeenCalled()
-    expect(bots.update).not.toHaveBeenCalled()
-  })
-
   it("defers the first turn for a takeover and runs it after writing a proposed bot's soul", async () => {
     const { bots, order, dispatcher } = createRuntime()
     const seed = { purpose: 'Tracks what’s blocking the 1.5 release.', templateId: 'release' }

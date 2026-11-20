@@ -1,3 +1,4 @@
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import type { AppState } from '../../types'
@@ -17,7 +18,7 @@ export function applyCachedChecksStatus(
   if (
     isCompletePRCheckOwner(pr) ||
     capturePRCheckContract(
-      () => state,
+      readAppRuntimeStatuses,
       aliasExecutionHostId.startsWith('runtime:')
         ? { kind: 'environment', environmentId: aliasExecutionHostId.slice(8) }
         : { kind: 'local' }

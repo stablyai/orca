@@ -1,4 +1,5 @@
 import type { CodexAccountSelectionTarget } from './codex/codex-selection-lane'
+import type { ClaudeAccountSwitchRunningSessions } from './claude/claude-account-switch-settings'
 
 export type ManagedDataAccountProvider = 'opencode' | 'devin'
 
@@ -139,6 +140,10 @@ export type ClaudeAccountSelectionChange = {
   target: CodexAccountSelectionTarget
   before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
+  /** The switching client's own choice for running sessions; absent, the host's setting decides. */
+  runningSessions?: ClaudeAccountSwitchRunningSessions
+  /** Nothing was selected: this answers the Ask a switch to this account left open. */
+  answersAskFor?: string | null
 }
 
 /** What a server did with its running Claude terminals when its account switched. */
@@ -147,6 +152,8 @@ export type ClaudeHostRunningSessionsMove = {
   restarting: number
   /** Running Claude terminals that may still be on the previous account. */
   notMoved: number
+  /** Of `notMoved`, those the server restarts when the same switch is sent again with `restart`. */
+  canRestart?: number
 }
 
 /** `runningSessions` is absent from older servers, and from hosts whose window moves its own. */

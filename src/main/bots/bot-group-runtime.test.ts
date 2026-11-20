@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
+import { setAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { fixture, groupNativeMocks } from './bot-group-native-runtime.test-fixture'
 import { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
@@ -83,7 +88,7 @@ describe('persistent native group lifecycle', () => {
         }
       }
     })
-    const told = groups.store.message('mail:fyi-op')
+    const told = groups.store.operationMessage('fyi-op')
     expect(told?.requester).toEqual({ id: 'bot-0', name: 'Scout', told: true })
     expect(told?.text).toBe('Scout told Forge')
   })
@@ -153,7 +158,7 @@ describe('persistent native group lifecycle', () => {
         }
       }
     })
-    const reply = groups.store.message('mail:reply-op')
+    const reply = groups.store.operationMessage('reply-op')
     expect(reply?.requester).toBeUndefined()
     expect(reply?.answeredBy).toEqual({ id: 'bot-1', name: 'Forge' })
     expect(reply?.text).toBe("Scout read Forge's reply")
@@ -177,14 +182,30 @@ describe('persistent native group lifecycle', () => {
       text: '@Forge start a worker'
     })
     groups.store.bindWorker('owned-worker', work.turns[0].operationId)
-    mails.set('peer', { id: 'peer', from_handle: 'dispatch:owned-worker', thread_id: null })
-    groups.reserveMailTurn({ ...input, operationId: 'verified-worker' })
+    mails.set('report', { id: 'report', from_handle: 'dispatch:owned-worker', thread_id: null })
+    groups.reserveMailTurn({
+      ...input,
+      operationId: 'verified-worker',
+      body: {
+        ...input.body,
+        from: {
+          kind: 'agent',
+          senders: [],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: target.sessionId,
+            dispatchId: null,
+            messages: [{ messageId: 'report', runId: 'run', from: 'dispatch:owned-worker' }]
+          }
+        }
+      }
+    })
     expect(groups.store.messages(group.id)).toHaveLength(4)
-    expect(groups.store.message('mail:verified-worker')).toMatchObject({
+    expect(groups.store.operationMessage('verified-worker')).toMatchObject({
       rootRequestId: work.id,
       rootSequence: work.sequence
     })
-    expect(groups.store.message('mail:verified-worker')?.requester).toBeUndefined()
+    expect(groups.store.operationMessage('verified-worker')?.requester).toBeUndefined()
   })
   it('scopes Stop to room sessions and preserves the cutoff after runtime recreation', async () => {
     const { groups, runtime } = fixture()
@@ -312,5 +333,49 @@ describe('persistent native group lifecycle', () => {
       assertBotGroupSessionAccess(runtime, 'bot-group-member-archived', { kind: 'desktop' })
     ).toThrow(/no longer/)
     expect(() => assertBotGroupOwner({ caller: { kind: 'local-cli' } })).toThrow(/human owner/)
+  })
+  it('claims a dropped image for every member and delivers it as an image block', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-bot-group-images-'))
+    const store = new AgentSessionAttachmentStore(join(dir, 'agent-session-attachments'), {
+      hasSession: () => true
+    })
+    const claimed: string[] = []
+    setAgentSessionAttachmentStore(store, async (sessionId) => {
+      claimed.push(sessionId)
+    })
+    try {
+      const { groups } = fixture()
+      const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
+      const dropped = join(dir, 'shot.png')
+      await writeFile(dropped, Buffer.alloc(12))
+
+      const sent = await groups.send(
+        {
+          groupId: group.id,
+          revision: group.revision,
+          messageId: randomUUID(),
+          text: '@Forge [Image #1]',
+          images: [dropped]
+        },
+        { local: true }
+      )
+      const stored = sent.images![0].path
+      expect(sent.images).toEqual([
+        {
+          path: expect.stringMatching(/agent-session-attachments[\\/][0-9a-f-]{36}[\\/]shot\.png$/),
+          name: 'shot.png',
+          bytes: 12
+        }
+      ])
+      expect(claimed).toEqual(group.members.map((member) => member.sessionId))
+      await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(1))
+      expect(mocks.send.mock.calls[0][0].sessionId).toBe(group.members[1].sessionId)
+      expect(mocks.send.mock.calls[0][0].turn.body.blocks.slice(1)).toEqual([
+        { type: 'image-ref', path: stored }
+      ])
+    } finally {
+      setAgentSessionAttachmentStore(null)
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

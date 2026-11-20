@@ -5,10 +5,14 @@ import type { ClaudeHostRunningSessionsMove } from '../../../../shared/agent-acc
 import { getClaudeAccountLabel } from './claude-account-label'
 import type { ClaudeAccountSnapshot } from './claude-account-switch-sessions'
 
+/** Asks the server to restart the sessions it left running under Ask; resolves with what it did. */
+export type RestartHostClaudeSessions = () => Promise<ClaudeHostRunningSessionsMove | undefined>
+
 export function announceHostMove(
   move: ClaudeHostRunningSessionsMove | undefined,
   before: ClaudeAccountSnapshot,
-  after: ClaudeAccountSnapshot
+  after: ClaudeAccountSnapshot,
+  restart?: RestartHostClaudeSessions
 ): 'show-confirmation' | 'handled' {
   if (move && move.restarting > 0) {
     announceRestart(
@@ -18,10 +22,56 @@ export function announceHostMove(
     )
     return 'handled'
   }
+  const previous = getClaudeAccountLabel(before.state, before.accountId)
+  if (move?.canRestart && restart) {
+    askHostRestart(move.canRestart, previous, () => {
+      void restart().then(
+        (moved) => announceHostMove(moved, before, after),
+        (error: unknown) => {
+          console.error('[claude-account-switch] server restart failed:', error)
+          toast.error(
+            translate(
+              'auto.components.settings.AccountsPane.2743cdc0af',
+              'Claude account update failed.'
+            )
+          )
+        }
+      )
+    })
+    return 'handled'
+  }
   if (move && move.notMoved > 0) {
-    warnStrandedSessions(move.notMoved, getClaudeAccountLabel(before.state, before.accountId))
+    warnStrandedSessions(move.notMoved, previous)
   }
   return 'show-confirmation'
+}
+
+/** Why a toast: the server left these running because the setting is Ask, and only here can it be answered. */
+function askHostRestart(count: number, previous: string, restart: () => void): void {
+  toast.warning(
+    count === 1
+      ? translate(
+          'accounts.claude.switchSessions.hostAskOne',
+          '1 Claude session is still on {{previous}}.',
+          { previous }
+        )
+      : translate(
+          'accounts.claude.switchSessions.hostAskOther',
+          '{{count}} Claude sessions are still on {{previous}}.',
+          { count, previous }
+        ),
+    {
+      description: translate(
+        'accounts.claude.switchSessions.hostAskDescription',
+        'Restarting stops any work in progress.'
+      ),
+      classNames: INLINE_ACTION_CLASS_NAMES,
+      action: {
+        label: translate('accounts.claude.switchSessions.hostAskRestart', 'Restart'),
+        onClick: restart
+      }
+    }
+  )
 }
 
 /** Name the sessions left behind and offer the same list, without the ones already restarting. */
