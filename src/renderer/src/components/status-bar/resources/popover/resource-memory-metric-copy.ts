@@ -14,10 +14,7 @@ export function getResourceMemoryMetricCopy(
   if (metric === 'footprint') {
     return {
       columnLabel: t('auto.components.status.bar.resource.memory.metric.memColumn', 'Mem'),
-      summaryLabel: t(
-        'auto.components.status.bar.resource.memory.metric.memorySummary',
-        'Σ Memory'
-      )
+      summaryLabel: t('auto.components.status.bar.resource.memory.metric.memorySummary', 'Σ Memory')
     }
   }
   if (metric === 'working-set') {
