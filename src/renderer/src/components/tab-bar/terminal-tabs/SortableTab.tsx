@@ -92,7 +92,8 @@ export default function SortableTab({
     (s) =>
       unread ||
       terminalTabHasUnreadActivity({
-        terminalTabId: statusTabId,
+        terminalTabId: tab.id,
+        completionTabId: statusTabId,
         unreadTerminalTabs: s.unreadTerminalTabs,
         unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
       })
