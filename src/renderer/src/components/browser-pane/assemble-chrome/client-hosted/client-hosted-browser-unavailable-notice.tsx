@@ -1,7 +1,11 @@
 import { useEffect } from 'react'
 import { Globe } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import {
+  useAppStoreWithHostStatuses,
+  useRuntimeHostStatusSelector
+} from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { useAppStore } from '@/store'
 import { readBrowserClientHostId } from '@/runtime/browser/client-hosting/browser-client-host-identity'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
@@ -30,8 +34,8 @@ export function ClientHostedBrowserUnavailableNotice({
   placementHostClientId: string | null
 }): React.JSX.Element {
   const t = useTranslate()
-  const offlineHostName = useAppStore((s) => {
-    const entry = s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)
+  const offlineHostName = useAppStoreWithHostStatuses((s, statuses) => {
+    const entry = statuses.get(runtimeEnvironmentId)
     const state = runtimeHostConnectionStateForEntry(entry)
     // Revoked/refused pairings also read disconnected but cannot reconnect.
     const offline =
@@ -54,7 +58,7 @@ export function ClientHostedBrowserUnavailableNotice({
   // Reclaim hosting on mount too; a failed lease reconnect after contact returns has no later contact edge.
   useEffect(() => {
     const state = useAppStore.getState()
-    if (!onOtherDesktop && state.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)?.status) {
+    if (!onOtherDesktop && readRuntimeStatuses().get(runtimeEnvironmentId)?.status) {
       void ensureBrowserClientHostOnRuntimeContact(state, runtimeEnvironmentId)
     }
   }, [onOtherDesktop, runtimeEnvironmentId])

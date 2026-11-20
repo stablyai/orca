@@ -45,19 +45,11 @@ afterEach(() => {
 describe('protected Antigravity account snapshots', () => {
   it.skipIf(process.platform === 'win32').each([
     [
-      '{"auth_method":"consumer","token":{"ACCESS_TOKEN":"fixture-access","refresh_token":"typed-grant"}}',
-      'consumer'
-    ],
-    [
-      '{"auth_method":"consumer","token":{"access_token":"fixture-access","access_token":null,"refresh_token":"typed-grant"}}',
-      'consumer'
-    ],
-    [
       '{"auth_method":"consumer","access_token":"fixture-access","refresh_token":"typed-grant"}',
       ''
     ],
     [
-      '{"auth_method":"old","AUTH_METHOD":"consumer","token":{"access_token":"fixture-access","refresh_token":"typed-grant"}}',
+      '{"auth_method":"old","AUTH_METHOD":"consumer","token":{"ACCESS_TOKEN":"fixture-access","access_token":null,"refresh_token":"typed-grant"}}',
       'consumer'
     ]
   ])(
@@ -251,7 +243,7 @@ describe('protected Antigravity account snapshots', () => {
     }
   )
 
-  it('keeps the selected account launchable after agy refreshes its token without an id_token', async () => {
+  it('keeps the selected account launchable across refreshes and a verified grant rotation', async () => {
     const h = harness()
     const store = createEncryptedAntigravityAccountStore(join(dir, 'vault'))
     const service = new AntigravityAccountService(store, h.backend)
@@ -269,6 +261,27 @@ describe('protected Antigravity account snapshots', () => {
     await restarted.prepareForLaunch()
     expect((await store.read()).accounts[0].credentials).toBe(refreshedWithoutIdToken(3))
     h.setNative(refreshedWithoutIdToken(4, 'refresh-other-grant'))
+    await expect(restarted.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
+    h.lookupIdentity.mockClear()
+
+    h.lookupIdentity.mockResolvedValue({
+      issuer: 'https://accounts.google.com',
+      subject: 'a',
+      email: 'a@example.invalid'
+    })
+    h.setNative(refreshedWithoutIdToken(5, 'refresh-rotated'))
+    await restarted.prepareForLaunch()
+    expect((await store.read()).accounts[0].credentials).toBe(
+      refreshedWithoutIdToken(5, 'refresh-rotated')
+    )
+    await restarted.prepareForLaunch()
+    expect(h.lookupIdentity).toHaveBeenCalledTimes(1)
+    h.lookupIdentity.mockResolvedValue({
+      issuer: 'https://accounts.google.com',
+      subject: 'someone-else',
+      email: null
+    })
+    h.setNative(refreshedWithoutIdToken(6, 'refresh-other-grant'))
     await expect(restarted.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
     expect(h.backend.write).not.toHaveBeenCalled()
   })
@@ -288,34 +301,6 @@ describe('protected Antigravity account snapshots', () => {
     })
     await h.service.prepareForLaunch()
     expect(h.getNative()).toBe(credential('b'))
-  })
-
-  it('follows a rewritten login with a new grant when Google names the same account', async () => {
-    const h = harness()
-    const store = createEncryptedAntigravityAccountStore(join(dir, 'vault'))
-    const service = new AntigravityAccountService(store, h.backend, Date.now, h.lookupIdentity)
-    const id = (await service.addCurrentAccount()).activeAccountId!
-    await service.selectAccount(id)
-    h.lookupIdentity.mockResolvedValue({
-      issuer: 'https://accounts.google.com',
-      subject: 'a',
-      email: 'a@example.invalid'
-    })
-    h.setNative(refreshedWithoutIdToken(5, 'refresh-rotated'))
-    await service.prepareForLaunch()
-    expect((await store.read()).accounts[0].credentials).toBe(
-      refreshedWithoutIdToken(5, 'refresh-rotated')
-    )
-    await service.prepareForLaunch()
-    expect(h.lookupIdentity).toHaveBeenCalledTimes(1)
-    h.lookupIdentity.mockResolvedValue({
-      issuer: 'https://accounts.google.com',
-      subject: 'someone-else',
-      email: null
-    })
-    h.setNative(refreshedWithoutIdToken(6, 'refresh-other-grant'))
-    await expect(service.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
-    expect(h.backend.write).not.toHaveBeenCalled()
   })
 
   it.skipIf(process.platform === 'win32')(

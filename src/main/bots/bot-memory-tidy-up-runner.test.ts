@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../shared/bot-types'
 import { makeTestBot } from './bot.test-fixture'
@@ -11,9 +12,9 @@ import { testRunPower } from './bot-background-run.test-fixture'
 import type { BotTurnEnd } from './bot-run-turn-watch'
 
 const HOME = '/home/me/.orca/bots/scout'
-const MEMORY = `${HOME}/MEMORY.md`
-const ARCHIVE = `${HOME}/memory/archive.md`
-const RELEASE = `${HOME}/memory/release.md`
+const MEMORY = join(HOME, 'MEMORY.md')
+const ARCHIVE = join(HOME, 'memory', 'archive.md')
+const RELEASE = join(HOME, 'memory', 'release.md')
 const NIGHT = new Date(2026, 10, 6, 3, 5).getTime()
 const DAY = 24 * 60 * 60 * 1000
 const OWNER_CHAT: TidyUpChat = {

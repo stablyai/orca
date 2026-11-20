@@ -88,7 +88,7 @@ describe('selectSidebarChildrenByParentIdentity', () => {
     const state = crossMachineState()
     const { childWorktrees, lineageChildrenByParentIdentity } = getFolderWorkspaceChildWorktrees(
       getFolderWorkspaceHostIdentity(state.folderWorkspaces[0]),
-      selectSidebarChildrenByParentIdentity(state)
+      selectSidebarChildrenByParentIdentity(state, state.runtimeStatusByEnvironmentId)
     )
     expect(childWorktrees.map((row) => row.id)).toEqual(['remote-0'])
     expect(
@@ -98,7 +98,7 @@ describe('selectSidebarChildrenByParentIdentity', () => {
 
   it('keeps its identity when a status update keeps every store identity', () => {
     const state = crossMachineState(1000)
-    const sources = selectSidebarChildrenByParentIdentity(state)
+    const sources = selectSidebarChildrenByParentIdentity(state, state.runtimeStatusByEnvironmentId)
     expect(sources.get(getFolderWorkspaceHostIdentity(state.folderWorkspaces[0]))).toHaveLength(
       1000
     )
@@ -106,7 +106,9 @@ describe('selectSidebarChildrenByParentIdentity', () => {
       ...state,
       runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId)
     }
-    expect(selectSidebarChildrenByParentIdentity(statusOnly)).toBe(sources)
+    expect(
+      selectSidebarChildrenByParentIdentity(statusOnly, statusOnly.runtimeStatusByEnvironmentId)
+    ).toBe(sources)
   })
 
   it('keeps each same-id worker’s child on another machine under its own worker', () => {
@@ -149,7 +151,7 @@ describe('selectSidebarChildrenByParentIdentity', () => {
     }
     const identities = getBotListedWorktreeIdentities(
       twins.folderWorkspaces,
-      selectSidebarChildrenByParentIdentity(twins)
+      selectSidebarChildrenByParentIdentity(twins, twins.runtimeStatusByEnvironmentId)
     )
     expect([...identities].sort()).toEqual([
       'local|local-grandchild',
@@ -164,7 +166,10 @@ describe('folder cards and badges over the sidebar children', () => {
   function cardPr(state: ReturnType<typeof crossMachineState>, row: Row, number: number) {
     return getFolderWorkspaceCardPrDisplay({
       folderIdentity: getFolderWorkspaceHostIdentity(state.folderWorkspaces[0]),
-      childrenByParentIdentity: selectSidebarChildrenByParentIdentity(state),
+      childrenByParentIdentity: selectSidebarChildrenByParentIdentity(
+        state,
+        state.runtimeStatusByEnvironmentId
+      ),
       repoMap: new Map([
         [
           row.repoId,
@@ -229,7 +234,11 @@ describe('folder cards and badges over the sidebar children', () => {
       state.worktreesByRepo['remote-repo'][0],
       state.worktreesByRepo['local-repo'][0]
     ]) {
-      expect(selectFolderAncestors(state, row).map((folder) => folder.id)).toEqual(['bot-home'])
+      expect(
+        selectFolderAncestors(state, state.runtimeStatusByEnvironmentId, row).map(
+          (folder) => folder.id
+        )
+      ).toEqual(['bot-home'])
     }
   })
 })

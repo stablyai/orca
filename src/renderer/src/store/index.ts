@@ -1,4 +1,5 @@
 import { logActiveWorkspaceChanges } from './active-workspace-change-log'
+import { bindAppRuntimeStatusStore } from './slices/runtime-status/views/app-runtime-status-binding'
 import { withAgentStatusOwnership } from './slices/agent-status/status-ownership/agent-status-ownership-boundary'
 import { withBrowserInitializationPresentations } from './slices/browser/hosts/browser-initialization-presentation-store'
 import { registerTerminalNoticeShutdownReader } from '@/components/terminal-pane/pty-transport/delivery/pty-notice-exit'
@@ -172,6 +173,8 @@ export const useAppStore = create<AppState>()(
     )
   )
 )
+
+bindAppRuntimeStatusStore(useAppStore)
 
 registerTerminalNoticeShutdownReader(
   (ptyId) => (useAppStore.getState().pendingPtyShutdownIds[ptyId] ?? 0) > 0

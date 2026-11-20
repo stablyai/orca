@@ -6,7 +6,6 @@ import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desk
 import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
 import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,
@@ -38,8 +37,7 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   removeIpcListener: (channel, listener) => {
     ipcMain.removeListener(channel, listener as Parameters<typeof ipcMain.removeListener>[1])
   },
-  // Only the phone icon source needs these codecs and fetcher.
-  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? { encodeRepoIconPng, fetchRepoIcon: fetchWithElectronManualRedirects }
-    : {})
+  // Phone icons (repo icons, browser tab favicons) are fetched and shrunk to data URLs here.
+  encodeRepoIconPng,
+  fetchRepoIcon: fetchWithElectronManualRedirects
 }

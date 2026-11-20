@@ -99,7 +99,7 @@ export const proposalLongPurpose = defineFixture({
 
 // Review shots at a 340 and a 480 px dialog. The dialog is fixed, so it portals into a transformed box
 // that wide (plus its 1rem margins) instead of the page's wide viewport.
-function Stage({ width }: { width: 340 | 480 }): React.JSX.Element {
+function Stage({ width, nudge }: { width: 340 | 480; nudge?: boolean }): React.JSX.Element {
   const [box, setBox] = useState<HTMLElement | null>(null)
   return (
     <div
@@ -109,7 +109,7 @@ function Stage({ width }: { width: 340 | 480 }): React.JSX.Element {
     >
       {box ? (
         <PortalContainerContext.Provider value={box}>
-          <NewBotDialog open onOpenChange={() => {}} />
+          <NewBotDialog open onOpenChange={() => {}} onImport={nudge ? () => {} : undefined} />
         </PortalContainerContext.Provider>
       ) : null}
     </div>
@@ -133,6 +133,33 @@ const seeded = (computer?: string) => (): void => {
       hostSettingOverrides: computer ? { local: { displayLabel: computer } } : {}
     }
   }))
+}
+
+// A Hermes bot on this computer, so the first-bot import nudge shows.
+const HERMES_SOURCES = [
+  {
+    app: 'hermes',
+    home: '~/.hermes',
+    bots: [{ agent: 'atlas', name: 'Atlas', path: '~/.hermes/atlas', absolutePath: '/x/atlas' }]
+  }
+]
+
+const withNudge = (): void => {
+  seeded()()
+  try {
+    localStorage.removeItem('orca.bots.import-nudge-dismissed')
+  } catch {
+    // The nudge stays hidden; the shot shows it missing.
+  }
+  const runtime = window.api.runtime
+  const call = runtime.call.bind(runtime)
+  Reflect.set(window.api, 'runtime', {
+    ...runtime,
+    call: async (request: Parameters<typeof call>[0]) =>
+      request.method === 'bots.import.sources'
+        ? { ok: true, result: { sources: HERMES_SOURCES } }
+        : call(request)
+  })
 }
 
 const named = (name: string, identity: string) => async (): Promise<void> => {
@@ -169,6 +196,16 @@ const LONGEST = named(
   ].join('\n')
 )
 
+export const nudge340 = defineFixture({
+  width: 372,
+  setup: withNudge,
+  render: () => <Stage width={340} nudge />
+})
+export const nudge480 = defineFixture({
+  width: 512,
+  setup: withNudge,
+  render: () => <Stage width={480} nudge />
+})
 export const empty340 = defineFixture(review(340))
 export const empty480 = defineFixture(review(480))
 export const filled340 = defineFixture({ ...review(340), interact: FILLED })
