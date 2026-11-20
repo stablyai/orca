@@ -1340,11 +1340,12 @@ html.native-shell .app-layout {
   transform: translateY(-50%);
 }
 
-/* Thin seams: a 1px in-flow line, with an invisible grab area reaching into one neighbor. The reach
+/* Thin seams: a 1px in-flow line, with invisible grab segments reaching into one neighbor. The reach
    avoids the first pane's vertical scrollbar (right of a vertical line) and the second group's tab strip
-   (above a horizontal line); stacking it over pane content needs a z-index. */
+   (above a horizontal line); segments leave gaps at attached tab rows. Retained pane hosts sit at z 10
+   over group bodies, so the seam stacks above them. */
 .tab-group-split-resize-handle.is-thin {
-  z-index: 10;
+  z-index: 11;
 }
 
 .tab-group-split-resize-handle.is-thin.is-vertical {
@@ -1355,23 +1356,22 @@ html.native-shell .app-layout {
   height: 1px;
 }
 
-.tab-group-split-resize-handle.is-thin::before {
-  content: '';
+.tab-group-split-grab {
   position: absolute;
-  inset: 0;
 }
 
-.tab-group-split-resize-handle.is-thin.is-vertical::before {
+.is-vertical > .tab-group-split-grab {
+  top: 0;
+  bottom: 0;
+  left: 0;
   right: calc(-1 * var(--divider-grab-reach));
 }
 
-/* Tabs and their close buttons sit at the strip's edge; only the line itself grabs inside that row. */
-.tab-group-split-resize-handle.is-thin.is-vertical.has-tab-band::before {
-  top: var(--workspace-tab-row-height);
-}
-
-.tab-group-split-resize-handle.is-thin.is-horizontal::before {
+.is-horizontal > .tab-group-split-grab {
+  left: 0;
+  right: 0;
   top: calc(-1 * var(--divider-grab-reach));
+  bottom: 0;
 }
 
 .tab-group-split-resize-handle.is-thin::after {
@@ -1394,7 +1394,8 @@ html.native-shell .app-layout {
 }
 
 .tab-group-split-resize-handle.is-thin.is-dragging::after {
-  transition-delay: 0s;
+  /* Dropping the transition also cancels a hover delay still pending from a quick grab. */
+  transition: none;
 }
 
 /* Electron drag hit-testing ignores z-index; every overlapping Radix portal needs explicit no-drag. */

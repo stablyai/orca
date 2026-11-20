@@ -124,7 +124,8 @@
     --orca-terminal-divider-color-strong,
     var(--orca-terminal-divider-color, transparent)
   );
-  transition-delay: 0s;
+  /* Dropping the transition also cancels a hover delay still pending from a quick grab. */
+  transition: none;
 }
 
 .pane-drag-handle {

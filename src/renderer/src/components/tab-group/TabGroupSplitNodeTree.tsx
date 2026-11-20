@@ -8,6 +8,7 @@ import { setGroupRatioThroughLayoutOwner } from '../../runtime/workspace-layout/
 import '../browser-pane/host-guest/drag/webview-drag-passthrough'
 
 import { ResizeHandle } from '../pane-resize/PaneSplitResizeHandle'
+import { getSeamTabRowStarts } from './seam-tab-row-starts'
 
 function SplitNode({
   node,
@@ -109,7 +110,9 @@ function SplitNode({
       <ResizeHandle
         direction={node.direction}
         thin
-        tabBand={isHorizontal && tabStrip === 'attached'}
+        tabRowStarts={
+          isHorizontal && tabStrip === 'attached' ? getSeamTabRowStarts(node.second) : undefined
+        }
         onResizeStart={() => recordFeatureInteraction('terminal-panes')}
         onRatioChange={(nextRatio) =>
           ORCA_LAYOUT_OWNER_IS_MAIN
