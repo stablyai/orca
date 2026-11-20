@@ -45,7 +45,8 @@ vi.mock('../../codex/hooks/reconciliation/codex-hook-reconcile', () => ({
 vi.mock('../../codex/configuration/homes/codex-home-paths', () => ({
   getCodexSessionBackfillStateDirPath: () => join(homes.system, 'backfill'),
   getSystemCodexHomePath: () => homes.system,
-  getOrcaManagedCodexHomePath: () => join(homes.system, 'legacy')
+  getOrcaManagedCodexHomePath: () => join(homes.system, 'legacy'),
+  resolveOrcaManagedCodexHomePath: () => join(homes.system, 'legacy')
 }))
 vi.mock('../../codex/configuration/settings/codex-config-mirror', () => ({
   ensureCodexDaemonSocketGuard: vi.fn()
