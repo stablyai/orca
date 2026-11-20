@@ -24,7 +24,6 @@ export type GitWorktreeExecOptions = {
   timeout?: number
   includeCreatePreparations?: boolean
   admissionTier?: GitAdmissionTier
-  spawnOnWorkerThread?: boolean
   canStart?: () => boolean
   observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
 }
@@ -110,7 +109,6 @@ export type GitExecOptionsForWorktree = {
   signal?: AbortSignal
   timeout?: number
   admissionTier?: GitAdmissionTier
-  spawnOnWorkerThread?: boolean
   canStart?: () => boolean
   observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
 }
@@ -125,7 +123,6 @@ export function gitExecOptions(
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.timeout ? { timeout: options.timeout } : {}),
     ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
-    ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {}),
     ...(options.canStart ? { canStart: options.canStart } : {}),
     ...(options.observeChildTermination
       ? { observeChildTermination: options.observeChildTermination }

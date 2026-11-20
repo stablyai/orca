@@ -179,6 +179,8 @@ export class WorkerThreadChildProcessHost {
   private workerError: string | null = null
   // A worker that dies before answering anything is broken here (e.g. an unloadable chunk); stop offering it.
   private failedToStart = false
+  // Settles true on the current worker's 'ready', false if it exits first.
+  private ready: { promise: Promise<boolean>; settle: (ready: boolean) => void } | null = null
 
   constructor(factory: WorkerThreadFactory) {
     this.host = new LazyWorkerThreadHost<WorkerThreadChildEvent>({
@@ -208,6 +210,11 @@ export class WorkerThreadChildProcessHost {
     return this.ensureWorker()
   }
 
+  /** True once the worker has loaded its entry; false if it can't start or dies first. */
+  whenReady(): Promise<boolean> {
+    return this.ensureWorker() && this.ready ? this.ready.promise : Promise.resolve(false)
+  }
+
   private ensureWorker(): boolean {
     // A worker that died before answering is not started again; direct spawns report it unavailable.
     if (this.failedToStart) {
@@ -217,6 +224,9 @@ export class WorkerThreadChildProcessHost {
       // A fresh worker (first use or after idle teardown) has not proven it starts yet.
       this.workerAnswered = false
       this.workerError = null
+      this.ready?.settle(false)
+      const ready = Promise.withResolvers<boolean>()
+      this.ready = { promise: ready.promise, settle: ready.resolve }
     }
     return this.host.ensure() !== null
   }
@@ -259,6 +269,7 @@ export class WorkerThreadChildProcessHost {
   private route(event: WorkerThreadChildEvent): void {
     this.workerAnswered = true
     if (event.type === 'ready') {
+      this.ready?.settle(true)
       return
     }
     const child = this.children.get(event.id)
@@ -286,7 +297,8 @@ export class WorkerThreadChildProcessHost {
 
   // Worker death closes stdin for graceful stop but proves no child exit; omit close so drain windows/home locks still expire normally.
   private abandonAll(message: string): void {
-    if (!this.workerAnswered && this.children.size > 0 && !this.failedToStart) {
+    this.ready?.settle(false)
+    if (!this.workerAnswered && !this.failedToStart) {
       this.failedToStart = true
       console.warn(`[worker-thread-child-process] worker died before answering. ${message}`)
     }
@@ -323,6 +335,12 @@ export function spawnProcessOnWorkerThread(spec: WorkerThreadChildSpec): WorkerT
   assertWslNotLatchedAbsent(spec.program)
   sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
   return sharedHost.spawn(spec)
+}
+
+/** Resolves true once a spawn would reach a worker that loaded its entry; false means spawn locally. */
+export function whenSpawnWorkerReady(): Promise<boolean> {
+  sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
+  return sharedHost.whenReady()
 }
 
 /** True when a spawn now would reach a live worker; callers that must not fail can spawn locally instead. */

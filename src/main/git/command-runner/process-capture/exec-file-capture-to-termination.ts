@@ -58,17 +58,13 @@ export async function execFileCaptureToTermination(
     signal: options.signal,
     terminationBarrier: barrier,
     onChildTerminated: reportTerminated,
-    ...(options.spawnOnWorkerThread === false
-      ? {}
-      : {
-          launch: (spec: ProcessSpec) =>
-            launchProcessSpecOnWindowsWorker(
-              spec,
-              options.onWorkerLost,
-              reportTerminated,
-              options.workerLossEndsLifetime === true || !options.onChildTerminated
-            )
-        }),
+    launch: (spec: ProcessSpec) =>
+      launchProcessSpecOnWindowsWorker(
+        spec,
+        options.onWorkerLost,
+        reportTerminated,
+        options.workerLossEndsLifetime === true || !options.onChildTerminated
+      ),
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
   const result = await pending

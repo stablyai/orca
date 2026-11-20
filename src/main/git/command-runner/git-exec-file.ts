@@ -109,7 +109,6 @@ async function gitExecFileAsyncUnlocked(
           signal: options.signal,
           terminationBarrier: options.terminationBarrier,
           admissionTier: options.admissionTier,
-          spawnOnWorkerThread: options.spawnOnWorkerThread,
           // Admission already passed; the capture rechecks at the spawn call itself.
           ...(options.canStart ? { canStart: options.canStart } : {}),
           onChildTerminated: reportTerminated,

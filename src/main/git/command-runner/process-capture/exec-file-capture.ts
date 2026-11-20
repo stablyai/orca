@@ -13,10 +13,10 @@ import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-co
 import { spawnedExecFile, workerExecFile } from './worker-exec-file'
 import { emptyExecFileOutput, isExecFileResultObject } from './exec-file-result-shape'
 import {
-  canSpawnOnWorkerThread,
   isAbandonedWorkerChildError,
   isWorkerChildStdinWriteError,
-  type WorkerThreadChildProcess
+  type WorkerThreadChildProcess,
+  whenSpawnWorkerReady
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
 export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
@@ -34,7 +34,6 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   /** Called once when the deadline — not an abort — is what ended the process. */
   onDeadlineKill?: () => void
   onStderr?: (chunk: string) => void
-  spawnOnWorkerThread?: boolean
   /** Native Git only: launch an owned group and retain it after abnormal stop until proof. */
   ownedPosixGroup?: boolean
   /** Rechecked synchronously at the spawn call, after any async executable resolution. */
@@ -78,11 +77,7 @@ export function execFileCapture(
     let child: ChildProcess | WorkerThreadChildProcess | null = null
     let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
     const ownedPosixGroup = options.ownedPosixGroup === true && process.platform !== 'win32'
-    // Windows CreateProcessW can stall the calling loop for seconds under endpoint security (#11161, #27362).
-    const useWorker =
-      process.platform === 'win32'
-        ? options.spawnOnWorkerThread !== false && canSpawnOnWorkerThread()
-        : options.spawnOnWorkerThread === true && process.platform === 'darwin'
+    let useWorker = false
     const deadline =
       options.timeout && options.timeout > 0 ? performance.now() + options.timeout : null
     let timer: NodeJS.Timeout | null = null
@@ -165,6 +160,8 @@ export function execFileCapture(
 
     const launch = async (): Promise<void> => {
       try {
+        // Process creation blocks its calling loop: uv_spawn's fork/exec, and CreateProcessW for seconds under endpoint security (#11161, #27362).
+        useWorker = await whenSpawnWorkerReady()
         if (settled) {
           return
         }
@@ -238,11 +235,14 @@ export function execFileCapture(
             finish(createAbortError())
             return
           }
-          // execFile's error text; overflow ends the whole tree, or a hook holding the pipe blocks close.
-          const workerOptions =
-            process.platform === 'win32'
-              ? { ...captureOptions, errorCommand: [command, ...args].join(' '), onOverflow: stop }
-              : captureOptions
+          // Main's error text per platform; a Windows overflow ends the whole tree, or a hook holding the pipe blocks close.
+          const workerOptions = {
+            ...captureOptions,
+            ...(process.platform !== 'darwin'
+              ? { errorCommand: [command, ...args].join(' ') }
+              : {}),
+            ...(process.platform === 'win32' ? { onOverflow: stop } : {})
+          }
           child = useWorker
             ? workerExecFile(command, args, workerOptions, complete)
             : ownedPosixGroup
@@ -272,12 +272,13 @@ export function execFileCapture(
         }
         if (!useWorker && !child?.pid) {
           reportChildTerminated()
-        } else if (child && !ownedPosixGroup && isAbandonedWorkerChildError(error)) {
+        } else if (child && isAbandonedWorkerChildError(error)) {
           endAbandonedWorkerChild(
             child,
             options.onWorkerLost,
             reportChildTerminated,
-            options.workerLossEndsLifetime === true || !options.onChildTerminated
+            options.workerLossEndsLifetime === true || !options.onChildTerminated,
+            ownedPosixGroup
           )
         }
         if (!terminating) {

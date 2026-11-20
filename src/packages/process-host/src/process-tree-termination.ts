@@ -97,7 +97,24 @@ async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promi
   }
 }
 
+// Concurrent group waits share one table read; a read already running only reports a group as busier than it is.
+let processTableRead: Promise<string | null> | undefined
+
 function readPosixProcessGroupStates(processGroupId: number): Promise<string[] | null> {
+  processTableRead ??= readPosixProcessTable().finally(() => {
+    processTableRead = undefined
+  })
+  return processTableRead.then((output) =>
+    output === null
+      ? null
+      : output.split('\n').flatMap((line) => {
+          const match = line.trim().match(/^(\d+)\s+(\S+)/)
+          return match && Number(match[1]) === processGroupId ? [match[2]] : []
+        })
+  )
+}
+
+function readPosixProcessTable(): Promise<string | null> {
   return new Promise((resolve) => {
     let probe: ChildProcess
     try {
@@ -113,13 +130,13 @@ function readPosixProcessGroupStates(processGroupId: number): Promise<string[] |
     let output = ''
     let truncated = false
     let settled = false
-    const finish = (states: string[] | null): void => {
+    const finish = (table: string | null): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timer)
-      resolve(states)
+      resolve(table)
     }
     probe.stdout?.on('data', (chunk: Buffer | string) => {
       const text = chunk.toString()
@@ -136,11 +153,7 @@ function readPosixProcessGroupStates(processGroupId: number): Promise<string[] |
         finish(null)
         return
       }
-      const states = output.split('\n').flatMap((line) => {
-        const match = line.trim().match(/^(\d+)\s+(\S+)/)
-        return match && Number(match[1]) === processGroupId ? [match[2]] : []
-      })
-      finish(states)
+      finish(output)
     })
     const timer = setTimeout(() => {
       probe.kill()

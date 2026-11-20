@@ -41,6 +41,7 @@ vi.mock('../../../worker-thread-child-process/worker-thread-child-process', asyn
   return {
     ...actual,
     canSpawnOnWorkerThread: () => worker.available,
+    whenSpawnWorkerReady: async () => worker.available,
     spawnProcessOnWorkerThread: (
       spec: Parameters<typeof WorkerChildModule.spawnProcessOnWorkerThread>[0]
     ) => {

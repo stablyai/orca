@@ -32,8 +32,6 @@ export type GitExecOptions = {
   admissionClass?: 'checkout'
   /** Skips general admission; only for a caller that bounds its own concurrency (worktree deletes). */
   admissionExempt?: true
-  /** Native macOS deletion spawns use the shared process worker. */
-  spawnOnWorkerThread?: boolean
   /** Observe stderr without changing capture/errors; incompatible with terminationBarrier. */
   onStderr?: (chunk: string) => void
 }

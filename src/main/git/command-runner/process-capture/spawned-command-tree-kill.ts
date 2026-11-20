@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import { forceTerminateProcessTree } from '@orca/process-host/process-tree-termination'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
 import {
   canSpawnOnWorkerThread,
@@ -107,8 +108,13 @@ export function endAbandonedWorkerChild(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>,
   onWorkerLost: (() => void) | undefined,
   onTerminated: () => void,
-  lifetimeEndsOnLoss = false
+  lifetimeEndsOnLoss = false,
+  ownedPosixGroup = false
 ): void {
+  if (ownedPosixGroup && child instanceof WorkerThreadChildProcess) {
+    endAbandonedWorkerGroup(child, onWorkerLost, onTerminated, lifetimeEndsOnLoss)
+    return
+  }
   onWorkerLost?.()
   const killed = killAbandonedWorkerChildTree(child)
   if (lifetimeEndsOnLoss) {
@@ -116,6 +122,46 @@ export function endAbandonedWorkerChild(
     return
   }
   reportWhenAbandonedRootEnds(child.pid, killed, onTerminated)
+}
+
+const ABANDONED_GROUP_RETRY_MAX_MS = 30_000
+
+/** A dead worker can't stop or reap its owned POSIX group, so main ends it; the unreaped root keeps the group id reserved until its exit was reported. */
+function endAbandonedWorkerGroup(
+  child: WorkerThreadChildProcess,
+  onWorkerLost: (() => void) | undefined,
+  onTerminated: () => void,
+  lifetimeEndsOnLoss: boolean
+): void {
+  onWorkerLost?.()
+  const rootExited = child.exitCode !== null || child.signalCode !== null
+  // An exited root not being stopped ends its lifetime as a normal close would; a stop still needs the group gone.
+  if (child.ownedGroupTerminated || (rootExited && !child.ownedGroupStopping)) {
+    onTerminated()
+    return
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the group kill reads only pid, exitCode, signalCode and kill, which the stand-in carries.
+  const group = child as unknown as ChildProcess
+  const attempt = (retryMs: number): void => {
+    void forceTerminateProcessTree(group)
+      .catch(() => false)
+      .then((ended) => {
+        if (ended) {
+          if (!lifetimeEndsOnLoss) {
+            onTerminated()
+          }
+          return
+        }
+        setTimeout(
+          () => attempt(Math.min(retryMs * 2, ABANDONED_GROUP_RETRY_MAX_MS)),
+          retryMs
+        ).unref?.()
+      })
+  }
+  attempt(ABANDONED_ROOT_FIRST_CHECK_MS)
+  if (lifetimeEndsOnLoss) {
+    onTerminated()
+  }
 }
 
 /** Resolves once the stop is done; a stopped child's own close still reports its termination. */
