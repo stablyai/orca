@@ -171,3 +171,59 @@ it('returns from chat selection without editing the draft and replaces the filte
   act(() => result.current.chooseMention('src/main.ts'))
   expect(draft).toBe('Ask @src/main.ts ')
 })
+
+const engBots: NativeChatBotChatRoom = {
+  withFiles: true,
+  mentions: [
+    { name: 'Eng - Perf', id: 'perf', key: 'local:perf', icon: null },
+    { name: 'Eng - Reviewer', id: 'rev', key: 'local:rev', icon: null },
+    { name: 'Eng - Reviewer - Official', id: 'off', key: 'runtime:air:off', icon: null }
+  ],
+  placeholder: '',
+  token: (value) => (value === 'runtime:air:off' ? '[Bot: Official](bot:off@air)' : undefined)
+}
+
+it('keeps `@` open past spaces while the words still name a bot, so a later one can be picked', () => {
+  const completeMention = vi.fn()
+  const { result, rerender } = renderHook(
+    ({ draft }: { draft: string }) =>
+      useNativeChatComposerMentions(
+        undefined,
+        draft,
+        { autocomplete: triggerOf(draft), completeMention },
+        { terminalTabId: 'tab', structuredWorktreeId: undefined, caret: draft.length }
+      ),
+    {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <NativeChatBotChatRoomContext.Provider value={engBots}>
+          {children}
+        </NativeChatBotChatRoomContext.Provider>
+      ),
+      initialProps: { draft: 'notify @eng - reviewer - o' }
+    }
+  )
+  expect(result.current.autocomplete).toEqual({
+    mode: 'mention',
+    query: 'eng - reviewer - o',
+    triggerKey: '@:7'
+  })
+  expect(result.current.mentionFiles.files).toEqual(['runtime:air:off', 'src/main.ts'])
+  act(() => {
+    result.current.chooseMention('runtime:air:off')
+  })
+  expect(completeMention).toHaveBeenCalledExactlyOnceWith(
+    'runtime:air:off',
+    '[Bot: Official](bot:off@air)',
+    7
+  )
+
+  for (const draft of ['notify @eng - reviewer please', 'notify @eng ', 'a@eng - rev', '@- x']) {
+    rerender({ draft })
+    expect(result.current.autocomplete).toEqual(triggerOf(draft))
+  }
+  rerender({ draft: 'notify @eng - rev' })
+  act(() => {
+    expect(result.current.handleKey(key('Escape'), 0)).toBe(true)
+  })
+  expect(result.current.autocomplete).toEqual({ mode: 'none' })
+})
