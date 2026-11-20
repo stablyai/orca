@@ -34,28 +34,27 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
       const runtimeAuth = readFileSync(runtimeAuthPath, 'utf-8')
       const provenanceStatus = this.resolveSharedRuntimeAuthProvenanceStatus()
       const provenance = provenanceStatus.kind === 'committed' ? provenanceStatus.provenance : null
-      const systemDefaultAuthExists = existsSync(systemDefaultAuthPath)
-      // The runtime copy may hold the only refreshed token: unreadable is no logout, so capture
-      // nothing and keep it until ~/.codex/auth.json reads again.
-      if (!systemDefaultAuthExists && !this.systemDefaultAuthIsGone()) {
-        return
-      }
       if (provenance?.owner === 'managed') {
-        this.captureSystemDefaultSnapshot({ force: true })
-        if (!systemDefaultAuthExists) {
-          this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath)
+        if (existsSync(systemDefaultAuthPath)) {
+          this.captureSystemDefaultSnapshot({ force: true })
+          const systemDefaultAuth = readFileSync(systemDefaultAuthPath, 'utf-8')
+          this.writeRuntimeAuth(systemDefaultAuth, { owner: 'system-default' })
           return
         }
-        this.writeRuntimeAuth(readFileSync(systemDefaultAuthPath, 'utf-8'), {
-          owner: 'system-default'
-        })
+        // A managed login leaves the mirror; an unreadable ~/.codex would snapshot no login.
+        const snapshot = this.systemDefaultAuthIsGone()
+        this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath, snapshot)
         return
       }
       const {
         ownershipProven: systemDefaultOwnershipProven,
         mirroredAuthJson: mirroredSystemDefaultAuth
       } = this.resolveSystemDefaultMirrorClaim(runtimeAuth, provenanceStatus)
-      if (!systemDefaultAuthExists) {
+      if (!existsSync(systemDefaultAuthPath)) {
+        // An unreadable auth.json is no logout: the runtime copy may hold the only refreshed token.
+        if (!this.systemDefaultAuthIsGone()) {
+          return
+        }
         if (mirroredSystemDefaultAuth !== null && runtimeAuth === mirroredSystemDefaultAuth) {
           this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath)
           return
@@ -304,10 +303,12 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
     return true
   }
 
-  protected clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath: string): void {
+  protected clearRuntimeAuthAfterSystemDefaultLogout(path: string, snapshot = true): void {
     // System logout revokes the mirrored login even after a runtime token refresh.
-    rmSync(runtimeAuthPath, { force: true })
-    this.captureSystemDefaultSnapshot({ force: true })
+    rmSync(path, { force: true })
+    if (snapshot) {
+      this.captureSystemDefaultSnapshot({ force: true })
+    }
     this.persistRuntimeLogoutMarker()
     this.lastWrittenAuthJson = null
     this.persistSharedRuntimeAuthProvenance({

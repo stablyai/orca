@@ -95,7 +95,7 @@ describe('CodexRuntimeHomeService', () => {
     { provenance: 'system default', managed: false },
     { provenance: 'a managed account', managed: true }
   ])(
-    'keeps a refreshed mirror login while ~/.codex/auth.json cannot be read ($provenance)',
+    'records no logout while ~/.codex/auth.json cannot be read ($provenance)',
     async ({ managed }) => {
       const runtimeAuthPath = getRuntimeCodexAuthPath()
       const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-old')
@@ -117,6 +117,10 @@ describe('CodexRuntimeHomeService', () => {
         )
       }
 
+      const snapshotBefore = readFileSync(
+        join(testState.userDataDir, 'codex-runtime-home', 'system-default-auth.json'),
+        'utf-8'
+      )
       const systemHome = join(testState.fakeHomeDir, '.codex')
       chmodSync(systemHome, 0o000)
       try {
@@ -125,7 +129,18 @@ describe('CodexRuntimeHomeService', () => {
         chmodSync(systemHome, 0o755)
       }
 
-      expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)
+      // A managed login still leaves the system default's mirror, but no empty snapshot is taken.
+      const snapshotPath = join(
+        testState.userDataDir,
+        'codex-runtime-home',
+        'system-default-auth.json'
+      )
+      if (managed) {
+        expect(existsSync(runtimeAuthPath)).toBe(false)
+        expect(readFileSync(snapshotPath, 'utf-8')).toBe(snapshotBefore)
+      } else {
+        expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(refreshedAuth)
+      }
       expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
     }
   )
