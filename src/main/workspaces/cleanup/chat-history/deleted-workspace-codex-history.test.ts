@@ -311,6 +311,40 @@ describe('deleteCodexRolloutsPermanently with a fork archived during the sweep',
   })
 })
 
+describe('deleteCodexRolloutsPermanently with a fork restored during the sweep', () => {
+  it('keeps the parent when its deleted fork comes back before the parent is retried', async () => {
+    root = mkdtempSync(join(tmpdir(), 'orca-codex-history-'))
+    vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
+    const home = join(root, 'codex')
+    mkdirSync(join(home, 'thread-writer-locks'), { recursive: true })
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 10, 20, 12))
+    const today = join(home, 'sessions', '2026', '11', '20')
+    const parent = write(join(today, NAME('1')), rollout('/gone'))
+    const forkContents = `${JSON.stringify({
+      type: 'session_meta',
+      payload: { cwd: '/gone', history_base: { thread_id: '00000001-0000-4000-8000-000000000000' } }
+    })}\n`
+    const fork = write(join(today, NAME('2')), forkContents)
+    utimesSync(today, WRITTEN, WRITTEN)
+
+    await deleteCodexRolloutsPermanently(
+      [parent, fork].map((filePath) => ({ agent: 'codex', filePath })),
+      async ({ filePath }) => {
+        if (filePath === parent && !exists(fork)) {
+          // A backup restores the fork after it was deleted, before the parent is retried.
+          write(fork, forkContents)
+        }
+        return true
+      },
+      async () => ({ homes: [home], protectedRoots: [] })
+    )
+
+    vi.useRealTimers()
+    expect([parent, fork].filter(exists)).toEqual([parent, fork])
+  })
+})
+
 describe('deleteCodexRolloutsPermanently across many Codex homes', () => {
   it('deletes an unreferenced rollout when more homes have archives than one sweep re-lists', async () => {
     root = mkdtempSync(join(tmpdir(), 'orca-codex-history-'))
