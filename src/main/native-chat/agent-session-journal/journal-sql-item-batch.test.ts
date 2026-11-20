@@ -16,7 +16,7 @@ afterEach(async () => {
 })
 
 function toolOutput(sessionId: string, callId: string): JournalWriterCommand {
-  const identity = { provider: 'orca', clientMessageId: callId }
+  const identity = { provider: 'orca' as const, clientMessageId: callId }
   const body = {
     kind: 'tool-call',
     name: 'shell',
