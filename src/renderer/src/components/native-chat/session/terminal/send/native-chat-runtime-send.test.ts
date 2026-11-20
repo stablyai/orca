@@ -15,8 +15,23 @@ vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () =
   }
 }))
 
-vi.mock('@/runtime/files/agent-image-preparation', () => ({
-  prepareAgentImagePaths: async () => ['/views/hero.png']
+vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
+  subscribeRuntimeRpc: async (
+    _target: unknown,
+    _method: string,
+    _params: unknown,
+    handlers: { onEvent: (value: unknown) => void }
+  ) => {
+    handlers.onEvent({ paths: ['/views/hero.png'] })
+    return { unsubscribe: () => {} }
+  }
+}))
+vi.mock('@/store/index', () => ({ useAppStore: { subscribe: () => () => {} } }))
+vi.mock('@/runtime/hosted-terminals/identity/remote-runtime-pty-owner', () => ({
+  getRemoteRuntimePtyOwner: () => ({
+    target: { kind: 'environment', environmentId: 'outer-server' },
+    terminal: 'terminal-1'
+  })
 }))
 
 import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
@@ -81,6 +96,34 @@ describe('sendNativeChatMessage input line ownership', () => {
 })
 
 describe('fitted image delivery', () => {
+  it.each([false, true])(
+    'keeps a nested SSH attachment on its own host (observed=%s)',
+    async (observed) => {
+      vi.useFakeTimers()
+      writes.length = 0
+      try {
+        const handle = sendNativeChatMessageWithImageAttachments(
+          'claude',
+          'remote:outer-server@@terminal-1',
+          'Inspect this image',
+          ['/repo/.orca/drops/hero.png'],
+          {
+            executionHostId: 'ssh:inner-server',
+            clearInput: '',
+            ...(observed ? { onWriteRejected: () => {} } : {})
+          }
+        )
+        await vi.advanceTimersByTimeAsync(2000)
+        expect(writes.some((text) => text.includes('/repo/.orca/drops/hero.png'))).toBe(true)
+        expect(writes.some((text) => text.includes('/views/hero.png'))).toBe(false)
+        await expect(handle.outcome).resolves.toBe('submitted')
+      } finally {
+        resetNativeChatPtySendQueuesForTests()
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it('sends the viewing image and retains the selected editing target', async () => {
     vi.useFakeTimers()
     writes.length = 0

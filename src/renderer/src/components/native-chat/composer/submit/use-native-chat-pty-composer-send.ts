@@ -17,6 +17,7 @@ import {
   type NativeChatSendHandle
 } from '../../session/terminal/send/native-chat-runtime-send'
 import { sendNativeChatMessageWithImageAttachments } from '../../session/terminal/send/native-chat-runtime-image-send'
+import { resolveNativeChatAttachmentOwner } from '../../attachments/uploads/native-chat-attachment-owner'
 import { resolveNativeChatLaunchDraftSend } from '../../drafts/native-chat-launch-draft-send'
 import {
   nativeChatComposerTargetIsRemote,
@@ -130,12 +131,16 @@ export function useNativeChatPtyComposerSend(args: {
             ? sendNativeChatTypedCommand(target.ptyId, text, launchSendOptions)
             : sendNativeChatMessage(target.ptyId, text, sendOptions)
       } else if (imagePaths.length > 0) {
+        const owner = resolveNativeChatAttachmentOwner(useAppStore.getState(), args.terminalTabId)
         pendingHandle = sendNativeChatMessageWithImageAttachments(
           args.agent,
           target.ptyId,
           text,
           imagePaths,
-          sendOptions
+          {
+            ...sendOptions,
+            executionHostId: owner.kind === 'remote' ? owner.staging?.executionHostId : undefined
+          }
         )
       } else if (text.trim().length > 0) {
         pendingHandle = sendNativeChatMessage(target.ptyId, text, sendOptions)

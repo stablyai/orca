@@ -1,4 +1,7 @@
-import { prepareAgentImagePaths } from '@/runtime/files/agent-image-preparation'
+import {
+  prepareAgentImagePaths,
+  type AgentImagePreparationOptions
+} from '@/runtime/files/agent-image-preparation'
 import {
   sendNativeChatObservedWrites,
   type NativeChatObservedWrite
@@ -38,13 +41,16 @@ export function sendNativeChatMessageWithImageAttachments(
   ptyId: string,
   text: string,
   imagePaths: readonly string[],
-  options?: NativeChatSendOptions
+  options?: NativeChatSendOptions & Pick<AgentImagePreparationOptions, 'executionHostId'>
 ): NativeChatSendHandle {
   if (imagePaths.length === 0) {
     return sendNativeChatMessage(ptyId, text, options)
   }
   const preparePaths = async (signal: AbortSignal): Promise<string[]> => {
-    const prepared = await prepareAgentImagePaths(ptyId, imagePaths, undefined, { signal })
+    const prepared = await prepareAgentImagePaths(ptyId, imagePaths, undefined, {
+      signal,
+      executionHostId: options?.executionHostId
+    })
     signal.throwIfAborted()
     options?.onImagesPrepared?.(prepared)
     return prepared
