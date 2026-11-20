@@ -34,6 +34,50 @@ export async function readMessageText(
   return text
 }
 
+const AHEAD = /^\+(\d{1,4})([mhd])$/
+const UNIT_SECONDS = { m: 60, h: 3_600, d: 86_400 } as const
+// A time with its zone, so it means one moment wherever the machine is.
+const ZONED = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/
+/** Slack's own limits on a scheduled message: not in the past, at most 120 days ahead. */
+const MAX_AHEAD_SECONDS = 120 * 86_400
+const MIN_AHEAD_SECONDS = 60
+
+/** `--at` as the moment to post (epoch seconds): a while from now (+30m, +2h, +3d) or a time with
+ *  its zone. Nothing when the flag is absent. */
+export function scheduledFor(at: string | undefined, nowMs: number): { postAt?: number } {
+  if (at === undefined) {
+    return {}
+  }
+  const now = Math.floor(nowMs / 1000)
+  const ahead = AHEAD.exec(at.trim())
+  const unit = ahead?.[2]
+  const postAt =
+    ahead && (unit === 'm' || unit === 'h' || unit === 'd')
+      ? now + Number(ahead[1]) * UNIT_SECONDS[unit]
+      : ZONED.test(at.trim())
+        ? Math.floor(Date.parse(at.trim()) / 1000)
+        : Number.NaN
+  if (!Number.isSafeInteger(postAt)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--at takes a while from now (+30m, +2h, +3d) or a time with its zone (2026-12-01T09:00:00-08:00).'
+    )
+  }
+  if (postAt < now + MIN_AHEAD_SECONDS) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--at must be at least a minute from now. Leave it out to post now.'
+    )
+  }
+  if (postAt > now + MAX_AHEAD_SECONDS) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Slack schedules a post at most 120 days ahead.'
+    )
+  }
+  return { postAt }
+}
+
 /** The verbs `orca slack` sends in one call, as connector.act names them; attach takes several. */
 export type SlackVerb = 'find' | 'check' | 'read' | 'post' | 'react' | 'edit' | 'delete'
 
@@ -66,7 +110,11 @@ export async function actionArgs(
       return { text: await readMessageText(flags, cwd, true) }
     case 'post':
       // Minted once here, so the host's retries after a lost answer post it at most once.
-      return { text: await readMessageText(flags, cwd, true), postId: randomUUID() }
+      return {
+        text: await readMessageText(flags, cwd, true),
+        postId: randomUUID(),
+        ...scheduledFor(getOptionalStringFlag(flags, 'at'), Date.now())
+      }
     case 'check':
       return flags.get('join') === true ? { join: true } : {}
     case 'find': {

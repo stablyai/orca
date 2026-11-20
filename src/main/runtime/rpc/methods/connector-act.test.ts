@@ -265,6 +265,24 @@ describe('connector.act', () => {
     expect(calls).toEqual([])
   })
 
+  it('schedules a post only with a cloud that can, and never posts it now instead', async () => {
+    const later = {
+      sessionId: 'bot-session',
+      verb: 'post',
+      ref: 'slack:T1:C1',
+      args: { text: 'standup in 10', postId: 'p1', postAt: 1_900_000_000 }
+    }
+    const older = actContext({ features: ['actions'] })
+    await expect(run(later, older.context)).rejects.toMatchObject({ code: 'cloud_lacks_schedule' })
+    expect(older.calls).toEqual([])
+    const newer = actContext({
+      features: ['actions', 'post.schedule'],
+      answers: [{ ok: true, value: { ok: true, result: { note: 'Scheduled.' } } }]
+    })
+    await run(later, newer.context)
+    expect(newer.calls[0]?.body).toMatchObject({ verb: 'post', args: later.args })
+  })
+
   it('sends a search only to a cloud that takes one', async () => {
     const find = {
       sessionId: 'bot-session',

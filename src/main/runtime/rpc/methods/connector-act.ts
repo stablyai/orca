@@ -1,4 +1,5 @@
 import type { ConnectorCloudFeature } from '../../../../shared/connectors/connector-cloud-contract'
+import { CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE } from '../../../../shared/connector-cloud-features'
 import type { ConnectorActErrorCode } from '../../../../shared/connector-action-contract'
 import { ConnectorAct } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { botOfSession } from '../../../bots/bot-session-tabs'
@@ -142,6 +143,12 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
       throw new ConnectorActError(
         'cloud_lacks_search',
         "Orca Cloud can't search yet. Find a channel by its name or link with `orca slack find`."
+      )
+    }
+    if (args.postAt && !features.has(CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE)) {
+      throw new ConnectorActError(
+        'cloud_lacks_schedule',
+        "Orca Cloud can't post later yet; nothing was scheduled. Post it now, or try again after Orca Cloud updates."
       )
     }
     if (
