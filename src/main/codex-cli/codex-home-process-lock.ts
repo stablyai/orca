@@ -30,6 +30,11 @@ export function resolveCodexHomeProcessLockKeyForSpawnEnv(
   return normalizeRuntimePathForComparison(codexHome ?? join(homedir(), '.codex'))
 }
 
+/** While anything holds or waits for the lock, settles when that work is done; recheck afterwards. */
+export function codexHomeProcessLockBusy(lockKey: string): Promise<unknown> | null {
+  return lockTails.get(lockKey) ?? null
+}
+
 export function withCodexHomeProcessLock<T>(lockKey: string, fn: () => Promise<T>): Promise<T> {
   const prior = lockTails.get(lockKey) ?? Promise.resolve()
   const run = prior.then(fn)

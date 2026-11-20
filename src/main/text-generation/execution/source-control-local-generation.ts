@@ -3,10 +3,12 @@ import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import {
+  codexHomeProcessLockBusy,
   resolveCodexHomeProcessLockKeyForSpawnEnv,
   withCodexHomeProcessLock
 } from '../../codex-cli/codex-home-process-lock'
 import {
+  CANCELED_GENERATION_RESULT,
   clearLocalGenerationCancelToken,
   localGenerationLaneKey,
   setLocalGenerationCancelToken
@@ -132,33 +134,71 @@ export function runLocalPlanForAgent(input: {
       : launch(input.plan)
   }
   const admit = input.admit
-  const holdsAccountLock = input.agentId === 'codex'
-  const admitted = admit
-    ? async (): Promise<LocalProcessExecution<InternalTextGenerationResult>> =>
-        (await admit(start, { holdsAccountLock })) ?? {
-          result: Promise.resolve({
-            success: false,
-            error: 'Generation canceled.',
-            canceled: true
-          }),
-          processClosed: Promise.resolve()
-        }
-    : start
-  if (input.agentId !== 'codex') {
-    const execution = admitted()
-    return Promise.resolve(execution).then((execution) =>
-      input.shouldExecute
+  const finish = (execution: LocalProcessExecution<InternalTextGenerationResult> | null) =>
+    !execution
+      ? Promise.resolve(CANCELED_GENERATION_RESULT)
+      : input.shouldExecute
         ? execution.result.finally(() => execution.processClosed)
         : execution.result
+  if (input.agentId !== 'codex') {
+    return Promise.resolve(admit ? admit(start) : start()).then(finish)
+  }
+  if (admit) {
+    const lockKey = resolveCodexHomeProcessLockKeyForSpawnEnv(
+      target.env,
+      target.wslDistro,
+      input.plan.env
     )
+    return admitUnderFreeCodexHome(admit, lockKey, () =>
+      startCodexUnderHomeLock(start, target, input.operation, input.plan.env)
+    ).then(finish)
   }
   return runCodexLocalPlanUnderHomeLock(
-    admitted,
+    start,
     target,
     input.operation,
     input.plan.env,
     !!input.shouldExecute
   )
+}
+
+/**
+ * Takes a background slot and the Codex home lock together, never holding one while waiting for
+ * the other: a run that finds the account busy gives its slot back, waits for the account, then
+ * returns to the front of the queue.
+ */
+async function admitUnderFreeCodexHome(
+  admit: GenerationAdmission,
+  lockKey: string,
+  startUnderLock: () => LocalProcessExecution<InternalTextGenerationResult>
+): Promise<LocalProcessExecution<InternalTextGenerationResult> | null> {
+  let returning = false
+  for (;;) {
+    const busy = codexHomeProcessLockBusy(lockKey)
+    if (busy) {
+      await busy
+      returning = true
+      continue
+    }
+    let accountBusy = false
+    const execution = await admit(
+      () => {
+        if (codexHomeProcessLockBusy(lockKey)) {
+          accountBusy = true
+          return {
+            result: Promise.resolve(CANCELED_GENERATION_RESULT),
+            processClosed: Promise.resolve()
+          }
+        }
+        return startUnderLock()
+      },
+      { returning }
+    )
+    if (!accountBusy) {
+      return execution
+    }
+    returning = true
+  }
 }
 
 function runCodexLocalPlanUnderHomeLock(
@@ -170,6 +210,21 @@ function runCodexLocalPlanUnderHomeLock(
   commandEnv?: Record<string, string>,
   awaitSettlement = false
 ): Promise<InternalTextGenerationResult> {
+  const execution = startCodexUnderHomeLock(start, target, operation, commandEnv)
+  return awaitSettlement
+    ? execution.result.finally(() => execution.processClosed)
+    : execution.result
+}
+
+/** Queues on the Codex home lock; `processClosed` settles once the lock is released. */
+function startCodexUnderHomeLock(
+  start: () =>
+    | LocalProcessExecution<InternalTextGenerationResult>
+    | Promise<LocalProcessExecution<InternalTextGenerationResult>>,
+  target: LocalGenerationTarget,
+  operation: TextGenerationOperation,
+  commandEnv?: Record<string, string>
+): LocalProcessExecution<InternalTextGenerationResult> {
   const laneKey = localGenerationLaneKey(operation, target.cwd, target.laneId)
   let canceledWhileQueued = false
   let publishResult!: (result: InternalTextGenerationResult) => void
@@ -214,7 +269,7 @@ function runCodexLocalPlanUnderHomeLock(
       }
     })
     .finally(() => clearLocalGenerationCancelToken(laneKey, queuedCancel))
-  return awaitSettlement ? result.finally(() => operationSettled) : result
+  return { result, processClosed: operationSettled }
 }
 
 export function runCodexProcessWithHomeLock<T>(
