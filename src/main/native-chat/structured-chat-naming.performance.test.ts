@@ -63,7 +63,7 @@ function burst() {
   return { records, naming, running, started, peak: () => peak, settle, finishOne }
 }
 
-// #PR_NUMBER: a launch burst started one naming agent CLI per new chat at once from main.
+// #45703: a launch burst started one naming agent CLI per new chat at once from main.
 describe('chat naming during a launch burst', () => {
   it('runs at most three naming agents at a time and starts none for a chat named while queued', async () => {
     const { records, naming, running, started, peak, settle, finishOne } = burst()
