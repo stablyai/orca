@@ -192,7 +192,7 @@ function OfferCard({
  * to Orca Cloud is down with no notice of its own (refused, or stopped while signed in), why.
  */
 function ServerOffer(props: OfferProps): React.JSX.Element {
-  useTranslation()
+  const t = useTranslate()
   const host = useBotHostLabel(props.bot.hostId)
   const { state, connector } = useServerNoticeState(props.bot.hostId, props.bot)
   // An older server's update notice doesn't mean its events stopped.
@@ -202,7 +202,7 @@ function ServerOffer(props: OfferProps): React.JSX.Element {
     host === null ? undefined : noticed ? (
       <BotConnectorsHostNotice bot={props.bot} />
     ) : linkDown ? (
-      <p className="text-xs text-muted-foreground">{notReaching(props.bot.name)}</p>
+      <p className="text-xs text-muted-foreground">{notReaching(props.bot.name, t)}</p>
     ) : undefined
   return <SourceOffer {...props} pause={pause} />
 }

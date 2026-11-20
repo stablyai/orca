@@ -4,7 +4,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import type * as LinkRead from '@/lib/bot-host-link-read'
+import type * as RendererI18n from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { ConnectorOffer } from '../../../../shared/bots/bot-connector-offer'
 
 type Mocks = {
   bots: Bot[]
@@ -16,6 +18,7 @@ type Mocks = {
   localRead: 'lands' | 'fails' | 'set-aside'
   /** Runs while this computer's read is out, before it lands. */
   whileReading: (() => void) | null
+  language: 'first' | 'second' | null
 }
 const mocks = vi.hoisted((): Mocks => ({
   bots: [],
@@ -23,8 +26,35 @@ const mocks = vi.hoisted((): Mocks => ({
   updateBot: vi.fn(),
   localConnector: 'ok',
   localRead: 'lands',
-  whileReading: null
+  whileReading: null,
+  language: null
 }))
+vi.mock('@/i18n/i18n', async (actual) => {
+  const real = await actual<typeof RendererI18n>()
+  const reasons = new Set([
+    'bots.cloudSignIn.webhooksChat',
+    'bots.cloudSignIn.eventsChat',
+    'bots.cloudSignIn.webhooksHostChat',
+    'bots.cloudSignIn.eventsHostChat',
+    'bots.host.notice.notReaching'
+  ])
+  return {
+    ...real,
+    translate: (...args: Parameters<typeof real.translate>) => {
+      if (!mocks.language || !reasons.has(args[0])) {
+        return real.translate(...args)
+      }
+      if (args[0] === 'bots.host.notice.notReaching') {
+        return mocks.language === 'first'
+          ? 'First-language link warning'
+          : 'Second-language link warning'
+      }
+      return mocks.language === 'first'
+        ? 'First-language sign-in reason'
+        : 'Second-language sign-in reason'
+    }
+  }
+})
 vi.mock('@/lib/bot-catalog', () => ({
   useBots: () => mocks.bots,
   updateBot: mocks.updateBot,
@@ -115,6 +145,13 @@ import {
 } from '../bots/orca-sign-in.test-fixture'
 import { NativeChatBotKickoffContext } from './native-chat-bot-kickoff-view'
 import { NativeChatConnectorOfferCard } from './NativeChatConnectorOfferCard'
+import { translate } from '@/i18n/i18n'
+import { TranslationScopeContext, type Translate } from '@/i18n/use-translate'
+
+const firstLanguageTranslator: Translate = (...args) => translate(...args)
+const secondLanguageTranslator: Translate = (...args) => translate(...args)
+const firstLanguageScope = { t: firstLanguageTranslator, intlLocale: 'en' }
+const secondLanguageScope = { t: secondLanguageTranslator, intlLocale: 'zh' }
 
 const acme = { workspaceId: 'w1', workspaceName: 'Acme' }
 
@@ -157,6 +194,59 @@ afterEach(() => {
   mocks.localConnector = 'ok'
   mocks.localRead = 'lands'
   mocks.whileReading = null
+  mocks.language = null
+})
+
+describe('sign-in copy when the language changes', () => {
+  it.each(['local-sign-in', 'local-unread', 'server-sign-in', 'server-link-down'])(
+    'updates %s without replacing the offer',
+    async (state) => {
+      const initial = useAppStore.getState()
+      const remote = state.startsWith('server')
+      const down = state.endsWith('link-down')
+      useAppStore.setState({
+        orcaProfileAuthStatus: state === 'local-sign-in' ? ORCA_SIGNED_OUT : ORCA_CONNECTED
+      })
+      mocks.localRead = down ? 'lands' : 'set-aside'
+      mocks.localConnector = down ? 'refused' : 'ok'
+      const bot = makeTestBot({ github: {} })
+      mocks.bots = [remote ? stampBotHost('runtime:server', bot) : bot]
+      server.state = state === 'server-sign-in' ? { kind: 'signed-out' } : null
+      server.connector = down ? 'refused' : 'ok'
+      const offer: ConnectorOffer = {
+        botId: 'b1',
+        source: 'github',
+        signIn: !down || !remote ? true : undefined
+      }
+      const card = <NativeChatConnectorOfferCard offer={offer} messageId="m1" fallback="fallback" />
+      mocks.language = 'first'
+      try {
+        const view = render(
+          <TranslationScopeContext.Provider value={firstLanguageScope}>
+            {card}
+          </TranslationScopeContext.Provider>
+        )
+        expect(
+          await screen.findByText(
+            down ? 'First-language link warning' : 'First-language sign-in reason'
+          )
+        ).toBeTruthy()
+        mocks.language = 'second'
+        view.rerender(
+          <TranslationScopeContext.Provider value={secondLanguageScope}>
+            {card}
+          </TranslationScopeContext.Provider>
+        )
+        expect(
+          screen.getByText(down ? 'Second-language link warning' : 'Second-language sign-in reason')
+        ).toBeTruthy()
+      } finally {
+        server.state = null
+        server.connector = 'ok'
+        useAppStore.setState(initial, true)
+      }
+    }
+  )
 })
 
 describe('the Connect card', () => {
