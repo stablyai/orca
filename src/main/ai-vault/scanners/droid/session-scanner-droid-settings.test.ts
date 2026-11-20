@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -126,8 +126,8 @@ describe('droid settings sidecar', () => {
       transcriptPath,
       `${JSON.stringify({ type: 'message', role: 'assistant', text: 'done' })}\n`
     )
-    const future = new Date(Date.now() + 10_000)
-    await utimes(transcriptPath, future, future)
+    const later = new Date((await stat(transcriptPath)).mtimeMs + 10_000)
+    await utimes(transcriptPath, later, later)
     const session = await scanDroid(scanOptions)
 
     expect(session?.model).toBe('m1')
