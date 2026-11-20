@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { win32 } from 'node:path'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import type {
   WindowsMobileFirewallRepairResult,
   WindowsMobileFirewallStatus,
@@ -120,8 +120,7 @@ function defaultEnvironment(): WindowsMobileFirewallEnvironment {
     // Why: direct helper calls must fail closed; the IPC integration opts in
     // only after Electron confirms this is a packaged Windows build.
     isPackaged: false,
-    executablePath: process.execPath,
-    systemRoot: process.env.SystemRoot
+    executablePath: process.execPath
   }
 }
 
@@ -235,8 +234,8 @@ function encodePowerShell(script: string): string {
   return Buffer.from(script, 'utf16le').toString('base64')
 }
 
-function getWindowsPowerShellPath(systemRoot = 'C:\\Windows'): string {
-  return win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+function getWindowsPowerShellPath(systemRoot?: string): string {
+  return windowsPowerShellPath(systemRoot === undefined ? undefined : { SystemRoot: systemRoot })
 }
 
 function getRunner(environment: WindowsMobileFirewallEnvironment): PowerShellRunner {
