@@ -54,19 +54,25 @@ export function useBotLookSave(
     save: () => void
     look: BotLookUpdate
   } | null>(null)
-  const latestPick = useRef(0)
+  // The drain this editor waits on, so it observes each one once however many picks join it.
+  const watched = useRef<Promise<void> | null>(null)
   const pick = (change: BotLookUpdate): void => {
     const look = { ...timer.current?.look, ...change }
-    const thisPick = (latestPick.current += 1)
     setPicked((shown) => ({ ...shown, ...change }))
     if (timer.current) {
       clearTimeout(timer.current.timer)
     }
     const save = (): void => {
       timer.current = null
-      void saveBotLook(key, look, update).then(() => {
-        // Shown as saved once it lands, unless something newer was picked meanwhile.
-        if (latestPick.current === thisPick) {
+      const drained = saveBotLook(key, look, update)
+      if (watched.current === drained) {
+        return
+      }
+      watched.current = drained
+      void drained.then(() => {
+        watched.current = null
+        // Shown as saved once everything picked has landed, unless a newer pick is still waiting.
+        if (!timer.current) {
           setPicked(null)
         }
       })

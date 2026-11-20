@@ -82,37 +82,41 @@ function cached<T>(cache: Map<string, T>, key: string, build: () => T): T {
   return value
 }
 
-const dressed = new Map<string, string>()
-const faced = new Map<string, string>()
+const pictures = new Map<string, string>()
 const arts = new Map<string, BotOutfitArt>()
-
-function mascotSvg(id: BotMascotId, color: string | null): string | null {
-  const svg = MASCOT_SVGS[`../../../../shared/bot-mascots/${id}.svg`]
-  return svg && color ? recolorMascotSvg(svg, color) : (svg ?? null)
-}
 
 function svgSrc(svg: string): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
 
-// `layers` undefined: the outfit's art hasn't arrived, so the picture shows without it (and isn't cached).
+// Each picture is built once per mascot, color and outfit, inside the cache miss.
+function pictureSrc(
+  id: BotMascotId,
+  color: string | null,
+  key: string,
+  build: (svg: string) => string
+): string {
+  return cached(pictures, `${id}|${color ?? ''}|${key}`, () => {
+    const svg = MASCOT_SVGS[`../../../../shared/bot-mascots/${id}.svg`]
+    return svg ? svgSrc(build(color ? recolorMascotSvg(svg, color) : svg)) : BOT_MASCOT_URLS[id]
+  })
+}
+
+function plainSrc(id: BotMascotId, color: string | null): string {
+  return color ? pictureSrc(id, color, '', (svg) => svg) : BOT_MASCOT_URLS[id]
+}
+
+// `layers` undefined: the outfit's art hasn't arrived (or failed), so the plain picture shows meanwhile.
 function dressedSrc(
   id: BotMascotId,
   color: string | null,
   outfit: BotAvatarOutfit | null,
   layers: BotOutfitLayers | null | undefined
 ): string {
-  const svg = mascotSvg(id, color)
-  if (!svg) {
-    return BOT_MASCOT_URLS[id]
-  }
   const layer = outfit && layers ? layers[id] : undefined
-  if (outfit && layers === undefined) {
-    return color ? svgSrc(svg) : BOT_MASCOT_URLS[id]
-  }
-  return cached(dressed, `${id}|${color ?? ''}|${outfit ?? ''}`, () =>
-    svgSrc(layer ? dressMascotSvg(svg, layer) : svg)
-  )
+  return layer
+    ? pictureSrc(id, color, `${outfit}|dressed`, (svg) => dressMascotSvg(svg, layer))
+    : plainSrc(id, color)
 }
 
 function layeredLook(
@@ -122,22 +126,13 @@ function layeredLook(
   layers: BotOutfitLayers | null | undefined
 ): BotMascotLook {
   const layer = outfit && layers ? layers[id] : undefined
-  const svg = mascotSvg(id, color)
-  if (!svg) {
-    return { src: BOT_MASCOT_URLS[id], outfit: null }
-  }
   if (!layer) {
-    return {
-      src: color ? cached(faced, `${id}|${color}|`, () => svgSrc(svg)) : BOT_MASCOT_URLS[id],
-      outfit: null
-    }
+    return { src: plainSrc(id, color), outfit: null }
   }
   // Only an outfit that changes the face makes the mascot's own picture differ from the plain one.
   const src = layer.face
-    ? cached(faced, `${id}|${color ?? ''}|${outfit}`, () => svgSrc(faceMascotSvg(svg, layer)))
-    : color
-      ? cached(faced, `${id}|${color}|`, () => svgSrc(svg))
-      : BOT_MASCOT_URLS[id]
+    ? pictureSrc(id, color, `${outfit}|faced`, (svg) => faceMascotSvg(svg, layer))
+    : plainSrc(id, color)
   const art = cached(arts, `${id}|${outfit}`, () => ({ src: artSrc(layer), at: layer.at }))
   return { src, outfit: art }
 }
@@ -158,7 +153,7 @@ export function useBotMascotSrc(
   if (!id) {
     return null
   }
-  return tile || worn ? dressedSrc(id, tile, worn, layers) : BOT_MASCOT_URLS[id]
+  return dressedSrc(id, tile, worn, layers)
 }
 
 /** Each mascot's picture on `color`, wearing `outfit`, in layers: for the picker, where the color is dragged. */
