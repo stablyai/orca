@@ -199,6 +199,8 @@ export class CodexAccountHistoryPasses {
     const moveOutcome = shared ? MOVE_OUTCOMES[outcome] : undefined
     if (moveOutcome) {
       this.moveReport.record(key, moveOutcome)
+      // Any pass can complete the newest listing: a retry, or a home a later launch added.
+      void this.moveReport.report(this.censusHomes)
     } else {
       this.moveReport.forget(key)
     }
@@ -272,10 +274,7 @@ export class CodexAccountHistoryPasses {
           void this.run(accountHome, true, {
             stillWanted: () =>
               !isCodexAccountHistoryWorkStopping() && this.isStillShared(accountHome)
-          })
-            // A home that moved on its retry updates the report without waiting for a launch.
-            .then(() => (this.censusWaiting ? undefined : this.moveReport.report(this.censusHomes)))
-            .catch(() => {})
+          }).catch(() => {})
         }
       }, BUSY_RETRY_MS)
     )
