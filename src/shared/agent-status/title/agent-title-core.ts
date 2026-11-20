@@ -53,13 +53,21 @@ export const STRONG_PERMISSION_KEYWORDS_RE =
 
 export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 
-export function hasGeminiStatusGlyph(title: string): boolean {
-  return (
-    title.includes(GEMINI_PERMISSION) ||
-    title.includes(GEMINI_WORKING) ||
-    title.includes(GEMINI_SILENT_WORKING) ||
-    title.includes(GEMINI_IDLE)
-  )
+const GEMINI_GLYPH_CLASS = `[${GEMINI_PERMISSION}${GEMINI_WORKING}${GEMINI_SILENT_WORKING}${GEMINI_IDLE}]`
+// Gemini opens its title with the glyph (or a `<glyph>  ` frame behind a tmux/Administrator prefix); leftmost anchor wins.
+const GEMINI_STATUS_GLYPH_RE = new RegExp(
+  String.raw`(?:^\s*| \| \s*|["'\s](?=${GEMINI_GLYPH_CLASS}  ))(${GEMINI_GLYPH_CLASS})`
+)
+
+export function leadingGeminiGlyphStatus(title: string): AgentStatus | null {
+  const glyph = GEMINI_STATUS_GLYPH_RE.exec(title)?.[1]
+  if (!glyph) {
+    return null
+  }
+  if (glyph === GEMINI_PERMISSION) {
+    return 'permission'
+  }
+  return glyph === GEMINI_IDLE ? 'idle' : 'working'
 }
 
 const GEMINI_IDENTITY_FRAME_RE =
@@ -80,7 +88,7 @@ function computeIsGeminiTerminalTitle(title: string): boolean {
     return false
   }
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
-  if (hasGeminiStatusGlyph(title)) {
+  if (leadingGeminiGlyphStatus(title) !== null) {
     return true
   }
   if (getWrapperTitleSegments(title).some(isDecoratedNonGeminiFrameSegment)) {
