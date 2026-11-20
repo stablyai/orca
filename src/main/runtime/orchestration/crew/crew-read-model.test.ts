@@ -315,3 +315,45 @@ it('shows what changed for a chat that left and one that is new while the host i
     vi.useRealTimers()
   }
 })
+
+it('reads fresh for a chat no kept host covers, without subscribing', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const { db, deps, assign, handles } = fixture()
+  try {
+    assign('term_worker')
+    const model = new CrewReadModel(() => deps, db.crewChanges.subscribe)
+    const stop = model.subscribe(() => {}, 'term_coord')
+    model.read('term_coord')
+    stop()
+    const other = db.createRun({
+      objective: 'Other crew',
+      coordinatorHandle: 'term_peer',
+      coordinatorPaneKey: handles.get('term_peer')!
+    })
+    const task = db.createTask({ runId: other.id, spec: 'Other work', taskTitle: 'Other work' })
+    db.updateTaskStatus(task.id, 'ready')
+    db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_helper',
+      assigneePaneKey: handles.get('term_helper'),
+      creator: { kind: 'terminal', handle: 'term_peer', paneKey: handles.get('term_peer') },
+      maxDepth: 10
+    })
+    // As the worker approvals stream reads a hidden coordinator.
+    expect(model.read('term_peer').sections.managing.map((row) => row.task?.title)).toEqual([
+      'Other work'
+    ])
+    db.insertMessage({
+      runId: other.id,
+      from: 'term_helper',
+      to: 'term_peer',
+      subject: 'Update',
+      body: 'later'
+    })
+    expect(model.read('term_peer').sections.managing.map((row) => row.latest?.preview)).toEqual([
+      'later'
+    ])
+  } finally {
+    vi.useRealTimers()
+  }
+})

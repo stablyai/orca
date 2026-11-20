@@ -1,4 +1,5 @@
-// Perf contract for the crew subscribe stall in 1.4.266 (follow-up to #45290): hide/show must not rebuild.
+// Perf contracts for the crew subscribe stall in 1.4.266 (follow-up to #45290): hide/show and opening
+// another chat must not rebuild the crew host.
 import { afterEach, expect, it, vi } from 'vitest'
 import { fixture } from './crew-read-model.test-fixture'
 import { seedLegacyCrewLoad, LEGACY_COORDINATOR } from './legacy-crew-load.test-fixture'
@@ -48,4 +49,40 @@ it('keeps the shared crew host across a chat hidden and shown 20 times, then let
   expect({ watching, timers: vi.getTimerCount() }).toEqual({ watching: 0, timers: 0 })
   showAndHide()
   expect(builds).toBe(2)
+})
+
+it('opens a chat beside a mounted one without rebuilding for an unrelated Dispatch', () => {
+  const f = fixture()
+  f.assign('term_worker')
+  let builds = 0
+  const model = new CrewReadModel((previous) => {
+    if (!previous) {
+      builds++
+    }
+    return f.deps
+  }, f.db.crewChanges.subscribe)
+  const show = (party: string) =>
+    subscribeCrew(
+      () => model.read(party),
+      (wake) => model.subscribe(wake, party),
+      () => {}
+    )
+  const mounted = show('term_coord')
+  const other = f.db.createRun({
+    objective: 'Other',
+    coordinatorHandle: 'term_peer',
+    coordinatorPaneKey: null
+  })
+  const task = f.db.createTask({ runId: other.id, spec: 'Other work' })
+  f.db.createDispatchContext({
+    taskId: task.id,
+    assigneeHandle: 'term_helper',
+    creator: { kind: 'terminal', handle: 'term_peer' },
+    maxDepth: 10
+  })
+  for (const party of ['term_outbound', 'term_grandchild', 'term_worker']) {
+    show(party)()
+  }
+  expect(builds).toBe(1)
+  mounted()
 })

@@ -51,10 +51,8 @@ export class CrewReadModel {
   private broadTraffic = false
   private unwatch: (() => void) | undefined
   private release: ReturnType<typeof setTimeout> | undefined
-  /** Parties that left while the host stays: their rows still filter wakes, so their return reads fresh. */
+  /** Parties whose last listener left since the last subscribe: their rows still filter wakes, so their return reads fresh. */
   private readonly departed = new Set<string>()
-  /** Mail wakes no shown row named; a party new to this host reads its mail fresh. */
-  private skippedTraffic = false
   /** A terminal record write while nobody listened, checked by the next read instead of on every notice. */
   private identityDeferred = false
   private readonly hosts = crewHostBuilder(() => this.listeners.size)
@@ -74,9 +72,6 @@ export class CrewReadModel {
     identityMoved: () => this.identityMoved(),
     status: () => {
       this.skipped ??= 'status'
-    },
-    traffic: () => {
-      this.skippedTraffic = true
     },
     patch: (id) => this.patches.add(id),
     stale: (id) => (this.stale.size < STALE_CAP ? this.stale.add(id) : this.dirty.add('topology'))
@@ -133,22 +128,24 @@ export class CrewReadModel {
 
   /** `party` routes wakes: a change no row of that party shows does not wake it. */
   subscribe = (listener: () => void, party?: string): (() => void) => {
+    // Kept past a hide only for the parties whose rows filtered wakes since: anyone else reads as after a release.
+    if (
+      this.listeners.size === 0 &&
+      this.host &&
+      (party === undefined || !this.departed.has(party))
+    ) {
+      this.dirty.add('topology')
+    }
+    for (const left of this.departed) {
+      if (left !== party) {
+        this.partyRelevance.delete(left)
+      }
+    }
+    this.departed.clear()
     this.listeners.set(listener, party)
     clearTimeout(this.release)
     this.release = undefined
     this.unwatch ??= this.watch(this.invalidate, this.readRelevance)
-    if (party !== undefined && this.departed.delete(party)) {
-      // Its rows filtered wakes while it was away.
-    } else if (party === undefined || !this.partyRelevance.has(party)) {
-      // New to this host: writes skipped before it joined may concern it.
-      if (this.stale.size > 0) {
-        this.dirty.add('topology')
-      }
-      if (this.skippedTraffic) {
-        this.broadTraffic = true
-        this.dirty.add('traffic')
-      }
-    }
     // A party joining reads rows the skipped wakes may have changed; stale Dispatches it shows rebuild on read.
     if (this.skipped === 'status') {
       this.dirty.add('status').add('names')
@@ -178,13 +175,18 @@ export class CrewReadModel {
     for (const kept of [this.partyRelevance, this.departed, this.stale, this.patches, this.dirty]) {
       kept.clear()
     }
-    this.skippedTraffic = this.identityDeferred = false
+    this.identityDeferred = false
     this.trafficAddresses.clear()
     this.renamed.clear()
   }
 
   read = (address: string): OrchestrationCrewSnapshot => {
     try {
+      // Unwatched, or kept for parties this one is not: a one-shot read has no watch keeping its rows current.
+      if (this.listeners.size === 0 && !this.departed.has(address)) {
+        const host = this.hosts.build('one-shot', this.readDependencies())
+        return buildCrewSnapshot(address, { ...host.deps, now: Date.now() }, host)
+      }
       return this.readFresh(address)
     } finally {
       this.hosts.settle()
@@ -209,7 +211,6 @@ export class CrewReadModel {
   /** A fresh host: nothing skipped yet, and parties that left read as new when they return. */
   private rebuilt(host: CrewHostDerivation): CrewHostDerivation {
     this.stale.clear()
-    this.skippedTraffic = false
     for (const party of this.departed) {
       this.partyRelevance.delete(party)
     }
@@ -231,8 +232,6 @@ export class CrewReadModel {
     this.dirty.clear()
     this.renamed.clear()
     this.trafficAddresses.clear()
-    // A broad traffic invalidation rereads every mailbox, skipped ones included.
-    this.skippedTraffic &&= !this.broadTraffic
     this.broadTraffic = false
     if (this.host && this.patches.size > 0 && !dirty.has('topology') && !dirty.has('records')) {
       const patched = patchCrewAssignmentStages(this.host, this.patches)
@@ -263,9 +262,6 @@ export class CrewReadModel {
         crewRebuildTrigger(previous, this.listeners.size > 0, dirty, now, cause),
         deps
       )
-      if (!this.unwatch) {
-        return buildCrewSnapshot(address, { ...host.deps, now }, host)
-      }
       this.host = this.rebuilt(host)
       this.skipped = undefined
     } else if (dirty.has('status') || dirty.has('names')) {

@@ -6,7 +6,6 @@ export type CrewWakeSkips = {
   deferIdentity: (() => void) | null
   identityMoved: () => boolean
   status: () => void
-  traffic: () => void
   /** A shown Dispatch whose own row changed: patched on the next read. */
   patch: (id: string) => void
   /** A Dispatch no row shows: a read that shows it later rebuilds. */
@@ -44,17 +43,14 @@ export function admitCrewWake(
     return false
   }
   if (facetList.every((facet) => facet === 'traffic')) {
-    const shown = facets.trafficAddresses
-      ? [...facets.trafficAddresses].some((address) => relevance.addresses.has(address))
-      : facets.dispatchIds
-        ? [...facets.dispatchIds].some(
-            (id) => relevance.dispatches.has(id) || relevance.addresses.has(`dispatch:${id}`)
-          )
-        : true
-    if (!shown) {
-      skips.traffic()
+    if (facets.trafficAddresses) {
+      return [...facets.trafficAddresses].some((address) => relevance.addresses.has(address))
     }
-    return shown
+    if (facets.dispatchIds) {
+      return [...facets.dispatchIds].some(
+        (id) => relevance.dispatches.has(id) || relevance.addresses.has(`dispatch:${id}`)
+      )
+    }
   }
   if (
     (facets.dispatchIds || facets.parties) &&

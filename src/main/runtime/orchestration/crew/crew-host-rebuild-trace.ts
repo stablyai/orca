@@ -59,7 +59,13 @@ export function crewHostBuilder(listeners: () => number) {
     settle()
     const span = startSpan('orchestration.crew.rebuild', { attributes: { trigger } })
     const started = performance.now()
-    const host = createCrewHostDerivation(deps, () => Math.max(32, listeners() * 2))
+    let host: CrewHostDerivation
+    try {
+      host = createCrewHostDerivation(deps, () => Math.max(32, listeners() * 2))
+    } catch (error) {
+      span.fail(error instanceof Error ? error : String(error))
+      throw error
+    }
     pending = { span, started, host }
     return host
   }
