@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { HELD_BOT_RULES, TAKEN } from './bot-turn-rules.test-fixture'
 import { describe, expect, it } from 'vitest'
 import type {
@@ -29,7 +29,7 @@ function home(
     readText: async (path: string) => files.get(path) ?? null,
     listNames: async (dir: string) =>
       [...files.keys()].flatMap((path) =>
-        path.startsWith(`${dir}/`) ? [path.slice(dir.length + 1)] : []
+        path.startsWith(`${dir}${sep}`) ? [path.slice(dir.length + 1)] : []
       ),
     replaceText: async () => false,
     writeText: async () => false

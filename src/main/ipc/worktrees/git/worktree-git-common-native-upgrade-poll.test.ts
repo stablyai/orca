@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WatcherProcessFailure } from '../../filesystem/watcher-process/parcel-watcher-process-failure'
 import { GIT_COMMON_NATIVE_UPGRADE_INTERVAL_MS } from './worktree-git-common-native-upgrade-poll'
@@ -68,7 +69,9 @@ describe('git-common narrow watch crash-fuse upgrade poll', () => {
 
     expect(subscribeMock).toHaveBeenCalledTimes(3)
     expect(fallback.unsubscribe).toHaveBeenCalledOnce()
-    expect(onEvents).toHaveBeenCalledWith([{ type: 'update', path: '/repo/.git/worktrees' }])
+    expect(onEvents).toHaveBeenCalledWith([
+      { type: 'update', path: join('/repo/.git', 'worktrees') }
+    ])
 
     // Native again: no further upgrade attempts.
     await vi.advanceTimersByTimeAsync(GIT_COMMON_NATIVE_UPGRADE_INTERVAL_MS * 2)
