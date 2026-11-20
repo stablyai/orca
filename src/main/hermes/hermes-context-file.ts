@@ -36,23 +36,17 @@ export async function writeHermesContextFile(cwd: string, text: string): Promise
   let path = link
   let existing: string | null = null
   let mode = 0o600
-  try {
-    path = await realpath(link).catch(async (error) => {
-      // A link to nothing is the user's; only a missing file is free to create.
-      if (
-        await lstat(link).then(
-          () => true,
-          () => false
-        )
-      ) {
-        throw error
-      }
-      return link
-    })
-    existing = await readFile(path, 'utf8')
-    mode = (await stat(path)).mode & 0o777
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || path !== link) {
+  const linked = await lstat(link).then(
+    () => true,
+    () => false
+  )
+  if (linked) {
+    try {
+      path = await realpath(link)
+      existing = await readFile(path, 'utf8')
+      mode = (await stat(path)).mode & 0o777
+    } catch {
+      // A link to nothing, or a file that cannot be read, is the user's.
       return link
     }
   }
