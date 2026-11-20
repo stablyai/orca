@@ -148,7 +148,7 @@ export function isCloudTestRunnerInput(file) {
   return CLOUD_TEST_RUNNER_INPUT.test(file)
 }
 
-// The package (windows) job's "Test Windows-specific boundaries" step runs exactly these files.
+// The package tests (windows) job's "Test Windows-specific boundaries" step runs exactly these files.
 export const WINDOWS_BOUNDARY_TESTS = [
   'config/scripts/native-build/node-addons/rebuild-native-deps-windows-process-tree.test.mjs',
   'config/scripts/native-build/node-addons/rebuild-native-deps-node-pty.test.mjs',

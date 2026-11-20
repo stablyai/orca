@@ -1353,8 +1353,8 @@ jobs:
 
       - wait: headless-serve-shutdown
 
-  package_windows:
-    name: package (windows)
+  package_windows_tests:
+    name: package tests (windows)
     needs: [code_paths]
     if: needs.code_paths.outputs.package_windows == 'true'
     runs-on: windows-2022
@@ -1366,36 +1366,10 @@ jobs:
         with:
           persist-credentials: false
 
-      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
-      - name: Resolve electron-builder download versions
-        id: eb-versions
-        shell: bash
-        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
-
-      - name: Cache electron-builder downloads
-        uses: actions/cache/restore@v5
-        with:
-          path: |
-            ~\AppData\Local\electron\Cache
-            ~\AppData\Local\electron-builder\Cache
-          # Release builds seed this exact path set; PR-local copies cannot serve other PRs.
-          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
-          restore-keys: |
-            electron-builder-win-
-
-      # Do not save Node cache post-job: later Electron rebuild mutates the same paths to another ABI.
       - uses: ./.github/actions/install-node-dependencies
-        id: deps
         with:
           native-runtime: node
           persist-native-cache: 'false'
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            mobile/pnpm-lock.yaml
-
-      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
-      # build resolves React Native and Expo from mobile/node_modules.
-      - uses: ./.github/actions/install-mobile-dependencies
 
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
@@ -1469,11 +1443,103 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts
           src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 
-      # Use parallel Vite targets as already packaged/smoked on Linux; release behavior is otherwise identical.
+  package_windows:
+    name: package (windows)
+    needs: [code_paths]
+    if: needs.code_paths.outputs.package_windows == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Electron and builder releases fix what this downloads; the lockfile churns far more often.
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          # Release builds seed this exact path set; PR-local copies cannot serve other PRs.
+          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
+          restore-keys: |
+            electron-builder-win-
+
+      # Do not save Node cache post-job: later Electron rebuild mutates the same paths to another ABI.
+      - uses: ./.github/actions/install-node-dependencies
+        id: deps
+        with:
+          native-runtime: node
+          persist-native-cache: 'false'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      # Why here: electron-builder's beforePack requires out/mobile-web, and the bundle
+      # build resolves React Native and Expo from mobile/node_modules.
+      - uses: ./.github/actions/install-mobile-dependencies
+
+      - name: Resolve the Windows Rust build scope
+        id: rust-scope
+        shell: bash
+        run: node config/scripts/native-build/windows/windows-rust-build-scope.mjs >> "$GITHUB_OUTPUT"
+
+      # Real inputs only: older restores are safe because the build re-checks each exe's fingerprint.
+      - name: Cache Windows CLI launcher
+        uses: actions/cache@v5
+        with:
+          # Cache cargo registry with .build so misses do not rebuild resource crates cold.
+          path: |
+            native/windows-cli-launcher/.build
+            native/windows-cli-launcher/target
+            native/windows-agent-hook/.build
+            native/windows-agent-hook/target
+            ~/.cargo/registry
+          key: windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-${{ steps.rust-scope.outputs.app-version }}-${{ hashFiles('native/windows-cli-launcher/src/**', 'native/windows-cli-launcher/build.rs', 'native/windows-cli-launcher/Cargo.toml', 'native/windows-cli-launcher/Cargo.lock', 'native/windows-cli-launcher/app.manifest', 'native/windows-cli-launcher/.cargo/**', 'native/windows-agent-hook/src/**', 'native/windows-agent-hook/build.rs', 'native/windows-agent-hook/Cargo.toml', 'native/windows-agent-hook/Cargo.lock', 'native/windows-agent-hook/app.manifest', 'native/windows-agent-hook/.cargo/**', 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs', 'config/scripts/native-build/windows/build-windows-agent-hook.mjs', 'config/scripts/native-build/windows/windows-rust-executable-build.mjs', 'config/scripts/native-build/windows/windows-pe-imports.mjs', 'resources/build/icon.ico') }}
+          restore-keys: |
+            windows-cli-launcher-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust-scope.outputs.toolchain }}-
+
+      # Require cargo early; otherwise packaged Rust launcher fails deep inside builder native hooks.
+      - name: Ensure the Rust toolchain for the Windows CLI launcher
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            rustup toolchain install stable --profile minimal
+            rustup default stable
+          }
+          cargo --version
+
+      - name: Build the Windows agent hook
+        run: node config/scripts/native-build/windows/build-windows-agent-hook.mjs
+
+      - name: Build the Windows CLI launcher
+        run: node config/scripts/native-build/windows/build-windows-cli-launcher.mjs
+
+      # build:release:parallel's steps, with the mobile page (it writes only out/mobile-web) overlapping the Vite targets.
       - name: Build package inputs
+        shell: bash
         env:
           ORCA_CI_MAIN_SOURCEMAPS: '0'
-        run: pnpm run build:release:parallel
+        run: |
+          set -euo pipefail
+          pnpm run build:wsl-guest
+          pnpm run build:native
+          pnpm run verify:computer-native
+          pnpm run build:cli
+          pnpm run build:mobile-web &
+          mobile="$!"
+          status=0
+          { pnpm run build:electron-vite:parallel && pnpm run verify:built-skills-cli && pnpm run build:web-from-renderer; } || status=1
+          wait "$mobile" || status=1
+          exit "$status"
 
       - name: Prepare Electron native runtime
         uses: ./.github/actions/prepare-native-runtime
@@ -1614,6 +1680,7 @@ jobs:
       - managed_hook_node18
       - package
       - package_windows
+      - package_windows_tests
       - dependency_isolation
     runs-on: ubuntu-slim
     timeout-minutes: 5
@@ -1651,6 +1718,7 @@ jobs:
           PACKAGE_SHOULD_RUN: ${{ needs.code_paths.outputs.package }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
           PACKAGE_WINDOWS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows }}
+          PACKAGE_WINDOWS_TESTS: ${{ needs.package_windows_tests.result }}
           DEPENDENCY_ISOLATION: ${{ needs.dependency_isolation.result }}
           DEPENDENCY_ISOLATION_SHOULD_RUN: ${{ needs.code_paths.outputs.dependency_isolation }}
         run: |
@@ -1697,5 +1765,6 @@ jobs:
           check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
           check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
           check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
+          check_job package_windows_tests "$PACKAGE_WINDOWS_TESTS" "$PACKAGE_WINDOWS_SHOULD_RUN"
           check_job dependency_isolation "$DEPENDENCY_ISOLATION" "$DEPENDENCY_ISOLATION_SHOULD_RUN"
           exit "$failed"
