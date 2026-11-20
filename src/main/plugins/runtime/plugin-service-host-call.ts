@@ -77,6 +77,8 @@ export function resolvePluginServiceHostCallPolicy(input: {
   sinks: Pick<PluginServiceOptions, 'statusBar' | 'appearance' | 'editorTypography'>
   audit: PluginAuditLog
   log?: (pluginKey: string) => (line: string) => void
+  /** Runs one of an approved plugin's own commands, as the palette does. */
+  invokeCommand?: (pluginKey: string, commandId: string) => Promise<unknown>
 }): PluginHostCallPolicy {
   const plugin = input.findApprovedPlugin(input.pluginKey)
   return {
@@ -96,7 +98,12 @@ export function resolvePluginServiceHostCallPolicy(input: {
           declaredStatusBarItemIds: plugin?.manifest.contributes.statusBarItems.map(
             (item) => item.id
           ),
-          statusBarRevision: plugin ? pluginStatusBarRevision(plugin) : undefined
+          statusBarRevision: plugin ? pluginStatusBarRevision(plugin) : undefined,
+          // Renderer action aliases never run a worker, so they are not the plugin's own.
+          declaredCommandIds: plugin?.manifest.contributes.commands
+            .filter((command) => command.action === undefined)
+            .map((command) => command.id),
+          invokeCommand: input.invokeCommand
         })
       : null,
     audit: input.audit,

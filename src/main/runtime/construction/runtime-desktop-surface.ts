@@ -20,7 +20,7 @@ export type RuntimeDesktopSurface = {
   /** This machine's own idle state; undefined is unknown. Absent on hosts with no desktop. */
   isAwayForMobileNotifications?(): boolean | undefined
   /** Show a native notification. Returns false when the host cannot, so callers can say so. */
-  showNotification(input: { title: string; body: string }): boolean
+  showNotification(input: { title: string; body: string; onClick?: () => void }): boolean
   /** Sends to every open renderer window. Absent where there is no desktop. */
   sendToRenderers?(channel: string, payload: unknown): void
   /** Whether this window is open; its renderer may already be gone during teardown. */
