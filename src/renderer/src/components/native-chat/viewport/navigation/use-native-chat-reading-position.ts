@@ -12,21 +12,29 @@ const MAX_RESTORE_ATTEMPTS = 5
 
 export type NativeChatReadingPosition = { messageId: string; offset: number }
 
-/** The first row reaching below the viewport's top, by its message, and how far the reader is into it. */
+/**
+ * The first row reaching below the viewport's top, by its message, and how far the reader is into it. A reader
+ * past every indexed row (in the waiting messages drawn after them) is held by the last one, further in.
+ */
 function readingPositionOf(
   container: HTMLElement,
   messageIdAt: (index: number) => string | null
 ): NativeChatReadingPosition | null {
   const top = container.getBoundingClientRect().top
+  let anchor: HTMLElement | null = null
   for (const row of container.querySelectorAll<HTMLElement>('[data-index]')) {
-    const rect = row.getBoundingClientRect()
-    if (rect.bottom <= top) {
-      continue
+    anchor = row
+    if (row.getBoundingClientRect().bottom > top) {
+      break
     }
-    const messageId = messageIdAt(Number.parseInt(row.dataset.index ?? '', 10))
-    return messageId ? { messageId, offset: Math.max(0, top - rect.top) } : null
   }
-  return null
+  if (!anchor) {
+    return null
+  }
+  const messageId = messageIdAt(Number.parseInt(anchor.dataset.index ?? '', 10))
+  return messageId
+    ? { messageId, offset: Math.max(0, top - anchor.getBoundingClientRect().top) }
+    : null
 }
 
 /** Remembers the reading position when a reader away from the end leaves; a later fresh mount jumps back to it. */

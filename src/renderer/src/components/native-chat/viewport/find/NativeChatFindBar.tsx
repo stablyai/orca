@@ -15,7 +15,7 @@ export function NativeChatFindBar({
   isVisible: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const { query, setQuery, close, rootRef, barRef, inputRef, revealMatch } = find
+  const { query, setQuery, close, rootRef, barRef, inputRef, takeOpenFocus, revealMatch } = find
   const { matchCount, activeIndex, step } = useNativeChatFindMatches({
     rootRef,
     barRef,
@@ -30,9 +30,12 @@ export function NativeChatFindBar({
       return
     }
     opened.current = true
+    if (!takeOpenFocus()) {
+      return
+    }
     inputRef.current?.focus()
     inputRef.current?.select()
-  }, [inputRef])
+  }, [inputRef, takeOpenFocus])
 
   const status =
     query && matchCount === 0
