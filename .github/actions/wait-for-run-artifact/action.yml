@@ -35,9 +35,14 @@ runs:
         fi
         # Why: base 10 so a value like 010 is not read as octal (and 08 does not error).
         budget=$((10#$TIMEOUT_SECONDS))
+        if [ "$budget" -le 0 ]; then
+          echo "::error::wait-for-run-artifact needs a positive timeout-seconds."
+          exit 1
+        fi
         deadline=$((SECONDS + budget))
         delay=2
         sightings=0
+        seen=0
         last='no response yet'
         # Stop a stalled reader without ever blocking on it: TERM, short grace, KILL. A native
         # child that outlives this is a read-only GET; the runner terminates orphans at job end.
@@ -65,7 +70,7 @@ runs:
         while :; do
           remaining=$((deadline - SECONDS))
           if [ "$remaining" -le 0 ]; then
-            echo "::error::Artifact $ARTIFACT_ID was not listed for run $GITHUB_RUN_ID within ${budget}s, so SignPath would reject it ($last)."
+            echo "::error::Could not confirm artifact $ARTIFACT_ID in run $GITHUB_RUN_ID's artifact list (two consecutive listings) within ${budget}s; seen in $seen poll(s); last poll: $last. Not submitting to SignPath."
             exit 1
           fi
           # Why: SignPath's lookup is run-scoped, so poll the run's artifact list rather than /artifacts/<id>.
@@ -80,14 +85,14 @@ runs:
             wait "$pid"
             status=$?
           fi
-          pid=
+          pid=''
           ids=$(tr -d '\r' <"$out")
           if [ "$status" -eq 124 ]; then
             sightings=0
             last="the last read was still running at the deadline"
           elif [ "$status" -ne 0 ]; then
             sightings=0
-            last="gh api failed (exit $status): ${ids:0:300}"
+            last="gh api failed (exit $status): $(tr '\n' ' ' <<<"${ids:0:300}")"
           elif ! grep -qx "$ARTIFACT_ID" <<<"$ids"; then
             sightings=0
             last="run lists $(grep -c . <<<"$ids" || true) other artifact(s)"
@@ -97,6 +102,8 @@ runs:
             last="the artifact was only seen after the deadline"
           else
             sightings=$((sightings + 1))
+            seen=$((seen + 1))
+            last="listed once; awaiting a second consecutive listing"
             # Why: two consecutive sightings guard against a single replica answering early.
             if [ "$sightings" -ge 2 ]; then
               echo "Artifact $ARTIFACT_ID is listed for run $GITHUB_RUN_ID."
@@ -106,7 +113,7 @@ runs:
           fi
           remaining=$((deadline - SECONDS))
           [ "$remaining" -le 0 ] && continue
-          [ "$sightings" -eq 0 ] && echo "Artifact $ARTIFACT_ID not listed for run $GITHUB_RUN_ID yet ($last); retrying in ${delay}s."
+          echo "Artifact $ARTIFACT_ID not confirmed for run $GITHUB_RUN_ID yet ($last); retrying in ${delay}s."
           nap "$((delay < remaining ? delay : remaining))"
           delay=$((delay * 2 > 15 ? 15 : delay * 2))
         done
