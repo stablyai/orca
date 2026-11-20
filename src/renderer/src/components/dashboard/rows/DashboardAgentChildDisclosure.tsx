@@ -54,7 +54,7 @@ export function DashboardAgentChildDisclosure({
       >
         {timestamp}
       </span>
-      {/* Why: align the 12px icon with adjacent row icons while keeping its 24px hit target. */}
+      {/* Why: a 16px icon is easy to spot and hit while staying inside the 24px target. */}
       <Button
         variant="ghost"
         size="icon-xs"
@@ -82,7 +82,7 @@ export function DashboardAgentChildDisclosure({
       >
         <ChevronDown
           className={cn(
-            'size-3 transition-transform duration-150',
+            'size-4 transition-transform duration-150',
             !childAgentsExpanded && '-rotate-90'
           )}
           aria-hidden
