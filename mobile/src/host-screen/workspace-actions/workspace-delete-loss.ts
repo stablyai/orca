@@ -46,7 +46,7 @@ const atRiskLocalFilesQuery = defineHostQuery({
       worktree: `id:${target.worktree ?? ''}`
     })
     // Only an older host's refusal means "no scan"; any other refusal is a scan that failed.
-    if (outcome.kind === 'outer-refused' && !isOlderHostRefusal(outcome.error.code)) {
+    if (!outcome.ok && !isOlderHostRefusal(outcome.error.code)) {
       throw new Error('Ignored-files scan failed')
     }
     const reply = atRiskLocalFilesRead.interpret(outcome)
@@ -97,6 +97,8 @@ export function useWorkspaceDeleteLoss(args: {
     changeCount: status.data.status.entries.length,
     // null is a host that predates the scan; undefined is a scan that failed, which is never "no files".
     ignoredFiles:
-      ignored.data === undefined ? { count: 0, samplePaths: [], complete: false } : ignored.data
+      ignored.isError || ignored.data === undefined
+        ? { count: 0, samplePaths: [], complete: false }
+        : ignored.data
   }
 }
