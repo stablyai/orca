@@ -11,7 +11,7 @@ import {
 } from '@/components/automations/events/automations-changed-window-event'
 import type { Bot } from '../../../../shared/bot-types'
 import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
-import type { BotChangeKind } from '../../../../shared/bots/bot-change-scope'
+import type { BotChangeKind, BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 
@@ -30,13 +30,55 @@ type BotReadEntry<T> = {
   /** Asked again while a read ran: one more read follows it. */
   again: boolean
   startedAt: number
+  /** What the asks since the last read began cover: some parts (`BotHostReadParts`), or the whole. */
+  parts: BotReadAsk
+}
+
+/** The asks waiting on the next read: none, only these parts, or the whole. */
+export type BotReadAsk = Set<string> | 'whole' | null
+
+/** One more ask joined to those waiting: its parts while every ask named some and they stay within
+ *  `max`; otherwise the whole. */
+export function addBotReadAsk(
+  waiting: BotReadAsk,
+  named: readonly string[] | null | undefined,
+  max: number
+): BotReadAsk {
+  if (!named || waiting === 'whole') {
+    return 'whole'
+  }
+  const next = waiting ?? new Set<string>()
+  named.forEach((part) => next.add(part))
+  return next.size > max ? 'whole' : next
+}
+
+/** A read that can read part of its value again: the parts a notice names (a bot's changed items),
+ *  merged into the last value. */
+export type BotHostReadParts<T> = {
+  /** The parts a notice names for the bot, or null when it must read whole. */
+  of: (scope: BotChangeScope | undefined, botId: string) => readonly string[] | null
+  /** The params that read just these parts. */
+  params: (parts: readonly string[]) => Record<string, unknown>
+  /** The last value with the parts' read merged in; `previous` itself when nothing changed. */
+  merge: (previous: T, read: T, parts: readonly string[]) => T
+  /** The most parts one read takes; more read whole. */
+  max: number
+}
+
+export type BotHostReadOptions<T> = {
+  /** Sent with every read. */
+  params?: Record<string, unknown>
+  parts?: BotHostReadParts<T>
 }
 
 /** One host read about a bot (its Activity, its chats tree), shared by every surface showing that bot. */
 export type BotHostRead<T> = {
   /** The kinds of change to the bot that can change this read. */
   kinds: readonly BotChangeKind[]
-  request: (bot: BotRef) => void
+  /** `parts`: only these changed (`BotHostReadParts`); absent: read whole. */
+  request: (bot: BotRef, parts?: readonly string[] | null) => void
+  /** The parts a notice names for the bot; null: read whole. */
+  partsOf: (scope: BotChangeScope | undefined, botId: string) => readonly string[] | null
   subscribe: (bot: BotRef, listener: () => void) => () => void
   snapshot: (key: string) => T | null
   /** Ready once a value landed; until then, loading or why none came. */
@@ -55,8 +97,10 @@ export function createBotHostRead<T>(
   /** The least time between two reads' starts; asks in between share the one after it. */
   minIntervalMs = 0,
   /** Keep each bot's last value after its last surface closes, shown at once when one opens again while it re-reads. */
-  keepLast = false
+  keepLast = false,
+  options: BotHostReadOptions<T> = {}
 ): BotHostRead<T> {
+  const { parts } = options
   const entries = new Map<string, BotReadEntry<T>>()
   // One value per bot, replaced by each read that lands.
   const lastValues = new Map<string, T>()
@@ -76,7 +120,8 @@ export function createBotHostRead<T>(
         timer: null,
         inFlight: false,
         again: false,
-        startedAt: 0
+        startedAt: 0,
+        parts: null
       }
       entries.set(key, entry)
     }
@@ -87,11 +132,25 @@ export function createBotHostRead<T>(
     const current = ++entry.latest
     entry.inFlight = true
     entry.startedAt = Date.now()
+    // Only parts, when every ask since the last read named them and a value is there to merge into.
+    const previous = entry.value
+    const named =
+      parts && previous && entry.parts instanceof Set && entry.parts.size > 0
+        ? [...entry.parts]
+        : null
+    entry.parts = null
     try {
-      const result = await callBotRpc<never>(entry.bot, method, { botId: entry.bot.id })
+      const result = await callBotRpc<never>(entry.bot, method, {
+        botId: entry.bot.id,
+        ...options.params,
+        ...(named && parts ? parts.params(named) : {})
+      })
       if (current === entry.latest && entries.get(key) === entry) {
         // What the answer repeats keeps its identity; an unchanged answer tells no one.
-        const value = reuseEqualJson(entry.value, pick(result))
+        const value =
+          named && parts && previous
+            ? parts.merge(previous, pick(result), named)
+            : reuseEqualJson(entry.value, pick(result))
         if (value !== entry.value || entry.failure) {
           entry.value = value
           entry.failure = null
@@ -103,7 +162,15 @@ export function createBotHostRead<T>(
       }
     } catch (error) {
       console.error(failure, error)
-      if (current === entry.latest && entries.get(key) === entry && entry.failure !== 'failed') {
+      if (named) {
+        // Parts that failed are read whole next, at once.
+        entry.again = true
+        entry.parts = 'whole'
+      } else if (
+        current === entry.latest &&
+        entries.get(key) === entry &&
+        entry.failure !== 'failed'
+      ) {
         entry.failure = 'failed'
         entry.listeners.forEach((listener) => listener())
       }
@@ -111,15 +178,19 @@ export function createBotHostRead<T>(
       entry.inFlight = false
       if (entry.again && entries.get(key) === entry) {
         entry.again = false
-        request(entry.bot)
+        schedule(key, entry)
       }
     }
   }
 
   // Asks from one commit's consumers, and those while a read runs, share one read.
-  const request = (bot: BotRef): void => {
-    const key = botRefKey(bot)
+  const request = (bot: BotRef, named?: readonly string[] | null): void => {
     const entry = entryFor(bot)
+    entry.parts = addBotReadAsk(entry.parts, parts ? named : null, parts?.max ?? 0)
+    schedule(botRefKey(bot), entry)
+  }
+
+  const schedule = (key: string, entry: BotReadEntry<T>): void => {
     if (entry.inFlight) {
       entry.again = true
       return
@@ -147,6 +218,7 @@ export function createBotHostRead<T>(
   return {
     kinds,
     request,
+    partsOf: (scope, botId) => parts?.of(scope, botId) ?? null,
     subscribe: (bot, listener) => {
       const key = botRefKey(bot)
       const entry = entryFor(bot)
@@ -285,9 +357,9 @@ export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | nu
     }
     const ref = { hostId, id: botId }
     let missed = false
-    const onChanged = (): void => {
+    const onChanged = (_host: unknown, scope: BotChangeScope | undefined): void => {
       if (document.visibilityState === 'visible') {
-        read.request(ref)
+        read.request(ref, read.partsOf(scope, botId))
       } else {
         missed = true
       }

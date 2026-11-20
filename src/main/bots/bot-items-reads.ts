@@ -20,6 +20,8 @@ export type BotItemListQuery = {
   chatIds?: readonly string[]
   /** Only items linking this: `item list --link`. */
   link?: { kind: BotItemLinkKind; ref: string }
+  /** Only these items; the counts stay the whole scope's. */
+  uids?: readonly string[]
   limit: number
   /** The last row of the previous page. */
   cursor?: { at: number; number: number }
@@ -68,18 +70,20 @@ export class BotItemsReads extends BotItemsTables {
       .all(...scopeArgs)) {
       counts[statusOf(row.status)] = Number(row.count ?? 0)
     }
+    const uids = query.uids ? ' AND uid IN (SELECT value FROM json_each(?))' : ''
     const cursor = query.cursor
       ? ' AND (last_activity_at < ? OR (last_activity_at = ? AND number < ?))'
       : ''
     const items = this.db
       .prepare(
         `SELECT * FROM items WHERE ${scope}
-           AND status IN (SELECT value FROM json_each(?))${cursor}
+           AND status IN (SELECT value FROM json_each(?))${uids}${cursor}
          ORDER BY last_activity_at DESC, number DESC LIMIT ?`
       )
       .all(
         ...scopeArgs,
         JSON.stringify(query.statuses),
+        ...(query.uids ? [JSON.stringify(query.uids)] : []),
         ...(query.cursor ? [query.cursor.at, query.cursor.at, query.cursor.number] : []),
         query.limit
       )

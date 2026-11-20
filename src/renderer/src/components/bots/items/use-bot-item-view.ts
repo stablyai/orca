@@ -7,6 +7,10 @@ import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { BotRef } from '@/lib/bot-hosts'
 import type { BotItem, BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { mergeBotItemEvents } from '../../../../../shared/bots/bot-item-merge'
+import {
+  botChangeItemUids,
+  type BotChangeKind
+} from '../../../../../shared/bots/bot-change-scope'
 import { showBotItem } from './use-bot-items'
 
 export type BotItemViewRead = {
@@ -127,10 +131,17 @@ export function useBotItemView(bot: BotRef, uid: string, listed?: BotItem): BotI
       }
     }
     void read()
-    const stop = onBotsChanged(() => void read(), hostId, {
-      botId: id,
-      kinds: ['items', 'workers']
-    })
+    const kinds: readonly BotChangeKind[] = ['items', 'workers']
+    // A notice naming the bot's changed items reads this one only when it is among them.
+    const stop = onBotsChanged(
+      (_host, scope) => {
+        if (botChangeItemUids(scope, id, kinds)?.includes(uid) !== false) {
+          void read()
+        }
+      },
+      hostId,
+      { botId: id, kinds }
+    )
     return () => {
       live = false
       stop()

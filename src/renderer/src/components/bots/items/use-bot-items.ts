@@ -6,9 +6,18 @@ import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemEvent, BotItemStatus } from '../../../../../shared/bots/bot-items'
 import type { BotItemsListRead } from '../../../../../shared/bots/bot-item-schema'
+import { BOT_ITEM_LIMITS } from '../../../../../shared/bots/bot-items'
+import { mergeNamedBotItems } from '../../../../../shared/bots/bot-item-merge'
 import {
+  botChangeItemUids,
+  type BotChangeKind
+} from '../../../../../shared/bots/bot-change-scope'
+import { reuseEqualJson } from '../../../../../shared/reuse-equal-json'
+import {
+  addBotReadAsk,
   createBotHostRead,
   useBotHostRead,
+  type BotReadAsk,
   useBotHostReadState,
   type BotHostReadState
 } from '../use-bot-host-read'
@@ -18,12 +27,27 @@ export type BotItemsRead = BotItemsListRead
 /** Work changes come in bursts, so reads start at most this often. */
 const ITEMS_MIN_READ_GAP_MS = 500
 
+const ITEMS_KINDS: readonly BotChangeKind[] = ['items', 'workers']
+
+/** Rows need no description, done means or close note: the opened item reads its own. */
+const SUMMARY = { summary: true }
+
 const itemsRead = createBotHostRead<BotItemsRead>(
   'bots.items.owner.list',
   (result: BotItemsRead) => result,
   'Failed to read bot items:',
-  ['items', 'workers'],
-  ITEMS_MIN_READ_GAP_MS
+  ITEMS_KINDS,
+  ITEMS_MIN_READ_GAP_MS,
+  false,
+  {
+    params: SUMMARY,
+    parts: {
+      of: (scope, botId) => botChangeItemUids(scope, botId, ITEMS_KINDS),
+      params: (uids) => ({ uids }),
+      merge: mergeNamedBotItems,
+      max: BOT_ITEM_LIMITS.listPageMax
+    }
+  }
 )
 
 export function useBotItems(bot: Bot | null): {
@@ -102,38 +126,61 @@ export function useBotChatItems(
     }
     const scope = chatScope(chats)
     let live = true
+    let last: BotItemsRead | null = null
     // One read out at a time; notices during it share one more after it, so the last to land is newest.
     let reading = false
-    let again = false
-    const load = (): void => {
-      if (reading) {
-        again = true
+    let waiting: BotReadAsk = null
+    const start = (): void => {
+      if (reading || !waiting) {
         return
       }
       reading = true
-      callBotRpc<BotItemsRead>({ hostId }, 'bots.items.owner.list', { botId: id, ...scope })
+      const asked = last && waiting instanceof Set ? [...waiting] : null
+      waiting = null
+      callBotRpc<BotItemsRead>({ hostId }, 'bots.items.owner.list', {
+        botId: id,
+        ...scope,
+        ...SUMMARY,
+        ...(asked ? { uids: asked } : {})
+      })
         .then((value) => {
           if (live) {
-            setRead({ chats, value })
+            // What the answer repeats keeps its identity.
+            const next =
+              asked && last ? mergeNamedBotItems(last, value, asked) : reuseEqualJson(last, value)
+            if (next !== last) {
+              last = next
+              setRead({ chats, value: next })
+            }
             setFailed(false)
           }
         })
         .catch((error: unknown) => {
           console.warn('[bots] items: reading a chat’s items failed', error)
-          if (live) {
+          if (asked) {
+            // Named items that failed are read whole next.
+            waiting = 'whole'
+          } else if (live) {
             setFailed(true)
           }
         })
         .finally(() => {
           reading = false
-          if (again && live) {
-            again = false
-            load()
+          if (live) {
+            start()
           }
         })
     }
-    load()
-    const stop = onBotsChanged(load, hostId, { botId: id, kinds: ['items', 'workers'] })
+    const load = (uids: readonly string[] | null): void => {
+      waiting = addBotReadAsk(waiting, uids, BOT_ITEM_LIMITS.listPageMax)
+      start()
+    }
+    load(null)
+    const stop = onBotsChanged(
+      (_host, change) => load(botChangeItemUids(change, id, ITEMS_KINDS)),
+      hostId,
+      { botId: id, kinds: ITEMS_KINDS }
+    )
     return () => {
       live = false
       stop()
@@ -152,6 +199,8 @@ export async function readMoreClosedItems(
   const result = await callBotRpc<BotItemsRead>(bot, 'bots.items.owner.list', {
     botId: bot.id,
     closedCursor: cursor,
+    closedOnly: true,
+    ...SUMMARY,
     ...chatScope(chatIds)
   })
   return {

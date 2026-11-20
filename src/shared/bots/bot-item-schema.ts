@@ -138,7 +138,8 @@ export const BotItemSchema: z.ZodType<BotItem, unknown> = z.looseObject({
   lastActivityAt: z.number(),
   createdAt: z.number(),
   updatedAt: z.number(),
-  closedAt: z.number().nullable()
+  closedAt: z.number().nullable(),
+  summary: salvagedOptional('summary', z.literal(true))
 })
 
 export type BotItemsListRead = {

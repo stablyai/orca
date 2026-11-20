@@ -3,6 +3,7 @@
 import {
   BOT_ITEM_LIMITS,
   BOT_ITEM_OPEN_STATUSES,
+  BOT_ITEM_STATUSES,
   botItemEventId,
   parseBotItemEventId
 } from '../../../../shared/bots/bot-items'
@@ -24,6 +25,7 @@ import {
 import { botChatTakingMail } from './bots-chats'
 import type { BotItemOwnerActor } from '../../../bots/bot-items-input'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
+import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import { defineMethod, type RpcContext } from '../core'
 import { ownerOnly } from './bots-caller-gates'
 import { parseCursor, resolveItem } from './bots-items-write-support'
@@ -38,6 +40,31 @@ function ownerActor(context: RpcContext): BotItemOwnerActor {
     : { kind: 'owner' }
 }
 
+/** Every open item of the bot (or its chats), however many, read a page at a time. */
+async function allOpenItems(
+  store: BotItemsRemote,
+  botId: string,
+  chat: { chatIds?: readonly string[] }
+): Promise<BotItemRecord[]> {
+  const open: BotItemRecord[] = []
+  let cursor: { at: number; number: number } | undefined
+  for (;;) {
+    const page = await store.list({
+      botId,
+      ...chat,
+      statuses: BOT_ITEM_OPEN_STATUSES,
+      limit: BOT_ITEM_LIMITS.listPageMax + 1,
+      ...(cursor ? { cursor } : {})
+    })
+    open.push(...page.items.slice(0, BOT_ITEM_LIMITS.listPageMax))
+    const last = page.items[BOT_ITEM_LIMITS.listPageMax - 1]
+    if (page.items.length <= BOT_ITEM_LIMITS.listPageMax || !last) {
+      return open
+    }
+    cursor = { at: last.lastActivityAt, number: last.number }
+  }
+}
+
 const LIST = defineMethod({
   name: 'bots.items.owner.list',
   permission: 'workspace',
@@ -49,25 +76,28 @@ const LIST = defineMethod({
     // An older client names one chat; a group's panel names its rooms' member sessions.
     const chatIds = params.chatIds ?? (params.chatId !== undefined ? [params.chatId] : undefined)
     const chat = chatIds ? { chatIds } : {}
-    // Every open item, however many, then closed ones a page at a time.
-    const open: BotItemRecord[] = []
-    let cursor: { at: number; number: number } | undefined
-    for (;;) {
-      const page = await store.list({
+    const seenEventId = botItemEventId(
+      context.runtime.bots.list().find((bot) => bot.id === params.botId)?.itemsSeen ?? 0
+    )
+    if (params.uids) {
+      // What a notice named: those items (an absent one is deleted or out of scope), with the counts.
+      const named = await store.list({
         botId: params.botId,
         ...chat,
-        statuses: BOT_ITEM_OPEN_STATUSES,
-        limit: BOT_ITEM_LIMITS.listPageMax + 1,
-        ...(cursor ? { cursor } : {})
+        statuses: BOT_ITEM_STATUSES,
+        uids: params.uids,
+        limit: params.uids.length
       })
-      open.push(...page.items.slice(0, BOT_ITEM_LIMITS.listPageMax))
-      const last = page.items[BOT_ITEM_LIMITS.listPageMax - 1]
-      if (page.items.length <= BOT_ITEM_LIMITS.listPageMax || !last) {
-        break
+      return {
+        items: await botItems.views(named.items, params.summary),
+        counts: named.counts,
+        seenEventId
       }
-      cursor = { at: last.lastActivityAt, number: last.number }
     }
+    // Every open item, then closed ones a page at a time; a Closed page asked alone skips the open.
     const closedCursor = parseCursor(params.closedCursor)
+    const open =
+      closedCursor && params.closedOnly ? [] : await allOpenItems(store, params.botId, chat)
     const closed = await store.list({
       botId: params.botId,
       ...chat,
@@ -78,11 +108,9 @@ const LIST = defineMethod({
     const closedRows = closed.items.slice(0, BOT_ITEM_LIMITS.listPage)
     const lastClosed = closedRows.at(-1)
     return {
-      items: await botItems.views([...open, ...closedRows]),
+      items: await botItems.views([...open, ...closedRows], params.summary),
       counts: closed.counts,
-      seenEventId: botItemEventId(
-        context.runtime.bots.list().find((bot) => bot.id === params.botId)?.itemsSeen ?? 0
-      ),
+      seenEventId,
       ...(closed.items.length > BOT_ITEM_LIMITS.listPage && lastClosed
         ? { nextClosedCursor: `${lastClosed.lastActivityAt}:${lastClosed.number}` }
         : {})
@@ -162,7 +190,7 @@ const COMMENT = defineMethod({
       undefined,
       params.requestId
     )
-    botItems.changed([item.ownerBotId])
+    botItems.changed([item])
     // The comment is stored and its mail owed: the reply never waits on the chat taking it.
     void botItems
       .sendOwedMail()
@@ -190,7 +218,7 @@ const STATUS = defineMethod({
       },
       actor
     )
-    botItems.changed(items.map((item) => item.ownerBotId))
+    botItems.changed(items)
     await botItems.sendOwedMail()
     return {
       items: result.items.map((entry) => ({
@@ -221,7 +249,7 @@ const SNOOZE = defineMethod({
       },
       actor
     )
-    botItems.changed(items.map((item) => item.ownerBotId))
+    botItems.changed(items)
     return {
       items: result.items.map((entry) => ({
         uid: entry.uid,

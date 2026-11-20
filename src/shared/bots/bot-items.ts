@@ -43,6 +43,7 @@ export const BOT_ITEM_LIMITS = {
   text: 8_000,
   links: 50,
   listPage: 50,
+  /** Also the most items one list read names by uid. */
   listPageMax: 100,
   eventsPage: 50
 } as const
@@ -206,6 +207,9 @@ export type BotItem = {
   createdAt: number
   updatedAt: number
   closedAt: number | null
+  /** A list's summary: description, done means and close note left out (null); the item's own read
+   *  has them. */
+  summary?: true
 }
 
 /** How the Items list and item view show an item's number: `#35`. */
