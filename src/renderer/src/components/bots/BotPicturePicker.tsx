@@ -141,7 +141,7 @@ export function BotPicturePicker({
         ? CUSTOM_FACE
         : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
   const generating = currentKey === GENERATE_FACE
-  const looks = useBotMascotLooks(PICKABLE_BOT_MASCOT_IDS, color, outfit)
+  const lookOf = useBotMascotLooks(color, outfit)
   const faces: BotPictureFace[] = order.map((key) =>
     key === GENERATE_FACE
       ? {
@@ -152,7 +152,7 @@ export function BotPicturePicker({
         }
       : key === CUSTOM_FACE
         ? { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
-        : { key, src: looks[key].src, outfit: looks[key].outfit, fallback: '' }
+        : { key, ...lookOf(key), fallback: '' }
   )
   // Every picture an intake takes, shared or not and even the same image again, leaves Generate.
   const [seenTaken, setSeenTaken] = useState(intake.taken)

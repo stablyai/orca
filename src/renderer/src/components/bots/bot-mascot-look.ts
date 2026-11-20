@@ -162,19 +162,14 @@ export function useBotMascotSrc(
 }
 
 /** Each mascot's picture on `color`, wearing `outfit`, in layers: for the picker, where the color is dragged. */
-export function useBotMascotLooks<Id extends BotMascotId>(
-  ids: readonly Id[],
+export function useBotMascotLooks(
   color: string | null | undefined,
   outfit: BotAvatarOutfit | null | undefined = null
-): Record<Id, BotMascotLook> {
+): (id: BotMascotId) => BotMascotLook {
   const worn = outfit ?? null
   const layers = useBotOutfitLayers(worn)
   const tile = tileColor(color)
-  const looks = {} as Record<Id, BotMascotLook>
-  for (const id of ids) {
-    looks[id] = layeredLook(id, tile, worn, layers)
-  }
-  return looks
+  return (id) => layeredLook(id, tile, worn, layers)
 }
 
 /** One mascot's picture in layers, as useBotMascotLooks draws it. */
@@ -183,5 +178,5 @@ export function useBotMascotLook(
   color: string | null | undefined,
   outfit: BotAvatarOutfit | null | undefined = null
 ): BotMascotLook {
-  return useBotMascotLooks([id], color, outfit)[id]
+  return useBotMascotLooks(color, outfit)(id)
 }
