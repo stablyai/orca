@@ -228,6 +228,10 @@ export function NativeChatMarkdown({
       ? {
           ...base,
           remarkPlugins: [...base.remarkPlugins, remarkNativeChatQuoteLines],
+          sanitizeAttributes: {
+            ...base.sanitizeAttributes,
+            div: [...(base.sanitizeAttributes.div ?? []), 'dataNativeChatQuoteGap']
+          },
           components: { ...base.components, blockquote: NativeChatSentQuote }
         }
       : base

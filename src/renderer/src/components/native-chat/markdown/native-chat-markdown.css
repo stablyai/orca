@@ -91,6 +91,11 @@
   }
 }
 
+/* The blank line between text and a quote chip: one paragraph gap, as the p margin (my-2) gives. */
+.native-chat-markdown [data-native-chat-quote-gap] {
+  margin-top: 0.5rem;
+}
+
 /* The quoted text, for a short time after a sent quote jumps back to it. */
 ::highlight(native-chat-quote-jump) {
   background-color: color-mix(in srgb, var(--markdown-search-match-active) 60%, transparent);

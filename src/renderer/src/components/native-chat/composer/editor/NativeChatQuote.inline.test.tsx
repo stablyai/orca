@@ -64,17 +64,24 @@ async function composerLines(text: string): Promise<string[]> {
   return [...view.container.querySelectorAll('.ProseMirror > p')].map(lineText)
 }
 
-/** The sent message, as lines: a block of the Markdown, or '' for a visible empty line. */
-function sentLines(text: string): string[] {
+function renderSent(text: string): Element {
   const view = render(
     <TooltipProvider>
       <NativeChatMarkdown content={text} variant="document" quoteChips />
     </TooltipProvider>
   )
-  const root = view.container.querySelector('.native-chat-markdown')!
-  return [...root.children].map((block) =>
+  return view.container.querySelector('.native-chat-markdown')!
+}
+
+/**
+ * The sent message, as lines: a block of the Markdown, or '' for a visible empty line. A paragraph
+ * gap above a quote line is where the composer shows an empty line, so it reads as ''.
+ */
+function sentLines(text: string): string[] {
+  return [...renderSent(text).children].flatMap((block) => [
+    ...(block.matches('[data-native-chat-quote-gap]') ? [''] : []),
     block.matches('[data-native-chat-sent-quote]') ? CHIP : lineText(block)
-  )
+  ])
 }
 
 // The sent text keeps the quote, a blank line, then the comment; the comment shows on the chip's line.
@@ -94,6 +101,28 @@ it.each(TABLE)('shows %s in the composer', async (_name, text, lines) => {
 
 it.each(TABLE)('shows %s the same way when sent', (_name, text, lines) => {
   expect(sentLines(text)).toEqual(lines)
+})
+
+it('shows the blank line between a comment and the next quote as a paragraph gap, not an empty line', () => {
+  const root = renderSent('> a\n\nc1\n\n> b\n\nc2')
+  // Two chip lines; the second has the gap above it. An empty line would be a third block.
+  expect(
+    [...root.children].map((block) => block.outerHTML.includes('data-native-chat-sent-quote'))
+  ).toEqual([true, true])
+  expect(root.children[1].hasAttribute('data-native-chat-quote-gap')).toBe(true)
+  expect(root.children[0].hasAttribute('data-native-chat-quote-gap')).toBe(false)
+})
+
+it('keeps the comment apart from the chip with a margin on the chip, in the composer and when sent', async () => {
+  const { view } = mount('> q\n\nc')
+  await waitFor(() => expect(view.container.textContent).toContain('Quote: '))
+  expect(view.container.querySelector('.ProseMirror [data-selected]')!.classList).toContain(
+    'me-1.5'
+  )
+  cleanup()
+  expect(
+    renderSent('> q\n\nc').querySelector('[data-native-chat-sent-quote]')!.classList
+  ).toContain('me-1')
 })
 
 const NATIVE = 'native'
