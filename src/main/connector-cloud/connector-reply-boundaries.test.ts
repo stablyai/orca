@@ -21,7 +21,10 @@ import {
   settle
 } from './connector-poll-client.test-fixture'
 import { drainReplyId, type ConnectorReplyJournal } from './connector-reply-outbox'
+import { CONNECTOR_REHELLO_SPREAD_MS } from './connector-poll-control'
 import { ConnectorTurnEvents } from './connector-turn-events'
+import { postConnectorOutboxReply } from './connector-replies'
+import { ConnectorAccountTransport } from './connector-transport'
 
 // Design item 125 §8, desktop boundaries end to end: the journal's own file reopened by a new
 // process, and the cloud's wire answering (or losing its answer to) the reply events and posts.
@@ -61,8 +64,14 @@ function startProcess(journal: ConnectorReplyJournal) {
   const events = new ConnectorTurnEvents(h.userDataPath, 'ada', undefined, {
     journal: () => journal,
     onOwed: () => {},
+    // The app's own drain post, over the client's transport.
     post: async (body) =>
-      running?.reply(body) ?? { ok: false, status: 0, error: null, retryAfterMs: null },
+      running
+        ? postConnectorOutboxReply(
+            new ConnectorAccountTransport(h.fake.origin, h.fake.mintFor('ada'), h.fake.fetch),
+            body
+          )
+        : { ok: false, status: 0, error: null, retryAfterMs: null },
     hostName: () => 'box'
   })
   const { client } = h.startClient(undefined, events)
@@ -131,7 +140,8 @@ describe('a reply in transit across the kill switch and back', () => {
     h.fake.features = ['replies.outbox']
     h.fake.forgetHello()
     h.poll([])
-    await settle(2_000)
+    // The 409 asks for a hello after a random spread (0.5 of it here).
+    await settle(CONNECTOR_REHELLO_SPREAD_MS)
     admitAndAnswer(journal.db, 'd2', 'Second answer.')
     void next.events.drainReplies()
     await settle(100)

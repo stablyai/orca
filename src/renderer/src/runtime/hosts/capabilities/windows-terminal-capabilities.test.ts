@@ -4,6 +4,7 @@ import {
   loadWindowsTerminalCapabilities,
   resetWindowsTerminalCapabilitiesForTests
 } from './windows-terminal-capabilities'
+import { signInShell } from './windows-terminal-sign-in-shell'
 import { resolveExecutionHostAgentStartupShell } from '../platform/execution-host-facts'
 import type { ExecutionHostPlatformFact } from '../platform/execution-host-platform-fact'
 
@@ -66,6 +67,20 @@ describe('local Git Bash probe for startup shell quoting', () => {
     expect(getProbedLocalGitBashAvailability()).toBe(false)
     expect(resolveExecutionHostAgentStartupShell(LOCAL_WIN32_FACT, 'git-bash')).toBe('powershell')
     expect(resolveExecutionHostAgentStartupShell(REMOTE_WIN32_FACT, 'git-bash')).toBe('posix')
+  })
+
+  it('uses PowerShell for a local sign-in command once Git Bash probes unavailable', async () => {
+    stubLocalWindowsApi(() => Promise.resolve(false))
+
+    await loadWindowsTerminalCapabilities()
+
+    expect(
+      signInShell({
+        platform: 'win32',
+        isRemote: false,
+        hostTerminalWindowsShell: 'git-bash'
+      })
+    ).toBe('powershell')
   })
 
   it('keeps posix quoting when the Git Bash probe rejects instead of proving absence', async () => {

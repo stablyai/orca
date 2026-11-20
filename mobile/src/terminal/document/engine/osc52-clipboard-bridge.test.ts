@@ -29,17 +29,14 @@ function fixture() {
 const BTW_COPY = `\x1b]52;c;${Buffer.from('hello from btw').toString('base64')}\x07`
 
 describe('OSC 52 in the mobile terminal document', () => {
-  it('posts a live copy to native as clipboard text', async () => {
-    const { scope, posted, write } = fixture()
-    resumeTerminalDataReplyAuthority(scope)
-    await write(BTW_COPY)
-    expect(posted).toEqual([{ type: 'clipboard-write', text: 'hello from btw' }])
-  })
-
-  it('drops a copy parsed before the replay boundary', async () => {
+  it('drops replayed clipboard writes and delivers live copies after the boundary', async () => {
     const { scope, posted, write } = fixture()
     resetTerminalDataReplyAuthority(scope)
     await write(BTW_COPY)
     expect(posted).toEqual([])
+
+    resumeTerminalDataReplyAuthority(scope)
+    await write(BTW_COPY)
+    expect(posted).toEqual([{ type: 'clipboard-write', text: 'hello from btw' }])
   })
 })

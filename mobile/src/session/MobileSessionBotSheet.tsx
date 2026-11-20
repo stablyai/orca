@@ -10,6 +10,10 @@ import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
 import { BotItemCommentMicContext } from '../bots/items/bot-item-comment-mic'
 import { navigateToMobileFilePreview } from '../files/preview/mobile-file-preview-navigation'
+import {
+  isChatAttachmentStorePath,
+  isCommittedChatAttachmentCandidate
+} from '../../../src/shared/native-chat/attachments/native-chat-text-attachment-references'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
@@ -163,6 +167,8 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
         )
       }
     : null
+  const hostName =
+    (server ? server.name : controller.hostName) || t('bots.items.thisComputer', 'The computer')
   if (itemsOnPhone && hostId) {
     const closePanel = () => setBotPanel(null)
     const panelTreeActions: BotChatTreeActions = {
@@ -185,10 +191,7 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
               routeBot={routeBot}
               client={client}
               online={connState === 'connected'}
-              hostName={
-                (server ? server.name : controller.hostName) ||
-                t('bots.items.thisComputer', 'The computer')
-              }
+              hostName={hostName}
               hostId={hostId}
               worktreeId={worktreeId}
               hostKey={hostBotsKey(hostId, executionHost)}
@@ -203,6 +206,25 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
                 )
               }}
               onOpenFile={(path, toast) => {
+                // A comment's text file opens from the bot host's attachment store, as in chat.
+                if (isCommittedChatAttachmentCandidate(path)) {
+                  navigateToMobileFilePreview(
+                    router,
+                    { hostId, worktreeId, source: 'chatAttachment', absolutePath: path },
+                    { embedded: true, onRequestClose: closePanel }
+                  )
+                  return
+                }
+                // Other attachment files (a PDF, say) have no phone preview.
+                if (isChatAttachmentStorePath(path)) {
+                  const name = path.split(/[\\/]/).at(-1) ?? path
+                  toast(
+                    t('bots.items.comment.fileOnComputer', 'Open {{name}} on your computer.', {
+                      name
+                    })
+                  )
+                  return
+                }
                 // Only a file in the bot's folder opens, as on the desktop.
                 if (!isBotFolderPath(path)) {
                   toast(
@@ -235,6 +257,8 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
     <MobileBotSheet
       hostKey={hostBotsKey(hostId ?? '', executionHost)}
       treeActions={treeActions}
+      online={connState === 'connected'}
+      hostName={hostName}
       visible={showBotSheet}
       onClose={() => setShowBotSheet(false)}
       routeBot={routeBot}

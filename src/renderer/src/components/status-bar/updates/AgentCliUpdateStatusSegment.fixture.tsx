@@ -17,6 +17,34 @@ const codex = {
   command: 'codex update',
   runnable: true
 } as const
+const opencode = {
+  agent: 'opencode',
+  installedVersion: '1.19.5',
+  latestVersion: '1.19.6',
+  command: 'opencode upgrade',
+  runnable: true
+} as const
+const copilot = {
+  agent: 'copilot',
+  installedVersion: '1.0.113',
+  latestVersion: '1.0.114',
+  command: 'copilot update',
+  runnable: true
+} as const
+const cursor = {
+  agent: 'cursor',
+  installedVersion: '2026.11.12',
+  latestVersion: '2026.11.17',
+  command: 'cursor-agent update',
+  runnable: true
+} as const
+const hermes = {
+  agent: 'hermes',
+  installedVersion: '0.23.0',
+  latestVersion: '0.23.2',
+  command: 'hermes update',
+  runnable: false
+} as const
 
 const OUTPUT = [
   'Updating Codex via `npm install -g @openai/codex`...',
@@ -51,7 +79,7 @@ function bar(hosts: [string, AgentCliUpdateHost][]) {
     store: { agentCliUpdates: new Map(hosts) },
     render: () => (
       <div className="flex h-96 items-end justify-end bg-card p-2 text-foreground">
-        <AgentCliUpdateStatusSegment iconOnly={false} />
+        <AgentCliUpdateStatusSegment />
       </div>
     )
   }
@@ -61,6 +89,11 @@ export const twoUpdates = defineFixture(bar([['', { updates: [claude, codex], ru
 
 export const twoUpdatesOpen = defineFixture({
   ...bar([['', { updates: [claude, codex], runs: {} }]]),
+  interact: open
+})
+
+export const everyAgentOpen = defineFixture({
+  ...bar([['', { updates: [claude, codex, opencode, copilot, cursor, hermes], runs: {} }]]),
   interact: open
 })
 
@@ -74,18 +107,24 @@ export const updating = defineFixture({
   interact: open
 })
 
-export const failedWithOutput = defineFixture({
+export const failed = defineFixture({
   ...bar([
-    ['', { updates: [claude, codex], runs: { codex: { phase: 'failed', output: OUTPUT } } }]
+    [
+      '',
+      {
+        updates: [claude, codex],
+        runs: {
+          codex: {
+            phase: 'failed',
+            output: OUTPUT,
+            command: 'codex update',
+            finishedAt: Date.UTC(2026, 10, 18, 18, 42)
+          }
+        }
+      }
+    ]
   ]),
-  interact: async (frame) => {
-    await open(frame)
-    const showOutput = [...document.querySelectorAll<HTMLButtonElement>('button')].find(
-      (button) => button.textContent === 'Show output'
-    )
-    showOutput?.click()
-    await settle()
-  }
+  interact: open
 })
 
 export const manualCommand = defineFixture({

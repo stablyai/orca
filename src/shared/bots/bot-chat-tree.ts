@@ -1,4 +1,5 @@
 // A bot's chats with the workers each one started nested under it: the Activity panel's and sidebar's one list.
+import { isBotGroupMemberSession } from './bot-group'
 
 /** What a chat row's icon shows: Home Chat, an outside thread's mark, an automation or a side chat. */
 export type BotChatOrigin = 'home' | 'slack' | 'linear' | 'github' | 'automation' | 'side'
@@ -114,15 +115,32 @@ export function chatRunningCount(chat: BotChatTreeChat): number {
   return chat.runningTotal - notRunning
 }
 
-/** A folded chat's live counts, '1 waiting · 3 running'; null when nothing runs, so the row shows its time. */
-export function chatFoldSummary(chat: BotChatTreeChat): string | null {
+/** What a folded chat's line counts: its workers waiting on the owner and still running. */
+export type ChatFoldCounts = { waiting: number; running: number }
+
+/** A folded chat's live counts; null when nothing runs, so the row shows its time. */
+export function chatFoldCounts(chat: BotChatTreeChat): ChatFoldCounts | null {
   const waiting = chatWaitingCount(chat)
   const running = chatRunningCount(chat)
-  const parts = [
-    waiting > 0 ? `${waiting} waiting` : null,
-    running > 0 ? `${running} running` : null
-  ].filter(Boolean)
-  return parts.length > 0 ? parts.join(' · ') : null
+  return waiting > 0 || running > 0 ? { waiting, running } : null
+}
+
+/** Each client's `t`: the desktop's and the phone's both fit. */
+export type BotChatTranslate = (
+  key: string,
+  fallback: string,
+  values?: Record<string, unknown>
+) => string
+
+/** '1 waiting · 3 running' in the reader's language; a zero count drops out. */
+export function chatFoldSummary(t: BotChatTranslate, counts: ChatFoldCounts): string {
+  const { waiting, running } = counts
+  return [
+    waiting > 0 ? t('bots.chats.waitingCount', '{{count}} waiting', { count: waiting }) : null,
+    running > 0 ? t('bots.chats.runningCount', '{{count}} running', { count: running }) : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /** A manual fold; a chat with none starts folded. */
@@ -157,4 +175,43 @@ export function normalizeBotChatFolds(value: unknown): Record<string, BotChatFol
     (entry): entry is [string, BotChatFold] => entry[1] === 'open' || entry[1] === 'folded'
   )
   return Object.fromEntries(entries.slice(-BOT_CHAT_FOLDS_MAX))
+}
+
+/** The bot's chats as its own lists show them: a group room session belongs to its room, so its row
+ *  drops, and its workers move under Home Chat, where anything without a chat goes; every worker that
+ *  waits on the owner keeps a row. With no Home Chat to take them, nothing moves. Finished workers
+ *  past the room's shown page stay out: Home's Show more reads only Home's. */
+export function botOwnChatTree<T extends BotChatTreeRead>(tree: T): T {
+  const rooms = tree.chats.filter((chat) => isBotGroupMemberSession(chat.chatId))
+  const home = tree.chats.find((chat) => chat.origin === 'home' && !chat.closed)
+  if (rooms.length === 0 || !home) {
+    return tree
+  }
+  const roomIds = new Set(rooms.map((chat) => chat.chatId))
+  const moved = rooms.flatMap((chat) => chat.finished)
+  const merged: BotChatTreeChat = {
+    ...home,
+    running: [...home.running, ...rooms.flatMap((chat) => chat.running)].toSorted(
+      (a, b) => Number(b.state === 'needs-you') - Number(a.state === 'needs-you')
+    ),
+    runningTotal: rooms.reduce((sum, chat) => sum + chat.runningTotal, home.runningTotal),
+    finished: [...home.finished, ...moved].toSorted(
+      (a, b) => (b.settledAt ?? b.startedAt) - (a.settledAt ?? a.startedAt)
+    ),
+    finishedTotal: home.finishedTotal + moved.length,
+    failedTotal: home.failedTotal + moved.filter((worker) => worker.state === 'failed').length
+  }
+  const workspaceChats = Object.fromEntries(
+    Object.entries(tree.workspaceChats).map(([workspace, chatId]) => [
+      workspace,
+      roomIds.has(chatId) ? home.chatId : chatId
+    ])
+  )
+  return {
+    ...tree,
+    chats: tree.chats.flatMap((chat) =>
+      roomIds.has(chat.chatId) ? [] : chat === home ? [merged] : [chat]
+    ),
+    workspaceChats
+  }
 }

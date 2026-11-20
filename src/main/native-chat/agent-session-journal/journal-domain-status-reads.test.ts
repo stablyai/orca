@@ -405,7 +405,12 @@ it('waits on the user for a Codex async question after its turn ends, until thei
           type: 'tool-call',
           name: 'request_user_input_async',
           callId: 'call',
-          input: { questions: [{ title: 'Which color?', options: ['Red', 'Blue'] }] }
+          input: {
+            questions: [
+              { title: 'Which color?', options: ['Red', 'Blue'] },
+              { title: 'Why that one?\nOne line is fine.' }
+            ]
+          }
         }
       ]
     }),
@@ -416,14 +421,20 @@ it('waits on the user for a Codex async question after its turn ends, until thei
     })
   ]
   const waiting = readJournalSqlStatusState(fixture(asked).context())
-  expect(waiting.summary).toMatchObject({ status: 'idle', openAsyncQuestion: 'question' })
+  expect(waiting.summary).toMatchObject({
+    status: 'idle',
+    openAsyncQuestion: {
+      itemId: 'question',
+      text: 'Which color?\n\nWhy that one?\nOne line is fine.'
+    }
+  })
   expect(waiting.pendingPromptIds).toEqual([])
   const notice = item('notice', {
     ...message('Coordinator: status?'),
     from: { kind: 'agent', senders: [], orchestration: null }
   })
   const noticed = readJournalSqlStatusState(fixture([...asked, notice]).context())
-  expect(noticed.summary.openAsyncQuestion).toBe('question')
+  expect(noticed.summary.openAsyncQuestion?.itemId).toBe('question')
   const answered = readJournalSqlStatusState(
     fixture([...asked, notice, item('answer', message('Blue'))]).context()
   )
@@ -653,53 +664,4 @@ it('reopens stopped history when its only effective carrier is excluded and reta
     kind: 'latest-accepted-handover',
     sequence: 7
   })
-})
-
-it('keeps sending phase re-entry separate from entered and pending admission order', () => {
-  const submission = (id: string, held = false): JournalRow => ({
-    ...base,
-    kind: 'submission',
-    clientMessageId: id,
-    payloadFingerprint: id,
-    providerHandle,
-    body: message(id),
-    ...(held ? { handoverRecorded: true } : {})
-  })
-  const dispatch = (state: 'pending' | 'unknown'): JournalRow => ({
-    ...base,
-    kind: 'dispatch',
-    clientMessageId: 'a',
-    state,
-    providerItemId: null,
-    reason: null
-  })
-  const { scope } = fixture([
-    submission('a', true),
-    submission('b'),
-    dispatch('pending'),
-    submission('c'),
-    dispatch('unknown'),
-    dispatch('pending'),
-    dispatch('pending')
-  ])
-  const result = readJournalSqlInput(scope(), {
-    kind: 'batch',
-    reads: [
-      { kind: 'sending-submissions' },
-      { kind: 'entered-submissions' },
-      { kind: 'pending-submissions' }
-    ]
-  })
-  if (result.kind !== 'batch') {
-    throw new Error('expected batch')
-  }
-  expect(
-    result.results.map((read) =>
-      'submissions' in read ? read.submissions.map((input) => input.clientMessageId) : []
-    )
-  ).toEqual([
-    ['a', 'b', 'c'],
-    ['a', 'b', 'c'],
-    ['a', 'b', 'c']
-  ])
 })

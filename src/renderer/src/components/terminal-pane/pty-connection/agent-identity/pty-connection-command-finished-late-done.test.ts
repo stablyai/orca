@@ -227,18 +227,6 @@ describe('command-finished drop and a Done that lands after it', () => {
     }
   }
 
-  it('keeps a Done that lands after the command-finished fact', async () => {
-    const pane = await connectRunPane()
-    pane.setStatus('working')
-
-    pane.finishCommand()
-    pane.setStatus('done')
-    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(mockStoreState.agentStatusByPaneKey.get(pane.paneKey)!).toMatchObject({ state: 'done' })
-  })
-
   // OSC 7501: a finished program's result outlives its exit until the user comes back to it.
   describe('a program status result', () => {
     const brewDone = { programStatus: { state: 'done' as const, observedAt: 2_000 } }

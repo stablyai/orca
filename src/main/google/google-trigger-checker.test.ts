@@ -61,7 +61,8 @@ async function checkerWith(
     ],
     bots: () => [{ id: 'bot-1', google: options.google ?? true }],
     accounts: () => accounts,
-    api: (account) => google.client.googleApi(account, { http: fake.http, now: () => now }),
+    api: async (account) =>
+      await google.client.googleApi(account, { http: fake.http, now: () => now }),
     runForEvent: async (automationId, event) => {
       if ((failRuns -= 1) >= 0) {
         throw new Error('runtime_unavailable')
@@ -139,8 +140,16 @@ function gmailRoutes(added: ReturnType<typeof message>[], historyStatus = 200): 
 }
 
 describe('Gmail rules', () => {
-  it('starts from now, then starts a run for new mail a rule matches, once', async () => {
-    const { checker, fired, state, fake } = await checkerWith(gmailRoutes([message('m1')]))
+  it('seeds Gmail history and fires only for the new message with an authenticated sender', async () => {
+    const forged = message('m2', { auth: [authResults('fail')] })
+    const planted = message('m3', {
+      auth: ['mx.example.com; dmarc=fail', authResults('pass')]
+    })
+    const sent = message('m4', { labels: ['SENT'] })
+    const old = message('m5', { at: NOW - 60_000 })
+    const { checker, fired, state, fake } = await checkerWith(
+      gmailRoutes([forged, planted, sent, old, message('m1')])
+    )
     await checker.tick()
     expect(fired).toEqual([])
     expect(state().accounts['ada@acme.dev']?.historyId).toBe('100')
@@ -158,25 +167,11 @@ describe('Gmail rules', () => {
       google: { account: 'ada@acme.dev', ref: 'gmail:thread:t-m1' }
     })
     expect(state().accounts['ada@acme.dev']?.historyId).toBe('120')
-    // Only the topmost Authentication-Results header and the message's metadata were read.
     const read = fake.calls.find((call) => call.pathname === `${GMAIL}/messages/m1`)
     expect(read?.searchParams.get('format')).toBe('metadata')
   })
 
-  it('never fires a from= rule for a forged sender, the owner’s sent mail, or mail from before it listened', async () => {
-    const forged = message('m2', { auth: [authResults('fail')] })
-    const planted = message('m3', {
-      auth: ['mx.example.com; dmarc=fail', authResults('pass')]
-    })
-    const sent = message('m4', { labels: ['SENT'] })
-    const old = message('m5', { at: NOW - 60_000 })
-    const { checker, fired } = await checkerWith(gmailRoutes([forged, planted, sent, old]))
-    await checker.tick()
-    await checker.tick()
-    expect(fired).toEqual([])
-  })
-
-  it('keeps the history point when the label lookup or a run start fails, so that mail is matched next check', async () => {
+  it('backs off after a label rate limit and retries from the same history point after failures', async () => {
     let labelsUp = false
     const routes: FakeRoute[] = [
       (url) =>
@@ -187,16 +182,22 @@ describe('Gmail rules', () => {
           : null,
       ...gmailRoutes([message('m1', { labels: ['INBOX', 'Label_7'] })])
     ]
-    const { checker, fired, state, advance } = await checkerWith(routes, {
+    const { checker, fake, fired, state, advance } = await checkerWith(routes, {
       rules: [{ ...gmailRule, label: 'clients' }],
       state: { accounts: { 'ada@acme.dev': { historyId: '7' } }, listeners: {} },
       failRuns: 1
     })
     await checker.tick()
     expect(state().accounts['ada@acme.dev']?.historyId).toBe('7')
+    const calls = fake.calls.length
     labelsUp = true
-    advance(120_000)
+    advance(30_000)
     await checker.tick()
+    expect(fake.calls).toHaveLength(calls)
+
+    advance(90_000)
+    await checker.tick()
+    expect(fake.calls.length).toBeGreaterThan(calls)
     expect(fired).toEqual([])
     expect(state().accounts['ada@acme.dev']?.historyId).toBe('7')
     await checker.tick()
@@ -211,20 +212,6 @@ describe('Gmail rules', () => {
     await checker.tick()
     expect(fired).toEqual([])
     expect(state().accounts['ada@acme.dev']?.historyId).toBe('100')
-  })
-
-  it('backs off after Google says too many requests', async () => {
-    const { checker, fake, advance } = await checkerWith(gmailRoutes([], 429), {
-      state: { accounts: { 'ada@acme.dev': { historyId: '7' } }, listeners: {} }
-    })
-    await checker.tick()
-    const calls = fake.calls.length
-    advance(30_000)
-    await checker.tick()
-    expect(fake.calls.length).toBe(calls)
-    advance(60_000)
-    await checker.tick()
-    expect(fake.calls.length).toBeGreaterThan(calls)
   })
 
   it('checks nothing for a bot whose owner has not turned Google on, or a rule naming no account among several', async () => {
@@ -245,6 +232,7 @@ function calendarRoutes(
   events: { id: string; startsIn: number; declined?: boolean }[],
   syncStatus = 200
 ): FakeRoute[] {
+  let seeds = 0
   return [
     (url) => {
       if (url.pathname !== EVENTS) {
@@ -253,7 +241,7 @@ function calendarRoutes(
       if (url.searchParams.has('fields')) {
         return url.searchParams.has('syncToken') && syncStatus !== 200
           ? googleJson(syncStatus, { error: { code: syncStatus } })
-          : googleJson(200, { items: [], nextSyncToken: 'sync-1' })
+          : googleJson(200, { items: [], nextSyncToken: `sync-${++seeds}` })
       }
       return googleJson(200, {
         items: events.map((event) => ({
@@ -275,16 +263,20 @@ function calendarRoutes(
 }
 
 describe('Calendar rules', () => {
-  it('fires once when a meeting is within its minutes, not for later or declined ones', async () => {
-    const { checker, fired, state } = await checkerWith(
-      calendarRoutes([
-        { id: 'soon', startsIn: 5 * 60_000 },
-        { id: 'later', startsIn: 3 * 3_600_000 },
-        { id: 'declined', startsIn: 4 * 60_000, declined: true }
-      ]),
+  it('fires once for a due meeting even if Calendar expires the sync token', async () => {
+    const { checker, fake, fired, state } = await checkerWith(
+      calendarRoutes(
+        [
+          { id: 'soon', startsIn: 5 * 60_000 },
+          { id: 'later', startsIn: 3 * 3_600_000 },
+          { id: 'declined', startsIn: 4 * 60_000, declined: true }
+        ],
+        410
+      ),
       { rules: [calendarRule] }
     )
     await checker.tick()
+    expect(state().accounts['ada@acme.dev']?.calendars?.primary?.syncToken).toBe('sync-1')
     await checker.tick()
     expect(fired.map((entry) => entry.event.google?.ref)).toEqual(['calendar:primary:event:soon'])
     expect(fired[0]?.event).toMatchObject({
@@ -292,19 +284,7 @@ describe('Calendar rules', () => {
       event: 'starting_soon',
       occurredAt: NOW + 5 * 60_000 - 10 * 60_000
     })
-    expect(state().accounts['ada@acme.dev']?.calendars?.primary?.syncToken).toBe('sync-1')
-  })
-
-  it('seeds a new sync token when Google drops the saved one', async () => {
-    const { checker, fake, state } = await checkerWith(calendarRoutes([], 410), {
-      rules: [calendarRule],
-      state: {
-        accounts: { 'ada@acme.dev': { calendars: { primary: { syncToken: 'old' } } } },
-        listeners: {}
-      }
-    })
-    await checker.tick()
-    expect(state().accounts['ada@acme.dev']?.calendars?.primary?.syncToken).toBe('sync-1')
-    expect(fake.calls.some((call) => call.searchParams.get('syncToken') === 'old')).toBe(true)
+    expect(fake.calls.some((call) => call.searchParams.get('syncToken') === 'sync-1')).toBe(true)
+    expect(state().accounts['ada@acme.dev']?.calendars?.primary?.syncToken).toBe('sync-2')
   })
 })

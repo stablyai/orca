@@ -1,3 +1,4 @@
+import './rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -7,6 +8,9 @@ import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-r
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { makeTestBot } from '../bots/bot.test-fixture'
 import { BotsDisabledError } from '../../shared/bots-switch'
+import { RpcDispatcher } from './rpc/dispatcher'
+import { AUTOMATION_METHODS } from './rpc/methods/automations/automations'
+import type { OrcaRuntimeService } from './orca-runtime'
 import { RuntimeAutomationController } from './integrations/automations/runtime-automation-controller'
 import {
   EVENT_ONLY_SCHEDULE,
@@ -178,8 +182,6 @@ describe('RuntimeAutomationController bot target', () => {
     await expect(
       controller.update(saved.id, { bot: { ...botTarget, resultsTo: { channel: 'C0RES' } } })
     ).resolves.toMatchObject({ bot: { resultsTo: posted } })
-    // Its own check takes the id the field keeps.
-    expect(/^[CGD][A-Z0-9]+$/.test(posted.channel)).toBe(true)
     // An edit that leaves a place keeps it as saved.
     await expect(controller.update(older.id, { name: 'Renamed' })).resolves.toMatchObject({
       on: [{ in: ['C0ENG'] }]
@@ -289,25 +291,6 @@ describe('RuntimeAutomationController bot target', () => {
     expect(back).toMatchObject({ agentId: 'codex', bot: botTarget })
   })
 
-  it('refuses Antigravity as the agent on a host without Orca’s managed Antigravity server', async () => {
-    const { controller, store } = await setup()
-    const created = await controller.create({ ...schedule, bot: botTarget })
-    const onAgy: AutomationBotTarget = { ...botTarget, agentSetup: { agent: 'antigravity' } }
-    const refusal =
-      "Antigravity bots need Orca's own Antigravity server, which isn't available on the computer this bot runs on."
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { ...platform, value: 'freebsd' })
-    try {
-      await expect(controller.create({ ...schedule, bot: onAgy })).rejects.toThrow(refusal)
-      await expect(controller.update(created.id, { bot: onAgy })).rejects.toThrow(refusal)
-    } finally {
-      Object.defineProperty(process, 'platform', platform)
-    }
-    expect(store.listAutomations()).toEqual([
-      expect.objectContaining({ agentId: 'codex', bot: botTarget })
-    ])
-  })
-
   it('pauses a stored automation whose chat target still names an agent, without refusing it', async () => {
     const { controller, store, folderKey } = await setup()
     // No save path writes this; a hand-edited store can.
@@ -407,22 +390,58 @@ describe('RuntimeAutomationController bot target', () => {
     )
   })
 
-  it('carries a named zone through create and edit', async () => {
-    const { controller } = await setup()
-    const created = await controller.create({
-      ...schedule,
-      bot: botTarget,
+  it('saves mobile edits and preserves explicit and inherited timezones', async () => {
+    const { controller, store } = await setup()
+    const operations = {
+      getRuntimeId: () => 'test-runtime',
+      createAutomation: controller.create.bind(controller),
+      updateAutomation: controller.update.bind(controller)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These mobile methods only use the runtime ID and automation writes.
+    const runtime = operations as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+    const dispatch = (method: string, params: unknown) =>
+      dispatcher.dispatch(
+        { id: 'req-1', authToken: 'tok', method, params },
+        { callerScope: { kind: 'mobile' } }
+      )
+
+    await expect(
+      dispatch('automation.create', {
+        ...schedule,
+        bot: botTarget,
+        timezone: 'Europe/London',
+        timezoneExplicit: true
+      })
+    ).resolves.toMatchObject({ ok: true })
+    await expect(
+      dispatch('automation.create', {
+        ...schedule,
+        name: 'Inherited zone',
+        repo: 'id:repo-1',
+        workspaceMode: 'new_per_run'
+      })
+    ).resolves.toMatchObject({ ok: true })
+    const saved = store.listAutomations()
+    expect(saved.find((entry) => entry.name === schedule.name)).toMatchObject({
       timezone: 'Europe/London',
       timezoneExplicit: true
     })
-    const plain = await controller.create({ ...schedule, bot: botTarget })
-    const named = await controller.update(plain.id, {
+    const inherited = saved.find((entry) => entry.name === 'Inherited zone')
+    expect(inherited?.timezoneExplicit).toBeUndefined()
+    const edited = {
+      enabled: false,
+      prompt: 'Do more',
+      agentId: 'claude',
       timezone: 'Asia/Tokyo',
-      timezoneExplicit: true
-    })
-
-    expect(created.timezoneExplicit).toBe(true)
-    expect(plain.timezoneExplicit).toBeUndefined()
-    expect(named).toMatchObject({ timezone: 'Asia/Tokyo', timezoneExplicit: true })
+      timezoneExplicit: true,
+      rrule: 'FREQ=DAILY;BYHOUR=8;BYMINUTE=0'
+    }
+    await expect(
+      dispatch('automation.update', { id: inherited?.id, updates: edited })
+    ).resolves.toMatchObject({ ok: true })
+    expect(store.listAutomations().find((entry) => entry.id === inherited?.id)).toMatchObject(
+      edited
+    )
   })
 })

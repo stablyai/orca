@@ -20,17 +20,13 @@ function input(overrides: Partial<AcpSkillRootsInput> = {}): AcpSkillRootsInput 
 }
 
 describe('Grok skill roots', () => {
-  it('passes plugin folders only on a release known to take --plugin-dir', async () => {
-    await expect(loadGrokSkillRoots(input({ version: '1.0.44' }))).resolves.toMatchObject({
+  it('passes only unlinked plugin folders on releases that support --plugin-dir', async () => {
+    await expect(loadGrokSkillRoots(input({ version: '1.0.44' }))).resolves.toEqual({
+      loaded: [VISUALS],
       pluginDirs: ['/app/plugin']
     })
     await expect(loadGrokSkillRoots(input({ version: '1.0.43' }))).resolves.toBeNull()
     await expect(loadGrokSkillRoots(input({ version: null }))).resolves.toBeNull()
-  })
-
-  it('leaves a folder of linked skills to the instructions, since its plugin folders skip links', async () => {
-    const launch = await loadGrokSkillRoots(input({ version: '1.0.77' }))
-    expect(launch?.loaded).toEqual([VISUALS])
     await expect(
       loadGrokSkillRoots(input({ roots: [LINKED], version: '1.0.77' }))
     ).resolves.toBeNull()

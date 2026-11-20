@@ -1,4 +1,5 @@
 import { memoizeStringResult } from '../../collections/string-result-cache'
+import { isAgentSessionSlotTabId } from './agent-session-slot-tab-id'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   normalizeOptionalField,
@@ -14,6 +15,7 @@ import {
   type AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
+import type { AgentSessionAwaitedQuestion } from '../agent-session-wire'
 import { agentJournalLinkageFields } from '../journal/agent-session-journal-producer'
 import { itemBlocks } from './structured-agent-session-item-blocks'
 import { agentJournalItemRowOrigin } from '../journal/agent-session-journal-position'
@@ -121,6 +123,7 @@ export function projectStructuredItemToNativeChat(
 
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
+/** Legacy tab id of chats opened before slot ids were minted; still their pane/status address. */
 export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
@@ -163,9 +166,9 @@ export type StructuredAgentSessionStatusProjection = {
   /** Idle-only latest-request verdict: turn outcome, host-observed end if absent, or refused-send failure. */
   turnOutcome?: AgentTurnOutcome
   statusStartedAt?: number
-  /** The row of the newest async question still waiting for the person's next message; set by
-   *  the host's journal reads and folded with the person's Skip into the published `awaitsAnswer`. */
-  openAsyncQuestion?: string
+  /** The newest async question still waiting for the person's next message; set by the host's
+   *  journal reads and folded with the person's Skip into the published `awaitsAnswer`. */
+  openAsyncQuestion?: AgentSessionAwaitedQuestion
 }
 
 /** Share host/client previews; null status means no turn yet. Bound text because sends admit 256 KB and status frames include all sessions;
@@ -259,6 +262,12 @@ const structuredAgentSessionPaneLeaf = memoizeStringResult((sessionId: string): 
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
 }, 2048)
 
+/** The tab id a chat's pane key names: status, attention and orchestration rows still address a
+ *  minted slot's chat by its session's legacy id. */
+export function structuredAgentSessionAddressTabId(tabId: string, sessionId: string): string {
+  return isAgentSessionSlotTabId(tabId) ? structuredAgentSessionTabId(sessionId) : tabId
+}
+
 export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {
-  return `${tabId}:${structuredAgentSessionPaneLeaf(sessionId)}`
+  return `${structuredAgentSessionAddressTabId(tabId, sessionId)}:${structuredAgentSessionPaneLeaf(sessionId)}`
 }

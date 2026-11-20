@@ -214,7 +214,7 @@ export function claudeStructuredSessionOptionsFrom(
   const listed = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
   const model = current.id === 'default' ? undefined : current.id
-  const models = structuredAgentSessionOptionModels(listed, model, (row) => ({
+  const models = structuredAgentSessionOptionModels('claude', listed, model, (row) => ({
     ...row,
     resolvedModel: null
   }))

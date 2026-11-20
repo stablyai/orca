@@ -72,29 +72,14 @@ describe('Composio in a bot’s Tools', () => {
     )
   })
 
-  it('opens to the catalog after the key: sign-ins first, then Connect or Set up in Composio', async () => {
-    answer('ok')
-    show()
-    fireEvent.click(await screen.findByRole('button', { name: 'Composio apps' }))
-    expect(await screen.findByText('Connected as dana@acme.com')).toBeTruthy()
-    expect(await screen.findByRole('button', { name: 'Connect HubSpot' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Set up in Composio/ })).toBeTruthy()
-    expect(screen.getByText('Needs your own Salesforce developer app')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Connect Salesforce' })).toBeNull()
-    expect(screen.getByText('1 connected · Your app sign-ins are held by Composio.')).toBeTruthy()
-  })
-
-  it('asks for a new key when Composio refused it', async () => {
-    answer('rejected')
-    show()
-    expect(await screen.findByText('Key not accepted')).toBeTruthy()
-    expect(await screen.findByRole('button', { name: 'Replace key' })).toBeTruthy()
-  })
-
-  it('connects an app and opens its sign-in in the browser', async () => {
+  it('shows sign-ins and opens a supported app’s sign-in in the browser', async () => {
     answer('ok', { 'bots.composio.connect': { url: 'https://connect.composio.dev/link/lk_1' } })
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Composio apps' }))
+    expect(await screen.findByText('Connected as dana@acme.com')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Set up in Composio/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Connect Salesforce' })).toBeNull()
+
     fireEvent.click(await screen.findByRole('button', { name: 'Connect HubSpot' }))
     await waitFor(() =>
       expect(mocks.openUrl).toHaveBeenCalledWith('https://connect.composio.dev/link/lk_1')

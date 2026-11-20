@@ -1,14 +1,19 @@
 import type React from 'react'
+import { useMemo } from 'react'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
+import { useAppStore } from '../../../store/index'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
 import { ClaudeSwitcherForOwner } from './ClaudeSwitcherForOwner'
 import { getAccountOwnerKey } from './owner-account-rows'
-import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
+import {
+  useAccountOwnerUsage,
+  type OwnerUsageRateLimits
+} from '../usage/use-owner-usage-rate-limits'
 
 export type ClaudeSwitcherMenuProps = {
   claude: ProviderRateLimits | null
-  compact: boolean
-  iconOnly: boolean
+  iconOnly?: boolean
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
 } & (
@@ -18,8 +23,36 @@ export type ClaudeSwitcherMenuProps = {
 )
 
 export function ClaudeSwitcherMenu(props: ClaudeSwitcherMenuProps): React.JSX.Element | null {
-  const owner = props.chatAction
-    ? { target: props.chatAction.target, wslHostDistro: null }
-    : props.ownerUsage.owner
-  return <ClaudeSwitcherForOwner {...props} key={getAccountOwnerKey(owner)} owner={owner} />
+  if (props.chatAction) {
+    return <ChatClaudeSwitcherMenu {...props} chatAction={props.chatAction} />
+  }
+  const owner = props.ownerUsage.owner
+  return (
+    <ClaudeSwitcherForOwner
+      {...props}
+      key={getAccountOwnerKey(owner)}
+      owner={owner}
+      ownerUsage={props.ownerUsage}
+    />
+  )
+}
+
+/** A chat's rows belong to the chat's host, read through the same owner observation as the bar. */
+function ChatClaudeSwitcherMenu(
+  props: ClaudeSwitcherMenuProps & { chatAction: ChatAccountAction }
+): React.JSX.Element | null {
+  const target = props.chatAction.target
+  const owner = useMemo<AccountOwner>(() => ({ target, wslHostDistro: null }), [target])
+  const ownerUsage = useAccountOwnerUsage(
+    owner,
+    useAppStore((s) => s.rateLimits)
+  )
+  return (
+    <ClaudeSwitcherForOwner
+      {...props}
+      key={getAccountOwnerKey(owner)}
+      owner={owner}
+      ownerUsage={ownerUsage}
+    />
+  )
 }

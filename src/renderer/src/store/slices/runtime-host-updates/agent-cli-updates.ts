@@ -1,6 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
+import { runtimeStatusSubscriptionsFor } from '../runtime-status/views/runtime-status-subscriptions'
 import {
+  AGENT_CLI_UPDATE_AGENTS,
   AGENT_CLI_UPDATE_RUNTIME_CAPABILITY,
   type AgentCliUpdate,
   type AgentCliUpdateAgent,
@@ -15,7 +17,16 @@ const RUN_TIMEOUT_MS = 11 * 60_000
 // Chat starts come in bursts; one ask per host in this window is enough.
 const CHECK_INTERVAL_MS = 10 * 60_000
 
-export type AgentCliUpdateRun = { phase: 'running' } | { phase: 'failed'; output: string }
+export type AgentCliUpdateRun =
+  | { phase: 'running' }
+  | {
+      phase: 'failed'
+      /** Capped by the host, so the failure dialog can show all of it. */
+      output: string
+      /** What Orca ran; absent when nothing ran. */
+      command?: string
+      finishedAt: number
+    }
 
 /** One host's answer about the user's own agent CLIs, and the updates run there from this window. */
 export type AgentCliUpdateHost = {
@@ -46,7 +57,8 @@ function sameUpdates(a: readonly AgentCliUpdate[], b: readonly AgentCliUpdate[])
         other.installedVersion === update.installedVersion &&
         other.latestVersion === update.latestVersion &&
         other.command === update.command &&
-        other.runnable === update.runnable
+        other.runnable === update.runnable &&
+        JSON.stringify(other.models ?? []) === JSON.stringify(update.models ?? [])
       )
     })
   )
@@ -62,7 +74,8 @@ export type AgentCliUpdatesSlice = {
 
 export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCliUpdatesSlice> = (
   set,
-  get
+  get,
+  store
 ) => {
   const writeHost = (key: string, write: (host: AgentCliUpdateHost) => AgentCliUpdateHost) =>
     set((state) => {
@@ -75,7 +88,7 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
   const hostAnswers = (target: RuntimeClientTarget): boolean =>
     target.kind === 'local' ||
     lastVerifiedRuntimeStatus(
-      get().runtimeStatusByEnvironmentId.get(target.environmentId)
+      runtimeStatusSubscriptionsFor(store).readStatuses().get(target.environmentId)
     )?.capabilities?.includes(AGENT_CLI_UPDATE_RUNTIME_CAPABILITY) === true
 
   return {
@@ -90,7 +103,9 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       let check = checks.get(key)
       if (!check) {
         checkedAt.set(key, Date.now())
-        check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(target, 'agentCliUpdate.check')
+        check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(target, 'agentCliUpdate.check', {
+          agents: AGENT_CLI_UPDATE_AGENTS
+        })
           .then(({ updates }) => {
             // An unchanged answer leaves the store alone, so the status bar doesn't re-render.
             if (!sameUpdates(get().agentCliUpdates.get(key)?.updates ?? [], updates)) {
@@ -124,7 +139,12 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
         result = { ok: false, output: error instanceof Error ? error.message : String(error) }
       }
       if (!result.ok) {
-        writeRun(key, agent, { phase: 'failed', output: result.output })
+        writeRun(key, agent, {
+          phase: 'failed',
+          output: result.output,
+          ...(result.command ? { command: result.command } : {}),
+          finishedAt: Date.now()
+        })
         return false
       }
       writeHost(key, (host) => {

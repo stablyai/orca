@@ -98,6 +98,13 @@ export class AcpTurnFailures {
     ]
   }
 
+  /** A failure reported mid-turn still fails a turn the agent closes with end_turn. */
+  ending(turn: string, reported: AcpTurnEnding): AcpTurnEnding {
+    return reported.stopReason === 'end_turn' && this.rows.has(turn)
+      ? { ...reported, stopReason: 'error' }
+      : reported
+  }
+
   ended(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
     return acpStopReasonFailed(ending.stopReason) ? this.row(turn, ending) : []
   }

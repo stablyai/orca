@@ -53,7 +53,7 @@ it("claims the comment's images and store files for the item's live chat, sized 
   const log = await stored(UPLOAD_B, 'build.log')
   const text = `See @"${log}"`
 
-  const images = await admitBotItemCommentAttachments(deps(), text, [shot])
+  const { images } = await admitBotItemCommentAttachments(deps(), text, [shot])
 
   expect(images).toEqual([{ path: shot, name: 'shot.png', bytes: 7 }])
   expect(claims).toEqual([
@@ -75,7 +75,7 @@ it('leaves the journal alone for text naming no upload', async () => {
   const claim = vi.fn()
   await expect(
     admitBotItemCommentAttachments(deps({ claim }), 'See @src/app.ts', [])
-  ).resolves.toEqual([])
+  ).resolves.toEqual({ text: 'See @src/app.ts', images: [] })
   expect(claim).not.toHaveBeenCalled()
 })
 
@@ -110,7 +110,9 @@ it("copies this host's own dropped image into the store before claiming it", asy
   const dropped = join(dir, 'Screen Shot.png')
   await writeFile(dropped, Buffer.alloc(5))
 
-  const [image] = await admitBotItemCommentAttachments(deps({ local: true }), '', [dropped])
+  const {
+    images: [image]
+  } = await admitBotItemCommentAttachments(deps({ local: true }), '', [dropped])
 
   expect(image?.path.startsWith(store.rootDir)).toBe(true)
   expect(image?.name).toBe('Screen Shot.png')
@@ -153,6 +155,17 @@ it("refuses a comment naming an upload while this host's store is unavailable, a
   await expect(admitBotItemCommentAttachments(down, `See ${log}`, [])).rejects.toThrow(
     "This computer can't take attachments right now. Comment again in a moment."
   )
-  await expect(admitBotItemCommentAttachments(down, 'Ship it', [])).resolves.toEqual([])
+  await expect(admitBotItemCommentAttachments(down, 'Ship it', [])).resolves.toEqual({
+    text: 'Ship it',
+    images: []
+  })
   expect(chat).not.toHaveBeenCalled()
+})
+
+it('refuses more than 10 files besides images', async () => {
+  const many = Array.from({ length: 11 }, (_, n) => join(dir, `${n}.log`))
+  await expect(admitBotItemCommentAttachments(deps({ local: true }), '', [], many)).rejects.toThrow(
+    'Comments take up to 10 files besides images.'
+  )
+  expect(claims).toEqual([])
 })

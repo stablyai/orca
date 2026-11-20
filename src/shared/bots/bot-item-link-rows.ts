@@ -7,7 +7,7 @@ import type {
   BotItemPullRequest,
   BotItemWorkerState
 } from './bot-items'
-import { botItemPrRefOfUrl, botItemPrUrl } from './bot-items'
+import { botItemLinksOnePerChain, botItemPrRefOfUrl, botItemPrUrl } from './bot-items'
 import {
   botItemFileName,
   botItemGitHubRefOfUrl,
@@ -155,7 +155,7 @@ export function botItemLinkRows(links: readonly BotItemLinkView[]): BotItemLinkR
       unread.set(prKey(ref), ref)
     }
   }
-  for (const link of links) {
+  for (const link of botItemLinksOnePerChain(links)) {
     switch (link.kind) {
       case 'dispatch':
         rows.push({ kind: 'worker', key: `dispatch:${link.ref}`, link })

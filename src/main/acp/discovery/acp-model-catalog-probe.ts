@@ -20,7 +20,11 @@ import {
 import { AgentModelCatalogListingStoppedError } from '../../native-chat/agent-model-catalog/agent-model-catalog-failures'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
-import { createAcpAgentConnection } from '../process/acp-agent-connection'
+import {
+  createAcpAgentConnection,
+  type AcpAgentConnectionOptions
+} from '../process/acp-agent-connection'
+import { acpClientInfo } from '../launch/acp-client-info'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import {
   acpListingDependsOnRelease,
@@ -44,11 +48,13 @@ import { AcpAgentError, AcpAgentExitedError } from '../transport/acp-errors'
 import { AgentModelCatalogUnavailableError } from '../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
+type AcpListingConnect<C> = (launch: ProviderProcessLaunch, options: AcpAgentConnectionOptions) => C
+
 export type AcpModelCatalogProbeDeps = AcpLaunchInvocationDeps & {
   resolveSavedEnvironment?: () => Promise<Record<string, string>>
   probeVersion?: AgentCliVersionReader
-  connect?: (launch: ProviderProcessLaunch) => AcpModelCatalogConnection
-  connectSession?: (launch: ProviderProcessLaunch) => AcpModelCatalogSessionConnection
+  connect?: AcpListingConnect<AcpModelCatalogConnection>
+  connectSession?: AcpListingConnect<AcpModelCatalogSessionConnection>
   runListing?: typeof runAgentModelCatalogListing
 }
 
@@ -76,7 +82,7 @@ export function createAcpModelCatalogProbe(
     }
     // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
-    const { command, prefixArgs, env, envToDelete } = await resolveAcpLaunchInvocation(
+    const { command, prefixArgs, env, envToDelete, version } = await resolveAcpLaunchInvocation(
       spec,
       accountHome,
       {
@@ -93,6 +99,7 @@ export function createAcpModelCatalogProbe(
     )
     assertStructuredAgentResolutionCurrent(operation)
     return {
+      answerSignIn: spec.signIn?.answered,
       identity: { command, prefixArgs, cwd, workspace },
       inputStamp: JSON.stringify(
         await Promise.all(
@@ -133,6 +140,8 @@ export function createAcpModelCatalogProbe(
           env,
           envToDelete
         }
+        // Chats send this identity, and some servers list models only to clients they allowlist.
+        const connectionOptions = { clientInfo: acpClientInfo(spec, version ?? release.version) }
         const run = { label: spec.agent, signal: options?.signal, timeoutMs: null }
         // OMP records every model switch as account usage; starting on the picked model records none.
         const launchedModel =
@@ -177,7 +186,11 @@ export function createAcpModelCatalogProbe(
                 AcpModelCatalogSessionConnection,
                 Awaited<ReturnType<typeof readSessionModels>>
               >(
-                () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
+                () =>
+                  (deps.connectSession ?? createAcpAgentConnection)(
+                    { ...launch, args },
+                    connectionOptions
+                  ),
                 (connection, ready) =>
                   readSessionModels(
                     spec,
@@ -246,7 +259,7 @@ export function createAcpModelCatalogProbe(
           attemptedModels = result.attemptedModels
         } else {
           models = await runAgentModelCatalogSession(
-            () => (deps.connect ?? createAcpAgentConnection)(launch),
+            () => (deps.connect ?? createAcpAgentConnection)(launch, connectionOptions),
             async (connection) => {
               const initialized = await connection.initialize()
               assertStructuredAgentResolutionCurrent(operation)
@@ -271,36 +284,32 @@ export function createAcpModelCatalogProbe(
       }
     }
   }
-  const probe: AgentModelCatalogProbe = async (home, options) => {
-    try {
-      return await (
-        await resolve(home, options?.workspacePath ?? '', 'recover', options?.operation)
-      ).run(options?.signal, options?.operation, options?.selectedModels, options?.publish)
-    } catch (error) {
-      if (error instanceof AcpAgentError && error.code === -32000) {
-        throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
-      }
-      throw error
-    }
-  }
+  const probe: AgentModelCatalogProbe = (home, options) =>
+    resolve(home, options?.workspacePath ?? '', 'recover', options?.operation).then((resolved) =>
+      resolved
+        .run(options?.signal, options?.operation, options?.selectedModels, options?.publish)
+        .catch(signedOutAsUnavailable(resolved.answerSignIn))
+    )
   return Object.assign(probe, {
     resolve: async (...args: Parameters<typeof resolve>) => {
-      const resolved = await resolve(...args)
+      const { answerSignIn, ...resolved } = await resolve(...args)
       return {
         ...resolved,
-        run: async (...runArgs: Parameters<typeof resolved.run>) => {
-          try {
-            return await resolved.run(...runArgs)
-          } catch (error) {
-            if (error instanceof AcpAgentError && error.code === -32000) {
-              throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
-            }
-            throw error
-          }
-        }
+        run: (...runArgs: Parameters<typeof resolved.run>) =>
+          resolved.run(...runArgs).catch(signedOutAsUnavailable(answerSignIn))
       }
     }
   })
+}
+
+// A listing often reaches a signed-out server before any chat sends; telling the spec lets a chat
+// offer its sign-in choices without a failed send first.
+const signedOutAsUnavailable = (answerSignIn?: (signedIn: boolean) => void) => (error: unknown) => {
+  if (!(error instanceof AcpAgentError && error.code === -32000)) {
+    throw error
+  }
+  answerSignIn?.(false)
+  throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
 }
 
 const folderlessListing = (spec: AcpLaunchSpec) =>

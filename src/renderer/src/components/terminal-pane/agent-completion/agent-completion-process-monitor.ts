@@ -224,6 +224,8 @@ export function createAgentCompletionProcessMonitor({
     })
   }
 
+  let trackedPtyId: string | null = null
+
   return {
     requestInspection,
     scheduleNextPoll,
@@ -234,14 +236,19 @@ export function createAgentCompletionProcessMonitor({
       }
     },
     start: () => {
-      state.pollTrackingStarted = true
+      // A newly bound PTY polls fast while its foreground identity settles; visibility re-syncs don't count as activity.
+      const ptyId = options.getPtyId()
+      if (!state.pollTrackingStarted || ptyId !== trackedPtyId) {
+        state.pollTrackingStarted = true
+        trackedPtyId = ptyId
+        state.lastPaneActivityAt = Date.now()
+      }
       scheduleNextPoll()
     },
     recordActivity: () => {
       state.lastPaneActivityAt = Date.now()
-      if (state.pollTimer === null || state.pollTimerTier === 'no-evidence') {
-        scheduleNextPoll()
-      }
+      // The scheduler replaces a slower pending timer (quiet or no-evidence) with the faster tier.
+      scheduleNextPoll()
     },
     incrementGeneration: () => {
       state.inspectionGeneration += 1

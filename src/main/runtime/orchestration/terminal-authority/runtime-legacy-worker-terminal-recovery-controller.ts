@@ -44,6 +44,10 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
     await Promise.all(this.backgroundWork)
   }
 
+  isStopped(): boolean {
+    return this.stopped
+  }
+
   /** Work a pass starts without awaiting; shutdown still waits for it. */
   trackBackgroundWork(work: Promise<unknown>): void {
     this.backgroundWork.add(work)

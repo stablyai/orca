@@ -17,9 +17,18 @@ function isRestorableFocusedElement(element: HTMLElement | null): element is HTM
 }
 
 /** Restore the pre-open surface after Radix’s default return is canceled; capture before modal focus steals document.activeElement. */
-export function useModalReturnFocus(visible: boolean): {
+export function useModalReturnFocus(
+  visible: boolean,
+  {
+    preferCapturedElement = false
+  }: {
+    /** Return to the opening element while it exists; store state cannot see floating panels or chat tabs. */
+    preferCapturedElement?: boolean
+  } = {}
+): {
   captureReturnFocus: () => void
   skipReturnFocus: () => void
+  rearmReturnFocus: () => void
 } {
   const capturedRef = useRef<ModalReturnFocusSurface | null>(null)
   const capturedElementRef = useRef<HTMLElement | null>(null)
@@ -147,9 +156,18 @@ export function useModalReturnFocus(visible: boolean): {
     }
 
     if (!visible && wasVisibleRef.current) {
-      const action = resolveModalReturnFocusAction(skipRef.current ? null : capturedRef.current)
+      const skipped = skipRef.current
+      const action = resolveModalReturnFocusAction(skipped ? null : capturedRef.current)
       capturedRef.current = null
-      if (action.kind === 'browser') {
+      // Webview guests still need browser focus requests; other openers outrank the main-workspace store tab.
+      if (
+        preferCapturedElement &&
+        !skipped &&
+        capturedElementRef.current?.tagName !== 'WEBVIEW' &&
+        focusCapturedElement()
+      ) {
+        cancelFrames()
+      } else if (action.kind === 'browser') {
         cancelFrames()
         requestBrowserFocus({ pageId: action.pageId, target: action.target })
       } else if (action.kind === 'terminal') {
@@ -159,7 +177,7 @@ export function useModalReturnFocus(visible: boolean): {
         focusEditorSurface()
       } else if (action.kind === 'simulator') {
         focusSimulatorSurface()
-      } else if (action.kind === 'surface') {
+      } else if (action.kind === 'surface' && !preferCapturedElement) {
         focusFallbackSurface()
       }
       capturedElementRef.current = null
@@ -170,9 +188,11 @@ export function useModalReturnFocus(visible: boolean): {
     visible,
     cancelFrames,
     captureReturnFocus,
+    focusCapturedElement,
     focusEditorSurface,
     focusFallbackSurface,
     focusSimulatorSurface,
+    preferCapturedElement,
     requestBrowserFocus
   ])
 
@@ -181,5 +201,10 @@ export function useModalReturnFocus(visible: boolean): {
     skipRef.current = true
   }, [])
 
-  return { captureReturnFocus, skipReturnFocus }
+  // Undo an earlier skip when the modal stayed open and is now dismissed.
+  const rearmReturnFocus = useCallback((): void => {
+    skipRef.current = false
+  }, [])
+
+  return { captureReturnFocus, skipReturnFocus, rearmReturnFocus }
 }
