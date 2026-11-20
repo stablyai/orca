@@ -41,16 +41,6 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
       }
       return
     }
-    try {
-      this.readSystemDefaultAuth()
-    } catch (error) {
-      // Reading it as a logout would delete the mirror's refreshed login; try again next sync.
-      console.warn(
-        '[codex-runtime-home] Could not read ~/.codex/auth.json; auth left as is:',
-        error
-      )
-      return
-    }
     const runtimeAuthExistedBeforeSync = existsSync(this.getRuntimeAuthPath())
     if (this.lastSyncedAccountId === null) {
       this.captureSystemDefaultSnapshot({ force: false })
