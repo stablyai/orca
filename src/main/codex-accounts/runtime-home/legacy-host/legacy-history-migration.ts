@@ -3,6 +3,7 @@ import { constants } from 'node:fs'
 import {
   access,
   copyFile,
+  lstat,
   readFile,
   readdir,
   realpath,
@@ -102,7 +103,10 @@ async function realpathIfPresent(path: string): Promise<string | null> {
   }
 }
 
-/** Exclusive create never replaces or writes through a name; same bytes there count as copied. */
+/**
+ * Exclusive create never replaces or writes through a name. A regular file already holding the same
+ * bytes counts as the copy; a link there does not, since it isn't a copy of its own.
+ */
 async function copyIntoFreeName(source: string, targetPath: string): Promise<boolean> {
   try {
     await copyFile(source, targetPath, constants.COPYFILE_EXCL | constants.COPYFILE_FICLONE)
@@ -113,11 +117,25 @@ async function copyIntoFreeName(source: string, targetPath: string): Promise<boo
     }
   }
   try {
-    return (await readFile(targetPath)).equals(await readFile(source))
+    return (
+      (await lstat(targetPath)).isFile() &&
+      (await readFile(targetPath)).equals(await readFile(source))
+    )
   } catch {
-    // A dangling link or directory at this name still occupies it.
     return false
   }
+}
+
+// The shared history only when it is a regular file in the runtime home: an account history that
+// is that file needs no copy, but one the shared history links to does.
+async function sharedHistoryFile(runtimeHistoryPath: string): Promise<string | null> {
+  const stats = await lstat(runtimeHistoryPath).catch((error: unknown) => {
+    if (errnoCodeOrUnknown(error) === 'ENOENT') {
+      return null
+    }
+    throw error
+  })
+  return stats?.isFile() ? realpath(runtimeHistoryPath) : null
 }
 
 // Every account's own history, copied into the runtime home where no Orca path deletes it, so an
@@ -132,7 +150,7 @@ async function preserveLegacyHistories(
     }
     throw error
   })
-  const sharedHistory = await realpathIfPresent(runtimeHistoryPath)
+  const sharedHistory = await sharedHistoryFile(runtimeHistoryPath)
   const preserved = new Set<string>()
   const names = accounts.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
   for (const accountId of names.sort()) {

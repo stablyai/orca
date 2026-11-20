@@ -1,5 +1,4 @@
 import {
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -70,7 +69,7 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     expect(readFileSync(join(f.home, 'sessions', 'rollout.jsonl'), 'utf8')).toBe('only copy\n')
   })
 
-  it('keeps every entry a linked prompt history passes through inside the home', async () => {
+  it('deletes only the logins from a home whose prompt history is a link', async () => {
     const f = fixture()
     mkdirSync(join(f.home, '..backup'))
     writeFileSync(join(f.home, '..backup', 'prompts.jsonl'), '{"text":"only prompt"}\n')
@@ -79,6 +78,7 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     symlinkSync(join('middle', 'next'), join(f.home, 'bridge'))
     symlinkSync(join('bridge', 'prompts.jsonl'), join(f.home, 'history.jsonl'))
     writeFileSync(join(f.home, 'auth.json'), '{}')
+    writeFileSync(join(f.home, '.credentials.json'), '{}')
 
     await f.lifecycle.safeRemove(f.home, 'a')
 
@@ -86,26 +86,18 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     expect(readFileSync(join(f.home, 'history.jsonl'), 'utf8')).toBe('{"text":"only prompt"}\n')
   })
 
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'removes nothing when a linked prompt history cannot be followed',
-    async () => {
-      const f = fixture()
-      const outside = join(f.accountsRoot, 'outside')
-      mkdirSync(outside)
-      writeFileSync(join(f.home, 'prompts.saved'), '{"text":"only prompt"}\n')
-      symlinkSync(join(f.home, 'prompts.saved'), join(outside, 'link'))
-      symlinkSync(join(outside, 'link'), join(f.home, 'history.jsonl'))
-      writeFileSync(join(f.home, 'auth.json'), '{}')
-      chmodSync(outside, 0o000)
-      try {
-        await f.lifecycle.safeRemove(f.home, 'a')
-      } finally {
-        chmodSync(outside, 0o755)
-      }
+  it('deletes only the logins when the prompt history is a link it cannot follow', async () => {
+    const f = fixture()
+    const outside = join(f.accountsRoot, 'outside')
+    mkdirSync(outside)
+    writeFileSync(join(f.home, 'PROMPTS.saved'), '{"text":"only prompt"}\n')
+    symlinkSync(join(outside, 'gone', 'link'), join(f.home, 'history.jsonl'))
+    writeFileSync(join(f.home, 'auth.json'), '{}')
 
-      expect(readdirSync(f.home).sort()).toEqual(['auth.json', 'history.jsonl', 'prompts.saved'])
-    }
-  )
+    await f.lifecycle.safeRemove(f.home, 'a')
+
+    expect(readdirSync(f.home).sort()).toEqual(['PROMPTS.saved', 'history.jsonl'])
+  })
 
   it('removes a home that never shared history entirely', async () => {
     const f = fixture()

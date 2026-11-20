@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readlinkSync,
   readFileSync,
@@ -254,6 +255,22 @@ describe('CodexRuntimeHomeService', () => {
       )
     ).toBe('{"id":"legacy-1"}\n')
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"shared-1"}\n')
+  })
+
+  it('makes a real copy when the shared history and the preserved name only link to the account history', async () => {
+    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
+    mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
+    symlinkSync(join(managedHomePath, 'history.jsonl'), preservedHistoryPath('account-1'))
+    symlinkSync(
+      join(managedHomePath, 'history.jsonl'),
+      join(getRuntimeCodexHomePath(), 'history.jsonl')
+    )
+
+    await startService()
+
+    const copyPath = join(getRuntimeCodexHomePath(), 'history.orca-legacy-account-1-1.jsonl')
+    expect(lstatSync(copyPath).isFile()).toBe(true)
+    expect(readFileSync(copyPath, 'utf-8')).toBe('{"id":"legacy-1"}\n')
   })
 
   it('imports from the preserved history once the account folder is gone', async () => {
