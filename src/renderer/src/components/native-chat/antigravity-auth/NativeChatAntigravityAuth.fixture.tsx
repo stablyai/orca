@@ -44,7 +44,8 @@ const view = (error: string | null = null) => ({
   flow: null,
   auth: 'signedOut' as const,
   error,
-  openFailed: false
+  openFailed: false,
+  retryIntent: 'signIn' as const
 })
 
 function Strip(props: { detection: AntigravityChatAuthDetection; error?: string }) {

@@ -104,7 +104,7 @@ async function applyAntigravityChatAuthMethod(
       method === 'oauth-personal' &&
       !readAntigravityChatAuthDetection(target)?.googleSignIn.personal
     ) {
-      await startAntigravityChatSignIn(target)
+      await startAntigravityChatSignIn(target, 'signIn')
     } else {
       toast.success(
         t('components.native-chat.antigravityAuth.switched', 'Antigravity now uses {{method}}.', {
@@ -167,7 +167,7 @@ export function NativeChatAntigravityAuthProvider({
       setSwitching(action === GOOGLE_SIGN_IN ? 'oauth-personal' : action)
       const done =
         action === GOOGLE_SIGN_IN
-          ? startAntigravityChatSignIn(target)
+          ? startAntigravityChatSignIn(target, 'signIn')
           : applyAntigravityChatAuthMethod(target, action, t)
       return done.then(() => {
         busy.current = false
