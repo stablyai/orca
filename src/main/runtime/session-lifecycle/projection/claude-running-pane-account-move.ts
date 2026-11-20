@@ -274,7 +274,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     ) {
       return false
     }
-    const host = this.accounts.getSnapshot().claude
+    const host = this.accounts.getClaudeAccountsSnapshot()
     const saved = this.store?.getSettings().claudeManagedAccounts ?? []
     if (
       isClaudePaneOnAccount(
@@ -318,7 +318,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
         this.restartedClaudePanes.set(ptyId, { session, accountId: undefined })
         continue
       }
-      const accounts = this.accounts.getSnapshot().claude
+      const accounts = this.accounts.getClaudeAccountsSnapshot()
       this.restartedClaudePanes.set(ptyId, {
         session,
         accountId: claudeLaunchAccountId(accounts, accounts.activeAccountId)

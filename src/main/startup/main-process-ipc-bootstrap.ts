@@ -73,6 +73,7 @@ export function registerMainProcessIpcHandlers(): void {
       // Only the pass after terminal reconnect leaves every restored worker terminal resolvable.
       if (options?.afterReconnect === true) {
         state.runtime?.startupWorkerAuthority.finish()
+        void state.runtime?.reportWorkerStopsAcrossRestartOnce()
       }
     })
   )

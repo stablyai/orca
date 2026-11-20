@@ -2,8 +2,12 @@ import { hasBinaryFileExtension } from '../../file-preview/binary-file-extension
 import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../agent-session/agent-session-attachments'
 
 export function isCommittedChatAttachmentCandidate(path: string): boolean {
+  return !hasBinaryFileExtension(path) && isChatAttachmentStorePath(path)
+}
+
+/** An absolute path to a committed file in a chat attachment store, of any kind. */
+export function isChatAttachmentStorePath(path: string): boolean {
   return (
-    !hasBinaryFileExtension(path) &&
     /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(path) &&
     new RegExp(
       `(?:^|[\\\\/])${AGENT_SESSION_ATTACHMENTS_DIR_NAME}[\\\\/][0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}[\\\\/][^\\\\/]+$`,

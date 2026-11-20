@@ -26,10 +26,8 @@ import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravi
 import {
   ANTIGRAVITY_LAUNCH_GATE,
   answerAntigravityChatAuth,
-  antigravityChatAccount,
-  antigravityChatSignIn
+  antigravityChatAccount
 } from './antigravity-chat-account'
-import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
 import { readAntigravitySignInLine } from './antigravity-sign-in-url'
 import { antigravityChatRulesMeta } from './antigravity-chat-rules'
@@ -42,7 +40,6 @@ import {
   agyUsesApiKey,
   antigravityHostAcpReady,
   hasAgyCredential,
-  hasManagedAntigravityChatSignIn,
   isAntigravityHostAccountHome
 } from './antigravity-host-acp'
 
@@ -212,19 +209,15 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   hostBackend: {
     spec: ANTIGRAVITY_HOST_LAUNCH_SPEC,
     pins: isAntigravityHostAccountHome,
-    // Someone signed in to Orca's own Chat keeps it; the host's agy needs a sign-in that serves
-    // sessions, not an API-key provider whose key the host launch drops.
-    select: async ({ command, env, envToDelete, homePath, stateDirectory, settings }) =>
+    // A signed-in agy wins over Orca's own sign-in, so chats use the account Accounts switches and
+    // the usage meter reads (#44613). It needs a sign-in that serves sessions, not an API-key
+    // provider whose key the host launch drops.
+    select: async ({ command, env, envToDelete, homePath, settings }) =>
       savedChatAuthIsPersonal(settings.antigravityChatAuth) &&
-      antigravityChatSignIn.get().value.auth !== 'signedIn' &&
-      !(await hasManagedAntigravityChatSignIn(
-        join(stateDirectory, ANTIGRAVITY_CHAT_HOME_FOLDER)
-      )) &&
       !(await agyUsesApiKey(homePath)) &&
       (await hasAgyCredential(homePath)) &&
       (await antigravityHostAcpReady(command, env, envToDelete))
         ? antigravityHostAccountHome(homePath)
-        : null,
-    selectionRevision: () => antigravityChatSignIn.get().revision
+        : null
   }
 } satisfies AcpLaunchSpec

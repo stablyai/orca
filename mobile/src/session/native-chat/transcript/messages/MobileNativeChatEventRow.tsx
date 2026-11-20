@@ -65,6 +65,7 @@ export function MobileNativeChatEventRow({
   disclosureKey,
   fontScale,
   onLongPress,
+  wordsLines = 2,
   testID
 }: {
   icon: ReactNode
@@ -82,6 +83,8 @@ export function MobileNativeChatEventRow({
   disclosureKey?: string
   fontScale: number
   onLongPress?: () => void
+  /** Lines the words may take; 0 lets a summary whose facts must all show wrap freely. */
+  wordsLines?: number
   testID?: string
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -121,7 +124,7 @@ export function MobileNativeChatEventRow({
         </View>
         <Text
           pointerEvents={toggles ? 'none' : 'auto'}
-          numberOfLines={2}
+          numberOfLines={wordsLines}
           style={[styles.words, type]}
         >
           {children}

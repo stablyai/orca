@@ -10,6 +10,7 @@ import type {
 } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { MobileChatPermission } from './input/prompts/mobile-native-chat-permission'
+import type { MobileWorkerApprovals } from './input/prompts/use-mobile-worker-approvals'
 import type { MobileNativeChatCollapsedPrompt } from './input/prompts/MobileNativeChatPromptStrip'
 import type { MobileChatQuestion } from './input/prompts/mobile-native-chat-question'
 import type {
@@ -76,6 +77,8 @@ export type MobileNativeChatController = {
   nativeChatSendFollowUp: NativeChatSendFollowUp | null
   nativeChatStreamingText?: string
   nativeChatPermission: MobileChatPermission | null
+  /** A coordinator chat's workers' open permission prompts, answered on their host. */
+  nativeChatWorkerApprovals: MobileWorkerApprovals
   // A new prompt occurrence resets local card submission state only.
   nativeChatPromptKey: string | null
   /** Only a structured chat's journal question; a terminal chat's questions are asks. */

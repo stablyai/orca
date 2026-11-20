@@ -139,6 +139,7 @@ export class Session extends SessionProcessInspection {
     // Human input must reach rc-file readers while automatic startup commands wait for readiness.
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
       this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
+      this.shellReady.observeTypedInput(data)
       this.subprocess.write(data)
     }
   }

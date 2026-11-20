@@ -187,6 +187,9 @@ export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
 // The cloud takes a turn's answer up to maxLongAnswerBytes; a machine sends one over
 // maxLastAssistantMessageBytes only to a cloud that lists it.
 export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'
+// The cloud takes a post's `postAt` and has the source post it then. Kept out of
+// CONNECTOR_CLOUD_FEATURES: only the code that schedules lists it.
+export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
 // The cloud takes the `activity` event and shows it on a working thread. Kept out of
 // CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that reads the event lists it.
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'

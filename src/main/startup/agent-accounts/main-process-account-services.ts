@@ -16,7 +16,7 @@ import { installOrcaServerSignIn, OrcaServerSignIn } from '../../orca-profiles/o
 import { GoogleConnect, installGoogleConnect } from '../../google/google-connect'
 import { setBotToolSignInBrowser } from '../../bots/tool-oauth/bot-tool-sign-in-flows'
 
-export function initializeMainProcessAccountServices(): void {
+export async function initializeMainProcessAccountServices(): Promise<void> {
   const store = state.store
   if (!store || !state.claudeUsage || !state.codexUsage) {
     throw new Error('Usage stores must be initialized before account services')
@@ -54,7 +54,7 @@ export function initializeMainProcessAccountServices(): void {
   // Defer shared-home migration; compatibility launches re-arm non-destructive scans for new rollouts (#4444, #8612, #12480).
   state.codexSessionMigration.scheduleInitialRun()
   installProviderAccountCatalogWarmup(store)
-  store.migrateLegacyOpenCodeGoApiKey({
+  await store.migrateLegacyOpenCodeGoApiKey({
     has: hasOpenCodeGoApiKey,
     read: readOpenCodeGoApiKey,
     save: saveOpenCodeGoApiKey

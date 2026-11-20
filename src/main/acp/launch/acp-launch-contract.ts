@@ -30,8 +30,13 @@ export type AcpLaunchSpec = {
   launchesWithModel?: true
   /** Applied after the account and user environment. */
   env: Readonly<Record<string, string>>
-  /** Scrubs inherited Orca plumbing and returns keys to omit entirely. */
-  scrubEnvironment?(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[]
+  /** Scrubs inherited Orca plumbing and returns keys to omit entirely; the chat's saved
+   *  Antigravity account type keeps the credentials it reads. */
+  scrubEnvironment?(
+    env: Record<string, string>,
+    inherited: NodeJS.ProcessEnv,
+    antigravityChatAuth?: AntigravityChatAuthConfig
+  ): string[]
   dialect: AcpDialect
   /** Initialize's identity for the launched version (null when unknown), for agents that grant
    *  features by client name; absent sends Orca's. */
