@@ -16,6 +16,7 @@ const ATTEMPTS_PER_SESSION = 3
 const ATTEMPT_SPACING_MS = 60 * 60_000
 // The copy blocks no one; this only bounds the disk and CPU it uses.
 const COPY_BUDGET_MS = 120_000
+const WRITE_WATCH_MS = 50
 // journal_size_limit: closing at quit checkpoints at most this much.
 const MAX_WAL_BYTES = 8 * MIB
 const SWAP_CAP_MS = 2_000
@@ -161,7 +162,7 @@ export class OrchestrationDbCompaction {
     }
     this.attempts++
     this.lastAttemptAt = Date.now()
-    const copied = await this.copy()
+    const copied = await this.copy(fingerprint)
     if (copied && !this.stopped && writeFingerprint(db) === fingerprint) {
       this.ready = { fingerprint }
     } else if (!this.stopped) {
@@ -169,7 +170,7 @@ export class OrchestrationDbCompaction {
     }
   }
 
-  private copy(): Promise<boolean> {
+  private copy(fingerprint: string): Promise<boolean> {
     return new Promise((resolve) => {
       let child: ChildProcess
       try {
@@ -192,6 +193,19 @@ export class OrchestrationDbCompaction {
       }
       this.copying = child
       const budget = setTimeout(() => child.kill('SIGKILL'), COPY_BUDGET_MS)
+      // A write makes the copy stale, so stop it then: its disk traffic can slow the runtime's later
+      // commits (seen on a busy Linux disk).
+      const watch = setInterval(() => {
+        let stale = true
+        try {
+          stale = writeFingerprint(this.orchestrationDb.db) !== fingerprint
+        } catch {
+          // A closed database: nothing left to copy for.
+        }
+        if (stale) {
+          child.kill('SIGKILL')
+        }
+      }, WRITE_WATCH_MS)
       // Any exit, update installs included: a child left running would hold the app's executable open.
       const killOnExit = (): void => {
         child.kill('SIGKILL')
@@ -199,6 +213,7 @@ export class OrchestrationDbCompaction {
       process.once('exit', killOnExit)
       const done = (copied: boolean): void => {
         clearTimeout(budget)
+        clearInterval(watch)
         process.off('exit', killOnExit)
         this.copying = undefined
         resolve(copied)
