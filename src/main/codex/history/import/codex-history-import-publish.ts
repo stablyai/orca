@@ -39,16 +39,23 @@ async function storeHoldsAnyForm(folders: string[], name: string): Promise<boole
 }
 
 async function linkUnlessDeleted(job: StagedImport): Promise<'copied' | 'existing' | 'refused'> {
+  // A deletion that came and went since staging began must not see its conversation return (one
+  // of any other rollout only delays this one to a later pass), and a changed setting publishes nothing.
+  const stillWanted = (): boolean =>
+    codexRolloutDeletionEpoch() === job.deletionEpoch && job.isCurrent()
   const outcome = await linkCodexRolloutUnlessHeld(job.final, async () => {
-    // A deletion that came and went since staging began must not see its conversation return;
-    // one of any other rollout only delays this one to a later pass.
-    if (codexRolloutDeletionEpoch() !== job.deletionEpoch) {
+    if (!stillWanted()) {
       return 'refused'
     }
     // Recorded before the link, so the store's index learns every rollout that joins it.
     const marker = join(job.indexPendingDir, basename(job.final))
     await writeFile(marker, '')
     try {
+      // Checked again with nothing awaited before the link, which is the publish.
+      if (!stillWanted()) {
+        await rm(marker, { force: true, maxRetries: 3 })
+        return 'refused'
+      }
       return await linkStagedRollout(job.staged, job.final)
     } catch (error) {
       // No heal runs during a publish, so the marker can't settle the thread as missing.

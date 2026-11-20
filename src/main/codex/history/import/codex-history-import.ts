@@ -17,6 +17,7 @@ import {
   stagingRecordPath
 } from './codex-history-import-staging-record'
 import {
+  appendHandledNames,
   hasUnsavedImportLedger,
   readImportLedger,
   writeImportLedger,
@@ -25,7 +26,6 @@ import {
 } from './codex-history-import-ledger'
 
 const ARCHIVED = 'archived_sessions'
-const LEDGER_SAVE_EVERY = 50
 
 export type CodexHistoryImportArgs = {
   importHome: string
@@ -48,6 +48,44 @@ function rolloutKey(name: string): string {
     : name
 }
 
+/** Names never copied again; each one added is journaled by the next `flush`. */
+class HandledNames {
+  private readonly names: Set<string>
+  private pending: string[] = []
+
+  constructor(
+    names: readonly string[],
+    private readonly record: (names: string[]) => Promise<void>
+  ) {
+    this.names = new Set(names)
+  }
+
+  get size(): number {
+    return this.names.size
+  }
+
+  has(name: string): boolean {
+    return this.names.has(name)
+  }
+
+  add(name: string): void {
+    if (!this.names.has(name)) {
+      this.names.add(name)
+      this.pending.push(name)
+    }
+  }
+
+  list(): string[] {
+    return [...this.names]
+  }
+
+  async flush(): Promise<void> {
+    const names = this.pending
+    this.pending = []
+    await this.record(names)
+  }
+}
+
 type FolderResult = ImportedFolder & {
   copied: number
   stopped: boolean
@@ -59,7 +97,7 @@ async function importFolder(
   args: CodexHistoryImportArgs,
   folder: string,
   source: ImportedSource,
-  handled: Set<string>,
+  handled: HandledNames,
   store: StoreNames,
   seedOnly: boolean
 ): Promise<FolderResult | null> {
@@ -144,6 +182,8 @@ async function importFolder(
     }
     copied += published === 'copied' ? 1 : 0
     handled.add(key)
+    // Recorded at once, so a crash can't forget a copy the user then deletes.
+    await handled.flush()
     targetNames.add(name)
   }
   const after = (await stat(path, { bigint: true })).mtimeNs
@@ -190,17 +230,21 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         }
   ledger.sources[sourceKey] = source
   const seedOnly = source.seeding === true
-  let unread = false
-  const handled = new Set(source.handled)
-  const folders = [ARCHIVED, ...(await listDayFolders(args.importHome))]
+  const handled = new HandledNames(source.handled, (names) =>
+    appendHandledNames(args.ledgerPath, { key: sourceKey, identity }, names)
+  )
+  const listing = await listDayFolders(args.importHome)
+  // A pass that skipped an unreadable folder hasn't read everything yet.
+  let unread = !listing.complete
+  const folders = [ARCHIVED, ...listing.days]
   const store = new StoreNames(args.storeHome, args.runId)
   let copied = 0
-  let unsaved = 0
+  let changed = false
   let stopped = false
   const save = async (): Promise<void> => {
-    source.handled = [...handled]
+    source.handled = handled.list()
     await writeImportLedger(args.ledgerPath, ledger)
-    unsaved = 0
+    changed = false
   }
   try {
     for (const folder of folders) {
@@ -215,13 +259,15 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
       } catch (error) {
         unread = true
         // Names this folder copied before failing are kept: they must stay handled.
-        unsaved += 1
+        changed = true
         // One unreadable folder must not hold back the rest; the next pass reads it again.
         console.warn(
           `[codex-history-import] Could not read ${join(args.importHome, folder)}:`,
           error
         )
         continue
+      } finally {
+        await handled.flush()
       }
       if (result) {
         const entry: ImportedFolder = result.mtimeNs ? { mtimeNs: result.mtimeNs } : {}
@@ -231,7 +277,7 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
           handled.size !== handledBefore ||
           JSON.stringify(entry) !== JSON.stringify(source.folders[folder] ?? {})
         ) {
-          unsaved += 1
+          changed = true
         }
         source.folders[folder] = entry
         copied += result.copied
@@ -242,13 +288,10 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         if (result.halt) {
           break
         }
-        if (unsaved >= LEDGER_SAVE_EVERY) {
-          await save()
-        }
       }
     }
   } finally {
-    if (unsaved > 0 || !known || hasUnsavedImportLedger(args.ledgerPath)) {
+    if (changed || !known || hasUnsavedImportLedger(args.ledgerPath)) {
       await save()
     }
   }
