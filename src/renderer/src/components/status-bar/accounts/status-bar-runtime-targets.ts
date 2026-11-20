@@ -54,8 +54,12 @@ export type StatusSwitchGroupOptions = {
 }
 
 export function getCodexStatusWslKey(wslDistro: string | null | undefined): string {
-  const trimmed = wslDistro?.trim().toLocaleLowerCase('en-US')
+  const trimmed = wslDistro?.trim()
   return trimmed ? trimmed : '__default__'
+}
+
+export function getCodexStatusWslComparisonKey(wslDistro: string | null | undefined): string {
+  return getCodexStatusWslKey(wslDistro).toLowerCase()
 }
 
 export function getCodexStatusRuntimeLabel(
@@ -71,7 +75,9 @@ export function getCodexStatusRuntimeLabel(
 }
 
 export function getCodexStatusRuntimeKey(target: CodexStatusRuntimeTarget): string {
-  return target.runtime === 'host' ? 'host' : `wsl:${getCodexStatusWslKey(target.wslDistro)}`
+  return target.runtime === 'host'
+    ? 'host'
+    : `wsl:${getCodexStatusWslComparisonKey(target.wslDistro)}`
 }
 
 export function toCodexStatusRuntimeTarget(

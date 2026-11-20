@@ -34,10 +34,8 @@ export async function prepareClaudeLaunchAccount(
         normalizeRuntimePathForComparison(systemHome)
     ) {
       const login = router?.systemDefaultLogin()
-      env[CLAUDE_USAGE_ACCOUNT_ID_ENV] = claudeSystemDefaultUsageAccountId(
-        login?.email,
-        login?.organizationUuid
-      )
+      env[CLAUDE_USAGE_ACCOUNT_ID_ENV] =
+        claudeSystemDefaultUsageAccountId(login?.email, login?.organizationUuid) ?? ''
     } else {
       delete env[CLAUDE_USAGE_ACCOUNT_ID_ENV]
     }

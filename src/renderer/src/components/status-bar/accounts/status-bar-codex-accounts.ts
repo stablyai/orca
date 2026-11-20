@@ -12,6 +12,7 @@ import {
 import {
   getCodexStatusRuntimeKey,
   getCodexStatusRuntimeLabel,
+  getCodexStatusWslComparisonKey,
   getCodexStatusWslKey,
   type CodexStatusRuntimeTarget,
   type CodexStatusSwitchGroup,
@@ -21,19 +22,22 @@ import {
 type CodexStatusAccount = CodexRateLimitAccountsState['accounts'][number]
 
 function getSingleConcreteCodexWslDistro(state: CodexRateLimitAccountsState): string | null {
-  const keys = new Set<string>()
+  const distros = new Map<string, string>()
   for (const [key, accountId] of Object.entries(state.activeAccountIdsByRuntime?.wsl ?? {})) {
     if (accountId && key !== '__default__') {
-      keys.add(getCodexStatusWslKey(key))
+      distros.set(getCodexStatusWslComparisonKey(key), getCodexStatusWslKey(key))
     }
   }
   for (const account of state.accounts) {
     const key = getCodexStatusWslKey(account.wslDistro)
     if (account.managedHomeRuntime === 'wsl' && key !== '__default__') {
-      keys.add(key)
+      const comparisonKey = getCodexStatusWslComparisonKey(key)
+      if (!distros.has(comparisonKey)) {
+        distros.set(comparisonKey, key)
+      }
     }
   }
-  return keys.size === 1 ? Array.from(keys)[0] : null
+  return distros.size === 1 ? (Array.from(distros.values())[0] ?? null) : null
 }
 
 export function normalizeCodexStatusRuntimeTarget(
@@ -55,9 +59,9 @@ export function getCodexStatusActiveId(
   if (target.runtime === 'host') {
     return selection ? selection.host : (state.activeAccountId ?? null)
   }
-  const distroKey = getCodexStatusWslKey(target.wslDistro)
+  const distroKey = getCodexStatusWslComparisonKey(target.wslDistro)
   const distroSelection = Object.entries(selection?.wsl ?? {}).find(
-    ([key]) => getCodexStatusWslKey(key) === distroKey
+    ([key]) => getCodexStatusWslComparisonKey(key) === distroKey
   )?.[1]
   if (target.wslDistro || distroSelection) {
     return distroSelection ?? null
@@ -76,7 +80,8 @@ function getCodexStatusAccountsForTarget(
   return state.accounts.filter(
     (account) =>
       account.managedHomeRuntime === 'wsl' &&
-      getCodexStatusWslKey(account.wslDistro) === getCodexStatusWslKey(target.wslDistro)
+      getCodexStatusWslComparisonKey(account.wslDistro) ===
+        getCodexStatusWslComparisonKey(target.wslDistro)
   )
 }
 
@@ -132,28 +137,36 @@ export function buildCodexStatusSwitchGroups(
 
   groups.push(makeGroup({ runtime: 'host', wslDistro: null }))
 
-  const wslKeys = new Set<string>(
-    Object.keys(state.activeAccountIdsByRuntime?.wsl ?? {}).map(getCodexStatusWslKey)
-  )
+  const wslDistros = new Map<string, string>()
+  const addWslDistro = (value: string | null | undefined) => {
+    const display = getCodexStatusWslKey(value)
+    const key = getCodexStatusWslComparisonKey(value)
+    if (!wslDistros.has(key)) {
+      wslDistros.set(key, display)
+    }
+  }
+  for (const key of Object.keys(state.activeAccountIdsByRuntime?.wsl ?? {})) {
+    addWslDistro(key)
+  }
   if (normalizedCurrentTarget.runtime === 'wsl') {
-    wslKeys.add(getCodexStatusWslKey(normalizedCurrentTarget.wslDistro))
+    addWslDistro(normalizedCurrentTarget.wslDistro)
   }
   for (const account of state.accounts) {
     if (account.managedHomeRuntime === 'wsl') {
-      wslKeys.add(getCodexStatusWslKey(account.wslDistro))
+      addWslDistro(account.wslDistro)
     }
   }
   if (options.includeFallbackWsl) {
-    wslKeys.add(getCodexStatusWslKey(options.fallbackWslDistro))
+    addWslDistro(options.fallbackWslDistro)
   }
   if (currentTarget.runtime === 'wsl' && currentTarget.wslDistro === null) {
     const concreteDistro = getSingleConcreteCodexWslDistro(state)
     if (concreteDistro) {
-      wslKeys.delete('__default__')
+      wslDistros.delete('__default__')
     }
   }
 
-  for (const key of Array.from(wslKeys).sort((a, b) => {
+  for (const [comparisonKey, displayKey] of Array.from(wslDistros).sort(([a], [b]) => {
     if (a === '__default__') {
       return -1
     }
@@ -162,7 +175,12 @@ export function buildCodexStatusSwitchGroups(
     }
     return a.localeCompare(b)
   })) {
-    groups.push(makeGroup({ runtime: 'wsl', wslDistro: key === '__default__' ? null : key }))
+    groups.push(
+      makeGroup({
+        runtime: 'wsl',
+        wslDistro: comparisonKey === '__default__' ? null : displayKey
+      })
+    )
   }
 
   return groups

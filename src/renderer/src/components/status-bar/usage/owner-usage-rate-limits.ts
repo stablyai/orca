@@ -259,6 +259,8 @@ export function resolveOwnerUsageRateLimits(
   }
   return {
     ...base,
+    inactiveClaudeAccounts: [],
+    inactiveCodexAccounts: [],
     ...mapProviders((key) => {
       const provider = base[key]
       if (ACCOUNT_OWNED_PROVIDERS.has(key)) {

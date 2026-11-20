@@ -12,9 +12,9 @@ export function resolveClaudeLiveAccount(
   if (!normalized) {
     return null
   }
-  for (const account of accounts) {
+  const matches = accounts.flatMap((account) => {
     if (accountId ? account.id !== accountId : account.id.startsWith('system-default:host:')) {
-      continue
+      return []
     }
     const wsl = account.managedAuthRuntime === 'wsl'
     const home = wsl
@@ -25,13 +25,18 @@ export function resolveClaudeLiveAccount(
     const paths = home
       ? [home, ...(wsl && account.wslDistro ? [toWindowsWslPath(home, account.wslDistro)] : [])]
       : []
-    if (paths.some((path) => normalizeClaudeConfigDir(path) === normalized)) {
-      return {
-        accountId: account.id,
-        runtime: wsl ? ('wsl' as const) : ('host' as const),
-        wslDistro: wsl ? (account.wslDistro ?? null) : null
-      }
-    }
+    return paths.some((path) => normalizeClaudeConfigDir(path) === normalized)
+      ? [
+          {
+            accountId: account.id,
+            runtime: wsl ? ('wsl' as const) : ('host' as const),
+            wslDistro: wsl ? (account.wslDistro ?? null) : null
+          }
+        ]
+      : []
+  })
+  if (matches.length === 1) {
+    return matches[0]
   }
   return null
 }

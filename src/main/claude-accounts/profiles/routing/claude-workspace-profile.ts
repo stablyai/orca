@@ -83,10 +83,8 @@ export class ClaudeWorkspaceProfiles {
           ...(distro
             ? {}
             : {
-                [CLAUDE_USAGE_ACCOUNT_ID_ENV]: claudeSystemDefaultUsageAccountId(
-                  login?.email,
-                  login?.organizationUuid
-                )
+                [CLAUDE_USAGE_ACCOUNT_ID_ENV]:
+                  claudeSystemDefaultUsageAccountId(login?.email, login?.organizationUuid) ?? ''
               }),
           [CLAUDE_PROFILE_POINTER_ENV]: '',
           [CLAUDE_INJECTED_CONFIG_DIR_ENV]: configDir

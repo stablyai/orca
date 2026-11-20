@@ -17,6 +17,9 @@ export function workspaceAccountUsage(
     return { ...primary, session: null, weekly: null, fableWeekly: null, extraUsage: null }
   }
   const systemDefault = accountId === WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID
+  const primaryProvenance = primary?.usageMetadata?.authProvenance
+  const primaryIsSystemDefault =
+    !primaryProvenance?.startsWith('profile:') && !primary?.usageMetadata?.readingAccount?.accountId
   const cached = (
     provider === 'codex' ? state.inactiveCodexAccounts : state.inactiveClaudeAccounts
   ).find((entry) =>
@@ -27,10 +30,7 @@ export function workspaceAccountUsage(
   )
   const reading = (
     systemDefault
-      ? primary &&
-        !primary.usageMetadata?.readingAccount?.accountId &&
-        (primary.usageMetadata?.authProvenance === 'system' ||
-          !primary.usageMetadata?.authProvenance)
+      ? primary && primaryIsSystemDefault
       : primary?.usageMetadata?.readingAccount?.accountId === accountId
   )
     ? primary

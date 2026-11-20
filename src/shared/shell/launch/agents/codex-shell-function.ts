@@ -45,7 +45,7 @@ if typeset -f codex >/dev/null 2>&1; then
     __orca_codex_user_definition="$(typeset -f codex)"
     eval "function __orca_codex_user {\${__orca_codex_user_definition#*{}"
     unset __orca_codex_user_definition
-    if [[ -n "\${BASH_VERSION:-}" ]] && [[ "$(export -pf)" == *"declare -fx codex ()"* ]]; then
+    if [[ -n "\${BASH_VERSION:-}" ]] && [[ $'\n'"$(export -pf)"$'\n' == *$'\ndeclare -fx codex\n'* ]]; then
       export -f __orca_codex_user
     fi
   fi

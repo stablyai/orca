@@ -8,7 +8,7 @@ import { claudeSystemDefaultUsageAccountId } from '../../../../shared/agent-acco
 export function claudeWorkspaceUsageAccountId(
   profileAccountId: string | undefined,
   systemDefaultLogin: ClaudeFolderLogin | null
-): string {
+): string | null {
   return (
     profileAccountId ??
     claudeSystemDefaultUsageAccountId(

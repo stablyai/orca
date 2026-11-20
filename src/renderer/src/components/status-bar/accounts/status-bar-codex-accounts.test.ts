@@ -31,7 +31,6 @@ it('retains the live System default identity while local settings select a manag
     resolveCodexStatusAccountState(settings, runtime, 'remote-owner').activeAccountId
   ).toBeNull()
 })
-
 it('keeps WSL accounts available when the distro name differs only by case', () => {
   const groups = buildCodexStatusSwitchGroups(
     {
