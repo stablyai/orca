@@ -8,7 +8,7 @@ import { BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL } from '../../../../../shared/b
 import {
   noteBrowserGuestSubframeNavigation,
   noteBrowserGuestSubframeUnloaded,
-  settleBrowserGuestSubframeDemand
+  settleBrowserGuestSubframe
 } from './browser-guest-frame-user-agent-demand'
 import { watchDecisionBlockedMainFrames } from '../../../sessions/requests/browser-session-request-decisions'
 import {
@@ -75,7 +75,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         return
       }
       if (!isMainFrame) {
-        noteBrowserGuestSubframeNavigation(guest, url)
+        noteBrowserGuestSubframeNavigation(guest, url, event.frame)
         return
       }
       this.updatePendingNavigationForRedirect(guest.id, url)
@@ -132,13 +132,13 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     }
 
     const didStartNavigationHandler = (
-      _event: Electron.Event,
+      event: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
       url: string,
       isInPlace: boolean,
       isMainFrame: boolean
     ): void => {
       if (!isMainFrame) {
-        noteBrowserGuestSubframeNavigation(guest, url)
+        noteBrowserGuestSubframeNavigation(guest, url, event.frame)
         return
       }
       if (isChromiumInternalErrorUrl(url)) {
@@ -241,11 +241,18 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     guest.on('page-title-updated', offscreenStateChangedHandler)
     guest.on('did-start-loading', offscreenStateChangedHandler)
     guest.on('did-stop-loading', offscreenStateChangedHandler)
-    const settleFrames = (): void => settleBrowserGuestSubframeDemand(guest)
-    guest.on('did-stop-loading', settleFrames)
+    // Subframe commits and failures (an error page is a failure, not a commit) settle that frame.
+    const subframeSettled = (...args: unknown[]): void => {
+      const [isMainFrame, processId, routingId] = args.slice(-3)
+      if (isMainFrame === false && typeof processId === 'number' && typeof routingId === 'number') {
+        settleBrowserGuestSubframe(guest, processId, routingId)
+      }
+    }
+    guest.on('did-frame-navigate', subframeSettled)
+    guest.on('did-fail-provisional-load', subframeSettled)
     const subframeUnloaded = (event: Electron.IpcMainEvent, channel: string): void => {
       if (channel === BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL && event.sender === guest) {
-        noteBrowserGuestSubframeUnloaded(guest)
+        noteBrowserGuestSubframeUnloaded(guest, event.senderFrame)
       }
     }
     guest.on('ipc-message', subframeUnloaded)
@@ -285,7 +292,8 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         guest.off('page-title-updated', offscreenStateChangedHandler)
         guest.off('did-start-loading', offscreenStateChangedHandler)
         guest.off('did-stop-loading', offscreenStateChangedHandler)
-        guest.off('did-stop-loading', settleFrames)
+        guest.off('did-frame-navigate', subframeSettled)
+        guest.off('did-fail-provisional-load', subframeSettled)
         guest.off('ipc-message', subframeUnloaded)
         guest.off('did-fail-load', didFailLoadHandler)
         guest.off('will-prevent-unload', allowPageUnload)

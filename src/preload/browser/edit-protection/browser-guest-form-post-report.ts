@@ -29,7 +29,11 @@ export function installBrowserGuestFormPostReport(port: {
     },
     true
   )
-  // Form events stay inside a shadow root; the frame's own navigation still carries the POST body.
+  // Form events stay inside a shadow root; the top page's own navigation still carries the POST
+  // body. Only the top frame listens: an embedded frame's navigation doesn't replace the page.
+  if (window !== window.top) {
+    return
+  }
   window.navigation?.addEventListener('navigate', (event) => {
     if (event.isTrusted && event.formData && !event.hashChange) {
       port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost: event.destination.url })
@@ -37,21 +41,14 @@ export function installBrowserGuestFormPostReport(port: {
   })
 }
 
-const reportedWithoutSubmit = new WeakSet<HTMLFormElement>()
-
 /** The action URL of a POST that replaces the top page; null for GET or another target. */
 function postedFormAction(
   target: EventTarget | null,
   lastSubmitterByForm: WeakMap<HTMLFormElement, HTMLElement | null>
 ): string | null {
-  // `new FormData(form)` fires formdata too; a submission's own entry list follows a submit event,
-  // except `form.submit()`, which only an embedded frame posting to the top page needs reported,
-  // once per form: the top page's navigation replaces the frame.
-  if (!(target instanceof HTMLFormElement)) {
-    return null
-  }
-  const withoutSubmit = !lastSubmitterByForm.has(target)
-  if (withoutSubmit && (window === window.top || reportedWithoutSubmit.has(target))) {
+  // `new FormData(form)` fires formdata too; only a submission's own entry list follows a submit.
+  // (`form.submit()` fires no submit event; in the top frame the Navigation API still sees it.)
+  if (!(target instanceof HTMLFormElement) || !lastSubmitterByForm.has(target)) {
     return null
   }
   const submitter = lastSubmitterByForm.get(target)
@@ -68,9 +65,6 @@ function postedFormAction(
     : formProperty(target, 'target')
   if (method !== 'post' || !targetsTopPage(formTarget.toLowerCase())) {
     return null
-  }
-  if (withoutSubmit) {
-    reportedWithoutSubmit.add(target)
   }
   return button?.hasAttribute('formaction') ? button.formAction : formProperty(target, 'action')
 }
