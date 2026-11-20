@@ -29301,7 +29301,8 @@
         "previous": "Previous question",
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",
-        "typeAnswer": "Type your answer"
+        "typeAnswer": "Type your answer",
+        "replaced": "The agent asked a new question. Read it, then reply."
       }
     },
     "search": {

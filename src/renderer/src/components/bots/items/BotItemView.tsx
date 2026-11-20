@@ -237,7 +237,7 @@ export function BotItemBody({
     bot,
     item,
     view.events,
-    sendLatest,
+    (text, questionId) => sendLatest(text, [], questionId),
     pending.shown
   )
   // The box's Enter, "Replying to" a line of several questions, answers that line like a quick reply.
