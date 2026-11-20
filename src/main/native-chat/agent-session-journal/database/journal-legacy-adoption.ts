@@ -1,12 +1,40 @@
 import type Database from '../../../sqlite/sync-database'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { insertJournalLegacyClaims } from './journal-legacy-claims'
+import { insertJournalLegacyClaims, missingJournalLegacyClaims } from './journal-legacy-claims'
+import { runJournalTransaction } from './journal-database'
 import { writeMeta } from './journal-legacy-reconcile-marks'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
 import { readMeta } from './journal-legacy-reconcile-marks'
+import { journalLegacyChatRevision, journalLegacyChatRevisionKey } from './journal-legacy-source'
 
 export type Claim = SqliteRow
+
+/**
+ * A baseline is the original's revision when it was read. A write changes the original's identity
+ * for good, so while it still matches the saved receipt, no write followed any baseline here.
+ */
+export function missingBaselines(
+  source: Database.Database,
+  db: Database.Database
+): [string, string][] {
+  return journalLegacyOriginalChatIds(source, 'any')
+    .filter((id) => readMeta(db, journalLegacyChatRevisionKey(id)) === undefined)
+    .map((id): [string, string] => [id, journalLegacyChatRevision(source, id) ?? 'null'])
+}
+
+/** A stopped walk keeps the custody the bulk pass took before visiting any chat. */
+export function retainEnumeratedClaims(db: Database.Database, adoption: Adoption): void {
+  try {
+    runJournalTransaction(db, () => {
+      for (const [id, claims] of adoption.claims) {
+        insertJournalLegacyClaims(db, id, missingJournalLegacyClaims(db, id, claims))
+      }
+    })
+  } catch (error) {
+    console.warn('[agent-session-journal] keeping original upload custody failed', error)
+  }
+}
 
 /** Adoption takes chats in the original's saved order; in any order, the id index alone answers. */
 export function journalLegacyOriginalChatIds(

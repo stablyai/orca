@@ -12,6 +12,7 @@ import {
 import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import { openJournalDatabase } from './journal-database'
 import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
+import { publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -29,15 +30,14 @@ it('keeps claims whose original record is gone and isolates a refusal among thei
   const record = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
   record.run('kept-failed', '{}')
   record.run('kept-healthy', '{}')
+  for (const id of ['kept-failed', 'kept-healthy']) {
+    publishJournalSessionEpoch(source, { sessionId: id, workspaceId: 'workspace' }, 'original')
+  }
   const filename = await initializeJournalDomainDatabase(root)
   const { db } = openJournalDomainDatabase(filename)
   cleanup.push(() => db.close())
   for (const id of ['kept-failed', 'kept-healthy']) {
-    db.prepare('INSERT INTO journal_chat_state(session_id,workspace_id,epoch) VALUES(?,?,?)').run(
-      id,
-      'workspace',
-      'converted'
-    )
+    db.prepare("UPDATE journal_chat_state SET epoch='converted' WHERE session_id=?").run(id)
   }
   source.exec('DELETE FROM agent_session_records')
   const claim = source.prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
@@ -59,6 +59,9 @@ it('keeps claims whose original record is gone and isolates a refusal among thei
   expect(
     db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
   ).toEqual([{ upload_id: 'claimed', session_id: 'kept-healthy' }])
+  source.exec("DELETE FROM agent_session_attachment_claims WHERE session_id='kept-failed'")
+  reconcileJournalLegacySource(root, db)
+  expect(failure.get('journal.legacy-failed:kept-failed')).toBeUndefined()
 })
 
 it.each([11, 10])(

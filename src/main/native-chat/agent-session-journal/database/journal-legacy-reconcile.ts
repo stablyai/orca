@@ -5,6 +5,8 @@ import {
   readAdoption,
   adoptJournalLegacyChat,
   journalLegacyOriginalChatIds,
+  retainEnumeratedClaims,
+  missingBaselines,
   type Adoption
 } from './journal-legacy-adoption'
 import {
@@ -83,6 +85,7 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   const source = openJournalLegacySource(sourcePath)
   let complete = true
   let gone: string[] = []
+  const clearedClaims: string[] = []
   try {
     if (unchanged) {
       // The original wrote nothing since the copy, so each chat is as shown here; once every
@@ -97,9 +100,16 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     if (!unchanged) {
       const hasOriginal = source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
       const hasRecord = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
-      gone = metaKeys(db, journalLegacyFailureKey('')).filter(
-        (id) => !hasRecord.get(id) && !hasOriginal.get(id)
-      )
+      for (const id of metaKeys(db, journalLegacyFailureKey(''))) {
+        const held = Boolean(hasRecord.get(id))
+        if ((!held || (pass.claimOwners && !pass.claimOwners.has(id))) && !hasOriginal.get(id)) {
+          if (held) {
+            clearedClaims.push(id)
+          } else {
+            gone.push(id)
+          }
+        }
+      }
     }
   } finally {
     source.close()
@@ -115,6 +125,9 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   runJournalTransaction(db, () => {
     for (const id of gone) {
       deleteMeta(db, journalLegacyFailureKey(id))
+    }
+    for (const id of clearedClaims) {
+      clearJournalLegacyClaimFailure(db, id)
     }
     for (const [id, revision] of pass.baselines) {
       recordJournalLegacyChatRevision(db, id, revision)
@@ -139,16 +152,7 @@ type Pass = {
   baselines: [string, string][]
   /** Converted chats with no revision to compare, for the background compare. */
   compares: [string, string][]
-}
-
-/**
- * A baseline is the original's revision when it was read. A write changes the original's identity
- * for good, so while it still matches the saved receipt, no write followed any baseline here.
- */
-function missingBaselines(source: Database.Database, db: Database.Database): [string, string][] {
-  return journalLegacyOriginalChatIds(source, 'any')
-    .filter((id) => readMeta(db, journalLegacyChatRevisionKey(id)) === undefined)
-    .map((id): [string, string] => [id, journalLegacyChatRevision(source, id) ?? 'null'])
+  claimOwners?: Pick<Adoption['claims'], 'has'>
 }
 
 /**
@@ -163,6 +167,7 @@ function absorbChats(
   walk: boolean
 ): boolean {
   const adoption = readAdoption(source, db, walk ? null : [...pass.forced.keys()])
+  pass.claimOwners = adoption.claims
   let chats: string[]
   try {
     chats = walk ? journalLegacyOriginalChatIds(source, 'saved') : [...pass.forced.keys()]
@@ -239,19 +244,6 @@ function absorbChats(
     }
   }
   return true
-}
-
-/** A stopped walk keeps the custody the bulk pass took before visiting any chat. */
-function retainEnumeratedClaims(db: Database.Database, adoption: Adoption): void {
-  try {
-    runJournalTransaction(db, () => {
-      for (const [id, claims] of adoption.claims) {
-        insertJournalLegacyClaims(db, id, missingJournalLegacyClaims(db, id, claims))
-      }
-    })
-  } catch (error) {
-    console.warn('[agent-session-journal] keeping original upload custody failed', error)
-  }
 }
 
 function absorbChat(
