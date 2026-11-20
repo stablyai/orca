@@ -1,0 +1,93 @@
+// Slack's Done screen: how to ask the bot, drawn as the two-message Slack DM it makes.
+import React, { useId } from 'react'
+import { Trans } from 'react-i18next'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Bot } from '../../../../../shared/bot-types'
+import { BotAvatar } from '../BotAvatar'
+import { SlackPersonPlaceholder } from './SlackPersonPlaceholder'
+
+// Slack's mention highlight: its own blue, so the @name reads as a Slack mention in either theme.
+const MENTION =
+  'min-w-0 truncate rounded-[3px] bg-[#1d9bd1]/10 px-0.5 text-[#1264a3] dark:bg-[#1d9bd1]/15 dark:text-[#1d9bd1]'
+
+export function SlackTryItPreview({
+  bot,
+  asker
+}: {
+  bot: Bot
+  /** Whoever asks in the sample: the person who installed it, else "You". */
+  asker: string | undefined
+}): React.JSX.Element {
+  const t = useTranslate()
+  const headingId = useId()
+  const now = t('bots.slack.setup.preview.now', 'now')
+  return (
+    <section aria-labelledby={headingId} className="space-y-2">
+      <h3 id={headingId} className="text-xs font-medium">
+        {t('bots.slack.setup.tryIt', 'Try it')}
+      </h3>
+      <div className="space-y-3 rounded-lg border border-border bg-background p-3">
+        <SlackMessage
+          avatar={<SlackPersonPlaceholder />}
+          name={asker ?? t('bots.slack.setup.preview.you', 'You')}
+          time={now}
+        >
+          <Trans
+            i18n={i18n}
+            i18nKey="bots.slack.setup.preview.ask"
+            defaults="<mention>@{{name}}</mention> summarize this thread"
+            values={{ name: bot.name }}
+            shouldUnescape
+            components={{ mention: <span className={MENTION} title={`@${bot.name}`} /> }}
+          />
+        </SlackMessage>
+        <SlackMessage
+          avatar={<BotAvatar bot={bot} className="size-full rounded-none border-0" />}
+          name={bot.name}
+          app
+          time={now}
+        >
+          <span className="truncate">{t('bots.slack.setup.preview.reply', 'On it.')}</span>
+        </SlackMessage>
+      </div>
+    </section>
+  )
+}
+
+/** One Slack message, one line each for who and what: a long name or mention ends in an ellipsis. */
+function SlackMessage({
+  avatar,
+  name,
+  app,
+  time,
+  children
+}: {
+  avatar: React.ReactNode
+  name: string
+  app?: boolean
+  time: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex items-start gap-2">
+      <span aria-hidden className="size-8 shrink-0 overflow-hidden rounded-md">
+        {avatar}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-baseline gap-1">
+          <span className="truncate text-[13px] leading-[18px] font-bold">{name}</span>
+          {app ? (
+            <span className="shrink-0 rounded-sm bg-muted-foreground/15 px-0.5 text-[9px] leading-3 font-bold text-muted-foreground">
+              {t('bots.slack.postAs.app', 'APP')}
+            </span>
+          ) : null}
+          <span className="shrink-0 text-[11px] text-muted-foreground">{time}</span>
+        </div>
+        {/* whitespace-pre keeps the space after the mention, which a flex row would drop. */}
+        <p className="flex min-w-0 text-[13px] leading-[18px] whitespace-pre">{children}</p>
+      </div>
+    </div>
+  )
+}
