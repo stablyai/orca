@@ -173,17 +173,13 @@ describe('relay ids saved by ownership', () => {
       tabsByWorktree: { 'other::/p': [{ id: 'tab-p' }] }
     } as unknown as WorkspaceSessionState
     const state = { repos: [SSH_REPO], contestedHostWorkspaceSessions: { [SSH_HOST]: parked } }
+    const sshSlice = (relays: Record<string, string>) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay write reads relay ids only.
+      const slice = { remoteSessionIdsByTabId: relays } as WorkspaceSessionState
+      return { [SSH_HOST]: slice }
+    }
     const save = (relays?: Record<string, string>) =>
-      sendDesktopRelayWrite(
-        api,
-        takeDesktopRelayWrite(
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay write reads relay ids only.
-          relays
-            ? { [SSH_HOST]: { remoteSessionIdsByTabId: relays } as WorkspaceSessionState }
-            : {},
-          state
-        )
-      )
+      sendDesktopRelayWrite(api, takeDesktopRelayWrite(relays ? sshSlice(relays) : {}, state))
     await save({ 'tab-a': 'relay-a' })
     // tab-a's relay ends during a save with no slice for the SSH host.
     await save()
