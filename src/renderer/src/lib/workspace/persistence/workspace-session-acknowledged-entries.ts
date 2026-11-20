@@ -71,6 +71,22 @@ export class AcknowledgedWorkspaceSessionEntries {
     }
   }
 
+  /** Hosts whose acknowledged `field` still holds entries this window sent. */
+  hostsHoldingEntries(field: string): ExecutionHostId[] {
+    const hostIds: ExecutionHostId[] = []
+    for (const [hostId, fields] of this.byHost) {
+      const value = fields.get(field)
+      if (
+        Array.isArray(value)
+          ? value.length > 0
+          : isWorkspaceSessionRecord(value) && Object.keys(value).length > 0
+      ) {
+        hostIds.push(hostId)
+      }
+    }
+    return hostIds
+  }
+
   /** Main's copy can't be assumed after a failed, fenced or whole-partition write: send whole fields. */
   forget(hostId?: ExecutionHostId, fields?: readonly string[]): void {
     if (hostId === undefined) {

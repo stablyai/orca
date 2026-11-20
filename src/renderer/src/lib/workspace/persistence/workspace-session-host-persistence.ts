@@ -50,7 +50,7 @@ import {
   type AcknowledgedWorkspaceSessionEntries
 } from './workspace-session-acknowledged-entries'
 import { patchHostSlice, routedSessionHostIds } from './workspace-session-host-entries-write'
-import { seedEmptiedSshReconnectFacts } from './workspace-session-emptied-field-hosts'
+import { clearEndedSshReconnectFacts } from './workspace-session-emptied-field-hosts'
 
 export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
@@ -247,7 +247,6 @@ function splitWorkspaceSessionForWrite(
     worktreeIdByTabId,
     emptyContainerHostIds
   })
-  seedEmptiedSshReconnectFacts(slices, payload, state, mode)
   attachHostSessionShadow(slices, state.contestedHostWorkspaceSessions, routing.claims, mode)
   return slices
 }
@@ -260,6 +259,9 @@ export function patchWorkspaceSessionByHost(
   acknowledged?: AcknowledgedWorkspaceSessionEntries
 ): { localWrite: Promise<void>; written: Promise<void> } {
   const slices = splitWorkspaceSessionForWrite(patch as WorkspaceSessionState, state, 'patch')
+  if (acknowledged) {
+    clearEndedSshReconnectFacts(slices, patch, state, acknowledged)
+  }
   acknowledged?.retainHosts(routedSessionHostIds(state, slices))
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
   const localWrite = patchHostSlice(api, local, LOCAL_EXECUTION_HOST_ID, acknowledged)

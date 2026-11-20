@@ -123,4 +123,43 @@ describe('session fields a window clears', () => {
       stop()
     }
   })
+  it('a relay that ends without any tab change still clears on its SSH partition', async () => {
+    const store = createTestStore()
+    const main = inMemoryMain()
+    const acknowledged = new AcknowledgedWorkspaceSessionEntries()
+    const stop = createSessionWriteSubscriber({
+      store,
+      debounceMs: DEBOUNCE_MS,
+      persist: ({ patch }) =>
+        patchWorkspaceSessionByHost(main.api, patch, store.getState(), acknowledged).written
+    })
+    try {
+      // A dormant tab reconnects through its last known relay; only that record changes when it ends.
+      seedStore(store, {
+        repos: [SSH_REPO],
+        worktreesByRepo: {
+          [SSH_REPO.id]: [
+            makeWorktree({ id: WORKTREE_ID, repoId: SSH_REPO.id, path: '/remote/wt' })
+          ]
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [makeTab({ id: 'tab-a', worktreeId: WORKTREE_ID, ptyId: null })]
+        },
+        lastKnownRelayPtyIdByTabId: { 'tab-a': 'relay-a' },
+        workspaceSessionReady: true,
+        hydrationSucceeded: true
+      })
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+      expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
+
+      store.setState({ lastKnownRelayPtyIdByTabId: {} })
+      await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
+
+      const restored = main.holding(WORKTREE_ID)
+      expect(restored.remoteSessionIdsByTabId).toEqual({})
+      expect(restored.activeWorktreeIdsOnShutdown).toEqual([])
+    } finally {
+      stop()
+    }
+  })
 })

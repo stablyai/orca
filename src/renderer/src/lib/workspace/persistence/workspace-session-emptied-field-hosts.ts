@@ -4,13 +4,16 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
-import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import type { HostSessionWriteMode } from './workspace-session-host-contention'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../../../../shared/workspace-session/workspace-session-state-types'
+import type { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
 import type { HostPersistenceState } from './workspace-session-host-persistence'
-import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-session-host-split'
+import type { HostSessionSlices } from './workspace-session-host-split'
 
 // Restart reconnects from these; an ended last relay left on an SSH partition revived after a crash.
-const SSH_EMPTIED_RECONNECT_FIELDS = [
+const SSH_RECONNECT_FIELDS = [
   'remoteSessionIdsByTabId',
   'activeWorktreeIdsOnShutdown'
 ] as const satisfies readonly (keyof WorkspaceSessionState)[]
@@ -26,34 +29,36 @@ function catalogHostIds(state: HostPersistenceState): Set<ExecutionHostId> {
   return hostIds
 }
 
-/** Main patches fieldwise, so an SSH partition whose last relay ended kept it unless the write carried
- *  the emptied field there. Only partitions this write already saves to get them, so idle hosts see no
- *  extra save; a host holding parked contested rows is left out, since its shadow restores only
- *  worktree-keyed rows. */
-export function seedEmptiedSshReconnectFacts(
+/** A reconnect field only routes the entries it still has, so an SSH host whose last relay ended got no
+ *  save for it and main kept the ended one. A host main acknowledged entries from this window for gets
+ *  the field empty, and the entries diff then removes exactly those keys; a partition this window never
+ *  wrote (unread, another writer's) is left alone, and a host with parked contested rows is skipped. */
+export function clearEndedSshReconnectFacts(
   slices: HostSessionSlices,
-  payload: WorkspaceSessionState,
+  patch: WorkspaceSessionPatch,
   state: HostPersistenceState,
-  mode: HostSessionWriteMode
+  acknowledged: AcknowledgedWorkspaceSessionEntries
 ): void {
-  const carried = SSH_EMPTIED_RECONNECT_FIELDS.filter((field) => payload[field] !== undefined)
-  if (mode !== 'patch' || carried.length === 0) {
-    return
-  }
-  const catalog = catalogHostIds(state)
-  for (const [hostId, slice] of nonLocalHostSessionEntries(slices)) {
-    if (
-      parseExecutionHostId(hostId)?.kind !== 'ssh' ||
-      !catalog.has(hostId) ||
-      state.contestedHostWorkspaceSessions?.[hostId]
-    ) {
+  let catalog: Set<ExecutionHostId> | null = null
+  for (const field of SSH_RECONNECT_FIELDS) {
+    if (patch[field] === undefined) {
       continue
     }
-    if (carried.includes('remoteSessionIdsByTabId')) {
-      slice.remoteSessionIdsByTabId ??= {}
-    }
-    if (carried.includes('activeWorktreeIdsOnShutdown')) {
-      slice.activeWorktreeIdsOnShutdown ??= []
+    for (const hostId of acknowledged.hostsHoldingEntries(field)) {
+      if (
+        parseExecutionHostId(hostId)?.kind !== 'ssh' ||
+        state.contestedHostWorkspaceSessions?.[hostId] ||
+        slices[hostId]?.[field] !== undefined
+      ) {
+        continue
+      }
+      catalog ??= catalogHostIds(state)
+      if (!catalog.has(hostId)) {
+        continue
+      }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partition patch carries only the fields it names; main keeps the rest.
+      const slice = (slices[hostId] ??= {} as WorkspaceSessionState)
+      Object.assign(slice, { [field]: field === 'remoteSessionIdsByTabId' ? {} : [] })
     }
   }
 }
