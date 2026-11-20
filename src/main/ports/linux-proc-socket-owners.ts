@@ -9,6 +9,7 @@ let previousInodes = new Set<number>()
 let previousPids: ReadonlySet<number> | undefined
 let scanSequence = 0
 let lastFullWalkScan = Number.NEGATIVE_INFINITY
+let lastPublishedScan = 0
 
 /**
  * Map listener socket inodes to the pid holding them; a shared socket goes to the last holder in /proc order.
@@ -26,6 +27,7 @@ export async function resolveLinuxSocketOwners(
   const knownInodes = previousInodes
   const owners = new Map<number, number>()
   if (inodes.size === 0) {
+    lastPublishedScan = sequence
     ownerPidByInode = new Map()
     previousInodes = new Set()
     return { owners, fullWalk: true }
@@ -97,9 +99,13 @@ export async function resolveLinuxSocketOwners(
     lastFullWalkScan = Math.max(lastFullWalkScan, sequence)
   }
 
-  ownerPidByInode = owners
-  previousInodes = new Set(inodes)
-  previousPids = new Set(pids)
+  // A scan that started later and finished first saw a newer /proc; an older result must not replace it.
+  if (sequence > lastPublishedScan) {
+    lastPublishedScan = sequence
+    ownerPidByInode = owners
+    previousInodes = new Set(inodes)
+    previousPids = new Set(pids)
+  }
   return { owners: new Map(owners), fullWalk }
 }
 
