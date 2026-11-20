@@ -8,7 +8,7 @@ import { GRAB_PICK_CONTROL_SCRIPT } from './grab-guest-pick-control-script'
 import { clampGrabPayload } from './browser-grab-payload'
 import { executeGrabScript, requestGrabExecution } from './grab-guest-execution'
 
-it('keeps the original picked node across marker removal and rejects a same-selector replacement', async () => {
+it('keeps the original picked node across marker removal and rejects replacement or document adoption', async () => {
   const { Window } = await import('happy-dom')
   const window = new Window()
   try {
@@ -58,6 +58,9 @@ it('keeps the original picked node across marker removal and rejects a same-sele
     original.replaceWith(replacement)
     await expect(isPickedElementPresent(guest, id)).resolves.toBe(false)
     await expect(isPickedElementPresent(guest, 'another-pick')).resolves.toBe(false)
+    const otherDocument = document.implementation.createHTMLDocument('Synthetic other document')
+    otherDocument.body.append(otherDocument.adoptNode(original))
+    await expect(isPickedElementPresent(guest, id)).resolves.toBe(false)
   } finally {
     await window.happyDOM.abort()
   }

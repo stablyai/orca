@@ -4,13 +4,13 @@ export const GRAB_PICK_CONTROL_SCRIPT = `  function pickControl(element, payload
     var hidden = null;
     function snapshot() {
       var target = original.deref();
-      if (!target || !target.isConnected) return false;
+      if (!target || !target.isConnected || target.ownerDocument !== document) return false;
       var rect = target.getBoundingClientRect();
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, viewportWidth: window.innerWidth };
     }
     return function(action, id) {
       if (action === 'payload') { var result = response; response = null; return result; }
-      if (action === 'present') { var target = original.deref(); return Boolean(target && target.isConnected); }
+      if (action === 'present') { var target = original.deref(); return Boolean(target && target.isConnected && target.ownerDocument === document); }
       if (action === 'snapshot') return snapshot();
       if (action === 'hide') {
         var rect = snapshot();
