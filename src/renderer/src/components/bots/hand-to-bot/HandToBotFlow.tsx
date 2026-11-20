@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 // Hand to bot…: pick a bot (or make one) for a workspace and, optionally, say what it should do. The
 // workspace moves under the bot's home and its agents keep running as the bot's workers.
 import { botRefKey, isSameBot } from '@/lib/bot-hosts'
@@ -90,7 +91,9 @@ export function HandToBotFlow({
     [workspaceHostId]
   )
   const purposes = useBotPurposes()
-  const folders = useAppStore((s) => selectFolderAncestors(s, worktree))
+  const folders = useAppStoreWithHostStatuses((s, statuses) =>
+    selectFolderAncestors(s, statuses, worktree)
+  )
   const owner = botOfFolders(folders, bots)
   const agents = useWorktreeAgentRows(worktree.id).filter((row) => row.rowSource !== 'subagent')
   const takeOver = useTakeOver(

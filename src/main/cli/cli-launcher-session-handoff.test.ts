@@ -77,7 +77,8 @@ describe.skipIf(process.platform === 'win32').each(Object.entries(LAUNCHERS))(
       )
     })
 
-    it('runs itself when the named CLI is gone, relative, or not runnable', () => {
+    it('runs itself when there is no usable session CLI', () => {
+      expect(run(launcher, {})).toBe('installed connector reply --text hi there')
       const notRunnable = join(root, `plain-file-${_platform}`)
       writeFileSync(notRunnable, 'echo nope\n')
       for (const named of [join(root, 'missing-orca'), 'session-orca', notRunnable]) {
@@ -85,10 +86,6 @@ describe.skipIf(process.platform === 'win32').each(Object.entries(LAUNCHERS))(
           'installed connector reply --text hi there'
         )
       }
-    })
-
-    it('runs itself, unchanged, outside a session', () => {
-      expect(run(launcher, {})).toBe('installed connector reply --text hi there')
     })
 
     it('never hands back once the named CLI was reached through a hand-off', () => {

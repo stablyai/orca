@@ -19,9 +19,11 @@ import type { ManagedDataAccountsState } from '../../../shared/agent-accounts/ma
 import { restoreManagedDataAccountEnvironment } from '../../../shared/agent-launch/environment/managed-data-account-environment'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { createAcpStructuredLaunchResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
+import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecFor } from './acp-launch-registry'
-import { deliverCopilotInstructions } from './acp-instructions'
+import { deliverCopilotInstructions, deliverOpenCodeInstructions } from './acp-instructions'
+import { acpReleaseWithChild } from './acp-structured-launch-preparation'
 
 const PREAMBLE = 'You are Zorblax, a bot that runs in Orca.'
 
@@ -187,6 +189,30 @@ describe('ACP launch: standing instructions', () => {
     expect(await readFile(join(source, 'AGENTS.md'), 'utf8')).toBe('Mine.\n')
   })
 
+  it("keeps a lowercase-named global agents.md of the user's out of the generated file's write path", async () => {
+    const source = join(dataDirectory, 'opencode-lowercase-agents')
+    await mkdir(source, { recursive: true })
+    await writeFile(join(source, 'agents.md'), 'Mine.\n')
+    const resolved = await launch('opencode', {
+      instructions: PREAMBLE,
+      version: '2.0.14',
+      launchEnv: { OPENCODE_CONFIG_DIR: source }
+    })
+    const configDir = resolved.env.OPENCODE_CONFIG_DIR ?? ''
+    expect(await readFile(join(source, 'agents.md'), 'utf8')).toBe('Mine.\n')
+    const foldsCase = await readFile(join(source, 'AGENTS.md'), 'utf8').then(
+      () => true,
+      () => false
+    )
+    expect(await readFile(join(configDir, 'AGENTS.md'), 'utf8')).toBe(
+      `${foldsCase ? 'Mine.\n\n' : ''}${PREAMBLE}\n`
+    )
+    expect((await lstat(join(configDir, 'AGENTS.md'))).isSymbolicLink()).toBe(false)
+    expect((await readdir(configDir)).sort()).toEqual(
+      foldsCase ? ['AGENTS.md'] : ['AGENTS.md', 'agents.md']
+    )
+  })
+
   it('writes only the preamble when the explicitly configured OpenCode folder is missing', async () => {
     const xdg = join(dataDirectory, 'other-opencode-xdg')
     await mkdir(join(xdg, 'opencode'), { recursive: true })
@@ -302,6 +328,52 @@ describe('ACP launch: standing instructions', () => {
       version: null
     })
     expect(delivered).toBeNull()
+  })
+
+  it("removes an OpenCode 2.x launch's config folder on release, leaving the user's files", async () => {
+    const source = join(dataDirectory, 'opencode-release-source')
+    const folder = join(dataDirectory, 'opencode-release-folder')
+    await mkdir(source, { recursive: true })
+    await mkdir(folder, { recursive: true })
+    await writeFile(join(source, 'opencode.json'), '{}')
+    await mkdir(join(source, 'agents'))
+    await writeFile(join(source, 'agents', 'reviewer.md'), 'Review.')
+    const delivered = await deliverOpenCodeInstructions({
+      text: PREAMBLE,
+      env: { OPENCODE_CONFIG_DIR: source },
+      cwd: '/unused',
+      file: async () => '/unused',
+      folder: async () => '/unused',
+      emptyFolder: async () => folder,
+      version: '2.0.14'
+    })
+    expect(await readdir(folder)).toContain('AGENTS.md')
+    await delivered?.release?.()
+    expect(await readdir(dataDirectory)).not.toContain('opencode-release-folder')
+    expect(await readFile(join(source, 'opencode.json'), 'utf8')).toBe('{}')
+    expect(await readFile(join(source, 'agents', 'reviewer.md'), 'utf8')).toBe('Review.')
+  })
+
+  it('releases a launch when its child exits, or at once when the connection throws', async () => {
+    let released = 0
+    const release = async () => {
+      released += 1
+    }
+    let exited: Parameters<AcpStructuredConnection['onExit']>[0] = () => {}
+    const connection = {
+      onExit: (callback: Parameters<AcpStructuredConnection['onExit']>[0]): void => {
+        exited = callback
+      }
+    }
+    acpReleaseWithChild(() => connection, release)()
+    expect(released).toBe(0)
+    exited({ code: 0, signal: null, processless: false })
+    expect(released).toBe(1)
+    const failing = acpReleaseWithChild(() => {
+      throw new Error('spawn failed')
+    }, release)
+    expect(failing).toThrow('spawn failed')
+    expect(released).toBe(2)
   })
 
   it('refuses to start an agent that has no way to take them', async () => {

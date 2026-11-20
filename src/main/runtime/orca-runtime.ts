@@ -54,8 +54,8 @@ import {
 } from './agent-session/launch/structured-agent-availability'
 import { PairedServerRowsProducer } from './sidebar-inputs/workspace-rows/paired-server-rows-producer'
 import { RepoIconDataUrls } from './sidebar-inputs/repo-icons/repo-icon-data-urls'
+import { runtimeIconFetch } from './sidebar-inputs/repo-icons/repo-icon-remote-fetch'
 import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows/workspace-rows-producer'
-import { getMainHttpClient } from '../network/http-client'
 import { getRuntimeDesktopSurface } from './construction/runtime-desktop-surface'
 import { CollapseWriteOrder } from './client/settings/workspace-view-collapse-writes'
 import { SidebarInputsFeed } from './sidebar-inputs/feed/sidebar-inputs-feed'
@@ -144,13 +144,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   readonly repoIconDataUrls = ORCA_SIDEBAR_INPUTS_IS_MAIN
     ? new RepoIconDataUrls({
         repos: () => this.store?.getRepos() ?? [],
-        // The desktop net.fetch wrapper rejects manual redirects.
-        fetch: (url, init) => {
-          const manualRedirectFetch = getRuntimeDesktopSurface().fetchRepoIcon
-          return manualRedirectFetch
-            ? manualRedirectFetch(url, init)
-            : getMainHttpClient().fetch(url, init)
-        },
+        fetch: runtimeIconFetch,
         encoder: () => getRuntimeDesktopSurface().encodeRepoIconPng
       })
     : null
@@ -235,14 +229,14 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   /** Whether a layout-owning window can show a tab before process creation. */
   canPublishAgentLaunchTab(): boolean {
-    return Boolean(this.notifier?.publishAgentLaunchTab && this.getAvailableAuthoritativeWindow())
+    return Boolean(this.notifier?.publishAgentLaunchTab && this.hasAuthoritativeWindow())
   }
 
   /** Publish before spawn when a window owns the layout; otherwise return null. */
   publishAgentLaunchTab(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
   ): Promise<AgentLaunchTabPublished> | null {
-    if (!this.notifier?.publishAgentLaunchTab || !this.getAvailableAuthoritativeWindow()) {
+    if (!this.notifier?.publishAgentLaunchTab || !this.hasAuthoritativeWindow()) {
       return null
     }
     return this.notifier.publishAgentLaunchTab(request)

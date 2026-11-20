@@ -73,7 +73,15 @@ export async function sendBotItemMail(
     // Delivered as the chat's image blocks, as chat sends a pasted image.
     ...(images.length > 0 ? { images } : {})
   })
-  db.insertMessage({ id, from: BOT_ITEM_MAIL_SENDER, to, type: 'status', ...mail, payload })
+  db.insertMessage({
+    id,
+    from: BOT_ITEM_MAIL_SENDER,
+    to,
+    type: 'status',
+    ...mail,
+    payload,
+    orcaAuthored: 'item-mail'
+  })
   runtime.notifyMessageArrived(to, 'status')
   // The chat shows the change itself, naming who made it; the mail row stays hidden there. A change
   // made in the chat the mail lands in (Home, when the item's chat takes no mail) has its own row there.

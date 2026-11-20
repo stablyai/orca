@@ -4946,13 +4946,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Summe des Arbeitssatzes (WS): Speicherseiten, die sich derzeit im RAM befinden. Gemeinsam genutzte Seiten können in mehreren Prozessen erscheinen. Speicher, den Windows ausgelagert hat, wird hier nicht mitgezählt.",
-                "privateBytesDescription": "Summe der privaten Bytes: von diesen Prozessen zugesicherter Speicher, unabhängig davon, ob er sich im RAM befindet oder ausgelagert ist. Der Host rechnet diesen Wert auf sein Zusicherungslimit an. Daher steigt er weiter, während der obige Arbeitssatz durch Auslagerung schrumpft.",
-                "footprintDescription": "Summe des Speicherbedarfs, derselbe Wert wie in Activity Monitor: Speicher, der den einzelnen Prozessen gehört, einschließlich Grafikspeicher. Gemeinsam genutzte Speicherseiten werden nicht doppelt gezählt.",
-                "rssDescription": "Summe des residenten Speichers (RSS). Gemeinsam genutzte oder mehrfach eingeblendete Speicherseiten können in mehreren Prozessen erscheinen.",
                 "memColumn": "Speicher",
-                "memorySummary": "Σ Arbeitsspeicher",
-                "privateSummary": "Σ Privat"
+                "memorySummary": "Σ Arbeitsspeicher"
               }
             },
             "manager": {
@@ -12510,6 +12505,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS-Schlüsselbund (cursor-agent)",
+            "keyring": "Linux-Schlüsselbund (cursor-agent)",
             "cli": "Authentifizierungsdatei der Cursor-CLI",
             "desktop": "Cursor IDE"
           },
@@ -17317,8 +17313,6 @@
             "27d863542c": "Browser-Anmerkungen",
             "e48569ac6d": "Diese Website konnte nicht erreicht werden.",
             "bbe8f15e83": "Dieser Bereich wird über den aktiven Laufzeitserver dargestellt.",
-            "8b7e6d1f5a": "Browser-Anmerkungen sind nur in lokalen Browser-Tabs verfügbar.",
-            "deb5293610": "Browser-Anmerkungen in entfernter Laufzeitumgebung nicht verfügbar",
             "90d021f2ad": "Hinzufügen",
             "0cb3bd6221": "Zweck der Anmerkung",
             "532bac48c5": "Beschreiben, was der Agent hier ändern soll…",
@@ -22730,8 +22724,7 @@
     "refresh": "Aktualisieren",
     "restartLocal": "Lokalen Daemon neu starten",
     "killAllLocal": "Alle lokalen Sitzungen beenden",
-    "killFailed": "Das Terminal konnte nicht beendet werden. Die zuletzt beobachteten Sitzungen bleiben erhalten.",
-    "metricDetails": "Metrikdetails"
+    "killFailed": "Das Terminal konnte nicht beendet werden. Die zuletzt beobachteten Sitzungen bleiben erhalten."
   },
   "browserExtensions": {
     "permission": {

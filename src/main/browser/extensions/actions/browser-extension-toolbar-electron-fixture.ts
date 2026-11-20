@@ -12,6 +12,8 @@ import { attachBrowserExtensionsToProfileSession } from '../profile-sessions/bro
 import { addUnpackedBrowserExtension } from '../browser-extension-management'
 import { recordActiveBrowserPage } from '../tabs-and-windows/browser-extension-tab-model'
 import { trackBrowserExtensionMainWindow } from '../tabs-and-windows/browser-extension-window-model'
+import { electronRuntimeDesktopSurface } from '../../../host/electron-runtime-desktop-surface'
+import { setRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
 import {
   activateBrowserExtensionAction,
   getBrowserExtensionToolbarState
@@ -128,6 +130,7 @@ async function run(): Promise<void> {
     webPreferences: { contextIsolation: true, sandbox: true, webviewTag: true }
   })
   trackBrowserExtensionMainWindow(host)
+  setRuntimeDesktopSurface(electronRuntimeDesktopSurface)
   status.hostWindowId = host.id
   // Stands in for the renderer's tab model: activation requests make the page active and reply.
   const send = host.webContents.send.bind(host.webContents)

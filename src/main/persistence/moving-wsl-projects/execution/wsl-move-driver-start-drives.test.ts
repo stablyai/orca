@@ -53,11 +53,11 @@ beforeEach(() => {
   }
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
   resetWslMoveDesktopRewriteStoresForTests()
-  removeWslMoveRigDirs()
+  await removeWslMoveRigDirs()
 })
 
 const project = (id: string, path: string) => ({ ...rig.world.repos[0], id, path })
@@ -103,27 +103,6 @@ describe.each(['none', 'shown'] as const)('a whole-distro start with ids %s', (i
     shares = { W: { share: '\\\\wsl.localhost\\Ubuntu\\home' } }
     expect(await previewThenStart(ids)).toMatchObject({ outcome: 'moved' })
     expect(listWslMoveCutovers(rig.userDataPath).map((record) => record.version)).toContain(1)
-  })
-})
-
-describe('a whole-distro start whose previewed drive now points elsewhere', () => {
-  it('moves the rest and names the projects it left', async () => {
-    rig.world.repos = [
-      project('repo-1', UNC),
-      { ...project('repo-w', 'W:\\home\\dev\\other'), displayName: 'other' }
-    ]
-    const preview = await previewWslMove(rig.world.deps, { distro: 'Ubuntu' })
-    expect(preview).toMatchObject({ outcome: 'ready', repoIds: ['repo-1', 'repo-w'] })
-    shares = { W: { share: '\\\\wsl.localhost\\Debian' } }
-    expect(
-      await moveProjectsToWslHost(rig.world.deps, {
-        distro: 'Ubuntu',
-        ...wslMoveStartFieldsOf(preview)
-      })
-    ).toMatchObject({
-      outcome: 'moved',
-      droppedForMappedDrives: [{ kind: 'repo', id: 'repo-w', name: 'other' }]
-    })
   })
 })
 

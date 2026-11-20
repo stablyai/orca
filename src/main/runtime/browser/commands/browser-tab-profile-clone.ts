@@ -15,7 +15,10 @@ import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 
 export type BrowserTabProfileCloneDependencies = {
   host: BrowserClientPageOpeningHost &
-    Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindow' | 'getAuthoritativeWindow'>
+    Pick<
+      RuntimeBrowserCommandHost,
+      'getAvailableAuthoritativeWindowId' | 'getAuthoritativeWindowId'
+    >
   targets: Pick<
     RuntimeBrowserCommandTargets,
     'requireAgentBrowserBridge' | 'resolveBrowserCommandTarget'
@@ -56,7 +59,7 @@ async function createBesideEnginePage(
   }
   const sourceTab = catalog.describeBrowserTab(sourceBrowserPageId, target.worktreeId)
   const worktreeId = sourceTab.worktreeId ?? target.worktreeId
-  if (!host.getAvailableAuthoritativeWindow()) {
+  if (host.getAvailableAuthoritativeWindowId() === null) {
     // A headless host has no renderer; `tab create` opens the clone in its offscreen browser.
     const created = await creation.browserTabCreate({
       url: sourceTab.url,

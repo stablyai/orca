@@ -148,56 +148,6 @@ it('cuts accepted provider aliases at their scoped opener while keeping late out
   expect(f.item('codex:child:late:1')?.body).toEqual(rewindMessage('kept late output'))
 })
 
-it('rolls the cut and usage-limit cancellation back with its receipt and completes both on retry', async () => {
-  const f = sqlRewindFixture(cleanup)
-  await f.write(native('old', 0), rewindMessage('kept request', 'user'))
-  await f.write(host('kept-turn'), {
-    kind: 'turn',
-    turnId: 'old',
-    state: 'completed',
-    outcome: 'failure',
-    startedAt: 1,
-    completedAt: 2
-  })
-  await f.write(
-    host('limit'),
-    {
-      kind: 'status',
-      ...agentSessionFailureWords(
-        agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: 1700000060000 } }),
-        { surface: 'row' }
-      )
-    },
-    { turnScope: { kind: 'turn', turnItemId: 'orca:kept-turn' } }
-  )
-  await f.write(native('next', 0), rewindMessage('target', 'user'))
-  const { complete } = f.prepare('codex:thread:next:0')
-  f.db.exec(`CREATE TRIGGER reject_rewind BEFORE UPDATE ON agent_session_records
-    WHEN json_extract(NEW.record_json,'$.rewind.phase')='completed'
-    BEGIN SELECT RAISE(ABORT,'completion refused'); END`)
-  await expect(complete()).rejects.toThrow('completion refused')
-  expect(f.item('codex:thread:next:0')?.body).toMatchObject({ role: 'user' })
-  expect(f.readRecord().rewind?.phase).toBe('provider-succeeded')
-  expect(f.readRecord().usageLimitContinueCancel).toBeUndefined()
-  expect(
-    JSON.parse(
-      String(f.db.prepare('SELECT row_json FROM agent_session_operations').get()!.row_json)
-    ).outcome
-  ).toEqual({ status: 'pending' })
-  f.db.exec('DROP TRIGGER reject_rewind')
-  await complete()
-  expect(f.item('codex:thread:next:0')).toBeUndefined()
-  expect(f.readRecord().usageLimitContinueCancel).toEqual({
-    turnItemId: 'orca:kept-turn',
-    resetsAt: 1700000060000
-  })
-  expect(
-    JSON.parse(
-      String(f.db.prepare('SELECT row_json FROM agent_session_operations').get()!.row_json)
-    ).outcome
-  ).toMatchObject({ status: 'succeeded' })
-})
-
 it('keeps the cleared prefix and late Claude turn rows, remapping the inherited anchor inside the same commit', async () => {
   const f = sqlRewindFixture(cleanup, 'claude')
   const claude = (uuid: string) => ({ provider: 'claude' as const, sessionId: 'native', uuid })

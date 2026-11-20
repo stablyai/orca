@@ -255,6 +255,19 @@ describe('connector.act', () => {
     expect(newer.calls[0]?.body).toMatchObject({ verb: 'post', args: later.args })
   })
 
+  it('sends Slack’s own verbs only to a cloud that takes them', async () => {
+    const pin = { sessionId: 'bot-session', verb: 'pin', ref: 'slack:T1:C1::1.1', args: {} }
+    const older = actContext({ features: ['actions'] })
+    await expect(run(pin, older.context)).rejects.toMatchObject({ code: 'cloud_lacks_slack_tools' })
+    expect(older.calls).toEqual([])
+    const newer = actContext({
+      features: ['actions', 'slack.tools'],
+      answers: [{ ok: true, value: { ok: true, result: {} } }]
+    })
+    await run(pin, newer.context)
+    expect(newer.calls[0]?.body).toMatchObject({ verb: 'pin', ref: 'slack:T1:C1::1.1' })
+  })
+
   it('sends a search only to a cloud that takes one', async () => {
     const find = {
       sessionId: 'bot-session',

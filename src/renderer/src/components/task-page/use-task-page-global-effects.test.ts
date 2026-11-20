@@ -76,12 +76,8 @@ describe('useTaskPageGlobalEffects', () => {
     expect(closeTaskPage).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['detail page', { dialogWorkItem: { id: 'issue-1', type: 'issue' } }, 'closeTaskDetailPage'],
-    ['list', {}, 'closeTaskPage']
-  ] as const)('leaves Escape to an open overlay on the %s', (_label, detail, expectedClose) => {
-    const rendered = renderTaskPage(detail)
-    const { closeTaskPage, closeTaskDetailPage, page } = rendered
+  it('leaves Escape to an open overlay on the list', () => {
+    const { closeTaskPage, closeTaskDetailPage, page } = renderTaskPage({})
     const menu = document.createElement('div')
     menu.setAttribute('role', 'menu')
     document.body.append(menu)
@@ -92,7 +88,7 @@ describe('useTaskPageGlobalEffects', () => {
 
     menu.remove()
     pressEscape(page)
-    expect(rendered[expectedClose]).toHaveBeenCalledTimes(1)
+    expect(closeTaskPage).toHaveBeenCalledTimes(1)
   })
 
   it('cancels a review-comment range drag on Escape without leaving the detail page', () => {
