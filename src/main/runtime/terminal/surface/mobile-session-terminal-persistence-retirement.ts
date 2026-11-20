@@ -9,7 +9,10 @@ import { retireLeavesFromTerminalLayout } from '../../../../shared/workspace-lay
 import { rebaseWorkspaceSessionTerminalMembership } from './workspace-session-terminal-membership-authority'
 import type { MembershipRewrites } from './workspace-session-membership-rewrites'
 import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
-import { withMainRelayKeys } from '../../../../shared/workspace-session/desktop-relay-ownership'
+import {
+  changedRelayKeys,
+  forgetDesktopRelayKeys
+} from '../../../../shared/workspace-session/desktop-relay-ownership'
 
 function visibleTypeForContentType(
   contentType: string | undefined
@@ -200,7 +203,10 @@ export function retireTerminalSurfaceFromPersistence(
   }
   return recordTerminalSurfaceRetirement(
     {
-      ...withMainRelayKeys(session, [surface.parentTabId]),
+      ...forgetDesktopRelayKeys(
+        session,
+        changedRelayKeys(session.remoteSessionIdsByTabId, remoteSessionIdsByTabId)
+      ),
       activeTabId:
         session.activeTabId === surface.parentTabId ? nextActiveTabId : session.activeTabId,
       tabsByWorktree: {

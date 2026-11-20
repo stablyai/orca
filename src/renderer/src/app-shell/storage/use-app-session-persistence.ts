@@ -95,7 +95,8 @@ export function useAppSessionPersistence(): void {
         const { snapshots, desktopRelays } = buildWorkspaceSessionHostSnapshots(
           buildWorkspaceSessionPayload(freshState),
           freshState,
-          desktopRelaysSupported(window.api.session)
+          // Unsettled at unload: relay ids stay in the snapshots, as for an older main.
+          desktopRelaysSupported(window.api.session) === true
         )
         stagedRelays = desktopRelays?.hosts
         return snapshots

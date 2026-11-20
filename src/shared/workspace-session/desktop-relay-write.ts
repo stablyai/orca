@@ -14,4 +14,6 @@ export type DesktopRelayWriteResult = {
   unchanged: ExecutionHostId[]
   /** Fenced partitions (a frozen source, a held move): nothing changed; resend later. */
   skipped: ExecutionHostId[]
+  /** Applied hosts where main kept an id it holds in place of the window's; resend a baseline later. */
+  refused: ExecutionHostId[]
 }

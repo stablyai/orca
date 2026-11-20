@@ -240,7 +240,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'desktopRelayOwnership',
     z.object({
       legacyAdoptionVersion: z.number().int().nonnegative(),
-      relayIdByTabId: salvagingRecord(terminalTabIdSchema, z.string().nullable())
+      relayIdByTabId: salvagingRecord(terminalTabIdSchema, z.string())
     })
   ),
   // Why: the sort comparator in order-empty-query-worktrees.ts would produce NaN

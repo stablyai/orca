@@ -1,6 +1,9 @@
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import { withMainRelayKeys } from '../../../../shared/workspace-session/desktop-relay-ownership'
+import {
+  changedRelayKeys,
+  forgetDesktopRelayKeys
+} from '../../../../shared/workspace-session/desktop-relay-ownership'
 
 /** Remote session IDs live outside the layout model and must follow the remaining pane after close. */
 export function followRemoteSessionAfterPaneClose(
@@ -26,7 +29,10 @@ export function followRemoteSessionAfterPaneClose(
   } else {
     delete next[command.tabId]
   }
-  return { ...withMainRelayKeys(written, [command.tabId]), remoteSessionIdsByTabId: next }
+  return {
+    ...forgetDesktopRelayKeys(written, changedRelayKeys(remoteSessionIds, next)),
+    remoteSessionIdsByTabId: next
+  }
 }
 
 /** Detached panes carry their remote session ID to the new tab. */
@@ -56,7 +62,7 @@ export function followRemoteSessionAfterPaneDetach(
     delete next[sourceTabId]
   }
   return {
-    ...withMainRelayKeys(written, [targetTabId, sourceTabId]),
+    ...forgetDesktopRelayKeys(written, changedRelayKeys(remoteSessionIds, next)),
     remoteSessionIdsByTabId: next
   }
 }

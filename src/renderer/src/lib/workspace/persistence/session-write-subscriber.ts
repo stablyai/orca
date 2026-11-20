@@ -115,6 +115,8 @@ export function createSessionWriteSubscriber({
   let prevBrowserHandlesSource: AppState['remoteBrowserPageHandlesByPageId'] | null = null
   // Pending fields are the only owed-write ledger after prev advances. In-flight writes own their fields until ACK; failures merge them back without replacing newer same-field edits.
   const pendingChangedFields = new Set<SessionRelevantField>()
+  // Accepted but not applied (a fenced partition): they ride along with the next real session change.
+  const deferredFields = new Set<SessionRelevantField>()
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
   const browserHandlesProjection = createBrowserSessionHandlesProjection()
@@ -147,7 +149,7 @@ export function createSessionWriteSubscriber({
         return
       }
       for (const field of pendingFields) {
-        pendingChangedFields.add(field)
+        deferredFields.add(field)
       }
       if (failed) {
         for (const field of changed) {
@@ -155,7 +157,7 @@ export function createSessionWriteSubscriber({
         }
         // A rejection waits for the next store wake, not a retry loop.
         onPersistError?.(error)
-      } else if (pendingChangedFields.size > pendingFields.length) {
+      } else if (pendingChangedFields.size > 0) {
         armFlushTimer()
       }
     }
@@ -247,6 +249,12 @@ export function createSessionWriteSubscriber({
     prev = next
     for (const field of changedFields) {
       pendingChangedFields.add(field)
+    }
+    if (changedFields.length > 0) {
+      for (const field of deferredFields) {
+        pendingChangedFields.add(field)
+      }
+      deferredFields.clear()
     }
     // Unrelated updates may wake deferred writes but must not reset an armed debounce and recreate reset storms.
     if (timer !== null && changedFields.length === 0) {

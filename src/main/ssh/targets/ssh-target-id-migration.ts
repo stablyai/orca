@@ -5,7 +5,6 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 import { parseAppSshPtyId, toAppSshPtyId } from '../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
-import { withMainRelayKeys } from '../../../shared/workspace-session/desktop-relay-ownership'
 
 /** Re-adoption must migrate every persisted id carrier together or reconnect/reattach resurrects dead target ids (STA-1468). Non-session carriers mutate in place and report changes for save scheduling. */
 
@@ -15,6 +14,30 @@ function rewriteSshPtyId(ptyId: string, oldTargetId: string, newTargetId: string
     return null
   }
   return toAppSshPtyId(newTargetId, parsed.relayPtyId)
+}
+
+/** The window keeps a rewritten relay only if it owned the old id; ownership of other keys is unchanged. */
+function migratedRelayOwnership(
+  session: WorkspaceSessionState,
+  rewritten: Record<string, string>
+): Pick<WorkspaceSessionState, 'desktopRelayOwnership'> {
+  const before = session.desktopRelayOwnership
+  if (!before) {
+    return {}
+  }
+  const owners = { ...before.relayIdByTabId }
+  for (const [tabId, relayId] of Object.entries(rewritten)) {
+    const old = session.remoteSessionIdsByTabId?.[tabId]
+    if (old === relayId) {
+      continue
+    }
+    if (owners[tabId] === old) {
+      owners[tabId] = relayId
+    } else {
+      delete owners[tabId]
+    }
+  }
+  return { desktopRelayOwnership: { ...before, relayIdByTabId: owners } }
 }
 
 function rewriteSshPtyIdRecordValues(
@@ -80,8 +103,9 @@ export function migrateWorkspaceSessionSshTargetId(
   )
   if (remoteSessionIdsByTabId) {
     next = {
-      ...withMainRelayKeys(next ?? session, Object.keys(remoteSessionIdsByTabId)),
-      remoteSessionIdsByTabId
+      ...(next ?? session),
+      remoteSessionIdsByTabId,
+      ...migratedRelayOwnership(session, remoteSessionIdsByTabId)
     }
   }
   if (session.activeConnectionIdsAtShutdown?.includes(oldTargetId)) {

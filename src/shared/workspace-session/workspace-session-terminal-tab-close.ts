@@ -5,7 +5,7 @@ import type {
   WorkspaceVisibleTabType
 } from '../workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
-import { withMainRelayKeys } from './desktop-relay-ownership'
+import { forgetDesktopRelayKeys } from './desktop-relay-ownership'
 
 export type WorkspaceSessionTerminalTabCloseResult = {
   session: WorkspaceSessionState
@@ -239,7 +239,7 @@ export function closeTerminalTabInWorkspaceSession(
 
   const next: WorkspaceSessionState = {
     // A closed tab's relay id stays gone even if a window still sends it.
-    ...withMainRelayKeys(session, [tabId]),
+    ...forgetDesktopRelayKeys(session, [tabId]),
     tabsByWorktree: {
       ...session.tabsByWorktree,
       [worktreeId]: (session.tabsByWorktree[worktreeId] ?? []).filter((tab) => tab.id !== tabId)

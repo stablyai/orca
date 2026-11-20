@@ -1,76 +1,116 @@
 import { describe, expect, it } from 'vitest'
-import { applyDesktopRelayWrite, withMainRelayKeys } from './desktop-relay-ownership'
+import {
+  applyDesktopRelayWrite,
+  changedRelayKeys,
+  forgetDesktopRelayKeys,
+  type DesktopRelayHostWrite
+} from './desktop-relay-ownership'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay rules read only the two relay fields.
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay rules read tab ids and the two relay fields.
 const partition = (fields: Partial<WorkspaceSessionState>) => fields as WorkspaceSessionState
-const noLegacy = () => ({})
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay rules read tab ids only.
+const rows = (...ids: string[]) =>
+  ({ 'repo::/w': ids.map((id) => ({ id })) }) as WorkspaceSessionState['tabsByWorktree']
+const withTabs = (...ids: string[]) => partition({ tabsByWorktree: rows(...ids) })
 
-/** Apply the window's ids, then return what the partition stores afterwards. */
 function save(
   session: WorkspaceSessionState,
   relayIdsByTabId: Record<string, string>,
-  complete = true
+  write: Partial<DesktopRelayHostWrite> = {}
 ): WorkspaceSessionState {
-  const patch = applyDesktopRelayWrite(session, { relayIdsByTabId, complete }, noLegacy)
+  const { patch } = applyDesktopRelayWrite(
+    session,
+    { relayIdsByTabId, complete: true, ...write },
+    null
+  )
   return patch ? { ...session, ...patch } : session
+}
+
+/** A main writer setting these relay ids, as the writers in main do. */
+function mainWrites(session: WorkspaceSessionState, relays: Record<string, string>) {
+  return {
+    ...forgetDesktopRelayKeys(session, changedRelayKeys(session.remoteSessionIdsByTabId, relays)),
+    remoteSessionIdsByTabId: relays
+  }
 }
 
 describe('desktop relay ownership', () => {
   it("removes the window's ended relay and keeps one main saved for another tab", () => {
-    const first = save(partition({ remoteSessionIdsByTabId: { 'tab-b': 'ssh:box@@relay-b' } }), {
-      'tab-a': 'ssh:box@@relay-a'
-    })
-
-    const ended = save(first, {})
-
-    expect(ended.remoteSessionIdsByTabId).toEqual({ 'tab-b': 'ssh:box@@relay-b' })
-  })
-
-  it('keeps the relay main moved into a tab when the window still sends or drops the old one', () => {
-    const saved = save(partition({}), { 'tab-a': 'ssh:box@@relay-a' })
-    const moved = withMainRelayKeys(
-      { ...saved, remoteSessionIdsByTabId: { 'tab-a': 'ssh:box@@relay-moved' } },
-      ['tab-a']
+    const first = save(
+      { ...withTabs('tab-a'), remoteSessionIdsByTabId: { 'tab-b': 'ssh:box@@relay-b' } },
+      { 'tab-a': 'ssh:box@@relay-a' }
     )
 
-    expect(save(moved, { 'tab-a': 'ssh:box@@relay-stale' }).remoteSessionIdsByTabId).toEqual({
+    expect(save(first, {}).remoteSessionIdsByTabId).toEqual({ 'tab-b': 'ssh:box@@relay-b' })
+  })
+
+  it('refuses to replace or drop a relay main moved into a tab', () => {
+    const saved = save(withTabs('tab-a'), { 'tab-a': 'ssh:box@@relay-a' })
+    const moved = mainWrites(saved, { 'tab-a': 'ssh:box@@relay-moved' })
+
+    const stale = applyDesktopRelayWrite(
+      moved,
+      { relayIdsByTabId: { 'tab-a': 'ssh:box@@relay-a' }, complete: true },
+      null
+    )
+
+    expect(stale.refused).toBe(true)
+    expect(stale.patch?.remoteSessionIdsByTabId ?? moved.remoteSessionIdsByTabId).toEqual({
       'tab-a': 'ssh:box@@relay-moved'
     })
     expect(save(moved, {}).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'ssh:box@@relay-moved' })
   })
 
-  it('keeps a relay main wrote with the same id the window had saved', () => {
-    const saved = save(partition({}), { 'tab-a': 'ssh:box@@relay-a' })
-    const promoted = withMainRelayKeys(saved, ['tab-a'])
+  it('keeps the window owning a relay main rewrote with the same id', () => {
+    const saved = save(withTabs('tab-a'), { 'tab-a': 'ssh:box@@relay-a' })
+    const promoted = mainWrites(saved, { 'tab-a': 'ssh:box@@relay-a' })
 
-    expect(save(promoted, {}).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'ssh:box@@relay-a' })
+    expect(save(promoted, {}).remoteSessionIdsByTabId).toBeUndefined()
   })
 
-  it('does not revive a relay main retired with its tab', () => {
-    const saved = save(partition({}), { 'tab-a': 'ssh:box@@relay-a' })
-    const closed = withMainRelayKeys({ ...saved, remoteSessionIdsByTabId: {} }, ['tab-a'])
+  it('does not revive a relay for a tab main closed', () => {
+    const saved = save(withTabs('tab-a'), { 'tab-a': 'ssh:box@@relay-a' })
+    const closed = { ...mainWrites(saved, {}), tabsByWorktree: rows() }
 
-    expect(save(closed, { 'tab-a': 'ssh:box@@relay-a' }).remoteSessionIdsByTabId).toEqual({})
+    const stale = applyDesktopRelayWrite(
+      closed,
+      { relayIdsByTabId: { 'tab-a': 'ssh:box@@relay-a' }, complete: true },
+      null
+    )
+
+    expect(stale.refused).toBe(true)
+    expect(stale.patch?.remoteSessionIdsByTabId).toBeUndefined()
   })
 
   it('leaves relays alone on a host the window does not speak for in full', () => {
-    const saved = save(partition({}), { 'tab-a': 'ssh:box@@relay-a' })
+    const saved = save(withTabs('tab-a'), { 'tab-a': 'ssh:box@@relay-a' })
 
-    expect(save(saved, {}, false).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'ssh:box@@relay-a' })
+    expect(save(saved, {}, { complete: false }).remoteSessionIdsByTabId).toEqual({
+      'tab-a': 'ssh:box@@relay-a'
+    })
   })
 
-  it('adopts a relay saved before ownership was recorded once, never one main took over', () => {
+  it('a delta removes only the ids it names', () => {
+    const saved = save(withTabs('tab-a', 'tab-b'), {
+      'tab-a': 'ssh:box@@relay-a',
+      'tab-b': 'ssh:box@@relay-b'
+    })
+
+    expect(save(saved, {}, { removedTabIds: ['tab-a'] }).remoteSessionIdsByTabId).toEqual({
+      'tab-b': 'ssh:box@@relay-b'
+    })
+  })
+
+  it('adopts a relay saved before ownership was recorded only when offered', () => {
     const legacy = partition({
       remoteSessionIdsByTabId: { 'tab-a': 'ssh:box@@relay-a', 'tab-m': 'ssh:box@@relay-m' }
     })
-    const adoptBoth = () => ({ 'tab-a': 'ssh:box@@relay-a', 'tab-m': 'ssh:box@@relay-m' })
-    const revoked = withMainRelayKeys(legacy, ['tab-m'])
 
-    const patch = applyDesktopRelayWrite(
-      revoked,
+    const { patch } = applyDesktopRelayWrite(
+      legacy,
       { relayIdsByTabId: {}, complete: true },
-      adoptBoth
+      () => ({ 'tab-a': 'ssh:box@@relay-a' })
     )
 
     expect(patch?.remoteSessionIdsByTabId).toEqual({ 'tab-m': 'ssh:box@@relay-m' })

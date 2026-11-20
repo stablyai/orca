@@ -21,7 +21,6 @@ import {
   type HostSessionWriteMode,
   type WorktreeHostClaims
 } from './workspace-session-host-contention'
-
 import {
   contestedPartitionHosts,
   pickPrimaryHostForClaims
@@ -51,10 +50,12 @@ import {
 } from './workspace-session-acknowledged-entries'
 import { patchHostSlice, routedSessionHostIds } from './workspace-session-host-entries-write'
 import {
-  desktopRelaysSupported,
+  afterDesktopRelayProbe,
+  probeDesktopRelays,
   desktopRelayWriteFor,
   relayWriteOutcome,
-  takeDesktopRelayWrite,
+  replaceDesktopRelays,
+  sendDesktopRelayWrite,
   type SessionWriteOutcome,
   type DesktopRelayApi
 } from './desktop-relay-writes'
@@ -270,6 +271,11 @@ export function patchWorkspaceSessionByHost(
   state: HostPersistenceState,
   acknowledged?: AcknowledgedWorkspaceSessionEntries
 ): { localWrite: Promise<void>; written: Promise<SessionWriteOutcome | void> } {
+  const retry = () => patchWorkspaceSessionByHost(api, patch, state, acknowledged)
+  const afterProbe = afterDesktopRelayProbe(api, patch, retry)
+  if (afterProbe) {
+    return afterProbe
+  }
   const slices = splitWorkspaceSessionForWrite(patch as WorkspaceSessionState, state, 'patch')
   const relays = desktopRelayWriteFor(api, patch, slices, state)
   acknowledged?.retainHosts(routedSessionHostIds(state, slices))
@@ -282,7 +288,7 @@ export function patchWorkspaceSessionByHost(
     })
   )
   // After the partition patches, so main applies relay ids to the rows they just wrote.
-  const relayWrite = relays && api.applyDesktopRelays ? api.applyDesktopRelays(relays) : null
+  const relayWrite = relays && sendDesktopRelayWrite(api, relays)
   // Why allSettled: every partition finishes before a retry rewrites the same fields.
   const written = Promise.allSettled([localWrite, ...hostWrites, relayWrite]).then(
     async (results): Promise<SessionWriteOutcome | void> => {
@@ -304,18 +310,12 @@ export async function persistWorkspaceSessionByHost(
   payload: WorkspaceSessionState,
   state: HostPersistenceState
 ): Promise<void> {
-  const relaysSeparate = desktopRelaysSupported(api)
-  const { snapshots, desktopRelays } = buildWorkspaceSessionHostSnapshots(
-    payload,
-    state,
-    relaysSeparate
-  )
+  const separate = await probeDesktopRelays(api)
+  const { snapshots, desktopRelays } = buildWorkspaceSessionHostSnapshots(payload, state, separate)
   await Promise.all(
     snapshots.map((s) => api.set(s.state, s.hostId, desktopRelays ? { relays: 'separate' } : {}))
   )
-  if (desktopRelays && api.applyDesktopRelays) {
-    await api.applyDesktopRelays(desktopRelays)
-  }
+  await (desktopRelays && sendDesktopRelayWrite(api, desktopRelays))
   await api.flush()
 }
 
@@ -328,7 +328,7 @@ export function buildWorkspaceSessionHostSnapshots(
 ): { snapshots: WorkspaceSessionHostSnapshot[]; desktopRelays: DesktopRelayWrite | null } {
   // Why 'replace': quit snapshots are applied as full partition sets.
   const slices = splitWorkspaceSessionForWrite(payload, state, 'replace')
-  const desktopRelays = relaysSeparate ? takeDesktopRelayWrite(slices, state) : null
+  const desktopRelays = relaysSeparate ? replaceDesktopRelays(slices, state) : null
   // They replace main's copy, including when the unload is vetoed and the window stays.
   windowAcknowledgedSessionEntries.forget()
   return {

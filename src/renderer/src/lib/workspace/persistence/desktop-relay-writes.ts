@@ -1,6 +1,7 @@
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import { workspaceSessionPartitionHostId } from '../../../../../shared/workspace-session/workspace-session-partition-owner'
@@ -12,6 +13,7 @@ import {
 import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-session-host-split'
 import type { SessionRelevantField } from './workspace-session'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import { AcknowledgedDesktopRelays } from './desktop-relay-acknowledged-hosts'
 
 export type DesktopRelayApi = {
   desktopRelaysVersion?: () => Promise<number>
@@ -25,26 +27,53 @@ type RelayHostState = {
 }
 
 let probedApi: DesktopRelayApi | null = null
-let supported = false
+let probe: Promise<boolean> = Promise.resolve(false)
+let settled: boolean | null = null
+const acknowledgedRelays = new AcknowledgedDesktopRelays()
 
-/** Ask main once whether it applies relay ids by ownership. Until it answers, and on an older main
- *  (no handler) or the paired web client (no method), relay ids stay in ordinary saves. */
-export function probeDesktopRelays(api: DesktopRelayApi): void {
+/** Ask main once whether it applies relay ids by ownership. An older main (no handler) and the paired
+ *  web client (no method) answer no, and keep relay ids in ordinary saves. */
+export function probeDesktopRelays(api: DesktopRelayApi): Promise<boolean> {
   if (probedApi === api) {
-    return
+    return probe
   }
   probedApi = api
-  supported = false
-  api.desktopRelaysVersion?.().then(
-    (version) => {
-      supported = probedApi === api && version === DESKTOP_RELAY_WRITE_VERSION
-    },
-    () => {}
-  )
+  acknowledgedRelays.forget()
+  const askVersion = api.applyDesktopRelays ? api.desktopRelaysVersion : undefined
+  settled = askVersion ? null : false
+  probe = askVersion
+    ? askVersion().then(
+        (version) => version === DESKTOP_RELAY_WRITE_VERSION,
+        () => false
+      )
+    : Promise.resolve(false)
+  void probe.then((supported) => {
+    if (probedApi === api) {
+      settled = supported
+    }
+  })
+  return probe
 }
 
-export function desktopRelaysSupported(api: DesktopRelayApi): boolean {
-  return supported && probedApi === api && api.applyDesktopRelays !== undefined
+/** The probe's answer, or null while it is pending (a save carrying relay ids then waits for it). */
+export function desktopRelaysSupported(api: DesktopRelayApi): boolean | null {
+  return probedApi === api ? settled : false
+}
+
+/** Relay ids go one way or the other only once main has said which it supports: a save carrying them
+ *  while the probe is pending runs again after it. */
+export function afterDesktopRelayProbe<
+  T extends { localWrite: Promise<void>; written: Promise<unknown> }
+>(
+  api: DesktopRelayApi,
+  patch: WorkspaceSessionPatch,
+  retry: () => T
+): { localWrite: Promise<void>; written: T['written'] } | null {
+  if (!Object.hasOwn(patch, 'remoteSessionIdsByTabId') || desktopRelaysSupported(api) !== null) {
+    return null
+  }
+  const once = probeDesktopRelays(api).then(retry)
+  return { localWrite: once.then((r) => r.localWrite), written: once.then((r) => r.written) }
 }
 
 /** Hosts whose relay ids this window speaks for in full: local, its SSH repos' partitions, and runtime
@@ -52,8 +81,10 @@ export function desktopRelaysSupported(api: DesktopRelayApi): boolean {
 function completeRelayHostIds(state: RelayHostState): Set<ExecutionHostId> {
   const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
   for (const repo of state.repos) {
-    if (repo.connectionId) {
-      hostIds.add(workspaceSessionPartitionHostId(getRepoExecutionHostId(repo)))
+    const hostId = getRepoExecutionHostId(repo)
+    // A runtime repo can keep a nested SSH connection; only its hydration makes it complete.
+    if (parseExecutionHostId(hostId)?.kind === 'ssh') {
+      hostIds.add(workspaceSessionPartitionHostId(hostId))
     }
   }
   const catalogHostIds = new Set(state.repos.map((repo) => getRepoExecutionHostId(repo)))
@@ -99,14 +130,16 @@ export function takeDesktopRelayWrite(
   return { version: DESKTOP_RELAY_WRITE_VERSION, hosts }
 }
 
-/** A write main accepted but could not apply yet (a fenced partition): resend these fields later. */
+/** A write main accepted but could not fully apply (a fenced partition, a refused id): resend these fields later. */
 export type SessionWriteOutcome = { pendingFields?: readonly SessionRelevantField[] }
 
 export function relayWriteOutcome(
   result: DesktopRelayWriteResult | null | undefined
 ): SessionWriteOutcome | void {
-  // A ptyIdsByTabId change rebuilds every host's relay ids on the next save.
-  return result?.skipped.length ? { pendingFields: ['ptyIdsByTabId'] } : undefined
+  // A ptyIdsByTabId change rebuilds every host's relay ids on the next save; refused hosts retry then.
+  return result?.skipped.length || result?.refused.length
+    ? { pendingFields: ['ptyIdsByTabId'] }
+    : undefined
 }
 
 /** For a save that carries relay ids, when main applies them by ownership: take them out of it. */
@@ -116,7 +149,41 @@ export function desktopRelayWriteFor(
   slices: HostSessionSlices,
   state: RelayHostState
 ): DesktopRelayWrite | null {
-  return Object.hasOwn(patch, 'remoteSessionIdsByTabId') && desktopRelaysSupported(api)
+  return Object.hasOwn(patch, 'remoteSessionIdsByTabId') && desktopRelaysSupported(api) === true
     ? takeDesktopRelayWrite(slices, state)
     : null
+}
+
+/** Send what changed since main last accepted this window's relay ids; null when nothing did. */
+export function sendDesktopRelayWrite(
+  api: DesktopRelayApi,
+  full: DesktopRelayWrite
+): Promise<DesktopRelayWriteResult> | null {
+  if (!api.applyDesktopRelays) {
+    return null
+  }
+  const { write, acknowledge } = acknowledgedRelays.narrow(full)
+  if (write.hosts.length === 0) {
+    return null
+  }
+  return api.applyDesktopRelays(write).then(
+    (result) => {
+      acknowledge(result)
+      return result
+    },
+    (error: unknown) => {
+      acknowledgedRelays.forget()
+      throw error
+    }
+  )
+}
+
+/** A full replacement (quit, unload) may not keep what main last accepted, so it sends every host's
+ *  relay ids as a baseline. */
+export function replaceDesktopRelays(
+  slices: HostSessionSlices,
+  state: RelayHostState
+): DesktopRelayWrite {
+  acknowledgedRelays.forget()
+  return takeDesktopRelayWrite(slices, state)
 }

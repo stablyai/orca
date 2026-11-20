@@ -17,7 +17,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-
 import { formatShutdownCheckpointFailureReason } from '../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 import type { DesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-write'
 import { windowSaveKeepingRelayOwnership } from '../persistence/window-save-relay-ownership'
-import { desktopRelayPatchFor } from './session-desktop-relays'
+import { applyDesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-ownership'
 
 type StageBeforeUnloadSyncArgs = {
   sessions: { state: WorkspaceSessionState; hostId?: ExecutionHostId }[]
@@ -53,7 +53,8 @@ function sessionsWithDesktopRelays(
   }
   return staged.map(({ state, hostId, resolved }) => {
     const relays = relaysByHost.get(resolved)
-    const patch = relays && desktopRelayPatchFor(store, resolved, relays, state)
+    // No legacy adoption here: the snapshot may move rows the stored partitions still place elsewhere.
+    const patch = relays && applyDesktopRelayWrite(state, relays, null).patch
     return { state: patch ? { ...state, ...patch } : state, hostId }
   })
 }

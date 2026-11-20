@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { desktopRelayLegacyAdoption } from './desktop-relay-legacy-adoption'
+import {
+  captureLegacyRelayBaseline,
+  legacyRelayAdoptionBatch
+} from './desktop-relay-legacy-adoption'
 import type { Repo } from '../../shared/repository/repo-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import {
@@ -54,14 +57,13 @@ describe('adopting relay ids saved before ownership was recorded', () => {
       ])
     )
 
-    expect(desktopRelayLegacyAdoption(store, SSH)(store.getWorkspaceSession(SSH))).toEqual({
+    const adoptionFor = legacyRelayAdoptionBatch(store, captureLegacyRelayBaseline(store))
+
+    expect(adoptionFor(SSH)(store.getWorkspaceSession(SSH))).toEqual({
       'tab-a': 'ssh:box@@relay-a'
     })
     expect(
-      desktopRelayLegacyAdoption(
-        store,
-        LOCAL_EXECUTION_HOST_ID
-      )(store.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID))
+      adoptionFor(LOCAL_EXECUTION_HOST_ID)(store.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID))
     ).toEqual({ 'tab-a': 'ssh:box@@relay-a' })
   })
 })

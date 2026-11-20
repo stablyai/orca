@@ -17,7 +17,10 @@ import type { ExecutionHostId } from '../../../shared/execution-host/execution-h
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { SessionTitleAuthority } from '../session-tabs/publication/session-title-publisher'
-import { withMainRelayKeys } from '../../../shared/workspace-session/desktop-relay-ownership'
+import {
+  changedRelayKeys,
+  forgetDesktopRelayKeys
+} from '../../../shared/workspace-session/desktop-relay-ownership'
 
 export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifySshStateChanged {
   protected abstract captureSessionTitleAuthority(): SessionTitleAuthority
@@ -229,17 +232,18 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
         ])
       ]
       const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
-      const promotedTabIds: string[] = []
       for (const { pty, tabId } of ptys) {
         if (pty.connectionId && tabId) {
           remoteSessionIdsByTabId[tabId] = pty.ptyId
-          promotedTabIds.push(tabId)
         }
       }
 
       this.store.setWorkspaceSession(
         {
-          ...withMainRelayKeys(session, promotedTabIds),
+          ...forgetDesktopRelayKeys(
+            session,
+            changedRelayKeys(session.remoteSessionIdsByTabId, remoteSessionIdsByTabId)
+          ),
           activeWorktreeIdsOnShutdown,
           ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),
           ...(Object.keys(remoteSessionIdsByTabId).length > 0 ? { remoteSessionIdsByTabId } : {})

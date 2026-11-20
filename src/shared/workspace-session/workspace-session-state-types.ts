@@ -45,12 +45,11 @@ export type PersistedOpenFile = {
 /** A saved page carries its unsent notes; the store keeps them in browserAnnotationsByPageId. */
 export type PersistedBrowserPage = BrowserPage & { annotations?: BrowserPageAnnotation[] }
 
-/** Per tab: the relay id the desktop window last wrote (it owns the key while the stored value matches),
- *  or null once a main writer took the key over. `legacyAdoptionVersion` marks relay ids saved before
- *  ownership was recorded as already sorted, so a revoked key is never adopted again. */
+/** Per tab: the relay id the desktop window last wrote; it owns the key while the stored id matches.
+ *  `legacyAdoptionVersion` records that relay ids saved before ownership was recorded were sorted once. */
 export type DesktopRelayOwnership = {
   legacyAdoptionVersion: number
-  relayIdByTabId: Record<string, string | null>
+  relayIdByTabId: Record<string, string>
 }
 
 export type WorkspaceSessionState = {
