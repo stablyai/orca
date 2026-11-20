@@ -25,6 +25,7 @@ export type CoreHandlerLifecycleOptions = {
   hostInitialization?: Promise<void>
   onBeforeRelaunch?: () => void | Promise<void>
   orcaAccount?: OrcaAccountService
+  profileDirectory?: string
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs

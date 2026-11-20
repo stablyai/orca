@@ -17,6 +17,7 @@ import {
 } from './bot-tools-client'
 import { useBotTools } from './bot-tool-checks'
 import { BotToolEditor } from './BotToolEditor'
+import { ServerVaultBotTool } from './ServerVaultBotTool'
 import { useBotHostLabel } from './use-bot-host-label'
 
 /** The tool editor once the bot's tool context (and a saved tool) is read; Add by URL hosts it too. */
@@ -82,26 +83,52 @@ export function LoadedEditor({
         ]
       : []
   )
+  const saved = loaded.saved
+  const remoteTool = saved && 'url' in saved.server ? saved.server : undefined
+  const vaultControls =
+    saved &&
+    remoteTool &&
+    hostId.startsWith('runtime:') &&
+    remoteTool.url.toLowerCase().startsWith('https://') &&
+    (remoteTool.vaultBacked || remoteTool.vaultLinkAllowed) ? (
+      <ServerVaultBotTool
+        bot={bot}
+        tool={{
+          botId,
+          name: remoteTool.name,
+          url: remoteTool.url,
+          version: saved.version,
+          linked: remoteTool.vaultBacked === true
+        }}
+        onChanged={close}
+      />
+    ) : null
+  if (remoteTool?.vaultBacked && vaultControls) {
+    return vaultControls
+  }
   return (
-    <BotToolEditor
-      {...loaded}
-      host={host}
-      taken={taken}
-      onCancel={close}
-      onSavingChange={onSavingChange}
-      onSave={async (config) => {
-        const tool = await saveBotTool(
-          bot,
-          config,
-          loaded.saved && name ? { name, version: loaded.saved.version } : undefined
-        )
-        if (onSaved) {
-          onSaved(tool)
-        } else {
-          close()
-        }
-      }}
-    />
+    <>
+      {vaultControls}
+      <BotToolEditor
+        {...loaded}
+        host={host}
+        taken={taken}
+        onCancel={close}
+        onSavingChange={onSavingChange}
+        onSave={async (config) => {
+          const tool = await saveBotTool(
+            bot,
+            config,
+            loaded.saved && name ? { name, version: loaded.saved.version } : undefined
+          )
+          if (onSaved) {
+            onSaved(tool)
+          } else {
+            close()
+          }
+        }}
+      />
+    </>
   )
 }
 

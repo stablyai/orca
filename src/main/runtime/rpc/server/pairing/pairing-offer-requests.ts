@@ -174,7 +174,10 @@ export async function createOwnerPairingOffer(
     {
       address: params.address,
       rotate: params.rotate,
-      grants: params.grantDesktopControl ? ['desktop-control'] : [],
+      grants: [
+        ...(params.grantDesktopControl ? ['desktop-control' as const] : []),
+        ...(params.grantCredentialVault ? ['credential-vault' as const] : [])
+      ],
       createdByDeviceId
     },
     lookup
@@ -188,7 +191,7 @@ export async function createOwnerPairingOffer(
     pairingUrl: offer.pairingUrl,
     endpoint: offer.endpoint,
     deviceId: offer.deviceId,
-    webClientUrl: offer.webClientUrl,
+    webClientUrl: params.grantCredentialVault ? null : offer.webClientUrl,
     connectionMode: null,
     qr: null
   }

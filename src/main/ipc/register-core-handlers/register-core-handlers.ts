@@ -42,6 +42,7 @@ import { registerDeveloperPermissionHandlers } from '../developer-permissions/de
 import { registerComputerUsePermissionHandlers } from '../computer-use-permissions'
 import { setAgentBrowserBridgeRef, registerBrowserHandlers } from '../browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../browser/browser-renderer-trust'
+import { registerCredentialVaultHandlers } from '../../credentials/vault/credential-vault-ipc'
 import { registerSessionHandlers } from '../session'
 import { registerSettingsHandlers } from '../settings/settings'
 import { registerDiagnosticsHandlers } from '../diagnostics'
@@ -202,6 +203,9 @@ export async function registerCoreHandlers(
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch
     })
     registerBrowserHandlers(store)
+    if (lifecycleOptions.profileDirectory) {
+      registerCredentialVaultHandlers(lifecycleOptions.profileDirectory)
+    }
     registerShellHandlers(store)
     registerPetHandlers()
     registerSessionHandlers(store, runtime)

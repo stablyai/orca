@@ -1,4 +1,8 @@
 import { randomBytes } from 'node:crypto'
+import {
+  configureServerCredentialVault,
+  type ServerCredentialVault
+} from '../../../credentials/vault/server-credential-vault'
 import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
@@ -45,6 +49,7 @@ export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
   protected readonly dispatcher: RpcDispatcher
   protected readonly userDataPath: string
+  protected readonly credentialVault?: ServerCredentialVault
   protected readonly pid: number
   protected readonly platform: NodeJS.Platform
   protected readonly enableWebSocket: boolean
@@ -121,6 +126,7 @@ export class RuntimeRpcState {
   constructor({
     runtime,
     userDataPath,
+    credentialVaultDirectory,
     pid = process.pid,
     platform = process.platform,
     enableWebSocket = false,
@@ -139,6 +145,9 @@ export class RuntimeRpcState {
     this.runtime = runtime
     this.dispatcher = new RpcDispatcher({ runtime, methods: methods ?? ALL_RPC_METHODS })
     this.userDataPath = userDataPath
+    this.credentialVault = credentialVaultDirectory
+      ? configureServerCredentialVault(credentialVaultDirectory)
+      : undefined
     this.pid = pid
     this.platform = platform
     this.enableWebSocket = enableWebSocket

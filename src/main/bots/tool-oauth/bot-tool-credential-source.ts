@@ -7,6 +7,7 @@ import {
   type BotToolCredential
 } from '../bot-tool-credentials'
 import { botToolUrlOf } from '../bot-tools-path'
+import { isBotVaultSource, resolveBotVaultHeader } from '../bot-tool-vault-source'
 import type { BotToolOAuthKey } from './bot-tool-oauth'
 import {
   botToolAccessToken,
@@ -102,7 +103,9 @@ export function botToolCredentialSource(
     let sourced: Record<string, string> | null = {}
     if (credential.source) {
       try {
-        sourced = (await headerSources[credential.source]?.(credential)) ?? null
+        sourced = isBotVaultSource(credential.source)
+          ? resolveBotVaultHeader(credential.source, credential.url)
+          : ((await headerSources[credential.source]?.(credential)) ?? null)
       } catch {
         sourced = null
       }

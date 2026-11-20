@@ -1,6 +1,10 @@
 import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifacts/artifacts-settings-search'
 import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations/automations-settings-search'
 import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser/browser-pane-search'
+import {
+  CREDENTIAL_VAULT_SECTION,
+  getCredentialVaultSearchEntry
+} from '@/components/settings/credential-vault/credential-vault-settings-search'
 import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/source-control/commit-message-ai-search'
 import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspaces/floating-workspace-search'
 import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/source-control/git-provider-api-budget-search'
@@ -19,6 +23,7 @@ import {
   History,
   GitBranch,
   Globe,
+  KeyRound,
   Link,
   ListChecks,
   PanelsTopLeft,
@@ -34,6 +39,7 @@ export function buildWorkflowSettingsSections(
   t: Translate = translate
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
+  const vaultSearch = getCredentialVaultSearchEntry(t)
   return [
     {
       id: 'automations',
@@ -172,6 +178,14 @@ export function buildWorkflowSettingsSections(
             ),
             icon: Globe,
             searchEntries: getBrowserPaneCombinedSearchEntries(),
+            group: 'workflows'
+          },
+          {
+            id: CREDENTIAL_VAULT_SECTION,
+            title: vaultSearch.title,
+            description: vaultSearch.description,
+            icon: KeyRound,
+            searchEntries: [vaultSearch],
             group: 'workflows'
           }
         ]

@@ -1,4 +1,5 @@
 import { STATUS_METHODS } from './host-management/status'
+import { CREDENTIAL_VAULT_METHODS } from './host-management/credential-vault'
 import { DESKTOP_WINDOW_METHODS } from './host-management/desktop-window'
 import { SIDEBAR_INPUT_METHODS } from './sidebar-inputs/sidebar-inputs'
 import { ORCAD_TERMINAL_CENSUS_METHODS } from './orcad/orcad-terminal-census'
@@ -225,6 +226,7 @@ const SERVICE_RPC_METHODS = [
   ...JIRA_METHODS,
   ...SSH_METHODS,
   ...MANAGED_SERVER_METHODS,
+  ...CREDENTIAL_VAULT_METHODS,
   ...RECIPE_VM_WAKE_METHODS,
   ...ENVIRONMENT_DOCTOR_METHODS,
   ...SPEECH_METHODS,

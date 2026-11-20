@@ -116,7 +116,13 @@ export type BotToolMaskedSecret = { key: string; configured: boolean }
 export type BotToolDetails = {
   version: string
   server: { name: string } & (
-    | { url: string; transport: 'http'; headers: BotToolMaskedSecret[] }
+    | {
+        url: string
+        transport: 'http'
+        headers: BotToolMaskedSecret[]
+        vaultBacked?: true
+        vaultLinkAllowed?: true
+      }
     | { command: string; args: string[]; env: BotToolMaskedSecret[] }
   )
 }

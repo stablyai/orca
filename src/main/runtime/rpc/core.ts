@@ -26,6 +26,7 @@ import type { RpcCallerIdentity } from './callers/rpc-caller-identity'
 import type { OrcadPeerDesktopsResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './transports/rpc-binary-sender'
 import type { RpcCallerScope } from './callers/rpc-caller-scope'
+import type { ServerCredentialVault } from '../../credentials/vault/server-credential-vault'
 import type { RpcMethodPermission } from './callers/rpc-method-permission'
 import type { OrcadFeatureRequirement } from './startup/orcad-readiness'
 import {
@@ -150,6 +151,7 @@ export type RpcContext = {
   clientKind?: 'mobile' | 'runtime'
   /** What the transport proved this caller may do; absent means this host's owner. */
   callerScope?: RpcCallerScope
+  credentialVault?: ServerCredentialVault
   // Session-tab streams re-project with .current; other readers use the request-time clientCapabilities.
   capabilitySource?: RuntimeClientCapabilities
   // Trust socket-negotiated capabilities, never destructive request assertions.

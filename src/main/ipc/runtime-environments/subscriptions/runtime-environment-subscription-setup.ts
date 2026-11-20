@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { resolveRendererRuntimeCallEnvironment } from '../requests/runtime-environment-renderer-call-scope'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/document-delivery-endpoint'
@@ -66,7 +67,7 @@ export async function resolveSubscriptionEnvironment(
   userDataPath: string,
   args: RuntimeEnvironmentSubscribeArgs
 ) {
-  const environment = await resolveEnvironment(userDataPath, args.selector)
+  const environment = await resolveRendererRuntimeCallEnvironment(userDataPath, args)
   if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
     throw new RuntimeEnvironmentSetupGuardError('runtime_manually_disconnected', {
       kind: 'manual-disconnect'

@@ -521,6 +521,7 @@ import {
   AgentCliUpdateCheckParams,
   AgentCliUpdateRunParams
 } from './host-management/agent-cli-update-params'
+import { CredentialVaultOperation } from './host-management/credential-vault-params'
 import { EnvironmentDoctorParams } from './host-management/environment-doctor-params'
 import {
   ManagedRuntimeAgentParams,
@@ -1442,6 +1443,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'connector.slackMirror.post': ConnectorSlackMirrorPost,
   'connector.slackMirror.set': ConnectorSlackMirrorSet,
   'connector.slackMirror.status': ConnectorSlackMirrorStatus,
+  'credentialVault.operate': CredentialVaultOperation,
   'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
