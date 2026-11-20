@@ -1,0 +1,33 @@
+import { describe, expect, it } from 'vitest'
+import {
+  parseAgentSessionResumeMarker,
+  storedAgentSessionResumeMarker,
+  type AgentSessionResumeMarker
+} from './agent-session-resume-marker'
+import { restartActivityWaitsOnPerson } from '../stopping/agent-session-restart-activity'
+
+const marker: AgentSessionResumeMarker = {
+  sessionId: 's1',
+  work: { kind: 'turn', id: 't1' },
+  recordedAt: 10,
+  trigger: 'crash',
+  providerHandleRoot: 'root',
+  teardownId: 'td',
+  exitUnproven: true,
+  activity: { state: 'working', prompts: [], tasks: [{ kind: 'agent', label: 'a' }] }
+}
+
+describe('exitUnproven resume marker storage', () => {
+  it('is stored blocked on a person so a rolled-back build never continues it alone', () => {
+    const stored = storedAgentSessionResumeMarker(marker)
+
+    expect(stored.trigger).toBe('quit')
+    expect(restartActivityWaitsOnPerson(stored.activity)).toBe(true)
+  })
+
+  it('reads back the activity it was written with', () => {
+    const read = parseAgentSessionResumeMarker(storedAgentSessionResumeMarker(marker))
+
+    expect(read).toEqual(marker)
+  })
+})

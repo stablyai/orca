@@ -11,12 +11,14 @@ import { writeRecoveryFileDurable } from './agent-session-recovery-capsule-file'
 import type { RecoveryEntry } from './agent-session-recovery-capsule-entries'
 
 const LEDGER_FILE = 'agent-session-recovery-automatic.json'
-const MAX_LEDGER_BYTES = 256 * 1024
+const MAX_LEDGER_BYTES = 1024 * 1024
 export const AUTOMATIC_CONTINUATION_LIMIT = 3
 export const AUTOMATIC_CONTINUATION_WINDOW_MS = 5 * 60_000
 /** Long enough to remember a cut across a crash loop; a day-old cut is no longer automatic anyway. */
 const TAKEN_RETENTION_MS = 24 * 60 * 60_000
 const DISMISSED_LIMIT = 500
+/** Bounds the file below its read limit; an unreadable ledger would stop every automatic continuation. */
+const PASSED_LIMIT = 2000
 
 const ledgerSchema = z.object({
   taken: z.record(z.string(), z.array(z.object({ at: z.number(), work: z.string() }))),
@@ -144,5 +146,6 @@ export function passOverAutomaticOffers(
       : []
   )
   const stillPassed = reserved.map(offerKey).filter((key) => ledger.passed.includes(key))
-  return { ...ledger, passed: [...new Set([...waiting.map(offerKey), ...stillPassed])] }
+  const passed = [...new Set([...waiting.map(offerKey), ...stillPassed])].slice(-PASSED_LIMIT)
+  return { ...ledger, passed }
 }

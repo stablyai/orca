@@ -118,3 +118,19 @@ it('keeps an offer passed over while a person holds it, should their continuatio
   await capsule.rollbackResume('person', NOW + 3)
   expect(await capsule.beginResume(undefined, 'automatic', NOW + MINUTE, true)).toEqual([])
 })
+
+it('keeps the passed-over list small enough for its own reader', () => {
+  const entries = Array.from({ length: 5000 }, (_, index) => ({
+    state: 'pending' as const,
+    marker: marker({ sessionId: `session-${index}`, recordedAt: 1 })
+  }))
+
+  const next = automaticLedger.passOverAutomaticOffers(
+    { taken: {}, passed: [], dismissed: [] },
+    entries,
+    10
+  )
+
+  expect(next.passed).toHaveLength(2000)
+  expect(Buffer.byteLength(JSON.stringify(next))).toBeLessThan(512 * 1024)
+})

@@ -108,13 +108,42 @@ export function parseAgentSessionResumeMarker(value: unknown): AgentSessionResum
     return null
   }
   const { activity, journalCursor, cause, exitUnproven, ...marker } = parsed.data
+  const readActivity = exitUnproven ? withoutManualOnlyGuard(activity) : activity
   return {
     ...marker,
     ...(exitUnproven ? { exitUnproven } : {}),
     ...(cause === 'crash' ? { trigger: 'crash' as const } : {}),
     ...(journalCursor === undefined ? {} : { journalCursor }),
-    ...(activity === undefined ? {} : { activity })
+    ...(readActivity === undefined ? {} : { activity: readActivity })
   }
+}
+
+/** Builds that predate `exitUnproven` drop it, then continue a quit offer on their own unless it is
+ *  blocked on a person. The stored copy carries one such prompt, so a rollback keeps it manual. */
+const MANUAL_ONLY_GUARD_LABEL = 'Orca could not confirm this chat stopped. Continue it yourself.'
+
+function withManualOnlyGuard(
+  activity: AgentSessionRestartActivity | undefined
+): AgentSessionRestartActivity | undefined {
+  // An offer already asking about a prompt is blocked on a person in every build.
+  if (activity && activity.prompts.length > 0) {
+    return activity
+  }
+  return {
+    state: 'blocked',
+    tasks: activity?.tasks ?? [],
+    prompts: [{ kind: 'question', label: MANUAL_ONLY_GUARD_LABEL }]
+  }
+}
+
+function withoutManualOnlyGuard(
+  activity: AgentSessionRestartActivity | undefined
+): AgentSessionRestartActivity | undefined {
+  if (!activity?.prompts.some((prompt) => prompt.label === MANUAL_ONLY_GUARD_LABEL)) {
+    return activity
+  }
+  const prompts = activity.prompts.filter((prompt) => prompt.label !== MANUAL_ONLY_GUARD_LABEL)
+  return { ...activity, prompts, state: prompts.length > 0 ? 'blocked' : 'working' }
 }
 
 /** The marker as the capsule file stores it; see `cause`. */
@@ -125,7 +154,10 @@ export function storedAgentSessionResumeMarker(marker: AgentSessionResumeMarker)
   trigger: AgentSessionResumeTrigger
   cause?: 'crash'
 } {
-  return marker.trigger === 'crash'
-    ? { ...marker, trigger: 'quit', cause: 'crash' }
-    : { ...marker, trigger: marker.trigger }
+  const stored = marker.exitUnproven
+    ? { ...marker, activity: withManualOnlyGuard(marker.activity) }
+    : marker
+  return stored.trigger === 'crash'
+    ? { ...stored, trigger: 'quit', cause: 'crash' }
+    : { ...stored, trigger: stored.trigger }
 }
