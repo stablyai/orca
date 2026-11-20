@@ -95,7 +95,6 @@ export class BotAvatarSync {
 
   private pump(): void {
     if (!this.deps.bots.enabled()) {
-      this.queued.clear()
       return
     }
     for (const [id, bot] of this.queued) {

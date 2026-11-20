@@ -232,7 +232,13 @@ export function BotItemCommentBox({
     reply.show()
     composer.current?.focus({ caretAtEnd: true, glow: true })
   }
-  const { caretToEnd, fill, lineLead, startLine } = useBotItemFill(draft, setDraft, input, answer)
+  const { caretToEnd, fill, lineLead, startLine } = useBotItemFill(
+    scopeKey,
+    draft,
+    setDraft,
+    input,
+    answer
+  )
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
     focusEnd: caretToEnd,

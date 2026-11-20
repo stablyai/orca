@@ -5,7 +5,11 @@ import { useState, type RefObject } from 'react'
 import { withoutBotItemLineLeads } from '../../../../../shared/bots/bot-item-ask'
 import type { NativeChatComposerInput } from '../../native-chat/composer/editor/native-chat-composer-input'
 
+// Outside the component, like the draft it guards, so a reopened item still knows its draft is a lead.
+const leadsByScope = new Map<string, string>()
+
 export function useBotItemFill(
+  scopeKey: string,
   draft: string,
   setDraft: (next: string) => void,
   input: RefObject<NativeChatComposerInput | null>,
@@ -16,7 +20,7 @@ export function useBotItemFill(
   lineLead: string
   startLine: (lead: string, leads: readonly string[]) => void
 } {
-  const [lineLead, setLineLead] = useState('')
+  const [lineLead, setLineLead] = useState(() => leadsByScope.get(scopeKey) ?? '')
   const caretToEnd = (): void => {
     const node = input.current
     node?.focus()
@@ -31,6 +35,7 @@ export function useBotItemFill(
   }
   const startLine = (lead: string, leads: readonly string[]): void => {
     const rest = withoutBotItemLineLeads(draft, leads)
+    leadsByScope.set(scopeKey, lead)
     setLineLead(lead)
     if (lead || rest !== draft) {
       put(lead ? `${lead} ${rest}` : rest)
