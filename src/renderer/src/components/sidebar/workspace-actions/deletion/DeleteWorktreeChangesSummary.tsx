@@ -8,7 +8,6 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
 import { DeleteWorktreeLocalFilesDetails } from './DeleteWorktreeLocalFilesHint'
@@ -90,17 +89,19 @@ export function DeleteWorktreeChangesSummary({
 }): JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
-  const [clipped, setClipped] = useState(false)
+  const [overflow, setOverflow] = useState({ px: 0, inToggle: false })
   const [focused, setFocused] = useState(false)
+  const [opened, setOpened] = useState(false)
   const textRef = useRef<HTMLSpanElement>(null)
   const noteRef = useRef<HTMLSpanElement>(null)
   // A long translation can clip the one fixed line; the full sentence then moves into the panel.
   const measureClipped = useCallback(() => {
     const spans = [textRef.current, noteRef.current].filter((el) => el != null)
-    const overflow = spans.reduce((total, el) => total + el.scrollWidth - el.clientWidth, 0)
-    // Inside the toggle, the chevron and its gap take room the plain line would have.
-    const chevronRoom = spans[0]?.closest('button') ? CHEVRON_ROOM_PX : 0
-    setClipped(overflow > chevronRoom)
+    const px = spans.reduce((total, el) => total + el.scrollWidth - el.clientWidth, 0)
+    const inToggle = spans[0]?.closest('button') != null
+    setOverflow((current) =>
+      current.px === px && current.inToggle === inToggle ? current : { px, inToggle }
+    )
   }, [])
   // Text changes don't fire ResizeObserver, so remeasure after every render too.
   useLayoutEffect(measureClipped)
@@ -178,7 +179,10 @@ export function DeleteWorktreeChangesSummary({
   const ignoredPaths = atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []
   const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0 || ignoredPaths.length > 0
   // An open or focused toggle outlives its last loss, so an autosave never collapses or unfocuses it.
-  const expandable = hasDetails || clipped || open || focused
+  const keepsToggle = hasDetails || open || focused
+  // A toggle that exists only because of clipping takes the chevron's room from the text itself.
+  const clipped = overflow.px > (overflow.inToggle && !keepsToggle ? CHEVRON_ROOM_PX : 0)
+  const expandable = keepsToggle || clipped
   if (!tone) {
     return null
   }
@@ -227,7 +231,11 @@ export function DeleteWorktreeChangesSummary({
       aria-live="polite"
       className="min-w-0"
       onFocus={() => setFocused(true)}
-      onBlur={() => setFocused(false)}
+      onBlur={(event) => {
+        const row = event.currentTarget
+        // Unmount the toggle only after focus lands, or Tab would fall back to the dialog.
+        setTimeout(() => setFocused(row.contains(document.activeElement)))
+      }}
     >
       {expandable ? (
         // A fixed open height: results that land after opening scroll inside instead of moving Delete.
@@ -238,16 +246,21 @@ export function DeleteWorktreeChangesSummary({
           contentClassName="h-44"
           triggerClassName={`h-5 max-w-full min-w-0 gap-1.5 ${toneClassName}`}
           open={open}
-          onOpenChange={setOpen}
+          onOpenChange={(next) => {
+            setOpen(next)
+            setOpened(true)
+          }}
         >
           {clipped || !hasDetails ? (
             <p className="mb-2 font-sans text-[13px] text-foreground">{fullText}</p>
           ) : null}
-          <DeleteWorktreeChangesFileList
-            preview={preview}
-            unsavedFiles={unsavedFiles}
-            atRiskLocalFiles={atRiskLocalFiles}
-          />
+          {/* Rows mount on first open and stay, so neither opening nor reopening rebuilds them early. */}
+          {opened && ignoredPaths.length > 0 && atRiskLocalFiles ? (
+            <DeleteWorktreeLocalFilesDetails files={atRiskLocalFiles} />
+          ) : null}
+          {opened ? (
+            <DeleteWorktreeChangesFileList preview={preview} unsavedFiles={unsavedFiles} />
+          ) : null}
         </DialogDisclosure>
       ) : null}
       {expandable ? null : (
@@ -259,23 +272,17 @@ export function DeleteWorktreeChangesSummary({
   )
 }
 
-/** Memoized so focus and status re-renders of the line never rebuild a long hidden list. */
+/** Memoized so status, scan and focus updates of the line never rebuild a long list. */
 const DeleteWorktreeChangesFileList = memo(function DeleteWorktreeChangesFileList({
   preview,
-  unsavedFiles,
-  atRiskLocalFiles
+  unsavedFiles
 }: {
   preview: DeleteWorktreeDirtyChangePreview | undefined
   unsavedFiles: readonly UnsavedFile[]
-  atRiskLocalFiles: WorktreeAtRiskLocalFiles | undefined
 }): JSX.Element {
   const t = useTranslate()
-  const ignoredPaths = atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []
   return (
     <>
-      {ignoredPaths.length > 0 && atRiskLocalFiles ? (
-        <DeleteWorktreeLocalFilesDetails files={atRiskLocalFiles} />
-      ) : null}
       <ul className="min-w-0 space-y-0.5">
         {(preview?.files ?? []).map((file) => (
           <li key={file.path} className="flex min-w-0 items-baseline gap-2">
