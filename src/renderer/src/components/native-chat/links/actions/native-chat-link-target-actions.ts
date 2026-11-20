@@ -61,7 +61,7 @@ export function nativeChatFileLinkActions(
     target.absolutePath,
     target.line,
     target.column,
-    { ...nativeChatFileOpenDeps(target, context), omitOpenInNewTab: true },
+    nativeChatFileOpenDeps(target, context),
     resolveNativeChatHttpLinkSourceOwner(useAppStore.getState(), context.worktreeId),
     t,
     target.isDirectoryHint ? { directoryHint: true } : undefined
