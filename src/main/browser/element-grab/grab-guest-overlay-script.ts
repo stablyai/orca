@@ -203,6 +203,7 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
       window.removeEventListener('toggle', raiseOverlay, true);
       window.removeEventListener('fullscreenchange', raiseOverlay, true);
       stopTrackingSelection();
+      currentEl = null;
       try { host.remove(); } catch(e) {}
       delete window.__orcaGrab;
     }
