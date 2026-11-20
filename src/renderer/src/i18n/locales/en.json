@@ -27089,8 +27089,9 @@
         "copyLink": "Copy link",
         "linkUntil": "(works once, until {{time}}).",
         "linkOnce": "(works once).",
-        "tryIt": "Try it",
+        "tryIt": "Try it in any channel or DM",
         "preview": {
+          "label": "Mention @{{name}} in Slack to ask it.",
           "now": "now",
           "you": "You",
           "ask": "<mention>@{{name}}</mention> summarize this thread",

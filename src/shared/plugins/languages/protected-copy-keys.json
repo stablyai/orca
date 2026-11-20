@@ -981,6 +981,7 @@
     "bots.slack.setup.otherUser",
     "bots.slack.setup.pick",
     "bots.slack.setup.preview.ask",
+    "bots.slack.setup.preview.label",
     "bots.slack.setup.preview.now",
     "bots.slack.setup.preview.reply",
     "bots.slack.setup.preview.you",

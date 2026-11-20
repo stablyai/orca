@@ -8,8 +8,9 @@ import { BotAvatar } from '../BotAvatar'
 import { SlackPersonPlaceholder } from './SlackPersonPlaceholder'
 
 // Slack's mention highlight: its own blue, so the @name reads as a Slack mention in either theme.
+// The mention is what to type, so it keeps its room; only a name wider than the row ends in "…".
 const MENTION =
-  'min-w-0 truncate rounded-[3px] bg-[#1d9bd1]/10 px-0.5 text-[#1264a3] dark:bg-[#1d9bd1]/15 dark:text-[#1d9bd1]'
+  'inline-block max-w-full truncate rounded-[3px] align-top bg-[#1d9bd1]/10 px-0.5 text-[#1264a3] dark:bg-[#1d9bd1]/25 dark:text-[#1d9bd1]'
 
 export function SlackTryItPreview({
   bot,
@@ -25,9 +26,15 @@ export function SlackTryItPreview({
   return (
     <section aria-labelledby={headingId} className="space-y-2">
       <h3 id={headingId} className="text-xs font-medium">
-        {t('bots.slack.setup.tryIt', 'Try it')}
+        {t('bots.slack.setup.tryIt', 'Try it in any channel or DM')}
       </h3>
-      <div className="space-y-3 rounded-lg border border-border bg-background p-3">
+      {/* A sample, not a real conversation: screen readers get what to do instead. */}
+      <p className="sr-only">
+        {t('bots.slack.setup.preview.label', 'Mention @{{name}} in Slack to ask it.', {
+          name: bot.name
+        })}
+      </p>
+      <div aria-hidden className="space-y-3 rounded-lg border border-border bg-background p-3">
         <SlackMessage
           avatar={<SlackPersonPlaceholder />}
           name={asker ?? t('bots.slack.setup.preview.you', 'You')}
@@ -48,7 +55,7 @@ export function SlackTryItPreview({
           app
           time={now}
         >
-          <span className="truncate">{t('bots.slack.setup.preview.reply', 'On it.')}</span>
+          {t('bots.slack.setup.preview.reply', 'On it.')}
         </SlackMessage>
       </div>
     </section>
@@ -85,8 +92,8 @@ function SlackMessage({
           ) : null}
           <span className="shrink-0 text-[11px] text-muted-foreground">{time}</span>
         </div>
-        {/* whitespace-pre keeps the space after the mention, which a flex row would drop. */}
-        <p className="flex min-w-0 text-[13px] leading-[18px] whitespace-pre">{children}</p>
+        {/* The text after the mention is the part that ends in "…". */}
+        <p className="truncate text-[13px] leading-[18px]">{children}</p>
       </div>
     </div>
   )
