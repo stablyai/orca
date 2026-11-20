@@ -191,7 +191,7 @@ describe('ACP launch: standing instructions', () => {
       const resolved = await launch('opencode', { instructions: PREAMBLE, version: '2.0.14' })
       folders.add(resolved.env.OPENCODE_CONFIG_DIR ?? '')
     }
-    const alive = []
+    const alive: boolean[] = []
     for (const folder of folders) {
       alive.push(
         await stat(folder).then(
