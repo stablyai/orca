@@ -23,9 +23,9 @@ import {
   antigravityChatDescription,
   antigravityChatDescriptionText
 } from '../../../provider-accounts/antigravity-chat-description'
+import { useRecheckOnce } from './use-recheck-once'
 import { AntigravityAgySignInButton } from '../../../provider-accounts/AntigravityAgySignInButton'
-import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import { ANTIGRAVITY_AGY_CHATS_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import { useOlderAntigravityHost } from '../../../provider-accounts/use-older-antigravity-host'
 
 // A cold `agy acp` initialize can take several seconds, longer on Windows.
 const AGY_CHECK_SETTLE_MS = 8_000
@@ -113,12 +113,7 @@ export function AntigravityAccountsSection({
     }
   }, [ownerKind, environmentId, runtime, wslDistro])
 
-  // Hosts that run every chat on agy say so; one that doesn't may still run Orca's server.
-  const olderHost =
-    useStructuredAgentSessionHostCapabilityState(
-      owner,
-      ANTIGRAVITY_AGY_CHATS_RUNTIME_CAPABILITY
-    ) === 'unsupported'
+  const olderHost = useOlderAntigravityHost(owner)
   // The rows don't wait for a cold agy check; once it has had time to answer, they read it again.
   const agyUnanswered =
     chats &&
@@ -126,14 +121,12 @@ export function AntigravityAccountsSection({
     state.chatUsesAgy === undefined &&
     state.chatAgySignedOut === undefined &&
     (chatMethod === 'oauth-personal' || chatMethod === 'oauth-business')
-  const askedAgain = useRef(false)
-  useEffect(() => {
-    if (!agyUnanswered || askedAgain.current) {
-      return
+  useRecheckOnce(agyUnanswered, AGY_CHECK_SETTLE_MS, () => {
+    if (pending.current) {
+      return false
     }
-    askedAgain.current = true
-    const timer = setTimeout(() => void run('List'), AGY_CHECK_SETTLE_MS)
-    return () => clearTimeout(timer)
+    void run('List')
+    return true
   })
   // A method change moves new chats between agy's home and Orca's, which the rows' status follows.
   const seenMethod = useRef<AntigravityChatAuthConfig['method'] | null>(null)

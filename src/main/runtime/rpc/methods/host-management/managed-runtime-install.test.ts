@@ -153,3 +153,15 @@ it("lists Orca's installed agy as an installed agent only while it may run", asy
   rememberManagedAgentRelease('antigravity', null)
   await rm(host.dataDirectory, { recursive: true, force: true })
 })
+
+it("refuses to install Orca's agy while it is switched off, so no unused copy lands", async () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only the settings store.
+  const off = {
+    runtime: {
+      requireStore: () => ({ getSettings: () => ({ antigravityManagedAgyEnabled: false }) })
+    }
+  } as unknown as RpcContext
+  await expect(installMethod.handler({ agent: 'antigravity' }, off)).rejects.toThrow(
+    "Orca's copy of Agent is switched off here. Install it yourself."
+  )
+})

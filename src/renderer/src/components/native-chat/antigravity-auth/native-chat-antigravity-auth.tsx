@@ -22,10 +22,8 @@ import { antigravityChatAuthMethodLabel } from '@/components/provider-accounts/A
 import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { AntigravityChatAuthDetection } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import {
-  ANTIGRAVITY_AGY_CHATS_RUNTIME_CAPABILITY,
-  ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY
-} from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import { ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import { useOlderAntigravityHost } from '../../provider-accounts/use-older-antigravity-host'
 
 type Method = AntigravityChatAuthConfig['method']
 /** An older Gemini Enterprise choice is agy's Google sign-in now. */
@@ -176,10 +174,7 @@ export function NativeChatAntigravityAuthProvider({
     [apply]
   )
 
-  // An older host may still run Orca's server, whose sign-in this client can neither show nor change.
-  const olderHost =
-    useStructuredAgentSessionHostCapabilityState(host, ANTIGRAVITY_AGY_CHATS_RUNTIME_CAPABILITY) ===
-    'unsupported'
+  const olderHost = useOlderAntigravityHost(host)
   const value = useMemo((): NativeChatAntigravityAuth | null => {
     if (!host || olderHost) {
       return null

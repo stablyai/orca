@@ -7,6 +7,7 @@ import {
   managedAgentCommandFor
 } from '../../managed-agent-cli/managed-agent-cli-registry'
 import { homedir } from 'node:os'
+import { acpOwnProgramTooOld } from './acp-launch-version'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
@@ -144,7 +145,15 @@ export async function acpHostBackendInput(
   // found on PATH (inherited from an Orca terminal) is Orca's, never the user's own.
   const managedCopy = managedAgentCommandFor(spec.agent, command, { use: false })
   const allowed = backend.spec.managedCopyAllowed?.(settings) !== false
-  const own = found !== null && !isManagedAgentCopyPath(spec.agent, found) ? found : null
+  const candidate = found !== null && !isManagedAgentCopyPath(spec.agent, found) ? found : null
+  // An own program below the floor gives way to Orca's installed copy, as its launches do.
+  const own =
+    candidate &&
+    allowed &&
+    managedCopy &&
+    (await acpOwnProgramTooOld(backend.spec, candidate, env, { probe: startsProgram }))
+      ? null
+      : candidate
   const program = own ?? (allowed ? managedCopy : null) ?? command
   return { command: program, env, envToDelete, homePath, stateDirectory, settings, startsProgram }
 }

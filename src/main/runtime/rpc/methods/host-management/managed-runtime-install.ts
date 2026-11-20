@@ -6,6 +6,7 @@ import {
   ManagedRuntimeCancelParams
 } from '../../../../../shared/rpc-contract/host-management/managed-runtime-install-params'
 import { findHostProgram } from '../../../../acp/launch/acp-launch-command'
+import { acpOwnProgramTooOld } from '../../../../acp/launch/acp-launch-version'
 import { ManagedRuntimeInstallation } from '../../../../node-runtime/managed-runtime-installation'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import { stopStructuredAgentChats } from '../../../agent-session/lifecycle/structured-agent-chat-stop'
@@ -14,6 +15,7 @@ import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-pla
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { homedir } from 'node:os'
 import {
+  installedManagedAgentCommand,
   isManagedAgentCli,
   MANAGED_AGENT_CLI_IDS,
   managedAgentCli,
@@ -64,7 +66,17 @@ function agentCliInstallation(
     const homePath = env.HOME ?? env.USERPROFILE ?? homedir()
     const dirs = spec?.installDirectories({ env, homePath }) ?? []
     const found = await findHostProgram(spec?.command ?? agent, env, dirs)
-    return found !== null && !isPathInsideOrEqual(managedRuntime.root(dataDirectory), found)
+    if (found === null || isPathInsideOrEqual(managedRuntime.root(dataDirectory), found)) {
+      return false
+    }
+    // An own program below the floor runs no chat while Orca's copy may stand in, so the copy is
+    // what chats run and what Settings and the chip name.
+    return !(
+      spec &&
+      managedCopyMayRun(agent, runtime) &&
+      installedManagedAgentCommand(agent) !== null &&
+      (await acpOwnProgramTooOld(spec, found, env, { probe: true }))
+    )
   }
   return new ManagedRuntimeInstallation(agent, managedRuntime, {
     dataDirectory,
