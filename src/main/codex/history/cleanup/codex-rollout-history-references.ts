@@ -263,6 +263,7 @@ export function createCodexRolloutHistoryReferences(
       for (const folder of folders) {
         complete = (await relists.relist(folder, (path) => relistNames(path, visited))) && complete
       }
+      complete &&= !recent || (await relists.unchanged(roots, dates))
       complete &&= pending.size === 0 && !moved
       if (moved) {
         // It is somewhere this sweep may not look again: the next pass reads every folder anew.

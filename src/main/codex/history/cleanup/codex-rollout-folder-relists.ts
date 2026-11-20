@@ -17,6 +17,11 @@ export type CodexRolloutFolderRelists = {
    * anything else, so nothing read earlier goes stale during the wait.
    */
   settle(roots: readonly CodexRolloutRoot[], dates: readonly string[][]): Promise<string[]>
+  /**
+   * Whether no folder settle names changed since its listing: a fork written into one already read,
+   * while later files were still being read, would otherwise go unseen. Call it last.
+   */
+  unchanged(roots: readonly CodexRolloutRoot[], dates: readonly string[][]): Promise<boolean>
   /** Lists a folder again when it changed; false past the cap, which keeps the candidate. */
   relist(folder: string, list: (folder: string) => Promise<boolean>): Promise<boolean>
   report(): void
@@ -73,6 +78,15 @@ export function createCodexRolloutFolderRelists(signal?: AbortSignal): CodexRoll
       }
       await delay(wait, undefined, { signal })
       return folders
+    },
+    unchanged: async (roots, dates) => {
+      for (const folder of await foldersOf(roots, dates)) {
+        const entry = await statUnlessAbsent(folder)
+        if (entry === undefined || (entry && stamps.state(folder, entry.mtimeMs) === 'changed')) {
+          return false
+        }
+      }
+      return true
     },
     relist: async (folder, list) => {
       const statAt = Date.now()
