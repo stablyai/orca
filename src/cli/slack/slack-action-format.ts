@@ -109,7 +109,20 @@ export function formatActionResult(verb: SlackVerb | 'attach', result: ActionRes
         ...(result.notices ?? [])
       ].join('\n')
     case 'react':
+    case 'pin':
       return result.target ? line(result.target) : 'Done.'
+    case 'canvas':
+    case 'list':
+      return [
+        result.target ? `Made: ${line(result.target)}` : 'Made.',
+        ...(result.url ? [`Link: ${result.url}`] : []),
+        ...(result.note ? [result.note] : [])
+      ].join('\n')
+    case 'scheduled':
+      return [
+        ...(result.target ? [line(result.target)] : []),
+        result.note ?? 'Nothing is scheduled there.'
+      ].join('\n')
     case 'edit':
       return result.target ? `Edited: ${result.target.ref}` : 'Edited.'
     case 'delete':
