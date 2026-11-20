@@ -273,15 +273,21 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account list': async (ctx) => {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account list')
     const provider = ctx.flags.get('agent')
+    const refreshUsage = ctx.flags.has('refresh')
     if (provider !== undefined) {
+      if (refreshUsage && provider !== 'claude' && provider !== 'codex') {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--refresh is available for Claude and Codex rate limits.'
+        )
+      }
       await listAgentAccounts(ctx, provider)
       return
     }
     const { client, json } = ctx
-    // JSON carries usage: refresh stale windows within throttles; a forced refresh bypasses Retry-After.
     const response = await client.call<AccountsListSnapshot>('accounts.list', {
-      refreshUsage: false,
-      ...(json ? { refreshStaleUsage: true } : {})
+      refreshUsage,
+      ...(json && !refreshUsage ? { refreshStaleUsage: true } : {})
     })
     // Why separate: Antigravity accounts live in their own native vault, not in the
     // accounts.list snapshot, and an older host simply has none to show.
