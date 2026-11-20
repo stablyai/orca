@@ -217,3 +217,15 @@ it('reoffers one relayed done after the final verified child disappears', async 
   expect(state()).toBe('done')
   expect(server._getStateForTests().antigravityChildWorkByPaneKey.has(PANE)).toBe(false)
 })
+
+it('ends the run on agy done when the finished subagent leaves the row during the grace', async () => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'performance'] })
+  await parentStopsWhileSubagentRuns()
+  await subagentIdleStop()
+  programDone()
+  // The roster poll drops the finished child from the row before the grace ends.
+  await vi.advanceTimersByTimeAsync(1500)
+  expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
+  expect(state()).toBe('done')
+})
