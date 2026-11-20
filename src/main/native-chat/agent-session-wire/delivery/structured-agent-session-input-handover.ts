@@ -79,11 +79,17 @@ export async function beginStructuredAgentSessionInputHandover(
       record: () => deps.record(sessionId),
       turnContext: deps.turnContext,
 
-      admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh') => {
+      admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh', prepareImages) => {
         let admission: StructuredAgentSessionInputAdmission | undefined
+        const prepared =
+          kind === 'fresh'
+            ? await deps.serialize(sessionId, async () => {
+                await validate(signal)
+                return prepare(binding.fence)
+              })
+            : undefined
+        const body = prepared && prepareImages ? await prepareImages(prepared, signal) : prepared
         const invoked = deps.serialize(sessionId, async () => {
-          await validate(signal)
-          const body = kind === 'fresh' ? await prepare(binding.fence) : undefined
           await validate(signal)
           const mode = deps.immediatePermission?.(sessionId)
           if (
