@@ -19,6 +19,8 @@ const JournalRetirementPolicySchema = z.object({
   revision: z.number().int().positive(),
   mode: z.enum(['off', 'report', 'enforce']).catch('report'),
   enforcePermille: z.number().catch(0),
+  /** Per platform, replacing `enforcePermille`, so each platform rolls out at its own share. */
+  platformPermille: z.record(z.string(), z.number()).optional().catch(undefined),
   platforms: z.array(z.unknown()).optional().catch([])
 })
 
@@ -86,6 +88,9 @@ export function effectiveJournalRetirementMode(args: {
     args.now - args.fetched.at <= JOURNAL_RETIREMENT_ENFORCE_FRESH_MS &&
     !!args.installId &&
     journalRetirementBucket(args.installId) <
-      Math.min(1000, Math.max(0, Math.round(rule.enforcePermille)))
+      Math.min(
+        1000,
+        Math.max(0, Math.round(rule.platformPermille?.[args.platform] ?? rule.enforcePermille))
+      )
   return { mode: enforce ? 'enforce' : 'report', revision }
 }

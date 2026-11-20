@@ -38,6 +38,7 @@ import {
   observeLegacySource,
   heldFor,
   laterVersion,
+  legacyProofWaits,
   provenOutcome,
   sourceBytes
 } from './journal-legacy-retirement-held'
@@ -64,6 +65,7 @@ export class JournalLegacyRetirement {
   private policy: LegacyJournalRetirementMode = { mode: 'report', revision: 0 }
   private readonly reporter: LegacyJournalRetirementReporter
   private activeMs = 0
+  private readonly waits = legacyProofWaits()
   private firstAttemptAt: number | undefined
 
   constructor(
@@ -89,9 +91,9 @@ export class JournalLegacyRetirement {
       writer,
       readers,
       conversions,
-      boundary,
+      this.waits.timed(boundary),
       this.stopped.signal,
-      rest
+      this.waits.timed(rest)
     )
   }
 
@@ -189,10 +191,11 @@ export class JournalLegacyRetirement {
     this.proof.observe(observation)
     this.proof.resume(saved.retirement, observation)
     const started = performance.now()
+    const waited = this.waits.waitedMs()
     try {
       await this.proof.run(observation)
     } finally {
-      this.activeMs += performance.now() - started
+      this.activeMs += performance.now() - started - (this.waits.waitedMs() - waited)
     }
     // Every early return below waits out the backoff: no helper or full-sync commit each minute.
     if (!(await this.matches(observation))) {

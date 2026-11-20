@@ -49,6 +49,21 @@ it('deletes only with a fresh download that enforces for this install, and never
     effectiveJournalRetirementMode({ ...base, fetched: fetched(policy({ platforms: ['win32'] })) })
       .mode
   ).toBe('report')
+  // Each platform at its own share: this platform's entry replaces the shared one.
+  const shares = { darwin: bucket + 1, win32: 0 }
+  expect(
+    effectiveJournalRetirementMode({
+      ...base,
+      fetched: fetched(policy({ enforcePermille: 0, platformPermille: shares }))
+    }).mode
+  ).toBe('enforce')
+  expect(
+    effectiveJournalRetirementMode({
+      ...base,
+      platform: 'win32',
+      fetched: fetched(policy({ enforcePermille: 1000, platformPermille: shares }))
+    }).mode
+  ).toBe('report')
   expect(
     effectiveJournalRetirementMode({ ...base, installId: undefined, fetched: fetched(policy({})) })
       .mode

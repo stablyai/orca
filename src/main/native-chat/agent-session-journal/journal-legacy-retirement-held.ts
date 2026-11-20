@@ -20,6 +20,27 @@ import type { LegacyJournalRetirementOutcome } from './journal-legacy-retirement
  * Absent means a release before this record copied the profile, which is always earlier; a copy
  * made without a known version waits only for the first launch that knows its own.
  */
+/** Time spent waiting (for idle, or pacing), so active time counts only the work. */
+export function legacyProofWaits(): {
+  timed: <A extends unknown[], R>(wait: (...args: A) => Promise<R>) => (...args: A) => Promise<R>
+  waitedMs: () => number
+} {
+  let waited = 0
+  return {
+    timed:
+      (wait) =>
+      async (...args) => {
+        const started = performance.now()
+        try {
+          return await wait(...args)
+        } finally {
+          waited += performance.now() - started
+        }
+      },
+    waitedMs: () => waited
+  }
+}
+
 export function laterVersion(running: string, convertedBy: string | null): boolean {
   return (
     isValidAppVersion(running) &&
