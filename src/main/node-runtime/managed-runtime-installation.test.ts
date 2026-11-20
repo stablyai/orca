@@ -418,6 +418,8 @@ it("doesn't keep a copy current while Orca is told not to", async () => {
   )
 
   await installation.updateIfBehind()
+  // A client reading status is not an install, so it must not look up the release either.
+  await installation.status()
 
   expect(refreshPin).not.toHaveBeenCalled()
   expect(fetcher).not.toHaveBeenCalled()
