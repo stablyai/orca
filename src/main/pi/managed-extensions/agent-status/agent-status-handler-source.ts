@@ -171,6 +171,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '',
     `  onStatus('tool_execution_end', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    '    recordForegroundSubagents(event)',
     "    post('tool_execution_end', {",
     '      tool_name: event.toolName,',
     '    })',

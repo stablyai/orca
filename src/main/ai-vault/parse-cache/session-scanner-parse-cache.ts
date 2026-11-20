@@ -16,6 +16,7 @@ import { createCopilotSessionResumeState } from '../scanners/copilot/session-sca
 import { createCursorSessionResumeState } from '../scanners/cursor/session-scanner-cursor-parser'
 import { countSubagentTranscripts } from '../scanners/claude/session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from '../scanners/omp/session-scanner-omp-subagent-transcripts'
+import { countPiSubagentTranscripts } from '../scanners/pi/session-scanner-pi-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
 import { refreshCachedCodexTitle } from '../scanners/codex/session-scanner-codex-cached-title'
 import {
@@ -275,7 +276,9 @@ async function reuseCachedSession(
         ? await countSubagentTranscripts(candidate.file.path, signal)
         : session.agent === 'omp'
           ? await countOmpSubagentTranscripts(candidate.file.path, signal)
-          : null
+          : session.agent === 'pi'
+            ? await countPiSubagentTranscripts(candidate.file.path, signal)
+            : null
     if (
       subagentTranscriptCount !== null &&
       subagentTranscriptCount !== session.subagentTranscriptCount
