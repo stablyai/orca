@@ -17857,8 +17857,6 @@
             "27d863542c": "浏览器注释",
             "e48569ac6d": "无法访问该网站",
             "bbe8f15e83": "该窗格是从活动运行时服务器呈现的",
-            "8b7e6d1f5a": "浏览器注释仅在本地浏览器选项卡中可用",
-            "deb5293610": "浏览器注释在远程运行时不可用",
             "90d021f2ad": "添加",
             "0cb3bd6221": "注释意图",
             "532bac48c5": "描述代理应该在这里改变什么......",
@@ -26047,7 +26045,6 @@
       "close": "关闭",
       "comesWith": "包含",
       "comesWithHelp": "关于模板计划和设置",
-      "olderHost": "{{host}} 上的 Orca 版本较旧，因此不会添加此模板的技能和计划。请在该主机上更新 Orca 以添加这些内容，或仅使用模板指令创建机器人。",
       "comesWithNote": "计划默认关闭。选好仓库或频道后，在首次聊天中设置自动化和连接器。",
       "keepSkill": "添加 {{skill}} 技能",
       "stateOff": "关闭",
@@ -26068,7 +26065,6 @@
       "closeTooltip": "关闭 · Esc",
       "fromLink": "来自链接",
       "search": "搜索模板",
-      "originTemplateNamed": "来自 {{template}} 模板",
       "aboutTemplate": "关于 {{name}}",
       "allTemplates": "所有模板",
       "filterCategory": "按类别筛选",
@@ -27619,10 +27615,6 @@
       "lookedUp": "已查找 {{query}}",
       "checkingConnections": "正在检查连接",
       "checkedConnections": "已检查连接"
-    },
-    "header": {
-      "runs": "运行你的 {{agent}}",
-      "newBot": "你的新机器人"
     },
     "github": {
       "whoCanAsk": {

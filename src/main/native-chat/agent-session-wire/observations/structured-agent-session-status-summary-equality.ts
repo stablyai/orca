@@ -29,6 +29,7 @@ export function structuredStatusSummariesEqual(
       (a.statusStartedAt !== undefined && !isIdleHeldOpenByChildWork(b))) &&
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
+    a.fallbackModel === b.fallbackModel &&
     a.permissionMode === b.permissionMode &&
     a.launchPermissionMode === b.launchPermissionMode &&
     a.runningPermissionMode === b.runningPermissionMode &&

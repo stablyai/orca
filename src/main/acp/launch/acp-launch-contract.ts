@@ -17,7 +17,11 @@ import type { AcpSignInWatch } from '../process/acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
-import type { Implementation, InitializeResponse } from '../generated/acp-protocol.generated'
+import type {
+  Implementation,
+  InitializeResponse,
+  McpServer
+} from '../generated/acp-protocol.generated'
 
 export type AcpLaunchSpec = {
   agent: TuiAgent
@@ -80,6 +84,9 @@ export type AcpLaunchSpec = {
   modelDiscovery: AcpModelDiscovery
   /** Loads Orca's visuals skill and linked projects' skills; absent loads none. */
   skillRoots?: AcpSkillRootsLoader
+  /** The agent's own MCP servers, for an agent whose ACP mode connects only the client's; absent,
+   *  the agent loads its own. */
+  ownMcpServers?: AcpOwnMcpServersLoader
   /** How a session's standing instructions reach the agent's system prompt; absent, a session
    *  with any cannot start. */
   instructions?: AcpInstructionsDelivery
@@ -111,6 +118,13 @@ export type AcpLaunchSpec = {
   /** Whether Orca's own copy of this program may run (and be kept updated); absent means it may. */
   managedCopyAllowed?(settings: ManagedCopySettings): boolean
 }
+
+/** Reads on the host the agent runs on; a missing or unreadable file contributes none. */
+export type AcpOwnMcpServersLoader = (input: {
+  cwd: string
+  env: Readonly<Record<string, string>>
+  version: string | null
+}) => Promise<McpServer[]>
 
 export type ManagedCopySettings = Partial<Pick<GlobalSettings, 'antigravityManagedAgyEnabled'>>
 

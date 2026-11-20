@@ -74,7 +74,7 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   sessionMetaOptional?: true
   aroundNewSession?: AcpInstructionsLaunch['aroundNewSession']
   release?: AcpInstructionsLaunch['release']
-  /** The bot's own tools, opened with each session; absent: none. */
+  /** The bot's own tools and `spec.ownMcpServers`, opened with each session; absent: none. */
   mcpServers?: McpServer[]
   /** The saved model the launch line carries. */
   launchModel?: string
@@ -255,9 +255,22 @@ export function acpStructuredLaunchPart(
       await instructions?.release?.().catch(() => undefined)
       throw error
     })
-    const mcpServers = acpBotMcpServers(tools)
     // A managed release's receipt names its version; other programs answer the check.
     const launchedVersion = version ?? launchVersion.version
+    const botServers = acpBotMcpServers(tools)
+    // Like its bot tools, a read-only session gets none of the agent's own servers.
+    const ownServers = basis.readOnly
+      ? []
+      : ((await spec.ownMcpServers?.({
+          cwd,
+          env: childEnvironmentView(env, inherited, envToDelete),
+          version: launchedVersion
+        })) ?? [])
+    // On a shared name the bot's server wins.
+    const mcpServers = [
+      ...botServers,
+      ...ownServers.filter((own) => !botServers.some((bot) => bot.name === own.name))
+    ]
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.

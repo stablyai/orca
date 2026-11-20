@@ -141,6 +141,8 @@ export type ClaudeSession = {
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
+  /** A session-scope refusal fallback this process runs until an accepted model write; a pick awaits its turn. */
+  modelFallback?: { model: string; replaced: string; picked?: true }
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
   /** Inputs carried by launch or accepted controls, independent of provider reports. */

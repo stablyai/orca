@@ -238,8 +238,21 @@ describe('group mail roots', () => {
   })
 
   it('holds a worker report that arrives before its worker is recorded', async () => {
-    const { groups, target, row } = await room(1)
-    const early = { ...row('early'), from_handle: 'dispatch:w1' }
+    const { groups, target, startWorker } = await room(1)
+    const early = startWorker('term_w1').send(target.sessionId, 'status')
     expect(groups.narrowMailBatch(target.sessionId, [early])).toEqual({ messages: [], ended: [] })
+  })
+
+  it("wakes the member with its worker's final report after the worker's Dispatch settles", async () => {
+    const { groups, orchestration, source, roots, startWorker } = await room(1)
+    const [turn] = roots[0].turns
+    const worker = startWorker('term_worker')
+    groups.store.bindWorker(worker.dispatchId, turn.operationId)
+    const done = worker.send(source.sessionId, 'worker_done')
+    orchestration.completeDispatch(worker.dispatchId)
+    expect(groups.narrowMailBatch(source.sessionId, [done])).toEqual({
+      messages: [done],
+      ended: []
+    })
   })
 })

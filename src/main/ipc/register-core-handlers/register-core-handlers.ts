@@ -1,5 +1,4 @@
 import { app } from 'electron'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { registerAppHandlers } from '../app'
 import { registerWslMoveWiring } from '../wsl/wsl-move-driver-wiring'
 import { registerWslDriveProjectHandlers } from '../wsl/wsl-drive-project-handlers'
@@ -129,15 +128,13 @@ export async function registerCoreHandlers(
   setTrustedClipboardRendererWebContentsId(mainWindowWebContentsId)
   setTrustedUIRendererWebContentsId(mainWindowWebContentsId)
   setAgentBrowserBridgeRef(runtime.getAgentBrowserBridge())
+  const { rendererCheckpoint } = lifecycleOptions
+  if (!rendererCheckpoint) {
+    throw new Error('Renderer shutdown checkpoint must be composed before core handlers')
+  }
   return (registration ??= (async () => {
     registerAppHandlers(store, {
-      quitResumeRecordsFor: (session) => runtime.quitResumeRecordsFor(session),
-      ...(ORCA_LAYOUT_OWNER_IS_MAIN
-        ? {
-            reconnectFactsFor: (session, partition) =>
-              runtime.shutdownReconnectFactsFor(session, partition)
-          }
-        : {}),
+      rendererCheckpoint,
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
       // Restart/profile switching closes this through will-quit; this callback covers relaunch exit.
       onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)

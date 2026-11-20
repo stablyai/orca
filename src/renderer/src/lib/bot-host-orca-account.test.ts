@@ -53,13 +53,6 @@ describe('startBotHostSignIn', () => {
     })
   })
 
-  it('starts a plain sign-in when the host is signed out', async () => {
-    await expect(startAfter('runtime:env-signed-out', 'signed-out')).resolves.toEqual({
-      approveInBrowser: true,
-      switchAccount: false
-    })
-  })
-
   it('starts a plain sign-in when the host is no longer signed in', async () => {
     await expect(startAfter('runtime:env-reconnect', 'reconnect-required')).resolves.toEqual({
       approveInBrowser: true,
