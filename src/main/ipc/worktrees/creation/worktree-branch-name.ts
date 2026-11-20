@@ -15,13 +15,28 @@ export function getConfiguredBranchPrefix(
   return raw ? normalizeBranchPrefix(raw) || null : null
 }
 
+function sanitizeBranchRefLeaf(name: string): string {
+  // Git rejects a ref component ending in .lock; only the branch is rewritten so the folder keeps its name.
+  return name
+    .split('/')
+    .map((segment) => segment.replace(/-?\.lock$/, '-lock'))
+    .join('/')
+}
+
 export function computeBranchName(
   sanitizedName: string,
   settings: Parameters<typeof selectBranchPrefixInput>[0],
   gitUsername: string | null
 ): string {
+  const sanitized = sanitizeBranchRefLeaf(sanitizedName)
   const prefix = getConfiguredBranchPrefix(settings, gitUsername)
-  return prefix ? `${prefix}/${sanitizedName}` : sanitizedName
+  if (prefix === null) {
+    return sanitized
+  }
+  if (getBranchPrefixIssue(prefix) !== null && settings.branchPrefix === 'git-username') {
+    return sanitized
+  }
+  return `${prefix}/${sanitized}`
 }
 
 /** Validate prefix settings early so creation errors identify configuration rather than opaque Git failures. */
@@ -30,11 +45,7 @@ export function computeValidatedBranchName(
   settings: BranchPrefixSettings,
   gitUsername: string | null
 ): string {
-  // Git rejects a ref component ending in .lock; only the branch is rewritten so the folder keeps its name.
-  const sanitizedName = sanitizedWorktreeName
-    .split('/')
-    .map((segment) => segment.replace(/-?\.lock$/, '-lock'))
-    .join('/')
+  const sanitizedName = sanitizeBranchRefLeaf(sanitizedWorktreeName)
   const prefix = getConfiguredBranchPrefix(settings, gitUsername)
   if (prefix === null) {
     return sanitizedName
