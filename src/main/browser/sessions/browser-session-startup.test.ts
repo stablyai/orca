@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-const ensureLoaded = vi.hoisted(() => vi.fn(async () => false))
+const loadWithRetry = vi.hoisted(() => vi.fn())
 const initializeFromPersistedState = vi.hoisted(() => vi.fn())
 
 vi.mock('./site-list/browser-profile-site-list-store', () => ({
-  ensureBrowserProfileSiteListsLoaded: ensureLoaded
+  loadBrowserProfileSiteListsWithRetry: loadWithRetry
 }))
 vi.mock('./profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
@@ -39,6 +39,6 @@ describe('initializeBrowserSessionsForApp', () => {
   it('loads site lists after the sync read, even when that read failed', () => {
     initializeBrowserSessionsForApp()
     expect(initializeFromPersistedState).toHaveBeenCalledTimes(1)
-    expect(ensureLoaded).toHaveBeenCalledTimes(1)
+    expect(loadWithRetry).toHaveBeenCalledTimes(1)
   })
 })

@@ -25,6 +25,27 @@ export async function ensureBrowserProfileSiteListsLoaded(): Promise<boolean> {
   return true
 }
 
+const RETRY_DELAYS_MS = [5_000, 30_000, 120_000, 600_000]
+
+/** Keeps trying, backing off, until the lists load, so a file that becomes readable later applies without anyone opening Settings. */
+export function loadBrowserProfileSiteListsWithRetry(attempt = 0): void {
+  const retry = (): void => {
+    const delay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)]
+    setTimeout(() => loadBrowserProfileSiteListsWithRetry(attempt + 1), delay).unref?.()
+  }
+  ensureBrowserProfileSiteListsLoaded().then(
+    (loaded) => {
+      if (!loaded) {
+        retry()
+      }
+    },
+    (error: unknown) => {
+      console.warn('[browser] site lists could not be loaded:', error)
+      retry()
+    }
+  )
+}
+
 export async function saveBrowserProfileSiteList(
   profileId: string,
   entries: string[]
