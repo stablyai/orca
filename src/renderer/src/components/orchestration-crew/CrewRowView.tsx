@@ -100,11 +100,9 @@ export const CrewRowView = memo(function CrewRowView({
       </button>
       <div className="flex shrink-0 items-center">
         <IconButton
-          label={t(
-            'components.orchestrationCrew.showDetails',
-            "Show {{name}}'s task and latest message",
-            { name: row.label }
-          )}
+          label={t('components.orchestrationCrew.showDetails', "Show {{name}}'s task and reply", {
+            name: row.label
+          })}
           aria-expanded={expanded}
           onClick={toggle}
         >

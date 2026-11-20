@@ -70,6 +70,7 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
         parentWorktree?: string
         matchFolderWorkspaces?: boolean
         crossStoreParent?: CrossStoreParentRef
+        crossStoreParentIsBotHome?: true
         noParent?: boolean
       }
     }

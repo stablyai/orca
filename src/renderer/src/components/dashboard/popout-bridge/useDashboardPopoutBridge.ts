@@ -11,6 +11,7 @@ import {
   buildDashboardSnapshot,
   type DashboardSnapshotState
 } from '../snapshot/build-dashboard-snapshot'
+import { createDashboardSnapshotReuse } from '../snapshot/dashboard-snapshot-reuse'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Throttle cross-worktree snapshot rebuilds to 4Hz during agent-status bursts.
@@ -117,6 +118,7 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
     let disposed = false
     let unsubscribeStore: (() => void) | null = null
     let trailingTimer: ReturnType<typeof setTimeout> | null = null
+    const reuse = createDashboardSnapshotReuse()
     let lastPublishAt = 0
     let lastPublishedRepoIcons: Record<string, RepoIcon | null> | null = null
 
@@ -126,7 +128,8 @@ export function useDashboardPopoutBridge(enabled: boolean): void {
       const state = useAppStore.getState()
       const snapshot = buildDashboardSnapshot(
         { ...state, chatNames: getStructuredChatTabNames() },
-        lastPublishAt
+        lastPublishAt,
+        { reuse }
       )
       const icons = snapshot.repoIconsByRepoId ?? {}
       if (!withIcons && repoIconsUnchanged(icons, lastPublishedRepoIcons)) {

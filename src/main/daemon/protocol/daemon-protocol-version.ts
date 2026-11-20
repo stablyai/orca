@@ -1,5 +1,6 @@
 // Why: daemons survive app updates, so wire behavior must be version-gated.
-// v61 stamps every output frame with its stream sequence, so main can line its count up with daemon snapshots after a reattach.
+// v62 stamps every output frame with its stream sequence, so main can line its count up with daemon snapshots after a reattach.
+// v61 enables image previews in the Codex shell function for new terminals.
 // v60 accepts `requestRepaint`, which asks a reattached program to redraw without sending it input.
 // v59 lets the signed macOS host start native provider owners whose pipes stay with the app;
 // it skips v58, which ad hoc builds of an earlier host route used.
@@ -19,8 +20,8 @@
 // v43 dropped it with the revert); v41 stages long startup commands as sourced scripts; v40 rolled
 // the #25130/#24636 shell-wrapper changes and the wider agent list into a fresh daemon; older owners
 // stay attachable.
-export const PROTOCOL_VERSION = 61
-export const STREAM_SEQUENCE_STAMP_PROTOCOL_VERSION = 61
+export const PROTOCOL_VERSION = 62
+export const STREAM_SEQUENCE_STAMP_PROTOCOL_VERSION = 62
 export const REPAINT_REQUEST_PROTOCOL_VERSION = 60
 export const FOCUS_LOSS_REPORT_PROTOCOL_VERSION = 56
 export const PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION = 55

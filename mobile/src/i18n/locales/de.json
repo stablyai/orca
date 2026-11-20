@@ -112,7 +112,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... oder den Code einfügen",
       "pasteCodeTitle": "Kopplungscode einfügen",
       "pasteInstead": "Stattdessen Code einfügen",
-      "pastePairingCode": "Oder Kopplungscode einfügen",
+      "pastePairingCode": "Kopplungscode einfügen",
       "scanCodeStep": "QR-Code scannen",
       "title": "Mit Desktop koppeln",
       "tryAgain": "Erneut versuchen",
@@ -146,7 +146,7 @@
       "installTitle": "Die neue App herunterladen",
       "installDescription": "Wenn dein Smartphone fragt, erlaube deinem Browser, Apps zu installieren.",
       "download": "Herunterladen",
-      "keepThisVersion": "Diese Version weiter nutzen",
+      "keepThisVersion": "Diese Version behalten",
       "keepThisVersionNote": "Dir entgehen Sicherheitskorrekturen. Wir erinnern dich in einer Woche."
     },
     "pairTitle": "Mit dem Computer koppeln",
@@ -324,7 +324,7 @@
       "triedSearchWeb": "Websuche versucht"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "Vollständige Nachricht anzeigen — Laden fehlgeschlagen, zum Wiederholen tippen",
+      "loadFailed": "Ganze Nachricht erneut laden",
       "showFullMessage": "Vollständige Nachricht anzeigen",
       "showLess": "Weniger anzeigen"
     },
@@ -390,8 +390,7 @@
       "submitSelectedOptions": "Ausgewählte Optionen absenden"
     },
     "queuedMessages": {
-      "clearAll": "Alles löschen",
-      "deleteAll": "Alle Nachrichten in der Warteschlange löschen",
+      "deleteAll": "Alle löschen",
       "editMessage": "Nachricht bearbeiten",
       "pausedState": "Pausiert",
       "queuedState": "In der Warteschlange",
@@ -789,7 +788,7 @@
       "manageShortcuts": "Tastenkürzel verwalten",
       "manageShortcutsHint": "Tastenkürzel einblenden, ausblenden oder neu anordnen",
       "modifiers": "Modifikatortasten",
-      "moreKeys": "Weitere Tasten – Tab, Pfeiltasten, F1–F12…",
+      "moreKeys": "WEITERE TASTEN",
       "navigation": "Navigation",
       "pickKey": "Taste auswählen",
       "pressEnter": "Enter drücken",
@@ -941,12 +940,10 @@
       "dismissDrawer": "Bereich schließen"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Einrichtungsskript",
-      "run": "Ausführen",
-      "runSetupCommand": "Einrichtungsbefehl ausführen",
+      "runSetup": "Einrichtung ausführen",
       "skip": "Überspringen",
-      "waitForSetup": "Vor dem Start des Agenten auf den Abschluss der Einrichtung warten",
+      "startAgentAfterSetup": "Agent nach der Einrichtung starten",
       "waitForSetupSaveFailed": "Das Startverhalten bei der Einrichtung konnte nicht gespeichert werden."
     },
     "newWorkspaceSshConnectionField": {
@@ -1221,7 +1218,7 @@
       "privacyHint": "Sendet einen um sensible Daten bereinigten Bericht mit begrenzter Größe. Er enthält Host-Name, Endpunkt, Versionen, Verbindungsstatus und Ereignisse, niemals Terminalinhalte oder Zugangsdaten.",
       "reconnecting": "Verbindung wird wiederhergestellt",
       "retrySending": "Erneut senden",
-      "sendDiagnostics": "Diagnosedaten an Orca senden",
+      "sendDiagnostics": "Diagnosedaten senden",
       "sending": "Wird gesendet…",
       "sent": "Diagnosedaten gesendet",
       "stateWithAttempt": "{{state}} · Versuch {{attempts}}",
@@ -1605,10 +1602,8 @@
   "host": {
     "edit": {
       "address": "Adresse",
-      "addressHint": "Akzeptiert IP-Adressen, host:port oder ws:// / wss://. Eine URL mit wss:// verwendet ohne Portangabe 443. Bei Adressen ohne Protokoll- und Portangabe bleibt der aktuelle Port erhalten (oder 6768).",
       "connectionPreview": "Verbindet mit {{endpoint}}",
       "goBack": "Zurück navigieren",
-      "help": "Anzeigenamen oder Verbindungsadresse ändern. Das Namensfeld leer lassen, um den vom Host gemeldeten Namen zu verwenden. Eine Adressänderung ändert nur das Verbindungsziel dieses Smartphones – es wird keine neue Kopplung hergestellt. Nützlich, wenn derselbe Host unter einer anderen IP-Adresse erreichbar ist (z. B. im Heim-LAN statt über Tailscale).",
       "hostNamePlaceholder": "Host-Name",
       "hostRemoved": "Dieser Host wurde von diesem Smartphone entfernt.",
       "loadFailed": "Host konnte nicht geladen werden.",
@@ -1952,7 +1947,7 @@
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "{{branch}} ist mit keinem offenen PR verknüpft.",
       "currentBranchNotLinked": "Der aktuelle Branch ist mit keinem offenen PR verknüpft.",
-      "linkExistingPullRequest": "Bestehenden Pull Request verknüpfen",
+      "linkExistingPullRequest": "Pull Request verknüpfen",
       "linkedPrUnavailable": "Verknüpfter PR #{{number}} nicht verfügbar",
       "refreshOrCreate": "Zum erneuten Prüfen aktualisieren oder einen neuen PR für diesen Branch erstellen."
     },
@@ -2330,8 +2325,8 @@
       "scrollToLatest": "Zur neuesten Nachricht scrollen"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "Vollständige Nachricht anzeigen – Laden fehlgeschlagen, zum Wiederholen tippen",
-      "loadOutputFailed": "Vollständige Ausgabe anzeigen – Laden fehlgeschlagen, zum Wiederholen tippen",
+      "loadMessageFailed": "Ganze Nachricht erneut laden",
+      "loadOutputFailed": "Ganze Ausgabe erneut laden",
       "partialMessage": "Ein Teil dieser Nachricht wird angezeigt.",
       "partialOutput": "{{shown}} von {{total}} werden angezeigt.",
       "showFullMessage": "Vollständige Nachricht anzeigen",
@@ -2347,8 +2342,8 @@
       "notFoundTitle": "Unterhaltung noch nicht gefunden"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "Zur Chatansicht wechseln",
-      "switchToTerminalView": "Zur Terminalansicht wechseln"
+      "switchToChatView": "Zum Chat wechseln",
+      "switchToTerminalView": "Zum Terminal wechseln"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "Der Agent wurde gestartet, aber die Notizen wurden nicht gesendet.",
@@ -3860,7 +3855,7 @@
       "issueSource": "Issue-Quelle",
       "keySecurityHint": "Der Schlüssel wird über den Schlüsselbund des Host-Betriebssystems verschlüsselt und lokal gespeichert.",
       "linearConnectSubtitle": "Persönlichen API-Schlüssel einfügen, um Issues aus diesem Arbeitsbereich anzuzeigen.",
-      "linearSettingsLink": "Linear Settings / Security / New API key",
+      "linearSettingsLink": "Linear-Einstellungen öffnen",
       "linearTeam": "Linear-Team",
       "linearTeamSubtitle": "Issue im ausgewählten Linear-Team erstellen.",
       "newIssueTitle": "Neues {{providerLabel}}-Issue",

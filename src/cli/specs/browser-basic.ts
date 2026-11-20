@@ -201,7 +201,10 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     path: ['tab', 'list'],
     summary: 'List open browser tabs',
     usage: 'orca tab list [--worktree <selector|all>] [--show-profile] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'show-profile']
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'show-profile'],
+    notes: [
+      'Without --worktree, lists the current worktree, or every worktree when none resolves. Pass --worktree all to list every worktree.'
+    ]
   },
   {
     path: ['tab', 'show'],

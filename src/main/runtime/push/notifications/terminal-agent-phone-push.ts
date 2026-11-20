@@ -80,7 +80,9 @@ export class TerminalAgentPhonePush {
           this.hooklessNews.noteFinish(news.event.paneKey)
         }
         // The turn's reply can arrive after the finish was decided; rebuilt only for a phone that gets it.
-        const replied = row.lastAssistantMessage !== news.row.lastAssistantMessage
+        // A row without one (a /clear's new session) keeps the reply already captured.
+        const replied =
+          !!row.lastAssistantMessage && row.lastAssistantMessage !== news.row.lastAssistantMessage
         this.send(news, () =>
           replied
             ? { ...news, event: this.buildEvent(news.worktreeId, news.paneKey, row, news.labels) }

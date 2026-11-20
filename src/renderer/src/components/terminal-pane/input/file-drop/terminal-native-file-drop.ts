@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { stageClientFilesForAgent } from '@/runtime/files/imports/agent-file-staging'
 import { translate } from '@/i18n/i18n'
-import { isWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
+import { parseWslUncPath, toWindowsWslPath } from '../../../../../../shared/file-access/wsl-paths'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
@@ -20,6 +20,7 @@ import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import type { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
 import { toLocalWslDropPath } from './terminal-drop-local-wsl'
 import { terminalFileDropErrorMessage } from './terminal-native-file-drop-error'
+import { recordRecentTerminalImage } from '../recent-terminal-images'
 
 export async function deliverNativeTerminalFileDrop(
   args: NativeDropFlowArgs & {
@@ -165,13 +166,19 @@ async function pasteLocalDropPaths(
   }
 ): Promise<void> {
   // Local WSL shells need distro-aware POSIX paths despite their Windows host.
-  if (isWslUncPath(args.worktreePath)) {
+  const wsl = parseWslUncPath(args.worktreePath)
+  if (wsl) {
     try {
       const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
         paths: args.dataPaths,
         worktreePath: args.worktreePath
       })
-      await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: 'posix' })
+      await pasteResolvedDropPaths({
+        ...args,
+        paths: resolvedPaths,
+        targetShell: 'posix',
+        previewPaths: resolvedPaths.map((path) => toWindowsWslPath(path, wsl.distro))
+      })
       reportTerminalDropUploadSkipsAndFailures(skipped, failed)
     } catch (err) {
       toast.error(terminalFileDropErrorMessage(err, 'resolve'))
@@ -183,7 +190,8 @@ async function pasteLocalDropPaths(
   await pasteResolvedDropPaths({
     ...args,
     paths: args.localWslDrop ? args.dataPaths.map(toLocalWslDropPath) : args.dataPaths,
-    targetShell: args.targetShell
+    targetShell: args.targetShell,
+    previewPaths: args.dataPaths
   })
 }
 
@@ -221,6 +229,7 @@ async function uploadRemoteDropPaths(
 async function pasteResolvedDropPaths(
   args: NativeDropFlowArgs & {
     paths: string[]
+    previewPaths?: readonly string[]
     targetShell: 'posix' | 'windows'
   }
 ): Promise<void> {
@@ -244,5 +253,18 @@ async function pasteResolvedDropPaths(
   showTerminalDropWriteFailure(writeResult.failureReason)
   if (writeResult.sentAnyPath) {
     recordTerminalUserInputForLeaf(args.tabId, args.pane.leafId)
+    if (
+      args.previewPaths &&
+      getCurrentTerminalDropTransport(args.manager, args.paneTransports, args.dropTarget)
+    ) {
+      const pane = args.manager
+        .getPanes()
+        .find((candidate) => candidate.leafId === args.pane.leafId)
+      if (pane) {
+        for (const path of args.previewPaths.slice(0, writeResult.pathsWritten)) {
+          recordRecentTerminalImage(pane.terminal, path)
+        }
+      }
+    }
   }
 }
