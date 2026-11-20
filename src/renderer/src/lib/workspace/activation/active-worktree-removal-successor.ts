@@ -14,6 +14,7 @@ import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-v
 import { getDeleteStateForWorktreeHost } from '@/components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
 import { createSleepingSweepHiddenCheck } from '@/components/sidebar/worktree-list/listing/sleeping-sweep-visibility'
 import { getSidebarSleepingSweepRetainedIds } from '@/components/sidebar/worktree-list/listing/use-sleeping-sweep-retention'
+import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
@@ -84,6 +85,8 @@ export function pickActiveWorktreeSuccessor(
       !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting &&
       !isWorktreeRetiredByRemoval(worktree) &&
       !isHostedOnRuntimeOwnedSshTarget(worktree, repoById) &&
+      // Activation clears sleep intent, so handing off to a slept sibling would wake it.
+      !hasWorktreeSleepIntent(worktree.id) &&
       !isHiddenAsleep?.(worktree)
   )
   const others = siblings.filter((worktree) => !worktree.isMainWorktree)
