@@ -18,7 +18,6 @@ import {
 } from './session-owner-fields'
 import { sessionFieldsRemovedWithWorkspace } from '../../orca-profiles/project-transfer/profile-project-session-field-disposition'
 import { markdownFileIdCandidates } from '../../orca-profiles/project-transfer/profile-session-markdown-transfer'
-import { forgetLegacyRelayTabs } from '../desktop-relay-legacy-adoption'
 
 const OWNER_PANE_KEYED_FIELDS = sessionFieldsRemovedWithWorkspace('ownerPaneKey')
 const OWNER_ROW_FIELDS = sessionFieldsRemovedWithWorkspace('ownerRow')
@@ -140,7 +139,6 @@ export function removeWorkspaceSessionOwner(
     (worktreeId) => worktreeId === ownerKey,
     removedFileIds
   )
-  forgetLegacyRelayTabs(removedTabIds)
   return next
 }
 
@@ -164,7 +162,6 @@ export function removeWorkspaceSessionOwners(
     (worktreeId) => ownerKeys.has(worktreeId),
     removedFileIds
   )
-  forgetLegacyRelayTabs(removedTabIds)
   return next
 }
 
