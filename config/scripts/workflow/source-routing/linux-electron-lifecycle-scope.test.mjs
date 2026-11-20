@@ -13,7 +13,8 @@ describe('Linux Electron lifecycle scope', () => {
     const inputs = await collectLinuxElectronLifecycleInputs(projectDir)
     for (const file of [
       'src/main/browser/extensions/api-runtime/browser-extension-electron-fixture.ts',
-      'src/renderer/src/hooks/ipc-events/browser/browser-link-materialization.test-fixture.tsx'
+      'src/renderer/src/hooks/ipc-events/browser/browser-link-materialization.test-fixture.tsx',
+      'src/packages/process-host/package.json'
     ]) {
       expect(linuxElectronLifecycleScope([file], inputs).run, file).toBe(true)
     }

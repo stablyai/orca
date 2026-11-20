@@ -34,6 +34,7 @@ const ALIASES = [
 ]
 
 async function bundleInputs(root, entries, workspace) {
+  const manifests = new Set()
   const result = await build({
     entryPoints: entries.map((entry) => path.join(root, entry)),
     bundle: true,
@@ -63,6 +64,8 @@ async function bundleInputs(root, entries, workspace) {
           pluginBuild.onResolve({ filter: /^@(?:orca|renderer)?\// }, async (args) => {
             const source = workspace.resolve(args.path)
             if (source) {
+              // The manifest's orca-source export decides which file loads.
+              manifests.add(source.manifest)
               return { path: source.path }
             }
             const alias = ALIASES.find(([prefix]) => args.path.startsWith(prefix))
@@ -83,7 +86,7 @@ async function bundleInputs(root, entries, workspace) {
       .relative(root, path.resolve(root, file.replace(/^asset:/, '')))
       .split(path.sep)
       .join('/')
-  return Object.keys(result.metafile.inputs).map(relative)
+  return [...Object.keys(result.metafile.inputs).map(relative), ...manifests]
 }
 
 /** Repo files the Electron lifecycle tests and the fixtures they bundle at runtime load. */
@@ -110,7 +113,13 @@ export async function collectLinuxElectronLifecycleInputs(root = process.cwd()) 
         REPO_PATH_LITERAL
       )) {
         const target = path.join(root, literal)
-        if (!inputs.has(literal) && existsSync(target) && statSync(target).isFile()) {
+        if (inputs.has(literal)) {
+          continue
+        }
+        if (!existsSync(target)) {
+          // A deleted fixture the tests still name must select the step.
+          inputs.add(literal)
+        } else if (statSync(target).isFile()) {
           next.add(literal)
         }
       }
