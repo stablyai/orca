@@ -1,23 +1,16 @@
 import { spawnCodexAppServerConnection } from '../codex-app-server-connection'
-import type {
-  CodexAppServerConnection,
-  CodexAppServerServerRequest
-} from '../codex-app-server-connection-types'
+import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
 import { initializeCodexAppServerConnection } from '../codex-app-server-handshake'
-import {
-  codexFrameThreadId,
-  codexSharedFrameParams,
-  codexSubagentParentThreadId,
-  type CodexSharedServerFrame
-} from './codex-shared-server-frames'
+import { isCodexAppServerUnsupportedError } from '../codex-app-server-session'
+import { stopCodexSharedChatWorkload } from './codex-shared-server-chat-workload'
+import type { CodexSharedServerFrame } from './codex-shared-server-frames'
 import type { DescendantTreeVerdict } from '../../../pty/process-retirement/pty-descendant-exit-verification'
 import type { CodexSharedServerSpec } from './codex-shared-server-key'
 import type { CodexSharedServerToolUsage } from './codex-shared-server-memory-ceiling'
 import type { CodexSharedLeaseHost, CodexSharedServerLease } from './codex-shared-server-lease'
 import { CodexSharedServerTurns, withDeadline } from './codex-shared-server-turns'
-import { CodexSharedServerUnrouted } from './codex-shared-server-unrouted'
+import { CodexSharedServerRouter } from './codex-shared-server-router'
 
-const MAX_RETIRED_THREADS = 4_096
 const RELEASE_REQUEST_TIMEOUT_MS = 5_000
 /** How long an interrupted turn has to report turn/completed before Stop counts it unproven. */
 const TURN_STOP_PROOF_MS = 10_000
@@ -35,12 +28,13 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   toolUsage: CodexSharedServerToolUsage[] = []
   private physical: CodexAppServerConnection | null = null
   private hasExited = false
-  private readonly owners = new Map<string, CodexSharedServerLease>()
   private reaping: Promise<void> | null = null
   private readonly releases = new WeakMap<CodexSharedServerLease, Promise<boolean>>()
   private readonly turns = new CodexSharedServerTurns()
-  private readonly retired = new Set<string>()
-  private readonly unrouted = new CodexSharedServerUnrouted((frame) => this.refuse(frame))
+  private readonly router = new CodexSharedServerRouter(
+    () => this.leases,
+    (frame) => this.refuse(frame)
+  )
   readonly ready: Promise<void>
 
   constructor(
@@ -53,8 +47,11 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
 
   private async start(connect: typeof spawnCodexAppServerConnection): Promise<void> {
     const connection = await connect(this.spec.launch, {
-      onNotification: (method, params) => this.onNotification(method, params),
-      onServerRequest: (request) => this.onServerRequest(request),
+      onNotification: (method, params) => {
+        this.turns.observe(method, params)
+        this.router.onNotification(method, params)
+      },
+      onServerRequest: (request) => this.router.onServerRequest(request),
       onUnhandledFrame: (kind, payload) => {
         console.warn(`[codex-shared-server] ${kind}`, this.pid ?? '')
         void payload
@@ -102,16 +99,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   }
 
   claim(threadId: string, lease: CodexSharedServerLease): void {
-    const previous = this.owners.get(threadId)
-    if (previous && previous !== lease) {
-      previous.threads.delete(threadId)
-    }
-    this.owners.set(threadId, lease)
-    lease.threads.add(threadId)
-    this.retired.delete(threadId)
-    for (const frame of this.unrouted.take(threadId)) {
-      lease.deliver(frame)
-    }
+    this.router.claim(threadId, lease)
   }
 
   trackTurnStart(threadId: string, request: Promise<unknown>): void {
@@ -137,14 +125,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
 
   private async releaseLease(lease: CodexSharedServerLease): Promise<boolean> {
     this.leases.delete(lease)
-    const threads = [...lease.threads]
-    for (const threadId of threads) {
-      if (this.owners.get(threadId) === lease) {
-        this.owners.delete(threadId)
-        this.retire(threadId)
-      }
-    }
-    lease.threads.clear()
+    const threads = this.router.release(lease)
     let proven = true
     const physical = this.physical
     if (physical && this.closed && !this.hasExited) {
@@ -154,11 +135,12 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       proven = this.workloadVerdict() === 'exited'
     } else if (physical && !this.closed) {
       const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
+      // Opens that answer from here on are abandoned (lease.ts), so none outlives the chat.
       await withDeadline(
-        Promise.allSettled(this.turns.startsPending(threads)),
+        Promise.allSettled([...lease.pendingOpens, ...this.turns.startsPending(threads)]),
         RELEASE_REQUEST_TIMEOUT_MS
       )
-      proven = !this.turns.anyStartPending(threads)
+      proven = lease.pendingOpens.size === 0 && !this.turns.anyStartPending(threads)
       const turns = threads.flatMap((threadId) => {
         const turnId = this.turns.runningOn(threadId)
         return turnId ? [{ threadId, turnId }] : []
@@ -181,15 +163,41 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         proven = this.workloadVerdict() === 'exited'
       }
       if (!this.closed) {
+        // Turns ending doesn't end the commands they started; the chat's own are stopped alone.
+        const workloadStopped = await stopCodexSharedChatWorkload({
+          rpc: physical,
+          threads,
+          sessionId: lease.sessionId,
+          serverPid: this.pid,
+          timeoutMs: RELEASE_REQUEST_TIMEOUT_MS
+        })
         // A chat that already resumed one of these threads here owns its subscription now.
-        const unclaimed = threads.filter((threadId) => !this.owners.has(threadId))
-        await Promise.allSettled(
+        const unclaimed = threads.filter((threadId) => !this.router.isClaimed(threadId))
+        const unsubscribed = await Promise.allSettled(
           unclaimed.map((threadId) => physical.request('thread/unsubscribe', { threadId }, options))
         )
+        proven &&=
+          workloadStopped &&
+          unsubscribed.every(
+            (result) =>
+              result.status === 'fulfilled' || isCodexAppServerUnsupportedError(result.reason)
+          )
       }
     }
     this.onEnded(this)
     return proven
+  }
+
+  abandon(threadId: string): void {
+    if (this.router.isClaimed(threadId)) {
+      return
+    }
+    this.router.retire(threadId)
+    if (!this.closed) {
+      this.physical
+        ?.request('thread/unsubscribe', { threadId }, { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS })
+        .catch(() => {})
+    }
   }
 
   /** A turn that ignores Stop: stop the server if no other chat is working, else drain it. */
@@ -235,67 +243,6 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     return (await this.physical.close()) && this.physical.closeResult?.root === 'exited'
   }
 
-  private retire(threadId: string): void {
-    this.retired.add(threadId)
-    if (this.retired.size > MAX_RETIRED_THREADS) {
-      const oldest = this.retired.values().next()
-      if (!oldest.done) {
-        this.retired.delete(oldest.value)
-      }
-    }
-  }
-
-  private onNotification(method: string, params: unknown): void {
-    this.turns.observe(method, params)
-    if (method === 'thread/started') {
-      const parent = codexSubagentParentThreadId(params)
-      const threadId = codexFrameThreadId(params)
-      const owner = parent ? this.owners.get(parent) : undefined
-      if (threadId && owner?.open) {
-        this.claim(threadId, owner)
-      }
-    }
-    this.route({ kind: 'notification', method, params })
-  }
-
-  private onServerRequest(request: CodexAppServerServerRequest): void {
-    this.route({ kind: 'request', request })
-  }
-
-  private route(frame: CodexSharedServerFrame): void {
-    const threadId = codexFrameThreadId(codexSharedFrameParams(frame))
-    if (threadId === null) {
-      this.routeServerWide(frame)
-      return
-    }
-    const owner = this.owners.get(threadId)
-    if (owner) {
-      owner.deliver(frame)
-      return
-    }
-    if (this.retired.has(threadId)) {
-      this.refuse(frame)
-      return
-    }
-    this.unrouted.hold(threadId, frame)
-  }
-
-  /** Account and rate-limit frames: each chat would have had its own copy from its own server. */
-  private routeServerWide(frame: CodexSharedServerFrame): void {
-    if (frame.kind === 'request') {
-      const first = [...this.leases].find((lease) => lease.open)
-      if (first) {
-        first.deliver(frame)
-      } else {
-        this.refuse(frame)
-      }
-      return
-    }
-    for (const lease of this.leases) {
-      lease.deliver(frame)
-    }
-  }
-
   private refuse(frame: CodexSharedServerFrame): void {
     if (frame.kind === 'request' && !this.closed) {
       this.physical?.respondWithError(
@@ -312,7 +259,6 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     }
     this.hasExited = true
     this.draining = true
-    this.unrouted.clear()
     this.turns.endAll()
     // Root exit says nothing of the commands it ran; reap and judge the tree for every chat.
     const physical = this.physical
@@ -327,7 +273,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       lease.fail(error, false)
     }
     this.leases.clear()
-    this.owners.clear()
+    this.router.clear()
     this.onEnded(this)
   }
 }

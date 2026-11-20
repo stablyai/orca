@@ -13,6 +13,10 @@ type FakeServer = {
   pid: number
   handlers: CodexAppServerConnectionHandlers
   requests: { method: string; params?: Record<string, unknown> }[]
+  /** Background terminals per thread, as Codex lists them. */
+  terminals: Map<string, Set<string>>
+  /** Answers the thread/start held by `holdOpen`. */
+  releaseOpen: () => void
   crash: () => void
   /** The server goes unusable without its exit being proven yet. */
   closeTransport: () => void
@@ -22,7 +26,9 @@ type FakeServer = {
 function fakeCodex(
   interrupt: 'ends' | 'later' | 'ignored' = 'ends',
   /** What closing the process proves about its commands. */
-  closeTree: 'exited' | 'unverifiable' = 'exited'
+  closeTree: 'exited' | 'unverifiable' = 'exited',
+  /** Whether thread/backgroundTerminals/terminate actually stops the command. */
+  terminateWorks = true
 ) {
   const servers: FakeServer[] = []
   let nextThread = 1
@@ -36,6 +42,8 @@ function fakeCodex(
       pid: 5000 + servers.length,
       handlers,
       requests: [],
+      terminals: new Map(),
+      releaseOpen: () => {},
       crash: () => {
         closed = true
         handlers.onClose?.(new Error('codex crashed'))
@@ -60,6 +68,26 @@ function fakeCodex(
         if (method === 'turn/start' && params?.hang === true) {
           // A send Codex has not answered yet.
           return new Promise(() => {})
+        }
+        if (method === 'thread/start' && params?.holdOpen === true) {
+          const id = `thread-${nextThread++}`
+          return new Promise((resolve) => {
+            server.releaseOpen = () => {
+              const result = { thread: { id } }
+              options?.onReply?.(result)
+              resolve(result)
+            }
+          })
+        }
+        const threadId = typeof params?.threadId === 'string' ? params.threadId : ''
+        if (method === 'thread/backgroundTerminals/list') {
+          const running = [...(server.terminals.get(threadId) ?? [])]
+          const result = { data: running.map((processId) => ({ processId })), nextCursor: null }
+          options?.onReply?.(result)
+          return result
+        }
+        if (method === 'thread/backgroundTerminals/terminate' && terminateWorks) {
+          server.terminals.get(threadId)?.delete(String(params?.processId))
         }
         let result: unknown = {}
         if (method === 'thread/start') {
@@ -190,7 +218,10 @@ describe('shared Codex app-servers', () => {
       turn: { id: 'turn-1' }
     })
     await expect(connA.close()).resolves.toBe(true)
-    expect(servers[0]!.requests.slice(-2)).toEqual([
+    const teardown = servers[0]!.requests.filter((r) =>
+      ['turn/interrupt', 'thread/unsubscribe'].includes(r.method)
+    )
+    expect(teardown).toEqual([
       { method: 'turn/interrupt', params: { threadId: 'thread-1', turnId: 'turn-1' } },
       { method: 'thread/unsubscribe', params: { threadId: 'thread-1' } }
     ])
@@ -384,5 +415,72 @@ describe('shared Codex app-servers', () => {
     await vi.advanceTimersByTimeAsync(20_000)
     await closing
     expect(connA.processTreeUnproven).toBe(true)
+  })
+
+  it("routes a helper a parent's item announced, with no thread/started of its own, to the parent's chat", async () => {
+    const { servers, pool } = fakeCodex()
+    const requests: string[] = []
+    const a = chat()
+    const connA = await pool.open(
+      launch(),
+      { ...a.handlers, onServerRequest: (request) => requests.push(request.method) },
+      { sessionId: 'a', skillRoots: [] }
+    )
+    const threadA = await startThread(connA)
+    const { handlers } = servers[0]!
+    handlers.onNotification?.('item/started', {
+      threadId: threadA,
+      item: {
+        type: 'subAgentActivity',
+        id: 'i1',
+        kind: 'started',
+        agentThreadId: 'helper-1',
+        agentPath: 'root/helper'
+      }
+    })
+    handlers.onNotification?.('turn/started', { threadId: 'helper-1', turn: { id: 'h' } })
+    handlers.onServerRequest?.({
+      id: 7,
+      method: 'item/commandExecution/requestApproval',
+      params: { threadId: 'helper-1' }
+    })
+    expect(a.notifications.at(-1)).toEqual({
+      method: 'turn/started',
+      params: { threadId: 'helper-1', turn: { id: 'h' } }
+    })
+    expect(requests).toEqual(['item/commandExecution/requestApproval'])
+  })
+
+  it("stops the chat's own background commands on close, and reports Stop unproven when one survives", async () => {
+    const { servers, pool } = fakeCodex()
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.terminals.set(threadA, new Set(['p1']))
+    await connA.close()
+    expect(servers[0]!.terminals.get(threadA)?.size).toBe(0)
+    expect(connA.processTreeUnproven).toBe(false)
+
+    const stuck = fakeCodex('ends', 'exited', false)
+    const connB = await stuck.pool.open(launch(), chat().handlers, {
+      sessionId: 'b',
+      skillRoots: []
+    })
+    const threadB = await startThread(connB)
+    stuck.servers[0]!.terminals.set(threadB, new Set(['p2']))
+    await connB.close()
+    expect(connB.processTreeUnproven).toBe(true)
+  })
+
+  it('lets go of a thread that opens after its chat closed', async () => {
+    const { servers, pool } = fakeCodex()
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const opening = connA.request('thread/start', { cwd: '/work', holdOpen: true })
+    const closing = connA.close()
+    servers[0]!.releaseOpen()
+    await opening
+    await closing
+    const opened = servers[0]!.requests.filter((r) => r.method === 'thread/unsubscribe')
+    expect(opened).toEqual([{ method: 'thread/unsubscribe', params: { threadId: 'thread-1' } }])
+    expect(connA.processTreeUnproven).toBe(false)
   })
 })

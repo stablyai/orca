@@ -5,6 +5,7 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex-app-server-connection-types'
 import {
+  codexChildThreadIdsInHistory,
   codexOpenedThreadId,
   codexSharedFrameParams,
   codexTurnId,
@@ -16,6 +17,7 @@ export const CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES = 20_000
 export const CODEX_SHARED_LEASE_MAX_QUEUED_BYTES = 64 * 1024 * 1024
 
 const OPENS_THREAD = new Set(['thread/start', 'thread/resume', 'thread/fork'])
+const CARRIES_HISTORY = new Set(['thread/resume', 'thread/read', 'thread/turns/list'])
 
 /** What a lease needs from the server it rides on. */
 export type CodexSharedLeaseHost = {
@@ -23,6 +25,8 @@ export type CodexSharedLeaseHost = {
   readonly closed: boolean
   readonly connection: CodexAppServerConnection
   claim: (threadId: string, lease: CodexSharedServerLease) => void
+  /** A thread that opened after its chat left: nobody will use it, so the server lets it go. */
+  abandon: (threadId: string) => void
   /** Records a turn/start in flight, so a release that races it still interrupts its turn. */
   trackTurnStart: (threadId: string, request: Promise<unknown>) => void
   noteTurnStarted: (threadId: string, turnId: string) => void
@@ -36,6 +40,8 @@ export type CodexSharedLeaseHost = {
 /** One chat's view of a shared app-server: its threads' frames, its own backpressure and close. */
 export class CodexSharedServerLease implements CodexAppServerConnection {
   readonly threads = new Set<string>()
+  /** thread/start, /resume and /fork still awaiting Codex; close waits for them. */
+  readonly pendingOpens = new Set<Promise<unknown>>()
   private workload: (() => DescendantTreeVerdict) | null = null
   private state: 'open' | 'closing' | 'ended' = 'open'
   private closing: Promise<boolean> | null = null
@@ -98,8 +104,17 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       // Claimed before the reply's continuation, so frames Codex sent first reach this chat first.
       onReply: (result) => {
         const threadId = opensThread ? codexOpenedThreadId(result) : null
-        if (threadId && this.state === 'open') {
-          this.host.claim(threadId, this)
+        if (threadId) {
+          if (this.state === 'open') {
+            this.host.claim(threadId, this)
+          } else {
+            this.host.abandon(threadId)
+          }
+        }
+        if (CARRIES_HISTORY.has(method) && this.state === 'open') {
+          for (const child of codexChildThreadIdsInHistory(result)) {
+            this.host.claim(child, this)
+          }
         }
         const turnId = turnThreadId ? codexTurnId(result) : null
         if (turnThreadId && turnId) {
@@ -110,6 +125,13 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     })
     if (turnThreadId) {
       this.host.trackTurnStart(turnThreadId, request)
+    }
+    if (opensThread) {
+      this.pendingOpens.add(request)
+      const settle = (): void => {
+        this.pendingOpens.delete(request)
+      }
+      request.then(settle, settle)
     }
     return request
   }
