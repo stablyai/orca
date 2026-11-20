@@ -116,7 +116,9 @@ function parseScanRequest(value: unknown): WorkspacePortScanRequest | undefined 
     return undefined
   }
   const { repoId, freshOwners } = parsed.data
-  return { ...(repoId ? { repoId } : {}), ...(freshOwners ? { freshOwners } : {}) }
+  // Only Linux caches listener owners; elsewhere a fresh request must keep sharing the running scan.
+  const fresh = freshOwners && process.platform === 'linux'
+  return { ...(repoId ? { repoId } : {}), ...(fresh ? { freshOwners: true } : {}) }
 }
 
 function parseKillRequest(value: unknown): WorkspacePortKillRequest | null {

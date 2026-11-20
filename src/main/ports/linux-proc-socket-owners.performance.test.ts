@@ -123,17 +123,19 @@ describe('Linux listener owner lookup', () => {
       cwd: '/repo/app',
       fds: ['socket:[5001]']
     })
+    fakeProc.processes.set(500, { uid: OWN_UID, comm: 'sh', cmdline: 'sh', cwd: '/', fds: [] })
     fakeProc.readdirPaths = []
     const third = await scanPlatformListeningPorts({})
     expect(third.ports.map((port) => [port.port, port.pid, port.cwd])).toEqual([
       [8080, 400, '/repo/app'],
       [22, undefined, undefined]
     ])
-    // The owner change is confirmed by a full walk that reuses the holders already read.
+    // The owner change is confirmed by a full walk that reuses every fd table already read.
     expect(fakeProc.readdirPaths).toEqual([
       '/proc',
       '/proc/100/fd',
       '/proc/400/fd',
+      '/proc/500/fd',
       '/proc/200/fd',
       '/proc/300/fd'
     ])
@@ -152,7 +154,8 @@ describe('Linux listener owner lookup', () => {
       '/proc/400/fd',
       '/proc/100/fd',
       '/proc/200/fd',
-      '/proc/300/fd'
+      '/proc/300/fd',
+      '/proc/500/fd'
     ])
 
     // The cached worker exits; the parent still holds the socket, so a full walk hands it back.
@@ -169,7 +172,8 @@ describe('Linux listener owner lookup', () => {
       '/proc/400/fd',
       '/proc/200/fd',
       '/proc/100/fd',
-      '/proc/300/fd'
+      '/proc/300/fd',
+      '/proc/500/fd'
     ])
   })
 

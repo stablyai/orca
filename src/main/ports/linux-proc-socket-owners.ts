@@ -68,7 +68,7 @@ export async function resolveLinuxSocketOwners(
     sequence - lastFullWalkScan >= FULL_WALK_INTERVAL_SCANS ||
     [...inodes].some((inode) => !knownInodes.has(inode))
 
-  // Holders seen by a partial pass, kept so a confirming full walk does not read them again.
+  // Every fd table a partial pass read (empty ones too), so a confirming full walk reads none twice.
   const holderSockets = new Map<number, ReadonlySet<number>>()
   if (!fullWalk) {
     for (const pid of pids) {
@@ -76,9 +76,7 @@ export async function resolveLinuxSocketOwners(
       cachedOwnerSockets.delete(pid)
       if (cached || !seenBefore?.has(pid)) {
         const sockets = cached ?? (await readPidListenerSockets(pid, inodes))
-        if (sockets.size > 0) {
-          holderSockets.set(pid, sockets)
-        }
+        holderSockets.set(pid, sockets)
         for (const inode of sockets) {
           owners.set(inode, pid)
         }

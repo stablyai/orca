@@ -84,8 +84,10 @@ export function LocalWorkspacePortsPanel({
       return Promise.resolve()
     }
     setWorkspacePortScanRefreshing(true)
-    // A manual refresh re-resolves every listener owner instead of trusting cached owners.
-    const promise = scanWorkspacePortsForTarget(runtimeTarget, undefined, { freshOwners: true })
+    // Only Linux scans cache listener owners; elsewhere Refresh keeps sharing the running background scan.
+    const freshOwners =
+      useAppStore.getState().workspacePortScansByKey[scanKey]?.platform === 'linux'
+    const promise = scanWorkspacePortsForTarget(runtimeTarget, undefined, { freshOwners })
       .then((nextScan) => {
         publishWorkspacePortScanForHost({
           scanKey,
