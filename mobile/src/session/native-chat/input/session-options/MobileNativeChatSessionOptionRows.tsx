@@ -216,7 +216,8 @@ export function descriptorRowElements(
       />
     ]
   }
-  const { currentValue } = descriptor.kind
+  // A provider fallback is what runs, so the saved model stays pickable.
+  const currentValue = descriptor.fallbackModel ?? descriptor.kind.currentValue
   const choices =
     descriptor.category === 'thought_level'
       ? orderEffortLevels(descriptor.kind.choices)

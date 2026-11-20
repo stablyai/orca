@@ -102,6 +102,13 @@ export async function claudeTakesFlagSettings(
   return session.flagSettingsControl !== 'unsupported'
 }
 
+/** A model pick, even of the unchanged saved value, asks Claude to leave its fallback at the next turn. */
+export function noteClaudeModelPick(session: ClaudeSession | undefined, fence: number): void {
+  if (session?.fence === fence && session.modelFallback) {
+    session.modelFallback = { ...session.modelFallback, picked: true }
+  }
+}
+
 /** A client's write to a live session. */
 export function setClaudeStructuredSessionOption(
   session: ClaudeSession,
@@ -176,8 +183,13 @@ export async function setClaudeStructuredOption(
     }
     if (input.key === 'model') {
       session.translator?.modelWritten(input.value)
+      delete session.modelFallback
     }
   } catch (error) {
+    // A refused write leaves Claude on its fallback; the pill names it again.
+    if (input.key === 'model' && session.modelFallback) {
+      session.modelFallback = { model: session.modelFallback.model }
+    }
     if (error instanceof ClaudeControlRequestError) {
       throw new AgentSessionOptionRejectedError(error)
     }

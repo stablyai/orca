@@ -17,8 +17,6 @@ export type StructuredAgentSessionLiveOptions = AgentSessionOptionsResult & {
   catalogListing?: AgentModelCatalogLiveListing
   /** The running CLI cannot change effort mid-chat, whatever its catalog lists. */
   effortFixed?: true
-  /** This child runs `model` after a provider fallback replaced the `requested` input; absent requested is the agent default. */
-  modelFallback?: { model: string; requested?: string }
 }
 
 export type StructuredAgentSessionRestingOptions = Pick<

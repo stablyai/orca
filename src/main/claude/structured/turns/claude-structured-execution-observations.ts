@@ -26,7 +26,6 @@ export function beginClaudeOptionMutation(session: ClaudeSession, key: string): 
   const sequence = session.optionMutationSequence
   if (key === 'model') {
     delete session.appliedOptions
-    delete session.modelFallback
   } else {
     if (session.reportedModelMutation === previous) {
       session.reportedModelMutation = sequence
@@ -69,8 +68,7 @@ function observeClaudeModelFallback(
   if (!session || !fallback || session.modelFallback?.model === fallback.to) {
     return false
   }
-  const requested = session.appliedInputOptions.get('model')
-  session.modelFallback = { model: fallback.to, ...(requested ? { requested } : {}) }
+  session.modelFallback = { model: fallback.to }
   return true
 }
 
