@@ -31,6 +31,8 @@ describe.runIf(process.platform === 'darwin')('cloneWorktreeCheckoutFiles', () =
     git(repo, 'init', '-q')
     git(repo, 'config', 'user.email', 'test@example.com')
     git(repo, 'config', 'user.name', 'Test')
+    git(repo, 'config', 'core.autocrlf', 'false')
+    git(repo, 'config', 'core.eol', 'lf')
     writeFileSync(join(repo, '.gitattributes'), '*.crlf text eol=crlf\n*.text text\n')
     writeFileSync(join(repo, '.gitignore'), 'secret.env\n')
     writeFileSync(join(repo, 'src/same.txt'), 'same\n')
