@@ -51,6 +51,9 @@ vi.mock('../platform/external-links/external-link', () => ({
 vi.mock('./bot-sheet-operations', () => ({
   botUpdate: { request: mocks.update, interpret: (reply: unknown) => reply }
 }))
+vi.mock('./tools/bot-tool-operations', () => ({
+  botToolsListRead: { request: async () => ({}), interpret: () => ({ own: [], inherited: [] }) }
+}))
 vi.mock('./bot-up-next-operations', () => ({
   suggestionStart: {
     request: mocks.start,

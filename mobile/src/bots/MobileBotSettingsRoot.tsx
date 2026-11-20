@@ -38,6 +38,7 @@ export type SettingsRootPage =
   | 'tidy-up'
   | 'stale'
   | 'who-can-ask'
+  | 'tools'
 
 function staleLabel(t: ReturnType<typeof useMobileTranslation>, stale: BotItemsStale) {
   return stale === 'never'
@@ -101,6 +102,8 @@ export function MobileBotSettingsRoot(props: {
   onDelete: () => void
   /** Above the list, under the page's header. */
   header: ReactNode
+  /** Rows under Who can ask in Access, such as Tools. */
+  accessRows?: ReactNode
   /** Groups that follow Access, such as Webhooks once the bot has a hook. */
   afterAccess?: ReactNode
 }) {
@@ -201,6 +204,7 @@ export function MobileBotSettingsRoot(props: {
             detail
             onPress={() => props.open('who-can-ask')}
           />
+          {props.accessRows}
         </Section>
         {props.afterAccess}
         <Section title={t('bots.settings.notifications', 'Notifications')}>
