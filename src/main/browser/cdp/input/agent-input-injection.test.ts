@@ -121,3 +121,22 @@ it('waits for every active shortcut policy before delivering input', async () =>
   await injection
   expect(delivered).toBe(true)
 })
+
+it('allows pointer work without a key ACK while still guarding nested keyboard delivery', async () => {
+  const guest = target()
+  const unavailable = new Error('key policy unavailable')
+  registerAgentInputSuspension(guest, async () => {
+    throw unavailable
+  })
+  const result = await withAgentInputInjection(
+    guest,
+    async () => {
+      expect(guest.menuIgnored()).toBe(true)
+      await expect(withAgentInputInjection(guest, async () => 'key')).rejects.toBe(unavailable)
+      return 'pointer delivered'
+    },
+    { keyboard: false }
+  )
+  expect(result).toBe('pointer delivered')
+  expect(guest.menuIgnored()).toBe(false)
+})

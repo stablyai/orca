@@ -71,6 +71,7 @@ export function registerAgentInputSuspension(
 
 const suspensionGates = new WeakMap<InjectionTarget, Promise<void>>()
 const injectionDepth = new WeakMap<InjectionTarget, number>()
+const keyboardDepth = new WeakMap<InjectionTarget, number>()
 
 export function isAgentInjectingInput(webContents: InjectionTarget): boolean {
   return (injectionDepth.get(webContents) ?? 0) > 0
@@ -78,19 +79,27 @@ export function isAgentInjectingInput(webContents: InjectionTarget): boolean {
 
 export async function withAgentInputInjection<T>(
   webContents: InjectionTarget,
-  run: () => Promise<T>
+  run: () => Promise<T>,
+  options: { keyboard?: boolean } = {}
 ): Promise<T> {
   assertRemoteCliPageAccess(webContents.id)
   const depth = injectionDepth.get(webContents) ?? 0
+  const keyboard = options.keyboard !== false
+  const keys = keyboardDepth.get(webContents) ?? 0
   injectionDepth.set(webContents, depth + 1)
   if (depth === 0) {
     webContents.setIgnoreMenuShortcuts(true)
   }
+  if (keyboard) {
+    keyboardDepth.set(webContents, keys + 1)
+  }
   try {
-    if (depth === 0) {
-      suspensionGates.set(webContents, suspendBeforeInput(webContents))
+    if (keyboard) {
+      if (keys === 0) {
+        suspensionGates.set(webContents, suspendBeforeInput(webContents))
+      }
+      await suspensionGates.get(webContents)
     }
-    await suspensionGates.get(webContents)
     return await run()
   } finally {
     const remaining = (injectionDepth.get(webContents) ?? 1) - 1
@@ -98,14 +107,22 @@ export async function withAgentInputInjection<T>(
       injectionDepth.set(webContents, remaining)
     } else {
       injectionDepth.delete(webContents)
-      suspensionGates.delete(webContents)
-      try {
-        // A failed recovery cannot change an input already delivered, or hide its original error.
-        await setSuspended(webContents, false).catch(() => markUnacknowledged(webContents))
-      } finally {
-        if (!webContents.isDestroyed() && !isAgentInjectingInput(webContents)) {
-          webContents.setIgnoreMenuShortcuts(false)
+    }
+    try {
+      if (keyboard) {
+        const remainingKeys = (keyboardDepth.get(webContents) ?? 1) - 1
+        if (remainingKeys > 0) {
+          keyboardDepth.set(webContents, remainingKeys)
+        } else {
+          keyboardDepth.delete(webContents)
+          suspensionGates.delete(webContents)
+          // Recovery cannot replace a delivered result or its original error.
+          await setSuspended(webContents, false).catch(() => markUnacknowledged(webContents))
         }
+      }
+    } finally {
+      if (!webContents.isDestroyed() && !isAgentInjectingInput(webContents)) {
+        webContents.setIgnoreMenuShortcuts(false)
       }
     }
   }
