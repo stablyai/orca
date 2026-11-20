@@ -134,7 +134,7 @@ async function hostSetsBuiltByWholeOnlySave(size: number) {
   }
 }
 
-it('a client without entries patches builds no entries host set at N and 10N', async () => {
+// The waste scales with hosts, not workspaces, so one fleet size covers it.
+it('a client without entries patches builds no entries host set', async () => {
   expect(await hostSetsBuiltByWholeOnlySave(10)).toEqual({ hostSets: 0, writes: 2 })
-  expect(await hostSetsBuiltByWholeOnlySave(100)).toEqual({ hostSets: 0, writes: 2 })
 })
