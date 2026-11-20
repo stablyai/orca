@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { WebContents } from 'electron'
+import type { FanoutEventSource } from '../runtime/events/event-listener-fanout'
 import type { Store } from '../persistence/loading-store/store'
 import type { LocalFileAccess } from '../../shared/file-access/local-file-access'
 import { MEDIA_PREVIEW_SCHEME } from '../../shared/file-preview/media-preview-scheme'
@@ -52,7 +52,7 @@ const REMOTE_STAT_REUSE_MS = 1_000
 export const grants = new Map<string, PreviewGrant>()
 const senders = new Map<number, Map<string, string>>()
 
-export type PreviewSender = Pick<WebContents, 'id' | 'on' | 'removeListener'>
+export type PreviewSender = FanoutEventSource & { readonly id: number }
 
 export function mintPreviewUrl(
   sender: PreviewSender,

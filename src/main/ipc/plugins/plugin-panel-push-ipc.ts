@@ -35,7 +35,11 @@ export function registerPluginPanelPushHandlers(pluginService: PluginService): v
     pushes.set(key, {
       stop: pluginService.panelBridge.open(session.caller, session.pluginKey, (push) => {
         if (!sender.isDestroyed()) {
-          publishToDocuments(PLUGIN_PANEL_PUSH_CHANNEL, { sessionToken, push }, sender.caller)
+          publishToDocuments(
+            PLUGIN_PANEL_PUSH_CHANNEL,
+            { sessionToken, push },
+            { sourceId: sender.id }
+          )
         }
       }),
       releaseDestroyed:

@@ -61,7 +61,11 @@ import {
 import { buildWslMoveShellHistoryBlobs } from '../../persistence/moving-wsl-projects/terminal-state/wsl-move-shell-history-blobs'
 import { inspectPtyProviderProcessForRenderer } from '../../providers/pty/process-inspection'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { getTrustedUIRendererWebContents, sendToTrustedUIRenderer } from '../ui'
+import {
+  getTrustedUIRendererWebContents,
+  getTrustedUIRendererWindow,
+  sendToTrustedUIRenderer
+} from '../ui'
 import { registerWslMoveHandlers } from './wsl-move-handlers'
 import { wslMoveMappedDrivePorts } from './wsl-move-mapped-drive-ports'
 import { registerWslMoveOrchestrator } from './wsl-move-orchestrator-wiring'

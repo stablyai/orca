@@ -10,6 +10,6 @@ export type AppCaller = Readonly<{
 export type AppDocumentTarget =
   | AppCaller
   | { documentId: string }
-  | { sourceId: number }
+  | { sourceId: number | undefined }
   | { windowId: number }
   | 'all'

@@ -41,6 +41,11 @@ const MAIN_BLOCKING_GRAPH_INPUTS = [
 
 // Ratchets default to SOURCE_ROOTS; list narrower inputs only where a scan is clearly scoped.
 const RATCHET_INPUTS = {
+  'check-application-ipc-ratchet.mjs': [
+    'src/main/ipc/',
+    'src/main/startup/main-process-ipc-bootstrap.ts',
+    'config/application-ipc-native-channels.json'
+  ],
   'check-daemon-blocking-call-ratchet.mjs': ['src/main/'],
   'check-e2e-typecheck-ratchet.mjs': ['tests/', 'config/tsconfig.e2e.json'],
   'check-focus-read-ratchet.mjs': ['src/renderer/src/', 'src/shared/'],

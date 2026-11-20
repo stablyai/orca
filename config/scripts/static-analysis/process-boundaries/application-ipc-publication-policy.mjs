@@ -1,0 +1,16 @@
+// These two PR2-owned sites stay native until its composition seam lands, or PR5 converts them.
+export const DEFERRED_APPLICATION_PUBLICATIONS = new Map([
+  [
+    'src/main/startup/runtime-startup/main-process-runtime-launch.ts',
+    ['mobile:unpairedDeviceAuthFailure']
+  ],
+  ['src/main/startup/runtime-startup/main-process-runtime-service.ts', ['pty:sideEffect']]
+])
+
+export const APPLICATION_PUBLICATION_ROOTS = [
+  'src/main/startup/plugin-startup/main-process-plugins.ts',
+  'src/main/startup/main-window/main-window-agent-status.ts',
+  'src/main/startup/cloud-startup/main-process-relay-status.ts',
+  'src/main/startup/wsl-startup/wsl-orcad-account-env-wiring.ts',
+  ...DEFERRED_APPLICATION_PUBLICATIONS.keys()
+]

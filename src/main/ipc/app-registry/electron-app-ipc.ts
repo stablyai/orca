@@ -77,7 +77,7 @@ export function createElectronAppIpcHost(
     return owned
   }
   const invoke =
-    (listener: AppHandler) =>
+    (listener: AppHandler, dropRetired = false) =>
     (event: IpcMainInvokeEvent, ...args: unknown[]) => {
       const { sender, senderFrame } = event
       if (
@@ -86,6 +86,9 @@ export function createElectronAppIpcHost(
         senderFrame.detached ||
         (senderFrame !== sender.mainFrame && senderFrame.parent === null)
       ) {
+        if (dropRetired) {
+          return
+        }
         throw new Error('Application IPC document has retired')
       }
       const { caller } = documentFor(sender).document
@@ -99,7 +102,7 @@ export function createElectronAppIpcHost(
     }
   return {
     handle: (channel, listener) => ipcMain.handle(channel, invoke(listener)),
-    on: (channel, listener) => ipcMain.on(channel, invoke(listener)),
+    on: (channel, listener) => ipcMain.on(channel, invoke(listener, true)),
     removeHandler: (channel) => ipcMain.removeHandler(channel),
     removeAllListeners: (channel) => {
       ipcMain.removeAllListeners(channel)
@@ -139,7 +142,9 @@ export function createElectronAppIpcHost(
         const sender =
           'windowId' in target
             ? BrowserWindow.fromId(target.windowId)?.webContents
-            : webContents.fromId(target.sourceId)
+            : target.sourceId === undefined
+              ? undefined
+              : webContents.fromId(target.sourceId)
         if (sender && !sender.isDestroyed()) {
           sender.send(channel, ...args)
         }

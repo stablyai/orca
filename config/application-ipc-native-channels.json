@@ -1,0 +1,251 @@
+{
+  "src/main/ipc/app.ts": [
+    "app:getFeatureWallAssetBaseUrl",
+    "app:getIdentity",
+    "app:getKeyboardInputSourceId",
+    "app:getKeyboardLayoutSnapshot",
+    "app:getMacosUpgradeSupport",
+    "app:getSystemLanguageDetection",
+    "app:getWindowsAdministratorStatus",
+    "app:pickFloatingMarkdownDocument",
+    "app:pickFloatingWorkspaceDirectory",
+    "app:relaunch",
+    "app:restart",
+    "app:restartAsAdministrator",
+    "app:setWindowMaterialSuppressed"
+  ],
+  "src/main/ipc/browser/browser-client-host-cookie-import-ipc.ts": [
+    "browser:session:clientRouteImportSources",
+    "browser:session:importCookiesForClientHost",
+    "browser:session:importFromBrowserForClientHost"
+  ],
+  "src/main/ipc/browser/browser-dictation-ipc.ts": ["browser:insertDictationText"],
+  "src/main/ipc/browser/browser-extension-context-menu.ts": [
+    "ACTION_MENU_CHANNEL",
+    "CLICK_CHANNEL"
+  ],
+  "src/main/ipc/browser/browser-extension-side-panels.ts": [
+    "browserExtensions:sidePanelAttach",
+    "browserExtensions:sidePanelClose",
+    "browserExtensions:sidePanelShown",
+    "browserExtensions:sidePanels"
+  ],
+  "src/main/ipc/browser/browser-extension-toolbar.ts": [
+    "browserExtensions:activateAction",
+    "browserExtensions:pageIcon",
+    "browserExtensions:setPinned",
+    "browserExtensions:toolbarState"
+  ],
+  "src/main/ipc/browser/browser-extension-webstore.ts": [
+    "browserExtensions:installFromWebStore",
+    "browserExtensions:respondInstallPrompt"
+  ],
+  "src/main/ipc/browser/browser-extensions.ts": [
+    "browserExtensions:list",
+    "browserExtensions:loadUnpacked",
+    "browserExtensions:openOptions",
+    "browserExtensions:reload",
+    "browserExtensions:remove",
+    "browserExtensions:reviewUpdate",
+    "browserExtensions:setEnabled"
+  ],
+  "src/main/ipc/browser/browser-google-cookie-clear-ipc.ts": [
+    "browser:session:clearGoogleCookies",
+    "browser:session:googleCookieClearTarget"
+  ],
+  "src/main/ipc/browser/browser-grab-ipc.ts": [
+    "browser:awaitGrabSelection",
+    "browser:cancelGrab",
+    "browser:captureSelectionScreenshot",
+    "browser:extractHoverPayload",
+    "browser:setGrabMode"
+  ],
+  "src/main/ipc/browser/browser-guest-discard-ipc.ts": [
+    "browser:acknowledgeGuestRemoval",
+    "browser:getGuestDiscardProtection",
+    "browser:preparePageAttach",
+    "browser:refuseGuestIdleDiscard",
+    "browser:reportGuestVisibility",
+    "browser:reserveGuestDiscard"
+  ],
+  "src/main/ipc/browser/browser-guest-view-ipc.ts": [
+    "browser:addWordToDictionary",
+    "browser:cancelDownload",
+    "browser:closeDevTools",
+    "browser:copyImageAt",
+    "browser:getPageSiteDisplay",
+    "browser:openDevTools",
+    "browser:publishClientPageMetadata",
+    "browser:reportViewportScrollState",
+    "browser:setAnnotationViewportBridge",
+    "browser:setDevToolsDockBounds",
+    "browser:setPageAudioMuted",
+    "browser:setPageSiteColorScheme",
+    "browser:setViewportOverride",
+    "browser:zoomPage"
+  ],
+  "src/main/ipc/browser/browser-passwords-ipc-request.ts": ["channel"],
+  "src/main/ipc/browser/browser-session-profile-ipc.ts": [
+    "browser:identity:get",
+    "browser:identity:set",
+    "browser:session:clearDefaultCookies",
+    "browser:session:createProfile",
+    "browser:session:deleteProfile",
+    "browser:session:detectBrowsers",
+    "browser:session:detectBrowsersForClientHost",
+    "browser:session:ensureManagedProfile",
+    "browser:session:importCookies",
+    "browser:session:importFromBrowser",
+    "browser:session:listProfiles",
+    "browser:session:resolvePartition",
+    "browser:sitePermissions:list",
+    "browser:sitePermissions:set"
+  ],
+  "src/main/ipc/browser/browser.ts": [
+    "browser:activeTabChanged",
+    "browser:getGuestMetadata",
+    "browser:isGuestRegistered",
+    "browser:prepareSshWorkspacePartition",
+    "browser:proceedCertificate",
+    "browser:registerGuest",
+    "browser:repairGuestRegistration",
+    "browser:respondPagePrompt",
+    "browser:respondWebAuthnAccount",
+    "browser:unregisterGuest"
+  ],
+  "src/main/ipc/browser/desktop-browser-bridge-host-control.ts": [
+    "DESKTOP_BROWSER_BRIDGE_HOST_DISALLOW_CHANNEL",
+    "DESKTOP_BROWSER_BRIDGE_HOST_STOP_CHANNEL"
+  ],
+  "src/main/ipc/cli.ts": [
+    "cli:getInstallStatus",
+    "cli:getWslInstallStatus",
+    "cli:install",
+    "cli:installWsl",
+    "cli:remove",
+    "cli:removeWsl"
+  ],
+  "src/main/ipc/computer-use-permissions.ts": [
+    "computerUsePermissions:getStatus",
+    "computerUsePermissions:openSetup",
+    "computerUsePermissions:reset"
+  ],
+  "src/main/ipc/crash-reporting/crash-reporting.ts": [
+    "crashReports:copyLatestDiagnostics",
+    "crashReports:dismiss",
+    "crashReports:getLatestPending",
+    "crashReports:getLatestReport",
+    "crashReports:recordBreadcrumb",
+    "crashReports:recordRendererError",
+    "crashReports:submit"
+  ],
+  "src/main/ipc/custom-app-icon.ts": [
+    "appIcon:importCustom",
+    "appIcon:readCustomPreview",
+    "appIcon:removeCustom"
+  ],
+  "src/main/ipc/dashboard/dashboard-popout.ts": [
+    "dashboardPopout:open",
+    "dashboardPopout:revealAgent"
+  ],
+  "src/main/ipc/developer-permissions/developer-permissions.ts": [
+    "developerPermissions:getStatus",
+    "developerPermissions:openSettings",
+    "developerPermissions:request",
+    "developerPermissions:testLocalNetworkConnection"
+  ],
+  "src/main/ipc/diagnostics.ts": [
+    "diagnostics:collectBundle",
+    "diagnostics:deleteBundle",
+    "diagnostics:discardBundlePreview",
+    "diagnostics:getStatus",
+    "diagnostics:openBundlePreview",
+    "diagnostics:uploadBundle"
+  ],
+  "src/main/ipc/doc-preview-grant-ipc.ts": [
+    "DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL",
+    "DOC_PREVIEW_LINK_CLICK_CHANNEL",
+    "DOC_PREVIEW_MINT_GRANT_CHANNEL",
+    "DOC_PREVIEW_REVOKE_GRANT_CHANNEL"
+  ],
+  "src/main/ipc/export.ts": ["export:html-to-pdf"],
+  "src/main/ipc/google-setup.ts": [
+    "googleSetup:findDownloadedKey",
+    "googleSetup:pickClientFile",
+    "googleSetup:saveAppFile",
+    "googleSetup:stopWatchingDownloads",
+    "googleSetup:watchDownloads"
+  ],
+  "src/main/ipc/keyboard/macos-symbolic-hotkeys-probe.ts": ["app:getMacCapturedDigitRowChords"],
+  "src/main/ipc/memory.ts": ["memory:getSnapshot", "memory:resourceWindowVisible"],
+  "src/main/ipc/mobile.ts": [
+    "mobile:getWindowsFirewallStatus",
+    "mobile:openWindowsNetworkSettings",
+    "mobile:repairWindowsFirewall"
+  ],
+  "src/main/ipc/notifications/notification-sound-ipc.ts": [
+    "notifications:loadSound",
+    "notifications:resolveSoundPath"
+  ],
+  "src/main/ipc/notifications/notifications.ts": [
+    "notifications:acknowledgeAttention",
+    "notifications:dismiss",
+    "notifications:dispatch",
+    "notifications:getDesktopAwayState",
+    "notifications:getPermissionStatus",
+    "notifications:openSystemSettings",
+    "notifications:probeDelivery",
+    "notifications:settleStructuredPrompts"
+  ],
+  "src/main/ipc/pets/pet.ts": ["pet:delete", "pet:import", "pet:importPetBundle", "pet:read"],
+  "src/main/ipc/plugins/plugin-frame-entry-ipc.ts": [
+    "plugins:readCustomEditorEntry",
+    "plugins:readPanelEntry"
+  ],
+  "src/main/ipc/plugins/plugin-panel-push-ipc.ts": [
+    "plugins:closePanelPush",
+    "plugins:openPanelPush"
+  ],
+  "src/main/ipc/renderer-shutdown-checkpoint.ts": [
+    "app:await-before-unload-checkpoint",
+    "app:stage-before-unload-sync"
+  ],
+  "src/main/ipc/settings/settings-import-handlers.ts": [
+    "settings:previewGhosttyImport",
+    "settings:previewKittyImport",
+    "settings:previewWarpThemeImport"
+  ],
+  "src/main/ipc/settings/settings.ts": ["settings:get-sync", "settings:listFonts"],
+  "src/main/ipc/shell/shell-path-existence-handlers.ts": ["shell:pathExists", "shell:pathsExist"],
+  "src/main/ipc/shell/shell.ts": [
+    "shell:openFilePath",
+    "shell:openFileUri",
+    "shell:openInExternalEditor",
+    "shell:openInFileManager",
+    "shell:openPath",
+    "shell:openUrl",
+    "shell:pickAttachment",
+    "shell:pickAttachments",
+    "shell:pickAudio",
+    "shell:pickDirectory",
+    "shell:pickImage",
+    "shell:pickRepoIconImage"
+  ],
+  "src/main/ipc/speech.ts": [
+    "speech:audioPort",
+    "speech:cancelDictation",
+    "speech:feedAudio",
+    "speech:startDictation",
+    "speech:stopDictation"
+  ],
+  "src/main/ipc/ui.ts": ["ui:performNativePaste", "ui:performNativeSelectionAction"],
+  "src/main/ipc/workspace-space/workspace-space-window.ts": [
+    "workspaceSpace:openWindow",
+    "workspaceSpace:publishWindowAnalysis",
+    "workspaceSpace:publishWindowState",
+    "workspaceSpace:requestIssueRefresh",
+    "workspaceSpace:requestWindowState",
+    "workspaceSpace:requestWorktreeRefresh",
+    "workspaceSpace:revealWorktree"
+  ]
+}

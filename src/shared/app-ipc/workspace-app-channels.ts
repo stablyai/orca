@@ -1,4 +1,8 @@
 export const WORKSPACE_APP_CHANNELS = [
+  'git:sequencerAbort',
+  'git:sequencerContinue',
+  'git:cherryPick',
+  'git:revert',
   'folderWorkspaces:create',
   'folderWorkspaces:delete',
   'folderWorkspaces:getPathStatus',

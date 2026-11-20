@@ -118,7 +118,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         args.filePath,
         async () => {
           const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
-          const media = await readLocalFilePreview(event, args, store, {
+          const media = await readLocalFilePreview({ sender: appDocumentFor(event) }, args, store, {
             documents: args.rangePreview === true
           })
           if (media) {
@@ -146,7 +146,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     if (!remote) {
       throw new Error('Invalid preview path')
     }
-    return grantRemoteFilePreview(event, remote, store)
+    return grantRemoteFilePreview({ sender: appDocumentFor(event) }, remote, store)
   })
 
   registerAppHandler(
