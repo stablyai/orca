@@ -1,3 +1,4 @@
+import { activeRpcBrowserPagePicker } from '../../../browser/agent-browser/session-routing/person-pick-hold'
 import { BrowserError } from '../../../browser/browser-error'
 import type {
   BrowserTabInfo,
@@ -102,8 +103,8 @@ export class BrowserClientPageQueries {
     const pages = this.host.getRuntimeBrowserPageRegistry()
     const page = selected ? pages.getPage(selected.browserPageId) : undefined
     if (page) {
-      pages.activatePage(page.browserPageId, page.placement)
-      publishSwitchedBrowserSessionTab(this.host, {
+      pages.activatePage(page.browserPageId, page.placement, activeRpcBrowserPagePicker())
+      await publishSwitchedBrowserSessionTab(this.host, {
         placementKind: 'client',
         browserPageId: page.browserPageId,
         worktreeId: page.workspaceId,
@@ -158,11 +159,12 @@ export async function yieldClientPageSelection(
   worktree: string | undefined
 ): Promise<void> {
   const pages = host.getRuntimeBrowserPageRegistry()
+  if (worktree) {
+    pages.yieldSelection((await host.resolveBrowserWorkspace(worktree)).id)
+    return
+  }
   pages.deactivateGlobal()
-  const workspaceIds = worktree
-    ? [(await host.resolveBrowserWorkspace(worktree)).id]
-    : [...new Set(pages.listPages().map((page) => page.workspaceId))]
-  for (const workspaceId of workspaceIds) {
-    pages.deactivateWorkspace(workspaceId)
+  for (const workspaceId of new Set(pages.listPages().map((page) => page.workspaceId))) {
+    pages.yieldSelection(workspaceId)
   }
 }

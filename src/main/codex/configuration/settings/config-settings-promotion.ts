@@ -3,7 +3,9 @@ import { dirname, join, resolve } from 'node:path'
 import { observeAgentStateFile } from '../codex-path-observation'
 import { resolvePromotionWriteTarget } from './config-settings-promotion-write-target'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { observeFilePublication } from '../../../filesystem/file-content-observation'
+import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {
@@ -40,7 +42,7 @@ export type CodexSettingsBaselineSnapshotOptions = {
 export function snapshotCodexRuntimeSettingsBaseline(
   runtimeHomePath = getOrcaManagedCodexHomePath(),
   options: CodexSettingsBaselineSnapshotOptions = {}
-): void {
+): boolean {
   try {
     const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
     // An empty baseline lets the first Codex write be detected and promoted.
@@ -68,8 +70,10 @@ export function snapshotCodexRuntimeSettingsBaseline(
       mcpServers: options.mirroredMcpServers ?? new Set(),
       mcpServerRoot: options.mirroredMcpServerRoot ?? false
     })
+    return true
   } catch (error) {
     console.warn('[codex-settings-promotion] failed to snapshot settings baseline', error)
+    return false
   }
 }
 
@@ -182,7 +186,9 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   }
   if (targetExists && parseWslUncPath(writeTarget.path)) {
     // WSL 9P symlink metadata is unreliable; write through to preserve the guest inode.
+    assertGuardedFileCurrent(writeTarget.path)
     writeFileSync(writeTarget.path, nextContent, 'utf-8')
+    observeFilePublication(writeTarget.path, nextContent)
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
   writeFileAtomically(writeTarget.path, nextContent, {

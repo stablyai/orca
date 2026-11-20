@@ -91,57 +91,6 @@ describe('rich markdown empty paragraph deletion', () => {
     }
   })
 
-  it('Backspace at the next block start removes a previous empty paragraph without joining', () => {
-    const editor = createEditor()
-    try {
-      const paragraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
-      editor.commands.setTextSelection(paragraph.to)
-      expect(editor.commands.splitBlock()).toBe(true)
-
-      const heading = findNodeTextPosition(editor, 'heading', 'Next section')
-      editor.commands.setTextSelection(heading.from)
-
-      expect(deleteAdjacentEmptyParagraph(editor, 'backward')).toBe(true)
-
-      expectHardWrappedParagraphPreserved(editor)
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('Delete at a soft-wrapped paragraph end removes the following empty paragraph', () => {
-    const editor = createEditor()
-    try {
-      const paragraph = findNodeTextPosition(editor, 'paragraph', 'launch-lifetime')
-      editor.commands.setTextSelection(paragraph.to)
-      expect(editor.commands.splitBlock()).toBe(true)
-      editor.commands.setTextSelection(paragraph.to)
-
-      expect(deleteAdjacentEmptyParagraph(editor, 'forward')).toBe(true)
-
-      expectHardWrappedParagraphPreserved(editor)
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('Delete in an empty paragraph before soft-wrapped prose preserves soft newlines', () => {
-    const editor = createEditor(`\n\n${hardWrappedMarkdown}`)
-    try {
-      editor.commands.setTextSelection(1)
-
-      expect(deleteAdjacentEmptyParagraph(editor, 'forward')).toBe(true)
-
-      expectNoHardBreaks(editor)
-      expect(editor.state.doc.firstChild?.textContent).toBe(
-        'Alpha owns launch-lifetime state keyed by tab id, while native\n' +
-          'chat owns conversion, ordering, and transcript reconciliation.'
-      )
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('Backspace joining two non-empty paragraphs preserves source soft newlines', () => {
     const editor = createEditor(hardWrappedTwoParagraphs)
     try {

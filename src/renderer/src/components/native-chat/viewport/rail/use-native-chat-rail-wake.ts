@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useRef } from 'react'
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 const NATIVE_CHAT_RAIL_WAKE_MS = 300
 const NATIVE_CHAT_RAIL_SUSTAIN_MS = 1500
 export function useNativeChatRailWake(): {
@@ -7,6 +8,7 @@ export function useNativeChatRailWake(): {
   sustain: () => void
 } {
   const railRef = useRef<HTMLDivElement | null>(null)
+  const awakeRail = useRef<HTMLDivElement | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sleepAt = useRef(0)
   const sustainUntil = useRef(0)
@@ -19,6 +21,9 @@ export function useNativeChatRailWake(): {
     if (rail && !('awake' in rail.dataset)) {
       rail.dataset.awake = ''
     }
+    if (rail) {
+      awakeRail.current = rail
+    }
     if (timer.current !== null) {
       return
     }
@@ -29,8 +34,9 @@ export function useNativeChatRailWake(): {
         return
       }
       timer.current = null
-      if (railRef.current) {
-        delete railRef.current.dataset.awake
+      if (awakeRail.current) {
+        delete awakeRail.current.dataset.awake
+        awakeRail.current = null
       }
     }
     timer.current = setTimeout(settle, NATIVE_CHAT_RAIL_WAKE_MS)
@@ -46,13 +52,16 @@ export function useNativeChatRailWake(): {
     }
   }, [])
 
-  useEffect(
-    () => () => {
-      if (timer.current !== null) {
-        clearTimeout(timer.current)
-      }
-    },
-    []
+  useNativeChatPaneLifetimeEffect(
+    useCallback(
+      () => () => {
+        if (timer.current !== null) {
+          clearTimeout(timer.current)
+        }
+        awakeRail.current = null
+      },
+      []
+    )
   )
 
   return { railRef, wake, sustain }

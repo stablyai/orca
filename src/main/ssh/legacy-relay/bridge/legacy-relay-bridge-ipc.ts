@@ -4,12 +4,12 @@
  */
 import { ipcMain, type BrowserWindow } from 'electron'
 import { z } from 'zod'
-import { LEGACY_RELAY_BRIDGE_CHANNELS as CHANNELS } from '../../../../shared/legacy-relay-bridge-contract'
-import { isRemoteCliControlAllowed } from '../../../../shared/ssh-remote-cli-control'
+import { LEGACY_RELAY_BRIDGE_CHANNELS as CHANNELS } from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
+import { isRemoteCliControlAllowed } from '../../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { PtyRetirementWithoutProof } from '../../../pty/process-retirement/pty-exit-proof'
-import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { track } from '../../../telemetry/client'
 import type { SshConnection } from '../../connection/ssh-connection'
 import { knownSshHostPlatform } from '../../remote-host/ssh-host-platform-memo'
@@ -21,7 +21,7 @@ import {
   installLegacyRelayBridge,
   legacyRelayBridgedPanes,
   resizeLegacyRelayPane,
-  setLegacyRelayPaneOutputPaused,
+  setLegacyRelayOutputPaused,
   writeLegacyRelayPane
 } from './legacy-relay-bridge-registry'
 import { terminalsBucket } from './legacy-relay-daily-activity'
@@ -32,7 +32,11 @@ const PaneArgsSchema = z.object({ ptyId: PtyIdSchema })
 const DetachArgsSchema = z.object({ ptyId: PtyIdSchema, acquisitionId: z.number().int() })
 const AttachArgsSchema = z.object({ ptyId: PtyIdSchema, replayInStream: z.boolean().optional() })
 const WriteArgsSchema = z.object({ ptyId: PtyIdSchema, data: z.string() })
-const PausedArgsSchema = z.object({ ptyId: PtyIdSchema, paused: z.boolean() })
+const PausedArgsSchema = z.object({
+  ptyId: PtyIdSchema,
+  paused: z.boolean(),
+  replayNeeded: z.boolean().optional()
+})
 const ResizeArgsSchema = z.object({ ptyId: PtyIdSchema, cols: SizeSchema, rows: SizeSchema })
 
 export function registerLegacyRelayBridgeIpc(args: {
@@ -155,7 +159,7 @@ export function registerLegacyRelayBridgeIpc(args: {
   ipcMain.on(CHANNELS.setOutputPaused, (_event, payload: unknown) => {
     const args = PausedArgsSchema.safeParse(payload)
     if (args.success) {
-      setLegacyRelayPaneOutputPaused(args.data.ptyId, args.data.paused)
+      setLegacyRelayOutputPaused(args.data.ptyId, args.data.paused, args.data.replayNeeded)
     }
   })
   ipcMain.on(CHANNELS.detach, (_event, payload: unknown) => {

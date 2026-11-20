@@ -19,11 +19,12 @@ import type { StructuredSessionOpenFeedback } from './activate-ai-vault-structur
 import { agentMessageSenderUnavailableText } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import type { AgentMessageSenderTarget } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import { activateWorktreeAgentPane } from '@/components/sidebar/workspace-card/activity/use-worktree-agent-activation'
+import { findTabByIdOrChatAlias } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '@/store/types'
-import type { RuntimeTerminalResolvePane } from '../../../../../shared/runtime-terminal-contracts'
-import type { LocatedAgentSender } from '@/runtime/native-chat/agent-senders/agent-sender-associations'
+import type { RuntimeTerminalResolvePane } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { LocatedAgentSender } from '@/runtime/native-chat/agent-senders/agent-sender-index'
 
 /** older-host identifies the chat host; update may mean either side, and unreachable proves nothing. */
 export type LookupFailure = 'older-host' | 'update' | 'unreachable'
@@ -84,12 +85,11 @@ function heldTabId(
   if (!tabId) {
     return null
   }
-  const held =
-    (state.tabsByWorktree[location.worktreeId] ?? []).some((tab) => tab.id === tabId) ||
-    (state.unifiedTabsByWorktree[location.worktreeId] ?? []).some(
-      (tab) => tab.id === tabId && tab.contentType === 'agent-session'
-    )
-  return held ? tabId : null
+  if ((state.tabsByWorktree[location.worktreeId] ?? []).some((tab) => tab.id === tabId)) {
+    return tabId
+  }
+  const chat = findTabByIdOrChatAlias(state.unifiedTabsByWorktree[location.worktreeId], tabId)
+  return chat?.contentType === 'agent-session' ? chat.id : null
 }
 
 /** The handle the located pane holds: its status row's, when that row is known to be this pane's
@@ -107,7 +107,7 @@ async function openUnheldTerminal(
   const environmentId = host.kind === 'environment' ? host.environmentId : null
   const gone = () =>
     toast.info(agentMessageSenderUnavailableText({ kind: 'gone', sender: 'terminal' }, name))
-  const row = useAppStore.getState().agentStatusByPaneKey[location.paneKey]
+  const row = useAppStore.getState().agentStatusByPaneKey.get(location.paneKey)
   let handle =
     row?.worktreeId === location.worktreeId && (row.connectionId ?? null) === environmentId
       ? row.terminalHandle

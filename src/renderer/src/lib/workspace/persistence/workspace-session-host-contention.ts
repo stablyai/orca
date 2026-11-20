@@ -3,8 +3,8 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import { normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId } from '../../../../../shared/workspace-scope'
+} from '../../../../../shared/execution-host/execution-host'
+import { normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId } from '../../../../../shared/workspace/identity/workspace-scope'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import { pickPrimaryHostForClaims } from '../../../../../shared/workspace-session/workspace-session-contested-primary-host'
 import {

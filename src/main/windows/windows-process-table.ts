@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot-reader'
-import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/orcad-artifacts'
+import { createProcessTableSnapshotReader } from '../../shared/process-observation/tables/process-table-snapshot-reader'
+import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { reportWindowsCommandLineRecoveryHealth } from './windows-command-line-recovery-health'
 import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
 import { WindowsProcessTableTimeoutError } from './windows-process-table-timeout-error'
@@ -289,11 +289,19 @@ const detailedReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
   now: () => Date.now()
 })
 
+/** One identity projection per CIM snapshot, so panes polling it share the array and its index. */
+const identityProjections = new WeakMap<readonly WindowsProcessRow[], WindowsProcessIdentityRow[]>()
+
 /** Without a binding, project identity from the shared CIM scan and strip command lines to preserve the row contract. */
 async function readIdentityRows(fresh: boolean): Promise<WindowsProcessIdentityRow[]> {
   if (moduleLoader() === null) {
     const rows = await (fresh ? detailedReader.getFreshSnapshot() : detailedReader.getSnapshot())
-    return rows.map(toIdentityRow)
+    let identity = identityProjections.get(rows)
+    if (!identity) {
+      identity = rows.map(toIdentityRow)
+      identityProjections.set(rows, identity)
+    }
+    return identity
   }
   return fresh ? identityReader.getFreshSnapshot() : identityReader.getSnapshot()
 }

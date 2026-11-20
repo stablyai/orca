@@ -66,6 +66,24 @@ export function inEdgeCohort(
   return edgeCohortBucketPermille(relayHostId) < edgeRolloutPermille(config.rolloutPercent, flags)
 }
 
+// Whether the host's assignment row may be on the edge, so an ask that is not moving it there must
+// read the row (leave) first. A host reaches the edge only through the cohort (its bucket under the
+// rollout) or an allow list, and cohorts only grow with the rollout, so a host above the highest
+// rollout ever applied (leaveCeilingPermille) never had an edge row. Unset: every host may.
+// Mode is ignored: hosts leave under off and down too.
+export function mayBeOnEdge(config: EdgeRelayConfig, relayHostId: string, userId?: string): boolean {
+  const flags = config.control?.() ?? EDGE_CONTROL_DEFAULTS
+  if (flags.leaveCeilingPermille === undefined) { return true }
+  if (config.allowHosts.has(relayHostId) || config.denyHosts.has(relayHostId)) { return true }
+  if (userId !== undefined && config.allowUsers?.has(userId)) { return true }
+  const ceiling = Math.max(
+    flags.leaveCeilingPermille,
+    edgeRolloutPermille(config.rolloutPercent, flags),
+    config.rolloutPercent * 10
+  )
+  return edgeCohortBucketPermille(relayHostId) < ceiling
+}
+
 // Another director holds the host's row, or the host is on the edge and cannot leave yet (its
 // desktop is still connected there): retry shortly.
 export class EdgeMoveBusyError extends Error {

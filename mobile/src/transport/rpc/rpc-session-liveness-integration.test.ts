@@ -36,8 +36,6 @@ class MockWebSocket {
   onclose: (() => void) | null = null
   onmessage: ((event: { data: unknown }) => void) | null = null
   onerror: (() => void) | null = null
-  throwOnSend = false
-  throwForMethod: string | null = null
   readonly sent: string[] = []
   close = vi.fn(() => {
     this.readyState = MockWebSocket.CLOSED
@@ -49,12 +47,6 @@ class MockWebSocket {
   }
 
   send(payload: string): void {
-    if (
-      this.throwOnSend ||
-      (this.throwForMethod && payload.includes(`"method":"${this.throwForMethod}"`))
-    ) {
-      throw new Error('socket send failed')
-    }
     this.sent.push(payload)
   }
 
@@ -106,6 +98,29 @@ describe('physical session liveness', () => {
     }
     expect((await request).ok).toBe(true)
     await vi.advanceTimersByTimeAsync(9_000)
+    expect(client.getState()).toBe('reconnecting')
+    client.close()
+  })
+
+  it('keeps a network-change check open while frames arrive and ends it after 4 s of silence', async () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = sockets[0]!
+    socket.authenticate()
+    await vi.advanceTimersByTimeAsync(0)
+    client.notifyForeground('network-change')
+    const probe = lastRequestId(socket)
+    for (let elapsed = 0; elapsed < 10_000; elapsed += 2_000) {
+      await vi.advanceTimersByTimeAsync(2_000)
+      socket.onmessage?.({
+        data: `encrypted:${JSON.stringify({ id: 'earlier-window', ok: true, result: {} })}`
+      })
+    }
+    socket.onmessage?.({ data: `encrypted:${JSON.stringify({ id: probe, ok: true, result: {} })}` })
+    expect(client.getState()).toBe('connected')
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    client.notifyForeground('network-change')
+    await vi.advanceTimersByTimeAsync(4_000)
     expect(client.getState()).toBe('reconnecting')
     client.close()
   })

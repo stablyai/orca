@@ -18,8 +18,6 @@ import type { RemoteDispatchAttachmentStopMethods } from './remote-dispatch-atta
 import { attachRemoteQuestionStore } from './remote-question-store'
 import type { RemoteQuestionStoreMethods } from './remote-question-store'
 
-export type { FederationRelayAcknowledgment } from './federation-relay-report-acknowledgment'
-
 export type LegacyRemoteDbMethods = FederatedDispatchObservationFenceMethods &
   RemoteDispatchAttachmentCreateMethods &
   RemoteDispatchAttachmentAuthorityMethods &

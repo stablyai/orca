@@ -1,5 +1,4 @@
 import { journalRowSchemaVersion } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import './journal-row-builders'
 import {
   journalLifecycleMutationRow,
   journalLifecycleMutationItemId

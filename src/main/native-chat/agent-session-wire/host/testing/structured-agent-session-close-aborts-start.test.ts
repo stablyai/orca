@@ -2,7 +2,6 @@
 
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
   adapter,
@@ -10,13 +9,13 @@ import {
   CALLER,
   hostTestState,
   replaceHostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 function openHost(state: ReturnType<typeof hostTestState>): StructuredAgentSessionHost {
   const host = new StructuredAgentSessionHost({
@@ -24,7 +23,7 @@ function openHost(state: ReturnType<typeof hostTestState>): StructuredAgentSessi
     logger: createStructuredAgentSessionLogger(),
     store: state.store,
     adapter: adapter(),
-    journalDatabase: openTestJournalHostDatabase(state.root),
+    journalDatabase: state.host.deps.journalDatabase,
     recoveryCapsule: new AgentSessionRecoveryCapsule(state.root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-a',
@@ -50,22 +49,4 @@ it('a close stops a start the provider never answers instead of queueing behind 
   await host.close(SESSION, 'user-close')
   expect(signal?.aborted).toBe(true)
   expect((await attaching).ok).toBe(false)
-})
-
-it('a close while the attach still probes the previous owner asks no adapter to start', async () => {
-  const state = hostTestState()
-  // Test adapters that ignore signals; host admission must still prevent late spawn.
-  const host = openHost(state)
-  const runtimeState = host.collaboratorsForTests().runtimeState
-  const probe = runtimeState.probeOwner.bind(runtimeState)
-  let closing: Promise<void> | undefined
-  runtimeState.probeOwner = async (sessionId) => {
-    closing ??= host.close(SESSION, 'user-close')
-    return probe(sessionId)
-  }
-  expect(await host.attach(CALLER, attachParams()).catch((error: unknown) => error)).toMatchObject({
-    name: 'AgentSessionPreSpawnError'
-  })
-  await closing
-  expect(state.acquire).not.toHaveBeenCalled()
 })

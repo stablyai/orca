@@ -54,7 +54,12 @@ function getManagedScriptPath(): string {
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
     ? wrapWindowsBatchHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
+    : getPosixManagedCommand(scriptPath)
+}
+
+// Command Code scrubs hook env; its script recovers the pane from ancestor processes.
+function getPosixManagedCommand(scriptPath: string): string {
+  return wrapPosixHookCommand(scriptPath, {}, { skipPaneGuard: true })
 }
 
 function buildInstalledConfig(
@@ -180,7 +185,7 @@ export class CommandCodeHookService {
         }
       }
 
-      buildInstalledConfig(config, wrapPosixHookCommand(remoteScriptPath), 'command-code-hook.sh')
+      buildInstalledConfig(config, getPosixManagedCommand(remoteScriptPath), 'command-code-hook.sh')
       await writeManagedScriptRemote(sftp, remoteScriptPath, buildCommandCodeManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, config)
 

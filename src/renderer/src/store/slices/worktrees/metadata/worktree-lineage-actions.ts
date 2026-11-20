@@ -1,13 +1,16 @@
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetForOwnerEnvironment
 } from '../../../../runtime/rpc/targets/runtime-client-target'
 import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
 import { refreshCrossStoreLineageForTarget } from './cross-store-lineage-hydration'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   applyWorktreeLineageUpdate,
   refreshWorktreeLineageForTarget,
@@ -16,7 +19,7 @@ import {
 import { hostRouteForWorktreeOwner } from '../listing/worktree-owner-target'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
-import { buildCrossStoreParentRef } from './cross-store-parent-ref'
+import { buildCrossStoreParentRef, isBotHomeParent } from './cross-store-parent-ref'
 
 // Why: this runs inside a catch, so letting the refresh reject would replace the failure it recovers from.
 async function refreshWorktreeLineageBestEffort(
@@ -130,7 +133,7 @@ export function createAssignCrossStoreWorktreeParent(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['assignCrossStoreWorktreeParent'] {
-  return async (children, parent) => {
+  return async (children, parent, options) => {
     const routes = children.map((child) => ({
       child,
       target: hostRouteForWorktreeOwner(get(), child.id, child.hostId).target
@@ -147,7 +150,14 @@ export function createAssignCrossStoreWorktreeParent(
           callRuntimeRpc(
             target,
             'worktree.set',
-            { worktree: toRuntimeWorktreeSelector(child.id), crossStoreParent },
+            {
+              worktree: toRuntimeWorktreeSelector(child.id),
+              crossStoreParent,
+              ...(isBotHomeParent(get(), parent) ? { crossStoreParentIsBotHome: true } : {}),
+              ...(options?.ifParentWorkspace !== undefined
+                ? { ifParentWorkspace: options.ifParentWorkspace }
+                : {})
+            },
             { timeoutMs: 15_000 }
           )
         )

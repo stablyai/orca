@@ -20,7 +20,7 @@ import type {
   CodexStructuredSessionAdapterDeps
 } from './codex-structured-session-state'
 
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { withObservedProviderExit } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 
 const startLinks = new WeakMap<

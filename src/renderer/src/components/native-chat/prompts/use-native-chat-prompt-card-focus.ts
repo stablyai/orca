@@ -6,8 +6,14 @@ const PROMPT_CARD_FOCUS_TARGET_SELECTOR =
   '[data-native-chat-prompt-card-focus-target]:not(:disabled)'
 
 function focusPromptCard(card: HTMLElement): void {
-  const target = card.querySelector<HTMLElement>(PROMPT_CARD_FOCUS_TARGET_SELECTOR) ?? card
-  target.focus()
+  const target = card.querySelector<HTMLElement>(PROMPT_CARD_FOCUS_TARGET_SELECTOR)
+  if (target) {
+    // Show the ring even when a mouse click opened the card; number keys and Enter act on this row.
+    target.focus({ focusVisible: true })
+    return
+  }
+  // The card itself is only a key sink; leave its ring to the browser's keyboard heuristic.
+  card.focus()
 }
 
 /** Focus the shown card requesting it unless keep already names a control inside it; return false when ineligible. */
@@ -27,7 +33,9 @@ export function isInNativeChatPaneOf(card: HTMLElement | null, element: Element 
     !element ||
     element === document.body ||
     card?.closest('.native-chat-pane-shell') === element ||
-    Boolean(card?.closest(NATIVE_CHAT_ROOT_SELECTOR)?.contains(element))
+    Boolean(card?.closest(NATIVE_CHAT_ROOT_SELECTOR)?.contains(element)) ||
+    // A surface outside chat that shows the card (an item page) names its own key scope.
+    Boolean(card?.closest('[data-native-chat-prompt-scope]')?.contains(element))
   )
 }
 

@@ -1,12 +1,13 @@
 // Count pending handovers and late-settlement writes as held until child/journal state catches up.
 // Nested late-settlement windows share the count without replacing the input that owns its result.
 
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { UnopenedSendJournal } from './structured-agent-session-unopened-send-withdrawal'
 
-/** The chat's journal, which identifies the conversation for as long as it is held. */
-type HandoverJournal = Pick<UnopenedSendJournal, 'submissions'>
+/** Live handles and finite recovery snapshots identify their own handover windows. */
+type HandoverJournal = AgentSessionJournal | Pick<UnopenedSendJournal, 'snapshot' | 'submission'>
 
 type HandoverInput = {
   owner: () => void
@@ -54,17 +55,37 @@ export function structuredAgentSessionHandingOver(
   return handingOver.get(journal) ?? NONE
 }
 
+/** Pending submission membership is checked in the reader's snapshot, alongside these live owners. */
+export function structuredAgentSessionHandoverAuthority(journal: HandoverJournal): {
+  handingOver: string[]
+  continuingUnadmitted: string[]
+  finalizing: string[]
+} {
+  const sends = structuredAgentSessionHandingOver(journal)
+  const continuingUnadmitted: string[] = []
+  const finalizing: string[] = []
+  for (const [id, { input }] of sends) {
+    if (input?.unadmitted === true && input.signal?.aborted !== true) {
+      continuingUnadmitted.push(id)
+    }
+    if (input?.finalization !== undefined) {
+      finalizing.push(id)
+    }
+  }
+  return { handingOver: [...sends.keys()], continuingUnadmitted, finalizing }
+}
+
 /** Volatile proof owned by the live handover; a crash or cancellation restores ordinary doubt. */
 export function continuingStructuredAgentSessionInput(
   journal: HandoverJournal,
   clientMessageId: string
 ): boolean {
   const input = handingOver.get(journal)?.get(clientMessageId)?.input
-  return input?.unadmitted === true && input.signal?.aborted !== true && input.pending?.() === true
+  return input?.unadmitted === true && input.signal?.aborted !== true && (input.pending?.() ?? true)
 }
 
 export function markStructuredAgentSessionInputUnadmitted(
-  journal: Pick<AgentSessionJournal, 'submissions' | 'submission'>,
+  journal: HandoverJournal,
   clientMessageId: string,
   owner: () => void,
   unadmitted: boolean,
@@ -77,7 +98,9 @@ export function markStructuredAgentSessionInputUnadmitted(
       unadmitted,
       compilerPermission,
       signal,
-      pending: () => journal.submission(clientMessageId)?.dispatchState === 'pending'
+      ...(hasSubmissionSnapshot(journal)
+        ? { pending: () => journal.submission(clientMessageId)?.dispatchState === 'pending' }
+        : {})
     })
   }
 }
@@ -122,11 +145,14 @@ export function beginStructuredAgentSessionHandover(
   const entry: Handover = sends.get(clientMessageId) ?? { count: 0 }
   entry.count += 1
   sends.set(clientMessageId, entry)
+  // The send's writes, through its accepted receipt, must not wait behind other chats' streaming.
+  const sending = 'holdSending' in journal ? journal.holdSending() : undefined
   let held = true
   const completed = Promise.withResolvers<void>()
   const release = (): void => {
     if (held) {
       held = false
+      sending?.()
       if (entry.input?.owner === release) {
         delete entry.input
       }
@@ -149,4 +175,11 @@ export function beginStructuredAgentSessionHandover(
     }
   }
   return release
+}
+
+/** Finite policy snapshots retain their synchronous membership check. Live handles read it in-worker. */
+function hasSubmissionSnapshot(
+  journal: HandoverJournal
+): journal is HandoverJournal & { submission: (id: string) => AgentJournalSubmission | undefined } {
+  return 'submission' in journal && typeof journal.submission === 'function'
 }

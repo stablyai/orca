@@ -15,10 +15,10 @@ import {
   type GitHubWorkItemProjectOrigin
 } from '@/components/github/github-work-item-identity'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
-import { githubProjectHost } from '../../../../shared/github/project-identity'
+import { githubProjectHost } from '../../../../shared/github/projects/project-identity'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export async function runIssueUpdate(args: {

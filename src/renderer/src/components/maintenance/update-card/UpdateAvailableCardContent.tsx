@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import type { ChangelogData } from '../../../../../shared/update-status-types'
+import type { ChangelogData } from '../../../../../shared/updater/update-status-types'
 import { Button } from '../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -105,7 +105,7 @@ export function UpdateAvailableRichContent({
         className="text-xs text-muted-foreground underline hover:text-foreground self-start"
         onClick={(event) => openAppHttpLink(release.releaseNotesUrl, { event })}
       >
-        {t('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')}
+        {t('auto.components.UpdateCard.aad383aecc', 'Release notes')}
       </button>
       {externallyManaged ? (
         <ExternallyManagedNote />

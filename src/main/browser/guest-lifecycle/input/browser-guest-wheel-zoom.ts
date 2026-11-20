@@ -1,4 +1,4 @@
-import type { BrowserPageZoomDirection } from '../../../../shared/browser-page-zoom'
+import type { BrowserPageZoomDirection } from '../../../../shared/browser/site-settings/browser-page-zoom'
 import type { ResolveRenderer } from '../browser-guest-renderer-target'
 import { forwardGuestMousePress } from './browser-guest-mouse-press'
 

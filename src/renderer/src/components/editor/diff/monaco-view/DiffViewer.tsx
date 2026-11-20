@@ -9,18 +9,21 @@ import {
   setWithLRU
 } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
-import { useContextualCopySetup } from '../../useContextualCopySetup'
+import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
+import { useContextualCopySetup } from '../../contextual-copy/useContextualCopySetup'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { isDiffComment } from '@/lib/source-control/review/comments/diff-comment-compat'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
+import {
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from '../../commands/editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from '../large-files/LargeDiffFallback'
-import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
+import { getLargeDiffRenderLimit } from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 import { useDiffViewerLargeDiffLifecycle } from '../large-files/useDiffViewerLargeDiffLifecycle'
 import { useDiffViewerFirstChangeAutoScroll } from './useDiffViewerFirstChangeAutoScroll'
 import { getDiffViewerLargeDiffSaveAction } from '../large-files/diff-viewer-large-diff-save-action'
@@ -33,14 +36,14 @@ import {
 import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchanged-options'
 import { useDiffEditorRegistration } from '../review/diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
-import { monacoFindOptions } from '../../monaco-find-options'
-import { buildEditorUnicodeHighlightOptions } from '../../editor-unicode-highlight-options'
-import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
+import { monacoFindOptions } from '../../monaco/monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from '../../monaco/editor-unicode-highlight-options'
+import { usePluginSyntaxLanguage } from '../../monaco/use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 import { cn } from '@/lib/class-names'
 import { wholeFileDiffTintClass } from './whole-file-diff-tint'
 

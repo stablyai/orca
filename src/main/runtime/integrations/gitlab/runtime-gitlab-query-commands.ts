@@ -3,25 +3,28 @@ import type {
   GitLabProjectRef,
   GitLabWorkItem,
   MRListState
-} from '../../../../shared/gitlab-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { diagnoseAuth, getRateLimit } from '../../../gitlab/gitlab-auth-and-rate-limit'
+} from '../../../../shared/gitlab/gitlab-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { diagnoseAuth, getRateLimit } from '../../../gitlab/requests/gitlab-auth-and-rate-limit'
 import {
   getWorkItemByProjectRef,
   listTodos,
   listWorkItems
-} from '../../../gitlab/work-item-queries'
-import { listAssignableUsers, listLabels } from '../../../gitlab/project-label-and-member-lookup'
-import { listIssues } from '../../../gitlab/issues'
-import { listMergeRequests } from '../../../gitlab/merge-request-list'
+} from '../../../gitlab/work-items/work-item-queries'
+import {
+  listAssignableUsers,
+  listLabels
+} from '../../../gitlab/projects/project-label-and-member-lookup'
+import { listIssues } from '../../../gitlab/issues/gitlab-issue-queries'
+import { listMergeRequests } from '../../../gitlab/merge-requests/merge-request-list'
 import {
   normalizeGitLabIssueListArgs,
   normalizeGitLabMRListState,
   normalizeGitLabPositiveInteger,
   type GitLabIssueListState
-} from '../../../gitlab/gitlab-preload-args'
-import { getWorkItemDetails } from '../../../gitlab/work-item-details'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+} from '../../../gitlab/requests/gitlab-preload-args'
+import { getWorkItemDetails } from '../../../gitlab/work-items/work-item-details'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
 

@@ -4,7 +4,7 @@ import {
   createJournalReducerState
 } from '../../../agent-session-journal/projection/journal-reducer'
 import type { JournalReducerState } from '../../../agent-session-journal/projection/journal-reducer'
-import { journalInputOrder } from '../../../agent-session-journal/input-order/journal-input-order'
+import { readJournalInput } from '../../../agent-session-journal/journal-input-reads'
 import type { CommandReceiptRead } from '../../../agent-session-journal/writing/command-receipt-table'
 
 import { parseJournalRow } from '../../../agent-session-journal/durable-rows/journal-row-schema'
@@ -76,19 +76,21 @@ function journal() {
   }
 }
 
-function answer(
+async function answer(
   state: JournalReducerState,
   operationId: string,
   receipt: CommandReceiptRead = { verdict: 'absent' }
 ) {
   const readReceipt = vi.fn((_operationId: string) => receipt)
   const reads: Parameters<typeof structuredSendAnswer>[0] = {
-    submission: (id) => state.submissions.get(id),
-    item: (id) => state.items.get(id) ?? null,
-    inputOrder: journalInputOrder(state),
+    reads: {
+      submission: async (id) => state.submissions.get(id),
+      item: async (id) => state.items.get(id) ?? null,
+      input: async (operation) => readJournalInput(state, operation)
+    },
     queuedMessages: {
-      get: (id) => state.queue.cards.get(id) ?? null,
-      inputState: () => state
+      get: async (id) => state.queue.cards.get(id) ?? null,
+      clearedThrough: async () => state.queuePauseMarks.cleared?.sequence ?? 0
     }
   }
   // Following sends never walks the conversation's history.
@@ -99,13 +101,13 @@ function answer(
     }
   }
   return {
-    result: structuredSendAnswer(guarded, readReceipt, 'session-1', operationId),
+    result: await structuredSendAnswer(guarded, readReceipt, 'session-1', operationId),
     readReceipt
   }
 }
 
 describe('what a chat host answers for one send', () => {
-  it('counts a later turn by where it was handed over, not where it was admitted', () => {
+  it('counts a later turn by where it was handed over, not where it was admitted', async () => {
     const j = journal()
     j.submit(1, 'mail')
     // The person's message is admitted before the mail fails, and handed over after.
@@ -113,20 +115,23 @@ describe('what a chat host answers for one send', () => {
     j.reject(3, 'mail')
     j.handOver(4, 'person')
     j.accept(5, 'person')
-    expect(answer(j.state, 'mail').result).toEqual({
+    expect((await answer(j.state, 'mail')).result).toEqual({
       kind: 'rejected',
       cancelled: false,
       recovered: true
     })
   })
 
-  it('never counts a turn handed over before the failure, though accepted after it', () => {
+  it('never counts a turn handed over before the failure, though accepted after it', async () => {
     const j = journal()
     j.submit(1, 'mail')
     j.submit(2, 'person')
     j.handOver(3, 'person')
     j.reject(4, 'mail')
     j.accept(5, 'person')
-    expect(answer(j.state, 'mail').result).toMatchObject({ kind: 'rejected', recovered: false })
+    expect((await answer(j.state, 'mail')).result).toMatchObject({
+      kind: 'rejected',
+      recovered: false
+    })
   })
 })

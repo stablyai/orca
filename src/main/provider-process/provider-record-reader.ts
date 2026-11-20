@@ -2,7 +2,13 @@ import type { Readable } from 'node:stream'
 import {
   createIncrementalNdjsonFramer,
   type NdjsonRejectedRecord
-} from '../../shared/main-process-ndjson-framer'
+} from '../../shared/json-stream/main-process-ndjson-framer'
+
+/**
+ * Far above valid replies (large diffs and image turns have passed 16 MB), but bounds what one
+ * line can make main buffer and parse.
+ */
+export const PROVIDER_RECORD_MAX_LINE_BYTES = 128 * 2 ** 20
 
 type RecordReaderStream = Pick<Readable, 'on' | 'pause' | 'resume' | 'setEncoding'>
 
@@ -19,8 +25,7 @@ export function createProviderRecordReader(input: {
 }): ProviderRecordReader {
   let paused = false
   const framer = createIncrementalNdjsonFramer(input.onRecord, input.onRejected, {
-    // The provider owns this local stdio stream, so valid agent payloads keep full fidelity.
-    maxLineBytes: Number.POSITIVE_INFINITY,
+    maxLineBytes: PROVIDER_RECORD_MAX_LINE_BYTES,
     shouldPause: () => paused
   })
 

@@ -20,6 +20,7 @@ import {
   checkOrcadStdioBridge,
   openOrcadStdioBridgeChannel
 } from '../../managed-server/lifecycle/orcad-stdio-bridge'
+import { ORCAD_STDIO_BRIDGE_MAX_CHANNELS } from '../../managed-server/lifecycle/orcad-stdio-bridge-listener'
 import { startEchoServer } from '../../managed-server/lifecycle/orcad-stdio-bridge-test-channel'
 import {
   fakeWslBridgeChildren,
@@ -161,6 +162,19 @@ describe('WslOrcadConnectionManager', () => {
     expect(children.commands.at(-1)).toContain(` ${second.port}; fi; done;`)
   })
 
+  it('does not hold long-lived sockets to the SSH session cap', async () => {
+    const { manager, children } = setup()
+    const connection = await manager.ensure('Ubuntu')
+    const count = ORCAD_STDIO_BRIDGE_MAX_CHANNELS + 4
+    const sockets = await Promise.all(
+      Array.from({ length: count }, () => dial(connection.localPort))
+    )
+    await vi.waitFor(() => expect(children.live()).toBe(count))
+    expect(await Promise.all(sockets.map((socket, i) => echoOf(socket, `m${i}`)))).toEqual(
+      sockets.map((_, i) => `m${i}`)
+    )
+  })
+
   it('drops a connect that a close overtook', async () => {
     let release: () => void = () => {}
     const gate = new Promise<void>((resolve) => {
@@ -177,6 +191,33 @@ describe('WslOrcadConnectionManager', () => {
     release()
     await expect(pending).rejects.toBeInstanceOf(WslOrcadConnectionSupersededError)
     expect(manager.get('Ubuntu')).toBeNull()
+  })
+
+  it('says a first connect waits on another install, but leaves a live host’s status alone', async () => {
+    const { manager, onChange } = setup({
+      deployAndLaunch: async (_distro, options) => {
+        options?.onInstallLockWait?.({ takeoverInMs: 60_000, givesUpInMs: 120_000 })
+        options?.onInstallLockWait?.(null)
+        return ready(first.port)
+      }
+    })
+    await manager.ensure('Ubuntu')
+    const connecting = onChange.mock.calls
+      .map((call) => call[2])
+      .filter((status) => status.state === 'connecting')
+    expect(connecting).toEqual([
+      { state: 'connecting' },
+      { state: 'connecting', installLockWait: { takeoverInMs: 60_000, givesUpInMs: 120_000 } },
+      // Taking the lock clears the wait before the connect turns ready.
+      { state: 'connecting' }
+    ])
+    onChange.mockClear()
+    await manager.ensure('Ubuntu', { intent: 'update' })
+    expect(onChange).not.toHaveBeenCalledWith(
+      'Ubuntu',
+      expect.anything(),
+      expect.objectContaining({ installLockWait: expect.anything() })
+    )
   })
 })
 

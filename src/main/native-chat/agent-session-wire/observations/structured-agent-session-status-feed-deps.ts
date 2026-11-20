@@ -1,13 +1,17 @@
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { HostUsageLimitCut } from '../recovery/structured-agent-session-usage-limit-chain'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { JournalObserverResult } from '../../agent-session-journal/journal-observer-read'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type {
   StructuredChatNamingFailure,
   StructuredAgentSessionEndedChild,
-  StructuredAgentSessionProviderChild
+  StructuredAgentSessionProviderChild,
+  QuietTurnEnd
 } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
@@ -16,13 +20,16 @@ import type { StructuredAgentSessionStatusSink } from './structured-agent-sessio
 import { structuredSummaryConversationNaming } from './structured-agent-session-status-summary'
 
 export type StatusFeedSession = {
-  journal: AgentSessionJournal
+  journal: AgentSessionJournal | SqlAgentSessionJournal
   params: {
     location: AgentSessionConversationView['location']
     provider: AgentSessionConversationView['provider']
   }
-  child?: Pick<StructuredAgentSessionProviderChild, 'phase' | 'generation' | 'fence'> | null
-  lastEndedChild?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone'>
+  child?: Pick<
+    StructuredAgentSessionProviderChild,
+    'phase' | 'generation' | 'fence' | 'heldSends'
+  > | null
+  lastEndedChild?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone' | 'cause'>
   operationalRevision?: number
   restartResume?: AgentSessionStatusSummary['restartResume']
 }
@@ -36,7 +43,16 @@ export type StructuredAgentSessionStatusFeedDeps = {
   rowRetired?: (sessionId: string) => boolean
   /** Absent means no replaced runtime. */
   replacedRuntime?: (sessionId: string) => { fence: number } | undefined
-  readUsageLimitContinue?: (id: string) => AgentSessionStatusSummary['usageLimitContinue']
+  /** See `StructuredAgentSessionHostDeps.quietTurnEnd`. */
+  quietTurnEnd?: QuietTurnEnd
+  /** See `StructuredAgentSessionHostDeps.isBotHome`. */
+  isBotHome?: (workspaceId: string) => boolean
+  readUsageLimitContinue?: (
+    id: string,
+    cut: HostUsageLimitCut | null
+  ) => AgentSessionStatusSummary['usageLimitContinue']
+  /** Absent: the running child applies the mode it launched with. */
+  runningPermissionMode?: (sessionId: string) => string | undefined
   now: () => number
   /** Observer/sink failure must not block subscriber events. */
   logger: StructuredAgentSessionLogger
@@ -53,6 +69,7 @@ export type StructuredAgentSessionStatusFeedDeps = {
     sessionId: string,
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
+  drainChildWork?: (sessionId?: string) => Promise<void>
   namingActiveSessionIds?: () => string[]
   namingFailure?: (sessionId: string) => StructuredChatNamingFailure | undefined
   onAgentStarted?: (sessionId: string) => void
@@ -66,6 +83,8 @@ export type StructuredAgentSessionStatusSubscriber = {
 export type StatusPublication = {
   summary: AgentSessionStatusSummary
   firstInputSubmissionKey: string | null
+  /** The current work the published summary was read with; absent until a live read. */
+  work?: JournalObserverResult['work']
 }
 
 /** Naming activity does not depend on any readable journal or retained summary. */
@@ -79,6 +98,7 @@ export function structuredAgentSessionNamingSnapshot(
   const conversationNames = records.map((entry) => ({
     sessionId: entry.sessionId,
     conversationName: entry.conversationName ?? null,
+    agent: entry.provider,
     ...structuredSummaryConversationNaming(entry, deps.namingFailure?.(entry.sessionId))
   }))
   return {

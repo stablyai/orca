@@ -1,8 +1,8 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
-import type { Tab } from '../../../../../shared/tab-types'
-import { normalizeAgentSessionConversationName } from '../../../../../shared/agent-session/agent-session-conversation-name'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { normalizeAgentSessionConversationName } from '../../../../../shared/agent-session/conversation-naming/agent-session-conversation-name'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { supportsStructuredAgentSessionRename } from '../host-capabilities/structured-agent-session-host-support'
 import {
@@ -11,8 +11,8 @@ import {
   legacyStructuredChatRenameOwner,
   executionHostIdForStructuredTarget
 } from '../session-ownership/structured-agent-session-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { sendTabChangeToLayoutOwner } from '@/store/terminals/tab-change-through-layout-owner'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
+import { sendTabChangeToLayoutOwner } from '@/store/terminals/tabs/presentation/tab-change-through-layout-owner'
 import { captureStructuredChatRename } from './structured-chat-rename-action'
 
 type RenameResult = { name: string | null; applied: boolean }

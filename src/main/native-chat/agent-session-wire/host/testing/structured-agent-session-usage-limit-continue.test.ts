@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -8,14 +9,14 @@ import {
   appendUsageLimitedTurn
 } from './structured-agent-session-rewind-usage-limit.test-fixture'
 import { RestartContinuationSupersededError } from '../../recovery/structured-agent-session-restart-continuation'
-import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger.test-fixture'
 import { StructuredAgentSessionUsageLimitContinue } from '../../recovery/structured-agent-session-usage-limit-continue'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW,
   hostTestRestingOptionsRecord
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 
 let rig: QueuedMessageTestRig | undefined
@@ -39,7 +40,7 @@ it('automatically continues a failed usage-limited turn after its reset instead 
   await current.host.usageLimitContinue.tick()
   let continuationId: string | undefined
   await eventually(async () => {
-    const snapshot = await current.host.journalSnapshot(SESSION)
+    const snapshot = await readTestHostJournal(current.host, SESSION)
     continuationId = snapshot.submissions.find(
       (submission) => submission.handedOverAt !== undefined
     )?.clientMessageId
@@ -69,7 +70,7 @@ it('stops automatically continuing once five continues in a row end in another u
   for (let round = 0; round < 8; round += 1) {
     clock = cut.resetsAt + 15_000
     await current.host.usageLimitContinue.tick()
-    const snapshot = await current.host.journalSnapshot(SESSION)
+    const snapshot = await readTestHostJournal(current.host, SESSION)
     const continuation = snapshot.submissions.find(
       (submission) => submission.origin === 'host' && !sent.includes(submission.clientMessageId)
     )
@@ -87,38 +88,54 @@ it('stops automatically continuing once five continues in a row end in another u
     cut = await appendUsageLimitedTurn(journal, clock, `refail-${round}`, userItemId)
   }
   expect(sent).toHaveLength(5)
-  expect(current.host.usageLimitContinue.readState(SESSION)?.state).toBe('failed')
+  expect(
+    current.host.usageLimitContinue.readState(SESSION, await journal.reads.usageLimitCut())?.state
+  ).toBe('failed')
 })
 
-it('continues every chat whose limit reset in the same pass', async () => {
+function sweepOver(
+  open: { tabs: string[]; background: string[] },
+  sent: string[],
+  {
+    enabled = true,
+    loaded = true,
+    unreadable = []
+  }: { enabled?: boolean; loaded?: boolean; unreadable?: readonly string[] } = {}
+): StructuredAgentSessionUsageLimitContinue {
   const now = HOST_TEST_NOW
-  const ids = ['chat-a', 'chat-b', 'chat-c']
+  const ids = [...open.tabs, ...open.background]
   const cut = (id: string) => ({
     turnItemId: `${id}-turn`,
     resetsAt: now - 60_000,
     turnEndedAt: now - 120_000,
     chain: 0
   })
-  const sent: string[] = []
-  const sweep = new StructuredAgentSessionUsageLimitContinue({
+  return new StructuredAgentSessionUsageLimitContinue({
     host: {
       logger: recordingStructuredAgentSessionLogger().logger,
       usageLimitAutoContinue: {
-        isEnabled: () => true,
+        isEnabled: () => enabled,
         isWorkspaceAsleep: () => false,
         subscribe: () => () => {}
       },
       store: {
         hostId: 'local',
-        listVisibleSessionIds: () => ids,
-        isSessionTabVisible: () => true,
+        listVisibleSessionIds: () => open.tabs,
+        isSessionTabVisible: (id) => open.tabs.includes(id),
+        listBackgroundSessionIds: () => open.background,
+        isSessionInBackground: (id) => open.background.includes(id),
         cancelUsageLimitContinue: async (id) => hostTestRestingOptionsRecord(id),
         getRecord: (id) => hostTestRestingOptionsRecord(id)
       }
     },
-    sessions: new Map(ids.map((id) => [id, {}])),
-    readSavedCut: () => null,
-    readLoadedCut: cut,
+    sessions: new Map(loaded ? ids.map((id) => [id, {}]) : []),
+    readSavedCut: async (id) => (loaded ? null : cut(id)),
+    readLoadedCut: async (id) => {
+      if (unreadable.includes(id)) {
+        throw new Error('database disk image is malformed')
+      }
+      return cut(id)
+    },
     serialize: (_id, run) => run(),
     // Each send is answered as superseded, which spends no budget; only who was sent matters here.
     send: async (params) => {
@@ -129,6 +146,34 @@ it('continues every chat whose limit reset in the same pass', async () => {
     publish: () => {},
     now: () => now
   })
+}
+
+// Bot chats and kept-open structured workers run with no tab.
+const TABLESS = { tabs: [], background: ['bot-chat', 'worker-chat'] }
+
+it('continues both visible and tabless chats whose limit reset in the same pass', async () => {
+  const sent: string[] = []
+  await sweepOver({ ...TABLESS, tabs: ['chat-a'] }, sent).tick()
+  expect(sent).toEqual(['chat-a', 'bot-chat', 'worker-chat'])
+})
+
+it('continues no tabless chat while automatic continue is off', async () => {
+  const sent: string[] = []
+  await sweepOver(TABLESS, sent, { enabled: false }).tick()
+  expect(sent).toEqual([])
+})
+
+it('continues tabless chats that are not loaded, as after a restart or a released run', async () => {
+  const sent: string[] = []
+  await sweepOver(TABLESS, sent, { loaded: false }).tick()
+  expect(sent).toEqual(['bot-chat', 'worker-chat'])
+})
+
+it('still continues the other chats when one chat cannot be read', async () => {
+  const sent: string[] = []
+  const sweep = sweepOver({ tabs: ['chat-a', 'chat-corrupt', 'chat-c'], background: [] }, sent, {
+    unreadable: ['chat-corrupt']
+  })
   await sweep.tick()
-  expect(sent).toEqual(ids)
+  expect(sent).toEqual(['chat-a', 'chat-c'])
 })

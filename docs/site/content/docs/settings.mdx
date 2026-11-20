@@ -20,6 +20,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Default new-worktree name** — custom prefix or marine creatures.
 - **Editor Word Wrap** — default wrap for file editors (on by default). Toggle from a file tab's **⋯** menu or `Alt+Z`. Separate from **Diff Word Wrap**.
 - **Insert Final Newline** — add a missing line break when saving a non-empty file from the code editor; off by default.
+- **End of Line** — line ending for new files and files with no line breaks yet: Auto (follows the system that runs the file's workspace: LF for Linux, macOS, and WSL, CRLF for Windows), LF, or CRLF. Files with line breaks keep theirs.
 
 ## Appearance
 
@@ -148,7 +149,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Toggle Workspace Board** ships unbound; assign it here to open or close the Workspace Board with one shortcut. Existing bindings for `workspace.openBoard` continue to work.
 - Close all editor tabs defaults to `Cmd+Option+W` on macOS and `Ctrl+Alt+W` on Windows / Linux.
 - **Tab navigation defaults (new installs):** next/previous tab **across all types** is `Cmd+Shift+]` / `Cmd+Shift+[` (Ctrl on Linux/Windows). Same-type next/previous is `Cmd+Option+]` / `Cmd+Option+[`. Previous recent tab is `Ctrl+Tab`. Existing installs keep customized overrides under `~/.orca/keybindings.json`.
-- **Switch between Chat UI and terminal** defaults to `Cmd+Shift+J` on macOS and `Ctrl+Shift+F11` on Windows / Linux in a supported agent tab. Remap it or remove its binding here. Existing custom shortcuts keep their chords. On Windows / Linux, `Ctrl+Shift+J` also switches when **Switch worktree** doesn't use it, or from terminal input under the terminal-first policy.
+- **Switch between Chat UI and terminal** defaults to `Cmd+Shift+J` on macOS and `Ctrl+Shift+F11` on Windows / Linux in a supported agent tab. Remap it or remove its binding here. Existing custom shortcuts keep their chords. On Windows / Linux, `Ctrl+Shift+J` also switches when **Search everything** doesn't use it, or from terminal input under the terminal-first policy.
 - **Add Review Note** defaults to `Cmd+Shift+A` (macOS) / `Ctrl+Shift+A` (Windows / Linux); remappable.
 - **Send Review Notes to Agent** ships unbound; assign it here to open the send-notes menu for the active worktree's diff notes without using the mouse.
 - **Delete workspace** defaults to `Cmd+Shift+Backspace` on macOS and `Ctrl+Shift+Backspace` on Windows / Linux. Hover the sidebar workspace you mean to delete; Orca still asks for confirmation.

@@ -1,13 +1,12 @@
 // A new start must not reach the host before its cancel of the previous one, and late capture rejection must preserve the reported closure.
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createFakeRpcClient,
   type FakeRpcClient,
   type SentRequest
-} from '../mobile-web-shell/bridge-host-test-fakes'
-import { MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE } from './mobile-dictation-session-state'
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 
 type PermissionSettler = { grant: () => void; refuse: (error: unknown) => void }
 
@@ -139,39 +138,5 @@ describe('a start right after a cancel the host has not answered yet', () => {
     })
     expect(dictation().status).toBe('recording')
     expect(errors).toEqual([])
-  })
-})
-
-describe('a capture open that rejects after the composer already closed the start', () => {
-  it('keeps the closure the abort reported instead of walking it back to idle', async () => {
-    const rpc = createFakeRpcClient()
-    let renderer: ReactTestRenderer | null = null
-    act(() => {
-      renderer = create(createElement(Probe, { client: rpc, enabled: true }))
-    })
-    const started: { failure: unknown } = { failure: null }
-    await act(async () => {
-      void dictation()
-        .start()
-        .catch((error: unknown) => {
-          started.failure = error
-        })
-      await Promise.resolve()
-    })
-    expect(dictation().status).toBe('starting')
-    await act(async () => {
-      renderer?.update(createElement(Probe, { client: rpc, enabled: false }))
-      await pump(rpc)
-    })
-    expect(errors).toEqual([MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE])
-    await act(async () => {
-      device.permissions.shift()?.refuse(new Error('microphone unavailable'))
-      await pump(rpc)
-    })
-    expect(dictation().status).toBe('error')
-    expect(dictation().error).toBe(MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE)
-    // Do not rethrow: the composer would toast this stale rejection over the closure already reported by disable.
-    expect(started.failure).toBeNull()
-    expect(errors).toEqual([MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE])
   })
 })

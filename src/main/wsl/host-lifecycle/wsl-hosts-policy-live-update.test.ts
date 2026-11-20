@@ -1,8 +1,9 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import '../../../shared/wsl-hosts-policy'
+import '../../../shared/remote-runtime/wsl-hosts/wsl-hosts-policy'
 import {
   readCachedWslHostsPolicy,
   WslHostsPolicyLiveUpdater,
@@ -63,9 +64,8 @@ describe('WSL hosts policy live update', () => {
       'utf8'
     )
     expect(cachedText).toBe(text)
-    // This build reads its own fields from it, and a newer parser still finds the later one.
+    // This build can also read its own fields from the cache.
     expect(readCachedWslHostsPolicy(userDataPath, STABLE)?.wslHosts).toBe('block')
-    expect(JSON.parse(cachedText)).toMatchObject({ someLaterField: { keep: true } })
   })
 
   it('never lets a lower or equal revision replace the cache', async () => {

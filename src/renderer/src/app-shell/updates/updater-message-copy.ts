@@ -1,15 +1,27 @@
 import { translate } from '@/i18n/i18n'
-import type { LinuxPackageCommandUnavailableReason } from '../../../../shared/update-status-types'
+import type { LinuxPackageCommandUnavailableReason } from '../../../../shared/updater/update-status-types'
 import {
   UPDATER_FAILURE_COPY,
   type UpdaterFailureCode
-} from '../../../../shared/updater-failure-copy'
+} from '../../../../shared/updater/updater-failure-copy'
 
 type Param = (name: string) => string | null
 type CountParam = (name: string) => number | null
 
 // null = required params missing; caller shows the host's English message.
 const COPY: Record<UpdaterFailureCode, (param: Param, count: CountParam) => string | null> = {
+  automaticInstallTerminalBusy: () =>
+    translate(
+      'updates.failure.automaticInstallTerminalBusy',
+      UPDATER_FAILURE_COPY.automaticInstallTerminalBusy
+    ),
+  macStagingTimeout: () =>
+    translate('updates.failure.macStagingTimeout', UPDATER_FAILURE_COPY.macStagingTimeout),
+  automaticInstallCheckpointFailed: () =>
+    translate(
+      'updates.failure.automaticInstallCheckpointFailed',
+      UPDATER_FAILURE_COPY.automaticInstallCheckpointFailed
+    ),
   releaseNotReady: () =>
     translate('updates.failure.releaseNotReady', UPDATER_FAILURE_COPY.releaseNotReady),
   updateServerUnreachable: () =>

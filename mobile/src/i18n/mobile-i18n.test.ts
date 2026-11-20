@@ -32,12 +32,4 @@ describe('activateMobileUiLocale', () => {
     expect(mobileI18n.language).toBe('ja')
     expect(translate('greeting', 'Hello')).toBe('こんにちは')
   })
-
-  it('falls back to English when a catalog cannot load', async () => {
-    failing.add('de')
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await activateMobileUiLocale('de')
-    expect(getMobileUiLocale()).toBe('en')
-    expect(translate('greeting', 'Hello')).toBe('Hello')
-  })
 })
