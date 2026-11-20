@@ -109,7 +109,7 @@ export function createBotTurnContext(
     if (!stored) {
       return null
     }
-    const receiptVersion = record.version(stored.botId)
+    const memoryRecord = record.version(stored.botId)
     const [entry, files, work, topics, recent, unanswered] = await Promise.all([
       relinked(sessionId, stored),
       readBotHomeFiles(fs, stored.folder),
@@ -120,10 +120,9 @@ export function createBotTurnContext(
     ])
     const soul = fingerprint(files.soul)
     const memory = fingerprint(files.memory)
-    const memoryRecord = record.version(entry.botId)
     update(sessionId, {
       memoryAtStart: memory,
-      receiptAtStart: { memory: files.memory, topics, version: receiptVersion },
+      receiptAtStart: { memory: files.memory, topics, version: memoryRecord },
       topicsAtStart: botMemoryTopicsKey(topics),
       ...(entry.topics ? {} : { topics })
     })

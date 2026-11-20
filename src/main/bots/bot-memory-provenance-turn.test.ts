@@ -48,9 +48,18 @@ const edits = (line: string): AgentJournalItemBody => ({
 function bot(memory: string) {
   const files = new Map([[MEMORY, memory]])
   let beforeReplace = (): void => {}
+  let afterMemoryRead: (() => Promise<void>) | undefined
   let failing = 0
   const fs = {
-    readText: async (path: string) => files.get(path) ?? null,
+    readText: async (path: string) => {
+      const text = files.get(path) ?? null
+      if (path === MEMORY && afterMemoryRead) {
+        const run = afterMemoryRead
+        afterMemoryRead = undefined
+        await run()
+      }
+      return text
+    },
     replaceText: async (path: string, expected: string, text: string) => {
       beforeReplace()
       if (failing > 0) {
@@ -162,6 +171,7 @@ function bot(memory: string) {
         fact,
         sessionId ? { kind: 'bot', sessionId } : { kind: 'owner' }
       ),
+    afterNextMemoryRead: (run: () => Promise<void>) => (afterMemoryRead = run),
     onReplace: (run: () => void) => (beforeReplace = run),
     failReplaces: (count: number) => (failing = count)
   }
@@ -487,6 +497,20 @@ describe('a chat hears of MEMORY.md edited outside it', () => {
     })
 
     expect(await chat.started()).toBeNull()
+  })
+
+  it('delivers a Settings removal made while an attachment turn was opening', async () => {
+    const { conversation, read, write, forget, afterNextMemoryRead } = bot(OLD)
+    const chat = conversation('s1')
+    write(`${read()}${ADDED}\n`)
+    afterNextMemoryRead(async () => {
+      expect(await forget('owner fact')).toBe(true)
+    })
+
+    expect(await chat.startedAttachment()).toContain(ADDED)
+    await chat.ended(said('see attached'), edits(ADDED))
+
+    expect(await chat.started()).toContain('Removed:\n<<<\n- 2026-11-01 owner fact\n>>>')
   })
 
   it('after a hand edit between turns, though a command turn that did not carry it ran a tool', async () => {
