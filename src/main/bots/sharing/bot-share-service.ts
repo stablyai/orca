@@ -7,7 +7,6 @@ import type { BotShareCandidateSummary, BotSharePartFile } from '../../../shared
 import {
   botPackageName,
   botShareStatusOf,
-  listedAsBotShare,
   type BotOwnedShare,
   type BotShareStatus
 } from '../../../shared/bots/bot-share-status'
@@ -33,6 +32,7 @@ import { buildBotPackageContent } from './bot-package-content'
 import { archiveRawFiles } from './bot-package-content-files'
 import { prepareRecipientContent, reviewOf, type BotRecipientContent } from './bot-share-recipient'
 import { BotShareReviews } from './bot-share-reviews'
+import { listedShareOwner } from './bot-share-stop'
 import { botSharePartFiles } from './bot-share-part-view'
 import type { BotShareable } from './bot-share-sources'
 import type { BotSharePicks } from '../../../shared/bots/bot-share-picks'
@@ -281,10 +281,10 @@ export class BotShareService {
   /** Stops the link; false when it was already stopped. When the live listing shows the link is
    *  this bot's, its stored picks go too, so sharing it again starts from the defaults. */
   async stop(shareId: string, botId?: string): Promise<SkillCloudOperation<boolean>> {
-    const listed = botId ? await this.deps.client.listShares().catch(() => null) : null
+    const owner = await listedShareOwner(this.deps.client, shareId, botId)
     const stopped = await this.deps.client.revokeShare(shareId)
-    if (stopped.status === 'ok' && botId && listedAsBotShare(listed, shareId, botId)) {
-      await this.deps.picks?.forget(botId).catch(() => undefined)
+    if (stopped.status === 'ok' && stopped.value && owner) {
+      await this.deps.picks?.forget(owner).catch(() => undefined)
     }
     return stopped
   }
