@@ -4,24 +4,38 @@ import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  recoverInterruptedGuardedFileOperation,
   removeFileAtomicallyIfUnchanged,
   writeFileAtomicallyIfUnchanged
 } from './atomic-file-publication'
 
 const fsMock = vi.hoisted(() => ({ linkSync: vi.fn(), renameSync: vi.fn() }))
 
-/** Runs `once` instead of the first link to a kept-copy name. */
-function onFirstKeptLink(once: (source: string, kept: string) => void): () => void {
-  const link = fsMock.linkSync.getMockImplementation()!
+type PathMock = typeof fsMock.linkSync
+
+/** Runs `once` instead of the first call whose destination matches; returns the undo. */
+function onFirstCallTo(
+  mock: PathMock,
+  matches: (destination: string) => boolean,
+  once: (source: string, destination: string) => void
+): () => void {
+  const actual = mock.getMockImplementation()!
   let done = false
-  fsMock.linkSync.mockImplementation((source: string, destination: string) => {
-    if (!done && destination.includes('.orca-kept-')) {
+  mock.mockImplementation((source: string, destination: string) => {
+    if (!done && matches(destination)) {
       done = true
       return once(source, destination)
     }
-    return link(source, destination)
+    return actual(source, destination)
   })
-  return () => fsMock.linkSync.mockImplementation(link)
+  return () => mock.mockImplementation(actual)
+}
+
+const isKept = (destination: string): boolean => destination.includes('.orca-kept-')
+const isHeld = (destination: string): boolean => destination.endsWith('.orca-guarded')
+
+function onFirstKeptLink(once: (source: string, kept: string) => void): () => void {
+  return onFirstCallTo(fsMock.linkSync, isKept, once)
 }
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -59,14 +73,15 @@ describe('writeFileAtomically', () => {
       writeFileSync(target, 'baseline')
       Object.defineProperty(process, 'platform', { value: 'win32' })
       fsMock.renameSync.mockClear()
-      fsMock.renameSync.mockImplementationOnce(() => {
+      const undo = onFirstCallTo(fsMock.renameSync, isHeld, () => {
         writeFileSync(target, 'concurrent')
         throw Object.assign(new Error('busy'), { code: 'EBUSY' })
       })
 
       expect(writeFileAtomicallyIfUnchanged(target, 'baseline', 'stale-write')).toBe(false)
+      undo()
       expect(readFileSync(target, 'utf-8')).toBe('concurrent')
-      expect(fsMock.renameSync).toHaveBeenCalledTimes(2)
+      expect(fsMock.renameSync.mock.calls.filter(([, to]) => isHeld(to))).toHaveLength(2)
     } finally {
       cleanup()
     }
@@ -77,13 +92,14 @@ describe('writeFileAtomically', () => {
     try {
       const target = join(dir, 'guarded.toml')
       writeFileSync(target, 'baseline')
-      const rename = fsMock.renameSync.getMockImplementation()
-      fsMock.renameSync.mockImplementationOnce((source: string, destination: string) => {
-        rename!(source, destination)
+      const rename = fsMock.renameSync.getMockImplementation()!
+      const undo = onFirstCallTo(fsMock.renameSync, isHeld, (source, destination) => {
+        rename(source, destination)
         writeFileSync(target, 'concurrent')
       })
 
       expect(writeFileAtomicallyIfUnchanged(target, 'baseline', 'stale-write')).toBe(false)
+      undo()
       expect(readFileSync(target, 'utf-8')).toBe('concurrent')
     } finally {
       cleanup()
@@ -178,7 +194,7 @@ describe('writeFileAtomically', () => {
     }
   })
 
-  it('leaves the held file in place when it cannot be kept aside', () => {
+  it('keeps the held bytes when they cannot take their content name', () => {
     setup()
     try {
       const target = join(dir, 'config.toml')
@@ -188,17 +204,35 @@ describe('writeFileAtomically', () => {
         throw Object.assign(new Error('no space'), { code: 'ENOSPC' })
       })
 
-      expect(() => writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toThrow(
-        'no space'
-      )
-      restoreLink()
-      expect(readFileSync(`${target}.orca-guarded`, 'utf-8')).toBe('model = "o5"\n')
       expect(writeFileAtomicallyIfUnchanged(target, 'approval = "never"\n', 'next')).toBe(true)
+      restoreLink()
       expect(
         readdirSync(dir)
           .filter((name) => name.includes('.orca-kept-'))
           .map((name) => readFileSync(join(dir, name), 'utf-8'))
       ).toEqual(['model = "o5"\n'])
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('never deletes a file another writer holds under the shared held name meanwhile', () => {
+    setup()
+    try {
+      const target = join(dir, 'config.toml')
+      const heldPath = `${target}.orca-guarded`
+      writeFileSync(heldPath, 'model = "o5"\n')
+      writeFileSync(target, 'approval = "never"\n')
+      const link = fsMock.linkSync.getMockImplementation()!
+      const restoreLink = onFirstKeptLink((source, kept) => {
+        // Another process moves its own target aside under the held name.
+        writeFileSync(heldPath, 'theirs\n')
+        link(source, kept)
+      })
+
+      recoverInterruptedGuardedFileOperation(target)
+      restoreLink()
+      expect(readFileSync(heldPath, 'utf-8')).toBe('theirs\n')
     } finally {
       cleanup()
     }
@@ -225,13 +259,14 @@ describe('writeFileAtomically', () => {
     try {
       const target = join(dir, 'guarded-auth.json')
       writeFileSync(target, 'baseline')
-      const rename = fsMock.renameSync.getMockImplementation()
-      fsMock.renameSync.mockImplementationOnce((source: string, destination: string) => {
-        rename!(source, destination)
+      const rename = fsMock.renameSync.getMockImplementation()!
+      const undo = onFirstCallTo(fsMock.renameSync, isHeld, (source, destination) => {
+        rename(source, destination)
         writeFileSync(target, 'concurrent')
       })
 
       expect(removeFileAtomicallyIfUnchanged(target, 'baseline')).toBe(false)
+      undo()
       expect(readFileSync(target, 'utf-8')).toBe('concurrent')
     } finally {
       cleanup()
