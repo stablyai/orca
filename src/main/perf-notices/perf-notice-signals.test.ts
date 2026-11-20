@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repository/repo-types'
 
 const { statfs } = vi.hoisted(() => ({ statfs: vi.fn() }))
@@ -29,6 +29,10 @@ describe('readPerfNoticeSignals', () => {
   beforeEach(() => {
     vi.resetModules()
     statfs.mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it.runIf(process.platform !== 'win32')(
@@ -64,6 +68,34 @@ describe('readPerfNoticeSignals', () => {
         '/vol/old/workspaces/app/login-form'
       ])
       expect(signals.disk).toEqual({ freeBytes: 1 * GB, totalBytes: 500 * GB })
+    }
+  )
+
+  it.runIf(process.platform !== 'win32')(
+    'reads new roots once a call that outlived its deadline returns',
+    async () => {
+      vi.useFakeTimers()
+      let finishHungCall: (value: unknown) => void = () => {}
+      statfs.mockImplementation((path: string) =>
+        path === '/vol/hung'
+          ? new Promise((resolve) => {
+              finishHungCall = resolve
+            })
+          : Promise.resolve({ bavail: 1, bsize: GB, blocks: 500 })
+      )
+      const { readPerfNoticeSignals } = await import('./perf-notice-signals')
+
+      const hung = readPerfNoticeSignals(store('/vol/hung'))
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(await hung).toEqual({ disk: null })
+      expect(await readPerfNoticeSignals(store('/vol/new'))).toEqual({ disk: null })
+
+      finishHungCall({ bavail: 400, bsize: GB, blocks: 500 })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(await readPerfNoticeSignals(store('/vol/new'))).toEqual({
+        disk: { freeBytes: 1 * GB, totalBytes: 500 * GB }
+      })
     }
   )
 })

@@ -113,11 +113,14 @@ async function statDisk(path: string): Promise<PerfNoticeDisk | null> {
   }
 }
 
-async function readFullestDisk(roots: string[]): Promise<PerfNoticeDisk | null> {
+/** `complete` is false when another call still running cut the scan short. */
+async function readFullestDisk(
+  roots: string[]
+): Promise<{ disk: PerfNoticeDisk | null; complete: boolean }> {
   let first: PerfNoticeDisk | null = null
   for (const root of roots) {
     if (callInFlight) {
-      return first
+      return { disk: first, complete: false }
     }
     callInFlight = true
     let disk: PerfNoticeDisk | null
@@ -127,11 +130,11 @@ async function readFullestDisk(roots: string[]): Promise<PerfNoticeDisk | null> 
       callInFlight = false
     }
     if (isDiskAlmostFull(disk)) {
-      return disk
+      return { disk, complete: true }
     }
     first ??= disk
   }
-  return first
+  return { disk: first, complete: true }
 }
 
 /** A hung mount answers "no reading" so the notice loop moves on. */
@@ -152,14 +155,24 @@ export function readPerfNoticeSignals(store: PerfNoticeSignalStore): Promise<Per
   let current = disk
   const stale = !current || current.key !== key || now - current.readAt >= DISK_READ_INTERVAL_MS
   if (!current || (stale && current.settled)) {
-    const value = readFullestDisk(roots)
-    const read = { key, readAt: now, settled: false, bounded: withDeadline(value) }
+    const scan = readFullestDisk(roots)
+    const read = {
+      key,
+      readAt: now,
+      settled: false,
+      bounded: withDeadline(scan.then((result) => result.disk))
+    }
     void read.bounded.finally(() => {
       read.settled = true
     })
     // Why: a read slower than the deadline still lands in the cache, so the next check uses it.
-    void value.then((result) => {
-      if (disk?.key === key) {
+    void scan.then(({ disk: result, complete }) => {
+      if (!complete) {
+        // Why: a scan cut short read nothing new; caching it would hide these roots for 10 minutes.
+        if (disk === read) {
+          disk = null
+        }
+      } else if (!disk || disk.key === key) {
         disk = { key, readAt: Date.now(), settled: true, bounded: Promise.resolve(result) }
       }
     })
