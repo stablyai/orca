@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type RefObject
 } from 'react'
@@ -11,6 +10,7 @@ import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '../../../../store/index'
+import { useNativeChatViewState } from '../../pane/ownership/native-chat-view-memory'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
 import { focusNativeChatPromptCard } from '../../prompts/use-native-chat-prompt-card-focus'
@@ -52,8 +52,9 @@ export function useNativeChatFind(
   composerRef: RefObject<Pick<NativeChatComposerHandle, 'focus'> | null>,
   messageListRef: RefObject<Pick<NativeChatMessageListHandle, 'revealFindMatch'> | null>
 ): NativeChatFind {
-  const [isOpen, setIsOpen] = useState(false)
-  const [query, setQuery] = useState('')
+  // Kept with the chat tab: a released view returns with Find open on the same query.
+  const [isOpen, setIsOpen] = useNativeChatViewState('find-open', false)
+  const [query, setQuery] = useNativeChatViewState('find-query', '')
   const barRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const focusBeforeOpenRef = useRef<HTMLElement | null>(null)
@@ -85,7 +86,7 @@ export function useNativeChatFind(
     if (!composerRef.current?.focus()) {
       root.focus({ preventScroll: true })
     }
-  }, [composerRef, rootRef])
+  }, [composerRef, rootRef, setIsOpen])
 
   const open = useCallback(
     (returnFocusTo = rootRef.current?.ownerDocument.activeElement) => {
@@ -97,7 +98,7 @@ export function useNativeChatFind(
       focusBeforeOpenRef.current = returnFocusTo instanceof HTMLElement ? returnFocusTo : null
       setIsOpen(true)
     },
-    [rootRef]
+    [rootRef, setIsOpen]
   )
 
   useEffect(() => {

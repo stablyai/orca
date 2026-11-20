@@ -247,7 +247,8 @@ export function NativeChatMessageList({
   const newRows = useNativeChatNewRowsMarker(
     slots,
     waitingSlots,
-    isVisible && session.readCurrent === true
+    isVisible && session.readCurrent === true,
+    transcriptKey
   )
   const transcriptWindow = useNativeChatTranscriptWindow({
     scrollRef,

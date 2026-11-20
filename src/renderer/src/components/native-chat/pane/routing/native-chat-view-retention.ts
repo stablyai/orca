@@ -90,8 +90,12 @@ class ChatViewRetention {
     }
   }
 
-  isRetained(tabId: string): boolean {
-    return this.retained.has(tabId)
+  /** The retained tabs among `tabIds`, walking only the small retained set. */
+  retainedAmong(tabIds: ReadonlySet<string>): string {
+    return [...this.retained]
+      .filter((id) => tabIds.has(id))
+      .sort()
+      .join('\n')
   }
 }
 
@@ -103,7 +107,5 @@ export function useRetainedChatViewKey(ownedTabIds: ReadonlySet<string>): string
     (listener: () => void) => chatViewRetention.subscribe(ownedTabIds, listener),
     [ownedTabIds]
   )
-  return useSyncExternalStore(subscribe, () =>
-    [...ownedTabIds].filter((id) => chatViewRetention.isRetained(id)).join('\n')
-  )
+  return useSyncExternalStore(subscribe, () => chatViewRetention.retainedAmong(ownedTabIds))
 }

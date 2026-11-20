@@ -1,6 +1,7 @@
 // Mark the first row that arrived or kept growing while the reader was away.
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNativeChatViewMemory } from '../../pane/ownership/native-chat-view-memory'
 import { useOrcaWindowForegroundFocused } from '@/attention/use-orca-window-foreground-focused'
 import { compareAgentJournalPositions } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentJournalPosition } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -159,12 +160,23 @@ export function nativeChatNewRowsMarkerPlacement(
     : { key: nativeChatSlotKey(first), place: 'above-row' }
 }
 
+type Seen = {
+  watching: boolean
+  /** While the reader is away: where they had read to. */
+  left: NativeChatLeftAt | null
+  /** Stands until the reader answers. */
+  missed: NativeChatMissedRows | null
+  arriving: boolean
+}
+
 export function useNativeChatNewRowsMarker(
   slots: readonly NativeChatTranscriptSlot[],
   /** Rows held behind the running turn: seen and missed like any other, drawn outside `slots`. */
   waitingSlots: readonly NativeChatTranscriptSlot[],
   /** The pane is the one showing, and shows what the host holds now. */
-  isShowingLatest: boolean
+  isShowingLatest: boolean,
+  /** This transcript within its chat tab, so a released view keeps where its reader left off. */
+  memoryKey?: string
 ): {
   marker: NativeChatNewRowsMarkerState | undefined
   /** The slot drawing the marker, or -1. */
@@ -176,14 +188,14 @@ export function useNativeChatNewRowsMarker(
   const enabled = useAppStore((state) => nativeChatMarksNewMessages(state.settings))
   const focused = useOrcaWindowForegroundFocused(enabled && isShowingLatest)
   const watching = !enabled || focused
-  const [seen, setSeen] = useState<{
-    watching: boolean
-    /** While the reader is away: where they had read to. */
-    left: NativeChatLeftAt | null
-    /** Stands until the reader answers. */
-    missed: NativeChatMissedRows | null
-    arriving: boolean
-  }>({ watching, left: null, missed: null, arriving: false })
+  const kept = useNativeChatViewMemory<Seen>(
+    memoryKey === undefined ? undefined : `new-rows:${memoryKey}`
+  )
+  const [seen, setSeen] = useState<Seen>(
+    () => kept.saved ?? { watching, left: null, missed: null, arriving: false }
+  )
+  const { write: keep } = kept
+  useEffect(() => keep(seen), [keep, seen])
   if (!enabled) {
     if (!seen.watching || seen.left !== null || seen.missed !== null) {
       setSeen({ watching, left: null, missed: null, arriving: false })

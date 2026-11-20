@@ -1,5 +1,5 @@
 import { Editor, type EditorOptions } from '@tiptap/core'
-import { undoDepth } from '@tiptap/pm/history'
+import { redoDepth, undoDepth } from '@tiptap/pm/history'
 import {
   isNativeChatViewTabOpen,
   type NativeChatViewTab
@@ -156,7 +156,8 @@ const keptEditorsByTab = new Map<string, ComposerEditors>()
 const undoOnlyTabs = new Set<string>()
 const MAX_KEPT_UNDO_ONLY = 8
 
-const keepsEditor = (editor: Editor): boolean => !editor.isEmpty || undoDepth(editor.state) > 0
+const keepsEditor = (editor: Editor): boolean =>
+  !editor.isEmpty || undoDepth(editor.state) > 0 || redoDepth(editor.state) > 0
 
 function keepEditors(tabId: string, editors: ComposerEditors): void {
   keptEditorsByTab.set(tabId, editors)

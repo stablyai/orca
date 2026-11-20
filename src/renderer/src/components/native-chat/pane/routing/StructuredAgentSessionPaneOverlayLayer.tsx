@@ -171,23 +171,24 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     )
     const isActive = (tab: Tab) =>
       Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)
-    const isShown = (tab: Tab) =>
-      Boolean(
-        (isWorktreeActive || preparingHandoff) && groupActiveTabById.get(tab.groupId) === tab.id
-      )
     const layerId = useId()
-    const shownKey = structuredTabs
-      .filter(isShown)
-      .map((tab) => tab.id)
-      .join('\n')
+    const tabIndexById = useMemo(
+      () => new Map(structuredTabs.map((tab, index) => [tab.id, index] as const)),
+      [structuredTabs]
+    )
+    // Why: walk groups and the few retained chats, not every tab: an eviction re-renders background layers.
+    const shownKey =
+      isWorktreeActive || preparingHandoff
+        ? groups
+            .map((group) => group.activeTabId)
+            .filter((id): id is string => id !== null && tabIndexById.has(id))
+            .join('\n')
+        : ''
     useLayoutEffect(() => {
       chatViewRetention.show(layerId, shownKey ? shownKey.split('\n') : [])
     }, [layerId, shownKey])
     useLayoutEffect(() => () => chatViewRetention.show(layerId, []), [layerId])
-    const ownedTabIds = useMemo(
-      () => new Set(structuredTabs.map((tab) => tab.id)),
-      [structuredTabs]
-    )
+    const ownedTabIds = useMemo(() => new Set(tabIndexById.keys()), [tabIndexById])
     const ownedTabIdsRef = useRef<ReadonlySet<string>>(new Set())
     useLayoutEffect(() => {
       const closed = new Set([...ownedTabIdsRef.current].filter((id) => !ownedTabIds.has(id)))
@@ -216,9 +217,11 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     )
     // Why: only shown chats and a few recently shown ones stay mounted, so memory doesn't grow with chats visited.
     const retainedKey = useRetainedChatViewKey(ownedTabIds)
-    const retainedTabIds = useMemo(() => new Set(retainedKey.split('\n')), [retainedKey])
-    const isMounted = (tab: Tab) => isShown(tab) || retainedTabIds.has(tab.id)
-    const mountedTabs = structuredTabs.filter(isMounted)
+    const mountedTabs = [...new Set([...shownKey.split('\n'), ...retainedKey.split('\n')])]
+      .map((id) => tabIndexById.get(id))
+      .filter((index): index is number => index !== undefined)
+      .sort((a, b) => a - b)
+      .map((index) => structuredTabs[index]!)
 
     return (
       <>
