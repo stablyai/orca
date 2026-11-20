@@ -359,14 +359,10 @@ describe('Cmd+K @ shows only bots', () => {
       worktreesByRepo: { 'repo-1': [makeWorktree('wt-notes', 'Triage notes')] }
     })
 
-  it.each<Partial<AppState>>([
-    { filterRepoIds: ['repo-1'] },
-    { visibleWorkspaceHostIds: ['local'] },
-    { filterRepoIds: ['repo-1'], visibleWorkspaceHostIds: ['local'] }
-  ])('keeps bots searchable with workspace filters %j', async (filters) => {
-    await renderPalette({ ...triageState(), ...filters })
+  it('keeps bots searchable when a host filter hides local workspaces', async () => {
+    await renderPalette({ ...triageState(), visibleWorkspaceHostIds: ['runtime:other'] })
     await typeQuery('triage')
-    expect(rowIds()).toContain('5:extra4:bots12:bot:local/b1')
+    expect(rowIds()).toEqual([botRowId('b1')])
   })
 
   it('selects a matching bot when the workspace filter excludes every workspace', async () => {
