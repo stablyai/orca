@@ -63,7 +63,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     setWidth: commitGraphWidth,
     onDraftWidthChange: setDraftGraphWidth
   })
-  const columns = `160px ${draftGraphWidth}px minmax(200px,1fr) 120px 100px`
+  const columns = `160px ${draftGraphWidth}px minmax(200px,1fr) 120px 128px`
   const getScrollOffset = useCallback(
     () => getGitGraphViewport(controller, 'scrollOffset'),
     [controller]
@@ -131,7 +131,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
         <div className="flex min-w-0 flex-1 flex-col overflow-x-auto scrollbar-sleek">
           <div
             className="grid h-7 shrink-0 items-center border-b border-border px-3 text-2xs text-muted-foreground"
-            style={{ gridTemplateColumns: columns, minWidth: draftGraphWidth + 604 }}
+            style={{ gridTemplateColumns: columns, minWidth: draftGraphWidth + 632 }}
           >
             <span>{t('gitGraph.branchTag', 'Branch / Tag')}</span>
             <div ref={graphHeader} className="relative flex h-full items-center">
@@ -177,7 +177,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
           >
             <div
               className="relative min-w-max"
-              style={{ height: virtualHeight, minWidth: draftGraphWidth + 604 }}
+              style={{ height: virtualHeight, minWidth: draftGraphWidth + 632 }}
             >
               {virtualRows.map((virtualRow) => {
                 const viewModel = rows[virtualRow.index]!
@@ -223,8 +223,11 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                           {item.subject}
                         </button>
                         <span className="truncate pr-2 text-muted-foreground">{item.author}</span>
-                        <span className="truncate text-2xs text-muted-foreground">
-                          {formatGitHistoryTimestamp(item.timestamp, intlLocale)}
+                        <span
+                          className="truncate text-2xs text-muted-foreground"
+                          title={formatGitHistoryTimestamp(item.timestamp, intlLocale)}
+                        >
+                          {formatGitHistoryTimestamp(item.timestamp, intlLocale, 'compact')}
                         </span>
                       </div>
                     </ContextMenuTrigger>
