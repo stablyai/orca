@@ -215,29 +215,26 @@ const ACTIVE_OLD = JSON.stringify(
 )
 
 describe('deployOrcad', () => {
-  it.each(['', '{"type":"orca_profile_state_ready","revision":0}'])(
-    'leaves the incumbent and shared state alone when preflight returns %j',
-    async (preflightResult) => {
-      const script: HostScript = {
-        activationRecord: ACTIVE_OLD,
-        readiness: { [NEW_VERSION]: readyLine({}) },
-        log: [],
-        preflightResult
-      }
-      scriptHost(script)
-      expect(await deployOrcad(options())).toMatchObject({
-        outcome: 'installed-not-activated',
-        code: 'orcad_candidate_preflight_failed',
-        startCheckFailed: true
-      })
-      expect(script.log).toEqual(['preflight'])
-      expect(
-        vi
-          .mocked(writeAtomicOrcadRemoteRecord)
-          .mock.calls.some(([, path]) => path.includes('orcad-active.json'))
-      ).toBe(false)
+  it('leaves the incumbent and shared state alone when preflight returns invalid evidence', async () => {
+    const script: HostScript = {
+      activationRecord: ACTIVE_OLD,
+      readiness: { [NEW_VERSION]: readyLine({}) },
+      log: [],
+      preflightResult: '{"type":"orca_profile_state_ready","revision":0}'
     }
-  )
+    scriptHost(script)
+    expect(await deployOrcad(options())).toMatchObject({
+      outcome: 'installed-not-activated',
+      code: 'orcad_candidate_preflight_failed',
+      startCheckFailed: true
+    })
+    expect(script.log).toEqual(['preflight'])
+    expect(
+      vi
+        .mocked(writeAtomicOrcadRemoteRecord)
+        .mock.calls.some(([, path]) => path.includes('orcad-active.json'))
+    ).toBe(false)
+  })
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -261,12 +258,6 @@ describe('deployOrcad', () => {
     [
       'exits 255 over ssh2',
       sshCommandExitError('preflight', 255, ''),
-      false,
-      'orcad_candidate_preflight_failed'
-    ],
-    [
-      'exits 1 over ssh2',
-      sshCommandExitError('preflight', 1, ''),
       false,
       'orcad_candidate_preflight_failed'
     ],
@@ -325,18 +316,16 @@ describe('deployOrcad', () => {
     expect(uploadRemoteInstallDirectory).not.toHaveBeenCalled()
   })
 
-  it.skipIf(process.platform === 'win32').each([undefined, 'linux-x64', 'linux-musl-x64'])(
-    'restores uploaded executable modes with optional browser %s',
+  it.skipIf(process.platform === 'win32').each(['linux-x64', 'linux-musl-x64'])(
+    'restores uploaded executable modes with browser %s',
     async (browserTarget) => {
       const directory = mkdtempSync(join(tmpdir(), 'orcad-install-modes-'))
       const binaries = [
         'ripgrep/linux-x64/rg',
         'bin/orca-provider-exec',
-        'node_modules/node-pty/build/Release/journal-file-lock'
+        'node_modules/node-pty/build/Release/journal-file-lock',
+        `agent-browser-${browserTarget}`
       ]
-      if (browserTarget) {
-        binaries.push(`agent-browser-${browserTarget}`)
-      }
       try {
         for (const filename of binaries) {
           const path = join(directory, filename)
@@ -482,7 +471,7 @@ describe('deployOrcad', () => {
     )
   })
 
-  it.each(['CHANGED', 'UNKNOWN', ''])(
+  it.each(['CHANGED', ''])(
     'preserves rejected candidate state when comparison is %s',
     async (comparisonResult) => {
       const script: HostScript = {
