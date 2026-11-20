@@ -1553,7 +1553,6 @@
       "connectorRequests_one": "{{count}} request",
       "connectorRequests_other": "{{count}} requests",
       "connectorOnlyYou": "Only you",
-      "connectorStatus": {},
       "memorySource": "From {{source}}",
       "memorySourceLink": "link",
       "lookAround": {
@@ -1815,7 +1814,6 @@
         "recipeDescription": "Clean up dictated text before it lands."
       }
     },
-    "experimental": {},
     "groupHooks": {
       "title": "Project Settings > {{name}}",
       "example": "Example: create a worktree in each repo (this machine only)",
@@ -3893,52 +3891,15 @@
         "9b40d7b018": "Copy"
       },
       "NativeChatResumeOnRestartModal": {
-        "serverTitle": "{{machine}} restarted",
-        "serverBody": "These chats were working when Orca on {{machine}} restarted. Resuming restores each one where it stopped and asks the agent to carry on. Your own prompt is not re-sent.",
-        "serverDismiss": "Dismiss",
-        "serverResumeAll": "Resume all {{count}} on {{machine}}",
-        "title": "Resume interrupted chats?",
-        "body": "These chats were working when Orca closed. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.",
-        "updateBody": "These chats were working when Orca installed an update. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.",
-        "resuming": "Resuming…",
-        "untitled": "Untitled chat",
-        "listLabel": "Chats that would be resumed",
-        "dontAskAgain": "Don't ask again (resume automatically)",
-        "dontAskAgainHint": "You can turn this off in Settings → Chat → Behavior.",
-        "selectAgent": "Resume {{value0}} chat \"{{value1}}\" in {{value2}}",
-        "dismissAll": "Dismiss all",
-        "viewChats": "View chats",
-        "review": "Review",
         "activityUnnamed": "unnamed",
         "activityApproval": "Waiting for your approval: {{value0}}",
         "activityQuestion": "Waiting for your answer: {{value0}}",
         "activityMidReply": "Was mid-reply",
         "activitySubagentOne": "Subagent running: {{value0}}",
         "activityMonitorOne": "Monitoring: {{value0}}",
-        "selectWorkspace": "Select all chats in {{value0}}",
         "workspaceSelectedCount": "{{value0}} of {{value1}}",
-        "selectAll": "Select all chats",
-        "selectAllLabel": "Select all",
-        "selectedCount": "{{value0}} of {{value1}} selected",
-        "selectProject": "Select all chats in {{value0}}",
         "collapseNode": "Collapse {{value0}}",
         "expandNode": "Expand {{value0}}",
-        "selectMachine": "Select all chats on {{value0}}",
-        "sshHost": "SSH",
-        "done": "Done",
-        "resultListLabel": "Chats in this resume",
-        "resumeChats_one": "Resume {{count}} chat",
-        "resumeChats_other": "Resume {{count}} chats",
-        "serverResumeHereCount_one": "Resume {{count}} chat started here",
-        "serverResumeHereCount_other": "Resume {{count}} chats started here",
-        "continuedCount_one": "Resumed {{count}} chat",
-        "continuedCount_other": "Resumed {{count}} chats",
-        "notContinuedCount_one": "{{count}} chat couldn’t be resumed",
-        "notContinuedCount_other": "{{count}} chats couldn’t be resumed",
-        "notConfirmedCount_one": "Couldn’t confirm {{count}} chat was resumed",
-        "notConfirmedCount_other": "Couldn’t confirm {{count}} chats were resumed",
-        "notConfirmedOtherCount_one": "Couldn’t confirm {{count}} other chat was resumed",
-        "notConfirmedOtherCount_other": "Couldn’t confirm {{count}} other chats were resumed",
         "activitySubagentCount_other": "{{count}} subagents running",
         "activityMonitorCount_other": "Monitoring {{count}} background tasks",
         "activityMonitorCount_one": "Monitoring {{count}} background task",
@@ -9314,7 +9275,7 @@
           "8a52ca1d02": "Release notes",
           "d89806cc89": "is ready to install.",
           "a6b37929dc": "Version",
-          "8311da27ba": "is available. Click \"Download Update\" to download it.",
+          "8311da27ba": "is available.",
           "02dc082e70": "Could not start the update download.",
           "ceb579abaf": "Check for app updates and install a newer Orca version.",
           "bd79d412f0": "Update check failed. {{value0}}",
@@ -20312,25 +20273,15 @@
         "3d8e5f1b9c": "Share skills behind an unlisted link and install them on any machine you use.",
         "c5b3e8a17d": "Sign in to Orca"
       },
-      "NativeChatResumeOutcomeRow": {
-        "openChat": "Open chat",
-        "retry": "Retry",
-        "dismiss": "Dismiss",
-        "unconfirmed": "Couldn’t confirm the chat was resumed",
-        "failed": "Couldn’t resume",
-        "statusFor": "{{value0}}: {{value1}}",
-        "dismissChat": "Dismiss \"{{value0}}\" in {{value1}}",
-        "toResume": "To resume:"
-      },
       "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca couldn’t confirm the “continue” message was delivered. Open the chat and check before sending another.",
-        "superseded": "Open the chat and reply. New work arrived in it right after the restart, so Orca didn’t send its “continue” message.",
-        "conflict": "This chat is open in another Orca window or terminal. Close it there, then retry.",
-        "ownershipUnknown": "This chat isn’t ready to resume yet. Wait a moment, then retry.",
-        "notAttached": "The chat didn’t reconnect. Retry, or open it to start a fresh turn.",
-        "dispatchRejected": "The agent refused the “continue” message. Open the chat and send one yourself.",
-        "unsupported": "This chat can’t be resumed by Orca. Open it to see where it stopped.",
-        "fallback": "Orca couldn’t resume this chat. Open it to continue manually."
+        "fallbackShort": "Couldn’t resume.",
+        "unconfirmedShort": "Couldn’t confirm it continued.",
+        "supersededShort": "New work arrived after the restart.",
+        "conflictShort": "Open in another window or terminal.",
+        "ownershipUnknownShort": "Not ready to resume yet.",
+        "notAttachedShort": "Didn’t reconnect.",
+        "dispatchRejectedShort": "The agent declined to continue.",
+        "unsupportedShort": "Orca can’t resume this chat."
       },
       "web": {
         "preloadApi": {
@@ -20342,41 +20293,6 @@
             "claudeWslDefaultUnavailable": "Switching a WSL lane back to the system default is only available in the desktop app."
           }
         }
-      },
-      "NativeChatResumeRunPanel": {
-        "description": "Each chat is restored with its full context and asked to check where it stopped. You can close this; the status bar keeps track.",
-        "finished": "These chats were working when Orca closed. Orca restored each one where it stopped, with its full context, and asked the agent to check what it was doing before carrying on. Your own prompts weren’t re-sent.",
-        "finishedUpdate": "These chats were working when Orca installed an update. Orca restored each one where it stopped, with its full context, and asked the agent to check what it was doing before carrying on. Your own prompts weren’t re-sent.",
-        "finishedPartial": "These chats were working when Orca closed. The ones Orca resumed were restored where they stopped, with their full context, and asked to check what they were doing before carrying on. Your own prompts weren’t re-sent. Check the list for chats that still need attention or can be resumed.",
-        "finishedPartialUpdate": "These chats were working when Orca installed an update. The ones Orca resumed were restored where they stopped, with their full context, and asked to check what they were doing before carrying on. Your own prompts weren’t re-sent. Check the list for chats that still need attention or can be resumed.",
-        "resumedOfTotal_one": "Resumed {{resumed}} of {{count}} chat",
-        "resumedOfTotal_other": "Resumed {{resumed}} of {{count}} chats",
-        "resumingCount_one": "Resuming {{count}} chat",
-        "resumingCount_other": "Resuming {{count}} chats"
-      },
-      "NativeChatResumeRunStatusIcon": {
-        "waitingForReply": "Waiting for a reply",
-        "starting": "Starting",
-        "waitingToStart": "Waiting to start",
-        "inFlight": "{{value0}} · {{value1}}",
-        "resumed": "Resumed"
-      },
-      "NativeChatResumeRunSummary": {
-        "done": "{{value0}} of {{value1}} done",
-        "starting": "{{value0}} starting",
-        "waitingForReply": "{{value0}} waiting for a reply",
-        "waitingToStart": "{{value0}} waiting to start",
-        "all": "All",
-        "inProgress": "In progress",
-        "resumed": "Resumed",
-        "attention": "Need you",
-        "running": "Running {{value0}}",
-        "filter": "Show chats"
-      },
-      "NativeChatResumeAutoNote": {
-        "resuming": "Resuming automatically after the restart.",
-        "resumed": "Resumed automatically after the restart.",
-        "changeInSettings": "Change in Settings"
       },
       "TaskPageJiraSavedFilters": {
         "6c381858a1": "Saved filters",
@@ -20568,6 +20484,45 @@
       },
       "NewWorkspaceComposerFooter": {
         "create": "Create"
+      },
+      "NativeChatResumeToast": {
+        "resumingOn_one": "Resuming {{count}} chat on {{machine}}…",
+        "resumingOn_other": "Resuming {{count}} chats on {{machine}}…",
+        "resuming_one": "Resuming {{count}} chat…",
+        "resuming_other": "Resuming {{count}} chats…",
+        "resumedOn_one": "Resumed {{count}} chat on {{machine}}.",
+        "resumedOn_other": "Resumed {{count}} chats on {{machine}}.",
+        "resumedUpdate_one": "Resumed {{count}} chat after the update.",
+        "resumedUpdate_other": "Resumed {{count}} chats after the update.",
+        "resumedRestart_one": "Resumed {{count}} chat after the restart.",
+        "resumedRestart_other": "Resumed {{count}} chats after the restart.",
+        "partial_one": "Resumed {{resumed}} of {{total}} chats. {{count}} needs you.",
+        "partial_other": "Resumed {{resumed}} of {{total}} chats. {{count}} need you.",
+        "stoppedOn_one": "{{count}} chat stopped on {{machine}}.",
+        "stoppedOn_other": "{{count}} chats stopped on {{machine}}.",
+        "stoppedUpdate_one": "{{count}} chat stopped when Orca updated.",
+        "stoppedUpdate_other": "{{count}} chats stopped when Orca updated.",
+        "stoppedRestart_one": "{{count}} chat stopped when Orca closed.",
+        "stoppedRestart_other": "{{count}} chats stopped when Orca closed.",
+        "promptsNotResent": "Resuming won’t send your prompts again.",
+        "promptsNotSent": "Your prompts weren’t sent again.",
+        "resume": "Resume",
+        "details": "Details",
+        "close": "Close",
+        "listLabel": "Chats",
+        "untitled": "Untitled chat",
+        "willAsk": "Orca asks chats to continue. Queued messages may be sent.",
+        "asked": "Orca asked chats to continue. Queued messages may be sent.",
+        "resumedAutomatically": "Resumed automatically.",
+        "changeInSettings": "Change in Settings",
+        "dismissAll": "Dismiss all",
+        "open": "Open",
+        "dismiss": "Dismiss",
+        "retry": "Retry",
+        "stateResumed": "Resumed",
+        "stateNeedsYou": "Needs you",
+        "stateResuming": "Resuming",
+        "stateStopped": "Stopped"
       }
     },
     "i18n": {
@@ -21259,6 +21214,7 @@
         },
         "imageUnavailable": "Preview unavailable",
         "botFor": "For: {{detail}}",
+        "agents": "Agents",
         "bots": "Bots",
         "files": "Files",
         "skillPillLabel": "Skill: {{name}}",
@@ -21452,7 +21408,12 @@
         "stateUnverifiableCount": "{{value0}} with status unavailable",
         "stateWaitingCount": "{{value0}} waiting",
         "stateWorkingCount": "{{value0}} working",
-        "openAgent": "Open {{value0}}"
+        "openAgent": "Open {{value0}}",
+        "needsAttention_one": "{{count}} needs attention",
+        "needsAttention_other": "{{count}} need attention",
+        "workerBadge": "Worker",
+        "subagentBadge": "Subagent",
+        "nameInMessage": "Add {{name}} to message"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",
@@ -22253,6 +22214,7 @@
           "failed": "Failed",
           "failedReason": "Failed: {{error}}",
           "disabled": "Disabled",
+          "notStarted": "Not started",
           "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
         },
         "signIn": {
@@ -22503,6 +22465,44 @@
         "signsInClaudeAccount": "Signs in this Claude account",
         "runsCommand": "Runs {{command}} in a terminal",
         "thenSlashCommand": "Sign in, then type {{slashCommand}}."
+      },
+      "antigravityAuth": {
+        "chipLabel": "Antigravity signs in with {{method}}. Change",
+        "chipTitle": "Antigravity signs in with {{method}}",
+        "menuTitle": "Antigravity signs in with",
+        "detected": "Detected",
+        "settings": "Sign-in settings…",
+        "switched": "Antigravity now uses {{method}}.",
+        "switchFailed": "Orca couldn't change how Antigravity signs in. Try again.",
+        "confirmTitle": "Switch to {{method}}?",
+        "confirmBody": "Antigravity chats running on this host restart. A reply in progress stops; your conversations stay.",
+        "cancel": "Cancel",
+        "confirm": "Switch",
+        "otherWays": "You can sign in with an API key or gcloud instead.",
+        "moreOptions": "More options…",
+        "useApiKey": "Use your Gemini API key",
+        "useGcloud": "Use gcloud ({{project}})",
+        "useGoogle": "Use your Google sign-in",
+        "apiKeyFromEnvironment": "Found GEMINI_API_KEY in your environment",
+        "apiKeySaved": "Saved in Orca",
+        "gcloudFound": "Found your gcloud login (Application Default Credentials)",
+        "googleFound": "You signed in with Google on this host before",
+        "askApiKeyEnvironment": "Use the Gemini API key found in your environment instead?",
+        "askApiKeySaved": "Use the Gemini API key saved in Orca instead?",
+        "askGcloud": "Use your gcloud login (project {{project}}) instead?",
+        "askGoogle": "Use your Google sign-in instead?",
+        "noSubscription": "This Google account has no Antigravity subscription.",
+        "ineligible": "This Google account can't use Antigravity.",
+        "signedOut": "Antigravity isn't signed in.",
+        "refused": "Google refused this chat's credentials.",
+        "usageLimit": "This sign-in reached its usage limit.",
+        "foundLead": "Orca found credentials on this host you can use instead:",
+        "signInGoogle": "Sign in with Google",
+        "useKeyOrGcloud": "Use an API key or gcloud instead",
+        "agy": "agy sign-in",
+        "agyItem": "agy's own login",
+        "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
+        "confirmSignIn": "Sign in with Google?"
       }
     },
     "tab": {
@@ -23308,6 +23308,7 @@
           "archiveUnavailable": "Archive not available",
           "archiveScript": "Has an archive script",
           "removing": "Already being removed",
+          "folderWorkspaceSibling": "Another repository in this workspace is still in use",
           "waiting": "Waiting",
           "notRemovable": "Main workspace or folder project",
           "projectOff": "Cleanup off for this project",
@@ -23464,6 +23465,15 @@
           "diskSpace": "disk space",
           "cleanup": "cleanup",
           "chatHistory": "delete chat history"
+        }
+      },
+      "notifications": {
+        "server": {
+          "fallbackHost": "this server",
+          "updateFailed": "Couldn't update notifications on {{host}}.",
+          "unsupported": "Update Orca on {{host}} to change its notifications here.",
+          "enabledDescription": "Alerts {{host}} sends for its agents and terminals, including pushes to your phones.",
+          "sectionDescription": "Alerts {{host}} sends for its agents and terminals."
         }
       }
     },
@@ -23635,17 +23645,19 @@
       "openChat": "Open its chat",
       "copiedAddress": "Copied {{name}}'s address",
       "copyAddress": "Copy address",
-      "showDetails": "Show {{name}}'s task and latest message",
+      "showDetails": "Show {{name}}'s task and reply",
       "task": "Task",
-      "asksYou": "Asks you",
       "openFailed": "{{name}}: {{detail}}",
       "chatUnavailable": "This host cannot open the chat. Try again.",
       "terminalExited": "This terminal has exited.",
       "openOnHost": "Open this agent on {{host}}.",
       "cannotLocate": "This host cannot locate this agent. Try again.",
-      "latest": "Latest",
-      "to": "To",
-      "from": "From"
+      "reply": "Reply",
+      "noReply": "No reply yet",
+      "taskFailed": "Failed",
+      "youPreview": "You: {{preview}}",
+      "composerUnavailable": "The message box can't take a mention now",
+      "mentionTip": "Mention {{name}}"
     },
     "orchestration": {
       "workerAutoClose": {
@@ -24623,6 +24635,13 @@
     "delete": "Delete"
   },
   "terminal": {
+    "recentImages": {
+      "pasted": "Pasted image",
+      "open": "Open preview",
+      "copyPath": "Copy path",
+      "setting": "Pasted and dropped image previews",
+      "settingDescription": "Show recent local images in the pane header after you paste or drop them."
+    },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
       "capacity": "The device saving this terminal reported full storage or an exceeded storage quota. Free space on that device, then try again.",
@@ -24859,6 +24878,22 @@
       "fd47b5a5dd": "Antigravity accounts",
       "personalOption": "Your personal Google AI plan",
       "enterpriseOption": "Your organization's license",
+      "apiKeyOption": "A key from Google AI Studio",
+      "agentPlatformOption": "Your gcloud login (ADC)",
+      "apiKey": "Gemini API key",
+      "agentPlatform": "Google Agent Platform",
+      "projectFromGcloud": "From gcloud",
+      "locationGlobal": "global",
+      "adcHint": "Optional. Orca uses your gcloud project and the global location. Run gcloud auth application-default login once first.",
+      "apiKeySaveFailed": "Orca couldn't save the key. Try again.",
+      "apiKeySaved": "Key saved on this host, encrypted.",
+      "apiKeyFromEnvironment": "Using GEMINI_API_KEY from your environment. Paste a key to use a different one.",
+      "apiKeyLabel": "Gemini API key",
+      "apiKeyPlaceholder": "Paste your API key",
+      "apiKeySave": "Save",
+      "apiKeyReplace": "Replace key",
+      "apiKeyRemove": "Remove",
+      "apiKeyGet": "Get a key from Google AI Studio",
       "location": "Location",
       "enterpriseFieldsShort": "Enter a project and location.",
       "chatUseMethod": "Sign in again to use {{method}}",
@@ -24878,9 +24913,12 @@
       "runtime": "Runtime",
       "chatTitle": "Antigravity Chat",
       "chatDescription": "Signs in through your browser, so Chat works without agy installed.",
+      "chatDescriptionAgy": "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't.",
       "terminalTitle": "agy in the terminal",
       "terminalDescriptionWindows": "Uses agy's own saved accounts. Switching applies to the host default agy credential.",
       "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
+      "terminalDescriptionChats": "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats.",
+      "terminalDescriptionNoChats": "Uses agy's own saved accounts. Switching applies to new agy sessions, not to Antigravity chats.",
       "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here."
     },
     "claude": {
@@ -24937,6 +24975,10 @@
         "sharedOther": "{{count}} Claude sessions stay on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
         "strandedOne": "1 Claude session may still be on {{previous}}. Restart it manually to switch.",
         "strandedOther": "{{count}} Claude sessions may still be on {{previous}}. Restart them manually to switch.",
+        "hostAskOne": "1 Claude session is still on {{previous}}.",
+        "hostAskOther": "{{count}} Claude sessions are still on {{previous}}.",
+        "hostAskDescription": "Restarting stops any work in progress.",
+        "hostAskRestart": "Restart",
         "notMovedOne": "1 other session wasn't moved.",
         "notMovedOther": "{{count}} other sessions weren't moved.",
         "review": "Review",
@@ -25032,11 +25074,9 @@
     },
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",
-      "review": "Delete with nested worktrees…",
       "description": "This permanently deletes \"{{name}}\", every nested worktree listed below, and all files inside them, including uncommitted changes. Their terminals and agents will be stopped.",
       "detached": "Detached HEAD",
       "loading": "Checking nested worktrees…",
-      "order": "Nested worktrees are deleted first. If one fails, deletion stops and the parent is kept. Branches follow your existing deletion settings.",
       "cancel": "Cancel",
       "retry": "Review again",
       "deleting": "Deleting…",
@@ -25073,12 +25113,10 @@
       "forceDelete": "Force delete",
       "alwaysForceDelete": "Always force delete",
       "batchTitle": "Delete {{count}} workspaces?",
-      "batchVerb": "Delete {{count}} workspaces",
       "withChildrenTitle_one": "Delete {{name}} and {{count}} child workspace?",
       "withChildrenTitle_other": "Delete {{name}} and {{count}} child workspaces?",
       "allVerb": "Delete all",
       "singleTitle": "Delete {{name}}?",
-      "singleVerb": "Delete workspace",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
       "errorDetails": "Details",
       "changesIncomplete": "Some changes couldn’t be fully checked."
@@ -25977,7 +26015,9 @@
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
-      "botItemBack": "Back to items"
+      "botItemBack": "Back to items",
+      "botItemPrevious": "Previous item",
+      "botItemNext": "Next item"
     },
     "group": {
       "global": "Global",
@@ -26916,7 +26956,8 @@
       "waitingCount": "Waiting on {{count}} events",
       "settings": "Bot settings…",
       "hostDisconnected": "{{host}} disconnected",
-      "disconnected": "Disconnected"
+      "disconnected": "Disconnected",
+      "runsOn": "Runs on {{host}}"
     },
     "new": {
       "agentClaude": "Claude Code",
@@ -27897,6 +27938,7 @@
       "picked": "{{count}} picked",
       "filter": "Filter bots",
       "pickTwo": "Pick 2 or more bots",
+      "sameComputer": "Bots in a group must be on the same computer.",
       "nameIt": "Name the group",
       "suggestTwo": "{{a}} & {{b}}",
       "suggestThree": "{{a}}, {{b}} & {{c}}",
@@ -29124,6 +29166,12 @@
         "next": "Next item",
         "previous": "Previous item",
         "place": "{{index}} / {{total}}",
+        "placeOf": "{{index}} of {{total}}",
+        "navigation": "Item {{index}} of {{total}}",
+        "loadingNext": "Loading next item",
+        "shown": "Item {{index}} of {{total}}: {{title}}",
+        "firstItem": "First item",
+        "lastItem": "Last item",
         "deleted": "This item was deleted.",
         "moreLinks": "{{count}} more links"
       },
@@ -29168,7 +29216,11 @@
         "dismiss": "Dismiss",
         "commentNotAnswer": "A comment, with any files, goes to the bot and moves this item to In progress, but isn’t recorded as your answer. Expand the question to answer it.",
         "uncertain": "This question closed while your answer was being sent, and no reply came, so it may not have gone. Check Activity; your answer is kept here.",
-        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here."
+        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here.",
+        "reply": "Reply",
+        "replyPlaceholder": "Reply to {{name}}…",
+        "cancelReply": "Cancel",
+        "sendReply": "Send"
       }
     },
     "search": {
@@ -29196,6 +29248,20 @@
       "continuesShort": "Continues {{time}}",
       "hitShort": "Hit limit",
       "stoppedCount": "{{count}} stopped"
+    },
+    "hover": {
+      "asksQuestion": "Waiting for your answer",
+      "wantsApproval": "Wants your approval",
+      "signIn": "Needs you to sign in",
+      "access": "Asked for access",
+      "needsYouHeading_one": "1 thing needs you",
+      "needsYouHeading_other": "{{count}} things need you",
+      "moreAsks_one": "+{{count}} more ask",
+      "moreAsks_other": "+{{count}} more asks",
+      "itemsNeedYou_one": "{{count}} item it flagged for you",
+      "itemsNeedYou_other": "{{count}} items it flagged for you",
+      "review": "Review",
+      "openHome": "Open {{name}}’s Home"
     }
   },
   "plugins": {
@@ -29473,8 +29539,18 @@
     "versions": "{{installed}} → {{latest}}",
     "modelRequiresClaude": "Requires Claude Code CLI {{version}}",
     "modelRequiresCodex": "Requires Codex CLI {{version}}",
+    "modelRequires": "Requires {{product}} {{version}}",
     "claudeProduct": "Claude Code",
     "codexProduct": "Codex CLI",
+    "grokProduct": "Grok Build",
+    "opencodeProduct": "OpenCode",
+    "opencode2Product": "OpenCode 2",
+    "ompProduct": "OMP",
+    "copilotProduct": "GitHub Copilot CLI",
+    "copilotShortProduct": "Copilot CLI",
+    "kimiProduct": "Kimi Code",
+    "cursorProduct": "Cursor CLI",
+    "hermesProduct": "Hermes Agent",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",

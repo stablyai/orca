@@ -117,6 +117,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalLigatures: 'auto' | 'on' | 'off'
   /** Enable SIXEL/iTerm2/Kitty via lazy @xterm/addon-image; image canvas/storage allocates only after a pane receives an image. */
   terminalInlineImages: boolean
+  terminalDroppedImagesPreview?: boolean
   terminalCursorStyle: 'bar' | 'block' | 'underline'
   /** One-shot migration guard for moving inherited cursor defaults to block. */
   terminalCursorStyleDefaultedToBlock?: boolean

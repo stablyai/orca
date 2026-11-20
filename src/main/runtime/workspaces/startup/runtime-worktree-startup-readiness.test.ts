@@ -163,6 +163,59 @@ describe('fresh worker composer readiness', () => {
   })
 })
 
+describe('startup draft behind a wait-for-setup wrapper', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('starts the deadline when Setup ends, ignoring the wrapper shell meanwhile', async () => {
+    vi.useFakeTimers()
+    let listener = (_data: string): void => {}
+    const host: WorktreeStartupReadinessHost = {
+      getPtyId: () => 'pty-1',
+      getForegroundProcess: async () => 'claude',
+      subscribeToData: (_ptyId, onData) => {
+        listener = onData
+        return () => {}
+      },
+      readRecentOutput: () => 'PS C:\\repo> \x1b[?2004h',
+      write: vi.fn()
+    }
+    let value: string | null | undefined
+    void waitForWorktreeStartupDraft(host, 'term-1', 'claude', { afterSetup: true }).then(
+      (ready) => (value = ready)
+    )
+
+    listener('\x1b[?2004lWaiting for setup to finish before starting agent...\r\n')
+    // Setup outlasts the agent's whole 8s draft window, and the wrapper's prompt arms no paste.
+    listener('\x1b[?2004h')
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(value).toBeUndefined()
+
+    listener('Setup finished; starting agent.\r\n')
+    await vi.advanceTimersByTimeAsync(7_000)
+    listener('\x1b[?2031h\u276f\u00a0')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(value).toBe('pty-1')
+  })
+
+  it('gives up when Setup fails instead of pasting into the shell it returns to', async () => {
+    let listener = (_data: string): void => {}
+    const host: WorktreeStartupReadinessHost = {
+      getPtyId: () => 'pty-1',
+      getForegroundProcess: async () => 'bash',
+      subscribeToData: (_ptyId, onData) => {
+        listener = onData
+        return () => {}
+      },
+      readRecentOutput: () => 'Waiting for setup to finish before starting agent...\r\n',
+      write: vi.fn()
+    }
+    const pending = waitForWorktreeStartupDraft(host, 'term-1', 'claude', { afterSetup: true })
+
+    listener('Setup failed (exit 3); skipping agent startup.\r\n$ \x1b[?2004h')
+    await expect(pending).resolves.toBeNull()
+  })
+})
+
 describe('OpenCode submit readiness', () => {
   afterEach(() => vi.useRealTimers())
 

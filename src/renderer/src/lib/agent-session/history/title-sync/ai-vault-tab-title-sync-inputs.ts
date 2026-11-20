@@ -27,7 +27,7 @@ function providerSessionEqual(
   )
 }
 
-function relevantRecordEqual<T extends object>(
+export function relevantRecordEqual<T extends object>(
   current: Record<string, T>,
   previous: Record<string, T>,
   relevant: (entry: T) => boolean,
@@ -245,7 +245,7 @@ function requestFactsChanged(
   )
 }
 
-function ownerInputsChanged(
+export function ownerInputsChanged(
   current: AiVaultTitleRequestInputs,
   previous: AiVaultTitleRequestInputs
 ): boolean {

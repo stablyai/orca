@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 
 const mocks = vi.hoisted(() => ({
@@ -20,9 +22,13 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
     mocks.rpc(target, method, params)
 }))
 vi.mock('./use-bot-group-delete', () => ({ useBotGroupDelete: () => vi.fn() }))
+vi.mock('./use-bot-host-label', () => ({
+  useBotHostLabel: (hostId: string) => (hostId === 'local' ? null : 'Workstation')
+}))
 
-function bot(id: string, name: string): Bot {
-  return {
+// A paired server's bot is stamped with its server's host id, as the catalog lists it.
+function bot(id: string, name: string, hostId: ExecutionHostId = 'local'): Bot {
+  return stampBotHost(hostId, {
     id,
     name,
     hostId: 'local',
@@ -39,7 +45,7 @@ function bot(id: string, name: string): Bot {
     github: null,
     createdAt: 1,
     updatedAt: 1
-  }
+  })
 }
 
 const group: BotGroup = {
@@ -66,7 +72,10 @@ afterEach(() => {
 })
 
 describe('BotGroupMembersDialog', () => {
-  mocks.bots = [bot('a', 'Fern'), bot('b', 'Moss'), bot('c', 'Ivy')]
+  const sameHost = [bot('a', 'Fern'), bot('b', 'Moss'), bot('c', 'Ivy')]
+  beforeEach(() => {
+    mocks.bots = sameHost
+  })
 
   it('keeps the name field focused during member selection and offers the suggestion on Tab', () => {
     render(<BotGroupMembersDialog onClose={() => {}} />)
@@ -128,5 +137,54 @@ describe('BotGroupMembersDialog', () => {
       name: 'Crew two',
       botIds: ['a', 'b', 'c']
     })
+  })
+
+  it("keeps another computer's bots listed but unpickable once a member is picked", () => {
+    mocks.bots = [bot('a', 'Fern'), bot('w', 'Willow', 'runtime:ws'), bot('b', 'Moss')]
+    render(<BotGroupMembersDialog onClose={() => {}} />)
+    expect(row('Willow').textContent).toContain('Workstation')
+    expect(row('Fern').textContent).toContain('Local')
+    fireEvent.click(row('Willow'))
+    expect(row('Fern').hasAttribute('disabled')).toBe(true)
+    expect(row('Moss').hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText('Bots in a group must be on the same computer.')).toBeTruthy()
+    fireEvent.click(row('Willow'))
+    expect(row('Fern').hasAttribute('disabled')).toBe(false)
+    expect(screen.queryByText('Bots in a group must be on the same computer.')).toBeNull()
+    fireEvent.click(row('Fern'))
+    fireEvent.click(row('Moss'))
+    expect(row('Willow').hasAttribute('disabled')).toBe(true)
+    expect(screen.getByText('Name the group')).toBeTruthy()
+  })
+
+  it('shows no computer names or note when every bot is on one computer', () => {
+    render(<BotGroupMembersDialog onClose={() => {}} />)
+    fireEvent.click(row('Fern'))
+    expect(row('Moss').hasAttribute('disabled')).toBe(false)
+    expect(row('Moss').textContent).not.toContain('Local')
+    expect(screen.queryByText('Bots in a group must be on the same computer.')).toBeNull()
+  })
+
+  it("keeps another computer's bots unpickable while managing a group", () => {
+    mocks.bots = [...sameHost, bot('w', 'Willow', 'runtime:ws')]
+    render(<BotGroupMembersDialog group={group} onClose={() => {}} />)
+    expect(row('Willow').hasAttribute('disabled')).toBe(true)
+    expect(row('Willow').getAttribute('aria-describedby')).toBe('bot-group-same-computer')
+    fireEvent.click(row('Ivy'))
+    fireEvent.click(button('Save'))
+    expect(mocks.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'bots.groups.update', {
+      groupId: 'group-1',
+      revision: 1,
+      name: 'Crew',
+      botIds: ['a', 'b', 'c']
+    })
+  })
+
+  it("never shows another computer's bot with the same id as picked", () => {
+    mocks.bots = [bot('a', 'Fern'), bot('a', 'Willow', 'runtime:ws')]
+    render(<BotGroupMembersDialog onClose={() => {}} />)
+    fireEvent.click(row('Fern'))
+    expect(row('Fern').getAttribute('aria-checked')).toBe('true')
+    expect(row('Willow').getAttribute('aria-checked')).toBe('false')
   })
 })

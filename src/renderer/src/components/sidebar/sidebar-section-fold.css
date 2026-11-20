@@ -1,3 +1,11 @@
+/* The sidebar surface receives pointer hits while the header is captured for the fold. */
+[data-sidebar-content-shell]:has(
+  > [data-sidebar-content-viewport]:active-view-transition-type(sidebar-fold)
+),
+[data-sidebar-content-viewport]:active-view-transition-type(sidebar-fold) {
+  cursor: pointer;
+}
+
 [data-sidebar-content-viewport]:active-view-transition-type(sidebar-fold)
   [data-sidebar-bots-split] {
   view-transition-name: sidebar-fold-bots;

@@ -33,6 +33,7 @@ import { KIMI_LAUNCH_SPEC } from '../../kimi/kimi-acp-launch-spec'
 import { CURSOR_LAUNCH_SPEC } from '../../cursor/cursor-acp-launch-spec'
 import { HERMES_LAUNCH_SPEC } from '../../hermes/hermes-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
+import { OPENCODE_MINIMUM_VERSIONS, OPENCODE2_MINIMUM_VERSIONS } from './acp-minimum-versions'
 
 const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'grok',
@@ -69,9 +70,6 @@ const GROK_LAUNCH_SPEC: AcpLaunchSpec = {
   sessionHistory: GROK_SESSION_HISTORY
 }
 
-// Verified release lines: 1.18.31 recordings and 2.0.14 private-child startup.
-const OPENCODE_MINIMUM_VERSIONS = ['1.18.31', '2.0.14'] as const
-
 // 1.x serves in-process; 2.x passes this environment to a private serve --stdio child.
 function openCodeLaunchSpec(
   row: Pick<AcpLaunchSpec, 'agent' | 'command' | 'minimumVersions' | 'modelDiscovery'>
@@ -82,7 +80,7 @@ function openCodeLaunchSpec(
     args: () => ['acp'],
     // 1.x cannot answer ACP questions; 2.x ignores this guard and negotiates form support.
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
-    scrubEnvironment: scrubOpenCodeAcpEnvironment,
+    scrubEnvironment: (env, inherited) => scrubOpenCodeAcpEnvironment(env, inherited),
     dialect: OPENCODE_ACP_DIALECT,
     historyCatchUp: 'user-message-id',
     loginCommand: agentSessionSetupFor(row.agent)?.loginCommand ?? [],
@@ -117,7 +115,7 @@ const OPENCODE_LAUNCH_SPEC = openCodeLaunchSpec({
 const OPENCODE2_LAUNCH_SPEC = openCodeLaunchSpec({
   agent: 'opencode2',
   command: 'opencode2',
-  minimumVersions: ['2.0.14'],
+  minimumVersions: OPENCODE2_MINIMUM_VERSIONS,
   modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false }
 })
 

@@ -49,7 +49,9 @@ import { imageReferencesToPromptMarkers } from '../../../../../shared/native-cha
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
 import { botRefKey } from '@/lib/bot-hosts'
-import { useClearOfFloatingTrigger } from './use-clear-of-floating-trigger'
+import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
+import { BOT_ITEM_TOOL_ROW_TOUCH_FIT } from './BotItemStepper'
+import { cn } from '@/lib/class-names'
 import {
   useBotItemCommentAttachments,
   type BotItemCommentAttachTarget
@@ -57,6 +59,8 @@ import {
 
 export type BotItemCommentBoxHandle = {
   focus: () => void
+  /** Focus the box with the caret after its text, as when coming back to a draft. */
+  focusEnd: () => void
   /** Focus the box and type `text` at its caret. */
   type: (text: string) => void
 }
@@ -72,6 +76,7 @@ export function BotItemCommentBox({
   attachTo,
   onSend,
   hidden = false,
+  nav,
   ref
 }: {
   bot: Bot
@@ -82,6 +87,8 @@ export function BotItemCommentBox({
   onSend: (text: string, paths: readonly string[]) => void
   /** Behind the open question's card: files dropped on the pane are not taken into its hidden draft. */
   hidden?: boolean
+  /** The item pane's previous / next arrows, between the attach and mic buttons. */
+  nav?: React.ReactNode
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -93,7 +100,7 @@ export function BotItemCommentBox({
   const box = useRef<HTMLDivElement | null>(null)
   const input = useRef<NativeChatComposerInput | null>(null)
   const composer = useRef<NativeChatComposerHandle | null>(null)
-  const lift = useClearOfFloatingTrigger(box)
+  useKeepFloatingTerminalTriggerClear(box)
   const dictation = useNativeChatDictation(input, false)
   const access = useBotItemCommentAttachments(bot, item, attachTo)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
@@ -206,6 +213,11 @@ export function BotItemCommentBox({
 
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
+    focusEnd: () => {
+      const node = input.current
+      node?.focus()
+      node?.setSelectionRange(node.value.length, node.value.length)
+    },
     type: (typed) => void composer.current?.insertTypedText(typed)
   }))
 
@@ -316,7 +328,6 @@ export function BotItemCommentBox({
       data-native-chat-composer-scope={scopeKey}
       onClick={focusAtEnd}
       className="mx-3 mb-3 mt-2 flex shrink-0 cursor-text flex-col rounded-[10px] border border-border bg-background p-3 focus-within:border-foreground/20"
-      style={lift > 0 ? { marginBottom: 12 + lift } : undefined}
     >
       {mentions.autocomplete.mode === 'mention' ? (
         <NativeChatMentionMenu
@@ -369,13 +380,14 @@ export function BotItemCommentBox({
       />
       {/* The send circle sets the row's height; the ghost buttons overhang it, so their glyphs sit on
           the text's left edge and level with the send. */}
-      <div className="mt-2 flex items-center gap-1">
+      <div className={cn('mt-2 flex items-center gap-1', nav ? BOT_ITEM_TOOL_ROW_TOUCH_FIT : null)}>
         {access.session ? (
           <span className="-my-1 -ml-2 flex">
             <NativeChatAttachButton onAttach={fileDrops.pickAttachments} />
           </span>
         ) : null}
-        <span className="-my-1 ml-auto flex">
+        {nav}
+        <span className={cn('-my-1 flex', nav ? null : 'ml-auto')}>
           <NativeChatDictationButton
             disabled={dictation.dictationDisabled}
             isDictating={dictation.isDictating}

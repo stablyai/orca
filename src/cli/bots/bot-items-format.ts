@@ -13,6 +13,7 @@ export type BotItemWriteView = {
   eventId: string | null
   created?: boolean
   unchanged?: boolean
+  advice?: { codes: string[]; tip: string }
 }
 
 export type BotItemListView = {
@@ -56,6 +57,9 @@ export function formatBotItemWrite(view: BotItemWriteView): string {
       ...(view.unchanged ? ['nothing changed'] : [])
     ].join(' · ')
   ]
+  if (view.advice) {
+    lines.push(view.advice.tip)
+  }
   return lines.join('\n')
 }
 

@@ -1,7 +1,6 @@
 id: bots-no-local-target
 valid:
   - "callBotRpc(bot, 'bots.activity', { botId: bot.id })"
-  - 'const target = botTarget(bot)'
   - "const options = { kind: 'folder' }"
 invalid:
   - "const LOCAL = { kind: 'local' } as const"

@@ -9,6 +9,7 @@ import { MobileMarkdownRemoteImage } from './blocks/MobileMarkdownRemoteImage'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
 import { MarkdownLinkHandlerContext } from './links/markdown-link-handler'
 import { useMobileMarkdownTree } from './parsing/use-mobile-markdown-tree'
+import { MobileMarkdownSlackPeopleContext } from './parsing/mobile-markdown-mentions'
 import {
   MobileMarkdownLinksContext,
   useNativeChatFileLinkExistsFrom
@@ -75,6 +76,7 @@ function MobileMarkdownContent({
   const setup = useContext(MarkdownTextContext)
   const onOpenLink = useContext(MarkdownLinkHandlerContext)
   const links = useContext(MobileMarkdownLinksContext)
+  const slackPeople = useContext(MobileMarkdownSlackPeopleContext)
   const fileLinkExists = useNativeChatFileLinkExistsFrom(
     links?.fileLinks ?? null,
     onOpenFile !== undefined,
@@ -86,7 +88,12 @@ function MobileMarkdownContent({
     renderVisual !== undefined,
     growing,
     chatMath,
-    { fileLinkExists, githubRepo: links?.githubRepo, slackMentions }
+    {
+      fileLinkExists,
+      githubRepo: links?.githubRepo,
+      slackMentions,
+      slackPeople
+    }
   )
   if (!text) {
     return fallback ? (

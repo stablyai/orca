@@ -11,7 +11,7 @@ export async function readGrantedAttachmentImage(
   if (!grant) {
     return null
   }
-  const client = getClients(grant.siteId).find((entry) => entry.site.id === grant.siteId)
+  const client = (await getClients(grant.siteId)).find((entry) => entry.site.id === grant.siteId)
   if (!client) {
     return null
   }

@@ -32,7 +32,6 @@ import {
   folderWorkspaceKey,
   getActiveSidebarWorkspaceId
 } from '../../../../shared/workspace/identity/workspace-scope'
-import type { Bot } from '../../../../shared/bot-types'
 import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
 import { getHostKeyedBotSidebarEntries } from './bot-sidebar-entry-keys'
 import { readBotHostState } from '@/lib/bot-catalog-snapshot'
@@ -41,7 +40,6 @@ import { BotGroupRow } from './BotGroupRow'
 import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 import { useBotGroupDelete } from './use-bot-group-delete'
 import { findBotGroupRoom, type BotGroup } from '../../../../shared/bots/bot-group'
-import { openBotFromSidebar } from './BotRow'
 import { NewBotDialog } from './NewBotDialog'
 import { openBotShareLink } from './sharing/bot-share-receive-open'
 import { BotSidebarOptionsMenu } from './BotSidebarOptionsMenu'
@@ -60,11 +58,17 @@ import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
 
-/** The sidebar's Bots section, its own top-level section above Projects: one row per bot, this computer's and each paired server's. */
 // The + menu's rows only: 28px tall (a 20px line in the item's own 4px padding), roomier than other menus.
 const BOT_MENU_ROW = 'flex min-h-5 items-center gap-2'
 
-export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): React.JSX.Element {
+/** Lists bots from this computer and paired servers in the sidebar. */
+export function SidebarBotsSection({
+  onOpenBot,
+  reorderable = false
+}: {
+  onOpenBot: () => void
+  reorderable?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const bots = useBots()
   const savedCollapsed = useAppStore((s) => s.collapsedGroups.has(BOTS_GROUP_KEY))
@@ -165,19 +169,12 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
   })
   const listShown = !collapsed && entries.length > 0
   const reveal = useBotsSidebarReveal(listRef, listShown, savedEntries, search.endForReveal)
-  const label = t('bots.section.title', 'Bots')
   const newBotLabel = t('bots.section.newBot', 'New bot')
   const newLabel = t('bots.section.new', 'New bot or group')
 
   const toggleBots = (): void => {
     if (!search.endForFold()) {
       toggleCollapsedGroup(BOTS_GROUP_KEY)
-    }
-  }
-  // A face opens its bot as its row does, and unfolds the section so that row shows.
-  const openFromFace = (bot: Bot): void => {
-    if (openBotFromSidebar(bot, onOpenBot) && collapsed) {
-      toggleBots()
     }
   }
   const collapseLabel = collapsed
@@ -190,8 +187,9 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
     <div className={cn('flex min-h-0 flex-col', searchOpen && 'grow')}>
       {/* Each folded face is a button of its own above the shared fold button. */}
       <SidebarSectionHeader
-        title={label}
+        title={t('bots.section.title', 'Bots')}
         sectionId="bots"
+        reorderable={reorderable}
         fold={{
           collapsed,
           label: t(
@@ -215,10 +213,9 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
         }
         summary={
           collapsed ? (
-            <BotCollapsedPreview facts={facts} onOpenBot={openFromFace} onExpand={toggleBots} />
+            <BotCollapsedPreview facts={facts} onOpenBot={onOpenBot} onExpand={toggleBots} />
           ) : null
         }
-        // Folded, the header is just its title and faces; the controls unmount so Tab can't reach them.
         actions={
           collapsed ? null : (
             <>

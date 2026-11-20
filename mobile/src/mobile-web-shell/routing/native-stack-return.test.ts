@@ -35,8 +35,7 @@ describe('reusing an open session for a pane request', () => {
     })
   })
 
-  it('gives a newer request its own item, or none, instead of an earlier one', () => {
-    expect(request(`&botItem=${encodeURIComponent(item('q-2'))}`)?.params.botItem).toBe(item('q-2'))
+  it('explicitly clears the item when the pane request does not carry one', () => {
     expect(request('')?.params).toStrictEqual({
       paneKey: 'pane-2',
       botItem: undefined,

@@ -44,12 +44,12 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
   browserManager.setStandingDownloadClaim(
     googleSetupKeyDownloadClaim({
       runs: () => googleSetupRuns().list(),
-      importKey: (text) => {
+      importKey: async (text) => {
         const connect = getGoogleConnect()
         if (!connect) {
           throw new Error("Google isn't available on this computer.")
         }
-        connect.importClient(text)
+        await connect.importClient(text)
       },
       keyArrived: (botId) =>
         answerGoogleSetupCard(runtime, botId, 'owner', 'step', ['done', 'client']),

@@ -71,6 +71,11 @@ const RATCHET_INPUTS = {
   'check-tab-map-seam-ratchet.mjs': ['src/renderer/src/'],
   'check-terminal-parking-ownership-ratchet.mjs': ['src/renderer/src/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
+  'check-whole-hot-map-selector-ratchet.mjs': [
+    'src/renderer/src/',
+    'config/oxlint-plugins/app-store-performance.mjs',
+    'config/oxlint-whole-hot-map-ratchet.json'
+  ],
   'check-workspace-record-read-ratchet.mjs': ['src/renderer/src/'],
   'check-worktree-id-composer-ratchet.mjs': ['src/', 'mobile/src/']
 }
