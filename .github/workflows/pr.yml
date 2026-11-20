@@ -1087,8 +1087,23 @@ jobs:
           ORCA_DAEMON_SHUTDOWN_FIXTURE_CACHE_IMAGE: ${{ steps.daemon-fixture-cache.outputs.image }}
         run: node config/scripts/runtime-verification/daemon-lifecycle/run-daemon-shutdown-descendants-docker.mjs
 
+      # ~87s on the critical path; skip when no file the tests bundle changed (linux-electron-lifecycle.yml runs them on main).
+      - name: Scope Linux Electron lifecycle boundary
+        id: electron-lifecycle-scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          PARENTS="$(git cat-file -p HEAD | awk '/^parent /{print $2}')"
+          BASE="$BASE_SHA"
+          if [ "$(printf '%s\n' "$PARENTS" | wc -l)" -ge 2 ]; then BASE="$(printf '%s\n' "$PARENTS" | head -n 1)"; fi
+          git fetch --no-tags --depth=1 --filter=blob:none origin "$BASE"
+          git diff --name-only --no-renames --diff-filter=ACDMR "$BASE" HEAD |
+            node config/scripts/workflow/source-routing/linux-electron-lifecycle-scope.mjs >> "$GITHUB_OUTPUT"
+
       # Serialize dual-Electron lifecycle files: four concurrent probes on four vCPUs starve each other past their own deadlines.
       - name: Test Linux Electron lifecycle boundary
+        if: steps.electron-lifecycle-scope.outputs.run == 'true'
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: >-
