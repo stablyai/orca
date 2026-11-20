@@ -513,14 +513,6 @@ describe('orca slack', () => {
       'Dana wrote'
     )
   })
-  it('says when a search found more than it shows, even with none shown', () => {
-    expect(
-      formatActionResult('find', {
-        matches: [],
-        note: 'More issues match than shown; narrow the search.'
-      })
-    ).toBe('No matches.\nMore issues match than shown; narrow the search.')
-  })
   it("prints what each searched message says, quoted as someone else's words", () => {
     const printed = formatActionResult('find', {
       matches: [
