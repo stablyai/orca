@@ -162,6 +162,24 @@ describe('group @Name hand-offs', () => {
     expect(history).not.toContain('context context')
   })
 
+  it('delivers the assignment after a long emoji code span', async () => {
+    const { post, reply, newest } = await room()
+    const asked = await post('@Scout write it up')
+    await reply(asked, `\`${'\u{1F600}'.repeat(4_000)}\`\n@Forge verify X\n${'d'.repeat(17_000)}`)
+    expect(await sentPrompt(newest().turns[0]!.operationId)).toContain('@Forge verify X')
+  })
+
+  it('cuts a naming reply that alone overflows the history budget around its mention', async () => {
+    const { post, reply, newest } = await room()
+    const asked = await post('@Scout plan')
+    await post('@Forge note this')
+    await reply(asked, `@Forge check\n${'\\'.repeat(14_000)}`)
+    const prompt = await sentPrompt(newest().turns[0]!.operationId)
+    const history = /<quoted_room_history>\n([\s\S]*)\n<\/quoted_room_history>/u.exec(prompt)![1]!
+    expect(history.length).toBeLessThanOrEqual(24_000)
+    expect(history).toContain('@Forge check')
+  })
+
   it('wakes no one when a reply that reached nobody is replayed after its member resumes', async () => {
     const { groups, post, ended, reply, lines } = await room()
     const forge = groups.runtime.bots.list().find((bot) => bot.id === 'bot-1')!

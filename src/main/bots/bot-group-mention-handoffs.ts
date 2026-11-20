@@ -1,8 +1,11 @@
 // A member's reply that names other members as @Name wakes them under the same person's post.
 import type { Nodes } from 'mdast'
+import { gfmTableFromMarkdown } from 'mdast-util-gfm-table'
+import { gfmTable } from 'micromark-extension-gfm-table'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import {
+  BOT_GROUP_CONTEXT_MAX,
   fitBotGroupContext,
   type BotGroupMessage,
   type BotGroupTurn
@@ -13,8 +16,15 @@ import { BOT_GROUP_HANDOFF_LIMIT, deliverTurn } from './bot-group-delivery'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import type { BotGroupRuntime } from './bot-group-runtime'
 
-// Code and block quotes are core CommonMark; GFM's extensions add none and triple the parse.
-const markdown = unified().use(remarkParse)
+// Core CommonMark plus GFM tables, whose cells end inline code at a pipe. The other GFM
+// extensions add no code or quotes and triple the parse.
+const markdown = unified()
+  .use(remarkParse)
+  .use(function gfmTables() {
+    const data = this.data()
+    ;(data.micromarkExtensions ??= []).push(gfmTable())
+    ;(data.fromMarkdownExtensions ??= []).push(gfmTableFromMarkdown())
+  })
 
 /** `reply` with its Markdown code (fenced, indented, inline) and block quotes blanked in place,
  *  lines and offsets kept; text with no `@` has nothing to blank. */
@@ -39,7 +49,13 @@ export function blankMarkdownCode(reply: string): string {
   const parts: string[] = []
   let cursor = 0
   for (const [start, end] of ranges.toSorted((left, right) => left[0] - right[0])) {
-    parts.push(reply.slice(cursor, start), reply.slice(start, end).replace(/[^\n]/gu, ' '))
+    // One space per UTF-16 unit, so masked offsets index the original reply.
+    const blank = reply
+      .slice(start, end)
+      .split('\n')
+      .map((line) => ' '.repeat(line.length))
+      .join('\n')
+    parts.push(reply.slice(cursor, start), blank)
     cursor = end
   }
   parts.push(reply.slice(cursor))
@@ -180,8 +196,9 @@ const EXCERPT_BEFORE = 1_000
 const EXCERPT_AFTER = 3_000
 
 /** `context` (the quoted history lines) holding the speaker's reply where it names this member: the
- *  saved reply when the mention is in it, else an excerpt around the mention. That line is kept
- *  and older lines go first to fit the room-history budget. */
+ *  saved reply when the mention is in it, else an excerpt around the mention, cut further around
+ *  the mention until it alone fits the room-history budget. That line is kept and older lines go
+ *  first to fit the rest. */
 function withNamingReply(
   context: string,
   speaker: BotGroupTurn,
@@ -190,13 +207,19 @@ function withNamingReply(
 ): string {
   const lines: unknown[] = JSON.parse(context)
   const author = { kind: 'bot', id: speaker.botId, name: speaker.botName }
-  const inSaved = mentionAt >= reply.full.length - reply.saved.length
-  const from = Math.max(0, mentionAt - EXCERPT_BEFORE)
-  const to = mentionAt + EXCERPT_AFTER
-  const text = inSaved
-    ? reply.saved
-    : `${from > 0 ? '…' : ''}${reply.full.slice(from, to)}${to < reply.full.length ? '…' : ''}`
-  const at = lines.findIndex(
+  const savedFrom = reply.full.length - reply.saved.length
+  const inSaved = mentionAt >= savedFrom
+  const source = inSaved ? reply.saved : reply.full
+  const at = inSaved ? mentionAt - savedFrom : mentionAt
+  let before = inSaved ? at : EXCERPT_BEFORE
+  let after = inSaved ? source.length - at : EXCERPT_AFTER
+  let text = excerpt(source, at, before, after)
+  while (JSON.stringify([{ author, text }]).length > BOT_GROUP_CONTEXT_MAX) {
+    before = Math.floor(before / 2)
+    after = Math.floor(after / 2)
+    text = excerpt(source, at, before, after)
+  }
+  const index = lines.findIndex(
     (line) =>
       typeof line === 'object' &&
       line !== null &&
@@ -205,7 +228,14 @@ function withNamingReply(
       'author' in line &&
       JSON.stringify(line.author) === JSON.stringify(author)
   )
-  return at === -1
+  return index === -1
     ? fitBotGroupContext([...lines, { author, text }], 1)
-    : fitBotGroupContext(lines, lines.length - at)
+    : fitBotGroupContext(lines, lines.length - index)
+}
+
+/** `source` from `before` units ahead of `at` to `after` units past it, marked where cut. */
+function excerpt(source: string, at: number, before: number, after: number): string {
+  const from = Math.max(0, at - before)
+  const to = Math.min(source.length, at + after)
+  return `${from > 0 ? '…' : ''}${source.slice(from, to)}${to < source.length ? '…' : ''}`
 }

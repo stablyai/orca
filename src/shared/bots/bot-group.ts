@@ -302,7 +302,8 @@ export function botGroupContext(
   return fitBotGroupContext(lines)
 }
 
-const BOT_GROUP_CONTEXT_MAX = 24_000
+/** The serialized room history a member turn quotes, at most. */
+export const BOT_GROUP_CONTEXT_MAX = 24_000
 
 /** Room history lines serialized under the context budget: the oldest go first, never the last
  *  `kept` (lines a turn must see, such as the reply that handed it the turn). */

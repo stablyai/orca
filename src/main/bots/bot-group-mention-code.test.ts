@@ -29,4 +29,15 @@ describe('reply prose', () => {
   it('finds a mention after thousands of inline code spans', () => {
     expect(wakes(`${'`x` '.repeat(6_000)}@Forge done`)).toEqual(['forge'])
   })
+
+  it('skips inline code inside a GFM table cell', () => {
+    expect(wakes('| Literal | Example |\n| --- | --- |\n| ` | `@Forge` |')).toEqual([])
+  })
+
+  it('keeps every UTF-16 offset when masking emoji', () => {
+    const reply = `\`${'\u{1F600}'.repeat(4_000)}\`\n@Forge verify X`
+    expect(botGroupReplyMentions(blankMarkdownCode(reply), room, members, 'x')).toEqual([
+      { id: 'forge', start: reply.indexOf('@Forge') }
+    ])
+  })
 })
