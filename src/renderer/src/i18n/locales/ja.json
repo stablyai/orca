@@ -4654,6 +4654,7 @@
             "codexSignInSuccess": "Codex にサインインしました",
             "codexSignInError": "Codex のサインインに失敗しました。もう一度お試しください。",
             "cursorUsageMenu": "Cursor の使用状況",
+            "hiddenUsageProviders": "ほかに: {{value0}}",
             "zcodeUsageMenu": "ZCode の使用量",
             "rateLimitResetsAvailable_other": "レート制限リセットが {{count}} 回利用可能",
             "signedOutAccounts": "サインアウト済み",

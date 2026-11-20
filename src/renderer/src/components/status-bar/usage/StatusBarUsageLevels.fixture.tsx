@@ -56,17 +56,25 @@ function levelsFixture(mode: StatusBarUsageMode) {
     width: 960,
     render: () => (
       <div className="flex flex-col gap-2 bg-background p-3 text-xs">
-        {ROWS.map((row) => (
-          <div
-            key={row.label}
-            className="flex items-center gap-3 whitespace-nowrap rounded border border-border px-2 py-1"
-          >
-            <span className="w-32 shrink-0 text-muted-foreground">{row.label}</span>
-            {row.providers.map((p) => (
-              <ProviderSegment key={p.provider} p={p} display="used" mode={mode} />
-            ))}
-          </div>
-        ))}
+        {ROWS.flatMap((row) =>
+          [false, true].map((compact) => (
+            <div
+              key={`${row.label}-${compact}`}
+              className="flex items-center gap-3 whitespace-nowrap rounded border border-border px-2 py-1"
+            >
+              <span className="w-32 shrink-0 text-muted-foreground">{`${row.label} · ${compact ? 'narrow' : 'normal'}`}</span>
+              {row.providers.map((p) => (
+                <ProviderSegment
+                  key={p.provider}
+                  p={p}
+                  compact={compact}
+                  display="used"
+                  mode={mode}
+                />
+              ))}
+            </div>
+          ))
+        )}
       </div>
     )
   })

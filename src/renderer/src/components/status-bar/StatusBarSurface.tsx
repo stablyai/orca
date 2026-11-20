@@ -1,22 +1,10 @@
-import { PanelsTopLeft, RefreshCw } from 'lucide-react'
+import { PanelsTopLeft } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
-import { UsageRosterPanel } from './usage/UsageRosterPanel'
-import {
-  STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS,
-  shouldOpenStatusBarContextMenu
-} from './composition/status-bar-context-menu-policy'
-import { StatusBarUsageEmptyCta } from './usage/StatusBarUsageEmptyCta'
-import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices'
+import { shouldOpenStatusBarContextMenu } from './composition/status-bar-context-menu-policy'
 import { UpdateStatusSegment } from './updates/UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './updates/SkillUpdateStatusSegment'
 import { AgentCliUpdateStatusSegment } from './updates/AgentCliUpdateStatusSegment'
@@ -27,17 +15,10 @@ import { PluginStatusBarItems } from './plugins/PluginStatusBarItems'
 import { RemoteServerUpdateStatusSegment } from './updates/RemoteServerUpdateStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/workspace/floating-workspace-open-intent'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/trigger/FloatingTerminalIconContextMenu'
-import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
-import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
-import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
-import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
-import { ClippedRowProviderSegment } from './usage/StatusBarProviderSegment'
-import { UsageUnitLabel, usageChipShowsPercentage } from './usage/usage-unit-label'
 import { useStatusBarController } from './composition/use-status-bar-controller'
+import { StatusBarUsageArea } from './StatusBarUsageArea'
 import { scrollStripSidewaysOnWheel } from '../tab-bar/strip/tab-strip-scroll-metrics'
-import { isOwnerNotSetUpPlaceholder } from './usage/owner-usage-rate-limits'
-import { getAccountOwnerKey } from './accounts/owner-account-rows'
 import { StatusBarVisibilityMenu } from './composition/StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { GitBlameStatusSegment } from './GitBlameStatusSegment'
@@ -88,43 +69,18 @@ export function StatusBarSurface({
     return null
   }
   const {
-    antigravityAccounts,
-    anyFetching,
-    anyVisible,
-    canSignInFromUsageRow,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
-    handleManageAccounts,
-    handleOpenProviderAccounts,
-    handleRefresh,
-    handleUsageDetails,
-    handleUsageMenuOpenChange,
-    hasVisibleUsageMeters,
-    isEmptyUsageState,
-    isRefreshing,
-    ownerUsage,
     petEnabled,
-    remoteOwner,
-    rosterProviders,
     setMenuOpen,
     setMenuPoint,
-    setStatusBarUsageMode,
-    showEmptyUsageCta,
     showFloatingTerminalToggle,
     showFloatingWorkspaceAttentionDot,
     showGitBlame,
     showPorts,
     showResourceUsage,
-    showSsh,
-    statusBarUsageMode,
-    usageMenuFocusHandoff,
-    usageMenuOpen,
-    usagePercentageDisplay
+    showSsh
   } = controller
-  const showUnitLabel = rosterProviders.some((p) =>
-    usageChipShowsPercentage(p, statusBarUsageMode, t)
-  )
-
   return (
     <div
       data-orca-status-bar=""
@@ -142,147 +98,7 @@ export function StatusBarSurface({
         setMenuOpen(true)
       }}
     >
-      {/* Why fixed priority instead of density levels: choosing a layout from the bar's own measured
-          widths fed back into the next measurement and could loop (React #185). Usage gives way
-          first but keeps enough width to stay clickable; its popover holds everything it clips. */}
-      <div
-        className={cn(
-          'flex flex-1 items-center overflow-clip [overflow-clip-margin:3px]',
-          hasVisibleUsageMeters ? 'min-w-16' : 'min-w-0'
-        )}
-      >
-        <div className="flex shrink-0 items-center gap-3">
-          {isEmptyUsageState ? (
-            showEmptyUsageCta ? (
-              <StatusBarUsageEmptyCta remoteOwner={remoteOwner} />
-            ) : null
-          ) : hasVisibleUsageMeters ? (
-            <StatusBarUsageChangeNotices hasVisibleUsageMeters={hasVisibleUsageMeters}>
-              <DropdownMenu
-                open={usageMenuOpen}
-                onOpenChange={handleUsageMenuOpenChange}
-                modal={false}
-              >
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-3 rounded px-1 py-0.5 hover:bg-accent/70"
-                    aria-label={t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
-                  >
-                    {showUnitLabel ? <UsageUnitLabel display={usagePercentageDisplay} /> : null}
-                    {rosterProviders.map((p) => (
-                      <ClippedRowProviderSegment
-                        key={p.provider}
-                        p={p}
-                        display={usagePercentageDisplay}
-                        mode={statusBarUsageMode}
-                      />
-                    ))}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
-                  side="top"
-                  align="start"
-                  sideOffset={8}
-                  // Reserve footer height so the popover and drill-in submenus stay above the status bar.
-                  collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
-                  variant="picker"
-                  className="w-[440px] max-w-[calc(100vw-1rem)]"
-                  onPointerDownOutside={usageMenuFocusHandoff.onPointerDownOutside}
-                  onCloseAutoFocus={usageMenuFocusHandoff.onCloseAutoFocus}
-                >
-                  <UsageRosterPanel
-                    providers={rosterProviders}
-                    display={usagePercentageDisplay}
-                    statusBarUsageMode={statusBarUsageMode}
-                    onStatusBarUsageModeChange={setStatusBarUsageMode}
-                    isRefreshing={isRefreshing || anyFetching}
-                    onRefresh={handleRefresh}
-                    onOpenProvider={handleOpenProviderAccounts}
-                    onSignIn={handleOpenProviderAccounts}
-                    canSignIn={canSignInFromUsageRow}
-                    onManageAccounts={handleManageAccounts}
-                    onUsageDetails={handleUsageDetails}
-                    renderRow={(p, rowNode) => {
-                      // Why: a placeholder has nothing to drill into; its row opens the host's accounts.
-                      if (isOwnerNotSetUpPlaceholder(p)) {
-                        return null
-                      }
-                      // Claude/Codex detail panels also expose account switching and runtime controls.
-                      if (p.provider === 'claude') {
-                        return (
-                          <ClaudeSwitcherMenu
-                            claude={p}
-                            ownerUsage={ownerUsage}
-                            asSubmenu
-                            triggerContent={rowNode}
-                          />
-                        )
-                      }
-                      if (p.provider === 'antigravity') {
-                        return (
-                          <AntigravityUsageMenu
-                            antigravity={p}
-                            accounts={antigravityAccounts}
-                            triggerContent={rowNode}
-                            onManageAccounts={() => handleOpenProviderAccounts('antigravity')}
-                          />
-                        )
-                      }
-                      if (p.provider === 'codex') {
-                        return (
-                          <CodexSwitcherMenu
-                            key={getAccountOwnerKey(ownerUsage.owner)}
-                            codex={p}
-                            ownerUsage={ownerUsage}
-                            asSubmenu
-                            triggerContent={rowNode}
-                          />
-                        )
-                      }
-                      return (
-                        <ProviderDetailsMenu
-                          provider={p}
-                          asSubmenu
-                          triggerContent={rowNode}
-                          ariaLabel={t(
-                            'auto.components.status.bar.UsageRosterPanel.openDetails',
-                            'Open usage details'
-                          )}
-                        />
-                      )
-                    }}
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </StatusBarUsageChangeNotices>
-          ) : null}
-          {anyVisible && !isEmptyUsageState && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  className="p-0.5 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                  aria-label={t(
-                    'auto.components.status.bar.StatusBar.3325d996cb',
-                    'Refresh rate limits'
-                  )}
-                >
-                  <RefreshCw
-                    size={11}
-                    className={isRefreshing || anyFetching ? 'animate-spin' : ''}
-                  />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {t('auto.components.status.bar.StatusBar.c8857b40f7', 'Refresh usage data')}
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </div>
-      </div>
+      <StatusBarUsageArea controller={controller} />
 
       {/* Why: attention segments shrink only after usage reaches its minimum, then scroll instead of
           compressing; the row's padding keeps edge badges and focus rings inside the scroll box. */}

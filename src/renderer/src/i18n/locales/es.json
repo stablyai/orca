@@ -4188,6 +4188,7 @@
             "codexSignInSuccess": "Sesión iniciada en Codex",
             "codexSignInError": "No se pudo iniciar sesión en Codex. Inténtalo de nuevo.",
             "cursorUsageMenu": "Uso de Cursor",
+            "hiddenUsageProviders": "También: {{value0}}",
             "zcodeUsageMenu": "Uso del código Z",
             "rateLimitResetsAvailable_one": "{{count}} reinicio de rate limit disponible",
             "rateLimitResetsAvailable_other": "{{count}} reinicios de rate limit disponibles",

@@ -4449,6 +4449,7 @@
             "codexSignInSuccess": "Connecté à Codex",
             "codexSignInError": "Échec de la connexion à Codex. Veuillez réessayer.",
             "cursorUsageMenu": "Utilisation Cursor",
+            "hiddenUsageProviders": "Aussi : {{value0}}",
             "zcodeUsageMenu": "Utilisation du code Z",
             "rateLimitResetsAvailable_one": "{{count}} réinitialisation de limite de débit disponible",
             "rateLimitResetsAvailable_other": "{{count}} réinitialisations de limite de débit disponibles",

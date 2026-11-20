@@ -4806,6 +4806,7 @@
             "codexSignInSuccess": "Codex'te oturum açıldı",
             "codexSignInError": "Codex'te oturum açılamadı. Lütfen tekrar deneyin.",
             "cursorUsageMenu": "Cursor Kullanımı",
+            "hiddenUsageProviders": "Ayrıca: {{value0}}",
             "zcodeUsageMenu": "ZCode Kullanımı",
             "rateLimitResetsAvailable_other": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir",
             "rateLimitResetsAvailable_one": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir",

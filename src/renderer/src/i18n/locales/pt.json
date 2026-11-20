@@ -3460,6 +3460,7 @@
             "4025a6f62f": "Ilimitado",
             "a95969101f": "{{value0}} créditos",
             "cursorUsageMenu": "Uso do Cursor",
+            "hiddenUsageProviders": "Também: {{value0}}",
             "zcodeUsageMenu": "Uso do ZCode",
             "rateLimitResetsAvailable_one": "{{count}} redefinição de limite de taxa disponível",
             "rateLimitResetsAvailable_other": "{{count}} redefinições de limite de taxa disponíveis",

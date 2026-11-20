@@ -4685,6 +4685,7 @@
             "codexSignInSuccess": "已登录 Codex",
             "codexSignInError": "Codex 登录失败，请重试",
             "cursorUsageMenu": "Cursor 用量",
+            "hiddenUsageProviders": "另有：{{value0}}",
             "zcodeUsageMenu": "Z代码使用",
             "rateLimitResetsAvailable_other": "可重置速率限制 {{count}} 次",
             "staleCodexSessions_other": "{{count}} 个 Codex 会话仍在使用旧账户",
