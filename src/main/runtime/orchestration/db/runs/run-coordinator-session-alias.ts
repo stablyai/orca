@@ -1,6 +1,7 @@
 import type Database from '../../../../sqlite/sync-database'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { STRUCTURED_WORKER_HANDLE_PREFIX } from '../../../../../shared/orchestration/workers/structured-worker-handle'
+import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { STRUCTURED_WORKER_INCARNATION_PREFIX } from '../../terminal-authority/structured-sessions/structured-worker-incarnation'
 import { orcaSessionIdOfAddressSql } from '../orca-session-address-sql'
 import { currentRunCoordinatorSessionAddressSql } from './run-coordinator-orca-session'
@@ -8,6 +9,7 @@ import { currentRunCoordinatorSessionAddressSql } from './run-coordinator-orca-s
 const SESSION_ADDRESS_GLOB = `'${ORCA_SESSION_ADDRESS_PREFIX}*'`
 export const STRUCTURED_WORKER_HANDLE_GLOB_SQL = `'${STRUCTURED_WORKER_HANDLE_PREFIX}*'`
 const INCARNATION_GLOB = `'${STRUCTURED_WORKER_INCARNATION_PREFIX}*'`
+const STRUCTURED_SESSION_TAB_PREFIX = structuredAgentSessionTabId('')
 
 /**
  * Structured-worker proof in Dispatch and worker-resource tables, one indexed EXISTS per column
@@ -73,10 +75,18 @@ export function staleChatCoordinatorAliasSql(aliasRow: string): string {
 }
 
 /**
- * Index structured worker incarnations on `dispatch_contexts` and stamp any pre-upgrade active
- * structured-worker session alias before pruning stale chat rows.
+ * Index structured worker incarnations on `dispatch_contexts` and stamp pre-upgrade session aliases
+ * before pruning stale chat rows. A worker who lost a Run before upgrade is proven by any active
+ * Run it still coordinates, its creation Dispatch/resource row, or a message it sent in that Run
+ * under its `structworker_*` handle and session pane key; the stamp keeps that alias after
+ * settled-run retirement deletes those rows. A chat that shares `first_bound_at` with the worker
+ * handle has none of those proofs. (If a worker's origin Run was already retired pre-upgrade —
+ * which only happens once that worker is no longer live — and no other Run or message references
+ * it, the 3-column pre-upgrade table holds no link between the handle and session rows.)
  */
 export function installCoordinatorSessionAliasIndexes(db: Database.Database): void {
+  const sessionId = orcaSessionIdOfAddressSql('run_coordinator_handles.terminal_handle')
+  const panePrefix = `'${STRUCTURED_SESSION_TAB_PREFIX}' || ${sessionId} || ':*'`
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_dispatch_structured_process_incarnation
       ON dispatch_contexts(process_incarnation)
@@ -85,12 +95,21 @@ export function installCoordinatorSessionAliasIndexes(db: Database.Database): vo
     SET is_structured_worker = 1
     WHERE is_structured_worker = 0
       AND terminal_handle GLOB ${SESSION_ADDRESS_GLOB}
-      AND EXISTS (
-        SELECT 1 FROM runs
-        WHERE runs.id = run_coordinator_handles.run_id
-          AND runs.legacy = 0
-          AND runs.coordinator_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL}
-          AND ${currentRunCoordinatorSessionAddressSql('runs')} = run_coordinator_handles.terminal_handle
+      AND (
+        EXISTS (
+          SELECT 1 FROM runs
+          WHERE runs.legacy = 0
+            AND runs.coordinator_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL}
+            AND runs.coordinator_orca_session_id = ${sessionId}
+            AND ${currentRunCoordinatorSessionAddressSql('runs')} = run_coordinator_handles.terminal_handle
+        )
+        OR ${structuredWorkerEvidenceSql('run_coordinator_handles.terminal_handle')}
+        OR EXISTS (
+          SELECT 1 FROM messages
+          WHERE messages.run_id = run_coordinator_handles.run_id
+            AND messages.from_handle GLOB ${STRUCTURED_WORKER_HANDLE_GLOB_SQL}
+            AND messages.sender_pane_key GLOB ${panePrefix}
+        )
       );
   `)
 }

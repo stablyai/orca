@@ -224,6 +224,220 @@ describe('stale chat coordinator aliases', () => {
     expect(db.getRunMailboxOwnerIdsForHandle(workerAddress)).toEqual([run.id])
   })
 
+  it('stamps a worker session from its creation Dispatch when takeover happened before upgrade', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-worker-alias-takeover-'))
+    tempRoots.push(root)
+    const path = join(root, 'orchestration.db')
+    const workerSession = testOrcaSessionId('c2a4e6b8-1d3f-4a50-9b70-6e8c0a2d4f16')
+    const workerAddress = formatOrcaSessionAddress(workerSession)
+    const workerHandle = mintStructuredWorkerHandle()
+
+    db = new OrchestrationDb(path)
+    const origin = db.createRun({
+      objective: 'origin',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: PTY_PANE
+    })
+    // The Dispatch that created the worker, on the Run it works, not the Run it later coordinates.
+    db.createDispatchContext({
+      taskId: db.createTask({ runId: origin.id, spec: 'work' }).id,
+      assigneeHandle: workerHandle,
+      assigneePaneKey: mintStructuredWorkerPaneKey(workerSession),
+      processIncarnation: structuredWorkerProcessIncarnation(workerSession),
+      creator: { kind: 'terminal', handle: 'term_coord' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    const run = db.createRun({
+      objective: 'worker coordinates',
+      coordinatorHandle: workerHandle,
+      coordinatorPaneKey: mintStructuredWorkerPaneKey(workerSession),
+      coordinatorOrcaSessionId: workerSession
+    })
+    db.close()
+    db = undefined
+    const raw = new Database(path)
+    // Takeover on the pre-upgrade schema, before the new column exists.
+    raw
+      .prepare(
+        `UPDATE runs SET coordinator_handle = NULL, coordinator_pane_key = NULL,
+           coordinator_orca_session_id = ?, coordinator_orca_session_id_generation = consumer_generation
+         WHERE id = ?`
+      )
+      .run(CHAT_X_ID, run.id)
+    raw.exec(`
+      DROP TABLE run_coordinator_handles;
+      CREATE TABLE run_coordinator_handles (
+        run_id TEXT NOT NULL,
+        terminal_handle TEXT NOT NULL,
+        first_bound_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (run_id, terminal_handle)
+      );
+    `)
+    const sameSecond = '2026-11-21 00:00:00'
+    raw
+      .prepare(
+        'INSERT INTO run_coordinator_handles (run_id, terminal_handle, first_bound_at) VALUES (?, ?, ?)'
+      )
+      .run(run.id, workerHandle, sameSecond)
+    raw
+      .prepare(
+        'INSERT INTO run_coordinator_handles (run_id, terminal_handle, first_bound_at) VALUES (?, ?, ?)'
+      )
+      .run(run.id, workerAddress, sameSecond)
+    raw
+      .prepare(
+        'INSERT INTO run_coordinator_handles (run_id, terminal_handle, first_bound_at) VALUES (?, ?, ?)'
+      )
+      .run(run.id, CHAT_Y, sameSecond)
+    raw.close()
+
+    db = new OrchestrationDb(path)
+    expect(handles(db, run.id)).not.toContain(CHAT_Y)
+    expect(db.getRunMailboxOwnerIdsForHandle(workerAddress)).toEqual([run.id])
+
+    // Settled-run retirement deletes that Dispatch later. The stamp has to outlive it.
+    db.db.prepare('DELETE FROM dispatch_contexts').run()
+    db.close()
+    db = new OrchestrationDb(path)
+    expect(handles(db, run.id)).toContain(workerAddress)
+    expect(db.getRunMailboxOwnerIdsForHandle(workerAddress)).toEqual([run.id])
+  })
+
+  it('stamps a former worker alias from Run messages or another coordinated Run even when its creation Dispatch retired pre-upgrade', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-worker-alias-retired-preupgrade-'))
+    tempRoots.push(root)
+    const path = join(root, 'orchestration.db')
+    const workerSession = testOrcaSessionId('d3b5f7a9-2e4c-4b61-8c82-1f9e0b3c5d27')
+    const workerAddress = formatOrcaSessionAddress(workerSession)
+    const workerHandle = mintStructuredWorkerHandle()
+    const workerPaneKey = mintStructuredWorkerPaneKey(workerSession)
+
+    db = new OrchestrationDb(path)
+    const run = db.createRun({
+      objective: 'worker coordinated then retired origin pre-upgrade',
+      coordinatorHandle: workerHandle,
+      coordinatorPaneKey: workerPaneKey,
+      coordinatorOrcaSessionId: workerSession
+    })
+    db.insertMessage({
+      from: workerHandle,
+      senderPaneKey: workerPaneKey,
+      to: 'term_peer',
+      subject: 'from worker before takeover',
+      body: '',
+      runId: run.id
+    })
+    db.close()
+    db = undefined
+
+    const raw = new Database(path)
+    // Takeover happened and origin Run A's dispatch/resource rows were already retired before upgrade.
+    raw
+      .prepare(
+        `UPDATE runs SET coordinator_handle = NULL, coordinator_pane_key = NULL,
+           coordinator_orca_session_id = ?, coordinator_orca_session_id_generation = consumer_generation
+         WHERE id = ?`
+      )
+      .run(CHAT_X_ID, run.id)
+    raw.exec(`
+      DROP TABLE run_coordinator_handles;
+      CREATE TABLE run_coordinator_handles (
+        run_id TEXT NOT NULL,
+        terminal_handle TEXT NOT NULL,
+        first_bound_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (run_id, terminal_handle)
+      );
+    `)
+    const sameSecond = '2026-11-21 00:00:00'
+    raw
+      .prepare(
+        'INSERT INTO run_coordinator_handles (run_id, terminal_handle, first_bound_at) VALUES (?, ?, ?)'
+      )
+      .run(run.id, workerHandle, sameSecond)
+    raw
+      .prepare(
+        'INSERT INTO run_coordinator_handles (run_id, terminal_handle, first_bound_at) VALUES (?, ?, ?)'
+      )
+      .run(run.id, workerAddress, sameSecond)
+    raw
+      .prepare(
+        'INSERT INTO run_coordinator_handles (run_id, terminal_handle, first_bound_at) VALUES (?, ?, ?)'
+      )
+      .run(run.id, CHAT_Y, sameSecond)
+    raw.close()
+
+    db = new OrchestrationDb(path)
+    expect(handles(db, run.id)).not.toContain(CHAT_Y)
+    expect(handles(db, run.id)).toContain(workerAddress)
+    expect(db.getRunMailboxOwnerIdsForHandle(workerAddress)).toEqual([run.id])
+  })
+
+  it('stamps a former worker alias from another active Run it coordinates when its origin Dispatch retired pre-upgrade', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-worker-alias-cross-run-'))
+    tempRoots.push(root)
+    const path = join(root, 'orchestration.db')
+    const workerSession = testOrcaSessionId('e4c6a8b0-3f5d-4c72-9d93-2a0f1c4d6e38')
+    const workerAddress = formatOrcaSessionAddress(workerSession)
+    const workerHandle = mintStructuredWorkerHandle()
+    const workerPaneKey = mintStructuredWorkerPaneKey(workerSession)
+
+    db = new OrchestrationDb(path)
+    const takenOverRun = db.createRun({
+      objective: 'run lost before upgrade with no messages or dispatches',
+      coordinatorHandle: workerHandle,
+      coordinatorPaneKey: workerPaneKey,
+      coordinatorOrcaSessionId: workerSession
+    })
+    const activeOtherRun = db.createRun({
+      objective: 'other run still coordinated by the same worker',
+      coordinatorHandle: workerHandle,
+      coordinatorPaneKey: workerPaneKey,
+      coordinatorOrcaSessionId: workerSession
+    })
+    db.close()
+    db = undefined
+
+    const raw = new Database(path)
+    raw
+      .prepare(
+        `UPDATE runs SET coordinator_handle = NULL, coordinator_pane_key = NULL,
+           coordinator_orca_session_id = ?, coordinator_orca_session_id_generation = consumer_generation
+         WHERE id = ?`
+      )
+      .run(CHAT_X_ID, takenOverRun.id)
+    raw.exec(`
+      DROP TABLE run_coordinator_handles;
+      CREATE TABLE run_coordinator_handles (
+        run_id TEXT NOT NULL,
+        terminal_handle TEXT NOT NULL,
+        first_bound_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (run_id, terminal_handle)
+      );
+    `)
+    const sameSecond = '2026-11-21 00:00:00'
+    for (const [runId, handle] of [
+      [takenOverRun.id, workerHandle],
+      [takenOverRun.id, workerAddress],
+      [takenOverRun.id, CHAT_Y],
+      [activeOtherRun.id, workerHandle],
+      [activeOtherRun.id, workerAddress]
+    ] as const) {
+      raw
+        .prepare(
+          'INSERT INTO run_coordinator_handles (run_id, terminal_handle, first_bound_at) VALUES (?, ?, ?)'
+        )
+        .run(runId, handle, sameSecond)
+    }
+    raw.close()
+
+    db = new OrchestrationDb(path)
+    expect(handles(db, takenOverRun.id)).not.toContain(CHAT_Y)
+    expect(handles(db, takenOverRun.id)).toContain(workerAddress)
+    expect(db.getRunMailboxOwnerIdsForHandle(workerAddress).sort()).toEqual(
+      [takenOverRun.id, activeOtherRun.id].sort()
+    )
+  })
+
   it('probes dispatch_contexts and worker_terminal_resources by index with no table scan', () => {
     db = new OrchestrationDb(':memory:')
     const run = createChatRun(CHAT_X_ID)
