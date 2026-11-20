@@ -108,7 +108,7 @@ describe('IosEmulatorBackend', () => {
     ]
     const blocked = { code: 'emulator_input_blocked' }
     await expect(backend.tap('device-1', 0.5, 0.5)).rejects.toMatchObject(blocked)
-    await expect(backend.type('device-1', 'hi', null)).rejects.toMatchObject(blocked)
+    await expect(backend.type('device-1', 'hi', () => null)).rejects.toMatchObject(blocked)
     await expect(
       backend.gesture('device-1', points, 'ws://127.0.0.1:3100/x')
     ).rejects.toMatchObject(blocked)

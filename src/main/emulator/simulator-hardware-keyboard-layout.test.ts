@@ -3,7 +3,8 @@ import {
   iosHardwareLayoutForMacLayout,
   isUSHardwareKeyboard,
   parseAppleKeyboardsDefaults,
-  withHardwareLayout
+  withHardwareLayout,
+  withOriginalHardwareLayouts
 } from './simulator-hardware-keyboard-layout'
 
 // Entries from the iOS 27.2 runtime's USBKeyboardLayouts.plist.
@@ -46,6 +47,16 @@ describe('simulator AppleKeyboards', () => {
       'emoji@sw=Emoji'
     ])
     expect(withHardwareLayout(null, 'German')).toEqual(['en_US@sw=QWERTY;hw=German'])
+  })
+
+  it('restores each keyboard layout and keeps keyboards the user added meanwhile', () => {
+    expect(
+      withOriginalHardwareLayouts(
+        ['tr_TR@sw=Turkish-Q;hw=German', 'ja_JP-Romaji@sw=QWERTY-Japanese;hw=German'],
+        ['tr_TR@sw=Turkish-Q;hw=Automatic']
+      )
+    ).toEqual(['tr_TR@sw=Turkish-Q;hw=Automatic', 'ja_JP-Romaji@sw=QWERTY-Japanese;hw=Automatic'])
+    expect(withOriginalHardwareLayouts(['en_US@sw=QWERTY;hw=German'], null)).toBeNull()
   })
 
   it('treats only a US hardware layout as safe for US key usages', () => {

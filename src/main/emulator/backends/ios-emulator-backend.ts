@@ -150,15 +150,21 @@ export class IosEmulatorBackend implements EmulatorBackend {
     await sendEmulatorGestureSequence(wsUrl, points)
   }
 
-  async type(deviceId: string, text: string, wsUrl: string | null, paste = false): Promise<void> {
+  async type(
+    deviceId: string,
+    text: string,
+    wsUrlFor: (udid: string) => string | null,
+    paste = false
+  ): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
     await assertSimulatorInputNotShadowedByDeviceHub(udid)
     await typeSimulatorText({
       udid,
       text,
       paste,
-      wsUrl,
+      wsUrl: wsUrlFor(udid),
       // `--` keeps text such as "--help" from being read as a serve-sim option.
+      usHardwareKeyboard: () => this.hardwareKeyboardSync.isUSHardwareKeyboard(udid),
       typeKeys: () => this.execServeSim(['type', '-d', udid, '--', text]),
       pasteKeyCode: () => this.hardwareKeyboardSync.pasteKeyCode(udid)
     })
@@ -269,10 +275,11 @@ export class IosEmulatorBackend implements EmulatorBackend {
     options: { helperPid?: number; includeOrphaned?: boolean } = {}
   ): Promise<void> {
     // The pane is detaching, so the simulator gets back the keyboard layout it had before Orca.
-    await this.hardwareKeyboardSync.restore(deviceId)
+    const restoreKeyboardLayout = this.hardwareKeyboardSync.restore(deviceId)
     await this.execServeSim(serveSimKillArgs(deviceId)).catch(() => {})
     // Stale helpers can outlive the state file that serve-sim --kill relies on.
     await killServeSimHelperProcessesForDevice(deviceId, options).catch(() => {})
+    await restoreKeyboardLayout
   }
 
   async shutdownDevice(deviceId: string): Promise<void> {

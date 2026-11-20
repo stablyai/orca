@@ -190,7 +190,7 @@ describe('EmulatorDeviceFrame wheel scrolling', () => {
 })
 
 describe('EmulatorDeviceFrame input', () => {
-  it('releases pressed keyboard usages when delayed frames are canceled by cleanup', () => {
+  it('releases pressed keyboard usages when delayed frames are canceled by cleanup', async () => {
     vi.useFakeTimers()
     renderFrame()
     act(() => {
@@ -198,8 +198,10 @@ describe('EmulatorDeviceFrame input', () => {
     })
     const screen = getScreen()
 
-    act(() => {
+    await act(async () => {
       screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+    })
+    act(() => {
       screen.dispatchEvent(keyEvent('keydown', { key: 'A' }))
     })
 
@@ -217,19 +219,25 @@ describe('EmulatorDeviceFrame input', () => {
 
   it('sends the physical key once the simulator follows the Mac keyboard layout', async () => {
     vi.useFakeTimers()
-    callRuntimeRpc.mockResolvedValue({ physicalKeys: true })
+    let finishSync: (result: { physicalKeys: boolean }) => void = () => {}
+    callRuntimeRpc.mockReturnValue(new Promise((resolve) => (finishSync = resolve)))
     renderFrame()
     act(() => {
       FakeWebSocket.instances[0]?.open()
     })
     const screen = getScreen()
-    await act(async () => {
-      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
-    })
 
     // Turkish Q: the key right of L types "ş" ("Ş" with Caps Lock), Option+Q types "@".
     act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
       screen.dispatchEvent(keyEvent('keydown', { code: 'Semicolon', key: 'ş' }))
+    })
+    // A key typed before the layout sync lands waits for it instead of using the old layout.
+    expect(decodedSentKeyboardFrames()).toEqual([])
+    await act(async () => {
+      finishSync({ physicalKeys: true })
+    })
+    act(() => {
       vi.runAllTimers()
       screen.dispatchEvent(keyEvent('keydown', { altKey: true, code: 'KeyQ', key: '@' }))
       vi.runAllTimers()

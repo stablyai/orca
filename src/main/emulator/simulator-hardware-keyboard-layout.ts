@@ -63,6 +63,33 @@ export function isUSHardwareKeyboard(entries: string[] | null): boolean {
   })
 }
 
+function withoutHardwareLayout(entry: string): string {
+  return entry.replace(/;?hw=[^;]*/, '')
+}
+
+/**
+ * Puts back the hardware layout each keyboard had before Orca, keeping keyboards the user added
+ * since (those return to Automatic). Null means AppleKeyboards should be unset again.
+ */
+export function withOriginalHardwareLayouts(
+  current: string[] | null,
+  original: string[] | null
+): string[] | null {
+  const automatic = (entry: string): string => entry.replace(/([@;]hw=)[^;]*/, '$1Automatic')
+  const before = new Map(
+    (original ?? [`${DEFAULT_KEYBOARD};hw=Automatic`]).map((entry) => [
+      withoutHardwareLayout(entry),
+      entry
+    ])
+  )
+  const restored = (current ?? []).map(
+    (entry) => before.get(withoutHardwareLayout(entry)) ?? automatic(entry)
+  )
+  const untouchedDefault =
+    original === null && restored.every((entry) => entry === `${DEFAULT_KEYBOARD};hw=Automatic`)
+  return untouchedDefault ? null : restored
+}
+
 async function simctl(
   args: string[]
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
@@ -130,6 +157,8 @@ type DeviceSyncState = {
   macLayoutId: string
   synced: boolean
   rewritten: boolean
+  /** The key that types "v" in the synced layout, for Cmd+V (it is "." on Dvorak). */
+  pasteKeyCode: string
 }
 
 /**
@@ -139,6 +168,23 @@ type DeviceSyncState = {
 export class SimulatorHardwareKeyboardSync {
   private readonly devices = new Map<string, DeviceSyncState>()
   private readonly inFlight = new Map<string, Promise<boolean>>()
+  // A guest prefs read costs ~0.3 s, so each helper session reads AppleKeyboards once and tracks its own writes.
+  private readonly keyboards = new Map<string, string[] | null>()
+
+  private async readKeyboards(udid: string): Promise<string[] | null> {
+    const cached = this.keyboards.get(udid)
+    if (cached !== undefined) {
+      return cached
+    }
+    const entries = await readSimulatorKeyboards(udid)
+    this.keyboards.set(udid, entries)
+    return entries
+  }
+
+  /** Whether US key usages type what they name, which `orca emulator type` needs before sending keys. */
+  isUSHardwareKeyboard(udid: string): Promise<boolean> {
+    return this.readKeyboards(udid).then(isUSHardwareKeyboard, () => false)
+  }
 
   /** Resolves true when the simulator now uses the Mac's layout, so the pane can send physical keys. */
   sync(udid: string): Promise<boolean> {
@@ -155,17 +201,9 @@ export class SimulatorHardwareKeyboardSync {
     return pending
   }
 
-  /** Cmd+V must press the key that types "v" in the guest's layout (it is "." on Dvorak). */
   async pasteKeyCode(udid: string): Promise<string> {
     await this.inFlight.get(udid)
-    if (!this.devices.get(udid)?.synced) {
-      return 'KeyV'
-    }
-    const snapshot = await readMacKeyboardLayoutSnapshot()
-    const entry = Object.entries(snapshot?.keyCharacters ?? {}).find(
-      ([, characters]) => characters.unmodified === 'v'
-    )
-    return entry?.[0] ?? 'KeyV'
+    return this.devices.get(udid)?.pasteKeyCode ?? 'KeyV'
   }
 
   private async syncNow(udid: string): Promise<boolean> {
@@ -178,40 +216,70 @@ export class SimulatorHardwareKeyboardSync {
       macLayoutId,
       await readIosKeyboardLayouts(udid)
     )
-    const current = await readSimulatorKeyboards(udid)
+    const current = await this.readKeyboards(udid)
     const original = known ? known.original : current
     // A Mac layout iOS lacks leaves the simulator on the user's own setting.
     const next = hardwareLayout ? withHardwareLayout(current, hardwareLayout) : original
     const changed = JSON.stringify(next) !== JSON.stringify(current)
     if (changed) {
+      // Record the original first: a write that lands but whose notify fails still needs restoring.
+      this.devices.set(udid, {
+        original,
+        macLayoutId: '',
+        synced: false,
+        rewritten: true,
+        pasteKeyCode: 'KeyV'
+      })
+      this.keyboards.delete(udid)
       await writeSimulatorKeyboards(udid, next)
+      this.keyboards.set(udid, next)
     }
     const synced = hardwareLayout !== null
     this.devices.set(udid, {
       original,
       macLayoutId,
       synced,
-      rewritten: changed || known?.rewritten === true
+      rewritten: changed || known?.rewritten === true,
+      pasteKeyCode: synced ? await macKeyCodeTypingV(macLayoutId) : 'KeyV'
     })
     return synced
   }
 
   async restore(udid: string): Promise<void> {
     await this.inFlight.get(udid)
+    this.keyboards.delete(udid)
     const known = this.devices.get(udid)
     if (!known) {
       return
     }
     if (known.rewritten) {
-      // A shut-down simulator rejects the write; keep the original so the next attach still restores it.
-      const restored = await writeSimulatorKeyboards(udid, known.original).then(
-        () => true,
-        () => false
-      )
+      // A shut-down simulator rejects these; keep the original so the next attach still restores it.
+      const restored = await readSimulatorKeyboards(udid)
+        .then((current) => {
+          const next = withOriginalHardwareLayouts(current, known.original)
+          return JSON.stringify(next) === JSON.stringify(current)
+            ? undefined
+            : writeSimulatorKeyboards(udid, next)
+        })
+        .then(
+          () => true,
+          () => false
+        )
       if (!restored) {
         return
       }
     }
     this.devices.delete(udid)
   }
+}
+
+async function macKeyCodeTypingV(macLayoutId: string): Promise<string> {
+  const snapshot = await readMacKeyboardLayoutSnapshot()
+  if (snapshot?.layoutSourceId !== macLayoutId) {
+    return 'KeyV'
+  }
+  const entry = Object.entries(snapshot.keyCharacters).find(
+    ([, characters]) => characters.unmodified === 'v'
+  )
+  return entry?.[0] ?? 'KeyV'
 }

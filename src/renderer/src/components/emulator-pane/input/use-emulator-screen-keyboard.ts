@@ -37,6 +37,30 @@ const ANDROID_KEY_BUTTONS: Record<string, string> = {
   PageDown: 'page_down'
 }
 
+type SimulatorKeyPress = {
+  alt: boolean
+  /** Caps Lock capitalized a character; the guest has no Caps Lock state of its own. */
+  capsLetter: boolean
+  code: string
+  key: string
+  shift: boolean
+}
+
+// Synced simulators take the physical key; unsynced ones keep a US layout, so the character picks its US key.
+function simulatorKeyFrames(
+  press: SimulatorKeyPress,
+  physicalKeys: boolean
+): ServeSimKeyboardFrame[] | null {
+  if (physicalKeys) {
+    return buildServeSimKeyboardFramesForCode(press.code, {
+      alt: press.alt,
+      shift: press.shift || press.capsLetter
+    })
+  }
+  // Option composes characters only through the guest's own layout.
+  return press.alt ? null : buildServeSimKeyboardFramesForKey(press.key, { shift: press.shift })
+}
+
 type UseEmulatorScreenKeyboardArgs = {
   cancelKeyboardFrames: () => void
   canInteract: boolean
@@ -58,6 +82,8 @@ export function useEmulatorScreenKeyboard({
   // True once main has put the simulator's hardware layout on the Mac's, so physical keys type what the Mac key shows.
   const physicalKeysRef = useRef(false)
   const layoutSyncIdRef = useRef(0)
+  // Non-null while a layout sync is in flight: keys wait so none is sent under the old layout.
+  const pendingKeyPressesRef = useRef<SimulatorKeyPress[] | null>(null)
   const [keyboardCaptureActive, setKeyboardCaptureActive] = useState(false)
 
   const syncKeyboardLayout = useCallback((): void => {
@@ -65,6 +91,7 @@ export function useEmulatorScreenKeyboard({
       return
     }
     const syncId = ++layoutSyncIdRef.current
+    pendingKeyPressesRef.current ??= []
     void callRuntimeRpc<{ physicalKeys: boolean }>(
       { kind: 'local' },
       'emulator.syncKeyboardLayout',
@@ -75,11 +102,19 @@ export function useEmulatorScreenKeyboard({
       .then((result) => result.physicalKeys === true)
       .catch(() => false)
       .then((physicalKeys) => {
-        if (syncId === layoutSyncIdRef.current) {
-          physicalKeysRef.current = physicalKeys
+        if (syncId !== layoutSyncIdRef.current) {
+          return
+        }
+        physicalKeysRef.current = physicalKeys
+        const presses = pendingKeyPressesRef.current ?? []
+        pendingKeyPressesRef.current = null
+        // One call keeps the held keys in order; separate calls would interleave their spaced frames.
+        const frames = presses.flatMap((press) => simulatorKeyFrames(press, physicalKeys) ?? [])
+        if (frames.length > 0 && captureActiveRef.current) {
+          sendKeyboardFrames(frames)
         }
       })
-  }, [scrcpyKeyboard, worktreeId])
+  }, [scrcpyKeyboard, sendKeyboardFrames, worktreeId])
 
   const cancelActivePaste = useCallback((): void => {
     pasteRequestIdRef.current += 1
@@ -103,7 +138,7 @@ export function useEmulatorScreenKeyboard({
   useEffect(
     () =>
       window.api.app.onKeyboardLayoutChanged((event) => {
-        if (event.phase === 'refresh' && captureActiveRef.current) {
+        if (event.phase === 'invalidated' && captureActiveRef.current) {
           syncKeyboardLayout()
         }
       }),
@@ -128,14 +163,14 @@ export function useEmulatorScreenKeyboard({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      const physicalKeys = !scrcpyKeyboard && physicalKeysRef.current
+      const simulatorOption =
+        !scrcpyKeyboard && (physicalKeysRef.current || pendingKeyPressesRef.current !== null)
       if (
         !canInteract ||
         event.nativeEvent.isComposing ||
         event.metaKey ||
         event.ctrlKey ||
-        // Option composes characters only through the guest's own layout.
-        (event.altKey && !physicalKeys)
+        (event.altKey && !simulatorOption)
       ) {
         return
       }
@@ -159,36 +194,40 @@ export function useEmulatorScreenKeyboard({
         return
       }
 
-      if (physicalKeys) {
-        const frames = buildServeSimKeyboardFramesForCode(event.code, {
+      if (!scrcpyKeyboard) {
+        const press: SimulatorKeyPress = {
           alt: event.altKey,
-          // The guest has no Caps Lock state of its own, so a capitalized letter carries Shift.
-          shift:
-            event.shiftKey ||
-            (event.getModifierState('CapsLock') && event.key !== event.key.toLowerCase())
-        })
-        if (!frames || !sendKeyboardFrames(frames)) {
-          return
+          capsLetter:
+            event.getModifierState('CapsLock') &&
+            [...event.key].length === 1 &&
+            event.key !== event.key.toLowerCase(),
+          code: event.code,
+          key: event.key,
+          shift: event.shiftKey
+        }
+        const pending = pendingKeyPressesRef.current
+        if (pending) {
+          pending.push(press)
+        } else {
+          const frames = simulatorKeyFrames(press, physicalKeysRef.current)
+          if (!frames || !sendKeyboardFrames(frames)) {
+            return
+          }
         }
         event.preventDefault()
         event.stopPropagation()
         return
       }
 
-      // Unsynced simulators keep a US layout, so the character picks its US key; the table also gates Android.
-      const frames = buildServeSimKeyboardFramesForKey(event.key, { shift: event.shiftKey })
-      if (!frames) {
+      // The HID table also decides which keys an Android pane accepts.
+      if (!buildServeSimKeyboardFramesForKey(event.key, { shift: event.shiftKey })) {
         return
       }
-      if (scrcpyKeyboard) {
-        const button = ANDROID_KEY_BUTTONS[event.key]
-        if (button) {
-          scrcpyKeyboard.sendKey(button, event.shiftKey)
-        } else {
-          void scrcpyKeyboard.sendText(event.key)
-        }
-      } else if (!sendKeyboardFrames(frames)) {
-        return
+      const button = ANDROID_KEY_BUTTONS[event.key]
+      if (button) {
+        scrcpyKeyboard.sendKey(button, event.shiftKey)
+      } else {
+        void scrcpyKeyboard.sendText(event.key)
       }
       event.preventDefault()
       event.stopPropagation()

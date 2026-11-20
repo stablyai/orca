@@ -7,7 +7,6 @@ import {
 } from '../../shared/emulator/emulator-keyboard-frame'
 import { EmulatorError } from './emulator-errors'
 import { sendServeSimFrameSequence } from './emulator-gesture-sender'
-import { isUSHardwareKeyboard, readSimulatorKeyboards } from './simulator-hardware-keyboard-layout'
 
 const PASTEBOARD_TIMEOUT_MS = 15_000
 const DEVICECTL_FLAGS = ['--timeout', '10', '--quiet']
@@ -93,6 +92,8 @@ export type SimulatorTextInput = {
   text: string
   paste: boolean
   wsUrl: string | null
+  /** Must resolve false when the layout cannot be read: it could be anything. */
+  usHardwareKeyboard: () => Promise<boolean>
   typeKeys: () => Promise<unknown>
   pasteKeyCode: () => Promise<string>
 }
@@ -114,12 +115,10 @@ export function typeSimulatorText(input: SimulatorTextInput): Promise<void> {
 }
 
 async function typeSimulatorTextNow(input: SimulatorTextInput): Promise<void> {
-  // An unreadable layout could be anything, so only a confirmed US layout gets key usages.
-  const usHardwareKeyboard = await readSimulatorKeyboards(input.udid).then(
-    isUSHardwareKeyboard,
-    () => false
-  )
-  const plan = planSimulatorTextInput(input.text, { paste: input.paste, usHardwareKeyboard })
+  const plan = planSimulatorTextInput(input.text, {
+    paste: input.paste,
+    usHardwareKeyboard: input.paste ? false : await input.usHardwareKeyboard()
+  })
   if (plan.kind === 'keys') {
     await input.typeKeys()
     return

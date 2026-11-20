@@ -167,9 +167,11 @@ export class EmulatorBridge {
   }
 
   async type(text: string, opts?: EmulatorTargetOpts, paste = false): Promise<void> {
-    const { backend, udid } = await this.resolveTargetUdid(opts)
-    const wsUrl = this.sessionRegistry.getSession(udid)?.wsUrl ?? null
-    await backend.type(udid, text, wsUrl, paste)
+    const { backend, device } = await this.resolveTarget(opts)
+    // Only iOS resolves the device for its socket; Android keeps routing text without an adb census.
+    const wsUrlFor = (udid: string): string | null =>
+      this.sessionRegistry.getSession(udid)?.wsUrl ?? null
+    await backend.type(device, text, wsUrlFor, paste)
   }
 
   async button(name: string, opts?: EmulatorTargetOpts): Promise<void> {
