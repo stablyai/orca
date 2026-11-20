@@ -159,8 +159,8 @@ async function inspectLaunchedAgentForeground(
           }
           // The agent's own process and its start time tell a returning agent from a new one; a wrapper leading the job would not.
           const identify = async (found: TuiAgent): Promise<'agent'> => {
-            // Why the job leader as fallback: older daemons and name-confirmed agents carry no agentPid.
-            const pid = observation.agentPid ?? observation.foregroundPgid
+            // Why no job-leader fallback: a wrapper leading the job outlives the agent, so it would fence out a new one.
+            const pid = observation.agentPid
             const startedAtMs = !host.remote && pid ? await readProcessStartTimeMs(pid) : null
             if (pid && startedAtMs !== null) {
               onAgent?.(found, { pid, startedAtMs })
