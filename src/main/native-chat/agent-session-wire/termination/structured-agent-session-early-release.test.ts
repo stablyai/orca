@@ -51,6 +51,30 @@ describe('releasing a finished background run', () => {
     expect(agentRunning()).toBe(true)
   })
 
+  it('stops an open chat idle agent when asked to anyway, as an account switch does', async () => {
+    await finishedRun(() => null)
+    await rig.host.subscribe({ id: 'pane', sessionId: SESSION, emit: () => {} })
+
+    await eventually(async () => {
+      await rig.host.releaseIdleSession(SESSION, true)
+      expect(agentRunning()).toBe(false)
+    })
+  })
+
+  it("names a running agent's pinned home when its adapter reports none, as ACP's do", async () => {
+    await finishedRun()
+    const pinned = rig.store.getConversation(SESSION)?.accountHome
+
+    expect(pinned).toBeDefined()
+    expect(rig.host.childAccountHome(SESSION)).toBeUndefined()
+    expect(rig.host.childAccountHome(SESSION, true)).toEqual(pinned)
+    await eventually(async () => {
+      await rig.host.releaseIdleSession(SESSION, true)
+      expect(agentRunning()).toBe(false)
+    })
+    expect(rig.host.childAccountHome(SESSION, true)).toBeUndefined()
+  })
+
   it('keeps the agent while the provider still holds a send', async () => {
     await finishedRun()
     rig.adapter.holdsDispatch.mockReturnValue(true)
