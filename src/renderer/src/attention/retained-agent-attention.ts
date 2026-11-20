@@ -12,6 +12,8 @@ import {
   readAgentAttentionNotificationSound
 } from './agent-attention-notification-delivery'
 
+type CatalogState = { runtimeEnvironments?: readonly { id: string }[] }
+
 /** Retained host attention uses the same client policy and delivery as agent input requests. */
 export function createRetainedAgentAttentionReceiver() {
   const presentedByEnvironment = new Map<string, Map<string, string>>()
@@ -69,6 +71,14 @@ export function createRetainedAgentAttentionReceiver() {
       readAgentAttentionNotificationSound(state.settings ?? {})
     )
   }
+  const keepCatalogEnvironments = (state: CatalogState): void => {
+    // Why the catalog, not connection: a disconnected host keeps its notices for the reconnect snapshot.
+    for (const environmentId of presentedByEnvironment.keys()) {
+      if (!state.runtimeEnvironments?.some((environment) => environment.id === environmentId)) {
+        presentedByEnvironment.delete(environmentId)
+      }
+    }
+  }
   return {
     receive,
     reconcile: (environmentId: string, notices: RetainedAgentAttention[]): void => {
@@ -92,14 +102,18 @@ export function createRetainedAgentAttentionReceiver() {
       }
     },
     /** A host removed from the catalog sends no clearing snapshot, so its notice state ends here. */
-    keepCatalogEnvironments: (state: { runtimeEnvironments?: readonly { id: string }[] }): void => {
-      // Why the catalog, not connection: a disconnected host keeps its notices for the reconnect snapshot.
-      for (const environmentId of presentedByEnvironment.keys()) {
-        if (!state.runtimeEnvironments?.some((environment) => environment.id === environmentId)) {
-          presentedByEnvironment.delete(environmentId)
+    keepCatalogEnvironments,
+    /** Wraps a store listener so catalog removals drop their hosts' notice state first. */
+    pruningCatalog:
+      <S extends CatalogState, A extends unknown[]>(
+        listener: (state: S, previous: S, ...rest: A) => void
+      ) =>
+      (state: S, previous: S, ...rest: A): void => {
+        if (state.runtimeEnvironments !== previous.runtimeEnvironments) {
+          keepCatalogEnvironments(state)
         }
-      }
-    },
+        listener(state, previous, ...rest)
+      },
     presentedNoticeCount: (): number => {
       let count = 0
       for (const presented of presentedByEnvironment.values()) {

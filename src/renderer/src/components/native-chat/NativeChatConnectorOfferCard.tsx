@@ -22,7 +22,11 @@ import {
 } from '../../../../shared/bots/bot-connector-offer'
 import { googleBotConnectState } from '../../../../shared/google/google-bot-connect-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
-import { NativeChatCardFrame } from './NativeChatCardFrame'
+import {
+  NativeChatCardActions,
+  NativeChatCardFrame,
+  NativeChatCardStatus
+} from './NativeChatCardFrame'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
 import { OrcaCloudSignInLine } from '../bots/orca-cloud-sign-in'
 import { useOrcaCloudSignedOut } from '../bots/orca-cloud-signed-out'
@@ -108,11 +112,31 @@ function OfferCard({
       ? names.some((name) => name.toLowerCase() === wanted)
       : connectorAdded(bot, offer.source))
   const label = connector?.label ?? offer.source
-  const heading = connected
-    ? t('components.native-chat.connectorOffer.connected', 'Connected')
-    : t('components.native-chat.connectorOffer.connect', 'Connect')
   const footnote = offerFootnote(offer.source)
   const addsWorkspace = offer.workspace !== undefined && connectorAdded(bot, offer.source)
+  const actionLabel = addsWorkspace
+    ? offer.source === 'github'
+      ? t('components.native-chat.connectorOffer.addOrg', 'Add org')
+      : t('components.native-chat.connectorOffer.addWorkspace', 'Add workspace')
+    : t('components.native-chat.connectorOffer.connectService', 'Connect {{service}}', {
+        service: label
+      })
+  const footer = connected ? (
+    // Connected still adds access: GitHub repositories or organizations, or another workspace.
+    offer.source === 'google' ? undefined : (
+      <NativeChatCardActions>
+        <Button type="button" variant="outline" size="sm" onClick={() => setup.start(offer.source)}>
+          {connectorAddAccessLabel(offer.source)}
+        </Button>
+      </NativeChatCardActions>
+    )
+  ) : (
+    <NativeChatOfferActions offer={answering}>
+      <Button type="button" size="sm" onClick={() => setup.start(offer.source)}>
+        {actionLabel}
+      </Button>
+    </NativeChatOfferActions>
+  )
   return (
     <NativeChatCardFrame
       avatar={
@@ -120,55 +144,31 @@ function OfferCard({
           <BotAppBrandLogo app={connector ?? { id: offer.source }} />
         </span>
       }
-      heading={heading}
+      heading={t('components.native-chat.connectorOffer.heading', 'Connect a service')}
+      status={
+        connected ? (
+          <NativeChatCardStatus tone="success">
+            {t('components.native-chat.connectorOffer.connected', 'Connected')}
+          </NativeChatCardStatus>
+        ) : null
+      }
+      title={offer.workspace ? `${label} · ${offer.workspace}` : label}
+      footer={footer}
     >
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">
-            {offer.workspace ? `${label} · ${offer.workspace}` : label}
+      {connected ? (
+        names.length > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            {t('components.native-chat.connectorOffer.connectedIn', 'Connected in {{places}}', {
+              places: names.join(', ')
+            })}
           </p>
-          {connected ? (
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Check className="size-3" aria-hidden />
-              {names.length > 0
-                ? t(
-                    'components.native-chat.connectorOffer.connectedIn',
-                    'Connected in {{places}}',
-                    {
-                      places: names.join(', ')
-                    }
-                  )
-                : t('components.native-chat.connectorOffer.connected', 'Connected')}
-            </p>
-          ) : (
-            <>
-              <p className="text-xs text-muted-foreground">{connectorDescription(offer.source)}</p>
-              {footnote ? <p className="mt-1 text-2xs text-muted-foreground">{footnote}</p> : null}
-            </>
-          )}
-        </div>
-        <NativeChatOfferActions offer={answering} done={connected}>
-          <Button type="button" size="xs" onClick={() => setup.start(offer.source)}>
-            {addsWorkspace
-              ? offer.source === 'github'
-                ? t('components.native-chat.connectorOffer.addOrg', 'Add org')
-                : t('components.native-chat.connectorOffer.addWorkspace', 'Add workspace')
-              : t('components.native-chat.connectorOffer.connect', 'Connect')}
-          </Button>
-        </NativeChatOfferActions>
-      </div>
-      {connected && offer.source !== 'google' ? (
-        // Connected still adds access: GitHub repositories or organizations, or another workspace.
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          className="mt-2"
-          onClick={() => setup.start(offer.source)}
-        >
-          {connectorAddAccessLabel(offer.source)}
-        </Button>
-      ) : null}
+        ) : null
+      ) : (
+        <>
+          <p className="mt-0.5">{connectorDescription(offer.source)}</p>
+          {footnote ? <p className="mt-0.5 text-xs text-muted-foreground">{footnote}</p> : null}
+        </>
+      )}
       {setup.dialogs}
     </NativeChatCardFrame>
   )

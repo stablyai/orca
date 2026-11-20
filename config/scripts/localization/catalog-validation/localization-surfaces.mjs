@@ -38,6 +38,7 @@ export const LOCALIZATION_SURFACES = {
       path.join('mobile', 'src'),
       path.join('mobile', 'web-entry'),
       // Shared copy helpers the phone draws, so its catalog keeps their plural families.
+      path.join('src', 'shared', 'bots', 'bot-chat-tree.ts'),
       path.join('src', 'shared', 'bots', 'bot-sidebar-tree.ts'),
       path.join('src', 'shared', 'bots', 'bot-chat-tree-view.ts'),
       path.join('src', 'shared', 'bots', 'bot-row-line.ts'),

@@ -12334,6 +12334,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS 鑰匙圈（cursor-agent）",
+            "keyring": "Linux 鑰匙圈（cursor-agent）",
             "cli": "Cursor CLI 認證檔案",
             "desktop": "Cursor IDE"
           },
@@ -18887,7 +18888,8 @@
       "install": {
         "checking": "正在檢查 {{agent}} 是否已在此主機上準備就緒…",
         "cliInstall": "安裝",
-        "cliRecheck": "再次檢查"
+        "cliRecheck": "再次檢查",
+        "openAgentSettings": "開啟設定"
       },
       "reasoning": "推理",
       "failureWords": {
@@ -18921,6 +18923,7 @@
         "claudeAccountFolderMissing": "所選 Claude 帳戶的資料夾不存在。請重新登入該帳戶或選擇其他帳戶。",
         "claudeAccountSetupFailed": "無法設定所選 Claude 帳戶。請重試或選擇其他帳戶。",
         "agentCommandNotRunnable": "{{agent}} 在「設定 → 代理程式」中的命令必須是 Orca 能找到的程式路徑或名稱，且不能包含引數或變數。請修改或重設。",
+        "agentCommandFailed": "{{agent}} 在「設定 → 代理程式」中的命令未能啟動 {{agent}}：{{detail}}。請修改或重設。",
         "runtimeNotInstalled": "執行此聊天的電腦上未安裝 {{agent}}。請在新版 Orca 中從聊天裡安裝。",
         "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
         "launchPreparationFailed": "Orca 無法在執行此聊天的電腦上準備啟動 {{agent}}。",

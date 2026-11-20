@@ -76,7 +76,7 @@ afterEach(() => {
 describe('the Connect card', () => {
   it('connects through the same setup as Add connector', () => {
     show(makeTestBot({ id: 'b1' }), { source: 'linear' })
-    fireEvent.click(screen.getByRole('button', { name: 'Connect' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Linear' }))
     expect(mocks.start).toHaveBeenCalledWith('linear')
   })
 

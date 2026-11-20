@@ -2198,6 +2198,7 @@
     "failure": {
       "accountSwitchInProgress": "La configuración de {{agent}} está cambiando en este host. Vuelva a intentarlo cuando termine.",
       "agentCommandNotRunnable": "{{agent}}: el Comando en Ajustes → Agentes debe ser la ruta o el nombre de un programa que Orca pueda encontrar, sin argumentos ni variables. Cámbielo o restablézcalo con Reiniciar.",
+      "agentCommandFailed": "El Comando de {{agent}} en Ajustes → Agentes no inició {{agent}}: {{detail}}. Cámbialo o restablécelo.",
       "agentCommandNotSignedIn": "Inicia sesión en {{agent}} con `{{loginCommand}}` en el equipo donde se ejecuta este chat.",
       "agentNotSignedIn": "Inicia sesión en {{agent}}.",
       "agentStarting": "El agente todavía se está iniciando.",
