@@ -49,18 +49,18 @@ export async function scanWorkspacePorts(
       const { probes, complete } = resolved
       const attributedPorts = attributePortsToWorkspaces(scan.ports, probes)
       const canReconcile = scan.metadataAvailable && complete
-      const observations = workspaceListenerObservations(attributedPorts, probes)
+      const confirmUrls = !freshOwners && scan.ownersFromCache === true
+      const observations =
+        confirmUrls || canReconcile
+          ? workspaceListenerObservations(attributedPorts, probes)
+          : undefined
       // Cached owners can miss a socket passed to a running process; only a full walk may bind or drop a printed URL.
-      if (
-        !freshOwners &&
-        scan.ownersFromCache &&
-        urlWatcher.couldDropUrls(observations, canReconcile)
-      ) {
+      if (confirmUrls && observations && urlWatcher.couldDropUrls(observations, canReconcile)) {
         freshOwners = true
         continue
       }
       // Missing metadata cannot prove listener loss; eviction would discard URLs only PTY output can restore (#11161).
-      if (canReconcile) {
+      if (canReconcile && observations) {
         // Invalidate disappeared/changed listeners before lazy lookup can pin a stale banner.
         urlWatcher.reconcileWorkspaces(observations)
       }
