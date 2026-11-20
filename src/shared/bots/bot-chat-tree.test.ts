@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chatFoldCounts,
+  chatFoldSummary,
   normalizeBotChatFolds,
   orderBotChats,
   withBotChatFold,
@@ -54,6 +56,33 @@ describe('orderBotChats', () => {
       'running',
       'closed'
     ])
+  })
+})
+
+describe('chatFoldSummary', () => {
+  const worker = (key: string, state: 'running' | 'needs-you' | 'unreachable') => ({
+    key,
+    title: key,
+    state,
+    startedAt: 1
+  })
+
+  it('counts waiting and running workers, and none while nothing runs', () => {
+    const running = [worker('a', 'needs-you'), worker('b', 'running'), worker('c', 'unreachable')]
+    expect(chatFoldCounts(chat('c', { running, runningTotal: 4 }))).toEqual({
+      waiting: 1,
+      running: 2
+    })
+    expect(chatFoldCounts(chat('idle'))).toBeNull()
+  })
+
+  it("says the counts through the reader's translations, dropping a zero", () => {
+    const t = (key: string, fallback: string, values?: Record<string, unknown>): string =>
+      `${key}:${fallback.replace('{{count}}', String(values?.count))}`
+    expect(chatFoldSummary(t, { waiting: 1, running: 3 })).toBe(
+      'bots.chats.waitingCount:1 waiting · bots.chats.runningCount:3 running'
+    )
+    expect(chatFoldSummary(t, { waiting: 0, running: 2 })).toBe('bots.chats.runningCount:2 running')
   })
 })
 
