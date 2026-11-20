@@ -297,7 +297,7 @@ export function createServerSession({
         // Watches outside the root (package stores) are accepted and never fire; installs restart the server.
         watchRegistrations.add(registration.id)
       } else {
-        clientRegistrations.set(registration.id, registration.method)
+        clientRegistrations.set(registration.id, { method: registration.method })
         forwarded.push(registration)
       }
     }
@@ -312,9 +312,11 @@ export function createServerSession({
   const onUnregister = (message) => {
     // The protocol spells this field "unregisterations".
     const forwarded = []
+    const withdrawn = []
     for (const unregistration of message.params?.unregisterations ?? []) {
       if (!watchRegistrations.delete(unregistration.id) && clientRegistrations.has(unregistration.id)) {
         forwarded.push(unregistration)
+        withdrawn.push([unregistration.id, clientRegistrations.get(unregistration.id)])
       }
     }
     if (watchRegistrations.size === 0) {
@@ -323,8 +325,11 @@ export function createServerSession({
     if (forwarded.length > 0) {
       // Still the client's until it answers, so a stop in between withdraws them too.
       relayToClient({ ...message, params: { unregisterations: forwarded } }, () => {
-        for (const { id } of forwarded) {
-          clientRegistrations.delete(id)
+        // A registration re-added under the same id since then is a new entry and stays.
+        for (const [id, entry] of withdrawn) {
+          if (clientRegistrations.get(id) === entry) {
+            clientRegistrations.delete(id)
+          }
         }
       })
     } else {
@@ -412,7 +417,7 @@ export function createServerSession({
       jsonrpc: '2.0',
       id: withdrawId,
       method: 'client/unregisterCapability',
-      params: { unregisterations: [...clientRegistrations].map(([id, method]) => ({ id, method })) }
+      params: { unregisterations: [...clientRegistrations].map(([id, { method }]) => ({ id, method })) }
     })
     clientRegistrations.clear()
     killTimer = setTimer(finishWithdraw, SHUTDOWN_GRACE_MS)
