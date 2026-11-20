@@ -1,17 +1,10 @@
 import { isRecord } from '../../../agent-status/child-work/agent-status-child-work-value-guards'
 import { readFirstString } from '../../interactive-tool'
 import type { HookListenerState } from '../../listener-state'
-import { readFirstTranscriptRecord } from '../../transcript-reader'
 
 export type AntigravityTranscriptOrigin = 'root' | 'child' | 'unknown'
 
-export function classifyAntigravityTranscriptOrigin(
-  transcriptPath: string | undefined
-): AntigravityTranscriptOrigin {
-  if (!transcriptPath) {
-    return 'unknown'
-  }
-  const origin = readFirstTranscriptRecord(transcriptPath)
+export function classifyAntigravityTranscriptOrigin(origin: unknown): AntigravityTranscriptOrigin {
   if (!isRecord(origin)) {
     return 'unknown'
   }

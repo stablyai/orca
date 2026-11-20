@@ -1,7 +1,6 @@
 import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-status'
 import type { AgentChildWorkKind } from '../agent-status/child-work/agent-status-child-work'
-import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
-import type { GrokActiveTurn } from './main-agent-turn-state'
+import type * as MainAgentTurns from './main-agent-turn-state'
 
 import {
   createAgentStatusLegacyAdapter,
@@ -57,7 +56,7 @@ export type HookListenerState = {
   /** Live subagents/teammates per Claude pane; survives turn boundaries since background children outlive the lead turn. */
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
   /** Lead-only state published as mainAgent; retain verdict through child churn until final done. */
-  claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
+  claudeLeadStateByPaneKey: Map<string, MainAgentTurns.ClaudeLeadTurnState>
   /** Claude calls whose PreToolUse arrived and that have not resolved; a PermissionRequest asks about one of them. */
   claudeOpenToolUsesByPaneKey: Map<string, ClaudeToolRequest[]>
   /** One-normalization provenance marker for a status backed only by restored child state. */
@@ -81,7 +80,7 @@ export type HookListenerState = {
   /** Incremental parent/child rollout cursors for Codex collaboration v2. */
   codexSubagentTranscriptByPaneKey: Map<string, CodexSubagentTranscriptState>
   /** Root Codex state/model, kept separate from child hook traffic. */
-  codexLeadStateByPaneKey: Map<string, CodexLeadTurnState>
+  codexLeadStateByPaneKey: Map<string, MainAgentTurns.CodexLeadTurnState>
   /** Mid-turn async questions Codex's TUI holds open; its own status keeps saying working. */
   codexAsyncQuestionsByPaneKey: Map<string, CodexAsyncQuestions>
   /** Ephemeral forked Codex threads (/side) per pane; they never own the pane's status. */
@@ -89,7 +88,7 @@ export type HookListenerState = {
   /** A rollout-less Codex start held until its prompt shows a new conversation or the hidden title thread. */
   codexHeldEphemeralStartByPaneKey: Map<string, string>
   /** Newest Grok turn per pane, used to reject end reports that arrive after a replacement prompt. */
-  grokActiveTurnByPaneKey: Map<string, GrokActiveTurn>
+  grokActiveTurnByPaneKey: Map<string, MainAgentTurns.GrokActiveTurn>
   /** The Grok main agent's own state as last published, so its clock keeps continuity across events. */
   grokMainAgentStatusByPaneKey: Map<string, AgentMainAgentStatus>
   /** Grok background shells and subagents still running, by Grok's task id; a cancel report omits them. */

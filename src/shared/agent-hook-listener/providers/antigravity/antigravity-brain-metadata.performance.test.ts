@@ -4,10 +4,10 @@ import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import * as fsp from 'node:fs/promises'
 import { readAntigravityChildMetadata } from './antigravity-brain-metadata'
-import { retireAntigravityChild } from './antigravity-pane-state'
 import { createHookListenerState } from '../../listener-state'
 import {
   getOrCreateAntigravityPaneState,
+  retireAntigravityChild,
   recordAntigravityChildHook
 } from './antigravity-pane-state'
 import {

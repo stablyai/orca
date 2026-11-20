@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
+import type { AgentHookEventPayload } from '../../listener-event'
 import { createHookListenerState } from '../../listener-state'
 import { RolloutReadBatch } from '../codex/codex-rollout-async-reads'
 import { normalizeAntigravityEvent } from './antigravity-events'
@@ -43,7 +44,7 @@ it.each([10, 100])(
       }
     }
     expect(frames).toBe(0)
-    const row = {
+    const row: AgentHookEventPayload = {
       paneKey: 'pane',
       connectionId: null,
       payload: { state: 'working' as const, agentType: 'antigravity' as const, prompt: 'Task' }

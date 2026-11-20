@@ -32,10 +32,14 @@ export function readPaneSessionContext(
   eventName: unknown
 ) {
   const { paneKey, hookPayloadRecord } = envelope
+  const transcriptPath =
+    source === 'antigravity'
+      ? readPathFromKeys(hookPayloadRecord, ['transcriptPath', 'transcript_path'])
+      : undefined
   const antigravityOrigin =
     source === 'antigravity'
       ? classifyAntigravityTranscriptOrigin(
-          readPathFromKeys(hookPayloadRecord, ['transcriptPath', 'transcript_path'])
+          transcriptPath ? readFirstTranscriptRecord(transcriptPath) : undefined
         )
       : undefined
   const providerSession = readPaneProviderSession(

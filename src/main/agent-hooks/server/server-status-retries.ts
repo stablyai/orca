@@ -186,6 +186,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
       this.scheduleTranscriptPoll(
         poll.source,
         poll.body,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main stores enriched accepted rows; the shared view exposes their base event type.
         poll.original as EnrichedAgentHookEventPayload
       )
     }
