@@ -116,7 +116,9 @@ function antigravityRunFiles(stdout: string): string[] {
 
 function codexImagesDir(stdout: string, env: NodeJS.ProcessEnv | undefined): string | null {
   const threadId = codexThreadId(stdout)
-  const codexHome = env?.CODEX_HOME ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
+  // The child's own env decides its home: a prepared env may drop an inherited CODEX_HOME.
+  const childEnv = env ?? process.env
+  const codexHome = childEnv.CODEX_HOME ?? join(childEnv.HOME ?? homedir(), '.codex')
   return threadId ? join(codexHome, 'generated_images', threadId) : null
 }
 
