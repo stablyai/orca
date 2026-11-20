@@ -76,7 +76,7 @@ Llamadas nuevas, solo se agregan (no se renombra nada existente):
 
 1. **PR 1 (#26, mergeado):** este spec + Parte A (archivar principales).
 2. **PR 2 (lectura):** RPC `snapshot`/`subscribe` y capability, store por servidor, aviso de cola en el chat de un servidor (solo lectura, con "En MSI Server") y reloj de arena en la barra lateral. **Pendiente para después:** las tarjetas sobre terminales de un servidor (hay que comprobar que la clave de panel coincide entre la laptop y el servidor) y el tablero con una sección por máquina.
-3. **PR 3:** Parte B de acciones: `cancel`, `forceStart`, `dismissCanceled` desde la laptop.
+3. **PR 3 (acciones):** `zotz.agentQueue.cancel`, `forceStart` y `dismissCanceled` en el servidor, con la capability `zotz.agent-queue-control.v1`, y los botones del aviso del chat de un servidor (cancelar y _Launch anyway_). Los botones solo salen si el servidor declara esa capability; si no, el aviso queda de solo lectura.
 
 Cada PR pasa `pnpm check:changed`, sale a `main` y, para macOS, el release se arma según el procedimiento de firma local (el runner `macos-15` de GitHub suele no estar disponible).
 

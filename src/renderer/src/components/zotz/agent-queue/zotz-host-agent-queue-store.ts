@@ -9,7 +9,10 @@ import {
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { ZotzAgentQueueSnapshot } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue-snapshot'
 import { normalizeRemoteZotzAgentQueueSnapshot } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue-remote-snapshot'
-import { ZOTZ_AGENT_QUEUE_RUNTIME_CAPABILITY } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue-runtime-capability'
+import {
+  ZOTZ_AGENT_QUEUE_CONTROL_RUNTIME_CAPABILITY,
+  ZOTZ_AGENT_QUEUE_RUNTIME_CAPABILITY
+} from '../../../../../shared/zotz/agent-queue/zotz-agent-queue-runtime-capability'
 
 // Each paired server's memory queue, keyed by its host id; absent while it is unreachable or too old to publish one.
 let hostQueues: ReadonlyMap<ExecutionHostId, ZotzAgentQueueSnapshot> = new Map()
@@ -41,12 +44,29 @@ export function useZotzHostAgentQueue(
   return useSyncExternalStore(subscribe, () => (hostId ? (hostQueues.get(hostId) ?? null) : null))
 }
 
+function hostDeclares(
+  state: ReturnType<typeof useAppStore.getState>,
+  environmentId: string,
+  capability: string
+): boolean {
+  const status = lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))
+  return status?.capabilities?.includes(capability) === true
+}
+
 function hostPublishesQueue(
   state: ReturnType<typeof useAppStore.getState>,
   environmentId: string
 ): boolean {
-  const status = lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))
-  return status?.capabilities?.includes(ZOTZ_AGENT_QUEUE_RUNTIME_CAPABILITY) === true
+  return hostDeclares(state, environmentId, ZOTZ_AGENT_QUEUE_RUNTIME_CAPABILITY)
+}
+
+/** True when the server can also cancel or force a queued launch, so its buttons may show here. */
+export function useZotzHostQueueControllable(environmentId: string | null): boolean {
+  return useAppStore(
+    (state) =>
+      environmentId !== null &&
+      hostDeclares(state, environmentId, ZOTZ_AGENT_QUEUE_CONTROL_RUNTIME_CAPABILITY)
+  )
 }
 
 /** Follow the memory queue of every paired server that publishes one; hosts without the capability are skipped silently. */

@@ -8,7 +8,8 @@ import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { ZotzQueuedPaneCard } from './ZotzQueuedPanePortals'
 import { useZotzAgentQueue } from './zotz-agent-queue-store'
-import { useZotzHostAgentQueue } from './zotz-host-agent-queue-store'
+import { runZotzHostQueueAction } from './zotz-host-agent-queue-actions'
+import { useZotzHostAgentQueue, useZotzHostQueueControllable } from './zotz-host-agent-queue-store'
 
 /** A native chat whose agent waits in the memory queue says so above its composer (docs/zotz/PLAN.md §8g). */
 export function ZotzQueuedChatNotice({
@@ -19,17 +20,18 @@ export function ZotzQueuedChatNotice({
   /** Where the chat's agent runs; omitted or local reads this machine's queue. */
   target?: RuntimeClientTarget
 }): React.JSX.Element | null {
+  const environmentId = target?.kind === 'environment' ? target.environmentId : null
   const localSnapshot = useZotzAgentQueue()
   const remoteSnapshot = useZotzHostAgentQueue(
-    target?.kind === 'environment' ? toRuntimeExecutionHostId(target.environmentId) : null
+    environmentId ? toRuntimeExecutionHostId(environmentId) : null
   )
-  const remote = target?.kind === 'environment'
+  const controllable = useZotzHostQueueControllable(environmentId)
   const hostLabel = useAppStore((state) =>
-    target?.kind === 'environment'
-      ? selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(target.environmentId))
+    environmentId
+      ? selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(environmentId))
       : undefined
   )
-  const snapshot = remote ? remoteSnapshot : localSnapshot
+  const snapshot = environmentId ? remoteSnapshot : localSnapshot
   if (!snapshot) {
     return null
   }
@@ -39,14 +41,24 @@ export function ZotzQueuedChatNotice({
   if (!task) {
     return null
   }
+  // A server's buttons appear only when it declares the control calls; the others stay a read-only notice.
+  const queueAction = (action: 'cancel' | 'forceStart'): (() => void) | undefined => {
+    if (!environmentId) {
+      return () => void window.api.zotzAgentQueue[action](task.id)
+    }
+    return controllable
+      ? () =>
+          void runZotzHostQueueAction(environmentId, hostLabel ?? environmentId, action, task.id)
+      : undefined
+  }
   return (
     <div className="flex shrink-0 justify-center px-3 pb-2" data-zotz-queued-chat={task.position}>
       <ZotzQueuedPaneCard
         task={task}
         snapshot={snapshot}
         hostLabel={hostLabel}
-        onCancel={remote ? undefined : () => void window.api.zotzAgentQueue.cancel(task.id)}
-        onForceStart={remote ? undefined : () => void window.api.zotzAgentQueue.forceStart(task.id)}
+        onCancel={queueAction('cancel')}
+        onForceStart={queueAction('forceStart')}
       />
     </div>
   )

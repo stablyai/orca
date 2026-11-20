@@ -3,7 +3,10 @@ import type { ZotzMemoryGovernorService } from './zotz-memory-governor-service'
 
 export type ZotzAgentQueueSource = {
   governor: Pick<ZotzMemoryGovernorService, 'getState' | 'subscribe' | 'wake'>
-  queue: Pick<ZotzAgentLaunchQueue, 'list' | 'listCanceled' | 'subscribe'>
+  queue: Pick<
+    ZotzAgentLaunchQueue,
+    'list' | 'listCanceled' | 'subscribe' | 'cancel' | 'forceStart' | 'dismissCanceled'
+  >
 }
 
 let source: ZotzAgentQueueSource | null = null
