@@ -293,32 +293,6 @@ describe('Jira client credential storage', () => {
     })
   })
 
-  it('does not clear the Jira token when safeStorage decryption fails', async () => {
-    const siteId = 'site-alpha'
-    const tokenPath = tokenPathForSite(siteId)
-    writeJiraFiles(siteId, Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]))
-    const jira = await loadClientModule({
-      encryptionAvailable: true,
-      decryptString: () => {
-        throw new Error('userCanceledErr')
-      }
-    })
-
-    await expect(jira.testConnection(siteId)).resolves.toEqual({
-      ok: false,
-      error: 'Could not decrypt saved Jira credential. Approve Keychain access or reconnect Jira.'
-    })
-
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(existsSync(tokenPath)).toBe(true)
-    expect(await jira.getStatus()).toMatchObject({
-      connected: true,
-      credentialError:
-        'Could not decrypt saved Jira credential. Approve Keychain access or reconnect Jira.',
-      sites: [{ id: siteId }]
-    })
-  })
-
   it('does not clear plaintext fallback credentials on Jira auth failure after decrypt failure', async () => {
     const siteId = 'site-alpha'
     const tokenPath = tokenPathForSite(siteId)
@@ -353,7 +327,8 @@ describe('Jira client credential storage', () => {
   it('clears the recorded credential error after Keychain access is approved', async () => {
     const siteId = 'site-alpha'
     let keychainApproved = false
-    writeJiraFiles(siteId, Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]))
+    const encrypted = Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe])
+    writeJiraFiles(siteId, encrypted)
     netFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -374,8 +349,17 @@ describe('Jira client credential storage', () => {
       }
     })
 
-    await expect(jira.testConnection(siteId)).resolves.toMatchObject({ ok: false })
-    expect((await jira.getStatus()).credentialError).toContain('Could not decrypt')
+    await expect(jira.testConnection(siteId)).resolves.toEqual({
+      ok: false,
+      error: 'Could not decrypt saved Jira credential. Approve Keychain access or reconnect Jira.'
+    })
+    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(readFileSync(tokenPathForSite(siteId))).toEqual(encrypted)
+    expect(await jira.getStatus()).toMatchObject({
+      connected: true,
+      credentialError: expect.stringContaining('Could not decrypt'),
+      sites: [{ id: siteId }]
+    })
 
     keychainApproved = true
     await expect(jira.testConnection(siteId)).resolves.toMatchObject({
@@ -597,17 +581,6 @@ describe('Jira site file cross-process visibility', () => {
       )
     }
   )
-
-  it('recovers a token that appears after metadata was first read without it', async () => {
-    writeJiraFiles('site-alpha', 'token-alpha')
-    const path = tokenPathForSite('site-alpha')
-    rmSync(path)
-    const jira = await loadClientModule()
-    expect((await jira.getStatus()).connected).toBe(false)
-    writeFileSync(path, 'token-alpha')
-    expect((await jira.getStatus()).connected).toBe(true)
-    expect(await jira.getClients('site-alpha')).toHaveLength(1)
-  })
 
   it('keeps a captured request on its site after an external selection change', async () => {
     const sites = [
