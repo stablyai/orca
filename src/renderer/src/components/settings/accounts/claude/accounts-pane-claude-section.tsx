@@ -8,6 +8,7 @@ import { ButtonGroup } from '../../../ui/button-group'
 import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/accounts/provider-icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { ClaudeAutoSwitchSetting } from './claude-auto-switch-setting'
 import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
@@ -259,6 +260,9 @@ export function renderClaudeAccountsSection(
             updateSettings={updateSettings}
             recordFeatureInteraction={recordFeatureInteraction}
           />
+        )}
+        {isRemoteAccountScope ? null : (
+          <ClaudeAutoSwitchSetting settings={settings} updateSettings={updateSettings} />
         )}
         {isRemoteAccountScope ? null : (
           <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />

@@ -22255,6 +22255,13 @@
         "title": "Suivi de l’utilisation de Claude",
         "description": "Utilise votre connexion Claude Code pour consulter l’utilisation, les crédits et les comptes inactifs. Désactivez cette option pour utiliser uniquement les données en direct des sessions de terminal.",
         "about": "À propos du suivi de l’utilisation de Claude"
+      },
+      "autoSwitch": {
+        "title": "Changer de compte automatiquement",
+        "description": "Lorsque le compte actif atteint son seuil, Orca passe au compte de plus haute priorité encore sous son propre seuil. À priorité égale, celui qui a le plus de quota restant l'emporte. Désactivez ou classez les comptes dans leurs lignes.",
+        "threshold": "Changer à % d'utilisation",
+        "inRotation": "En rotation",
+        "priority": "Priorité (la plus élevée est utilisée en premier)"
       }
     },
     "hostSignIn": {

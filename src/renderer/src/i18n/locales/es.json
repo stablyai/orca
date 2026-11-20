@@ -21551,6 +21551,13 @@
         "title": "Consulta de uso de Claude",
         "description": "Usa tu inicio de sesión de Claude Code para consultar el uso, los créditos y las cuentas inactivas. Desactívala para usar solo las lecturas en directo de las sesiones de terminal.",
         "about": "Acerca de la consulta de uso de Claude"
+      },
+      "autoSwitch": {
+        "title": "Cambiar de cuenta automáticamente",
+        "description": "Cuando la cuenta activa alcanza su umbral, Orca cambia a la cuenta con mayor prioridad que siga por debajo de su propio umbral. Con la misma prioridad gana la que tenga más cuota disponible. Puedes desactivar o priorizar cuentas en sus filas.",
+        "threshold": "Cambiar al % de uso",
+        "inRotation": "En rotación",
+        "priority": "Prioridad (la mayor se usa primero)"
       }
     },
     "hostSignIn": {

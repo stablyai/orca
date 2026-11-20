@@ -23,6 +23,7 @@ import {
   ClaudeSignInLinkMenu,
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
+import { ClaudeAccountRotationControls } from './claude-account-rotation-controls'
 import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
 import { getObservedAccountPlan } from '@/lib/provider-accounts/observed-account-plans'
 
@@ -136,6 +137,14 @@ export function renderClaudeAccountRow(
           </span>
         </button>
         <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
+          {isRemoteAccountScope ? null : (
+            <ClaudeAccountRotationControls
+              accountId={account.id}
+              settings={model.settings}
+              updateSettings={model.updateSettings}
+              t={t}
+            />
+          )}
           <AccountRenameButton
             t={t}
             disabled={claudeAction === `remove:${account.id}`}

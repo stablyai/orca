@@ -25063,6 +25063,13 @@
         "title": "Claude usage polling",
         "description": "Uses your Claude Code sign-in to check usage, credits, and inactive accounts. Turn off to use live terminal readings only.",
         "about": "About Claude usage polling"
+      },
+      "autoSwitch": {
+        "title": "Switch accounts automatically",
+        "description": "When the active account reaches its threshold, switch to the account with the highest priority that is still under its own threshold. Accounts with equal priority are ranked by most quota left. Disable or rank accounts in their rows.",
+        "threshold": "Switch at % used",
+        "inRotation": "In rotation",
+        "priority": "Priority (higher is used first)"
       }
     },
     "managedData": {

@@ -21969,6 +21969,13 @@
         "title": "Claude-Nutzungsabfrage",
         "description": "Verwendet deine Claude-Code-Anmeldung, um Nutzung, Guthaben und inaktive Konten abzufragen. Deaktiviere diese Option, um nur Live-Daten aus Terminalsitzungen zu verwenden.",
         "about": "Über die Claude-Nutzungsabfrage"
+      },
+      "autoSwitch": {
+        "title": "Konten automatisch wechseln",
+        "description": "Erreicht das aktive Konto seinen Schwellenwert, wechselt Orca zum Konto mit der höchsten Priorität, das noch unter seinem eigenen Schwellenwert liegt. Bei gleicher Priorität gewinnt das Konto mit dem meisten verbleibenden Kontingent. Konten lassen sich in ihren Zeilen deaktivieren oder priorisieren.",
+        "threshold": "Wechseln bei % Nutzung",
+        "inRotation": "In der Rotation",
+        "priority": "Priorität (höhere wird zuerst genutzt)"
       }
     },
     "managedData": {
