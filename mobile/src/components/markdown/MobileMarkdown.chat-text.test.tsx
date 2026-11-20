@@ -34,6 +34,7 @@ vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 import { MobileMarkdown } from './MobileMarkdown'
 import { MarkdownLinkHandlerContext } from './links/markdown-link-handler'
 import { styles } from './mobile-markdown-styles'
+import { MobileMarkdownSlackPeopleContext } from './parsing/mobile-markdown-mentions'
 
 function textOf(node: ReactTestInstance | string): string {
   return typeof node === 'string' ? node : node.children.map(textOf).join('')
@@ -80,4 +81,44 @@ describe("a Slack message's markup on the phone", () => {
     expect(all).toContain('@user in')
     expect(all).toContain('mail ann@Ann.dev')
   })
+})
+
+describe("Slack mention tokens in an agent's reply on the phone", () => {
+  it('shows them as names, leaving code as written', () => {
+    let tree: ReactTestRenderer | undefined
+    act(() => {
+      tree = create(
+        createElement(
+          MobileMarkdownSlackPeopleContext.Provider,
+          { value: new Map([['U05BRPQSABY', 'Jinjing']]) },
+          createElement(MobileMarkdown, {
+            content: 'Hi <!here> <@U05BRPQSABY> The limit, see `<@U05BRPQSABY>`; ask <@U2>'
+          })
+        )
+      )
+    })
+    const spans = tree!.root.findAll((node) => isHostText(node.type))
+    expect(spans.filter((node) => hasStyle(node, styles.mention)).map(textOf)).toEqual([
+      '@here',
+      '@Jinjing'
+    ])
+    const all = textOf(tree!.root)
+    expect(all).toContain('see <@U05BRPQSABY>; ask @user')
+  })
+})
+
+it('keeps typed list numbers in chat and renumbers them outside chat', () => {
+  const content = '1. a\n2. b\n4. c'
+  const markers = (chatMath: boolean): string[] => {
+    let tree: ReactTestRenderer | undefined
+    act(() => {
+      tree = create(createElement(MobileMarkdown, { content, chatMath }))
+    })
+    return tree!.root
+      .findAll((node) => isHostText(node.type) && hasStyle(node, styles.listMarker))
+      .map(textOf)
+  }
+
+  expect(markers(true)).toEqual(['1.', '2.', '4.'])
+  expect(markers(false)).toEqual(['1.', '2.', '3.'])
 })

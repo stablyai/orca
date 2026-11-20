@@ -1470,7 +1470,7 @@
 2 src/main/workspaces/catalog/repo-worktree-catalog-owner.ts
 5 src/main/workspaces/catalog/repo-worktrees.ts
 1 src/main/workspaces/cleanup/chat-history/deleted-workspace-chat-history.ts
-3 src/main/workspaces/cleanup/workspace-cleanup-removal-step.ts
+4 src/main/workspaces/cleanup/workspace-cleanup-removal-step.ts # folder workspace group (#44715): decideWorkspaceCleanups wraps the per-workspace decision; same orca.yaml read, now also for folder siblings in the re-check
 2 src/main/workspaces/cleanup/workspace-cleanup-runner.ts
 3 src/main/workspaces/creation/preparation/worktree-create-preparation-pool.ts
 2 src/main/workspaces/creation/preparation/worktree-create-preparation-stale-cleanup.ts
@@ -1594,7 +1594,7 @@
 19 src/shared/secure-storage/secure-file.ts
 6 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts
-2 src/shared/shell/command-resolution/cli-fs-reads.ts
-16 src/shared/shell/command-resolution/node-cli-command-resolution.ts
+3 src/shared/shell/command-resolution/cli-fs-reads.ts # sync runner for CLI lookups; isNativeExecutable moved here from node-cli-command-resolution (16 -> 13) so withCliRuntimeOnPath has an async form
+13 src/shared/shell/command-resolution/node-cli-command-resolution.ts
 1 src/shared/shell/command-resolution/nvm-version-directories.ts
 1 src/shared/shell/launch/startup-command-staging.ts

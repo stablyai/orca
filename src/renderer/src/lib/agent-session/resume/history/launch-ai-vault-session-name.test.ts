@@ -75,16 +75,13 @@ describe('resume names the new tab after the session', () => {
     })
   })
 
-  it('leaves forks and unnamed sessions alone', () => {
+  it('leaves forks, unnamed sessions and sessions on unknown hosts without a title', () => {
     launchAiVaultSessionInNewTab({ ...resume, providerSession: undefined })
     launchAiVaultSessionInNewTab({
       ...resume,
       providerSession: { key: 'session_id', id: 's2' }
     })
-    expect(mocks.store.setTabCustomTitle).not.toHaveBeenCalled()
-  })
 
-  it('does not use a name when the target host is unknown', () => {
     mocks.hostId = null
     launchAiVaultSessionInNewTab(resume)
     expect(mocks.store.setTabCustomTitle).not.toHaveBeenCalled()

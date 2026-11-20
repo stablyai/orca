@@ -1,8 +1,3 @@
-import {
-  getSelectedClaudeAccountIdForTarget,
-  type ClaudeAccountSelectionTarget
-} from '../../../claude-accounts/selection/runtime-selection'
-import type { ClaudeRateLimitAccountsState } from '../../../../shared/agent-accounts/managed-account-types'
 import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
 import type { AccountsSnapshot, RuntimeAccountServices } from './runtime-account-controller'
@@ -87,17 +82,4 @@ export function subscribeRuntimeAccountChanges(
     unsubscribeUsage()
     unsubscribeRenames.forEach((unsubscribe) => unsubscribe())
   }
-}
-
-export function selectedClaudeAccountId(
-  state: ClaudeRateLimitAccountsState,
-  target: ClaudeAccountSelectionTarget
-): string | null {
-  return getSelectedClaudeAccountIdForTarget(
-    {
-      activeClaudeManagedAccountId: state.activeAccountId,
-      activeClaudeManagedAccountIdsByRuntime: state.activeAccountIdsByRuntime
-    },
-    target
-  )
 }

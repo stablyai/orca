@@ -1,3 +1,4 @@
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import type { ClaudeAccountService } from '../../../claude-accounts/service'
 import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
@@ -28,6 +29,7 @@ import type { CodexResetCreditExpectedScope } from '../../../../shared/agent-acc
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   getClaudeSelectionTargetForAccount,
+  getSelectedClaudeAccountIdInState,
   type ClaudeAccountSelectionTarget
 } from '../../../claude-accounts/selection/runtime-selection'
 import {
@@ -36,10 +38,7 @@ import {
 } from '../../../../shared/agent-launch/startup/host-account-launch-env'
 import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
 import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
-import {
-  selectedClaudeAccountId,
-  subscribeRuntimeAccountChanges
-} from './runtime-account-change-subscription'
+import { subscribeRuntimeAccountChanges } from './runtime-account-change-subscription'
 import { readRuntimeAccountsSnapshot } from './runtime-account-snapshot'
 import type { ManagedAccountNameProvider } from '../../../../shared/agent-accounts/managed-account-display-names'
 
@@ -208,22 +207,29 @@ export class RuntimeAccountController {
   /** Desktop switches go through IPC and handle their own sessions; this path moves the others. */
   async selectClaude(
     accountId: string | null,
-    options: { movesRunningSessions?: true } = {}
+    options: {
+      movesRunningSessions?: true
+      runningSessions?: ClaudeAccountSwitchRunningSessions
+      answersAsk?: true
+    } = {}
   ): Promise<ClaudeAccountSelectResult> {
     const { claudeAccounts } = this.requireServices()
     if (options.movesRunningSessions) {
       return claudeAccounts.selectAccount(accountId)
     }
     const before = claudeAccounts.listAccounts()
-    const after = await claudeAccounts.selectAccount(accountId)
+    // An answer to Ask selects nothing, so it can never undo a later switch.
+    const after = options.answersAsk ? before : await claudeAccounts.selectAccount(accountId)
     const account = before.accounts.find((candidate) => candidate.id === accountId)
     const target: ClaudeAccountSelectionTarget = account
       ? getClaudeSelectionTargetForAccount(account)
       : { runtime: 'host' }
     const runningSessions = await this.onClaudeAccountSelected({
       target,
-      before: { state: before, accountId: selectedClaudeAccountId(before, target) },
-      after: { state: after, accountId: selectedClaudeAccountId(after, target) }
+      before: { state: before, accountId: getSelectedClaudeAccountIdInState(before, target) },
+      after: { state: after, accountId: getSelectedClaudeAccountIdInState(after, target) },
+      ...(options.runningSessions ? { runningSessions: options.runningSessions } : {}),
+      ...(options.answersAsk ? { answersAskFor: accountId } : {})
     })
     return runningSessions ? { ...after, runningSessions } : after
   }

@@ -21214,6 +21214,7 @@
         },
         "imageUnavailable": "Preview unavailable",
         "botFor": "For: {{detail}}",
+        "agents": "Agents",
         "bots": "Bots",
         "files": "Files",
         "skillPillLabel": "Skill: {{name}}",
@@ -21407,7 +21408,12 @@
         "stateUnverifiableCount": "{{value0}} with status unavailable",
         "stateWaitingCount": "{{value0}} waiting",
         "stateWorkingCount": "{{value0}} working",
-        "openAgent": "Open {{value0}}"
+        "openAgent": "Open {{value0}}",
+        "needsAttention_one": "{{count}} needs attention",
+        "needsAttention_other": "{{count}} need attention",
+        "workerBadge": "Worker",
+        "subagentBadge": "Subagent",
+        "nameInMessage": "Add {{name}} to message"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",
@@ -22208,6 +22214,7 @@
           "failed": "Failed",
           "failedReason": "Failed: {{error}}",
           "disabled": "Disabled",
+          "notStarted": "Not started",
           "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
         },
         "signIn": {
@@ -23263,6 +23270,7 @@
           "archiveUnavailable": "Archive not available",
           "archiveScript": "Has an archive script",
           "removing": "Already being removed",
+          "folderWorkspaceSibling": "Another repository in this workspace is still in use",
           "waiting": "Waiting",
           "notRemovable": "Main workspace or folder project",
           "projectOff": "Cleanup off for this project",
@@ -23599,17 +23607,19 @@
       "openChat": "Open its chat",
       "copiedAddress": "Copied {{name}}'s address",
       "copyAddress": "Copy address",
-      "showDetails": "Show {{name}}'s task and latest message",
+      "showDetails": "Show {{name}}'s task and reply",
       "task": "Task",
-      "asksYou": "Asks you",
       "openFailed": "{{name}}: {{detail}}",
       "chatUnavailable": "This host cannot open the chat. Try again.",
       "terminalExited": "This terminal has exited.",
       "openOnHost": "Open this agent on {{host}}.",
       "cannotLocate": "This host cannot locate this agent. Try again.",
-      "latest": "Latest",
-      "to": "To",
-      "from": "From"
+      "reply": "Reply",
+      "noReply": "No reply yet",
+      "taskFailed": "Failed",
+      "youPreview": "You: {{preview}}",
+      "composerUnavailable": "The message box can't take a mention now",
+      "mentionTip": "Mention {{name}}"
     },
     "orchestration": {
       "workerAutoClose": {
@@ -24901,6 +24911,10 @@
         "sharedOther": "{{count}} Claude sessions stay on {{previous}} because another pane has the same conversation open. Restarting could reopen the other pane's conversation.",
         "strandedOne": "1 Claude session may still be on {{previous}}. Restart it manually to switch.",
         "strandedOther": "{{count}} Claude sessions may still be on {{previous}}. Restart them manually to switch.",
+        "hostAskOne": "1 Claude session is still on {{previous}}.",
+        "hostAskOther": "{{count}} Claude sessions are still on {{previous}}.",
+        "hostAskDescription": "Restarting stops any work in progress.",
+        "hostAskRestart": "Restart",
         "notMovedOne": "1 other session wasn't moved.",
         "notMovedOther": "{{count}} other sessions weren't moved.",
         "review": "Review",
@@ -25937,7 +25951,9 @@
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
-      "botItemBack": "Back to items"
+      "botItemBack": "Back to items",
+      "botItemPrevious": "Previous item",
+      "botItemNext": "Next item"
     },
     "group": {
       "global": "Global",
@@ -29085,6 +29101,12 @@
         "next": "Next item",
         "previous": "Previous item",
         "place": "{{index}} / {{total}}",
+        "placeOf": "{{index}} of {{total}}",
+        "navigation": "Item {{index}} of {{total}}",
+        "loadingNext": "Loading next item",
+        "shown": "Item {{index}} of {{total}}: {{title}}",
+        "firstItem": "First item",
+        "lastItem": "Last item",
         "deleted": "This item was deleted.",
         "moreLinks": "{{count}} more links"
       },

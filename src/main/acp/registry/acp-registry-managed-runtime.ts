@@ -3,7 +3,8 @@
 import { copyFile, link } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { getMainHttpClient } from '../../network/http-client'
-import type { ManagedRuntime, ManagedRuntimePin } from '../../node-runtime/managed-runtime-release'
+import type { ManagedAgentCli, ManagedRuntimePin } from '../../node-runtime/managed-runtime-release'
+import { runtimeDownloadBytes } from '../../node-runtime/runtime-download-size'
 import { followLatestRelease } from '../../node-runtime/managed-runtime-latest-release'
 import { requireRuntimeAnswersVersion } from '../../node-runtime/managed-runtime-version-check'
 import { agentCliMinimumVersion } from '../../agent-launch/preflight/agent-cli-minimum-version'
@@ -66,23 +67,6 @@ async function archiveSha256(
   return listed && /^[a-f0-9]{64}$/.test(listed) ? listed : null
 }
 
-async function archiveBytes(url: string, label: string, signal?: AbortSignal): Promise<number> {
-  const response = await getMainHttpClient().fetch(url, {
-    method: 'HEAD',
-    redirect: 'follow',
-    signal
-  })
-  if (!response.ok) {
-    throw new Error(`${label} download size lookup failed (${response.status})`)
-  }
-  const encoding = response.headers.get('content-encoding')?.trim().toLowerCase() || 'identity'
-  const bytes = Number(response.headers.get('content-length'))
-  if (encoding !== 'identity' || !Number.isSafeInteger(bytes) || bytes <= 0) {
-    throw new Error(`${label} download size is unknown`)
-  }
-  return bytes
-}
-
 async function fetchRegistryPin(
   managed: AcpRegistryManagedAgent,
   signal?: AbortSignal
@@ -110,7 +94,7 @@ async function fetchRegistryPin(
   }
   const [sha256, bytes] = await Promise.all([
     archiveSha256(target, signal),
-    archiveBytes(target.archive, label, signal)
+    runtimeDownloadBytes(target.archive, label, signal)
   ])
   if (!sha256) {
     console.warn(`[acp-registry] ${label} ${version} for ${key} publishes no checksum`)
@@ -132,11 +116,7 @@ function answersVersion(answered: string, version: string): boolean {
   return parsed === version || parsed?.startsWith(`${version}-`) === true
 }
 
-export function acpRegistryManagedRuntime(managed: AcpRegistryManagedAgent): {
-  runtime: ManagedRuntime
-  available: () => boolean
-  executable: (folder: string) => string
-} {
+export function acpRegistryManagedRuntime(managed: AcpRegistryManagedAgent): ManagedAgentCli {
   const { alias } = managed
   const executable = (folder: string): string =>
     join(folder, ...managed.command(process.platform).split('/'))

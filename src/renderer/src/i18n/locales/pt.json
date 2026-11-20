@@ -22511,14 +22511,10 @@
       "copyAddress": "Copiar endereço",
       "showDetails": "Mostrar a tarefa e a última mensagem de {{name}}",
       "task": "Tarefa",
-      "asksYou": "Pergunta a você",
       "chatUnavailable": "Este host não pode abrir o chat. Tente novamente.",
       "terminalExited": "Este terminal foi encerrado.",
       "openOnHost": "Abra este agente em {{host}}.",
       "cannotLocate": "Este host não pode localizar este agente. Tente novamente.",
-      "latest": "Mais recente",
-      "to": "Para",
-      "from": "De",
       "mentionAgent": "Mencione {{name}}:",
       "more": "Mais para {{name}}",
       "openFailed": "{{name}}: {{detail}}",
@@ -22921,7 +22917,11 @@
         "sharedOne": "1 sessão do Claude permanece em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
         "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
         "strandedOne": "1 sessão do Claude pode ainda estar em {{previous}}. Reinicie-a manualmente para trocar.",
-        "strandedOther": "{{count}} sessões do Claude podem ainda estar em {{previous}}. Reinicie-as manualmente para trocar."
+        "strandedOther": "{{count}} sessões do Claude podem ainda estar em {{previous}}. Reinicie-as manualmente para trocar.",
+        "hostAskOne": "1 sessão do Claude ainda está em {{previous}}.",
+        "hostAskOther": "{{count}} sessões do Claude ainda estão em {{previous}}.",
+        "hostAskDescription": "Reiniciar interrompe o trabalho em andamento.",
+        "hostAskRestart": "Reiniciar"
       },
       "oauthUsage": {
         "title": "Consulta de uso do Claude",
