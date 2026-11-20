@@ -5,7 +5,7 @@ import { expect, it } from 'vitest'
 import { readNativeChatTranscriptTailFile } from '../transcript-tail-reader'
 import { verifyTranscriptRanges } from './transcript-range-verifier'
 
-it('matches untouched bytes and rejects a same-length rewrite', async () => {
+it('matches untouched bytes and rejects a same-length rewrite or swapped lines', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'native-chat-range-'))
   const file = join(directory, 'session.jsonl')
   try {
@@ -23,6 +23,8 @@ it('matches untouched bytes and rejects a same-length rewrite', async () => {
     }
     expect(await verifyTranscriptRanges(file, ranges)).toEqual([true])
     await writeFile(file, '{"text":"new"}\n{"text":"end"}\n')
+    expect(await verifyTranscriptRanges(file, ranges)).toEqual([false])
+    await writeFile(file, '{"text":"end"}\n{"text":"old"}\n')
     expect(await verifyTranscriptRanges(file, ranges)).toEqual([false])
   } finally {
     await rm(directory, { recursive: true, force: true })
