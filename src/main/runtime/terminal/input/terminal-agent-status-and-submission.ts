@@ -115,6 +115,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
         this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict === 'unverifiable')
       } else if (verdict === 'exited' && !recoverCompletedHook) {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+        this.noteProvenAgentProcessExit(ptyId)
       } else if (verdict === 'live') {
         this.restoreDisprovedAgentExit(ptyId)
       } else {
@@ -215,6 +216,10 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
       if (!keepOnSilence || answered) {
         if (!recoverCompletedHook) {
           this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+          // A read that names a non-agent foreground is the same proof as a hook exit: the agent process is gone.
+          if (answered) {
+            this.noteProvenAgentProcessExit(ptyId)
+          }
         }
       } else {
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
