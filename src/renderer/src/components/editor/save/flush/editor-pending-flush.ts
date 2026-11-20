@@ -132,11 +132,6 @@ function frameFlushesOf(state: EditorBufferViewIndex, fileId: string): FrameFlus
   ])
 }
 
-/** Whether a frame view of exactly this tab is mounted; unmounting it skips the frame's flush. */
-export function hasMountedEditorFrame(viewId: string): boolean {
-  return frameFlushes.has(viewId)
-}
-
 /** Whether closing `fileId` must first wait on a mounted frame view's flush. */
 export function hasEditorFrameFlush(state: EditorBufferViewIndex, fileId: string): boolean {
   return frameFlushesOf(state, fileId).length > 0

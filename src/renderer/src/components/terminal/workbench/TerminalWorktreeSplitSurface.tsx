@@ -11,7 +11,7 @@ import {
 } from '../../browser-pane/host-guest/retention/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from '../../tab-group/TabGroupSplitLayout'
 import { useAppStore } from '../../../store/index'
-import { hasMountedEditorFrame } from '../../editor/save/flush/editor-pending-flush'
+import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from '../worktree-prewarm/terminal-worktree-prewarm'
 
@@ -45,19 +45,27 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
 }): React.JSX.Element {
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
-  const hasUnreleasableTab = useAppStore((state) =>
-    (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
-      (tab) =>
-        tab.contentType === 'simulator' ||
-        (tab.contentType === 'editor' && hasMountedEditorFrame(tab.entityId))
-    )
-  )
-  // Parked terminals restore from snapshots; browser guests, simulators and plugin editor frames (async flush) would lose state.
+  // Allowlist: only views drawn outside the layout (terminals restore from parking snapshots, chats stay mounted).
+  const layoutHoldsOnlyOverlays = useAppStore((state) => {
+    const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+    if (tabs.some((tab) => tab.contentType === 'simulator')) {
+      return false
+    }
+    return (state.groupsByWorktree[worktreeId] ?? []).every((group) => {
+      const active = tabs.find((tab) => tab.id === group.activeTabId)
+      return (
+        !active ||
+        active.contentType === 'terminal' ||
+        active.contentType === 'room' ||
+        isStructuredTab(active)
+      )
+    })
+  })
   const surfaceReleased =
     shouldColdParkTerminalPanes &&
     !isForceParked &&
     browserPageIds.length === 0 &&
-    !hasUnreleasableTab
+    layoutHoldsOnlyOverlays
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
     // A mount-stage prewarm stays display:none so its style/layout cost lands in a later task.
     shouldMeasureHiddenWorktree: shouldMeasureHiddenWorktree && prewarmStage !== 'mount',
