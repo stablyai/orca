@@ -69,10 +69,9 @@ export function observeBrowserExtensionActionSession(sess: Electron.Session): vo
   })
 }
 
+// Why no notice: the profile is idle (no toolbar shows it) or reattaching, whose loads repaint it.
 onBrowserExtensionIdleStateDropped((profileId, extensionId) => {
-  if (stateByProfileId.get(profileId)?.delete(extensionId)) {
-    notifyBrowserExtensionActionsChanged(profileId)
-  }
+  stateByProfileId.get(profileId)?.delete(extensionId)
 })
 
 export function getBrowserExtensionActionState(

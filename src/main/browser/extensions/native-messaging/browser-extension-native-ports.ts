@@ -106,17 +106,32 @@ function finish(port: NativePort): void {
 }
 
 /** Ends matching ports without telling their (gone) contexts; their hosts are killed. */
-/** Returns how many ports it closed. */
-export function closeNativePortsWhere(matches: (port: NativePort) => boolean): number {
-  let closed = 0
+export function closeNativePortsWhere(matches: (port: NativePort) => boolean): void {
   for (const port of ports.values()) {
     if (matches(port)) {
       finish(port)
       port.onEvent({ type: 'disconnect', error: 'The port owner went away', teardown: true })
-      closed++
     }
   }
-  return closed
+}
+
+/** Closes a session's ports whose owner went away, in the same single pass over the ports. */
+function closeOwnerlessPorts(sess: Electron.Session, matches: (port: NativePort) => boolean): void {
+  const profileId = getHostSessionState(sess)?.browserProfileId
+  const lost = new Set<string>()
+  closeNativePortsWhere((port) => {
+    const owned = port.session === sess && matches(port)
+    if (owned) {
+      lost.add(port.extensionId)
+    }
+    return owned
+  })
+  // Why: the extension gets no disconnect event, so only a clean start (onStartup) reconnects it.
+  for (const extensionId of lost) {
+    if (profileId) {
+      noteBrowserExtensionNeedsCleanStart(profileId, extensionId)
+    }
+  }
 }
 
 function frameStillOwns(port: NativePort): boolean {
@@ -137,23 +152,14 @@ function observeSession(sess: Electron.Session): void {
   }
   observedSessions.add(sess)
   // Disable, removal, reload and profile deletion all unload the extension from the session.
-  sess.extensions.on('extension-unloaded', (_event, extension) => {
-    const profileId = getHostSessionState(sess)?.browserProfileId
-    const closed = closeNativePortsWhere(
-      (port) => port.session === sess && port.extensionId === extension.id
-    )
-    // Why: the extension gets no disconnect event, so only a clean start reconnects it.
-    if (profileId && closed > 0) {
-      noteBrowserExtensionNeedsCleanStart(profileId, extension.id)
-    }
-  })
+  sess.extensions.on('extension-unloaded', (_event, extension) =>
+    closeOwnerlessPorts(sess, (port) => port.extensionId === extension.id)
+  )
   sess.serviceWorkers.on('running-status-changed', ({ versionId, runningStatus }) => {
     if (runningStatus === 'stopped') {
-      closeNativePortsWhere(
-        (port) =>
-          port.session === sess &&
-          port.owner.kind === 'worker' &&
-          port.owner.versionId === versionId
+      closeOwnerlessPorts(
+        sess,
+        (port) => port.owner.kind === 'worker' && port.owner.versionId === versionId
       )
     }
   })
