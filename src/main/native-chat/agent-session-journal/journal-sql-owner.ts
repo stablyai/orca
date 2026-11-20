@@ -10,6 +10,7 @@ import type {
   JournalSqlTiming
 } from './journal-sql-protocol'
 import { JournalSqlWriterStallReport } from './journal-sql-writer-stall-report'
+import { reportJournalCheckpointOutage } from './database/journal-checkpoint-outage-report'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import { prepareJournalSqlRequest } from './journal-sql-ready-batch'
 import type { JournalWriterCommand } from './journal-writer-command'
@@ -216,6 +217,10 @@ export class JournalSqlOwner {
   private receive(response: JournalSqlResponse): void {
     if (response.type === 'ready') {
       this.ready.resolve(response.readOnly)
+      return
+    }
+    if (response.type === 'checkpoint-outage') {
+      reportJournalCheckpointOutage(response.outage)
       return
     }
     const pending = response.id === undefined ? undefined : this.pending.get(response.id)

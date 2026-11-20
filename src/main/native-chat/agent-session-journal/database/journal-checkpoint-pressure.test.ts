@@ -1,14 +1,12 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
 import { JournalSqlBatch } from '../journal-sql-batch'
-import { JournalCheckpointOwner } from './journal-checkpoint-owner'
-import { JOURNAL_WAL_BACKPRESSURE_FRAMES } from './journal-wal-admission'
-import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
+import { JournalCheckpointOwner, type JournalCheckpointOutage } from './journal-checkpoint-owner'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
 
 const cleanup: (() => void | Promise<void>)[] = []
@@ -41,24 +39,21 @@ it.each(['before-write', 'after-write'] as const)(
     const blocked = new Promise<void>((resolve) => {
       observedBlocked = resolve
     })
-    const worker = new Worker(journalCheckpointWorkerSource, {
-      eval: true,
-      workerData: {
-        filename,
-        sizeLimit: JOURNAL_SIZE_LIMIT_BYTES,
-        backpressureFrames: JOURNAL_WAL_BACKPRESSURE_FRAMES
+    const owner = new JournalCheckpointOwner(writer, filename, {
+      factory: (workerData) => {
+        const worker = new Worker(journalCheckpointWorkerSource, { eval: true, workerData })
+        worker.on('message', (message) => {
+          if (
+            message.type === 'checked' &&
+            message.blocked &&
+            (pinAt === 'before-write' || message.truncateId !== undefined)
+          ) {
+            observedBlocked()
+          }
+        })
+        return worker
       }
     })
-    worker.on('message', (message) => {
-      if (
-        message.type === 'checked' &&
-        message.blocked &&
-        (pinAt === 'before-write' || message.truncateId !== undefined)
-      ) {
-        observedBlocked()
-      }
-    })
-    const owner = new JournalCheckpointOwner(writer, filename, { factory: () => worker })
     cleanup.push(() => owner.close())
     const batch = new JournalSqlBatch(writer, owner)
     const pin = () => reader.exec('BEGIN; SELECT COUNT(*) FROM writes;')
@@ -221,4 +216,106 @@ it('admits a sending chat past WAL pressure while bulk waits, but never past a t
   })
   await Promise.all([bulk, sending])
   expect(ids()).toEqual([{ id: 3 }, { id: 4 }])
+})
+
+it('restarts a crashed checkpoint worker within the launch and shrinks the WAL it left behind', async () => {
+  const { filename, writer } = fixture()
+  const reader = new Database(filename, { readonly: true })
+  cleanup.push(() => reader.close())
+  const workers: Worker[] = []
+  const outages: JournalCheckpointOutage[] = []
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  const owner = new JournalCheckpointOwner(writer, filename, {
+    restartBaseMs: 10,
+    onOutage: (outage) => outages.push(outage),
+    factory: (workerData) => {
+      const worker = new Worker(journalCheckpointWorkerSource, { eval: true, workerData })
+      workers.push(worker)
+      return worker
+    }
+  })
+  cleanup.push(() => owner.close())
+  const batch = new JournalSqlBatch(writer, owner)
+  const walBytes = () => statSync(`${filename}-wal`).size
+
+  reader.exec('BEGIN; SELECT COUNT(*) FROM writes;')
+  await workers[0]!.terminate()
+  // The writer keeps committing while no worker runs; the pinned reader keeps the WAL from draining.
+  await batch.run([1], (id) =>
+    writer.prepare('INSERT INTO writes VALUES(?, zeroblob(18874368))').run(id)
+  )
+  expect(walBytes()).toBeGreaterThan(16 * 1024 * 1024)
+  await vi.waitFor(() => expect(outages).toHaveLength(1), { timeout: 10_000 })
+  expect(workers).toHaveLength(2)
+  expect(outages[0]).toMatchObject({ cause: 'exited', recovered: true, restarts: 1 })
+  expect(writer.pragma('wal_autocheckpoint', { simple: true })).toBe(0)
+
+  reader.exec('ROLLBACK')
+  await batch.run([2], (id) => writer.prepare("INSERT INTO writes VALUES(?, 'after')").run(id))
+  await vi.waitFor(() => expect(walBytes()).toBeLessThan(1024 * 1024), { timeout: 10_000 })
+  expect(writer.prepare('SELECT id FROM writes ORDER BY id').all()).toEqual([
+    { id: 0 },
+    { id: 1 },
+    { id: 2 }
+  ])
+}, 20_000)
+
+class LivenessCheckpoint extends ControlledCheckpoint {
+  terminated = false
+  constructor(readonly liveness: Int32Array) {
+    super()
+  }
+  override terminate(): Promise<number> {
+    this.terminated = true
+    queueMicrotask(() => this.emit('exit', 1))
+    return Promise.resolve(1)
+  }
+}
+
+it('keeps a checkpoint worker that is slow inside SQLite, and replaces one that went silent', async () => {
+  const { filename, writer } = fixture()
+  const workers: LivenessCheckpoint[] = []
+  const outages: JournalCheckpointOutage[] = []
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  const owner = new JournalCheckpointOwner(writer, filename, {
+    timeoutMs: 20,
+    restartBaseMs: 10,
+    onOutage: (outage) => outages.push(outage),
+    factory: (workerData) => {
+      const worker = new LivenessCheckpoint(new Int32Array(workerData.liveness))
+      workers.push(worker)
+      return worker
+    }
+  })
+  cleanup.push(() => owner.close())
+  const answer = (worker: LivenessCheckpoint) => {
+    const request = worker.sent.at(-1)!
+    worker.emit('message', {
+      type: 'checked',
+      id: request.id,
+      generation: request.generation,
+      log: 0,
+      checkpointed: 0,
+      blocked: false
+    })
+  }
+  const autocheckpoint = () => writer.pragma('wal_autocheckpoint', { simple: true })
+
+  // Still inside a checkpoint (in-call slot set): the writer checkpoints meanwhile, the worker stays.
+  await vi.waitFor(() => expect(autocheckpoint()).toBe(1000))
+  await new Promise((resolve) => setTimeout(resolve, 60))
+  expect(workers).toHaveLength(1)
+  expect(workers[0]!.terminated).toBe(false)
+  Atomics.store(workers[0]!.liveness, 0, 0)
+  answer(workers[0]!)
+  expect(autocheckpoint()).toBe(0)
+  expect(outages).toEqual([expect.objectContaining({ cause: 'slow', recovered: true, restarts: 0 })])
+
+  // Its next request goes unanswered while it sits idle: declared dead past the deadline, then replaced.
+  await vi.waitFor(() => expect(workers).toHaveLength(2))
+  expect(workers[0]!.terminated).toBe(true)
+  Atomics.store(workers[1]!.liveness, 0, 0)
+  answer(workers[1]!)
+  expect(autocheckpoint()).toBe(0)
+  expect(outages[1]).toMatchObject({ cause: 'unresponsive', recovered: true, restarts: 1 })
 })

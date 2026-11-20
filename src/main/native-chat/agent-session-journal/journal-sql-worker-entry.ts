@@ -88,7 +88,9 @@ async function open(): Promise<void> {
     forks = new JournalForkStages(db, stateDirectory)
     commands = new JournalSqlCommand(db, stateDirectory, forks)
     if (!readOnly) {
-      checkpoint = new JournalCheckpointOwner(db, workerData.filename)
+      checkpoint = new JournalCheckpointOwner(db, workerData.filename, {
+        onOutage: (outage) => reply({ type: 'checkpoint-outage', outage })
+      })
       parking = new JournalSqlWalParking(checkpoint)
     }
     batch = new JournalSqlBatch(db, checkpoint && journalSqlTimedGate(checkpoint, gate))

@@ -10,6 +10,7 @@ import {
 } from './journal-database'
 import { journalOpenRefusalError } from '../replay/journal-open-failure'
 import { JournalCheckpointOwner } from './journal-checkpoint-owner'
+import { reportJournalCheckpointOutage } from './journal-checkpoint-outage-report'
 import { readJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
 
@@ -53,7 +54,9 @@ export class JournalHostDatabase {
     this.connection = opened.db
     this.readOnly = opened.readOnly
     if (!this.readOnly) {
-      this.checkpoint = new JournalCheckpointOwner(opened.db, journalDatabasePath(stateDirectory))
+      this.checkpoint = new JournalCheckpointOwner(opened.db, journalDatabasePath(stateDirectory), {
+        onOutage: reportJournalCheckpointOutage
+      })
     }
   }
 
