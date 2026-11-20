@@ -47,8 +47,9 @@ export class RuntimeMobileSpeechCatalog {
       (manifest) =>
         isOfferedSpeechModel(manifest) &&
         (!isLocalSpeechModel(manifest) || hasLocalSpeechRecognizer()) &&
-        // Phones offer an unready cloud row as "add an OpenAI key", which can't set this one up.
-        (manifest.provider !== 'openai-compatible' ||
+        // Phones offer an unready cloud row as "add an OpenAI key", which can't set these up.
+        (manifest.provider === 'local' ||
+          manifest.provider === 'openai' ||
           stateById.get(manifest.id)?.status === 'ready')
     )
     const models: RuntimeSpeechModelSummary[] = runnable.map((manifest) => {

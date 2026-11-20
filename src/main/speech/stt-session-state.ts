@@ -1,6 +1,6 @@
 import { voiceModelUnloadDelayMs } from '../../shared/speech/models/voice-model-unload'
 import type { ModelManager } from './model-manager'
-import type { OpenAiTranscriptionSession } from './openai-transcription-client'
+import type { CloudDictationSession } from './cloud-dictation-session'
 import type { SttEventSink } from './stt-service'
 import type { SpawnSttWorkerProcess, SttWorkerProcess } from './stt-worker-process'
 
@@ -37,7 +37,7 @@ export type SttSession = {
   /** Spellings this dictation's stream tells the engine to expect. */
   vocabulary: string[]
   engine: SttEngine | null
-  cloud: OpenAiTranscriptionSession | null
+  cloud: CloudDictationSession | null
   phase: 'starting' | 'active' | 'stopping'
   stopPromise: Promise<void> | null
 }

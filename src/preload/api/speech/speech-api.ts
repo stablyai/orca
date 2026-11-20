@@ -21,6 +21,12 @@ export type SpeechApi = {
   }>
   saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
   clearOpenAiApiKey: () => Promise<{ configured: boolean }>
+  getSonioxApiKeyStatus: () => Promise<{
+    configured: boolean
+    protection: SecretAtRestProtection | null
+  }>
+  saveSonioxApiKey: (apiKey: string) => Promise<{ configured: boolean }>
+  clearSonioxApiKey: () => Promise<{ configured: boolean }>
   /** Never returns the saved key. */
   getOpenAiCompatibleProvider: () => Promise<OpenAiCompatibleSpeechProviderSummary | null>
   /** A blank key keeps the saved one while the base URL is unchanged. */

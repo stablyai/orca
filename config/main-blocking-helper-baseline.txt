@@ -1378,13 +1378,14 @@
 2 src/main/skills/providers/skill-provider-runtime-roots.ts
 1 src/main/skills/providers/skill-wsl-provider-detection.ts
 1 src/main/source-control/hosted-review-creation-provider.ts
-4 src/main/speech/cloud-transcription-target.ts
+5 src/main/speech/cloud-transcription-target.ts # +1: Soniox readiness check, the same one-file existsSync as the OpenAI-compatible provider
 1 src/main/speech/dictation-cleanup-service.ts
 2 src/main/speech/model-cache-path.ts
 7 src/main/speech/model-manager.ts
 6 src/main/speech/openai-api-key-store.ts
 1 src/main/speech/openai-api-key-verification.ts
 2 src/main/speech/openai-compatible-speech-provider-store.ts
+2 src/main/speech/soniox-api-key-store.ts # same encrypted one-file key store as openai-compatible-speech-provider-store; the key is cached after the first read
 2 src/main/speech/speech-vad-model.ts
 4 src/main/speech/stt-gpu-failure-marker.ts
 2 src/main/speech/stt-service.ts

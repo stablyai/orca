@@ -11,6 +11,7 @@ import {
   openAiCompatibleTranscriptionUrl,
   readOpenAiCompatibleSpeechProvider
 } from './openai-compatible-speech-provider-store'
+import { canReadSonioxSpeechApiKey, hasSonioxSpeechApiKey } from './soniox-api-key-store'
 
 export const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
 
@@ -28,6 +29,9 @@ export type CloudTranscriptionTarget = {
 }
 
 export function hasCloudSpeechCredentials(provider: SpeechModelProvider): boolean {
+  if (provider === 'soniox') {
+    return hasSonioxSpeechApiKey()
+  }
   return provider === 'openai-compatible'
     ? hasOpenAiCompatibleSpeechProvider()
     : hasOpenAiSpeechApiKey()
@@ -35,6 +39,9 @@ export function hasCloudSpeechCredentials(provider: SpeechModelProvider): boolea
 
 /** Headless hosts can't raise keychain prompts, so their readiness verifies decryption. */
 export function canReadCloudSpeechCredentials(provider: SpeechModelProvider): boolean {
+  if (provider === 'soniox') {
+    return canReadSonioxSpeechApiKey()
+  }
   return provider === 'openai-compatible'
     ? canReadOpenAiCompatibleSpeechProvider()
     : canReadOpenAiSpeechApiKey()

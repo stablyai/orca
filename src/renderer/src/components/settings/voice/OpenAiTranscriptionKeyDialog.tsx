@@ -13,6 +13,8 @@ import { Label } from '../../ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 
 type OpenAiTranscriptionKeyDialogProps = {
+  /** Whose key this is; the dialog only differs in its copy. */
+  provider?: 'openai' | 'soniox'
   open: boolean
   configured: boolean
   apiKeyDraft: string
@@ -24,6 +26,7 @@ type OpenAiTranscriptionKeyDialogProps = {
 }
 
 export function OpenAiTranscriptionKeyDialog({
+  provider = 'openai',
   open,
   configured,
   apiKeyDraft,
@@ -34,29 +37,38 @@ export function OpenAiTranscriptionKeyDialog({
   onClear
 }: OpenAiTranscriptionKeyDialogProps): React.JSX.Element {
   const t = useTranslate()
+  const soniox = provider === 'soniox'
+  const inputId = `${provider}-speech-api-key`
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>
-            {t(
-              'auto.components.settings.OpenAiTranscriptionKeyDialog.bf1ff9c891',
-              'OpenAI transcription'
-            )}
+            {soniox
+              ? t('components.settings.voice.soniox.title', 'Soniox real-time transcription')
+              : t(
+                  'auto.components.settings.OpenAiTranscriptionKeyDialog.bf1ff9c891',
+                  'OpenAI transcription'
+                )}
           </DialogTitle>
           <DialogDescription>
-            {t(
-              'auto.components.settings.OpenAiTranscriptionKeyDialog.07ed3e512e',
-              'Audio is sent to OpenAI only when an OpenAI speech model is selected.'
-            )}
+            {soniox
+              ? t(
+                  'components.settings.voice.soniox.description',
+                  'Audio streams to Soniox only while the Soniox model is selected, and words appear as you speak.'
+                )
+              : t(
+                  'auto.components.settings.OpenAiTranscriptionKeyDialog.07ed3e512e',
+                  'Audio is sent to OpenAI only when an OpenAI speech model is selected.'
+                )}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <Label htmlFor="openai-speech-api-key">
+          <Label htmlFor={inputId}>
             {t('auto.components.settings.OpenAiTranscriptionKeyDialog.c3dfb3840e', 'API key')}
           </Label>
           <Input
-            id="openai-speech-api-key"
+            id={inputId}
             type="password"
             value={apiKeyDraft}
             placeholder={
@@ -65,7 +77,9 @@ export function OpenAiTranscriptionKeyDialog({
                     'auto.components.settings.OpenAiTranscriptionKeyDialog.2f797018f0',
                     'API key configured'
                   )
-                : t('auto.components.settings.OpenAiTranscriptionKeyDialog.c3380e4ca5', 'sk-...')
+                : soniox
+                  ? ''
+                  : t('auto.components.settings.OpenAiTranscriptionKeyDialog.c3380e4ca5', 'sk-...')
             }
             disabled={pending}
             onChange={(event) => onApiKeyDraftChange(event.target.value)}

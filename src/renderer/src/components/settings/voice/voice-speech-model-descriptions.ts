@@ -9,6 +9,12 @@ export function speechModelDescription(
   if (manifest.provider === 'openai') {
     return t('components.settings.voice.models.sendsToOpenAi', 'Sends your audio to OpenAI.')
   }
+  if (manifest.provider === 'soniox') {
+    return t(
+      'components.settings.voice.models.sendsToSoniox',
+      'Words appear as you speak. Sends your audio to Soniox.'
+    )
+  }
   if (manifest.provider === 'openai-compatible') {
     return t(
       'components.settings.voice.models.sendsToCompatible',
