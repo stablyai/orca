@@ -12,7 +12,7 @@ import type { ClaudeSession } from '../claude-structured-session-state'
 import type { ClaudeJournalTranslatorDeps } from '../journal/claude-journal-translator-contract'
 
 type ClaudeBypassFacts = Partial<
-  Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'bypassDisabled'>
+  Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'bypassDisabled' | 'autoDisabled'>
 >
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -31,6 +31,15 @@ export function readClaudeSettingsBypassDisabled(settings: unknown): boolean | u
     : undefined
 }
 
+/** Claude's own setting, read at the top level or under `permissions` as Claude reads it. */
+export function readClaudeSettingsAutoDisabled(settings: unknown): boolean | undefined {
+  const effective = record(record(settings)?.effective)
+  return effective
+    ? effective.disableAutoMode === 'disable' ||
+        record(effective.permissions)?.disableAutoMode === 'disable'
+    : undefined
+}
+
 /** A first init in Plan proves nothing: a Plan start reports Plan whatever the settings say. */
 export function claudeBypassRefused(session: ClaudeBypassFacts): boolean {
   if (session.launchIntent?.permissionMode !== 'bypassPermissions') {
@@ -43,37 +52,62 @@ export function claudeBypassRefused(session: ClaudeBypassFacts): boolean {
   )
 }
 
-/** Where Claude refuses bypass, the mode it opened in, else its own fallback. */
+/** Where Claude refuses bypass, Approve for me, or Ask where its settings turn that off too. */
 export function claudeAllowedPermissionMode(
   session: ClaudeBypassFacts,
   mode: PermissionMode
 ): PermissionMode {
-  if (mode !== 'bypassPermissions' || !claudeBypassRefused(session)) {
-    return mode
-  }
-  const opened = session.firstRootInit?.permissionMode
-  return opened === 'default' ||
-    opened === 'acceptEdits' ||
-    opened === 'auto' ||
-    opened === 'dontAsk'
-    ? opened
-    : 'default'
+  const wanted = mode === 'bypassPermissions' && claudeBypassRefused(session) ? 'auto' : mode
+  return wanted === 'auto' && session.autoDisabled === true ? 'default' : wanted
 }
 
 // Claude's answer to `set_permission_mode bypassPermissions` once its settings turn bypass off.
 const CLAUDE_BYPASS_REFUSAL = /bypassPermissions because it is disabled by settings/
 
-function isClaudeBypassRefusal(error: unknown): boolean {
+// Claude's answer to `set_permission_mode auto` once its settings turn auto mode off.
+const CLAUDE_AUTO_REFUSAL = /Cannot set permission mode to auto/
+
+function claudeRefusal(error: unknown): 'bypass' | 'auto' | null {
   if (!(error instanceof Error)) {
-    return false
+    return null
   }
-  const cause = record(error.cause)
-  return cause?.errorCode === 'bypass_disabled' || CLAUDE_BYPASS_REFUSAL.test(error.message)
+  const code = record(error.cause)?.errorCode
+  if (code === 'bypass_disabled' || CLAUDE_BYPASS_REFUSAL.test(error.message)) {
+    return 'bypass'
+  }
+  return (typeof code === 'string' && code.startsWith('auto_mode')) ||
+    CLAUDE_AUTO_REFUSAL.test(error.message)
+    ? 'auto'
+    : null
 }
 
-/** Asks for the mode Claude allows and resolves to the mode applied. While no settings read
- *  or start proved whether Claude allows bypass, its fallback is written first and bypass right behind it:
- *  a refusal then leaves Claude in the fallback, with no late write to race a newer choice. */
+/** The modes to write in order, the last one Claude accepts winning: a step whose answer is
+ *  unknown goes out right behind its fallback, so a refusal never needs a late write that
+ *  could land after a newer choice. */
+function claudePermissionModeLadder(
+  session: ClaudeBypassFacts,
+  mode: PermissionMode
+): PermissionMode[] {
+  if (mode !== 'bypassPermissions') {
+    return [claudeAllowedPermissionMode(session, mode)]
+  }
+  const bypassKnown =
+    session.bypassDisabled !== undefined ||
+    session.firstRootInit?.permissionMode === 'bypassPermissions' ||
+    claudeBypassRefused(session)
+  if (bypassKnown && !claudeBypassRefused(session)) {
+    return ['bypassPermissions']
+  }
+  const fallback: PermissionMode[] =
+    session.autoDisabled === undefined
+      ? ['default', 'auto']
+      : [session.autoDisabled ? 'default' : 'auto']
+  return bypassKnown ? fallback : [...fallback, 'bypassPermissions']
+}
+
+/** Asks for the mode Claude allows and resolves to the mode applied, remembering what Claude
+ *  accepted or refused for this process. Claude rereads its settings, so bypass or auto it
+ *  allowed earlier can be refused later; that refusal is followed by the fallback. */
 export async function setClaudeAllowedPermissionMode(
   session: ClaudeBypassFacts & {
     connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
@@ -81,42 +115,62 @@ export async function setClaudeAllowedPermissionMode(
   mode: PermissionMode,
   options?: { timeoutMs?: number }
 ): Promise<PermissionMode> {
-  const allowed = claudeAllowedPermissionMode(session, mode)
-  const known =
-    session.bypassDisabled !== undefined ||
-    session.firstRootInit?.permissionMode === 'bypassPermissions'
-  if (allowed !== 'bypassPermissions' || known) {
-    try {
-      await session.connection.setPermissionMode(allowed, options)
-      return allowed
-    } catch (error) {
-      // Claude rereads its settings, so bypass it allowed earlier can be refused later.
-      if (allowed !== 'bypassPermissions' || !isClaudeBypassRefusal(error)) {
-        throw error
+  const ladder = claudePermissionModeLadder(session, mode)
+  const writes = await Promise.allSettled(
+    ladder.map((step) => session.connection.setPermissionMode(step, options))
+  )
+  let applied: PermissionMode | null = null
+  let refusedLast = false
+  for (const [index, write] of writes.entries()) {
+    const step = ladder[index]
+    if (write.status === 'fulfilled') {
+      applied = step
+      refusedLast = false
+      if (step === 'bypassPermissions') {
+        session.bypassDisabled = false
+      } else if (step === 'auto') {
+        session.autoDisabled = false
       }
+      continue
+    }
+    const refusal = claudeRefusal(write.reason)
+    if (refusal === null || (refusal === 'bypass') !== (step === 'bypassPermissions')) {
+      throw write.reason
+    }
+    refusedLast = true
+    if (refusal === 'bypass') {
       session.bypassDisabled = true
-      const fallback = claudeAllowedPermissionMode(session, mode)
-      await session.connection.setPermissionMode(fallback, options)
-      return fallback
+    } else {
+      session.autoDisabled = true
     }
   }
-  const fallback = claudeAllowedPermissionMode({ ...session, bypassDisabled: true }, mode)
-  const [fallbackWrite, bypassWrite] = await Promise.allSettled([
-    session.connection.setPermissionMode(fallback, options),
-    session.connection.setPermissionMode('bypassPermissions', options)
-  ])
-  if (fallbackWrite.status === 'rejected') {
-    throw fallbackWrite.reason
+  if (applied !== null && !refusedLast) {
+    return applied
   }
-  if (bypassWrite.status === 'fulfilled') {
-    session.bypassDisabled = false
-    return 'bypassPermissions'
+  const next = claudeAllowedPermissionMode(session, mode)
+  if (applied === next) {
+    return applied
   }
-  if (!isClaudeBypassRefusal(bypassWrite.reason)) {
-    throw bypassWrite.reason
-  }
-  session.bypassDisabled = true
-  return fallback
+  // Every step written was refused (a refusal of a mode allowed earlier). Each refusal is a new
+  // fact, so this asks again at most twice.
+  return setClaudeAllowedPermissionMode(session, mode, options)
+}
+
+/** A refused Full access chat outside Plan whose fallback no build switch has applied yet. */
+export function claudeOwesFullAccessFallback(
+  session: ClaudeBypassFacts &
+    Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'> &
+    Partial<Pick<ClaudeSession, 'orderedPermissionMode'>>
+): boolean {
+  const running = session.orderedPermissionMode
+    ? session.orderedPermissionMode()
+    : session.reportedOptions.reportedPermissionMode
+  return (
+    claudeBypassRefused(session) &&
+    !session.appliedInputOptions.has('buildPermissionMode') &&
+    session.appliedInputOptions.get('interactionMode') !== 'plan' &&
+    running !== 'plan'
+  )
 }
 
 const MAX_ANNOUNCED = 1_000
@@ -137,12 +191,28 @@ export function claimClaudeFullAccessRefusalNotice(sessionId: string): boolean {
   return true
 }
 
-export function claudeFullAccessRefusalRow(session: ClaudeBypassFacts): AgentJournalStatusItem {
-  const choice = readClaudeReportedPermissionMode({
-    type: 'system',
-    subtype: 'init',
-    permissionMode: claudeAllowedPermissionMode(session, 'bypassPermissions')
-  })
+/** Names the mode Claude runs instead: the fallback applied, else what Claude reports, else
+ *  the fallback the next build switch will ask for. */
+export function claudeFullAccessRefusalRow(
+  session: ClaudeBypassFacts &
+    Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'>>
+): AgentJournalStatusItem {
+  const applied = session.appliedInputOptions?.get('buildPermissionMode')
+  const reported = session.reportedOptions?.reportedPermissionMode
+  const choice =
+    applied !== undefined
+      ? readClaudeReportedPermissionMode({
+          type: 'system',
+          subtype: 'init',
+          permissionMode: applied
+        })
+      : reported && reported !== 'plan' && reported !== 'full-access'
+        ? reported
+        : readClaudeReportedPermissionMode({
+            type: 'system',
+            subtype: 'init',
+            permissionMode: claudeAllowedPermissionMode(session, 'bypassPermissions')
+          })
   const running = isAgentChatPermissionMode(choice)
     ? agentChatPermissionModeCopy('claude', choice).label
     : 'its own permission settings'

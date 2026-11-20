@@ -3,6 +3,7 @@ import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import {
   claudeAllowedPermissionMode,
+  claudeBypassRefused,
   setClaudeAllowedPermissionMode
 } from './claude-full-access-refusal'
 
@@ -27,14 +28,15 @@ export function claudePlanApprovalMode(
 /** Keep a provider's startup restriction until an approved plan successfully restores the requested policy. */
 export function claudeBuildPermissionMode(
   session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'appliedInputOptions'> &
-    Partial<Pick<ClaudeSession, 'bypassDisabled'>>
+    Partial<Pick<ClaudeSession, 'bypassDisabled' | 'autoDisabled'>>
 ): PermissionMode {
   const opened = session.firstRootInit?.permissionMode
   const built = claudePlanApprovalMode({
     launchIntent: {
       permissionMode:
         session.appliedInputOptions.get('buildPermissionMode') ??
-        (opened !== 'plan' ? opened : undefined) ??
+        // A refused Full access start opened in Claude's own fallback, not the chat's choice.
+        (opened !== 'plan' && !claudeBypassRefused(session) ? opened : undefined) ??
         session.launchIntent?.permissionMode
     }
   })
@@ -57,7 +59,7 @@ export function leaveClaudePlanModeOnApproval(
     ClaudeSession,
     'launchIntent' | 'firstRootInit' | 'reportedOptions' | 'orderedPermissionMode'
   > &
-    Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'bypassDisabled'>> & {
+    Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'bypassDisabled' | 'autoDisabled'>> & {
       connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
     },
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,

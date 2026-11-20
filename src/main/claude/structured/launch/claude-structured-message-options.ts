@@ -1,5 +1,8 @@
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
-import { setClaudeAllowedPermissionMode } from '../permissions/claude-full-access-refusal'
+import {
+  claudeOwesFullAccessFallback,
+  setClaudeAllowedPermissionMode
+} from '../permissions/claude-full-access-refusal'
 import { claudeStartedUnechoedSend } from '../turns/claude-command-lifecycle'
 import { claudeExecutionObservations } from '../turns/claude-structured-execution-observations'
 import { dispatchClaudeTurn } from '../dispatch/claude-structured-dispatch'
@@ -74,6 +77,13 @@ export async function applyClaudeMessageOptions(
     if (options.interactionMode === 'default') {
       session.appliedInputOptions.set('buildPermissionMode', mode)
     }
+  } else if (claudeOwesFullAccessFallback(session)) {
+    // Claude started a refused Full access chat in its own fallback; the chat's is Approve for me.
+    const mode = await waitForPromiseWithSignal(
+      setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), { timeoutMs }),
+      signal
+    )
+    session.appliedInputOptions.set('buildPermissionMode', mode)
   }
   throwIfSignalAborted(signal)
 }

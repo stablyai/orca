@@ -36,7 +36,10 @@ import {
   claudeStartupAnswerAfterExit
 } from './claude-structured-session-startup-exit'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import { readClaudeSettingsBypassDisabled } from '../permissions/claude-full-access-refusal'
+import {
+  readClaudeSettingsAutoDisabled,
+  readClaudeSettingsBypassDisabled
+} from '../permissions/claude-full-access-refusal'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeStructuredSessionEvent
@@ -244,6 +247,7 @@ async function settleClaudeStartupSettings(
   // A process policy fact: a newer option write cannot make it stale.
   if (input.isCurrent()) {
     session.bypassDisabled = readClaudeSettingsBypassDisabled(settings) ?? session.bypassDisabled
+    session.autoDisabled = readClaudeSettingsAutoDisabled(settings) ?? session.autoDisabled
   }
   if (!input.isCurrent() || token.pending || session.settingsObservation !== token) {
     return
