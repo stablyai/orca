@@ -13,7 +13,10 @@ import {
   scanImportStatements,
   type ImportNavigationRequest
 } from '../import-navigation/import-statement-scan'
-import { resolveImportNavigationTarget } from '../import-navigation/import-target-resolution'
+import {
+  resolveImportNavigationTarget,
+  type ImportNavigationTarget
+} from '../import-navigation/import-target-resolution'
 import {
   createOpenFileImportNavigationAccess,
   importNavigationRootOf,
@@ -50,7 +53,10 @@ export function registerImportNavigationEditor(
   }
 }
 
-function sourceFileOf(model: Monaco.editor.ITextModel): ImportNavigationSourceFile | null {
+/** The open edit tab whose mounted editor shows `model`. */
+export function importNavigationSourceFile(
+  model: Monaco.editor.ITextModel
+): ImportNavigationSourceFile | null {
   for (const [editorInstance, getFileId] of sourceEditors) {
     if (editorInstance.getModel() !== model) {
       continue
@@ -140,6 +146,52 @@ function importRequestCandidate(
   return request ? { request, confirmPaths: foreignPaths } : null
 }
 
+/** A definition answer that opens `resolved` in an editor tab of `file`'s workspace. */
+export function importNavigationTargetLink(
+  monaco: MonacoNamespace,
+  file: ImportNavigationSourceFile,
+  rootPath: string,
+  resolved: ImportNavigationTarget
+): Monaco.languages.LocationLink | null {
+  const relativePath = getRelativePathInsideRoot(resolved.filePath, rootPath)
+  if (relativePath === null) {
+    return null
+  }
+  const owner = getRuntimeTargetForFileOwner(
+    useAppStore.getState(),
+    file.worktreeId,
+    file.runtimeEnvironmentId
+  )
+  const targetModel = importTargetModel(
+    monaco,
+    {
+      filePath: resolved.filePath,
+      relativePath,
+      worktreeId: file.worktreeId,
+      runtimeEnvironmentId: owner?.kind === 'environment' ? owner.environmentId : null
+    },
+    resolved.content
+  )
+  const start = targetModel.getPositionAt(resolved.offset)
+  const word = targetModel.getWordAtPosition(start)
+  return {
+    uri: targetModel.uri,
+    // Why: eight or more lines make Monaco preview the declaration's indented block, not one name.
+    range: {
+      startLineNumber: start.lineNumber,
+      startColumn: 1,
+      endLineNumber: Math.min(targetModel.getLineCount(), start.lineNumber + PREVIEW_LINES),
+      endColumn: 1
+    },
+    targetSelectionRange: {
+      startLineNumber: start.lineNumber,
+      startColumn: start.column,
+      endLineNumber: start.lineNumber,
+      endColumn: word && resolved.offset > 0 ? word.endColumn : start.column
+    }
+  }
+}
+
 async function importDefinition(
   monaco: MonacoNamespace,
   model: Monaco.editor.ITextModel,
@@ -147,7 +199,7 @@ async function importDefinition(
   definitions: readonly Monaco.languages.Location[],
   token: Monaco.CancellationToken
 ): Promise<Monaco.languages.LocationLink | null> {
-  const file = sourceFileOf(model)
+  const file = importNavigationSourceFile(model)
   const rootPath = file ? importNavigationRootOf(file) : null
   if (!file || !rootPath) {
     return null
@@ -179,35 +231,7 @@ async function importDefinition(
   ) {
     return null
   }
-  const owner = getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
-  const targetModel = importTargetModel(
-    monaco,
-    {
-      filePath: resolved.filePath,
-      relativePath,
-      worktreeId: file.worktreeId,
-      runtimeEnvironmentId: owner?.kind === 'environment' ? owner.environmentId : null
-    },
-    resolved.content
-  )
-  const start = targetModel.getPositionAt(resolved.offset)
-  const word = targetModel.getWordAtPosition(start)
-  return {
-    uri: targetModel.uri,
-    // Why: eight or more lines make Monaco preview the declaration's indented block, not one name.
-    range: {
-      startLineNumber: start.lineNumber,
-      startColumn: 1,
-      endLineNumber: Math.min(targetModel.getLineCount(), start.lineNumber + PREVIEW_LINES),
-      endColumn: 1
-    },
-    targetSelectionRange: {
-      startLineNumber: start.lineNumber,
-      startColumn: start.column,
-      endLineNumber: start.lineNumber,
-      endColumn: word && resolved.offset > 0 ? word.endColumn : start.column
-    }
-  }
+  return importNavigationTargetLink(monaco, file, rootPath, resolved)
 }
 
 function openImportTarget(target: ImportTarget, line: number, column: number): void {

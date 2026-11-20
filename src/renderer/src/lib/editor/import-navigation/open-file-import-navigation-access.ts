@@ -1,11 +1,15 @@
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { getRelativePathInsideRoot } from '@/lib/path'
+import { basename, getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
 import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import { runtimePathsExist } from '@/runtime/files/metadata/runtime-path-existence-batch'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
+import {
+  listRuntimeFiles,
+  searchRuntimeFilePaths
+} from '@/runtime/files/search/runtime-file-search-client'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ImportNavigationFileAccess } from './import-navigation-file-access'
 
@@ -60,6 +64,8 @@ function remember<Value>(
 
 const existenceCache = new Map<string, Cached<boolean>>()
 const textCache = new Map<string, Cached<string | null>>()
+const searchCache = new Map<string, Cached<string[]>>()
+const MAX_NAMED_FILES = 200
 
 function ownerKey(target: RuntimeClientTarget, file: ImportNavigationSourceFile): string {
   return JSON.stringify([target, file.worktreeId, file.externalSshTargetId ?? null])
@@ -100,7 +106,37 @@ export function createOpenFileImportNavigationAccess(
     }
   }
 
+  const findFilesNamed = async (fileName: string): Promise<string[]> => {
+    try {
+      // Why: local hosts filter by name while listing; SSH and runtime hosts search paths instead.
+      const relativePaths =
+        target.kind !== 'environment' && !connectionId
+          ? await listRuntimeFiles(context, {
+              rootPath,
+              nameFilter: fileName,
+              maxResults: MAX_NAMED_FILES
+            })
+          : (await searchRuntimeFilePaths(context, { query: fileName, limit: MAX_NAMED_FILES }))
+              .files
+      return relativePaths
+        .filter((relativePath) => basename(relativePath) === fileName)
+        .map((relativePath) => joinPath(rootPath, relativePath))
+    } catch {
+      return []
+    }
+  }
+
   return {
+    findFilesNamed(fileName) {
+      const key = `${owner}\0${fileName}`
+      const hit = liveEntry(searchCache, key)
+      if (hit) {
+        return hit
+      }
+      const value = findFilesNamed(fileName)
+      remember(searchCache, key, value)
+      return value
+    },
     pathsExist(paths) {
       const keyOf = (path: string): string => `${owner}\0${path}`
       const missing = paths.filter((path) => liveEntry(existenceCache, keyOf(path)) === null)
