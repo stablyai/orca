@@ -94,6 +94,8 @@ export function OutfitArt({ art }: { art: BotOutfitArt }): React.JSX.Element {
     <img
       src={art.src}
       alt=""
+      // Off the paint path: the mascot draws at once and its outfit joins when decoded.
+      decoding="async"
       draggable={false}
       style={{ left: x, top: y, width, height }}
       className="pointer-events-none absolute max-w-none"
