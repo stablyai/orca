@@ -77,19 +77,25 @@ describe('useFileExplorerAutoReveal', () => {
     useAppStore.setState({ pendingExplorerReveal: null })
   })
 
-  it('reveals a file activated while the tree was hidden once the unfiltered tree is shown', () => {
+  it('reveals the active file each time the unfiltered tree is shown after a hidden file switch', () => {
     const contents = {
       activeFileId: null,
       worktreePath: null,
       hasNameFilterQuery: false,
       rowProjection: collapsedTree
     }
-    const { rerender } = renderAutoReveal(contents)
+    const { rerender, setSelectedPath } = renderAutoReveal(contents)
     rerender({ ...contents, activeFileId: 'file-deep' })
     expect(pendingRevealPath()).toBeNull()
 
-    rerender({ ...contents, activeFileId: 'file-deep', worktreePath: ROOT })
+    const shown = { ...contents, activeFileId: 'file-deep', worktreePath: ROOT }
+    rerender(shown)
     expect(pendingRevealPath()).toBe(FILE_PATH)
+
+    rerender({ ...shown, activeFileId: 'file-other', worktreePath: null })
+    rerender({ ...shown, worktreePath: null })
+    rerender({ ...shown, rowProjection: expandedTree })
+    expect(setSelectedPath).toHaveBeenCalledExactlyOnceWith(FILE_PATH)
   })
 
   it('leaves a kept name filter alone when the tree is shown again', () => {
@@ -112,21 +118,5 @@ describe('useFileExplorerAutoReveal', () => {
     })
     expect(setSelectedPath).not.toHaveBeenCalled()
     expect(pendingRevealPath()).toBeNull()
-  })
-
-  it('re-reveals the active file after another file was active while the tree was hidden', () => {
-    const shown = {
-      activeFileId: 'file-deep',
-      worktreePath: ROOT,
-      hasNameFilterQuery: false,
-      rowProjection: expandedTree
-    }
-    const { rerender, setSelectedPath } = renderAutoReveal(shown)
-    expect(setSelectedPath).toHaveBeenCalledTimes(1)
-
-    rerender({ ...shown, activeFileId: 'file-other', worktreePath: null })
-    rerender({ ...shown, worktreePath: null })
-    rerender(shown)
-    expect(setSelectedPath).toHaveBeenCalledTimes(2)
   })
 })
