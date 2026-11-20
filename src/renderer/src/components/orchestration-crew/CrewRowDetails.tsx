@@ -1,4 +1,4 @@
-import { Badge } from '@/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { recomputeOn } from '@/lib/recompute-on'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
@@ -43,38 +43,35 @@ export function CrewRowTime({ at, className }: { at?: string; className?: string
 export function CrewRowDetails({ row }: { row: OrchestrationCrewRow }) {
   const t = useTranslate()
   return (
-    <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs [overflow-wrap:anywhere]">
-      <dt className="text-muted-foreground">{t('components.orchestrationCrew.task', 'Task')}</dt>
-      <dd className="min-w-0">
-        {row.task ? (
-          <>
-            <Badge variant="outline" className="mr-1">
-              {row.task.state}
-            </Badge>
-            {row.task.title}
-          </>
+    <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-0.5 text-xs">
+      <dt className="text-2xs text-muted-foreground">
+        {t('components.orchestrationCrew.task', 'Task')}
+      </dt>
+      <dd className="min-w-0 [overflow-wrap:anywhere]">
+        {row.task?.state === 'failed' ? (
+          <span className="text-destructive">
+            {t('components.orchestrationCrew.taskFailed', 'Failed')} ·{' '}
+          </span>
+        ) : null}
+        {row.task?.title ?? t('components.orchestrationCrew.noTask', 'No shared task')}
+      </dd>
+      <dt className="text-2xs text-muted-foreground">
+        {t('components.orchestrationCrew.reply', 'Reply')}
+      </dt>
+      <dd className="min-w-0 text-muted-foreground">
+        {row.reply ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="truncate">{row.reply.preview}</p>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-96 whitespace-pre-wrap">
+              {row.reply.preview}
+            </TooltipContent>
+          </Tooltip>
         ) : (
-          t('components.orchestrationCrew.noTask', 'No shared task')
+          t('components.orchestrationCrew.noReply', 'No reply yet')
         )}
       </dd>
-      {row.latest ? (
-        <>
-          <dt className="text-muted-foreground">
-            {t('components.orchestrationCrew.latest', 'Latest')}
-          </dt>
-          <dd className="min-w-0">
-            <span className="text-2xs text-muted-foreground">
-              {row.latest.direction === 'to'
-                ? t('components.orchestrationCrew.to', 'To')
-                : t('components.orchestrationCrew.from', 'From')}{' '}
-              {row.label} · <CrewRowTime at={row.latest.at} />
-            </span>
-            <blockquote className="mt-1 whitespace-pre-wrap border-l border-border pl-2">
-              {row.latest.preview}
-            </blockquote>
-          </dd>
-        </>
-      ) : null}
     </dl>
   )
 }

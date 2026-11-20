@@ -268,13 +268,16 @@ export function buildCrewSnapshot(
       row = decorate(target, 'peer', undefined, sendAddress)
       snapshot.sections.talkingWith.push(row)
     }
+    const line = {
+      preview: preview(message.body),
+      at: message.created_at,
+      sequence: message.sequence
+    }
     if (!row.latest || message.sequence > row.latest.sequence) {
-      row.latest = {
-        direction: message.direction,
-        preview: preview(message.body),
-        at: message.created_at,
-        sequence: message.sequence
-      }
+      row.latest = { direction: message.direction, ...line }
+    }
+    if (message.direction === 'from' && (!row.reply || message.sequence > row.reply.sequence)) {
+      row.reply = line
     }
   }
   for (const [address, { target, question }] of attention) {

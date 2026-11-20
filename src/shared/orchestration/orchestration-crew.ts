@@ -34,6 +34,8 @@ export const CrewRow = z.object({
       sequence: z.number()
     })
     .optional(),
+  /** The party's newest message to the viewer; `latest` may be a newer one the viewer sent. */
+  reply: z.object({ preview: z.string(), at: z.string(), sequence: z.number() }).optional(),
   pendingQuestion: z.object({ preview: z.string(), at: z.string() }).optional(),
   /** This worker's permission prompts addressed to the viewing party, each as its newest message: open ones, and recent receipts. */
   approvals: z.array(CrewRowApproval).optional(),

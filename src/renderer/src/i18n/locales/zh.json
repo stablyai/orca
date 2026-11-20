@@ -21994,10 +21994,7 @@
       "chatUnavailable": "此主机无法打开该聊天，请重试",
       "terminalExited": "此终端已退出",
       "openOnHost": "请在 {{host}} 上打开此智能体",
-      "cannotLocate": "此主机找不到此智能体，请重试",
-      "latest": "最新消息",
-      "to": "发给",
-      "from": "来自"
+      "cannotLocate": "此主机找不到此智能体，请重试"
     },
     "link": {
       "routing": {

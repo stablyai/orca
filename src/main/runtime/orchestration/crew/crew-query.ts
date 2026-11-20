@@ -110,7 +110,8 @@ const ADMITTED_TRAFFIC = `type <> 'heartbeat'
     AND json_type(payload, '$._orcaLifecycleRejection.code') IS 'text'
     AND json_type(payload, '$._orcaLifecycleRejection.reason') IS 'text')`
 
-/** Pair maxima follow enumeration, so a busy mailbox cannot crowd out its quieter peers. */
+/** Each peer's newest message per direction, so a row keeps the peer's last reply even after a newer send.
+ *  Pair maxima follow enumeration, so a busy mailbox cannot crowd out its quieter peers. */
 export function readCrewTraffic(
   db: OrchestrationDb,
   aliases: string[],
@@ -127,9 +128,10 @@ export function readCrewTraffic(
       SELECT from_handle AS peer, 'from' AS direction, sequence
       FROM messages WHERE to_handle IN (SELECT value FROM json_each(?))
         AND julianday(created_at) >= julianday(?) AND ${ADMITTED_TRAFFIC}
-    ), peers AS (SELECT peer, MAX(sequence) AS sequence FROM traffic GROUP BY peer)
+    ), peers AS (SELECT peer, direction, MAX(sequence) AS sequence FROM traffic GROUP BY peer, direction)
     SELECT traffic.peer, traffic.direction, traffic.sequence, winner.body, winner.created_at
-    FROM peers JOIN traffic ON traffic.peer = peers.peer AND traffic.sequence = peers.sequence
+    FROM peers JOIN traffic ON traffic.peer = peers.peer AND traffic.direction = peers.direction
+      AND traffic.sequence = peers.sequence
     JOIN messages winner ON winner.sequence = traffic.sequence
     ORDER BY traffic.sequence DESC
   `)

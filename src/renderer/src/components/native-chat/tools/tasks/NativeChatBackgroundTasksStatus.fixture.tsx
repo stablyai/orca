@@ -26,6 +26,8 @@ function row(
     agentKind,
     status,
     sendAddress: `term_${partyKey}`,
+    // As the read model does: a worker's own newest message is also its reply.
+    reply: extra.latest?.direction === 'from' ? extra.latest : undefined,
     ...extra
   }
 }
@@ -237,7 +239,7 @@ export const subagentsOnly = defineFixture({
   render: () => strip({ crew: null, expanded: true })
 })
 
-/** A focused worker row swaps its time for Open and ⋯, as hover does. */
+/** A focused worker row swaps its time for Open and Copy, as hover does. */
 export const coordinatorRowActions = defineFixture({
   width: 720,
   render: () => strip({ crew: crew(coordinatorRows, 1), expanded: true }),
@@ -252,5 +254,16 @@ export const subagentRowActions = defineFixture({
   render: () => strip({ crew: crew(coordinatorRows, 1), expanded: true }),
   interact: (frame) => {
     frame.querySelector<HTMLButtonElement>('[aria-label^="Add Explore"]')?.focus()
+  }
+})
+
+/** Worker details: the full task and the worker's newest reply, or that it hasn't replied. */
+export const workerDetails = defineFixture({
+  width: 720,
+  render: () => strip({ crew: crew(coordinatorRows, 1), expanded: true }),
+  interact: (frame) => {
+    frame
+      .querySelectorAll<HTMLButtonElement>('[aria-label$="task and reply"]')
+      .forEach((button) => button.click())
   }
 })

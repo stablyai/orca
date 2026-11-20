@@ -156,11 +156,9 @@ export const CrewStripRow = memo(function CrewStripRow({
           ) : null}
         </CrewStripRowEnd>
         <IconButton
-          label={t(
-            'components.orchestrationCrew.showDetails',
-            "Show {{name}}'s task and latest message",
-            { name: row.label }
-          )}
+          label={t('components.orchestrationCrew.showDetails', "Show {{name}}'s task and reply", {
+            name: row.label
+          })}
           aria-expanded={expanded}
           onClick={() => toggle(row.partyKey)}
         >
