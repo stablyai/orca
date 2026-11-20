@@ -18,7 +18,7 @@ describe('generated picture descriptions', () => {
     let settings = getDefaultSettings('/home/test')
     useAppStore.setState({
       settings,
-      updateSettings: async (updates: Partial<GlobalSettings>) => {
+      updateSettingsOrThrow: async (updates: Partial<GlobalSettings>) => {
         settings = { ...settings, ...updates }
         useAppStore.setState({ settings })
       }

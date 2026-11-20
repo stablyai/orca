@@ -57,21 +57,23 @@ export function keepSavedPictureDescription(
   }
   queued.set(key, description)
   saving = saving.then(async () => {
+    const { settings, updateSettingsOrThrow } = useAppStore.getState()
+    if (!settings) {
+      return
+    }
+    const entries = Object.entries(settings.generatedAvatarDescriptions ?? {}).filter(
+      ([saved]) => saved !== key
+    )
+    // Newest last; the oldest go once there are more than the cap.
+    const kept = [...entries, [key, description] as const].slice(-MAX_SAVED)
     try {
-      const { settings, updateSettings } = useAppStore.getState()
-      if (!settings) {
-        return
-      }
-      const entries = Object.entries(settings.generatedAvatarDescriptions ?? {}).filter(
-        ([saved]) => saved !== key
-      )
-      // Newest last; the oldest go once there are more than the cap.
-      const kept = [...entries, [key, description] as const].slice(-MAX_SAVED)
-      await updateSettings({ generatedAvatarDescriptions: Object.fromEntries(kept) })
-    } finally {
-      if (queued.get(key) === description) {
-        queued.delete(key)
-      }
+      await updateSettingsOrThrow({ generatedAvatarDescriptions: Object.fromEntries(kept) })
+    } catch {
+      // Not saved: the caption stays queued, so this session still finds it.
+      return
+    }
+    if (queued.get(key) === description) {
+      queued.delete(key)
     }
   })
 }
