@@ -176,7 +176,7 @@ export function createClaudeJournalTranslator(
       if (isRootClaudeFrame(event.message)) {
         if (event.message.type === 'system' && event.message.subtype === 'init') {
           turn.observeProviderCycleStart()
-          journalClaudeFullAccessRefusal(deps, event.message, fallbackId, turnScope())
+          journalClaudeFullAccessRefusal(deps, fallbackId, turnScope())
         } else if (
           event.startsTurn === true ||
           event.message.type === 'assistant' ||

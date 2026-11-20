@@ -36,6 +36,7 @@ import {
   claudeStartupAnswerAfterExit
 } from './claude-structured-session-startup-exit'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import { readClaudeSettingsBypassDisabled } from '../permissions/claude-full-access-refusal'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeStructuredSessionEvent
@@ -157,6 +158,7 @@ function applyClaudeSettingsFacts(
   writtenSinceRead: boolean
 ): void {
   const { settings, prepared } = facts
+  session.bypassDisabled = readClaudeSettingsBypassDisabled(settings) ?? session.bypassDisabled
   const published = claudeStructuredSessionPublicationOptions(prepared)
   if (!writtenSinceRead) {
     const applied = readClaudeSettingsApplied(settings)

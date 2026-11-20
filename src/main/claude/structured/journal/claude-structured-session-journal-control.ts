@@ -9,13 +9,11 @@ import type {
 import type { ClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import {
-  readClaudeFrameString,
-  type ClaudeInitProof
-} from '../startup/claude-structured-init-proof'
+import type { ClaudeInitProof } from '../startup/claude-structured-init-proof'
 import {
   claimClaudeFullAccessRefusalNotice,
-  claudeFullAccessRefusedAtStart
+  claudeBypassRefused,
+  claudeFullAccessRefusalRow
 } from '../permissions/claude-full-access-refusal'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type {
@@ -55,11 +53,14 @@ export function createClaudeSessionJournalTranslator(
         bindPromptItemId: (itemId, promptKey) =>
           attempt.prompts.bindJournalItemId(itemId, promptKey),
         acceptStartupFailure,
-        claimFullAccessRefusal: (init) =>
-          claudeFullAccessRefusedAtStart(
-            attempt.fullAccess ? 'bypassPermissions' : undefined,
-            readClaudeFrameString(init, 'permissionMode')
-          ) && claimClaudeFullAccessRefusalNotice(failure.sessionId),
+        fullAccessRefusalNotice: () => {
+          const session = currentSession()
+          return session &&
+            claudeBypassRefused(session) &&
+            claimClaudeFullAccessRefusalNotice(failure.sessionId)
+            ? claudeFullAccessRefusalRow(session)
+            : null
+        },
         steerAwaitingEcho: () =>
           currentSession()?.dispatchWaiters.some((waiter) => waiter.steers) ?? false
       })

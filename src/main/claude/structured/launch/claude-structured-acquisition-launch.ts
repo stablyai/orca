@@ -13,7 +13,6 @@ import {
   CLAUDE_EFFORT_FLAG
 } from '../../cli-capabilities/claude-cli-flag-support'
 import {
-  claudeLaunchSkipsPermissions,
   claudeStructuredSpawnOptions,
   type ClaudeStructuredSpawnOptions
 } from './claude-structured-spawn-options'
@@ -121,7 +120,6 @@ export async function resolveClaudeAcquisitionLaunch(args: {
       effortFlag,
       flagSettingsControl
     })
-    attempt.fullAccess = claudeLaunchSkipsPermissions(sdkOptions)
     return {
       ...launch,
       options: sdkOptions,

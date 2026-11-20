@@ -1,26 +1,61 @@
-// Claude starts a Full access launch in another mode when its settings turn bypass off
-// (`permissions.disableBypassPermissionsMode`); only its root init says so.
+// Claude runs a Full access launch in another mode when its settings turn bypass off
+// (`permissions.disableBypassPermissionsMode`), and refuses any later switch to bypass.
 
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../shared/agent-session/journal/agent-session-turn-notice'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModeCopy } from '../../../../shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import { readClaudeReportedPermissionMode } from '../startup/claude-structured-init-proof'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import type { ClaudeSession } from '../claude-structured-session-state'
 import type { ClaudeJournalTranslatorDeps } from '../journal/claude-journal-translator-contract'
 
-/** A Plan start hides the refusal: Plan is what a Full access launch reports then too. */
-export function claudeFullAccessRefusedAtStart(
-  requested: PermissionMode | undefined,
-  opened: string | null | undefined
-): boolean {
+type ClaudeBypassFacts = Partial<
+  Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'bypassDisabled'>
+>
+
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+/** Claude's merged settings, policy tiers included, as its `get_settings` reports them. */
+export function readClaudeSettingsBypassDisabled(settings: unknown): boolean | undefined {
+  const effective = record(record(settings)?.effective)
+  return effective
+    ? record(effective.permissions)?.disableBypassPermissionsMode === 'disable'
+    : undefined
+}
+
+/** A first init in Plan proves nothing: a Plan start reports Plan whatever the settings say. */
+export function claudeBypassRefused(session: ClaudeBypassFacts): boolean {
+  if (session.launchIntent?.permissionMode !== 'bypassPermissions') {
+    return false
+  }
+  const opened = session.firstRootInit?.permissionMode
   return (
-    requested === 'bypassPermissions' &&
-    typeof opened === 'string' &&
-    opened !== 'bypassPermissions' &&
-    opened !== 'plan'
+    session.bypassDisabled === true ||
+    (typeof opened === 'string' && opened !== 'bypassPermissions' && opened !== 'plan')
   )
+}
+
+/** Where Claude refuses bypass, the mode it opened in, else its own fallback. */
+export function claudeAllowedPermissionMode(
+  session: ClaudeBypassFacts,
+  mode: PermissionMode
+): PermissionMode {
+  if (mode !== 'bypassPermissions' || !claudeBypassRefused(session)) {
+    return mode
+  }
+  const opened = session.firstRootInit?.permissionMode
+  return opened === 'default' ||
+    opened === 'acceptEdits' ||
+    opened === 'auto' ||
+    opened === 'dontAsk'
+    ? opened
+    : 'default'
 }
 
 const MAX_ANNOUNCED = 1_000
@@ -38,8 +73,12 @@ export function claimClaudeFullAccessRefusalNotice(sessionId: string): boolean {
   return true
 }
 
-function claudeFullAccessRefusalRow(init: Record<string, unknown>): AgentJournalStatusItem {
-  const choice = readClaudeReportedPermissionMode(init)
+export function claudeFullAccessRefusalRow(session: ClaudeBypassFacts): AgentJournalStatusItem {
+  const choice = readClaudeReportedPermissionMode({
+    type: 'system',
+    subtype: 'init',
+    permissionMode: claudeAllowedPermissionMode(session, 'bypassPermissions')
+  })
   const running = isAgentChatPermissionMode(choice)
     ? agentChatPermissionModeCopy('claude', choice).label
     : 'its own permission settings'
@@ -51,19 +90,19 @@ function claudeFullAccessRefusalRow(init: Record<string, unknown>): AgentJournal
   }
 }
 
-/** One warning row on the root init where Claude first shows the refusal. */
+/** One warning row on the first root init after Claude's refusal is known. */
 export function journalClaudeFullAccessRefusal(
-  deps: Pick<ClaudeJournalTranslatorDeps, 'sink' | 'claimFullAccessRefusal'>,
-  init: Record<string, unknown>,
+  deps: Pick<ClaudeJournalTranslatorDeps, 'sink' | 'fullAccessRefusalNotice'>,
   idPrefix: string,
   turnScope: AgentJournalTurnScope
 ): void {
-  if (!deps.claimFullAccessRefusal?.(init)) {
+  const body = deps.fullAccessRefusalNotice?.()
+  if (!body) {
     return
   }
   deps.sink.appendItem(
     { provider: 'orca', clientMessageId: `full-access-refused:claude:${idPrefix}` },
-    claudeFullAccessRefusalRow(init),
+    body,
     { turnScope }
   )
   deps.sink.publish()

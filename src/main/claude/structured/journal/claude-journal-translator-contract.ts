@@ -1,3 +1,4 @@
+import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type { AgentSessionContextReport } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
@@ -35,8 +36,8 @@ export type ClaudeJournalTranslatorDeps = {
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
   /** True while a send written with priority `now` has not been echoed. */
   steerAwaitingEcho?: () => boolean
-  /** True once per chat when this root init shows Claude refused the launch's Full access. */
-  claimFullAccessRefusal?: (init: Record<string, unknown>) => boolean
+  /** The row to write once per chat when Claude refused this launch's Full access, else null. */
+  fullAccessRefusalNotice?: () => AgentJournalStatusItem | null
 }
 
 export type ClaudeJournalTranslator = {

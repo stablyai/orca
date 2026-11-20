@@ -148,6 +148,8 @@ export type ClaudeSession = {
   /** What Orca put on this process's command line, and the first root init's answer; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
   firstRootInit?: { permissionMode: string | null }
+  /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
+  bypassDisabled?: boolean
   /** Full access processes only: Claude's mode in wire order, ahead of `reportedOptions`. */
   orderedPermissionMode?: (() => string | null | undefined) | null
   /** Fast was omitted from launch settings and must be applied before message input. */
@@ -224,8 +226,6 @@ export type ClaudeAcquisitionAttempt = {
   finish: () => void
   /** The resolved launch's account, read by the translator to word a sign-in failure. */
   account?: ClaudeStructuredLaunch['account']
-  /** The resolved launch asked for Full access, read by the translator to notice Claude refusing it. */
-  fullAccess?: boolean
 }
 
 export function createClaudeAcquisitionAttempt(

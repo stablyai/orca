@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { createClaudeAcquisitionAttempt } from '../claude-structured-session-state'
-import type { ClaudeAcquireCallbacks } from '../claude-structured-session-state'
+import {
+  createClaudeAcquisitionAttempt,
+  type ClaudeAcquireCallbacks,
+  type ClaudeSession
+} from '../claude-structured-session-state'
 import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { createClaudeInitProof } from '../startup/claude-structured-init-proof'
 import { createClaudeSessionJournalTranslator } from './claude-structured-session-journal-control'
 
-function launch(sessionId: string, fullAccess: boolean) {
+type Launch = Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'bypassDisabled'>
+
+function launch(sessionId: string, session: Launch) {
   const bodies: AgentJournalItemBody[] = []
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (_identity, body) => bodies.push(body),
@@ -15,7 +20,7 @@ function launch(sessionId: string, fullAccess: boolean) {
     publish: vi.fn()
   }
   const attempt = createClaudeAcquisitionAttempt(new ClaudePromptRegistry())
-  attempt.fullAccess = fullAccess
+  attempt.published = true
   const translator = createClaudeSessionJournalTranslator(
     sink,
     '1',
@@ -25,7 +30,7 @@ function launch(sessionId: string, fullAccess: boolean) {
       callbacks: {} as ClaudeAcquireCallbacks,
       sessionId
     },
-    () => null,
+    () => session as ClaudeSession,
     () => false
   )
   const init = (permissionMode: string) =>
@@ -44,27 +49,49 @@ function launch(sessionId: string, fullAccess: boolean) {
   return { init, warnings }
 }
 
-describe('a Full access launch Claude opened in another mode', () => {
-  it('says once per chat which mode the chat runs in', () => {
-    const first = launch('refused-chat', true)
-    first.init('default')
-    first.init('default')
-    expect(first.warnings()).toEqual([
-      expect.objectContaining({
-        text: "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so this chat runs with Ask for approval."
-      })
-    ])
+const FULL_ACCESS = { permissionMode: 'bypassPermissions' }
 
-    const restarted = launch('refused-chat', true)
+describe('a Full access chat whose Claude refuses bypass', () => {
+  it('gets one warning per chat, across turns and restarts', () => {
+    const opened = { launchIntent: FULL_ACCESS, firstRootInit: { permissionMode: 'default' } }
+    const first = launch('refused-chat', opened)
+    first.init('default')
+    first.init('default')
+    expect(first.warnings()).toHaveLength(1)
+
+    const restarted = launch('refused-chat', opened)
     restarted.init('default')
-    expect(restarted.warnings()).toEqual([])
+    expect(restarted.warnings()).toHaveLength(0)
   })
 
-  it('stays quiet when Claude granted Full access or the chat never asked for it', () => {
-    const granted = launch('granted-chat', true)
+  it('is warned after a Plan start once Claude reports bypass turned off', () => {
+    const planStart = launch('plan-chat', {
+      launchIntent: FULL_ACCESS,
+      firstRootInit: { permissionMode: 'plan' },
+      bypassDisabled: true
+    })
+    planStart.init('plan')
+    expect(planStart.warnings()).toHaveLength(1)
+  })
+
+  it('stays quiet when Claude allows Full access or the chat never asked for it', () => {
+    const granted = launch('granted-chat', {
+      launchIntent: FULL_ACCESS,
+      firstRootInit: { permissionMode: 'bypassPermissions' }
+    })
     granted.init('bypassPermissions')
-    const asked = launch('ask-chat', false)
+    granted.init('default')
+    const plan = launch('allowed-plan-chat', {
+      launchIntent: FULL_ACCESS,
+      firstRootInit: { permissionMode: 'plan' },
+      bypassDisabled: false
+    })
+    plan.init('plan')
+    const asked = launch('ask-chat', {
+      launchIntent: { permissionMode: 'default' },
+      firstRootInit: { permissionMode: 'default' }
+    })
     asked.init('default')
-    expect([...granted.warnings(), ...asked.warnings()]).toEqual([])
+    expect([...granted.warnings(), ...plan.warnings(), ...asked.warnings()]).toHaveLength(0)
   })
 })
