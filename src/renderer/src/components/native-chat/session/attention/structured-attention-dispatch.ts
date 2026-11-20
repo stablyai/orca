@@ -25,6 +25,7 @@ import {
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readBots } from '@/lib/bot-catalog'
 import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import {
@@ -176,7 +177,7 @@ function isSlackThreadSession(
   const folderId = scope?.type === 'folder' ? scope.folderWorkspaceId : null
   return (
     folderId !== null &&
-    (state.folderWorkspaces ?? []).some(
+    (selectFolderWorkspaces(state) ?? []).some(
       (workspace) =>
         workspace.id === folderId &&
         workspace.externalConversations?.some(
