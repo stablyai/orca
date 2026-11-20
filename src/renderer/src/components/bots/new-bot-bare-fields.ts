@@ -18,8 +18,8 @@ export const keyboardNavMarkerHandlers = {
 const BARE =
   'w-full min-w-0 resize-none border-0 bg-transparent outline-none placeholder:text-muted-foreground in-data-keyboard-nav:focus-visible:outline-1 in-data-keyboard-nav:focus-visible:outline-ring/60 in-data-keyboard-nav:focus-visible:outline-solid'
 
-/** The name, under the picture: large and left-aligned. */
-export const BARE_HEADING_CLASS = `${BARE} rounded-sm p-0 text-xl leading-[26px] font-semibold tracking-[-0.018em]`
+/** The name, beside the picture: large and left-aligned; a long one truncates. */
+export const BARE_HEADING_CLASS = `${BARE} truncate rounded-sm p-0 text-xl leading-[26px] font-semibold tracking-[-0.018em]`
 
 /** A template's Watches / Does / Reports line. */
 export const BARE_LINE_CLASS = `${BARE} block rounded-sm p-0 text-sm leading-5 [field-sizing:content]`

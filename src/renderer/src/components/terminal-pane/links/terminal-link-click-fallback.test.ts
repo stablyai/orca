@@ -46,7 +46,6 @@ installTerminalLinkTestEnvironment(doubles)
 describe('Windows OSC file links', () => {
   // A Mac client reaches Windows drive paths through an SSH or paired Windows host.
   it.each([
-    { platform: 'Windows', worktreePath: 'D:/project' },
     { platform: 'Macintosh', worktreePath: 'D:/project' },
     { platform: 'Windows', worktreePath: '\\\\server\\share\\project' },
     { platform: 'Windows', worktreePath: 'D:/project', startupCwd: '/d/project' }

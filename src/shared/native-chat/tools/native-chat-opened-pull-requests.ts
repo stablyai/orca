@@ -3,7 +3,6 @@ import { parseGitLabIssueOrMRLink, type ProjectSlug } from '../../new-workspace/
 import type { NativeChatMessage } from '../native-chat-types'
 import { nativeChatToolCallScript } from './native-chat-tool-call-script'
 import { pairToolBlocks } from './native-chat-tool-pairs'
-import { replaceShellMatches, shellMatches } from './shell-text-matches'
 
 export type NativeChatOpenedPullRequest =
   | { provider: 'github'; url: string; slug: RepoSlug; number: number }
@@ -31,9 +30,7 @@ const CREATE_RUNS = CREATE_COMMANDS.map(({ provider, command }) => ({
 // only printf.
 const HEREDOC_BODY =
   /<<-?[ \t]*(['"]?)(\w+)\1[^\n]*\n(?:(?:[\s\S]*?\n)?[ \t]*\2[ \t]*(?=\n|$)|[\s\S]*$)/gu
-// Scanned through shellMatches, which reads a comment from its `#` to the line end, and keeps a
-// comment or heredoc only where one can start.
-const QUOTED_OR_COMMENT = /'[^']*'|"(?:\\[\s\S]|[^"\\])*"|#|\\\n|\\[\s\S]/gu
+const QUOTED_OR_COMMENT = /'[^']*'|"(?:\\[\s\S]|[^"\\])*"|(?<=^|[\s;&|(])#[^\n]*|\\\n|\\[\s\S]/gmu
 const COMMAND_SEPARATOR = /&&|\|\||[;|\n]/u
 // Commands that print other change requests' URLs, so output beside them proves nothing.
 const LISTS_CHANGE_REQUESTS =
@@ -45,7 +42,7 @@ function createCount(code: string): number {
 
 /** The commands a script runs, without the text it carries. */
 export function shellCode(script: string): string {
-  return replaceShellMatches(script.replace(HEREDOC_BODY, '<<'), QUOTED_OR_COMMENT, ([text]) =>
+  return script.replace(HEREDOC_BODY, '<<').replace(QUOTED_OR_COMMENT, (text) =>
     // A line continuation (backslash-LF) joins lines, as the shell removes it; any other text,
     // including a backslash before CR, becomes one word.
     text === '\\\n' ? '' : "''"
@@ -55,8 +52,8 @@ export function shellCode(script: string): string {
 // Quoted text, escapes and comments match first and are skipped; then an unquoted heredoc
 // operator (`<<EOF`, `<<'EOF'`, `<<"EOF"`, `<<-EOF`, never a `<<<` here-string), or a line end.
 const TEXT_HEREDOC_OR_LINE_END = new RegExp(
-  `(${QUOTED_OR_COMMENT.source})|<<(-?)[ \\t]*(['"]?)(\\w+)\\3|\\n`,
-  'gu'
+  `(${QUOTED_OR_COMMENT.source})|(?<!<)<<(-?)[ \\t]*(['"]?)(\\w+)\\3|\\n`,
+  'gmu'
 )
 
 /** Where the body that starts at `start` ends: after its delimiter line, or at the script's end. */
@@ -85,7 +82,7 @@ export function withoutHeredocBodyLines(script: string): string {
   const pending: { delimiter: string; tabs: boolean }[] = []
   let kept = ''
   let from = 0
-  for (const match of shellMatches(script, scan)) {
+  for (let match = scan.exec(script); match; match = scan.exec(script)) {
     if (match[1] !== undefined) {
       continue
     }
@@ -110,16 +107,16 @@ export function withoutHeredocBodyLines(script: string): string {
 
 // Redirections outside quotes: an fd copy or close (`2>&1`, `>&2`, `<&-`), or a file target
 // (`>out`, `2>>log`, `&>log`, `>|f`, `< in`). Quoted text and escapes match first and stay.
-// shellMatches adds the fd number in front (`2>&1`).
+const FD = '(?:(?<=^|\\s)\\d+)?'
 const TARGET = `(?:[^\\s;&|<>()'"\\\\]|\\\\[\\s\\S]|'[^']*'|"(?:\\\\[\\s\\S]|[^"\\\\])*")+`
 const TEXT_OR_REDIRECTION = new RegExp(
-  `(${QUOTED_OR_COMMENT.source})|[<>]&(?:\\d+|-)(?=$|\\s)|(?:>>|>\\||<>|>|<|&>>|&>)\\s*${TARGET}`,
-  'gu'
+  `(${QUOTED_OR_COMMENT.source})|${FD}[<>]&(?:\\d+|-)(?=$|\\s)|(?:${FD}(?:>>|>\\||<>|>|<)|&>>|&>)\\s*${TARGET}`,
+  'gmu'
 )
 
 /** A command with its unquoted redirections removed, so `git push 2>&1` reads as `git push`. */
 export function withoutShellRedirections(command: string): string {
-  return replaceShellMatches(command, TEXT_OR_REDIRECTION, ([match, text]) =>
+  return command.replace(TEXT_OR_REDIRECTION, (match, text: string | undefined) =>
     text === undefined ? ' ' : match
   )
 }
@@ -226,7 +223,7 @@ export function pullRequestsOpenedBy(
     if (parsed === null || !creators.has(parsed.provider)) {
       continue
     }
-    const named = new RegExp(`(?:^|[\\s#/=("'])${parsed.number}(?=$|[\\s);&|/"'])`, 'u')
+    const named = new RegExp(`(?:^|(?<=[\\s#/=("']))${parsed.number}(?=$|[\\s);&|/"'])`, 'u')
     // Quoted text in the other commands counts, as in `printf '.../pull/12'`.
     if (named.test(otherScript)) {
       continue

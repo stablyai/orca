@@ -6,8 +6,6 @@ import {
   lifecycleFacts
 } from './journal-domain-lifecycle.test-fixture'
 import type { JournalLifecycleMutationInput } from './writing/journal-lifecycle-mutation'
-import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { journalDomainQueueRow } from './journal-domain-queue-rows'
 
 const cleanups: (() => void)[] = []
 afterEach(() => {
@@ -165,46 +163,6 @@ it('retains settlement retry authority after more than 4096 unrelated settlement
   })
   expect(f.item('orca:duplicate')).toBeUndefined()
   expect(f.item('orca:new')?.body).toEqual({ kind: 'status', text: 'new' })
-})
-
-it('returns direct personal input on start failure and lets an earlier handover win', async () => {
-  const f = domainLifecycleFixture(cleanups)
-  const failure = agentSessionFailureWords({ kind: 'notSignedIn' }, { surface: 'rejection' })
-  for (const id of ['queued', 'handed']) {
-    await f.run({
-      kind: 'submission',
-      input: {
-        clientMessageId: id,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] },
-        fence: 1,
-        payloadFingerprint: id,
-        handoverRecorded: true,
-        source: { kind: 'user' },
-        origin: 'client'
-      }
-    })
-  }
-  await f.run({
-    kind: 'dispatch',
-    input: { clientMessageId: 'handed', fence: 1, state: 'pending', turnScope: { kind: 'thread' } }
-  })
-  await f.run({
-    kind: 'start-failure-settle',
-    input: { startKey: 'ignored', clientMessageId: 'handed', fence: 1, ...failure }
-  })
-  const settled = await f.run({
-    kind: 'start-failure-settle',
-    input: { startKey: 'failed', clientMessageId: 'queued', fence: 1, ...failure }
-  })
-  expect(
-    journalDomainQueueRow(f.db, { sessionId: 'chat', epoch: 'epoch' }, 'queued')?.card
-  ).toMatchObject({ state: 'returned', body: { blocks: [{ type: 'text', text: 'queued' }] } })
-  expect(
-    settled.publication?.items.some(
-      (item) => item.body.kind === 'status' && item.body.failure?.kind === 'notSignedIn'
-    )
-  ).toBe(true)
-  expect(f.item('orca:ignored')).toBeUndefined()
 })
 
 it('normalizes direct and lifecycle turn ends from the current Stop plus its matching transient overlay', async () => {

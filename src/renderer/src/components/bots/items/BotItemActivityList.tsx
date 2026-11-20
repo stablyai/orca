@@ -27,7 +27,7 @@ import {
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
 import { botItemStatusName } from './bot-item-status-name'
 import { BOT_ITEM_COMMENT_ATTRIBUTE, BotItemCommentCard } from './BotItemCommentCard'
-import type { BotItemQuickReplyActions } from './BotItemQuestionLines'
+import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
@@ -282,6 +282,10 @@ export function BotItemActivityList({
         className="relative flex flex-col before:absolute before:inset-y-2.5 before:left-[9.5px] before:w-px before:bg-foreground/12"
       >
         {entries.map((entry) => {
+          // An answer reads on its question's lines.
+          if (entry.kind === 'comment' && entry.onAsk) {
+            return null
+          }
           if (entry.kind === 'comment') {
             return (
               <BotItemCommentCard
@@ -322,19 +326,25 @@ export function BotItemActivityList({
           )
         })}
         {/* Last, as sent: never placed by this machine's clock among the host's events. */}
-        {pending?.shown.map(({ event, failed }) => (
-          <BotItemCommentCard
-            key={event.id}
-            bot={bot}
-            item={item}
-            entry={{ event }}
-            failed={
-              failed
-                ? { retry: () => pending.retry(event.id), discard: () => pending.discard(event.id) }
-                : undefined
-            }
-          />
-        ))}
+        {pending?.shown.map(({ event, failed }) =>
+          // Answers posted as one comment show on their lines already.
+          !failed && event.data.text === quickReplies?.sent?.text ? null : (
+            <BotItemCommentCard
+              key={event.id}
+              bot={bot}
+              item={item}
+              entry={{ event }}
+              failed={
+                failed
+                  ? {
+                      retry: () => pending.retry(event.id),
+                      discard: () => pending.discard(event.id)
+                    }
+                  : undefined
+              }
+            />
+          )
+        )}
       </div>
       {entries.some((entry) => entry.kind !== 'worker' && entry.kind !== 'event') ||
       pending?.shown.length ? null : (

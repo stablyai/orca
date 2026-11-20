@@ -15,7 +15,7 @@ import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/wor
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemStatus } from '../../../../../shared/bots/bot-items'
-import { botItemWaitingLine } from '../../../../../shared/bots/bot-item-question-answers'
+import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatPaneFileDropSurface } from '../../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import {
@@ -232,19 +232,37 @@ export function BotItemBody({
     }),
     [fileContext?.fileLinkContext, runtimeContext]
   )
+  // `waitingLine`: the question the comment box names, until a reply is on its way.
+  const { steps, sent, quick, waitingLine } = useBotItemQuestionSteps(
+    bot,
+    item,
+    view.events,
+    sendLatest,
+    pending.shown
+  )
+  // The box's Enter, "Replying to" a line of several questions, answers that line like a quick reply.
+  const sendFromBox = (text: string, paths: readonly string[]): void => {
+    const line = steps ? `${steps.askId}:${steps.current}` : null
+    if (steps && line && paths.length === 0 && comment.current?.replyingTo() === line) {
+      steps.answer(steps.current, text)
+      return
+    }
+    sendComment(text, paths)
+  }
   const quickReplies = useMemo(
     () =>
       deleted
         ? undefined
         : {
-            send: (text: string) => sendLatest(text),
+            send: quick,
             edit: (text: string) => comment.current?.fill(text),
-            type: () => comment.current?.answer()
+            recover: (text: string) => comment.current?.fill(text, true),
+            type: () => comment.current?.answer(),
+            steps,
+            sent
           },
-    [deleted, comment, sendLatest]
+    [deleted, comment, quick, steps, sent]
   )
-  // The question the item waits on, as the comment box names it, until a reply is on its way.
-  const waitingLine = botItemWaitingLine(item, view.events)
   // The waiting question's comment, with its words and quick replies, is read even when it is older
   // than the loaded page: earlier pages load until it shows.
   const questionId = item.question?.eventId
@@ -374,7 +392,7 @@ export function BotItemBody({
                 attachTo={attachTo}
                 nav={nav}
                 question={waitingOn}
-                onSend={sendComment}
+                onSend={sendFromBox}
               />
             )}
           </NativeChatPaneFileDropSurface>

@@ -12334,6 +12334,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "macOS 鑰匙圈（cursor-agent）",
+            "keyring": "Linux 鑰匙圈（cursor-agent）",
             "cli": "Cursor CLI 認證檔案",
             "desktop": "Cursor IDE"
           },
@@ -17090,8 +17091,6 @@
             "27d863542c": "瀏覽器註解",
             "e48569ac6d": "無法存取該網站。",
             "bbe8f15e83": "此窗格由使用中的執行環境伺服器呈現。",
-            "8b7e6d1f5a": "瀏覽器註解僅在本機瀏覽器分頁中可用。",
-            "deb5293610": "瀏覽器註解在遠端執行環境中無法使用",
             "90d021f2ad": "新增",
             "0cb3bd6221": "註解意圖",
             "532bac48c5": "描述代理程式應該在這裡改變什麼...",
@@ -18887,7 +18886,8 @@
       "install": {
         "checking": "正在檢查 {{agent}} 是否已在此主機上準備就緒…",
         "cliInstall": "安裝",
-        "cliRecheck": "再次檢查"
+        "cliRecheck": "再次檢查",
+        "openAgentSettings": "開啟設定"
       },
       "reasoning": "推理",
       "failureWords": {
@@ -18921,6 +18921,7 @@
         "claudeAccountFolderMissing": "所選 Claude 帳戶的資料夾不存在。請重新登入該帳戶或選擇其他帳戶。",
         "claudeAccountSetupFailed": "無法設定所選 Claude 帳戶。請重試或選擇其他帳戶。",
         "agentCommandNotRunnable": "{{agent}} 在「設定 → 代理程式」中的命令必須是 Orca 能找到的程式路徑或名稱，且不能包含引數或變數。請修改或重設。",
+        "agentCommandFailed": "{{agent}} 在「設定 → 代理程式」中的命令未能啟動 {{agent}}：{{detail}}。請修改或重設。",
         "runtimeNotInstalled": "執行此聊天的電腦上未安裝 {{agent}}。請在新版 Orca 中從聊天裡安裝。",
         "fullAccessAsRoot": "{{agent}} 以 root 身分執行時不會使用「完整存取權」。請在執行此聊天的電腦上，前往「設定 → 代理程式」為 {{agent}} 選擇其他權限，然後開始新的聊天。",
         "launchPreparationFailed": "Orca 無法在執行此聊天的電腦上準備啟動 {{agent}}。",
@@ -20533,7 +20534,6 @@
       "cancelFailed": "無法取消安裝。請再試一次。",
       "install": "安裝 {{agent}}",
       "installManaged": "安裝 Orca 提供的副本",
-      "installed": "已安裝",
       "notInstalled": "尚未安裝。",
       "progress": "{{agent}} 下載",
       "readFailed": "無法檢查此主機上的 {{agent}}。正在重試。",

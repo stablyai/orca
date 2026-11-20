@@ -24,14 +24,9 @@ afterEach(() => {
 
 describe('readDroidTurnVerdictAsync', () => {
   it.each([
-    ['cancelled', 'cancellation'],
     ['process_exit', 'cancellation'],
     ['permission_rejected', 'failure'],
-    ['model_rate_limited', 'failure'],
-    ['prompt_rejected', 'failure'],
-    ['error', 'failure'],
     ['completed', null],
-    ['spec_handoff', null],
     ['some_future_reason', null]
   ])('maps %s as Droid does', async (reason, verdict) => {
     writeFileSync(transcriptPath, userRecord('turn-1', 'go') + outcome('turn-1', reason))

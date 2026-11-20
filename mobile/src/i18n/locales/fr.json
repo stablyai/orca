@@ -2077,6 +2077,9 @@
       "sendFailed": "Impossible d'envoyer la commande de reprise"
     },
     "aiVaultResumePreparation": {
+      "openInChat": "Cette conversation {{agent}} est ouverte dans un chat. Actualisez l'historique des sessions pour l'ouvrir.",
+      "ownershipUnknown": "Orca n'a pas pu confirmer à qui appartient cette conversation {{agent}}. Actualisez l'historique des sessions et réessayez.",
+      "preparationRefused": "Orca n'a pas pu préparer cette conversation {{agent}}. Démarrez un nouveau chat pour continuer.",
       "prepareFailed": "Impossible de préparer cette ancienne session Codex. Réessayez de la reprendre."
     },
     "backgroundTask": {
@@ -2198,6 +2201,7 @@
     "failure": {
       "accountSwitchInProgress": "La configuration de {{agent}} est en cours de modification sur cet hôte. Réessayez une fois l'opération terminée.",
       "agentCommandNotRunnable": "{{agent}} : la Commande dans Paramètres → Agents doit être le chemin ou le nom d'un programme qu'Orca peut trouver, sans arguments ni variables. Modifiez-la ou réinitialisez-la.",
+      "agentCommandFailed": "La Commande de {{agent}} dans Réglages → Agents n’a pas lancé {{agent}} : {{detail}}. Modifiez-la ou réinitialisez-la.",
       "agentCommandNotSignedIn": "Connectez-vous à {{agent}} avec `{{loginCommand}}` sur l’ordinateur qui exécute ce chat.",
       "agentNotSignedIn": "Connectez-vous à {{agent}}.",
       "agentStarting": "L'agent est encore en cours de démarrage.",

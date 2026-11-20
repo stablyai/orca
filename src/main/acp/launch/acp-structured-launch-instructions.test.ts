@@ -7,6 +7,7 @@ import {
   readlink,
   rm,
   stat,
+  symlink,
   writeFile
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -18,9 +19,11 @@ import type { ManagedDataAccountsState } from '../../../shared/agent-accounts/ma
 import { restoreManagedDataAccountEnvironment } from '../../../shared/agent-launch/environment/managed-data-account-environment'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { createAcpStructuredLaunchResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
+import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecFor } from './acp-launch-registry'
-import { deliverCopilotInstructions } from './acp-instructions'
+import { deliverCopilotInstructions, deliverOpenCodeInstructions } from './acp-instructions'
+import { acpReleaseWithChild } from './acp-structured-launch-preparation'
 
 const PREAMBLE = 'You are Zorblax, a bot that runs in Orca.'
 
@@ -137,28 +140,74 @@ describe('ACP launch: standing instructions', () => {
   })
 
   it("gives OpenCode 2.x them after the user's own global AGENTS.md, in a config folder linking the rest of theirs", async () => {
-    const source = join(dataDirectory, 'user-opencode-config')
-    await mkdir(source, { recursive: true })
+    const xdg = join(dataDirectory, 'opencode-xdg')
+    const config = join(xdg, 'opencode')
+    const source = process.platform === 'win32' ? config : join(dataDirectory, 'opencode-dotfiles')
+    await mkdir(join(source, 'agents'), { recursive: true })
+    await writeFile(join(source, 'agents', 'reviewer.md'), 'Review changes.')
     await writeFile(join(source, 'opencode.json'), '{"permissions":[]}')
     await writeFile(join(source, 'AGENTS.md'), 'Mine.\n')
+    if (process.platform !== 'win32') {
+      await mkdir(xdg)
+      await symlink(source, config, 'dir')
+    }
     const mine = JSON.stringify({ model: 'x/y' })
     const resolved = await launch('opencode', {
       instructions: PREAMBLE,
-      version: '2.0.16',
-      launchEnv: { OPENCODE_CONFIG_DIR: source, OPENCODE_CONFIG_CONTENT: mine }
+      version: '2.0.14',
+      launchEnv: { XDG_CONFIG_HOME: xdg, OPENCODE_CONFIG_CONTENT: mine }
     })
     const configDir = resolved.env.OPENCODE_CONFIG_DIR ?? ''
     expect(configDir.startsWith(join(dataDirectory, 'acp-instructions-folders'))).toBe(true)
     expect(await readFile(join(configDir, 'AGENTS.md'), 'utf8')).toBe(`Mine.\n\n${PREAMBLE}\n`)
     expect(await readFile(join(configDir, 'opencode.json'), 'utf8')).toBe('{"permissions":[]}')
+    expect(await readFile(join(configDir, 'agents', 'reviewer.md'), 'utf8')).toBe('Review changes.')
     if (process.platform !== 'win32') {
       expect((await lstat(join(configDir, 'opencode.json'))).isSymbolicLink()).toBe(true)
-      expect(await readlink(join(configDir, 'opencode.json'))).toBe(join(source, 'opencode.json'))
+      expect(await readlink(join(configDir, 'opencode.json'))).toBe(join(config, 'opencode.json'))
       expect((await stat(configDir)).mode & 0o777).toBe(0o700)
     }
     expect(resolved.env.OPENCODE_CONFIG_CONTENT).toBe(mine)
     // The user's own folder is left as it was.
     expect(await readFile(join(source, 'AGENTS.md'), 'utf8')).toBe('Mine.\n')
+  })
+
+  it("keeps a lowercase-named global agents.md of the user's out of the generated file's write path", async () => {
+    const source = join(dataDirectory, 'opencode-lowercase-agents')
+    await mkdir(source, { recursive: true })
+    await writeFile(join(source, 'agents.md'), 'Mine.\n')
+    const resolved = await launch('opencode', {
+      instructions: PREAMBLE,
+      version: '2.0.14',
+      launchEnv: { OPENCODE_CONFIG_DIR: source }
+    })
+    const configDir = resolved.env.OPENCODE_CONFIG_DIR ?? ''
+    expect(await readFile(join(source, 'agents.md'), 'utf8')).toBe('Mine.\n')
+    const foldsCase = await readFile(join(source, 'AGENTS.md'), 'utf8').then(
+      () => true,
+      () => false
+    )
+    expect(await readFile(join(configDir, 'AGENTS.md'), 'utf8')).toBe(
+      `${foldsCase ? 'Mine.\n\n' : ''}${PREAMBLE}\n`
+    )
+    expect((await lstat(join(configDir, 'AGENTS.md'))).isSymbolicLink()).toBe(false)
+    expect((await readdir(configDir)).sort()).toEqual(
+      foldsCase ? ['AGENTS.md'] : ['AGENTS.md', 'agents.md']
+    )
+  })
+
+  it('writes only the preamble when the explicitly configured OpenCode folder is missing', async () => {
+    const xdg = join(dataDirectory, 'other-opencode-xdg')
+    await mkdir(join(xdg, 'opencode'), { recursive: true })
+    await writeFile(join(xdg, 'opencode', 'AGENTS.md'), 'Unselected instructions.')
+    const resolved = await launch('opencode', {
+      instructions: PREAMBLE,
+      version: '2.1.0',
+      launchEnv: { XDG_CONFIG_HOME: xdg, OPENCODE_CONFIG_DIR: join(dataDirectory, 'missing') }
+    })
+    const configDir = resolved.env.OPENCODE_CONFIG_DIR ?? ''
+    expect(await readdir(configDir)).toEqual(['AGENTS.md'])
+    expect(await readFile(join(configDir, 'AGENTS.md'), 'utf8')).toBe(`${PREAMBLE}\n`)
   })
 
   it("refuses to start OpenCode when the user's inline configuration cannot be extended", async () => {
@@ -262,6 +311,52 @@ describe('ACP launch: standing instructions', () => {
       version: null
     })
     expect(delivered).toBeNull()
+  })
+
+  it("removes an OpenCode 2.x launch's config folder on release, leaving the user's files", async () => {
+    const source = join(dataDirectory, 'opencode-release-source')
+    const folder = join(dataDirectory, 'opencode-release-folder')
+    await mkdir(source, { recursive: true })
+    await mkdir(folder, { recursive: true })
+    await writeFile(join(source, 'opencode.json'), '{}')
+    await mkdir(join(source, 'agents'))
+    await writeFile(join(source, 'agents', 'reviewer.md'), 'Review.')
+    const delivered = await deliverOpenCodeInstructions({
+      text: PREAMBLE,
+      env: { OPENCODE_CONFIG_DIR: source },
+      cwd: '/unused',
+      file: async () => '/unused',
+      folder: async () => '/unused',
+      emptyFolder: async () => folder,
+      version: '2.0.14'
+    })
+    expect(await readdir(folder)).toContain('AGENTS.md')
+    await delivered?.release?.()
+    expect(await readdir(dataDirectory)).not.toContain('opencode-release-folder')
+    expect(await readFile(join(source, 'opencode.json'), 'utf8')).toBe('{}')
+    expect(await readFile(join(source, 'agents', 'reviewer.md'), 'utf8')).toBe('Review.')
+  })
+
+  it('releases a launch when its child exits, or at once when the connection throws', async () => {
+    let released = 0
+    const release = async () => {
+      released += 1
+    }
+    let exited: Parameters<AcpStructuredConnection['onExit']>[0] = () => {}
+    const connection = {
+      onExit: (callback: Parameters<AcpStructuredConnection['onExit']>[0]): void => {
+        exited = callback
+      }
+    }
+    acpReleaseWithChild(() => connection, release)()
+    expect(released).toBe(0)
+    exited({ code: 0, signal: null, processless: false })
+    expect(released).toBe(1)
+    const failing = acpReleaseWithChild(() => {
+      throw new Error('spawn failed')
+    }, release)
+    expect(failing).toThrow('spawn failed')
+    expect(released).toBe(2)
   })
 
   it('refuses to start an agent that has no way to take them', async () => {

@@ -1,5 +1,9 @@
 // The Share dialog's building blocks: one line per part that drills in, and the items on its page.
-import { ChevronLeft, ChevronRight, TriangleAlert } from 'lucide-react'
+import { useId } from 'react'
+import { ChevronLeft, ChevronRight, Eye, TriangleAlert } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 
 /** A line of the overview: a title and a quiet value; the whole line opens its page. */
@@ -94,6 +98,80 @@ export function BotShareItem({
           <ChevronRight className="size-3.5 text-muted-foreground" />
         </button>
       ) : null}
+    </div>
+  )
+}
+
+/** A memory file on one line: tick, name, flag, line count; the whole line ticks, the eye previews. */
+export function BotShareMemoryRow({
+  name,
+  lines,
+  checked,
+  disabled = false,
+  flags,
+  onChange,
+  onPreview
+}: {
+  name: string
+  lines: number
+  checked: boolean
+  /** Unpickable: the share already carries as many files as it can. */
+  disabled?: boolean
+  flags: { kind: 'secret' | 'warning'; text: string }[]
+  onChange: (on: boolean) => void
+  onPreview: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const flagId = useId()
+  const flag = flags.find((entry) => entry.kind === 'secret') ?? flags[0]
+  const flagText = flags.map((entry) => entry.text).join(', ')
+  return (
+    <div
+      onClick={() => !disabled && onChange(!checked)}
+      className={cn(
+        'group/row flex h-8 items-center gap-2.5 rounded-md px-2 text-sm select-none hover:bg-accent/60 has-[:focus-visible]:bg-accent/60',
+        disabled ? 'text-muted-foreground' : 'cursor-pointer'
+      )}
+    >
+      <Checkbox
+        checked={checked}
+        disabled={disabled}
+        aria-label={name}
+        aria-describedby={flag ? flagId : undefined}
+        // The line's own click ticks it; the box must not tick twice.
+        onClick={(event) => event.stopPropagation()}
+        onCheckedChange={(value) => onChange(value === true)}
+      />
+      <span className="min-w-0 flex-1 truncate" title={name}>
+        {name}
+      </span>
+      {flag ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="flex shrink-0">
+              <BotShareFlagIcon kind={flag.kind} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="top">{flagText}</TooltipContent>
+        </Tooltip>
+      ) : null}
+      {flag ? (
+        <span id={flagId} className="sr-only">
+          {flagText}
+        </span>
+      ) : null}
+      <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{lines}</span>
+      <button
+        type="button"
+        aria-label={t('bots.share.previewFile', 'Preview {{name}}', { name })}
+        onClick={(event) => {
+          event.stopPropagation()
+          onPreview()
+        }}
+        className="-mr-1 flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground opacity-0 outline-none group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <Eye className="size-3.5" />
+      </button>
     </div>
   )
 }

@@ -37,18 +37,18 @@ describe('bots other apps keep on this computer', () => {
     expect(await findBotImportSources(env(), [])).toEqual([
       {
         app: 'openclaw',
-        home: '~/.openclaw',
+        home: join('~', '.openclaw'),
         bots: [
           {
             agent: 'main',
             name: 'Molty',
-            path: '~/.openclaw/workspace',
+            path: join('~', '.openclaw', 'workspace'),
             absolutePath: join(home, '.openclaw/workspace')
           },
           {
             agent: 'scout',
             name: 'Scout',
-            path: '~/.openclaw/workspace-scout',
+            path: join('~', '.openclaw', 'workspace-scout'),
             absolutePath: join(home, '.openclaw/workspace-scout')
           }
         ]
@@ -61,7 +61,7 @@ describe('bots other apps keep on this computer', () => {
     const [source] = await findBotImportSources(env(), [])
     expect(source).toMatchObject({
       app: 'openclaw',
-      home: '~/.clawdbot',
+      home: join('~', '.clawdbot'),
       bots: [{ agent: 'main' }]
     })
   })

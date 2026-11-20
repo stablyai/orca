@@ -9064,6 +9064,7 @@
         "CursorAccountsSection": {
           "source": {
             "keychain": "Chaves do macOS (cursor-agent)",
+            "keyring": "Chaveiro do Linux (cursor-agent)",
             "cli": "Arquivo de autenticação da CLI do Cursor",
             "desktop": "Cursor IDE"
           },
@@ -17733,8 +17734,6 @@
             "27d863542c": "Anotações do navegador",
             "e48569ac6d": "Não foi possível alcançar este site.",
             "bbe8f15e83": "Este painel é renderizado a partir do servidor de runtime ativo.",
-            "8b7e6d1f5a": "As anotações do navegador só estão disponíveis em abas de navegador locais.",
-            "deb5293610": "Anotações do navegador indisponíveis em runtime remoto",
             "90d021f2ad": "Adicionar",
             "0cb3bd6221": "Intenção da anotação",
             "532bac48c5": "Descreva o que o agente deve alterar aqui...",
@@ -21047,7 +21046,8 @@
       "install": {
         "checking": "Verificando se {{agent}} está pronto neste host…",
         "cliInstall": "Instalar",
-        "cliRecheck": "Verificar novamente"
+        "cliRecheck": "Verificar novamente",
+        "openAgentSettings": "Abrir configurações"
       },
       "reasoning": "Raciocínio",
       "failureWords": {
@@ -21081,6 +21081,7 @@
         "claudeAccountFolderMissing": "A pasta da conta do Claude selecionada não foi encontrada. Entre nela novamente ou escolha outra conta.",
         "claudeAccountSetupFailed": "Não foi possível configurar a conta do Claude selecionada. Tente novamente ou escolha outra conta.",
         "agentCommandNotRunnable": "O Comando do {{agent}} em Configurações → Agentes deve começar com um programa que o Orca consiga encontrar. Variáveis, pipes e outras sintaxes de shell não são compatíveis; use a configuração Ambiente para variáveis. Altere ou redefina o comando.",
+        "agentCommandFailed": "O Comando do {{agent}} em Configurações → Agentes não iniciou o {{agent}}: {{detail}}. Altere ou redefina o comando.",
         "runtimeNotInstalled": "{{agent}} não está instalado no computador que executa este chat. Instale-o pelo chat em uma versão atual do Orca.",
         "fullAccessAsRoot": "{{agent}} não usará Acesso total enquanto for executado como root. Escolha outra permissão para {{agent}} em Configurações → Agentes para o computador que executa este chat e inicie um novo chat.",
         "launchPreparationFailed": "O Orca não conseguiu preparar a inicialização de {{agent}} no computador que executa este chat.",
@@ -22397,7 +22398,6 @@
       "cancelFailed": "Não foi possível cancelar a instalação. Tente novamente.",
       "install": "Instalar {{agent}}",
       "installManaged": "Instalar a cópia do Orca",
-      "installed": "Instalado",
       "notInstalled": "Não instalado.",
       "progress": "Download do {{agent}}",
       "readFailed": "Não foi possível verificar o {{agent}} neste host. Tentando novamente.",

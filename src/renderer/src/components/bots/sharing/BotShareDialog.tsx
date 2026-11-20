@@ -217,6 +217,11 @@ export function BotShareSecretNotice({
 }
 
 /** A part's page in place of the dialog's front: Back, its title, and its items or text. */
+/** A page takes focus at its title as it opens, so nothing below (such as Cancel) looks chosen. */
+function focusOnOpen(title: HTMLDivElement | null): void {
+  title?.focus({ preventScroll: true })
+}
+
 export function BotShareDrillIn({
   page,
   backLabel,
@@ -236,8 +241,18 @@ export function BotShareDrillIn({
       <div className="flex min-h-7 items-center">
         <BotShareBack label={backLabel} onBack={onBack} />
       </div>
-      <div>
-        <div className="text-sm leading-5 font-semibold">{pageTitle(page, t)}</div>
+      <div ref={focusOnOpen} tabIndex={-1} className="outline-none">
+        <div className="flex items-baseline gap-2 text-sm leading-5 font-semibold">
+          {pageTitle(page, t)}
+          {page.kind === 'list' && page.list === 'memory' ? (
+            <span className="text-xs font-normal tabular-nums text-muted-foreground">
+              {t('bots.share.countOf', '{{picked}} of {{all}}', {
+                picked: ctx.selection.memory?.length ?? 0,
+                all: ctx.candidate.available.memory.length
+              })}
+            </span>
+          ) : null}
+        </div>
         {page.kind === 'part' && page.detail ? (
           <div className="text-xs leading-4 text-muted-foreground">{page.detail}</div>
         ) : null}
