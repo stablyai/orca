@@ -82,9 +82,10 @@ export function keepPreGapScreen(
   }
 }
 
-/** A capture attempt that did not rebuild parses its frame now, releasing the ANSI it captured. */
-export function settleKeptGapScreen(state: RuntimeHeadlessTerminal, recovery: GapRecovery): void {
-  if (state.gapReseed === recovery) {
+/** A capture attempt that did not rebuild, on a terminal still recovering, parses its frame now and releases
+ *  the ANSI it captured; a retired terminal's frame is never parsed. */
+export function settleKeptGapScreen(recovery: GapRecovery, stillRecovering: boolean): void {
+  if (stillRecovering) {
     void recovery.keptScreen?.read()
   }
 }

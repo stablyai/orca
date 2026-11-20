@@ -183,7 +183,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
         // A failed capture retries; the live model is untouched.
       } finally {
         stopGapJournal(recovery)
-        settleKeptGapScreen(state, recovery)
+        settleKeptGapScreen(recovery, this.isGapRecovering(ptyId, state, recovery))
         this.releaseGapCaptureSlot()
       }
     }
