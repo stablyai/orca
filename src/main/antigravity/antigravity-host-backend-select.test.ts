@@ -49,6 +49,8 @@ type Host = {
   /** agy's own settings pick an API-key model provider. */
   agyApiKey?: boolean
   apiKeyChat?: boolean
+  /** The kill switch for Orca's copy of agy is off. */
+  managedAgyOff?: boolean
   /** The agy that resolves is Orca's own copy. */
   orcasAgy?: boolean
   /** No agy is found on this host yet. */
@@ -96,9 +98,10 @@ function host(options: Host = {}) {
     envToDelete: [],
     homePath,
     stateDirectory,
-    settings: options.apiKeyChat
-      ? { antigravityChatAuth: { method: 'gemini-api-key' as const } }
-      : {}
+    settings: {
+      ...(options.apiKeyChat ? { antigravityChatAuth: { method: 'gemini-api-key' as const } } : {}),
+      ...(options.managedAgyOff ? { antigravityManagedAgyEnabled: false } : {})
+    }
   }
 }
 
@@ -244,5 +247,55 @@ describe('agy behind a keyring that needs unlocking', () => {
     Object.assign(agy, { login: 'absent', answer: 'ready' })
 
     expect(await select(host({ server: true }))).toBeNull()
+  })
+})
+
+describe('agy with no login to find', () => {
+  it('asks it only whether it can serve chats, and runs new chats on it signed out', async () => {
+    // A session request would answer incompatible and move chats to Orca's server.
+    Object.assign(agy, { login: 'absent', answer: 'incompatible', compatible: 'ready' })
+    const input = host()
+
+    expect(await installsManagedRuntime(input)).toBe(false)
+    expect(await select(input)).not.toBeNull()
+  })
+
+  it('keeps an incompatible agy out of new chats', async () => {
+    Object.assign(agy, { login: 'absent', compatible: 'incompatible' })
+
+    expect(await select(host())).toBeNull()
+  })
+})
+
+describe('with Orca’s copy of agy switched off', () => {
+  it("keeps a fresh host's new chats and Install on Orca's server", async () => {
+    const input = host({ noAgy: true, managedAgyOff: true })
+
+    expect(await select(input)).toBeNull()
+    expect(await installsManagedRuntime(input)).toBe(true)
+  })
+
+  it('still runs new chats on a signed-in agy', async () => {
+    const input = host({ managedAgyOff: true })
+
+    expect(await select(input)).not.toBeNull()
+  })
+
+  it('still launches a chat already pinned to Orca’s agy on that copy', async () => {
+    const { rememberManagedAgentRelease } =
+      await import('../managed-agent-cli/managed-agent-cli-registry')
+    const { resolveAcpLaunchCommand } = await import('../acp/launch/acp-launch-command')
+    const { homePath, stateDirectory } = host({ noAgy: true, managedAgyOff: true })
+    const release = join(stateDirectory, 'agent-runtimes', 'agy', '1.5.13')
+    rememberManagedAgentRelease('antigravity', release)
+
+    const { command } = resolveAcpLaunchCommand(
+      ANTIGRAVITY_LAUNCH_SPEC.hostBackend.spec,
+      { PATH: '', HOME: homePath, USERPROFILE: homePath },
+      { dataDirectory: null }
+    )
+
+    expect(command).toBe(join(release, process.platform === 'win32' ? 'agy.exe' : 'agy'))
+    rememberManagedAgentRelease('antigravity', null)
   })
 })

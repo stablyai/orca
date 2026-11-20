@@ -38,6 +38,7 @@ const HEALTH_SETTINGS = [
   'nativeChatShellEnvironmentVariables',
   // Why: a saved Gemini Enterprise choice keeps chats off the host's agy (hostAlternative).
   'antigravityChatAuth',
+  'antigravityManagedAgyEnabled',
   ...SHELL_SETTINGS
 ] as const satisfies readonly (keyof GlobalSettings)[]
 

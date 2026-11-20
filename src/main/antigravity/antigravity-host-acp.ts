@@ -181,6 +181,9 @@ async function askAntigravityHostAcp(
       (initialized): AntigravityHostAcpAnswer => {
         if (sessions) {
           check.version = initialized.agentInfo?.version
+        } else {
+          // Compatibility changes only with the binary, whose identity keys this check.
+          check.retryAt = undefined
         }
         return 'ready'
       },

@@ -357,3 +357,31 @@ it.each([
     }
   }
 )
+
+it('never looks up the latest release for a copy that is not installed', async () => {
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+  roots.push(dataDirectory)
+  const refreshPin = vi.fn(async () => {})
+  const fetcher = vi.fn(async () => new Response(''))
+  const installation = new ManagedRuntimeInstallation(
+    'agent',
+    {
+      label: 'Agent',
+      root: () => join(dataDirectory, 'agent-runtimes', 'agent'),
+      pin: () => null,
+      refreshPin
+    },
+    {
+      dataDirectory,
+      program: 'cli',
+      findExternal: async () => false,
+      fence: (work) => work(),
+      fetcher
+    }
+  )
+
+  await installation.updateIfBehind()
+
+  expect(refreshPin).not.toHaveBeenCalled()
+  expect(fetcher).not.toHaveBeenCalled()
+})

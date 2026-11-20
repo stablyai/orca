@@ -13,6 +13,7 @@ import { RevisionedState, type RevisionClock } from '../runtime/events/revisione
 import {
   reclaimRuntimeReleases,
   resolveInstalledRuntimeRelease,
+  runtimeReleaseMayBePublished,
   type ManagedRuntime
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
@@ -131,6 +132,10 @@ export class ManagedRuntimeInstallation {
   /** Bring Orca's own copy to the latest release; never installs one nobody asked for or touches a user's own. */
   async updateIfBehind(): Promise<void> {
     if (!this.runtime.refreshPin || this.running) {
+      return
+    }
+    // Nothing installed has nothing to update, so the latest release isn't looked up.
+    if (!(await runtimeReleaseMayBePublished(this.root))) {
       return
     }
     const state = await this.status()

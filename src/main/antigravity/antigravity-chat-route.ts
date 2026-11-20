@@ -79,7 +79,9 @@ export async function antigravityChatRoute(
     return ON_SERVER
   }
   const agyResolves = isAbsolute(command)
-  if (await usesOrcaServer(input, server)) {
+  // Off, Orca's copy of agy takes no new chats: agy needs its own login, as before Orca installed it.
+  const managedAgy = input.settings.antigravityManagedAgyEnabled !== false
+  if (!managedAgy || (await usesOrcaServer(input, server))) {
     // A signed-in agy still takes new chats; with no login to find, agy isn't asked at all.
     const ready =
       agyResolves &&
@@ -91,12 +93,19 @@ export async function antigravityChatRoute(
   if (!agyResolves) {
     return { agy: 'notInstalled', installs: 'agy' }
   }
-  // Seen on a locked-keyring host: `agy acp` opens no D-Bus connection for initialize, but a
-  // session request calls Secret Service Unlock and raises its prompt. So only initialize asks
-  // whether agy can serve chats; agy asks for the keyring when the chat starts.
-  if ((await agyCredentialPresence(homePath)) === 'locked') {
+  const presence = await agyCredentialPresence(homePath)
+  // Without a login to find, only whether agy can serve chats is asked, once per binary. Seen on a
+  // locked-keyring host: `agy acp` opens no D-Bus connection for initialize, but a session request
+  // calls Secret Service Unlock and raises its prompt; agy asks for the keyring when a chat starts.
+  if (presence !== 'present') {
     const compatible = await checkAntigravityHostAcpCompatible(command, env, envToDelete)
-    return compatible === 'incompatible' ? ON_SERVER : { agy: 'unknown', installs: 'agy' }
+    if (compatible === 'incompatible') {
+      return ON_SERVER
+    }
+    return {
+      agy: compatible === 'ready' && presence === 'absent' ? 'signedOut' : 'unknown',
+      installs: 'agy'
+    }
   }
   const answer = await checkAntigravityHostAcp(command, env, envToDelete)
   // An agy that can't serve chats shadows Orca's copy too, so only the server can help.
