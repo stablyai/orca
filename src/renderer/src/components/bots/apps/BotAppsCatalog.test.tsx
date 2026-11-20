@@ -224,6 +224,33 @@ describe('Add to <bot>', () => {
     expect(calls('bots.tools.add')).toHaveLength(1)
   })
 
+  it('on Try again, names no place for a same-name tool the app’s template doesn’t make', async () => {
+    let saved = false
+    answer({
+      ...tools,
+      'bots.tools.list': () => ({
+        own: saved
+          ? [{ name: 'datadog', detail: 'npx dd-mcp --api-key=secret', remote: false }]
+          : [],
+        inherited: []
+      }),
+      'bots.tools.add': () => {
+        saved = true
+        throw new Error('A tool named datadog already exists.')
+      }
+    })
+    open()
+    fireEvent.click(screen.getByRole('button', { name: /^Monitoring/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Datadog' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText('Remove it in Manage to add another.')).toBeTruthy()
+    expect(screen.queryByText(/secret/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Manage' })).toBeTruthy()
+    expect(calls('bots.tools.connect')).toHaveLength(0)
+  })
+
   it('shows the site field and places in the user’s language, site codes as they are', async () => {
     i18n.addResourceBundle('zh', 'translation', zh)
     await i18n.changeLanguage('zh')

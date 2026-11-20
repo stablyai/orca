@@ -26283,7 +26283,8 @@
           "unitedKingdom": "英国"
         },
         "elsewhereTitle": "{{app}} 已在 {{bot}} 上",
-        "elsewhereLine": "它已添加在 {{place}}。请先在“管理”中移除，再添加其他。"
+        "elsewhereLine": "它已添加在 {{place}}。请先在“管理”中移除，再添加其他。",
+        "elsewhereOther": "请先在“管理”中移除，再添加其他。"
       },
       "unsupported": "暂不支持此应用",
       "cantReach": "无法连接 {{app}}",

@@ -84,15 +84,20 @@ export function botMcpAppUrlTag(
 
 /**
  * A typed GitLab-style address as a URL's host and optional port: a bare authority, or a pasted
- * http(s) URL whose path is dropped. '' when empty; null for userinfo, another scheme, port 0, or
- * anything the URL parser refuses (bad IDNA included).
+ * http(s) URL whose path is dropped and whose typed port stays. '' when empty; null for userinfo,
+ * another scheme, port 0, or anything the URL parser refuses (bad IDNA included).
  */
 export function botMcpAppHost(input: string): string | null {
   const text = input.trim()
   if (!text) {
     return ''
   }
-  const url = parseWebUrl(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`)
+  // A scheme, unless it is a bare host:port; http(s) is read under https so a typed port stays.
+  const scheme = /^[a-z][a-z0-9+.-]*:/i.test(text) && !/^[^:/?#]+:\d+(?:[/?#]|$)/.test(text)
+  if (scheme && !/^https?:/i.test(text)) {
+    return null
+  }
+  const url = parseWebUrl(scheme ? text.replace(/^https?:/i, 'https:') : `https://${text}`)
   if (!url || !url.hostname || url.username || url.password || url.port === '0') {
     return null
   }

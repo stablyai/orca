@@ -53,6 +53,10 @@ describe('botMcpAppHost', () => {
       'user@gitlab.acme.dev',
       'https://user:pw@gitlab.acme.dev',
       'file://gitlab.acme.dev/etc',
+      'file:/etc/config',
+      'javascript:alert(1)',
+      'mailto:admin@gitlab.acme.dev',
+      'gitlab.acme.dev:',
       'javascript://gitlab.acme.dev/%0Aalert(1)',
       'ftp://gitlab.acme.dev',
       'xn--a.example',
@@ -62,6 +66,13 @@ describe('botMcpAppHost', () => {
     ]) {
       expect(botMcpAppHost(input), input).toBeNull()
     }
+  })
+
+  it('keeps a typed port when reading http as https, and drops only an omitted or https default', () => {
+    expect(botMcpAppHost('http://git.example:80/group')).toBe('git.example:80')
+    expect(botMcpAppHost('http://git.example/group')).toBe('git.example')
+    expect(botMcpAppHost('https://git.example:443/group')).toBe('git.example')
+    expect(botMcpAppHost('localhost:80')).toBe('localhost:80')
   })
 
   it('builds the https endpoint from the normalized host', () => {

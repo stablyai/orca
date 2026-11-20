@@ -30,7 +30,8 @@ export type CustomPhase =
   | { kind: 'variable'; app: BotMcpAppPreset; variable: BotMcpAppUrlVariable }
   | { kind: 'adding' }
   /** Another site or host of the app is on the bot already; one tool per name. */
-  | { kind: 'elsewhere'; app: string; place: string }
+  /** `place`: the site or host it is at, when the app's template makes its URL. */
+  | { kind: 'elsewhere'; app: string; place: string | null }
   /** owned: Orca signs in (pasted back only when its host runs it); else the tool's agent CLI does. */
   | {
       kind: 'signing'
@@ -147,7 +148,7 @@ export function CustomAppStep({
           setPhase({
             kind: 'elsewhere',
             app: preset.title,
-            place: botMcpAppUrlPlace(preset, saved.detail)?.name ?? saved.detail
+            place: botMcpAppUrlPlace(preset, saved.detail)?.name ?? null
           })
         } else if (saved) {
           signIn(name, owned)
@@ -187,11 +188,15 @@ export function CustomAppStep({
             app: phase.app,
             bot: bot.name
           })}
-          line={t(
-            'bots.apps.mcp.elsewhereLine',
-            'It’s added at {{place}}. Remove it in Manage to add another.',
-            { place: phase.place }
-          )}
+          line={
+            phase.place
+              ? t(
+                  'bots.apps.mcp.elsewhereLine',
+                  'It’s added at {{place}}. Remove it in Manage to add another.',
+                  { place: phase.place }
+                )
+              : t('bots.apps.mcp.elsewhereOther', 'Remove it in Manage to add another.')
+          }
           actions={
             <>
               <Button variant="ghost" size="sm" onClick={onClose}>

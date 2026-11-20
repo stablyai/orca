@@ -28832,7 +28832,8 @@
           "unitedKingdom": "United Kingdom"
         },
         "elsewhereTitle": "{{app}} is already on {{bot}}",
-        "elsewhereLine": "It’s added at {{place}}. Remove it in Manage to add another."
+        "elsewhereLine": "It’s added at {{place}}. Remove it in Manage to add another.",
+        "elsewhereOther": "Remove it in Manage to add another."
       },
       "unsupported": "This app isn’t supported yet",
       "cantReach": "Can’t reach {{app}}",
