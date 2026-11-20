@@ -37,7 +37,7 @@ import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import {
   bindPluginRuntime,
-  createPluginAgentStatusForwarder,
+  installPluginAgentStatusForwarding,
   watchPluginWorkspaceContext
 } from '../../plugins/runtime/plugin-runtime-binding'
 import { emitPluginWorktreeLifecycle } from '../pty-startup/main-process-pty-startup'
@@ -296,13 +296,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     }
   }, PLUGIN_MARKETPLACE_SEED_STARTUP_DELAY_MS).unref?.()
   // Filter hook/worktree events server-side by each plugin subscription.
-  const forwardAgentStatus = createPluginAgentStatusForwarder(pluginDelegate, pluginService)
-  agentHookServer.subscribeEnrichedStatus((enriched) => {
-    const payload = projectPluginAgentStatusChangedPayload(enriched, store)
-    if (payload) {
-      forwardAgentStatus(payload, enriched.terminalHandle)
-    }
-  })
+  installPluginAgentStatusForwarding(pluginDelegate, pluginService, agentHookServer, (enriched) =>
+    projectPluginAgentStatusChangedPayload(enriched, store)
+  )
   watchPluginWorkspaceContext({
     delegate: pluginDelegate,
     events: pluginService,

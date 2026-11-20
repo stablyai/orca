@@ -45,3 +45,29 @@ export function projectPluginAgentStatusChangedPayload(
     ...(sessionId ? { sessionId } : {})
   }
 }
+
+export type ForwardedPluginAgentStatus = {
+  payload: PluginAgentStatusChangedPayload
+  terminalHandle?: string
+}
+
+/** Same status as last forwarded for the pane, apart from when it was received. */
+export function pluginAgentStatusRestates(
+  previous: ForwardedPluginAgentStatus | undefined,
+  next: ForwardedPluginAgentStatus
+): boolean {
+  if (!previous || previous.terminalHandle !== next.terminalHandle) {
+    return false
+  }
+  const a = previous.payload
+  const b = next.payload
+  return (
+    a.workspaceId === b.workspaceId &&
+    a.workspaceListId === b.workspaceListId &&
+    a.state === b.state &&
+    a.sessionId === b.sessionId &&
+    a.mainAgent?.state === b.mainAgent?.state &&
+    a.mainAgent?.outcome === b.mainAgent?.outcome &&
+    a.mainAgent?.stateStartedAt === b.mainAgent?.stateStartedAt
+  )
+}

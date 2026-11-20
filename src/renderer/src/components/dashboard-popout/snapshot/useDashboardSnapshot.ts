@@ -5,7 +5,10 @@ import {
   EMPTY_DASHBOARD_SNAPSHOT,
   type DashboardSnapshot
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
-import { patchDashboardSnapshotFromAgentStatus } from './dashboard-agent-status-patch'
+import {
+  dashboardCardTracksFreshness,
+  patchDashboardSnapshotFromAgentStatus
+} from './dashboard-agent-status-patch'
 
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 250
 const TOPOLOGY_REFRESH_MAX_WAIT_MS = 1_000
@@ -74,12 +77,7 @@ export function useDashboardSnapshot(): DashboardSnapshot {
       }
       let nextDeadline = Number.POSITIVE_INFINITY
       for (const card of next.cards) {
-        if (
-          card.statusUpdatedAt !== undefined &&
-          (card.dotState === 'working' ||
-            card.dotState === 'blocked' ||
-            card.dotState === 'waiting')
-        ) {
+        if (card.statusUpdatedAt !== undefined && dashboardCardTracksFreshness(card)) {
           nextDeadline = Math.min(nextDeadline, card.statusUpdatedAt + AGENT_STATUS_STALE_AFTER_MS)
         }
       }
