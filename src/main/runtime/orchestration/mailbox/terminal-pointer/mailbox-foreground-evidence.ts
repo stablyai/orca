@@ -4,7 +4,10 @@ import type {
   MailboxForegroundInspection
 } from '../../../terminal/wait/launched-agent-foreground'
 import { PrioritySemaphore } from '../../../../../shared/concurrency/priority-semaphore'
-import { PROCESS_START_TIME_TOLERANCE_MS } from '../../../agent-session/ownership/agent-session-process-identity-probe'
+import {
+  PROCESS_START_TIME_TOLERANCE_MS,
+  readProcessStartTimeMs
+} from '../../../agent-session/ownership/agent-session-process-identity-probe'
 
 type ForegroundObservation = {
   processIncarnation: string
@@ -15,6 +18,8 @@ type ForegroundObservation = {
   status?: string
   /** The admitted agent's process; while held, only that process returning releases the hold. */
   agentProcess?: MailboxAgentProcess
+  /** The agent's own hook reported after the hold began, which a shell or failed read cannot fake. */
+  agentReportedSinceHold?: boolean
 }
 
 export type OrchestrationMailboxForegroundObservation = {
@@ -23,6 +28,8 @@ export type OrchestrationMailboxForegroundObservation = {
   contradiction: number
   process?: MailboxAgentProcess
   agentUnprovable?: boolean
+  /** The held agent's process has exited, so a new agent of its kind is what the mail now awaits. */
+  heldAgentGone?: boolean
 }
 
 export type OrchestrationMailboxForegroundProbe = OrchestrationMailboxForegroundObservation & {
@@ -62,9 +69,12 @@ export class MailboxForegroundEvidence {
         }
       })
       .catch(() => 'unknown' as const)
-      .then((result) => ({
+      .then(async (result) => ({
         ...(typeof result === 'string' ? { foreground: result } : result),
-        ...observation
+        ...observation,
+        ...(typeof result !== 'string' && (await this.heldAgentGone(ptyId, result.process))
+          ? { heldAgentGone: true }
+          : {})
       }))
       .finally(() => {
         if (this.foregroundProbes.get(ptyId) === probe) {
@@ -109,24 +119,23 @@ export class MailboxForegroundEvidence {
     if (foreground === 'shell' || foreground === 'non-shell') {
       // TODO(STA-16313): record the suspended agent's process here when no earlier probe named it.
       observation.held = true
+      observation.agentReportedSinceHold = false
       observation.screenRequired = true
       observation.contradiction++
     } else if (foreground === 'agent' && admitted) {
       const known = observation.agentProcess
       // Why: a same-kind agent started in place of the suspended one is not the agent the held mail awaits;
       // once the agent's process is known, a probe that cannot name it proves nothing.
-      if (
-        observation.held &&
-        known &&
-        (!proof.process ||
-          known.pid !== proof.process.pid ||
-          Math.abs(known.startedAtMs - proof.process.startedAtMs) > PROCESS_START_TIME_TOLERANCE_MS)
-      ) {
+      if (observation.held && known && !proof.heldAgentGone && !sameProcess(known, proof.process)) {
         return false
       }
       observation.held = false
-      observation.agentProcess = proof.process ?? known
-    } else if (foreground === 'unknown' && proof.agentUnprovable) {
+      observation.agentProcess = proof.heldAgentGone ? proof.process : (proof.process ?? known)
+    } else if (
+      foreground === 'unknown' &&
+      proof.agentUnprovable &&
+      observation.agentReportedSinceHold
+    ) {
       // Why: a host that can never name the agent back hands the hold to the screen check completeDelivery awaits.
       observation.held = false
     }
@@ -156,10 +165,14 @@ export class MailboxForegroundEvidence {
     }
   }
 
-  observeTerminal(ptyId: string, status?: string): boolean {
+  observeTerminal(ptyId: string, status?: string, fromAgentHook = false): boolean {
     const observation = this.foregroundObservations.get(ptyId)
     if (!observation) {
       return false
+    }
+    const reported = fromAgentHook && observation.held && !observation.agentReportedSinceHold
+    if (reported) {
+      observation.agentReportedSinceHold = true
     }
     observation.generation++
     if (status === 'done') {
@@ -169,7 +182,27 @@ export class MailboxForegroundEvidence {
     if (status !== undefined) {
       observation.status = status
     }
-    return observation.held && changed
+    return observation.held && (changed || reported)
+  }
+
+  /** Whether a host that cannot name an agent has heard from the agent itself since mail was held. */
+  agentReportedSinceHold(ptyId: string): boolean {
+    return this.foregroundObservations.get(ptyId)?.agentReportedSinceHold === true
+  }
+
+  private async heldAgentGone(ptyId: string, found?: MailboxAgentProcess): Promise<boolean> {
+    const known = this.foregroundObservations.get(ptyId)
+    const held = known?.held ? known.agentProcess : undefined
+    if (!held || sameProcess(held, found)) {
+      return false
+    }
+    try {
+      process.kill(held.pid, 0)
+    } catch (error) {
+      return error instanceof Error && 'code' in error && error.code === 'ESRCH'
+    }
+    const startedAtMs = await readProcessStartTimeMs(held.pid)
+    return startedAtMs !== null && !sameProcess(held, { pid: held.pid, startedAtMs })
   }
 
   private foregroundObservation(ptyId: string, processIncarnation: string): ForegroundObservation {
@@ -194,4 +227,12 @@ export class MailboxForegroundEvidence {
   retirePty(ptyId: string): void {
     this.foregroundObservations.delete(ptyId)
   }
+}
+
+function sameProcess(known: MailboxAgentProcess, found?: MailboxAgentProcess): boolean {
+  return (
+    !!found &&
+    known.pid === found.pid &&
+    Math.abs(known.startedAtMs - found.startedAtMs) <= PROCESS_START_TIME_TOLERANCE_MS
+  )
 }

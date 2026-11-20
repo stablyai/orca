@@ -50,14 +50,32 @@ it('another known program in front holds mail like a shell does', () => {
   expect(evidence.foregroundHold('pty-1')).toBe('incarnation-1')
 })
 
-it('a host that cannot name an agent hands the hold to the screen check once the shell leaves', () => {
+it('a host that cannot name an agent releases the hold only after the agent itself reports', () => {
   const evidence = new MailboxForegroundEvidence()
   const probe = () => evidence.captureForegroundObservation('pty-1', 'incarnation-1')
   evidence.applyForeground('pty-1', probe(), 'shell')
-  evidence.applyForeground('pty-1', probe(), 'unknown')
+  // A failed Windows read looks like a negative shell-alone read.
+  evidence.applyForeground('pty-1', { ...probe(), agentUnprovable: true }, 'unknown')
   expect(evidence.foregroundHold('pty-1')).toBe('incarnation-1')
 
+  evidence.observeTerminal('pty-1', 'idle', true)
   evidence.applyForeground('pty-1', { ...probe(), agentUnprovable: true }, 'unknown')
   expect(evidence.foregroundHold('pty-1')).toBeUndefined()
   expect(evidence.screenRecovery('pty-1')).toBe('incarnation-1')
+})
+
+it('a new agent resumed after the held agent exited is what held mail awaits', () => {
+  const evidence = new MailboxForegroundEvidence()
+  const probe = () => evidence.captureForegroundObservation('pty-1', 'incarnation-1')
+  evidence.applyForeground('pty-1', { ...probe(), process: suspended }, 'agent', true)
+  evidence.applyForeground('pty-1', probe(), 'shell')
+  expect(
+    evidence.applyForeground(
+      'pty-1',
+      { ...probe(), process: newcomer, heldAgentGone: true },
+      'agent',
+      true
+    )
+  ).toBe(true)
+  expect(evidence.foregroundHold('pty-1')).toBeUndefined()
 })

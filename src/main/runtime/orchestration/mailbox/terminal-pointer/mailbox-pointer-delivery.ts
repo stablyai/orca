@@ -223,8 +223,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     return !!hold
   }
 
-  observeTerminal(ptyId: string, status?: string): void {
-    if (this.state.foreground.observeTerminal(ptyId, status)) {
+  observeTerminal(ptyId: string, status?: string, fromAgentHook?: boolean): void {
+    if (this.state.foreground.observeTerminal(ptyId, status, fromAgentHook)) {
       this.deps.onDeliveryDecision(ptyId, { reset: true })
       queueMicrotask(() => this.deps.redriveTerminal(ptyId))
     }

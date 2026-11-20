@@ -62,9 +62,6 @@ describe('owed mailbox foreground revalidation', () => {
         getForegroundProcess: async () => 'codex',
         confirmShellForeground: async () => {
           inspections++
-          if (mode === 'failed') {
-            throw new Error('inspection unavailable')
-          }
           return mode === 'shell'
         },
         supportsForegroundObservation: () => true,
@@ -110,6 +107,9 @@ describe('owed mailbox foreground revalidation', () => {
         expect(await runtime.readTerminalMailHold(`run:${run.id}`)).toMatchObject({
           kind: 'not-live'
         })
+        if (host === 'windows') {
+          Object.defineProperty(process, 'platform', { value: platform })
+        }
         mode = 'agent'
         await vi.advanceTimersByTimeAsync(65000)
         expect(write.mock.calls.map(([, data]) => data)).toEqual([
