@@ -26,6 +26,7 @@ import {
   BOT_ITEM_OPEN_QUESTION,
   BotItemQuestionStep
 } from './BotItemQuestionStep'
+import { BOT_ITEM_CHIPS_ATTRIBUTE } from './use-bot-item-chip-stacked'
 import { useBotItemHeldAnswers, type BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
 const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
@@ -123,7 +124,10 @@ export function BotItemQuestionLines({
                 <BotItemMarkdown text={decision.question} />
               </div>
               {open && actions && decision.replies.length > 0 ? (
-                <div className="mt-2.5 flex flex-wrap gap-2">
+                <div
+                  {...{ [BOT_ITEM_CHIPS_ATTRIBUTE]: '' }}
+                  className="mt-2.5 flex flex-wrap gap-2"
+                >
                   {decision.replies.map((reply) => (
                     <button
                       key={reply.label}

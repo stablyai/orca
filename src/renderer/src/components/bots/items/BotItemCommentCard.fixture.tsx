@@ -118,6 +118,52 @@ export const longQuestion = defineFixture({
   )
 })
 
+export const longOption = defineFixture({
+  width: 340,
+  render: () => (
+    <Feed>
+      <Card
+        event={ask('q4', {
+          ...LONG,
+          questions: [
+            {
+              ...LONG.questions[0]!,
+              options: [
+                {
+                  label: 'Lead with the faster startup requested in the last two weeks of feedback'
+                }
+              ],
+              recommended: 0
+            }
+          ]
+        })}
+        waiting
+      />
+    </Feed>
+  )
+})
+
+// Asked in prose, no quick replies: tagged and outlined, nothing to rule off.
+export const proseQuestion = defineFixture({
+  width: 340,
+  render: () => (
+    <Feed>
+      <Card
+        event={{
+          id: 'q3',
+          kind: 'commented',
+          actor: asker,
+          data: {
+            text: 'The staging deploy needs a token I don’t have. Can you add it to the vault?'
+          },
+          at: AT
+        }}
+        waiting
+      />
+    </Feed>
+  )
+})
+
 // Answered: no tag, no outline; the line reads "Question → answer" as before.
 export const answered = defineFixture({
   width: 340,

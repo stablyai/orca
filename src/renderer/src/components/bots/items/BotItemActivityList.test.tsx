@@ -158,6 +158,29 @@ it('tags the comment that asks Needs you while the item waits on it, and only th
   expect(plain!.textContent).not.toContain('Needs you')
 })
 
+it('tags a question asked in prose Needs you too, while it is the item’s question', () => {
+  const events: BotItemEvent[] = [
+    {
+      id: 'e2',
+      kind: 'commented',
+      actor: ASKER,
+      data: { text: 'Hold mail while paused?' },
+      at: 200
+    },
+    { id: 'e3', kind: 'status', actor: ASKER, data: { from: 'working', to: 'needs_you' }, at: 200 }
+  ]
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'Hold mail while paused?' }
+  })
+  const { rerender } = render(<BotItemActivityList bot={BOT} item={item} events={events} />)
+
+  expect(screen.getByRole('article').textContent).toContain('Needs you')
+
+  rerender(<BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />)
+  expect(screen.getByRole('article').textContent).not.toContain('Needs you')
+})
+
 it('shows an answer an older host recorded as a quoted comment, the question reading Question → pick', () => {
   const events: BotItemEvent[] = [
     ...WAITING,

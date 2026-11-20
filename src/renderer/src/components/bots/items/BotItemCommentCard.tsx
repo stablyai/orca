@@ -39,7 +39,7 @@ const QUESTION_RULE = '-ml-9 -mr-2 mt-2.5 border-t border-border pl-9 pr-2 pt-2.
 function NeedsYouTag(): React.JSX.Element {
   const t = useTranslate()
   return (
-    <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-agent-question/12 px-2 py-px text-[11px] font-semibold leading-4 text-agent-question-text">
+    <span className="ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-agent-question/12 px-2 py-px text-2xs font-semibold leading-4 text-agent-question-text">
       <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-agent-question" />
       {t('bots.items.status.needsYou', 'Needs you')}
     </span>
@@ -102,8 +102,6 @@ export function BotItemCommentCard({
   const waiting = entry.waiting === true
   const images = botItemCommentImages(event.data)
   const shape = botItemQuestionShape(event.data)
-  // `waiting` is false once every line has its answer, or a reply is on its way.
-  const asking = waiting && shape.decisions.length > 0
   // Its images show after the words, so the [Image #N] its send wrote go, as in chat's sent messages.
   // Its files show as links after them, so their `@path`s go from the words.
   const { words } = botItemCommentFiles(stripSentImagePromptMarkers(shape.body, images.length))
@@ -127,16 +125,16 @@ export function BotItemCommentCard({
         className={cn(
           'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]',
           // Asking the owner: a soft outline, no fill change, so it stands out when scanning.
-          asking && 'ring-1 ring-agent-question/45',
+          waiting && 'ring-1 ring-agent-question/45 dark:ring-agent-question/60',
           // A question's chips end the card: more room under them.
-          shape.decisions.length > 0 ? 'pb-3.5' : 'pb-2'
+          shape.decisions.length > 0 ? 'pb-4' : 'pb-2'
         )}
       >
         <div className="mb-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <Avatar bot={bot} event={event} name={name} />
           <b className="min-w-0 truncate text-[13px] font-medium text-foreground">{name}</b>
-          {asking ? <NeedsYouTag /> : null}
-          <span className={cn('shrink-0 text-2xs tabular-nums', !asking && 'ml-auto')}>
+          {waiting ? <NeedsYouTag /> : null}
+          <span className={cn('shrink-0 text-2xs tabular-nums', !waiting && 'ml-auto')}>
             {format.format(event.at)}
           </span>
         </div>
@@ -187,7 +185,7 @@ export function BotItemCommentCard({
               byOrder={entry.byOrder}
               actions={quickReplies}
               // Ruled off only below something: a question with no body stays under the name.
-              className={asking && shape.body.trim() ? QUESTION_RULE : undefined}
+              className={waiting && shape.body.trim() ? QUESTION_RULE : undefined}
             />
           ) : null}
           {failed ? (

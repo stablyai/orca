@@ -5,6 +5,7 @@
 import { Check, ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { buttonVariants } from '@/components/ui/button'
 import {
   botItemQuestionLine,
   type BotItemQuestionShape,
@@ -12,16 +13,22 @@ import {
 } from '../../../../../shared/bots/bot-item-ask'
 import { BotItemMarkdown } from './BotItemMarkdown'
 import type { BotItemQuestionSteps, BotItemQuickReplyActions } from './use-bot-item-question-steps'
+import { BOT_ITEM_CHIPS_ATTRIBUTE, useBotItemChipStacked } from './use-bot-item-chip-stacked'
 
 export const BOT_ITEM_CHIP =
-  'min-h-8 max-w-full rounded-2xl border border-question-option-border px-3.5 py-1.5 text-left text-[13px] leading-[18px]'
+  'min-h-8 w-fit max-w-full rounded-2xl border border-question-option-border px-3.5 py-1.5 text-left text-[13px] leading-[18px]'
 
 const CHIP_ACTION =
   'outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/50'
 
 /** The recommended reply of an open line: filled, the one the owner most likely means. */
-export const BOT_ITEM_CHIP_RECOMMENDED =
-  'border-foreground bg-foreground text-background hover:bg-foreground/90'
+export const BOT_ITEM_CHIP_RECOMMENDED = buttonVariants({
+  variant: 'default',
+  className: cn(
+    BOT_ITEM_CHIP,
+    'h-auto justify-start gap-0 whitespace-normal border-foreground bg-foreground font-normal text-background hover:bg-foreground/90 focus-visible:ring-2 focus-visible:ring-ring/50'
+  )
+})
 
 /** An open question's words: a title, 14 px semibold, over the Markdown's own 13 px. */
 export const BOT_ITEM_OPEN_QUESTION =
@@ -35,21 +42,42 @@ export function BotItemChipWords({
   filled = false
 }: {
   reply: BotItemQuickReply
-  /** On a filled chip: its Recommended reads on the dark fill. */
+  /** The filled recommended chip: Recommended reads on the fill, under the label when both don't fit. */
   filled?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const { root, label, tag, stacked } = useBotItemChipStacked(filled)
+  const recommended = t('bots.items.ask.recommended', 'Recommended')
+  if (filled) {
+    return (
+      <span
+        ref={root}
+        className={cn(
+          'max-w-full items-baseline',
+          stacked ? 'flex flex-col items-start' : 'inline-flex'
+        )}
+      >
+        <span ref={label} className="min-w-0 [overflow-wrap:anywhere]">
+          {reply.label}
+        </span>
+        <span
+          ref={tag}
+          className={cn(
+            'shrink-0 whitespace-nowrap text-2xs text-background/70',
+            !stacked && 'ml-1.5'
+          )}
+        >
+          {recommended}
+        </span>
+      </span>
+    )
+  }
   return (
     <>
       {reply.label}
       {reply.recommended ? (
-        <span
-          className={cn(
-            'ml-1.5 whitespace-nowrap text-2xs',
-            filled ? 'text-background/70' : 'text-muted-foreground'
-          )}
-        >
-          {t('bots.items.ask.recommended', 'Recommended')}
+        <span className="ml-1.5 whitespace-nowrap text-2xs text-muted-foreground">
+          {recommended}
         </span>
       ) : null}
     </>
@@ -170,7 +198,7 @@ export function BotItemQuestionStep({
           </div>
           <StepNav steps={steps} />
         </div>
-        <div className="mt-2.5 flex flex-wrap gap-2">
+        <div {...{ [BOT_ITEM_CHIPS_ATTRIBUTE]: '' }} className="mt-2.5 flex flex-wrap gap-2">
           {decision.replies.map((reply) => {
             const picked = held === reply.label
             // Filled until the owner picks one on this line; then the pick stands out instead.
@@ -195,7 +223,7 @@ export function BotItemQuestionStep({
                 }}
               >
                 {picked ? <Check className="size-3 shrink-0" /> : null}
-                <span className="min-w-0">
+                <span className="min-w-0 max-w-full">
                   <BotItemChipWords reply={reply} filled={filled} />
                 </span>
               </button>
