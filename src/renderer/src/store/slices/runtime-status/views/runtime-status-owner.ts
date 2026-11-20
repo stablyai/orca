@@ -20,28 +20,6 @@ export function readRuntimeStatuses(): RuntimeStatuses {
   return appRuntimeStatusSubscriptions().readStatuses()
 }
 
-/** Wakes when any host's status changes, and on nothing else. */
-export function subscribeRuntimeStatuses(listener: () => void): () => void {
-  return appRuntimeStatusSubscriptions().subscribeStatuses(listener)
-}
-
-/** Hands each host status change with the map it replaced. */
-export function subscribeRuntimeStatusChanges(
-  listener: (statuses: RuntimeStatuses, previous: RuntimeStatuses) => void
-): () => void {
-  const owner = appRuntimeStatusSubscriptions()
-  let previous = owner.readStatuses()
-  return owner.subscribeStatuses(() => {
-    const statuses = owner.readStatuses()
-    if (statuses === previous) {
-      return
-    }
-    const replaced = previous
-    previous = statuses
-    listener(statuses, replaced)
-  })
-}
-
 /** One callback per app store publication with the host statuses on each side of it. */
 export function subscribeAppStoreWithStatuses(
   listener: (

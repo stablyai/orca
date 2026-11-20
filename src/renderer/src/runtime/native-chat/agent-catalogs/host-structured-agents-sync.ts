@@ -6,6 +6,7 @@ import {
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '@/store/index'
 import {
+  subscribeStoreWithStatuses,
   runtimeStatusSubscriptionsFor,
   type RuntimeStatuses
 } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
@@ -75,13 +76,13 @@ export function installHostStructuredAgentsSync(): () => void {
       void syncLocalHost(useAppStore.getState().settings)
     }
   })
-  const stopStore = useAppStore.subscribe((state, previousState) => {
+  const stopStore = subscribeStoreWithStatuses(useAppStore, (state, previousState, statuses) => {
     if (state.settings === previousState.settings) {
       return
     }
     if (launchesMayOpenChats(state) && !launchesMayOpenChats(previousState)) {
       void syncLocalHost(state.settings)
-      syncPairedHosts(hostStatuses.readStatuses())
+      syncPairedHosts(statuses)
     }
   })
   // A status write re-reads only the hosts it touched; an unpaired host is forgotten without loading the rest.

@@ -15,7 +15,11 @@ import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runt
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { onServerControlConnected } from '../workspace-layout/server/server-layout-view-report'
 import { subscribeRuntimeHostContactRegained } from '../hosts/connections/runtime-host-contact-regained'
-import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
+import {
+  type RuntimeStatuses,
+  subscribeStoreWithStatuses,
+  runtimeStatusSubscriptionsFor
+} from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 
 type UnsavedReportState = WorktreeOperationRouteState & Pick<AppState, 'openFiles' | 'editorDrafts'>
 
@@ -167,9 +171,9 @@ export function installRemoteUnsavedEditorReport(): () => void {
   const hostStatuses = runtimeStatusSubscriptionsFor(useAppStore)
   const noteEnvironments = (
     state: Pick<AppState, 'runtimeEnvironments'>,
-    environmentIds: Iterable<string> = hostStatuses.readStatuses().keys()
+    statuses: RuntimeStatuses,
+    environmentIds: Iterable<string> = statuses.keys()
   ): string[] => {
-    const statuses = hostStatuses.readStatuses()
     // Statuses can outlive a removed host; only configured hosts get a report.
     const noted: string[] = []
     let configured: Set<string> | undefined
@@ -186,15 +190,15 @@ export function installRemoteUnsavedEditorReport(): () => void {
     }
     return noted
   }
-  noteEnvironments(useAppStore.getState())
+  noteEnvironments(useAppStore.getState(), hostStatuses.readStatuses())
   sync()
   // Routing reads no host status, so a status write only owes a first report to a newly seen host.
   const stopStatuses = hostStatuses.subscribeStatusChanges((change) =>
-    syncHosts(noteEnvironments(useAppStore.getState(), change.ids))
+    syncHosts(noteEnvironments(useAppStore.getState(), hostStatuses.readStatuses(), change.ids))
   )
-  const stopStore = useAppStore.subscribe((state, previous) => {
+  const stopStore = subscribeStoreWithStatuses(useAppStore, (state, previous, statuses) => {
     if (state.runtimeEnvironments !== previous.runtimeEnvironments) {
-      noteEnvironments(state)
+      noteEnvironments(state, statuses)
     }
     if (readReportInputs.some((read) => read(state) !== read(previous))) {
       sync()

@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { AppState } from '@/store/types'
 import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -6,8 +7,8 @@ import type { AgentSessionLaunchRequest } from '@/lib/agent-session/launch/routi
 import {
   buildAgentLaunchRouteInput,
   buildAgentLaunchRouteView,
-  resolveAgentLaunchHost,
-  selectAgentLaunchRouteView,
+  hostCapabilitiesFrom,
+  resolveAgentLaunchOwner,
   type AgentLaunchRouteArgs
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
@@ -42,7 +43,11 @@ export function buildAgentMenuRouteInput(
   statuses: RuntimeStatuses,
   args: AgentLaunchRouteArgs
 ) {
-  return buildAgentLaunchRouteInput(buildAgentLaunchRouteView(state, statuses), args)
+  // The live map needs no pinned view: the route reads the owner's statuses itself.
+  return buildAgentLaunchRouteInput(
+    statuses === readRuntimeStatuses() ? state : buildAgentLaunchRouteView(state, statuses),
+    args
+  )
 }
 
 /** Identity facts for the picker's owner and acquisition keys; readiness stays out of them. */
@@ -52,12 +57,12 @@ export function readAgentMenuLaunchFacts(
   workspace: AgentSessionLaunchRequest['workspace']
 ) {
   // Only the host and its capabilities are read, so skip building the full route input.
-  const input = resolveAgentLaunchHost(selectAgentLaunchRouteView(state, statuses), workspace)
-  const host = parseExecutionHostId(input.executionHostId)
+  const { owner, executionHostId } = resolveAgentLaunchOwner(state, workspace)
+  const host = parseExecutionHostId(executionHostId)
   const status = host?.kind === 'runtime' ? statuses.get(host.environmentId) : undefined
   const contact = runtimeHostContactForEntry(status)
   return {
-    executionHostId: input.executionHostId,
+    executionHostId,
     runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
     hostPlatform:
       host?.kind === 'local'
@@ -71,7 +76,8 @@ export function readAgentMenuLaunchFacts(
     checking:
       contact.verdict === 'unverifiable' &&
       ['checking', 'transport-connecting'].includes(contact.reason),
-    capabilities: input.hostCapabilities?.join(',')
+    capabilities:
+      owner === null ? undefined : hostCapabilitiesFrom(statuses, executionHostId)?.join(',')
   }
 }
 

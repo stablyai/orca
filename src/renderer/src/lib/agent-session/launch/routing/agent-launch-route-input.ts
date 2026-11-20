@@ -94,9 +94,16 @@ const agentLaunchRouteInputsChanged = (
   state: AppState,
   statuses: RuntimeStatuses,
   previous: AgentLaunchRouteView
-): boolean =>
-  statuses !== previous.hostStatuses ||
-  AGENT_LAUNCH_ROUTE_STATE_KEYS.some((key) => state[key] !== previous[key])
+): boolean => statuses !== previous.hostStatuses || routeStateKeysChanged(state, previous)
+
+function routeStateKeysChanged(state: AppState, previous: AgentLaunchRouteView): boolean {
+  for (const key of AGENT_LAUNCH_ROUTE_STATE_KEYS) {
+    if (state[key] !== previous[key]) {
+      return true
+    }
+  }
+  return false
+}
 
 /** A fresh route view, for render-time readers whose statuses may be a retained view's frozen map. */
 export function buildAgentLaunchRouteView(
@@ -168,10 +175,17 @@ export function resolveHostCapabilities(
   store: Pick<AgentLaunchRouteStore, 'hostStatuses'>,
   executionHostId: string
 ): readonly string[] | null {
+  return hostCapabilitiesFrom(routeHostStatuses(store), executionHostId)
+}
+
+/** A host's verified capabilities read from these statuses; the local host reads its own. */
+export function hostCapabilitiesFrom(
+  statuses: RuntimeStatuses,
+  executionHostId: string
+): readonly string[] | null {
   const host = parseExecutionHostId(executionHostId)
   return host?.kind === 'runtime'
-    ? (lastVerifiedRuntimeStatus(routeHostStatuses(store).get(host.environmentId))?.capabilities ??
-        null)
+    ? (lastVerifiedRuntimeStatus(statuses.get(host.environmentId))?.capabilities ?? null)
     : readLocalRuntimeCapabilitiesOrUnknown()
 }
 
