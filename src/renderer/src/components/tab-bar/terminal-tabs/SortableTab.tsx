@@ -74,6 +74,7 @@ export default function SortableTab({
   nativeChat,
   namingFailure,
   closable = true,
+  sizing = 'terminal',
   canContinueInTerminal = true,
   identityIcon,
   identityDetail,
@@ -179,7 +180,7 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive, 'terminal')
+  const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
   const tabTitle = tab.customTitle ?? tab.title
   const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
