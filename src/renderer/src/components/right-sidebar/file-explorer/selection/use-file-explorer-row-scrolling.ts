@@ -26,6 +26,7 @@ type UseFileExplorerRowScrollingParams = {
   setSelectedPath: (path: string | null) => void
   activeFileId: string | null
   openFiles: OpenFile[]
+  hasNameFilterQuery: boolean
 }
 
 type UseFileExplorerRowScrollingResult = {
@@ -54,7 +55,8 @@ export function useFileExplorerRowScrolling({
   loadMoreDir,
   setSelectedPath,
   activeFileId,
-  openFiles
+  openFiles,
+  hasNameFilterQuery
 }: UseFileExplorerRowScrollingParams): UseFileExplorerRowScrollingResult {
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
@@ -120,6 +122,7 @@ export function useFileExplorerRowScrolling({
     displayRootPath,
     pendingExplorerReveal,
     openFiles,
+    hasNameFilterQuery,
     rowProjection,
     setSelectedPath,
     virtualizer
