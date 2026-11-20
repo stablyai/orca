@@ -235,10 +235,11 @@ describe('WorkerThreadChildProcessHost availability', () => {
     const child = host.spawn({ program: 'git', args: ['status'] })
     const failure = new Promise<Error>((resolve) => child.once('error', resolve))
     await expect(failure).resolves.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
-    expect(child.closed).toBe(false)
+    // It answered, so it is offered again.
+    expect(host.available()).toBe(true)
   })
 
-  it('keeps a child unproven when a worker that was ready dies before acknowledging it', async () => {
+  it('fails a child the ready worker never started as a spawn error', async () => {
     const host = new WorkerThreadChildProcessHost(() => {
       const transport = new EventEmitter()
       setImmediate(() => transport.emit('message', { type: 'ready' }))
@@ -252,8 +253,9 @@ describe('WorkerThreadChildProcessHost availability', () => {
     await new Promise((resolve) => setImmediate(resolve))
     const child = host.spawn({ program: 'git', args: ['status'] })
     const failure = new Promise<Error>((resolve) => child.once('error', resolve))
+    const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
     await expect(failure).resolves.toMatchObject({ code: WORKER_CHILD_ABANDONED_CODE })
-    expect(child.closed).toBe(false)
+    await closed
   })
 })
 

@@ -1,10 +1,10 @@
-import { Buffer } from 'buffer/index.js'
 import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
 import type { MobileFileMedia } from './mobile-file-media'
 import { isMobileMethodUnavailableError } from '../../transport/rpc/mobile-method-unavailable'
+import { decodeBase64Bytes } from '../../transport/encryption/base64-byte-codec'
 
 export const MOBILE_MEDIA_CHUNK_BYTES = 384 * 1024
 export const MOBILE_MEDIA_MAX_BYTES = 256 * 1024 * 1024
@@ -94,9 +94,7 @@ export async function downloadMobileFileMedia(
         await chunkRead.request(client, { ...params, offset, length }, options)
       )
       checkDownloadActive(signal)
-      const decoded = Buffer.from(chunk.contentBase64, 'base64')
-      // Hand sinks a plain Uint8Array: Expo's JSI rejects the polyfill's Buffer subclass.
-      const bytes = new Uint8Array(decoded.buffer, decoded.byteOffset, decoded.byteLength)
+      const bytes = decodeBase64Bytes(chunk.contentBase64)
       if (
         bytes.byteLength !== chunk.bytesRead ||
         chunk.bytesRead === 0 ||

@@ -1,8 +1,8 @@
 import {
   useAppStateViewActive,
-  useAppViewExternalStore,
-  useAppStateValue
+  useAppViewExternalStore
 } from '@/store/retained-views/app-state-view'
+import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useCallback, useEffect, useMemo } from 'react'
 import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
@@ -72,21 +72,17 @@ export function useManagedRuntimeInstall(
   const record = useHostStructuredAgent(target, agent)
   const managed = record?.managedRuntime === true
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  const remote = useAppStateValue((state) =>
-    environmentId === null
-      ? null
-      : lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))
+  const remote = useRuntimeHostStatusViewSelector(environmentId, (entry) =>
+    environmentId === null ? null : lastVerifiedRuntimeStatus(entry)
   )
   // The entry's own status clears on a lost contact; the verified one above outlives it.
-  const reachable = useAppStateValue(
-    (state) =>
-      environmentId === null ||
-      Boolean(state.runtimeStatusByEnvironmentId.get(environmentId)?.status)
+  const reachable = useRuntimeHostStatusViewSelector(
+    environmentId,
+    (entry) => environmentId === null || Boolean(entry?.status)
   )
-  const contactEpoch = useAppStateValue((state) =>
-    environmentId === null
-      ? 0
-      : (state.runtimeStatusByEnvironmentId.get(environmentId)?.hostContactEpoch ?? 0)
+  const contactEpoch = useRuntimeHostStatusViewSelector(
+    environmentId,
+    (entry) => entry?.hostContactEpoch ?? 0
   )
   const localCapable = useAppViewExternalStore(
     subscribeLocalRuntimeCapabilitiesKnown,

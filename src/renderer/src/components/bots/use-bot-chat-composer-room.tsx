@@ -73,7 +73,7 @@ export function useBotChatComposerRoom(
           // Keyed by bot and computer, so same-named bots on two computers both list.
           key: botRefKey(bot),
           id: bot.id,
-          icon: <BotAvatar bot={bot} className="mt-0.5 size-5 shrink-0" />,
+          icon: <BotAvatar bot={bot} className="size-5 shrink-0" />,
           ...(detail ? { detail } : {}),
           ...(elsewhere ? { host: <BotMentionHostBadge hostId={bot.hostId} /> } : {}),
           ...(elsewhere && !live.includes(bot.hostId) ? { dimmed: true as const } : {}),

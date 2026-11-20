@@ -389,7 +389,10 @@ describe('an Orca-typed turn in a chat that posts to its Slack thread', () => {
 
   it('keeps the reply in Orca when none of its messages posted', async () => {
     const events = slackThread(() => null)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(events.some((event) => event.kind === 'turn-ended' && event.mirror)).toBe(false)
+    await vi.waitFor(() =>
+      expect(events).toEqual([expect.objectContaining({ kind: 'turn-ended', origin: 'local' })])
+    )
+    expect(events[0]).not.toHaveProperty('lastAssistantMessage')
+    expect(events[0]).not.toHaveProperty('mirror')
   })
 })

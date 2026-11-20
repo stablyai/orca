@@ -12,13 +12,18 @@ export function hydrateBotSidebarState(
   ui: PersistedUIState
 ): Pick<
   UISlice,
-  'hideBotCreatedWorkspaces' | 'botSidebarView' | 'botChatFolds' | 'sidebarBotsHeight'
+  | 'hideBotCreatedWorkspaces'
+  | 'botSidebarView'
+  | 'botChatFolds'
+  | 'sidebarBotsHeight'
+  | 'sidebarProjectsFirst'
 > {
   return {
     hideBotCreatedWorkspaces: ui.hideBotCreatedWorkspaces !== false,
     botSidebarView: normalizeBotSidebarView(ui.botSidebarView),
     botChatFolds: normalizeBotChatFolds(ui.botChatFolds),
-    sidebarBotsHeight: normalizeSidebarBotsHeight(ui.sidebarBotsHeight)
+    sidebarBotsHeight: normalizeSidebarBotsHeight(ui.sidebarBotsHeight),
+    sidebarProjectsFirst: ui.sidebarProjectsFirst === true
   }
 }
 

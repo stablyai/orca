@@ -102,7 +102,7 @@ export function ComposioEventsCardView({
                 : t('bots.composio.events.setUp', 'Set it up')}
             </Button>
             <Button size="xs" variant="ghost" disabled={busy} onClick={onByHand}>
-              {t('bots.composio.events.byHand', 'I’ll do it in Composio')}
+              {t('bots.composio.events.byHand', 'Manual setup')}
             </Button>
           </div>
         )}

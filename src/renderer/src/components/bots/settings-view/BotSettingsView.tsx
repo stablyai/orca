@@ -48,7 +48,7 @@ function Crumb({
   const back = page
     ? t('bots.settingsView.backToSettings', 'Back to Settings')
     : host === 'panel'
-      ? t('bots.settingsView.backToItems', 'Back to Items')
+      ? t('bots.settingsView.backToItems', 'Back to Home')
       : t('bots.settingsView.backToBots', 'Back to Bots')
   const sep = (
     <span aria-hidden className="shrink-0 text-muted-foreground">
@@ -97,7 +97,11 @@ function Crumb({
 }
 
 /** Focus after a screen change: the row Back came from, else the screen itself, unless it is elsewhere. */
-function focusScreen(node: HTMLElement, cameFrom: BotSettingsPage | null): void {
+function focusScreen(
+  node: HTMLElement,
+  cameFrom: BotSettingsPage | null,
+  preventScroll: boolean
+): void {
   const active = document.activeElement
   if (active && active !== document.body && !node.contains(active)) {
     return
@@ -105,7 +109,22 @@ function focusScreen(node: HTMLElement, cameFrom: BotSettingsPage | null): void 
   const row = cameFrom
     ? node.querySelector<HTMLElement>(`[data-settings-page="${cameFrom}"]`)
     : null
-  ;(row ?? node.querySelector<HTMLElement>('[data-settings-screen]'))?.focus()
+  ;(row ?? node.querySelector<HTMLElement>('[data-settings-screen]'))?.focus({ preventScroll })
+}
+
+function findScrollContainer(screen: HTMLElement, host: BotSettingsHost): HTMLElement | null {
+  if (host === 'panel') {
+    return screen
+  }
+  let parent = screen.parentElement
+  while (parent) {
+    const overflowY = getComputedStyle(parent).overflowY
+    if (overflowY === 'auto' || overflowY === 'scroll') {
+      return parent
+    }
+    parent = parent.parentElement
+  }
+  return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null
 }
 
 export function BotSettingsView({
@@ -132,10 +151,18 @@ export function BotSettingsView({
     [bot]
   )
   const guards = useMemo(() => createBotSettingsLeaveGuards(), [])
-  // The subpage Back left, whose row takes focus on the root.
+  // The subpage Back left, whose row takes focus on the root, and the root scroll position to restore.
   const cameFrom = useRef<BotSettingsPage | null>(null)
+  const screenRef = useRef<HTMLElement | null>(null)
+  const rootScrollTop = useRef<number | null>(null)
 
   const open = (next: BotSettingsPage): void => {
+    if (!page && screenRef.current) {
+      const scroller = findScrollContainer(screenRef.current, host)
+      if (scroller) {
+        rootScrollTop.current = scroller.scrollTop
+      }
+    }
     cameFrom.current = null
     setBotSettingsPlace(host, { botId: bot.id, page: next })
   }
@@ -174,11 +201,26 @@ export function BotSettingsView({
     return () => document.removeEventListener('keydown', onKeyDown, true)
   }, [back, host, page])
 
-  const showScreen = useCallback((node: HTMLDivElement | null): void => {
-    if (node) {
-      focusScreen(node, cameFrom.current)
-    }
-  }, [])
+  const showScreen = useCallback(
+    (node: HTMLDivElement | null): void => {
+      if (!node) {
+        return
+      }
+      const screen = node.querySelector<HTMLElement>('[data-settings-screen]')
+      screenRef.current = screen
+      const scroller = screen ? findScrollContainer(screen, host) : null
+      let restoredScroll = false
+      if (!page && rootScrollTop.current !== null && scroller) {
+        scroller.scrollTop = rootScrollTop.current
+        rootScrollTop.current = null
+        restoredScroll = true
+      } else if (page && host === 'page' && scroller) {
+        scroller.scrollTop = 0
+      }
+      focusScreen(node, cameFrom.current, restoredScroll)
+    },
+    [host, page]
+  )
 
   return (
     <BotSettingsLeaveGuardContext.Provider value={guards}>
@@ -232,7 +274,11 @@ export function BotSettingsView({
             {place?.page ? (
               <fieldset
                 disabled={offline}
-                className={cn('flex min-w-0 flex-col gap-[18px]', offline ? 'opacity-60' : null)}
+                className={cn(
+                  'flex min-w-0 flex-col gap-[18px]',
+                  place.page === 'soul' && host === 'panel' ? 'min-h-0 flex-1' : null,
+                  offline ? 'opacity-60' : null
+                )}
               >
                 <BotSettingsSubpage
                   bot={bot}

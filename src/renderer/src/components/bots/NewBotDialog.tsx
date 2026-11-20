@@ -1,6 +1,10 @@
 import React, { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { LayoutTemplate } from 'lucide-react'
+import {
+  AddRemoteHostDialog,
+  type AddRemoteHostMode
+} from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -123,6 +127,7 @@ export function NewBotDialog({
   const nameRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const [name, setName] = useState(proposal?.name ?? initialName ?? '')
+  const [addHostMode, setAddHostMode] = useState<AddRemoteHostMode | null>(null)
   const [draft, setDraft] = useState(() => draftOf(proposal, initialPurpose))
   const hostChoice = useBotCreateHost(open, hosts, offerHostId)
   const { hostId, blocked } = hostChoice.host
@@ -148,6 +153,7 @@ export function NewBotDialog({
 
   const close = (made?: Bot): void => {
     setName(proposal?.name ?? '')
+    setAddHostMode(null)
     setDraft(draftOf(proposal, initialPurpose))
     agentSetup.reset()
     picture.reset()
@@ -306,6 +312,7 @@ export function NewBotDialog({
               model={menu.model}
               choices={choices}
               onSetupChange={agentSetup.setSetup}
+              onAddHost={hosts ? undefined : setAddHostMode}
             />
             {proposal ? (
               <div className="border-t border-border pt-4">
@@ -346,7 +353,7 @@ export function NewBotDialog({
                 className="flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 <LayoutTemplate className="size-3.5" aria-hidden />
-                {t('bots.new.fromTemplate', 'Start from a template')}
+                {t('bots.new.fromTemplate', 'Use template')}
               </button>
             ) : null}
             <BotCreateButton
@@ -360,6 +367,9 @@ export function NewBotDialog({
           </div>
         </form>
       </DialogContent>
+      {addHostMode ? (
+        <AddRemoteHostDialog mode={addHostMode} onOpenChange={setAddHostMode} />
+      ) : null}
     </Dialog>
   )
 }

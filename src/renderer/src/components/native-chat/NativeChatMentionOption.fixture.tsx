@@ -5,7 +5,7 @@ import type { NativeChatRoomMention } from './composer/native-chat-composer-type
 import { NativeChatMentionOption } from './NativeChatMentionOption'
 
 const icon = (fallback: string) => (
-  <BotAvatarTile src={null} fallback={fallback} className="mt-0.5 size-5 shrink-0" />
+  <BotAvatarTile src={null} fallback={fallback} className="size-5 shrink-0" />
 )
 
 // This computer's bot, a paired server's (its pill), one on a server that is down (dimmed in place),
@@ -37,8 +37,8 @@ export const bots = defineFixture({
           key={row.name}
           className={
             index === 1
-              ? 'flex w-full items-start gap-2 rounded-sm bg-accent px-2 py-1.5 text-sm'
-              : 'flex w-full items-start gap-2 px-2 py-1.5 text-sm'
+              ? 'flex w-full items-center gap-2 rounded-sm bg-accent px-2 py-1.5 text-sm'
+              : 'flex w-full items-center gap-2 px-2 py-1.5 text-sm'
           }
         >
           <NativeChatMentionOption value={row.name} member={row} />

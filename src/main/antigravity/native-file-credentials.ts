@@ -1,7 +1,9 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
+import { lstat, mkdir, readFile } from 'node:fs/promises'
+import { inCredentialFileOrder } from '../credentials/credential-file-io'
 import { dirname } from 'node:path'
 import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
-import { readPrivateWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
+import { readPrivateWindowsCredentialFile } from '../../shared/secure-storage/windows-credential-file-io'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
 import type { AntigravityCredentialBackend } from './native-account-service'
 
@@ -46,20 +48,26 @@ export function isAntigravityContainerOrWslHost(): boolean {
   return false
 }
 
-export function readAntigravityCredentialFile(path: string): string | null {
+export async function readAntigravityCredentialFile(path: string): Promise<string | null> {
   try {
     if (process.platform === 'win32') {
-      const raw = readPrivateWindowsFile(path, 64 * 1024)
+      const raw = await readPrivateWindowsCredentialFile(path, 64 * 1024)
       return raw ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(raw) : null
     }
-    if (!existsSync(path)) {
-      return null
+    let metadata
+    try {
+      metadata = await lstat(path)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return null
+      }
+      throw error
     }
-    const stat = lstatSync(path)
+    const stat = metadata
     if (!stat.isFile() || stat.size > 64 * 1024 || (stat.mode & 0o077) !== 0) {
       throw new Error('unsafe credential file')
     }
-    return readFileSync(path, 'utf8')
+    return await readFile(path, 'utf8')
   } catch {
     throw new Error('The Antigravity execution-host credential file could not be read safely.')
   }
@@ -71,33 +79,35 @@ export function createAntigravityFileCredentialBackend(
 ): AntigravityCredentialBackend {
   async function read() {
     try {
-      const contents = readAntigravityCredentialFile(path)
+      const contents = await readAntigravityCredentialFile(path)
       return contents === null ? null : parseCredential(contents)
     } catch {
       throw new Error('The Antigravity execution-host credential file could not be read safely.')
     }
   }
   return {
-    read,
+    read: () => inCredentialFileOrder(`${path}.mutation`, read),
     async write(contents, expected) {
-      parseCredential(contents)
-      if ((await read())?.contents !== (expected ?? undefined)) {
-        throw new Error(CONFLICT)
-      }
-      try {
-        mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-        writeCredentialFileAtomic(path, Buffer.from(contents, 'utf8'), undefined, true)
-      } catch (error) {
-        if (process.platform === 'win32') {
-          throw new Error(
-            'Antigravity could not update its credential file privately. Check the file permissions and try again.'
-          )
+      return inCredentialFileOrder(`${path}.mutation`, async () => {
+        parseCredential(contents)
+        if ((await read())?.contents !== (expected ?? undefined)) {
+          throw new Error(CONFLICT)
         }
-        throw error
-      }
-      if ((await read())?.contents !== contents) {
-        throw new Error(CONFLICT)
-      }
+        try {
+          await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+          await writeCredentialFileAtomic(path, Buffer.from(contents, 'utf8'), undefined, true)
+        } catch (error) {
+          if (process.platform === 'win32') {
+            throw new Error(
+              'Antigravity could not update its credential file privately. Check the file permissions and try again.'
+            )
+          }
+          throw error
+        }
+        if ((await read())?.contents !== contents) {
+          throw new Error(CONFLICT)
+        }
+      })
     }
   }
 }

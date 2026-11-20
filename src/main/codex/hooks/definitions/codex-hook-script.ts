@@ -3,6 +3,7 @@ import {
   buildPosixClaudeBackgroundJobGuardLines
 } from '../../../agent-hooks/installation/scripts/claude-background-job-guard'
 import { buildPosixAgentHookPostCommand } from '../../../agent-hooks/installation/scripts/hook-post-command'
+import { buildHookTmuxPaneCapture } from '../../../agent-hooks/installation/scripts/hook-process-capture'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
@@ -28,6 +29,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
+    ...buildHookTmuxPaneCapture(),
     ...buildPosixHookSpoolLines('codex'),
     ...buildPosixClaudeBackgroundJobGuardLines(),
     // Reload endpoint state so surviving PTYs keep reporting after restart.

@@ -13,7 +13,7 @@ import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/
 import RecentTabSwitcher from '../components/tab-bar/recent-switcher/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/freshness/SkillFreshnessUpdateDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
-import { NativeChatResumeOnRestartModal } from '../components/native-chat-recovery/NativeChatResumeRuntimeModal'
+import { NativeChatResumeToasts } from '../components/native-chat-recovery/toast/NativeChatResumeToastHost'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { LanguagePackDiscoveryHost } from '../components/languages/LanguagePackDiscoveryHost'
 import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/PluginInstallTrustDialog'
@@ -300,7 +300,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         onChatUiHereCornerCardClose={() => onboardingGate.setChatUiHereCornerCardOpen(false)}
       />
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>
-        <NativeChatResumeOnRestartModal />
+        <NativeChatResumeToasts />
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
         <StarNagToastHost />

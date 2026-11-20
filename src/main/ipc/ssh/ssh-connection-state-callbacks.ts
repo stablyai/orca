@@ -10,7 +10,7 @@ import {
   credentialRequestedForTarget,
   testingTargets
 } from './ssh-connect-attempt-registry'
-import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
+import { connectionManager } from './ssh-ipc-context'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { recordSshSignInRequirement } from './ssh-sign-in-requirement'
 import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
@@ -30,7 +30,7 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
     (connectInFlight.has(targetId) || isSshHostCensusInFlight(targetId))
   ) {
     // Raw transport connected is premature while the host server decision is still pending.
-    broadcastSshState(getCurrentMainWindow, targetId, {
+    broadcastSshState(targetId, {
       targetId,
       status: 'connecting',
       error: state.error,
@@ -38,7 +38,7 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
     })
     return
   }
-  broadcastSshState(getCurrentMainWindow, targetId, state)
+  broadcastSshState(targetId, state)
   // An explicit connect restores through its own publish; this covers a transport that recovered.
   if (state.status === 'connected') {
     void restoreManagedHostPortForwards(targetId)
@@ -53,7 +53,7 @@ export function createSshConnectionCallbacks(): SshConnectionCallbacks {
         return Promise.resolve(null)
       }
       credentialRequestedForTarget.add(targetId)
-      return requestCredential(getCurrentMainWindow, targetId, kind, detail, echo, signal)
+      return requestCredential(targetId, kind, detail, echo, signal)
     },
     onStateChange: handleSshConnectionStateChange
   }

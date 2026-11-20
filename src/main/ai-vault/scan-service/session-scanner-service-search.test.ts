@@ -24,6 +24,7 @@ let harness: SessionSearchIndexerHarness
 let currentRoots: SessionSearchIndexerHarness['roots']
 let originalSend: typeof process.send
 const sent: AiVaultServiceChildMessage[] = []
+const replyWaiters = new Map<number, (reply: AiVaultServiceChildMessage) => void>()
 let nextId = 1
 
 function emit(message: AiVaultServiceParentMessage): void {
@@ -32,14 +33,12 @@ function emit(message: AiVaultServiceParentMessage): void {
 
 async function call(body: AiVaultServiceRequestBody): Promise<AiVaultServiceResultValue> {
   const id = nextId++
+  // Reconcile can outlast a poll window, so wait for this id's reply.
+  const replied = new Promise<AiVaultServiceChildMessage>((resolve) =>
+    replyWaiters.set(id, resolve)
+  )
   emit({ ...body, id })
-  const reply = await vi.waitFor(() => {
-    const found = sent.find(
-      (message) => (message.type === 'result' || message.type === 'error') && message.id === id
-    )
-    expect(found).toBeDefined()
-    return found!
-  })
+  const reply = await replied
   if (reply.type === 'error') {
     throw new Error(reply.message)
   }
@@ -84,6 +83,10 @@ beforeAll(async () => {
   originalSend = process.send
   const record: NonNullable<typeof process.send> = (message) => {
     sent.push(message)
+    if (message.type === 'result' || message.type === 'error') {
+      replyWaiters.get(message.id)?.(message)
+      replyWaiters.delete(message.id)
+    }
     if (message.type === 'sessionSearchRoots') {
       queueMicrotask(() =>
         emit({ type: 'sessionSearchRoots', id: message.id, roots: currentRoots })

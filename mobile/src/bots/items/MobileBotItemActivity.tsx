@@ -1,15 +1,13 @@
-// An item's Activity on the phone, in the desktop's order and words: comments as cards (the bot's open
-// question outlined with Waiting on you and Reply), and one muted line per other event.
+// An item's Activity on the phone, in the desktop's order and words: comments as cards (an agent's
+// question with its question footer and quick replies), and one muted line per other event.
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
   AlarmClock,
   AlarmClockOff,
-  Check,
   ChevronDown,
   CircleCheck,
   CircleX,
-  CornerDownRight,
   Link,
   Pencil,
   Play,
@@ -17,8 +15,7 @@ import {
 } from 'lucide-react-native'
 import {
   botItemActivity,
-  type BotItemActivityEntry,
-  type BotItemQuestionState
+  type BotItemActivityEntry
 } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
@@ -33,6 +30,11 @@ import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
+import {
+  MobileBotItemQuestionLines,
+  type MobileBotItemQuickReplyActions
+} from './MobileBotItemQuestionLines'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -217,7 +219,9 @@ function WorkerLine({ entry }: { entry: Extract<BotItemActivityEntry, { kind: 'w
   )
 }
 
-function EntryIcon({ entry }: { entry: Exclude<BotItemActivityEntry, { kind: 'comment' }> }) {
+type LineEntry = Exclude<BotItemActivityEntry, { kind: 'comment' }>
+
+function EntryIcon({ entry }: { entry: LineEntry }) {
   if (entry.kind === 'worker') {
     if (entry.phase === 'started') {
       return <Play size={ICON} color={colors.textMuted} />
@@ -251,56 +255,44 @@ function EntryIcon({ entry }: { entry: Exclude<BotItemActivityEntry, { kind: 'co
 
 function CommentCard({
   item,
-  event,
-  question,
-  replyTo,
-  onReply
+  entry,
+  quickReplies,
+  busy
 }: {
   item: BotItem
-  event: BotItemEvent
-  question: BotItemQuestionState | null
-  /** A recorded answer's question, by its first line. */
-  replyTo?: { text: string }
-  onReply: () => void
+  entry: Extract<BotItemActivityEntry, { kind: 'comment' }>
+  quickReplies: MobileBotItemQuickReplyActions
+  busy: boolean
 }) {
   const t = useMobileTranslation()
+  const { event, replyTo, waiting } = entry
   const mine = event.actor.kind === 'owner'
-  const text = commentText(event.data)
+  const shape = botItemQuestionShape(event.data)
+  const text = stripSentImagePromptMarkers(shape.body, botItemCommentImages(event.data).length)
   return (
-    <View style={[styles.card, mine && styles.cardMine, question === 'open' && styles.cardOpen]}>
-      {question === 'open' ? (
-        <View style={styles.cardTop}>
-          <MobileBotItemStatusIcon status="needs_you" />
-          <Text style={styles.waiting}>
-            {t('bots.items.activity.waitingOnYou', 'Waiting on you')}
-          </Text>
-          <View style={styles.spacer} />
-          <Pressable onPress={onReply} accessibilityRole="button" hitSlop={8} style={styles.inline}>
-            <CornerDownRight size={12} color={colors.textPrimary} />
-            <Text style={styles.reply}>{t('bots.items.activity.reply', 'Reply')}</Text>
-          </Pressable>
-        </View>
-      ) : null}
+    <View
+      style={[
+        styles.card,
+        mine && styles.cardMine,
+        shape.decisions.length > 0 && styles.cardAsking
+      ]}
+    >
       <View style={styles.cardHead}>
         <Text style={styles.author}>{botItemActorName(event, item, t)}</Text>
-        {question ? (
-          <Text style={styles.meta} numberOfLines={1}>
-            {question === 'open'
-              ? t('bots.items.activity.asksYou', 'asks you')
-              : t('bots.items.activity.askedYou', 'asked you')}
-          </Text>
-        ) : null}
         <View style={styles.spacer} />
-        {question === 'answered' ? (
-          <View style={styles.inline}>
-            <Check size={11} color={colors.textMuted} />
-            <Text style={styles.meta}>{t('bots.items.activity.answered', 'Answered')}</Text>
-          </View>
-        ) : null}
         <Text style={styles.meta}>{timeOf(event.at)}</Text>
       </View>
       {replyTo ? <MobileBotItemReplyQuote text={replyTo.text} /> : null}
-      <MobileMarkdown content={text} />
+      {text.trim() ? <MobileMarkdown content={text} /> : null}
+      {shape.decisions.length > 0 ? (
+        <MobileBotItemQuestionLines
+          shape={shape}
+          waiting={waiting}
+          answers={entry.answers}
+          actions={quickReplies}
+          busy={busy}
+        />
+      ) : null}
     </View>
   )
 }
@@ -308,11 +300,15 @@ function CommentCard({
 export function MobileBotItemActivity({
   item,
   events,
-  onReply
+  quickReplies,
+  busy = false
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
-  onReply: () => void
+  /** A quick reply is on its way or just landed: the quick replies wait for its outcome. */
+  busy?: boolean
+  /** What the waiting question's quick replies do. */
+  quickReplies: MobileBotItemQuickReplyActions
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -324,10 +320,9 @@ export function MobileBotItemActivity({
           <CommentCard
             key={entry.key}
             item={item}
-            event={entry.event}
-            question={entry.question}
-            replyTo={entry.replyTo}
-            onReply={onReply}
+            entry={entry}
+            quickReplies={quickReplies}
+            busy={busy}
           />
         ) : (
           <View key={entry.key} style={styles.event}>
@@ -394,18 +389,8 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.sheetGroup
   },
   cardMine: { backgroundColor: colors.bgRaised },
-  cardOpen: { borderColor: colors.textMuted },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingBottom: spacing.sm,
-    marginBottom: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  waiting: { fontSize: typography.metaSize, fontWeight: '500', color: colors.textPrimary },
-  reply: { fontSize: 13, fontWeight: '500', color: colors.textPrimary },
+  // A question's chips end the card: more room under them.
+  cardAsking: { paddingBottom: spacing.lg + spacing.xxs },
   cardHead: {
     flexDirection: 'row',
     alignItems: 'center',

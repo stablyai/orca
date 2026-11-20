@@ -180,7 +180,7 @@ export function SortableTabContextMenu({
             <SquareTerminal className="size-3.5 shrink-0" />
             {t(
               'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-              'Continue with Terminal Agent'
+              'Continue in terminal'
             )}
           </ContextMenuItem>
         </>

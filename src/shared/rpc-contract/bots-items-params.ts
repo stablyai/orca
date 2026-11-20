@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { BOT_ITEM_STATUSES } from '../bots/bot-items'
+import { BotItemAskSchema } from '../bots/bot-item-ask'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../agent-session/agent-session-attachments'
 import {
   OptionalBoolean,
@@ -40,8 +41,10 @@ export const BotItemsSet = z.object({
   note: OptionalString,
   /** With `--status canceled`, which needs it. */
   reason: OptionalString,
-  /** With any `--status`, written as a comment; with needs-you, the question for the owner. */
-  comment: OptionalString
+  /** With any `--status`, written as a comment. With `ask`, a readable copy of it that this host does not keep. */
+  comment: OptionalString,
+  /** With needs-you: the comment's body (`--comment`), its question lines (`--ask`) and quick replies (`--option`). */
+  ask: BotItemAskSchema.optional()
 })
 
 export const BotItemsComment = z.object({

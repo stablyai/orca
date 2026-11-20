@@ -1,5 +1,6 @@
 // Bot items: what a bot is doing for its owner and what it needs from them. One list per host; each
 // item belongs to one bot and one of its chats. The host's store is the truth; this is the wire shape.
+import type { BotItemDecision } from './bot-item-ask'
 
 export const BOT_ITEM_STATUSES = ['planned', 'working', 'needs_you', 'done', 'canceled'] as const
 export type BotItemStatus = (typeof BOT_ITEM_STATUSES)[number]
@@ -18,7 +19,9 @@ export const BOT_ITEM_ERROR_CODES = [
   'not_owner',
   'items_read_only',
   'items_unavailable',
-  'item_changed'
+  'item_changed',
+  // From hosts that recorded answers (v1.4.265); this host no longer refuses with it.
+  'question_closed'
 ] as const
 export type BotItemErrorCode = (typeof BOT_ITEM_ERROR_CODES)[number] | 'invalid_argument'
 
@@ -185,8 +188,9 @@ export type BotItem = {
   /** `gone`: the host read its chats and this one's record is deleted, so its comments take no attachments. */
   chat: { id: string; kind: BotItemChatKind; title: string | null; gone?: true }
   madeBy: { botId: string; name: string | null; chatId: string } | null
-  /** Needs you: the bot's comment asking the owner, the row's second line. */
-  question: { eventId: string; text: string } | null
+  /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
+   *  question lines (`--ask`) and their quick replies (`--option`). */
+  question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null
   closeNote: string | null
   links: BotItemLinkView[]
   version: number

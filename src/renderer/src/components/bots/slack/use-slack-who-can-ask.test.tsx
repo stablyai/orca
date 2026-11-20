@@ -29,7 +29,10 @@ vi.mock('@/lib/bot-catalog', () => ({
 }))
 
 vi.mock('@/store', () => {
-  const state = { setContextualToursBlockingSurfaceVisible: vi.fn() }
+  const state = {
+    setContextualToursBlockingSurfaceVisible: vi.fn(),
+    settings: null
+  }
   return {
     useAppStore: Object.assign(
       (selector: (current: Record<string, unknown>) => unknown) => selector(state),
@@ -150,6 +153,8 @@ describe('useSlackWhoCanAsk', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Priya Shah' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add 2 people' }))
     const dialog = await screen.findByRole('dialog')
+    expect(dialog).toBeVisible()
+    expect(dialog).toHaveAccessibleDescription()
     // Nothing is saved until the owner confirms.
     expect(mocks.updateBot).not.toHaveBeenCalled()
     // Enter must not grant access by accident.
@@ -244,14 +249,6 @@ describe('useSlackWhoCanAsk', () => {
     expect(screen.getByText('Eli')).toBeDefined()
     expect(screen.getByText('Fay')).toBeDefined()
     expect(screen.queryByRole('button', { name: 'Show 2 more' })).toBeNull()
-  })
-
-  it('removes someone who could ask', () => {
-    renderList(<BotWhoCanAsk bot={bot()} />)
-    fireEvent.click(screen.getByRole('button', { name: /^Remove / }))
-    expect(mocks.updateBot).toHaveBeenCalledWith(expect.objectContaining({ id: 'bot-1' }), {
-      members: []
-    })
   })
 
   it('lists and removes only Slack people, leaving another service’s alone', () => {

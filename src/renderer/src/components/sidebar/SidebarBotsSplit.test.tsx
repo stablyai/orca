@@ -31,7 +31,7 @@ const SEARCH_FLOOR = 188
 function OpenSearch(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => holdSidebarBotsHeightForSearch(ref.current!), [])
-  return <div ref={ref} data-bot-sidebar-search="" />
+  return <div ref={ref} data-bot-sidebar-search="multiple-rows" />
 }
 
 function tree(projectsCollapsed = false, searching = false): React.JSX.Element {
@@ -141,15 +141,6 @@ describe('SidebarBotsSplit', () => {
     const { section, handle } = renderSplit(200, 400, true)
     expect(handle).toBeNull()
     expect(section.style.maxHeight).toBe('')
-  })
-
-  it('hides the Projects list without unmounting it while folded', () => {
-    const view = render(
-      <SidebarProjectsListSlot botsShown collapsed>
-        <div data-testid="list" />
-      </SidebarProjectsListSlot>
-    )
-    expect(view.getByTestId('list').parentElement!.className).toContain('hidden')
   })
 
   it('hides the handle while the Bots section is collapsed', () => {

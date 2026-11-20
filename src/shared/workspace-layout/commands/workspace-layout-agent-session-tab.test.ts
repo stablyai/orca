@@ -45,6 +45,14 @@ describe('a chat tab a window drew', () => {
     expect(other.ok ? 'applied' : other.code).toBe('tab_exists')
   })
 
+  it('shows the tab a chat already has when it is opened under another slot id', () => {
+    const ctx = testContext()
+    const { model } = build(ctx, [drawn()])
+    const again = applyLayoutCommand(model, drawn({ tabId: 'chat-tab-minted' }), ctx)
+    expect(again.ok && again.model).toEqual(model)
+    expect(again.ok && again.result.tabId).toBe('structured-agent-session-chat-1')
+  })
+
   it('takes its place after the tab the window drew it beside', () => {
     const ctx = testContext()
     const { model, results } = build(ctx, [

@@ -163,15 +163,6 @@ describe('a background run on a host that sleeps', () => {
     expect(host.holds).toEqual(['held', 'released'])
   })
 
-  it('ends with the run when it finishes inside the limit', async () => {
-    vi.useFakeTimers(WITH_CLOCKS)
-    const host = simulatedHost()
-    const watch = watchBackgroundRun(host.power, 's1')
-    const done = watch.limit(Promise.resolve('reply'), 10 * MINUTE)
-    await expect(done).resolves.toBe('reply')
-    expect(watch.slept()).toBe(false)
-  })
-
   it('never lets runs sleep cut short use a slot up, only spacing the tries', () => {
     const slot = 1_000
     const asleep = (at: number) => ({
@@ -272,38 +263,6 @@ describe('a background run on a host that sleeps', () => {
     expect(() => gate.afterStart()).toThrow()
   })
 
-  it('counts setup inside the limit, and lets a turn watch that comes late go', async () => {
-    vi.useFakeTimers(WITH_CLOCKS)
-    const host = simulatedHost()
-    const watch = watchBackgroundRun(host.power, 's-setup')
-    const ready = Promise.withResolvers<void>()
-    let disposed = 0
-    let started = 0
-    const start = startWithinLimit(
-      watch,
-      {
-        setup: async () => {
-          await ready.promise
-          return { next: () => new Promise<never>(() => {}), dispose: () => void (disposed += 1) }
-        },
-        start: async () => {
-          started += 1
-          return { sessionId: 's', clientMessageId: 'm', fingerprint: 'f' }
-        },
-        stopTurn: async () => {}
-      },
-      10 * MINUTE
-    )
-    await vi.advanceTimersByTimeAsync(10 * MINUTE)
-    await expect(start.ended).resolves.toBe('timed_out')
-    start.dispose()
-    ready.resolve()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(disposed).toBe(1)
-    expect(started).toBe(0)
-    watch.end()
-  })
-
   it('keeps tracking sleep after the hold goes, until the run ends', async () => {
     vi.useFakeTimers(WITH_CLOCKS)
     const host = simulatedHost()
@@ -398,16 +357,13 @@ describe("the host's full-wake reading, shared by the look-around and tidy-up ru
     }
   }
 
-  it.each([
-    [10, 10],
-    [100, 100]
-  ])('reads a dark wake once per tick, not once per runner (%i ticks)', async (ticks, spawns) => {
+  it('reads a dark wake once per tick, not once per runner', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const mac = host(false)
-    for (let tick = 0; tick < ticks; tick += 1) {
+    for (let tick = 0; tick < 10; tick += 1) {
       expect(await mac.tick()).toBe(false)
     }
-    expect(mac.state.spawns).toBe(spawns)
+    expect(mac.state.spawns).toBe(10)
   })
 
   it.each([

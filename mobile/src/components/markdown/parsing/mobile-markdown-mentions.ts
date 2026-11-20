@@ -1,4 +1,11 @@
-import { SLACK_MENTION_HREF } from '../../../../../src/shared/connectors/slack-message-markup'
+import { createContext } from 'react'
+import {
+  SLACK_MENTION_HREF,
+  type SlackPeople
+} from '../../../../../src/shared/connectors/slack-message-markup'
+
+/** The Slack people the chat knows; with them, Slack's `<@U…>` tokens in its text draw as names. */
+export const MobileMarkdownSlackPeopleContext = createContext<SlackPeople | null>(null)
 
 type MarkdownNode = { type: string; value?: string; url?: string; children?: MarkdownNode[] }
 

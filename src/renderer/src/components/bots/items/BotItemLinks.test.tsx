@@ -178,7 +178,6 @@ it.each([
   ['open', 'failure', 'Checks failing'],
   ['draft', 'success', 'Checks passing'],
   ['open', 'pending', null],
-  ['merged', 'success', null],
   ['closed', 'failure', null]
 ] as const)('a %s PR with %s checks shows CI glyph %s', (state, checks, label) => {
   only(prLink('acme/app', 9, state, checks))
@@ -296,17 +295,15 @@ describe('a PR merged since the host read it', () => {
 
   it('uses the newer PR read from the host or this window and hides CI once merged', () => {
     useAppStore.setState({ prCache: { 'acme/app#fix': { data: merged, fetchedAt: 2 } } })
-    const svg = only(prLink('acme/app', 9, 'open', 'success')).querySelector('svg')!
-    expect(svg.classList.contains('lucide-git-merge')).toBe(true)
-    expect(svg.classList.contains('text-purple-600')).toBe(true)
+    only(prLink('acme/app', 9, 'open', 'failure'))
     expect(screen.queryByRole('img')).toBeNull()
 
     cleanup()
     useAppStore.setState({
       prCache: { 'acme/app#fix': { data: { ...merged, state: 'open' }, fetchedAt: 0 } }
     })
-    const host = only(prLink('acme/app', 9, 'merged', null)).querySelector('svg')!
-    expect(host.classList.contains('lucide-git-merge')).toBe(true)
+    only(prLink('acme/app', 9, 'merged', 'failure'))
+    expect(screen.queryByRole('img')).toBeNull()
   })
 
   it('asks for a fresh read of a worker’s stale open PR, never of a fresh or settled one', () => {

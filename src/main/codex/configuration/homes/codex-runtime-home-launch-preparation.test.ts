@@ -10,6 +10,11 @@ const { prepareHooks, grantRead, paths } = vi.hoisted(() => ({
   grantRead: vi.fn(),
   paths: { root: '' }
 }))
+vi.mock('../../trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('electron', () => ({ app: { getPath: () => paths.root } }))
 vi.mock('os', async (importOriginal) => ({
   ...(await importOriginal<typeof Os>()),
@@ -32,66 +37,54 @@ beforeEach(() => {
 afterEach(() => rmSync(paths.root, { recursive: true, force: true }))
 
 describe('managed Codex launch configuration', () => {
-  it.each(['prepared', 'hooks failed'] as const)(
-    'provides mirrored sandbox settings before the grant when preparation is %s',
-    async (outcome) => {
-      const systemHomePath = join(paths.root, '.codex')
-      const runtimeHomePath = join(paths.root, 'managed')
-      mkdirSync(systemHomePath)
-      mkdirSync(runtimeHomePath)
-      const expectedConfig = '[windows]\nsandbox = "elevated"\n'
-      writeFileSync(join(systemHomePath, 'config.toml'), expectedConfig)
-      const runtimeHome: Pick<CodexRuntimeHomeService, 'prepareForCodexLaunchAsync'> = {
-        prepareForCodexLaunchAsync: async (_target, _env, options) => {
-          const sync = (): boolean =>
-            syncSystemConfigIntoManagedCodexHome({ systemHomePath, runtimeHomePath })
-          if (options?.deferConfigSync) {
-            options.deferConfigSync(sync)
-          } else {
-            sync()
-          }
-          return runtimeHomePath
+  it('mirrors sandbox settings before the grant when hook preparation fails', async () => {
+    const systemHomePath = join(paths.root, '.codex')
+    const runtimeHomePath = join(paths.root, 'managed')
+    mkdirSync(systemHomePath)
+    mkdirSync(runtimeHomePath)
+    const expectedConfig = '[windows]\nsandbox = "elevated"\n'
+    writeFileSync(join(systemHomePath, 'config.toml'), expectedConfig)
+    const runtimeHome: Pick<CodexRuntimeHomeService, 'prepareForCodexLaunchAsync'> = {
+      prepareForCodexLaunchAsync: async (_target, _env, options) => {
+        if (options?.deferConfigSync) {
+          options.deferConfigSync({ systemHomePath, runtimeHomePath })
+        } else {
+          syncSystemConfigIntoManagedCodexHome({ systemHomePath, runtimeHomePath })
         }
+        return runtimeHomePath
       }
-      prepareHooks.mockImplementation(async (_home, _target, _enabled, _codex, config) => {
-        if (outcome === 'hooks failed') {
-          throw new Error('Hook preparation unavailable')
-        }
-        if (outcome === 'prepared') {
-          config?.run()
-        }
-        config?.complete()
-        return { state: 'installed' }
-      })
-      let grantedConfig: string | undefined
-      grantRead.mockImplementation(async (home: string) => {
-        grantedConfig = readFileSync(join(home, 'config.toml'), 'utf8')
-      })
-      const prepare = createCodexRuntimeHomeLaunchPreparation({
-        getRuntimeHome: () => runtimeHome,
-        getSettings: () => undefined
-      })
-      expect(await prepare()).toBe(runtimeHomePath)
-      expect(grantedConfig).toContain(expectedConfig.trim())
     }
-  )
+    prepareHooks.mockRejectedValue(new Error('Hook preparation unavailable'))
+    let grantedConfig: string | undefined
+    grantRead.mockImplementation(async (home: string) => {
+      grantedConfig = readFileSync(join(home, 'config.toml'), 'utf8')
+    })
+    const prepare = createCodexRuntimeHomeLaunchPreparation({
+      getRuntimeHome: () => runtimeHome,
+      getSettings: () => undefined
+    })
+    expect(await prepare()).toBe(runtimeHomePath)
+    expect(grantedConfig).toContain(expectedConfig.trim())
+  })
 
-  it('propagates the original deferred config failure through the hook warning boundary', async () => {
+  it("propagates the worker's deferred config failure through the hook warning boundary", async () => {
     const failure = new Error('Config could not be prepared')
     const prepare = createCodexRuntimeHomeLaunchPreparation({
       getRuntimeHome: () => ({
         prepareForCodexLaunchAsync: async (_target, _env, options) => {
-          options?.deferConfigSync?.(() => {
-            throw failure
+          options?.deferConfigSync?.({
+            runtimeHomePath: join(paths.root, 'managed'),
+            systemHomePath: join(paths.root, '.codex')
           })
           return join(paths.root, 'managed')
         }
       }),
       getSettings: () => undefined
     })
-    prepareHooks.mockImplementation(async (_home, _target, _enabled, _codex, config) =>
-      config?.run()
-    )
+    prepareHooks.mockImplementation(async (_home, _target, _enabled, _codex, config) => {
+      config?.settle({ error: failure })
+      return config?.run()
+    })
     await expect(prepare()).rejects.toBe(failure)
   })
 })
