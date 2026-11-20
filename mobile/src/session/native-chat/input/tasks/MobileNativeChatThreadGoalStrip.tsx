@@ -83,7 +83,7 @@ export function MobileNativeChatThreadGoalStrip({
       testID="thread-goal-strip"
     >
       {expanded ? (
-        <>
+        <View style={styles.open}>
           <View style={styles.openLine}>
             <View style={styles.openIcon}>
               <Goal size={14} color={colors.textMuted} strokeWidth={2} />
@@ -137,7 +137,7 @@ export function MobileNativeChatThreadGoalStrip({
               />
             </View>
           ) : null}
-        </>
+        </View>
       ) : (
         <Pressable
           accessibilityRole="button"
@@ -204,6 +204,10 @@ const styles = themedStyleSheet(() => ({
     paddingLeft: spacing.md,
     paddingRight: spacing.xs
   },
+  // The open goal owns its bottom inset, so the composer edge sits the same distance below text or actions.
+  open: {
+    paddingBottom: spacing.sm
+  },
   openLine: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -228,8 +232,7 @@ const styles = themedStyleSheet(() => ({
     minWidth: 0
   },
   openText: {
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs
+    paddingTop: spacing.sm
   },
   status: {
     color: colors.textPrimary,
@@ -255,8 +258,7 @@ const styles = themedStyleSheet(() => ({
     flexWrap: 'wrap',
     gap: spacing.sm,
     paddingLeft: spacing.md + 14 + spacing.sm,
-    paddingTop: 2,
-    paddingBottom: spacing.sm
+    paddingTop: spacing.sm
   },
   action: {
     minHeight: 32,
