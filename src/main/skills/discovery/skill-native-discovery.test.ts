@@ -46,6 +46,94 @@ afterEach(() => {
 })
 
 describe('skill discovery', () => {
+  it('merges identical Claude default copies and retains both placements', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    try {
+      const home = join(root, 'home')
+      const markdown = '---\nname: pdf\ndescription: default\n---\n\n# PDF\n'
+      const paths = ['account-one', 'account-two'].map((account) =>
+        join(home, '.claude', 'skills', account, 'pdf', 'SKILL.md')
+      )
+      for (const path of paths) {
+        await mkdir(join(path, '..'), { recursive: true })
+        await writeFile(path, markdown)
+      }
+
+      const result = await discoverSkills({
+        homeDir: home,
+        cwd: root,
+        repos: [],
+        includeCwd: false,
+        refresh: true,
+        sourceKinds: ['home']
+      })
+
+      expect(result.skills).toHaveLength(1)
+      expect(result.skills[0].name).toBe('pdf')
+      expect(
+        result.skills[0].placements?.map((placement) => placement.skillFilePath).sort()
+      ).toEqual([...paths].sort())
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps a modified Claude default copy distinct', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    try {
+      const home = join(root, 'home')
+      const paths = ['account-one', 'account-two'].map((account) =>
+        join(home, '.claude', 'skills', account, 'pdf', 'SKILL.md')
+      )
+      await mkdir(join(paths[0], '..'), { recursive: true })
+      await mkdir(join(paths[1], '..'), { recursive: true })
+      await writeFile(paths[0], '---\nname: pdf\n---\n\n# PDF\n')
+      await writeFile(paths[1], '---\nname: pdf\n---\n\n# Customized PDF\n')
+
+      const result = await discoverSkills({
+        homeDir: home,
+        cwd: root,
+        repos: [],
+        includeCwd: false,
+        refresh: true,
+        sourceKinds: ['home']
+      })
+
+      expect(result.skills).toHaveLength(2)
+      expect(result.skills.every((skill) => skill.placements === undefined)).toBe(true)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps identical non-default Claude skills distinct', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    try {
+      const home = join(root, 'home')
+      const paths = ['account-one', 'account-two'].map((account) =>
+        join(home, '.claude', 'skills', account, 'review', 'SKILL.md')
+      )
+      for (const path of paths) {
+        await mkdir(join(path, '..'), { recursive: true })
+        await writeFile(path, '---\nname: review\n---\n\n# Review\n')
+      }
+
+      const result = await discoverSkills({
+        homeDir: home,
+        cwd: root,
+        repos: [],
+        includeCwd: false,
+        refresh: true,
+        sourceKinds: ['home']
+      })
+
+      expect(result.skills).toHaveLength(2)
+      expect(result.skills.every((skill) => skill.placements === undefined)).toBe(true)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   // An abandoned root must not empty the picker for healthy roots.
   it('keeps every healthy root when one root walk is aborted', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))

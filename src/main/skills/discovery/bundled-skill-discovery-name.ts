@@ -6,6 +6,7 @@ import {
   classifyBundledSkillPath
 } from '../bundled-skill-install/bundled-skill-classification'
 import { nativeBundledSkillFilesystem } from '../bundled-skill-install/bundled-skill-filesystem'
+import { requestedBundledSkillName } from '../../../shared/skills/bundled/bundled-skill-names'
 
 /** Former generic names identify Orca only when their bytes match a shipped version. */
 export function bundledSkillDiscoveryName(
@@ -49,4 +50,14 @@ export async function withoutBundledSkillCompatibilityCopies<T extends Discovere
     visible.push(skill)
   }
   return visible
+}
+
+export async function finalizeBundledSkillDiscoveries<T extends DiscoveredSkill>(
+  skills: readonly T[],
+  requestedNames?: readonly string[]
+): Promise<T[]> {
+  return (await withoutBundledSkillCompatibilityCopies(skills)).map((skill) => ({
+    ...skill,
+    name: requestedBundledSkillName(skill.name, requestedNames)
+  }))
 }
