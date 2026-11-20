@@ -26,7 +26,7 @@ import {
 
 type CrewRuntimeWatchDependencies = {
   store: RuntimeStore | null
-  watchChanges: (wake: (facets: CrewInvalidation) => void) => () => void
+  watchChanges: (wake: (facets: CrewInvalidation) => void, idle?: () => boolean) => () => void
   watchTransitions: (wake: (change: { paneKey: string }) => void) => () => void
   watchClient: (wake: (event: RuntimeClientEvent) => void) => () => void
 }
@@ -114,7 +114,7 @@ export function watchCrewRuntimeSources(
     }
   }
   const disposers = [
-    deps.watchChanges(wake),
+    deps.watchChanges(wake, idle),
     sessionCrewChanges.subscribe(wake),
     // A hook observation names its pane: one for a pane no crew row shows wakes nothing.
     deps.watchTransitions((change) => wake(scoped(['status', 'names'], change.paneKey))),

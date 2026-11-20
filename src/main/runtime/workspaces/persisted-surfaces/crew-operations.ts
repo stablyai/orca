@@ -49,7 +49,7 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
       watchCrewRuntimeSources(
         {
           store: this.store,
-          watchChanges: this.crewChanges.subscribe,
+          watchChanges: this.crewChanges.subscribeWithIdle,
           watchTransitions: (listener) => this.agentTransitions.subscribe(listener),
           watchClient: (listener) => this.onClientEvent(listener)
         },

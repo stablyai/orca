@@ -272,17 +272,27 @@ const RELEVANCE_SETS = [
 
 /** Invalidation is synchronous; the existing stream scheduler reads only after the commit. */
 export class CrewChanges {
-  private readonly listeners = new Set<(facets: CrewInvalidation) => void>()
+  /** Each listener, with whether it is idle: kept for a later read, with nobody reading now. */
+  private readonly listeners = new Map<(facets: CrewInvalidation) => void, () => boolean>()
 
-  subscribe = (listener: (facets: CrewInvalidation) => void): (() => void) => {
-    this.listeners.add(listener)
+  subscribe = (listener: (facets: CrewInvalidation) => void): (() => void) =>
+    this.subscribeWithIdle(listener, () => false)
+
+  subscribeWithIdle = (
+    listener: (facets: CrewInvalidation) => void,
+    idle: () => boolean
+  ): (() => void) => {
+    this.listeners.set(listener, idle)
     return () => this.listeners.delete(listener)
   }
 
   hasListeners = (): boolean => this.listeners.size > 0
 
+  /** Some listener reads now: worth comparing before notifying, rather than notifying broadly. */
+  hasActiveListeners = (): boolean => [...this.listeners.values()].some((idle) => !idle())
+
   notify = (facets: CrewInvalidation = new Set(['topology'])): void => {
-    for (const listener of this.listeners) {
+    for (const listener of this.listeners.keys()) {
       listener(facets)
     }
   }
