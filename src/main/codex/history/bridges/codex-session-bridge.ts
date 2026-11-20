@@ -15,7 +15,7 @@ import {
 import { listCodexSessionJsonlFilesIncrementally } from '../rollouts/codex-session-file-listing'
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
-import { LegacyCopyLockHolder } from './codex-legacy-session-copy-lock-holder'
+import { legacyCopyLocks } from './codex-legacy-session-copy-lock-holder'
 import {
   protectLegacySessionCopy,
   settleLegacySessionCopyName,
@@ -82,8 +82,6 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
     limit: LEGACY_COPY_READ_BUDGET_BYTES
   }
   const hasLegacyCopies = existsSync(join(managedHome, '.orca-session-copies'))
-  // One hold of Codex's coordination shared by the pass's publishes, let go when it ends.
-  const lockHolder = new LegacyCopyLockHolder()
   try {
     for await (const systemSessionFilePath of listCodexSessionJsonlFilesIncrementally(
       systemSessionsRoot,
@@ -128,8 +126,7 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
                 managedHome,
                 relativePath,
                 expectedSourcePath: systemSessionFilePath,
-                readBudget,
-                lockHolder
+                readBudget
               }))
         }
       } else if (bridged) {
@@ -137,7 +134,8 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
       }
     }
   } finally {
-    await lockHolder.release()
+    // The pass's last window lets go now rather than at its timer.
+    await legacyCopyLocks.releaseIfIdle()
   }
   return summary
 }

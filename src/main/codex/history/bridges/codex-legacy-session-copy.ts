@@ -14,7 +14,7 @@ import { sourceStartsWithCopy } from './codex-legacy-session-copy-prefix'
 import { restoreMovedCopy } from './codex-legacy-session-copy-recovery'
 import { runAloneForCopy } from './codex-legacy-session-copy-turns'
 import { isCopyIdle, keepsThreadLocks, threadIdsOf } from './codex-legacy-session-copy-writer-locks'
-import { LegacyCopyLockHolder } from './codex-legacy-session-copy-lock-holder'
+import { legacyCopyLocks } from './codex-legacy-session-copy-lock-holder'
 import {
   linkUnlessTaken,
   lstatIfPresent,
@@ -56,20 +56,9 @@ export function swapLegacySessionCopy(args: {
   expectedSourcePath?: string
   /** Copy bytes a background pass may still compare; resume-time swaps have no limit. */
   readBudget?: LegacySessionCopyReadBudget
-  /** A background pass's shared hold of Codex's coordination. */
-  lockHolder?: LegacyCopyLockHolder
 }): Promise<LegacySessionCopySwap> {
   const copyPath = join(args.managedHome, 'sessions', args.relativePath)
-  return runAloneForCopy(copyPath, async () => {
-    const lockHolder = args.lockHolder ?? new LegacyCopyLockHolder()
-    try {
-      return await swap({ ...args, lockHolder }, copyPath)
-    } finally {
-      if (!args.lockHolder) {
-        await lockHolder.release()
-      }
-    }
-  })
+  return runAloneForCopy(copyPath, () => swap(args, copyPath))
 }
 
 /**
@@ -157,9 +146,10 @@ async function swap(
     join(args.managedHome, 'thread-writer-locks')
   ]
   const threadIds = threadIdsOf(args.relativePath)
-  const holder = args.lockHolder ?? new LegacyCopyLockHolder()
   // Before any bytes are read, and after the hold's sweep drops locks a crashed Codex left.
-  if ((await holder.whileUnlocked(locksDirs, threadIds, () => isCopyIdle(args))) !== true) {
+  if (
+    (await legacyCopyLocks.whileUnlocked(locksDirs, threadIds, () => isCopyIdle(args))) !== true
+  ) {
     return 'deferred'
   }
   // The source's change time: an in-place rewrite of the same file voids the check too.
@@ -187,7 +177,7 @@ async function swap(
   }
   const settled = marker
   const locked = await linkCodexRolloutUnlessHeld(sourcePath, () =>
-    holder.whileUnlocked(locksDirs, threadIds, () =>
+    legacyCopyLocks.whileUnlocked(locksDirs, threadIds, () =>
       publishSourceOverCopy({
         copyPath,
         markerPath,

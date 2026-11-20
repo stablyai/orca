@@ -19,7 +19,8 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from './codex-session-bridge'
-import { protectLegacySessionCopy } from './codex-legacy-session-copy'
+import { protectLegacySessionCopy, swapLegacySessionCopy } from './codex-legacy-session-copy'
+import { legacyCopyLocks } from './codex-legacy-session-copy-lock-holder'
 import {
   prepareCodexAccountRestartResume,
   prepareLegacySharedCodexSessionResume
@@ -308,6 +309,21 @@ describe('legacy session copy swap', () => {
     writeFile(join(systemHome, 'thread-writer-locks', `${THREAD_ID}.lock`), '')
 
     await bridgePass()
+
+    expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
+  })
+
+  it('swaps a resumed copy while a background pass holds the locks', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    const lockFolders = [
+      join(systemHome, 'thread-writer-locks'),
+      join(runtimeHome(), 'thread-writer-locks')
+    ]
+
+    // A resume joins the pass's window rather than being refused by it.
+    await legacyCopyLocks.whileUnlocked(lockFolders, [], () =>
+      swapLegacySessionCopy({ managedHome: runtimeHome(), relativePath: RELATIVE_PATH })
+    )
 
     expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
   })
