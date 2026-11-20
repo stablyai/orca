@@ -75,7 +75,7 @@ export function FileExplorerPasteMenuItem({
           </span>
         </Item>
       </HoverCardTrigger>
-      <HoverCardContent side="left" sideOffset={16} align="start" className="w-fit max-w-64">
+      <HoverCardContent side="left" sideOffset={16} align="start" variant="clipboard-preview">
         {preview.kind === 'image' ? (
           <ClipboardImagePreview />
         ) : preview.kind === 'text' ? (
