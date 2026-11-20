@@ -56,7 +56,8 @@ export class CodexAccountHistoryPasses {
     }
   ) {}
 
-  private censusWaiting = false
+  // The homes the waiting move census will report on; null when none waits.
+  private censusHomes: string[] | null = null
   private readonly moveReport = new CodexHistoryMoveReport({
     wslHomeCount: () => this.homes.wslHomeCount(),
     markerPath: () => join(getOrcaUserDataPath(), 'codex-account-history', 'move-status-sent.json')
@@ -155,20 +156,23 @@ export class CodexAccountHistoryPasses {
     )
   }
 
-  /** Every home's pass in the background; once all settle, the move report from this one listing. */
+  /** Every home's pass in the background; once all settle, the move report from this listing. */
   runAll(accountHomes: string[], shared: boolean): void {
-    const passes = accountHomes.map((home) => this.run(home, shared).catch(() => {}))
-    // One census waits at a time: a pass that never settles must not gather one per launch.
-    if (!shared || this.censusWaiting) {
+    const keys = accountHomes.map((home) => normalizeRuntimePathForComparison(home))
+    // One census waits at a time, reporting the newest listing: a pass that never settles must
+    // not gather one per launch.
+    if (!shared || this.censusHomes) {
+      this.censusHomes &&= shared ? keys : null
+      for (const home of accountHomes) {
+        void this.run(home, shared)
+      }
       return
     }
-    this.censusWaiting = true
-    void Promise.all(passes)
-      .then(() =>
-        this.moveReport.report(accountHomes.map((home) => normalizeRuntimePathForComparison(home)))
-      )
+    this.censusHomes = keys
+    void Promise.all(accountHomes.map((home) => this.run(home, shared).catch(() => {})))
+      .then(() => this.censusHomes && this.moveReport.report(this.censusHomes))
       .finally(() => {
-        this.censusWaiting = false
+        this.censusHomes = null
       })
   }
 
