@@ -60,8 +60,7 @@ const PackStatus = z.object({
     process_reaped: z.boolean(),
     process_running: z.boolean(),
     done: z.object({ message: z.string() }).optional(),
-    success: z.object({ message: z.string() }).optional(),
-    fatal: z.unknown().optional()
+    success: z.object({ message: z.string() }).optional()
   })
 })
 
@@ -128,6 +127,9 @@ export async function readSpcTerminalResult(
     }
     const publishes = publish.post_test?.publish_spl ?? true
     const uploads = publish.post_test?.upload_rustfs ?? true
+    if (!publishes && !uploads) {
+      return { kind: 'ignored', reason: 'spc_test_only_policy' }
+    }
     const sync = publish.verification
     const verified =
       publish.archive_verified &&
@@ -160,7 +162,7 @@ export async function readSpcTerminalResult(
   const { test_task_id: task } = notice
   const [logValue, packValue] = await Promise.all([
     read('task_log', { id: task, limit: 1 }),
-    read('pack_status', { id: pack })
+    read('pack_status', { id: pack, test_task_id: task })
   ])
   const { summary, correlation_id: correlationId } = TestLog.parse(logValue)
   const state = PackStatus.parse(packValue)
@@ -194,8 +196,7 @@ export async function readSpcTerminalResult(
     test.observed &&
     test.process_reaped &&
     !test.process_running &&
-    Boolean(test.done && test.success) &&
-    !test.fatal
+    Boolean(test.done && test.success)
   const text =
     summary.status === 'cancelled'
       ? '启动测试已取消'

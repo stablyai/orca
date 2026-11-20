@@ -10,31 +10,33 @@ it('waits on a persisted release at test completion and only uses the verified p
     correlation_id: 'notification-correlation',
     thread_id: 'notification-thread'
   })
-  const result = await readSpcTerminalResult(test, async (tool) =>
-    tool === 'task_log'
-      ? {
-          summary: {
-            id: 'test-task',
-            workflow_id: 'workflow',
-            task_type: 'test',
-            status: 'completed'
-          }
-        }
-      : {
-          server_pack: { id: 'pack' },
+  const result = await readSpcTerminalResult(test, async (tool, args) => {
+    if (tool === 'task_log') {
+      return {
+        summary: {
+          id: 'test-task',
           workflow_id: 'workflow',
-          publication: { reviewed_test_log_id: 'test-task' },
-          test: {
-            log_id: 'test-task',
-            passed: true,
-            observed: true,
-            process_reaped: true,
-            process_running: false,
-            done: { message: 'Done (1s)' },
-            success: { message: 'Server startup test succeeded' }
-          }
+          serverpack_id: 'pack',
+          task_type: 'test',
+          status: 'completed'
         }
-  )
+      }
+    }
+    expect(tool).toBe('pack_status')
+    expect(args).toEqual({ id: 'pack', test_task_id: 'test-task' })
+    return {
+      server_pack: { id: 'pack' },
+      workflow_id: 'workflow',
+      publication: { reviewed_test_log_id: 'test-task' },
+      test: {
+        log_id: 'later-test',
+        passed: false,
+        observed: false,
+        process_reaped: false,
+        process_running: true
+      }
+    }
+  })
   expect(result).toEqual({ kind: 'ignored', reason: 'spc_waiting_for_publication' })
 
   const publication = SpcTerminalNotice.parse({
