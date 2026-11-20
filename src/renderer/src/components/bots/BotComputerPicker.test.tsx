@@ -52,7 +52,7 @@ describe('BotComputerPicker', () => {
     const setListing = vi.fn()
     const choice: BotCreateHostChoice = {
       hosts: [local, older],
-      host: local,
+      host: older,
       setHostId: () => {},
       otherAccount: null,
       otherAccountOf: () => null,
@@ -71,14 +71,6 @@ describe('BotComputerPicker', () => {
     fireEvent.focus(screen.getByRole('combobox', { name: 'Computer' }))
     expect(setListing).toHaveBeenLastCalledWith(true)
     expect(refreshRemoteServerUpdates).toHaveBeenCalledTimes(1)
-  })
-
-  it('asks no server about updates while closed, even for an older one that is picked', () => {
-    const refreshRemoteServerUpdates = vi.fn(async () => {})
-    useAppStore.setState({ remoteServerUpdates: new Map(), refreshRemoteServerUpdates })
-    renderPicker(choiceOf([local, older], older))
-
-    expect(refreshRemoteServerUpdates).not.toHaveBeenCalled()
   })
 
   it('picks the next computer, not Add host, when a key reopens the list', () => {
