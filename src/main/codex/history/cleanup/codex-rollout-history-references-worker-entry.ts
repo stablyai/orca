@@ -34,7 +34,8 @@ async function run(request: Exclude<CodexRolloutReferencesRequest, { op: 'abort'
     case 'forget':
       return references.forget(request.rolloutId)
     case 'save':
-      return references.save()
+      await references.save()
+      return undefined
   }
 }
 

@@ -271,7 +271,10 @@ describe('deleteCodexRolloutsPermanently with a fork archived during the sweep',
     const home = join(root, 'codex')
     mkdirSync(join(home, 'thread-writer-locks'), { recursive: true })
     mkdirSync(join(home, 'archived_sessions'), { recursive: true })
-    const now = new Date()
+    // A fixed local day: the sweep re-lists only the dated folders around today.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 10, 20, 12))
+    const now = new Date(2026, 10, 20, 12)
     const today = join(
       home,
       'sessions',
@@ -303,6 +306,7 @@ describe('deleteCodexRolloutsPermanently with a fork archived during the sweep',
       async () => ({ homes: [home], protectedRoots: [] })
     )
 
+    vi.useRealTimers()
     expect([first, parent].filter(exists)).toEqual([parent])
   })
 })

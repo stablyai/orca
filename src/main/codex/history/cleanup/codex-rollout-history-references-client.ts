@@ -73,7 +73,7 @@ export function createCodexRolloutHistoryReferencesClient(
   const onAbort = (): void => worker?.postMessage({ op: 'abort' })
   signal.addEventListener('abort', onAbort, { once: true })
 
-  const call = <T>(body: CallBody): Promise<T> => {
+  const call = (body: CallBody): Promise<unknown> => {
     if (failure) {
       return Promise.reject(failure)
     }
@@ -85,20 +85,24 @@ export function createCodexRolloutHistoryReferencesClient(
     }
     const id = (nextId += 1)
     const active = worker
-    return new Promise<T>((resolve, reject) => {
-      pending.set(id, { resolve: (value) => resolve(value as T), reject })
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject })
       active.postMessage({ ...body, id })
     })
   }
 
   return {
-    prepare: (homes) => call<boolean>({ op: 'prepare', homes }),
-    refresh: (homes) => call<boolean>({ op: 'refresh', homes }),
-    isReferenced: (rolloutId) => call<boolean>({ op: 'isReferenced', rolloutId }),
-    forget: (rolloutId) => call<string | null>({ op: 'forget', rolloutId }),
+    prepare: async (homes) => (await call({ op: 'prepare', homes })) === true,
+    refresh: async (homes) => (await call({ op: 'refresh', homes })) === true,
+    // Anything but a plain false keeps the rollout.
+    isReferenced: async (rolloutId) => (await call({ op: 'isReferenced', rolloutId })) !== false,
+    forget: async (rolloutId) => {
+      const freed = await call({ op: 'forget', rolloutId })
+      return typeof freed === 'string' ? freed : null
+    },
     save: async () => {
       if (worker && !failure) {
-        await call<undefined>({ op: 'save' }).catch((error: unknown) => {
+        await call({ op: 'save' }).catch((error: unknown) => {
           console.warn('[workspace-cleanup] Could not save the Codex fork scan:', error)
         })
       }
