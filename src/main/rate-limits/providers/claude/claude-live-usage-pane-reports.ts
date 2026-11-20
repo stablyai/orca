@@ -9,25 +9,57 @@ type PaneReport = {
   weekly: RateLimitWindow | null
 }
 
-type ResetWindow = { configDir: string | null; resetsAt: number }
+function resetWindowKey(configDir: string | null, kind: ClaudeLiveUsageWindowKind): string {
+  return JSON.stringify([configDir, kind])
+}
 
 // Bounds memory to recently posting panes; an evicted pane needs one more post before changes count.
 const MAX_TRACKED_CLAUDE_PANES = 64
 
-// A pane learns quota only from its own API responses, so a changed report is fresh even when lower.
+// A pane learns quota only from its own API responses, so its reports are ordered while panes' are not.
 export class ClaudeLiveUsagePaneReports {
   private readonly lastByPane = new Map<string, PaneReport>()
-  private readonly resetByKind = new Map<ClaudeLiveUsageWindowKind, ResetWindow>()
+  // Keyed by account and window kind; each account keeps its reset until that window ends.
+  private readonly resetsAtByWindow = new Map<string, number>()
+
+  private lastWindow(
+    paneKey: string | null,
+    configDir: string | null,
+    kind: ClaudeLiveUsageWindowKind
+  ): RateLimitWindow | null {
+    const last = paneKey === null ? undefined : this.lastByPane.get(paneKey)
+    return last?.configDir === configDir ? last[kind] : null
+  }
 
   hasChanged(
-    paneKey: string,
+    paneKey: string | null,
     configDir: string | null,
     kind: ClaudeLiveUsageWindowKind,
     incoming: RateLimitWindow
   ): boolean {
-    const last = this.lastByPane.get(paneKey)
-    const previous = last?.configDir === configDir ? last[kind] : null
+    const previous = this.lastWindow(paneKey, configDir, kind)
     return Boolean(previous && !isSameClaudeUsageWindow(previous, incoming))
+  }
+
+  // Usage only grows within a window, so a pane's own drop is a redeemed reset.
+  recordReset(
+    paneKey: string | null,
+    configDir: string | null,
+    kind: ClaudeLiveUsageWindowKind,
+    incoming: RateLimitWindow
+  ): boolean {
+    const previous = this.lastWindow(paneKey, configDir, kind)
+    if (
+      !previous ||
+      previous.resetsAt === null ||
+      incoming.resetsAt === null ||
+      !isSameClaudeUsageReset(previous.resetsAt, incoming.resetsAt) ||
+      incoming.usedPercent >= previous.usedPercent
+    ) {
+      return false
+    }
+    this.resetsAtByWindow.set(resetWindowKey(configDir, kind), incoming.resetsAt)
+    return true
   }
 
   remember(
@@ -52,10 +84,6 @@ export class ClaudeLiveUsagePaneReports {
     }
   }
 
-  markReset(configDir: string | null, kind: ClaudeLiveUsageWindowKind, resetsAt: number): void {
-    this.resetByKind.set(kind, { configDir, resetsAt })
-  }
-
   // After a reset, idle panes still hold the pre-reset value for the same window.
   isResetWindow(
     configDir: string | null,
@@ -63,12 +91,11 @@ export class ClaudeLiveUsagePaneReports {
     incoming: RateLimitWindow,
     now: number
   ): boolean {
-    const reset = this.resetByKind.get(kind)
-    return Boolean(
-      reset &&
-      reset.configDir === configDir &&
-      reset.resetsAt > now &&
-      isSameClaudeUsageReset(reset.resetsAt, incoming.resetsAt)
+    const resetsAt = this.resetsAtByWindow.get(resetWindowKey(configDir, kind))
+    return (
+      resetsAt !== undefined &&
+      resetsAt > now &&
+      isSameClaudeUsageReset(resetsAt, incoming.resetsAt)
     )
   }
 }

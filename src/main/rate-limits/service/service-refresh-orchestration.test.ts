@@ -380,11 +380,15 @@ describe('RateLimitService', () => {
     expect(await shown()).toBe(90)
     post('tab-c:pane-c', 95)
     expect(await shown()).toBe(95)
+    // A late post from a pane whose own value rose is still an older reading, not a reset.
+    post('tab-b:pane-b', 50)
+    post('tab-d:pane-d', 97)
+    expect(await shown()).toBe(97)
 
     post('tab-a:pane-a', 7)
     expect(await shown()).toBe(7)
     post('tab-c:pane-c', 95)
-    post('tab-d:pane-d', 60)
+    post('tab-e:pane-e', 60)
     expect(await shown()).toBe(7)
   })
   it('keeps the account on the usage read right after redeeming a Codex reset', async () => {
