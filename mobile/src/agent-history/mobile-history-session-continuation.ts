@@ -176,5 +176,9 @@ export async function continueMobileHistorySession(
     assertCurrentOwner
   )
   mutations.releaseOnSuccess(launchKey)
-  return { worktreeId: target.worktreeId, paneKey: terminalTabPaneKey(tab), terminal: tab.terminal }
+  return {
+    worktreeId: target.worktreeId,
+    paneKey: terminalTabPaneKey(tab),
+    ...(tab.terminal ? { terminal: tab.terminal } : {})
+  }
 }

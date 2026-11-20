@@ -58,13 +58,13 @@ export function openHistorySessionPane(args: HistoryNavigation & HistorySessionD
 export function openResumedHistoryTerminal(
   args: HistoryNavigation & {
     worktreeId: string
-    resumed: { id: string; terminal: string; parentTabId?: string; leafId?: string }
+    resumed: { id: string; terminal?: string | null; parentTabId?: string; leafId?: string }
     fromSession: boolean
   }
 ): void {
   openHistorySessionPane({
     ...args,
-    terminal: args.resumed.terminal,
+    terminal: args.resumed.terminal ?? undefined,
     paneKey: terminalTabPaneKey(args.resumed)
   })
 }
@@ -103,7 +103,7 @@ export function useResumedHistoryTerminalOpener(
     (args: ResumedHistoryTerminal) =>
       open({
         worktreeId: args.worktreeId,
-        terminal: args.resumed.terminal,
+        terminal: args.resumed.terminal ?? undefined,
         paneKey: terminalTabPaneKey(args.resumed),
         fromSession: args.fromSession
       }),

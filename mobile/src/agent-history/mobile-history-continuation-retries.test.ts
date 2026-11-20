@@ -12,6 +12,39 @@ import { historyClient, historySession } from './mobile-history-test-fixture'
 import type { PendingMobileHistoryHandoff } from './mobile-history-session-handoff'
 import { structuredSessionOperationId } from '../session/native-chat/agent-session/structured-session-operation-id'
 
+it('accepts a resumed pane while the host is still publishing its terminal handle', async () => {
+  const client = historyClient(historySession(), async (method) =>
+    method === 'session.tabs.createTerminal'
+      ? {
+          id: 'created',
+          ok: true,
+          result: {
+            tab: {
+              type: 'terminal',
+              id: 'pending-tab',
+              parentTabId: 'group',
+              leafId: '11111111-1111-4111-8111-111111111111',
+              status: 'pending-handle',
+              terminal: null
+            }
+          }
+        }
+      : undefined
+  )
+  await expect(
+    resumeAiVaultSessionInTerminal(client, 'repo::/repo', {
+      command: 'claude --resume source',
+      clientMutationId: structuredSessionOperationId(),
+      hostCapabilities: ['session.tabs.owned-startup.v1']
+    })
+  ).resolves.toMatchObject({
+    id: 'pending-tab',
+    parentTabId: 'group',
+    leafId: '11111111-1111-4111-8111-111111111111',
+    terminal: null
+  })
+})
+
 it('requires host-owned startup before creating a history terminal on an older host', async () => {
   const requests: string[] = []
   const client = historyClient(historySession(), async (method) => {

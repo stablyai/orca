@@ -57,24 +57,26 @@
         }
       }
     },
-    "400d946a183d": {
+    "4cb5d8cacc05": {
       "failure": {
         "$rpc": "null"
       },
       "launched": {
         "id": "tab-9",
         "terminal": "terminal-9",
-        "title": "codex"
+        "title": "codex",
+        "type": "terminal"
       }
     },
-    "6e79da536ca9": {
+    "79f9e25d1539": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "id": "tab-9",
         "terminal": "terminal-9",
-        "title": "codex"
+        "title": "codex",
+        "type": "terminal"
       }
     },
     "ef0733a06396": {
@@ -92,9 +94,9 @@
           "sender": ["0b1294a2080e"],
           "payloads": ["ef0733a06396"],
           "settlements": {
-            "full": "6e79da536ca9"
+            "full": "79f9e25d1539"
           },
-          "state": "400d946a183d",
+          "state": "4cb5d8cacc05",
           "effects": []
         }
       }

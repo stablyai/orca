@@ -20,8 +20,7 @@ import { resolveWindowsShellStartupFamily } from '../../../src/shared/shell/laun
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
-import { reviewTerminalCreateRun } from '../source-control/review/terminal-delivery/mobile-review-terminal-operations'
-import type { MobileReviewTerminalTab } from '../source-control/review/terminal-delivery/review-terminal-reply-schema'
+import { sessionTabCreateTerminal } from '../session/tabs/mobile-session-tab-write-operations'
 import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault/resume/ai-vault-resume-target'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/agent-launch/startup/qoder-terminal-create-capability'
 import { agentHistoryHostStatusSchema } from './agent-history-reply-schema'
@@ -103,7 +102,7 @@ export async function resumeAiVaultSessionInTerminal(
     hostCapabilities?: readonly string[]
   },
   assertCurrentOwner?: () => void
-): Promise<MobileReviewTerminalTab> {
+) {
   assertCurrentOwner?.()
   // Qoder's execution host must select its installed executable before the resume starts.
   const qoderOwnedCreate =
@@ -121,7 +120,7 @@ export async function resumeAiVaultSessionInTerminal(
     )
   }
   // Await requests outside refusal handling so transport errors keep their original delivery-unknown identity.
-  const created = await reviewTerminalCreateRun.request(
+  const created = await sessionTabCreateTerminal.request(
     client,
     {
       worktree: `id:${worktreeId}`,
@@ -144,7 +143,7 @@ export async function resumeAiVaultSessionInTerminal(
     { timeoutMs: RESUME_RPC_TIMEOUT_MS, beforeSend: assertCurrentOwner }
   )
   return interpretOrThrowRefusalMessage(
-    () => reviewTerminalCreateRun.interpret(created),
+    () => sessionTabCreateTerminal.interpret(created),
     translate('session.aiVaultResumeLaunch.createFailed', 'Failed to create terminal')
   )
 }
