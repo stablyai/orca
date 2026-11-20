@@ -71,6 +71,15 @@ function refusedOptions(message: string): { options: string[]; perAccount: boole
   }
 }
 
+/** Whether Claude exited because the organization's managed settings refuse `option`. */
+export function claudeManagedSettingsRefuse(error: unknown, option: string): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const { options, perAccount } = refusedOptions(error.message)
+  return perAccount && options.includes(option)
+}
+
 const MAX_REMEMBERED = 32
 
 export type ClaudeCliLaunch = {
