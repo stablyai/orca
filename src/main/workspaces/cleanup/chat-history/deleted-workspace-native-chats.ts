@@ -57,32 +57,51 @@ export async function forgetHostNativeChats(
     if (!host || host.deps.store.readOnly) {
       return result
     }
-    const { sessionId, location } = chat
-    let forgotten = false
     try {
-      forgotten = await host.serialize(sessionId, async () => {
-        // Any history read opens the conversation, so an open one may be on screen. A worker that
-        // still owes a dispatch is settled through its record, so it stays until that is done.
-        if (host.hasSession(sessionId) || host.deps.hasOpenDispatch?.(chat)) {
-          return false
-        }
-        const tabShown = host.isSessionTabVisible(sessionId)
-        const deleted = await host.deps.store.forgetIdleChat(
-          { sessionId, location, idleBefore: Date.now() - WORKSPACE_CLEANUP_RULE_GRACE_MS },
-          () => shouldForget(chat)
-        )
-        if (deleted && tabShown) {
-          await closeForgottenChatTab(host, sessionId)
-        }
-        return deleted
-      })
+      const forgotten = await forgetNativeChatInLane(
+        chat,
+        Date.now() - WORKSPACE_CLEANUP_RULE_GRACE_MS,
+        () => shouldForget(chat)
+      )
+      result.deleted += forgotten === 'forgotten' ? 1 : 0
     } catch (error) {
       console.warn('[workspace-cleanup] Deleting a chat of a deleted workspace failed', error)
       result.failed += 1
     }
-    result.deleted += forgotten ? 1 : 0
   }
   return result
+}
+
+/** `open`: the conversation is loaded or still owes a Dispatch; `kept`: the store refused it. */
+export type NativeChatForget = 'forgotten' | 'open' | 'kept'
+
+/** Deletes one chat at rest, in its conversation lane so no open or start can race it. */
+export async function forgetNativeChatInLane(
+  chat: AgentSessionRecord,
+  idleBefore: number,
+  stillWanted: () => Promise<boolean>
+): Promise<NativeChatForget> {
+  const host = getStructuredAgentSessionHost()
+  if (!host || host.deps.store.readOnly) {
+    return 'kept'
+  }
+  const { sessionId, location } = chat
+  return host.serialize(sessionId, async () => {
+    // Any history read opens the conversation, so an open one may be on screen. A worker that
+    // still owes a dispatch is settled through its record, so it stays until that is done.
+    if (host.hasSession(sessionId) || host.deps.hasOpenDispatch?.(chat)) {
+      return 'open'
+    }
+    const tabShown = host.isSessionTabVisible(sessionId)
+    const deleted = await host.deps.store.forgetIdleChat(
+      { sessionId, location, idleBefore },
+      stillWanted
+    )
+    if (deleted && tabShown) {
+      await closeForgottenChatTab(host, sessionId)
+    }
+    return deleted ? 'forgotten' : 'kept'
+  })
 }
 
 /** A shown tab was seeded into status lists: close it the usual way so its sink rows go too. */

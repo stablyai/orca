@@ -1330,7 +1330,8 @@
         "automationHelp": "Its run history is deleted too.",
         "automation": "Deleting an automation",
         "title": "Confirmations",
-        "running": "Closing a running chat or terminal"
+        "running": "Closing a running chat or terminal",
+        "chat": "Deleting a chat"
       },
       "pages": {
         "folder": "Workspace folder",
@@ -29044,7 +29045,11 @@
       "workers": "Workers",
       "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
-      "readFailed": "Couldn't read this bot's chats."
+      "readFailed": "Couldn't read this bot's chats.",
+      "clear": "Clear chat",
+      "delete": "Delete chat",
+      "open": "Open",
+      "actions": "Chat actions"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -29705,5 +29710,23 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More"
+  },
+  "chats": {
+    "delete": {
+      "updateHost": "Update {{host}} to delete chats",
+      "replying": "Replying now",
+      "workersRunning": "Workers still running",
+      "failed": "Couldn't delete the chat",
+      "undone": "This can't be undone.",
+      "title": "Delete this chat?",
+      "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
+      "action": "Delete"
+    },
+    "clear": {
+      "title": "Clear Home Chat?",
+      "descriptionHost": "{{name}} starts a fresh Home Chat and keeps its soul and memory. This conversation is deleted permanently from {{host}}. This can't be undone.",
+      "description": "{{name}} starts a fresh Home Chat and keeps its soul and memory. This conversation is deleted. This can't be undone.",
+      "action": "Clear chat"
+    }
   }
 }

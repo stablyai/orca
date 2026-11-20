@@ -39,6 +39,8 @@ import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { botSkillProjectViews, relinkBotSkills } from '../../../bots/bot-skill-projects'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { deleteChatsInWorkspace } from '../../../native-chat/chat-deletion/orca-chat-delete'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
@@ -232,6 +234,10 @@ export const BOT_METHODS = [
       if (bot) {
         releaseDeletedBotLinks(runtime, bot)
         await composioBotsOf(runtime).forget(bot.id)
+        // Its chats live in this host's chat store, not its folder, so they go here.
+        void deleteChatsInWorkspace(runtime, folderWorkspaceKey(bot.folderWorkspaceId)).catch(
+          (error: unknown) => console.warn('[bots] could not delete a deleted bot’s chats', error)
+        )
       }
       await dropUnreadBotRequests(runtime, params.botId, 'deleted')
       googleSetupRuns().forget(params.botId)
