@@ -4,6 +4,7 @@ import {
 } from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
 import { hookRootAnswerDeadline } from '../../../shared/agent-hook-listener/presence/hook-root-attempts'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
+import { ClaudeAgentViewBridge } from '../../claude/agent-view/agent-view-bridge'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
@@ -11,6 +12,7 @@ import { respondAfterAgentToolPluginHooks } from '../tool-events/agent-tool-plug
 import { ClaudePermissionHookHolds } from './claude-permission-hook-hold'
 
 export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServerRuntimeEnv {
+  readonly claudeAgentViews = new ClaudeAgentViewBridge()
   protected readonly claudePermissionHooks = new ClaudePermissionHookHolds()
   private statusHookInitialization: Promise<void> | null = null
 
@@ -42,9 +44,6 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
       this.clearAllTranscriptPolls()
     }
     this.statusHooksEnabled = enabled
-    if (this.server) {
-      this.maybeWriteEndpointFile()
-    }
     if (enabled && this.server) {
       void this.initializeStatusHookOwner().catch((error: unknown) => {
         console.error('[agent-hooks] status initialization failed', error)

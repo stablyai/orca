@@ -19,7 +19,6 @@ export type EndpointFileFields = {
   token: string
   env: string
   version: string
-  generation?: number
   transport?: string
   openCodeTui?: boolean
 }
@@ -40,9 +39,6 @@ export function writeEndpointFile(
   ]
   if (fields.transport) {
     valuesToWrite.push(['ORCA_AGENT_HOOK_TRANSPORT', fields.transport])
-  }
-  if (fields.generation !== undefined) {
-    valuesToWrite.push(['ORCA_AGENT_HOOK_GENERATION', String(fields.generation)])
   }
   if (fields.openCodeTui) {
     valuesToWrite.push(['ORCA_AGENT_HOOK_OPENCODE_TUI', '1'])

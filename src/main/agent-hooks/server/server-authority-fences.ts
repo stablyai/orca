@@ -63,7 +63,6 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
   }
 
   protected clearPaneProcessState(paneKey: string): void {
-    this.claudeAgentViews.removePane(paneKey)
     this.clearAssistantMessageRetry(paneKey)
     this.clearTranscriptPoll(paneKey)
     clearPaneProcessCacheState(this.state, paneKey)

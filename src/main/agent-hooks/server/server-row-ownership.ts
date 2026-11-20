@@ -134,19 +134,6 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     if (!emit || semanticRowsEqual(before, after)) {
       return false
     }
-    if (before && before.paneKey !== after?.paneKey) {
-      this.claudeAgentViews.removePane(before.paneKey)
-    }
-    if (
-      after &&
-      (!before ||
-        before.paneKey !== after.paneKey ||
-        before.providerSession?.id !== after.providerSession?.id ||
-        before.payload.agentType !== after.payload.agentType ||
-        before.agentPresence?.ended !== after.agentPresence?.ended)
-    ) {
-      this.claudeAgentViews.reconcilePane(after.paneKey)
-    }
     this.notifyStatusRowMutationListeners({
       before: toMutationIdentity(before),
       after: toMutationIdentity(after)

@@ -1,5 +1,4 @@
 import { AgentHookServerStateContract } from './server-state-contract'
-import { ClaudeAgentViewBridge } from '../../claude/agent-view/agent-view-bridge'
 
 import type { createServer } from 'node:http'
 import { randomBytes, randomUUID } from 'node:crypto'
@@ -51,29 +50,6 @@ import type { AgentProcessPresence } from '../../../shared/agent-status/process/
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export abstract class AgentHookServerState extends AgentHookServerStateContract {
-  readonly claudeAgentViews = new ClaudeAgentViewBridge((paneKey, sessionId) => {
-    const resolved = this.resolvePaneKeyAlias(paneKey)
-    if (
-      this.closedAgentStatusPaneKeys.has(resolved) ||
-      this.isClosedAgentStatusTabForPaneKey(resolved) ||
-      this.agentExitedAtByPaneKey.has(resolved)
-    ) {
-      return false
-    }
-    const row = this.state.lastStatusByPaneKey.get(resolved)
-    if (!row) {
-      // A registration may precede its first status hook; keep it hidden until admission.
-      return undefined
-    }
-    return (
-      !row.agentPresence?.ended &&
-      (!row.payload.agentType ||
-        row.payload.agentType === 'claude' ||
-        row.payload.agentType === 'unknown') &&
-      (!row.providerSession || row.providerSession.id === sessionId)
-    )
-  })
-
   protected terminalPaneLifecycle: {
     /** Answers the record that was saved when the agent quit. */
     retireSavedRecord?(paneKey: string, exitedAt: number): SleepingAgentSessionRecord | undefined
@@ -145,9 +121,6 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     const paneKeys = this.paneKeysWithAliases(paneKey)
     const exitedAt = Date.now()
     recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
-    for (const key of paneKeys) {
-      this.claudeAgentViews.removePane(key)
-    }
     this.retirePaneResume(paneKeys, status, exitedAt)
   }
 

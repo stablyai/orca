@@ -11,7 +11,7 @@ let endedSessionId
 let observedView
 let viewRevision = 0
 let lastAnnouncement
-let lifecycle = false
+let supportsRenew = false
 let refreshTimer
 let refreshMs
 let announcing
@@ -20,17 +20,15 @@ let announceAgain = false
   async function connection($) {
     let port = await $.env.get('ORCA_AGENT_HOOK_PORT')
     let token = await $.env.get('ORCA_AGENT_HOOK_TOKEN')
-    let publication
     const endpoint = await $.env.get('ORCA_AGENT_HOOK_ENDPOINT')
     if (endpoint) {
       try {
-        publication = await $.fs.read(endpoint)
-        const file = parseEndpoint(publication)
+        const file = parseEndpoint(await $.fs.read(endpoint))
         port = file.port
         token = file.token
       } catch {}
     }
-    return { port, token, publication }
+    return { port, token }
   }
 
   async function post($, action, data = {}, session = identity, target) {
@@ -64,6 +62,7 @@ let announceAgain = false
       if (!identity || identity.sessionId !== sessionId) {
         identity = { paneKey, sessionId, instanceId: String(await $.clock.now()) + '-' + String(Math.random()) }
         lastAnnouncement = undefined
+        supportsRenew = false
       }
       const session = identity
       const keybindings = await $.fs.read(configDir + '/keybindings.json').catch(() => '')
@@ -73,14 +72,20 @@ let announceAgain = false
         keybindings,
         ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
       }
-      const announcement = JSON.stringify({ ...session, ...target, ...data })
-      if (lifecycle && lastAnnouncement === announcement) return {}
+      const announcement = JSON.stringify({ ...target, keybindings })
+      if (supportsRenew && lastAnnouncement === announcement) {
+        const reply = await post($, 'renew', {}, session, target)
+        if (reply.registered || identity !== session || endedSessionId === sessionId) return reply
+      }
+      // Until this endpoint confirms renewal support, keep the legacy lease alive.
+      refresh($, 5000)
+      supportsRenew = false
       const reply = await post($, 'register', data, session, target)
       if (identity !== session || endedSessionId === sessionId) return {}
-      lifecycle = reply.lifecycle === true
-      if (lifecycle) lastAnnouncement = announcement
+      supportsRenew = reply.renew === true
+      if (reply.registered) lastAnnouncement = announcement
       // Older runtimes still expire registrations after 15 seconds.
-      refresh($, reply.registered && !lifecycle ? 5000 : 60000)
+      refresh($, supportsRenew ? 60000 : 5000)
       return reply
     } catch {
       return {}
@@ -109,7 +114,18 @@ export function register(on) {
       const agentId = event.props.view.agentId
       if (observedView?.sessionId !== sessionId || observedView.view.agentId !== agentId) {
         observedView = { sessionId, view: { ...(agentId ? { agentId } : {}), revision: ++viewRevision } }
-        void announce($)
+        if (identity?.sessionId === sessionId) {
+          const session = identity
+          const view = observedView.view
+          void (async () => {
+            await announcing
+            if (identity === session && endedSessionId !== sessionId) {
+              await post($, 'observe', { view }, session)
+            }
+          })().catch(() => {})
+        } else {
+          void announce($)
+        }
       }
     }
     return result
@@ -124,8 +140,7 @@ export function register(on) {
     if (!configDir) return result
     endedSessionId = undefined
     await $.command.register({ name: 'orca-agent-view', description: 'Open the agent selected in Orca', immediate: true })
-    // The mod API has no file watcher; compare locally without renewing a lease.
-    refresh($, 60000)
+    refresh($, 5000)
     void announce($)
     return result
   })

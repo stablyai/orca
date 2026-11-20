@@ -9,6 +9,8 @@ import {
   type ClaudeAgentViewResult
 } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
+const SESSION_TTL_MS = 150_000
+
 const Identity = z.object({
   paneKey: z
     .string()
@@ -23,6 +25,7 @@ const Message = z.discriminatedUnion('action', [
     keybindings: z.string().max(128 * 1024),
     view: ClaudeAgentViewObservation.optional()
   }),
+  Identity.extend({ action: z.literal('renew') }),
   Identity.extend({ action: z.literal('observe'), view: ClaudeAgentViewObservation }),
   Identity.extend({ action: z.literal('take') }),
   Identity.extend({
@@ -44,13 +47,14 @@ type PendingView = {
 type ViewSession = z.infer<typeof Identity> & {
   chord: string
   keybindings: string
+  seenAt: number
   pending?: PendingView
   view?: z.infer<typeof ClaudeAgentViewObservation>
 }
 
 type BridgeReply = {
   registered?: true
-  lifecycle?: true
+  renew?: true
   requestId?: string
   agentId?: string
   expiresAt?: number
@@ -59,49 +63,49 @@ type BridgeReply = {
 export class ClaudeAgentViewBridge {
   private readonly sessions = new Map<string, ViewSession>()
   private readonly listeners = new Set<(snapshot: ClaudeAgentViewSnapshot) => void>()
-
-  constructor(
-    private readonly isLive: (paneKey: string, sessionId: string) => boolean | undefined = () =>
-      true
-  ) {}
+  private expiryTimer?: ReturnType<typeof setTimeout>
+  private publishedSnapshot: ClaudeAgentViewSnapshot = []
 
   subscribe(listener: (snapshot: ClaudeAgentViewSnapshot) => void): () => void {
+    this.prune()
     this.listeners.add(listener)
     listener(this.snapshot())
-    return () => {
-      this.listeners.delete(listener)
-    }
+    return () => void this.listeners.delete(listener)
   }
 
   private snapshot(): ClaudeAgentViewSnapshot {
-    return [...this.sessions.values()].flatMap((session) =>
-      session.view && this.isLive(session.paneKey, session.sessionId) === true
-        ? [
-            {
-              paneKey: session.paneKey,
-              sessionId: session.sessionId,
-              ...(session.view.agentId ? { agentId: session.view.agentId } : {})
-            }
-          ]
-        : []
-    )
+    return [...this.sessions.values()]
+      .filter((session) => session.view)
+      .map((session) => ({
+        paneKey: session.paneKey,
+        sessionId: session.sessionId,
+        ...(session.view?.agentId ? { agentId: session.view.agentId } : {})
+      }))
   }
 
   private publish(): void {
     const snapshot = this.snapshot()
+    const previous = this.publishedSnapshot
+    if (
+      snapshot.length === previous.length &&
+      snapshot.every(
+        (entry, index) =>
+          entry.paneKey === previous[index].paneKey &&
+          entry.sessionId === previous[index].sessionId &&
+          entry.agentId === previous[index].agentId
+      )
+    ) {
+      return
+    }
+    this.publishedSnapshot = snapshot
     for (const listener of this.listeners) {
       listener(snapshot)
     }
   }
 
   private observe(session: ViewSession, view: z.infer<typeof ClaudeAgentViewObservation>): void {
-    if (session.view && session.view.revision >= view.revision) {
-      return
-    }
-    const changed = !session.view || session.view.agentId !== view.agentId
-    session.view = view
-    if (changed) {
-      this.publish()
+    if (!session.view || session.view.revision < view.revision) {
+      session.view = view
     }
   }
 
@@ -111,10 +115,7 @@ export class ClaudeAgentViewBridge {
       return {}
     }
     const message = parsed.data
-    if (this.isLive(message.paneKey, message.sessionId) === false) {
-      this.reconcilePane(message.paneKey)
-      return {}
-    }
+    this.prune()
     const current = this.sessions.get(message.paneKey)
     if (message.action === 'register') {
       const chord =
@@ -125,16 +126,18 @@ export class ClaudeAgentViewBridge {
         if (current?.instanceId === message.instanceId && current.sessionId === message.sessionId) {
           current.pending?.finish({ status: 'unavailable' })
           this.sessions.delete(message.paneKey)
+          this.armExpiry()
           this.publish()
         }
-        return { lifecycle: true }
+        return { renew: true }
       }
       if (!current && this.sessions.size >= 1024) {
         return {}
       }
       if (current?.instanceId === message.instanceId && current.sessionId === message.sessionId) {
-        current.keybindings = message.keybindings
+        current.seenAt = Date.now()
         current.chord = chord
+        current.keybindings = message.keybindings
       } else {
         current?.pending?.finish({ status: 'unavailable' })
         this.sessions.set(message.paneKey, {
@@ -142,15 +145,17 @@ export class ClaudeAgentViewBridge {
           sessionId: message.sessionId,
           instanceId: message.instanceId,
           chord,
-          keybindings: message.keybindings
+          keybindings: message.keybindings,
+          seenAt: Date.now()
         })
-        this.publish()
       }
       const session = this.sessions.get(message.paneKey)
       if (session && message.view) {
         this.observe(session, message.view)
       }
-      return { registered: true, lifecycle: true }
+      this.armExpiry()
+      this.publish()
+      return { registered: true, renew: true }
     }
     if (
       !current ||
@@ -159,14 +164,21 @@ export class ClaudeAgentViewBridge {
     ) {
       return {}
     }
+    if (message.action === 'renew') {
+      current.seenAt = Date.now()
+      this.armExpiry()
+      return { registered: true }
+    }
     if (message.action === 'end') {
       current.pending?.finish({ status: 'unavailable' })
       this.sessions.delete(message.paneKey)
+      this.armExpiry()
       this.publish()
       return {}
     }
     if (message.action === 'observe') {
       this.observe(current, message.view)
+      this.publish()
       return {}
     }
     const request = current.pending
@@ -199,15 +211,10 @@ export class ClaudeAgentViewBridge {
     trigger: (input: string, isCurrent: () => boolean) => Promise<boolean>
     signal?: AbortSignal
   }): Promise<ClaudeAgentViewResult> {
-    this.reconcilePane(args.paneKey)
+    this.prune()
     const session = this.sessions.get(args.paneKey)
     const shortcut = CLAUDE_AGENT_VIEW_SHORTCUTS.find((item) => item.chord === session?.chord)
-    if (
-      !session ||
-      session.sessionId !== args.sessionId ||
-      !shortcut ||
-      this.isLive(session.paneKey, session.sessionId) !== true
-    ) {
+    if (!session || session.sessionId !== args.sessionId || !shortcut) {
       return { status: 'unsupported' }
     }
     if (args.signal?.aborted) {
@@ -241,7 +248,7 @@ export class ClaudeAgentViewBridge {
       session.chord === shortcut.chord &&
       session.pending === pending &&
       pending.expiresAt >= Date.now() &&
-      this.isLive(session.paneKey, session.sessionId) === true
+      Date.now() - session.seenAt < SESSION_TTL_MS
     const timeout = setTimeout(() => finish({ status: 'timeout' }), 5500)
     const abort = () => finish({ status: 'unavailable' })
     args.signal?.addEventListener('abort', abort, { once: true })
@@ -269,33 +276,34 @@ export class ClaudeAgentViewBridge {
       session.pending?.finish({ status: 'unavailable' })
     }
     this.sessions.clear()
+    this.armExpiry()
     this.publish()
   }
 
-  removePane(paneKey: string): void {
-    const session = this.sessions.get(paneKey)
-    if (!session) {
+  private armExpiry(): void {
+    clearTimeout(this.expiryTimer)
+    this.expiryTimer = undefined
+    if (this.sessions.size === 0) {
       return
     }
-    session.pending?.finish({ status: 'unavailable' })
-    this.sessions.delete(paneKey)
-    this.publish()
+    let deadline = Infinity
+    for (const session of this.sessions.values()) {
+      deadline = Math.min(deadline, session.seenAt + SESSION_TTL_MS)
+    }
+    this.expiryTimer = setTimeout(() => this.prune(), Math.max(0, deadline - Date.now()))
+    this.expiryTimer.unref()
   }
 
-  reconcile(): void {
-    for (const paneKey of this.sessions.keys()) {
-      this.reconcilePane(paneKey)
+  private prune(): void {
+    const size = this.sessions.size
+    for (const [paneKey, session] of this.sessions) {
+      if (Date.now() - session.seenAt >= SESSION_TTL_MS) {
+        session.pending?.finish({ status: 'unavailable' })
+        this.sessions.delete(paneKey)
+      }
     }
-  }
-
-  reconcilePane(paneKey: string): void {
-    const session = this.sessions.get(paneKey)
-    if (!session) {
-      return
-    }
-    if (this.isLive(paneKey, session.sessionId) === false) {
-      this.removePane(paneKey)
-    } else {
+    if (this.sessions.size !== size) {
+      this.armExpiry()
       this.publish()
     }
   }
