@@ -11,6 +11,7 @@ import {
 } from '../agent-hooks/installation/configuration/hook-config-schema'
 import {
   createManagedCommandMatcher,
+  hookDefinitionHasManagedCommand,
   removeManagedCommands
 } from '../agent-hooks/installation/commands/managed-hook-command-matching'
 import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
@@ -23,7 +24,7 @@ import {
   writeHooksJsonRemote
 } from '../agent-hooks/installation/configuration/hooks-json-remote'
 import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
-import { CURSOR_EVENTS } from './hook-events'
+import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 import { getManagedCommand, getManagedScript, getPosixManagedCommand } from './hook-script'
 
 function getConfigPath(): string {
@@ -38,25 +39,40 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-function hasManagedEntries(configPath: string): boolean {
+type ManagedEntryScan = { events: CursorEvent[]; outdated: boolean }
+
+// Events holding Orca entries, and whether any entry differs from what this build writes.
+function scanManagedEntries(configPath: string, scriptPath: string): ManagedEntryScan {
   const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-  return Object.values(readHooksJson(configPath)?.hooks ?? {}).some(
-    (definitions) =>
-      Array.isArray(definitions) &&
-      definitions.some(
-        (definition) =>
-          isManagedCommand(definition.command) ||
-          (definition.hooks ?? []).some((hook) => isManagedCommand(hook.command))
-      )
-  )
+  const scan: ManagedEntryScan = { events: [], outdated: false }
+  for (const [eventName, definitions] of Object.entries(readHooksJson(configPath)?.hooks ?? {})) {
+    const managed = Array.isArray(definitions)
+      ? definitions.filter((definition) =>
+          hookDefinitionHasManagedCommand(definition, isManagedCommand)
+        )
+      : []
+    if (managed.length === 0) {
+      continue
+    }
+    const event = CURSOR_EVENTS.find((candidate) => candidate === eventName)
+    if (event) {
+      scan.events.push(event)
+    }
+    const current = event ? getManagedCommand(scriptPath, event) : undefined
+    if (managed.some((definition) => definition.command !== current)) {
+      scan.outdated = true
+    }
+  }
+  return scan
 }
 
 export class CursorHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
-    // Cursor desktop runs these entries without the CLI that gates install(), so keep existing ones current.
-    if (this.getStatus().state !== 'installed' && hasManagedEntries(getConfigPath())) {
-      this.install()
+    // Cursor desktop runs these entries without the CLI that gates install(); update only what Orca already owns.
+    const scan = scanManagedEntries(getConfigPath(), getManagedScriptPath())
+    if (scan.outdated) {
+      this.install(scan.events)
     }
   }
 
@@ -107,7 +123,7 @@ export class CursorHookService {
     return { agent: 'cursor', state, configPath, managedHooksPresent, detail }
   }
 
-  install(): AgentHookInstallStatus {
+  install(events: readonly CursorEvent[] = CURSOR_EVENTS): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
@@ -146,7 +162,7 @@ export class CursorHookService {
       }
     }
 
-    for (const eventName of CURSOR_EVENTS) {
+    for (const eventName of events) {
       const command = getManagedCommand(scriptPath, eventName)
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand).filter(
