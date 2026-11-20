@@ -71,6 +71,7 @@ const WorktreeVisibilityDialog = lazyWithRetry(
 const OrcaYamlTrustDialog = lazyWithRetry(
   () => import('./workspace-creation/hook-trust/OrcaYamlTrustDialog')
 )
+const OpenOnHostDialog = lazyWithRetry(() => import('../open-on-host/OpenOnHostDialog'))
 const ForgetSshWorkspaceDialog = lazyWithRetry(
   () => import('./workspace-actions/deletion/ForgetSshWorkspaceDialog')
 )
@@ -400,6 +401,7 @@ function Sidebar({
         {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
         {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
         {activeModal === 'forget-ssh-workspace' ? <ForgetSshWorkspaceDialog /> : null}
+        {activeModal === 'open-on-host' ? <OpenOnHostDialog /> : null}
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer

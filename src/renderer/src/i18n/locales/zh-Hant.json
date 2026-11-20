@@ -28186,5 +28186,29 @@
       "badJson": "請檢查貼上的 JSON：無法解析。",
       "none": "Orca 找不到可新增的伺服器。不支援 SSE 伺服器、有自己的 OAuth 用戶端或工具篩選器的伺服器，以及從環境讀取的值（${VAR}）。"
     }
+  },
+  "openOnHost": {
+    "projectMenu": "在 {{host}} 上開啟…",
+    "workspaceMenu": "在 {{host}} 上開啟…",
+    "title": "在 {{host}} 上開啟 {{name}}",
+    "existingLocation": "在 {{path}} 中開啟",
+    "cloneLocation": "從 {{url}} 複製到 {{path}}",
+    "branch": "分支 {{branch}}",
+    "pushFirst": "先推送 {{branch}}",
+    "publishFirst": "先將 {{branch}} 發佈到 origin",
+    "unpublishedBlocked": "{{branch}} 尚未在遠端儲存庫中，{{host}} 無法擷取。請先發佈",
+    "detached": "簽出一個分支後才能在 {{host}} 上開啟此工作區",
+    "primary": "在 {{host}} 上開啟",
+    "opening": "正在開啟…",
+    "cancel": "取消",
+    "noRemote": "新增 Git 遠端儲存庫後才能在另一台電腦上開啟此專案",
+    "updateOrca": "請更新 {{host}} 上的 Orca 以使用此功能",
+    "cloneFolderTaken": "{{path}} 在 {{host}} 上已被使用。請在專案設定中設定此專案在 {{host}} 上的位置",
+    "sourceUnavailable": "無法連線至此工作區的主機",
+    "noRemoteBranch": "此分支沒有 {{host}} 可以開啟的遠端分支",
+    "missingRemote": "{{host}} 上的複製沒有遠端儲存庫 {{remote}}",
+    "headMismatch": "{{host}} 上的 {{branch}} 副本與這台 Mac 位於不同的提交",
+    "hostCopyNotLoaded": "{{host}} 上此專案的副本尚未載入",
+    "localCommitsStay_other": "你的 {{count}} 個本機提交保留在這台 Mac 上"
   }
 }

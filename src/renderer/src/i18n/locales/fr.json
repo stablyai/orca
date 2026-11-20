@@ -28993,5 +28993,31 @@
       "badJson": "Vérifiez le JSON collé : il n'est pas analysable.",
       "none": "Orca n'a trouvé aucun serveur qu'il puisse ajouter. Les serveurs SSE, les serveurs avec leur propre client OAuth ou des filtres d'outils, et les valeurs lues dans l'environnement (${VAR}) ne sont pas pris en charge."
     }
+  },
+  "openOnHost": {
+    "projectMenu": "Ouvrir sur {{host}}…",
+    "workspaceMenu": "Ouvrir sur {{host}}…",
+    "title": "Ouvrir {{name}} sur {{host}}",
+    "existingLocation": "S'ouvre dans {{path}}",
+    "cloneLocation": "Cloner depuis {{url}} dans {{path}}",
+    "branch": "Branche {{branch}}",
+    "pushFirst": "Pousser {{branch}} d'abord",
+    "publishFirst": "Publier {{branch}} sur origin d'abord",
+    "unpublishedBlocked": "{{branch}} n'est pas encore sur un dépôt distant, {{host}} ne peut donc pas la récupérer. Publiez-la d'abord",
+    "detached": "Passez sur une branche pour ouvrir cet espace de travail sur {{host}}",
+    "primary": "Ouvrir sur {{host}}",
+    "opening": "Ouverture…",
+    "cancel": "Annuler",
+    "noRemote": "Ajoutez un dépôt distant git pour ouvrir ce projet sur une autre machine",
+    "updateOrca": "Mettez à jour Orca sur {{host}} pour utiliser cette option",
+    "cloneFolderTaken": "{{path}} est déjà utilisé sur {{host}}. Définissez l'emplacement de ce projet sur {{host}} dans les paramètres du projet",
+    "sourceUnavailable": "Impossible de joindre l'hôte de cet espace de travail",
+    "noRemoteBranch": "Cette branche n'a pas de branche distante que {{host}} peut ouvrir",
+    "missingRemote": "Le clone sur {{host}} n'a pas de dépôt distant {{remote}}",
+    "headMismatch": "La copie de {{branch}} sur {{host}} est sur un autre commit que ce Mac",
+    "hostCopyNotLoaded": "La copie de ce projet sur {{host}} n'est pas encore chargée",
+    "localCommitsStay_one": "Votre {{count}} commit local reste sur ce Mac",
+    "localCommitsStay_other": "Vos {{count}} commits locaux restent sur ce Mac",
+    "localCommitsStay_many": "Vos {{count}} commits locaux restent sur ce Mac"
   }
 }

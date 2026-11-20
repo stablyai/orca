@@ -31801,5 +31801,31 @@
       "badJson": "Verifique o JSON colado: ele não pode ser analisado.",
       "none": "O Orca não encontrou nenhum servidor que possa adicionar. Servidores SSE, servidores com cliente OAuth próprio ou filtros de ferramentas e valores lidos do ambiente (${VAR}) não são suportados."
     }
+  },
+  "openOnHost": {
+    "projectMenu": "Abrir em {{host}}…",
+    "workspaceMenu": "Abrir em {{host}}…",
+    "title": "Abrir {{name}} em {{host}}",
+    "existingLocation": "Abre em {{path}}",
+    "cloneLocation": "Clonar de {{url}} para {{path}}",
+    "branch": "Branch {{branch}}",
+    "pushFirst": "Fazer push de {{branch}} primeiro",
+    "publishFirst": "Publicar {{branch}} no origin primeiro",
+    "unpublishedBlocked": "{{branch}} ainda não está em um remoto, então {{host}} não pode buscá-lo. Publique-o primeiro",
+    "detached": "Faça checkout de um branch para abrir este workspace em {{host}}",
+    "primary": "Abrir em {{host}}",
+    "opening": "Abrindo…",
+    "cancel": "Cancelar",
+    "noRemote": "Adicione um remoto git para abrir este projeto em outra máquina",
+    "updateOrca": "Atualize o Orca em {{host}} para usar isto",
+    "cloneFolderTaken": "{{path}} já está em uso em {{host}}. Defina o local deste projeto em {{host}} nas configurações do projeto",
+    "sourceUnavailable": "Não é possível acessar o host deste workspace",
+    "noRemoteBranch": "Este branch não tem um branch remoto que {{host}} possa abrir",
+    "missingRemote": "O clone em {{host}} não tem o remoto {{remote}}",
+    "headMismatch": "A cópia de {{branch}} em {{host}} está em um commit diferente deste Mac",
+    "hostCopyNotLoaded": "A cópia deste projeto em {{host}} ainda não foi carregada",
+    "localCommitsStay_one": "Seu {{count}} commit local fica neste Mac",
+    "localCommitsStay_other": "Seus {{count}} commits locais ficam neste Mac",
+    "localCommitsStay_many": "Seus {{count}} commits locais ficam neste Mac"
   }
 }
