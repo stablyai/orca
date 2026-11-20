@@ -232,6 +232,7 @@ export function descriptorRowElements(
       <ListRow
         key={choice.value}
         title={parts?.model ?? nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
+        accessibilityLabel={parts ? choice.label : undefined}
         wrapTitle={parts !== null}
         subtitle={subtitle}
         leading={choiceLeading ? (choiceLeading(choice.value) ?? null) : undefined}
