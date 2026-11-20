@@ -504,6 +504,20 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 
+  it('cuts a 409’s spread short to say a change made during it', async () => {
+    const { client, machine } = startClient()
+    await settle()
+    h.fake.answerPoll({ status: 409, body: { error: 'hello_required', reason: 'features' } })
+    await settle(1_000)
+    expect(h.fake.hellos).toHaveLength(1)
+    machine.botList = [FAKE_BOT]
+    client.sayChanged()
+    await settle(1_000)
+    expect(h.fake.hellos).toHaveLength(2)
+    expect(h.fake.requestsTo(CONNECTOR_PATHS.poll).at(-1)?.body).toMatchObject({ helloRev: 2 })
+    client.stop()
+  })
+
   it('polls on a hello said during the held poll, without waiting a spread, when the 409 beats it', async () => {
     const { client, machine } = startClient()
     await settle()

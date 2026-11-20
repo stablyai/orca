@@ -1,6 +1,7 @@
 import { delayUnlessAborted } from '../../shared/concurrency/abort-aware-delay'
 import { ConnectorPollControl } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorFailure } from './connector-cloud-request'
+import type { ConnectorSnapshotReason } from './connector-snapshot-trace'
 import { connectorRetryDelayMs } from './connector-outbox'
 
 // A deploy drains every host at once, and a crashed instance fails ~1,000 polls at once: their next
@@ -19,10 +20,31 @@ export function connectorRehelloSpreadMs(random: () => number): number {
   return random() * CONNECTOR_REHELLO_SPREAD_MS
 }
 
-/** Waits out a 409's re-hello spread, or until `signal` aborts. */
-export async function waitRehelloSpread(random: () => number, signal: AbortSignal): Promise<null> {
-  await delayUnlessAborted(connectorRehelloSpreadMs(random), signal)
-  return null
+/** A 409's re-hello spread, which a change to say (`cut`) ends early so it reaches the cloud at once. */
+export class ConnectorRehelloSpread {
+  private cutting: AbortController | null = null
+
+  async wait(random: () => number, signal: AbortSignal): Promise<null> {
+    this.cutting = new AbortController()
+    await delayUnlessAborted(
+      connectorRehelloSpreadMs(random),
+      AbortSignal.any([signal, this.cutting.signal])
+    )
+    this.cutting = null
+    return null
+  }
+
+  cut(): void {
+    this.cutting?.abort()
+  }
+}
+
+/** Why a failed poll dropped its hello, for the snapshot it takes. */
+export function connectorPollDropReason(failure: ConnectorFailure): ConnectorSnapshotReason {
+  if (failure.status !== 409) {
+    return 'poll-failed'
+  }
+  return failure.reason === 'features' ? 'poll-409-features' : 'poll-409'
 }
 
 /** A failed poll's wait: the first spreads like a drain's re-poll, later ones double as usual. */
