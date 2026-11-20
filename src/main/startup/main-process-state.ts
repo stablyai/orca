@@ -2,6 +2,7 @@ import type { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
 import { type BrowserWindow, type Tray, app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import type { StatsCollector } from '../stats/collector'
 import type { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import type { CodexAccountService } from '../codex-accounts/service'
@@ -84,6 +85,8 @@ export const mainProcessState = {
   /** User quit bypasses running-process confirmation during close. */
   isQuitting: false,
   store: null as Store | null,
+  // Main's native consumers read settings through this; it never exposes the Store.
+  nativeSettings: null as NativeSettingsProjection | null,
   profileShutdownCheckpoint: null as Promise<void> | null,
   profileStateStartup: createInitialProfileStateStartup(),
   profileStateAdmission: createInitialProfileStateAdmission(),

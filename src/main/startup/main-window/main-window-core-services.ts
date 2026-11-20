@@ -8,7 +8,7 @@ import { mainProcessState as state } from '../main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
 import { preserveAgentAuthBeforeRestart } from '../../providers/accounts/agent-auth-restart-preservation'
-import { preserveStateBeforeUpdateRestart } from '../../updater/update-restart-preservation'
+import { preserveStateBeforeUpdateRestart } from '../../core-desktop/update-restart-preservation'
 import {
   emitPluginWorktreeLifecycle,
   handleCodexHomePtySpawned,
@@ -49,6 +49,7 @@ async function installMainWindowCoreServices(
     throw new Error('Main window closed while preparing services')
   }
   const store = state.store
+  const nativeSettings = state.nativeSettings
   const runtime = state.runtime
   const stats = state.stats
   const codexAccounts = state.codexAccounts
@@ -61,6 +62,7 @@ async function installMainWindowCoreServices(
   const orcaAccount = state.orcaAccount
   if (
     !store ||
+    !nativeSettings ||
     !runtime ||
     !stats ||
     !codexAccounts ||
@@ -131,6 +133,7 @@ async function installMainWindowCoreServices(
   await attachMainWindowServices(
     window,
     store,
+    nativeSettings,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
     (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
