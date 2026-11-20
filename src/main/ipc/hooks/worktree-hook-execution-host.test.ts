@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { hydrateRepo } from '../../persistence/tracking-repos/repo-hydration'

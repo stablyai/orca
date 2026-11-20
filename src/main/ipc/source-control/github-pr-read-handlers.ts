@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import type { GitHubReactionContent } from '../../../shared/github/comments/comment-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
@@ -17,7 +18,7 @@ import {
 } from './github-repo-routing'
 
 export function registerGitHubPRReadHandlers(store: Store): void {
-  ipcMain.handle('gh:repoSlug', (_event, args: { repoPath: string }) => {
+  registerAppHandler('gh:repoSlug', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredGitHubRepo(args, store)
     const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)[0]
     return localGitOptions
@@ -27,7 +28,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
       : getRepoSlug(repo.path, getGitHubRepoConnectionId(repo))
   })
 
-  ipcMain.handle('gh:repoUpstream', (_event, args: { repoPath: string }) => {
+  registerAppHandler('gh:repoUpstream', (_event, args: { repoPath: string }) => {
     const repo = assertRegisteredGitHubRepo(args, store)
     const localGitOptions = getGitHubLocalGitOptionArgs(store, repo)[0]
     return localGitOptions
@@ -37,7 +38,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
       : getRepoUpstream(repo.path, getGitHubRepoConnectionId(repo))
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:prChecks',
     (
       _event,
@@ -74,7 +75,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:prCheckDetails',
     (
       _event,
@@ -105,7 +106,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:prComments',
     (
       _event,
@@ -129,7 +130,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:setPRCommentReaction',
     (
       _event,
@@ -159,7 +160,7 @@ export function registerGitHubPRReadHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:resolveReviewThread',
     async (
       _event,

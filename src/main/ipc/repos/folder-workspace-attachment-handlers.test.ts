@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { BrowserWindow } from 'electron'
 import { mkdtempSync, rmSync } from 'node:fs'

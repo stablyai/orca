@@ -1,4 +1,5 @@
-import { type BrowserWindow, ipcMain } from 'electron'
+import { publishToDocuments, registerAppHandler } from '../app-registry/app-handler-registry'
+import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../../persistence/loading-store/store'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
@@ -13,11 +14,11 @@ import {
 import { assertWslMoveProjectWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: Store): void {
-  ipcMain.handle('sparsePresets:list', (_event, args: { repoId: string }) => {
+  registerAppHandler('sparsePresets:list', (_event, args: { repoId: string }) => {
     return store.getSparsePresets(args.repoId)
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'sparsePresets:save',
     (
       _event,
@@ -57,19 +58,22 @@ export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: S
     }
   )
 
-  ipcMain.handle('sparsePresets:remove', (_event, args: { repoId: string; presetId: string }) => {
-    const repo = store.getRepo(args.repoId)
-    if (!repo) {
-      throw new Error(`Repo "${args.repoId}" not found`)
+  registerAppHandler(
+    'sparsePresets:remove',
+    (_event, args: { repoId: string; presetId: string }) => {
+      const repo = store.getRepo(args.repoId)
+      if (!repo) {
+        throw new Error(`Repo "${args.repoId}" not found`)
+      }
+      assertWslMoveProjectWritable(store, { repoId: args.repoId })
+      store.removeSparsePreset(args.repoId, args.presetId)
+      notifySparsePresetsChanged(mainWindow, args.repoId)
     }
-    assertWslMoveProjectWritable(store, { repoId: args.repoId })
-    store.removeSparsePreset(args.repoId, args.presetId)
-    notifySparsePresetsChanged(mainWindow, args.repoId)
-  })
+  )
 }
 
 function notifySparsePresetsChanged(mainWindow: BrowserWindow, repoId: string): void {
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('sparsePresets:changed', { repoId })
+    publishToDocuments('sparsePresets:changed', { repoId }, { sourceId: mainWindow.webContents.id })
   }
 }

@@ -1,4 +1,5 @@
-import { ipcMain, app } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+import { app } from 'electron'
 import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type {
   CreateWorktreeArgs,
@@ -38,7 +39,7 @@ import { createdWorktreeLifecycleIdentity } from '../../../runtime/workspaces/li
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:create',
     async (_event, rawArgs: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
@@ -120,7 +121,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:runApprovedSetup',
     (_event, args: RunApprovedWorktreeSetupArgs): Promise<RunApprovedWorktreeSetupResult> =>
       // A click on the trust prompt is the user's act, so it may start the repo's WSL distro.
@@ -129,7 +130,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
       })
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:adoptProvisionedRoot',
     async (_event, rawArgs: AdoptProvisionedRootArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)

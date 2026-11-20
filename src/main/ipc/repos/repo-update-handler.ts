@@ -1,4 +1,5 @@
-import { type BrowserWindow, ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
@@ -32,7 +33,7 @@ import {
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'repos:update',
     async (
       _event,

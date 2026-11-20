@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import type { ClaudeAccountService } from '../../claude-accounts/service'
 import type { ClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
 import { openAccountSignInLink } from './account-sign-in-link-opener'
@@ -16,35 +17,35 @@ export function registerClaudeAccountHandlers(
   moveUnheldSessions: MoveUnheldClaudeSessions
 ): void {
   claudeAccounts.setWslSignInLinkOpener((signInLink) => openAccountSignInLink('claude', signInLink))
-  ipcMain.handle('claudeAccounts:list', () => claudeAccounts.listAccounts())
-  ipcMain.handle(
+  registerAppHandler('claudeAccounts:list', () => claudeAccounts.listAccounts())
+  registerAppHandler(
     'claudeAccounts:add',
     (_event, args?: ClaudeAccountSelectionTarget & { copyLink?: boolean }) =>
       claudeAccounts.addAccount(args, args?.copyLink)
   )
-  ipcMain.handle('claudeAccounts:cancelPendingLogin', () => claudeAccounts.cancelPendingLogin())
-  ipcMain.handle(
+  registerAppHandler('claudeAccounts:cancelPendingLogin', () => claudeAccounts.cancelPendingLogin())
+  registerAppHandler(
     'claudeAccounts:reauthenticate',
     (_event, args: { accountId: string; copyLink?: boolean }) =>
       claudeAccounts.reauthenticateAccount(args.accountId, args.copyLink)
   )
-  ipcMain.handle('claudeAccounts:waitForSignInLink', () => claudeAccounts.waitForSignInLink())
-  ipcMain.handle('claudeAccounts:remove', (_event, args: { accountId: string }) =>
+  registerAppHandler('claudeAccounts:waitForSignInLink', () => claudeAccounts.waitForSignInLink())
+  registerAppHandler('claudeAccounts:remove', (_event, args: { accountId: string }) =>
     claudeAccounts.removeAccount(args.accountId)
   )
-  ipcMain.handle(
+  registerAppHandler(
     'claudeAccounts:rename',
     (_event, args: { accountId: string; displayName: string | null }) =>
       claudeAccounts.renameAccount(args.accountId, args.displayName)
   )
-  ipcMain.handle(
+  registerAppHandler(
     'claudeAccounts:select',
     (_event, args: { accountId: string | null } & ClaudeAccountSelectionTarget) =>
       args.runtime
         ? claudeAccounts.selectAccountForTarget(args.accountId, args)
         : claudeAccounts.selectAccount(args.accountId)
   )
-  ipcMain.handle(
+  registerAppHandler(
     'claudeAccounts:moveUnheldRunningSessions',
     (_event, args: { change: ClaudeHostSelectionChange; heldPtyIds: string[] }) =>
       moveUnheldSessions(args.change, new Set(args.heldPtyIds))

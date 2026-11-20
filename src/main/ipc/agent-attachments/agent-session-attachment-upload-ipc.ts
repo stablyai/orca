@@ -1,4 +1,5 @@
-import { app, ipcMain } from 'electron'
+import { registerAppHandler, appDocumentFor } from '../app-registry/app-handler-registry'
+import { app } from 'electron'
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
@@ -8,7 +9,7 @@ import { uploadExternalPathsToAgentSessionAttachments } from './agent-session-at
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 
 export function registerAgentSessionAttachmentUploadHandlers(): void {
-  ipcMain.handle(
+  registerAppHandler(
     'fs:uploadPathsToAgentSessionAttachments',
     async (
       event,
@@ -16,7 +17,7 @@ export function registerAgentSessionAttachmentUploadHandlers(): void {
     ): Promise<AgentSessionAttachmentPathUploadResult> => {
       const userDataPath = app.getPath('userData')
       // Abort on reload/close; the server sweeps abandoned part files.
-      const lifetime = abortWhenRendererGone(event.sender)
+      const lifetime = abortWhenRendererGone(appDocumentFor(event))
       try {
         return await uploadExternalPathsToAgentSessionAttachments(
           {

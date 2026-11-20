@@ -1,4 +1,5 @@
-import type { WebContents } from 'electron'
+import { publishToDocuments, type AppDocument } from '../app-registry/app-handler-registry'
+
 import { iterateTerminalInputChunks } from '../../../shared/terminal/input/terminal-input'
 import type {
   TerminalPreviewDataPayload,
@@ -63,7 +64,7 @@ export class TerminalPreviewOutputStream {
   private isDisposed = false
 
   constructor(
-    readonly contents: WebContents,
+    readonly contents: AppDocument,
     readonly ptyId: string,
     private readonly releaseRawView: () => void,
     private readonly onDispose: (stream: TerminalPreviewOutputStream) => void
@@ -169,7 +170,7 @@ export class TerminalPreviewOutputStream {
       return false
     }
     try {
-      this.contents.send('terminalPreview:data', payload)
+      publishToDocuments('terminalPreview:data', payload, this.contents.caller)
       return true
     } catch {
       this.dispose()

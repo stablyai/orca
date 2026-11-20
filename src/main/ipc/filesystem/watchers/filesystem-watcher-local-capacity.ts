@@ -1,4 +1,5 @@
-import type { WebContents } from 'electron'
+import { publishToDocuments, type AppDocument } from '../../app-registry/app-handler-registry'
+
 import { onWatcherChildCapacityAvailable } from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
 
 import {
@@ -12,14 +13,14 @@ import {
 import { isWatcherRemovalInProgressError } from '../../../workspaces/removal/watcher-removal-gate'
 import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
 
-export type SubscribeLocalWatcher = (worktreePath: string, sender: WebContents) => Promise<void>
+export type SubscribeLocalWatcher = (worktreePath: string, sender: AppDocument) => Promise<void>
 /** Calls `retry` when installing may succeed again; returns a cancel. */
 export type WaitForLocalWatcherRetry = (retry: () => Promise<void>) => () => void
 
 export function scheduleLocalCapacityRetry(
   rootKey: string,
   worktreePath: string,
-  listeners: Map<number, WebContents>,
+  listeners: Map<number, AppDocument>,
   subscribe: SubscribeLocalWatcher,
   waitForRetry: WaitForLocalWatcherRetry = onWatcherChildCapacityAvailable
 ): void {
@@ -52,11 +53,15 @@ export function scheduleLocalCapacityRetry(
         // Writes after IPC returned but before installation require a resync.
         const root = watcherLifecycleState.watchedRoots.get(rootKey)
         if (root?.listeners.has(listener.id) && !listener.isDestroyed()) {
-          listener.send('fs:changed', {
-            worktreePath: root.rootPath,
-            events: [{ kind: 'overflow', absolutePath: root.rootPath }],
-            resync: true
-          } satisfies FsChangedPayload)
+          publishToDocuments(
+            'fs:changed',
+            {
+              worktreePath: root.rootPath,
+              events: [{ kind: 'overflow', absolutePath: root.rootPath }],
+              resync: true
+            } satisfies FsChangedPayload,
+            listener.caller
+          )
         }
       })
     )

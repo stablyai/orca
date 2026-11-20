@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler, appDocumentFor } from '../app-registry/app-handler-registry'
+
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { GitHubPullRequestStateUpdate } from '../../../shared/work-items/issue-mutation-types'
 import { markPRReadyForReview } from '../../github/client/update/pr-ready'
@@ -31,7 +32,7 @@ function broadcastSuccessfulPRMutation(
 }
 
 export function registerGitHubPRMutationHandlers(store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'gh:updatePRTitle',
     async (
       event,
@@ -46,12 +47,12 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
-      broadcastSuccessfulPRMutation(ok, repo.path, repo.id, args.prNumber, event.sender.id)
+      broadcastSuccessfulPRMutation(ok, repo.path, repo.id, args.prNumber, appDocumentFor(event).id)
       return ok
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:mergePR',
     async (
       event,
@@ -72,12 +73,18 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         normalizePRCheckHeadSha(args.expectedHeadSha) ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
-      broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+      broadcastSuccessfulPRMutation(
+        result.ok,
+        repo.path,
+        repo.id,
+        args.prNumber,
+        appDocumentFor(event).id
+      )
       return result
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:setPRAutoMerge',
     async (
       event,
@@ -98,12 +105,18 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
-      broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+      broadcastSuccessfulPRMutation(
+        result.ok,
+        repo.path,
+        repo.id,
+        args.prNumber,
+        appDocumentFor(event).id
+      )
       return result
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:updatePRState',
     async (
       event,
@@ -129,12 +142,18 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
-      broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+      broadcastSuccessfulPRMutation(
+        result.ok,
+        repo.path,
+        repo.id,
+        args.prNumber,
+        appDocumentFor(event).id
+      )
       return result
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:markPRReadyForReview',
     async (
       event,
@@ -158,12 +177,18 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
-      broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+      broadcastSuccessfulPRMutation(
+        result.ok,
+        repo.path,
+        repo.id,
+        args.prNumber,
+        appDocumentFor(event).id
+      )
       return result
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:rerunPRChecks',
     async (
       _event,
@@ -192,7 +217,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:requestPRReviewers',
     async (
       event,
@@ -211,12 +236,18 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
-      broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+      broadcastSuccessfulPRMutation(
+        result.ok,
+        repo.path,
+        repo.id,
+        args.prNumber,
+        appDocumentFor(event).id
+      )
       return result
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:removePRReviewers',
     async (
       event,
@@ -235,7 +266,13 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
-      broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+      broadcastSuccessfulPRMutation(
+        result.ok,
+        repo.path,
+        repo.id,
+        args.prNumber,
+        appDocumentFor(event).id
+      )
       return result
     }
   )

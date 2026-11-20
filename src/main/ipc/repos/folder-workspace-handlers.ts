@@ -1,4 +1,5 @@
-import { type BrowserWindow, ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { FolderWorkspacePathStatusRequest } from '../../../shared/folder-workspaces/folder-workspace-path-status'
@@ -27,9 +28,11 @@ export function registerFolderWorkspaceHandlers(
   store: Store,
   runtime: Pick<OrcaRuntimeService, 'deleteFolderWorkspace' | 'createFolderWorkspace'>
 ): void {
-  ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => visibleFolderWorkspaces(store))
+  registerAppHandler('folderWorkspaces:list', (): FolderWorkspace[] =>
+    visibleFolderWorkspaces(store)
+  )
 
-  ipcMain.handle('folderWorkspaces:getPathStatus', async (_event, rawArgs: unknown) => {
+  registerAppHandler('folderWorkspaces:getPathStatus', async (_event, rawArgs: unknown) => {
     const args = parseProjectGroupIpcArgs(
       FolderWorkspacePathStatusArgs,
       rawArgs,
@@ -38,7 +41,7 @@ export function registerFolderWorkspaceHandlers(
     return getFolderWorkspacePathStatus(store, args)
   })
 
-  ipcMain.handle('folderWorkspaces:create', async (_event, rawArgs: unknown) => {
+  registerAppHandler('folderWorkspaces:create', async (_event, rawArgs: unknown) => {
     const args = parseProjectGroupIpcArgs(
       FolderWorkspaceCreateArgs,
       rawArgs,
@@ -51,7 +54,7 @@ export function registerFolderWorkspaceHandlers(
     })
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'folderWorkspaces:update',
     async (_event, rawArgs: unknown): Promise<FolderWorkspace | null> => {
       const args = parseProjectGroupIpcArgs(
@@ -97,13 +100,16 @@ export function registerFolderWorkspaceHandlers(
     }
   )
 
-  ipcMain.handle('folderWorkspaces:delete', async (_event, rawArgs: unknown): Promise<boolean> => {
-    const args = parseProjectGroupIpcArgs(
-      FolderWorkspaceDeleteArgs,
-      rawArgs,
-      'invalid_folder_workspace_delete_args'
-    )
-    // Runtime owns teardown of PTYs, browsers and sessions, plus success notifications.
-    return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId, args)).deleted
-  })
+  registerAppHandler(
+    'folderWorkspaces:delete',
+    async (_event, rawArgs: unknown): Promise<boolean> => {
+      const args = parseProjectGroupIpcArgs(
+        FolderWorkspaceDeleteArgs,
+        rawArgs,
+        'invalid_folder_workspace_delete_args'
+      )
+      // Runtime owns teardown of PTYs, browsers and sessions, plus success notifications.
+      return (await runtime.deleteFolderWorkspace(args.folderWorkspaceId, args)).deleted
+    }
+  )
 }

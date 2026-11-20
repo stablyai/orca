@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
 import {
   connectBitbucket,
   disconnectBitbucket,
@@ -35,7 +35,7 @@ function normalizeConnectInput(value: unknown): BitbucketConnectArgs | null {
 }
 
 export function registerBitbucketHandlers(): void {
-  ipcMain.handle(
+  registerAppHandler(
     'bitbucket:connect',
     async (_event, args: unknown): Promise<BitbucketConnectResult> => {
       const input = normalizeConnectInput(args)
@@ -51,12 +51,12 @@ export function registerBitbucketHandlers(): void {
     }
   )
 
-  ipcMain.handle('bitbucket:disconnect', async (): Promise<void> => {
+  registerAppHandler('bitbucket:disconnect', async (): Promise<void> => {
     await disconnectBitbucket()
     _resetPreflightCache()
   })
 
-  ipcMain.handle('bitbucket:status', async (): Promise<BitbucketConnectionStatus> => {
+  registerAppHandler('bitbucket:status', async (): Promise<BitbucketConnectionStatus> => {
     return getBitbucketConnectionStatus()
   })
 }

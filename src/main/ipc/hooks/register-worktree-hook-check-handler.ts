@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import {
   getRepoDialableSshTargetId,
   isRepoOnCatalogHost,
@@ -17,7 +18,7 @@ import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-
 export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): void {
   const { store, runtime } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'hooks:check',
     async (
       _event,

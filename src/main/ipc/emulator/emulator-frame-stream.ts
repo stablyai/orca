@@ -1,4 +1,9 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import {
+  publishToDocuments,
+  registerAppHandler,
+  appDocumentFor
+} from '../app-registry/app-handler-registry'
+
 import { randomUUID } from 'node:crypto'
 import { MjpegFrameStream } from '../../emulator/mjpeg-frame-stream'
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
@@ -27,11 +32,11 @@ function frameToArrayBuffer(frame: Buffer<ArrayBufferLike>): ArrayBuffer {
 }
 
 export function registerEmulatorFrameStreamHandlers(): void {
-  ipcMain.handle(
+  registerAppHandler(
     'emulator:frameStreamStart',
     (event, args: { streamUrl: string; streamKey?: string }): { streamId: string } => {
-      const owner = event.sender
-      const ownerWindow = BrowserWindow.fromWebContents(owner)
+      const owner = appDocumentFor(event)
+      const ownerWindow = event.windowId
       if (!ownerWindow) {
         throw new Error('Emulator frame stream must originate from a BrowserWindow.')
       }
@@ -43,15 +48,19 @@ export function registerEmulatorFrameStreamHandlers(): void {
         {
           onError: (message) => {
             if (sessions.has(streamId) && !owner.isDestroyed()) {
-              owner.send('emulator:frameStreamError', { streamId, message })
+              publishToDocuments('emulator:frameStreamError', { streamId, message }, owner.caller)
             }
           },
           onFrame: (frame) => {
             if (sessions.has(streamId) && !owner.isDestroyed()) {
-              owner.send('emulator:frameStreamFrame', {
-                streamId,
-                bytes: frameToArrayBuffer(frame)
-              })
+              publishToDocuments(
+                'emulator:frameStreamFrame',
+                {
+                  streamId,
+                  bytes: frameToArrayBuffer(frame)
+                },
+                owner.caller
+              )
             }
           }
         },
@@ -78,7 +87,7 @@ export function registerEmulatorFrameStreamHandlers(): void {
     }
   )
 
-  ipcMain.handle('emulator:frameStreamStop', (_event, args: { streamId: string }) => {
+  registerAppHandler('emulator:frameStreamStop', (_event, args: { streamId: string }) => {
     stopFrameStream(args.streamId)
   })
 }

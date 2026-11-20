@@ -1,9 +1,10 @@
-import type { WebContents } from 'electron'
+import type { AppDocument } from '../app-registry/app-handler-registry'
+
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 
 type SenderState = {
   connectionId: string
-  sender: WebContents
+  sender: AppDocument
   subscriptions: Map<string, AbortController>
 }
 
@@ -15,20 +16,20 @@ export class DesktopRuntimeSenderLifecycle {
 
   constructor(private readonly runtime: CleanupRuntime) {}
 
-  connectionIdFor(sender: WebContents): string {
+  connectionIdFor(sender: AppDocument): string {
     return this.stateFor(sender).connectionId
   }
 
-  subscriptionsFor(sender: WebContents): Map<string, AbortController> {
+  subscriptionsFor(sender: AppDocument): Map<string, AbortController> {
     return this.stateFor(sender).subscriptions
   }
 
-  existingSubscriptionsFor(sender: WebContents): Map<string, AbortController> | null {
+  existingSubscriptionsFor(sender: AppDocument): Map<string, AbortController> | null {
     const state = this.senders.get(sender.id)
     return state?.sender === sender ? state.subscriptions : null
   }
 
-  private stateFor(sender: WebContents): SenderState {
+  private stateFor(sender: AppDocument): SenderState {
     const existing = this.senders.get(sender.id)
     if (existing?.sender === sender) {
       return existing
@@ -42,7 +43,7 @@ export class DesktopRuntimeSenderLifecycle {
       subscriptions: new Map()
     }
     this.senders.set(sender.id, state)
-    const retireDocument = (): void => this.retire(state, false)
+    const retireDocument = (): void => this.retire(state, true)
     sender.on('did-navigate', retireDocument)
     sender.on('render-process-gone', retireDocument)
     sender.once('destroyed', () => this.retire(state, true))

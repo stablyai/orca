@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import type {
   OrcaOrgRole,
   OrcaProfileOrgInviteRevokeArgs,
@@ -78,7 +79,7 @@ function orgMemberRemoveArgsFromUnknown(args: unknown): OrcaProfileOrgMemberRemo
 }
 
 export function registerOrcaProfileOrgMemberHandlers(): void {
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:orgMembersList',
     async (
       _event,
@@ -87,7 +88,7 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
       listOrcaProfileOrgMembers(getProfileUserDataPath(), orgMembersScopedArgs(rawArgs).orgId)
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:orgMemberInvite',
     async (
       _event,
@@ -96,7 +97,7 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
       inviteOrcaProfileOrgMember(getProfileUserDataPath(), orgMemberInviteArgsFromUnknown(rawArgs))
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:orgInviteRevoke',
     async (
       _event,
@@ -105,7 +106,7 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
       revokeOrcaProfileOrgInvite(getProfileUserDataPath(), orgInviteRevokeArgsFromUnknown(rawArgs))
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:orgMemberChangeRole',
     async (
       _event,
@@ -117,7 +118,7 @@ export function registerOrcaProfileOrgMemberHandlers(): void {
       )
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:orgMemberRemove',
     async (
       _event,

@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { CodexAccountAddTarget } from '../../codex-accounts/account-management/codex-account-service-types'
 import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
@@ -15,7 +16,7 @@ export function registerCodexAccountHandlers(
   codexAccounts: CodexAccountService,
   getSettings?: () => GlobalSettings
 ): void {
-  ipcMain.handle('codexAccounts:listStalePanes', (_event, args: { ptyIds?: unknown }) => {
+  registerAppHandler('codexAccounts:listStalePanes', (_event, args: { ptyIds?: unknown }) => {
     const settings = getSettings?.()
     if (!settings || !Array.isArray(args?.ptyIds)) {
       return []
@@ -25,45 +26,48 @@ export function registerCodexAccountHandlers(
       settings
     })
   })
-  ipcMain.handle('codexAccounts:listRecordedPaneLanes', (_event, args: { ptyIds?: unknown }) => {
-    if (!Array.isArray(args?.ptyIds)) {
-      return {}
+  registerAppHandler(
+    'codexAccounts:listRecordedPaneLanes',
+    (_event, args: { ptyIds?: unknown }) => {
+      if (!Array.isArray(args?.ptyIds)) {
+        return {}
+      }
+      return listRecordedCodexPaneLanes(
+        args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string')
+      )
     }
-    return listRecordedCodexPaneLanes(
-      args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string')
-    )
-  })
-  ipcMain.handle('codexAccounts:forgetStalePanes', (_event, args: { ptyIds?: unknown }) => {
+  )
+  registerAppHandler('codexAccounts:forgetStalePanes', (_event, args: { ptyIds?: unknown }) => {
     if (!Array.isArray(args?.ptyIds)) {
       return
     }
     forgetStaleCodexPanes(args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'))
   })
-  ipcMain.handle('codexAccounts:list', () => codexAccounts.listAccounts())
-  ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
+  registerAppHandler('codexAccounts:list', () => codexAccounts.listAccounts())
+  registerAppHandler('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)
   )
-  ipcMain.handle('codexAccounts:cancelPendingLogin', () => codexAccounts.cancelPendingLogin())
-  ipcMain.handle('codexAccounts:pendingLoginUrl', () => codexAccounts.getPendingLoginUrl())
+  registerAppHandler('codexAccounts:cancelPendingLogin', () => codexAccounts.cancelPendingLogin())
+  registerAppHandler('codexAccounts:pendingLoginUrl', () => codexAccounts.getPendingLoginUrl())
   // Settings reads the current link on mount; broadcasts carry later changes.
   codexAccounts.onPendingLoginUrlChanged(broadcastCodexPendingLoginUrl)
   codexAccounts.setWslLoginUrlOpener((url) => openAccountSignInLink('codex', url))
-  ipcMain.handle(
+  registerAppHandler(
     'codexAccounts:reauthenticate',
     (_event, args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
       codexAccounts.reauthenticateAccount(args.accountId, {
         activateIfSelectionWasEmpty: args.activateIfSelectionWasEmpty === true
       })
   )
-  ipcMain.handle('codexAccounts:remove', (_event, args: { accountId: string }) =>
+  registerAppHandler('codexAccounts:remove', (_event, args: { accountId: string }) =>
     codexAccounts.removeAccount(args.accountId)
   )
-  ipcMain.handle(
+  registerAppHandler(
     'codexAccounts:rename',
     (_event, args: { accountId: string; displayName: string | null }) =>
       codexAccounts.renameAccount(args.accountId, args.displayName)
   )
-  ipcMain.handle(
+  registerAppHandler(
     'codexAccounts:select',
     (_event, args: { accountId: string | null } & CodexAccountSelectionTarget) => {
       if (!args.runtime) {

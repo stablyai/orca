@@ -1,13 +1,14 @@
+import { registerAppHandler } from './app-registry/app-handler-registry'
 // Treat renderer payloads as untrusted; track validates event schemas, while consent handlers narrow inputs, cap writes and derive provenance.
 
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow } from 'electron'
 import { consumeConsentMutationToken } from '../telemetry/burst-cap'
 import {
   assignBrowserExtensionsBanner,
   initBrowserExtensionsBanner
 } from '../telemetry/browser-extensions-banner'
 import type { BrowserExtensionsBannerAssignmentReply } from '../../shared/browser/extensions/browser-extensions-banner'
-import { isTrustedBrowserRenderer } from './browser/browser-renderer-trust'
+
 import {
   hasTrackedAgentDashboardActiveToday,
   persistBannerAcknowledgeWithoutEmitting,
@@ -78,15 +79,15 @@ export function registerTelemetryHandlers(store: Store): void {
   storeRef = store
   initBrowserExtensionsBanner(store)
 
-  ipcMain.handle(
+  registerAppHandler(
     'telemetry:assignBrowserExtensionsBanner',
     (event): Promise<BrowserExtensionsBannerAssignmentReply> =>
-      isTrustedBrowserRenderer(event.sender)
+      event.role === 'main'
         ? assignBrowserExtensionsBanner()
         : Promise.resolve({ status: 'not_ready' })
   )
 
-  ipcMain.handle('telemetry:track', (event, name: unknown, props: unknown): boolean => {
+  registerAppHandler('telemetry:track', (event, name: unknown, props: unknown): boolean => {
     if (typeof name !== 'string') {
       return false
     }
@@ -99,7 +100,7 @@ export function registerTelemetryHandlers(store: Store): void {
       return false
     }
     if (eventName === 'agent_dashboard_active') {
-      const window = BrowserWindow.fromWebContents(event.sender)
+      const window = event.windowId === null ? null : BrowserWindow.fromId(event.windowId)
       if (!window || window.isDestroyed() || !window.isVisible() || window.isMinimized()) {
         return false
       }
@@ -119,7 +120,7 @@ export function registerTelemetryHandlers(store: Store): void {
     )
   })
 
-  ipcMain.handle('telemetry:setOptIn', (_event, optedIn: unknown): Promise<void> | void => {
+  registerAppHandler('telemetry:setOptIn', (_event, optedIn: unknown): Promise<void> | void => {
     if (typeof optedIn !== 'boolean') {
       return
     }
@@ -141,7 +142,7 @@ export function registerTelemetryHandlers(store: Store): void {
   })
 
   // Privacy UI cannot directly read main's environment-based telemetry blocks.
-  ipcMain.handle('telemetry:getConsentState', (): ConsentState => {
+  registerAppHandler('telemetry:getConsentState', (): ConsentState => {
     if (!storeRef) {
       // Missing settings cannot establish enabled consent.
       return { effective: 'pending_banner' }
@@ -149,7 +150,7 @@ export function registerTelemetryHandlers(store: Store): void {
     return resolveConsent(storeRef.getSettings())
   })
 
-  ipcMain.handle('telemetry:acknowledgeBanner', (_event): Promise<void> | void => {
+  registerAppHandler('telemetry:acknowledgeBanner', (_event): Promise<void> | void => {
     // Silent banner acknowledgement must not emit telemetry_opted_in.
     if (!storeRef) {
       return

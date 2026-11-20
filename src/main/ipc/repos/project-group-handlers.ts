@@ -1,6 +1,7 @@
+import { registerAppHandler } from '../app-registry/app-handler-registry'
 import { ProjectGroupHooksCheck } from '../../../shared/rpc-contract/projects/repo-params'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { type BrowserWindow, ipcMain } from 'electron'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
@@ -31,7 +32,7 @@ export function registerProjectGroupHandlers(
   store: Store,
   runtime: Pick<OrcaRuntimeService, 'checkProjectGroupHooks'>
 ): void {
-  ipcMain.handle('projectGroups:checkHooks', (_event, rawArgs: unknown) => {
+  registerAppHandler('projectGroups:checkHooks', (_event, rawArgs: unknown) => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupHooksCheck,
       rawArgs,
@@ -39,9 +40,9 @@ export function registerProjectGroupHandlers(
     )
     return runtime.checkProjectGroupHooks(args.groupId, { background: args.background })
   })
-  ipcMain.handle('projectGroups:list', () => runtimeVisibleProjectGroups(store))
+  registerAppHandler('projectGroups:list', () => runtimeVisibleProjectGroups(store))
 
-  ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
+  registerAppHandler('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupCreateArgs,
       rawArgs,
@@ -58,7 +59,7 @@ export function registerProjectGroupHandlers(
     return group
   })
 
-  ipcMain.handle('projectGroups:update', (_event, rawArgs: unknown): ProjectGroup | null => {
+  registerAppHandler('projectGroups:update', (_event, rawArgs: unknown): ProjectGroup | null => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupUpdateArgs,
       rawArgs,
@@ -71,20 +72,23 @@ export function registerProjectGroupHandlers(
     return updated
   })
 
-  ipcMain.handle('projectGroups:updateMany', (_event, rawArgs: unknown): ProjectGroup[] | null => {
-    const args = parseProjectGroupIpcArgs(
-      ProjectGroupUpdateManyArgs,
-      rawArgs,
-      'invalid_project_group_update_many_args'
-    )
-    const updated = store.updateProjectGroups(args.mutations)
-    if (updated?.length) {
-      notifyReposChanged(mainWindow)
+  registerAppHandler(
+    'projectGroups:updateMany',
+    (_event, rawArgs: unknown): ProjectGroup[] | null => {
+      const args = parseProjectGroupIpcArgs(
+        ProjectGroupUpdateManyArgs,
+        rawArgs,
+        'invalid_project_group_update_many_args'
+      )
+      const updated = store.updateProjectGroups(args.mutations)
+      if (updated?.length) {
+        notifyReposChanged(mainWindow)
+      }
+      return updated
     }
-    return updated
-  })
+  )
 
-  ipcMain.handle('projectGroups:delete', (_event, rawArgs: unknown): boolean => {
+  registerAppHandler('projectGroups:delete', (_event, rawArgs: unknown): boolean => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupSelectorArgs,
       rawArgs,
@@ -97,7 +101,7 @@ export function registerProjectGroupHandlers(
     return deleted
   })
 
-  ipcMain.handle('projectGroups:moveProject', (_event, rawArgs: unknown): Repo | null => {
+  registerAppHandler('projectGroups:moveProject', (_event, rawArgs: unknown): Repo | null => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupMoveProjectArgs,
       rawArgs,
@@ -119,7 +123,7 @@ export function registerProjectGroupHandlers(
     return moved
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'projectGroups:scanNested',
     async (event, rawArgs: unknown): Promise<NestedRepoScanResult> => {
       const args = parseProjectGroupIpcArgs(
@@ -131,7 +135,7 @@ export function registerProjectGroupHandlers(
     }
   )
 
-  ipcMain.handle('projectGroups:cancelNestedScan', (_event, rawArgs: unknown): boolean => {
+  registerAppHandler('projectGroups:cancelNestedScan', (_event, rawArgs: unknown): boolean => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupCancelNestedScanArgs,
       rawArgs,

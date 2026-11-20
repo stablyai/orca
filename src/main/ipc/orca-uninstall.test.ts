@@ -1,3 +1,4 @@
+import './app-registry/testing/app-ipc-test-host'
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence/loading-store/store'

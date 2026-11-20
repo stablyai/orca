@@ -1,5 +1,14 @@
+import {
+  publishToDocuments,
+  removeAppHandler,
+  removeAppListeners,
+  registerAppHandler,
+  registerAppListener,
+  appDocumentFor,
+  isCurrentAppDocument
+} from './app-registry/app-handler-registry'
 import type { RendererStatusPublication } from '../../shared/agent-status/renderer-status-publication'
-import { BrowserWindow, ipcMain } from 'electron'
+
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeRendererSyncWindowGraph,
@@ -31,43 +40,42 @@ function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
 export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
   const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
-  ipcMain.removeHandler('runtime:syncWindowGraph')
-  ipcMain.removeHandler('runtime:getStatus')
-  ipcMain.removeHandler('runtime:call')
-  ipcMain.removeHandler('runtime:subscribe')
-  ipcMain.removeAllListeners('runtime:unsubscribe')
-  ipcMain.removeHandler('ephemeralVm:resumeWorkspace')
-  ipcMain.removeHandler('ephemeralVm:suspendWorkspace')
+  removeAppHandler('runtime:syncWindowGraph')
+  removeAppHandler('runtime:getStatus')
+  removeAppHandler('runtime:call')
+  removeAppHandler('runtime:subscribe')
+  removeAppListeners('runtime:unsubscribe')
+  removeAppHandler('ephemeralVm:resumeWorkspace')
+  removeAppHandler('ephemeralVm:suspendWorkspace')
 
   // The window's wake shares the runtime's single VM wake path with its sleep's suspend.
-  ipcMain.handle('ephemeralVm:resumeWorkspace', (_event, args: { workspaceId: string }) =>
+  registerAppHandler('ephemeralVm:resumeWorkspace', (_event, args: { workspaceId: string }) =>
     toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId))
   )
   // Suspend VM with nothing open; a workspace with open panels sleeps, which suspends it after.
-  ipcMain.handle('ephemeralVm:suspendWorkspace', (_event, args: { workspaceId: string }) =>
+  registerAppHandler('ephemeralVm:suspendWorkspace', (_event, args: { workspaceId: string }) =>
     toWorkspaceLifecycleResult(async () => {
       await runtime.suspendWorkspaceVm(args.workspaceId)
       return null
     })
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'runtime:syncWindowGraph',
     async (event, graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> => {
-      const window = BrowserWindow.fromWebContents(event.sender)
-      if (!window) {
+      const windowId = event.windowId
+      if (windowId === null) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
       }
-      if (event.senderFrame !== event.sender.mainFrame) {
+      if (!event.isMainFrame) {
         // Queued calls from a disposed frame must not settle the replacement document's generation.
         throw new Error('Runtime graph sync must originate from the current main frame')
       }
       if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
         throw new Error('Runtime graph sync requires a renderer generation')
       }
-      const frame = event.senderFrame
-      const result = await runtime.syncWindowGraph(window.id, graph)
-      if (window.isDestroyed() || frame !== event.sender.mainFrame) {
+      const result = await runtime.syncWindowGraph(windowId, graph)
+      if (!isCurrentAppDocument(event)) {
         throw new Error('Runtime graph sender changed during publication')
       }
       // Only the authoritative window's accepted graph may publish its project catalog.
@@ -82,22 +90,22 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     }
   )
 
-  ipcMain.removeHandler('runtime:syncAgentStatus')
-  ipcMain.handle('runtime:syncAgentStatus', (event, batch: RendererStatusPublication) => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-    if (!window || event.senderFrame !== event.sender.mainFrame) {
+  removeAppHandler('runtime:syncAgentStatus')
+  registerAppHandler('runtime:syncAgentStatus', (event, batch: RendererStatusPublication) => {
+    const windowId = event.windowId
+    if (windowId === null || !event.isMainFrame) {
       return { accepted: false, reason: 'superseded' }
     }
-    return runtime.syncRendererAgentStatus(window.id, batch)
+    return runtime.syncRendererAgentStatus(windowId, batch)
   })
 
-  ipcMain.handle('runtime:getStatus', async (): Promise<RuntimeStatus> => {
+  registerAppHandler('runtime:getStatus', async (): Promise<RuntimeStatus> => {
     // Match status.get's capped name wait; later reads pick up a lookup that is still running.
     await runtime.machineNameReady()
     return runtime.getStatus()
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'runtime:call',
     async (
       event,
@@ -107,7 +115,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         orchestration?: { contractVersion: number; requestId: string }
       }
     ): Promise<RuntimeRpcResponse<unknown>> => {
-      if (event.senderFrame !== event.sender.mainFrame) {
+      if (!event.isMainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
       return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
@@ -129,24 +137,24 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           clientId: 'desktop-renderer',
           caller: DESKTOP_RPC_CALLER,
           clientKind: 'runtime',
-          connectionId: desktopSenders.connectionIdFor(event.sender),
+          connectionId: desktopSenders.connectionIdFor(appDocumentFor(event)),
           clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
         }
       )
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'runtime:subscribe',
     (
       event,
       args: { subscriptionId: string; method: string; params?: unknown }
     ): { subscribed: boolean } => {
-      if (event.senderFrame !== event.sender.mainFrame) {
+      if (!event.isMainFrame) {
         throw new Error('Runtime subscription must originate from the current main frame')
       }
-      const senderSubscriptions = desktopSenders.subscriptionsFor(event.sender)
-      const connectionId = desktopSenders.connectionIdFor(event.sender)
+      const senderSubscriptions = desktopSenders.subscriptionsFor(appDocumentFor(event))
+      const connectionId = desktopSenders.connectionIdFor(appDocumentFor(event))
       const previous = senderSubscriptions.get(args.subscriptionId)
       previous?.abort()
       const controller = new AbortController()
@@ -161,8 +169,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           params: args.params
         },
         (response) => {
-          if (!controller.signal.aborted && !event.sender.isDestroyed()) {
-            event.sender.send(channel, response)
+          if (!controller.signal.aborted && !appDocumentFor(event).isDestroyed()) {
+            publishToDocuments(channel, response, appDocumentFor(event).caller)
           }
         },
         {
@@ -178,14 +186,14 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     }
   )
 
-  ipcMain.on('runtime:unsubscribe', (event, args: { subscriptionId: string }) => {
-    const senderSubscriptions = desktopSenders.existingSubscriptionsFor(event.sender)
+  registerAppListener('runtime:unsubscribe', (event, args: { subscriptionId: string }) => {
+    const senderSubscriptions = desktopSenders.existingSubscriptionsFor(appDocumentFor(event))
     senderSubscriptions?.get(args.subscriptionId)?.abort()
     senderSubscriptions?.delete(args.subscriptionId)
   })
 
-  ipcMain.removeHandler('runtime:getTerminalFitOverrides')
-  ipcMain.handle(
+  removeAppHandler('runtime:getTerminalFitOverrides')
+  registerAppHandler(
     'runtime:getTerminalFitOverrides',
     (): {
       ptyId: string
@@ -201,8 +209,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     }
   )
 
-  ipcMain.removeHandler('runtime:getTerminalDrivers')
-  ipcMain.handle(
+  removeAppHandler('runtime:getTerminalDrivers')
+  registerAppHandler(
     'runtime:getTerminalDrivers',
     (): { ptyId: string; driver: RuntimeTerminalDriverState }[] => {
       const drivers = runtime.getAllTerminalDrivers()
@@ -210,8 +218,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     }
   )
 
-  ipcMain.removeHandler('runtime:getBrowserDrivers')
-  ipcMain.handle(
+  removeAppHandler('runtime:getBrowserDrivers')
+  registerAppHandler(
     'runtime:getBrowserDrivers',
     (): { browserPageId: string; driver: RuntimeTerminalDriverState }[] => {
       const drivers = runtime.getAllBrowserDrivers()
@@ -222,20 +230,20 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     }
   )
 
-  ipcMain.removeHandler('runtime:getBrowserRemoteViewerPages')
-  ipcMain.handle('runtime:getBrowserRemoteViewerPages', (): string[] =>
+  removeAppHandler('runtime:getBrowserRemoteViewerPages')
+  registerAppHandler('runtime:getBrowserRemoteViewerPages', (): string[] =>
     runtime.getBrowserRemoteViewerPages()
   )
 
   // In-memory renderer rows need a main-owned source for reload restoration.
-  ipcMain.removeHandler('runtime:getClientHostedBrowserRows')
-  ipcMain.handle('runtime:getClientHostedBrowserRows', (): ClientHostedBrowserRowsEvent[] =>
+  removeAppHandler('runtime:getClientHostedBrowserRows')
+  registerAppHandler('runtime:getClientHostedBrowserRows', (): ClientHostedBrowserRowsEvent[] =>
     runtime.listClientHostedBrowserRows()
   )
 
   // Restore desktop dimensions through the mobile display-mode path so subscribers receive resize events.
-  ipcMain.removeHandler('runtime:restoreTerminalFit')
-  ipcMain.handle('runtime:restoreTerminalFit', async (_event, args: { ptyId: string }) => {
+  removeAppHandler('runtime:restoreTerminalFit')
+  registerAppHandler('runtime:restoreTerminalFit', async (_event, args: { ptyId: string }) => {
     // Take back input and sizing for desktop (docs/mobile-presence-lock.md).
     // Keep one reclaim per PTY through caller timeouts; retries cannot bypass layout serialization.
     let pending = pendingTerminalFitRestores.get(args.ptyId)
@@ -266,8 +274,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     return { restored: await boundTerminalFitRestore(pending) }
   })
 
-  ipcMain.removeHandler('runtime:reclaimBrowserForDesktop')
-  ipcMain.handle(
+  removeAppHandler('runtime:reclaimBrowserForDesktop')
+  registerAppHandler(
     'runtime:reclaimBrowserForDesktop',
     (_event, args: { browserPageId: string }): { reclaimed: boolean } => {
       try {

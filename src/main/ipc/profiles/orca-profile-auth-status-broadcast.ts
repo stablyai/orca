@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../app-registry/app-handler-registry'
 import { BrowserWindow } from 'electron'
 import {
   ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL,
@@ -5,13 +6,13 @@ import {
   type OrcaCloudSignInProgress
 } from '../../../shared/orca-profiles/orca-profiles'
 
-function broadcast(channel: string, ...args: unknown[]): void {
+function broadcast(channel: string, payload?: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (window.isDestroyed()) {
       continue
     }
     try {
-      window.webContents.send(channel, ...args)
+      publishToDocuments(channel, payload, { sourceId: window.webContents.id })
     } catch {
       // A renderer can disappear between isDestroyed() and send().
     }

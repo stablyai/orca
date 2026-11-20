@@ -1,3 +1,4 @@
+import '../../ipc/app-registry/testing/app-ipc-test-host'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'

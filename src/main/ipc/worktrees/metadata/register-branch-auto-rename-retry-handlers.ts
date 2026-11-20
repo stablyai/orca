@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
@@ -38,7 +39,7 @@ export function registerBranchAutoRenameRetryHandlers(context: WorktreeIpcContex
   installFirstWorkAttemptNotifier((event) =>
     sendToTrustedUIRenderer('worktrees:branchAutoRenameAttempt', event)
   )
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:getBranchAutoRenameRetryAvailability',
     (_event, args: RetryArgs): Promise<BranchAutoRenameRetryAvailability> => {
       const worktreeId = localWorktreeId(args)
@@ -51,7 +52,7 @@ export function registerBranchAutoRenameRetryHandlers(context: WorktreeIpcContex
         : Promise.resolve({ available: false, runningAttemptId: null })
     }
   )
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:retryBranchAutoRename',
     (_event, args: RetryArgs): Promise<BranchAutoRenameRetryResult> => {
       const worktreeId = localWorktreeId(args)

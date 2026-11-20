@@ -1,7 +1,13 @@
+import {
+  publishToDocuments,
+  type AppDocument,
+  registerAppHandler,
+  appDocumentFor
+} from './app-registry/app-handler-registry'
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { ipcMain, type WebContents } from 'electron'
+
 import type { Store } from '../persistence/loading-store/store'
 import {
   resolveDesktopAuthorizedPath,
@@ -25,11 +31,11 @@ import type {
 } from '../../shared/editor/notebooks/notebook-kernel-types'
 
 /** Each renderer document's kernels, by notebook file. */
-const kernelsByOwner = new Map<WebContents, Map<string, NotebookKernel>>()
+const kernelsByOwner = new Map<AppDocument, Map<string, NotebookKernel>>()
 const startCancellations = createSenderScopedRequestCancellations()
-const startsByOwner = new WeakMap<WebContents, Map<string, Set<AbortController>>>()
+const startsByOwner = new WeakMap<AppDocument, Map<string, Set<AbortController>>>()
 
-function cancelPendingStarts(owner: WebContents, filePath: string): void {
+function cancelPendingStarts(owner: AppDocument, filePath: string): void {
   const starts = startsByOwner.get(owner)
   const pending = starts?.get(filePath)
   starts?.delete(filePath)
@@ -39,7 +45,7 @@ function cancelPendingStarts(owner: WebContents, filePath: string): void {
 }
 
 // Renderer page teardown must also retire its notebook kernels.
-function kernelsOf(owner: WebContents): Map<string, NotebookKernel> {
+function kernelsOf(owner: AppDocument): Map<string, NotebookKernel> {
   let kernels = kernelsByOwner.get(owner)
   if (!kernels) {
     const owned = new Map<string, NotebookKernel>()
@@ -63,7 +69,7 @@ function kernelsOf(owner: WebContents): Map<string, NotebookKernel> {
 
 // Open notebook paths select cwd/venv; project paths canonicalize to their real file.
 export function registerNotebookHandlers(store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'notebook:listPythonEnvironments',
     async (
       _event,
@@ -77,15 +83,15 @@ export function registerNotebookHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'notebook:describePython',
     (_event, args: { path: string }): Promise<PythonEnvironment | null> => describePython(args.path)
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'notebook:startKernel',
     async (event, args: { filePath: string; python: string }): Promise<KernelStartResult> => {
-      const owner = event.sender
+      const owner = appDocumentFor(event)
       if (owner.isDestroyed()) {
         return { status: 'failed', detail: 'The notebook closed before its kernel started.' }
       }
@@ -112,10 +118,14 @@ export function registerNotebookHandlers(store: Store): void {
           cwd,
           onFrame: (frame) => {
             if (!owner.isDestroyed()) {
-              owner.send('notebook:kernelFrame', {
-                filePath: args.filePath,
-                frame
-              } satisfies KernelFrameEvent)
+              publishToDocuments(
+                'notebook:kernelFrame',
+                {
+                  filePath: args.filePath,
+                  frame
+                } satisfies KernelFrameEvent,
+                owner.caller
+              )
             }
           }
         })
@@ -136,13 +146,13 @@ export function registerNotebookHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'notebook:installIpykernel',
     (_event, args: { python: string }): Promise<{ ok: boolean; detail: string }> =>
       installIpykernel(args.python)
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'notebook:createVenv',
     async (
       _event,
@@ -156,17 +166,20 @@ export function registerNotebookHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('notebook:execute', (event, args: { filePath: string; code: string }): void => {
-    kernelsOf(event.sender).get(args.filePath)?.execute(args.code)
+  registerAppHandler(
+    'notebook:execute',
+    (event, args: { filePath: string; code: string }): void => {
+      kernelsOf(appDocumentFor(event)).get(args.filePath)?.execute(args.code)
+    }
+  )
+
+  registerAppHandler('notebook:interrupt', (event, args: { filePath: string }): void => {
+    kernelsOf(appDocumentFor(event)).get(args.filePath)?.interrupt()
   })
 
-  ipcMain.handle('notebook:interrupt', (event, args: { filePath: string }): void => {
-    kernelsOf(event.sender).get(args.filePath)?.interrupt()
-  })
-
-  ipcMain.handle('notebook:shutdownKernel', (event, args: { filePath: string }): void => {
-    cancelPendingStarts(event.sender, args.filePath)
-    const kernels = kernelsOf(event.sender)
+  registerAppHandler('notebook:shutdownKernel', (event, args: { filePath: string }): void => {
+    cancelPendingStarts(appDocumentFor(event), args.filePath)
+    const kernels = kernelsOf(appDocumentFor(event))
     kernels.get(args.filePath)?.shutdown()
     kernels.delete(args.filePath)
   })

@@ -1,4 +1,6 @@
-import { ipcMain } from 'electron'
+import type { AppChannel } from '../../../shared/app-ipc/app-channel-manifest'
+import { registerAppHandler, appDocumentFor } from '../app-registry/app-handler-registry'
+
 import { z } from 'zod'
 import type { Store } from '../../persistence/loading-store/store'
 import type { PluginHostCallOutcome } from '../../../shared/plugins/frames/plugin-protocol'
@@ -97,13 +99,13 @@ export function registerPluginHandlers(
   marketplaceServices?: PluginMarketplaceHandlerServices
 ): void {
   // All handlers must await startup discovery to avoid returning a pre-discovery empty list.
-  ipcMain.handle('plugins:list', async () => listPluginsForClients(pluginService))
-  ipcMain.handle('plugins:getInstalledManifest', async (_event, args: unknown) => {
+  registerAppHandler('plugins:list', async () => listPluginsForClients(pluginService))
+  registerAppHandler('plugins:getInstalledManifest', async (_event, args: unknown) => {
     const { pluginKey } = logsArgsSchema.parse(args)
     return readInstalledPluginManifest(pluginService, pluginKey)
   })
-  const handleContentPacks = (channel: string, read: (arg: unknown) => unknown): void => {
-    ipcMain.handle(channel, async (_event, arg: unknown) => {
+  const handleContentPacks = (channel: AppChannel, read: (arg: unknown) => unknown): void => {
+    registerAppHandler(channel, async (_event, arg: unknown) => {
       await pluginService.whenReady()
       return read(arg)
     })
@@ -120,7 +122,7 @@ export function registerPluginHandlers(
   handleContentPacks('plugins:loadSyntax', (id) =>
     typeof id === 'string' ? contentPacks.syntaxes.load(id) : null
   )
-  ipcMain.handle('plugins:consent', async (_event, args: unknown) => {
+  registerAppHandler('plugins:consent', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)
     await applyPluginConsent({
@@ -133,7 +135,7 @@ export function registerPluginHandlers(
     return listPluginsForClients(pluginService)
   })
 
-  ipcMain.handle('plugins:setEnabled', async (_event, args: unknown) => {
+  registerAppHandler('plugins:setEnabled', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = setEnabledArgsSchema.parse(args)
     await applyPluginEnablement({
@@ -152,28 +154,28 @@ export function registerPluginHandlers(
   registerPluginEditorSaveHookHandler()
   registerPluginSettingsHandlers(pluginService)
 
-  ipcMain.handle('plugins:readNewFileTemplate', async (_event, args: unknown) => {
+  registerAppHandler('plugins:readNewFileTemplate', async (_event, args: unknown) => {
     const parsed = readNewFileTemplateArgsSchema.parse(args)
     await pluginService.whenReady()
     return readApprovedPluginNewFileTemplate(pluginService, parsed.pluginKey, parsed.newFileId)
   })
 
   // Renderer forwards frame host calls; main enforces capabilities and surfaces.
-  ipcMain.handle(
+  registerAppHandler(
     'plugins:panelAction',
     async (event, args: unknown): Promise<PluginHostCallOutcome> => {
       await pluginService.whenReady()
-      return pluginService.panels.execute(rendererPanelOwner(event.sender.id), args, {
+      return pluginService.panels.execute(rendererPanelOwner(appDocumentFor(event).id), args, {
         desktop: true,
-        callerWebContentsId: event.sender.id
+        callerWebContentsId: appDocumentFor(event).id
       })
     }
   )
 
   // Components panels' persisted atoms; desktop only, like the guests that write them.
-  ipcMain.handle('plugins:panelState', async (event, args: unknown) => {
+  registerAppHandler('plugins:panelState', async (event, args: unknown) => {
     await pluginService.whenReady()
-    const owner = rendererPanelOwner(event.sender.id)
+    const owner = rendererPanelOwner(appDocumentFor(event).id)
     return handlePluginPanelStateRequest(
       {
         pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath),
@@ -184,9 +186,9 @@ export function registerPluginHandlers(
   })
 
   // Components panels' Image files: bytes from inside the plugin, never a URL the renderer loads.
-  ipcMain.handle('plugins:panelImage', async (event, args: unknown) => {
+  registerAppHandler('plugins:panelImage', async (event, args: unknown) => {
     await pluginService.whenReady()
-    const owner = rendererPanelOwner(event.sender.id)
+    const owner = rendererPanelOwner(appDocumentFor(event).id)
     return readPluginPanelImage(
       {
         resolveComponentsPanelRoot: (token) =>
@@ -196,7 +198,7 @@ export function registerPluginHandlers(
     )
   })
 
-  ipcMain.handle('plugins:invokeCommand', async (_event, args: unknown) => {
+  registerAppHandler('plugins:invokeCommand', async (_event, args: unknown) => {
     // Why before whenReady: the caller's deadline started when it asked, not when plugins loaded.
     const askedAt = Date.now()
     await pluginService.whenReady()
@@ -205,11 +207,11 @@ export function registerPluginHandlers(
     return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args, startBy)
   })
 
-  ipcMain.handle('plugins:resolveGitSource', async (_event, args: unknown) =>
+  registerAppHandler('plugins:resolveGitSource', async (_event, args: unknown) =>
     resolvePluginGitSource(resolveGitSourceArgsSchema.parse(args))
   )
 
-  ipcMain.handle('plugins:install', async (_event, args: unknown) => {
+  registerAppHandler('plugins:install', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginInstallArgs(args)
     const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
@@ -238,7 +240,7 @@ export function registerPluginHandlers(
     return result
   })
 
-  ipcMain.handle('plugins:remove', async (_event, args: unknown) => {
+  registerAppHandler('plugins:remove', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = removeArgsSchema.parse(args)
     const removed = await uninstallInstalledPlugin({
@@ -253,12 +255,12 @@ export function registerPluginHandlers(
     return listPluginsForClients(pluginService)
   })
 
-  ipcMain.handle('plugins:getLogs', async (_event, args: unknown) => {
+  registerAppHandler('plugins:getLogs', async (_event, args: unknown) => {
     const parsed = logsArgsSchema.parse(args)
     return pluginService.getLogs(parsed.pluginKey)
   })
 
-  ipcMain.handle('plugins:refresh', async () => {
+  registerAppHandler('plugins:refresh', async () => {
     await pluginService.refresh()
     return listPluginsForClients(pluginService)
   })

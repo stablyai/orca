@@ -1,27 +1,25 @@
-import { app, ipcMain } from 'electron'
+import type { EphemeralVmProvisionIpcResult } from './ephemeral-vm-provision-result'
+export type { EphemeralVmProvisionIpcResult } from './ephemeral-vm-provision-result'
+import {
+  publishToDocuments,
+  removeAppHandler,
+  registerAppHandler
+} from '../app-registry/app-handler-registry'
+import { app } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   getEphemeralVmRecipeResultConnection,
   type EphemeralVmRecipeDoctorResult
 } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
-import {
-  getEphemeralVmRecipeResultWarnings,
-  type EphemeralVmRecipeResultWarning
-} from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostics'
+import { getEphemeralVmRecipeResultWarnings } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostics'
 import { redactEphemeralVmRecipeDiagnosticText } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostic-redaction'
 import { getProvisionedRootRecipeRepoUrl } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-repo-url'
 // Import the Node-only doctor directly so browser consumers of the barrel do not bundle fs/path.
 import { doctorEphemeralVmRecipe } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-doctor'
 import { updateEphemeralVmRuntimeStatus } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
-import {
-  requireEphemeralVmRecipeResult,
-  type EphemeralVmProvisionedRuntimeRecord
-} from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { requireEphemeralVmRecipeResult } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { addEnvironmentFromPairingCode } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import {
-  redactRuntimeEnvironment,
-  type PublicKnownRuntimeEnvironment
-} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { redactRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   cleanupEphemeralVmRuntime,
   provisionEphemeralVmRuntime
@@ -48,53 +46,27 @@ import {
 
 const activeProvisionControllers = new Map<string, AbortController>()
 
-export type EphemeralVmProvisionIpcResult =
-  | {
-      ok: true
-      connectionType: 'orca-server'
-      runtime: EphemeralVmProvisionedRuntimeRecord
-      environment: PublicKnownRuntimeEnvironment
-      stderr: string
-      warnings: EphemeralVmRecipeResultWarning[]
-    }
-  | {
-      ok: true
-      connectionType: 'ssh'
-      runtime: EphemeralVmProvisionedRuntimeRecord
-      sshTargetId: string
-      /** The managed Orca server the host runs; its workspace lives there. */
-      environmentId?: string
-      expectedRefHead?: string
-      stderr: string
-      warnings: EphemeralVmRecipeResultWarning[]
-    }
-  | ({
-      ok: false
-      stderr: string
-      stdout: string
-    } & EphemeralVmFailure)
-
 export function registerEphemeralVmHandlers(store: Store, pluginService?: PluginService): void {
-  ipcMain.removeHandler('ephemeralVm:listRecipes')
-  ipcMain.removeHandler('ephemeralVm:listRecipeCatalog')
-  ipcMain.removeHandler('ephemeralVm:doctor')
-  ipcMain.removeHandler('ephemeralVm:provision')
-  ipcMain.removeHandler('ephemeralVm:cancelProvision')
+  removeAppHandler('ephemeralVm:listRecipes')
+  removeAppHandler('ephemeralVm:listRecipeCatalog')
+  removeAppHandler('ephemeralVm:doctor')
+  removeAppHandler('ephemeralVm:provision')
+  removeAppHandler('ephemeralVm:cancelProvision')
   registerEphemeralVmRuntimeHandlers(store)
   reconcileInterruptedEphemeralVmProvisionsOnStartup(app.getPath('userData'))
 
-  ipcMain.handle('ephemeralVm:listRecipes', async (_event, args: { repoId: string }) => {
+  registerAppHandler('ephemeralVm:listRecipes', async (_event, args: { repoId: string }) => {
     return listRecipes(store, args.repoId, await getApprovedPluginVmRecipes(pluginService))
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'ephemeralVm:listRecipeCatalog',
     async (): Promise<EphemeralVmRecipeCatalogEntry[]> => {
       return listRecipeCatalog(store, await getApprovedPluginVmRecipes(pluginService))
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'ephemeralVm:doctor',
     async (
       _event,
@@ -114,7 +86,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'ephemeralVm:provision',
     async (
       _event,
@@ -149,11 +121,15 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
         if (!args.provisionId) {
           return
         }
-        _event.sender.send('ephemeralVm:provisionEvent', {
-          provisionId: args.provisionId,
-          stream,
-          chunk: redactEphemeralVmRecipeDiagnosticText(chunk)
-        })
+        publishToDocuments(
+          'ephemeralVm:provisionEvent',
+          {
+            provisionId: args.provisionId,
+            stream,
+            chunk: redactEphemeralVmRecipeDiagnosticText(chunk)
+          },
+          _event
+        )
       }
       // Retain cancellation registration until every signal-consuming provisioning phase settles.
       try {
@@ -288,7 +264,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'ephemeralVm:cancelProvision',
     (_event, args: { provisionId: string }): { cancelled: boolean } => {
       const controller = activeProvisionControllers.get(args.provisionId)

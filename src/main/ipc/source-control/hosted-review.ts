@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import { posix, resolve } from 'node:path'
 
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -114,7 +115,7 @@ function normalizeRemoteHostedReviewPath(remotePath: string): string {
 }
 
 export function registerHostedReviewHandlers(store: Store, stats: StatsCollector): void {
-  ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
+  registerAppHandler('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
     const repo = assertRegisteredRepoForBranch(args, store)
     const localGitOptions = {
       ...getLocalProjectGhExecOptions(store, repo),
@@ -156,7 +157,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     return hostedReviewForBranchReply(read, args.reportReadOutcome)
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
       const repo = assertRegisteredRepoForBranch(args, store)
@@ -178,7 +179,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     }
   )
 
-  ipcMain.handle('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
+  registerAppHandler('hostedReview:create', async (_event, args: CreateHostedReviewArgs) => {
     const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
     const localGitOptions = {
@@ -220,7 +221,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     return result
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'hostedReview:createStacked',
     async (_event, args: CreateStackedHostedReviewArgs) => {
       const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)

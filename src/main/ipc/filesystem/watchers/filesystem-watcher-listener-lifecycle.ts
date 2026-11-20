@@ -1,4 +1,5 @@
-import type { WebContents } from 'electron'
+import type { AppDocument } from '../../app-registry/app-handler-registry'
+
 import { isWatcherProcessFailure } from '../watcher-process/parcel-watcher-process-failure'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 import {
@@ -71,7 +72,7 @@ export function abandonLocalUnsubscribes(promises: Iterable<Promise<void>>): voi
 
 export function addInFlightLocalInstallListener(
   token: LocalWatcherInstallToken,
-  sender: WebContents
+  sender: AppDocument
 ): void {
   if (sender.isDestroyed() || token.abortController.signal.aborted) {
     return
@@ -98,7 +99,7 @@ function cleanupInFlightLocalInstallsForSender(senderId: number): void {
   }
 }
 
-export function takeLocalCapacityRetryListeners(rootKey: string): WebContents[] {
+export function takeLocalCapacityRetryListeners(rootKey: string): AppDocument[] {
   const retry = watcherLifecycleState.pendingLocalCapacityRetries.get(rootKey)
   if (!retry) {
     return []
@@ -114,7 +115,7 @@ export function clearLocalCapacityRetry(rootKey: string): void {
   watcherLifecycleState.pendingLocalCapacityRetries.delete(rootKey)
 }
 
-export function addLocalWatchListener(rootKey: string, sender: WebContents): void {
+export function addLocalWatchListener(rootKey: string, sender: AppDocument): void {
   const root = watcherLifecycleState.watchedRoots.get(rootKey)
   if (!root || sender.isDestroyed()) {
     return
@@ -126,7 +127,7 @@ export function addLocalWatchListener(rootKey: string, sender: WebContents): voi
 export function addCancelledInstallWaiter(
   waitersByKey: CancelledInstallWaiters,
   key: string,
-  sender: WebContents
+  sender: AppDocument
 ): symbol {
   const token = Symbol('cancelled-install-wait')
   const waiters = waitersByKey.get(key) ?? new Map<number, CancelledInstallWaiter>()
@@ -161,7 +162,7 @@ export function forgetCancelledInstallWaiter(
   }
 }
 
-export function registerWatcherSenderCleanup(sender: WebContents): AbortSignal {
+export function registerWatcherSenderCleanup(sender: AppDocument): AbortSignal {
   return captureWatcherSenderLifetime(sender, () => {
     cleanupLocalWatchersForSender(sender.id)
   })

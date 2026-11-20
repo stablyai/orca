@@ -1,4 +1,5 @@
-import { type BrowserWindow, ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
@@ -44,12 +45,12 @@ export function registerRepoCreationHandlers(
   store: Store,
   enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
 ): void {
-  ipcMain.handle('repos:isGitAvailable', () => probeLocalGitAvailability())
-  ipcMain.handle('repos:getDefaultCreateProjectParent', () =>
+  registerAppHandler('repos:isGitAvailable', () => probeLocalGitAvailability())
+  registerAppHandler('repos:getDefaultCreateProjectParent', () =>
     getDefaultCreateProjectParent(store.getSettings())
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'repos:add',
     async (
       _event,
@@ -71,7 +72,7 @@ export function registerRepoCreationHandlers(
   )
 
   // An initial commit gives Git projects the HEAD ref needed for worktrees.
-  ipcMain.handle(
+  registerAppHandler(
     'repos:create',
     async (
       _event,

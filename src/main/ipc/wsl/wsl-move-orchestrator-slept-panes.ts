@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../app-registry/app-handler-registry'
 /**
  * The window's slept-pane bindings for an automatic move (D3a): only the window knows them, and a
  * move without them misses those panes' history. Main asks; the window answers by request id.
@@ -32,7 +33,11 @@ export function requestSleptPanes(): Promise<SleptPanes> {
       }
     }
     sleptPaneRequests.set(requestId, answer)
-    window.webContents.send(WSL_MOVE_ORCHESTRATOR_SLEPT_PANES_REQUEST_CHANNEL, { requestId })
+    publishToDocuments(
+      WSL_MOVE_ORCHESTRATOR_SLEPT_PANES_REQUEST_CHANNEL,
+      { requestId },
+      { sourceId: window.webContents.id }
+    )
   })
 }
 

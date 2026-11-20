@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -48,7 +49,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
   const { store, gitStatusCancellations } = context
   registerFilesystemGitHistoryHandlers(context)
   registerFilesystemGitAtRiskLocalFilesHandlers(context)
-  ipcMain.handle(
+  registerAppHandler(
     'git:status',
     async (
       event,
@@ -115,18 +116,18 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  ipcMain.handle('git:cancelStatus', (event, args: { requestToken: string }): void => {
+  registerAppHandler('git:cancelStatus', (event, args: { requestToken: string }): void => {
     gitStatusCancellations.cancel(event, args.requestToken)
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:setStatusUpstreamRefWatch',
     (_event, args: GitStatusUpstreamRefWatchRequest): Promise<void> =>
       applyGitStatusUpstreamRefWatchRequest(store, args)
   )
 
   // Parent status exposes only gitlinks; read inner changes from each submodule worktree.
-  ipcMain.handle(
+  registerAppHandler(
     'git:submoduleStatus',
     async (
       _event,
@@ -152,7 +153,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:checkIgnored',
     async (
       _event,
@@ -173,7 +174,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:findHugeFoldersToIgnore',
     async (_event, args: { worktreePath: string }): Promise<string[]> =>
       readWorktreeGitUnlessWslStopped(store, args.worktreePath, false, (worktreePath, gitOptions) =>
@@ -181,7 +182,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       )
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:appendGitignore',
     async (_event, args: { worktreePath: string; folderName: string }): Promise<boolean> => {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
@@ -190,7 +191,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
   )
 
   // Filesystem probes clear inactive-worktree conflict badges without a full Git status.
-  ipcMain.handle(
+  registerAppHandler(
     'git:conflictOperation',
     async (
       _event,
@@ -209,7 +210,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:mutationInFlight',
     async (
       _event,
@@ -226,7 +227,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:abortMerge',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
@@ -240,7 +241,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:abortRebase',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
@@ -254,7 +255,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:diff',
     async (
       _event,

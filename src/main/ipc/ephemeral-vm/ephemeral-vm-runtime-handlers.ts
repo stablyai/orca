@@ -1,4 +1,10 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import {
+  publishToDocuments,
+  removeAppHandler,
+  registerAppHandler,
+  appDocumentFor
+} from '../app-registry/app-handler-registry'
+import { app, BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import { listCredentialLikeEnvNames } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-env'
 import {
@@ -42,7 +48,9 @@ function broadcastEphemeralVmRuntimesChanged(): void {
         continue
       }
       try {
-        window.webContents.send(EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL)
+        publishToDocuments(EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL, undefined, {
+          sourceId: window.webContents.id
+        })
       } catch {
         // A renderer can disappear between isDestroyed() and send().
       }
@@ -67,9 +75,10 @@ function broadcastPendingVmCheckouts(): void {
       continue
     }
     try {
-      window.webContents.send(
+      publishToDocuments(
         PENDING_VM_CHECKOUTS_CHANGED_CHANNEL,
-        pendingVmCheckouts.listExcept(window.webContents.id)
+        pendingVmCheckouts.listExcept(window.webContents.id),
+        { sourceId: window.webContents.id }
       )
     } catch {
       // A renderer can disappear between isDestroyed() and send().
@@ -79,12 +88,12 @@ function broadcastPendingVmCheckouts(): void {
 
 /** Windows publish the VM checkouts their creates have not adopted yet; every window reads the union. */
 function registerPendingVmCheckoutHandlers(): void {
-  ipcMain.removeHandler('ephemeralVm:publishPendingCheckouts')
-  ipcMain.removeHandler('ephemeralVm:listPendingCheckouts')
+  removeAppHandler('ephemeralVm:publishPendingCheckouts')
+  removeAppHandler('ephemeralVm:listPendingCheckouts')
   detachPendingCheckoutBroadcast?.()
   detachPendingCheckoutBroadcast = pendingVmCheckouts.onChanged(broadcastPendingVmCheckouts)
-  ipcMain.handle('ephemeralVm:publishPendingCheckouts', (event, value: unknown): void => {
-    const sender = event.sender
+  registerAppHandler('ephemeralVm:publishPendingCheckouts', (event, value: unknown): void => {
+    const sender = appDocumentFor(event)
     const ownerId = sender.id
     if (!pendingCheckoutOwners.has(ownerId)) {
       pendingCheckoutOwners.add(ownerId)
@@ -101,33 +110,33 @@ function registerPendingVmCheckoutHandlers(): void {
     }
     pendingVmCheckouts.publish(ownerId, parsePendingVmCheckouts(value))
   })
-  ipcMain.handle('ephemeralVm:listPendingCheckouts', (event) =>
-    pendingVmCheckouts.listExcept(event.sender.id)
+  registerAppHandler('ephemeralVm:listPendingCheckouts', (event) =>
+    pendingVmCheckouts.listExcept(appDocumentFor(event).id)
   )
 }
 
 export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   registerPendingVmCheckoutHandlers()
-  ipcMain.removeHandler('ephemeralVm:attachWorkspace')
-  ipcMain.removeHandler('ephemeralVm:listRuntimes')
-  ipcMain.removeHandler('ephemeralVm:cleanup')
-  ipcMain.removeHandler('ephemeralVm:stopCleanup')
-  ipcMain.removeHandler('ephemeralVm:forgetRuntime')
-  ipcMain.removeHandler('ephemeralVm:getCleanupCommand')
-  ipcMain.removeHandler('ephemeralVm:listCredentialEnvNames')
+  removeAppHandler('ephemeralVm:attachWorkspace')
+  removeAppHandler('ephemeralVm:listRuntimes')
+  removeAppHandler('ephemeralVm:cleanup')
+  removeAppHandler('ephemeralVm:stopCleanup')
+  removeAppHandler('ephemeralVm:forgetRuntime')
+  removeAppHandler('ephemeralVm:getCleanupCommand')
+  removeAppHandler('ephemeralVm:listCredentialEnvNames')
   stopRuntimesChangedBroadcast?.()
   stopRuntimesChangedBroadcast = onEphemeralVmRuntimesChanged(broadcastEphemeralVmRuntimesChanged)
 
   // Names only: the recipe list warns which credentials scripts inherit, never their values.
-  ipcMain.handle('ephemeralVm:listCredentialEnvNames', () =>
+  registerAppHandler('ephemeralVm:listCredentialEnvNames', () =>
     listCredentialLikeEnvNames(process.env)
   )
 
-  ipcMain.handle('ephemeralVm:listRuntimes', (): EphemeralVmRuntimeRecord[] => {
+  registerAppHandler('ephemeralVm:listRuntimes', (): EphemeralVmRuntimeRecord[] => {
     return listEphemeralVmRuntimes(app.getPath('userData'))
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'ephemeralVm:attachWorkspace',
     (_event, args: { runtimeId: string; workspaceId: string }): EphemeralVmRuntimeRecord => {
       return attachEphemeralVmRuntimeToWorkspace({
@@ -138,14 +147,14 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'ephemeralVm:cleanup',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmRuntimeRecord> => {
       return cleanupOwnedEphemeralVmRuntime(store, app.getPath('userData'), args.runtimeId)
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'ephemeralVm:stopCleanup',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmRuntimeRecord> => {
       const userDataPath = app.getPath('userData')
@@ -174,11 +183,11 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('ephemeralVm:forgetRuntime', (_event, args: { runtimeId: string }): void => {
+  registerAppHandler('ephemeralVm:forgetRuntime', (_event, args: { runtimeId: string }): void => {
     forgetInterruptedEphemeralVmProvision(app.getPath('userData'), args.runtimeId)
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'ephemeralVm:getCleanupCommand',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmCleanupCommandResult> => {
       const userDataPath = app.getPath('userData')

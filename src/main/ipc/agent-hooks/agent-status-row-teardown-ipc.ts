@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { removeAppListeners, registerAppListener } from '../app-registry/app-handler-registry'
+
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { isValidPaneKey } from '../../agent-hooks/server/server-status-identity'
 import type { AgentStatusCacheIdentity } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -14,13 +15,13 @@ import { isValidAgentStatusDropTabId } from './agent-status-ipc-boundary'
 const MAX_DROP_PERSISTED_BATCH = 5_000
 
 export function registerAgentStatusRowTeardownIpcHandlers(): void {
-  ipcMain.removeAllListeners('agentStatus:drop')
-  ipcMain.removeAllListeners('agentStatus:dropPersisted')
-  ipcMain.removeAllListeners('agentStatus:dropPersistedBatch')
-  ipcMain.removeAllListeners('agentStatus:reconcileEndedProcess')
-  ipcMain.removeAllListeners('agentStatus:dropByTabPrefix')
+  removeAppListeners('agentStatus:drop')
+  removeAppListeners('agentStatus:dropPersisted')
+  removeAppListeners('agentStatus:dropPersistedBatch')
+  removeAppListeners('agentStatus:reconcileEndedProcess')
+  removeAppListeners('agentStatus:dropByTabPrefix')
 
-  ipcMain.on('agentStatus:drop', (_event, paneKey: unknown) => {
+  registerAppListener('agentStatus:drop', (_event, paneKey: unknown) => {
     if (
       typeof paneKey !== 'string' ||
       (!isValidPaneKey(paneKey) && parseLegacyNumericPaneKey(paneKey) === null)
@@ -36,7 +37,7 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     }
   })
 
-  ipcMain.on('agentStatus:dropPersisted', (_event, request: unknown) => {
+  registerAppListener('agentStatus:dropPersisted', (_event, request: unknown) => {
     if (!isValidAgentStatusCacheIdentity(request)) {
       return
     }
@@ -49,7 +50,7 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     }
   })
 
-  ipcMain.on('agentStatus:dropPersistedBatch', (_event, request: unknown) => {
+  registerAppListener('agentStatus:dropPersistedBatch', (_event, request: unknown) => {
     if (!Array.isArray(request) || request.length > MAX_DROP_PERSISTED_BATCH) {
       return
     }
@@ -86,7 +87,7 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
         }
       })
   }
-  ipcMain.on('agentStatus:reconcileEndedProcess', (_event, paneKey: unknown) => {
+  registerAppListener('agentStatus:reconcileEndedProcess', (_event, paneKey: unknown) => {
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return
     }
@@ -99,7 +100,7 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     }
   })
 
-  ipcMain.on('agentStatus:dropByTabPrefix', (_event, tabId: unknown) => {
+  registerAppListener('agentStatus:dropByTabPrefix', (_event, tabId: unknown) => {
     if (!isValidAgentStatusDropTabId(tabId)) {
       return
     }

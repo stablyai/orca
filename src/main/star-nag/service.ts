@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { registerAppHandler, publishToDocuments } from '../ipc/app-registry/app-handler-registry'
+import { BrowserWindow } from 'electron'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/feature-education/star-nag/star-nag-threshold'
 import { checkOrcaStarred } from '../github/client/fetch/orca-star'
 import type { Store } from '../persistence/loading-store/store'
@@ -66,16 +67,16 @@ export class StarNagService {
   }
 
   registerIpcHandlers(): void {
-    ipcMain.handle('star-nag:dismiss', () => this.dismiss())
-    ipcMain.handle('star-nag:later', () => this.defer('later'))
-    ipcMain.handle('star-nag:complete', () => this.markCompleted())
-    ipcMain.handle('star-nag:disable', () => this.disable())
-    ipcMain.handle('star-nag:openWeb', () => this.openWeb())
-    ipcMain.handle('star-nag:starOrca', () => this.starOrcaFromNag())
-    ipcMain.handle('star-nag:forceShow', () => this.forceShow())
-    ipcMain.handle('star-nag:agentValueMoment', () => this.prepareAgentValueMoment())
-    ipcMain.handle('star-nag:showAgentValueMoment', () => this.showPreparedAgentValueMoment())
-    ipcMain.handle('star-nag:onboardingCompleted', () => this.onboardingCompleted())
+    registerAppHandler('star-nag:dismiss', () => this.dismiss())
+    registerAppHandler('star-nag:later', () => this.defer('later'))
+    registerAppHandler('star-nag:complete', () => this.markCompleted())
+    registerAppHandler('star-nag:disable', () => this.disable())
+    registerAppHandler('star-nag:openWeb', () => this.openWeb())
+    registerAppHandler('star-nag:starOrca', () => this.starOrcaFromNag())
+    registerAppHandler('star-nag:forceShow', () => this.forceShow())
+    registerAppHandler('star-nag:agentValueMoment', () => this.prepareAgentValueMoment())
+    registerAppHandler('star-nag:showAgentValueMoment', () => this.showPreparedAgentValueMoment())
+    registerAppHandler('star-nag:onboardingCompleted', () => this.onboardingCompleted())
   }
 
   private handleAgentSpawned(total: number): void {
@@ -166,7 +167,7 @@ export class StarNagService {
       return false
     }
     const context = createStarNagPromptContext(this.store, this.stats, source, mode)
-    win.webContents.send('star-nag:show', { mode, surface })
+    publishToDocuments('star-nag:show', { mode, surface }, { sourceId: win.webContents.id })
     this.promptVisible = true
     this.promptSession = context
     this.trackOutcome('shown')
@@ -177,7 +178,7 @@ export class StarNagService {
   private broadcastHide(): void {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
-        win.webContents.send('star-nag:hide')
+        publishToDocuments('star-nag:hide', undefined, { sourceId: win.webContents.id })
       }
     }
   }

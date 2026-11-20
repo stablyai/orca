@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import { awaitWindowsHostGitEnvironmentReady } from '../../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../../../git/remotes/repo-remote-queries'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
@@ -10,7 +11,7 @@ import { getConnectionExecutionHostId } from '../../../../shared/execution-host/
 
 export function registerFilesystemGitUrlHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
-  ipcMain.handle(
+  registerAppHandler(
     'git:remoteFileUrl',
     async (
       _event,
@@ -35,7 +36,7 @@ export function registerFilesystemGitUrlHandlers(context: FilesystemHandlerConte
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:remoteCommitUrl',
     async (
       _event,

@@ -1,4 +1,10 @@
-import { ipcMain, type WebContents } from 'electron'
+import {
+  publishToDocuments,
+  type AppDocument,
+  registerAppHandler,
+  appDocumentFor
+} from '../../app-registry/app-handler-registry'
+
 import { watch, type FSWatcher } from 'node:fs'
 import type {
   LocalLogTailChangedPayload,
@@ -66,7 +72,7 @@ function closeSenderWatches(owner: TailSenderOwner): void {
   releaseIdleOwner(owner)
 }
 
-function getSenderOwner(sender: WebContents): TailSenderOwner {
+function getSenderOwner(sender: AppDocument): TailSenderOwner {
   const existing = senderOwners.get(sender.id)
   if (existing) {
     return existing
@@ -96,7 +102,7 @@ function validateSubscriptionId(value: unknown): string {
 }
 
 async function startWatch(
-  sender: WebContents,
+  sender: AppDocument,
   args: LocalLogTailWatchArgs,
   store: Store
 ): Promise<void> {
@@ -124,7 +130,7 @@ async function startWatch(
         return
       }
       const payload: LocalLogTailChangedPayload = { subscriptionId, eventType }
-      sender.send('fs:localLogTailChanged', payload)
+      publishToDocuments('fs:localLogTailChanged', payload, sender.caller)
     }
     const watcher = watch(filePath, (eventType) => sendChange(eventType))
     const subscription: TailWatch = { owner, watcher }
@@ -144,7 +150,7 @@ async function startWatch(
 }
 
 export function registerLocalLogTailHandlers(store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'fs:readLocalLogTail',
     async (_event, args: LocalLogTailReadArgs): Promise<LocalLogTailReadResult> => {
       const filePath = await resolveUserNamedRegularFile(args.filePath, store)
@@ -152,13 +158,13 @@ export function registerLocalLogTailHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('fs:startLocalLogTail', (event, args: LocalLogTailWatchArgs): Promise<void> =>
-    startWatch(event.sender, args, store)
+  registerAppHandler('fs:startLocalLogTail', (event, args: LocalLogTailWatchArgs): Promise<void> =>
+    startWatch(appDocumentFor(event), args, store)
   )
 
-  ipcMain.handle('fs:stopLocalLogTail', (event, args: { subscriptionId: string }): void => {
-    const key = watchKey(event.sender.id, validateSubscriptionId(args.subscriptionId))
-    const owner = senderOwners.get(event.sender.id)
+  registerAppHandler('fs:stopLocalLogTail', (event, args: { subscriptionId: string }): void => {
+    const key = watchKey(appDocumentFor(event).id, validateSubscriptionId(args.subscriptionId))
+    const owner = senderOwners.get(appDocumentFor(event).id)
     owner?.pending.delete(key)
     closeWatch(key)
     if (owner) {

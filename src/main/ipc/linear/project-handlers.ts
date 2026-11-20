@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import {
   createProject,
   getProject,
@@ -16,7 +17,7 @@ import { clampLinearIssueListLimit } from '../../../shared/linear/issue-read-lim
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 
 export function registerLinearProjectHandlers(): void {
-  ipcMain.handle(
+  registerAppHandler(
     'linear:listProjects',
     async (
       _event,
@@ -37,7 +38,7 @@ export function registerLinearProjectHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'linear:createProject',
     async (
       _event,
@@ -103,7 +104,7 @@ export function registerLinearProjectHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'linear:getProject',
     async (_event, args: { id: string; workspaceId?: string; force?: boolean }) => {
       if (typeof args?.id !== 'string' || !args.id.trim()) {
@@ -117,7 +118,7 @@ export function registerLinearProjectHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'linear:listProjectIssues',
     async (
       _event,

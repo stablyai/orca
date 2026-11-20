@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 /** Unresolved-owner sentinels have no environment: return unavailable instead of dialing a paired runtime (#18097). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

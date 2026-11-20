@@ -1,4 +1,5 @@
-import { type BrowserWindow, ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+import type { BrowserWindow } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
@@ -102,7 +103,7 @@ export function registerRepoCloneHandlers(
   store: Store,
   enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
 ): void {
-  ipcMain.handle('repos:cloneAbort', async () => {
+  registerAppHandler('repos:cloneAbort', async () => {
     for (const controller of pendingLocalCloneControllers) {
       controller.abort()
     }
@@ -126,11 +127,11 @@ export function registerRepoCloneHandlers(
           getRepoExecutionHostId(r) === LOCAL_EXECUTION_HOST_ID
       )
 
-  ipcMain.handle('repos:checkCloneTarget', (_event, args: CloneTargetArgs) =>
+  registerAppHandler('repos:checkCloneTarget', (_event, args: CloneTargetArgs) =>
     checkCloneTarget(args, findLocalSaved, LOCAL_EXECUTION_HOST_ID)
   )
 
-  ipcMain.handle('repos:clone', async (_event, args: CloneTargetArgs): Promise<Repo> => {
+  registerAppHandler('repos:clone', async (_event, args: CloneTargetArgs): Promise<Repo> => {
     const clonePath = deriveValidatedClonePath(args)
     const clonePathKey = getClonePathComparisonKey(clonePath)
     let savedPathKeys: string[] = []

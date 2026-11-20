@@ -1,3 +1,4 @@
+import './app-registry/testing/app-ipc-test-host'
 import { expect, it, vi } from 'vitest'
 import { registerDesktopRelayHandlers } from './session-desktop-relays'
 import {

@@ -1,7 +1,8 @@
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
 import type { GitCommitAction } from '../../../../shared/git/commands/git-commit-action'
 import { applyCommit, recoverSequencer } from '../../../git/worktrees/checkout/commit-actions'
 import { createBranch } from '../../../git/worktrees/checkout/create-branch'
-import { ipcMain } from 'electron'
+
 import { commitChanges, completeMerge } from '../../../git/source-control/mutations/commit-changes'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
@@ -11,7 +12,7 @@ import { getConnectionExecutionHostId } from '../../../../shared/execution-host/
 
 export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
-  ipcMain.handle(
+  registerAppHandler(
     'git:createBranch',
     async (
       _event,
@@ -27,7 +28,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
   )
   for (const action of ['abort', 'continue'] as const) {
     const method = action === 'abort' ? 'sequencerAbort' : 'sequencerContinue'
-    ipcMain.handle(
+    registerAppHandler(
       `git:${method}`,
       async (
         _event,
@@ -51,7 +52,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
     ['cherryPick', 'cherry-pick'],
     ['revert', 'revert']
   ] as const) {
-    ipcMain.handle(
+    registerAppHandler(
       `git:${method}`,
       async (_event, args: { worktreePath: string; commitId: string; connectionId?: string }) => {
         requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
@@ -68,7 +69,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       }
     )
   }
-  ipcMain.handle(
+  registerAppHandler(
     'git:commit',
     async (
       _event,
@@ -91,7 +92,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       })
     }
   )
-  ipcMain.handle(
+  registerAppHandler(
     'git:completeMerge',
     async (
       _event,

@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../../ipc/app-registry/app-handler-registry'
 import type { LocalAccountRuntimeTarget } from '../../../shared/agent-accounts/local-account-runtime'
 import type { BrowserWindow } from 'electron'
 import type {
@@ -267,7 +268,9 @@ export abstract class RateLimitServiceState {
           }
         }
         if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-          this.mainWindow.webContents.send('rateLimits:update', state)
+          publishToDocuments('rateLimits:update', state, {
+            sourceId: this.mainWindow.webContents.id
+          })
         }
       }
     } finally {

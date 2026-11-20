@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/naming/retired-name-registry'
 import { getRetiredNameRegistryForRepo } from '../../../workspaces/removal/retirement/worktree-name-retirement'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -6,7 +7,7 @@ import type { WorktreeIpcContext } from '../worktree-ipc-context'
 export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): void {
   const { store } = context
 
-  ipcMain.handle('worktrees:listRetiredNames', async (_event, args: { repoId: string }) => {
+  registerAppHandler('worktrees:listRetiredNames', async (_event, args: { repoId: string }) => {
     const repo = store.getRepo(args.repoId)
     if (!repo) {
       return EMPTY_RETIRED_NAME_REGISTRY

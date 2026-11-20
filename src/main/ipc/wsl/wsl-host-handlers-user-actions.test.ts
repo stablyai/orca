@@ -1,3 +1,5 @@
+import '../app-registry/testing/app-ipc-test-host'
+import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type Handler = (event: unknown, request?: unknown) => unknown
@@ -58,6 +60,7 @@ const service = vi.hoisted(() => ({
     })
   ),
   remove: vi.fn(async () => ({ stopped: true })),
+  setVisibleWork: vi.fn(),
   hasServerFiles: vi.fn(() => true),
   recordForEnvironment: vi.fn(() => ({ distro: 'Ubuntu', environmentId: 'wsl:Ubuntu' }))
 }))
@@ -150,4 +153,24 @@ it('registers WSL actions before load without starting the service or acting bef
     resetWslHostsGateForTests()
     vi.unstubAllEnvs()
   }
+})
+
+it('rejects a retired document report after host initialization settles', async () => {
+  vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
+  await configureWslHostsGate({ hasSavedWslHost: () => true, hasWslMoveCutover: () => false })
+  const ready = Promise.withResolvers<void>()
+  const registration = register(ready.promise)
+  let retired = false
+  const sender = Object.assign(new EventEmitter(), { id: 42, isDestroyed: () => retired })
+  const report = handlers.get('wslHosts:setVisibleWork')!(
+    { sender },
+    { environmentIds: ['wsl:Ubuntu'] }
+  )
+  retired = true
+  ready.resolve()
+  await registration
+  await expect(report).rejects.toThrow('Application IPC document has retired')
+  expect(service.setVisibleWork).not.toHaveBeenCalled()
+  vi.unstubAllEnvs()
+  resetWslHostsGateForTests()
 })

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from './app-registry/app-handler-registry'
 import { z } from 'zod'
 import type { Store } from '../persistence/loading-store/store'
 import {
@@ -129,9 +129,9 @@ export function registerDesktopRelayHandlers(
     }
   }
   // Answering proves this main registered the apply handler; older mains reject the probe.
-  ipcMain.handle('session:desktop-relays-version', () => DESKTOP_RELAY_WRITE_VERSION)
+  registerAppHandler('session:desktop-relays-version', () => DESKTOP_RELAY_WRITE_VERSION)
 
-  ipcMain.handle(
+  registerAppHandler(
     'session:apply-desktop-relays',
     (_event, args: unknown): DesktopRelayWriteResult => {
       const { hosts } = desktopRelayWriteSchema.parse(args)

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
 import {
   connect,
   disconnect,
@@ -14,7 +14,7 @@ import { registerLinearCustomViewHandlers } from './custom-view-handlers'
 import { registerLinearTeamHandlers } from './team-handlers'
 
 export function registerLinearHandlers(): void {
-  ipcMain.handle('linear:connect', async (_event, args: { apiKey: string }) => {
+  registerAppHandler('linear:connect', async (_event, args: { apiKey: string }) => {
     if (typeof args?.apiKey !== 'string' || !args.apiKey.trim()) {
       return { ok: false, error: 'Invalid API key' }
     }
@@ -25,12 +25,12 @@ export function registerLinearHandlers(): void {
     return result
   })
 
-  ipcMain.handle('linear:disconnect', async (_event, args?: { workspaceId?: string }) => {
+  registerAppHandler('linear:disconnect', async (_event, args?: { workspaceId?: string }) => {
     await disconnect(normalizeWorkspaceId(args?.workspaceId))
     _resetPreflightCache()
   })
 
-  ipcMain.handle('linear:selectWorkspace', async (_event, args: { workspaceId: string }) => {
+  registerAppHandler('linear:selectWorkspace', async (_event, args: { workspaceId: string }) => {
     const workspaceId = normalizeWorkspaceSelection(args?.workspaceId)
     if (!workspaceId) {
       return getStatus()
@@ -38,11 +38,11 @@ export function registerLinearHandlers(): void {
     return selectWorkspace(workspaceId)
   })
 
-  ipcMain.handle('linear:status', async () => {
+  registerAppHandler('linear:status', async () => {
     return getStatus()
   })
 
-  ipcMain.handle('linear:testConnection', async (_event, args?: { workspaceId?: string }) => {
+  registerAppHandler('linear:testConnection', async (_event, args?: { workspaceId?: string }) => {
     return testConnection(normalizeWorkspaceId(args?.workspaceId))
   })
 

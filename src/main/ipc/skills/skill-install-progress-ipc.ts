@@ -1,18 +1,20 @@
-import type { IpcMainInvokeEvent } from 'electron'
+import {
+  publishToDocuments,
+  appDocumentFor,
+  type AppCaller
+} from '../app-registry/app-handler-registry'
+
 import type { SkillBundleInstallProgress } from '../../../shared/skills/installation/skill-bundle-install-contract'
 import type { SkillInstallProgress } from '../../../shared/skills/sharing/skill-sharing-contract'
 
-export function sendSkillInstallProgress(
-  event: IpcMainInvokeEvent,
-  progress: SkillInstallProgress
-): void {
-  if (!event.sender.isDestroyed()) {
-    event.sender.send('skills:installProgress', progress)
+export function sendSkillInstallProgress(event: AppCaller, progress: SkillInstallProgress): void {
+  if (!appDocumentFor(event).isDestroyed()) {
+    publishToDocuments('skills:installProgress', progress, appDocumentFor(event).caller)
   }
 }
 
 export function sendBundleInstallProgress(
-  event: IpcMainInvokeEvent,
+  event: AppCaller,
   progress: SkillBundleInstallProgress
 ): void {
   sendSkillInstallProgress(event, {

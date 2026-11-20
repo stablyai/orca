@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import { readLocalFileRange } from '../../../filesystem/local-file-io/local-file-range-read'
 import { validateFileRangeRequest } from '../../../../shared/file-content/file-range-read'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
@@ -8,7 +9,7 @@ import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { guardWslUncPathAccess } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 export function registerFilesystemChunkReadHandler({ store }: FilesystemHandlerContext): void {
-  ipcMain.handle(
+  registerAppHandler(
     'fs:readFileChunk',
     async (
       _event,

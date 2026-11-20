@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
@@ -25,7 +26,7 @@ import { reviewStartPointFailure } from '../../../../shared/worktree/hosted-revi
 export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
   const { store, runtime } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:resolvePrBase',
     async (
       _event,
@@ -100,7 +101,7 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:resolveMrBase',
     async (
       _event,

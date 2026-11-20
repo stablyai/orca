@@ -1,3 +1,4 @@
+import { registerAppFixtureWindow } from '../../app-registry/testing/app-ipc-test-host'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,6 +17,7 @@ import { EMPTY_HEAD_IDENTITY_SCOPE } from './worktree-head-identity-scope'
 
 const REPO_ID = 'repo-1'
 const tempDirs: string[] = []
+let nextWindowId = 40
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
@@ -44,16 +46,24 @@ function createWatch(
   runtimeEnvironmentActive = false
 ): WorktreeBaseNotificationWatch & { sent: { channel: string; payload: unknown }[] } {
   const sent: { channel: string; payload: unknown }[] = []
+  // Unique ids so readers in one test each receive their own window's publications.
+  nextWindowId += 2
+  const mainWindow = {
+    id: nextWindowId,
+    isDestroyed: () => false,
+    webContents: {
+      id: nextWindowId + 1,
+      send: (channel: string, payload: unknown) => sent.push({ channel, payload })
+    }
+  }
+  registerAppFixtureWindow(mainWindow)
   return {
     key: `git-common:${commonDir}`,
     kind: 'git-common',
     path: commonDir,
     repos: new Map([[REPO_ID, { repoId: REPO_ID, repoName: 'repo', nestWorkspaces: false }]]),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the watcher only calls isDestroyed and webContents.send.
-    mainWindow: {
-      isDestroyed: () => false,
-      webContents: { send: (channel: string, payload: unknown) => sent.push({ channel, payload }) }
-    } as never,
+    mainWindow: mainWindow as never,
     notifyTimer: null,
     pendingStructureRepoIds: new Set(),
     pendingGitStatusRepoIds: new Set(),

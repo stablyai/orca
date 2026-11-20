@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult
@@ -17,7 +18,7 @@ import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-
 export function registerGitRemoteCompareHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:branchCompare',
     async (
       _event,
@@ -45,7 +46,7 @@ export function registerGitRemoteCompareHandlers(context: FilesystemHandlerConte
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:commitCompare',
     async (
       _event,

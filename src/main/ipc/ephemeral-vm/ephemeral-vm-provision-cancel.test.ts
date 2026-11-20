@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

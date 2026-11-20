@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../app-registry/app-handler-registry'
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { wakeFolderRepoGitUpgradeWatch } from '../worktrees/listing/folder-repo-git-upgrade-wake'
@@ -17,7 +18,7 @@ export function setRepoRemoteClientNotifier(notifier: RepoRemoteClientNotifier):
 export function notifyReposChanged(mainWindow: BrowserWindow | null): void {
   wakeFolderRepoGitUpgradeWatch()
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('repos:changed')
+    publishToDocuments('repos:changed', undefined, { sourceId: mainWindow.webContents.id })
   }
   // Paired clients refetch only on this event, including host-side deletes and renames (#11994).
   broadcast('repo', () => repoRemoteClientNotifier?.notifyReposChangedForRemoteClients())

@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import {
   getCustomView,
   listCustomViewIssues,
@@ -15,7 +16,7 @@ import type { LinearCustomViewModel } from '../../../shared/linear/project-types
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 
 export function registerLinearCustomViewHandlers(): void {
-  ipcMain.handle(
+  registerAppHandler(
     'linear:listCustomViews',
     async (
       _event,
@@ -36,7 +37,7 @@ export function registerLinearCustomViewHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'linear:getCustomView',
     async (
       _event,
@@ -59,7 +60,7 @@ export function registerLinearCustomViewHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'linear:listCustomViewIssues',
     async (
       _event,
@@ -78,7 +79,7 @@ export function registerLinearCustomViewHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'linear:listCustomViewProjects',
     async (
       _event,

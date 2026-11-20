@@ -1,4 +1,10 @@
-import { ipcMain } from 'electron'
+import {
+  publishToDocuments,
+  removeAppHandler,
+  registerAppHandler,
+  appWindowFor
+} from '../app-registry/app-handler-registry'
+
 import type { Store } from '../../persistence/loading-store/store'
 import type {
   WorkspaceSpaceAnalysis,
@@ -26,97 +32,106 @@ type InFlightWorkspaceSpaceScan = {
 export function registerWorkspaceSpaceHandlers(store: Store): void {
   const snapshotDirectory = store.getProfileStorageDirectory()
   let inFlightScan: InFlightWorkspaceSpaceScan | null = null
-  ipcMain.removeHandler('workspaceSpace:cancel')
-  ipcMain.removeHandler('workspaceSpace:analyze')
-  ipcMain.removeHandler('workspaceSpace:getCachedAnalysis')
-  ipcMain.handle('workspaceSpace:analyze', async (event): Promise<WorkspaceSpaceAnalyzeResult> => {
-    if (!inFlightScan) {
-      // A scan is always a user's click, so it is also the retry after repeated worker crashes.
-      retryHeavyWorkers()
-      const controller = new AbortController()
-      const scanId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-      let latestProgress: WorkspaceSpaceScanProgress = {
-        scanId,
-        state: 'running',
-        startedAt: Date.now(),
-        updatedAt: Date.now(),
-        totalRepoCount: 0,
-        scannedRepoCount: 0,
-        totalWorktreeCount: 0,
-        scannedWorktreeCount: 0,
-        currentRepoDisplayName: null,
-        currentWorktreeDisplayName: null
-      }
-      let lastProgressSentAt = 0
-      let pendingMeasurements: WorkspaceSpaceWorktreeMeasurement[] = []
-      const sendProgress = (progress: WorkspaceSpaceScanProgress): void => {
-        if (progress.completedMeasurements?.length) {
-          pendingMeasurements.push(...progress.completedMeasurements)
+  removeAppHandler('workspaceSpace:cancel')
+  removeAppHandler('workspaceSpace:analyze')
+  removeAppHandler('workspaceSpace:getCachedAnalysis')
+  registerAppHandler(
+    'workspaceSpace:analyze',
+    async (event): Promise<WorkspaceSpaceAnalyzeResult> => {
+      if (!inFlightScan) {
+        // A scan is always a user's click, so it is also the retry after repeated worker crashes.
+        retryHeavyWorkers()
+        const controller = new AbortController()
+        const scanId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+        let latestProgress: WorkspaceSpaceScanProgress = {
+          scanId,
+          state: 'running',
+          startedAt: Date.now(),
+          updatedAt: Date.now(),
+          totalRepoCount: 0,
+          scannedRepoCount: 0,
+          totalWorktreeCount: 0,
+          scannedWorktreeCount: 0,
+          currentRepoDisplayName: null,
+          currentWorktreeDisplayName: null
         }
-        // Throttle per-worktree progress to avoid repainting the full Space page for every row.
-        const now = Date.now()
-        const isFirstProgress = lastProgressSentAt === 0
-        const isTerminalProgress =
-          progress.state !== 'running' ||
-          (progress.totalWorktreeCount > 0 &&
-            progress.scannedWorktreeCount >= progress.totalWorktreeCount)
-        if (
-          !isFirstProgress &&
-          !isTerminalProgress &&
-          now - lastProgressSentAt < PROGRESS_EMIT_INTERVAL_MS
-        ) {
-          return
-        }
-        lastProgressSentAt = now
-        if (!event.sender.isDestroyed()) {
-          const completedMeasurements = pendingMeasurements
-          pendingMeasurements = []
-          event.sender.send('workspaceSpace:progress', {
-            ...progress,
-            ...(completedMeasurements.length > 0 ? { completedMeasurements } : {})
-          })
-        }
-      }
-      // Concurrent fleet requests share expensive disk traversal.
-      const scan: InFlightWorkspaceSpaceScan = {
-        scanId,
-        controller,
-        progress: latestProgress,
-        promise: Promise.resolve(null as never)
-      }
-      inFlightScan = scan
-      scan.promise = analyzeWorkspaceSpace(store, {
-        scanId,
-        signal: controller.signal,
-        onProgress: (progress) => {
-          latestProgress = progress
-          scan.progress = progress
-          sendProgress(progress)
-        }
-      })
-        .then((analysis): WorkspaceSpaceAnalyzeResult => {
-          // Persist cold-analysis results without delaying or failing the reply.
-          void persistWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, analysis)
-          return { ok: true, analysis }
-        })
-        .catch((error: unknown): WorkspaceSpaceAnalyzeResult => {
-          if (error instanceof WorkspaceSpaceScanCancelledError) {
-            return { ok: false, cancelled: true }
+        let lastProgressSentAt = 0
+        let pendingMeasurements: WorkspaceSpaceWorktreeMeasurement[] = []
+        const sendProgress = (progress: WorkspaceSpaceScanProgress): void => {
+          if (progress.completedMeasurements?.length) {
+            pendingMeasurements.push(...progress.completedMeasurements)
           }
-          throw error
+          // Throttle per-worktree progress to avoid repainting the full Space page for every row.
+          const now = Date.now()
+          const isFirstProgress = lastProgressSentAt === 0
+          const isTerminalProgress =
+            progress.state !== 'running' ||
+            (progress.totalWorktreeCount > 0 &&
+              progress.scannedWorktreeCount >= progress.totalWorktreeCount)
+          if (
+            !isFirstProgress &&
+            !isTerminalProgress &&
+            now - lastProgressSentAt < PROGRESS_EMIT_INTERVAL_MS
+          ) {
+            return
+          }
+          lastProgressSentAt = now
+          if (!appWindowFor(event).isDestroyed()) {
+            const completedMeasurements = pendingMeasurements
+            pendingMeasurements = []
+            publishToDocuments(
+              'workspaceSpace:progress',
+              {
+                ...progress,
+                ...(completedMeasurements.length > 0 ? { completedMeasurements } : {})
+              },
+              { sourceId: appWindowFor(event).id }
+            )
+          }
+        }
+        // Concurrent fleet requests share expensive disk traversal.
+        const scan: InFlightWorkspaceSpaceScan = {
+          scanId,
+          controller,
+          progress: latestProgress,
+          promise: Promise.resolve(null as never)
+        }
+        inFlightScan = scan
+        scan.promise = analyzeWorkspaceSpace(store, {
+          scanId,
+          signal: controller.signal,
+          onProgress: (progress) => {
+            latestProgress = progress
+            scan.progress = progress
+            sendProgress(progress)
+          }
         })
-        .finally(() => {
-          inFlightScan = null
-        })
+          .then((analysis): WorkspaceSpaceAnalyzeResult => {
+            // Persist cold-analysis results without delaying or failing the reply.
+            void persistWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, analysis)
+            return { ok: true, analysis }
+          })
+          .catch((error: unknown): WorkspaceSpaceAnalyzeResult => {
+            if (error instanceof WorkspaceSpaceScanCancelledError) {
+              return { ok: false, cancelled: true }
+            }
+            throw error
+          })
+          .finally(() => {
+            inFlightScan = null
+          })
+      }
+      return inFlightScan.promise
     }
-    return inFlightScan.promise
-  })
-
-  ipcMain.handle('workspaceSpace:getCachedAnalysis', (): Promise<WorkspaceSpaceAnalysis | null> =>
-    readWorkspaceSpaceAnalysisSnapshot(snapshotDirectory)
   )
 
-  ipcMain.handle('workspaceSpace:cancel', async (): Promise<boolean> => {
+  registerAppHandler(
+    'workspaceSpace:getCachedAnalysis',
+    (): Promise<WorkspaceSpaceAnalysis | null> =>
+      readWorkspaceSpaceAnalysisSnapshot(snapshotDirectory)
+  )
+
+  registerAppHandler('workspaceSpace:cancel', async (): Promise<boolean> => {
     if (!inFlightScan || inFlightScan.controller.signal.aborted) {
       return false
     }

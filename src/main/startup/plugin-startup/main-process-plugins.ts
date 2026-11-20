@@ -1,9 +1,10 @@
+import { publishToDocuments } from '../../ipc/app-registry/app-handler-registry'
 import { join } from 'node:path'
 import { PluginImageCache } from '../../plugins/media/plugin-image-cache'
 import { installPluginImageProtocolHandler } from '../../plugins/media/plugin-image-protocol'
 import { getPluginDesktopFrameServices } from '../../plugins/panels/desktop-actions/plugin-frame-desktop-services'
 import { pluginHostVersion } from '../../../shared/plugins/installation/plugin-host-version'
-import { app, BrowserWindow, net } from 'electron'
+import { app, net } from 'electron'
 import { performance } from 'node:perf_hooks'
 import { PluginService } from '../../plugins/plugin-service'
 import { PluginKillListService } from '../../plugins/catalog/plugin-kill-list-service'
@@ -71,11 +72,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
       (app.isPackaged || process.env.ORCA_PLUGIN_INSTALL_STATS === '1')
   })
   core.pluginInstallStatsService.onChanged(() => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('plugins:installCountsChanged')
-      }
-    }
+    publishToDocuments('plugins:installCountsChanged', undefined, 'all')
   })
   const pluginImageCache = new PluginImageCache(
     join(getPluginsDataDir(app.getPath('userData')), 'image-cache')
@@ -152,11 +149,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
         version,
         name: pluginService.findValidPlugin(pluginKey)?.manifest.name ?? pluginKey
       }))
-      for (const window of BrowserWindow.getAllWindows()) {
-        if (!window.isDestroyed()) {
-          window.webContents.send('plugins:autoUpdateChanged', { state: autoUpdate, updated })
-        }
-      }
+      publishToDocuments('plugins:autoUpdateChanged', { state: autoUpdate, updated }, 'all')
     }
   })
   core.pluginAutoUpdater = pluginAutoUpdater
@@ -283,11 +276,7 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
         rebuildSystemTrayMenu()
       })
     }
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('plugins:changed', event)
-      }
-    }
+    publishToDocuments('plugins:changed', event, 'all')
   })
   requestBundledPluginBootstrap()
   setTimeout(() => {

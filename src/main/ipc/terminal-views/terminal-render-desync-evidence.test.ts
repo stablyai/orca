@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 import { mkdtemp, readFile, readdir, rm, stat, utimes } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'

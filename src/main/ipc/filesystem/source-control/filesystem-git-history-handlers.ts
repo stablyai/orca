@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import type {
   GitHistoryOptions,
   GitHistoryResult
@@ -13,7 +14,7 @@ import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 
 export function registerFilesystemGitHistoryHandlers({ store }: FilesystemHandlerContext): void {
-  ipcMain.handle(
+  registerAppHandler(
     'git:refs',
     async (_event, args: { worktreePath: string; connectionId?: string; query?: string }) => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
@@ -26,7 +27,7 @@ export function registerFilesystemGitHistoryHandlers({ store }: FilesystemHandle
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:history',
     async (
       _event,
@@ -55,7 +56,7 @@ export function registerFilesystemGitHistoryHandlers({ store }: FilesystemHandle
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:blame',
     async (
       _event,

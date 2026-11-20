@@ -1,4 +1,10 @@
-import { ipcMain, type WebContents } from 'electron'
+import {
+  publishToDocuments,
+  registerAppHandler,
+  type AppWindow,
+  appWindowFor
+} from '../app-registry/app-handler-registry'
+
 import type { Store } from '../../persistence/loading-store/store'
 import { relaunchApp, type AppRelaunchReason } from '../../startup/quit/app-relaunch'
 import { quitProcess } from '../../startup/quit/process-quit-request'
@@ -127,9 +133,9 @@ async function runBeforeProfileRelaunch(
 
 type ProfileRelaunchReason = Extract<AppRelaunchReason, `profile-${string}`>
 
-function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebContents): void {
+function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: AppWindow): void {
   if (!sender.isDestroyed()) {
-    sender.send('app:restart-committed')
+    publishToDocuments('app:restart-committed', undefined, { sourceId: sender.id })
   }
   setTimeout(() => {
     relaunchApp(reason)
@@ -143,12 +149,12 @@ export function registerOrcaProfileHandlers(
   orcaAccount: OrcaAccountService,
   options: RegisterOrcaProfileHandlersOptions = {}
 ): void {
-  ipcMain.handle('orcaProfiles:list', (): OrcaProfileListResult => ({
+  registerAppHandler('orcaProfiles:list', (): OrcaProfileListResult => ({
     ...getOrcaProfileListState(),
     multiProfileUi: isMultiProfileUiEnabled()
   }))
 
-  ipcMain.handle('orcaProfiles:authStatus', (): OrcaProfileAuthStatus =>
+  registerAppHandler('orcaProfiles:authStatus', (): OrcaProfileAuthStatus =>
     orcaAccount.getAuthStatus()
   )
 
@@ -156,7 +162,7 @@ export function registerOrcaProfileHandlers(
   onOrcaCloudSessionInvalidated(broadcastOrcaProfileAuthStatusChanged)
   onOrcaCloudSignInProgressChanged(broadcastOrcaProfileSignInProgressChanged)
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:createLocal',
     (_event, args?: CreateLocalOrcaProfileArgs): CreateLocalOrcaProfileResult => {
       const result = createLocalOrcaProfile(args)
@@ -165,7 +171,7 @@ export function registerOrcaProfileHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:switch',
     async (event, args: SwitchOrcaProfileArgs): Promise<SwitchOrcaProfileResult> => {
       const profileId = profileIdFromArgs(args)
@@ -179,13 +185,13 @@ export function registerOrcaProfileHandlers(
       setActiveOrcaProfile(profileId)
       await runBeforeProfileRelaunch(options.onBeforeRelaunch)
 
-      scheduleProfileRelaunch('profile-switch', event.sender)
+      scheduleProfileRelaunch('profile-switch', appWindowFor(event))
 
       return { status: 'relaunching' }
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:transferProject',
     async (
       event,
@@ -204,7 +210,7 @@ export function registerOrcaProfileHandlers(
           store,
           async () => {
             await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-            scheduleProfileRelaunch('profile-transfer', event.sender)
+            scheduleProfileRelaunch('profile-transfer', appWindowFor(event))
           }
         )
         if (result.status === 'transferred') {
@@ -213,7 +219,7 @@ export function registerOrcaProfileHandlers(
             setActiveOrcaProfile(args.targetProfileId)
           } finally {
             // The source has already changed and its writer cannot resume.
-            scheduleProfileRelaunch('profile-transfer', event.sender)
+            scheduleProfileRelaunch('profile-transfer', appWindowFor(event))
           }
           return { ...result, willRelaunch: true }
         }
@@ -232,7 +238,7 @@ export function registerOrcaProfileHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:findProjectProfiles',
     (_event, rawArgs: FindOrcaProfileProjectsByPathArgs): FindOrcaProfileProjectsByPathResult =>
       findOrcaProfileProjectsByPath(
@@ -241,17 +247,17 @@ export function registerOrcaProfileHandlers(
       )
   )
 
-  ipcMain.handle('orcaProfiles:connectCurrent', (): Promise<ConnectCurrentOrcaProfileResult> =>
+  registerAppHandler('orcaProfiles:connectCurrent', (): Promise<ConnectCurrentOrcaProfileResult> =>
     orcaAccount.connect()
   )
 
-  ipcMain.handle('orcaProfiles:signInProgress', (): OrcaCloudSignInProgress | null =>
+  registerAppHandler('orcaProfiles:signInProgress', (): OrcaCloudSignInProgress | null =>
     getOrcaCloudSignInProgress()
   )
 
-  ipcMain.handle('orcaProfiles:cancelSignIn', (): void => cancelOrcaCloudSignIn())
+  registerAppHandler('orcaProfiles:cancelSignIn', (): void => cancelOrcaCloudSignIn())
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:createCloudLinked',
     async (
       _event,
@@ -262,15 +268,15 @@ export function registerOrcaProfileHandlers(
       )
   )
 
-  ipcMain.handle('orcaProfiles:refreshAuth', (): Promise<RefreshCurrentOrcaProfileAuthResult> =>
+  registerAppHandler('orcaProfiles:refreshAuth', (): Promise<RefreshCurrentOrcaProfileAuthResult> =>
     orcaAccount.refreshAuth()
   )
 
-  ipcMain.handle('orcaProfiles:signOutCurrent', (): Promise<SignOutCurrentOrcaProfileResult> =>
+  registerAppHandler('orcaProfiles:signOutCurrent', (): Promise<SignOutCurrentOrcaProfileResult> =>
     orcaAccount.signOut()
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaProfiles:selectOrg',
     async (_event, rawArgs: SelectOrcaProfileOrgArgs): Promise<SelectOrcaProfileOrgResult> =>
       orcaAccount.selectOrg(orgIdFromUnknown(rawArgs))

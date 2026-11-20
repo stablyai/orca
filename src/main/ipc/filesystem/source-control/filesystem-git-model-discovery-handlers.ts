@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { CommitMessageAgentRuntimeTarget } from '../../../text-generation/execution/commit-message-agent-environment'
 import { discoverCommitMessageModelsLocal } from '../../../text-generation/commit-message-text-generation'
@@ -16,7 +17,7 @@ export function registerFilesystemGitModelDiscoveryHandlers(
   context: FilesystemHandlerContext
 ): void {
   const { store, commitMessageAgentEnv } = context
-  ipcMain.handle(
+  registerAppHandler(
     'git:discoverCommitMessageModels',
     async (
       _event,

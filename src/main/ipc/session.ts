@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from './app-registry/app-handler-registry'
+
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { parseTerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
@@ -46,12 +47,12 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     isFrozenOrcadSourceSessionPartition(store, hostId) || isWslMoveWindowWriteHeld()
 
   // Optional hostId preserves local-partition behavior for older renderers.
-  ipcMain.handle('session:get', (_event, hostId?: string | null) => {
+  registerAppHandler('session:get', (_event, hostId?: string | null) => {
     return store.getWorkspaceSession(hostId)
   })
 
   // Repo catalogs omit folder-only SSH hosts; enumerate session partitions directly (#12723).
-  ipcMain.handle('session:list-host-ids', () => {
+  registerAppHandler('session:list-host-ids', () => {
     return visibleSessionHostIds(store, store.getWorkspaceSessionHostIds())
   })
 
@@ -83,7 +84,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
 
   const relayApplier = registerDesktopRelayHandlers(store, isFenced)
 
-  ipcMain.handle(
+  registerAppHandler(
     'session:set',
     (
       _event,
@@ -151,12 +152,15 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     return { status: 'applied', ...withRelays }
   }
 
-  ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
-    patchWindowSession(() => args, hostId)
-  })
+  registerAppHandler(
+    'session:patch',
+    (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
+      patchWindowSession(() => args, hostId)
+    }
+  )
 
   // Changed keys only: rebuilt into whole fields from the stored partition, then saved as a patch.
-  ipcMain.handle(
+  registerAppHandler(
     'session:patch-entries',
     (
       _event,
@@ -180,7 +184,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   )
 
   // Window saves cannot shrink main-owned membership; closes must commit explicitly.
-  ipcMain.handle(
+  registerAppHandler(
     'session:close-terminal-surface',
     (_event, args: { worktreeId?: unknown; target?: unknown; reason?: unknown } | undefined) => {
       const target = parseTerminalSurfaceCloseTarget(args?.target)
@@ -200,12 +204,12 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
   )
 
-  ipcMain.handle('session:flush', () => {
+  registerAppHandler('session:flush', () => {
     // Lifecycle success requires durable writes; Store.flush only logs failures.
     return store.flushPendingOrThrowAsync()
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'session:read-terminal-scrollback',
     (_event, args: { ref?: unknown } | undefined) =>
       typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshotAsync(args.ref) : null

@@ -1,3 +1,4 @@
+import '../../ipc/app-registry/testing/app-ipc-test-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GhUtilsOwner1 from '../../git/command-runner/hosted-cli/gh-exec-file'
 import type * as GitRunner from '../../git/command-runner/git-exec-file'

@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const { handleMock, fromWebContentsMock } = vi.hoisted(() => ({

@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { RuntimeAiVaultScanOptions } from '../../ai-vault/runtime-hosts/ai-vault-runtime-scan'

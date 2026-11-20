@@ -1,3 +1,4 @@
+import { registerAppHandler } from './app-registry/app-handler-registry'
 import { getSystemLanguageDetection } from '../i18n/system-language'
 import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
@@ -124,7 +125,7 @@ function resolveDevFeatureWallAssetDir(): string {
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions): void {
   registerRendererShutdownCheckpointHandler(options.rendererCheckpoint)
   registerMacKeyboardLayoutChangeNotifications()
-  ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
+  registerAppHandler('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)
   ipcMain.handle('app:getSystemLanguageDetection', (_event, preferences: unknown) => {
     const previous = getSystemLanguageDetection()
     const detection = getSystemLanguageDetection(
@@ -163,13 +164,14 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   })
 
   // Async probes avoid blocking PTY traffic and IPC for up to 5s per capability read.
-  ipcMain.handle('wsl:isAvailable', (): Promise<boolean> => isWslAvailableAsync())
-  ipcMain.handle('wsl:listDistros', (): Promise<string[]> => listWslDistrosAsync())
-  ipcMain.handle('wsl:resolveMappedDrivePath', (_event, path: unknown): Promise<string | null> =>
-    resolveWslMappedDrivePath(path)
+  registerAppHandler('wsl:isAvailable', (): Promise<boolean> => isWslAvailableAsync())
+  registerAppHandler('wsl:listDistros', (): Promise<string[]> => listWslDistrosAsync())
+  registerAppHandler(
+    'wsl:resolveMappedDrivePath',
+    (_event, path: unknown): Promise<string | null> => resolveWslMappedDrivePath(path)
   )
-  ipcMain.handle('pwsh:isAvailable', (): Promise<boolean> => isPwshAvailableAsync())
-  ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())
+  registerAppHandler('pwsh:isAvailable', (): Promise<boolean> => isPwshAvailableAsync())
+  registerAppHandler('gitBash:isAvailable', (): boolean => isGitBashAvailable())
 
   // The selected IME identity must win over its US-shaped backing keyboard layout.
   ipcMain.handle('app:getKeyboardInputSourceId', async (): Promise<string | null> => {
@@ -230,11 +232,11 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
 
   registerMacSymbolicHotkeysProbeHandler(readCommandStdout)
 
-  ipcMain.handle('app:getFloatingTerminalCwd', (_event, args?: FloatingTerminalCwdRequest) =>
+  registerAppHandler('app:getFloatingTerminalCwd', (_event, args?: FloatingTerminalCwdRequest) =>
     resolveFloatingTerminalCwd(store, args)
   )
 
-  ipcMain.handle('app:getFloatingMarkdownDirectory', () => ensureDefaultFloatingWorkspacePath())
+  registerAppHandler('app:getFloatingMarkdownDirectory', () => ensureDefaultFloatingWorkspacePath())
 
   ipcMain.handle('app:pickFloatingMarkdownDocument', (event) => pickFloatingMarkdownDocument(event))
 

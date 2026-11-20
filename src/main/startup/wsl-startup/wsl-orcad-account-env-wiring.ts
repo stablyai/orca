@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../../ipc/app-registry/app-handler-registry'
 import { BrowserWindow } from 'electron'
 import { withClaudeProfileTerminalEnv } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { getSelectedClaudeAccountIdForTarget } from '../../claude-accounts/selection/runtime-selection'
@@ -30,7 +31,9 @@ function broadcastAccountNotApplied(distro: string): void {
       continue
     }
     try {
-      window.webContents.send(WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL, event)
+      publishToDocuments(WSL_ORCAD_ACCOUNT_NOT_APPLIED_CHANNEL, event, {
+        sourceId: window.webContents.id
+      })
     } catch {
       // A renderer can disappear between isDestroyed() and send().
     }

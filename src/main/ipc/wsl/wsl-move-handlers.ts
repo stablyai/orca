@@ -1,9 +1,15 @@
+import {
+  removeAppHandler,
+  registerAppHandler,
+  appDocumentFor,
+  flushAppDocumentStorage,
+  type AppCaller
+} from '../app-registry/app-handler-registry'
 /**
  * IPC for a WSL move: the move itself (preview, start, cancel), the renderer half of a committed
  * move's desktop rewrite, and bringing a moved project back to this computer. Every channel answers
  * empty / refuses while the internal WSL hosts gate is closed, before it touches anything.
  */
-import { ipcMain, type WebContents } from 'electron'
 import type {
   WslMovePendingRendererRewrite,
   WslMoveRecordStoreRewrittenResult
@@ -53,7 +59,7 @@ export const WSL_MOVE_HANDLER_CHANNELS = [
   'wslMove:useProjectHereAgain'
 ] as const
 
-type RendererEvent = { sender?: Pick<WebContents, 'id' | 'session'> }
+type RendererEvent = AppCaller
 
 export function registerWslMoveHandlers(
   getUserDataPath: () => string,
@@ -67,12 +73,12 @@ export function registerWslMoveHandlers(
   readSettings: () => WslHostsSetting = () => ({ experimentalWslHosts: true })
 ): void {
   for (const channel of WSL_MOVE_HANDLER_CHANNELS) {
-    ipcMain.removeHandler(channel)
+    removeAppHandler(channel)
   }
-  ipcMain.handle('wslMove:listPendingRendererRewrites', (): WslMovePendingRendererRewrite[] =>
+  registerAppHandler('wslMove:listPendingRendererRewrites', (): WslMovePendingRendererRewrite[] =>
     listPendingWslMoveRendererRewrites(getUserDataPath())
   )
-  ipcMain.handle(
+  registerAppHandler(
     'wslMove:recordStoreRewritten',
     (event: RendererEvent, request: unknown): WslMoveRecordStoreRewrittenResult => {
       // Renderer input: anything but two strings is an unknown store.
@@ -86,14 +92,14 @@ export function registerWslMoveHandlers(
       ) {
         return { recorded: false, reason: 'unknown-store' }
       }
-      const sender = event.sender
+      const sender = appDocumentFor(event)
       if (!sender || !isMainWindowRenderer(sender.id)) {
         return { recorded: false, reason: 'not-main-window' }
       }
       return recordWslMoveRendererStoreRewritten(
         getUserDataPath(),
         { migrationId: request.migrationId, storeId: request.storeId },
-        () => sender.session.flushStorageData()
+        () => flushAppDocumentStorage(event)
       )
     }
   )
@@ -116,7 +122,7 @@ function registerWslMoveDriverHandlers(
     if (!gate() || !driverDeps) {
       return { outcome: 'refused', code: 'wsl_move_unavailable' }
     }
-    const sender = event.sender
+    const sender = appDocumentFor(event)
     return sender && isMainWindowRenderer(sender.id)
       ? null
       : { outcome: 'refused', code: 'wsl_move_unavailable', detail: 'not-main-window' }
@@ -127,7 +133,7 @@ function registerWslMoveDriverHandlers(
     (wslHostsOptedIn(readSettings())
       ? null
       : { outcome: 'refused', code: 'wsl_move_unavailable', detail: 'wsl-hosts-off' })
-  ipcMain.handle(
+  registerAppHandler(
     'wslMove:preview',
     async (event: RendererEvent, request: unknown): Promise<WslMovePreview> => {
       const parsed = parseWslMoveRequest(request)
@@ -137,7 +143,7 @@ function registerWslMoveDriverHandlers(
       )
     }
   )
-  ipcMain.handle(
+  registerAppHandler(
     'wslMove:start',
     async (event: RendererEvent, request: unknown): Promise<WslMoveResult> => {
       const parsed = parseWslMoveRequest(request)
@@ -149,12 +155,15 @@ function registerWslMoveDriverHandlers(
       )
     }
   )
-  ipcMain.handle('wslMove:listUnfinished', (): WslMoveUnfinished[] =>
+  registerAppHandler('wslMove:listUnfinished', (): WslMoveUnfinished[] =>
     wslHostsServing() ? listUnfinishedWslMoves(getUserDataPath()) : []
   )
   // The quit prompt's question; a quit now loses the run, which the next launch undoes.
-  ipcMain.handle('wslMove:isRunning', (): boolean => wslHostsGateOpen() && isAnyWslMoveRunning())
-  ipcMain.handle(
+  registerAppHandler(
+    'wslMove:isRunning',
+    (): boolean => wslHostsGateOpen() && isAnyWslMoveRunning()
+  )
+  registerAppHandler(
     'wslMove:cancel',
     (event: RendererEvent, distro: unknown): boolean =>
       refuseUnlessOpen(event, wslHostsGateOpen) === null &&
@@ -172,14 +181,14 @@ function registerWslMoveUseHereHandler(
   isMainWindowRenderer: (senderId: number) => boolean,
   createUndoPorts: () => WslMoveUndoPorts
 ): void {
-  ipcMain.handle(
+  registerAppHandler(
     'wslMove:useProjectHereAgain',
-    async (event: { sender?: WebContents }, request: unknown): Promise<WslMoveUseLocallyResult> => {
+    async (event: AppCaller, request: unknown): Promise<WslMoveUseLocallyResult> => {
       // Gate first: with it closed, nothing is read. Serve-only keeps the way back.
       if (!wslHostsServing()) {
         return { released: false, reason: 'gated-off' }
       }
-      const sender = event.sender
+      const sender = appDocumentFor(event)
       if (!sender || !isMainWindowRenderer(sender.id)) {
         return { released: false, reason: 'failed', detail: 'not-main-window' }
       }

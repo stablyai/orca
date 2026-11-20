@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
 
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status-types'
@@ -25,7 +25,7 @@ import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-
 export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:upstreamStatus',
     async (
       _event,
@@ -45,7 +45,7 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:fetch',
     async (
       _event,
@@ -86,7 +86,7 @@ export function registerGitRemoteSyncHandlers(context: FilesystemHandlerContext)
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:syncFork',
     async (
       _event,

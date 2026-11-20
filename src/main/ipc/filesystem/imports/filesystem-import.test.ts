@@ -1,3 +1,4 @@
+import '../../app-registry/testing/app-ipc-test-host'
 import path from 'node:path'
 
 import { Readable, Writable } from 'node:stream'

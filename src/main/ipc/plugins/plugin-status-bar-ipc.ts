@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { publishToDocuments, registerAppHandler } from '../app-registry/app-handler-registry'
+import { BrowserWindow } from 'electron'
 import type { PluginService } from '../../plugins/plugin-service'
 import { pluginStatusBarRevision } from '../../plugins/status-bar/plugin-status-bar-state'
 import { PLUGIN_STATUS_BAR_CHANGED_CHANNEL } from '../../../shared/plugins/contributions/plugin-status-bar-state'
@@ -6,7 +7,7 @@ import { PLUGIN_STATUS_BAR_CHANGED_CHANNEL } from '../../../shared/plugins/contr
 /** Desktop windows read the workers' status bar changes, then hear each new snapshot. */
 export function registerPluginStatusBarHandlers(pluginService: PluginService): void {
   const { statusBar } = pluginService.options
-  ipcMain.handle('plugins:statusBarState', () => statusBar?.snapshot() ?? {})
+  registerAppHandler('plugins:statusBarState', () => statusBar?.snapshot() ?? {})
   if (!statusBar) {
     return
   }
@@ -20,7 +21,9 @@ export function registerPluginStatusBarHandlers(pluginService: PluginService): v
   statusBar.onChanged((overrides) => {
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.isDestroyed()) {
-        window.webContents.send(PLUGIN_STATUS_BAR_CHANGED_CHANNEL, overrides)
+        publishToDocuments(PLUGIN_STATUS_BAR_CHANGED_CHANNEL, overrides, {
+          sourceId: window.webContents.id
+        })
       }
     }
   })

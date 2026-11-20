@@ -1,4 +1,10 @@
-import { ipcMain } from 'electron'
+import {
+  publishToDocuments,
+  removeAppHandler,
+  registerAppHandler,
+  appDocumentFor
+} from '../app-registry/app-handler-registry'
+
 import type { Store } from '../../persistence/loading-store/store'
 import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import {
@@ -38,20 +44,20 @@ export function registerWorkspaceCleanupHandlers(
   getOrchestrationDb?: () => OrchestrationDb | null
 ): void {
   const snapshotDirectory = store.getProfileStorageDirectory()
-  ipcMain.removeHandler('workspaceCleanup:scan')
-  ipcMain.removeHandler('workspaceCleanup:cancelScan')
-  ipcMain.removeHandler('workspaceCleanup:getCachedScan')
-  ipcMain.removeHandler('workspaceCleanup:dismiss')
-  ipcMain.removeHandler('workspaceCleanup:clearDismissals')
-  ipcMain.removeHandler('workspaceCleanup:beginRemovalSnapshotPruneBatch')
-  ipcMain.removeHandler('workspaceCleanup:recordRemovalSnapshotPrune')
-  ipcMain.removeHandler('workspaceCleanup:finishRemovalSnapshotPruneBatch')
+  removeAppHandler('workspaceCleanup:scan')
+  removeAppHandler('workspaceCleanup:cancelScan')
+  removeAppHandler('workspaceCleanup:getCachedScan')
+  removeAppHandler('workspaceCleanup:dismiss')
+  removeAppHandler('workspaceCleanup:clearDismissals')
+  removeAppHandler('workspaceCleanup:beginRemovalSnapshotPruneBatch')
+  removeAppHandler('workspaceCleanup:recordRemovalSnapshotPrune')
+  removeAppHandler('workspaceCleanup:finishRemovalSnapshotPruneBatch')
 
-  ipcMain.handle(
+  registerAppHandler(
     'workspaceCleanup:scan',
     async (event, args?: WorkspaceCleanupScanArgs): Promise<WorkspaceCleanupScanResult> => {
       const scanArgs = args ?? {}
-      const sender = event.sender
+      const sender = appDocumentFor(event)
       const scanKey = getWorkspaceCleanupScanKey(sender.id, scanArgs.scanId)
       const controller = new AbortController()
       if (scanKey) {
@@ -74,7 +80,7 @@ export function registerWorkspaceCleanupHandlers(
           onProgress: scanArgs.scanId
             ? (progress) => {
                 if (!controller.signal.aborted && !sender.isDestroyed()) {
-                  sender.send('workspaceCleanup:scanProgress', progress)
+                  publishToDocuments('workspaceCleanup:scanProgress', progress, sender.caller)
                 }
               }
             : undefined
@@ -96,8 +102,8 @@ export function registerWorkspaceCleanupHandlers(
     }
   )
 
-  ipcMain.handle('workspaceCleanup:cancelScan', (event, scanId: string): boolean => {
-    const scanKey = getWorkspaceCleanupScanKey(event.sender.id, scanId)
+  registerAppHandler('workspaceCleanup:cancelScan', (event, scanId: string): boolean => {
+    const scanKey = getWorkspaceCleanupScanKey(appDocumentFor(event).id, scanId)
     const controller = scanKey ? activeScans.get(scanKey) : undefined
     if (!controller || controller.signal.aborted) {
       return false
@@ -106,11 +112,13 @@ export function registerWorkspaceCleanupHandlers(
     return true
   })
 
-  ipcMain.handle('workspaceCleanup:getCachedScan', (): Promise<WorkspaceCleanupScanResult | null> =>
-    readWorkspaceCleanupScanSnapshot(snapshotDirectory)
+  registerAppHandler(
+    'workspaceCleanup:getCachedScan',
+    (): Promise<WorkspaceCleanupScanResult | null> =>
+      readWorkspaceCleanupScanSnapshot(snapshotDirectory)
   )
 
-  ipcMain.handle('workspaceCleanup:dismiss', (_event, args: WorkspaceCleanupDismissArgs) => {
+  registerAppHandler('workspaceCleanup:dismiss', (_event, args: WorkspaceCleanupDismissArgs) => {
     const next = { ...store.getUI().workspaceCleanup?.dismissals }
     for (const worktreeId of args.removedWorktreeIds ?? []) {
       for (const [identity, dismissal] of Object.entries(next)) {
@@ -141,11 +149,11 @@ export function registerWorkspaceCleanupHandlers(
     store.updateUI({ workspaceCleanup: { dismissals: next } })
   })
 
-  ipcMain.handle('workspaceCleanup:clearDismissals', () => {
+  registerAppHandler('workspaceCleanup:clearDismissals', () => {
     store.updateUI({ workspaceCleanup: { dismissals: {} } })
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'workspaceCleanup:beginRemovalSnapshotPruneBatch',
     (_event, args: WorkspaceCleanupSnapshotPruneBatchArgs) => {
       if (isSnapshotPruneBatchId(args?.batchId)) {
@@ -154,7 +162,7 @@ export function registerWorkspaceCleanupHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'workspaceCleanup:recordRemovalSnapshotPrune',
     (_event, args: WorkspaceCleanupSnapshotPruneRecordArgs) => {
       if (
@@ -168,7 +176,7 @@ export function registerWorkspaceCleanupHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'workspaceCleanup:finishRemovalSnapshotPruneBatch',
     (_event, args: WorkspaceCleanupSnapshotPruneBatchArgs) => {
       if (isSnapshotPruneBatchId(args?.batchId)) {

@@ -1,4 +1,5 @@
-import type { WebContents } from 'electron'
+import type { AppDocument } from '../../app-registry/app-handler-registry'
+
 import { beginWatcherInstall } from '../../../workspaces/removal/watcher-removal-gate'
 
 import {
@@ -28,7 +29,7 @@ const cancelledInstallWaiters = watcherLifecycleState.cancelledLocalInstallWaite
 
 export async function subscribeLocalWatcher(
   worktreePath: string,
-  sender: WebContents,
+  sender: AppDocument,
   generation = watcherLifecycleState.localWatcherLifecycleGeneration,
   senderSignal = registerWatcherSenderCleanup(sender)
 ): Promise<void> {
@@ -49,7 +50,7 @@ export async function subscribeLocalWatcher(
 
 async function subscribeWhileRemovalAllowed(
   worktreePath: string,
-  sender: WebContents,
+  sender: AppDocument,
   generation: number,
   senderSignal: AbortSignal
 ): Promise<void> {

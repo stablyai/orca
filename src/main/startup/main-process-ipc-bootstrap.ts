@@ -1,5 +1,14 @@
+import {
+  publishToDocuments,
+  registerAppHandler,
+  appDocumentFor
+} from '../ipc/app-registry/app-handler-registry'
+import { installElectronAppIpc } from '../ipc/app-registry/electron-app-ipc'
+import { isTrustedUIRenderer, getTrustedUIRendererWebContents } from '../ipc/ui'
+import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
+import { isWorkspaceSpaceWindowRenderer } from '../window/workspace-space-window'
 import { readSessionWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
-import { ipcMain } from 'electron'
+
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoption/unshown-live-terminal-placement'
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './pty-startup/legacy-worker-renderer-recovery'
@@ -18,17 +27,28 @@ import {
 import { subscribeAgentSessionUploadRemoval } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 
 export function registerMainProcessIpcHandlers(): void {
-  ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
+  installElectronAppIpc(
+    (sender) =>
+      isTrustedUIRenderer(sender)
+        ? 'main'
+        : isDashboardPopoutRenderer(sender)
+          ? 'dashboard-popout'
+          : isWorkspaceSpaceWindowRenderer(sender)
+            ? 'workspace-space'
+            : 'document',
+    (sender) => getTrustedUIRendererWebContents() === sender
+  )
+  registerAppHandler('app:awaitFirstWindowStartupServices', async () => {
     await Promise.all([
       state.firstWindowStartupServicesReady,
       state.managedWslCliStartupBarrierReady
     ])
   })
   // Git needs shell PATH/WSL registration, not daemon/hooks; separate barriers keep worktree hydration off terminal startup.
-  ipcMain.handle('app:awaitGitEnvironmentStartupBarrier', async () => {
+  registerAppHandler('app:awaitGitEnvironmentStartupBarrier', async () => {
     await Promise.all([state.shellPathReady, state.managedWslCliStartupBarrierReady])
   })
-  ipcMain.handle('app:prepareTerminalStartupRestoration', async () => {
+  registerAppHandler('app:prepareTerminalStartupRestoration', async () => {
     await Promise.all([
       state.firstWindowStartupServicesReady,
       state.managedWslCliStartupBarrierReady
@@ -36,21 +56,25 @@ export function registerMainProcessIpcHandlers(): void {
     await state.core.runtime?.prepareStructuredAgentSessionStartupRestoration()
   })
   // Only hosts holding a saved/new structured chat have local rows for the renderer to mirror.
-  ipcMain.handle('app:holdsStructuredAgentSessions', () => structuredAgentSessionsHeld())
+  registerAppHandler('app:holdsStructuredAgentSessions', () => structuredAgentSessionsHeld())
   onStructuredAgentSessionsHeldChanged((held) => {
     const window = state.mainWindow
     if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
-      window.webContents.send('app:structuredAgentSessionsHeldChanged', held)
+      publishToDocuments('app:structuredAgentSessionsHeldChanged', held, {
+        sourceId: window.webContents.id
+      })
     }
   })
   // Draft restore checks pastes only once; notify when a later sweep removes them.
   subscribeAgentSessionUploadRemoval((uploadDir) => {
     const window = state.mainWindow
     if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
-      window.webContents.send('app:agentSessionUploadRemoved', uploadDir)
+      publishToDocuments('app:agentSessionUploadRemoved', uploadDir, {
+        sourceId: window.webContents.id
+      })
     }
   })
-  ipcMain.handle('app:recoverLegacyWorkerTerminalsForRendererStartup', (_event, options) =>
+  registerAppHandler('app:recoverLegacyWorkerTerminalsForRendererStartup', (_event, options) =>
     recoverLegacyWorkerTerminalsForRendererStartup({
       firstWindowStartupServicesReady: state.firstWindowStartupServicesReady,
       managedWslCliStartupBarrierReady: state.managedWslCliStartupBarrierReady,
@@ -80,11 +104,11 @@ export function registerMainProcessIpcHandlers(): void {
     })
   )
   // Renderer pulls after listener mount so early Settings requests survive.
-  ipcMain.handle('ui:consumePendingOpenSettings', (event) =>
-    state.pendingOpenSettings.matches(event.sender.id, { consume: true })
+  registerAppHandler('ui:consumePendingOpenSettings', (event) =>
+    state.pendingOpenSettings.matches(appDocumentFor(event).id, { consume: true })
   )
-  ipcMain.handle('ui:consumePendingSkillShare', () => state.deepLinks.consumeSkillShare())
-  ipcMain.handle('ui:consumePendingBotLink', () => {
+  registerAppHandler('ui:consumePendingSkillShare', () => state.deepLinks.consumeSkillShare())
+  registerAppHandler('ui:consumePendingBotLink', () => {
     // Bots off: the link only brings Orca forward.
     if (state.store?.getSettings().botsEnabled === false) {
       state.deepLinks.discardConnectorLinks()
@@ -116,15 +140,15 @@ export function registerMainProcessIpcHandlers(): void {
         )
       : { kind: 'missing' }
   })
-  ipcMain.handle('ui:consumePendingQuitAndStopAllSessions', (event) =>
-    consumeQuitAndStopAllSessionsRequest(event.sender.id)
+  registerAppHandler('ui:consumePendingQuitAndStopAllSessions', (event) =>
+    consumeQuitAndStopAllSessionsRequest(appDocumentFor(event).id)
   )
-  ipcMain.handle('ui:quitAfterStoppingAllSessions', (event) =>
-    quitAfterRendererStoppedAllSessions(event.sender.id)
+  registerAppHandler('ui:quitAfterStoppingAllSessions', (event) =>
+    quitAfterRendererStoppedAllSessions(appDocumentFor(event).id)
   )
-  ipcMain.handle('ui:consumePendingPluginInstallLink', () => state.pluginInstallLinks.consume())
+  registerAppHandler('ui:consumePendingPluginInstallLink', () => state.pluginInstallLinks.consume())
   // Pull delivers cold-start Open With and proves the listener is ready for later pushes.
-  ipcMain.handle('ui:consumePendingMarkdownFileOpens', async () => {
+  registerAppHandler('ui:consumePendingMarkdownFileOpens', async () => {
     state.osDocumentOpenListenerReady = true
     const filePaths = state.osOpenedDocuments.consume()
     try {
@@ -135,7 +159,7 @@ export function registerMainProcessIpcHandlers(): void {
       throw error
     }
   })
-  ipcMain.handle(
+  registerAppHandler(
     'app:startupDiagnostic',
     (_event, event: string, details?: Record<string, unknown>) => {
       if (!state.startupDiagnosticsEnabled || !event.startsWith('renderer-')) {

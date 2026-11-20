@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import {
   listAssignableUsers,
   listAssignableUsersForProject,
@@ -10,7 +11,7 @@ function normalizeSiteId(value: unknown): string | undefined {
 }
 
 export function registerJiraUserSearchHandlers(): void {
-  ipcMain.handle(
+  registerAppHandler(
     'jira:listAssignableUsers',
     async (_event, args: { key: string; query?: string; siteId?: string }) => {
       if (typeof args?.key !== 'string' || !args.key.trim()) {
@@ -24,7 +25,7 @@ export function registerJiraUserSearchHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'jira:listAssignableUsersForProject',
     async (_event, args: { projectIdOrKey: string; query?: string; siteId?: string }) => {
       if (typeof args?.projectIdOrKey !== 'string' || !args.projectIdOrKey.trim()) {
@@ -38,10 +39,13 @@ export function registerJiraUserSearchHandlers(): void {
     }
   )
 
-  ipcMain.handle('jira:searchUsers', async (_event, args?: { query?: string; siteId?: string }) => {
-    return searchUsers(
-      typeof args?.query === 'string' ? args.query : undefined,
-      normalizeSiteId(args?.siteId)
-    )
-  })
+  registerAppHandler(
+    'jira:searchUsers',
+    async (_event, args?: { query?: string; siteId?: string }) => {
+      return searchUsers(
+        typeof args?.query === 'string' ? args.query : undefined,
+        normalizeSiteId(args?.siteId)
+      )
+    }
+  )
 }

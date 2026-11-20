@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import { registerAppHandler } from './app-registry/app-handler-registry'
 import type { MemorySnapshot } from '../../shared/diagnostics/process-stats-types'
 import type { Store } from '../persistence/loading-store/store'
 import { collectMemorySnapshot } from '../memory/collector'
@@ -18,8 +19,8 @@ export function registerMemoryHandlers(store: Store): void {
       return collectMemorySnapshot(store)
     }
   )
-  ipcMain.handle('memory:readPerfNoticeSignals', () => readPerfNoticeSignals(store))
-  ipcMain.handle('memory:countHiddenBrowserPages', (_event, hiddenForMs: unknown) =>
+  registerAppHandler('memory:readPerfNoticeSignals', () => readPerfNoticeSignals(store))
+  registerAppHandler('memory:countHiddenBrowserPages', (_caller, hiddenForMs: unknown) =>
     countHiddenBrowserPages(typeof hiddenForMs === 'number' ? hiddenForMs : 0)
   )
   ipcMain.handle('memory:resourceWindowVisible', (event) =>

@@ -1,10 +1,18 @@
+import {
+  publishToDocuments,
+  removeAppHandler,
+  registerAppHandler,
+  appDocumentFor,
+  appWindowFor
+} from '../app-registry/app-handler-registry'
+import type { AppCaller } from '../app-registry/app-handler-registry'
 /**
  * IPC for converting UNC Windows-drive projects to their drive paths (D1c), and what the last
  * startup did with a journaled conversion. Refused off Windows and while the internal WSL hosts
  * gate is closed, before anything is read.
  */
 import { randomUUID } from 'node:crypto'
-import { app, ipcMain, type IpcMainInvokeEvent } from 'electron'
+import { app } from 'electron'
 import type {
   WslDriveUncConversionRequest,
   WslDriveUncConversionResult
@@ -48,11 +56,11 @@ export function registerWslDriveUncConversionHandlers(
   runtime: OrcaRuntimeService
 ): void {
   for (const channel of WSL_DRIVE_UNC_CONVERSION_CHANNELS) {
-    ipcMain.removeHandler(channel)
+    removeAppHandler(channel)
   }
-  ipcMain.handle(
+  registerAppHandler(
     'wslDriveUnc:convert',
-    async (event: IpcMainInvokeEvent, args: unknown): Promise<WslDriveUncConversionResult> => {
+    async (event: AppCaller, args: unknown): Promise<WslDriveUncConversionResult> => {
       // Opt-in, so the setting off or a block learned this run stops a conversion before it starts.
       if (!isAvailable() || !wslHostsOptedIn(store.getSettings())) {
         throw new Error('wsl_drive_unc_unavailable')
@@ -76,8 +84,10 @@ export function registerWslDriveUncConversionHandlers(
             (await gitExecFileAsync(gitArgs, { cwd, hostGit: true })).stdout,
           readWorktreeLinks,
           restart: () => {
-            if (!event.sender.isDestroyed()) {
-              event.sender.send('app:restart-committed')
+            if (!appWindowFor(event).isDestroyed()) {
+              publishToDocuments('app:restart-committed', undefined, {
+                sourceId: appDocumentFor(event).id
+              })
             }
             // Quit, not exit: the window and the store flush the slept panes on the way out.
             setTimeout(() => {
@@ -93,22 +103,22 @@ export function registerWslDriveUncConversionHandlers(
     }
   )
   // The rest follow the journal, which only Windows writes, so they answer on any platform.
-  ipcMain.handle('wslDriveUnc:lastOutcomes', (): WslDriveUncConversionOutcome[] =>
+  registerAppHandler('wslDriveUnc:lastOutcomes', (): WslDriveUncConversionOutcome[] =>
     wslHostsGateOpen() ? lastWslDriveUncConversionOutcomes() : []
   )
-  ipcMain.handle(
+  registerAppHandler(
     'wslDriveUnc:listPendingRendererRewrites',
     (): WslDriveUncPendingRendererRewrite[] =>
       wslHostsGateOpen() ? listPendingWslDriveUncRendererRewrites(app.getPath('userData')) : []
   )
-  ipcMain.handle(
+  registerAppHandler(
     'wslDriveUnc:recordStoreRewritten',
-    (event: IpcMainInvokeEvent, args: unknown): WslMoveRecordStoreRewrittenResult => {
+    (event: AppCaller, args: unknown): WslMoveRecordStoreRewrittenResult => {
       if (!wslHostsGateOpen()) {
         return { recorded: false, reason: 'gated-off' }
       }
       // The stores live in the main window's storage; another window's copy is not them.
-      if (getTrustedUIRendererWebContents()?.id !== event.sender.id) {
+      if (getTrustedUIRendererWebContents()?.id !== appDocumentFor(event).id) {
         return { recorded: false, reason: 'not-main-window' }
       }
       const record = typeof args === 'object' && args !== null ? args : {}

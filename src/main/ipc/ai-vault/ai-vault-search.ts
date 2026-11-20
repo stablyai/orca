@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import { z } from 'zod'
 import {
   searchSessionService,
@@ -59,7 +60,7 @@ let handlerOptions: AiVaultSearchHandlerOptions = {}
 export function registerAiVaultSearchHandlers(options: AiVaultSearchHandlerOptions = {}): void {
   handlerOptions = options
   // Async so a refused scope reaches the renderer as a rejection, like every other parse failure.
-  ipcMain.handle('aiVault:searchSessions', async (_event, raw: unknown, rawScope?: unknown) => {
+  registerAppHandler('aiVault:searchSessions', async (_event, raw: unknown, rawScope?: unknown) => {
     const request = AiVaultSearchRequestSchema.parse(raw)
     // Only the desktop fans out: a runtime or CLI caller would make it two hops.
     if (scopeSchema.parse(rawScope) === ALL_EXECUTION_HOSTS_SCOPE) {
@@ -67,18 +68,18 @@ export function registerAiVaultSearchHandlers(options: AiVaultSearchHandlerOptio
     }
     return searchByExecutionHostScope(request, requestedSearchScope(rawScope))
   })
-  ipcMain.handle('aiVault:searchStatus', async (_event, rawScope?: unknown) => {
+  registerAppHandler('aiVault:searchStatus', async (_event, rawScope?: unknown) => {
     const scope = requestedSearchScope(rawScope)
     return statusByExecutionHost(scope)
   })
-  ipcMain.handle(
+  registerAppHandler(
     'aiVault:setSearchEnabled',
     async (_event, rawScope: unknown, rawEnabled: unknown) => {
       const { enabled } = AiVaultSetSearchEnabledParamsSchema.parse({ enabled: rawEnabled })
       return setSearchEnabledByExecutionHost(requestedSearchScope(rawScope), enabled)
     }
   )
-  ipcMain.handle('aiVault:clearSearchIndex', () => clearSessionSearchInService())
+  registerAppHandler('aiVault:clearSearchIndex', () => clearSessionSearchInService())
 }
 
 /** Only paired runtimes support toggling here; local consent belongs to Settings and SSH has no setter. */

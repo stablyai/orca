@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { registerAppHandler, appDocumentFor } from '../../app-registry/app-handler-registry'
+import { BrowserWindow, dialog } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { open, writeFile } from 'node:fs/promises'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
@@ -25,7 +26,7 @@ function validateRequiredString(value: unknown, label: string): string {
 export function registerFilesystemDownloadHandlers(context: FilesystemHandlerContext): void {
   const { downloadSessions, closeDownloadSession } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:downloadFile',
     async (_event, args: { filePath?: string; connectionId?: string }): Promise<never> => {
       validateRequiredString(args?.filePath, 'filePath')
@@ -34,7 +35,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:downloadFolder',
     async (_event, args: { dirPath?: string; connectionId?: string }): Promise<never> => {
       validateRequiredString(args?.dirPath, 'dirPath')
@@ -43,7 +44,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:saveDownloadedFile',
     async (
       event,
@@ -57,7 +58,8 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
       }
       const content = args.content
       const encoding = args?.encoding === 'base64' ? 'base64' : 'utf8'
-      const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
+      const parentWindow =
+        (event.windowId === null ? null : BrowserWindow.fromId(event.windowId)) ?? undefined
       const dialogResult = parentWindow
         ? await dialog.showSaveDialog(parentWindow, { defaultPath: suggestedName })
         : await dialog.showSaveDialog({ defaultPath: suggestedName })
@@ -82,7 +84,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:startDownloadedFile',
     async (
       event,
@@ -93,10 +95,10 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
       const suggestedName = sanitizeLocalDownloadFilename(
         validateRequiredString(args?.suggestedName, 'suggestedName')
       )
-      if (event.sender.isDestroyed()) {
+      if (appDocumentFor(event).isDestroyed()) {
         return { canceled: true }
       }
-      const lifetime = abortWhenRendererGone(event.sender)
+      const lifetime = abortWhenRendererGone(appDocumentFor(event))
       const transferId = randomUUID()
       const disposeRendererLifetime = (): void => {
         lifetime.signal.removeEventListener('abort', onRendererGone)
@@ -111,7 +113,8 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
       let tempPath: string | null = null
       let handle: Awaited<ReturnType<typeof open>> | null = null
       try {
-        const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
+        const parentWindow =
+          (event.windowId === null ? null : BrowserWindow.fromId(event.windowId)) ?? undefined
         const dialogResult = parentWindow
           ? await dialog.showSaveDialog(parentWindow, { defaultPath: suggestedName })
           : await dialog.showSaveDialog({ defaultPath: suggestedName })
@@ -155,7 +158,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:appendDownloadedFileChunk',
     async (
       _event,
@@ -172,7 +175,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:finishDownloadedFile',
     async (
       _event,
@@ -200,7 +203,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:cancelDownloadedFile',
     async (_event, args: { transferId?: string }): Promise<{ ok: true }> => {
       const transferId = validateRequiredString(args?.transferId, 'transferId')

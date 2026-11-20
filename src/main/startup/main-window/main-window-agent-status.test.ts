@@ -1,3 +1,6 @@
+vi.mock('../../ipc/app-registry/app-handler-registry', () => ({
+  publishToDocuments: (channel: string, payload: unknown) => send(channel, payload)
+}))
 import { expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 

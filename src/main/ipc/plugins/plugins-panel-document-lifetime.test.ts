@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 import { EventEmitter } from 'node:events'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

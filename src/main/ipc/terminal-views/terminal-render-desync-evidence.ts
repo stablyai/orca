@@ -1,12 +1,12 @@
+import { registerAppHandler } from '../app-registry/app-handler-registry'
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { app, ipcMain } from 'electron'
+import { app } from 'electron'
 import {
   TERMINAL_RENDER_DESYNC_CAPTURE_ID_PATTERN,
   type WriteTerminalRenderDesyncEvidenceArgs,
   type WriteTerminalRenderDesyncEvidenceResult
 } from '../../../shared/terminal/diagnostics/terminal-render-desync-evidence'
-import { isTrustedUIRenderer } from '../ui'
 
 const EVIDENCE_DIRECTORY = 'terminal-render-desync-evidence'
 const MAX_PNG_DATA_URL_BYTES = 40 * 1024 * 1024
@@ -17,10 +17,10 @@ const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
 let evidenceWriteQueue = Promise.resolve()
 
 export function registerTerminalRenderDesyncEvidenceHandler(): void {
-  ipcMain.handle(
+  registerAppHandler(
     'terminal:writeRenderDesyncEvidence',
     (event, args: WriteTerminalRenderDesyncEvidenceArgs) => {
-      if (!isTrustedUIRenderer(event.sender)) {
+      if (event.role !== 'main') {
         throw new Error('Unauthorized render-desync evidence sender')
       }
       const write = evidenceWriteQueue.then(() =>

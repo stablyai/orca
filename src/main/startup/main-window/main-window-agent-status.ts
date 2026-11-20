@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../../ipc/app-registry/app-handler-registry'
 import type { BrowserWindow } from 'electron'
 import { publishedOrcaSessionId } from '../../agent-hooks/identity/pane-agent-identities'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
@@ -62,22 +63,31 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         return
       }
       // Idle Pi session_start only refreshes resume identity; skip titles, telemetry and status UI.
-      state.mainWindow?.webContents.send('agentStatus:set', {
-        ...payload,
-        paneKey,
-        ...(launchToken ? { launchToken } : {}),
-        ...(launchConfig !== undefined ? { launchConfig } : {}),
-        tabId,
-        worktreeId,
-        connectionId,
-        receivedAt,
-        ...(evidenceObservedAt !== undefined ? { evidenceObservedAt } : {}),
-        stateStartedAt,
-        ...(providerSession ? { providerSession } : {}),
-        ...(observation ? { observation } : {}),
-        ...shared,
-        providerSessionOnly: true
-      })
+      {
+        const target1 = state.mainWindow
+        if (target1) {
+          publishToDocuments(
+            'agentStatus:set',
+            {
+              ...payload,
+              paneKey,
+              ...(launchToken ? { launchToken } : {}),
+              ...(launchConfig !== undefined ? { launchConfig } : {}),
+              tabId,
+              worktreeId,
+              connectionId,
+              receivedAt,
+              ...(evidenceObservedAt !== undefined ? { evidenceObservedAt } : {}),
+              stateStartedAt,
+              ...(providerSession ? { providerSession } : {}),
+              ...(observation ? { observation } : {}),
+              ...shared,
+              providerSessionOnly: true
+            },
+            { sourceId: target1.webContents.id }
+          )
+        }
+      }
       return
     }
     const runtime = state.core.runtime
@@ -116,8 +126,18 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       // Mark reconnect replays so cached completions do not notify again.
       ...(isReplay === true ? { isReplay: true } : {})
     }
-    state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
-    getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
+    {
+      const target2 = state.mainWindow
+      if (target2) {
+        publishToDocuments('agentStatus:set', statusEvent, { sourceId: target2.webContents.id })
+      }
+    }
+    {
+      const target3 = getDashboardPopoutWindow()
+      if (target3) {
+        publishToDocuments('agentStatus:set', statusEvent, { sourceId: target3.webContents.id })
+      }
+    }
     // A facet-only republish (progress tick) or a settled id is not a state the agent entered.
     if (programStatusOnly !== true && identityOnly !== true) {
       options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
@@ -127,19 +147,45 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
     if (state.mainWindow?.isDestroyed()) {
       return
     }
-    state.mainWindow?.webContents.send('agentStatus:clear', clear)
-    getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
+    {
+      const target4 = state.mainWindow
+      if (target4) {
+        publishToDocuments('agentStatus:clear', clear, { sourceId: target4.webContents.id })
+      }
+    }
+    {
+      const target5 = getDashboardPopoutWindow()
+      if (target5) {
+        publishToDocuments('agentStatus:clear', clear, { sourceId: target5.webContents.id })
+      }
+    }
   })
   setMigrationUnsupportedPtyListener((event) => {
     if (state.mainWindow?.isDestroyed()) {
       return
     }
     if (event.type === 'set') {
-      state.mainWindow?.webContents.send('agentStatus:migrationUnsupported', event.entry)
+      {
+        const target6 = state.mainWindow
+        if (target6) {
+          publishToDocuments('agentStatus:migrationUnsupported', event.entry, {
+            sourceId: target6.webContents.id
+          })
+        }
+      }
     } else {
-      state.mainWindow?.webContents.send('agentStatus:migrationUnsupportedClear', {
-        ptyId: event.ptyId
-      })
+      {
+        const target7 = state.mainWindow
+        if (target7) {
+          publishToDocuments(
+            'agentStatus:migrationUnsupportedClear',
+            {
+              ptyId: event.ptyId
+            },
+            { sourceId: target7.webContents.id }
+          )
+        }
+      }
     }
   })
 }

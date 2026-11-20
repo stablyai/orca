@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import {
   listCreateFields,
   listIssueTypes,
@@ -10,11 +11,11 @@ import type { JiraSiteSelection } from '../../../shared/jira/jira-types'
 export function registerJiraProjectMetadataHandlers(
   normalizeSiteId: (value: unknown) => string | undefined
 ): void {
-  ipcMain.handle('jira:listProjects', async (_event, args?: { siteId?: JiraSiteSelection }) => {
+  registerAppHandler('jira:listProjects', async (_event, args?: { siteId?: JiraSiteSelection }) => {
     return listProjects(normalizeSiteId(args?.siteId))
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'jira:listIssueTypes',
     async (_event, args: { projectIdOrKey: string; siteId?: string }) => {
       if (typeof args?.projectIdOrKey !== 'string' || !args.projectIdOrKey.trim()) {
@@ -24,7 +25,7 @@ export function registerJiraProjectMetadataHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'jira:listCreateFields',
     async (_event, args: { projectIdOrKey: string; issueTypeId: string; siteId?: string }) => {
       if (typeof args?.projectIdOrKey !== 'string' || !args.projectIdOrKey.trim()) {
@@ -41,7 +42,7 @@ export function registerJiraProjectMetadataHandlers(
     }
   )
 
-  ipcMain.handle('jira:listPriorities', async (_event, args?: { siteId?: string }) => {
+  registerAppHandler('jira:listPriorities', async (_event, args?: { siteId?: string }) => {
     return listPriorities(normalizeSiteId(args?.siteId))
   })
 }
