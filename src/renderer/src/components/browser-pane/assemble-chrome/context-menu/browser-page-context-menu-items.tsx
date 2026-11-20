@@ -1,15 +1,12 @@
-import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
-import { Fragment, type MutableRefObject } from 'react'
+import { Fragment } from 'react'
 import { useAppStore } from '@/store/index'
-import { isMac } from '@/app-shell/app-window-chrome'
+import { isMac } from '@/app-shell/chrome/app-window-chrome'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { openLinkInNewBrowserTab } from '@/lib/browser/palette/open-client-hosted-link-beside-page'
 import {
   buildSearchUrl,
   DEFAULT_SEARCH_ENGINE,
   normalizeBrowserNavigationUrl,
-  normalizeExternalBrowserUrl,
   SEARCH_ENGINE_LABELS,
   type SearchEngine
 } from '../../../../../../shared/browser/navigation/browser-url'
@@ -24,7 +21,32 @@ const SEARCH_LABEL_MAX_CHARS = 32
 
 type MenuItem = { label: string; disabled?: boolean; run: () => void }
 
-type EditCommand = 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'pasteAndMatchStyle' | 'selectAll'
+export type BrowserPageEditCommand =
+  | 'undo'
+  | 'redo'
+  | 'cut'
+  | 'copy'
+  | 'paste'
+  | 'pasteAndMatchStyle'
+  | 'selectAll'
+
+/** What the menu's items do, for a page in this window's webview or one streamed from a host. */
+export type BrowserPageContextMenuActions = {
+  edit: (command: BrowserPageEditCommand) => void
+  /** Left out where the page's spell checker is not on this machine. */
+  replaceMisspelling?: (word: string) => void
+  addWordToDictionary?: (word: string) => void
+  openInNewTab: (url: string, activate: boolean) => void
+  /** The address the OS browser should open, or null to leave the item out. */
+  externalUrl: (url: string) => string | null
+  /** Left out where the page's downloads, pixels or DevTools are not on this machine. */
+  saveImage?: (url: string) => void
+  copyImage?: () => void
+  inspect?: () => void
+  goBack: () => void
+  goForward: () => void
+  reload: () => void
+}
 
 function searchLabelText(selection: string): string {
   const collapsed = selection.replace(/\s+/g, ' ').trim()
@@ -35,12 +57,9 @@ function searchLabelText(selection: string): string {
 
 type BrowserPageContextMenuItemsProps = {
   menu: BrowserPageContextMenuState
-  browserPageId: string
-  worktreeId: string
   canGoBack: boolean
   canGoForward: boolean
-  webviewRef: MutableRefObject<Electron.WebviewTag | null>
-  onReload: () => void
+  actions: BrowserPageContextMenuActions
   onClose: () => void
 }
 
@@ -48,18 +67,15 @@ type BrowserPageContextMenuItemsProps = {
 function buildMenuSections(
   {
     menu,
-    browserPageId,
-    worktreeId,
     canGoBack,
     canGoForward,
-    webviewRef,
-    onReload,
+    actions,
     onClose,
     searchEngine
   }: BrowserPageContextMenuItemsProps & { searchEngine: SearchEngine },
   t: Translate = translate
 ): MenuItem[][] {
-  const { editable, image, linkUrl, pageUrl, pagePoint } = menu
+  const { editable, image, linkUrl, pageUrl } = menu
   const selectionText = menu.selectionText.trim() ? menu.selectionText : ''
 
   const item = (label: string, run: () => void, disabled = false): MenuItem => ({
@@ -71,35 +87,36 @@ function buildMenuSections(
     }
   })
   // Why close first: closing hands focus back to the guest, which edit commands act on.
-  const editItem = (label: string, command: EditCommand, enabled: boolean): MenuItem => ({
+  const editItem = (
+    label: string,
+    command: BrowserPageEditCommand,
+    enabled: boolean
+  ): MenuItem => ({
     label,
     disabled: !enabled,
     run: () => {
       onClose()
-      webviewRef.current?.[command]()
+      actions.edit(command)
     }
   })
-  const openInNewTab = (url: string, activate: boolean): void => {
-    openLinkInNewBrowserTab({ sourcePageId: browserPageId, worktreeId, url, activate })
+  const externalItem = (label: string, url: string): MenuItem[] => {
+    const targetUrl = actions.externalUrl(url)
+    return targetUrl ? [item(label, () => void window.api.shell.openUrl(targetUrl))] : []
   }
-  const openExternally = (url: string): void => {
-    const targetUrl = normalizeExternalBrowserUrl(url)
-    if (targetUrl) {
-      void window.api.shell.openUrl(targetUrl)
-    }
-  }
+  const { replaceMisspelling, addWordToDictionary, saveImage, copyImage, inspect } = actions
 
   const sections: MenuItem[][] = []
   if (editable) {
     const { suggestions, misspelledWord } = editable.spelling
     sections.push([
-      ...suggestions.map((word) => item(word, () => webviewRef.current?.replaceMisspelling(word))),
-      ...(misspelledWord
+      ...(replaceMisspelling
+        ? suggestions.map((word) => item(word, () => replaceMisspelling(word)))
+        : []),
+      ...(misspelledWord && addWordToDictionary
         ? [
             item(
               t('auto.components.browser.pane.BrowserPane.addToDictionary', 'Add to Dictionary'),
-              () =>
-                void window.api.browser.addWordToDictionary({ browserPageId, word: misspelledWord })
+              () => addWordToDictionary(misspelledWord)
             )
           ]
         : [])
@@ -145,11 +162,11 @@ function buildMenuSections(
     sections.push([
       item(
         t('auto.components.browser.pane.BrowserPane.b5b87d6cbb', 'Open Link In Orca Browser'),
-        () => openInNewTab(linkUrl, false)
+        () => actions.openInNewTab(linkUrl, false)
       ),
-      item(
+      ...externalItem(
         t('auto.components.browser.pane.BrowserPane.8ce4f6b12e', 'Open Link In Default Browser'),
-        () => openExternally(linkUrl)
+        linkUrl
       ),
       item(
         t('auto.components.browser.pane.BrowserPane.efb0e8f7f3', 'Copy Link Address'),
@@ -168,19 +185,26 @@ function buildMenuSections(
                 'auto.components.browser.pane.BrowserPane.openImageInNewTab',
                 'Open Image in New Tab'
               ),
-              () => openInNewTab(openableImageUrl, false)
+              () => actions.openInNewTab(openableImageUrl, false)
             )
           ]
         : []),
-      // Use guest download rules for local Downloads or the client-hosted remote workspace.
-      item(t('auto.components.browser.pane.BrowserPane.saveImage', 'Save Image'), () =>
-        webviewRef.current?.downloadURL(image.url)
-      ),
-      item(
-        t('auto.components.browser.pane.BrowserPane.copyImage', 'Copy Image'),
-        () => void window.api.browser.copyImageAt({ browserPageId, point: pagePoint }),
-        !image.canCopy
-      ),
+      ...(saveImage
+        ? [
+            item(t('auto.components.browser.pane.BrowserPane.saveImage', 'Save Image'), () =>
+              saveImage(image.url)
+            )
+          ]
+        : []),
+      ...(copyImage
+        ? [
+            item(
+              t('auto.components.browser.pane.BrowserPane.copyImage', 'Copy Image'),
+              copyImage,
+              !image.canCopy
+            )
+          ]
+        : []),
       item(
         t('auto.components.browser.pane.BrowserPane.copyImageAddress', 'Copy Image Address'),
         () => void window.api.ui.writeClipboardText(image.url)
@@ -213,7 +237,7 @@ function buildMenuSections(
           const url = buildSearchUrl(selectionText.trim(), searchEngine, {
             kagiSessionLink: browserKagiSessionLink
           })
-          openInNewTab(url, true)
+          actions.openInNewTab(url, true)
         }
       )
     ])
@@ -222,20 +246,20 @@ function buildMenuSections(
     sections.push([
       item(
         t('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back'),
-        () => issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack()),
+        actions.goBack,
         !canGoBack
       ),
       item(
         t('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward'),
-        () => issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward()),
+        actions.goForward,
         !canGoForward
       ),
-      item(t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload'), onReload)
+      item(t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload'), actions.reload)
     ])
     sections.push([
-      item(
+      ...externalItem(
         t('auto.components.browser.pane.BrowserPane.f7ab83f7ed', 'Open Page In Default Browser'),
-        () => openExternally(pageUrl)
+        pageUrl
       ),
       item(
         t('auto.components.browser.pane.BrowserPane.1b179ab561', 'Copy Page URL'),
@@ -243,12 +267,9 @@ function buildMenuSections(
       )
     ])
   }
-  sections.push([
-    item(
-      t('auto.components.browser.pane.BrowserPane.inspect', 'Inspect'),
-      () => void window.api.browser.openDevTools({ browserPageId, inspectAt: pagePoint })
-    )
-  ])
+  if (inspect) {
+    sections.push([item(t('auto.components.browser.pane.BrowserPane.inspect', 'Inspect'), inspect)])
+  }
 
   return sections.filter((section) => section.length > 0)
 }

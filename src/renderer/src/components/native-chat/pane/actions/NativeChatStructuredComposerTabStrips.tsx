@@ -1,9 +1,9 @@
 import { NativeChatThreadGoalBanner } from '../../session/goals/NativeChatThreadGoalBanner'
 import { NativeChatStructuredWorkerLifetimeStrip } from '../../worker-lifetime/NativeChatStructuredWorkerLifetimeStrip'
-import type { NativeChatStructuredComposerTransport } from '../../composer/submit/native-chat-structured-composer-transport'
 import type { StructuredAgentSessionThreadGoal } from '../../session/goals/use-structured-agent-session-thread-goal'
 import type { NativeChatImageRuntimeContext } from '../../media/images/native-chat-image-runtime-context'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
+import type { NativeChatStructuredComposerTransport } from '../../composer/submit/native-chat-structured-composer-transport'
 import { NativeChatMcpTray } from '../../mcp/NativeChatMcpTray'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
@@ -33,6 +33,7 @@ export function NativeChatStructuredComposerTabStrips(props: {
         <NativeChatMcpTray
           sessionId={props.transport.sessionId}
           target={props.target}
+          opens={mcpPanel.opens}
           onClose={() => {
             mcpPanel.close()
             props.focusComposer()

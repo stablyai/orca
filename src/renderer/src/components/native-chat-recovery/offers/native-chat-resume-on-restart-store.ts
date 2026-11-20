@@ -3,7 +3,7 @@ import { RESTART_READ_RETRY_DELAYS_MS } from './native-chat-remote-restart-offer
 import { requestNativeChatResumeOnRestartDialog } from '../dialogs/native-chat-resume-on-restart-dialog'
 import { useAppStore } from '../../../store/index'
 import { markNativeChatLaunchResumeDecided } from './native-chat-launch-resume-decision'
-import { allResumeSessionIds } from '../tree/native-chat-resume-on-restart-grouping'
+import { launchResumeSessionIds } from '../tree/native-chat-resume-on-restart-grouping'
 import { useEffect, useSyncExternalStore } from 'react'
 import { createNativeChatRestartStore } from './native-chat-restart-runtime-store'
 
@@ -26,7 +26,7 @@ export function useNativeChatRestartOffer(enabled: boolean, store = localNativeC
   useEffect(() => {
     if (enabled && settingsLoaded && store.target.kind === 'local') {
       if (launch == null) {
-        launch = loadLaunchOffer(store).finally(markNativeChatLaunchResumeDecided)
+        launch = loadNativeChatLaunchOffer(store).finally(markNativeChatLaunchResumeDecided)
       }
     }
   }, [enabled, settingsLoaded, store])
@@ -53,7 +53,12 @@ export function useNativeChatRestartRun(store = localNativeChatRestartStore) {
 
 let launch: Promise<void> | undefined
 
-async function loadLaunchOffer(store: NativeChatRestartStore): Promise<void> {
+export async function loadNativeChatLaunchOffer(
+  store: Pick<
+    NativeChatRestartStore,
+    'readNativeChatRestartOffer' | 'continueNativeChatRestartOffer'
+  >
+): Promise<void> {
   // The preference belongs to this launch's request; later saves cannot dispatch another.
   const autoResume = useAppStore.getState().settings?.nativeChatResumeWorkOnRestart === true
   let read = await store.readNativeChatRestartOffer()
@@ -71,11 +76,11 @@ async function loadLaunchOffer(store: NativeChatRestartStore): Promise<void> {
   if (offered.length === 0) {
     return
   }
-  if (!autoResume) {
-    requestNativeChatResumeOnRestartDialog()
-    return
+  // One toast reports the launch: a Resume button when the preference is off, the outcome when on.
+  requestNativeChatResumeOnRestartDialog()
+  if (autoResume) {
+    await store.continueNativeChatRestartOffer(launchResumeSessionIds(offered), 'launch')
   }
-  await store.continueNativeChatRestartOffer(allResumeSessionIds(offered), 'launch')
 }
 
 export function _resetNativeChatRestartOffer(): void {

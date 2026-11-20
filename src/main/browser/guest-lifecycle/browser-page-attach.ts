@@ -9,7 +9,7 @@ import {
   renewHeldThrottle,
   type Page
 } from './browser-page-memory-state'
-import { markInitialBrowserGuest } from './manager/registration/browser-guest-discard-protection'
+import { noteBrowserPageClosed, noteBrowserPageOpened } from './browser-page-partition-presence'
 
 type Attach = { pageId: string; page: Page; url: string; token: string; admitted: boolean }
 const attachments = new Map<string, Attach>()
@@ -34,6 +34,10 @@ export function prepareBrowserPageAttach(
       page.history = null
     }
     page.rendererId = rendererId
+    if (page.partition !== partition) {
+      noteBrowserPageOpened(partition)
+      noteBrowserPageClosed(page.partition)
+    }
     page.partition = partition
   }
   if (!page) {
@@ -51,6 +55,7 @@ export function prepareBrowserPageAttach(
     }
     claims.set(pageId, page.claim)
     pages.set(pageId, page)
+    noteBrowserPageOpened(partition)
   }
   delete page.claim.pendingRendererId
   if (page.token) {
@@ -114,7 +119,6 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
     return false
   }
   attach.page.token = null
-  markInitialBrowserGuest(guest)
   attach.page.releaseThrottle?.()
   attach.page.releaseThrottle = null
   attach.page.guest = guest

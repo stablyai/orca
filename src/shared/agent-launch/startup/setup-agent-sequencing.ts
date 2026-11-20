@@ -11,8 +11,11 @@ import {
 import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 
-const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
+export const SETUP_AGENT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
+export const SETUP_WAIT_MESSAGE = 'Waiting for setup to finish before starting agent...'
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
+export const SETUP_FAILED_MESSAGE_PREFIX = 'Setup failed (exit '
+export const SETUP_WAIT_TIMEOUT_MESSAGE = 'Timed out waiting for setup before starting agent.'
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
 export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV = 'ORCA_SEQUENCED_SETUP_SCRIPT'
@@ -54,7 +57,7 @@ export function createSequencedSetupAgentCommands(args: {
     : resolution.runnerScriptPathForShell
   // Use distinct markers for overlapping launches of one setup runner.
   const markerPath = `${markerBasePath}.${nonce}.done`
-  const waitTimeoutSeconds = args.waitTimeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS
+  const waitTimeoutSeconds = args.waitTimeoutSeconds ?? SETUP_AGENT_WAIT_TIMEOUT_SECONDS
 
   if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
     return {
@@ -123,7 +126,7 @@ function buildPosixStartupScript(
   // Keep the interactive wrapper one line to avoid visible quote-continuation prompts.
   const script = [
     `deadline=$((SECONDS + ${timeout}));`,
-    'echo "Waiting for setup to finish before starting agent..." >&2;',
+    `echo ${quotePosixShellUnlessPlainNoAt(SETUP_WAIT_MESSAGE)} >&2;`,
     'while :; do',
     `if [ -f ${marker} ]; then`,
     `IFS=: read -r seen status < ${marker} || true;`,
@@ -132,12 +135,12 @@ function buildPosixStartupScript(
     // Announce success so “Waiting for setup...” does not linger. Install launch functions only after setup
     // may have supplied codex; fresh bash -lc does not read Orca’s wrapper.
     `if [ "$status" = "0" ]; then echo ${quotePosixShellUnlessPlainNoAt(SETUP_COMPLETE_MESSAGE)} >&2;\n${getPosixCodexShellLaunchPreflight() + getPosixClaudeShellFunction()}if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
-    'echo "Setup failed; skipping agent startup." >&2;',
+    `echo "${SETUP_FAILED_MESSAGE_PREFIX}\${status:-1}); skipping agent startup. See the Setup terminal for details." >&2;`,
     'exit "${status:-1}";',
     'fi;',
     'fi;',
     'if [ "$SECONDS" -ge "$deadline" ]; then',
-    'echo "Timed out waiting for setup before starting agent." >&2;',
+    `echo ${quotePosixShellUnlessPlainNoAt(SETUP_WAIT_TIMEOUT_MESSAGE)} >&2;`,
     'exit 124;',
     'fi;',
     'sleep 1;',
@@ -244,7 +247,7 @@ function buildWindowsStartupCommand(
     '$tmp = $marker + ".tmp"',
     `$nonce = ${quotePowerShellLiteral(nonce)}`,
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
-    '[Console]::Error.WriteLine("Waiting for setup to finish before starting agent...")',
+    `[Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_WAIT_MESSAGE)})`,
     'while ($true) {',
     '  if (Test-Path -LiteralPath $marker) {',
     '    $content = Get-Content -LiteralPath $marker -TotalCount 1',
@@ -252,7 +255,7 @@ function buildWindowsStartupCommand(
     '      $setupStatus = [int]$Matches[2]',
     '      Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '      if ($setupStatus -ne 0) {',
-    '        [Console]::Error.WriteLine("Setup failed; skipping agent startup.")',
+    `        [Console]::Error.WriteLine("${SETUP_FAILED_MESSAGE_PREFIX}$setupStatus); skipping agent startup. See the Setup terminal for details.")`,
     '        exit $setupStatus',
     '      }',
     `      $startup = $env:${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}`,
@@ -268,7 +271,7 @@ function buildWindowsStartupCommand(
     '    }',
     '  }',
     '  if ((Get-Date) -ge $deadline) {',
-    '    [Console]::Error.WriteLine("Timed out waiting for setup before starting agent.")',
+    `    [Console]::Error.WriteLine(${quotePowerShellLiteral(SETUP_WAIT_TIMEOUT_MESSAGE)})`,
     '    exit 124',
     '  }',
     '  Start-Sleep -Seconds 1',

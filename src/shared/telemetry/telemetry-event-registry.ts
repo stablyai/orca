@@ -4,6 +4,7 @@ import {
   onboardingLanguageRequestedSchema
 } from './schemas/telemetry-onboarding-language-schemas'
 import { agentTokenUsageSchema } from './schemas/telemetry-agent-token-usage-schema'
+import { codexHistoryCleanupSweepSchema } from './schemas/telemetry-codex-history-cleanup-event-schemas'
 import {
   agentDashboardActiveSchema,
   agentDashboardEnabledSchema,
@@ -119,6 +120,10 @@ import {
 import { sshRemoteRuntimeResolvedSchema } from './schemas/telemetry-ssh-runtime-event-schemas'
 import { wslUsageSnapshotSchema } from './schemas/telemetry-wsl-usage-event-schemas'
 import {
+  worktreeCardsIntroActionSchema,
+  worktreeCardStyleChangedSchema
+} from './schemas/telemetry-worktree-card-event-schemas'
+import {
   sshHostServerConversionSchema,
   sshHostServerDecidedSchema,
   sshHostServerDeployFailedSchema,
@@ -180,6 +185,8 @@ export const eventSchemas = {
   codex_trust_grant: codexTrustGrantSchema,
 
   settings_changed: settingsChangedSchema,
+  worktree_card_style_changed: worktreeCardStyleChangedSchema,
+  worktree_cards_intro_action: worktreeCardsIntroActionSchema,
 
   native_chat_toggled: nativeChatToggledSchema,
   native_chat_message_sent: nativeChatMessageSentSchema,
@@ -259,6 +266,8 @@ export const eventSchemas = {
   wsl_move_undo: wslMoveUndoSchema,
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
+
+  codex_history_cleanup_sweep: codexHistoryCleanupSweepSchema,
 
   plugin_installed: pluginInstalledSchema,
 

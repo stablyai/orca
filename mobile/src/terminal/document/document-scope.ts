@@ -1,6 +1,12 @@
 import { TerminalKittyKeyboardModeTracker } from '../../../../src/shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { TerminalLaidOutCellBox } from '../viewport/terminal-cell-box'
+import {
+  DEFAULT_TERMINAL_FONT_STYLE,
+  type TerminalFontStyle
+} from '../preferences/terminal-font-style'
 import { DEFAULT_TERMINAL_THEME } from '../terminal-webview-html/theme'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../src/shared/terminal/replay/terminal-scrollback-policy'
+import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../src/shared/terminal/input/terminal-word-separator'
 import {
   createEngineTerminal,
   createEngineUnicode11Addon,
@@ -47,6 +53,9 @@ export type TerminalDocumentState = {
   defaultTheme: TerminalDocumentTheme
   terminalTheme: TerminalDocumentTheme
   terminalMinimumContrastRatio: number
+  // The desktop's Scrollback Rows and Word Separator settings, as the host reported them.
+  scrollbackRows: number
+  wordSeparator: string
   initialOscLinks: TerminalInitialOscLink[]
   initialOscLinkRowOffset: number
   lastEmittedModes: TerminalDocumentModes
@@ -62,7 +71,11 @@ export type TerminalDocumentState = {
   scrollIndicatorHideTimer: ReturnType<typeof setTimeout> | null
   handledMessageIds: number[]
   currentTextScale: number
+  // The family xterm draws with; a bundled font joins it only once loaded, so cells are never measured on a fallback.
   terminalFontFamily: string
+  terminalFontStyle: TerminalFontStyle
+  // Settles once the picked bundled face is drawn with; the first fit waits for it.
+  terminalFontLoad: Promise<void> | null
   firstDataPending: boolean
   reportedCellBox: TerminalLaidOutCellBox | null
   activeAltScreenSnapshot: boolean
@@ -166,6 +179,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     defaultTheme: DEFAULT_TERMINAL_THEME,
     terminalTheme: DEFAULT_TERMINAL_THEME,
     terminalMinimumContrastRatio: 3,
+    scrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
+    wordSeparator: TERMINAL_DEFAULT_WORD_SEPARATOR,
     initialOscLinks: [],
     initialOscLinkRowOffset: 0,
     lastEmittedModes: {
@@ -189,6 +204,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     handledMessageIds: [],
     currentTextScale: 1,
     terminalFontFamily: '',
+    terminalFontStyle: DEFAULT_TERMINAL_FONT_STYLE,
+    terminalFontLoad: null,
     firstDataPending: false,
     reportedCellBox: null,
     activeAltScreenSnapshot: false,

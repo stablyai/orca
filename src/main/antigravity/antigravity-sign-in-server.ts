@@ -1,6 +1,7 @@
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
+import { acpClientInfo } from '../acp/launch/acp-client-info'
 import { acpSessionStartMeta } from '../acp/launch/acp-session-meta'
 import type { AcpAgentConnection, AcpSignInWatch } from '../acp/process/acp-agent-connection'
 import type { ConnectAcpAgent } from '../acp/process/acp-structured-connection'
@@ -10,6 +11,10 @@ import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provi
 import { AntigravitySignInSentence, closeAntigravitySignInOwner } from './antigravity-chat-account'
 import { SIGN_IN_FAILED, antigravitySignInFailure } from './antigravity-sign-in-failure'
 
+const OAUTH_TOKEN_FILES: Partial<Record<AntigravityChatAuthConfig['method'], string>> = {
+  'oauth-personal': 'acp_token.json',
+  'oauth-business': 'acp_business_token.json'
+}
 const SESSION_FAILED =
   'Antigravity authenticated, but could not initialize a session or load models.'
 const SAVED_SIGN_IN_UNUSABLE =
@@ -19,7 +24,11 @@ type SignInServerInput = {
   /** A new private temp folder per server: each server's exit removes its own. */
   connectServer: () => Promise<ConnectAcpAgent<AcpAgentConnection>>
   home: string
-  launch: Parameters<ConnectAcpAgent<AcpAgentConnection>>[0] & { cwd: string }
+  launch: Parameters<ConnectAcpAgent<AcpAgentConnection>>[0] & {
+    cwd: string
+    spec: Pick<AcpLaunchSpec, 'clientInfo'>
+    version?: string
+  }
   signal: AbortSignal
   closed: () => void
   /** Every server, so cleanup can wait for each one's exit. */
@@ -40,7 +49,10 @@ export function antigravitySignInServers({
     body: (server: AcpAgentConnection) => Promise<T>
   ): Promise<T> => {
     const connect = await connectServer()
-    const server = connect(launch, { clientInfo: { name: 'orca', version: '1' }, signIn: watch })
+    const server = connect(launch, {
+      clientInfo: acpClientInfo(launch.spec, launch.version ?? null),
+      signIn: watch
+    })
     spawned(server)
     const stop = (): void => void server.close().catch(() => false)
     signal.addEventListener('abort', stop, { once: true })
@@ -79,8 +91,11 @@ export function antigravitySignInServers({
       if (!(error instanceof AcpSignInPromptError)) {
         throw error
       }
-      // The server keeps each account type's sign-in in its own file.
-      const token = method === 'oauth-business' ? 'acp_business_token.json' : 'acp_token.json'
+      // The server keeps each Google sign-in in its own file; key and ADC methods save none.
+      const token = OAUTH_TOKEN_FILES[method]
+      if (!token) {
+        throw error
+      }
       await rm(join(home, ANTIGRAVITY_ACP_HOME, token), { force: true })
       throw new AntigravitySignInSentence(SAVED_SIGN_IN_UNUSABLE, { cause: error })
     })

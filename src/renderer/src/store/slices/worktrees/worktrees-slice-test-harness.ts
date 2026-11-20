@@ -1,6 +1,6 @@
-import { withAgentStatusOwnership } from '../agent-status/agent-status-ownership-boundary'
+import { withAgentStatusOwnership } from '../agent-status/status-ownership/agent-status-ownership-boundary'
 import { createAgentStatusSlice } from '../agent-status/agent-status'
-import { createPaneForegroundAgentSlice } from '../agent-status/pane-foreground-agent'
+import { createPaneForegroundAgentSlice } from '../agent-status/pane-authority/pane-foreground-agent'
 import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
@@ -12,7 +12,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult,
@@ -187,6 +187,7 @@ export function createTestStore() {
           editorViewMode: {},
           explorerDisplayRootByWorktree: {},
           showDotfilesByWorktree: {},
+          notificationsMutedByWorktree: {},
           expandedDirs: {},
           gitStatusByWorktree: {},
           gitStatusHeadByWorktree: {},

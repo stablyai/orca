@@ -23,7 +23,8 @@ type OrcadStdioBridgeChannelFactory = () => Promise<{
 
 export async function listenOrcadStdioBridge(
   options: PortForwardStartOptions,
-  openChannel: OrcadStdioBridgeChannelFactory
+  openChannel: OrcadStdioBridgeChannelFactory,
+  maxChannels = ORCAD_STDIO_BRIDGE_MAX_CHANNELS
 ): Promise<StartedPortForward> {
   const sockets = new Set<Socket>()
   const channels = new Set<RemoteCommandChannel>()
@@ -32,7 +33,7 @@ export async function listenOrcadStdioBridge(
   let closed = false
 
   const admitNext = (): void => {
-    while (open < ORCAD_STDIO_BRIDGE_MAX_CHANNELS) {
+    while (open < maxChannels) {
       const next = waiting.shift()
       if (!next) {
         return

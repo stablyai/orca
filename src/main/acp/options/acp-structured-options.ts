@@ -1,6 +1,14 @@
-import { acpEffortOption, acpSelectChoices } from './acp-select-choices'
+import {
+  acpCategorySelect,
+  acpEffortOption,
+  acpFastSelectOption,
+  acpInteractionModeValue,
+  acpSelectChoices
+} from './acp-select-choices'
 import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
+import { acpSessionSlashCommand } from './acp-session-slash-command'
+import { acpThinkingVariantEffortWrite, type AcpOptionWrite } from './acp-option-write'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
@@ -21,14 +29,6 @@ import type {
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
-export type AcpOptionWrite =
-  | { method: 'config'; configId: string; value: string }
-  | { method: 'model'; modelId: string }
-
-function isSelect(option: SessionConfigOption): option is SelectOption {
-  return option.type === 'select'
-}
-
 export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
@@ -41,7 +41,9 @@ export class AcpStructuredOptions {
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
       | 'normalizeConfigOptions'
+      | 'skillDescription'
       | 'fastConfigId'
+      | 'interactionModes'
     > = {}
   ) {}
 
@@ -200,13 +202,7 @@ export class AcpStructuredOptions {
     this.reportedCommands = commands
     this.commands = commands
       .filter((command) => !withheld.includes(command.name))
-      .map((command) => ({
-        name: command.name,
-        kind: 'command',
-        ...(command.description ? { description: command.description } : {}),
-        ...(command.input?.hint ? { argumentHint: command.input.hint } : {}),
-        ...(this.isBuiltin(command) ? { builtin: true as const } : {})
-      }))
+      .map((command) => acpSessionSlashCommand(command, this.dialect, this.isBuiltin(command)))
   }
 
   readCommands(): AgentSessionSlashCommand[] | undefined {
@@ -237,21 +233,30 @@ export class AcpStructuredOptions {
           : null
     }
     if (key === 'effort') {
-      if (this.dialect.effortSelectsThinkingVariant && (value === 'off' || value === 'on')) {
-        const modelOption = this.select('model')
-        if (modelOption) {
-          const base = modelOption.currentValue.replace(/:v:.*$/, '')
-          return {
-            method: 'config',
-            configId: modelOption.id,
-            value: value === 'off' ? `${base}:v:` : `${base}:v:thinking`
-          }
+      if (this.dialect.effortSelectsThinkingVariant) {
+        const variant = acpThinkingVariantEffortWrite(this.select('model'), value)
+        if (variant) {
+          return variant
         }
       }
       const option = this.effortOption()
       return option ? { method: 'config', configId: option.id, value } : null
     }
+    if (key === 'interactionMode') {
+      const option = this.select('mode')
+      const native = acpInteractionModeValue(this.dialect.interactionModes, option, value)
+      return option && native ? { method: 'config', configId: option.id, value: native } : null
+    }
     return null
+  }
+
+  /** Unrunnable Plan is refused, unrunnable Build skipped; only Orca's confirmed write proves the mode. */
+  needsInteractionMode(value: string): boolean {
+    const write = this.write('interactionMode', value)
+    return write?.method === 'config'
+      ? this.appliedInput.get('interactionMode') !== value ||
+          this.select('mode')?.currentValue !== write.value
+      : value === 'plan'
   }
 
   /** Native choices never establish an unobserved model's capability or configured default. */
@@ -340,19 +345,11 @@ export class AcpStructuredOptions {
   }
 
   private fastOption(): SelectOption | null {
-    const id = this.dialect.fastConfigId
-    if (!id) {
-      return null
-    }
-    const option = this.configOptions.find((entry) => entry.id === id)
-    return option && isSelect(option) ? option : null
+    return acpFastSelectOption(this.configOptions, this.dialect.fastConfigId)
   }
 
   /** The select row for a category; model also matches the legacy id-only row. */
   private select(category: string): SelectOption | null {
-    const option = this.configOptions.find(
-      (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
-    )
-    return option?.type === 'select' ? option : null
+    return acpCategorySelect(this.configOptions, category)
   }
 }

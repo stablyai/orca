@@ -24,6 +24,7 @@ import { sayNativeChatSessionOptionTranslated as say } from './native-chat-sessi
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 import { NativeChatSessionSpeedButton } from './NativeChatSessionSpeedButton'
 import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-speed-tiers'
+import { orderEffortLevels } from '../../../../../../../shared/agent-session/options/view/effort-level-order'
 
 type NativeChatSessionOptionRowsProps = {
   /** The current model's options, in display order. */
@@ -60,6 +61,8 @@ function LevelSegment(props: {
   const shortLabel = nativeChatSessionChoiceShortLabel(choice, say, optionId)
   // What the segment's text leaves out: the full name behind an abbreviation, and the description.
   const detail = [label === shortLabel ? null : label, choice.description].filter(Boolean).join(' ')
+  // A choice with its own short text keeps its full label as the name, not only as a description.
+  const name = choice.shortLabel ? label : undefined
   if (!detail) {
     return <ToggleGroupItem value={choice.value}>{shortLabel}</ToggleGroupItem>
   }
@@ -69,7 +72,7 @@ function LevelSegment(props: {
       <TooltipTrigger asChild>
         <span className="inline-flex">
           {/* Link the full description directly; the tooltip links only its wrapper while open. */}
-          <ToggleGroupItem value={choice.value} aria-describedby={detailId}>
+          <ToggleGroupItem value={choice.value} aria-label={name} aria-describedby={detailId}>
             {shortLabel}
           </ToggleGroupItem>
           <span id={detailId} className="sr-only">
@@ -222,6 +225,7 @@ function OptionRow(props: {
         type="single"
         variant="segmented"
         size="xs"
+        density={layout === 'inline' ? 'compact' : 'default'}
         spacing={0.5}
         role="radiogroup"
         aria-labelledby={labelId}
@@ -237,7 +241,10 @@ function OptionRow(props: {
         // Why -ml-2: a wrapped group lines its first label up under the row's.
         className={cn('flex-wrap', layout !== 'inline' && '-ml-2')}
       >
-        {descriptor.kind.choices.map((choice) => (
+        {(descriptor.category === 'thought_level'
+          ? orderEffortLevels(descriptor.kind.choices)
+          : descriptor.kind.choices
+        ).map((choice) => (
           <LevelSegment key={choice.value} optionId={descriptor.id} choice={choice} />
         ))}
       </ToggleGroup>
@@ -290,7 +297,9 @@ export function NativeChatSessionOptionRows({
           <div className={cn(divided && 'border-t border-border', layout === 'menu' && 'p-1')}>
             <div
               className={cn(
-                layout === 'inline' ? 'flex flex-wrap items-center gap-3' : 'flex flex-col',
+                layout === 'inline'
+                  ? 'flex flex-wrap items-center gap-x-2 gap-y-1'
+                  : 'flex flex-col',
                 layout === 'menu' && 'gap-0.5',
                 layout === 'settings' && 'gap-2.5'
               )}
@@ -302,7 +311,8 @@ export function NativeChatSessionOptionRows({
                     key={descriptor.id}
                     busy={pendingIds.has(descriptor.id)}
                     className={cn(
-                      layout === 'inline' && descriptor.category !== 'thought_level' && 'ml-auto'
+                      layout === 'inline' &&
+                        (descriptor.category === 'thought_level' ? 'min-w-0 flex-1' : 'ml-auto')
                     )}
                   >
                     <div data-option-id={descriptor.id}>

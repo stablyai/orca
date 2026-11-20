@@ -1,11 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { upsertOrcaCreatedProjectTrustLevel } from '../../../codex/trust/toml/config-toml-trust'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { markAntigravityWorkspaceTrusted } from '../../../agent-launch/trust/agent-trust-presets'
+
+vi.mock('../../../codex/trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../../codex/trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 
 const WORKTREE_ID = 'repo-1::/tmp/worktrees/feature-r1'
 const PROJECT = '/tmp/worktrees/feature-r1'
@@ -27,17 +32,12 @@ function purgeWithMeta(meta: Record<string, unknown> = {}) {
 
 describe('worktree removal drops the workspace trust Orca wrote', () => {
   let userDataDir: string
-  let configPath: string
   let previousUserDataPath: string | undefined
 
   beforeEach(() => {
     userDataDir = mkdtempSync(join(tmpdir(), 'orca-pretrust-removal-'))
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     process.env.ORCA_USER_DATA_PATH = userDataDir
-    const managedHome = join(userDataDir, 'codex-runtime-home', 'home')
-    mkdirSync(managedHome, { recursive: true })
-    configPath = join(managedHome, 'config.toml')
-    upsertOrcaCreatedProjectTrustLevel(configPath, PROJECT, 'trusted')
   })
 
   afterEach(() => {

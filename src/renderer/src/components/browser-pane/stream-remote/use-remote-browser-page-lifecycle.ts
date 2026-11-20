@@ -26,8 +26,8 @@ import {
   readRemoteBrowserPage,
   readRemoteBrowserPageObservation
 } from './remote-browser-page-observation'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { javaScriptDialogPrompt } from '../browser-javascript-dialog-prompt'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { javaScriptDialogPrompt } from '../page-prompts/browser-javascript-dialog-prompt'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,

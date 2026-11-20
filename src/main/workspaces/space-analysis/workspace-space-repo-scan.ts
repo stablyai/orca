@@ -10,7 +10,10 @@ import type {
   WorkspaceSpaceWorktree
 } from '../../../shared/workspace-disk-space/workspace-space-types'
 import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import { getRepoOwnedWorktreeMeta } from '../catalog/worktree-metadata-ownership'
 import {
@@ -18,7 +21,7 @@ import {
   resolveGitRouteForHost
 } from '../../providers/execution-host-provider-dispatch'
 import { createFolderWorktree, listRepoWorktrees } from '../catalog/repo-worktrees'
-import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { getLocalProjectWorktreeGitOptions } from '../execution-host/project-runtime-git-options'
 import {
   WorkspaceSpaceScanCancelledError,
@@ -28,6 +31,7 @@ import {
 } from './workspace-space-scan-control'
 import { createUnavailableWorkspaceSpaceRow } from './workspace-space-worktree-row'
 import { scanLocalWorkspaceSpaceWorktreeViaWorker } from './workspace-space-scan-worker-client'
+import { heavyWorkersPauseMessage } from '../../utility-worker-host/heavy-worker-spawn'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 
@@ -216,6 +220,11 @@ export async function scanWorkspaceSpaceRepo(args: {
               : `Host ${filesystemRoute.hostId} is not reachable from this process.`
           )
         : await limiters.localWorktree(async () => {
+            // A host paused mid-scan refuses every remaining worktree; don't `du` each one first.
+            const paused = heavyWorkersPauseMessage()
+            if (paused) {
+              return createUnavailableWorkspaceSpaceRow(repo, worktree, scannedAt, 'error', paused)
+            }
             let duOutput: string | null = null
             if (platform !== 'win32') {
               try {

@@ -64,10 +64,15 @@ export function isTimedPRRead(method: string, params: unknown): boolean {
   )
 }
 
-// Slow worktree removal/model listing waits get a separate lane so foreground refresh/send slots remain free;
-// background slots belong to status.
+// Slow worktree removal, model listing, usage and session-history scans get a separate lane so foreground
+// refresh/send slots remain free; background slots belong to status.
 function isLongWaitRuntimeMethod(method: string): boolean {
-  return method === 'worktree.rm' || method === 'agentSession.modelCatalog'
+  return (
+    method === 'worktree.rm' ||
+    method === 'agentSession.modelCatalog' ||
+    method === 'usage.call' ||
+    method === 'aiVault.listSessions'
+  )
 }
 
 // Byte-range reads (media, paged files, downloads) are bulk: a playing video must not hold terminal or workspace slots.

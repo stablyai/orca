@@ -1,5 +1,5 @@
 import { structuredAgentSessionSettledSends } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
-import type { StructuredAgentSessionState } from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 
 import type { StructuredAgentSessionReadOwner } from './structured-agent-session-read-owner-contract'
 

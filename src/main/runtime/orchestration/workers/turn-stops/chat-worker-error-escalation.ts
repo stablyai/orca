@@ -1,17 +1,13 @@
 import { createHash } from 'node:crypto'
-import { performance } from 'node:perf_hooks'
-import { structuredAgentSessionStartFailure } from '../../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
-import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { StructuredAgentSessionRequestFailure } from '../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
-import { tuiAgentDisplayName } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { resolveStructuredWorkerIdentityForSession } from '../../terminal-authority/structured-sessions/structured-worker-authority'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
-import { chatRequestError, isSenderOwnRejection } from './chat-worker-error-words'
+import { isSenderOwnRejection } from './chat-worker-error-words'
+import { readChatRequestError } from './chat-request-error-read'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
@@ -38,21 +34,6 @@ export function chatWorkerDispatches(sessionId: string, db: OrchestrationDb): Ch
   return found
 }
 
-function unrecordedError(request: StructuredAgentSessionRequestFailure) {
-  const agentName = tuiAgentDisplayName(request.agent) ?? 'The agent'
-  const fact = request.death?.failure ?? agentSessionFailureFact('providerExited')
-  const context = { agentName, ...request.death }
-  const words = request.death?.duringStartup
-    ? structuredAgentSessionStartFailure({ exit: fact }, context)
-    : {
-        reason: agentSessionFailureWords(fact, { ...context, surface: 'row' }).text,
-        rejection: fact
-      }
-  return request.outcome === 'interruption'
-    ? { text: words.reason, kind: words.rejection.kind, detail: fact.detail?.text }
-    : { text: `${agentName} ended its turn with an error and recorded no message.` }
-}
-
 function escalationId(dispatchId: string, request: StructuredAgentSessionRequestFailure): string {
   return `msg_chaterr_${createHash('sha256')
     .update(JSON.stringify([dispatchId, request.sessionId, request.kind, request.id]))
@@ -71,33 +52,11 @@ export async function escalateChatWorkerError(
     if (!db || targets.length === 0) {
       return
     }
-    const deadline = performance.now() + 2_000
-    const pending = request.death ? undefined : request.capturePendingOutput?.()
-    // Settlement publication and promise continuations precede the ordered error read.
-    await new Promise((resolve) => setImmediate(resolve))
-    while (pending?.()) {
-      const remaining = deadline - performance.now()
-      if (remaining <= 0) {
-        break
-      }
-      await new Promise((resolve) => setTimeout(resolve, Math.min(50, remaining)))
-    }
-    const snapshot = await request.read()
-    if (!snapshot) {
+    const error = await readChatRequestError(request)
+    if (!error || isSenderOwnRejection(error)) {
       return
     }
-    const recorded = chatRequestError(snapshot, request)
-    const error =
-      request.death &&
-      (request.death.duringStartup ||
-        !recorded ||
-        (recorded.kind === 'providerExited' && !recorded.detail))
-        ? unrecordedError(request)
-        : recorded
-    if (isSenderOwnRejection(error)) {
-      return
-    }
-    const { text, detail, kind } = error ?? { ...unrecordedError(request), detail: undefined }
+    const { text, detail, kind } = error
     for (const { dispatch, from } of targets) {
       // The journal read awaited: the Dispatch may have settled.
       const current = db.getDispatchContextById(dispatch.id)

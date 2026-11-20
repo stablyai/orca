@@ -2,7 +2,7 @@ import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
 import { createBrowserSlice } from './create-browser-slice'
 import type { AppState } from '../../types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest

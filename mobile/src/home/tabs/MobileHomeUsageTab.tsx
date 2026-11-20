@@ -7,7 +7,8 @@ import Animated, {
   useSharedValue,
   withTiming
 } from 'react-native-reanimated'
-import { usageBarFill } from '../../accounts/usage/UsageBar'
+import { formatUsageBarValue, usageBarFill } from '../../accounts/usage/UsageBar'
+import { useUsagePercentageDisplay } from '../../accounts/usage/usage-percentage-display-preference'
 import {
   getUsageBarState,
   getWindowResetLabel,
@@ -303,20 +304,22 @@ function UsageMeter(props: {
   reducedMotion: boolean
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const usageWindow = props.card.limits?.[props.windowKey] ?? null
   const bar = getUsageBarState(props.card.limits, usageWindow, props.card.fetching)
-  const { used, color } = usageBarFill(bar.usedPercent, bar.unavailable)
+  const display = useUsagePercentageDisplay()
+  const { shown, color } = usageBarFill(bar.usedPercent, bar.unavailable, display)
   const reset = getWindowResetLabel(usageWindow, props.now)
-  const width = useSharedValue(props.reducedMotion ? (used ?? 0) : 0)
+  const width = useSharedValue(props.reducedMotion ? (shown ?? 0) : 0)
 
   useEffect(() => {
     width.value = props.reducedMotion
-      ? (used ?? 0)
-      : withTiming(used ?? 0, { duration: 450, easing: HOME_EASE_OUT })
-  }, [props.reducedMotion, used, width])
+      ? (shown ?? 0)
+      : withTiming(shown ?? 0, { duration: 450, easing: HOME_EASE_OUT })
+  }, [props.reducedMotion, shown, width])
 
   const fillStyle = useAnimatedStyle(() => ({ width: `${width.value}%` }))
-  const value = bar.unavailable || used == null ? '—' : `${used}%`
+  const value = formatUsageBarValue(bar.unavailable ? null : shown, display, t)
 
   return (
     <>

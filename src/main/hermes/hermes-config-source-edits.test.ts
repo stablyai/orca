@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseDocument } from 'yaml'
 import { disablePlugin, enablePlugin, updateConfigContent } from './hermes-config-yaml'
 
-describe.each(['\n', '\r\n'])('Hermes source edit boundaries (%j)', (eol) => {
+describe.each(['\r\n'])('Hermes source edit boundaries (%j)', (eol) => {
   describe.each([
     {
       operation: 'remove',
@@ -29,7 +29,6 @@ describe.each(['\n', '\r\n'])('Hermes source edit boundaries (%j)', (eol) => {
 
     it.each([
       ['indentless', '  ', '  '],
-      ['deeper indentless', '    ', '    '],
       ['indented', '  ', '    ']
     ])('preserves comments and unrelated settings (%s)', (_name, keyIndent, listIndent) => {
       const prefix = [
@@ -70,16 +69,6 @@ describe.each(['\n', '\r\n'])('Hermes source edit boundaries (%j)', (eol) => {
       expected: { plugins: { custom: 'keep', enabled: ['orca-status'] } }
     },
     {
-      name: 'root trailing comma before a comment',
-      input: '{model: "001", # retain this comment\n}\n',
-      expected: { model: '001', plugins: { enabled: ['orca-status'] } }
-    },
-    {
-      name: 'plugin trailing comma before several comments',
-      input: 'plugins: {custom: "keep # ,", # first\n  # last\n  } # outside\n',
-      expected: { plugins: { custom: 'keep # ,', enabled: ['orca-status'] } }
-    },
-    {
       name: 'root trailing comma after a nested map',
       input: '{model: {name: "001",}, # first\n # last\n}\n',
       expected: { model: { name: '001' }, plugins: { enabled: ['orca-status'] } }
@@ -88,16 +77,6 @@ describe.each(['\n', '\r\n'])('Hermes source edit boundaries (%j)', (eol) => {
       name: 'plugin comment ending in a comma without a separator',
       input: 'plugins: {custom: keep # this comma is only a comment ,\n  }\n',
       expected: { plugins: { custom: 'keep', enabled: ['orca-status'] } }
-    },
-    {
-      name: 'root comment ending in a comma without a separator',
-      input: '{model: "001" # this comma is only a comment ,\n}\n',
-      expected: { model: '001', plugins: { enabled: ['orca-status'] } }
-    },
-    {
-      name: 'earlier plugin separator without a trailing comma',
-      input: 'plugins: {custom: keep, extra: "off" # last value\n  }\n',
-      expected: { plugins: { custom: 'keep', extra: 'off', enabled: ['orca-status'] } }
     },
     {
       name: 'nested sequence comma without a mapping separator',

@@ -29,6 +29,9 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   journalSql: 'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts',
   journalSqlReader: 'src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts',
   agentIdentityWorker: 'src/main/agent-hooks/identity/agent-identity-worker-entry.ts',
+  botsDbWorker: 'src/main/bots/db-worker/bots-db-worker-entry.ts',
+  orchestrationReader:
+    'src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
   commandPathDirectoryWorker: 'src/main/ipc/command-path/command-path-directory-worker-entry.ts',
   sessionScanner: 'src/main/ai-vault/scan-service/session-scanner-service-entry.ts',
@@ -36,9 +39,14 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
     'src/main/worker-thread-child-process/worker-thread-child-process-entry.ts',
   claudeProfileSetup:
     'src/main/claude-accounts/profiles/setup/claude-profile-setup-worker-entry.ts',
+  codexHistoryDiskUsage:
+    'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts',
+  codexProjectTrust: 'src/main/codex/trust/project-trust/codex-project-trust-worker-entry.ts',
   claudeConversationFork: 'src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts',
+  usageScanWorker: 'src/main/usage/scan-worker/usage-scan-worker-entry.ts',
   sttWorker: 'src/main/speech/stt-worker.ts',
-  computerSidecar: 'src/main/computer/computer-sidecar.ts'
+  computerSidecar: 'src/main/computer/computer-sidecar.ts',
+  googlePdfText: 'src/main/google/google-pdf-text-worker-entry.ts'
 }
 
 /** Each child ships flat beside orcad.js under its source basename; the runtime resolvers look there. */

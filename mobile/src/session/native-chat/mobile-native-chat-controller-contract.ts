@@ -10,6 +10,8 @@ import type {
 } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { MobileChatPermission } from './input/prompts/mobile-native-chat-permission'
+import type { MobileWorkerApprovals } from './input/prompts/use-mobile-worker-approvals'
+import type { MobileNativeChatCollapsedPrompt } from './input/prompts/MobileNativeChatPromptStrip'
 import type { MobileChatQuestion } from './input/prompts/mobile-native-chat-question'
 import type {
   NativeChatLiveTurnIndicator,
@@ -17,8 +19,8 @@ import type {
 } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
-import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
-import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/transcript/turns/native-chat-terminal-turn'
+import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
@@ -32,6 +34,7 @@ import type { MobileNativeChatPendingMessage } from './transcript/sending/mobile
 import type { useMobileNativeChatSession } from './conversation/use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/session-options/MobileNativeChatSessionOptionPickers'
 import type { MobileStructuredMcpPanel } from './mcp/use-mobile-structured-mcp-panel'
+import type { MobileStructuredAccountUsage } from './usage/use-mobile-structured-account-usage'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { useMobileStructuredSessionCommands } from './composer/commands/use-mobile-structured-session-commands'
@@ -74,6 +77,8 @@ export type MobileNativeChatController = {
   nativeChatSendFollowUp: NativeChatSendFollowUp | null
   nativeChatStreamingText?: string
   nativeChatPermission: MobileChatPermission | null
+  /** A coordinator chat's workers' open permission prompts, answered on their host. */
+  nativeChatWorkerApprovals: MobileWorkerApprovals
   // A new prompt occurrence resets local card submission state only.
   nativeChatPromptKey: string | null
   /** Only a structured chat's journal question; a terminal chat's questions are asks. */
@@ -93,7 +98,7 @@ export type MobileNativeChatController = {
   // Collapse writes nothing to the terminal and frees Send.
   collapseNativeChatAsk: () => void
   collapseNativeChatPrompt?: () => void
-  nativeChatCollapsedPrompt: { title: string; expand: () => void } | null
+  nativeChatCollapsedPrompt: MobileNativeChatCollapsedPrompt | null
   handleNativeChatCancelPrompt?: (prompt?: {
     itemId: string
     expectedRevision: number
@@ -106,6 +111,7 @@ export type MobileNativeChatController = {
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
   nativeChatMcpPanel: MobileStructuredMcpPanel | null
+  nativeChatAccountUsage: MobileStructuredAccountUsage | null
   nativeChatRewind: AgentSessionRewindSurface | undefined
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
@@ -134,4 +140,6 @@ export type MobileNativeChatController = {
   /** The structured chat's options read on whether its agent forks; absent until it answers. */
   nativeChatForkSupport?: AgentSessionOptionsResult['forkSupport']
   nativeChatUsageLimit: MobileNativeChatUsageLimit | null
+  /** Rows whose failure no later successful turn resolved. */
+  nativeChatUnresolvedFailureRows: ReadonlySet<string>
 }

@@ -12,24 +12,29 @@ import type {
   AgentModelCatalogProbe,
   AgentModelCatalogLookup
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
-import { agentModelCatalogInputStamp } from '../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import {
   runAgentModelCatalogListing,
   runAgentModelCatalogSession
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { AgentModelCatalogListingStoppedError } from '../../native-chat/agent-model-catalog/agent-model-catalog-failures'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
-import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { createAcpAgentConnection } from '../process/acp-agent-connection'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
+import {
+  createAcpAgentConnection,
+  type AcpAgentConnectionOptions
+} from '../process/acp-agent-connection'
+import { acpClientInfo } from '../launch/acp-client-info'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import {
   acpListingDependsOnRelease,
   acpListingNeedsChatFolder,
+  acpModelCatalogStampInput,
   acpModelListingForRelease
 } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
+import { agentSessionAccountHomePath } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import {
   resolveAcpLaunchInvocation,
   type AcpLaunchInvocationDeps
@@ -43,17 +48,19 @@ import { AcpAgentError, AcpAgentExitedError } from '../transport/acp-errors'
 import { AgentModelCatalogUnavailableError } from '../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
+type AcpListingConnect<C> = (launch: ProviderProcessLaunch, options: AcpAgentConnectionOptions) => C
+
 export type AcpModelCatalogProbeDeps = AcpLaunchInvocationDeps & {
   resolveSavedEnvironment?: () => Promise<Record<string, string>>
   probeVersion?: AgentCliVersionReader
-  connect?: (launch: ProviderProcessLaunch) => AcpModelCatalogConnection
-  connectSession?: (launch: ProviderProcessLaunch) => AcpModelCatalogSessionConnection
+  connect?: AcpListingConnect<AcpModelCatalogConnection>
+  connectSession?: AcpListingConnect<AcpModelCatalogSessionConnection>
   runListing?: typeof runAgentModelCatalogListing
 }
 
 /** Uses the same binary, account and scrubbed environment as chats. */
 export function createAcpModelCatalogProbe(
-  spec: AcpLaunchSpec,
+  agentSpec: AcpLaunchSpec,
   deps: AcpModelCatalogProbeDeps
 ): AgentModelCatalogProbe {
   const resolve = async (
@@ -63,6 +70,8 @@ export function createAcpModelCatalogProbe(
     operation?: StructuredAgentResolutionOperation
   ) => {
     assertStructuredAgentResolutionCurrent(operation)
+    // A host install can list differently from Orca's managed one, so the account picks the spec.
+    const spec = acpLaunchSpecForAccount(agentSpec, accountHome)
     const discovery = spec.modelDiscovery
     if (discovery.kind === 'unavailable') {
       throw new Error(discovery.reason)
@@ -73,7 +82,7 @@ export function createAcpModelCatalogProbe(
     }
     // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
-    const { command, prefixArgs, env, envToDelete } = await resolveAcpLaunchInvocation(
+    const { command, prefixArgs, env, envToDelete, version } = await resolveAcpLaunchInvocation(
       spec,
       accountHome,
       {
@@ -89,28 +98,17 @@ export function createAcpModelCatalogProbe(
       }
     )
     assertStructuredAgentResolutionCurrent(operation)
-    const home = agentSessionAccountHomePath(accountHome)
-    const homeConfigFiles =
-      discovery.kind === 'initialize' && home && discovery.homeConfigFiles
-        ? discovery.homeConfigFiles.map((name) => join(home, name))
-        : undefined
+    const inputStamp = await acpModelCatalogStampInput(discovery, {
+      command,
+      prefixArgs,
+      cwd,
+      workspace,
+      env,
+      home: agentSessionAccountHomePath(accountHome)
+    })
     return {
       identity: { command, prefixArgs, cwd, workspace },
-      inputStamp: JSON.stringify(
-        await Promise.all(
-          [
-            ...new Set([cwd, ...(discovery.kind === 'command' && workspace ? [workspace] : [])])
-          ].map((directory) =>
-            agentModelCatalogInputStamp({
-              command,
-              prefixArgs,
-              cwd: directory,
-              env,
-              configFiles: homeConfigFiles
-            })
-          )
-        )
-      ),
+      inputStamp,
       run: async (
         signal?: AbortSignal,
         runOperation = operation,
@@ -136,11 +134,13 @@ export function createAcpModelCatalogProbe(
         }
         const launch = {
           command,
-          args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDir: null })],
+          args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDirs: [] })],
           cwd,
           env,
           envToDelete
         }
+        // Chats send this identity, and some servers list models only to clients they allowlist.
+        const connectionOptions = { clientInfo: acpClientInfo(spec, version ?? release.version) }
         const run = { label: spec.agent, signal: options?.signal, timeoutMs: null }
         // OMP records every model switch as account usage; starting on the picked model records none.
         const launchedModel =
@@ -162,33 +162,40 @@ export function createAcpModelCatalogProbe(
           )
           models = listing.parse(stdout)
         } else if (listing.kind === 'session') {
-          if (!workspace) {
+          if (!workspace && !listing.inPrivateFolder) {
             throw folderlessListing(spec)
           }
           // Remove disposable session storage after the process closes.
           const folderArgs = listing.sessionFolderArgs
           const listInSession = async (model: string | undefined) => {
-            const folder = folderArgs
-              ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
-              : null
+            const folder =
+              folderArgs || listing.inPrivateFolder
+                ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
+                : null
+            const sessionCwd = listing.inPrivateFolder && folder ? folder.path : workspace
+            const started: string[] = []
             try {
               assertStructuredAgentResolutionCurrent(operation)
               const args = [
                 ...prefixArgs,
-                ...spec.args({ fullAccess: false, pluginDir: null, model }),
+                ...spec.args({ fullAccess: false, pluginDirs: [], model }),
                 ...(folderArgs && folder ? folderArgs(folder.path) : [])
               ]
               return await runAgentModelCatalogSession<
                 AcpModelCatalogSessionConnection,
                 Awaited<ReturnType<typeof readSessionModels>>
               >(
-                () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
+                () =>
+                  (deps.connectSession ?? createAcpAgentConnection)(
+                    { ...launch, args },
+                    connectionOptions
+                  ),
                 (connection, ready) =>
                   readSessionModels(
                     spec,
                     listing,
                     connection,
-                    workspace,
+                    sessionCwd,
                     operation,
                     options?.selectedModels,
                     model,
@@ -213,11 +220,26 @@ export function createAcpModelCatalogProbe(
                             ),
                           demanded: publish.demanded
                         }
-                      : undefined
+                      : undefined,
+                    (sessionId) => started.push(sessionId)
                   ),
                 run
               )
             } finally {
+              // The session's process has exited, so its files are no longer written.
+              const accountHomePath = agentSessionAccountHomePath(accountHome)
+              if (accountHomePath) {
+                for (const sessionId of started) {
+                  await listing
+                    .discardSession?.({ sessionId, cwd: sessionCwd, accountHomePath })
+                    .catch((error: unknown) => {
+                      console.warn(
+                        `[acp-model-catalog] ${spec.agent} kept a listing session:`,
+                        error
+                      )
+                    })
+                }
+              }
               await folder?.remove()
             }
           }
@@ -236,7 +258,7 @@ export function createAcpModelCatalogProbe(
           attemptedModels = result.attemptedModels
         } else {
           models = await runAgentModelCatalogSession(
-            () => (deps.connect ?? createAcpAgentConnection)(launch),
+            () => (deps.connect ?? createAcpAgentConnection)(launch, connectionOptions),
             async (connection) => {
               const initialized = await connection.initialize()
               assertStructuredAgentResolutionCurrent(operation)
@@ -261,36 +283,29 @@ export function createAcpModelCatalogProbe(
       }
     }
   }
-  const probe: AgentModelCatalogProbe = async (home, options) => {
-    try {
-      return await (
-        await resolve(home, options?.workspacePath ?? '', 'recover', options?.operation)
-      ).run(options?.signal, options?.operation, options?.selectedModels, options?.publish)
-    } catch (error) {
-      if (error instanceof AcpAgentError && error.code === -32000) {
-        throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
-      }
-      throw error
-    }
-  }
+  const probe: AgentModelCatalogProbe = (home, options) =>
+    resolve(home, options?.workspacePath ?? '', 'recover', options?.operation)
+      .then((resolved) =>
+        resolved.run(options?.signal, options?.operation, options?.selectedModels, options?.publish)
+      )
+      .catch(signedOutAsUnavailable)
   return Object.assign(probe, {
     resolve: async (...args: Parameters<typeof resolve>) => {
       const resolved = await resolve(...args)
       return {
         ...resolved,
-        run: async (...runArgs: Parameters<typeof resolved.run>) => {
-          try {
-            return await resolved.run(...runArgs)
-          } catch (error) {
-            if (error instanceof AcpAgentError && error.code === -32000) {
-              throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
-            }
-            throw error
-          }
-        }
+        run: (...runArgs: Parameters<typeof resolved.run>) =>
+          resolved.run(...runArgs).catch(signedOutAsUnavailable)
       }
     }
   })
+}
+
+function signedOutAsUnavailable(error: unknown): never {
+  if (error instanceof AcpAgentError && error.code === -32000) {
+    throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
+  }
+  throw error
 }
 
 const folderlessListing = (spec: AcpLaunchSpec) =>

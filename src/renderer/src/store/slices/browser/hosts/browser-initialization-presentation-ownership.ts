@@ -1,5 +1,5 @@
 import type { RemoteBrowserPageHandle } from '../browser-slice-contract'
-import type { BrowserInitializationDelivery } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
+import type { BrowserInitializationDelivery } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
 
 type Handles = Record<string, RemoteBrowserPageHandle>
 type HandleWrite = Set<string> | 'hydration'

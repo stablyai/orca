@@ -5,6 +5,8 @@ import {
   type SessionConfigSelectOption,
   type SessionModelState
 } from '../generated/acp-protocol.generated'
+import type { AcpDialect } from '../acp-dialects/acp-dialect'
+import { isAgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
@@ -55,4 +57,38 @@ export function acpEffortOption(options: readonly SessionConfigOption[]): Select
     }
   }
   return effort
+}
+
+/** The agent's own mode value for Orca's interaction mode, when its mode select offers it. */
+export function acpInteractionModeValue(
+  interactionModes: AcpDialect['interactionModes'],
+  modeOption: SelectOption | null,
+  value: string
+): string | null {
+  const native = isAgentSessionInteractionMode(value) ? interactionModes?.[value] : undefined
+  return native &&
+    modeOption &&
+    acpSelectChoices(modeOption).some((choice) => choice.value === native)
+    ? native
+    : null
+}
+
+/** The select row for a category; model also matches the legacy id-only row. */
+export function acpCategorySelect(
+  options: readonly SessionConfigOption[],
+  category: string
+): SelectOption | null {
+  const option = options.find(
+    (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
+  )
+  return option?.type === 'select' ? option : null
+}
+
+/** The fast-mode select when the dialect names its config id. */
+export function acpFastSelectOption(
+  options: readonly SessionConfigOption[],
+  fastConfigId: string | undefined
+): SelectOption | null {
+  const option = fastConfigId ? options.find((entry) => entry.id === fastConfigId) : undefined
+  return option?.type === 'select' ? option : null
 }

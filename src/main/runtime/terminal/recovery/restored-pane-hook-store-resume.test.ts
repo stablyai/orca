@@ -1,20 +1,21 @@
 // verify-15a parity: a host whose daemon restarted resumed nothing and replayed the pane's launch.
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { PaneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../construction/test-context/runtime-store-partial-fixture'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
-await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../construction/test-context/orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
-const { committingSpawn } = await import('../../orca-runtime-tests/bind-first-pane.test-fixture')
+} = await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('../layout/bind-first-pane.test-fixture')
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 const SESSION_ID = '0bc9e9f8-192c-4bd4-beb8-8b745c59c8b0'
@@ -39,10 +40,12 @@ async function makeRuntime(
   launchAgent?: 'codex',
   {
     session: overrides = {},
-    presence = 'exited'
+    presence = 'exited',
+    identity
   }: {
     session?: Partial<WorkspaceSessionState>
     presence?: 'live' | 'exited'
+    identity?: PaneAgentIdentity
   } = {}
 ) {
   const session = makeWorkspaceSessionWithHeadlessTerminal()
@@ -61,7 +64,8 @@ async function makeRuntime(
     getAgentProviderSessionSnapshot: () => rows,
     getAgentProviderSessionRowsForPane: (paneKey: string) =>
       rows.filter((row) => row.paneKey === paneKey),
-    checkHookAgentPresence: async () => presence
+    checkHookAgentPresence: async () => presence,
+    ...(identity ? { getPaneAgentIdentity: () => identity } : {})
   })
   runtime.setPtyController({
     spawn: committingSpawn(runtime, spawn),
@@ -88,6 +92,21 @@ async function restore(runtime: InstanceType<typeof OrcaRuntimeService>): Promis
 }
 
 describe('restoring a pane its host recorded an agent in', () => {
+  it.each(['ended', 'shared'] as const)(
+    'opens a shell when the pane owner says its conversation is %s',
+    async (ownership) => {
+      const { runtime, spawn } = await makeRuntime([codexRow()], 'codex', {
+        identity: {
+          status: codexRow(),
+          ended: ownership === 'ended',
+          executionHost: ownership === 'shared' ? 'shared' : 'pane-owned'
+        }
+      })
+      await restore(runtime)
+      expect(spawn.mock.calls[0]![0].command ?? '').toBe('')
+    }
+  )
+
   it('ignores a row from another worktree, and launches the tab’s agent fresh', async () => {
     const { runtime, spawn } = await makeRuntime(
       [codexRow({ worktreeId: 'other-repo::/other' })],

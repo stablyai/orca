@@ -18,7 +18,7 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-rev
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   selectReviewCacheData,
   selectReviewCacheEntry

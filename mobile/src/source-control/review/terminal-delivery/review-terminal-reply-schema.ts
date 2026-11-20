@@ -13,6 +13,8 @@ const reviewTerminalTabSchema = z
     type: z.literal('terminal'),
     id: z.string().min(1),
     terminal: z.string().min(1),
+    parentTabId: salvagedOptional('parentTabId', z.string()),
+    leafId: salvagedOptional('leafId', z.string()),
     title: salvagedOptional('title', z.string()),
     // Which agent runs in it, so a note can go straight to the only one; older hosts send neither.
     launchAgent: salvagedOptional('launchAgent', z.string()),
@@ -39,6 +41,8 @@ const reviewTerminalTabSchema = z
     return {
       id: tab.id,
       terminal: tab.terminal,
+      ...(tab.parentTabId ? { parentTabId: tab.parentTabId } : {}),
+      ...(tab.leafId ? { leafId: tab.leafId } : {}),
       title: tab.title ?? 'Terminal',
       ...(agent ? { agent } : {})
     }

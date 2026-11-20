@@ -5,7 +5,7 @@ import type {
   AgentSessionMcpOperation,
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
-} from '../../../../../src/shared/agent-session/agent-session-mcp'
+} from '../../../../../src/shared/agent-session/options/protocol/agent-session-mcp'
 import type { AgentSessionMcpPanelState } from '../../../../../src/shared/agent-session/view/use-agent-session-mcp-panel'
 import {
   agentSessionMcpRowFailure,
@@ -265,6 +265,7 @@ function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
     case 'failed':
       return <View style={[styles.dot, styles.dotFailed]} />
     case 'disabled':
+    case 'not-started':
       return <View style={[styles.dot, styles.dotDisabled]} />
     case 'pending':
       return <View style={styles.dotPending} />

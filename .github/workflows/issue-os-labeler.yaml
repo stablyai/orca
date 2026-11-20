@@ -84,6 +84,13 @@ jobs:
             const isBlank = (line) => /^[ \t]*$/.test(line);
             const isHeading = (line) => /^###(?:[ \t]|$)/.test(line);
             const isUnselected = (value) => value === "" || value === "_no response_";
+            // A recognized form with an unknown choice is left alone, but visibly, so form changes get noticed.
+            const rejectChoice = (heading, value) => {
+              core.warning(
+                `"${heading}" has unrecognized value "${value}". No further label changes from this pass; update this workflow if the form changed.`,
+              );
+              return null;
+            };
             const isTranslationNote = (line) =>
               line.length === NOTE_PREFIX.length + 10 + NOTE_SUFFIX.length &&
               line.startsWith(NOTE_PREFIX) &&
@@ -166,7 +173,7 @@ jobs:
               const os = fields.get(osHeading);
               if (!isUnselected(os)) {
                 if (!OS_LABELS.has(os)) {
-                  return null;
+                  return rejectChoice(osHeading, os);
                 }
                 const osLabel = OS_LABELS.get(os);
                 if (osLabel) {
@@ -176,14 +183,15 @@ jobs:
 
               // The current heading wins by presence, even when blank.
               const whereChoices = fields.has("Where were you using Orca?")
-                ? [fields.get("Where were you using Orca?"), WHERE_IS_MOBILE]
+                ? ["Where were you using Orca?", WHERE_IS_MOBILE]
                 : fields.has("Client")
-                  ? [fields.get("Client"), CLIENT_IS_MOBILE]
+                  ? ["Client", CLIENT_IS_MOBILE]
                   : null;
-              if (whereChoices && !isUnselected(whereChoices[0])) {
-                const [where, isMobileByChoice] = whereChoices;
+              if (whereChoices && !isUnselected(fields.get(whereChoices[0]))) {
+                const [whereHeading, isMobileByChoice] = whereChoices;
+                const where = fields.get(whereHeading);
                 if (!isMobileByChoice.has(where)) {
-                  return null;
+                  return rejectChoice(whereHeading, where);
                 }
                 if (isMobileByChoice.get(where)) {
                   desired.add("mobile");
@@ -191,9 +199,10 @@ jobs:
               }
 
               // Validated only; the remote host never contributes a label.
+              // GitHub renders this skipped optional dropdown as "None"; required fields keep rejecting it.
               const remoteOs = fields.get("Remote host operating system") ?? "";
-              if (!isUnselected(remoteOs) && !REMOTE_OS_VALUES.has(remoteOs)) {
-                return null;
+              if (!isUnselected(remoteOs) && remoteOs !== "none" && !REMOTE_OS_VALUES.has(remoteOs)) {
+                return rejectChoice("Remote host operating system", remoteOs);
               }
               return desired;
             }

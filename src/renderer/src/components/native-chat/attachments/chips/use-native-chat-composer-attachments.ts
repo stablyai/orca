@@ -1,10 +1,11 @@
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import { currentDraftScope } from '../../drafts/native-chat-launch-draft-source'
 import type {
   UseNativeChatComposerAttachmentsArgs,
   NativeChatComposerAttachments
 } from './native-chat-composer-attachment-contract'
 
-import { useCallback, useEffect, useLayoutEffect, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo } from 'react'
 import { nativeChatComposerTargetIsRemote } from '../../composer/submit/native-chat-composer-target'
 import { nativeChatLocalAttachmentUnsupportedNotice } from '../intake/native-chat-attachment-notices'
 import { captureNativeChatEditDraftDestination } from '../../drafts/native-chat-composer-draft-memory'
@@ -67,12 +68,14 @@ export function useNativeChatComposerAttachments({
   useLayoutEffect(() => {
     mountedRef.acceptsImages = acceptsImages
   }, [acceptsImages, mountedRef])
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [mountedRef])
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      mountedRef.current = true
+      return () => {
+        mountedRef.current = false
+      }
+    }, [mountedRef])
+  )
 
   const nextAttachmentId = useCallback(() => createUuidV4(), [])
   const serverOwnedPendingIds = useMemo(() => new Set<string>(), [])
@@ -198,8 +201,13 @@ export function useNativeChatComposerAttachments({
       references: { id: string; path: string }[],
       options?: NativeChatPendingAttachmentOptions,
       serverOwned = false
-    ) =>
-      settlePendingImageReferences(
+    ) => {
+      // Chips reserved for files staged on the remote target settle as server-owned too.
+      const owned = references.reduce(
+        (any, { id }) => serverOwnedPendingIds.delete(id) || any,
+        serverOwned
+      )
+      return settlePendingImageReferences(
         nativeChatPendingAttachmentScope(destinationScope(), references[0]?.id ?? ''),
         scopeEditor(),
         () =>
@@ -214,11 +222,12 @@ export function useNativeChatComposerAttachments({
                     attachResolvedPaths(
                       paths,
                       null,
-                      serverOwned ? { ...options, targetOwnerIsCurrent: () => true } : options
+                      owned ? { ...options, targetOwnerIsCurrent: () => true } : options
                     )
                 : undefined
           )
-      ),
+      )
+    },
     [
       attachResolvedPaths,
       attachmentScopeKey,
@@ -226,7 +235,8 @@ export function useNativeChatComposerAttachments({
       disabledRef,
       isComposing,
       mountedRef,
-      scopeEditor
+      scopeEditor,
+      serverOwnedPendingIds
     ]
   )
 

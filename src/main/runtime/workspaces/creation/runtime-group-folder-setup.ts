@@ -7,7 +7,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
-import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
+import { isRepoOnCatalogHost } from '../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   prepareRuntimeLocalWorktreeSetup,
@@ -29,6 +29,7 @@ export type RuntimeGroupFolderCreateInput = FolderWorkspaceCreateInput &
     | 'startupCwd'
     | 'startupPaneKey'
     | 'startupAccountEnv'
+    | 'terminalImageViewerSupported'
     | 'onStartupTerminalCreated'
     | 'onStartupPromptCarry'
     | 'onWorkspaceCreated'

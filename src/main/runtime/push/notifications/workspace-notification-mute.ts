@@ -29,6 +29,10 @@ export function isWorkspaceNotificationMuted(
   deps: WorkspaceNotificationMuteDeps,
   workspaceId: string
 ): boolean {
+  // Why: host-originated phone pushes bypass the renderer, so the user's per-worktree mute is applied here too.
+  if (deps.store.getUI?.()?.notificationsMutedByWorktree?.[workspaceId] === true) {
+    return true
+  }
   return (
     deps.store.getSettings().notifications?.notifyHiddenWorkspaces === false &&
     isWorkspaceHiddenBySidebarFilters(deps, workspaceId)

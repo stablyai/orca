@@ -24,19 +24,34 @@ export type PrepareNativeChatVisuals = (
   sessionId: string
 ) => Promise<NativeChatVisualsLaunch | null>
 
-export function createNativeChatVisualsDelivery(deps: {
-  stateDirectory: string
-  logger: StructuredAgentSessionLogger
+type NativeChatVisualsSwitch = {
   isEnabled?: () => boolean
   resolveSkill?: () => Promise<NativeChatVisualsSkillLocation | null>
-}): PrepareNativeChatVisuals {
-  const resolveSkill = deps.resolveSkill ?? (() => resolveNativeChatVisualsSkillLocation())
+}
+
+/** The bundled visuals skill while visuals are on; null when off or missing from this install.
+ *  A chat's launch and its resting `/` probe both load it from here. */
+export async function enabledNativeChatVisualsSkill(
+  deps: NativeChatVisualsSwitch
+): Promise<NativeChatVisualsSkillLocation | null> {
+  if (deps.isEnabled?.() === false) {
+    return null
+  }
+  return (deps.resolveSkill ?? (() => resolveNativeChatVisualsSkillLocation()))()
+}
+
+export function createNativeChatVisualsDelivery(
+  deps: NativeChatVisualsSwitch & {
+    stateDirectory: string
+    logger: StructuredAgentSessionLogger
+  }
+): PrepareNativeChatVisuals {
   return async (sessionId) => {
     try {
       if (deps.isEnabled?.() === false) {
         return null
       }
-      const skill = await resolveSkill()
+      const skill = await enabledNativeChatVisualsSkill(deps)
       if (!skill) {
         deps.logger.warn('native-chat visuals skill is missing from this install', {
           scope: 'nativeChatVisuals.skill',

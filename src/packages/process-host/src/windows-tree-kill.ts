@@ -36,6 +36,11 @@ export function trackedWindowsTreeKill(child: ChildProcess): WindowsTreeKill | u
   return kill && kill.verdict() !== 'unverifiable' ? kill : undefined
 }
 
+/** Any tree kill already started for this handle, settled or not: a second walk could hit a reused pid. */
+export function windowsTreeKillFor(child: ChildProcess): WindowsTreeKill | undefined {
+  return treeKills.get(child)
+}
+
 export function inFlightWindowsTreeKill(
   child: ChildProcess
 ): Promise<SettledWindowsTreeKillVerdict> | undefined {

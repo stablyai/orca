@@ -1,4 +1,6 @@
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import { join } from 'node:path'
+import { agentModelCatalogInputStamp } from '../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 
 /** Model discovery never authenticates interactively. */
@@ -29,16 +31,25 @@ export type AcpModelDiscovery =
   | AcpSessionModelDiscovery
   | { kind: 'unavailable'; reason: string }
 
-/** Requires a chat folder and session deletion or disposable storage to avoid persistent history. */
+/** Needs session deletion, disposable storage or `discardSession` to leave no history behind. */
 export type AcpSessionModelDiscovery = {
   kind: 'session'
   listingNamesConfiguredModel: boolean
   sessionFolderArgs?(folder: string): string[]
+  /** Models follow the account, not the project, so the session runs in a private folder. */
+  inPrivateFolder?: true
+  /** Starting the agent is heavy, so it lists only when a picker asks, never in warm-up. */
+  listsOnDemand?: true
+  /** Removes a listing session's files, after its process exits, from an agent that can't delete
+   *  sessions; `cwd` is the private folder it ran in, so only that session matches. */
+  discardSession?(session: AcpListingSession): Promise<void>
 }
+
+export type AcpListingSession = { sessionId: string; cwd: string; accountHomePath: string }
 
 export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean {
   return (
-    discovery.kind === 'session' ||
+    (discovery.kind === 'session' && !discovery.inPrivateFolder) ||
     (discovery.kind === 'command' && discovery.otherReleasesListInSession === true)
   )
 }
@@ -67,4 +78,42 @@ export function acpModelListingForRelease(
   return discovery.otherReleasesListInSession
     ? { kind: 'session', listingNamesConfiguredModel: discovery.listingNamesConfiguredModel }
     : null
+}
+
+/** Serialized stamp inputs covering every discovery-relevant launch directory and home config file. */
+export async function acpModelCatalogStampInput(
+  discovery: AcpModelDiscovery,
+  launch: {
+    command: string
+    prefixArgs: readonly string[]
+    cwd: string
+    workspace: string
+    env: NodeJS.ProcessEnv
+    home: string | null
+  }
+): Promise<string> {
+  const { home } = launch
+  const configFiles =
+    discovery.kind === 'initialize' && home && discovery.homeConfigFiles
+      ? discovery.homeConfigFiles.map((name) => join(home, name))
+      : undefined
+  const directories = [
+    ...new Set([
+      launch.cwd,
+      ...(discovery.kind === 'command' && launch.workspace ? [launch.workspace] : [])
+    ])
+  ]
+  return JSON.stringify(
+    await Promise.all(
+      directories.map((directory) =>
+        agentModelCatalogInputStamp({
+          command: launch.command,
+          prefixArgs: launch.prefixArgs,
+          cwd: directory,
+          env: launch.env,
+          configFiles
+        })
+      )
+    )
+  )
 }

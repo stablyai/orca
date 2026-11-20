@@ -74,7 +74,6 @@ export function newWorkspaceMountAdapters(
           projectObservable({
             command: state?.setupCommand,
             source: state?.setupSource,
-            trust: state?.setupTrust,
             runPolicy: state?.setupRunPolicy,
             advanced: state?.showAdvanced,
             run: state?.runSetup

@@ -2,10 +2,8 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
-import type {
-  AgentSessionModelOption,
-  AgentSessionOptionChoice
-} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import {
   MCODE_EFFORT_CHOICES,

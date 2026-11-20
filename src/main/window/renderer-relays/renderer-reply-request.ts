@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain, type BrowserWindow } from 'electron'
 
 import { addFanoutListener } from '../../runtime/events/event-listener-fanout'
-import { abortWhenRendererGone } from '../../ipc/renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../../ipc/renderer-requests/renderer-lifetime-abort'
 
 /** Sends one request to the window and resolves with the reply its own renderer sends; rejects when it goes away or times out. */
 export function requestRendererReply<TReply extends { requestId: string }>(

@@ -13,7 +13,7 @@ import {
   getRepoDialableSshTargetId,
   getRepoExecutionHostId,
   getRepoRoutingConnectionId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repositories/repository-name'
 import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'

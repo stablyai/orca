@@ -26,9 +26,20 @@ const badgeVariants = cva(
         /** An uppercase kind label set before a banner title; takes its color from the parent. */
         paneLabel:
           'h-4 border-current/30 px-1.5 py-0 align-[1px] text-3xs font-semibold tracking-wider uppercase',
-        /** A skill or file sitting inline in the chat message box, ringed while selected. */
+        /** A caution next to a name, such as a community plugin asking for trust. */
+        warning:
+          'border-status-warning-border bg-status-warning-background text-status-warning-text',
+        /** A skill, file or bot sitting inline in the chat message box, ringed while selected. */
         promptPill:
-          'max-w-full border-border bg-secondary px-1.5 py-0 align-baseline text-muted-foreground data-[selected=true]:ring-1 data-[selected=true]:ring-ring'
+          'max-w-full border-border bg-secondary px-1.5 py-0 align-baseline text-muted-foreground data-[selected=true]:ring-1 data-[selected=true]:ring-ring data-[muted=true]:border-dashed data-[muted=true]:opacity-70',
+        /** Something listed but not offered yet, such as a coming-soon connector. */
+        comingSoon: 'border-border font-normal text-muted-foreground',
+        /** Who sent a chat message from another app, over its bubble; a button when it opens. */
+        chatSender:
+          'h-5 max-w-full border-chat-user-border px-2 text-2xs font-normal text-chat-foreground-faint focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [button&]:cursor-pointer [button&]:hover:bg-accent',
+        /** Someone whose words a chat message carries as context only, such as a person without access. */
+        chatContextSender:
+          'h-5 max-w-full border-dashed border-chat-user-border px-2 text-2xs font-normal text-chat-foreground-faint'
       }
     },
     defaultVariants: {

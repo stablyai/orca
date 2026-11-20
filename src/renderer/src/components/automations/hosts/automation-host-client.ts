@@ -8,8 +8,8 @@ import type {
 } from '../../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { StableAutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 type RuntimeAutomationCreateInput = Omit<
   AutomationCreateInput,
@@ -38,7 +38,10 @@ export function getAutomationHostTargetFromKey(key: string | null): AutomationHo
     return null
   }
   if (key.startsWith('environment:')) {
-    return { kind: 'environment', environmentId: key.slice('environment:'.length) }
+    return {
+      kind: 'environment',
+      environmentId: key.slice('environment:'.length)
+    }
   }
   return { kind: 'local' }
 }
@@ -92,6 +95,10 @@ export function toRuntimeAutomationCreateInput(
   input: AutomationCreateInput
 ): RuntimeAutomationCreateInput {
   const { projectId, workspaceId, ...rest } = input
+  // A bot automation's folder comes from its bot, so it names no project or workspace.
+  if (input.bot) {
+    return rest
+  }
   return {
     ...rest,
     // Machine selectors must not fall back to path/name matching on a remote host.
@@ -140,15 +147,52 @@ export async function listAutomationRunsForTarget(
   return result.runs
 }
 
+export async function showAutomationForTarget(
+  target: AutomationHostTarget,
+  automationId: string
+): Promise<Automation> {
+  const result = await callRuntimeRpc<{ automation: Automation }>(
+    target,
+    'automation.show',
+    { id: automationId },
+    { timeoutMs: 15_000 }
+  )
+  return result.automation
+}
+
+/** Its host's message for an id it does not have. */
+export function isAutomationNotFoundError(error: unknown): boolean {
+  return error instanceof Error && error.message.startsWith('Automation not found')
+}
+
+/** The newest few runs; a host without paging sends them all, newest first. */
+export async function listRecentAutomationRunsForTarget(
+  target: AutomationHostTarget,
+  automationId: string,
+  limit: number
+): Promise<AutomationRun[]> {
+  const result = await callRuntimeRpc<{ runs: AutomationRun[] }>(
+    target,
+    'automation.runs',
+    { automationId, limit },
+    { timeoutMs: 15_000 }
+  )
+  return result.runs.slice(0, limit)
+}
+
 export async function updateAutomationForTarget(
-  automation: Automation,
+  automation: Pick<Automation, 'id' | 'runContext'>,
   updates: AutomationUpdateInput,
   sourceTarget?: AutomationHostTarget | null
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
   const prepared = await prepareAutomationLaunchSetup(
     target.kind === 'environment'
-      ? { kind: 'runtime', environmentId: target.environmentId, pairingRevision: 0 }
+      ? {
+          kind: 'runtime',
+          environmentId: target.environmentId,
+          pairingRevision: 0
+        }
       : { kind: 'desktop' },
     updates
   )
@@ -162,7 +206,7 @@ export async function updateAutomationForTarget(
 }
 
 export async function deleteAutomationForTarget(
-  automation: Automation,
+  automation: Pick<Automation, 'id' | 'runContext'>,
   sourceTarget?: AutomationHostTarget | null
 ): Promise<void> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
@@ -170,7 +214,7 @@ export async function deleteAutomationForTarget(
 }
 
 export async function runAutomationNowForTarget(
-  automation: Automation,
+  automation: Pick<Automation, 'id' | 'runContext'>,
   sourceTarget?: AutomationHostTarget | null
 ): Promise<AutomationRun> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)

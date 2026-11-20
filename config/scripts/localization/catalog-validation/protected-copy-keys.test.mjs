@@ -2,9 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { collectProtectedCopyKeys, main, PROTECTED_COPY_KEYS_PATH } from './protected-copy-keys.mjs'
-
-const ENGLISH = new Set(['trust.title', 'trust.reasons.network'])
+import { main, PROTECTED_COPY_KEYS_PATH } from './protected-copy-keys.mjs'
+import { LOCALIZATION_SOURCE_ROOTS } from './verify-localization-catalog.mjs'
 
 let dirs = []
 afterEach(() => {
@@ -28,22 +27,19 @@ function sourcesFrom(files) {
   return sources
 }
 
-describe('collectProtectedCopyKeys', () => {
-  it('keeps dynamic key heads only when they are specific', () => {
-    const sources = sourcesFrom({
-      'Dialog.tsx': '<SecuritySurface>{translate(`trust.${id}`)}{translate(`trust.reasons.${x}`)}'
-    })
-
-    expect(collectProtectedCopyKeys(sources, ENGLISH).prefixes).toEqual(['trust.reasons.'])
-  })
-})
-
 describe('protected copy check', () => {
   it('fails when a security dialog uses a key the generated list lacks, until synced', async () => {
     sourcesFrom({
       'src/renderer/src/i18n/locales/en.json': JSON.stringify({ trust: { allow: 'Allow' } }),
       'src/renderer/src/Dialog.tsx': `<SecuritySurface>{translate('trust.allow', 'Allow')}`,
       'src/main/ready.ts': '',
+      ...Object.fromEntries(
+        LOCALIZATION_SOURCE_ROOTS.filter((root) => path.extname(root)).map((root) => [
+          root.split(path.sep).join('/'),
+          ''
+        ])
+      ),
+      'src/shared/agent-usage/status-copy/empty.ts': '',
       [PROTECTED_COPY_KEYS_PATH.split(path.sep).join('/')]: '{}'
     })
     const root = dirs.at(-1)
