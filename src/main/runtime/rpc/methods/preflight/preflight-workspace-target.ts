@@ -1,7 +1,10 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { resolveQualifiedFolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import {
+  resolveQualifiedFolderWorkspace,
+  type QualifiedFolderWorkspaceSelection
+} from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { resolveWorkspaceAgentDetectionHost } from '../../../../preflight/workspace-agent-detection'
 import { resolveWorktreeHostRouting } from '../../../workspaces/catalog/worktree-launch-host-repo'
 
@@ -11,7 +14,8 @@ export async function resolveQualifiedAgentDetectionHost(
     'requireStore' | 'resolveAgentDetectionHost' | 'showManagedWorktree'
   >,
   params: { worktreeId?: string; worktreeHostId?: ExecutionHostId; repoId?: string },
-  selectedWorktree?: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
+  selectedWorktree?: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
+  selectedFolder?: QualifiedFolderWorkspaceSelection
 ) {
   const hostId = params.worktreeHostId
   if (!hostId || !params.worktreeId) {
@@ -22,25 +26,30 @@ export async function resolveQualifiedAgentDetectionHost(
   if (scope?.type === 'folder') {
     const groups = store.getProjectGroups?.() ?? []
     const repos = store.getRepos()
-    const selected = resolveQualifiedFolderWorkspace(
-      {
-        folderWorkspaces: store.getFolderWorkspaces?.() ?? [],
-        projectGroups: groups,
-        repos
-      },
-      scope.folderWorkspaceId,
-      hostId,
-      () => new Error('worktree_execution_host_unresolved')
-    )
+    const selected =
+      selectedFolder ??
+      resolveQualifiedFolderWorkspace(
+        {
+          folderWorkspaces: store.getFolderWorkspaces?.() ?? [],
+          projectGroups: groups,
+          repos
+        },
+        scope.folderWorkspaceId,
+        hostId,
+        () => new Error('worktree_execution_host_unresolved')
+      )
+    if (selected.workspace.id !== scope.folderWorkspaceId || selected.hostId !== hostId) {
+      throw new Error('worktree_execution_host_unresolved')
+    }
     return resolveWorkspaceAgentDetectionHost(
       {
         getSettings: () => store.getSettings(),
         getProjects: () => store.getProjects?.() ?? [],
         getRepos: () => repos,
         getProjectGroups: () => groups,
-        getFolderWorkspaces: () => [{ ...selected.workspace, executionHostId: selected.hostId }]
+        getFolderWorkspaces: () => [selected.workspace]
       },
-      { kind: 'folder', folderWorkspaceId: scope.folderWorkspaceId }
+      { kind: 'folder', folderWorkspaceId: scope.folderWorkspaceId, selected }
     )
   }
   const worktree =

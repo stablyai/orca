@@ -15,6 +15,10 @@ import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/w
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { RuntimeWorkspacePortOperations } from './ports/runtime-workspace-port-operations'
+import {
+  folderCatalogOf,
+  resolveKeyedFolderWorkspaceSelection
+} from './catalog/workspace-selector-candidates'
 const DEFAULT_WORKTREE_LIST_LIMIT = 200
 export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspacePortOperations {
   protected abstract resolveFolderWorkspaceSelector(
@@ -148,6 +152,14 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
         ? { crossStoreLineage }
         : {})
     }
+  }
+
+  resolveManagedFolderWorkspace(selector: string, requiredHostId?: ExecutionHostId) {
+    return resolveKeyedFolderWorkspaceSelection(
+      folderCatalogOf(this.requireStore()),
+      selector,
+      requiredHostId
+    )
   }
 
   /**

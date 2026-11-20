@@ -3,20 +3,20 @@ import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { main } from '../index'
-import { OrcaRuntimeService } from '../../main/runtime/orca-runtime'
-import { RpcDispatcher } from '../../main/runtime/rpc/dispatcher'
-import { defineMethod, type RpcRequest } from '../../main/runtime/rpc/core'
-import { PREFLIGHT_METHODS } from '../../main/runtime/rpc/methods/preflight/preflight'
-import { WorktreeShow } from '../../shared/rpc-contract/workspaces/worktree-params'
-import { OrchestrationError } from '../../main/runtime/orchestration/orchestration-error'
-import { getRuntimeMetadataPath } from '../../shared/remote-runtime/bootstrap/runtime-bootstrap'
-import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
-import * as detection from '../../main/preflight/workspace-agent-detection'
+import { main } from '../../../../../cli/index'
+import { OrcaRuntimeService } from '../../../orca-runtime'
+import { RpcDispatcher } from '../../dispatcher'
+import { defineMethod, type RpcRequest } from '../../core'
+import { PREFLIGHT_METHODS } from 'preflight'
+import { WorktreeShow } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
+import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import { getRuntimeMetadataPath } from '../../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import * as detection from '../../../../preflight/workspace-agent-detection'
 import {
   clearSshHostServerStatus,
   setSshHostServerStatus
-} from '../../main/ssh/host-server/ssh-host-server-status'
+} from '../../../../ssh/host-server/ssh-host-server-status'
 
 const roots: string[] = []
 const sockets = new Set<Socket>()

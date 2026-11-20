@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   partialRuntimeStore,
+  storeFolderWorkspace,
+  storeProjectGroup,
   storeRepo,
   storeWorktreeMeta
 } from '../../../construction/test-context/runtime-store-partial-fixture'
@@ -59,7 +61,7 @@ describe('installed-agent workspace resolution bound', () => {
       worktreeHostId: 'local'
     })
 
-    expect(result.agents).toEqual(['codex'])
+    expect(result).toMatchObject({ agents: ['codex'] })
     expect(resolve).toHaveBeenCalledTimes(1)
   })
 
@@ -82,5 +84,46 @@ describe('installed-agent workspace resolution bound', () => {
 
     expect(host.kind).toBe('local')
     expect(routing).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    [750, 12],
+    [7500, 120]
+  ])('acquires the selected folder once among %i folders', async (count, groupCount) => {
+    const folders = Array.from({ length: count }, (_, index) =>
+      storeFolderWorkspace({
+        id: index === 0 ? 'hub' : `hub-${index}`,
+        projectGroupId: 'group',
+        folderPath: `/work/hub-${index}`,
+        executionHostId: 'local'
+      })
+    )
+    folders.push(
+      storeFolderWorkspace({
+        id: 'hub',
+        projectGroupId: 'group',
+        folderPath: '/srv/hub',
+        executionHostId: 'ssh:box'
+      })
+    )
+    const readFolders = vi.fn(() => folders)
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getFolderWorkspaces: readFolders,
+        getProjectGroups: () =>
+          Array.from({ length: groupCount }, (_, index) =>
+            storeProjectGroup({ id: index === 0 ? 'group' : `group-${index}` })
+          )
+      })
+    )
+    vi.spyOn(detection, 'detectAgentsOnHost').mockResolvedValue(['codex'])
+
+    const result = await listInstalledWorkspaceAgents(runtime, {
+      worktreeId: 'folder:hub',
+      worktreeHostId: 'local'
+    })
+
+    expect(result).toMatchObject({ agents: ['codex'] })
+    expect(readFolders).toHaveBeenCalledTimes(1)
   })
 })

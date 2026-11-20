@@ -11,10 +11,13 @@ import {
 import { agentCommandOverrideDetectionOptions } from '../../../../preflight/installed-agent-detection'
 import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import type { QualifiedFolderWorkspaceSelection } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 
 type InstalledAgentsRuntime = Pick<
   OrcaRuntimeService,
   | 'showManagedWorktree'
+  | 'resolveManagedFolderWorkspace'
   | 'requireStore'
   | 'resolveAgentDetectionHost'
   | 'resolveOrchestrationWorkerServer'
@@ -28,13 +31,21 @@ export async function listInstalledWorkspaceAgents(
   let selectedWorktree:
     | Awaited<ReturnType<InstalledAgentsRuntime['showManagedWorktree']>>
     | undefined
+  let selectedFolder: QualifiedFolderWorkspaceSelection | undefined
   if (params.worktreeId) {
-    const worktree = await runtime.showManagedWorktree(
-      `id:${params.worktreeId}`,
-      params.worktreeHostId,
-      { matchFolders: true }
-    )
-    selectedWorktree = worktree
+    if (parseWorkspaceKey(params.worktreeId)?.type === 'folder') {
+      selectedFolder =
+        runtime.resolveManagedFolderWorkspace(params.worktreeId, params.worktreeHostId) ?? undefined
+      if (!selectedFolder) {
+        throw new Error('selector_not_found')
+      }
+    }
+    const worktree = selectedFolder
+      ? { id: params.worktreeId, hostId: selectedFolder.hostId }
+      : (selectedWorktree = await runtime.showManagedWorktree(
+          `id:${params.worktreeId}`,
+          params.worktreeHostId
+        ))
     const host = parseRoutableExecutionHostId(worktree.hostId)
     if (!host || (params.worktreeHostId && params.worktreeHostId !== worktree.hostId)) {
       throw new Error('worktree_execution_host_unresolved')
@@ -81,8 +92,11 @@ export async function listInstalledWorkspaceAgents(
   }
   const host = await resolveQualifiedAgentDetectionHost(
     runtime,
-    selectedWorktree ? { ...params, worktreeHostId: selectedWorktree.hostId } : params,
-    selectedWorktree
+    params.worktreeId
+      ? { ...params, worktreeHostId: selectedFolder?.hostId ?? selectedWorktree?.hostId }
+      : params,
+    selectedWorktree,
+    selectedFolder
   )
   await assertAgentDetectionHostRunning(host)
   const settings = runtime.requireStore().getSettings()
