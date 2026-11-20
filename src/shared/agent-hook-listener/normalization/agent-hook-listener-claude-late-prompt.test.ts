@@ -288,6 +288,38 @@ describe('Claude prompt event arriving after its turn', () => {
       ).toMatchObject({ state: 'done', turnCompletedAt: personEnd })
     })
 
+    it('lets a wakeup the person typed into, or one that failed, announce its own end', () => {
+      const personEnd = personTurnHeldByShell()
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+      claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })
+
+      expect(
+        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: 'also this' })
+      ).toMatchObject({ state: 'done', turnCompletedAt: undefined })
+
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: THIRD, prompt: done })
+      expect(
+        claude({ hook_event_name: 'StopFailure', prompt_id: THIRD, background_tasks: [] })
+          ?.turnCompletedAt
+      ).not.toBe(personEnd)
+    })
+
+    it('stops repeating the announced end once a turn ends with its prompt event still missing', () => {
+      const personEnd = personTurnHeldByShell()
+      claude({
+        hook_event_name: 'PreToolUse',
+        prompt_id: SECOND,
+        tool_name: 'Bash',
+        tool_use_id: 'c'
+      })
+      claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [SHELL] })
+
+      expect(
+        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: THIRD, prompt: done })
+          ?.turnCompletedAt
+      ).not.toBe(personEnd)
+    })
+
     it('never gives the person’s next turn the end it already announced', () => {
       const personEnd = personTurnHeldByShell()
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })

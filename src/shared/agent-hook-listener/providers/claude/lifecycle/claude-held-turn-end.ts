@@ -81,16 +81,24 @@ export function releaseClaudeUnclassifiedTurnEnd(
 export function claudeAnnouncedTurnEnd(
   event: { name: unknown; isTaskWakeup: boolean; opensTurn: boolean },
   previousLead: ClaudeLeadTurnState | undefined
-): Pick<ClaudeLeadTurnState, 'turnCompletedAt' | 'announcedTurnCompletedAt'> {
-  if (event.name === 'UserPromptSubmit' && !event.isTaskWakeup) {
+): Pick<
+  ClaudeLeadTurnState,
+  'turnCompletedAt' | 'announcedTurnCompletedAt' | 'repeatsAnnouncedEnd'
+> {
+  // A turn whose prompt event never said who started it may be the person's, so it ends the repeat too.
+  if (
+    (event.name === 'UserPromptSubmit' && !event.isTaskWakeup) ||
+    previousLead?.unclassifiedTurnCompletedAt !== undefined
+  ) {
     return { announcedTurnCompletedAt: undefined }
   }
   const own =
     previousLead?.waitingAgentId !== undefined ? previousLead.stateBeforeWait : previousLead
-  return (event.name === 'Stop' || event.name === 'StopFailure') &&
+  // A failed wakeup is news of its own, so it never repeats an announced end.
+  return event.name === 'Stop' &&
     !event.opensTurn &&
     own?.taskWakeupTurn === true &&
     previousLead?.announcedTurnCompletedAt !== undefined
-    ? { turnCompletedAt: previousLead.announcedTurnCompletedAt }
+    ? { turnCompletedAt: previousLead.announcedTurnCompletedAt, repeatsAnnouncedEnd: true }
     : {}
 }

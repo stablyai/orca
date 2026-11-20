@@ -34,10 +34,21 @@ export function settleLateClaudePromptSubmit(
   if (isTaskWakeup) {
     lead.unclassifiedTurnCompletedAt = undefined
     // A wakeup that Stop already ended repeats the person's announced end instead of announcing its own.
-    if (own?.state === 'done') {
-      lead.turnCompletedAt ??= lead.announcedTurnCompletedAt
+    if (
+      own?.state === 'done' &&
+      own.outcome !== 'failure' &&
+      lead.turnCompletedAt === undefined &&
+      lead.announcedTurnCompletedAt !== undefined
+    ) {
+      lead.turnCompletedAt = lead.announcedTurnCompletedAt
+      lead.repeatsAnnouncedEnd = true
     }
   } else {
+    // The person typed into a wakeup Stop already ended: its end is theirs to announce, not a repeat.
+    if (lead.repeatsAnnouncedEnd) {
+      lead.turnCompletedAt = undefined
+      lead.repeatsAnnouncedEnd = undefined
+    }
     lead.announcedTurnCompletedAt = undefined
     releaseClaudeUnclassifiedTurnEnd(state, paneKey, lead)
   }
