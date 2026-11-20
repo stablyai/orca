@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/bots/bot-avatar-color'
 import { BOT_AVATAR_OUTFITS, type BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { BotAvatarTile } from './BotAvatar'
-import { botMascotSrc } from './bot-mascot-look'
+import { useBotMascotSrc } from './bot-mascot-look'
 
 /** The mascot's tile color: the swatches, then any color. */
 export function BotPictureColors({
@@ -110,7 +110,7 @@ function OutfitTile({
   side: 'top' | 'bottom'
   onPick: () => void
 }): React.JSX.Element {
-  const src = botMascotSrc(id, color, outfit)
+  const src = useBotMascotSrc(id, color, outfit)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -157,7 +157,6 @@ export function BotPictureOutfits({
     'night-shift': t('bots.new.outfitNightShift', 'Night shift'),
     artist: t('bots.new.outfitArtist', 'Artist'),
     scientist: t('bots.new.outfitScientist', 'Scientist'),
-    security: t('bots.new.outfitSecurity', 'Security'),
     party: t('bots.new.outfitParty', 'Party')
   }
   const label = t('bots.new.pictureOutfit', 'Outfit')

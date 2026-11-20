@@ -18,18 +18,27 @@ describe('recolorMascotSvg', () => {
   })
 })
 
-const DRESSABLE = '<svg><g><g><g id="body"/><g id="face"><circle r="1"/></g></g></g></svg>\n'
+const DRESSABLE =
+  '<svg><defs><path d="M1"/></defs><g><g><path d="M1"/><g id="face"><circle r="1"/></g></g></g></svg>\n'
+const ART = '<image href="data:image/webp;base64,QQ" x="1" y="2" width="3" height="4" preserveAspectRatio="none"/>'
 
 describe('dressMascotSvg', () => {
   it('draws the outfit over the picture', () => {
-    expect(dressMascotSvg(DRESSABLE, { layer: '<g id="outfit"/>' })).toBe(
-      '<svg><g><g><g id="body"/><g id="face"><circle r="1"/></g></g></g><g id="outfit"/></svg>'
+    expect(dressMascotSvg(DRESSABLE, { art: 'QQ', at: [1, 2, 3, 4] })).toBe(
+      `<svg><defs><path d="M1"/></defs><g><g><path d="M1"/><g id="face"><circle r="1"/></g></g></g>${ART}</svg>`
     )
   })
 
-  it('swaps the face when the outfit has one', () => {
-    expect(dressMascotSvg(DRESSABLE, { layer: '<g id="outfit"/>', face: '<circle r="2"/>' })).toBe(
-      '<svg><g><g><g id="body"/><g id="face"><circle r="2"/></g></g></g><g id="outfit"/></svg>'
+  it('swaps the face and redraws body lines, leaving the defs alone', () => {
+    expect(
+      dressMascotSvg(DRESSABLE, {
+        art: 'QQ',
+        at: [1, 2, 3, 4],
+        face: '<circle r="2"/>',
+        redraw: [['M1', 'M2']]
+      })
+    ).toBe(
+      `<svg><defs><path d="M1"/></defs><g><g><path d="M2"/><g id="face"><circle r="2"/></g></g></g>${ART}</svg>`
     )
   })
 })

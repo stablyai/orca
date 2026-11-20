@@ -9,7 +9,7 @@ import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { PICKABLE_BOT_MASCOT_IDS } from '../../../../shared/bot-avatar'
 import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
-import { botMascotSrcs } from './bot-mascot-look'
+import { useBotMascotSrcs } from './bot-mascot-look'
 import { BotPictureColors, BotPictureOutfits } from './BotPictureLook'
 import { BotPictureIntakeLine, LineAction } from './BotPictureIntakeLine'
 import {
@@ -141,7 +141,7 @@ export function BotPicturePicker({
         ? CUSTOM_FACE
         : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
   const generating = currentKey === GENERATE_FACE
-  const srcs = botMascotSrcs(PICKABLE_BOT_MASCOT_IDS, color, outfit)
+  const srcs = useBotMascotSrcs(PICKABLE_BOT_MASCOT_IDS, color, outfit)
   const faces: BotPictureFace[] = order.map((key) =>
     key === GENERATE_FACE
       ? {
@@ -231,69 +231,69 @@ export function BotPicturePicker({
   return (
     // Once one label has shown, moving to the next tile, arrow or swatch shows its label at once.
     <TooltipProvider skipDelayDuration={300}>
-    <div
-      ref={rootRef}
-      data-dropping={(dropping && outlinePicker) || undefined}
-      onPointerDownCapture={() => {
-        byPointer.current = true
-      }}
-      onKeyDownCapture={() => {
-        byPointer.current = false
-      }}
-      className="relative before:pointer-events-none before:absolute before:-inset-x-2.5 before:-top-2.5 before:-bottom-1.5 before:hidden before:rounded-[14px] before:border-[1.5px] before:border-dashed before:border-foreground/35 data-dropping:before:block"
-    >
-      <BotPictureCarousel
-        faces={faces}
-        index={Math.max(0, order.indexOf(currentKey))}
-        dropping={dropping}
-        description={
-          generating
-            ? t('bots.avatar.generate.face', 'Generate a picture')
-            : showingCustom
-              ? custom.description
-              : t('bots.new.pictureMascot', 'Mascot {{n}} of {{total}}', {
-                  n: mascotIndex + 1,
-                  total: PICKABLE_BOT_MASCOT_IDS.length
-                })
-        }
-        onIndexChange={(index) => select(order[index])}
-      />
-      {/* On Generate the description field takes the swatches' place; the rows cross-fade. */}
-      <BotPictureRowFold open={!generating}>
-        {onColorChange || onOutfitChange ? (
-          <BotPictureRowFold open={!showingCustom}>
-            {onColorChange ? <BotPictureColors color={color} onChange={onColorChange} /> : null}
-            {onOutfitChange ? (
-              <BotPictureOutfits
-                id={PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0]}
-                color={color}
-                outfit={outfit}
-                onChange={onOutfitChange}
-              />
-            ) : null}
+      <div
+        ref={rootRef}
+        data-dropping={(dropping && outlinePicker) || undefined}
+        onPointerDownCapture={() => {
+          byPointer.current = true
+        }}
+        onKeyDownCapture={() => {
+          byPointer.current = false
+        }}
+        className="relative before:pointer-events-none before:absolute before:-inset-x-2.5 before:-top-2.5 before:-bottom-1.5 before:hidden before:rounded-[14px] before:border-[1.5px] before:border-dashed before:border-foreground/35 data-dropping:before:block"
+      >
+        <BotPictureCarousel
+          faces={faces}
+          index={Math.max(0, order.indexOf(currentKey))}
+          dropping={dropping}
+          description={
+            generating
+              ? t('bots.avatar.generate.face', 'Generate a picture')
+              : showingCustom
+                ? custom.description
+                : t('bots.new.pictureMascot', 'Mascot {{n}} of {{total}}', {
+                    n: mascotIndex + 1,
+                    total: PICKABLE_BOT_MASCOT_IDS.length
+                  })
+          }
+          onIndexChange={(index) => select(order[index])}
+        />
+        {/* On Generate the description field takes the swatches' place; the rows cross-fade. */}
+        <BotPictureRowFold open={!generating}>
+          {onColorChange || onOutfitChange ? (
+            <BotPictureRowFold open={!showingCustom}>
+              {onColorChange ? <BotPictureColors color={color} onChange={onColorChange} /> : null}
+              {onOutfitChange ? (
+                <BotPictureOutfits
+                  id={PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0]}
+                  color={color}
+                  outfit={outfit}
+                  onChange={onOutfitChange}
+                />
+              ) : null}
+            </BotPictureRowFold>
+          ) : null}
+          {uploadLine}
+        </BotPictureRowFold>
+        {withGenerate ? (
+          <BotPictureRowFold open={generating}>
+            <GenerateField face={face} />
           </BotPictureRowFold>
         ) : null}
-        {uploadLine}
-      </BotPictureRowFold>
-      {withGenerate ? (
-        <BotPictureRowFold open={generating}>
-          <GenerateField face={face} />
-        </BotPictureRowFold>
-      ) : null}
-      <input
-        ref={fileRef}
-        type="file"
-        accept={BOT_AVATAR_ACCEPT}
-        className="hidden"
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0]
-          event.currentTarget.value = ''
-          if (file) {
-            intake.take(file)
-          }
-        }}
-      />
-    </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={BOT_AVATAR_ACCEPT}
+          className="hidden"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0]
+            event.currentTarget.value = ''
+            if (file) {
+              intake.take(file)
+            }
+          }}
+        />
+      </div>
     </TooltipProvider>
   )
 }

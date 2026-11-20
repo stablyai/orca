@@ -2,8 +2,8 @@ import type { ImageSourcePropType } from 'react-native'
 import { BOT_MASCOT_IDS, type BotMascotId } from '../../../src/shared/bot-avatar'
 import type { BotAvatarOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
 
-// One sheet per outfit, each mascot's transparent render in BOT_MASCOT_IDS order, so the outfits add nine
-// files to the app rather than one per mascot; read on use, as the pictures are.
+// One sheet per outfit, each mascot's transparent render in BOT_MASCOT_IDS order, so an outfit adds one
+// file to the app rather than one per mascot; read on use, as the pictures are.
 const OUTFIT_SHEETS: Record<BotAvatarOutfit, () => ImageSourcePropType> = {
   tie: () => require('../../../src/shared/bot-mascots/outfits/tie.webp'),
   detective: () => require('../../../src/shared/bot-mascots/outfits/detective.webp'),
@@ -12,7 +12,6 @@ const OUTFIT_SHEETS: Record<BotAvatarOutfit, () => ImageSourcePropType> = {
   'night-shift': () => require('../../../src/shared/bot-mascots/outfits/night-shift.webp'),
   artist: () => require('../../../src/shared/bot-mascots/outfits/artist.webp'),
   scientist: () => require('../../../src/shared/bot-mascots/outfits/scientist.webp'),
-  security: () => require('../../../src/shared/bot-mascots/outfits/security.webp'),
   party: () => require('../../../src/shared/bot-mascots/outfits/party.webp')
 }
 

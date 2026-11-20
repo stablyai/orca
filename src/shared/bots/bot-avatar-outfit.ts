@@ -10,7 +10,6 @@ export const BOT_AVATAR_OUTFITS = [
   'night-shift',
   'artist',
   'scientist',
-  'security',
   'party'
 ] as const
 

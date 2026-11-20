@@ -7,7 +7,7 @@ import { uploadBotAvatar } from '@/lib/bot-catalog'
 import { PICKABLE_BOT_MASCOT_IDS, isBotMascotId, mascotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
-import { botMascotSrc } from './bot-mascot-look'
+import { useBotMascotSrc } from './bot-mascot-look'
 import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { pictureMascotIndex, type BotPictureCustom, type BotPictureValue } from './BotPicturePicker'
 
@@ -82,7 +82,7 @@ export function useNewBotPicture(
   const showingUpload = value.kind === 'custom' && upload !== null
   const mascotId =
     PICKABLE_BOT_MASCOT_IDS[pictureMascotIndex(value, custom)] ?? PICKABLE_BOT_MASCOT_IDS[0]
-  const mascotSrc = botMascotSrc(mascotId, color, outfit) ?? ''
+  const mascotSrc = useBotMascotSrc(mascotId, color, outfit) ?? ''
   return {
     value,
     custom,
