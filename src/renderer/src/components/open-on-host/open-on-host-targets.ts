@@ -10,6 +10,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import {
   buildProjectHostSetupOptions,
+  getHostSetupUnavailableDetail,
   type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
 } from '@/lib/workspace/creation/project-host-setup-options'
@@ -89,6 +90,12 @@ function getDisabledReason(
 ): string | null {
   if (option.kind === 'needs-setup' && !option.canSetLocation) {
     return option.detail
+  }
+  // Why: on the relay the shown row is ssh:, so the options builder never checked the server's capabilities.
+  const runtimeUnavailable =
+    option.kind === 'needs-setup' && host ? getHostSetupUnavailableDetail(host, t) : null
+  if (runtimeUnavailable) {
+    return runtimeUnavailable
   }
   if (!cloneUrl) {
     return t('openOnHost.noRemote', 'Add a git remote to open this project on another machine')
