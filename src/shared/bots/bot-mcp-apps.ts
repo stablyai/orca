@@ -100,6 +100,14 @@ export const BOT_MCP_APPS: readonly BotMcpApp[] = [
     category: 'coding'
   },
   {
+    id: 'revyl',
+    name: 'Revyl',
+    line: 'Test apps on cloud iOS, Android, web and Macs',
+    url: 'https://backend.revyl.ai/api/v1/mcp',
+    signIn: 'browser',
+    category: 'coding'
+  },
+  {
     id: 'atlassian',
     name: 'Atlassian',
     line: 'Jira issues and Confluence pages',
