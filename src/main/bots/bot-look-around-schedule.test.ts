@@ -87,7 +87,7 @@ describe('Look around hours', () => {
       { resetsAt: at(26, 17) }
     )
     expect(lookAroundDueAt(setting, limited, at(26, 16, 1))).toBeNull()
-    expect(lookAroundNextAt(setting, limited, at(26, 16, 1))).toBe(at(26, 17))
+    expect(next(setting, limited, at(26, 16, 1))?.at).toBe(at(26, 17))
     expect(lookAroundDueAt(setting, limited, at(26, 17, 1))).toBe(at(26, 16))
   })
 
@@ -121,9 +121,9 @@ describe('Look around hours', () => {
       false,
       { resetsAt: at(26, 16, 5) }
     )
-    expect(lookAroundNextAt(setting, limited, at(26, 16, 3))).toBe(at(26, 16, 17))
+    expect(next(setting, limited, at(26, 16, 3))?.at).toBe(at(26, 16, 17))
     // Still the retry once the reset has passed.
-    expect(lookAroundNextAt(setting, limited, at(26, 16, 6))).toBe(at(26, 16, 17))
+    expect(next(setting, limited, at(26, 16, 6))?.at).toBe(at(26, 16, 17))
   })
 
   it('names the next slot as Next look when it comes before the retry of an owed one', () => {
@@ -136,7 +136,7 @@ describe('Look around hours', () => {
       false,
       { resetsAt: at(26, 19, 58) }
     )
-    expect(lookAroundNextAt(setting, limited, at(26, 19, 57))).toBe(at(26, 20))
+    expect(next(setting, limited, at(26, 19, 57))?.at).toBe(at(26, 20))
   })
 
   it('keeps a usage limit hold when a later look fails to start', () => {

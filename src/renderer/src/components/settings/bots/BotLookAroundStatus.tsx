@@ -11,7 +11,7 @@ import { foreignZone, lookAroundScheduleShort } from '@/components/bots/bot-look
 import { translate } from '@/i18n/i18n'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { useTranslate } from '@/i18n/use-translate'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotLookAround, UpNextState } from '../../../../../shared/bots/bot-look-around'
 

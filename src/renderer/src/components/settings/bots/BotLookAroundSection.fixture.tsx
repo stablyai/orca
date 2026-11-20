@@ -7,7 +7,7 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { BotLookAround, UpNextState } from '../../../../../shared/bots/bot-look-around'
 import { BotHoverLookLine } from '../../bots/BotHoverLookLine'
 import { BotRow } from '../../bots/BotRow'
-import { ConfirmationDialogProvider } from '../../confirmation-dialog'
+import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { BotLookAroundSection } from './BotLookAroundSection'
 

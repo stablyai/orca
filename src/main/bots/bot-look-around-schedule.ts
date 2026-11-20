@@ -13,6 +13,8 @@ import {
   type BotLookState,
   type LookAroundRun
 } from './bot-look-around-state'
+import { missedRun } from './bot-background-run-history'
+import { usageLimitedUntil } from './bot-look-around-failures'
 
 /** A Look now started this soon before a slot may stand in for it (and after it, at least). */
 export const LOOK_RECENT_MS = 60 * 60 * 1000
@@ -169,8 +171,8 @@ function lookNowSlot(
  *  older records' looks are) that stands in for it (see lookNowSlot), each Look now in the order
  *  they started. A scheduled look for another current slot never takes it, however late it started;
  *  one for a slot the schedule no longer has (the owner moved a time) counts as a Look now, so an
- *  edit can't start a second look minutes after the first. A look the host's sleep cut short never
- *  takes a slot. */
+ *  edit can't start a second look minutes after the first. A look the host's sleep or a usage limit
+ *  cut short never takes a slot. */
 function slotTakers(
   setting: BotLookAround,
   runs: readonly LookAroundRun[]
@@ -186,14 +188,12 @@ function slotTakers(
     run.scheduledFor !== undefined && current.has(run.scheduledFor)
   const taken = new Set(
     runs.flatMap((run) =>
-      run.asleep !== true && run.scheduledFor !== undefined && ownSlot(run)
-        ? [run.scheduledFor]
-        : []
+      !missedRun(run) && run.scheduledFor !== undefined && ownSlot(run) ? [run.scheduledFor] : []
     )
   )
   const standsInFor = new Map<LookAroundRun, number>()
   for (const run of runs) {
-    if (run.asleep === true || ownSlot(run)) {
+    if (missedRun(run) || ownSlot(run)) {
       continue
     }
     const slot = lookNowSlot(setting, run.startedAt, taken)
@@ -205,25 +205,21 @@ function slotTakers(
   return (slot) =>
     runs.findLast(
       (run) =>
-        run.asleep !== true &&
+        !missedRun(run) &&
         (ownSlot(run) ? run.scheduledFor === slot : standsInFor.get(run) === slot)
     )
 }
 
-/** A look for the slot the host's sleep cut short a moment ago: it is tried again, only waiting a
- *  little after each, so a host that keeps sleeping doesn't start one every tick. */
-function retryWaiting(
-  setting: BotLookAround,
-  runs: readonly LookAroundRun[],
-  slot: number,
-  now: number
-): boolean {
+/** When the slot may be tried again after a look the host's sleep or a usage limit cut short; 0
+ *  when none did. Only waiting a little after each, so a host that keeps sleeping doesn't start one
+ *  every tick. */
+function retryAt(setting: BotLookAround, runs: readonly LookAroundRun[], slot: number): number {
   const current = new Set(
     runs.flatMap((run) => (run.scheduledFor !== undefined ? [run.scheduledFor] : []))
   )
   const ends = catchUpEnds(setting, slot)
-  const cut = runs.findLast((run) => run.asleep === true && takes(run, slot, ends, current))
-  return cut !== undefined && now - (cut.endedAt ?? cut.startedAt) < ASLEEP_RETRY_AFTER_MS
+  const cut = runs.findLast((run) => missedRun(run) && takes(run, slot, ends, current))
+  return cut ? (cut.endedAt ?? cut.startedAt) + ASLEEP_RETRY_AFTER_MS : 0
 }
 
 /** Until when a slot due now may still start: the next slot, or the end of its day. */
@@ -307,21 +303,30 @@ export function lookAroundDecision(
   const taken = slotTakers(setting, state.runs)
   const latest = latestLookSlot(setting, now)
   const calendar = automationScheduleCalendar(lookAroundZone(setting))
-  const owed =
+  const owedSlot =
     latest !== null && latest >= allowedFrom && latest >= calendar.startOfDay(now) && !taken(latest)
       ? latest
       : null
-  // Owed, but not started yet while a try the host's sleep cut short waits a little.
-  const due = owed !== null && !retryWaiting(setting, state.runs, owed, now) ? owed : null
+  // No scheduled look starts before the reset of a usage limit that ended the last one.
+  const limitedUntil = usageLimitedUntil(state.runs)
+  const retry = owedSlot !== null ? retryAt(setting, state.runs, owedSlot) : 0
+  const ends = owedSlot !== null ? catchUpEnds(setting, owedSlot) : 0
+  // A usage limit holding the owed slot past its catch-up gives it up to the next slot.
+  const owed = owedSlot !== null && limitedUntil < ends ? owedSlot : null
+  // Owed, but not started yet while a try the host's sleep or a usage limit cut short waits.
+  const due = owed !== null && now >= retry && now >= limitedUntil ? owed : null
   const missedAt = latestExpiredUntakenSlot(setting, state, now, allowedFrom, taken)
-  if (owed !== null) {
+  const startsAt = Math.max(retry, limitedUntil)
+  // Held by a usage limit, Next look is when it may start: at the reset, or once its retry waits.
+  const held = owed !== null && limitedUntil > 0 && startsAt > now
+  if (owed !== null && !(held && startsAt >= ends)) {
     return {
       due,
-      next: { at: owed, due: true, until: catchUpEnds(setting, owed) },
+      next: held ? { at: startsAt } : { at: owed, due: true, until: ends },
       ...(missedAt !== undefined ? { missedAt } : {})
     }
   }
-  let after = Math.max(now, allowedFrom - 1)
+  let after = Math.max(now, allowedFrom - 1, limitedUntil)
   let skipped: NonNullable<LookDecision['next']>['skipped']
   // A Look now takes at most one slot (lookNowSlot), so this skips one per look; the cap is a backstop.
   for (let attempt = 0; attempt < 4; attempt += 1) {

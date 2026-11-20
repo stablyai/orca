@@ -37,6 +37,8 @@ it('persists expired hourly misses while later slots succeed and naturally reach
     now: () => now,
     power: testRunPower(() => now).power,
     hadConversation: async () => true,
+    usageLimitOf: async () => null,
+    usageLimitContinues: async () => false,
     sessions: {
       startConversation: async (_bot, input) => {
         await input.beforeFirstMessage?.()
