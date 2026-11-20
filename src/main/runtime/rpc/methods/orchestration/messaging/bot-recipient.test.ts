@@ -174,6 +174,22 @@ describe('mail to a bot', () => {
     expect(cards.at(-1)?.body).not.toHaveProperty('botRequest.messageId')
   })
 
+  it('refuses missing or unsupported mail types, and refuses mail while bots are off', async () => {
+    journals[RANGER_THREAD] = [message('ask')]
+    await expect(send(RANGER_THREAD, { to: 'bot:Docs' })).rejects.toMatchObject({
+      code: 'bot_request_type'
+    })
+    await expect(send(RANGER_THREAD, { to: 'bot:Docs', type: 'escalation' })).rejects.toMatchObject(
+      { code: 'bot_request_type' }
+    )
+
+    vi.mocked(runtime.bots.enabled).mockReturnValue(false)
+    await expect(send(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff' })).rejects.toMatchObject({
+      code: 'bots_disabled'
+    })
+    expect(db.getAllMessagesForHandle(`orca_session_id:${DOCS_CHAT}`)).toEqual([])
+  })
+
   it('cards a refusal that comes after the first check, once', async () => {
     journals[RANGER_THREAD] = [message('ask')]
     // Docs is paused while its Chat is found, so only the re-check before storing refuses.
