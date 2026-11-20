@@ -90,3 +90,39 @@ it('preserves a human source-note caption while removing only the matching gener
   }
   expect(nativeChatMessageCopyText(message)).toBe(note)
 })
+
+it.each([true, false])(
+  'removes only a fitted image context beside an unchanged image (fitted first=%s)',
+  (first) => {
+    const note = '[Image source file: "/repo/big.png"; attached viewing copy: "/temp/big.png"]'
+    const paths = first
+      ? ['/temp/big.png', '/repo/small.png']
+      : ['/repo/small.png', '/temp/big.png']
+    const message: NativeChatMessage = {
+      id: 'mixed',
+      role: 'user',
+      source: 'transcript',
+      timestamp: 1,
+      blocks: [
+        ...paths.map((path) => ({ type: 'image-ref' as const, path })),
+        { type: 'text', text: `${note} Describe these` }
+      ]
+    }
+    expect(nativeChatMessageCopyText(message)).toBe('Describe these')
+  }
+)
+
+it('preserves a human note inside a caption beside an image with no path', () => {
+  const text = 'Why did it add [Image source file: "/a.png"; attached viewing copy: "/b.png"] here?'
+  const message: NativeChatMessage = {
+    id: 'literal',
+    role: 'user',
+    source: 'transcript',
+    timestamp: 1,
+    blocks: [
+      { type: 'image-ref', url: 'data:image/png;base64,abc' },
+      { type: 'text', text }
+    ]
+  }
+  expect(nativeChatMessageCopyText(message)).toBe(text)
+})

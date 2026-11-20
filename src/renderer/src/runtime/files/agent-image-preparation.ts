@@ -148,13 +148,10 @@ export function captureTerminalAgentImageTarget(tabId: string, leafId: string) {
     const state = useAppStore.getState()
     const entry = state.agentStatusByPaneKey.get(key)
     const foreground = state.paneForegroundAgentByPaneKey[key]
-    if (foreground?.shellForeground || foreground?.routingRevoked) {
-      return null
-    }
-    return isTuiAgent(foreground?.agent)
-      ? foreground.agent
-      : entry?.restoredUnconfirmed !== true && isTuiAgent(entry?.agentType)
-        ? entry.agentType
+    return entry?.restoredUnconfirmed !== true && isTuiAgent(entry?.agentType)
+      ? entry.agentType
+      : !foreground?.shellForeground && isTuiAgent(foreground?.agent)
+        ? foreground.agent
         : null
   }
   const agent = readAgent()
@@ -162,12 +159,16 @@ export function captureTerminalAgentImageTarget(tabId: string, leafId: string) {
     return null
   }
   const entry = useAppStore.getState().agentStatusByPaneKey.get(key)
+  const foregroundAtCapture = useAppStore.getState().paneForegroundAgentByPaneKey[key]
   const sessionId = entry?.orcaSessionId
   const providerSessionId = entry?.providerSession?.id
   return {
     isCurrent: () => {
-      const current = useAppStore.getState().agentStatusByPaneKey.get(key)
+      const state = useAppStore.getState()
+      const current = state.agentStatusByPaneKey.get(key)
+      const foreground = state.paneForegroundAgentByPaneKey[key]
       return (
+        !(foreground !== foregroundAtCapture && foreground?.shellForeground) &&
         readAgent() === agent &&
         (!sessionId || current?.orcaSessionId === sessionId) &&
         (!providerSessionId || current?.providerSession?.id === providerSessionId)

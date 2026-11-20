@@ -18,22 +18,44 @@ export function withoutAgentImageSourceContexts(blocks: NativeChatBlock[]): Nati
     selected.set(context.index, ranges)
   }
   if (images.length) {
-    let remaining = images.length
-    for (let index = contexts.length - 1; index >= 0 && remaining > 0; index--) {
-      const context = contexts[index]
-      const first = remaining - context.delivered.length
-      if (
-        first >= 0 &&
-        context.delivered.every(
-          (path, offset) => !images[first + offset].path || images[first + offset].path === path
-        )
-      ) {
-        select(context)
-        remaining = first
+    const known = new Map<string, number[]>()
+    const unknown: number[] = []
+    images.forEach((image, index) => {
+      if (image.path) {
+        const indices = known.get(image.path) ?? []
+        indices.push(index)
+        known.set(image.path, indices)
+      } else {
+        unknown.push(index)
       }
-    }
-    if (remaining > 0) {
-      return blocks
+    })
+    for (let index = contexts.length - 1; index >= 0; index--) {
+      const context = contexts[index]
+      const block = blocks[context.index]
+      if (!isTextBlock(block)) {
+        continue
+      }
+      const edge =
+        unknown.length > 0 &&
+        (context.end === block.text.length || !block.text.slice(0, context.start).trim())
+      const matched: { queue: number[]; image: number }[] = []
+      for (const path of context.delivered) {
+        const candidates = known.get(path)
+        const queue = candidates ?? (edge ? unknown : undefined)
+        const image = queue?.pop()
+        if (queue && image !== undefined) {
+          matched.push({ queue, image })
+        } else {
+          break
+        }
+      }
+      if (matched.length === context.delivered.length) {
+        select(context)
+      } else {
+        for (let offset = matched.length - 1; offset >= 0; offset--) {
+          matched[offset].queue.push(matched[offset].image)
+        }
+      }
     }
   } else {
     for (let index = contexts.length - 1; index >= 0; index--) {

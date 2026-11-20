@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { writes, preparation } = vi.hoisted(() => {
   const writes: string[] = []
-  const preparation: { hold: boolean; deliver?: () => void } = { hold: false }
+  const preparation: {
+    hold: boolean
+    deliver?: () => void
+    holdEnter?: boolean
+    acknowledgeEnter?: () => void
+  } = { hold: false }
   return { writes, preparation }
 })
 
@@ -15,6 +20,11 @@ vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
 vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: (_ptyId: string, data: string) => {
     writes.push(data)
+    if (data === '\r' && preparation.holdEnter) {
+      return new Promise<boolean>((resolve) => {
+        preparation.acknowledgeEnter = () => resolve(true)
+      })
+    }
     return Promise.resolve(true)
   }
 }))
@@ -207,6 +217,34 @@ describe('fitted image delivery', () => {
       }
     }
   )
+
+  it('keeps a proven Enter acknowledgment submitted when the agent exits immediately afterward', async () => {
+    vi.useFakeTimers()
+    writes.length = 0
+    preparation.holdEnter = true
+    let current = true
+    try {
+      const handle = sendNativeChatMessageWithImageAttachments(
+        'claude',
+        'pty-agent',
+        'Inspect this',
+        ['/repo/hero.png'],
+        { clearInput: '', isCurrent: () => current, onWriteRejected: () => {} }
+      )
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(writes).toContain('\r')
+      const sent = [...writes]
+      current = false
+      preparation.acknowledgeEnter?.()
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(handle.outcome).resolves.toBe('submitted')
+      expect(writes).toEqual(sent)
+    } finally {
+      preparation.holdEnter = false
+      resetNativeChatPtySendQueuesForTests()
+      vi.useRealTimers()
+    }
+  })
 
   it.each([false, true])(
     'keeps a nested SSH attachment on its own host (observed=%s)',

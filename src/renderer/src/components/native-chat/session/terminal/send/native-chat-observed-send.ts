@@ -54,7 +54,7 @@ export function sendNativeChatObservedWrites(
         return true
       }
       const writeAt = (index: number): void => {
-        if (isCancelled() || refuseSuccessor(index)) {
+        if (isCancelled()) {
           return
         }
         const write = writes[index]
@@ -68,6 +68,9 @@ export function sendNativeChatObservedWrites(
           } else {
             finish()
           }
+          return
+        }
+        if (refuseSuccessor(index)) {
           return
         }
         const send = (): void => {

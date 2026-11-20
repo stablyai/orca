@@ -137,6 +137,7 @@ export function useNativeChatPtyComposerSend(args: {
         const pane = parsePaneKey(args.paneKey)
         const imageTarget = pane ? captureTerminalAgentImageTarget(pane.tabId, pane.leafId) : null
         if (pane && !imageTarget) {
+          args.setNotice(translate('components.native-chat.messageNotSent', 'Message not sent'))
           return false
         }
         const owner = resolveNativeChatAttachmentOwner(useAppStore.getState(), args.terminalTabId)

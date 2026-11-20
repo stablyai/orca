@@ -134,7 +134,26 @@ it('retains a live idle agent and old-host fallback without reusing stale shell 
   await expect(flight).resolves.toEqual(['/repo/a.png'])
   publish({
     ...rig.state,
+    agentStatusByPaneKey: new Map(),
     paneForegroundAgentByPaneKey: { 'tab:leaf': { agent: null, shellForeground: true } }
   })
   expect(captureTerminalAgentImageTarget('tab', 'leaf')).toBeNull()
 })
+
+it.each(['stale-shell', 'revoked-routing'])(
+  'retains live hook-backed image sends despite %s evidence',
+  async (kind) => {
+    publish({
+      ...rig.state,
+      paneForegroundAgentByPaneKey: {
+        'tab:leaf':
+          kind === 'stale-shell'
+            ? { agent: null, shellForeground: true }
+            : { agent: 'claude', shellForeground: false, routingRevoked: true }
+      }
+    })
+    const flight = prepareTerminalAgentImagePaths('tab', 'leaf', 'pty', ['/repo/a.png'])
+    rig.requests[0].onEvent({ paths: ['/temp/a.png'] })
+    await expect(flight).resolves.toEqual(['/temp/a.png'])
+  }
+)
