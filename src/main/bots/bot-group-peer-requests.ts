@@ -159,13 +159,13 @@ export function narrowGroupMailBatch<
   }
 }
 
-/** Whether a mail line's turn may have run: saved, retired, or answered for by its chat. */
-function mailTurnRan(groups: BotGroupRuntime, turn: BotGroupTurn): boolean {
+/** Whether a mail line's turn ran, by what the line itself saved: its reply, or its retirement. */
+function mailTurnRan(turn: BotGroupTurn | undefined): boolean {
   return (
+    turn === undefined ||
     turn.reply !== undefined ||
     turn.revoked === true ||
-    turn.frozenItems !== undefined ||
-    groups.mailTurnChecks.get(turn.operationId)?.state === 'answered'
+    turn.frozenItems !== undefined
   )
 }
 
@@ -202,22 +202,27 @@ export function reserveGroupMailTurn(
   ) {
     throw new Error('This mail is outside the active group request; it was not delivered.')
   }
+  // A replay of this id (a line saved before lines were keyed by mail included) changes nothing.
+  if (
+    groups.store
+      .operationMessage(input.operationId)
+      ?.turns.some((turn) => turn.operationId === input.operationId)
+  ) {
+    return
+  }
   // One room line per mail and member, whatever id carries it: the lane mints a new id when an
-  // attempt is refused, withdrawn or too old to reuse, and the line follows to the attempt that runs.
-  // A line whose turn ran (or may have) keeps it; mail that comes back after that gets a line of its own.
+  // attempt is refused, withdrawn or too old to reuse, and the line follows to the attempt that
+  // runs. Mail that comes back after its turn ran gets the next line of its own.
   const mailKey = `mail:${member.sessionId}:${notice.messages.map(({ messageId }) => messageId).join(',')}`
-  const reserved = groups.store.message(mailKey)
-  if (reserved?.turns.some((turn) => turn.operationId === input.operationId)) {
-    return
+  let id = mailKey
+  let line = groups.store.message(id)
+  for (let index = 2; line && mailTurnRan(line.turns[0]); index += 1) {
+    id = `${mailKey}#${index}`
+    line = groups.store.message(id)
   }
-  const [held] = reserved?.turns ?? []
-  if (reserved && held && !mailTurnRan(groups, held)) {
-    groups.store.retarget(mailKey, input.operationId)
+  if (line) {
+    groups.store.retarget(id, input.operationId)
     groups.changed()
-    return
-  }
-  const id = reserved ? `mail:${input.operationId}` : mailKey
-  if (groups.store.message(id)) {
     return
   }
   const bot = groups.runtime.bots.list().find((bot) => bot.id === member.botId)
