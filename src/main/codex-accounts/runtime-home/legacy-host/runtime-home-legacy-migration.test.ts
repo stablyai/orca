@@ -81,9 +81,7 @@ async function startService(): Promise<void> {
 async function waitForHistorySettled(): Promise<void> {
   await vi.waitFor(
     () =>
-      expect(readFileSync(sessionsMigratedStatePath(), 'utf-8')).toContain(
-        '"historyImportSettled":true'
-      ),
+      expect(readFileSync(historyStatePath(), 'utf-8')).toContain('"historyImportSettled":true'),
     { timeout: WAIT_MS }
   )
 }
@@ -94,6 +92,10 @@ function preservedHistoryPath(accountId: string): string {
 
 function sessionsMigratedStatePath(): string {
   return join(testState.userDataDir, 'codex-runtime-home', 'migration-v1-sessions.json')
+}
+
+function historyStatePath(): string {
+  return join(testState.userDataDir, 'codex-runtime-home', 'migration-v1-history.json')
 }
 
 // Slow CI hosts take seconds to construct the service.
@@ -257,10 +259,11 @@ describe('CodexRuntimeHomeService', () => {
   it('imports from the preserved history once the account folder is gone', async () => {
     mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
     writeFileSync(preservedHistoryPath('account-1'), '{"id":"legacy-1"}\n', 'utf-8')
-    mkdirSync(join(sessionsMigratedStatePath(), '..'), { recursive: true })
+    mkdirSync(join(historyStatePath(), '..'), { recursive: true })
+    writeFileSync(sessionsMigratedStatePath(), '{}', 'utf-8')
     writeFileSync(
-      sessionsMigratedStatePath(),
-      JSON.stringify({ historyImportAttempts: 1 }),
+      historyStatePath(),
+      JSON.stringify({ historiesPreserved: true, historyImportAttempts: 1 }),
       'utf-8'
     )
 
@@ -320,9 +323,7 @@ describe('CodexRuntimeHomeService', () => {
     await waitForImportOutcomes(['failed'])
     await vi.waitFor(
       () =>
-        expect(readFileSync(sessionsMigratedStatePath(), 'utf-8')).toContain(
-          '"historyImportAttempts":1'
-        ),
+        expect(readFileSync(historyStatePath(), 'utf-8')).toContain('"historyImportAttempts":1'),
       { timeout: WAIT_MS }
     )
     expect(existsSync(runtimeHistoryPath)).toBe(false)
@@ -340,9 +341,9 @@ describe('CodexRuntimeHomeService', () => {
 
   it('retries an import it gave up on once the account history changed', async () => {
     writeHistory('account-1', '{"id":"legacy-1"}\n')
-    mkdirSync(join(sessionsMigratedStatePath(), '..'), { recursive: true })
+    mkdirSync(join(historyStatePath(), '..'), { recursive: true })
     writeFileSync(
-      sessionsMigratedStatePath(),
+      historyStatePath(),
       JSON.stringify({ historyImportAttempts: 3, historyImportInputs: 'before the change' }),
       'utf-8'
     )
@@ -357,9 +358,9 @@ describe('CodexRuntimeHomeService', () => {
   it('retries an import it gave up on a day later when nothing changed', async () => {
     writeHistory('account-1', '{"id":"legacy-1"}\n')
     const { legacyHistoryInputsKey } = await import('./legacy-prompt-history-import')
-    mkdirSync(join(sessionsMigratedStatePath(), '..'), { recursive: true })
+    mkdirSync(join(historyStatePath(), '..'), { recursive: true })
     writeFileSync(
-      sessionsMigratedStatePath(),
+      historyStatePath(),
       JSON.stringify({
         historyImportAttempts: 3,
         historyImportInputs: await legacyHistoryInputsKey(
