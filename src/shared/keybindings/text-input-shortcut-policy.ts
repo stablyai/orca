@@ -1,6 +1,6 @@
 import { hasModifier } from './parser'
 import { isLatinShortcutKey } from './input'
-import { keybindingRunsInTextField } from './matching'
+import { keybindingRunsInChatPrompt } from './matching'
 import type { KeybindingActionId, KeybindingInput } from './types'
 
 export type TextShortcutInput = KeybindingInput & {
@@ -62,7 +62,7 @@ export function nativeChatPromptClaimsShortcut(
   if (key && ['enter', 'escape', 'tab'].includes(key)) {
     return true
   }
-  if (actionId && keybindingRunsInTextField(actionId, input, platform)) {
+  if (actionId && keybindingRunsInChatPrompt(actionId, input, platform)) {
     return false
   }
   if (
