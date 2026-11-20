@@ -16395,7 +16395,8 @@
           },
           "FileExplorerPaste": {
             "paste": "Paste",
-            "clipboardImage": "Image"
+            "clipboardImage": "Image",
+            "clipboardImageTitle": "Clipboard image"
           },
           "FileExplorerKeyboardPaste": {
             "preferenceSaveFailed": "Could not save the confirmation preference.",

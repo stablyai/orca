@@ -45,23 +45,21 @@ type FileExplorerDropDestination =
     }
   | { error: unknown }
 
-type FileExplorerPasteOptions = {
-  worktreeId: string | null
-  worktreePath: string | null
-  displayRootPath: string | null
-  operationOwner: FileExplorerOperationOwner | undefined
-  importPreparedPaths: (
-    paths: string[],
-    destination: Exclude<FileExplorerDropDestination, { error: unknown }>
-  ) => Promise<number>
-}
-
 type FileExplorerImportController = {
   fileDropOwnerRef: (root: HTMLElement | null) => void
   pasteToDirectory: (directory?: string | null) => void
   keyboardPasteConfirmationOpen: boolean
   cancelKeyboardPasteConfirmation: () => void
   confirmKeyboardPasteConfirmation: (dontAskAgain: boolean) => void
+}
+
+function enqueueFileExplorerPasteDelivery(
+  sequence: { deliveryTail: Promise<void> },
+  deliver: () => Promise<void>
+): void {
+  sequence.deliveryTail = sequence.deliveryTail
+    .then(deliver)
+    .catch((error: unknown) => console.error('File explorer paste delivery failed', error))
 }
 
 export function useFileExplorerImport({
@@ -97,42 +95,24 @@ export function useFileExplorerImport({
     [refreshDir, setSelectedPath, t]
   )
 
-  const pasteOptionsRef = useRef<FileExplorerPasteOptions>({
-    worktreeId,
-    worktreePath,
-    displayRootPath,
-    operationOwner,
-    importPreparedPaths
-  })
-  useLayoutEffect(() => {
-    pasteOptionsRef.current = {
-      worktreeId,
-      worktreePath,
-      displayRootPath,
-      operationOwner,
-      importPreparedPaths
-    }
-  }, [displayRootPath, importPreparedPaths, operationOwner, worktreeId, worktreePath])
-
   const pasteToDirectory = useCallback(
     (directory?: string | null): void => {
       const root = rootRef.current
-      const options = pasteOptionsRef.current
-      if (!root || !options.worktreeId || !options.worktreePath || !options.displayRootPath) {
+      if (!root || !worktreeId || !worktreePath || !displayRootPath) {
         return
       }
 
-      const destinationDir = directory ?? options.displayRootPath
-      if (getRelativePathInsideRoot(destinationDir, options.displayRootPath) === null) {
+      const destinationDir = directory ?? displayRootPath
+      if (getRelativePathInsideRoot(destinationDir, displayRootPath) === null) {
         return
       }
 
       let destination: Exclude<FileExplorerDropDestination, { error: unknown }>
       try {
-        const guard = captureFileExplorerOperationGuard(options.worktreeId, options.operationOwner)
+        const guard = captureFileExplorerOperationGuard(worktreeId, operationOwner)
         destination = {
-          worktreeId: options.worktreeId,
-          worktreePath: options.worktreePath,
+          worktreeId,
+          worktreePath,
           destinationDir,
           guard
         }
@@ -149,7 +129,7 @@ export function useFileExplorerImport({
         return
       }
 
-      const delivery = sequence.deliveryTail.then(async () => {
+      enqueueFileExplorerPasteDelivery(sequence, async () => {
         try {
           const paths = await readClipboardImportPaths()
           if (paths.length === 0) {
@@ -160,15 +140,16 @@ export function useFileExplorerImport({
             const message = getNativeFileDropRejectionMessage(failure)
             toast.error(message.title, { description: message.description })
           }
-          const importedCount = await options.importPreparedPaths(prepared.paths, destination)
+          const importedCount = await importPreparedPaths(prepared.paths, destination)
           if (importedCount > 0) {
             toast.success(
               t(
-                importedCount === 1
-                  ? 'auto.components.right.sidebar.useFileExplorerImport.pasteSuccess_one'
-                  : 'auto.components.right.sidebar.useFileExplorerImport.pasteSuccess_other',
+                'auto.components.right.sidebar.useFileExplorerImport.pasteSuccess',
                 importedCount === 1 ? 'Pasted {{count}} item' : 'Pasted {{count}} items',
-                { count: importedCount }
+                {
+                  count: importedCount,
+                  defaultValue_one: 'Pasted {{count}} item'
+                }
               ),
               {
                 description: destination.destinationDir
@@ -187,11 +168,8 @@ export function useFileExplorerImport({
           )
         }
       })
-      sequence.deliveryTail = delivery.catch((error: unknown) =>
-        console.error('File explorer paste delivery failed', error)
-      )
     },
-    [sequence, t]
+    [displayRootPath, importPreparedPaths, operationOwner, sequence, t, worktreeId, worktreePath]
   )
 
   const {
@@ -207,20 +185,19 @@ export function useFileExplorerImport({
         return
       }
       const root = rootRef.current
-      const options = pasteOptionsRef.current
-      if (!root || !options.worktreeId || !options.worktreePath || !options.displayRootPath) {
+      if (!root || !worktreeId || !worktreePath || !displayRootPath) {
         return
       }
       event.preventDefault()
       event.stopPropagation()
-      const destination = readFileExplorerPasteDir(root, event.target) ?? options.displayRootPath
+      const destination = readFileExplorerPasteDir(root, event.target) ?? displayRootPath
       void readClipboardPastePreview().then((preview) => {
         if (preview) {
           requestKeyboardPasteConfirmation(destination)
         }
       })
     },
-    [requestKeyboardPasteConfirmation]
+    [displayRootPath, requestKeyboardPasteConfirmation, worktreeId, worktreePath]
   )
 
   const resolveDropDir = (event: DragEvent): string | null => {

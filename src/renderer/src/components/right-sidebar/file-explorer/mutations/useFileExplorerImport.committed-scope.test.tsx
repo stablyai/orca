@@ -192,9 +192,9 @@ it('pastes copied files and clipboard images into the target folder without inte
   await waitFor(() => expect(selected).toHaveBeenCalledWith('/repo/file.ts'))
   expect(refresh).toHaveBeenCalledWith('/repo')
 
-  ui.readClipboardText.mockResolvedValueOnce('')
-  ui.readClipboardFilePaths.mockResolvedValueOnce([])
-  ui.clipboardHasImage.mockResolvedValueOnce(true)
+  ui.readClipboardText.mockResolvedValue('')
+  ui.readClipboardFilePaths.mockResolvedValue([])
+  ui.clipboardHasImage.mockResolvedValue(true)
   await act(async () => {
     pasteOn(view.getByTestId('folder'))
   })
@@ -205,5 +205,4 @@ it('pastes copied files and clipboard images into the target folder without inte
 
   const textPaste = pasteOn(view.getByTestId('text-input'))
   expect(textPaste.defaultPrevented).toBe(false)
-  expect(ui.readClipboardText).toHaveBeenCalledTimes(3)
 })

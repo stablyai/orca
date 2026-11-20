@@ -6,7 +6,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
@@ -77,14 +76,21 @@ export function FileExplorerBackgroundMenu({
           <DropdownMenuItem onSelect={onPaste}>
             <ClipboardPaste />
             {t('auto.components.right.sidebar.FileExplorerPaste.paste', 'Paste')}
-            <DropdownMenuShortcut
-              className="ml-auto max-w-28 truncate normal-case tracking-normal"
-              title={pastePreview.kind === 'image' ? 'Clipboard image' : pastePreview.title}
+            <span
+              className="ml-auto max-w-28 truncate text-muted-foreground"
+              title={
+                pastePreview.kind === 'image'
+                  ? t(
+                      'auto.components.right.sidebar.FileExplorerPaste.clipboardImageTitle',
+                      'Clipboard image'
+                    )
+                  : pastePreview.title
+              }
             >
               {pastePreview.kind === 'image'
                 ? t('auto.components.right.sidebar.FileExplorerPaste.clipboardImage', 'Image')
                 : pastePreview.label}
-            </DropdownMenuShortcut>
+            </span>
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={() => onStartNew('file', worktreePath, displayDepth)}>
