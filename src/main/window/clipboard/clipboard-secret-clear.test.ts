@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  readText: vi.fn<() => string>(),
+  readText: vi.fn<() => Promise<string>>(),
   publish: vi.fn<(text: unknown, kind?: string) => Promise<void>>()
 }))
 
@@ -20,7 +20,7 @@ function setup(initial: string) {
     clipboard = ''
   })
   const clearer = createSecretClipboardClearer({
-    readText: () => clipboard,
+    readText: async () => clipboard,
     clear,
     setTimer: (run, ms) => setTimeout(run, ms),
     clearTimer: (timer) => clearTimeout(timer)
@@ -35,38 +35,38 @@ afterEach(() => {
 })
 
 describe('createSecretClipboardClearer', () => {
-  it('leaves whatever the owner copied afterwards', () => {
+  it('leaves whatever the owner copied afterwards', async () => {
     vi.useFakeTimers()
     const { clearer, clear, set, read } = setup('orcawh_secret')
     clearer('orcawh_secret')
     set('something else')
-    vi.advanceTimersByTime(SECRET_CLIPBOARD_CLEAR_MS)
+    await vi.advanceTimersByTimeAsync(SECRET_CLIPBOARD_CLEAR_MS)
     expect(clear).not.toHaveBeenCalled()
     expect(read()).toBe('something else')
   })
 
-  it('clears a second secret at its own one-minute deadline', () => {
+  it('clears a second secret at its own one-minute deadline', async () => {
     vi.useFakeTimers()
     const { clearer, set, read } = setup('first')
     clearer('first')
-    vi.advanceTimersByTime(SECRET_CLIPBOARD_CLEAR_MS / 2)
+    await vi.advanceTimersByTimeAsync(SECRET_CLIPBOARD_CLEAR_MS / 2)
     set('second')
     clearer('second')
 
-    vi.advanceTimersByTime(SECRET_CLIPBOARD_CLEAR_MS - 1)
+    await vi.advanceTimersByTimeAsync(SECRET_CLIPBOARD_CLEAR_MS - 1)
     expect(read()).toBe('second')
-    vi.advanceTimersByTime(1)
+    await vi.advanceTimersByTimeAsync(1)
     expect(read()).toBe('')
   })
 })
 
 describe('clearSecretFromClipboard', () => {
-  it('clears through the publisher that wrote the secret, so Wayland’s helper owner is replaced', () => {
+  it('clears through the publisher that wrote the secret, so Wayland’s helper owner is replaced', async () => {
     vi.useFakeTimers()
-    mocks.readText.mockReturnValue('orcawh_secret')
+    mocks.readText.mockResolvedValue('orcawh_secret')
     mocks.publish.mockResolvedValue(undefined)
     clearSecretFromClipboard('orcawh_secret')
-    vi.advanceTimersByTime(SECRET_CLIPBOARD_CLEAR_MS)
+    await vi.advanceTimersByTimeAsync(SECRET_CLIPBOARD_CLEAR_MS)
     expect(mocks.publish).toHaveBeenCalledWith('', 'ordinary')
   })
 })
