@@ -286,6 +286,21 @@ describe('legacy session copy swap', () => {
     expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
   })
 
+  it('still refuses an account restart onto an older state of a rollout that was never a copy', async () => {
+    writeFile(sourcePath, OLD_TURNS + NEW_TURNS)
+    const accountHome = join(root, 'account-home')
+    writeFile(join(accountHome, 'sessions', RELATIVE_PATH), OLD_TURNS)
+
+    await expect(
+      prepareCodexAccountRestartResume({
+        sourceHome: systemHome,
+        transcriptPath: sourcePath,
+        targetHome: accountHome,
+        systemCodexHomePath: systemHome
+      })
+    ).rejects.toThrow()
+  })
+
   it('points the copy at its grown source before a resume launches Codex', async () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
 
