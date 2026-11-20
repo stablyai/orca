@@ -117,7 +117,7 @@ export function buildCommandCodeManagedScript(
     '  done',
     'fi',
     // Last resort for hosts without an endpoint file: read only the token from the parent TUI.
-    'if [ -z "$ORCA_AGENT_HOOK_TOKEN" ] && [ -n "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$ORCA_AGENT_HOOK_TOKEN" ] && [ -n "$ORCA_PANE_KEY" ] && [ -n "$ORCA_AGENT_HOOK_PORT" ]; then',
     '  __orca_fill_token_from_ancestor',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',

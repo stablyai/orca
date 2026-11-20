@@ -38,9 +38,26 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
+function hasManagedEntries(configPath: string): boolean {
+  const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+  return Object.values(readHooksJson(configPath)?.hooks ?? {}).some(
+    (definitions) =>
+      Array.isArray(definitions) &&
+      definitions.some(
+        (definition) =>
+          isManagedCommand(definition.command) ||
+          (definition.hooks ?? []).some((hook) => isManagedCommand(hook.command))
+      )
+  )
+}
+
 export class CursorHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
+    // Cursor desktop runs these entries without the CLI that gates install(), so keep existing ones current.
+    if (this.getStatus().state !== 'installed' && hasManagedEntries(getConfigPath())) {
+      this.install()
+    }
   }
 
   getStatus(): AgentHookInstallStatus {

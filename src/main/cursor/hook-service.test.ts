@@ -168,6 +168,49 @@ describe('CursorHookService', () => {
     HOOK_CASE_TIMEOUT_MS
   )
 
+  it(
+    'rewrites outdated managed entries on script refresh, without CLI detection',
+    async () => {
+      const configPath = join(homeDir, '.cursor', 'hooks.json')
+      mkdirSync(dirname(configPath), { recursive: true })
+      const oldScript = join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME)
+      writeFileSync(
+        configPath,
+        JSON.stringify({
+          version: 1,
+          hooks: {
+            beforeShellExecution: [
+              { command: '/usr/local/bin/user-hook' },
+              { command: `printf '{"permission":"allow"}'; # ${oldScript}` }
+            ]
+          }
+        })
+      )
+
+      await new CursorHookService().refreshManagedScripts()
+
+      const config = readInstalledCursorHooks(homeDir)
+      expect(config.hooks.beforeShellExecution[0].command).toBe('/usr/local/bin/user-hook')
+      const command = config.hooks.beforeShellExecution[1]?.command ?? ''
+      expect(JSON.parse(runRegisteredCursorHook(command, '').stdout)).toEqual({})
+    },
+    HOOK_CASE_TIMEOUT_MS
+  )
+
+  it('leaves hooks.json alone on script refresh when Orca never installed Cursor hooks', async () => {
+    const configPath = join(homeDir, '.cursor', 'hooks.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    const userConfig = JSON.stringify({
+      version: 1,
+      hooks: { beforeShellExecution: [{ command: '/usr/local/bin/user-hook' }] }
+    })
+    writeFileSync(configPath, userConfig)
+
+    await new CursorHookService().refreshManagedScripts()
+
+    expect(readFileSync(configPath, 'utf8')).toBe(userConfig)
+  })
+
   it.each(['ordinary', 'spaced'] as const)(
     'emits protocol-valid JSON when the script is missing in a %s profile (#15462)',
     (profileKind) => {
