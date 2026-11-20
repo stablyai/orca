@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
@@ -81,7 +81,12 @@ it.each([200, 2000])(
       source: 'transcript',
       blocks: [{ type: 'text', text: 'old' }]
     }))
-    let renderer: ReactTestRenderer | undefined
+    let renderer:
+      | {
+          update: (element: ReturnType<typeof createElement>) => void
+          unmount: () => void
+        }
+      | undefined
     const update = async (messages: NativeChatMessage[], settled = true) => {
       work.scans = 0
       work.keys = 0
