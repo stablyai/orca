@@ -7,10 +7,10 @@ export function getPiAgentStatusComposerDraftSourceLines(kind: PiAgentKind): str
     return []
   }
   return [
-    'type ComposerDraftState = { acked: boolean | undefined; sending: boolean | undefined; retries: number }',
+    'type ComposerDraftState = { acked: boolean | undefined; retries: number }',
     'declare global { var __orcaPiComposerDraft: ComposerDraftState | undefined }',
     // Why: the post queue outlives /reload, so what Orca last received must outlive it too.
-    'const composerDraftState: ComposerDraftState = globalThis.__orcaPiComposerDraft ??= { acked: undefined, sending: undefined, retries: 0 }',
+    'const composerDraftState: ComposerDraftState = globalThis.__orcaPiComposerDraft ??= { acked: undefined, retries: 0 }',
     'let composerDraftUi: { getEditorText?: () => unknown } | null = null',
     'let stopComposerDraftInput: (() => void) | null = null',
     'let composerDraftCheck: ReturnType<typeof setTimeout> | null = null',
@@ -30,7 +30,8 @@ export function getPiAgentStatusComposerDraftSourceLines(kind: PiAgentKind): str
     '  composerDraftCheck = setTimeout(() => {',
     '    composerDraftCheck = null',
     '    const next = readComposerDraft()',
-    '    if (next === undefined || next === composerDraftState.acked || next === composerDraftState.sending) return',
+    // Why: compare only with what Orca received; a post in flight can still fail or never settle.
+    '    if (next === undefined || next === composerDraftState.acked) return',
     // A queued post reads the box when it is sent, so it already carries this reading.
     "    if (!hasQueuedPost()) post('composer_draft')",
     '  }, delayMs)',
@@ -39,13 +40,10 @@ export function getPiAgentStatusComposerDraftSourceLines(kind: PiAgentKind): str
     '',
     // Why: every post reads the box afresh, so text an extension sets without a key still reaches Orca.
     'function beginComposerDraftSend(ompRuntime: boolean): boolean | undefined {',
-    '  const reading = ompRuntime ? undefined : readComposerDraft()',
-    '  composerDraftState.sending = reading',
-    '  return reading',
+    '  return ompRuntime ? undefined : readComposerDraft()',
     '}',
     '',
     'function endComposerDraftSend(sent: boolean | undefined, delivered: boolean): void {',
-    '  if (composerDraftState.sending === sent) composerDraftState.sending = undefined',
     '  if (sent === undefined) return',
     '  if (delivered) {',
     '    composerDraftState.acked = sent',
