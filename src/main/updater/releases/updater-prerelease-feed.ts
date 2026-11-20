@@ -8,20 +8,18 @@ import {
 
 import {
   applyReleaseDelay,
+  isReleaseOldEnough,
   type DatedReleaseTag,
   type ReleaseDelayResult
 } from './updater-release-delay'
-import { listMainRepoReleaseBuilds } from './updater-release-builds'
-import { ReleaseBuildListCache } from './updater-release-build-cache'
+import { listMainRepoReleaseBuildsUntil } from './updater-release-builds'
+import type { ReleaseBuild } from '../../../shared/updater/release-channel'
 
 const ATOM_FEED_URL = 'https://github.com/stablyai/orca/releases.atom'
 const MAX_MANIFEST_PROBE_CANDIDATES = 6
-// Releases past the feed don't change and newer ones come from Atom, so a long-lived copy stays accurate.
-const MAIN_REPO_BUILDS_TTL_MS = 6 * 60 * 60 * 1000
-const mainRepoBuildCache = new ReleaseBuildListCache(
-  () => listMainRepoReleaseBuilds(),
-  MAIN_REPO_BUILDS_TTL_MS
-)
+// Releases past the feed don't change and newer ones come from Atom, so a list that settled the delay stays accurate.
+const OLDER_RELEASES_TTL_MS = 6 * 60 * 60 * 1000
+let olderReleasesCache: { tags: DatedReleaseTag[]; expiresAt: number } | null = null
 
 // Atom includes stable and prerelease tags without channel filtering.
 const ENTRY_RE = /<entry>([\s\S]*?)<\/entry>/g
@@ -151,29 +149,26 @@ export async function fetchNewerReleaseTagsWithReadiness(
     return resolveNewerReleaseTags(channelCandidates, currentVersion, maxTags)
   }
   const now = options.now ?? Date.now()
-  let delayed = applyReleaseDelay(
-    channelCandidates,
-    tags,
+  const cutoff = now - options.minReleaseAgeMs
+  // Newest-first lists settle the delay once they reach an aged-out release or our own version.
+  const settlesDelay = (list: ReleaseFeedTag[]): boolean =>
+    selectChannelCandidates(list, includePrerelease, options.releaseFilter).some(
+      (entry) =>
+        isReleaseOldEnough(entry, cutoff) || compareVersions(entry.version, currentVersion) <= 0
+    )
+  // Atom keeps only ~10 entries, so an aged-out release may predate it.
+  const olderTags = settlesDelay(tags) ? null : await fetchOlderReleaseTags(settlesDelay, now)
+  const allTags = olderTags ? mergeReleaseTags(tags, olderTags) : tags
+  const { eligible, releaseDelay } = applyReleaseDelay(
+    selectChannelCandidates(allTags, includePrerelease, options.releaseFilter),
+    allTags,
     currentVersion,
     options.minReleaseAgeMs,
     now
   )
-  if (feedMayOmitEligibleRelease(channelCandidates, delayed.eligible, currentVersion)) {
-    const restTags = await fetchMainRepoReleaseTags()
-    if (restTags) {
-      const mergedTags = mergeReleaseTags(tags, restTags)
-      delayed = applyReleaseDelay(
-        selectChannelCandidates(mergedTags, includePrerelease, options.releaseFilter),
-        mergedTags,
-        currentVersion,
-        options.minReleaseAgeMs,
-        now
-      )
-    }
-  }
   return {
-    ...(await resolveNewerReleaseTags(delayed.eligible, currentVersion, maxTags)),
-    releaseDelay: delayed.releaseDelay
+    ...(await resolveNewerReleaseTags(eligible, currentVersion, maxTags)),
+    releaseDelay
   }
 }
 
@@ -191,39 +186,47 @@ function selectChannelCandidates(
     : tags.filter(({ version }) => !isPrereleaseVersion(version))
 }
 
-// Atom keeps only ~10 entries; unless it reaches our version or an aged-out release, an eligible one may predate it.
-function feedMayOmitEligibleRelease(
-  candidates: ReleaseFeedTag[],
-  eligible: ReleaseFeedTag[],
-  currentVersion: string
-): boolean {
-  return (
-    eligible.length === 0 &&
-    candidates.every(({ version }) => compareVersions(version, currentVersion) > 0)
-  )
-}
-
-async function fetchMainRepoReleaseTags(): Promise<ReleaseFeedTag[] | null> {
+async function fetchOlderReleaseTags(
+  settlesDelay: (tags: ReleaseFeedTag[]) => boolean,
+  now: number
+): Promise<ReleaseFeedTag[] | null> {
+  if (
+    olderReleasesCache &&
+    olderReleasesCache.expiresAt > now &&
+    settlesDelay(olderReleasesCache.tags)
+  ) {
+    return olderReleasesCache.tags
+  }
   try {
-    const builds = await mainRepoBuildCache.list('stable')
-    return builds.map(({ tag, version, publishedAt }) => {
-      const releasedAt = publishedAt ? Date.parse(publishedAt) : Number.NaN
-      return { tag, version, releasedAt: Number.isNaN(releasedAt) ? null : releasedAt }
-    })
+    const builds = await listMainRepoReleaseBuildsUntil((listed) =>
+      settlesDelay(listed.map(toDatedReleaseTag))
+    )
+    const tags = builds.map(toDatedReleaseTag)
+    olderReleasesCache = { tags, expiresAt: now + OLDER_RELEASES_TTL_MS }
+    return tags
   } catch {
     // Rate limits or outages keep the Atom-only result, which holds the update (fail closed).
     return null
   }
 }
 
+function toDatedReleaseTag({ tag, version, publishedAt }: ReleaseBuild): ReleaseFeedTag {
+  const releasedAt = publishedAt ? Date.parse(publishedAt) : Number.NaN
+  return { tag, version, releasedAt: Number.isNaN(releasedAt) ? null : releasedAt }
+}
+
+// Atom entries win; REST pages can repeat a release published while paging.
 function mergeReleaseTags(
   feedTags: ReleaseFeedTag[],
-  restTags: ReleaseFeedTag[]
+  olderTags: ReleaseFeedTag[]
 ): ReleaseFeedTag[] {
-  const feedTagNames = new Set(feedTags.map(({ tag }) => tag))
-  return [...feedTags, ...restTags.filter(({ tag }) => !feedTagNames.has(tag))].sort(
-    (left, right) => compareVersions(right.version, left.version)
-  )
+  const byTag = new Map<string, ReleaseFeedTag>()
+  for (const entry of [...feedTags, ...olderTags]) {
+    if (!byTag.has(entry.tag)) {
+      byTag.set(entry.tag, entry)
+    }
+  }
+  return [...byTag.values()].sort((left, right) => compareVersions(right.version, left.version))
 }
 
 async function resolveNewerReleaseTags(
