@@ -30,8 +30,7 @@ import { useAppStore } from '@/store'
 import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
 import { BotAvatar } from './BotAvatar'
 import { BotHoverDetails, useBotRowDetails } from './BotHoverDetails'
-import { revealBotHome } from './BotHoverNeedsYou'
-import { openBotFromSidebar } from './BotRow'
+import { openBotHomePanelFromSidebar } from './BotRow'
 import { botErrorMessage } from './bot-presentation'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { openBotTemplates } from './templates/bot-templates-open'
@@ -150,9 +149,7 @@ export function BotCollapsedPreview({
   }
   const openHomePanel = (bot: Bot): void => {
     setOpenCardKey(null)
-    if (openBotFromSidebar(bot, onOpenBot)) {
-      revealBotHome()
-    }
+    openBotHomePanelFromSidebar(bot, onOpenBot)
   }
   return (
     <>
@@ -171,10 +168,11 @@ export function BotCollapsedPreview({
                 key={key}
                 open={cardOpen}
                 onOpenChange={(open) =>
-                  setOpenCardKey((currentKey) =>
-                    open ? key : currentKey === key ? null : currentKey
+                  setOpenCardKey(
+                    open ? key : (currentKey) => (currentKey === key ? null : currentKey)
                   )
                 }
+                pointerOpenMode={openCardKey === null ? 'rest' : 'immediate'}
                 closeDelay={120}
                 trigger={
                   <button
@@ -192,21 +190,21 @@ export function BotCollapsedPreview({
                   </button>
                 }
               >
-                {/* A vertical path to the card avoids crossing the neighboring avatar targets. */}
-                <HoverCardContent
-                  side="top"
-                  sideOffset={8}
-                  collisionPadding={8}
-                  variant="workspace-details"
-                  className="max-h-(--radix-hover-card-content-available-height)"
-                >
-                  {cardOpen ? (
+                {cardOpen ? (
+                  <HoverCardContent
+                    side="top"
+                    sideOffset={8}
+                    collisionPadding={8}
+                    variant="workspace-details"
+                    motion="none"
+                    className="max-h-(--radix-hover-card-content-available-height)"
+                  >
                     <CollapsedBotHoverDetails
                       fact={fact}
                       onOpenHome={() => openHomePanel(fact.bot)}
                     />
-                  ) : null}
-                </HoverCardContent>
+                  </HoverCardContent>
+                ) : null}
               </ActivityThreadHoverCardRoot>
             )
           })}

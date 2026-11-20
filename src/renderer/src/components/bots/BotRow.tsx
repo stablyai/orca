@@ -79,13 +79,6 @@ export function BotRow({
     work.catch((error: unknown) => toast.error(botErrorMessage(error)))
   }
   const handleDelete = useDeleteBot(bot)
-  // The bot's page with its Home tab showing and focused: where its Needs you leads.
-  const openHomePanel = (): void => {
-    if (openBotFromSidebar(bot, onOpen)) {
-      revealBotHome()
-    }
-  }
-
   return (
     <BotSidebarRow
       avatar={<BotAvatar bot={bot} className="size-9 rounded-md text-sm" />}
@@ -137,7 +130,11 @@ export function BotRow({
       }
       trailing={fold ? <BotRowFoldToggle botName={bot.name} fold={fold} /> : null}
       hoverDetails={() => (
-        <BotHoverDetails bot={bot} details={details} onOpenHome={openHomePanel} />
+        <BotHoverDetails
+          bot={bot}
+          details={details}
+          onOpenHome={() => openBotHomePanelFromSidebar(bot, onOpen)}
+        />
       )}
       menuItems={
         <>
@@ -183,6 +180,12 @@ export function openBotFromSidebar(bot: Bot, onOpened: () => void): boolean {
   }
   onOpened()
   return true
+}
+
+export function openBotHomePanelFromSidebar(bot: Bot, onOpened: () => void): void {
+  if (openBotFromSidebar(bot, onOpened)) {
+    revealBotHome()
+  }
 }
 
 /** A paired server's bot: a glyph on its second line, the server's name in its tooltip, so the
