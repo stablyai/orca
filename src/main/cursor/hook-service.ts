@@ -84,7 +84,7 @@ export class CursorHookService {
     // Cursor desktop runs these entries without the CLI that gates install(); update only what Orca already owns.
     const scan = await scanManagedEntries(getConfigPath(), getManagedScriptPath())
     if (scan.outdated) {
-      this.install(scan.events)
+      this.install(scan.events, { onlyOwnedEvents: true })
     }
   }
 
@@ -135,7 +135,10 @@ export class CursorHookService {
     return { agent: 'cursor', state, configPath, managedHooksPresent, detail }
   }
 
-  install(events: readonly CursorEvent[] = CURSOR_EVENTS): AgentHookInstallStatus {
+  install(
+    events: readonly CursorEvent[] = CURSOR_EVENTS,
+    options: { onlyOwnedEvents?: boolean } = {}
+  ): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
     const config = readHooksJson(configPath)
@@ -177,6 +180,13 @@ export class CursorHookService {
     for (const eventName of events) {
       const command = getManagedCommand(scriptPath, eventName)
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
+      // The refresh scan read the file earlier; skip events the user has since cleared of Orca entries.
+      if (
+        options.onlyOwnedEvents &&
+        !current.some((definition) => hookDefinitionHasManagedCommand(definition, isManagedCommand))
+      ) {
+        continue
+      }
       const cleaned = removeManagedCommands(current, isManagedCommand).filter(
         (definition) => !isManagedCommand(definition.command)
       )
