@@ -36,6 +36,11 @@ import {
   getCodexHistorySharingSearchKeywords,
   getCodexHistorySharingTitle
 } from './behavior/codex-history-sharing-copy'
+import {
+  getClaudeFlaggedRequestDescription,
+  getClaudeFlaggedRequestSearchKeywords,
+  getClaudeFlaggedRequestTitle
+} from './behavior/claude-flagged-request-copy'
 import { getDeleteAgentHistorySearchEntry } from './behavior/delete-agent-history-search'
 import { translate } from '@/i18n/i18n'
 import {
@@ -200,6 +205,11 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     id: AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID,
     description: getAgentWorkspaceTrustDescription(),
     keywords: getAgentWorkspaceTrustSearchKeywords()
+  },
+  {
+    title: getClaudeFlaggedRequestTitle(),
+    description: getClaudeFlaggedRequestDescription(),
+    keywords: getClaudeFlaggedRequestSearchKeywords()
   },
   {
     title: getCodexHistorySharingTitle(),

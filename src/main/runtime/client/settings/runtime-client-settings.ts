@@ -42,6 +42,7 @@ import type {
 } from './runtime-client-settings-shape'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { hostNativeChatDefaults } from '../../../../shared/native-chat/settings/native-chat-providers'
+import { claudeFlaggedRequestAction } from '../../../../shared/agent-launch/startup/claude-flagged-request-launch'
 import { getDefaultNotificationSettings } from '../../../../shared/notifications/notification-settings-defaults'
 import type { NotificationSettings } from '../../../../shared/notifications/notification-settings-types'
 import { projectSourceControlLaunchRecipes } from './runtime-client-source-control-ai-projection'
@@ -81,8 +82,9 @@ export class RuntimeClientSettingsController {
       agentDefaultArgs: launchProfile.agentDefaultArgs,
       agentDefaultEnv: launchProfile.agentDefaultEnv,
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
-      // Always present, so a client can tell this host accepts the setting (older hosts omit it).
+      // Always present, so a client can tell this host accepts these settings (older hosts omit them).
       codexShareHistoryAcrossAccounts: settings.codexShareHistoryAcrossAccounts !== false,
+      claudeFlaggedRequestAction: claudeFlaggedRequestAction(settings),
       claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled !== false,
       // Mobile honors this Copy option; absence from older hosts means on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,

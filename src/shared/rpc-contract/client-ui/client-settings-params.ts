@@ -14,6 +14,7 @@ import { WorktreeVisibilityDefaultsUpdate } from '../workspaces/worktree-visibil
 import { WorkspaceCleanupRulesParam } from '../workspace-cleanup/workspace-cleanup-policy-params'
 import { AGENT_CHAT_PERMISSION_MODES } from '../../agent-launch/permissions/agent-chat-permission-mode'
 import { PR_AUTO_REFRESH_CADENCES } from '../../source-control/hosted-review/review-refresh-policy'
+import { CLAUDE_FLAGGED_REQUEST_ACTIONS } from '../../agent-launch/startup/claude-flagged-request-launch'
 
 export const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
   message: 'Unknown task provider'
@@ -133,6 +134,7 @@ export const SettingsUpdate = z
     codexShareHistoryAcrossAccounts: z.boolean().optional(),
     deleteChatHistoryWithWorkspace: z.boolean().optional(),
     claudeSubagentNavigationEnabled: z.boolean().optional(),
+    claudeFlaggedRequestAction: z.enum(CLAUDE_FLAGGED_REQUEST_ACTIONS).optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
     compactWorktreeCards: z.boolean().optional(),

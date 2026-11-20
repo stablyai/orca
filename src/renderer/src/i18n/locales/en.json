@@ -1189,7 +1189,15 @@
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
       "defaultAutoBadge": "Default · Auto",
-      "newAgentsTitle": "New agents"
+      "newAgentsTitle": "New agents",
+      "claudeFlaggedRequest": {
+        "title": "When Claude flags a request",
+        "description": "When a safety check flags a request, Claude can re-run it on its fallback model and keep using that model, or end the turn with an error. Applies to Claude chats and terminals started after you change it.",
+        "stop": "Stop with an error",
+        "switchModel": "Switch to Claude's fallback model",
+        "unsupported": "Update Orca on {{host}} to change this setting there.",
+        "updateFailed": "Could not update the setting on {{host}}."
+      }
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -20903,6 +20911,7 @@
         "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
         "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
         "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
+        "flaggedRequestNotSwitched": "{{agent}} declined this request, and switching models on flagged requests is off. Rephrase it and send again, or change \"When Claude flags a request\" in Settings → Agents.",
         "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
         "providerResponseFailedQuoted": "{{agent}} couldn't finish this response: {{detail}}.",
         "selectedModel": "the selected model",

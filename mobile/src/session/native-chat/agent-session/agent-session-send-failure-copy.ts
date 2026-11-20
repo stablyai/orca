@@ -68,6 +68,12 @@ export const SEND_FAILURE_COPY = {
       AGENT_SESSION_FAILURE_COPY.providerSafetyStopped,
       values
     ),
+  flaggedRequestNotSwitched: (values) =>
+    translate(
+      'session.failure.flaggedRequestNotSwitched',
+      AGENT_SESSION_FAILURE_COPY.flaggedRequestNotSwitched,
+      values
+    ),
   providerResponseFailed: (values) =>
     translate(
       'session.failure.providerResponseFailed',

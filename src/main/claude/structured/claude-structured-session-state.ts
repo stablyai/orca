@@ -224,6 +224,8 @@ export type ClaudeAcquisitionAttempt = {
   finish: () => void
   /** The resolved launch's account, read by the translator to word a sign-in failure. */
   account?: ClaudeStructuredLaunch['account']
+  /** The resolved launch turned off Claude's switch to another model for flagged requests. */
+  stopsOnFlaggedRequest?: boolean
 }
 
 export function createClaudeAcquisitionAttempt(

@@ -20,6 +20,12 @@ export const PROVIDER_FAILURE_PIECES = {
       COPY.providerSafetyStopped,
       values
     ),
+  flaggedRequestNotSwitched: (values) =>
+    translate(
+      'components.native-chat.failureWords.flaggedRequestNotSwitched',
+      COPY.flaggedRequestNotSwitched,
+      values
+    ),
   providerResponseFailed: (values) =>
     translate(
       'components.native-chat.failureWords.providerResponseFailed',

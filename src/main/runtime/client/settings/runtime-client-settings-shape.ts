@@ -20,6 +20,7 @@ export type RuntimeClientSettings = Pick<
   | 'codexShareHistoryAcrossAccounts'
   | 'deleteChatHistoryWithWorkspace'
   | 'claudeSubagentNavigationEnabled'
+  | 'claudeFlaggedRequestAction'
   | 'terminalCopyTrimsGutter'
   | 'terminalScrollbackRows'
   | 'terminalWordSeparator'
@@ -80,6 +81,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
   | 'claudeSubagentNavigationEnabled'
+  | 'claudeFlaggedRequestAction'
   | 'botsEnabled'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'

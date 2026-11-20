@@ -1,6 +1,9 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { i18n } from '../../../../i18n/i18n'
-import { agentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
+import {
+  agentSessionFailureFact,
+  providerDiagnostic
+} from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
@@ -116,3 +119,34 @@ function ContextNotes(): React.JSX.Element {
 export const contextNotes = defineFixture({ width: 600, render: () => <ContextNotes /> })
 
 export const contextNotesNarrow = defineFixture({ width: 340, render: () => <ContextNotes /> })
+
+// The row a flagged Claude request ends its turn with when switching models is off.
+const claudeFlaggedRequest: NativeChatTextBlock = {
+  type: 'text',
+  tone: 'error',
+  ...agentSessionFailureWords(
+    agentSessionFailureFact('flaggedRequestNotSwitched', {
+      detail: providerDiagnostic(
+        "API Error: Claude Opus 5.5's safeguards flagged this message. Request ID: req_fixture",
+        'log'
+      )
+    }),
+    { agentName: 'Claude', provider: 'claude', surface: 'row' }
+  )
+}
+
+export const claudeFlaggedRequestStopped = defineFixture({
+  width: 600,
+  render: () => (
+    <div className="bg-chat-pane p-4">
+      <NativeChatNoticeRow agentName="Claude" block={claudeFlaggedRequest} />
+    </div>
+  )
+})
+
+export const claudeFlaggedRequestStoppedRussian = defineFixture({
+  ...claudeFlaggedRequestStopped,
+  interact: async () => {
+    await i18n.changeLanguage('ru')
+  }
+})

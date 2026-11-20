@@ -112,6 +112,39 @@ export function useServerSettingValue<T>(args: {
   }
 }
 
+/** Host-owned choices every newer host reports, so a missing key means an older host. */
+export type HostChoiceSettingKey = 'claudeFlaggedRequestAction'
+
+/** Reads and writes one value on the host that owns it: this app's settings, or a server's. */
+export function useHostSettingValue<T>(args: {
+  owner: RuntimeClientTarget
+  settingKey: HostBooleanSettingKey | HostChoiceSettingKey
+  /** Must be stable; undefined marks an older host. */
+  read: (settings: HostSettingsReply) => T | undefined
+  /** This app's own value, used when the owner is this app. */
+  localValue: T
+  updateLocalSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
+  updateFailedMessage: string
+}): { setting: HostSettingValue<T>; update: (value: T) => Promise<void> } {
+  const { owner, settingKey, read, localValue, updateLocalSettings, updateFailedMessage } = args
+  const environmentId = owner.kind === 'environment' ? owner.environmentId : null
+  const remote = useServerSettingValue({ environmentId, read, updateFailedMessage })
+
+  if (!environmentId) {
+    return {
+      setting: { state: 'ready', value: localValue },
+      update: async (value) => {
+        try {
+          await updateLocalSettings({ [settingKey]: value })
+        } catch (error) {
+          toast.error(updateFailedMessage, { description: errorMessage(error) })
+        }
+      }
+    }
+  }
+  return { setting: remote.setting, update: (value) => remote.update({ [settingKey]: value }) }
+}
+
 /** Reads and writes one switch on the host that owns it: this app's settings, or a server's. */
 export function useHostBooleanSetting(args: {
   owner: RuntimeClientTarget
@@ -121,8 +154,7 @@ export function useHostBooleanSetting(args: {
   updateLocalSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
   updateFailedMessage: string
 }): { setting: HostBooleanSetting; update: (enabled: boolean) => Promise<void> } {
-  const { owner, settingKey, localEnabled, updateLocalSettings, updateFailedMessage } = args
-  const environmentId = owner.kind === 'environment' ? owner.environmentId : null
+  const { settingKey, localEnabled, ...rest } = args
   const read = useCallback(
     (settings: HostSettingsReply) => {
       const value = settings[settingKey]
@@ -130,25 +162,14 @@ export function useHostBooleanSetting(args: {
     },
     [settingKey]
   )
-  const remote = useServerSettingValue({ environmentId, read, updateFailedMessage })
-
-  if (!environmentId) {
-    return {
-      setting: { state: 'ready', enabled: localEnabled },
-      update: async (enabled) => {
-        try {
-          await updateLocalSettings({ [settingKey]: enabled })
-        } catch (error) {
-          toast.error(updateFailedMessage, { description: errorMessage(error) })
-        }
-      }
-    }
-  }
+  const { setting, update } = useHostSettingValue({
+    ...rest,
+    settingKey,
+    read,
+    localValue: localEnabled
+  })
   return {
-    setting:
-      remote.setting.state === 'ready'
-        ? { state: 'ready', enabled: remote.setting.value }
-        : remote.setting,
-    update: (enabled) => remote.update({ [settingKey]: enabled })
+    setting: setting.state === 'ready' ? { state: 'ready', enabled: setting.value } : setting,
+    update
   }
 }
