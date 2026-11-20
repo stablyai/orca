@@ -1,4 +1,5 @@
 import type { WebContents } from 'electron'
+import { setBrowserInputGuard, hasBrowserInputGuard } from './browser-input-guard'
 import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
 
 // Agent keys must bypass Orca shortcuts, grab handlers, and app menus (#20595).
@@ -16,6 +17,7 @@ type InjectionTarget = Pick<WebContents, 'id' | 'isDestroyed' | 'setIgnoreMenuSh
 const suspensions = new WeakMap<InjectionTarget, Set<(suspended: boolean) => Promise<void>>>()
 
 async function setSuspended(target: InjectionTarget, suspended: boolean): Promise<void> {
+  await setBrowserInputGuard(target as WebContents, suspended)
   await Promise.all(Array.from(suspensions.get(target) ?? [], (update) => update(suspended)))
 }
 const unacknowledged = new WeakSet<InjectionTarget>()
@@ -40,9 +42,11 @@ function markUnacknowledged(target: InjectionTarget): void {
 async function suspendBeforeInput(target: InjectionTarget): Promise<void> {
   const suspend = suspensions.get(target)
   if (!suspend) {
-    if (unacknowledged.has(target)) {
+    if (unacknowledged.has(target) && !hasBrowserInputGuard(target as WebContents)) {
       throw new Error('Browser tool shortcuts have not acknowledged suspension')
     }
+    await setBrowserInputGuard(target as WebContents, true)
+    unacknowledged.delete(target)
     return
   }
   try {
@@ -125,5 +129,23 @@ export async function withAgentInputInjection<T>(
         webContents.setIgnoreMenuShortcuts(false)
       }
     }
+  }
+}
+
+export function isAgentInjectingKeyboard(target: InjectionTarget): boolean {
+  return (keyboardDepth.get(target) ?? 0) > 0
+}
+
+export async function recoverBrowserInputGuard(target: WebContents): Promise<boolean> {
+  if (isAgentInjectingKeyboard(target)) {
+    return true
+  }
+  try {
+    await setBrowserInputGuard(target, false)
+    unacknowledged.delete(target)
+    return true
+  } catch {
+    markUnacknowledged(target)
+    return false
   }
 }

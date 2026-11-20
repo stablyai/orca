@@ -1,4 +1,6 @@
+import { verifyGrabRetiredPolicy } from './grab-retired-policy-electron-fixture'
 import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
+import { verifyGrabChordNonCommit } from './grab-chord-noncommit-electron-fixture'
 import { verifyGrabChordRefresh } from './grab-chord-refresh-electron-fixture'
 import { verifyGrabSelectionReplacement } from './grab-selection-replacement-electron-fixture'
 import { mkdirSync, readFileSync } from 'node:fs'
@@ -257,10 +259,13 @@ async function run(): Promise<void> {
   }
 
   await manager.setGrabMode('page-1', false, page)
+  const retiredPolicy = await verifyGrabRetiredPolicy(page, manager, renderer, forwarded, press)
   const chordRefresh = await verifyGrabChordRefresh(page, chordPages, chord, () => {
     overrides = { 'browser.grabElement': ['Mod+Shift+G'] }
     refreshGrabShortcutPolicies()
   })
+
+  const nonCommit = await verifyGrabChordNonCommit(page, chordPages, chord)
 
   process.stdout.write(
     `${JSON.stringify({
@@ -280,12 +285,15 @@ async function run(): Promise<void> {
       chordInField,
       replacement,
       afterCancellation,
-      chordRefresh
+      chordRefresh,
+      nonCommit,
+      retiredPolicy
     })}\n`
   )
   process.stderr.write(
     `[palette-proof] ${JSON.stringify({
       pid: process.pid,
+      versions: process.versions,
       environmentKeys: Object.keys(process.env).sort(),
       chordOffField,
       chordInField,

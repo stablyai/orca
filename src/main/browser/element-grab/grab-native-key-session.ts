@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { setBrowserInputPolicy, retireBrowserInputPolicy } from '../cdp/input/browser-input-guard'
 import type { WebContents } from 'electron'
 import {
   GRAB_NATIVE_KEY_POLICY,
@@ -22,8 +23,10 @@ export class GrabNativeKeySession {
     private readonly host: WebContents,
     private readonly pageId: string,
     private readonly onStopped: () => void = () => {},
-    private readonly canDeliver: () => boolean = () => true
+    private readonly canDeliver: () => boolean = () => true,
+    private readonly onUnavailable: () => void = () => {}
   ) {
+    setBrowserInputPolicy(guest, 'native', this.token)
     host.on('destroyed', this.stop)
     host.on('did-start-navigation', this.onNavigation)
     guest.on('ipc-message', this.onReport)
@@ -52,6 +55,7 @@ export class GrabNativeKeySession {
         this.enabled = ready && enabled
         resolve(ready)
         if (!ready && retire && !this.stopped) {
+          this.onUnavailable()
           this.stop()
         }
       }
@@ -113,6 +117,7 @@ export class GrabNativeKeySession {
       return
     }
     this.stopped = true
+    retireBrowserInputPolicy(this.guest, 'native', this.token)
     this.onStopped()
     this.enabled = false
     this.pending?.finish(false)

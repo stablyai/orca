@@ -60,6 +60,8 @@ describe('tool letters from a real page during a pick', () => {
           pageSawKey: false
         },
         afterCancellation: { kind: 'cancelled', forwarded: [], pageSawKey: true },
+        retiredPolicy: { userKeyReachedPage: true, agentKeyReachedPage: true, forwarded: [] },
+        nonCommit: { documentKept: true, pages: ['page-1'], pageSawChord: false },
         chordRefresh: {
           oldChord: { pages: [], pageSawKey: true },
           newChord: { pages: ['page-1'], pageSawKey: false },

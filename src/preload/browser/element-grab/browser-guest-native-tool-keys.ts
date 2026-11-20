@@ -1,4 +1,8 @@
 import {
+  BROWSER_INPUT_GUARD,
+  BROWSER_INPUT_GUARD_ACK
+} from '../../../shared/browser/element-grab/browser-input-guard'
+import {
   GRAB_NATIVE_KEY_POLICY,
   GRAB_NATIVE_KEY_REPORT,
   GRAB_CHORD_POLICY,
@@ -19,6 +23,39 @@ export function installBrowserGuestNativeToolKeys(port: {
   on: (channel: string, listener: (payload: unknown) => void) => void
   send: (channel: string, payload: unknown) => void
 }): void {
+  let inputSuspended = true
+  let guardRevision = 0
+  let nativeToken: string | null = null
+  let chordToken: string | null = null
+  port.on(BROWSER_INPUT_GUARD, (payload) => {
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      !('token' in payload) ||
+      typeof payload.token !== 'string' ||
+      !('revision' in payload) ||
+      typeof payload.revision !== 'number' ||
+      !('suspended' in payload) ||
+      typeof payload.suspended !== 'boolean' ||
+      !('nativeToken' in payload) ||
+      !(payload.nativeToken === null || typeof payload.nativeToken === 'string') ||
+      !('chordToken' in payload) ||
+      !(payload.chordToken === null || typeof payload.chordToken === 'string')
+    ) {
+      return
+    }
+    if (payload.revision >= guardRevision) {
+      guardRevision = payload.revision
+      inputSuspended = payload.suspended
+      nativeToken = payload.nativeToken
+      chordToken = payload.chordToken
+    }
+    port.send(BROWSER_INPUT_GUARD_ACK, {
+      token: payload.token,
+      revision: guardRevision,
+      suspended: inputSuspended
+    })
+  })
   let policy: GrabNativeKeyPolicy | null = null
   let chord: GrabChordPolicy | null = null
   port.on(GRAB_CHORD_POLICY, (payload) => {
@@ -68,9 +105,13 @@ export function installBrowserGuestNativeToolKeys(port: {
   window.addEventListener(
     'keydown',
     (event) => {
+      if (inputSuspended) {
+        return
+      }
       const currentChord = chord
       if (
         currentChord?.enabled &&
+        currentChord.token === chordToken &&
         event.isTrusted &&
         !event.repeat &&
         !event.isComposing &&
@@ -107,6 +148,7 @@ export function installBrowserGuestNativeToolKeys(port: {
       }
       if (
         !policy?.enabled ||
+        policy.token !== nativeToken ||
         !event.isTrusted ||
         event.isComposing ||
         event.keyCode === 229 ||

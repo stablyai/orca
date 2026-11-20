@@ -1,8 +1,17 @@
-import { isAgentInjectingInput } from '../../../cdp/input/agent-input-injection'
+import {
+  isAgentInjectingKeyboard,
+  recoverBrowserInputGuard
+} from '../../../cdp/input/agent-input-injection'
 import { GrabNativeKeySession } from '../../../element-grab/grab-native-key-session'
 import { isPickedElementPresent } from '../../../element-grab/grab-picked-element'
 import { webContents } from 'electron'
-import { executeGrabScript, requestGrabExecution } from '../../../element-grab/grab-guest-execution'
+import {
+  executeGrabScript,
+  requestGrabExecution,
+  grabDocumentScope,
+  retireGrabOverlay,
+  type GrabDocumentScope
+} from '../../../element-grab/grab-guest-execution'
 import { buildGuestOverlayScript } from '../../../element-grab/grab-guest-script'
 import { buildGrabLabelAvoidScript } from '../../../element-grab/grab-guest-overlay-script'
 import { clampGrabPayload } from '../../../element-grab/browser-grab-payload'
@@ -24,35 +33,32 @@ import { BrowserManagerViewport } from '../viewport/browser-manager-viewport'
 function runOverlayScript(
   guest: Electron.WebContents,
   mode: 'arm' | 'teardown',
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  scope = grabDocumentScope(guest)
 ): Promise<boolean | null> {
-  return executeGrabScript(guest, buildGuestOverlayScript(mode), { signal })
-}
-
-// A stalled or throttled renderer has not established a clean frame: fail rather than capture old pixels.
-const PAINTED_FRAME_SCRIPT = `new Promise((resolve) => {
-  let done = false
-  const finish = (painted) => { if (!done) { done = true; resolve(painted) } }
-  requestAnimationFrame(() => requestAnimationFrame(() => finish(true)))
-  setTimeout(() => finish(false), 500)
-})`
-
-function waitForPaintedFrame(
-  guest: Electron.WebContents,
-  signal?: AbortSignal
-): Promise<boolean | null> {
-  return executeGrabScript(guest, PAINTED_FRAME_SCRIPT, { signal })
+  return executeGrabScript(guest, mode === 'arm' ? buildGuestOverlayScript(mode) : '', {
+    signal,
+    scope,
+    overlayControl: mode === 'arm',
+    clean: mode === 'teardown'
+  })
 }
 
 // Fire-and-forget: a page that is gone or mid-navigation simply has no picker to tell.
 async function sendLabelAvoidArea(
   guest: Electron.WebContents,
-  area: BrowserGrabLabelAvoidArea | null
+  area: BrowserGrabLabelAvoidArea | null,
+  scope?: GrabDocumentScope
 ): Promise<boolean> {
   if (guest.isDestroyed()) {
     return false
   }
-  return (await executeGrabScript(guest, buildGrabLabelAvoidScript(area))) === true
+  return (
+    (await executeGrabScript(guest, buildGrabLabelAvoidScript(area), {
+      background: true,
+      scope
+    })) === true
+  )
 }
 
 export abstract class BrowserManagerGrab extends BrowserManagerViewport {
@@ -129,32 +135,36 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     guest: Electron.WebContents,
     host?: Electron.WebContents,
     canDeliver?: () => boolean,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onUnavailable?: () => void
   ): Promise<boolean> {
     if (signal?.aborted || canDeliver?.() === false) {
       return false
     }
+    const scope = grabDocumentScope(guest)
     this.nativeKeysByTabId.get(browserTabId)?.stop()
     this.nativeKeysByTabId.delete(browserTabId)
     if (!enabled) {
       this.cancelGrabOp(browserTabId, 'user')
-      // Why always await a teardown, also right after cancelling a running pick: the page runs scripts in order, so
-      // this settles only once the cancelled pick's own teardown has run too. Draw captures the page after this
-      // resolves and must never freeze the picker's highlight into the screenshot.
-      const tornDown = await runOverlayScript(guest, 'teardown', signal)
-      return tornDown === true && (await waitForPaintedFrame(guest, signal)) === true
+      retireGrabOverlay(scope)
+      return (
+        (await runOverlayScript(guest, 'teardown', signal, scope)) === true &&
+        scope.current &&
+        canDeliver?.() !== false &&
+        !signal?.aborted
+      )
     }
     // Arm eagerly so hover feedback appears before selection starts.
-    const armed = await runOverlayScript(guest, 'arm', signal)
-    if (signal?.aborted || canDeliver?.() === false) {
+    const armed = await runOverlayScript(guest, 'arm', signal, scope)
+    if (signal?.aborted || canDeliver?.() === false || !scope.current) {
       if (armed) {
-        void runOverlayScript(guest, 'teardown')
+        retireGrabOverlay(scope)
       }
       return false
     }
     const area = this.grabLabelAvoidAreaByTabId.get(browserTabId)?.area
     if (armed && area) {
-      if (!(await sendLabelAvoidArea(guest, area))) {
+      if (!(await sendLabelAvoidArea(guest, area, scope))) {
         return false
       }
     }
@@ -169,10 +179,14 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
               this.nativeKeysByTabId.delete(browserTabId)
             }
           },
-          canDeliver
+          canDeliver,
+          onUnavailable
         )
         this.nativeKeysByTabId.set(browserTabId, keys)
-        if (!(await keys.setEnabled(!isAgentInjectingInput(guest)))) {
+        if (
+          !(await recoverBrowserInputGuard(guest)) ||
+          !(await keys.setEnabled(!isAgentInjectingKeyboard(guest)))
+        ) {
           keys.stop()
           if (this.nativeKeysByTabId.get(browserTabId) === keys) {
             this.nativeKeysByTabId.delete(browserTabId)
@@ -181,7 +195,7 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
         }
       }
     }
-    return armed === true
+    return armed === true && scope.current && canDeliver?.() !== false && !signal?.aborted
   }
 
   async awaitGrabSelection(
@@ -215,11 +229,12 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
   async captureSelectionScreenshot(
     _browserTabId: string,
     rect: BrowserGrabRect,
+    selectionId: string | undefined,
     guest: Electron.WebContents
   ): Promise<BrowserGrabScreenshot | null> {
     const releasePaint = this.holdPaintForCapture(guest.id)
     try {
-      return await captureGrabSelectionScreenshot(rect, guest)
+      return await captureGrabSelectionScreenshot(rect, guest, selectionId)
     } finally {
       releasePaint()
     }
@@ -231,7 +246,9 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     guest: Electron.WebContents
   ): Promise<BrowserGrabPayload | null> {
     try {
-      const execution = await requestGrabExecution(guest, buildGuestOverlayScript('extractHover'))
+      const execution = await requestGrabExecution(guest, buildGuestOverlayScript('extractHover'), {
+        capturePick: 'hover'
+      })
       if (!execution.ok) {
         return null
       }

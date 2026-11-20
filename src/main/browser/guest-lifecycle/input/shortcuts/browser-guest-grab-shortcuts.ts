@@ -8,8 +8,14 @@ import { getEffectiveKeybindingsForAction } from '../../../../../shared/keybindi
 import type { KeybindingInput, KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import {
   isAgentInjectingInput,
+  isAgentInjectingKeyboard,
+  recoverBrowserInputGuard,
   registerAgentInputSuspension
 } from '../../../cdp/input/agent-input-injection'
+import {
+  setBrowserInputPolicy,
+  retireBrowserInputPolicy
+} from '../../../cdp/input/browser-input-guard'
 import type { ResolveRenderer } from '../../browser-guest-renderer-target'
 
 type GrabShortcutBinding = {
@@ -35,18 +41,22 @@ class GrabChordSession {
   private revision = 0
   private enabled = false
   private stopped = false
+  private navigating = false
+  private refreshGeneration = 0
   private pending: { finish: (ready: boolean) => void } | null = null
   private readonly unregisterSuspension: () => void
 
   constructor(private readonly args: GrabShortcutBinding) {
     const guest = args.guest
+    setBrowserInputPolicy(guest, 'chord', this.token)
     guest.on('ipc-message', this.report)
-    guest.on('dom-ready', this.refresh)
+    guest.on('dom-ready', this.documentReady)
+    guest.on('did-stop-loading', this.stoppedLoading)
     guest.on('did-start-navigation', this.navigation)
     guest.on('destroyed', this.stop)
     policies.add(this)
     this.unregisterSuspension = registerAgentInputSuspension(guest, async (suspended) => {
-      if (!(await this.publish(!suspended))) {
+      if (!(await this.publish(!suspended && !this.navigating))) {
         throw new Error('Could not suspend the browser grab chord safely')
       }
     })
@@ -91,7 +101,24 @@ class GrabChordSession {
   }
 
   readonly refresh = (): void => {
-    void this.publish(!isAgentInjectingInput(this.args.guest))
+    const generation = ++this.refreshGeneration
+    void (async () => {
+      const ready = await recoverBrowserInputGuard(this.args.guest)
+      if (!this.stopped && generation === this.refreshGeneration) {
+        await this.publish(ready && !this.navigating && !isAgentInjectingKeyboard(this.args.guest))
+      }
+    })()
+  }
+
+  private readonly documentReady = (): void => {
+    this.navigating = false
+    this.refresh()
+  }
+
+  private readonly stoppedLoading = (): void => {
+    if (this.navigating && !this.args.guest.isLoadingMainFrame()) {
+      this.documentReady()
+    }
   }
 
   private readonly navigation = (
@@ -101,9 +128,11 @@ class GrabChordSession {
     main: boolean
   ): void => {
     if (main && !inPlace) {
-      this.enabled = false
-      this.pending?.finish(false)
+      this.refreshGeneration += 1
+      this.navigating = true
       this.token = randomUUID()
+      setBrowserInputPolicy(this.args.guest, 'chord', this.token)
+      void this.publish(false)
     }
   }
 
@@ -130,6 +159,7 @@ class GrabChordSession {
     const renderer = resolveRenderer(browserTabId)
     if (
       this.enabled &&
+      !this.navigating &&
       payload.input &&
       !isAgentInjectingInput(guest) &&
       isCurrentGuest?.() !== false &&
@@ -151,6 +181,8 @@ class GrabChordSession {
       return
     }
     this.stopped = true
+    this.refreshGeneration += 1
+    retireBrowserInputPolicy(this.args.guest, 'chord', this.token)
     this.enabled = false
     this.pending?.finish(false)
     this.unregisterSuspension()
@@ -166,7 +198,8 @@ class GrabChordSession {
       })
     }
     guest.off('ipc-message', this.report)
-    guest.off('dom-ready', this.refresh)
+    guest.off('dom-ready', this.documentReady)
+    guest.off('did-stop-loading', this.stoppedLoading)
     guest.off('did-start-navigation', this.navigation)
     guest.off('destroyed', this.stop)
   }
