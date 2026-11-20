@@ -1,8 +1,8 @@
 // A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, then
 // the text as Markdown, its images and its file links. An agent's Needs you question is a comment too:
 // its body and attachments, then its question footer (BotItemQuestionLines). A reply to a question quotes it, and leads back to it.
-// While the item waits on it, the asking comment stands out: a Needs you tag by its time, a soft orange
-// outline, and its question ruled off from the body. Answered, it reads as any other comment.
+// While the item waits on it, the asking comment stands out: a Needs you tag by its time and its
+// question ruled off from the body. Answered, it reads as any other comment.
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
@@ -124,8 +124,6 @@ export function BotItemCommentCard({
         })}
         className={cn(
           'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]',
-          // Asking the owner: a soft outline, no fill change, so it stands out when scanning.
-          waiting && 'ring-1 ring-agent-question/45 dark:ring-agent-question/60',
           // A question's chips end the card: more room under them.
           shape.decisions.length > 0 ? 'pb-4' : 'pb-2'
         )}
