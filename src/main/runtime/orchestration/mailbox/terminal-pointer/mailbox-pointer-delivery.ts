@@ -174,12 +174,12 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     return this.state.stagedPointerText(ptyId)
   }
 
-  requiresCurrentScreen = (ptyId: string): boolean => this.screenRecoverySince(ptyId) !== undefined
-
-  /** When the current incarnation's hold last saw another program in front; later evidence is current. */
-  screenRecoverySince(ptyId: string): number | undefined {
-    const incarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
-    return this.state.foreground.screenRecoverySince(ptyId, incarnation)
+  requiresCurrentScreen(ptyId: string): boolean {
+    const incarnation = this.state.foreground.screenRecovery(ptyId)
+    return (
+      incarnation !== undefined &&
+      incarnation === this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
+    )
   }
 
   readonly restoreUncertainMail = (ptyId: string): void => this.uncertainty.ensure(ptyId)

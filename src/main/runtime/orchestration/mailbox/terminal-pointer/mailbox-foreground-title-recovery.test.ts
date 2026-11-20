@@ -33,8 +33,8 @@ const OMP_COMPOSER = readFileSync(
   'utf8'
 )
 
-// OMP proves readiness only through its title, so the title it sets after fg must count.
-it('delivers held mail once a title-only agent comes back and titles itself idle', async () => {
+// OMP proves readiness only by title and its composer is unreadable, so mail never holds for it (like Windows).
+it('mail for a title-only agent waits out a shell in front without a hold, then submits after fg', async () => {
   Object.defineProperty(process, 'platform', { value: 'darwin' })
   vi.useFakeTimers()
   const db = createDatabase('orca-mail-title-recovery-')
@@ -74,7 +74,7 @@ it('delivers held mail once a title-only agent comes back and titles itself idle
     runtime.notifyMessageArrived(`run:${run.id}`, 'status')
     await vi.advanceTimersByTimeAsync(1000)
     expect(write).not.toHaveBeenCalled()
-    expect(await runtime.readTerminalMailHold(`run:${run.id}`)).toMatchObject({
+    expect(await runtime.readTerminalMailHold(`run:${run.id}`)).not.toMatchObject({
       kind: 'not-foreground'
     })
 
@@ -82,9 +82,10 @@ it('delivers held mail once a title-only agent comes back and titles itself idle
     await vi.advanceTimersByTimeAsync(1000)
     runtime.onPtyData(PTY_ID, `\x1b[2J\x1b[H${OMP_COMPOSER}\x1b]0;π > capture-cwd\x07`, Date.now())
     await vi.advanceTimersByTimeAsync(125000)
-    expect(write.mock.calls.map(([, text]) => text)).toContainEqual(
-      expect.stringContaining('You have 1 orchestration message')
-    )
+    expect(write.mock.calls.map(([, text]) => text)).toEqual([
+      expect.stringContaining('You have 1 orchestration message'),
+      '\r'
+    ])
   } finally {
     db.close()
   }

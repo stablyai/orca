@@ -19,6 +19,7 @@ import { readProcessStartTimeMs } from '../../agent-session/ownership/agent-sess
 import { isTerminalForegroundObservation } from '../../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { readTargetRootPid } from './legacy-owner-root'
 import { judgeLegacyMailboxRows, otherProgram } from './mailbox-foreground-judgment'
+import { unheldForeground } from './mailbox-unheld-foreground'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
@@ -31,6 +32,8 @@ export type MailboxForegroundInspection = {
   process?: MailboxAgentProcess
   /** This host can never name an agent in front, so an agent's return can only show on screen and in status. */
   agentUnprovable?: boolean
+  /** The agent proves readiness only by title and its composer is unreadable, so mail never holds for it. */
+  holdExempt?: boolean
 }
 
 /** Set when the read's own fresh, fenced observation named exactly the agent asked about. */
@@ -338,6 +341,5 @@ export async function readMailboxForeground(
   if (foreground === 'agent') {
     return { foreground, agent: agent ?? expected, ...(process ? { process } : {}) }
   }
-  // Why: Windows can neither name an agent nor suspend one behind another program, so it never holds mail.
-  return host.windows ? { foreground, agentUnprovable: true } : { foreground }
+  return unheldForeground(foreground, host.windows, expected)
 }

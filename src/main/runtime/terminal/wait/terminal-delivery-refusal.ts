@@ -17,9 +17,6 @@ import {
 import { ptyTuiIdleEvidence, type TuiIdleEvidenceSource } from './tui-idle-evidence-source'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
-// Agents whose only readiness signal is their title; others keep needing the screen during recovery.
-const TITLE_READY_AGENTS: ReadonlySet<string> = new Set(['pi', 'omp'])
-
 export function mailboxDeliveryRefusal(
   source: TuiIdleEvidenceSource,
   pty: RuntimePtyWorktreeRecord,
@@ -27,9 +24,7 @@ export function mailboxDeliveryRefusal(
   recovering: boolean,
   readComposerText: () => string | null,
   recognizedAgent: boolean,
-  stagedText?: string,
-  /** When recovery began; a title-only agent's title set after it is its own current readiness. */
-  recoverySince?: number
+  stagedText?: string
 ) {
   const ownPointer = terminalComposerTextOwnsPointer(readComposerText(), stagedText)
   const admissionSource = source
@@ -49,18 +44,7 @@ export function mailboxDeliveryRefusal(
   }
   const evidence = ptyTuiIdleEvidence(
     source,
-    recovering
-      ? {
-          ...pty,
-          lastAgentStatus: null,
-          lastOscTitle:
-            recoverySince !== undefined &&
-            TITLE_READY_AGENTS.has(source.getPaneAgent?.(pty.ptyId) ?? '') &&
-            (pty.lastOscTitleEpochMs ?? -1) > recoverySince
-              ? pty.lastOscTitle
-              : null
-        }
-      : pty,
+    recovering ? { ...pty, lastAgentStatus: null, lastOscTitle: null } : pty,
     recovering ? () => screen?.join('\n') ?? '' : readWaitText
   )
   let verdict: TuiIdleVerdict =
