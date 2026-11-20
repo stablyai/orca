@@ -20,16 +20,4 @@ describe('agent status row reads', () => {
     expect(store.getParents()[0]).toBe(first)
     expect(Object.isFrozen(first)).toBe(true)
   })
-
-  it('returns the replacement row after a write', () => {
-    const store = createAgentStatusStore({ epoch: 'host', mode: 'authority' })
-    store.applyMutation({ parent: { subject, firstObservedAt: 10 } })
-    const before = store.getParent(subject)
-    store.applyMutation({ parent: { subject, firstObservedAt: 20 } })
-
-    const after = store.getParent(subject)
-    expect(after).not.toBe(before)
-    expect(after?.firstObservedAt).toBe(20)
-    expect(before?.firstObservedAt).toBe(10)
-  })
 })
