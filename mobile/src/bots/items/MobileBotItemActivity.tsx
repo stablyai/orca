@@ -21,12 +21,15 @@ import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-nam
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
 import {
   BOT_ITEM_STATUSES,
-  botItemCommentImages,
   type BotItem,
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
-import { stripSentImagePromptMarkers } from '../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import {
+  mobileBotItemCommentWords,
+  MobileBotItemCommentAttachments,
+  type MobileBotItemAttachmentSource
+} from './MobileBotItemCommentAttachments'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -43,11 +46,6 @@ import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 
 const ICON = 13
-
-/** A comment's words without the [Image #N] its send wrote for its images, as desktop and chat show them. */
-function commentText(data: Record<string, unknown>): string {
-  return stripSentImagePromptMarkers(str(data.text), botItemCommentImages(data).length)
-}
 
 function str(value: unknown): string {
   return typeof value === 'string' ? value : ''
@@ -112,7 +110,7 @@ function EventLine({ event, item }: { event: BotItemEvent; item: BotItem }) {
   const { data } = event
   switch (event.kind) {
     case 'commented':
-      return <Text style={styles.line}>{commentText(data)}</Text>
+      return <Text style={styles.line}>{mobileBotItemCommentWords(data)}</Text>
     case 'edited': {
       const fields = typeof data.fields === 'object' && data.fields !== null ? data.fields : {}
       return (
@@ -257,18 +255,20 @@ function CommentCard({
   item,
   entry,
   quickReplies,
-  busy
+  busy,
+  attachments
 }: {
   item: BotItem
   entry: Extract<BotItemActivityEntry, { kind: 'comment' }>
   quickReplies: MobileBotItemQuickReplyActions
   busy: boolean
+  attachments: MobileBotItemAttachmentSource
 }) {
   const t = useMobileTranslation()
   const { event, replyTo, waiting } = entry
   const mine = event.actor.kind === 'owner'
   const shape = botItemQuestionShape(event.data)
-  const text = stripSentImagePromptMarkers(shape.body, botItemCommentImages(event.data).length)
+  const text = mobileBotItemCommentWords({ ...event.data, text: shape.body })
   return (
     <View
       style={[
@@ -283,7 +283,9 @@ function CommentCard({
         <Text style={styles.meta}>{timeOf(event.at)}</Text>
       </View>
       {replyTo ? <MobileBotItemReplyQuote text={replyTo.text} /> : null}
-      {text.trim() ? <MobileMarkdown content={text} /> : null}
+      <MobileBotItemCommentAttachments data={event.data} {...attachments}>
+        {text.trim() ? <MobileMarkdown content={text} /> : null}
+      </MobileBotItemCommentAttachments>
       {shape.decisions.length > 0 ? (
         <MobileBotItemQuestionLines
           shape={shape}
@@ -301,7 +303,8 @@ export function MobileBotItemActivity({
   item,
   events,
   quickReplies,
-  busy = false
+  busy = false,
+  attachments
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
@@ -309,6 +312,7 @@ export function MobileBotItemActivity({
   busy?: boolean
   /** What the waiting question's quick replies do. */
   quickReplies: MobileBotItemQuickReplyActions
+  attachments: MobileBotItemAttachmentSource
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -323,6 +327,7 @@ export function MobileBotItemActivity({
             entry={entry}
             quickReplies={quickReplies}
             busy={busy}
+            attachments={attachments}
           />
         ) : (
           <View key={entry.key} style={styles.event}>
