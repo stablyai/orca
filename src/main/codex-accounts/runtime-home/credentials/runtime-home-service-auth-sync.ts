@@ -304,11 +304,12 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
   }
 
   protected clearRuntimeAuthAfterSystemDefaultLogout(path: string, snapshot = true): void {
-    // System logout revokes the mirrored login even after a runtime token refresh.
-    rmSync(path, { force: true })
+    // Snapshot first: a failed save then leaves the mirror as it was, never an old snapshot to restore.
     if (snapshot) {
       this.captureSystemDefaultSnapshot({ force: true })
     }
+    // System logout revokes the mirrored login even after a runtime token refresh.
+    rmSync(path, { force: true })
     this.persistRuntimeLogoutMarker()
     this.lastWrittenAuthJson = null
     this.persistSharedRuntimeAuthProvenance({
