@@ -55,7 +55,9 @@ export class BotAvatarSync {
       return
     }
     let waiting = false
+    const present = new Set<string>()
     for (const bot of this.deps.bots.list()) {
+      present.add(bot.id)
       if (!(bot.slack || bot.github) || !bot.avatar) {
         this.queued.delete(bot.id)
         continue
@@ -79,6 +81,12 @@ export class BotAvatarSync {
       }
       this.queued.set(bot.id, bot)
     }
+    // A bot deleted while it waited for a slot is not sent.
+    for (const id of this.queued.keys()) {
+      if (!present.has(id)) {
+        this.queued.delete(id)
+      }
+    }
     if (waiting) {
       this.retryLater()
     }
@@ -86,6 +94,10 @@ export class BotAvatarSync {
   }
 
   private pump(): void {
+    if (!this.deps.bots.enabled()) {
+      this.queued.clear()
+      return
+    }
     for (const [id, bot] of this.queued) {
       if (this.sending.size >= MAX_CONCURRENT_SENDS) {
         return

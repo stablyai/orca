@@ -170,7 +170,8 @@ async function assertLocalImagesFit(
   paths: readonly string[]
 ): Promise<void> {
   let total = 0
-  for (const path of new Set(paths)) {
+  // Each listed path is copied, a repeated one too.
+  for (const path of paths) {
     if (!isAbsolute(path) || parseAgentSessionAttachmentStorePath(store.rootDir, path)) {
       continue
     }

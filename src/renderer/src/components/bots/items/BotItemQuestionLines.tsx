@@ -7,7 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
   botItemPickedReplies,
-  botItemQuestionLine,
+  botItemLineLead,
   botItemQuickReplyText,
   type BotItemQuestionShape,
   type BotItemQuickReply
@@ -19,8 +19,8 @@ export type BotItemQuickReplyActions = {
   /** `questionId`: the ask it answers, so a reply that arrives after a new question is refused. */
   send: (text: string, questionId: string) => void
   edit: (text: string) => void
-  /** Type your answer to one later line: its words lead the comment box, ahead of any draft. */
-  startLine: (text: string) => void
+  /** Type your answer to one line of several: a later line's lead goes first in the comment box, ahead of any draft. */
+  startLine: (lead: string, leads: readonly string[]) => void
   /** Type your answer: the comment box takes focus, glowing once. */
   type: () => void
 }
@@ -124,9 +124,12 @@ export function BotItemQuestionLines({
                     )}
                     onClick={() =>
                       // The box replies to the first open line: a later line's words name theirs.
-                      index === firstOpen || shape.decisions.length < 2
+                      shape.decisions.length < 2
                         ? actions.type()
-                        : actions.startLine(`${botItemQuestionLine(decision.question)} →`)
+                        : actions.startLine(
+                            index === firstOpen ? '' : botItemLineLead(decision),
+                            shape.decisions.map(botItemLineLead)
+                          )
                     }
                   >
                     <Pencil className="size-3 shrink-0" />

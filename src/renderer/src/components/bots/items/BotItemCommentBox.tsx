@@ -13,6 +13,7 @@ import {
 } from 'react'
 import { ArrowUp } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import { useBotItemFill } from './use-bot-item-fill'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { NativeChatComposerPrimaryButton } from '../../native-chat/composer/controls/NativeChatComposerPrimaryButton'
@@ -70,8 +71,9 @@ export type BotItemCommentBoxHandle = {
   type: (text: string) => void
   /** Put `text` in the box in place of its words, to add to before sending. */
   fill: (text: string) => void
-  /** Names the question line a typed answer is for, keeping any draft after it. */
-  startLine: (text: string) => void
+  /** Names the question line a typed answer is for ('' for the first open one), keeping the draft after
+   *  it; `leads`: every line's lead, so one from an earlier click is replaced. */
+  startLine: (lead: string, leads: readonly string[]) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
 }
@@ -226,37 +228,24 @@ export function BotItemCommentBox({
   }, [draft, ime])
 
   const reply = useBotItemReplyMark(box, question ?? null, scopeKey)
-  const caretToEnd = (): void => {
-    const node = input.current
-    node?.focus()
-    node?.setSelectionRange(node.value.length, node.value.length)
+  const answer = (): void => {
+    reply.show()
+    composer.current?.focus({ caretAtEnd: true, glow: true })
   }
-  const fillBox = (next: string): void => {
-    setDraft(next)
-    if (input.current) {
-      input.current.value = next
-    }
-    caretToEnd()
-  }
+  const { caretToEnd, fill, lineLead, startLine } = useBotItemFill(draft, setDraft, input, answer)
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
     focusEnd: caretToEnd,
     type: (typed) => void composer.current?.insertTypedText(typed),
-    answer: () => {
-      reply.show()
-      composer.current?.focus({ caretAtEnd: true, glow: true })
-    },
-    startLine: (text) => {
-      // Ahead of what is already typed, so the draft stays.
-      fillBox(draft.trim() ? `${text} ${draft}` : `${text} `)
-    },
-    fill: (text) => fillBox(`${text} `)
+    answer,
+    startLine,
+    fill
   }))
   const images = attachments.imageAttachments
   // The thumbnails' order numbers their pills, as in chat.
   const imageRow = useMemo(() => images.map(({ id }) => id), [images])
   const pending = images.some((image) => image.pending) || attachments.pastedTextSaving
-  const empty = !draft.trim() && images.length === 0
+  const empty = (!draft.trim() || draft.trim() === lineLead) && images.length === 0
   const send = (): void => {
     if (empty || pending) {
       return

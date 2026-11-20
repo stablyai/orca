@@ -125,9 +125,18 @@ export function botItemQuickReplyText(
   decision: BotItemDecision,
   reply: BotItemQuickReply
 ): string {
-  return shape.decisions.length > 1
-    ? `${botItemQuestionLine(decision.question)} → ${reply.label}`
-    : reply.label
+  return shape.decisions.length > 1 ? `${botItemLineLead(decision)} ${reply.label}` : reply.label
+}
+
+/** What "Type your answer" puts first in the comment box to name a later line of a several-question ask. */
+export function botItemLineLead(decision: BotItemDecision): string {
+  return `${botItemQuestionLine(decision.question)} →`
+}
+
+/** The draft without a lead a line's "Type your answer" put at its start. */
+export function withoutBotItemLineLeads(draft: string, leads: readonly string[]): string {
+  const lead = leads.find((candidate) => draft.startsWith(candidate))
+  return lead ? draft.slice(lead.length).trimStart() : draft
 }
 
 /** The quick replies an owner's reply picked for each question line, none where they wrote their own
