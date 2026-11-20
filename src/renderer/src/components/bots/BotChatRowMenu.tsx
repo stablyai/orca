@@ -136,22 +136,27 @@ export function BotChatMoreButton({
   }
   return (
     <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={t('bots.chats.actions', 'Chat actions')}
-          className={cn(
+      {/* Shown on hover, focus or while open. */}
+      <span
+        className={cn(
+          'opacity-0 group-hover/bot-chat:opacity-100 focus-within:opacity-100 has-[[data-state=open]]:opacity-100',
+          className
+        )}
+      >
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost-on-accent"
+            size="icon-xs"
+            aria-label={t('bots.chats.actions', 'Chat actions')}
             // Positioned, so it sits over a row's own full-size button.
-            'relative opacity-0 group-hover/bot-chat:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
-            className
-          )}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
-          <Ellipsis />
-        </Button>
-      </DropdownMenuTrigger>
+            className="relative"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <Ellipsis />
+          </Button>
+        </DropdownMenuTrigger>
+      </span>
       <DropdownMenuContent align="end" className="w-44">
         <BotChatMenuItems bot={bot} chat={chat} kind="dropdown" onOpen={onOpen} />
       </DropdownMenuContent>

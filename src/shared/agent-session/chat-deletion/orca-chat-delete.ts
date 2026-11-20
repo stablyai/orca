@@ -1,11 +1,5 @@
-import { z } from 'zod'
-
 /** The host deletes an Orca chat for good (agentSession.delete); an older host keeps every chat. */
 export const AGENT_SESSION_DELETE_RUNTIME_CAPABILITY = 'agentSession.delete.v1' as const
-
-export const AgentSessionDeleteParams = z.object({
-  sessionId: z.string().min(1)
-})
 
 /** `replying`: a turn or queued input is running; `workers`: workers it started are still running. */
 export type OrcaChatDeleteRefusal = 'replying' | 'workers' | 'not-found' | 'unavailable'

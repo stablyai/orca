@@ -3,7 +3,6 @@
 import type { z } from 'zod'
 import { AntigravityChatAuthConfigSchema } from '../agent-accounts/antigravity/antigravity-chat-auth-config'
 import { HostAccountLaunchEnvParams } from '../agent-launch/startup/host-account-launch-env'
-import { AgentSessionDeleteParams } from '../agent-session/chat-deletion/orca-chat-delete'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -1115,7 +1114,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.create': CreateParams,
   'agentSession.createSupport': CreateSupportParams,
   'agentSession.currentRequests': CurrentRequestsParams,
-  'agentSession.delete': AgentSessionDeleteParams,
+  'agentSession.delete': OptionsParams,
   'agentSession.ensure': AttachParams,
   'agentSession.handoffStatus': HandoffStatusParams,
   'agentSession.history': HistoryParams,

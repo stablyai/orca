@@ -11,10 +11,7 @@ import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { OrcaChatDeleteResult } from '../../../shared/agent-session/chat-deletion/orca-chat-delete'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { listAiVaultSessions } from '../../ai-vault/listing/cached-session-list'
-import { deleteAiVaultSessionForRemoteClient } from '../../ai-vault/deletion/host-session-delete'
 import { historyRowOwnershipLookup } from '../../ai-vault/structured-sessions/history-row-ownership-lookup'
-import { deleteCodexRolloutsPermanently } from '../../codex/history/cleanup/codex-rollout-permanent-delete'
-import { listHostCodexRolloutHomes } from '../../codex/history/cleanup/codex-host-rollout-homes'
 import { createCanonicalOrcaSessionResolver } from '../../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { readAgentSessionRecordStore } from '../../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { readSessionWorkers } from '../../runtime/rpc/methods/orchestration/worker/session-workers-method'
@@ -22,11 +19,12 @@ import { dropUnreadBotRequests } from '../../runtime/rpc/methods/orchestration/m
 import { runtimeBotChats } from '../../bots/bot-chat-session'
 import { botOfSession } from '../../bots/bot-session-tabs'
 import { closeStructuredAgentSessionChild } from '../../runtime/agent-session/lifecycle/structured-agent-session-close'
+import { deleteHostChatTranscriptsPermanently } from '../../workspaces/cleanup/chat-history/deleted-workspace-chat-history'
 import { forgetNativeChatInLane } from '../../workspaces/cleanup/chat-history/deleted-workspace-native-chats'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getStructuredAgentSessionHost } from '../agent-session-wire/host/structured-agent-session-registry'
 
-type Transcript = { agent: AiVaultAgent; sessionId: string; filePath: string }
+type Transcript = { agent: AiVaultAgent; filePath: string }
 
 /** A session's chat: the first session of its /clear lineage. */
 function chatRootResolver(): (sessionId: string) => string {
@@ -95,7 +93,7 @@ async function listChatTranscripts(records: readonly AgentSessionRecord[]): Prom
   return sessions.flatMap((session) => {
     const owned = owner(session)
     return session.executionHostId === LOCAL_EXECUTION_HOST_ID && owned && ids.has(owned.sessionId)
-      ? [{ agent: session.agent, sessionId: session.sessionId, filePath: session.filePath }]
+      ? [{ agent: session.agent, filePath: session.filePath }]
       : []
   })
 }
@@ -105,29 +103,19 @@ async function deleteTranscripts(
   runtime: OrcaRuntimeService,
   transcripts: readonly Transcript[]
 ): Promise<void> {
-  const codex = transcripts.filter((transcript) => transcript.agent === 'codex')
-  for (const transcript of transcripts.filter((entry) => entry.agent !== 'codex')) {
-    // This host's own delete: the Trash on a desktop, removed outright on a server.
-    const result = await deleteAiVaultSessionForRemoteClient(transcript).catch(
-      (error: unknown) => ({ outcome: String(error) })
-    )
-    if (result.outcome !== 'deleted') {
-      console.warn('[chat-delete] a deleted chat kept its transcript', result.outcome)
-    }
+  if (transcripts.length === 0) {
+    return
   }
-  if (codex.length > 0) {
-    await Promise.resolve()
-      .then(() => {
-        const settings = runtime.requireStore().getSettings()
-        return deleteCodexRolloutsPermanently(
-          codex,
-          async () => true,
-          () => listHostCodexRolloutHomes(settings)
-        )
-      })
-      .catch((error: unknown) => {
-        console.warn('[chat-delete] a deleted chat kept its Codex rollout', error)
-      })
+  const result = await Promise.resolve()
+    .then(() =>
+      deleteHostChatTranscriptsPermanently(runtime.requireStore(), transcripts, async () => true)
+    )
+    .catch((error: unknown) => {
+      console.warn('[chat-delete] a deleted chat kept its transcript', error)
+      return null
+    })
+  if (result && result.failed > 0) {
+    console.warn('[chat-delete] a deleted chat kept some transcripts', result.failed)
   }
 }
 
