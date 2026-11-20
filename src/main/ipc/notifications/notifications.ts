@@ -27,7 +27,7 @@ import {
   createAnnouncedNotificationRegistry,
   type AnnouncedNotification
 } from '../../notifications/announced-notification-registry'
-import { registerNotificationSoundHandlers } from './notification-sound-ipc'
+import { playDeliveredSound, registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 import { isStructuredAttentionRead } from '../../../shared/agent-session/view/agent-session-attention'
 import { isAgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -273,7 +273,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     dispatch: deliveryService.dispatch,
     dismiss: (id) => retireAnnouncements(announced.takeNotification(id)),
     readWorkspaceSession: () => store.getWorkspaceSession(),
-    retained: runtime?.getRetainedAgentAttention?.()
+    retained: runtime?.getRetainedAgentAttention?.(),
+    onDelivered: () => playDeliveredSound(store)
   })
   stopRuntimeAttentionEvents?.()
   stopRuntimeAttentionEvents = runtime?.onClientEvent?.(

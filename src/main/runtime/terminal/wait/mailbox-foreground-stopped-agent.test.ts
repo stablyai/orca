@@ -89,4 +89,6 @@ it("an older daemon's rows name a resumed native install of the agent by its ver
     }
   ]
   await expect(judgeLegacyMailboxRows(rows, 100, 'agent', 'claude')).resolves.toBe('agent')
+  const printRun = [rows[0], { ...rows[1], command: `${rows[1].command} -pc task` }]
+  await expect(judgeLegacyMailboxRows(printRun, 100, 'agent', 'claude')).resolves.toBe('unknown')
 })

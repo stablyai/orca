@@ -116,3 +116,8 @@ export const notificationsApi = {
     }
   }
 } satisfies PreloadApi['notifications']
+
+// Why: main delivers retained agent alerts itself, and a custom sound can only play in this page.
+ipcRenderer.on('notifications:playDeliveredSound', (_event, volume: unknown) => {
+  void notificationsApi.playSound(typeof volume === 'number' ? { volume } : undefined)
+})

@@ -11,6 +11,9 @@ import {
   NOTIFICATION_SOUND_MIME_BY_EXTENSION
 } from './notification-sound-selection'
 import { isNotificationFocusActive } from '../../notifications/notification-focus-state'
+import { usesCustomNotificationSound } from '../../../shared/notifications/notification-settings-types'
+import { getEffectiveNotificationSoundId } from './notification-sound-selection'
+import { getTrustedUIRendererWebContents } from '../ui'
 
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
 
@@ -65,4 +68,15 @@ export function registerNotificationSoundHandlers(store: Store): void {
       return { ok: false, reason: 'read-failed' }
     }
   })
+}
+
+/** Plays the selected custom sound for an alert main delivered itself; the renderer owns audio. */
+export function playDeliveredSound(store: Store): void {
+  const settings = store.getSettings().notifications
+  if (usesCustomNotificationSound(getEffectiveNotificationSoundId(settings))) {
+    getTrustedUIRendererWebContents()?.send(
+      'notifications:playDeliveredSound',
+      settings.customSoundVolume
+    )
+  }
 }
