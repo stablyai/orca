@@ -14,10 +14,10 @@ const electronSends = new WeakMap<Electron.WebContents, InternalSend>()
 export function listenForBrowserGuestPageVisibility(): void {
   ipcMain.on(BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL, (event, state: unknown) => {
     const guest = event.sender
+    // A document unloading after a cross-process navigation reports 'hidden' late; only the current one counts.
     if (
       (state !== 'visible' && state !== 'hidden') ||
-      !event.senderFrame ||
-      event.senderFrame.parent !== null ||
+      event.senderFrame !== guest.mainFrame ||
       guest.getType() !== 'webview'
     ) {
       return
