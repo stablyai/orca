@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronDown, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/class-names'
-import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import {
   CHECK_COLOR,
   CHECK_ICON,
@@ -65,7 +65,6 @@ export function ChecksTabCheckRow({
   return (
     <div className="min-w-0">
       <button
-        ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
         type="button"
         onClick={() => onToggle(check)}
         aria-expanded={expanded}
@@ -80,13 +79,13 @@ export function ChecksTabCheckRow({
             !expanded && '-rotate-90'
           )}
         />
-        <Icon
-          className={cn(
-            'size-3.5 shrink-0',
-            color,
-            conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
-          )}
-        />
+        {conclusion === 'pending' ? (
+          <SpinnerFrame>
+            <Icon className={cn('block size-3.5', color)} />
+          </SpinnerFrame>
+        ) : (
+          <Icon className={cn('size-3.5 shrink-0', color)} />
+        )}
         <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">{check.name}</span>
         <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel}</span>
       </button>
