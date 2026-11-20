@@ -8,6 +8,7 @@ const SHUTDOWN_GRACE_MS = 5000
 // Matches the plugin's startupTimeout: a restart that hasn't initialized by then is abandoned.
 const RESTART_TIMEOUT_MS = 60_000
 const REQUEST_CANCELLED = -32800
+const CONTENT_MODIFIED = -32801
 const SERVER_CANCELLED = -32802
 const REQUEST_FAILED = -32803
 // Requests held while a server starts or stops; past this the agent is told to retry.
@@ -23,6 +24,7 @@ const SESSION_STATE = new Set([
   'workspace/didChangeWorkspaceFolders'
 ])
 const WAKING_STATE = new Set(['textDocument/didOpen', 'textDocument/didChange'])
+const QUEUED_EXIT = Symbol('exit')
 // Not agent activity: cancellations, and file events from a client that watches for itself.
 const NOT_ACTIVITY = new Set(['$/cancelRequest', WATCHED_FILES])
 
@@ -240,7 +242,7 @@ export function createServerSession({
 
   const enqueue = (message) => {
     if (message.id === undefined) {
-      queue.set(Symbol('exit'), message)
+      queue.set(QUEUED_EXIT, message)
     } else if (queue.size < MAX_QUEUED_REQUESTS) {
       queue.set(message.id, message)
     } else {
@@ -281,6 +283,18 @@ export function createServerSession({
       if (SESSION_STATE.has(method)) {
         // The next server is given the current documents, settings and folders when it starts.
         track(message)
+        // A held request about a document edited since would run against text it never saw.
+        const uri = message.params?.textDocument?.uri
+        for (const [id, queued] of queue) {
+          if (uri !== undefined && queued.params?.textDocument?.uri === uri) {
+            queue.delete(id)
+            toClient({
+              jsonrpc: '2.0',
+              id,
+              error: { code: CONTENT_MODIFIED, message: 'document changed' }
+            })
+          }
+        }
         if (WAKING_STATE.has(method)) {
           wakeWanted = true
           if (state === 'stopped') {
