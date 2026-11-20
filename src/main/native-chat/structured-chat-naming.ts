@@ -25,13 +25,13 @@ import type {
   StructuredChatNamingFailure
 } from './agent-session-wire/host/structured-agent-session-host-types'
 import { neverThrowingStructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
-import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
+import {
+  BACKGROUND_PRIORITY,
+  runInBackgroundGenerationSlot,
+  USER_REQUEST_PRIORITY
+} from '../text-generation/execution/background-generation-slots'
 
 const GENERATION_RETRY_DELAYS_MS = [2000, 4000]
-// Each run starts an agent CLI from main; a launch burst must not start one per new chat at once.
-const MAX_GENERATIONS_RUNNING = 3
-const USER_REQUEST_PRIORITY = 0
-const AUTOMATIC_PRIORITY = 1
 const NAMING_ERROR_LIMIT = 1024
 const FAILURE_OUTPUT_ENTRIES = 32
 
@@ -51,7 +51,6 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
   const failureOutputs = new Map<string, AgentGenerationFailureOutput>()
   const now = deps.now ?? Date.now
   const hostStartedAt = now()
-  const generations = new PrioritySemaphore(MAX_GENERATIONS_RUNNING)
   const logger = neverThrowingStructuredAgentSessionLogger(deps.logger)
   const warn = (sessionId: string, error: unknown) =>
     logger.warn('Chat name generation failed', {
@@ -91,7 +90,9 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         request.record.conversationName ?? '',
         request.automatic ? GENERATION_RETRY_DELAYS_MS : [],
         () => applicable(request),
-        request.automatic ? AUTOMATIC_PRIORITY : USER_REQUEST_PRIORITY
+        // A user asking again while this waits moves it ahead of automatic runs.
+        () =>
+          request.automatic && !request.userWaiting ? BACKGROUND_PRIORITY : USER_REQUEST_PRIORITY
       )
       const store = deps.getStore()
       if (name && store && applicable(request)) {
@@ -136,31 +137,29 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     forName: string,
     retryDelays: readonly number[],
     stillCurrent: () => boolean,
-    priority: number
+    priority: () => number
   ): Promise<string | null> {
     attempted.set(record.sessionId, contextId(record))
     for (let attempt = 0; stillCurrent(); attempt += 1) {
-      let failure: NamingRunFailure
-      const release = await generations.acquire(priority)
-      try {
+      const result = await runInBackgroundGenerationSlot(priority, async () => {
         // A chat named or renamed while this run waited for a slot starts no agent.
         if (!stillCurrent()) {
           return null
         }
-        const result = await deps.generate(record, firstPrompt, stillCurrent)
-        if (!result) {
-          return null
+        try {
+          return await deps.generate(record, firstPrompt, stillCurrent)
+        } catch (error) {
+          warn(record.sessionId, error)
+          return chatNamingFailure('agentNotRun')
         }
-        if ('name' in result && result.name) {
-          return result.name
-        }
-        failure = 'error' in result ? result : chatNamingFailure('noName')
-      } catch (error) {
-        warn(record.sessionId, error)
-        failure = chatNamingFailure('agentNotRun')
-      } finally {
-        release()
+      })
+      if (!result) {
+        return null
       }
+      if ('name' in result && result.name) {
+        return result.name
+      }
+      const failure: NamingRunFailure = 'error' in result ? result : chatNamingFailure('noName')
       if (!stillCurrent()) {
         return null
       }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
@@ -55,18 +55,12 @@ function burst() {
     onNamed: () => {},
     logger: createStructuredAgentSessionLogger()
   })
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const settle = () => vi.advanceTimersByTimeAsync(0)
   const finishOne = async () => {
     running.shift()?.finish()
     await settle()
   }
-  return { records, naming, running, started, peak: () => peak, settle, finishOne }
-}
-
-// #45703: a launch burst started one naming agent CLI per new chat at once from main.
-describe('chat naming during a launch burst', () => {
-  it('runs at most three naming agents at a time and starts none for a chat named while queued', async () => {
-    const { records, naming, running, started, peak, settle, finishOne } = burst()
+  const startAll = async () => {
     for (const sessionId of records.keys()) {
       naming(
         {
@@ -82,6 +76,22 @@ describe('chat naming during a launch burst', () => {
       )
     }
     await settle()
+  }
+  return { records, naming, running, started, peak: () => peak, startAll, finishOne }
+}
+
+// #45703: a launch burst started one naming agent CLI per new chat at once from main.
+describe('chat naming during a launch burst', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('runs at most three naming agents at a time and starts none for a chat named while queued', async () => {
+    const { records, naming, running, started, peak, startAll, finishOne } = burst()
+    await startAll()
     expect(running).toHaveLength(3)
 
     // The user names a queued chat before its turn comes.
@@ -90,12 +100,23 @@ describe('chat naming during a launch burst', () => {
       throw new Error('missing fixture record')
     }
     records.set('session-50', { ...renamed, conversationName: 'Mine' })
+    // A user asking for a queued chat's name moves it ahead of automatic runs.
+    expect(naming.regenerate('session-99')).toBe(true)
 
     while (running.length > 0) {
       await finishOne()
     }
     expect(peak()).toBe(3)
+    expect(started[3]).toBe('session-99')
     expect(started).toHaveLength(CHATS - 1)
     expect(started).not.toContain('session-50')
+  })
+
+  it('lets the next chat start when a naming agent never finishes', async () => {
+    const { started, startAll } = burst()
+    await startAll()
+    expect(started).toHaveLength(3)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(started).toHaveLength(6)
   })
 })

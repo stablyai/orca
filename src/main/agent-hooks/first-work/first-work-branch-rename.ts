@@ -62,6 +62,10 @@ export {
   FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT,
   resetFirstWorkBranchRenameState
 } from './first-work-rename-attempts'
+import {
+  BACKGROUND_PRIORITY,
+  runInBackgroundGenerationSlot
+} from '../../text-generation/execution/background-generation-slots'
 
 export type FirstWorkBranchRenameDeps = FirstWorkAttemptDeps & {
   getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
@@ -224,9 +228,11 @@ async function runAutoRename(
     return failed('could not prepare generation environment', false)
   }
 
-  // Target preparation awaits; a replaced workspace must not launch generation.
-  attempt.assertIncarnation()
-  const generated = await generateBranchNameFromContext(resolved.context, params, target)
+  const generated = await runInBackgroundGenerationSlot(BACKGROUND_PRIORITY, () => {
+    // Target preparation and the slot wait await; a replaced workspace must not launch generation.
+    attempt.assertIncarnation()
+    return generateBranchNameFromContext(resolved.context, params, target)
+  })
   // Generation can outlive the start of a WSL move.
   if (isWslMoveRepoBlocked(repo)) {
     return defer('project-moving', 'a WSL move started during generation')
