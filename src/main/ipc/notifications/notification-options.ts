@@ -14,7 +14,9 @@ const NOTIFICATION_BODY_PREVIEW_MAX_LENGTH = 180
 
 export function buildNotificationOptions(
   args: NotificationDispatchRequest,
-  translate: NotificationTranslator = englishNotificationCopy
+  translate: NotificationTranslator = englishNotificationCopy,
+  /** The UI language's Intl tag for times; undefined keeps the process locale. */
+  intlLocale?: string
 ): {
   title: string
   body: string
@@ -38,7 +40,7 @@ export function buildNotificationOptions(
     }
   }
 
-  const richOptions = buildAgentTaskCompleteNotificationOptions(args, translate)
+  const richOptions = buildAgentTaskCompleteNotificationOptions(args, translate, intlLocale)
   if (richOptions) {
     return richOptions
   }
@@ -59,7 +61,8 @@ function fillNotificationPlaceholders(template: string, values: Record<string, s
 
 function buildAgentTaskCompleteNotificationOptions(
   args: NotificationDispatchRequest,
-  translate: NotificationTranslator
+  translate: NotificationTranslator,
+  intlLocale: string | undefined
 ): { title: string; body: string } | null {
   if (!hasAgentNotificationSnapshot(args)) {
     return null
@@ -71,7 +74,8 @@ function buildAgentTaskCompleteNotificationOptions(
 
   return {
     title: `${worktreeContext} - ${agentLabel} ${statusText}`,
-    body: buildAgentTaskCompleteRichBody(args, translate) ?? `${agentLabel} ${statusText}.`
+    body:
+      buildAgentTaskCompleteRichBody(args, translate, intlLocale) ?? `${agentLabel} ${statusText}.`
   }
 }
 
@@ -137,9 +141,10 @@ function hasAgentNotificationSnapshot(args: NotificationDispatchRequest): boolea
 
 function buildAgentTaskCompleteRichBody(
   args: NotificationDispatchRequest,
-  translate: NotificationTranslator
+  translate: NotificationTranslator,
+  intlLocale: string | undefined
 ): string | null {
-  const failure = agentFailureSentence(args)
+  const failure = agentFailureSentence(args, intlLocale)
   if (failure) {
     return failure
   }
@@ -179,7 +184,10 @@ function buildAgentTaskCompleteRichBody(
 }
 
 // A failed turn's reason, in the chat's own words ("Codex hit its weekly limit. It resets at 6:39 PM.").
-function agentFailureSentence(args: NotificationDispatchRequest): string | null {
+function agentFailureSentence(
+  args: NotificationDispatchRequest,
+  intlLocale: string | undefined
+): string | null {
   // Whole, or not at all: a newer host's fact whose detail this build can't read keeps the old body.
   const fact = readWholeAgentSessionFailureFact(args.agentFailure)
   if (!fact || args.agentState !== 'done' || args.agentTurnOutcome !== 'failure') {
@@ -189,7 +197,7 @@ function agentFailureSentence(args: NotificationDispatchRequest): string | null 
   const { text } = agentSessionFailureWords(fact, {
     surface: 'row',
     ...(agentName ? { agentName } : {}),
-    usageLimitReset: (resetsAt) => formatUsageLimitResetClock(resetsAt)
+    usageLimitReset: (resetsAt) => formatUsageLimitResetClock(resetsAt, undefined, intlLocale)
   })
   return normalizeNotificationText(text, NOTIFICATION_BODY_PREVIEW_MAX_LENGTH) || null
 }

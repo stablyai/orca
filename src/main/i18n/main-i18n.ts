@@ -41,6 +41,18 @@ export const mainI18n: I18nInstance = orcaI18n.i18n
 export const translateMain = orcaI18n.translate
 export const setMainPluginLanguagePacks = orcaI18n.setPluginLanguagePacks
 
+/** The UI language as an Intl tag (a plugin pack's declared tag), so main-built text formats like the renderer's. */
+export function getMainIntlLocale(): string {
+  const active = mainI18n.language
+  const pack = orcaI18n.getPluginLanguagePacks().find((entry) => entry.resourceLanguage === active)
+  try {
+    // An unsupported tag would silently use the OS locale; fall back to the default explicitly.
+    return Intl.DateTimeFormat.supportedLocalesOf(pack?.locale ?? active)[0] ?? DEFAULT_UI_LOCALE
+  } catch {
+    return DEFAULT_UI_LOCALE
+  }
+}
+
 export function getMainSystemLocale(): string {
   return getSystemLanguageDetection()?.locale ?? DEFAULT_UI_LOCALE
 }

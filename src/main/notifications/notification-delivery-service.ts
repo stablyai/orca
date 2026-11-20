@@ -7,7 +7,7 @@ import type {
 } from '../../shared/notifications/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from '../ipc/notifications/notification-options'
-import { translateMain } from '../i18n/main-i18n'
+import { getMainIntlLocale, translateMain } from '../i18n/main-i18n'
 import { reserveNotificationCooldown } from '../../shared/notifications/notification-burst-cooldown'
 import { toHostSessionPaneKey } from '../../shared/workspace-layout/terminal-surface-id'
 import { isNotificationSourceEnabled } from '../../shared/notifications/notification-source-gate'
@@ -111,7 +111,11 @@ export function createNotificationDeliveryService(
         request.agentState
       )
 
-      const notificationOptions = buildNotificationOptions(request, translateMain)
+      const notificationOptions = buildNotificationOptions(
+        request,
+        translateMain,
+        getMainIntlLocale()
+      )
 
       // Desktop focus need not silence phones; execution hosts retire their own delivered alerts.
       if (
