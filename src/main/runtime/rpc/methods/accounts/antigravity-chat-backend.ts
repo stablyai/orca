@@ -29,11 +29,14 @@ async function hostChatAgySignIn(runtime: OrcaRuntimeService) {
     return false
   }
   const env = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
+  // Someone opened Antigravity's accounts, so agy may be started to say whether it can sign in;
+  // without a login to find, that is the initialize-only check, which never reads the keyring.
   const input = await acpHostBackendInput(
     ANTIGRAVITY_LAUNCH_SPEC,
     env,
     getProfileUserDataPath(),
-    settings
+    settings,
+    { startsProgram: true }
   )
   return input ? antigravityAgySignIn(input) : false
 }
