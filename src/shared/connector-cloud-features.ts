@@ -50,6 +50,14 @@ export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
  *  maxLastAssistantMessageBytes. Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'
 
+/** The cloud takes a post's `postAt` and has the source post it then. Its own constant, as the
+ *  cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
+
+/** The cloud takes the verbs for Slack's own surfaces (pin, canvas, list, scheduled). Its own
+ *  constant, as the cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE = 'slack.tools'
+
 /** The cloud takes the `activity` event and shows what a running turn is doing. Its own constant,
  *  as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'

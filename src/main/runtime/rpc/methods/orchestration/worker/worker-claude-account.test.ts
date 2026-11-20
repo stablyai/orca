@@ -34,14 +34,9 @@ function account(id: string, email: string): ClaudeManagedAccountSummary {
 function createRuntime() {
   return {
     validateOrchestrationAgentLauncher: vi.fn(),
-    getAccountsSnapshot: vi.fn(() => ({
-      claude: {
-        accounts: [
-          account('acct-a', 'active@example.com'),
-          account('acct-b', 'pinned@example.com')
-        ],
-        activeAccountId: 'acct-a'
-      }
+    getClaudeAccountsSnapshot: vi.fn(() => ({
+      accounts: [account('acct-a', 'active@example.com'), account('acct-b', 'pinned@example.com')],
+      activeAccountId: 'acct-a'
     }))
   }
 }

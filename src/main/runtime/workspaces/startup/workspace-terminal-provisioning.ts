@@ -92,7 +92,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
       request,
       createRouteKind,
       canSpawn: Boolean(this.ptyController?.spawn),
-      listClaudeAccounts: () => this.getAccountsSnapshot().claude
+      listClaudeAccounts: () => this.getClaudeAccountsSnapshot()
     })
     // Why before the checkout: a startup that fails to prepare is only a warning on a successful create.
     // Without a runtime preparer (headless serve) the PTY layer's own one decides at spawn.

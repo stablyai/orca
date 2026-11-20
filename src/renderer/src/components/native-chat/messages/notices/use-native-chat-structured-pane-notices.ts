@@ -1,3 +1,4 @@
+import type { AgentSessionAccountKind } from '../../../../../../shared/agent-session/failures/agent-session-availability'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -37,7 +38,8 @@ export function useNativeChatStructuredPaneNotices({
   composerError,
   install,
   hostSendGate,
-  hostNotice
+  hostNotice,
+  kickoffSignIn
 }: {
   props: Omit<NativeChatStructuredViewProps, 'mode'>
   ownerWorktreeId: string | null
@@ -53,10 +55,13 @@ export function useNativeChatStructuredPaneNotices({
   composerError: Parameters<typeof structuredSessionNotices>[0]['composerError']
   install: ReturnType<typeof useNativeChatInstallSlot>
   hostSendGate: ReturnType<typeof useNativeChatHostSendGate>
+  /** The account a new bot's refused kickoff needs signed in, which its setup card offers. */
+  kickoffSignIn?: { account?: AgentSessionAccountKind } | null
   hostNotice: NativeChatComposerNotice | null
 }) {
   const t = useTranslate()
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
+  const kickoffOwed = kickoffSignIn != null
   const details = provisionalLaunch.failure?.details
   const { demandModelCatalog } = controller.optionSurface
   const installing = install.slot.kind === 'install'
@@ -86,7 +91,7 @@ export function useNativeChatStructuredPaneNotices({
         ? controller.unavailable.account
         : details && 'account' in details
           ? details.account
-          : undefined,
+          : kickoffSignIn?.account,
     failure: provisionalLaunch.failure,
     startFailures,
     journalItems: controller.journalItems,
@@ -133,8 +138,12 @@ export function useNativeChatStructuredPaneNotices({
   if (hostNotice) {
     notices.push(hostNotice)
   }
-  // One Sign in on screen: while the composer's notice has it, transcript rows only say what wasn't sent.
-  const signInInComposer = notices.some((notice) => notice.signIn !== undefined)
+  // One Sign in on screen: while the composer's notice or Antigravity's sign-in strip has it,
+  // transcript rows only say what wasn't sent.
+  const signInInComposer =
+    install.signIn !== null || notices.some((notice) => notice.signIn !== undefined)
+  // A new bot's setup card offers the kickoff's sign-in, so the composer doesn't repeat it.
+  const shown = kickoffOwed ? notices.filter((notice) => notice.signIn === undefined) : notices
   const rowSetup = useMemo(() => ({ ...setup, signInInComposer }), [setup, signInInComposer])
-  return { setup: rowSetup, notices }
+  return { setup: rowSetup, notices: shown }
 }

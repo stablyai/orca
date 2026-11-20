@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -139,6 +139,30 @@ describe('AntigravityHookService', () => {
       expect(readFileSync(corePath, 'utf8')).toBe('previous installed core')
       expect(readFileSync(configPath, 'utf8')).toBe(previousConfig)
     })
+  })
+
+  it('publishes the native reader into a Windows install that predates it on startup refresh', async () => {
+    const service = new AntigravityHookService()
+    withPlatform('win32', () => expect(service.install().state).toBe('installed'))
+    const exePath = join(homeDir, '.orca', 'agent-hooks', 'orca-agent-hook.exe')
+    expect(existsSync(exePath)).toBe(false)
+    const resourcesPath = join(homeDir, 'resources')
+    mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
+    writeFileSync(join(resourcesPath, 'bin', 'orca-agent-hook.exe'), 'bundled native hook')
+
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    Object.defineProperty(process, 'resourcesPath', { configurable: true, value: resourcesPath })
+    try {
+      await service.refreshManagedScripts()
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+      Reflect.deleteProperty(process, 'resourcesPath')
+    }
+
+    expect(readFileSync(exePath, 'utf8')).toBe('bundled native hook')
   })
 
   it('preserves user-authored hook bundles and entries in Orca bundle', () => {

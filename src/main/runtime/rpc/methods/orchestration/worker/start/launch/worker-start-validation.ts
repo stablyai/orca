@@ -122,7 +122,7 @@ function resolveWorkerClaudeAccount(
   selector: string
 ): ClaudeLaunchAccountResolution {
   try {
-    return resolveClaudeLaunchAccount(runtime.getAccountsSnapshot().claude, selector)
+    return resolveClaudeLaunchAccount(runtime.getClaudeAccountsSnapshot(), selector)
   } catch (error) {
     throw new OrchestrationError(
       'invalid_argument',

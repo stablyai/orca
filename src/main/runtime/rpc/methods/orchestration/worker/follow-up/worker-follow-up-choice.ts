@@ -126,7 +126,7 @@ function assertWorkerAccountRemains(
   options: { account?: string; accountEmail?: string }
 ): void {
   const accountId = options.account
-  if (!accountId || runtime.getAccountsSnapshot().claude.accounts.some((a) => a.id === accountId)) {
+  if (!accountId || runtime.getClaudeAccountsSnapshot().accounts.some((a) => a.id === accountId)) {
     return
   }
   throw new OrchestrationError(

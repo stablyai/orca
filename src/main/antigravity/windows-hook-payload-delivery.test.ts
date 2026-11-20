@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as osModule from 'node:os'
@@ -26,6 +26,10 @@ vi.mock('os', async (importOriginal) => {
 
 import { AntigravityHookService } from './hook-service'
 import { ANTIGRAVITY_EVENTS } from './hook-events'
+import {
+  buildWindowsNativeHookExecutable,
+  WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
+} from '../agent-hooks/installation/commands/testing/windows-native-hook-exe.test-fixture'
 
 // Literal ! characters expose inherited delayed-expansion corruption.
 const PANE_KEY = 'tab-1:leaf-1!bang'
@@ -242,6 +246,41 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
       expect(listener.posts[0].payload).toBe(input || '{}')
     },
     15_000
+  )
+
+  it(
+    'posts a held-open PreToolUse payload through the native reader instead of Node (#41298)',
+    async () => {
+      home = mkdtempSync(join(tmpdir(), 'orca-antigravity-native-'))
+      homedirMock.mockReturnValue(home)
+      expect(new AntigravityHookService().install().state).toBe('installed')
+      const hooksDir = join(home, '.orca', 'agent-hooks')
+      copyFileSync(buildWindowsNativeHookExecutable(), join(hooksDir, 'orca-agent-hook.exe'))
+      const listener = await startHookListener()
+      server = listener.server
+      const result = await runWrapper(
+        join(hooksDir, 'antigravity-pre-tool-use.cmd'),
+        hookEnvironment({
+          ORCA_AGENT_HOOK_PORT: String(listener.port),
+          ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+          ORCA_PANE_KEY: PANE_KEY,
+          // A runtime that cannot start proves the post came from the native reader.
+          ORCA_AGENT_HOOK_NODE: join(home, 'missing-runtime.exe')
+        }),
+        PAYLOAD,
+        'on',
+        true
+      )
+      expect(result.timedOut).toBe(false)
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout.trim()).toBe(expectedStdout('PreToolUse'))
+      expect(listener.posts).toHaveLength(1)
+      expect(listener.posts[0].payload).toBe(PAYLOAD)
+      expect(listener.posts[0].hookEventName).toBe('PreToolUse')
+      expect(listener.posts[0].paneKey).toBe(PANE_KEY)
+    },
+    // A local run builds the native reader with cargo inside this test.
+    WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
   )
 
   async function installWithoutCore(): Promise<string> {

@@ -16,9 +16,9 @@ describe('a fresh follow-up to a worker started with --account', () => {
   async function startPinnedWorkerThenLoseIt(): Promise<string> {
     h.setup()
     const accounts = [PINNED]
-    vi.spyOn(h.runtime, 'getAccountsSnapshot').mockImplementation(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the follow-up reads only the Claude account roster off this snapshot.
-      () => ({ claude: { accounts, activeAccountId: null }, codex: null }) as never
+    vi.spyOn(h.runtime, 'getClaudeAccountsSnapshot').mockImplementation(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the follow-up reads only each account's id off this roster.
+      () => ({ accounts, activeAccountId: null }) as never
     )
     vi.spyOn(h.runtime, 'showTerminalWorkspaceLaunchScope').mockResolvedValue({
       id: 'repo::worktree',
@@ -69,11 +69,10 @@ describe('a fresh follow-up to a worker started with --account', () => {
 
   it('names the removed account instead of starting on another one', async () => {
     const dispatchId = await startPinnedWorkerThenLoseIt()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the follow-up reads only the Claude account roster off this snapshot.
-    vi.mocked(h.runtime.getAccountsSnapshot).mockReturnValue({
-      claude: { accounts: [], activeAccountId: null },
-      codex: null
-    } as never)
+    vi.mocked(h.runtime.getClaudeAccountsSnapshot).mockReturnValue({
+      accounts: [],
+      activeAccountId: null
+    })
 
     await expect(send(dispatchId)).rejects.toMatchObject({
       code: 'worker_account_gone',

@@ -22,12 +22,7 @@ import {
 import { renderResourceUsageKillDialog } from './popover/resource-usage-kill-dialog'
 import { WorkspaceSpaceCompactPanel } from '../workspace-storage/WorkspaceSpaceCompactPanel'
 
-export function ResourceUsageStatusSegment({
-  iconOnly
-}: {
-  compact?: boolean
-  iconOnly: boolean
-}): React.JSX.Element {
+export function ResourceUsageStatusSegment(): React.JSX.Element {
   const t = useTranslate()
   const controller = useResourceUsageStatusController()
   const {
@@ -88,7 +83,6 @@ export function ResourceUsageStatusSegment({
           daemonUnreachable,
           resourceManagerAriaLabel,
           spaceScanReady,
-          iconOnly,
           commitToneClass,
           triggerSessionCount,
           orphanCount,

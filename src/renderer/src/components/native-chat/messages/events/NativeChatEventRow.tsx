@@ -51,12 +51,15 @@ function EventDetails({
   id,
   clamp,
   findActive,
+  rows,
   children
 }: {
   id: string
   clamp: boolean
   /** Find reads drawn text, so a search shows the details whole. */
   findActive: boolean
+  /** Details that are rows themselves: indented without the fill, whose color would show behind their controls. */
+  rows: boolean
   children: React.ReactNode
 }) {
   const t = useTranslate()
@@ -66,7 +69,7 @@ function EventDetails({
   const full = chosenFull || findActive
   useLayoutEffect(() => {
     const node = body.current
-    if (!node || full) {
+    if (!node || full || rows) {
       return
     }
     const measure = () => setCut(node.scrollHeight > node.clientHeight + 1)
@@ -78,7 +81,14 @@ function EventDetails({
       observer.observe(child)
     }
     return () => observer.disconnect()
-  }, [children, full])
+  }, [children, full, rows])
+  if (rows) {
+    return (
+      <div id={id} className="mt-1 ml-5">
+        {children}
+      </div>
+    )
+  }
   return (
     <div
       id={id}
@@ -130,6 +140,7 @@ export function NativeChatEventRow({
   onOpenChange,
   buttonRef,
   clampDetails = true,
+  detailsAreRows = false,
   className
 }: {
   icon: React.ReactNode
@@ -152,6 +163,7 @@ export function NativeChatEventRow({
   buttonRef?: Ref<HTMLButtonElement>
   /** Reports cut at about four lines; a short list of links shows whole. */
   clampDetails?: boolean
+  detailsAreRows?: boolean
   className?: string
 }): React.JSX.Element {
   const disclosure = useNativeChatDisclosure(disclosureKey, defaultOpen)
@@ -251,7 +263,12 @@ export function NativeChatEventRow({
         ) : null}
       </div>
       {toggles && shown ? (
-        <EventDetails id={detailsId} clamp={clampDetails} findActive={findActive}>
+        <EventDetails
+          id={detailsId}
+          clamp={clampDetails}
+          findActive={findActive}
+          rows={detailsAreRows}
+        >
           {details}
         </EventDetails>
       ) : null}

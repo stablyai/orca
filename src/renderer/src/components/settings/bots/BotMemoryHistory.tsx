@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Undo2 } from 'lucide-react'
+import { ChevronRight, Minus, Pencil, Plus, RotateCcw, Sparkles, Undo2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { SettingsInsetGroup } from '@/components/bots/settings-view/BotSettingsRows'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
+import { cn } from '@/lib/class-names'
 import { type BotMemoryLine, parseBotMemoryFacts } from '../../../../../shared/bot-memory-lines'
 import type { BotMemoryHistoryView } from '../../../../../shared/bots/bot-memory-history'
 
@@ -106,6 +108,22 @@ function dayLabel(at: number, now: Date): string {
   return new Date(at).toLocaleDateString(getIntlLocale(), { month: 'short', day: 'numeric' })
 }
 
+function rowIcon({ by, change }: BotMemoryHistoryView): React.JSX.Element {
+  if (by.kind === 'tidy-up') {
+    return <Sparkles className="size-2.5" />
+  }
+  if (by.kind === 'undo' || by.kind === 'kept') {
+    return <RotateCcw className="size-2.5" />
+  }
+  if (change.added.length > 0 && change.removed.length > 0) {
+    return <Pencil className="size-2.5" />
+  }
+  if (change.removed.length > 0) {
+    return <Minus className="size-2.5" />
+  }
+  return <Plus className="size-2.5" />
+}
+
 function Row({
   row,
   open,
@@ -123,61 +141,70 @@ function Row({
     hour: 'numeric',
     minute: '2-digit'
   })
+  const subtitle = row.undoable
+    ? author(row)
+    : t('settings.bots.memoryHistory.secret', '{{author}} · Can’t be undone: it held a secret', {
+        author: author(row)
+      })
   return (
-    <li className="group flex items-start gap-3 rounded-md px-2 hover:bg-accent">
+    <div data-row-icon="" className="px-3 py-2.5 transition-colors hover:bg-accent/40">
       <button
         type="button"
         aria-expanded={open}
-        className="min-w-0 flex-1 py-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-full items-start gap-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={onToggle}
       >
-        <span className="block truncate text-sm">{summary(row)}</span>
-        <span className="block truncate text-xs text-muted-foreground">
-          {row.undoable
-            ? author(row)
-            : t(
-                'settings.bots.memoryHistory.secret',
-                '{{author}} · Can’t be undone: it held a secret',
-                {
-                  author: author(row)
-                }
-              )}
+        <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded bg-foreground/[0.07] text-muted-foreground">
+          {rowIcon(row)}
         </span>
-        {open ? (
-          <span className="mt-1.5 block space-y-0.5 border-l-2 border-border pl-2.5 font-mono text-xs">
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] leading-[18px] text-foreground">{summary(row)}</span>
+          <span className="mt-0.5 flex items-center gap-1.5 text-2xs text-muted-foreground">
+            <span className="min-w-0 flex-1 truncate">{subtitle}</span>
+            <span className="shrink-0 tabular-nums">{time}</span>
+          </span>
+        </span>
+        <ChevronRight
+          className={cn(
+            'mt-1 size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150',
+            open ? 'rotate-90' : null
+          )}
+        />
+      </button>
+      {open ? (
+        <div className="mt-2.5 ml-6.5 space-y-2">
+          <div className="space-y-1 rounded-md bg-foreground/[0.045] p-2 font-mono text-2xs leading-[17px] dark:bg-background/50">
             {row.change.removed.map((entry) => (
-              <span key={`-${entry.line}`} className="block truncate text-muted-foreground">
-                − <s>{bare(entry)}</s>
-              </span>
+              <div
+                key={`-${entry.line}`}
+                className="flex gap-1.5 break-words text-muted-foreground"
+              >
+                <span className="shrink-0 select-none">−</span>
+                <span className="min-w-0">{bare(entry)}</span>
+              </div>
             ))}
             {row.change.added.map((entry) => (
-              <span key={`+${entry.line}`} className="block truncate">
-                + {bare(entry)}
-              </span>
+              <div key={`+${entry.line}`} className="flex gap-1.5 break-words text-foreground">
+                <span className="shrink-0 select-none">+</span>
+                <span className="min-w-0">{bare(entry)}</span>
+              </div>
             ))}
-          </span>
-        ) : null}
-      </button>
-      <span className="shrink-0 py-1.5 text-xs text-muted-foreground group-focus-within:hidden group-hover:hidden">
-        {time}
-      </span>
-      {row.undoable ? (
-        <Button
-          type="button"
-          size="xs"
-          variant="ghost"
-          className="mt-1 hidden group-focus-within:inline-flex group-hover:inline-flex"
-          onClick={onUndo}
-        >
-          <Undo2 />
-          {t('settings.bots.memoryHistory.undoAction', 'Undo')}
-        </Button>
+          </div>
+          {row.undoable ? (
+            <div className="flex justify-end">
+              <Button type="button" size="xs" variant="ghost" onClick={onUndo}>
+                <Undo2 />
+                {t('settings.bots.memoryHistory.undoAction', 'Undo')}
+              </Button>
+            </div>
+          ) : null}
+        </div>
       ) : null}
-    </li>
+    </div>
   )
 }
 
-/** Every change to MEMORY.md, newest first, each with Undo. */
+/** Every change to MEMORY.md, newest first, grouped by day inside inset cards. */
 export function BotMemoryHistory({
   load,
   undo,
@@ -232,28 +259,33 @@ export function BotMemoryHistory({
       </p>
     )
   }
+
+  const groups: { day: string; rows: BotMemoryHistoryView[] }[] = []
+  for (const row of rows) {
+    const day = dayLabel(row.at, now)
+    const last = groups.at(-1)
+    if (last && last.day === day) {
+      last.rows.push(row)
+    } else {
+      groups.push({ day, rows: [row] })
+    }
+  }
+
   return (
-    <ul className="space-y-0.5">
-      {rows.flatMap((row, index) => {
-        const day = dayLabel(row.at, now)
-        const item = (
-          <Row
-            key={row.id}
-            row={row}
-            open={open === row.id}
-            onToggle={() => setOpen(open === row.id ? null : row.id)}
-            onUndo={() => void undoRow(row.id)}
-          />
-        )
-        return index > 0 && dayLabel(rows[index - 1].at, now) === day
-          ? [item]
-          : [
-              <li key={`day:${row.id}`} className="px-2 pt-2 pb-0.5 text-xs text-muted-foreground">
-                {day}
-              </li>,
-              item
-            ]
-      })}
-    </ul>
+    <div className="flex flex-col gap-3.5">
+      {groups.map((group) => (
+        <SettingsInsetGroup key={group.day} title={group.day}>
+          {group.rows.map((row) => (
+            <Row
+              key={row.id}
+              row={row}
+              open={open === row.id}
+              onToggle={() => setOpen(open === row.id ? null : row.id)}
+              onUndo={() => void undoRow(row.id)}
+            />
+          ))}
+        </SettingsInsetGroup>
+      ))}
+    </div>
   )
 }

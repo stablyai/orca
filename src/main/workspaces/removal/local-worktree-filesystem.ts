@@ -3,7 +3,7 @@ import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-r
 import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
-import { removeHostTree } from '../../filesystem/host-tree-removal'
+import { removeHostTree, removeUnregisteredHostCheckout } from '../../filesystem/host-tree-removal'
 import {
   guestUncPath,
   resolveWslGuestPaths,
@@ -134,21 +134,36 @@ export function getLocalWorktreePathAccess(
   }
 }
 
+/** `markerLast` keeps `.git` until everything else is gone, so a failed delete still proves whose folder it is. */
 export async function removeLocalWorktreePath(
   targetPath: string,
   options: LocalWorktreeFilesystemOptions = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  { markerLast = false }: { markerLast?: boolean } = {}
 ): Promise<void> {
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
     throwIfSignalAborted(signal)
-    await removeHostTree(targetPath, { signal })
+    await (markerLast
+      ? removeUnregisteredHostCheckout(targetPath, signal)
+      : removeHostTree(targetPath, { signal }))
     return
   }
 
   // Delete guest paths inside their distro; Windows Node cannot safely remove them.
-  await runWslCommand(
-    distro,
-    guestCommand(targetPath, (target) => `rm -rf -- ${target}`)
-  )
+  try {
+    await runWslCommand(
+      distro,
+      guestCommand(targetPath, (target) =>
+        markerLast
+          ? `if [ -L ${target} ] || { [ -e ${target} ] && [ ! -d ${target} ]; }; then echo "Refusing to delete non-directory worktree path" >&2; exit 3; fi; LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && LC_ALL=C rmdir -- ${target}`
+          : `rm -rf -- ${target}`
+      )
+    )
+  } catch (error) {
+    // Only a definitive "No such file" means done; permission errors must not read as removed.
+    if (!markerLast || !isWslMissingPathError(error)) {
+      throw error
+    }
+  }
 }

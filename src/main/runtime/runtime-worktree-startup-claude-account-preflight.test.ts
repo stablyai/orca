@@ -33,7 +33,7 @@ const account = {
 type RuntimeInternals = {
   resolveRepoSelector: (selector: string) => Promise<unknown>
   buildStartupForAgent: (...args: unknown[]) => unknown
-  getAccountsSnapshot: () => unknown
+  getClaudeAccountsSnapshot: () => unknown
 }
 
 function makeRuntime(prepareClaudeAuth: PrepareClaudeAuth | undefined): OrcaRuntimeService {
@@ -54,8 +54,9 @@ function makeRuntime(prepareClaudeAuth: PrepareClaudeAuth | undefined): OrcaRunt
     startup: { command: 'claude' },
     launchRuntime: new Error('unused')
   })
-  vi.spyOn(internals, 'getAccountsSnapshot').mockReturnValue({
-    claude: { accounts: [account], activeAccountId: null }
+  vi.spyOn(internals, 'getClaudeAccountsSnapshot').mockReturnValue({
+    accounts: [account],
+    activeAccountId: null
   })
   return runtime
 }
