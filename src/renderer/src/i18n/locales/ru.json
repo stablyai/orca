@@ -4430,6 +4430,7 @@
             "terminalListNeedsServerUpdate": "Обновите Orca на этом сервере, чтобы увидеть терминальных агентов",
             "terminalListFailed": "Не удалось получить список терминальных агентов этого рабочего пространства",
             "chatNotInstalled": "Не установлено",
+            "chatInstallRequired": "Требуется установка",
             "chatNotOverSsh": "Чат недоступен по SSH",
             "chatNotInWsl": "Чат недоступен в WSL",
             "chatNotInSubfolder": "Чат недоступен во вложенной папке",
@@ -18661,10 +18662,6 @@
           "hideOtherClients": "Скрывать агентов других клиентов"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Путь скопирован в буфер обмена",
-          "copyPathFailed": "Не удалось скопировать путь",
-          "workspace": "Рабочее пространство",
-          "copyPath": "Скопировать путь",
           "jumpToWorkspace": "Перейти к рабочему пространству"
         },
         "ActivityThreadRow": {
@@ -19499,7 +19496,6 @@
         "stoppedRestart_many": "{{count}} чатов остановлено при закрытии Orca.",
         "stoppedRestart_other": "{{count}} чата остановлено при закрытии Orca.",
         "promptsNotResent": "Ваши промпты не будут отправлены повторно.",
-        "promptsNotSent": "Ваши промпты не отправлялись повторно.",
         "resume": "Возобновить",
         "details": "Подробнее",
         "close": "Закрыть",
@@ -21546,7 +21542,6 @@
       "cancelFailed": "Не удалось отменить установку. Повторите попытку.",
       "install": "Установить {{agent}}",
       "installManaged": "Установить копию, предоставляемую Orca",
-      "installed": "Установлено",
       "notInstalled": "Не установлено.",
       "progress": "Загрузка {{agent}}",
       "readFailed": "Не удалось проверить {{agent}} на этом компьютере. Повторяем попытку.",
@@ -24408,7 +24403,6 @@
       "chip": "Боты",
       "chipLabel": "Боты, показать всё",
       "searchEverything": "Искать «{{text}}» везде",
-      "searchBotsFor": "Искать ботов по запросу «{{text}}»",
       "noMatch": "Нет ботов, подходящих под «{{text}}»",
       "noBotsYet": "Ботов пока нет",
       "filtersPaused": "Фильтры применяются к рабочим пространствам, а не к ботам",
@@ -24426,7 +24420,7 @@
       "browse": "Просмотреть шаблоны"
     },
     "new": {
-      "fromTemplate": "Использовать шаблон"
+      "fromTemplate": "Шаблон"
     },
     "apps": {
       "paste": {

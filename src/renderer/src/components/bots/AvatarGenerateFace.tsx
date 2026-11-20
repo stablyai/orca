@@ -25,8 +25,10 @@ import { useAvatarGeneration, type GeneratedAvatar } from './use-avatar-generati
 const TILE = 'size-28 rounded-xl'
 
 /** The Generate face's state, shared by its tile and the caption line under the carousel. */
-export function useGenerateFace(onResult: (result: GeneratedAvatar) => void) {
-  const generation = useAvatarGeneration(onResult)
+/** `onStart` runs as a picture is asked for (once the description passes its checks), so a picture
+ *  taken earlier and still being read can't replace it. */
+export function useGenerateFace(onResult: (result: GeneratedAvatar) => void, onStart?: () => void) {
+  const generation = useAvatarGeneration(onResult, onStart)
   const [description, setDescription] = useState('')
   // Editing reopens the description field under a picture already made.
   const [editing, setEditing] = useState(false)
@@ -273,7 +275,7 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
         // Read-only, not disabled, so focus stays and Esc can cancel.
         readOnly={running}
         maxLength={MAX_AVATAR_DESCRIPTION_CHARS}
-        placeholder={t('bots.avatar.generate.placeholder', 'Describe a picture…')}
+        placeholder={t('bots.avatar.generate.placeholder', "Describe your bot's look…")}
         aria-label={t('bots.avatar.generate.describe', 'Picture description')}
         onChange={(event) => face.setDescription(event.currentTarget.value)}
         onKeyDown={(event) => {

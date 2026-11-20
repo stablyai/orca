@@ -4336,6 +4336,7 @@
             "terminalListNeedsServerUpdate": "Orca auf diesem Server aktualisieren, um Terminal-Agenten aufzulisten",
             "terminalListFailed": "Terminal-Agenten für diesen Arbeitsbereich konnten nicht aufgelistet werden",
             "chatNotInstalled": "Nicht installiert",
+            "chatInstallRequired": "Installation erforderlich",
             "chatNotOverSsh": "Kein Chat über SSH",
             "chatNotInWsl": "Kein Chat in WSL",
             "chatNotInSubfolder": "Kein Chat in einem Unterordner",
@@ -18142,10 +18143,6 @@
           "hideOtherClients": "Agenten anderer Clients ausblenden"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Pfad in die Zwischenablage kopiert",
-          "copyPathFailed": "Pfad konnte nicht kopiert werden",
-          "workspace": "Arbeitsbereich",
-          "copyPath": "Pfad kopieren",
           "jumpToWorkspace": "Zum Arbeitsbereich wechseln"
         },
         "ActivityThreadRow": {
@@ -18930,7 +18927,6 @@
         "stoppedRestart_one": "{{count}} Chat beim Beenden von Orca angehalten.",
         "stoppedRestart_other": "{{count}} Chats beim Beenden von Orca angehalten.",
         "promptsNotResent": "Deine Prompts werden nicht erneut gesendet.",
-        "promptsNotSent": "Deine Prompts wurden nicht erneut gesendet.",
         "resume": "Fortsetzen",
         "details": "Details",
         "close": "Schließen",
@@ -20858,7 +20854,6 @@
       "cancelFailed": "Die Installation konnte nicht abgebrochen werden. Erneut versuchen.",
       "install": "{{agent}} installieren",
       "installManaged": "Orcas Version installieren",
-      "installed": "Installiert",
       "notInstalled": "Nicht installiert.",
       "progress": "Download von {{agent}}",
       "readFailed": "{{agent}} konnte auf diesem Host nicht überprüft werden. Erneuter Versuch.",
@@ -23653,7 +23648,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, alles anzeigen",
       "searchEverything": "Überall nach „{{text}}“ suchen",
-      "searchBotsFor": "Bots nach „{{text}}“ durchsuchen",
       "noMatch": "Keine Bots passen zu „{{text}}“",
       "noBotsYet": "Noch keine Bots",
       "filtersPaused": "Filter gelten für Arbeitsbereiche, nicht für Bots",
@@ -23669,7 +23663,7 @@
       "browse": "Vorlagen durchsuchen"
     },
     "new": {
-      "fromTemplate": "Vorlage verwenden"
+      "fromTemplate": "Vorlage"
     },
     "apps": {
       "paste": {

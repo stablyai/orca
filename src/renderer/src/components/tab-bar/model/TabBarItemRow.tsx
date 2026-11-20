@@ -194,6 +194,7 @@ function TabBarItemRow({
         namingFailure={item.data.customLabel ? null : namingFailure}
         fork={fork}
         closable={!isBotChat}
+        sizing={isBotChat ? 'content' : 'terminal'}
         canContinueInTerminal={bot === null}
         identityIcon={
           bot ? <BotAvatar bot={bot} className="size-3 rounded-[3px] text-3xs" /> : undefined

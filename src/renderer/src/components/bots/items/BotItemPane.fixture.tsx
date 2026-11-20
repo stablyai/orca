@@ -346,31 +346,23 @@ export const loadingNext = defineFixture({
   interact: () => new Promise((resolve) => setTimeout(resolve, 600))
 })
 
-/** An answerable open question: its card takes the comment box's place, and the arrows stay in a plain row below. */
-const carding = {
+/** A waiting question: the comment box stays, with the arrows in its row. */
+const waiting = {
   ...named,
   uid: 'uid-card',
   status: 'needs_you' as const,
-  question: { eventId: 'e3', text: QUESTION, answerable: true as const }
+  question: { eventId: 'e3', text: QUESTION }
 }
-function askingCardAt(width: number) {
+function askingAt(width: number) {
   return defineFixture({
     width,
-    render: () => <Pane state={walk(3, 14)} shown={carding} activity={thread} tall />,
+    render: () => <Pane state={walk(3, 14)} shown={waiting} activity={thread} tall />,
     interact: (frame) => scrollItem(frame, 'bottom')
   })
 }
-export const askingCard300 = askingCardAt(300)
-export const askingCardWide = askingCardAt(480)
-/** The card folded: the comment box is back, with the arrows in its row. */
-export const askingCardFolded = defineFixture({
-  ...askingCard300,
-  interact: async (frame) => {
-    frame.querySelector<HTMLButtonElement>('button[aria-label="Collapse"]')?.click()
-    await scrollItem(frame, 'bottom')
-  }
-})
-/** A plain item at the same widths, to compare the arrows' x with the card's row. */
+export const asking300 = askingAt(300)
+export const askingWide = askingAt(480)
+/** A plain item at the same widths, to compare the arrows' x with a waiting question's. */
 export const plain300 = defineFixture({
   width: 300,
   render: () => <Pane state={walk(3, 14)} activity={thread} tall />

@@ -596,6 +596,9 @@
       "resetViewport": "Reset viewport size",
       "findOnPage": "Find on page",
       "profile": "Profile"
+    },
+    "loadStall": {
+      "waitingForHost": "Waiting for {{host}}…"
     }
   },
   "editor": {
@@ -850,6 +853,10 @@
           "monaco": "monaco",
           "syntax": "syntax"
         }
+      },
+      "tilingWindowMode": {
+        "title": "Tiling window manager mode",
+        "description": "Hide the minimize and maximize buttons and bring workspace tabs to the top edge. Move and resize the window with your window manager."
       },
       "reduceVisualEffects": {
         "description": "Turn off blur behind dialogs and menus, and window translucency after a restart. Helps remote desktops and machines without a GPU.",
@@ -1911,6 +1918,18 @@
       },
       "stepFailed": "Orca could not finish this step.",
       "finishFailed": "Orca could not do that."
+    },
+    "notifications": {
+      "perfNotices": {
+        "hiddenTabs": {
+          "label": "Hidden browser tabs",
+          "description": "Suggest Memory Saver when many hidden browser tabs stay loaded."
+        },
+        "search": {
+          "tabs": "tabs",
+          "memory": "memory"
+        }
+      }
     },
     "automaticUpdates": {
       "saveFailed": "Could not save automatic updates.",
@@ -5389,6 +5408,7 @@
             "terminalListNeedsServerUpdate": "Update Orca on this server to list terminal agents",
             "terminalListFailed": "Couldn’t list terminal agents for this workspace",
             "chatNotInstalled": "Not installed",
+            "chatInstallRequired": "Install required",
             "chatNotOverSsh": "No chat over SSH",
             "chatNotInWsl": "No chat in WSL",
             "chatNotInSubfolder": "No chat in a subfolder",
@@ -17797,7 +17817,9 @@
           "close": "Close",
           "copiedPng": "Copied as PNG",
           "copyPngFailed": "Could not copy image",
-          "copyPng": "Copy as PNG"
+          "copyPng": "Copy as PNG",
+          "previous": "Previous image",
+          "next": "Next image"
         },
         "MermaidBlock": {
           "dcc132e691": "Diagram error:",
@@ -19659,10 +19681,6 @@
           "hideOtherClients": "Hide other-client agents"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Path copied to clipboard",
-          "copyPathFailed": "Failed to copy path",
-          "workspace": "Workspace",
-          "copyPath": "Copy path",
           "jumpToWorkspace": "Jump to workspace"
         },
         "ActivityThreadRow": {
@@ -20530,7 +20548,6 @@
         "stoppedRestart_one": "{{count}} chat stopped when Orca closed.",
         "stoppedRestart_other": "{{count}} chats stopped when Orca closed.",
         "promptsNotResent": "Resuming won’t send your prompts again.",
-        "promptsNotSent": "Your prompts weren’t sent again.",
         "resume": "Resume",
         "details": "Details",
         "close": "Close",
@@ -22524,7 +22541,11 @@
         "foundLead": "Orca found credentials on this host you can use instead:",
         "signInGoogle": "Sign in with Google",
         "useKeyOrGcloud": "API key or gcloud",
-        "agy": "agy sign-in",
+        "yourAgy": "Your agy",
+        "yourAgyVersion": "Your agy · v{{version}}",
+        "orcaCopy": "Orca's copy",
+        "orcaCopyVersion": "Orca's copy · v{{version}}",
+        "runsOn": "Runs on: {{program}}",
         "agyItem": "agy's own login",
         "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
         "confirmSignIn": "Sign in with Google?"
@@ -23605,7 +23626,6 @@
       "cancelFailed": "Couldn't cancel the installation. Try again.",
       "install": "Install {{agent}}",
       "installManaged": "Install Orca's copy",
-      "installed": "Installed",
       "installedByOrca": "Installed by Orca · {{version}}",
       "notInstalled": "Not installed.",
       "progress": "{{agent}} download",
@@ -24939,6 +24959,8 @@
       "chatTitle": "Antigravity Chat",
       "chatDescription": "Signs in through your browser, so Chat works without agy installed.",
       "chatDescriptionAgy": "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't.",
+      "chatDescriptionAgyVersion": "New chats run on your agy (v{{version}}) and its account below. This sign-in is used when agy isn't.",
+      "chatDescriptionManagedVersion": "New chats run on Orca's copy (v{{version}}), so Chat works without agy installed.",
       "terminalTitle": "agy in the terminal",
       "terminalDescriptionWindows": "Uses agy's own saved accounts. Switching applies to the host default agy credential.",
       "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
@@ -26996,7 +27018,6 @@
       "hostReconnecting": "Reconnecting…",
       "hostUpdateAction": "Update",
       "title": "New bot",
-      "description": "Your AI teammate, with a name, memory and automations. It lives in a folder on one computer.",
       "name": "Name",
       "namePlaceholder": "Name your bot",
       "picture": "Picture",
@@ -27037,13 +27058,13 @@
       "reports": "Reports",
       "takesOver": "Takes over",
       "agentsKeepRunning": "Their agents keep running.",
-      "fromTemplate": "Use template",
+      "fromTemplate": "Template",
       "uploadDropOrPaste": "<upload>Upload</upload>, drop, or paste an image",
-      "createBot": "Create bot",
-      "purposeLabel": "Purpose",
-      "purposePlaceholder": "Describe its job (optional)",
+      "purposeLabel": "Identity",
+      "purposePlaceholder": "Who it is and what it does",
       "uploadPasteOrDrop": "or upload, paste or drop your own",
-      "pasteHint": "Paste an image with {{shortcut}}"
+      "pasteHint": "Paste an image with {{shortcut}}",
+      "changePicture": "Change picture"
     },
     "section": {
       "title": "Bots",
@@ -27123,7 +27144,8 @@
         "step2": "Select the workspace for your bot.",
         "step3": "Copy the Refresh Token and paste it below.",
         "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.",
-        "label": "Configuration refresh token"
+        "label": "Configuration refresh token",
+        "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it."
       },
       "workspaces": {
         "otherTeam": "That token is for another workspace. Orca keeps it for that workspace.",
@@ -27339,7 +27361,7 @@
         "drop": "Drop to use"
       },
       "generate": {
-        "placeholder": "Describe a picture…",
+        "placeholder": "Describe your bot's look…",
         "describe": "Picture description",
         "button": "Generate",
         "generating": "Generating…",
@@ -28861,7 +28883,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, show everything",
       "searchEverything": "Search everything for \"{{text}}\"",
-      "searchBotsFor": "Search bots for \"{{text}}\"",
       "noMatch": "No bots match \"{{text}}\"",
       "noBotsYet": "No bots yet",
       "filtersPaused": "Filters apply to workspaces, not bots",
@@ -29050,7 +29071,6 @@
         "changed": "changed {{field}}",
         "closed": "marked this done",
         "commentLabel": "{{name}}, {{time}}",
-        "goToAnswer": "Answered at {{time}}. Go to the answer",
         "replyingTo": "Replying to: {{question}}. Go to the question",
         "linked": "linked {{links}}",
         "made": "added this item",
@@ -29061,7 +29081,6 @@
         "retry": "Retry",
         "discard": "Discard",
         "reopened": "reopened this",
-        "waitingOnYou": "Waiting on you",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
         "workerStarted": "Worker started:",
@@ -29127,7 +29146,11 @@
         "label": "Comment",
         "showLess": "Show less",
         "submit": "Comment",
-        "thisServer": "This server"
+        "thisServer": "This server",
+        "replyOrPick": "Reply in your own words, or pick an option",
+        "replyingTo": "Replying to:",
+        "hideReplyingTo": "Hide",
+        "replyTo": "Reply to {{name}}…"
       },
       "empty": {
         "allClear": "Nothing needs you and nothing is running.",
@@ -29245,29 +29268,8 @@
         "pickCustom": "Custom time"
       },
       "ask": {
-        "closed": "That question closed before your answer went. Your answer is kept on the item.",
-        "asks": "{{name}} asks",
-        "asksAt": "{{name}} asks · {{time}}",
-        "answeredInComment": "Answered in a comment",
-        "notAnswered": "Not answered",
-        "youAnswered": "You answered:",
-        "skipped": "Skipped",
-        "answeredEarlier": "You answered an earlier question",
-        "hostCannotRecord": "This Orca host can’t record answers yet, so nothing was sent. Update Orca on the bot’s computer; your answer is kept here.",
-        "answeredElsewhere": "Answered elsewhere before yours went. Your answer is kept here.",
-        "changed": "This question changed before your answer went. Your answer is kept here.",
-        "withdrawn": "This question closed before your answer went. Your answer is kept here.",
-        "copied": "Copied",
-        "copy": "Copy",
-        "toComment": "Draft comment",
-        "dismiss": "Dismiss",
-        "commentNotAnswer": "A comment, with any files, goes to the bot and moves this item to In progress, but isn’t recorded as your answer. Expand the question to answer it.",
-        "uncertain": "This question closed while your answer was being sent, and no reply came, so it may not have gone. Check Activity; your answer is kept here.",
-        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here.",
-        "reply": "Reply",
-        "replyPlaceholder": "Reply to {{name}}…",
-        "cancelReply": "Cancel",
-        "sendReply": "Send"
+        "recommended": "Recommended",
+        "typeAnswer": "Type your answer"
       }
     },
     "search": {
@@ -29626,6 +29628,17 @@
     "title": "Some background work paused after crashing repeatedly",
     "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
     "retry": "Retry"
+  },
+  "perfNotices": {
+    "hiddenTabs": {
+      "title": "Save memory from inactive tabs",
+      "description_one": "You have {{count}} tab you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up its memory.",
+      "description_other": "You have {{count}} tabs you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up their memory.",
+      "descriptionOneHour_one": "You have {{count}} tab you haven't viewed in over an hour. Turn on Memory Saver to free up its memory.",
+      "descriptionOneHour_other": "You have {{count}} tabs you haven't viewed in over an hour. Turn on Memory Saver to free up their memory.",
+      "turnOnMemorySaver": "Turn on Memory Saver"
+    },
+    "dontShowAgain": "Don't show again"
   },
   "ui": {
     "monthCalendar": {

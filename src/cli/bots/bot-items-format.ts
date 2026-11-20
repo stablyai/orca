@@ -1,5 +1,6 @@
 // `orca bot item`: one short line per write, one row per item, and an item with its activity.
 import {
+  botItemCommentImages,
   BOT_ITEM_STATUSES,
   isBotItemSnoozed,
   type BotItem,
@@ -169,8 +170,10 @@ function eventLine(event: BotItemEvent): string {
         return `edited ${Object.keys(typeof data.fields === 'object' && data.fields ? data.fields : {}).join(', ')}${data.note ? ` (${String(data.note)})` : ''}`
       case 'status':
         return `${statusWord(data.from)} → ${statusWord(data.to)}${data.note ? `: ${String(data.note)}` : ''}`
-      case 'commented':
-        return String(data.text ?? '')
+      case 'commented': {
+        const images = botItemCommentImages(data).map(({ path }) => path)
+        return `${String(data.text ?? '')}${images.length > 0 ? `\n    images: ${images.join(', ')}` : ''}`
+      }
       case 'linked':
         return `linked ${Array.isArray(data.links) ? data.links.join(', ') : ''}`
       case 'snoozed':

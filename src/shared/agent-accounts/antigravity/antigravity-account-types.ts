@@ -24,6 +24,8 @@ export type AntigravityAccountState = {
   /** Host only: new chats run on agy and its account; false runs them on Orca's own sign-in. Absent
    *  from older hosts and WSL. */
   chatUsesAgy?: boolean
+  /** That agy's version, when new chats run on it. */
+  chatAgyVersion?: string
 }
 
 export const ANTIGRAVITY_CHAT_SIGN_IN_PHASES = [

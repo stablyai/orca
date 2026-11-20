@@ -181,6 +181,7 @@ export function buildDefaultSettings(args: {
     sourceControlCompareAgainstUpstream: false,
     prAutoRefresh: 'default',
     showTitlebarAppName: true,
+    linuxTilingWindowMode: false,
     showTasksButton: true,
     showAutomationsButton: true,
     artifactsEnabled: true,

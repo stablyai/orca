@@ -71,6 +71,7 @@ import {
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
+import { chatProgramInstalled } from '../../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
 
@@ -143,7 +144,7 @@ export function AgentLaunchSettingsCatalog({
       .filter(
         (agent) =>
           !selectedDetected?.includes(agent) &&
-          readChatProgram(state, agent, context, selectedDetected) === 'available'
+          chatProgramInstalled(readChatProgram(state, agent, context, selectedDetected))
       )
       .join(' ')
   })
