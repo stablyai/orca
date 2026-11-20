@@ -55,12 +55,14 @@ async function removeCopyMarker(
 
 type DeleteOutcome = 'done' | { referencedId: string }
 
-const SLOW_REFRESH_MS = 100
+const QUICK_REFRESH_MS = 100
+const MAX_REFRESH_ROUNDS = 3
 
 async function deleteRollout(
   target: RolloutTarget,
   listHomes: () => Promise<RolloutHomes>,
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
+  stillAllowed: () => Promise<boolean>,
   references: CodexRolloutHistoryReferences,
   result: DeleteResult,
   deletedPaths: string[],
@@ -122,17 +124,25 @@ async function deleteRollout(
     ) {
       return 'done'
     }
-    // The checks above take a while: a fork Codex started meanwhile is in today's folders.
-    const refreshedAt = Date.now()
-    if (!(await references.refresh(homes))) {
-      return 'done'
+    // The checks above take a while: a fork Codex started meanwhile is in today's folders. A slow
+    // refresh leaves those checks stale, and asking them again is slow: refresh until one is quick.
+    for (let round = 0; ; round += 1) {
+      const refreshedAt = Date.now()
+      if (!(await references.refresh(homes))) {
+        return 'done'
+      }
+      if (await references.isReferenced(rolloutId)) {
+        return { referencedId: rolloutId }
+      }
+      if (Date.now() - refreshedAt <= QUICK_REFRESH_MS) {
+        break
+      }
+      if (round === MAX_REFRESH_ROUNDS || !(await stillEligible())) {
+        return 'done'
+      }
     }
-    if (await references.isReferenced(rolloutId)) {
-      return { referencedId: rolloutId }
-    }
-    // A slow refresh (folders re-read) leaves the eligibility above stale: the workspace or setting
-    // may have changed meanwhile.
-    if (Date.now() - refreshedAt > SLOW_REFRESH_MS && !(await stillEligible())) {
+    // The setting, rows and folder, asked once more nearest the unlink.
+    if (!(await stillAllowed())) {
       return 'done'
     }
     const removed: NameState[] = []
@@ -196,7 +206,9 @@ export async function deleteCodexRolloutsPermanently(
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
   listHomes: () => Promise<RolloutHomes>,
   // A sweep shares one across its batches and saves it; alone, this call saves its own.
-  sweepReferences?: CodexRolloutHistoryReferences
+  sweepReferences?: CodexRolloutHistoryReferences,
+  // The cheap part of `shouldDelete`, asked once more right before the unlink.
+  stillAllowed: () => Promise<boolean> = async () => true
 ): Promise<DeleteResult> {
   const result: DeleteResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const deletedPaths: string[] = []
@@ -230,6 +242,7 @@ export async function deleteCodexRolloutsPermanently(
           target,
           listHomes,
           shouldDelete,
+          stillAllowed,
           references,
           result,
           deletedPaths,

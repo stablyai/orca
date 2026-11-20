@@ -6,7 +6,7 @@ import { codexPhysicalRolloutId } from '../../../native-chat/transcript-history/
 import { readHistoryBase } from './codex-rollout-history-base-header'
 import { createCodexRolloutFolderStamps } from './codex-rollout-folder-stamps'
 import { isNamedOn, recentDates } from './codex-rollout-recent-dates'
-import { lstatUnlessAbsent, statUnlessAbsent } from './codex-rollout-path-probes'
+import { linksIntoWsl, lstatUnlessAbsent, statUnlessAbsent } from './codex-rollout-path-probes'
 import {
   loadCodexRolloutHistoryBaseCache,
   type CodexRolloutHistoryBaseCache
@@ -102,6 +102,10 @@ export function createCodexRolloutHistoryReferences(
   }
 
   const visitLink = async (path: string, entry: Pending, visited: Set<string>) => {
+    // Codex's own scan never follows a link inside these folders; one into WSL can start a distro.
+    if (await linksIntoWsl(path)) {
+      return true
+    }
     const target = await statUnlessAbsent(path)
     if (target === undefined) {
       return false

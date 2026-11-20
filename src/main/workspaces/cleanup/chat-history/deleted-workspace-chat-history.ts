@@ -39,10 +39,14 @@ export type ChatHistorySweepDeps = {
   signal?: AbortSignal
   /** Sessions whose cwd is inside one of `scopePaths`, at most AI_VAULT_SCOPE_PATHS_MAX_COUNT of them. */
   listSessions: (scopePaths: string[], signal?: AbortSignal) => Promise<AiVaultSession[]>
-  /** `shouldDelete` runs right before each removal, after any earlier removal in the batch. */
+  /**
+   * `shouldDelete` runs right before each removal, after any earlier removal in the batch;
+   * `stillGone` is its cheap part (setting, rows, folder) for a last check nearest the unlink.
+   */
   deleteSessions: (
     targets: ChatHistoryTarget[],
-    shouldDelete: (target: ChatHistoryTarget) => Promise<boolean>
+    shouldDelete: (target: ChatHistoryTarget) => Promise<boolean>,
+    stillGone: () => Promise<boolean>
   ) => Promise<ChatHistorySweepResult>
   /** Orca's own chats on this host; absent sweeps none. */
   listNativeChats?: () => readonly AgentSessionRecord[]
@@ -124,7 +128,8 @@ export async function sweepDeletedWorkspaceChatHistory(
             target.agent === 'codex'
               ? isCodexRolloutStillIdleInGoneFolder
               : isChatStillIdleInGoneFolder
-          )(target.filePath, key, Date.now())) && (await stillGone())
+          )(target.filePath, key, Date.now())) && (await stillGone()),
+        stillGone
       )
   )
   const { listNativeChats, forgetNativeChats } = deps
@@ -165,7 +170,7 @@ export function deleteChatHistoryOfDeletedWorkspaces(
           { signal: scanSignal }
         )
       ).sessions,
-    deleteSessions: async (targets, shouldDelete) => {
+    deleteSessions: async (targets, shouldDelete, stillGone) => {
       const isCodex = (target: ChatHistoryTarget): boolean => target.agent === 'codex'
       const others = targets.filter((target) => !isCodex(target))
       const codex = targets.filter(isCodex)
@@ -179,7 +184,8 @@ export function deleteChatHistoryOfDeletedWorkspaces(
               codex,
               shouldDelete,
               () => listHostCodexRolloutHomes(store.getSettings()),
-              references
+              references,
+              stillGone
             )
           : empty
       return {
