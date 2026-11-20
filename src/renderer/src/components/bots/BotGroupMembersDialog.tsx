@@ -34,6 +34,7 @@ import {
   botGroupUnchanged
 } from '../../../../shared/bots/bot-group-pick'
 import { useBotGroupDelete } from './use-bot-group-delete'
+import { toast } from 'sonner'
 import { useBotHostLabel } from './use-bot-host-label'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
@@ -121,10 +122,10 @@ export function BotGroupMembersDialog({
           : { name: name.trim(), botIds: picked.map((bot) => bot.id) }
       )
       await refreshBotGroups()
-      if (!group) {
-        await openBotGroup(saved)
-      }
       onClose()
+      if (!group) {
+        openCreatedGroup(saved)
+      }
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error))
       setSaving(false)
@@ -261,6 +262,28 @@ export function BotGroupMembersDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Opens a group just made. It exists now, so a failed open is a toast with Retry: pressing
+ *  Create again would make a second group. */
+function openCreatedGroup(group: BotGroup): void {
+  void openBotGroup(group).catch((error: unknown) =>
+    toast.error(
+      translate('bots.groups.createdNotOpened', 'Created “{{name}}”, but couldn’t open it.', {
+        name: group.name
+      }),
+      {
+        id: `bot-group-open:${group.id}`,
+        description: error instanceof Error ? error.message : String(error),
+        // Time to read which computer and reach Retry.
+        duration: 10000,
+        action: {
+          label: translate('bots.groups.retryOpen', 'Retry'),
+          onClick: () => openCreatedGroup(group)
+        }
+      }
+    )
   )
 }
 

@@ -66,7 +66,7 @@ export async function openBotGroupRoom(
     throw new Error(
       translate(
         'bots.groups.homeUnavailable',
-        '{{name}}’s home workspace on {{host}} is unavailable.',
+        'The home workspace for “{{name}}” on {{host}} is unavailable.',
         {
           name: group.name,
           host: selectExecutionHostDisplayLabel(useAppStore.getState(), group.hostId)
