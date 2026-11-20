@@ -58,7 +58,7 @@ it('keeps the original picked node across marker removal and rejects replacement
     original.replaceWith(replacement)
     await expect(isPickedElementPresent(guest, id)).resolves.toBe(false)
     await expect(isPickedElementPresent(guest, 'another-pick')).resolves.toBe(false)
-    const otherDocument = document.implementation.createHTMLDocument('Synthetic other document')
+    const otherDocument = document.implementation.createHTMLDocument()
     otherDocument.body.append(otherDocument.adoptNode(original))
     await expect(isPickedElementPresent(guest, id)).resolves.toBe(false)
   } finally {
