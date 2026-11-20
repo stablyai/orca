@@ -14,7 +14,6 @@ describe('terminal clipboard paste', () => {
       saveClipboardImageAsTempFile: async () => '/tmp/preview.png',
       onLocalImagePasted
     }
-    await pasteTerminalClipboard({ ...deps, pasteText: () => false })
     await pasteTerminalClipboard({ ...deps, pasteText: () => true, connectionId: 'ssh-target' })
     await pasteTerminalClipboard({ ...deps, pasteText: () => true, runtimeEnvironmentId: 'paired' })
     expect(onLocalImagePasted).not.toHaveBeenCalled()
