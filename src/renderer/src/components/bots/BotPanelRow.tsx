@@ -18,18 +18,17 @@ import { cn } from '@/lib/class-names'
 import { BOT_ITEM_ROW_HOVER_ACTIONS } from './items/bot-item-row-hover-actions'
 import { useBotRowCardPlacement } from './use-bot-row-card-placement'
 
-/** Shows `card` beside the panel while `children` (the row's button) is hovered or keyboard-focused. */
-export function BotRowHoverCard({
-  card,
-  children
-}: {
+type BotRowHoverCardProps = {
   card: React.ReactNode
   children: React.ReactElement
-}): React.JSX.Element {
+}
+
+export function BotRowHoverCard(props: BotRowHoverCardProps): React.JSX.Element {
+  return props.card ? <BotRowPreview {...props} /> : props.children
+}
+
+function BotRowPreview({ card, children }: BotRowHoverCardProps): React.JSX.Element {
   const placement = useBotRowCardPlacement()
-  if (!card) {
-    return children
-  }
   return (
     <HoverCard openDelay={400} closeDelay={80} {...placement.root}>
       <HoverCardTrigger asChild {...placement.trigger}>

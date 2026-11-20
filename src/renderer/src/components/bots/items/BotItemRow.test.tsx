@@ -126,14 +126,15 @@ const isCard = (node: HTMLElement): boolean =>
 const CARD = { width: 256, height: 120 }
 
 /** A Needs you row in a 280px side panel at the right of a 1024×768 window, its title at `rowTop`. */
-function renderPanelRow(rowTop: number): { open: HTMLElement; row: DOMRect } {
-  render(
+function renderPanelRow(rowTop: number) {
+  const initialQuestion = { eventId: 'e1', text: 'Merge the guide-only PR?' }
+  const panelRow = (question: BotItem['question']) => (
     <div data-right-sidebar-panel="">
       <BotItemRow
         item={makeTestBotItem(836, {
           title: 'Host-aware worker placement',
           status: 'needs_you',
-          question: { eventId: 'e1', text: 'Merge the guide-only PR?' }
+          question
         })}
         stale={false}
         snoozing={{ snooze: () => {}, pick: () => {}, dialog: null }}
@@ -144,9 +145,9 @@ function renderPanelRow(rowTop: number): { open: HTMLElement; row: DOMRect } {
         onSelect={() => {}}
         onAction={() => {}}
       />
-    </div>,
-    { wrapper: TooltipProvider }
+    </div>
   )
+  const { rerender } = render(panelRow(initialQuestion), { wrapper: TooltipProvider })
   vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(1024)
   vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(768)
   // The card's laid-out size, which happy-dom does not compute from its classes.
@@ -166,7 +167,7 @@ function renderPanelRow(rowTop: number): { open: HTMLElement; row: DOMRect } {
   const row = new DOMRect(776, rowTop, 224, 20)
   const open = document.querySelector<HTMLElement>('[data-bot-item-open]')!
   vi.spyOn(open, 'getBoundingClientRect').mockReturnValue(row)
-  return { open, row }
+  return { open, row, setQuestion: (next: BotItem['question']) => rerender(panelRow(next)) }
 }
 
 async function hoverOpen(open: HTMLElement): Promise<void> {
@@ -283,6 +284,23 @@ it('dismisses an item preview on an outside press during the close delay', async
       await vi.advanceTimersByTimeAsync(300)
     })
     expect(cardElement()).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('waits for a new hover after a refresh clears and restores a question', async () => {
+  vi.useFakeTimers()
+  try {
+    const { open, setQuestion } = renderPanelRow(100)
+    await hoverOpen(open)
+    expect(cardElement()).not.toBeNull()
+    setQuestion(null)
+    expect(cardElement()).toBeNull()
+    setQuestion({ eventId: 'e2', text: 'Approve the updated guide?' })
+    expect(cardElement()).toBeNull()
+    await hoverOpen(document.querySelector<HTMLElement>('[data-bot-item-open]')!)
+    expect(cardElement()?.textContent).toContain('Approve the updated guide?')
   } finally {
     vi.useRealTimers()
   }
