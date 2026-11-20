@@ -35,11 +35,10 @@ import type { NativeChatTimedRow } from './conversation/slots/native-chat-timed-
 import { useNativeChatTranscriptWindow } from './viewport/virtualization/use-native-chat-transcript-window'
 import { useNativeChatHistoryRetention } from './viewport/history/use-native-chat-history-retention'
 import { useNativeChatSubagentScope } from './subagents/use-native-chat-subagent-scope'
-import { useNativeChatViewState } from './pane/ownership/native-chat-view-memory'
+import { useNativeChatExpandedTurns } from './messages/disclosure/use-native-chat-expanded-turns'
 import type { NativeChatSubagentView } from './subagents/native-chat-open-subagent'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type { NativeChatTranscriptSlot } from './conversation/slots/native-chat-transcript-slots'
-import { toggleNativeChatExpandedKey } from './messages/disclosure/native-chat-expanded-keys'
 import {
   useNativeChatSideChatForkOffer,
   useNativeChatSideChatForkPointReport
@@ -75,7 +74,6 @@ import { NativeChatBotHomeScope } from './NativeChatBotHomeScope'
 import type { NativeChatBotKickoffView } from './native-chat-bot-kickoff-view'
 
 const NO_SLOTS: readonly NativeChatTranscriptSlot[] = []
-const NO_EXPANDED_TURNS: ReadonlySet<string> = new Set()
 
 export function NativeChatMessageList({
   ref,
@@ -141,13 +139,8 @@ export function NativeChatMessageList({
   const receipts = useNativeChatQuestionReceipts(journalItems)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const [expandedTurnIds, setExpandedTurnIds] = useNativeChatViewState<ReadonlySet<string>>(
-    `expanded-turns:${session.agent}:${session.sessionId ?? ''}:${subagentView?.agentId ?? ''}`,
-    NO_EXPANDED_TURNS
-  )
-  const toggleExpandedTurn = useCallback((turnKey: string) => {
-    setExpandedTurnIds((current) => toggleNativeChatExpandedKey(current, turnKey))
-  }, [])
+  const transcriptKey = `${session.agent}:${session.sessionId ?? ''}:${subagentView?.agentId ?? ''}`
+  const [expandedTurnIds, toggleExpandedTurn] = useNativeChatExpandedTurns(transcriptKey)
 
   const { hasMore, loadingEarlier, loadEarlier } = session
   const historyRetention = useNativeChatHistoryRetention({
@@ -385,7 +378,7 @@ export function NativeChatMessageList({
             showJump={showJump}
             onJump={jumpToLatest}
             label={scope.regionLabel}
-            memoryKey={`${session.agent}:${session.sessionId ?? ''}:${subagentId ?? ''}`}
+            memoryKey={transcriptKey}
             overlays={
               <>
                 <NativeChatMessageRail

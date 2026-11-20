@@ -165,10 +165,12 @@ function keepEditors(tabId: string, editors: ComposerEditors): void {
   }
   undoOnlyTabs.add(tabId)
   if (undoOnlyTabs.size > MAX_KEPT_UNDO_ONLY) {
-    const oldest = undoOnlyTabs.values().next().value as string
-    undoOnlyTabs.delete(oldest)
-    keptEditorsByTab.get(oldest)?.destroyAll()
-    keptEditorsByTab.delete(oldest)
+    for (const oldest of undoOnlyTabs) {
+      undoOnlyTabs.delete(oldest)
+      keptEditorsByTab.get(oldest)?.destroyAll()
+      keptEditorsByTab.delete(oldest)
+      break
+    }
   }
 }
 

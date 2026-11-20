@@ -56,7 +56,9 @@ export function useNativeChatReadingPosition({
   // The restore in flight; an effect replay (StrictMode, a hide mid-restore) keeps the bookmark and retries it.
   const restoringRef = useRef<NativeChatReadingPosition | null>(null)
   const latest = useRef({ readerAtEnd, jumpTo, messageIdAt })
-  latest.current = { readerAtEnd, jumpTo, messageIdAt }
+  useLayoutEffect(() => {
+    latest.current = { readerAtEnd, jumpTo, messageIdAt }
+  })
   useLayoutEffect(() => {
     if (!isVisible || !ready || !tab) {
       return

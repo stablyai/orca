@@ -39,6 +39,7 @@ export function isNativeChatViewTabOpen(tab: NativeChatViewTab): boolean {
 }
 
 export function readNativeChatViewMemory<T>(tab: NativeChatViewTab, key: string): T | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each key is written only by the hook that reads it with this T.
   return records.get(tab.tabId)?.get(key) as T | undefined
 }
 
@@ -93,6 +94,10 @@ function subscribeToTab(tabId: string, listener: () => void): () => void {
   }
 }
 
+function isUpdater<T>(action: SetStateAction<T>): action is (previous: T) => T {
+  return typeof action === 'function'
+}
+
 const NO_SUBSCRIPTION = (): (() => void) => () => {}
 
 /**
@@ -114,8 +119,7 @@ export function useNativeChatViewState<T>(
   )
   const setValue = useCallback(
     (action: SetStateAction<T>) => {
-      const apply = (value: T): T =>
-        typeof action === 'function' ? (action as (previous: T) => T)(value) : action
+      const apply = (value: T): T => (isUpdater(action) ? action(value) : action)
       if (!tab) {
         setLocal(apply)
         return

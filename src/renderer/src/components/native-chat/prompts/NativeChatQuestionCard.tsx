@@ -1,6 +1,6 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { useEffect, useRef, useState, type RefObject } from 'react'
-import { useNativeChatViewMemory } from '../pane/ownership/native-chat-view-memory'
+import { useRef, type RefObject } from 'react'
+import { useNativeChatQuestionForm } from './use-native-chat-question-form'
 import { Check, Pencil } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
@@ -10,7 +10,6 @@ import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
 import {
   NativeChatQuestionSteps,
-  useReportNativeChatQuestionDraft,
   foldNativeChatQuestionOnEscape,
   type NativeChatQuestionCardDraft,
   type NativeChatQuestionCardLook
@@ -55,11 +54,6 @@ export type NativeChatQuestionCardProps = {
   memoryKey?: string
 }
 
-type QuestionCardMemory = { index: number; selections: number[][]; otherText: string[] }
-// Answered forms are never told they're done; keeping only the newest few bounds them per chat.
-const QUESTION_FORMS = 'question-form:'
-const MAX_KEPT_QUESTION_FORMS = 4
-
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
 const LINE_BREAKS = /[\r\n\u2028\u2029]/g
@@ -89,25 +83,9 @@ export function NativeChatQuestionCard({
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
-  const memory = useNativeChatViewMemory<QuestionCardMemory>(
-    memoryKey === undefined ? undefined : `${QUESTION_FORMS}${memoryKey}`,
-    MAX_KEPT_QUESTION_FORMS
-  )
-  const [index, setIndex] = useState(() => memory.saved?.index ?? 0)
+  const { index, setIndex, selections, setSelections, otherText, setOtherText, forget } =
+    useNativeChatQuestionForm({ prompt, freeTextInputs, draft, memoryKey })
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
-  // Use indices because labels can repeat and the agent commits numbered rows.
-  const [selections, setSelections] = useState<number[][]>(
-    () => draft?.selections ?? memory.saved?.selections ?? prompt.questions.map(() => [])
-  )
-  const [otherText, setOtherText] = useState<string[]>(
-    () =>
-      draft?.otherText ??
-      memory.saved?.otherText ??
-      prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
-  )
-  useReportNativeChatQuestionDraft(draft, selections, otherText)
-  const { write: remember } = memory
-  useEffect(() => remember({ index, selections, otherText }), [remember, index, selections, otherText])
 
   const total = prompt.questions.length
   const isLast = index === total - 1
@@ -234,7 +212,7 @@ export function NativeChatQuestionCard({
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
     } else if (action === 'cancel') {
-      remember(undefined)
+      forget()
       onCancel?.()
     }
   }
@@ -261,7 +239,7 @@ export function NativeChatQuestionCard({
   const cancel = onCancel
     ? (): void => {
         autoAdvance.cancel()
-        remember(undefined)
+        forget()
         onCancel()
       }
     : undefined
