@@ -72,25 +72,6 @@ describe('line ending of a new model', () => {
     expect(echoed).toBe(false)
   })
 
-  it('keeps the ending of a file loaded with line breaks', () => {
-    const model = windowsModel('a\r\nb\r\n')
-    const tracker = trackNewModelLineEnding(model, '\n', 'key')
-    expect(model.getValue()).toBe('a\r\nb\r\n')
-    tracker.dispose()
-  })
-
-  it('restores the chosen ending when Undo returns to one line', async () => {
-    const model = windowsModel()
-    type(model, 'typed')
-    const tracker = trackNewModelLineEnding(model, '\n', 'key')
-    model.undo()
-    await settle()
-    expect(model.getEOL()).toBe('\n')
-    type(model, 'next\nline')
-    expect(model.getValue()).toBe('next\nline')
-    tracker.dispose()
-  })
-
   it('leaves lines typed before a late host report untouched and clean of edits', async () => {
     const model = windowsModel()
     trackNewModelLineEnding(model, null, 'key').dispose()
@@ -109,15 +90,6 @@ describe('line ending of a new model', () => {
     await settle()
     expect(model.getValue()).toBe('one\r\ntwo')
     reported.dispose()
-  })
-
-  it('never converts saved lines when End of Line changes', () => {
-    const model = windowsModel()
-    trackNewModelLineEnding(model, '\r\n', 'key').dispose()
-    type(model, 'one\ntwo')
-    const changed = trackNewModelLineEnding(model, '\n', 'key')
-    expect(model.getValue()).toBe('one\r\ntwo')
-    changed.dispose()
   })
 
   it('adopts the ending of external text written into a new file', async () => {

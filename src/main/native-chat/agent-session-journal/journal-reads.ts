@@ -1,3 +1,4 @@
+import type { JournalRestartCut } from './journal-sql-restart-cut'
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalItemBody,
@@ -45,10 +46,28 @@ export type JournalNamedTurn = {
 
 export type JournalMessageOptions = { ordinaryMessage: boolean; runningTurn: boolean }
 
+/** A tool output or patch at `items[index]` whose head is an excerpt; the whole text is read in chunks. */
+export type JournalContinuedPayload = {
+  index: number
+  itemId: string
+  revision: number
+  field: JournalContinuedField
+  /** Stored UTF-8 length of the whole text. */
+  bytes: number
+}
+
+export type JournalContinuedField = 'output' | 'patch'
+
 export type JournalContinuationContext = {
   cursor: AgentJournalCursor
   items: readonly AgentJournalRenderItem[]
   submissions: readonly AgentJournalSubmission[]
+  continued: readonly JournalContinuedPayload[]
+}
+
+export type JournalContinuationSpill = Omit<JournalContinuedPayload, 'index' | 'bytes'> & {
+  /** A new private file the reader writes the whole stored UTF-8 text to. */
+  path: string
 }
 
 /** Reads a chat answers from its database; scans are filtered so none decodes the whole chat. */
@@ -94,6 +113,10 @@ export type AgentSessionJournalReads = {
   namedTurn(turnId: string): Promise<JournalNamedTurn>
   messageOptions(clientMessageId: string): Promise<JournalMessageOptions>
   continuationContext(): Promise<JournalContinuationContext>
+  /** Bytes written, or null once the item is gone or revised (nothing written). */
+  continuationSpill(spill: JournalContinuationSpill): Promise<number | null>
+  /** The newest turn and its rows a restart settled, for the offer a crash leaves. */
+  restartCut(): Promise<JournalRestartCut>
   /** The newest presented root user prompt, excluding commands, as restart offers preview it. */
   latestPrompt(): Promise<string>
   restartProgress(cursor: AgentJournalCursor): Promise<JournalRestartProgress>

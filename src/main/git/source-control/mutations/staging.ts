@@ -19,6 +19,7 @@ import {
 import { findExistingWorktreeSymlinkPaths } from '../../worktrees/content-paths/worktree-symlink-detection'
 import { redoWriteForDriveCheckoutSuspects } from '../drive-checkout/drive-checkout-suspect-writes'
 import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
+import { trackGitOperationWriters } from '../../command-runner/git-writer-lifetime'
 
 const STAGE_WRITE = ['add', '--update'] as const
 
@@ -46,45 +47,54 @@ export function resolveConflict(
   resolution: ConflictResolution,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
+  const lifetime = trackGitOperationWriters(options)
+  const executionOptions = lifetime.options
   // Two clients resolving one path must each re-check after the other's change lands.
-  return runWithGitWorktreeOperationLock(worktreePath, undefined, async () => {
-    const pathspec = literalPathspec(filePath, worktreePath, options)
-    // Re-read the path: a stale row (phone poll, another client) must not override what is there now.
-    const { stdout } = await gitExecFileAsync(
-      ['status', '--porcelain=v2', '-z', '--untracked-files=no', '--', pathspec],
-      gitOptionsForWorktree(worktreePath, options)
-    )
-    // Exact path only: a directory pathspec would match its conflicts and then stage the whole directory.
-    const reportedPath = gitReportedPath(filePath, worktreePath, options)
-    const record = stdout
-      .split('\0')
-      .find((line) => line.startsWith('u ') && line.split(' ').slice(10).join(' ') === reportedPath)
-    const entry = record ? await parseUnmergedEntry(worktreePath, record) : null
-    if (!entry) {
-      throw new Error(`${filePath} is no longer in conflict. Refresh to see its current state.`)
-    }
-    // The UI's own rule on the live conflict (no git rm for a both-modified file), plus a present file to keep:
-    // the shared status ignores worktree presence for both-modified/added, where git add would stage a deletion.
-    const keepsMissingFile = resolution !== 'keep_deletion' && record?.split(' ')[6] === '000000'
-    if (!getConflictResolutions(entry).includes(resolution) || keepsMissingFile) {
-      throw new Error(
-        `${filePath} has changed since this list loaded. Refresh to see its current state.`
+  return runWithGitWorktreeOperationLock(
+    worktreePath,
+    undefined,
+    async () => {
+      const pathspec = literalPathspec(filePath, worktreePath, options)
+      // Re-read the path: a stale row (phone poll, another client) must not override what is there now.
+      const { stdout } = await gitExecFileAsync(
+        ['status', '--porcelain=v2', '-z', '--untracked-files=no', '--', pathspec],
+        gitOptionsForWorktree(worktreePath, executionOptions)
       )
-    }
-    if (resolution !== 'keep_deletion') {
-      await stageFile(worktreePath, filePath, options)
-      return
-    }
-    invalidateGitReadCaches()
-    try {
-      await gitExecFileAsync(
-        ['rm', '--force', '--quiet', '--', pathspec],
-        gitOptionsForWorktree(worktreePath, options)
-      )
-    } finally {
+      // Exact path only: a directory pathspec would match its conflicts and then stage the whole directory.
+      const reportedPath = gitReportedPath(filePath, worktreePath, options)
+      const record = stdout
+        .split('\0')
+        .find(
+          (line) => line.startsWith('u ') && line.split(' ').slice(10).join(' ') === reportedPath
+        )
+      const entry = record ? await parseUnmergedEntry(worktreePath, record) : null
+      if (!entry) {
+        throw new Error(`${filePath} is no longer in conflict. Refresh to see its current state.`)
+      }
+      // The UI's own rule on the live conflict (no git rm for a both-modified file), plus a present file to keep:
+      // the shared status ignores worktree presence for both-modified/added, where git add would stage a deletion.
+      const keepsMissingFile = resolution !== 'keep_deletion' && record?.split(' ')[6] === '000000'
+      if (!getConflictResolutions(entry).includes(resolution) || keepsMissingFile) {
+        throw new Error(
+          `${filePath} has changed since this list loaded. Refresh to see its current state.`
+        )
+      }
+      if (resolution !== 'keep_deletion') {
+        await stageFile(worktreePath, filePath, executionOptions)
+        return
+      }
       invalidateGitReadCaches()
-    }
-  })
+      try {
+        await gitExecFileAsync(
+          ['rm', '--force', '--quiet', '--', pathspec],
+          gitOptionsForWorktree(worktreePath, executionOptions)
+        )
+      } finally {
+        invalidateGitReadCaches()
+      }
+    },
+    lifetime.waitForWriters
+  )
 }
 
 export async function unstageFile(

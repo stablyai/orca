@@ -35,6 +35,7 @@ import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { writeJournalDomainTextSnapshot } from './journal-domain-text-snapshot'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { readJournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export type { JournalDomainItemWrite, JournalDomainItemCommit } from './journal-domain-item-write'
 /** Runs only on the owning writer connection, inside its command SAVEPOINT. */
@@ -137,7 +138,7 @@ export function applyJournalDomainItem(
           sequence: Number(stored.sequence),
           body: input.body
         }
-      : JSON.parse(String(stored.payload_json))
+      : readJournalStoredItem(db, prefix, stored.payload_json)
     : undefined
   const item = (key: string): AgentJournalRenderItem | null => {
     if (key === rawId || key === itemId) {
@@ -148,7 +149,7 @@ export function applyJournalDomainItem(
       WHERE item.session_id=? AND item.epoch=? AND item.item_id=COALESCE(
         (SELECT item_id FROM journal_item_aliases WHERE session_id=? AND epoch=? AND provider_item_id=?),?)`)
       .get(...prefix, ...prefix, key, key)
-    return row ? JSON.parse(String(row.payload_json)) : null
+    return row ? readJournalStoredItem(db, prefix, row.payload_json) : null
   }
   let scope = input.options.turnScope ?? { kind: 'thread' as const }
   for (const key of input.scopeItemIds ?? []) {
@@ -198,9 +199,10 @@ export function applyJournalDomainItem(
   const next = previous ? journalItemRevisionValue(previous, rendered) : rendered
   const executionOwner =
     row.executionOwner ?? (stored?.execution_owner == null ? null : Number(stored.execution_owner))
+  const final = input.kind === 'text-snapshot' && input.final === true
   const items =
     blindText &&
-    writeJournalDomainTextSnapshot(db, target, stored, next, row.ownerFence!, executionOwner)
+    writeJournalDomainTextSnapshot(db, target, stored, next, row.ownerFence!, executionOwner, final)
       ? [next]
       : writeJournalDomainCurrentItem(db, target, {
           inputObservation: row,

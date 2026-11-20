@@ -1,3 +1,4 @@
+import { subscribeAppStoreWithStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   copyBrowserPageHandles,
   annotateBrowserPageHandles
@@ -204,23 +205,25 @@ export function installBrowserInitializationPresentationLifetime(): () => void {
   }
   const stopRetirement = onRuntimeEnvironmentsRetired(retire)
   const stopPairing = onRuntimeEnvironmentRevisionsChanged(retire)
-  const stopStatus = useAppStore.subscribe((state, previous) => {
-    if (state.runtimeStatusByEnvironmentId === previous.runtimeStatusByEnvironmentId) {
-      return
-    }
-    const retired: string[] = []
-    for (const [id] of deliveries) {
-      const snapshot = state.runtimeStatusByEnvironmentId.get(id)?.snapshot
-      if (
-        snapshot &&
-        (snapshot.retired || snapshot.verification === 'blocked') &&
-        snapshot.pairingRevision === getRuntimeEnvironmentRevision(id)
-      ) {
-        retired.push(id)
+  const stopStatus = subscribeAppStoreWithStatuses(
+    (_state, _previous, statuses, previousStatuses) => {
+      if (statuses === previousStatuses) {
+        return
       }
+      const retired: string[] = []
+      for (const [id] of deliveries) {
+        const snapshot = statuses.get(id)?.snapshot
+        if (
+          snapshot &&
+          (snapshot.retired || snapshot.verification === 'blocked') &&
+          snapshot.pairingRevision === getRuntimeEnvironmentRevision(id)
+        ) {
+          retired.push(id)
+        }
+      }
+      revokeBrowserInitializationDeliveries(retired, true)
     }
-    revokeBrowserInitializationDeliveries(retired, true)
-  })
+  )
   return () => {
     stopDiagnostics?.()
     stopRetirement()

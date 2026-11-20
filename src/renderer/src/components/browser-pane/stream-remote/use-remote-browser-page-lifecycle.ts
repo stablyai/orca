@@ -26,8 +26,8 @@ import {
   readRemoteBrowserPage,
   readRemoteBrowserPageObservation
 } from './remote-browser-page-observation'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { javaScriptDialogPrompt } from '../browser-javascript-dialog-prompt'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { javaScriptDialogPrompt } from '../page-prompts/browser-javascript-dialog-prompt'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -36,7 +36,7 @@ export function useRemoteBrowserPageLifecycle({
   isActive,
   setPaneNotice,
   setPaneBusy,
-  clearPendingRemoteWheel,
+  clearPendingRemoteInput,
   resetRemoteInputQueue
 }: {
   browserTab: BrowserPageState
@@ -45,7 +45,7 @@ export function useRemoteBrowserPageLifecycle({
   isActive: boolean
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
   setPaneBusy: (busy: boolean) => void
-  clearPendingRemoteWheel: () => void
+  clearPendingRemoteInput: () => void
   resetRemoteInputQueue: () => void
 }) {
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
@@ -224,23 +224,23 @@ export function useRemoteBrowserPageLifecycle({
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
       }
-      clearPendingRemoteWheel()
+      clearPendingRemoteInput()
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
       }
     }
-  }, [clearPendingRemoteWheel, lifecycle])
+  }, [clearPendingRemoteInput, lifecycle])
 
   useEffect(() => {
     // Why: only reset frame/wheel on identity change; bumping the stream/operation generations here races the streaming effect and wedges the pane.
     lifecycle.forgetStreamViewportSize()
-    clearPendingRemoteWheel()
+    clearPendingRemoteInput()
     clearStreamFrame()
   }, [
     activeRuntimeEnvironmentId,
     browserTab.id,
-    clearPendingRemoteWheel,
+    clearPendingRemoteInput,
     clearStreamFrame,
     lifecycle
   ])

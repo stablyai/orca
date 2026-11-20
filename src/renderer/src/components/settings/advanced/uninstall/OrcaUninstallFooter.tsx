@@ -166,6 +166,9 @@ export function OrcaUninstallFooter({
   }
   const running = phase === 'running'
   let hint = t('settings.uninstall.keeps', 'Projects, worktrees and Orca settings stay.')
+  if (plan?.terminalDaemon) {
+    hint = `${hint} ${t('settings.uninstall.closesTerminals', 'Open terminals will close.')}`
+  }
   if (plan?.otherOrcaBuildName) {
     hint = `${hint} ${t(
       'settings.uninstall.keepsShared',
@@ -200,7 +203,9 @@ export function OrcaUninstallFooter({
               !running && 'invisible'
             )}
           >
-            <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+            <Loader2
+              className={cn('size-3.5', running && 'animate-spin motion-reduce:animate-none')}
+            />
             {t('settings.uninstall.uninstalling', 'Uninstalling…')}
           </span>
         </span>

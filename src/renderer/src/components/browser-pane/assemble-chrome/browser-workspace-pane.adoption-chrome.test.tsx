@@ -96,22 +96,24 @@ vi.mock('../stream-remote/use-remote-browser-page-stream', () => ({
   useRemoteBrowserPageStream: () => ({ reconnectRemoteStream: vi.fn() })
 }))
 
-vi.mock('../stream-remote/use-remote-browser-page-input', () => ({
-  useRemoteBrowserPageInputQueue: () => ({
-    enqueueRemoteInput: vi.fn(),
-    clearPendingRemoteWheel: vi.fn(),
-    resetRemoteInputQueue: vi.fn(),
-    pendingRemoteWheelRef: { current: null },
-    remoteWheelFrameRef: { current: null },
-    remoteWheelInFlightRef: { current: false }
-  }),
-  useRemoteBrowserPageInput: () => ({
-    getRemoteImagePoint: () => null,
-    handleRemotePointerDown: vi.fn(),
-    handleRemotePointerUp: vi.fn(),
-    handleRemoteScreenshotKeyDown: vi.fn()
-  })
-}))
+vi.mock('../stream-remote/use-remote-browser-page-input', async () => {
+  const { RemoteBrowserInputQueue } = await import('../stream-remote/remote-browser-input-queue')
+  const inputQueue = new RemoteBrowserInputQueue()
+  return {
+    useRemoteBrowserPageInputQueue: () => ({
+      inputQueue,
+      enqueueRemoteInput: vi.fn(),
+      clearPendingRemoteInput: vi.fn(),
+      resetRemoteInputQueue: vi.fn()
+    }),
+    useRemoteBrowserPageInput: () => ({
+      getRemoteImagePoint: () => null,
+      handleRemotePointerDown: vi.fn(),
+      handleRemotePointerUp: vi.fn(),
+      handleRemoteScreenshotKeyDown: vi.fn()
+    })
+  }
+})
 
 vi.mock('../stream-remote/use-remote-browser-page-wheel', () => ({
   useRemoteBrowserPageWheel: vi.fn()
@@ -134,14 +136,14 @@ vi.mock('../stream-remote/remote-browser-page-viewport', () => ({
   }) => <div ref={remoteViewportRef} tabIndex={-1} data-testid="streamed-viewport" />
 }))
 
-vi.mock('../browser-client-page-renderer-installation', () => ({
+vi.mock('../host-guest/client-pages/browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
 
 import { useAppStore } from '@/store/index'
 import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { installClientHostedPaneApi } from '../client-hosted-browser-pane-test-rig'
+import { installClientHostedPaneApi } from './client-hosted/client-hosted-browser-pane-test-rig'
 import { clearBrowserAddressBarEditSession } from './address-bar/browser-address-bar-edit-session'
 import { clearBrowserPageDeferredNavigation } from '../navigate/browser-page-deferred-navigation'
 import BrowserPane from './browser-workspace-pane'

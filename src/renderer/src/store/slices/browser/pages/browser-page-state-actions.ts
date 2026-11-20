@@ -16,7 +16,7 @@ import {
   normalizeUrl
 } from './browser-page-records'
 import { normalizeBrowserHistoryUrl } from '../../../../../../shared/workspace-session/workspace-session-browser-history'
-import { replaceTabBuckets } from '../../../keyed-record-transitions'
+import { replaceTabBuckets } from '../../../record-transitions/keyed-record-transitions'
 import {
   browserCertificateFailureEqual,
   browserPageEqual

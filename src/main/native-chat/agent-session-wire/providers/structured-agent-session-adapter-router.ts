@@ -57,6 +57,13 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   ): boolean | undefined =>
     this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
 
+  applyPermissionMode: NonNullable<Adapter['applyPermissionMode']> = async (input) => {
+    await this.liveOwnerOrNull(input.sessionId)?.applyPermissionMode?.(input)
+  }
+
+  runningPermissionMode: NonNullable<Adapter['runningPermissionMode']> = (sessionId) =>
+    this.liveOwnerOrNull(sessionId)?.runningPermissionMode?.(sessionId)
+
   settlePermissionTransition: NonNullable<Adapter['settlePermissionTransition']> = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.settlePermissionTransition?.(input) ??
     Promise.resolve(true)
@@ -93,6 +100,13 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   stopProviderNaming = (): void => {
     for (const adapter of this.adapters()) {
       adapter.stopProviderNaming?.()
+    }
+  }
+
+  // Every adapter, so a session still starting hears it; only one that holds the session acts.
+  promptSuggestionInterestChanged = (sessionId: string, wanted: boolean): void => {
+    for (const adapter of this.adapters()) {
+      adapter.promptSuggestionInterestChanged?.(sessionId, wanted)
     }
   }
 
@@ -201,6 +215,8 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   canSetOptionWhileIdle: Adapter['canSetOptionWhileIdle'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.canSetOptionWhileIdle?.(input) === true
+  noteModelPick: Adapter['noteModelPick'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.noteModelPick?.(input)
   captureMessageSteeringInputs: Adapter['captureMessageSteeringInputs'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.captureMessageSteeringInputs?.(input) ?? {
       kind: 'codex-unavailable'

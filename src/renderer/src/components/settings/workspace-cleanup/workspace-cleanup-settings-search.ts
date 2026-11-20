@@ -1,3 +1,4 @@
+// @protected-copy: rule names here are reused in delete confirmations and must not be reworded by a language pack.
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { WORKSPACE_ARCHIVE_SUPPORTED } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
@@ -16,20 +17,43 @@ function cleanupKeywords(): string[] {
 export const getWorkspaceCleanupSettingsSearchParts = createLocalizedCatalog(
   () =>
     ({
-      status: {
-        title: translate('components.settings.workspaceCleanup.cleanUpNow', 'Clean up now'),
+      review: {
+        title: translate('components.settings.workspaceCleanup.manual.review', 'Review workspaces'),
         description: translate(
-          'components.settings.workspaceCleanup.search.statusDescription',
-          'Run the cleanup rules now, or review workspaces yourself.'
+          'components.settings.workspaceCleanup.manual.description',
+          'See every workspace and choose which to delete.'
+        ),
+        keywords: [
+          ...cleanupKeywords(),
+          ...translateSearchKeyword('components.settings.workspaceCleanup.search.manual', 'manual')
+        ]
+      },
+      // The Automatic cleanup heading, shown whether rules are off, on or running.
+      status: {
+        title: translate(
+          'components.settings.workspaceCleanup.automatic.title',
+          'Automatic cleanup'
+        ),
+        description: translate(
+          'components.settings.workspaceCleanup.search.automaticDescription',
+          'Whether automatic cleanup is on, when it runs next, and running the rules now.'
         ),
         keywords: [
           ...translateSearchKeyword(
-            'components.settings.workspaceCleanup.search.reviewWorkspaces',
-            'review workspaces'
+            'components.settings.workspaceCleanup.search.runRulesNow',
+            'run rules now'
+          ),
+          ...translateSearchKeyword(
+            'components.settings.workspaceCleanup.search.cleanUpNow',
+            'clean up now'
           ),
           ...translateSearchKeyword(
             'components.settings.workspaceCleanup.search.automatic',
             'automatic'
+          ),
+          ...translateSearchKeyword(
+            'components.settings.workspaceCleanup.search.schedule',
+            'schedule'
           )
         ]
       },
@@ -128,27 +152,6 @@ export const getWorkspaceCleanupSettingsSearchParts = createLocalizedCatalog(
           ...translateSearchKeyword('components.settings.workspaceCleanup.search.envFile', '.env', {
             englishOnly: true
           })
-        ]
-      },
-      deleteChatHistory: {
-        title: translate(
-          'components.settings.workspaceCleanup.chatHistory.deleteWithWorkspace',
-          'Delete chat history with the workspace'
-        ),
-        description: translate(
-          'components.settings.workspaceCleanup.chatHistory.deleteWithWorkspaceDescription',
-          "Orca, Claude Code and Codex chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
-        ),
-        keywords: [
-          ...translateSearchKeyword('components.settings.workspaceCleanup.search.chat', 'chat'),
-          ...translateSearchKeyword(
-            'components.settings.workspaceCleanup.search.transcripts',
-            'transcripts'
-          ),
-          ...translateSearchKeyword(
-            'components.settings.workspaceCleanup.search.diskSpace',
-            'disk space'
-          )
         ]
       },
       activity: {

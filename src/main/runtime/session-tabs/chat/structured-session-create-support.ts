@@ -6,7 +6,7 @@ import {
 } from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce as RestoreStructuredAgentSessionTabsOnceMethods } from './structured-session-tab-restoration'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { StructuredSessionWorkspaceScope } from './structured-session-workspace-scope'
+import { OrcaRuntimeWithStructuredResumeFolderCheck } from './structured-session-resume-folder-check'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
@@ -31,7 +31,7 @@ import type { AgentSessionAccountHome } from '../../../../shared/agent-session/l
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentCreateSupportReply } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
 
-export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
+export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithStructuredResumeFolderCheck {
   protected abstract restoreStructuredAgentSessionTabsOnce(
     ...args: Parameters<
       RestoreStructuredAgentSessionTabsOnceMethods['restoreStructuredAgentSessionTabsOnce']
@@ -139,9 +139,10 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
 
   /** Resolve catalog account home through the same host create-intent resolver when no session record exists. */
   async resolveStructuredAgentAccountHome(
-    agent: StructuredAgentId
+    agent: StructuredAgentId,
+    purpose: 'read' | 'catalog' = 'read'
   ): Promise<AgentSessionAccountHome> {
-    const resolveAccountHome = this.structuredAgentAccountHomeResolver(agent, '', 'read')
+    const resolveAccountHome = this.structuredAgentAccountHomeResolver(agent, '', purpose)
     if (!resolveAccountHome) {
       throw agentSessionRefusalError('structured_agent_session_unsupported', {
         reason: 'hostUnsupported'
@@ -290,11 +291,12 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   prepareStructuredAgentSessionStartupRestoration(): Promise<void> {
-    this.structuredAgentSessionStartupRestorePromise ??=
-      this.prepareStructuredAgentSessionStartupRestorationOnce().catch((error) => {
-        this.structuredAgentSessionStartupRestorePromise = null
-        throw error
-      })
+    this.structuredAgentSessionStartupRestorePromise ??= this.continueAfterStartupRestoration(
+      this.prepareStructuredAgentSessionStartupRestorationOnce()
+    ).catch((error) => {
+      this.structuredAgentSessionStartupRestorePromise = null
+      throw error
+    })
     return this.structuredAgentSessionStartupRestorePromise
   }
 

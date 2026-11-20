@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import type { BrowserPageInitializationAction } from '../../../../../shared/browser/client-hosting/browser-page-initialization-action'
 import type { BrowserGuestMetadata } from '../../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { ClientHostedBrowserPagePaneProps } from '../describe-page/browser-page-types'
-import { useRestoredClientHostedRecoveryWindow } from '../restored-client-hosted-recovery-window'
+import { useRestoredClientHostedRecoveryWindow } from '../host-guest/recovery/restored-client-hosted-recovery-window'
 import { routeBrowserPageInitializationAction } from './browser-page-initialization-action'
 
 export function useClientHostedPageInitialization(

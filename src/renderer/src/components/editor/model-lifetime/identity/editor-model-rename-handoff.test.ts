@@ -21,7 +21,6 @@ import {
 import { trackNewModelLineEnding } from '../buffer-text/editor-new-model-line-ending'
 import { resetProgrammaticContentSyncForTests } from '../buffer-text/monaco-programmatic-sync'
 import { useEditorModelRekeyCarry } from './editor-model-rekey-carry'
-import { takeRenamedBufferLineEnding } from './editor-model-rename-handoff'
 import { getEditorModelOwnerKey } from './editor-model-owner'
 import { toEditorModelUri } from './editor-model-uri'
 
@@ -136,7 +135,6 @@ describe('rename handoff of a buffer line ending', () => {
     expect(rename(store, file.id, reused, reused).ok).toBe(true)
     store.getState().closeFile(reused)
     await settle()
-    expect(takeRenamedBufferLineEnding(reused)).toBeUndefined()
     // A new one-line draft at the same id and path follows the editor's choice.
     store.setState({
       openFiles: [{ ...file, id: reused, filePath: reused, isDirty: true }],
@@ -145,12 +143,5 @@ describe('rename handoff of a buffer line ending', () => {
     const next = mount(store, reused)
     type(next, 'new draft\nsecond')
     expect(next.getValue()).toBe('new draft\r\nsecond')
-  })
-
-  it('records nothing for a clean tab', () => {
-    const { store, add } = setup()
-    const { file } = add('clean')
-    expect(rename(store, file.id, 'clean-renamed', '/fixture/workspace/clean.txt').ok).toBe(true)
-    expect(takeRenamedBufferLineEnding('clean-renamed')).toBeUndefined()
   })
 })

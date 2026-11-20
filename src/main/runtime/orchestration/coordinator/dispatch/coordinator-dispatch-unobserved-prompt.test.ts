@@ -69,7 +69,7 @@ async function dispatch(
 describe('coordinator dispatch with an unobserved prompt', () => {
   afterEach(() => db?.close())
 
-  it('never re-pastes a preamble whose turn start was not observed', async () => {
+  it('keeps an unobserved preamble dispatched until a late worker report settles it', async () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'do the work' })
     const runtime = createRuntime(new Error('agent_prompt_stalled'))
@@ -88,13 +88,8 @@ describe('coordinator dispatch with an unobserved prompt', () => {
     })
     expect(db.listTasks({ status: 'ready' })).toEqual([])
     expect(logs.join('\n')).toContain('turn start was not observed')
-  })
 
-  it('lets a late worker report settle a dispatch whose prompt was unobserved', async () => {
-    db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'do the work' })
-    await dispatch(createRuntime(new Error('agent_prompt_stalled')), task.id, [])
-    const dispatchId = db.getDispatchContext(task.id)!.id
+    const dispatchId = ctx!.id
     reattachDispatchConsumer(db, {
       dispatchId,
       paneKey: WORKER_PANE_KEY,

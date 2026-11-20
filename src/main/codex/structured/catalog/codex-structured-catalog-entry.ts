@@ -1,9 +1,7 @@
 import { structuredAgentSessionCapabilityView } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import type { AgentModelCatalogEntry } from '../../../native-chat/agent-model-catalog/agent-model-catalog-entry'
-import type {
-  CodexSession,
-  CodexSessionCatalogAccess
-} from '../session-lifecycle/codex-structured-session-state'
+import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
+import type { CodexSessionCatalogAccess } from './codex-session-catalog-access'
 import type { CodexModelCatalogListing } from './codex-structured-model-catalog'
 
 export function listingFromEntry(entry: AgentModelCatalogEntry): CodexModelCatalogListing {
@@ -41,6 +39,7 @@ export function codexSessionCapabilities(
   model = session.appliedTurnOptions?.model
 ): ReturnType<typeof structuredAgentSessionCapabilityView> {
   return structuredAgentSessionCapabilityView(
+    'codex',
     codexAcquireCatalogListing(session.catalogAccess) ?? { origin: 'unknown' },
     model
   )

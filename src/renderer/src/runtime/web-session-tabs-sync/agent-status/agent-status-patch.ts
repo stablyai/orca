@@ -1,10 +1,10 @@
-import { recordDraft } from '@/store/keyed-record-transitions'
-import { conversationSessionStartedAt } from '../../../store/slices/agent-status/agent-conversation-acceptance'
+import { recordDraft } from '@/store/record-transitions/keyed-record-transitions'
+import { conversationSessionStartedAt } from '../../../store/slices/agent-status/conversation/agent-conversation-acceptance'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   classifyAgentPaneConversation,
   projectAgentPaneConversation
-} from '../../../store/slices/agent-status/agent-pane-conversation'
+} from '../../../store/slices/agent-status/conversation/agent-pane-conversation'
 import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { withMirroredEvidenceReceipt } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -34,7 +34,7 @@ import {
 import {
   retirePaneLaunchNote,
   retiresLaunch
-} from '../../../store/slices/agent-status/agent-status-launch-config'
+} from '../../../store/slices/agent-status/launch-config/agent-status-launch-config'
 import {
   agentStatusEntryEqual,
   isAgentStatusFresh,

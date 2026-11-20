@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import type { useImmediateMutation } from '@/hooks/useIssueMetadata'
+import type { useImmediateMutation } from '@/hooks/useImmediateMutation'
 import {
   buildTaskPageGitHubCloseUpdate,
   type TaskPageGitHubCloseAction

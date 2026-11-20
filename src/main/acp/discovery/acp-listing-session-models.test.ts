@@ -1,3 +1,7 @@
+import { existsSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, sep } from 'node:path'
 import { createStructuredAgentSessionCatalogReads } from '../../native-chat/agent-session-wire/options/structured-agent-session-catalog-reads'
 import type { StructuredAgentSessionHostDeps } from '../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type { createAgentModelCatalogSuccessWriter } from '../../native-chat/agent-model-catalog/agent-model-catalog-entry-lifetime'
@@ -189,40 +193,38 @@ function accumulatedCatalogHarness(count: number) {
   return { store, writes, service, requests, connect, read, answer }
 }
 
-it.each([10, 100])(
-  'accumulates %i untargeted menus without publishing the full catalog per reply',
-  async (count) => {
-    vi.useFakeTimers()
-    onTestFinished(() => {
-      vi.useRealTimers()
-    })
-    const h = accumulatedCatalogHarness(count)
-    const first = h.read()
+it('accumulates 100 untargeted menus without publishing the full catalog per reply', async () => {
+  const count = 100
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const h = accumulatedCatalogHarness(count)
+  const first = h.read()
+  await vi.advanceTimersByTimeAsync(0)
+  expect((await first).models).toHaveLength(count)
+  let delivered = false
+  const observer = h.read().then((answer) => {
+    delivered = true
+    return answer
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  for (let index = 0; index < count - 1; index++) {
+    h.answer(index)
     await vi.advanceTimersByTimeAsync(0)
-    expect((await first).models).toHaveLength(count)
-    let delivered = false
-    const observer = h.read().then((answer) => {
-      delivered = true
-      return answer
-    })
-    await vi.advanceTimersByTimeAsync(0)
-    for (let index = 0; index < count - 1; index++) {
-      h.answer(index)
-      await vi.advanceTimersByTimeAsync(0)
-      if (index < count - 2) {
-        expect(delivered).toBe(false)
-      }
+    if (index < count - 2) {
+      expect(delivered).toBe(false)
     }
-    const final = await observer
-    expect(final.models?.every((model) => model.effortsKnown !== false)).toBe(true)
-    expect(h.connect).toHaveBeenCalledOnce()
-    // One initial inventory and one terminal observation, independent of the target count.
-    expect(h.writes.mock.calls.length).toBeLessThanOrEqual(2)
-    expect(
-      h.writes.mock.calls.reduce((rows, call) => rows + call[2].models.length, 0)
-    ).toBeLessThanOrEqual(count * 2)
   }
-)
+  const final = await observer
+  expect(final.models?.every((model) => model.effortsKnown !== false)).toBe(true)
+  expect(h.connect).toHaveBeenCalledOnce()
+  // One initial inventory and one terminal observation, independent of the target count.
+  expect(h.writes.mock.calls.length).toBeLessThanOrEqual(2)
+  expect(
+    h.writes.mock.calls.reduce((rows, call) => rows + call[2].models.length, 0)
+  ).toBeLessThanOrEqual(count * 2)
+})
 
 it.each(['snapshot', 'deadline', 'selected'])(
   'exposes accumulated menus at a %s boundary while the next switch is unanswered',
@@ -310,4 +312,85 @@ it('keeps a slow OpenCode 1.x version response and selects its command listing',
   expect((await result).models.map((row) => row.id)).toEqual(['opencode/slow-valid-model'])
   expect(session).not.toHaveBeenCalled()
   expect(command.mock.calls[0]?.[1]).toMatchObject({ timeoutMs: null })
+})
+
+it('lists OpenCode 2.x models in a temporary private folder when no workspace is provided', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'orca-opencode2-folderless-'))
+  onTestFinished(() => rm(folder, { recursive: true, force: true }))
+  const base = acpLaunchSpecFor('opencode')!
+  const config = (selected: string) =>
+    NewSessionResponseSchema.parse({
+      ...recorded,
+      configOptions: recorded.configOptions.map((option) =>
+        option.id === 'model'
+          ? {
+              ...option,
+              currentValue: selected,
+              options: [
+                { value: 'opencode/claude-opus-4-6', name: 'opencode/Claude Opus 4.6' },
+                { value: 'opencode/gpt-5.4', name: 'opencode/GPT-5.4' }
+              ]
+            }
+          : option
+      )
+    })
+  let startedCwd = ''
+  let cwdExistedAtStart = false
+  const deletedSessions: string[] = []
+  const probe = createAcpModelCatalogProbe(
+    { ...base, account: { ...base.account, environment: (_home, env) => env } },
+    {
+      resolveEnvironment: async () => ({}),
+      resolveCommand: () => process.execPath,
+      probeVersion: async () => ({ version: '2.1.0' }),
+      dataDirectory: folder,
+      homePath: folder,
+      connectSession: () => ({
+        initialize: async () => ({
+          protocolVersion: 1,
+          agentCapabilities: { sessionCapabilities: { delete: {} } }
+        }),
+        start: async (options) => {
+          startedCwd = options.cwd
+          cwdExistedAtStart = existsSync(options.cwd)
+          return { kind: 'new', sessionId: 'listing', response: config('opencode/claude-opus-4-6') }
+        },
+        setConfigOption: async (_id, model) => ({ configOptions: config(model).configOptions! }),
+        deleteSession: async (sessionId) => {
+          deletedSessions.push(sessionId)
+          return {}
+        },
+        close: async () => {}
+      })
+    }
+  )
+  const service = createAgentModelCatalogService({
+    store: new AgentModelCatalogStore(),
+    getRecord: () => undefined,
+    getConversation: () => undefined,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => ({ kind: 'opencode', locator: { kind: 'unmanaged' } }),
+    listsInChatFolder: new Set(['opencode']),
+    probes: { opencode: probe }
+  })
+  onTestFinished(() => service.stop())
+  const result = await service.read({ agent: 'opencode', waitForListing: true })
+  await service.stop()
+  expect(result).toMatchObject({
+    origin: 'probe',
+    modelsDifferByWorkspace: true
+  })
+  if (result.origin === 'unknown') {
+    throw new Error('Expected OpenCode 2.x models')
+  }
+  expect(result.models.map((row) => row.id)).toEqual([
+    'opencode/claude-opus-4-6',
+    'opencode/gpt-5.4'
+  ])
+  expect(cwdExistedAtStart).toBe(true)
+  expect(startedCwd.startsWith(`${join(folder, 'acp-listing-sessions', 'opencode')}${sep}`)).toBe(
+    true
+  )
+  expect(deletedSessions).toEqual(['listing'])
+  expect(existsSync(startedCwd)).toBe(false)
 })

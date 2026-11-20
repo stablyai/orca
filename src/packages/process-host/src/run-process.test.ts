@@ -1,3 +1,5 @@
+import type { ChildProcess } from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -99,6 +101,45 @@ describe('unkillable children', () => {
 })
 
 describe('abort', () => {
+  it('withdraws a launch, then holds the stop until the launched child reports its pid', async () => {
+    const controller = new AbortController()
+    const onChildTerminated = vi.fn()
+    const withdrawPendingLaunch = vi.fn()
+    const launched = Object.assign(new EventEmitter(), {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake starts without a pid, as a launched child does.
+      pid: undefined as number | undefined,
+      exitCode: null,
+      signalCode: null,
+      stdin: Object.assign(new EventEmitter(), { end: () => {} }),
+      stdout: new EventEmitter(),
+      stderr: new EventEmitter(),
+      kill: vi.fn(() => true)
+    })
+    const pending = runProcess({
+      program: 'launched-elsewhere',
+      signal: controller.signal,
+      onChildTerminated,
+      launch: () => ({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries only the surface runProcess reads before the pid arrives.
+        child: launched as unknown as ChildProcess,
+        withdrawPendingLaunch
+      })
+    })
+    controller.abort()
+    await Promise.resolve()
+    expect(withdrawPendingLaunch).toHaveBeenCalledOnce()
+    expect(launched.kill).not.toHaveBeenCalled()
+    expect(onChildTerminated).not.toHaveBeenCalled()
+
+    launched.pid = 4242
+    launched.emit('spawn')
+    expect(launched.kill).toHaveBeenCalledOnce()
+    launched.emit('exit', null, 'SIGTERM')
+    launched.emit('close', null, 'SIGTERM')
+    await expect(pending).resolves.toMatchObject({ code: null, signal: 'SIGTERM' })
+    expect(onChildTerminated).toHaveBeenCalledOnce()
+  })
+
   it('settles an abort after the child reports ready', async () => {
     const controller = new AbortController()
     let stderr = ''

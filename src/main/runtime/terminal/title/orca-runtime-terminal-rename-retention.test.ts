@@ -1,8 +1,8 @@
-import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
+import '../../construction/test-context/orca-runtime-test-lifecycle.spec'
 import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { describe, expect, it, vi } from 'vitest'
 
-import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   HEADLESS_LEAF_ID,
@@ -10,24 +10,21 @@ import {
   TEST_WORKTREE_PATH,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
+} from '../../construction/test-context/orca-runtime-test-fixtures.spec'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
-import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+import { committingSpawn } from '../layout/bind-first-pane.test-fixture'
 import '../../session-lifecycle/projection/runtime-mobile-agent-status-builder'
 
 describe('terminal rename before renderer graph hydration', () => {
-  it.each(['Media Engine Orch', null])(
-    'persists and forwards title %s across PTY replacement',
-    async (title) => {
-      const session = makeWorkspaceSessionWithHeadlessTerminal()
-      session.tabsByWorktree[TEST_WORKTREE_ID][0].customTitle = 'Previous name'
-      const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-      const checkedStore = runtimeStore
-      const runtime = new OrcaRuntimeService(checkedStore)
-      const renameTerminal = vi.fn()
+  it('persists, forwards, and clears a title across consecutive PTY replacements', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const renameTerminal = vi.fn()
+    const open = async (ptyId: string) => {
+      const runtime = new OrcaRuntimeService(runtimeStore)
       runtime.setPtyController({
-        spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'omp-initial-pty' }))),
+        spawn: vi.fn(committingSpawn(runtime, async () => ({ id: ptyId }))),
         write: () => true,
         kill: () => true,
         getForegroundProcess: async () => null
@@ -44,33 +41,35 @@ describe('terminal rename before renderer graph hydration', () => {
         terminalFitOverrideChanged: vi.fn(),
         terminalDriverChanged: vi.fn()
       })
-      const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
         tabId: 'host-tab',
         leafId: HEADLESS_LEAF_ID
       })
-
-      await runtime.renameTerminal(created.handle, title)
-
-      expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe(title)
-      expect(renameTerminal).toHaveBeenCalledWith('host-tab', title)
-      // Main-owned last-pane exit closes its tab; model restart with a fresh runtime over the saved session instead.
-      if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
-        runtime.onPtyExit('omp-initial-pty', 0)
-      }
-      const restored = new OrcaRuntimeService(checkedStore)
-      restored.setPtyController({
-        spawn: vi.fn(committingSpawn(restored, async () => ({ id: 'omp-replacement-pty' }))),
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      await restored.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-        tabId: 'host-tab',
-        leafId: HEADLESS_LEAF_ID
-      })
-      expect(getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle).toBe(title)
+      return { runtime, handle: terminal.handle }
     }
-  )
+    const customTitle = () => getSession().tabsByWorktree[TEST_WORKTREE_ID][0].customTitle
+
+    const initial = await open('omp-initial-pty')
+    await initial.runtime.renameTerminal(initial.handle, 'Media Engine Orch')
+    expect(customTitle()).toBe('Media Engine Orch')
+    expect(renameTerminal).toHaveBeenLastCalledWith('host-tab', 'Media Engine Orch')
+    // Main-owned last-pane exit closes the tab; restart from the saved session in that mode.
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      initial.runtime.onPtyExit('omp-initial-pty', 0)
+    }
+
+    const restored = await open('omp-replacement-pty')
+    expect(customTitle()).toBe('Media Engine Orch')
+    await restored.runtime.renameTerminal(restored.handle, null)
+    expect(customTitle()).toBeNull()
+    expect(renameTerminal).toHaveBeenLastCalledWith('host-tab', null)
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
+      restored.runtime.onPtyExit('omp-replacement-pty', 0)
+    }
+
+    await open('omp-cleared-pty')
+    expect(customTitle()).toBeNull()
+  })
 })
 
 describe('terminal rename display', () => {

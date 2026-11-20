@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -15,14 +16,14 @@ import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { runQuickCommandInNewTab } from '@/lib/terminal/quick-commands/run-quick-command-in-new-tab'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
 import {
   flattenTerminalQuickCommandHosts,
   type HostedTerminalQuickCommand,
   useTerminalQuickCommandHosts
-} from '@/hooks/use-terminal-quick-command-hosts'
+} from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
@@ -150,8 +151,8 @@ export function TabBarQuickCommandsButton({
       historyId: entry.key
     })
   }
-  const editorPromptMaxLength = useAppStore((state) =>
-    editor ? getTerminalQuickCommandHostPromptMaxLength(state, editor.hostId) : undefined
+  const editorPromptMaxLength = useAppStoreWithHostStatuses((_state, statuses) =>
+    editor ? getTerminalQuickCommandHostPromptMaxLength(statuses, editor.hostId) : undefined
   )
   const editorRepos = editor?.hostId.startsWith('runtime:')
     ? repos.filter((repo) => getRepoExecutionHostId(repo) === editor.hostId)

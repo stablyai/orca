@@ -15,13 +15,13 @@ src/renderer/src/components/sidebar/workspace-card/details/use-worktree-card-rev
 src/renderer/src/components/task-page/jira/Content.tsx
 src/renderer/src/components/task-page/jira/listing/use-task-page-jira-list-projection.ts
 src/renderer/src/components/task-page/jira/use-task-page-jira-list-state.ts
-src/renderer/src/hooks/use-integration-provider-status-refresh.ts
+src/renderer/src/runtime/hosts/observations/use-integration-provider-status-refresh.ts
 
 # structuredSessionSelectionAuthority/Controller read module state the selection lifetime replaces (live-read-in-memo-block).
 src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-option-state.ts
 
 # applyTerminalColdActivation mutates controller refs during render on the terminal hot path.
-src/renderer/src/components/use-terminal-controller.ts
+src/renderer/src/components/terminal/workbench/use-terminal-controller.ts
 
 # Caches keyed on a TanStack virtualizer, which mutates in place (hazard virtualizer-in-memo-block).
 src/renderer/src/components/editor/combined-diff/scroll-viewport/combined-diff-section-list.tsx
@@ -38,4 +38,4 @@ src/renderer/src/components/skills/installation/SkillInstallWorkspaceCombobox.ts
 
 # The workbench subtree relies on the shell re-rendering on every app render.
 src/renderer/src/app-shell/AppWorkspaceShell.tsx
-src/renderer/src/app-shell/use-app-chrome-layout.ts
+src/renderer/src/app-shell/chrome/use-app-chrome-layout.ts

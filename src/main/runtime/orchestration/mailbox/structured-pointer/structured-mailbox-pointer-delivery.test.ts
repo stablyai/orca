@@ -21,6 +21,7 @@ import { settleStructuredMailAttempt } from '../structured-mail/structured-mail-
 
 import type {
   StructuredMailboxPointerHost,
+  StructuredMailReportItem,
   StructuredPointerSendOutcome
 } from './structured-mailbox-pointer-host-contract'
 
@@ -28,6 +29,10 @@ import type { StructuredSendAnswer as StructuredMailSendState } from '../../../.
 
 import type { StructuredMailSendRow } from '../../db/messages/structured-mail-send-store'
 
+import {
+  orchestrationMailNotice,
+  readAgentMessageSource
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 type Mail = {
@@ -47,7 +52,13 @@ type Mail = {
 }
 
 /** dispatch:d1 behind one chat session at a time: idle sends start a turn, busy ones wait as cards. */
-function harness(options: { busy?: boolean; senderNames?: RuntimeOrchestrationSenderNames } = {}) {
+function harness(
+  options: {
+    busy?: boolean
+    senderNames?: RuntimeOrchestrationSenderNames
+    reportItem?: StructuredMailReportItem
+  } = {}
+) {
   const mailbox = 'dispatch:d1'
   const mail = new Map<string, Mail>()
   const records = new Map<string, StructuredMailSendRow>()
@@ -188,6 +199,7 @@ function harness(options: { busy?: boolean; senderNames?: RuntimeOrchestrationSe
       mailboxEnded: () => ended,
       unresolvedCustody: () => 'unverifiable',
       getCliCommand: () => 'orca-dev',
+      reportItem: options.reportItem,
       senderSnapshot: () => ({ name: 'Coordinator', agent: null }),
       senderSnapshotReader: options.senderNames
         ? () => options.senderNames!.snapshotReader()
@@ -274,8 +286,8 @@ const flush = async () => {
   }
 }
 
-describe('structured mailbox delivery: each message as its own card', () => {
-  it('points the new owner at mail whose handoff to the old owner won stale-card withdrawal', async () => {
+describe('structured mailbox delivery: each message whole', () => {
+  it('settles a handoff that wins stale-card withdrawal without sending it to the new owner', async () => {
     const h = harness({ busy: true })
     h.receive('m1')
     await h.deliver()
@@ -286,12 +298,46 @@ describe('structured mailbox delivery: each message as its own card', () => {
       return { kind: 'accepted' }
     })
     h.delivery.withdrawStale()
-    // The old owner was only pointed at `check`, which it can no longer read: the new owner is.
-    await vi.waitFor(() =>
-      expect(h.sent.map(({ sessionId }) => sessionId)).toEqual(['session-1', 'session-2'])
+    await vi.waitFor(() => expect(h.mail.get('m1')?.read).toBe(1))
+    expect(h.records.size).toBe(0)
+    expect(h.sent.map(({ sessionId, operationId }) => [sessionId, operationId])).toEqual([
+      ['session-1', first]
+    ])
+    expect(h.mail.get('m1')?.delivered_at).toBe('now')
+  })
+})
+
+describe("structured mailbox delivery: a finished item worker's report", () => {
+  const item = {
+    number: 34,
+    title: 'Paste images',
+    status: 'working' as const,
+    doneMeans: 'Image paste merged'
+  }
+
+  it('adds item context outside the recorded content and still delivers when lookup fails', async () => {
+    const reportItem = vi
+      .fn()
+      .mockResolvedValueOnce(item)
+      .mockRejectedValueOnce(new Error('items DB worker gone'))
+    const h = harness({ reportItem })
+    h.receive('m1')
+    await h.deliver()
+    const body = vi.mocked(h.host.send).mock.calls[0]![0].body
+    expect(h.sent[0]!.text.split('\n').at(-2)).toBe(
+      '[This worker was started for item 34, "Paste images" (In progress). Done means: Image paste merged. If this result changes the item, update it with orca-dev bot item <cancel|comment|done|set> 34.]'
     )
-    expect(h.sent[0]!.operationId).toBe(first)
-    expect(h.mail.get('m1')?.read).toBe(0)
+    const mail = orchestrationMailNotice(readAgentMessageSource(body.from))
+    const range = mail?.messages[0]?.content?.body
+    expect(range && h.sent[0]!.text.slice(...range)).toBe('body of m1')
+    await vi.waitFor(() => expect(h.mail.get('m1')?.read).toBe(1))
+
+    h.receive('m2')
+    await h.deliver()
+    expect(h.sent).toHaveLength(2)
+    expect(h.sent[1]!.text).not.toContain('This worker was started for item')
+    await vi.waitFor(() => expect(h.mail.get('m2')?.read).toBe(1))
+    expect(h.records.size).toBe(0)
   })
 })
 
@@ -329,7 +375,8 @@ describe('structured mailbox delivery across a real database close and reopen', 
         dispatchId: null,
         message,
         cliCommand: 'orca-dev',
-        senderSnapshot: () => ({ name: null, agent: null })
+        senderSnapshot: () => ({ name: null, agent: null }),
+        followUp: undefined
       }).body
       settleStructuredMailAttempt(
         db,

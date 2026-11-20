@@ -81,7 +81,7 @@ export function buildMobileDiffReviewRows<Line extends MobileDiffLine>(
           hiddenCount: foldEnd - foldStart,
           startIndex: foldStart,
           endIndex: foldEnd,
-          enclosingLine: foldEnclosingLine(lines, foldEnd)
+          enclosingLine: null
         })
         lineIndex = foldEnd - 1
         continue
@@ -89,6 +89,7 @@ export function buildMobileDiffReviewRows<Line extends MobileDiffLine>(
       pushLine(lineIndex)
     }
   }
+  populateFoldScopes(lines, rows)
   return rows
 }
 
@@ -108,30 +109,28 @@ function indentColumns(text: string): number {
   return columns
 }
 
-/**
- * The phone's diff has no `@@` headers, so the fold names its scope itself: the nearest new-file line at or
- * above the fold's end that is indented less than the first line shown after it. Blank lines don't count.
- */
-export function foldEnclosingLine(
-  lines: readonly MobileDiffLine[],
-  foldEnd: number
-): string | null {
-  const counts = (line: MobileDiffLine | undefined): line is MobileDiffLine =>
-    line !== undefined && line.kind !== 'delete' && line.text.trim() !== ''
-  let nextIndex = foldEnd
-  while (nextIndex < lines.length && !counts(lines[nextIndex])) {
-    nextIndex += 1
-  }
-  const next = lines[nextIndex]
-  if (!counts(next)) {
-    return null
-  }
-  const nextIndent = indentColumns(next.text)
-  for (let index = foldEnd - 1; index >= 0; index -= 1) {
+// Track enclosing indentation once instead of scanning backward separately for every fold.
+function populateFoldScopes(lines: readonly MobileDiffLine[], rows: MobileDiffReviewRow[]): void {
+  const folds = rows.filter((row) => row.kind === 'fold')
+  const scopes: { indent: number; text: string }[] = []
+  let foldIndex = 0
+  for (let index = 0; index < lines.length && foldIndex < folds.length; index += 1) {
     const line = lines[index]
-    if (counts(line) && indentColumns(line.text) < nextIndent) {
-      return line.text.trim()
+    if (line.kind === 'delete') {
+      continue
     }
+    const text = line.text.trim()
+    if (text.length === 0) {
+      continue
+    }
+    const indent = indentColumns(line.text)
+    while ((scopes.at(-1)?.indent ?? -1) >= indent) {
+      scopes.pop()
+    }
+    while (foldIndex < folds.length && folds[foldIndex].endIndex <= index) {
+      folds[foldIndex].enclosingLine = scopes.at(-1)?.text ?? null
+      foldIndex += 1
+    }
+    scopes.push({ indent, text })
   }
-  return null
 }

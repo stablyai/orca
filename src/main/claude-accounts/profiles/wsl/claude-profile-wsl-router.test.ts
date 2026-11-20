@@ -28,9 +28,10 @@ vi.mock('../../../../shared/file-access/wsl-paths', async (original) => ({
   ...(await original<typeof WslPaths>()),
   toWindowsWslPath: (linuxPath: string) => linuxPath
 }))
+const listRunning = vi.hoisted(() => vi.fn(async () => ['Ubuntu']))
 vi.mock('../../../wsl/discovery/distro-catalog', () => ({
   getWslHomeAsync: async (distro: string) => `\\\\wsl.localhost\\${distro}${guest.home}`,
-  listRunningWslDistrosAsync: async () => ['Ubuntu']
+  listRunningWslDistrosAsync: listRunning
 }))
 const gate = vi.hoisted(() => ({
   blocked: vi.fn(
@@ -126,6 +127,11 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     f.settings.claudeManagedAccounts = []
     await f.router.publish('Ubuntu')
     expect(existsSync(f.pointer)).toBe(false)
+
+    f.settings.claudeManagedAccounts = [{ ...f.account('h'), managedAuthRuntime: 'host' }]
+    listRunning.mockClear()
+    await expect(f.router.runningDistros()).resolves.toEqual([])
+    expect(listRunning).not.toHaveBeenCalled()
   })
 
   it('a launch waiting on setup leaves a selection made meanwhile in the pointer', async () => {

@@ -36,6 +36,13 @@ export function buildPosixClaudeDecisionModeLines(): string[] {
 /** Captures the post's reply; a failed curl's partial body is dropped, spooled and answered `{}`. */
 export function wrapPosixClaudeDecisionPost(postLines: readonly string[]): string[] {
   return [
+    // An event that asked for no decision discards the reply, so it skips the capture subshell.
+    'if [ -z "$orca_hook_decides" ]; then',
+    ...postLines.map((line, index) =>
+      index === postLines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
+    ),
+    '  exit 0',
+    'fi',
     ...postLines.map((line, index) =>
       index === 0
         ? `orca_hook_reply=$(${line}`

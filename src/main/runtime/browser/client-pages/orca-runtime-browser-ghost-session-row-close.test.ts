@@ -83,8 +83,8 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getBrowserHostLeaseRegistry: () => new BrowserHostLeaseRegistry({ authorityRuntimeId: 'host' }),
     getBrowserHostRequestRegistry: () => new BrowserHostRequestRegistry(),
-    getAuthoritativeWindow: vi.fn<RuntimeBrowserCommandHost['getAuthoritativeWindow']>(),
-    getAvailableAuthoritativeWindow: () => null,
+    getAuthoritativeWindowId: vi.fn<RuntimeBrowserCommandHost['getAuthoritativeWindowId']>(),
+    getAvailableAuthoritativeWindowId: () => null,
     getOffscreenBrowserBackend: () => null,
     getAgentBrowserBridge: () => bridge,
     ...overrides

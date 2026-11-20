@@ -1,7 +1,10 @@
 import type { AppState } from '../../types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
+import {
+  structuredAgentSessionAddressTabId,
+  structuredAgentSessionPaneKey
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { getAgentPaneExecutionHost } from '../agent-status/pane-authority/agent-pane-execution-host'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   completionPaneKeysByTabId,
@@ -113,7 +116,13 @@ export function workspaceMarkerPaneKeysForHost(
   executionHostId: ExecutionHostId | undefined,
   paneKeys: Iterable<string>
 ): Set<string> {
-  const tabs = new Map(workspaceMarkerTabs(state, workspaceId).map((tab) => [tab.id, tab]))
+  // Keyed as pane keys name each tab: a minted chat tab by its session's address.
+  const tabs = new Map(
+    workspaceMarkerTabs(state, workspaceId).map((tab) => [
+      tab.sessionId === null ? tab.id : structuredAgentSessionAddressTabId(tab.id, tab.sessionId),
+      tab
+    ])
+  )
   const index = indexWorkspaceTabs(state, workspaceId)
   return new Set(
     [...paneKeys].filter((key) => {

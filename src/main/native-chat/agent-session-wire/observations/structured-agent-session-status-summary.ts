@@ -1,5 +1,8 @@
 import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
-import { structuredAgentSessionRuntimePermission } from '../options/structured-agent-session-ran-options'
+import {
+  structuredAgentSessionRuntimeFallbackModel,
+  structuredAgentSessionRuntimePermission
+} from '../options/structured-agent-session-ran-options'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import {
@@ -32,6 +35,7 @@ export function structuredAgentSessionStatusSummary({
   stopping,
   starting,
   usageLimitContinue,
+  runningPermissionMode,
   childWork,
   namingFailure,
   now
@@ -50,6 +54,7 @@ export function structuredAgentSessionStatusSummary({
   state: StructuredAgentSessionStatusState
   starting?: boolean
   usageLimitContinue?: AgentSessionStatusSummary['usageLimitContinue']
+  runningPermissionMode?: string
   stopping: boolean
   childWork: Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'>
   namingFailure: StructuredChatNamingFailure | undefined
@@ -66,6 +71,9 @@ export function structuredAgentSessionStatusSummary({
   const fastMode = record?.options?.fastMode
   const serviceTier = record?.options?.serviceTier
   const interactionMode = record?.options?.interactionMode
+  const fallbackModel = session.child
+    ? structuredAgentSessionRuntimeFallbackModel(session.child)
+    : undefined
   const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
   return {
     sessionId,
@@ -81,7 +89,7 @@ export function structuredAgentSessionStatusSummary({
     ...(session.restartResume ? { restartResume: { phase: session.restartResume.phase } } : {}),
     ...projected,
     ...(structuredAgentSessionAwaitsAnswer(openAsyncQuestion, skippedThrough)
-      ? { awaitsAnswer: true as const }
+      ? { awaitsAnswer: true as const, awaitsQuestion: openAsyncQuestion }
       : {}),
     ...(skippedThrough ? { asyncQuestionsSkippedThrough: skippedThrough } : {}),
     runtimePermission: structuredAgentSessionRuntimePermission(session.child ?? undefined),
@@ -91,9 +99,13 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
+    ...(fallbackModel ? { fallbackModel } : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(session.child?.permissionMode
-      ? { launchPermissionMode: session.child.permissionMode }
+      ? {
+          launchPermissionMode: session.child.permissionMode,
+          runningPermissionMode: runningPermissionMode ?? session.child.permissionMode
+        }
       : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
@@ -201,6 +213,7 @@ export function releasedStructuredStatusSummary(
     stopping: _stopping,
     restartResume: _restartResume,
     reportedModel: _reportedModel,
+    fallbackModel: _fallbackModel,
     ...retained
   } = previous
   return { ...retained, runtimePermission: null }

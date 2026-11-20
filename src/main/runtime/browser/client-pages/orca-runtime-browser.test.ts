@@ -4,6 +4,11 @@ import type { RuntimeBrowserCommandHost } from '../commands/browser-command-cont
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import { BrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
+import { setRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import {
+  rendererWindowSurfaceForTest,
+  TEST_RENDERER_WINDOW_ID
+} from '../../construction/renderer-window-surface-test-double'
 
 const {
   ipcMainOnMock,
@@ -105,8 +110,8 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
     // No paired desktop: headless creates stay on this host.
     getBrowserHostLeaseRegistry: () => new BrowserHostLeaseRegistry({ authorityRuntimeId: 'host' }),
     getBrowserHostRequestRegistry: () => new BrowserHostRequestRegistry(),
-    getAuthoritativeWindow: vi.fn<RuntimeBrowserCommandHost['getAuthoritativeWindow']>(),
-    getAvailableAuthoritativeWindow: vi.fn(() => null),
+    getAuthoritativeWindowId: vi.fn<RuntimeBrowserCommandHost['getAuthoritativeWindowId']>(),
+    getAvailableAuthoritativeWindowId: vi.fn(() => null),
     getOffscreenBrowserBackend: vi.fn(() => null),
     getAgentBrowserBridge: () => bridge,
     ...overrides
@@ -176,13 +181,17 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     )
     bridge.getActivePageId.mockReturnValue('page-new')
     bridge.tabList.mockReturnValue({ tabs: [] })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: renderer tab creation reads only webContents.send; native BrowserWindow construction is unavailable in this unit test.
-    const window = { webContents } as unknown as Electron.BrowserWindow
+    setRuntimeDesktopSurface(
+      rendererWindowSurfaceForTest(webContents, {
+        on: ipcMainOnMock,
+        removeListener: ipcMainRemoveListenerMock
+      })
+    )
     const commands = new RuntimeBrowserCommands(
       createHost({
         getAgentBrowserBridge: () => bridge,
-        getAvailableAuthoritativeWindow: () => window,
-        getAuthoritativeWindow: () => window
+        getAvailableAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID,
+        getAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID
       })
     )
 
@@ -243,5 +252,88 @@ describe('RuntimeBrowserCommands browser screencast', () => {
 
     expect(bridge.setActiveTab).toHaveBeenCalledWith(102, 'wt-1')
     expect(pages.listPages('wt-1').find((page) => page.active)).toBeUndefined()
+  })
+  it('reports the profile of a page a paired desktop hosts', async () => {
+    const { RuntimeBrowserCommands } = await import('../commands/browser-commands')
+    const pages = new RuntimeBrowserPageRegistry()
+    pages.publishClientPage({
+      browserPageId: 'desktop-page',
+      workspaceId: 'wt-1',
+      browserProfileId: 'profile-isolated',
+      executionHostKey: 'local',
+      placement: {
+        kind: 'client',
+        browserHostClientId: 'desktop-1',
+        browserHostGeneration: 1,
+        pageHostGeneration: 1
+      },
+      url: 'https://user.example/',
+      loading: false,
+      active: false
+    })
+    const commands = new RuntimeBrowserCommands(
+      createHost({ getRuntimeBrowserPageRegistry: () => pages })
+    )
+
+    await expect(commands.browserTabProfileShow({ page: 'desktop-page' })).resolves.toEqual({
+      browserPageId: 'desktop-page',
+      worktreeId: 'wt-1',
+      profileId: 'profile-isolated',
+      profileLabel: 'Isolated'
+    })
+  })
+
+  it('clones a tab into the offscreen browser of a host without a window', async () => {
+    const { RuntimeBrowserCommands } = await import('../commands/browser-commands')
+    const bridge = vi.mockObject(AgentBrowserBridge.prototype)
+    bridge.getRegisteredTabs.mockReturnValue(new Map([['page-1', 100]]))
+    bridge.getRegisteredPageWebContentsId.mockImplementation((page) =>
+      page === 'page-1' ? 100 : undefined
+    )
+    bridge.tabList.mockReturnValue({
+      tabs: [
+        {
+          browserPageId: 'page-1',
+          index: 0,
+          url: 'https://source.example/',
+          title: 'Source',
+          active: true
+        }
+      ]
+    })
+    webContentsFromIdMock.mockReturnValue({
+      id: 100,
+      isDestroyed: () => false,
+      isLoadingMainFrame: () => false
+    })
+    const createTab = vi.fn(async () => ({ browserPageId: 'clone-page' }))
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        getOffscreenBrowserBackend: () => ({
+          createTab,
+          closeTab: vi.fn(async () => {}),
+          ownsTab: () => false
+        })
+      })
+    )
+
+    await expect(
+      commands.browserTabProfileClone({
+        page: 'page-1',
+        worktree: 'id:wt-1',
+        profileId: 'profile-isolated'
+      })
+    ).resolves.toEqual({
+      browserPageId: 'clone-page',
+      sourceBrowserPageId: 'page-1',
+      profileId: 'profile-isolated',
+      profileLabel: 'Isolated'
+    })
+    expect(createTab).toHaveBeenCalledWith({
+      url: 'https://source.example/',
+      worktreeId: 'wt-1',
+      profileId: 'profile-isolated'
+    })
   })
 })

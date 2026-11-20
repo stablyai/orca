@@ -6,7 +6,10 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { projectGroupIdFromRepoId } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
-import type { AgentSessionRestartActivity } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
+import {
+  restartActivityWaitsOnPerson,
+  type AgentSessionRestartActivity
+} from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 import type { StructuredAgentId } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 
 export type ResumeCandidate = {
@@ -14,7 +17,7 @@ export type ResumeCandidate = {
   workspaceId: string
   /** Older clients without registered-agent support receive only Claude/Codex offers. */
   agent: StructuredAgentId
-  trigger: 'quit' | 'update'
+  trigger: 'quit' | 'update' | 'crash'
   latestPrompt: string
   recordedAt: number
   /** Optional on the wire: an older host omits them, and a row must still render. */
@@ -219,4 +222,11 @@ export function resolveResumeGroupHeader(
 
 export function allResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
   return candidates.map((candidate) => candidate.sessionId)
+}
+
+/** Chats that were working; chats waiting on the person stay offered until they choose. */
+export function launchResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
+  return allResumeSessionIds(
+    candidates.filter((candidate) => !restartActivityWaitsOnPerson(candidate.activity))
+  )
 }

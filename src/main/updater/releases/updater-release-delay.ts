@@ -9,7 +9,7 @@ const DELAYED_UPDATE_CLEAR_BUFFER_MS = 5 * 60 * 1000
 export type DatedReleaseTag = {
   tag: string
   version: string
-  /** GitHub's Atom entry `updated` time: server-side and never earlier than publication. */
+  /** Server-side time: Atom `updated` (never earlier than publication), or REST `published_at` past the feed. */
   releasedAt: number | null
 }
 
@@ -22,6 +22,11 @@ export type ReleaseDelayResult = {
   isTagOldEnough: (tag: string) => boolean
 }
 
+// Unknown dates fail closed: a delay exists to avoid unvetted releases.
+export function isReleaseOldEnough(entry: DatedReleaseTag, cutoff: number): boolean {
+  return entry.releasedAt !== null && entry.releasedAt <= cutoff
+}
+
 export function applyReleaseDelay(
   candidates: DatedReleaseTag[],
   allTags: DatedReleaseTag[],
@@ -30,9 +35,7 @@ export function applyReleaseDelay(
   now: number
 ): { eligible: DatedReleaseTag[]; releaseDelay: ReleaseDelayResult } {
   const cutoff = now - minReleaseAgeMs
-  // Unknown dates fail closed: a delay exists to avoid unvetted releases.
-  const isOldEnough = (entry: DatedReleaseTag): boolean =>
-    entry.releasedAt !== null && entry.releasedAt <= cutoff
+  const isOldEnough = (entry: DatedReleaseTag): boolean => isReleaseOldEnough(entry, cutoff)
   const held = candidates.find(
     (entry) => compareVersions(entry.version, currentVersion) > 0 && !isOldEnough(entry)
   )

@@ -1,4 +1,6 @@
-import { withAgentStatusOwnership } from './slices/agent-status/agent-status-ownership-boundary'
+import { logActiveWorkspaceChanges } from './active-workspace-change-log'
+import { bindAppRuntimeStatusStore } from './slices/runtime-status/views/app-runtime-status-binding'
+import { withStatusTransaction } from './status-transaction/status-transaction-boundary'
 import { withBrowserInitializationPresentations } from './slices/browser/hosts/browser-initialization-presentation-store'
 import { registerTerminalNoticeShutdownReader } from '@/components/terminal-pane/pty-transport/delivery/pty-notice-exit'
 import { registerStructuredSelectionCatalogStore } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
@@ -34,7 +36,7 @@ import { createSshSlice } from './slices/ssh/create-ssh-slice'
 import { createRuntimeEnvironmentSshSlice } from './slices/ssh/runtime-environment-ssh'
 import { createWslHostsSlice } from './slices/wsl/wsl-hosts'
 import { createAgentStatusSlice } from './slices/agent-status/agent-status'
-import { createPaneForegroundAgentSlice } from './slices/agent-status/pane-foreground-agent'
+import { createPaneForegroundAgentSlice } from './slices/agent-status/pane-authority/pane-foreground-agent'
 import { createDiffCommentsSlice } from './slices/diff-comments/create-diff-comments-slice'
 import { createDetectedAgentsSlice } from './slices/agent-inventory/create-detected-agents-slice'
 import { createRuntimeDetectedAgentsSlice } from './slices/agent-inventory/runtime-detected-agents'
@@ -53,10 +55,11 @@ import { createNewIssueDraftSlice } from './slices/task-creation/new-issue-draft
 import { createFeedbackDraftSlice } from './slices/feedback/feedback-draft'
 import { createTaskCreationDraftsSlice } from './slices/task-creation/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/runtime-host-updates/remote-server-updates'
+import { createAgentCliUpdatesSlice } from './slices/runtime-host-updates/agent-cli-updates'
 import { createTerminalQuickCommandHostsSlice } from './terminals/quick-commands/terminal-quick-command-hosts'
-import { createStructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-session-launch-directories'
-import { createStructuredChatSleptAtSlice } from './slices/agent-status/structured-chat-slept-at'
-import { createStructuredChatCompanionWritesSlice } from './slices/agent-status/structured-chat-companion-writes'
+import { createStructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-sessions/structured-session-launch-directories'
+import { createStructuredChatSleptAtSlice } from './slices/agent-status/structured-sessions/structured-chat-slept-at'
+import { createStructuredChatCompanionWritesSlice } from './slices/agent-status/structured-sessions/structured-chat-companion-writes'
 import { createEphemeralVmLifecycleSlice } from './slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
 import { e2eConfig } from '@/app-shell/startup/e2e-config'
@@ -73,7 +76,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/s
 import { withReactCommitCascadeWriteProbe } from './diagnostics/react-commit-cascade-write-probe'
 import { withStoreIdentityChurnProbe } from './diagnostics/store-identity-churn-probe'
 import { withEditorBufferRecords } from './slices/editor/buffers/editor-buffer-record-lifecycle'
-import { withAgentConversationRetention } from './slices/agent-status/agent-conversation-retention'
+import { withAgentConversationRetention } from './slices/agent-status/conversation/agent-conversation-retention'
 import { attachEditorBufferIdentityEvents } from './slices/editor/buffers/editor-buffer-identity-events'
 import {
   registerRendererMemoryProfileContributor,
@@ -95,7 +98,7 @@ const withAppStoreWritePolicies = (createState: StateCreator<AppState, [], []>) 
 // Presentation ownership follows accepted buffer reconciliation; probes see the caller’s patch.
 // Why e2e checks the buffer invariant too: a writer that skips the record must fail there, not drift.
 export const useAppStore = create<AppState>()(
-  withAgentStatusOwnership(
+  withStatusTransaction(
     withBrowserInitializationPresentations(
       withEditorBufferRecords(
         withAppStoreWritePolicies(
@@ -154,6 +157,7 @@ export const useAppStore = create<AppState>()(
               ...createFeedbackDraftSlice(...a),
               ...createTaskCreationDraftsSlice(...a),
               ...createRemoteServerUpdatesSlice(...a),
+              ...createAgentCliUpdatesSlice(...a),
               ...createTerminalQuickCommandHostsSlice(...a),
               ...createStructuredSessionLaunchDirectorySlice(...a),
               ...createStructuredChatSleptAtSlice(...a),
@@ -169,6 +173,8 @@ export const useAppStore = create<AppState>()(
     )
   )
 )
+
+bindAppRuntimeStatusStore(useAppStore)
 
 registerTerminalNoticeShutdownReader(
   (ptyId) => (useAppStore.getState().pendingPtyShutdownIds[ptyId] ?? 0) > 0
@@ -232,6 +238,9 @@ registerRendererMemoryProfileContributor('storeKB', () =>
 if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefined') {
   const testWindow = window as unknown as Record<string, unknown>
   testWindow.__store = useAppStore
+  if (import.meta.env.DEV) {
+    logActiveWorkspaceChanges(useAppStore)
+  }
   if (e2eConfig.exposeStore) {
     testWindow.__webRuntimeSessionE2E = {
       createTerminal: async (args: Parameters<typeof createWebRuntimeSessionTerminal>[0]) =>

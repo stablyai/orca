@@ -15,7 +15,6 @@ import {
   db,
   dispatcher,
   host,
-  isMailPointer,
   isWholeMail,
   openChat,
   request,
@@ -26,6 +25,7 @@ import {
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 import { getFollowUpDispatch } from '../../db/dispatch-context/worker-follow-up-lineage'
 import { structuredWorkerIdentities } from './structured-worker-identity'
+import { readSessionWorkers } from '../../../rpc/methods/orchestration/worker/session-workers-method'
 import { createStructuredWorkerSession } from '../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session'
 import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/start/placement/worker-start-agent-placement'
 
@@ -93,12 +93,17 @@ function reportDone(sessionId: string, taskId: string, dispatchId: string) {
 /** A worker created as worker-start creates one, after its first Dispatch reported done. */
 async function finishedStructuredWorker(
   taskId: string,
-  settle: 'done' | 'abandon' | 'none' = 'done'
+  settle: 'done' | 'abandon' | 'none' = 'done',
+  turnSource?: 'connector'
 ) {
   // Each release of the worker's binding frees its handle.
   const forget = vi.spyOn(structuredWorkerIdentities, 'forget')
   const started = db.createStartingWorkerDispatch({
-    creator: { kind: 'session', orcaSessionId: testOrcaSessionId(COORDINATOR) },
+    creator: {
+      kind: 'session',
+      orcaSessionId: testOrcaSessionId(COORDINATOR),
+      ...(turnSource ? { turnSource } : {})
+    },
     maxDepth: 9,
     taskId,
     startOptions: { agent: 'codex' }
@@ -211,7 +216,89 @@ function sendTo(dispatchId: string, body: string) {
   )
 }
 
+describe("a chat's workers, as its connector conversation reads them", () => {
+  it('are only those a turn its conversation woke started', async () => {
+    await openChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    const asked = await finishedStructuredWorker(taskId, 'none', 'connector')
+    const typed = await finishedStructuredWorker(await followUpTask(), 'none')
+    const ids = (workers: { dispatchId: string }[]) => workers.map((row) => row.dispatchId).sort()
+
+    expect(ids(await readSessionWorkers(runtime, COORDINATOR))).toEqual(
+      [asked.firstDispatchId, typed.firstDispatchId].sort()
+    )
+    expect(ids(await readSessionWorkers(runtime, COORDINATOR, { connectorOnly: true }))).toEqual([
+      asked.firstDispatchId
+    ])
+  })
+})
+
 describe('a send to a finished structured worker', () => {
+  it('keeps the recorded provider across restart and consecutive kept-open follow-ups', async () => {
+    await openChat(COORDINATOR)
+    const { taskId } = await coordinatorRunAndTask()
+    const { identity, firstDispatchId } = await finishedStructuredWorker(taskId)
+    expect(db.keepWorkerTerminalOpen(identity.paneKey)).toBe(1)
+    const worker = connectionFor(identity.sessionId)
+    structuredWorkerIdentities.clear()
+
+    let previous = firstDispatchId
+    for (let turn = 0; turn < 2; turn += 1) {
+      const pending = sendTo(firstDispatchId, `follow-up ${turn + 1}`)
+      await vi.waitFor(() => expect(worker.turns).toHaveLength(turn + 1), WAIT)
+      await settleTurn(identity.sessionId, turn)
+      const receipt = await pending
+      const dispatchId = String(receipt.dispatchId)
+      expect(receipt).toMatchObject({ delivery: 'follow_up', followUpOf: previous })
+      expect(JSON.parse(db.getWorkerDispatch(dispatchId)!.start_options)).toMatchObject({
+        agent: null
+      })
+      const projected = await readSessionWorkers(runtime, COORDINATOR)
+      expect(projected.find((row) => row.dispatchId === dispatchId)).toMatchObject({
+        agent: 'codex',
+        state: 'working',
+        liveness: 'live',
+        chatSessionId: identity.sessionId
+      })
+      expect(projected.filter((row) => row.state === 'working')).toHaveLength(1)
+      const read = host.deps.store.getConversation
+      const unreadable = vi
+        .spyOn(host.deps.store, 'getConversation')
+        .mockImplementation((id) => (id === identity.sessionId ? null : read(id)))
+      try {
+        expect(
+          (await readSessionWorkers(runtime, COORDINATOR)).find(
+            (row) => row.dispatchId === dispatchId
+          )
+        ).toMatchObject({ agent: null, state: 'unverifiable' })
+      } finally {
+        unreadable.mockRestore()
+      }
+      expect(
+        await reportDone(identity.sessionId, String(receipt.taskId), dispatchId)
+      ).toMatchObject({
+        ok: true
+      })
+      expect(
+        (await readSessionWorkers(runtime, COORDINATOR)).every((row) => row.state === 'completed')
+      ).toBe(true)
+      expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+        retained_reason: 'user_kept',
+        auto_release_at: null
+      })
+      previous = dispatchId
+      structuredWorkerIdentities.clear()
+    }
+    expect(await sendUserMessage(identity.sessionId, 'an ordinary user turn')).toMatchObject({
+      ok: true
+    })
+    await vi.waitFor(() => expect(worker.turns).toHaveLength(3), WAIT)
+    await settleTurn(identity.sessionId, 2)
+    expect(
+      (await readSessionWorkers(runtime, COORDINATOR)).every((row) => row.state === 'completed')
+    ).toBe(true)
+  })
+
   it('becomes one follow-up on that worker; a racing send steers it', async () => {
     await openChat(COORDINATOR)
     const { taskId } = await coordinatorRunAndTask()
@@ -337,22 +424,27 @@ describe('a send to a finished structured worker', () => {
       await vi.waitFor(async () => {
         const cards = await queuedCardTexts(identity.sessionId)
         expect(cards).toHaveLength(2)
+        expect(cards[0]).toContain('arrive next, one at a time')
         expect(isWholeMail(cards[1]!)).toBe(true)
         expect(cards[1]).toContain('and the docs')
       }, WAIT)
+      expect((await queuedCardTexts(identity.sessionId)).join('\n')).not.toContain('`check`')
       reply.resolve()
       worker.handlers.onNotification?.('turn/completed', { turn: { id: 'turn-1' } })
       await host.flushStreamedEvents(identity.sessionId)
       await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
+      expect(turnText(worker.turns[1]!)).toContain('arrive next, one at a time')
       await settleTurn(identity.sessionId, 1)
       await vi.waitFor(() => expect(worker.turns).toHaveLength(3), WAIT)
-      expect(isMailPointer(turnText(worker.turns[2]!))).toBe(true)
+      expect(isWholeMail(turnText(worker.turns[2]!))).toBe(true)
+      expect(turnText(worker.turns[2]!)).toContain('and the docs')
       await settleTurn(identity.sessionId, 2)
 
       const followUp = getFollowUpDispatch(db, firstDispatchId)!
-      expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toMatchObject([
-        { body: 'and the docs' }
-      ])
+      await vi.waitFor(
+        () => expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toEqual([]),
+        WAIT
+      )
       expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toEqual([])
     } finally {
       reply.resolve()

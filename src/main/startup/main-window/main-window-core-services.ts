@@ -3,7 +3,7 @@ import { registerCoreHandlers } from '../../ipc/register-core-handlers/register-
 import { attachMainWindowServices } from '../../window/attach-main-window-services'
 import { initTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { resolveUpdateInstallMode } from '../../updater/updater-service'
-import { desktopConnectorCloud } from '../cloud-startup/main-process-connector-startup'
+import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from '../main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
@@ -21,7 +21,6 @@ import {
   prepareCodexSessionResumeForLaunch
 } from '../agent-accounts/codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
-import { RELAY_HOST_CLOSE_REASON } from '../../../shared/remote-runtime/relay/relay-host-close-reason'
 
 let attachmentTail: Promise<void> = Promise.resolve()
 
@@ -50,15 +49,16 @@ async function installMainWindowCoreServices(
     throw new Error('Main window closed while preparing services')
   }
   const store = state.store
-  const runtime = state.runtime
-  const stats = state.stats
-  const codexAccounts = state.codexAccounts
-  const claudeAccounts = state.claudeAccounts
-  const rateLimits = state.rateLimits
-  const automations = state.automations
-  const keybindings = state.keybindings
-  const codexRuntimeHome = state.codexRuntimeHome
-  const claudeRuntimeAuth = state.claudeRuntimeAuth
+  const runtime = state.core.runtime
+  const stats = state.core.stats
+  const codexAccounts = state.core.codexAccounts
+  const claudeAccounts = state.core.claudeAccounts
+  const rateLimits = state.core.rateLimits
+  const automations = state.core.automations
+  const keybindings = state.core.keybindings
+  const codexRuntimeHome = state.core.codexRuntimeHome
+  const claudeRuntimeAuth = state.core.claudeRuntimeAuth
+  const orcaAccount = state.core.orcaAccount
   if (
     !store ||
     !runtime ||
@@ -69,7 +69,8 @@ async function installMainWindowCoreServices(
     !automations ||
     !keybindings ||
     !codexRuntimeHome ||
-    !claudeRuntimeAuth
+    !claudeRuntimeAuth ||
+    !orcaAccount
   ) {
     throw new Error('Main window services must be initialized before attaching')
   }
@@ -103,35 +104,23 @@ async function installMainWindowCoreServices(
         }),
       onBeforeRelaunch: async () => {
         state.isQuitting = true
-        state.desktopRelayService?.fenceAndCloseNow()
-        desktopConnectorCloud()?.fence()
+        fenceMainProcessCloudOnQuit()
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
       },
-      onOrcaProfileAuthMutation: () => {
-        // An auth change retries relay installation after launch-time failure.
-        void state.desktopRelayInstaller?.authChanged()
-        state.desktopRelayService?.authMutated()
-        desktopConnectorCloud()?.accountChanged()
-      },
-      // Only sign-out fences paired phones; reasonless quit/relaunch must not look like logout.
-      onBeforeOrcaProfileSignOut: () => {
-        state.desktopRelayInstaller?.suspend()
-        state.desktopRelayService?.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-        desktopConnectorCloud()?.signOutStarted()
-      },
-      onAfterOrcaProfileSignOut: () => desktopConnectorCloud()?.signOutFinished()
+      orcaAccount,
+      rendererCheckpoint: state.core.rendererCheckpoint ?? undefined
     },
-    state.pluginService ?? undefined,
-    state.pluginMarketplaceService && state.pluginMarketplaceInstaller
+    state.core.pluginService ?? undefined,
+    state.core.pluginMarketplaceService && state.core.pluginMarketplaceInstaller
       ? {
-          marketplace: state.pluginMarketplaceService,
-          installer: state.pluginMarketplaceInstaller,
-          ...(state.pluginAutoUpdater ? { autoUpdater: state.pluginAutoUpdater } : {}),
-          ...(state.pluginInstallStatsService
-            ? { installStats: state.pluginInstallStatsService }
+          marketplace: state.core.pluginMarketplaceService,
+          installer: state.core.pluginMarketplaceInstaller,
+          ...(state.core.pluginAutoUpdater ? { autoUpdater: state.core.pluginAutoUpdater } : {}),
+          ...(state.core.pluginInstallStatsService
+            ? { installStats: state.core.pluginInstallStatsService }
             : {}),
-          ...(state.pluginUpdateReviewNotices
-            ? { reviewNotices: state.pluginUpdateReviewNotices }
+          ...(state.core.pluginUpdateReviewNotices
+            ? { reviewNotices: state.core.pluginUpdateReviewNotices }
             : {})
         }
       : undefined

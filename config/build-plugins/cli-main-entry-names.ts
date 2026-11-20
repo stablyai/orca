@@ -2,6 +2,8 @@
 export const CLI_MAIN_ENTRY_NAMES = [
   'worker-threads/worker-thread-entry-path',
   'worker-threads/worker-thread-spawn',
+  // The CLI-emitted environment store worker entry installs the send ledger from here.
+  'worker-threads/worker-send-ledger',
   'agent-hooks/installation/managed-agent-hook-controls',
   'gitlab/projects/project-ref-parser',
   'orca-profiles/profile-index-store',
@@ -31,10 +33,6 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
   'startup/network-compatibility/http1-compatibility-marker',
-  // `orca uninstall` runs the app's cleanup in the CLI process.
-  'uninstall/orca-install-identity',
-  'uninstall/orca-uninstall-cleanup',
-  'cli/cli-installer',
-  // The CLI's own app environment, so main-process removers can resolve profile paths.
+  // The CLI's own app environment, so main-process hook removers can resolve profile paths.
   'backend/node-service-environment'
 ] as const

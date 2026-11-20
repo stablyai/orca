@@ -1,8 +1,8 @@
 import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises'
-import { existsSync, statSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { acquireOrcadInstanceLock } from '../../../orcad/instance-lock/orcad-instance-lock'
 import { openJournalDatabase } from './journal-database'
 import { journalDatabasePath } from './journal-host-database'
@@ -21,6 +21,7 @@ const roots: string[] = []
 const databases: JournalSqlDatabase[] = []
 const locks: ReturnType<typeof acquireOrcadInstanceLock>[] = []
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await Promise.all(databases.splice(0).map((database) => database.close()))
   for (const lock of locks.splice(0)) {
     lock.release()
@@ -90,17 +91,6 @@ async function saveRetirement(root: string, phase: string, manifest?: unknown) {
   })
 }
 
-function fileIdentity(filename: string) {
-  const file = statSync(filename, { bigint: true })
-  return {
-    dev: String(file.dev),
-    ino: String(file.ino),
-    size: String(file.size),
-    mtimeNs: String(file.mtimeNs),
-    ctimeNs: String(file.ctimeNs)
-  }
-}
-
 const identity = {
   sessionId: 'empty',
   workspaceId: 'folder',
@@ -137,61 +127,69 @@ it('keeps queued-only zero-sequence source conversion unchanged', async () => {
   expect(await database.ensureSessionEpoch('empty')).toBeNull()
 })
 
+const savedV1 = (root: string) =>
+  withTestAgentSessionDatabase(
+    root,
+    (db) =>
+      db
+        .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+        .get('journal.legacy-retirement.v1')!.value
+  )
+
 it.each(['grace', 'prepared', 'complete'])(
-  'retains the legacy source with mature saved %s state through maintenance and reopen',
+  'keeps the original on the version that copied it, leaving a saved %s row untouched',
   async (phase) => {
+    vi.stubEnv('ORCA_APP_VERSION', '1.0.0')
     const { root, filename, database, errors } = await fixture()
     await database.ensureSessionEpoch('saved')
     const bytes = await readFile(filename)
     const saved = await saveRetirement(root, phase)
     await database.startMaintenance()
-    expect(await readFile(filename)).toEqual(bytes)
-    await writeFile(`${filename}-journal`, 'retained rollback journal')
     await database.close()
     const reopened = await open(root, errors)
     await reopened.startMaintenance()
-    reopened.requestSweep()
     await reopened.close()
     expect(await readFile(filename)).toEqual(bytes)
-    expect(await readFile(`${filename}-journal`, 'utf8')).toBe('retained rollback journal')
-    expect(
-      await withTestAgentSessionDatabase(
-        root,
-        (db) =>
-          db
-            .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
-            .get('journal.legacy-retirement.v1')!.value
-      )
-    ).toBe(saved)
+    expect(await savedV1(root)).toBe(saved)
     expect(errors).toEqual([])
   }
 )
 
-it('retains surviving companions from a previously prepared partial retirement', async () => {
+it.skipIf(process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST !== '1')(
+  'deletes the original on the next version through the real workers and lock, keeping every chat',
+  async () => {
+    vi.stubEnv('ORCA_APP_VERSION', '1.0.0')
+    const { root, filename, database, errors } = await fixture()
+    await database.close()
+    const saved = await saveRetirement(root, 'grace')
+    vi.stubEnv('ORCA_APP_VERSION', '1.0.1')
+    const updated = await open(root, errors)
+    await updated.startMaintenance()
+    expect(errors).toEqual([])
+    expect([filename, `${filename}-wal`, `${filename}-shm`].filter((f) => existsSync(f))).toEqual(
+      []
+    )
+    await updated.close()
+    const reopened = await open(root, errors)
+    expect(await reopened.ensureSessionEpoch('saved')).toBe('old-epoch')
+    expect((await reopened.openSession(identity)).target.epoch).toBe('empty-epoch')
+    expect(await savedV1(root)).toBe(saved)
+    expect(errors).toEqual([])
+  }
+)
+
+it('removes only an empty WAL and the SHM a removal left behind its main file', async () => {
   const { root, filename, database, errors } = await fixture()
   await database.startMaintenance()
   await database.close()
   await unlink(filename)
   await writeFile(`${filename}-wal`, '')
-  await writeFile(`${filename}-shm`, 'retained shared memory')
-  const saved = await saveRetirement(root, 'prepared', {
-    '-wal': fileIdentity(`${filename}-wal`),
-    '-shm': fileIdentity(`${filename}-shm`)
-  })
+  await writeFile(`${filename}-shm`, 'stale shared memory')
+  const saved = await saveRetirement(root, 'prepared')
   const reopened = await open(root, errors)
   await reopened.startMaintenance()
   await reopened.close()
-  expect(existsSync(filename)).toBe(false)
-  expect(await readFile(`${filename}-wal`, 'utf8')).toBe('')
-  expect(await readFile(`${filename}-shm`, 'utf8')).toBe('retained shared memory')
-  expect(
-    await withTestAgentSessionDatabase(
-      root,
-      (db) =>
-        db
-          .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
-          .get('journal.legacy-retirement.v1')!.value
-    )
-  ).toBe(saved)
+  expect([filename, `${filename}-wal`, `${filename}-shm`].filter((f) => existsSync(f))).toEqual([])
+  expect(await savedV1(root)).toBe(saved)
   expect(errors).toEqual([])
 })

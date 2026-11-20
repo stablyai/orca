@@ -17,17 +17,16 @@ import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
 import { AccountSwitchSection } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
+import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 
 export function CodexSwitcherMenu({
   codex,
-  compact,
-  iconOnly,
+  ownerUsage,
   asSubmenu = false,
   triggerContent
 }: {
   codex: ProviderRateLimits
-  compact: boolean
-  iconOnly: boolean
+  ownerUsage: OwnerUsageRateLimits
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
 }): React.JSX.Element {
@@ -35,6 +34,7 @@ export function CodexSwitcherMenu({
   const {
     activeTarget,
     canRedeemReset,
+    confirmedResetAccountId,
     handleConfirmReset,
     handleOpenChange,
     handleResetMenuSelect,
@@ -48,8 +48,10 @@ export function CodexSwitcherMenu({
     open,
     openSettingsPage,
     openSettingsTarget,
+    providerAccountHostLabel,
     reauthenticatingAccountId,
     resetConfirmOpen,
+    rosterKnown,
     resetCreditCount,
     resetCreditExpiry,
     selectedGroup,
@@ -58,7 +60,7 @@ export function CodexSwitcherMenu({
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
     switchGroups
-  } = useCodexSwitcherController(codex)
+  } = useCodexSwitcherController(codex, ownerUsage)
 
   const isBusy = isSwitching || reauthenticatingAccountId !== null
   const rows = (selectedGroup?.targets ?? []).map((target) => {
@@ -114,8 +116,7 @@ export function CodexSwitcherMenu({
     active: boolean,
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
-    // Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row.
-    if (active && !hasActiveRuntimeEnvironment) {
+    if (active) {
       return <AccountUsageGauge limits={codex} isFetching={codex.status === 'fetching'} />
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
@@ -129,8 +130,6 @@ export function CodexSwitcherMenu({
   return (
     <ProviderDetailsMenu
       provider={codex}
-      compact={compact}
-      iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
       ariaLabel={t(
@@ -139,7 +138,7 @@ export function CodexSwitcherMenu({
       )}
       variant="account"
       accountLabel={
-        !hasActiveRuntimeEnvironment
+        rosterKnown
           ? (activeTarget?.label ??
             t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
           : undefined
@@ -167,12 +166,14 @@ export function CodexSwitcherMenu({
         ) : undefined
       }
       topContent={
-        <AccountRuntimeToggle
-          groups={switchGroups}
-          value={selectedGroup?.key ?? selectedRuntimeKey}
-          onChange={(group) => void handleSelectRuntime(group)}
-          ariaLabel={t('auto.components.status.bar.StatusBar.38b5647724', 'Codex usage runtime')}
-        />
+        !hasActiveRuntimeEnvironment ? (
+          <AccountRuntimeToggle
+            groups={switchGroups}
+            value={selectedGroup?.key ?? selectedRuntimeKey}
+            onChange={(group) => void handleSelectRuntime(group)}
+            ariaLabel={t('auto.components.status.bar.StatusBar.38b5647724', 'Codex usage runtime')}
+          />
+        ) : undefined
       }
       open={open}
       onOpenChange={handleOpenChange}
@@ -184,31 +185,43 @@ export function CodexSwitcherMenu({
         onSkipChange={setSkipFutureResetConfirm}
         isRedeemingReset={isRedeemingReset}
         onConfirm={handleConfirmReset}
+        {...(providerAccountHostLabel
+          ? {
+              accountLabel: selectedGroup?.targets.find(
+                (target) => target.id === confirmedResetAccountId
+              )?.label,
+              hostLabel: providerAccountHostLabel
+            }
+          : {})}
       />
       {open ? <CodexRestartStatusPrompt /> : null}
-      <AccountSwitchSection
-        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
-        targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
-        onOpenSettings={() => {
-          openSettingsTarget({
-            pane: 'accounts',
-            repoId: null,
-            sectionId: 'accounts-codex'
-          })
-          openSettingsPage()
-        }}
-      >
-        {rows.filter((row) => !row.showSignInAction).map(renderRow)}
-        {unavailableUsageRows.length > 0 ? (
-          <>
-            <DropdownMenuLabel className="mt-1">
-              {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
-            </DropdownMenuLabel>
-            {unavailableUsageRows.map(renderRow)}
-          </>
-        ) : null}
-      </AccountSwitchSection>
+      {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
+      {rosterKnown ? (
+        <AccountSwitchSection
+          heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+          targets={selectedGroup?.targets ?? []}
+          panelShowsActiveAccount
+          onOpenSettings={() => {
+            openSettingsTarget({
+              pane: 'accounts',
+              repoId: null,
+              sectionId: 'accounts-codex',
+              hostScope: ownerUsage.owner.target
+            })
+            openSettingsPage()
+          }}
+        >
+          {rows.filter((row) => !row.showSignInAction).map(renderRow)}
+          {unavailableUsageRows.length > 0 ? (
+            <>
+              <DropdownMenuLabel className="mt-1">
+                {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
+              </DropdownMenuLabel>
+              {unavailableUsageRows.map(renderRow)}
+            </>
+          ) : null}
+        </AccountSwitchSection>
+      ) : null}
     </ProviderDetailsMenu>
   )
 }

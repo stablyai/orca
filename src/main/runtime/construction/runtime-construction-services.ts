@@ -71,6 +71,9 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract resolveOrchestrationWorkerServer(
     ...args: Calls.ResolveOrchestrationWorkerServerArgs
   ): Calls.ResolveOrchestrationWorkerServerResult
+  abstract listOrchestrationWorkerServers(): Promise<
+    readonly { environmentId: string; name: string }[]
+  >
   abstract callOrchestrationWorkerServer(
     ...args: Calls.CallOrchestrationWorkerServerArgs
   ): Calls.CallOrchestrationWorkerServerResult
@@ -92,7 +95,6 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
 
   protected abstract handleGraphReloadTimeout(windowId: number): void
   protected abstract flushScheduledMobileSessionTabsChanged(worktreeId: string): void
-  protected abstract getMobileSessionWorktreeIdsForPty(ptyId: string): string[]
   abstract touchMobileSessionTabsForWorktree(
     worktreeId: string,
     options?: {
@@ -115,6 +117,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   protected abstract clearWaitBlockedStamp(ptyId: string): void
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
   protected abstract readOutputClockAt(ptyId: string | null | undefined): number | null
+  protected abstract requestReattachedRepaint(ptyId: string): void
+  protected abstract confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean>
   protected abstract headlessTerminals: Map<string, RuntimeHeadlessTerminal>
   protected abstract readHeadlessVisibleTerminalState(
     ptyId: string
