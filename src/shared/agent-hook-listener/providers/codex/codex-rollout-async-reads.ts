@@ -15,6 +15,22 @@ import {
 const MAX_CONCURRENT_ROLLOUT_READS = 3
 let rolloutReadsInFlight = 0
 const rolloutReadQueue: { batch: RolloutReadBatch; grant: (granted: boolean) => void }[] = []
+const MIN_ROLLOUT_QUEUE_PRUNE_LENGTH = 16
+let rolloutQueuePruneLength = MIN_ROLLOUT_QUEUE_PRUNE_LENGTH
+
+/** Settles queued reads whose callers gave up; stalled slots would otherwise hold them and their polls. */
+export function releaseAbandonedRolloutReads(): void {
+  let kept = 0
+  for (const waiter of rolloutReadQueue) {
+    if (waiter.batch.wanted()) {
+      rolloutReadQueue[kept++] = waiter
+    } else {
+      waiter.grant(false)
+    }
+  }
+  rolloutReadQueue.length = kept
+  rolloutQueuePruneLength = Math.max(MIN_ROLLOUT_QUEUE_PRUNE_LENGTH, kept * 2)
+}
 
 // Why: buffers live until their poll or hook applies them; cap what all pending batches hold so many queued panes cannot pile up megabytes each.
 const MAX_HELD_ROLLOUT_BYTES = 16 * 1024 * 1024
@@ -85,11 +101,9 @@ async function withRolloutReadSlot<T>(
   if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
     rolloutReadsInFlight += 1
   } else {
-    // Stalled slots must not pin abandoned waiters, so each new waiter drops them first.
-    for (let index = rolloutReadQueue.length - 1; index >= 0; index--) {
-      if (!rolloutReadQueue[index].batch.wanted()) {
-        rolloutReadQueue.splice(index, 1)[0].grant(false)
-      }
+    // Pruning only when the queue doubles keeps admission linear while abandoned waiters cannot pile up.
+    if (rolloutReadQueue.length >= rolloutQueuePruneLength) {
+      releaseAbandonedRolloutReads()
     }
     // A freed slot passes straight to the oldest waiter, so the count never overshoots.
     if (!(await new Promise<boolean>((grant) => rolloutReadQueue.push({ batch, grant })))) {
