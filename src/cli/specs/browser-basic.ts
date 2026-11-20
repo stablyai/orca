@@ -231,8 +231,12 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     path: ['tab', 'create'],
     summary: 'Create a new browser tab in the current worktree',
     usage:
-      'orca tab create [--url <url>] [--worktree <selector>] [--profile <id>] [--split <right|left|down|up>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'profile', 'split']
+      'orca tab create [--url <url>] [--worktree <selector>] [--profile <id>] [--split <right|left|down|up>] [--headless] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree', 'profile', 'split', 'headless'],
+    booleanFlags: ['headless'],
+    notes: [
+      "On a Linux server, WSL or SSH host, the tab opens on the Orca desktop that shows that host's tabs, and the command fails when none can. --headless opens it in the host's own headless browser instead, which no desktop or phone shows."
+    ]
   },
   {
     path: ['tab', 'profile', 'list'],

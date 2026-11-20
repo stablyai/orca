@@ -1,4 +1,4 @@
-const { existsSync, readFileSync, realpathSync } = require('node:fs')
+const { existsSync, readdirSync, readFileSync, realpathSync } = require('node:fs')
 const { builtinModules, createRequire, isBuiltin } = require('node:module')
 const { dirname, isAbsolute, join, relative, resolve, sep } = require('node:path')
 const { spawnSync } = require('node:child_process')
@@ -149,7 +149,14 @@ function collectRuntimeClosure(outDir, artifactRoot = dirname(outDir)) {
   if (!existsSync(entry)) {
     throw new Error(`[verify-skills-cli-runtime] missing entry ${entry}`)
   }
-  const pending = [entry]
+  // Plain-Node CLI processes spawn these by path beside their client, so no require reaches them (#44748).
+  const sharedDir = join(outDir, 'shared')
+  const workerEntries = existsSync(sharedDir)
+    ? readdirSync(sharedDir, { recursive: true })
+        .filter((file) => file.endsWith('-worker-entry.js'))
+        .map((file) => join(sharedDir, file))
+    : []
+  const pending = [entry, ...workerEntries]
   const visited = new Set()
 
   while (pending.length > 0) {

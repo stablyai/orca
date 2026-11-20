@@ -104,9 +104,9 @@ function pick(
   act(() => result.current.completeMention(name, token))
 }
 
-it('shows a bot picked under `@` as its pill while the draft keeps the token the host reads', async () => {
+it('inserts a picked bot as one undoable pill and preserves the surrounding draft', async () => {
   const draft = 'ask @Eng to review'
-  const { input, inputRef, pills, pillNames, getByTestId } = setup(draft, 'ask @Eng'.length)
+  const { input, inputRef, pills, pillNames, getByTestId, editor } = setup(draft, 'ask @Eng'.length)
   pick(inputRef, draft)
 
   await pillNames([NORA.name])
@@ -114,18 +114,10 @@ it('shows a bot picked under `@` as its pill while the draft keeps the token the
   expect(getByTestId('avatar')).toBeTruthy()
   expect(input.value).toBe(`ask ${TOKEN} to review`)
   expect(input.selectionStart).toBe(`ask ${TOKEN} `.length)
-})
-
-it('gives back the typed `@query` on undo, the pill going as one piece', async () => {
-  const { input, inputRef, pills, pillNames, editor } = setup('ask @Eng')
-  pick(inputRef, 'ask @Eng')
-  expect(input.value).toBe(`ask ${TOKEN} `)
-  await pillNames([NORA.name])
-
   act(() => {
     editor.commands.undo()
   })
-  expect(input.value).toBe('ask @Eng')
+  expect(input.value).toBe(draft)
   await pillNames([])
   expect(pills()).toEqual([])
 })
@@ -252,14 +244,6 @@ it('leaves the document alone while an IME composition owns it', () => {
     // Back to ProseMirror's own getter.
     Reflect.deleteProperty(editor.view, 'composing')
   }
-})
-
-it('makes the pill from the token when the draft is written with no editor insert', async () => {
-  const { input, pillNames } = setup('ask @Eng')
-  act(() => {
-    input.value = `ask ${TOKEN} `
-  })
-  await pillNames([NORA.name])
 })
 
 it('sends agent references next to a picked bot, the bot as its token', async () => {

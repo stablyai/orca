@@ -2,6 +2,7 @@
 // the items the bot set to Needs you. Five rows, then Show N more; approvals never fold. Rows leave as
 // soon as their need clears where Orca reads it, and only focus that leaves with a row moves.
 import { memo, useLayoutEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
@@ -17,17 +18,19 @@ import { manageConnectors } from './AddConnectorDialog'
 import { openBotAutomation } from './bot-automation-open'
 import { botWorkerRowOpener } from './bot-worker-open'
 import { botActivityRowTitle } from './bot-activity-row-title'
+import { botErrorMessage } from './bot-presentation'
 import type { BotConnectorEntry } from './bot-connector-entries'
 import { botConnectorTitleText } from './bot-connector-titles'
 import { botToolSignInFace, botToolSignInWords } from './bot-tool-sign-in-action'
 import { openBotSession } from './bot-session-open'
 import { useBotHostLabel } from './use-bot-host-label'
 import { useBotSessionPrompt } from './use-bot-session-prompt'
+import { useStructuredAgentSessionAsyncQuestionSkip } from '../native-chat/prompts/use-structured-agent-session-async-question-skip'
 import type { BotNeedView } from './use-bot-now'
 import { NEEDS_YOU_CAP, needsYouFold } from '../../../../shared/bots/needs-you-fold'
 import { useApprovalReports } from './use-approval-reports'
 import { NeedsYouRowCommit, useNeedsYouFocus, useNeedsYouRefocus } from './use-needs-you-focus'
-import { NeedRow, StoppedForSignInRow } from './BotNeedRow'
+import { NeedRow, NeedRowBot, StoppedForSignInRow } from './BotNeedRow'
 
 type ReportApproval = (key: string, approval: boolean) => void
 
@@ -59,6 +62,7 @@ function SessionNeedRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const { prompt } = useBotSessionPrompt(bot, sessionId)
+  const { awaiting, save } = useStructuredAgentSessionAsyncQuestionSkip(botTarget(bot), sessionId)
   const approval = prompt?.body.kind === 'approval'
   // Before paint, so an approval sorts first without showing in its old place.
   useLayoutEffect(() => {
@@ -81,6 +85,8 @@ function SessionNeedRow({
       />
     )
   }
+  // The question the chat waits on without stopping, as its host publishes it; Skip settles it here.
+  const asked = prompt ? null : awaiting
   return (
     <NeedRow
       kind="question"
@@ -88,9 +94,20 @@ function SessionNeedRow({
       detail={
         prompt?.body.kind === 'question'
           ? prompt.body.question
-          : t('bots.needs.waiting', 'Waiting for you')
+          : asked?.text || t('bots.needs.waiting', 'Waiting for you')
       }
       action={action}
+      skip={
+        asked && save
+          ? {
+              label: t('components.native-chat.question.skip', 'Skip'),
+              onOpen: () =>
+                void save(asked.itemId).catch((error: unknown) =>
+                  toast.error(botErrorMessage(error))
+                )
+            }
+          : null
+      }
     />
   )
 }
@@ -273,6 +290,15 @@ const NeedItem = memo(function NeedItem({
   }
 })
 
+/** A group member's ask: its rows show the member's face. */
+function MemberNeedItem(props: React.ComponentProps<typeof NeedItem>): React.JSX.Element {
+  return (
+    <NeedRowBot.Provider value={props.bot}>
+      <NeedItem {...props} />
+    </NeedRowBot.Provider>
+  )
+}
+
 type GroupRow =
   | { key: string; approval: boolean; need: BotNeedView }
   | { key: string; approval: false; stopped: BotAutomationRow }
@@ -295,7 +321,8 @@ export function BotNeedsYouSection({
   offline = false,
   focusFallback
 }: {
-  bot: Bot
+  /** The asks' bot, or in a group's merged list each ask's own, whose face its row then shows. */
+  bot: Bot | ((need: BotNeedView) => Bot)
   asks: BotNeedsYouAsks
   /** The items in Needs you, after the asks, in their group's order. */
   items?: readonly BotItem[]
@@ -362,7 +389,16 @@ export function BotNeedsYouSection({
             hidden={!shown.has(row.key)}
           >
             {'need' in row ? (
-              <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
+              typeof bot === 'function' ? (
+                <MemberNeedItem
+                  bot={bot(row.need)}
+                  need={row.need}
+                  itemOf={itemOf}
+                  onApproval={onApproval}
+                />
+              ) : (
+                <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
+              )
             ) : 'stopped' in row ? (
               <StoppedForSignInRow row={row.stopped} />
             ) : (

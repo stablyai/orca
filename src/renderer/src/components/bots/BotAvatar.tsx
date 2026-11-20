@@ -12,7 +12,7 @@ export function BotAvatar({
   className,
   style
 }: {
-  bot: Pick<Bot, 'id' | 'name' | 'avatar'> & BotOnHost
+  bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor'> & BotOnHost
   className?: string
   style?: React.CSSProperties
 }): React.JSX.Element {

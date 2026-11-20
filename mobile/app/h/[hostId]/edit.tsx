@@ -36,6 +36,7 @@ import { hostOs } from '../../../src/platform/host-os'
 import { translate } from '../../../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
 import { TextField } from '../../../src/components/composer-input/TextField'
+import { HostOrcaVersionSection } from '../../../src/host-screen/identity/HostOrcaVersionSection'
 
 export default function EditHostScreen() {
   useMobileColorScheme()
@@ -251,7 +252,7 @@ export default function EditHostScreen() {
             <Text style={styles.help}>
               {t(
                 'host.edit.help',
-                'Change the display name or connection address. Leave the name empty to use the name the desktop reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same desktop is reachable at a different IP (for example home LAN vs Tailscale).'
+                'Change the display name or connection address. Leave the name empty to use the name the host reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same host is reachable at a different IP (for example home LAN vs Tailscale).'
               )}
             </Text>
 
@@ -309,6 +310,8 @@ export default function EditHostScreen() {
             ) : null}
 
             {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
+
+            <HostOrcaVersionSection />
 
             <ListGroup style={styles.removeGroup}>
               <ListRow

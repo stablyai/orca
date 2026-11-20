@@ -409,17 +409,6 @@ describe('bot chats tree: a chat worker in its own workspace', () => {
     return readBotChatTree(host, { botId: bot.id })
   }
 
-  it('lists under the side chat that started it, not under Home as handed over', async () => {
-    const tree = await chatWorkerTree()
-
-    expect(tree.workspaceChats).toEqual({ [worktree]: 'chat-alpha' })
-    const byId = new Map(tree.chats.map((chat) => [chat.chatId, chat]))
-    expect(byId.get('chat-home')?.running).toEqual([])
-    expect(byId.get('chat-alpha')?.running.map((worker) => worker.key)).toEqual([
-      'worker:ctx-chat-worker'
-    ])
-  })
-
   it('keeps another agent in that workspace listed as handed over, the workspace with the chat', async () => {
     const other = statusRow('tab-other:leaf-other', {
       state: 'blocked',

@@ -32,6 +32,7 @@ function createServiceWithLeader(): {
       })
       return { handle: `teammate-${splitCount}`, tabId: 'tab-1', paneRuntimeId: -1 }
     }),
+    allocateTerminalHandle: vi.fn(() => 'term_starting'),
     readTerminal: vi.fn(async (handle) => ({
       handle,
       status: 'running' as const,
@@ -74,6 +75,28 @@ function createServiceWithLeader(): {
 }
 
 describe('ClaudeAgentTeamsService', () => {
+  it('holds a teammate from before its process starts until it leaves the team', async () => {
+    const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
+    let heldWhileStarting = false
+    vi.mocked(api.splitTerminal).mockImplementationOnce(async (_handle, opts) => {
+      heldWhileStarting = service.holdsHandle('term_starting')
+      return { handle: opts.preAllocatedHandle!, tabId: 'tab-1', paneRuntimeId: -1 }
+    })
+
+    await service.handleTmuxCompat(
+      { teamId, token, envPane: leaderPane, argv: ['split-window', '-t', leaderPane, 'claude'] },
+      api
+    )
+
+    expect(heldWhileStarting).toBe(true)
+    expect(service.holdsHandle('term_starting')).toBe(true)
+    await service.handleTmuxCompat(
+      { teamId, token, envPane: leaderPane, argv: ['kill-pane', '-t', '%2'] },
+      api
+    )
+    expect(service.holdsHandle('term_starting')).toBe(false)
+  })
+
   it('removes the pane when replacement split fails after a confirmed placeholder stop', async () => {
     const { service, teamId, token, leaderPane, api } = createServiceWithLeader()
     const request = (argv: string[], envPane = leaderPane) =>

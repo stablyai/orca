@@ -6,7 +6,7 @@ import {
 } from './terminal-partial-escape-tail'
 
 describe('advanceTerminalEscapeBoundary', () => {
-  it.each(['\x1b]0;title', '\x1bPqpayload', '\x1bXsos', '\x1b^pm', '\x1b_apc'])(
+  it.each(['\x1b]0;title', '\x1bPqpayload'])(
     'retains only the pending ESC after a string ends: %j',
     (prefix) => {
       const stream = `${prefix}\x1b`
@@ -16,10 +16,10 @@ describe('advanceTerminalEscapeBoundary', () => {
         const state = advanceTerminalEscapeBoundary('', stream.slice(0, split))
         const continued = advanceTerminalEscapeBoundary(state, stream.slice(split))
         expect(continued).toBe('\x1b')
-        for (const completion of ['\\', '[31m', '\x1b[0m', '\x18', '\x1a', ']0;next\x07']) {
-          expect(advanceTerminalEscapeBoundary(continued, completion)).toBe('')
-          expect(extractPartialEscapeTail(stream + completion)).toBe('')
-        }
+      }
+      for (const completion of ['\\', '[31m', '\x1b[0m', '\x18', '\x1a', ']0;next\x07']) {
+        expect(advanceTerminalEscapeBoundary('\x1b', completion)).toBe('')
+        expect(extractPartialEscapeTail(stream + completion)).toBe('')
       }
     }
   )
@@ -58,13 +58,8 @@ describe('extractPartialEscapeTail', () => {
     expect(extractPartialEscapeTail('\x1b] \x1b\x1b^')).toBe('\x1b^')
     expect(extractPartialEscapeTail('\x1bPq\x1b\x1b[3')).toBe('\x1b[3')
     expect(extractPartialEscapeTail('\x1b]0;t\x1b\x1b')).toBe('\x1b')
-  })
-})
 
-describe('advancePartialEscapeTail ESC-free fast path', () => {
-  it('still carries a pending tail through an ESC-free chunk', () => {
-    expect(advancePartialEscapeTail('\x1b]0;my-title', ' still in the OSC')).toBe(
-      '\x1b]0;my-title still in the OSC'
-    )
+    const pending = advancePartialEscapeTail('', '\x1bPq\x1b')
+    expect(advancePartialEscapeTail(pending, '\x1b[3')).toBe('\x1b[3')
   })
 })

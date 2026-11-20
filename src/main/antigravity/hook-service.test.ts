@@ -25,7 +25,6 @@ const ANTIGRAVITY_POST_TOOL_USE_COMMAND =
   process.platform === 'win32' ? 'antigravity-post-tool-use.cmd' : 'antigravity-hook.sh'
 const ANTIGRAVITY_PRE_TOOL_USE_COMMAND =
   process.platform === 'win32' ? 'antigravity-pre-tool-use.cmd' : 'antigravity-hook.sh'
-const PRE_TOOL_USE_DECISION = '{"decision":"ask"}'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -53,7 +52,7 @@ describe('AntigravityHookService', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
-    'answers the PreToolUse gate with ask so the hook never decides tool permissions',
+    "prints nothing for PreToolUse so agy's own permission policy decides",
     () => {
       new AntigravityHookService().install()
 
@@ -75,12 +74,12 @@ describe('AntigravityHookService', () => {
       )
 
       expect(result.status).toBe(0)
-      expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
+      expect(result.stdout).toBe('')
     }
   )
 
   it.skipIf(process.platform === 'win32')(
-    'keeps answering the PreToolUse gate when the managed script is missing',
+    'stays silent for PreToolUse when the managed script is missing',
     () => {
       new AntigravityHookService().install()
       rmSync(join(homeDir, '.orca', 'agent-hooks'), { recursive: true, force: true })
@@ -97,7 +96,7 @@ describe('AntigravityHookService', () => {
 
       // Config under .gemini can outlive managed scripts under .orca.
       expect(result.status).toBe(0)
-      expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
+      expect(result.stdout).toBe('')
     }
   )
 

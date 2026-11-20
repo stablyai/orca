@@ -29,6 +29,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.commands',
   // The `/mcp` sheet; phones offer it where the host advertises agent-session.mcp.v1.
   'agentSession.mcp',
+  // `/usage` in a Codex chat; phones offer it where the host advertises agent-session.account-usage.phone.v1.
+  'agentSession.accountUsage',
   'agentSession.history',
   'agentSession.currentRequests',
   'agentSession.subscribe',

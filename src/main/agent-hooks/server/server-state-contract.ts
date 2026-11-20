@@ -29,7 +29,10 @@ import type {
 
 import type { LastStatusStore } from './last-status-store'
 
+import type { ProgramStatusFacetStore } from './program-status/facet-store'
+
 export abstract class AgentHookServerStateContract {
+  protected abstract readonly programStatusFacets: ProgramStatusFacetStore
   protected abstract state: HookListenerState
 
   protected abstract withdrawReplayObservation(paneKey: string): void

@@ -66,6 +66,8 @@ export type OrchestrationCrewFrame = z.infer<typeof CrewFrame>
 export const WorkerApprovalsSubscribeParams = z.object({
   party: CrewParty.refine((party) => parseOrcaSessionAddress(party) !== null)
 })
+/** Ends one approvals stream on this connection, named by its subscribe request's id. */
+export const WorkerApprovalsUnsubscribeParams = z.object({ subscriptionId: z.string().min(1) })
 export const WorkerApprovalEntry = CrewRowApproval.extend({
   worker: CrewRow.omit({ approvals: true })
 })

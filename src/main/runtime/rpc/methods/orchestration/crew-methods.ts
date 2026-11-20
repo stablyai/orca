@@ -1,16 +1,20 @@
 import {
   CrewSubscribeParams,
-  WorkerApprovalsSubscribeParams
+  WorkerApprovalsSubscribeParams,
+  WorkerApprovalsUnsubscribeParams
 } from '../../../../../shared/orchestration/orchestration-crew'
 import { subscribeCrew } from '../../../orchestration/crew/crew-stream'
 import type { RpcContext } from '../../core'
-import { defineOrchestrationStreamingMethod } from './access/orchestration-method-access'
+import {
+  defineOrchestrationMethod,
+  defineOrchestrationStreamingMethod
+} from './access/orchestration-method-access'
 
 let sequence = 0
 /** Run a stream until its client leaves; `start` returns the stream's stop. */
 async function streamUntilClosed(
   kind: string,
-  { runtime, signal, connectionId }: RpcContext,
+  { runtime, signal, connectionId, requestId }: RpcContext,
   emitEnd: () => void,
   start: () => () => void
 ): Promise<void> {
@@ -33,7 +37,9 @@ async function streamUntilClosed(
         emitEnd()
         resolve()
       },
-      connectionId
+      connectionId,
+      // Lets a client on a shared socket end this one stream by its request id.
+      requestId
     )
     signal?.addEventListener('abort', release, { once: true })
     if (signal?.aborted) {
@@ -73,5 +79,15 @@ export const ORCHESTRATION_CREW_METHODS = [
         () => emit({ type: 'end' }),
         () => context.runtime.subscribeOrchestrationWorkerApprovals(party, emit)
       )
+  }),
+  defineOrchestrationMethod({
+    name: 'orchestration.workerApprovalsUnsubscribe',
+    access: { kind: 'localOnly', targets: {} },
+    permission: 'workspace',
+    params: WorkerApprovalsUnsubscribeParams,
+    handler: ({ subscriptionId }, { runtime, connectionId }) => {
+      runtime.releaseSubscriptionByRequest(connectionId, subscriptionId)
+      return { unsubscribed: true }
+    }
   })
 ]

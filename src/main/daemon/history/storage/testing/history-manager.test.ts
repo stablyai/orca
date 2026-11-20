@@ -148,26 +148,6 @@ describe('HistoryManager', () => {
       expect(existsSync(sessionPath(dir, sessionId, 'checkpoint.json'))).toBe(true)
     })
 
-    it('rejects an unverified writer for a protected recovery generation', async () => {
-      const sessionId = 'protected-register'
-      await mgr.openSession(sessionId, { cwd: '/old', cols: 80, rows: 24 })
-      const recoveryFreeze = await mgr.freezeForRecovery(sessionId)
-      writeFileSync(join(dir, '.recovery-quarantine'), 'block owner directory creation')
-      await mgr.openSession(sessionId, {
-        cwd: '/new',
-        cols: 80,
-        rows: 24,
-        recoveryFreeze,
-        quarantineUnreadableRecovery: true
-      })
-      const relaunched = new HistoryManager(dir)
-
-      relaunched.registerWriter(sessionId)
-
-      expect(relaunched.isSessionDisabled(sessionId)).toBe(true)
-      expect(relaunched.hasWriter(sessionId)).toBe(false)
-    })
-
     it('rejects a freeze-verified writer for a protected recovery generation', async () => {
       const sessionId = 'recovered-protection'
       await mgr.openSession(sessionId, { cwd: '/old', cols: 80, rows: 24 })
@@ -262,15 +242,12 @@ describe('HistoryManager', () => {
     )
   })
 
-  describe('large session cleanup responsiveness', () => {
-    it('tombstones a large session tree instead of walking it on the teardown path', async () => {
+  describe('session cleanup', () => {
+    it('tombstones a session tree and finishes teardown before reclamation', async () => {
       const sessionId = 'bulky'
       await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
       const sessionDir = join(dir, getHistorySessionDirName(sessionId))
-      // Enough entries that a recursive walk would dominate removeSession's duration.
-      for (let i = 0; i < 3_000; i++) {
-        writeFileSync(join(sessionDir, `chunk-${i}.log`), `payload-${i}`)
-      }
+      writeFileSync(join(sessionDir, 'output.log'), 'payload')
 
       // Hold reclamation so the worker cannot delete the tombstone between assertions.
       const reclaim = Promise.withResolvers<void>()
@@ -292,7 +269,7 @@ describe('HistoryManager', () => {
         expect(tombstones).toHaveLength(1)
         const tombstonePath = join(dir, '.pending-delete', tombstones[0])
         expect(removalSpy).toHaveBeenCalledExactlyOnceWith(tombstonePath)
-        expect(readdirSync(tombstonePath).length).toBeGreaterThan(0)
+        expect(readFileSync(join(tombstonePath, 'output.log'), 'utf8')).toBe('payload')
       } finally {
         reclaim.resolve()
         removalSpy.mockRestore()

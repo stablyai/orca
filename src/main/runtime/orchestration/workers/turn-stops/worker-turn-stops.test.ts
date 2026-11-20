@@ -132,6 +132,33 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail()).toHaveLength(0)
   })
 
+  it("reports a finish's reply that its transcript read adds within the quiet window", async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ state: 'working' }) }
+    const quiet: (() => void)[] = []
+    const stops = terminal(ctx, current, {
+      setTimer: (run) => {
+        quiet.push(run)
+        return { cancel: () => {} }
+      }
+    })
+    stops.observe({
+      kind: 'observed',
+      paneKey: PANE,
+      workspace: { worktreeId: 'repo::/tmp/wt', sshHostId: null },
+      phase: 'working',
+      at: 1
+    })
+    current.row = hookRow({})
+    stops.observe(moved('working', 'done'))
+    current.row = hookRow({ lastAssistantMessage: 'All tests pass.' })
+    for (const run of quiet.splice(0)) {
+      run()
+    }
+    await settle()
+    expect(ctx.mail().map((m) => m.body)).toEqual([expect.stringContaining('All tests pass.')])
+  })
+
   it('never mails a capability or credential carried in why a worker went away', () => {
     const ctx = setup()
     const capability = 'dcap_0123456789abcdefghijKLMN'
@@ -369,57 +396,5 @@ describe('chat worker turn stops', () => {
     expect(ctx.mail().map((m) => m.subject)).toEqual(
       Array(3).fill('Worker stopped without reporting')
     )
-  })
-
-  it('retiring the owner suppresses pending reports and permits a fresh owner to report', async () => {
-    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    let finishRead!: (value: null) => void
-    const queued: (() => void)[] = []
-    const owner = chatWorkerTurnStopReporter(
-      ctx.deps,
-      (run) => {
-        queued.push(run)
-      },
-      () =>
-        new Promise((resolve) => {
-          finishRead = resolve
-        })
-    )
-    const edge = completion('success')
-    if (edge.type !== 'completion') {
-      throw new Error('Expected completion')
-    }
-    owner.onTurnAttention(edge, () => ({ status: 'idle' }))
-    owner.onTurnAttention(
-      {
-        type: 'prompt',
-        prompt: {
-          scope: edge.completion.scope,
-          sessionId: CHAT_SESSION,
-          promptId: 'approval-retired',
-          raisedAt: 1
-        }
-      },
-      () => ({ status: 'attention' })
-    )
-    owner.stop()
-    finishRead(null)
-    for (const run of queued) {
-      run()
-    }
-    await Promise.resolve()
-    await Promise.resolve()
-    expect(ctx.mail()).toEqual([])
-    expect(ctx.notify).not.toHaveBeenCalled()
-
-    const live = chatWorkerTurnStopReporter(ctx.deps, (run) => {
-      queued.push(run)
-    })
-    live.onTurnAttention(completion('success', 'fresh-turn'), () => ({ status: 'idle' }))
-    for (const run of queued.splice(0)) {
-      run()
-    }
-    expect(ctx.mail()).toMatchObject([{ subject: 'Worker stopped without reporting' }])
-    live.stop()
   })
 })

@@ -19,6 +19,25 @@ export function textInputOwnsComposition(input: TextShortcutInput): boolean {
   )
 }
 
+/** An Option (Mac) or Alt chord that types a character in a text field. */
+export function shortcutProducesText(input: TextShortcutInput, platform: NodeJS.Platform): boolean {
+  const alt = hasModifier(input, 'alt')
+  const meta = hasModifier(input, 'meta')
+  const control = hasModifier(input, 'control')
+  const key = input.key?.toLowerCase()
+  const physicalLetter = input.code?.match(/^Key([A-Z])$/)?.[1]?.toLowerCase()
+  // Electron has no AltGraph flag; a produced character differing from its physical key is text.
+  return Boolean(
+    (platform === 'darwin' && alt && !meta && !control && input.key?.length === 1) ||
+    (platform !== 'darwin' &&
+      alt &&
+      !meta &&
+      key?.length === 1 &&
+      physicalLetter &&
+      key !== physicalLetter)
+  )
+}
+
 /** The prompt owns editing and submit keys; unrelated app commands remain available. */
 export function nativeChatPromptClaimsShortcut(
   input: TextShortcutInput,
@@ -34,16 +53,7 @@ export function nativeChatPromptClaimsShortcut(
   const key = input.key?.toLowerCase()
   const physicalLetter = input.code?.match(/^Key([A-Z])$/)?.[1]?.toLowerCase()
   const editingLetter = key && isLatinShortcutKey(key) ? key : (physicalLetter ?? key)
-  // Electron has no AltGraph flag; a produced character differing from its physical key is text.
-  if (
-    (platform === 'darwin' && alt && !meta && !control && input.key?.length === 1) ||
-    (platform !== 'darwin' &&
-      alt &&
-      !meta &&
-      key?.length === 1 &&
-      physicalLetter &&
-      key !== physicalLetter)
-  ) {
+  if (shortcutProducesText(input, platform)) {
     return true
   }
   if (input.doubleTapModifier) {

@@ -74,7 +74,10 @@ const itemsSnooze = bindDeferredRpcOperation(
   })
 )
 
-export type BotItemRead<T> = { kind: 'read'; value: T } | { kind: 'failed'; notFound: boolean }
+/** `message` says why a read failed: the host's refusal or the transport's error, when either gave one. */
+export type BotItemRead<T> =
+  | { kind: 'read'; value: T }
+  | { kind: 'failed'; notFound: boolean; message?: string }
 
 /** Every open item, closed ones a page at a time (`closedCursor` for the next), or one chat's. */
 export async function readBotItems(
@@ -89,9 +92,13 @@ export async function readBotItems(
     )
     return answer.kind === 'answered'
       ? { kind: 'read', value: answer.value }
-      : { kind: 'failed', notFound: false }
-  } catch {
-    return { kind: 'failed', notFound: false }
+      : {
+          kind: 'failed',
+          notFound: false,
+          message: answer.kind === 'failed' ? answer.message : undefined
+        }
+  } catch (error) {
+    return { kind: 'failed', notFound: false, message: error instanceof Error ? error.message : '' }
   }
 }
 
@@ -143,7 +150,11 @@ export function commentOnBotItem(
   text: string
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
-    const reply = await itemComment.request(client, { item: uid, text })
+    const reply = await itemComment.request(
+      client,
+      { item: uid, text },
+      { failWhenDisconnected: true }
+    )
     try {
       itemComment.interpret(reply)
       return null
@@ -161,11 +172,15 @@ export function setBotItemsStatus(
   reason?: string
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
-    const reply = await itemsStatus.request(client, {
-      items: [...uids],
-      status,
-      ...(reason ? { reason } : {})
-    })
+    const reply = await itemsStatus.request(
+      client,
+      {
+        items: [...uids],
+        status,
+        ...(reason ? { reason } : {})
+      },
+      { failWhenDisconnected: true }
+    )
     try {
       itemsStatus.interpret(reply)
       return null
@@ -183,10 +198,14 @@ export function snoozeBotItems(
   until: number | null
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
-    const reply = await itemsSnooze.request(client, {
-      items: items.map((item) => ({ item: item.uid, othersLastEventId: item.othersLastEventId })),
-      until
-    })
+    const reply = await itemsSnooze.request(
+      client,
+      {
+        items: items.map((item) => ({ item: item.uid, othersLastEventId: item.othersLastEventId })),
+        until
+      },
+      { failWhenDisconnected: true }
+    )
     try {
       itemsSnooze.interpret(reply)
       return null
