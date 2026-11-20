@@ -12,7 +12,7 @@ import { useProjectHostSetupProjection } from '@/store/projects/use-project-host
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
+import { useHeaderCreateComposer } from '../rows/header-create-workspace-target'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
@@ -125,6 +125,7 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
   const defaultHostId = getSettingsFocusedExecutionHostId(settings)
+  const handleCreateForRepo = useHeaderCreateComposer(defaultHostId)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const projectGrouping = useMemo(
     () => ({
@@ -338,7 +339,7 @@ const WorktreeList = React.memo(function WorktreeList({
         toggleGroup={handleToggleGroup}
         onToggleAllProjects={projectCollapseKeys.length > 0 ? handleToggleAllProjects : undefined}
         collapsedGroups={effectiveCollapsedGroups}
-        handleCreateForRepo={openHeaderCreateComposer}
+        handleCreateForRepo={handleCreateForRepo}
         handleOpenRepoSettings={handleOpenRepoSettings}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
         handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}
