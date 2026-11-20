@@ -5,6 +5,7 @@ import {
 } from './native-chat-observed-send'
 import {
   agentImagePasteWrites,
+  agentImageDeliveryText,
   getAgentImageHandling
 } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { agentImagePastePath } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste-path'
@@ -48,25 +49,27 @@ export function sendNativeChatMessageWithImageAttachments(
     options?.onImagesPrepared?.(prepared)
     return prepared
   }
-  const trimmedText = text.trim()
   if (options?.onWriteRejected) {
-    const buildWrites = (imagePaths: readonly string[]): NativeChatObservedWrite[] => {
+    const buildWrites = (preparedPaths: readonly string[]): NativeChatObservedWrite[] => {
+      const deliveryText = agentImageDeliveryText(text, imagePaths, preparedPaths)
       const writes: NativeChatObservedWrite[] = agentImagePasteWrites(
         agent,
-        imagePaths.map((path) => buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))),
-        trimmedText.length > 0
+        preparedPaths.map((path) =>
+          buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
+        ),
+        deliveryText.trim().length > 0
       ).map((data) => ({ data, delayBeforeMs: 0 }))
       const mentions = typedImageMentions(agent, writes)
-      if (trimmedText) {
+      if (deliveryText.trim()) {
         writes.push({
-          data: buildNativeChatPasteBytes(text),
+          data: buildNativeChatPasteBytes(deliveryText),
           delayBeforeMs: NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS
         })
       }
       writes.push({
         data: NATIVE_CHAT_SUBMIT,
         delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS,
-        afterPasteOf: mentions + text
+        afterPasteOf: mentions + deliveryText
       })
       return writes
     }
@@ -75,9 +78,9 @@ export function sendNativeChatMessageWithImageAttachments(
     )
   }
   const durationMs =
-    (trimmedText.length > 0
-      ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
-      : NATIVE_CHAT_SUBMIT_DELAY_MS) + clearConfirmDurationMs(options)
+    NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS +
+    NATIVE_CHAT_SUBMIT_DELAY_MS +
+    clearConfirmDurationMs(options)
   return enqueueNativeChatPtySend(
     ptyId,
     durationMs,
@@ -87,6 +90,7 @@ export function sendNativeChatMessageWithImageAttachments(
       }
       void preparePaths(signal).then(
         (preparedPaths) => {
+          const deliveryText = agentImageDeliveryText(text, imagePaths, preparedPaths)
           if (isCancelled()) {
             return
           }
@@ -105,7 +109,7 @@ export function sendNativeChatMessageWithImageAttachments(
                 preparedPaths.map((path) =>
                   buildNativeChatImagePasteBytes(agentImagePastePath(agent, path))
                 ),
-                trimmedText.length > 0
+                deliveryText.trim().length > 0
               )
               const submitAfterPasteLands = (): void =>
                 afterNativeChatPasteLands({
@@ -115,7 +119,7 @@ export function sendNativeChatMessageWithImageAttachments(
                     typedImageMentions(
                       agent,
                       imageWrites.map((data) => ({ data }))
-                    ) + text,
+                    ) + deliveryText,
                   delay,
                   submit: () => {
                     sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
@@ -125,9 +129,9 @@ export function sendNativeChatMessageWithImageAttachments(
               for (const payload of imageWrites) {
                 sendRuntimePtyInput(ptyId, payload, 'driving')
               }
-              if (trimmedText.length > 0) {
+              if (deliveryText.trim().length > 0) {
                 delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
-                  sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
+                  sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(deliveryText), 'driving')
                   delay(NATIVE_CHAT_SUBMIT_DELAY_MS, submitAfterPasteLands)
                 })
                 return

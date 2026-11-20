@@ -132,7 +132,12 @@ it('reconciles a fitted attachment path while retaining the original for preview
     }
   ]
   const transcript = [
-    message('u1', 'user', '/temp/fitted.png look at this', 150),
+    message(
+      'u1',
+      'user',
+      '/temp/fitted.png look at this\n\n[Image source file: "/repo/hero.png"; attached viewing copy: "/temp/fitted.png"]',
+      150
+    ),
     message('a1', 'assistant', 'done', 160)
   ]
   expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
@@ -159,4 +164,40 @@ it('reconciles an image-only echo that names the delivered copy', () => {
   ]
   expect(pendingSendsAsMessages(pending, transcript)).toEqual([])
   expect(prunePendingSends(pending, transcript)).toEqual([])
+})
+
+it('retires each delivered version of the same original filename once across pruning', () => {
+  const pending: NativeChatPendingSend[] = [
+    {
+      id: 'p1',
+      text: '',
+      imagePaths: ['/repo/shot.png'],
+      deliveredImagePaths: ['/temp/v1.png'],
+      sentAt: 100,
+      afterMessageId: 'boundary'
+    },
+    {
+      id: 'p2',
+      text: '',
+      imagePaths: ['/repo/shot.png'],
+      deliveredImagePaths: ['/temp/v2.png'],
+      sentAt: 110,
+      afterMessageId: 'boundary',
+      matchingOccurrence: 2
+    }
+  ]
+  const transcript: NativeChatMessage[] = [
+    message('boundary', 'assistant', 'ready', 90),
+    { ...message('u1', 'user', '', 120), blocks: [{ type: 'image-ref', path: '/temp/v1.png' }] },
+    message('a1', 'assistant', 'first', 130)
+  ]
+  const remaining = prunePendingSends(pending, transcript)
+  expect(remaining.map((entry) => entry.id)).toEqual(['p2'])
+  transcript.push({
+    ...message('u2', 'user', '', 140),
+    blocks: [{ type: 'image-ref', path: '/temp/v2.png' }]
+  })
+  expect(pendingSendsAsMessages(remaining, transcript)).toEqual([])
+  transcript.push(message('a2', 'assistant', 'second', 150))
+  expect(prunePendingSends(remaining, transcript)).toEqual([])
 })

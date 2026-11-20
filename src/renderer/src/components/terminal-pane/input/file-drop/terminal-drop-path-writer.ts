@@ -1,3 +1,4 @@
+import { agentImageSourceContext } from '../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { prepareTerminalAgentImagePaths } from '@/runtime/files/agent-image-preparation'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { separateImagePasteFromFollowingText } from '../../../../../../shared/terminal/input/image-paste-following-text'
@@ -44,6 +45,7 @@ export async function writeTerminalDropPathsToCapturedTarget({
   targetShell: TerminalTargetShell
   operationTimeoutMs?: number
 }): Promise<TerminalDropPathWriteResult> {
+  const originalPaths = paths
   if (tabId && paths.some(isImageDropPath)) {
     try {
       paths = await prepareTerminalAgentImagePaths(
@@ -91,6 +93,7 @@ export async function writeTerminalDropPathsToCapturedTarget({
       canPasteImageDropPathRaw(nextPath, targetShell)
     const needsSeparatorAfterImage =
       nextPath !== undefined && !(pathIsRawPasteImage && nextPathIsRawPasteImage)
+    const sourceContext = agentImageSourceContext([originalPaths[index]], [path])
     const payload =
       imagePasteText !== null
         ? separateImagePasteFromFollowingText(
@@ -98,10 +101,19 @@ export async function writeTerminalDropPathsToCapturedTarget({
             needsSeparatorAfterImage
           )
         : `${shellEscapePath(path, targetShell)} `
-    const writeResult = await runTerminalPasteOperationWithTimeout(
-      (signal) => writeTerminalPastePtyInput(liveTransport, payload, 'driving', signal),
-      operationTimeoutMs
-    )
+    const writeResult = await runTerminalPasteOperationWithTimeout(async (signal) => {
+      if (!(await writeTerminalPastePtyInput(liveTransport, payload, 'driving', signal))) {
+        return false
+      }
+      return sourceContext
+        ? writeTerminalPastePtyInput(
+            liveTransport,
+            wrapTerminalBracketedPasteText(` ${sourceContext} `),
+            'driving',
+            signal
+          )
+        : true
+    }, operationTimeoutMs)
     if (writeResult.timedOut) {
       return { sentAnyPath, targetCurrent: false, pathsWritten, failureReason: 'operation-timeout' }
     }

@@ -1,3 +1,4 @@
+import type * as FileSystem from 'node:fs/promises'
 import { afterEach, expect, it, vi } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,6 +9,27 @@ import {
   fitAgentMessageImages
 } from './agent-image-fit-client'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+
+const intake = vi.hoisted(() => ({ checked: 0 }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FileSystem>()
+  return {
+    ...actual,
+    stat: async (...args: Parameters<typeof actual.stat>) => {
+      const info = await actual.stat(...args)
+      intake.checked++
+      return info
+    }
+  }
+})
+
+const publication = vi.hoisted(() => ({ hold: Promise.resolve() }))
+vi.mock('./agent-image-publication', () => ({
+  publishAgentImage: async (result: { path: string }) => {
+    await publication.hold
+    return result.path
+  }
+}))
 
 const worker = vi.hoisted(() => ({
   dispatch: vi.fn(async (build: (id: number) => unknown) => {
@@ -22,6 +44,7 @@ vi.mock('../../../shared/file-content/node-bounded-file-reader', () => ({
 }))
 vi.mock('../../worker-threads/worker-thread-request-queue', () => ({
   WorkerThreadRequestQueue: class {
+    async retired() {}
     dispatch = worker.dispatch
   }
 }))
@@ -38,6 +61,8 @@ vi.mock('../agent-session-attachments/agent-session-attachment-store-registry', 
 const roots: string[] = []
 afterEach(async () => {
   vi.clearAllMocks()
+  intake.checked = 0
+  publication.hold = Promise.resolve()
   for (const root of roots.splice(0)) {
     await rm(root, { recursive: true, force: true })
   }
@@ -73,3 +98,34 @@ it('keeps a header read failure provably before provider delivery', async () => 
   await writeFile(source, 'small')
   await expect(fitAgentImagePath(source)).rejects.toBeInstanceOf(AgentImageFitError)
 })
+
+it.each([10, 100])(
+  'keeps decoded results bounded while publication stalls under %i sends',
+  async (count) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-image-admission-'))
+    roots.push(root)
+    const source = join(root, 'shot.png')
+    await writeFile(source, Buffer.alloc(6 * 1024 * 1024))
+    let resume: () => void = () => {}
+    publication.hold = new Promise<void>((resolve) => {
+      resume = resolve
+    })
+    const first = fitAgentImagePath(source)
+    await vi.waitFor(() => expect(worker.dispatch).toHaveBeenCalledTimes(1))
+    const results = Array.from({ length: count }, () =>
+      fitAgentImagePath(source).then(
+        () => 'sent',
+        () => 'refused'
+      )
+    )
+    try {
+      await vi.waitFor(() => expect(intake.checked).toBe(count + 1))
+      expect(worker.dispatch).toHaveBeenCalledTimes(1)
+    } finally {
+      resume()
+    }
+    await expect(first).resolves.toBe('/fitted.png')
+    await Promise.all(results)
+    await expect(fitAgentImagePath(source)).resolves.toBe('/fitted.png')
+  }
+)

@@ -15,6 +15,11 @@ vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () =
   }
 }))
 
+vi.mock('@/runtime/files/agent-image-preparation', () => ({
+  prepareAgentImagePaths: async () => ['/views/hero.png']
+}))
+
+import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
 import { sendNativeChatMessage } from './native-chat-runtime-send'
 import { resetNativeChatPtySendQueuesForTests } from './native-chat-pty-send-queue'
 import { nativeChatExpectedLine, nativeChatLineShowsMessage } from './native-chat-paste-landed'
@@ -72,6 +77,33 @@ describe('sendNativeChatMessage input line ownership', () => {
 
     await vi.advanceTimersByTimeAsync(100)
     expect(writes).toEqual(['Reply with PONG', '\r'])
+  })
+})
+
+describe('fitted image delivery', () => {
+  it('sends the viewing image and retains the selected editing target', async () => {
+    vi.useFakeTimers()
+    writes.length = 0
+    try {
+      const handle = sendNativeChatMessageWithImageAttachments(
+        'codex',
+        'pty-image',
+        'Edit the attached image in place',
+        ['/repo/hero.png']
+      )
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(writes.some((text) => text.includes('/views/hero.png'))).toBe(true)
+      expect(
+        writes.some(
+          (text) =>
+            text.includes('/repo/hero.png') && text.includes('Edit the attached image in place')
+        )
+      ).toBe(true)
+      await expect(handle.outcome).resolves.toBe('submitted')
+    } finally {
+      resetNativeChatPtySendQueuesForTests()
+      vi.useRealTimers()
+    }
   })
 })
 

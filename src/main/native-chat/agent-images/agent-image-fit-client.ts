@@ -1,3 +1,4 @@
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import { AGENT_SESSION_ATTACHMENT_MAX_BYTES } from '../../../shared/agent-session/agent-session-attachments'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { toLinuxPath, toWindowsWslDrivePath } from '../../../shared/file-access/wsl-paths'
@@ -24,6 +25,8 @@ import { publishAgentImage } from './agent-image-publication'
 import type { AgentImageFitRequest, AgentImageFitResponse } from './agent-image-fit-protocol'
 
 export class AgentImageFitError extends Error {}
+const admission = new PrioritySemaphore(1)
+let attempts = 0
 let queue: WorkerThreadRequestQueue<AgentImageFitRequest, AgentImageFitResponse> | null = null
 
 export async function fitAgentImagePath(path: string, signal?: AbortSignal): Promise<string> {
@@ -55,38 +58,55 @@ export async function fitAgentImagePath(path: string, signal?: AbortSignal): Pro
         : isInsideNativeChatPasteFolder(nativeChatPasteFolder(), path)
           ? join(dirname(path), '.agent-images')
           : join(nativeChatPasteFolder(), 'agent-images')
-    queue ??= new WorkerThreadRequestQueue({
-      factory: () =>
-        spawnWorkerThread(
-          resolveWorkerThreadEntryPath(
-            currentWorkerEntryLayout(__dirname),
-            'agent-image-fit-worker-entry.js'
-          ),
-          { name: 'orca-agent-image-fit', resourceLimits: { maxOldGenerationSizeMb: 256 } }
-        ),
-      idleTeardownMs: 10_000,
-      maxConsecutiveDeaths: 3,
-      queueCap: { maxQueuedCalls: 64, describeFull: () => 'Too many images are being prepared' },
-      createUnavailableError: (message) => new AgentImageFitError(message),
-      describeTimeout: () => 'Image preparation timed out',
-      describeExit: (code) => `Image preparation exited with code ${code}`,
-      describeCrashLoop: (error) => `Image preparation failed: ${error}`,
-      onUnavailable: (error) => console.warn('[agent-images] worker unavailable:', error)
-    })
-    const response = await queue.dispatch(
-      (id) => ({
-        id,
-        path: readablePath,
-        outputDirectory
-      }),
-      60_000,
-      signal
-    )
-    if (!response.ok) {
-      throw new AgentImageFitError(response.error)
+    if (attempts >= 65) {
+      throw new AgentImageFitError('Too many images are being prepared')
     }
-    const prepared = await publishAgentImage(response, signal)
-    return readablePath !== path && path.startsWith('/mnt/') ? toLinuxPath(prepared) : prepared
+    attempts++
+    let release: (() => void) | undefined
+    try {
+      release = await admission.acquire(0, signal)
+      signal?.throwIfAborted()
+      queue ??= new WorkerThreadRequestQueue({
+        factory: () =>
+          spawnWorkerThread(
+            resolveWorkerThreadEntryPath(
+              currentWorkerEntryLayout(__dirname),
+              'agent-image-fit-worker-entry.js'
+            ),
+            { name: 'orca-agent-image-fit', resourceLimits: { maxOldGenerationSizeMb: 256 } }
+          ),
+        idleTeardownMs: 10_000,
+        awaitRetirement: true,
+        maxConsecutiveDeaths: 3,
+        queueCap: { maxQueuedCalls: 64, describeFull: () => 'Too many images are being prepared' },
+        createUnavailableError: (message) => new AgentImageFitError(message),
+        describeTimeout: () => 'Image preparation timed out',
+        describeExit: (code) => `Image preparation exited with code ${code}`,
+        describeCrashLoop: (error) => `Image preparation failed: ${error}`,
+        onUnavailable: (error) => console.warn('[agent-images] worker unavailable:', error)
+      })
+      await queue.retired()
+      const response = await queue.dispatch(
+        (id) => ({
+          id,
+          path: readablePath,
+          outputDirectory
+        }),
+        60_000,
+        signal
+      )
+      if (!response.ok) {
+        throw new AgentImageFitError(response.error)
+      }
+      const prepared = await publishAgentImage(response, signal)
+      return readablePath !== path && path.startsWith('/mnt/') ? toLinuxPath(prepared) : prepared
+    } finally {
+      if (release) {
+        await queue?.retired()
+        release()
+      }
+      attempts--
+    }
   } catch (error) {
     signal?.throwIfAborted()
     throw new AgentImageFitError(error instanceof Error ? error.message : String(error))

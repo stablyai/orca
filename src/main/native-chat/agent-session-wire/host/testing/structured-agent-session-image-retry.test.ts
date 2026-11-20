@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import type * as ImageFitClient from '../../../agent-images/agent-image-fit-client'
+import type { AgentImageFitRequest } from '../../../agent-images/agent-image-fit-protocol'
 import { writeFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { PNG } from 'pngjs'
@@ -16,32 +16,29 @@ import { eventually } from './structured-agent-session-queued-message-rig-provid
 import { preparePiRpcPrompt, PiRpcPromptError } from '../../../../pi/rpc/prompts/rpc-prompt'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
-const fitting = vi.hoisted(() => ({ enabled: false }))
-vi.mock('../../../agent-images/agent-image-fit-client', async (importOriginal) => {
-  const original = await importOriginal<typeof ImageFitClient>()
-  const { fitAgentImageFile } = await import('../../../agent-images/agent-image-fit')
-  const { dirname, join } = await import('node:path')
-  return {
-    ...original,
-    fitAgentMessageImages: async (body: AgentJournalMessageItem) => ({
-      ...body,
-      blocks: await Promise.all(
-        body.blocks.map(async (block) =>
-          fitting.enabled && block.type === 'image-ref' && block.path
-            ? {
-                ...block,
-                path: await fitAgentImageFile(block.path, join(dirname(block.path), 'fitted'))
-              }
-            : block
-        )
-      )
-    })
+const fitting = vi.hoisted(() => ({ enabled: false, pasteFolder: '' }))
+vi.mock('../../../paste-files/native-chat-paste-files', () => ({
+  nativeChatPasteFolder: () => fitting.pasteFolder,
+  isInsideNativeChatPasteFolder: () => false
+}))
+vi.mock('../../../../worker-threads/worker-thread-request-queue', () => ({
+  WorkerThreadRequestQueue: class {
+    async retired() {}
+    async dispatch(build: (id: number) => AgentImageFitRequest) {
+      const request = build(1)
+      const { prepareAgentImageFile } = await import('../../../agent-images/agent-image-fit')
+      const result = fitting.enabled
+        ? await prepareAgentImageFile(request.path, request.outputDirectory)
+        : { path: request.path }
+      return { id: request.id, ok: true, ...result }
+    }
   }
-})
+}))
 
 it('sends an old returned image card through fitting without editing its stored message', async () => {
   fitting.enabled = false
   const rig = await createQueuedMessageTestRig({ restartable: true })
+  fitting.pasteFolder = rig.root
   try {
     const source = join(rig.root, 'retina.png')
     const original = Buffer.concat([
@@ -91,7 +88,7 @@ it('sends an old returned image card through fitting without editing its stored 
       expect(handoff).toBeDefined()
       expect(rig.dispatch.mock.calls.at(-1)?.[0].body.blocks).toEqual([
         { type: 'text', text: 'Keep this screenshot and these words' },
-        { type: 'image-ref', path: expect.stringMatching(/fitted/) }
+        { type: 'image-ref', path: expect.stringMatching(/agent-images/) }
       ])
     })
     const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal

@@ -70,3 +70,27 @@ export function agentImagePasteWrites(
     separateImagePasteFromFollowingText(paste, index < framedPastes.length - 1 || followedByText)
   )
 }
+
+/** Keep a resized attachment associated with the file the user selected. */
+export function agentImageSourceContext(
+  original: readonly string[],
+  delivered: readonly string[]
+): string {
+  const sources = original.flatMap((path, index) =>
+    delivered[index] && delivered[index] !== path
+      ? [
+          `Image source file: ${JSON.stringify(path)}; attached viewing copy: ${JSON.stringify(delivered[index])}`
+        ]
+      : []
+  )
+  return sources.length ? `[${sources.join('\n')}]` : ''
+}
+
+export function agentImageDeliveryText(
+  text: string,
+  original: readonly string[],
+  delivered: readonly string[]
+): string {
+  const context = agentImageSourceContext(original, delivered)
+  return context ? `${text}${text.trim() ? '\n\n' : ''}${context}` : text
+}

@@ -1,3 +1,4 @@
+import { agentImageSourceContext } from '../../input/composer/agent-image-paste'
 import { nativeChatContinuationSendText } from './native-chat-continuation-send'
 import {
   normalizeNativeChatUserText,
@@ -50,6 +51,12 @@ function nativeChatUserMessageContentKey(
     return null
   }
   let text = normalizedNativeChatUserMessageText(message) ?? ''
+  const context = normalizeNativeChatPendingText(
+    agentImageSourceContext(sentImagePaths ?? [], deliveredImagePaths ?? [])
+  )
+  if (context && text.endsWith(context)) {
+    text = text.slice(0, -context.length).trimEnd()
+  }
   // Some CLIs retain pasted attachment paths as prompt text instead of image markers.
   const paths = sentImagePaths?.filter(Boolean) ?? []
   for (const prefix of prefixes) {
