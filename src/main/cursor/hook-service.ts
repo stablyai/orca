@@ -45,7 +45,7 @@ function getManagedScriptPath(): string {
 
 type ManagedEntryScan = { events: CursorEvent[]; outdated: boolean }
 
-// Events holding Orca entries, and whether any entry differs from what this build writes.
+// Events whose Orca entries differ from the single entry this build writes; retired events always count.
 async function scanManagedEntries(
   configPath: string,
   scriptPath: string
@@ -69,9 +69,9 @@ async function scanManagedEntries(
       scan.outdated = true
       continue
     }
-    scan.events.push(event)
     const current = getManagedCommand(scriptPath, event)
-    if (managed.some((definition) => definition.command !== current)) {
+    if (managed.length > 1 || managed[0].command !== current) {
+      scan.events.push(event)
       scan.outdated = true
     }
   }
