@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ClaudeJournalBoundDelivery } from '../../../claude/structured/journal/claude-journal-bound-delivery'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 
-// Perf contract (#PR): sizing each journal append and each pre-binding Claude event by serializing it
+// Perf contract (#45960): sizing each journal append and each pre-binding Claude event by serializing it
 // allocated ~3.6 GB on main over a 100-chat burst. Sizing must not build the serialized form.
 afterEach(() => {
   vi.restoreAllMocks()
