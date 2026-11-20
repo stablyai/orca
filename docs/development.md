@@ -24,6 +24,8 @@ Re-run `pnpm -C mobile install --frozen-lockfile` whenever `mobile/pnpm-lock.yam
 
 ## Dev Profiles and Parallel Instances
 
+On macOS, dev builds use Chromium's mock keychain so Keychain prompts do not block startup or tests. Its fixed key gives no OS keychain protection, so use test accounts. Set `ORCA_DEV_USE_KEYCHAIN=1` to use the real Keychain. Secrets and browser sign-ins saved in one mode can't be read in the other; sign in again after switching. Packaged builds, Linux and Windows are unchanged.
+
 `pnpm dev` in a linked Git worktree uses its own profile, renderer port (from 15200), and CDP port (from 9333), so worktrees run side by side. The main checkout uses the shared `orca-dev` profile. The chosen profile and ports are printed on an `ORCA_DEV_INSTANCE` line and written to `out/dev-instance.json`.
 
 | Option                                                                  | Effect                                                     |
