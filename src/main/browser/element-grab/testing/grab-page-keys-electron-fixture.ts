@@ -1,10 +1,15 @@
+import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
+import { verifyGrabChordRefresh } from './grab-chord-refresh-electron-fixture'
 import { verifyGrabSelectionReplacement } from './grab-selection-replacement-electron-fixture'
 import { mkdirSync, readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { app, BrowserWindow, webContents } from 'electron'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
-import { setupGrabShortcutForwarding } from '../../guest-lifecycle/input/shortcuts/browser-guest-grab-shortcuts'
+import {
+  setupGrabShortcutForwarding,
+  refreshGrabShortcutPolicies
+} from '../../guest-lifecycle/input/shortcuts/browser-guest-grab-shortcuts'
 import { withAgentInputInjection } from '../../cdp/input/agent-input-injection'
 
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Keys</title>
@@ -94,7 +99,9 @@ async function run(): Promise<void> {
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the forwarder only calls send on the renderer, which this recorder implements.
   const renderer = recorder as unknown as Electron.WebContents
+  let overrides: KeybindingOverrides | undefined
   setupGrabShortcutForwarding({
+    getKeybindings: () => overrides,
     browserTabId: 'page-1',
     guest: page,
     resolveRenderer: () => renderer,
@@ -201,10 +208,15 @@ async function run(): Promise<void> {
   await wait(80)
   const altEdges = forwarded.filter((key) => key.startsWith('alt'))
 
-  const chord = async (): Promise<void> => {
-    const modifiers: ('meta' | 'control')[] = [process.platform === 'darwin' ? 'meta' : 'control']
-    page.sendInputEvent({ type: 'keyDown', keyCode: 'C', modifiers })
-    page.sendInputEvent({ type: 'keyUp', keyCode: 'C', modifiers })
+  const chord = async (key = 'C', shift = false): Promise<void> => {
+    const modifiers: ('meta' | 'control' | 'shift')[] = [
+      process.platform === 'darwin' ? 'meta' : 'control'
+    ]
+    if (shift) {
+      modifiers.push('shift')
+    }
+    page.sendInputEvent({ type: 'keyDown', keyCode: key, modifiers })
+    page.sendInputEvent({ type: 'keyUp', keyCode: key, modifiers })
     await wait(80)
   }
   await evalPage(
@@ -248,6 +260,10 @@ async function run(): Promise<void> {
   }
 
   await manager.setGrabMode('page-1', false, page)
+  const chordRefresh = await verifyGrabChordRefresh(page, chordPages, chord, () => {
+    overrides = { 'browser.grabElement': ['Mod+Shift+G'] }
+    refreshGrabShortcutPolicies()
+  })
 
   process.stdout.write(
     `${JSON.stringify({
@@ -267,7 +283,8 @@ async function run(): Promise<void> {
       chordOffField,
       chordInField,
       replacement,
-      afterCancellation
+      afterCancellation,
+      chordRefresh
     })}\n`
   )
   process.stderr.write(
@@ -278,6 +295,7 @@ async function run(): Promise<void> {
       chordInField,
       replacement,
       afterCancellation,
+      chordRefresh,
       children: app.getAppMetrics().map((metric) => ({ pid: metric.pid, type: metric.type })),
       home: app.getPath('home'),
       appData: app.getPath('appData'),

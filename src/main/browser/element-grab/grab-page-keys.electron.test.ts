@@ -60,7 +60,12 @@ describe('tool letters from a real page during a pick', () => {
           forwarded: ['g'],
           pageSawKey: false
         },
-        afterCancellation: { kind: 'cancelled', forwarded: [], pageSawKey: true }
+        afterCancellation: { kind: 'cancelled', forwarded: [], pageSawKey: true },
+        chordRefresh: {
+          oldChord: { pages: [], pageSawKey: true },
+          newChord: { pages: ['page-1'], pageSawKey: false },
+          agentChord: { pages: [], pageSawKey: true }
+        }
       })
     },
     60_000

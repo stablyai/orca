@@ -63,7 +63,7 @@ export function registerAgentInputSuspension(
   suspensions.set(target, callbacks)
   return () => {
     callbacks.delete(suspend)
-    if (callbacks.size === 0) {
+    if (callbacks.size === 0 && suspensions.get(target) === callbacks) {
       suspensions.delete(target)
     }
   }
