@@ -2,15 +2,14 @@ import { describe, expect, it } from 'vitest'
 import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host/execution-host-registry-entry'
 import type { ProjectHostSetup } from '../../../../shared/project/project-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import type { Translate } from '@/i18n/use-translate'
 import {
   listOpenOnHostTargets,
   type OpenOnHostTarget,
   type OpenOnHostTargetsInput
 } from './open-on-host-targets'
 
-const t = ((_key: string, fallback: string) => fallback) as Parameters<
-  typeof listOpenOnHostTargets
->[1]
+const t = ((_key: string, fallback: string) => fallback) as Translate
 
 function runtimeHost(id: `runtime:${string}`, capabilities: string[]): ExecutionHostRegistryEntry {
   return {
@@ -93,6 +92,7 @@ describe('listOpenOnHostTargets', () => {
   it('disables cloning hosts when the project has no remote', () => {
     const targets = listOpenOnHostTargets({ ...input, cloneUrl: '' }, t)
     expect(byHost('runtime:old', targets).disabledReason).not.toBeNull()
+    expect(byHost('runtime:devdesk', targets).disabledReason).not.toBeNull()
   })
 
   it('disables a host that cannot take a new location', () => {
@@ -113,13 +113,46 @@ describe('listOpenOnHostTargets', () => {
     const targets = listOpenOnHostTargets(
       {
         ...input,
+        sourceHostId: 'ssh:box',
         hosts: [
-          ...input.hosts,
-          { ...runtimeHost('runtime:self', baseCapabilities), aliasHostIds: ['local'] }
+          ...input.hosts.filter((host) => host.id !== 'ssh:box'),
+          {
+            id: 'ssh:box',
+            kind: 'ssh',
+            label: 'box',
+            detail: '',
+            health: 'available',
+            mergedIntoHostId: 'runtime:box'
+          },
+          { ...runtimeHost('runtime:box', baseCapabilities), aliasHostIds: ['ssh:box'] }
         ]
       },
       t
     )
-    expect(targets.map((target) => target.hostId)).not.toContain('runtime:self')
+    expect(targets.map((target) => target.hostId)).toEqual(['runtime:devdesk', 'runtime:old'])
+  })
+
+  it('targets the server of an SSH host served over the relay, not a plain SSH host', () => {
+    const targets = listOpenOnHostTargets(
+      {
+        ...input,
+        hosts: [
+          {
+            id: 'ssh:devbox',
+            kind: 'ssh',
+            label: 'devbox',
+            detail: '',
+            health: 'available',
+            aliasHostIds: ['runtime:devbox']
+          },
+          { ...runtimeHost('runtime:devbox', baseCapabilities), mergedIntoHostId: 'ssh:devbox' },
+          { id: 'ssh:plain', kind: 'ssh', label: 'plain', detail: '', health: 'available' }
+        ]
+      },
+      t
+    )
+    expect(targets.map((target) => [target.hostId, target.environmentId])).toEqual([
+      ['runtime:devbox', 'devbox']
+    ])
   })
 })
