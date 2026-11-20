@@ -198,6 +198,7 @@ export type ClaudeSession = {
       covered: boolean
       contextActivity: number
       recovery?: Promise<void>
+      startRecovery?: () => void
     }
     onLateRefusal: (error: Error) => void
     startup: ClaudeStartupOutcome

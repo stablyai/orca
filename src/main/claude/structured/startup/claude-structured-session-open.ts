@@ -100,6 +100,7 @@ async function openStartingClaudeSession(
     (await events?.journalHistory?.()?.reads.historyOrigin()) ?? null
   )
   let recoverHistory: (() => Promise<void>) | undefined
+  let recoveryDeadline = 0
   if (resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {
     const catchUp = (recoveryDeadline?: number) =>
       withStructuredHistoryInvocation(session, request.signal, async (signal, revoke) => {
@@ -137,6 +138,7 @@ async function openStartingClaudeSession(
     )
     history.covered = outcome === true
     if (typeof outcome === 'object') {
+      recoveryDeadline = outcome.deadline
       recoverHistory = () =>
         catchUp(outcome.deadline).then((covered) => {
           history.covered = covered === true
@@ -146,19 +148,54 @@ async function openStartingClaudeSession(
   }
   startup.open()
   if (recoverHistory) {
-    history.recovery = recoverHistory()
-      .catch((error: unknown) => {
-        deps.logger?.warn('Claude transcript recovery failed', {
-          scope: 'claude-transcript-catch-up',
-          sessionId: request.sessionId,
-          error
+    const settled = Promise.withResolvers<void>()
+    const waiting = new AbortController()
+    session.historyCatchUp = waiting
+    const timer = setTimeout(() => waiting.abort(), Math.max(0, recoveryDeadline - Date.now()))
+    const cancelled = () => {
+      clearTimeout(timer)
+      history.startRecovery = undefined
+      history.recovery = undefined
+      settled.resolve()
+      if (session.historyCatchUp === waiting) {
+        session.historyCatchUp = undefined
+      }
+      events?.publish()
+    }
+    const signal = AbortSignal.any([request.signal, waiting.signal])
+    signal.addEventListener('abort', cancelled, { once: true })
+    history.recovery = settled.promise
+    history.startRecovery = () => {
+      clearTimeout(timer)
+      signal.removeEventListener('abort', cancelled)
+      history.startRecovery = undefined
+      void recoverHistory!()
+        .catch((error: unknown) => {
+          deps.logger?.warn('Claude transcript recovery failed', {
+            scope: 'claude-transcript-catch-up',
+            sessionId: request.sessionId,
+            error
+          })
         })
-      })
-      .finally(() => {
-        history.recovery = undefined
-        events?.publish()
-      })
+        .finally(() => {
+          history.recovery = undefined
+          settled.resolve()
+          events?.publish()
+        })
+    }
+    if (signal.aborted) {
+      cancelled()
+    }
     events?.publish()
   }
   return { ...result, link: session.link, newConversation: !resumesTranscript }
+}
+
+export function claudeHistoryStartupSettled(sessions: ReadonlyMap<string, ClaudeSession>) {
+  return (sessionId: string, acquisitionGeneration: string): void => {
+    const session = sessions.get(sessionId)
+    if (session?.acquisitionGeneration === acquisitionGeneration) {
+      session.initialization.history.startRecovery?.()
+    }
+  }
 }

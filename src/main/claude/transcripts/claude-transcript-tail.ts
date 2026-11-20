@@ -36,10 +36,10 @@ export async function readClaudeTranscriptTail(input: {
     }
     return false
   })
-  if (result === 'found') {
+  if (result.outcome === 'found') {
     return mainChain(newestFirst.toReversed(), input.leafUuid, covered ? input.chainBoundaries : [])
   }
-  if (result === 'absent') {
+  if (result.outcome === 'absent') {
     input.onLeafAbsent?.()
   }
   return null
@@ -63,10 +63,40 @@ export async function readClaudeTranscriptFrontier(input: {
   return frontier
 }
 
+/** Recovery bounds source work as well as the retained item window. */
+export const CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES = 20 * 1024 * 1024
+
+export async function readClaudeTranscriptWindow(input: {
+  filePath: string
+  check: () => void
+}): Promise<{
+  rows: Record<string, unknown>[]
+  bytesRead: number
+  decodedBytes: number
+  consumedBytes: number
+  sourceBytes: number
+}> {
+  const newestFirst: Record<string, unknown>[] = []
+  const result = await visitClaudeTranscriptTail(
+    { ...input, maxBytes: CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES },
+    (row) => {
+      newestFirst.push(row)
+      return false
+    }
+  )
+  return { ...result, rows: newestFirst.toReversed() }
+}
+
 async function visitClaudeTranscriptTail(
   input: { filePath: string; endBytes?: number; maxBytes?: number; check: () => void },
   visit: (row: Record<string, unknown>) => boolean
-): Promise<'found' | 'absent' | 'capacity'> {
+): Promise<{
+  outcome: 'found' | 'absent' | 'capacity'
+  bytesRead: number
+  decodedBytes: number
+  consumedBytes: number
+  sourceBytes: number
+}> {
   const maxBytes = input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
   const handle = await open(input.filePath, 'r')
   try {
@@ -74,12 +104,24 @@ async function visitClaudeTranscriptTail(
     const { size } = await handle.stat()
     const endBytes = Math.min(size, input.endBytes ?? size)
     input.check()
+    let bytesRead = 0
+    let decodedBytes = 0
+    let consumedBytes = 0
+    const result = (outcome: 'found' | 'absent' | 'capacity') => ({
+      outcome,
+      bytesRead,
+      decodedBytes,
+      consumedBytes,
+      sourceBytes: endBytes
+    })
     // Retain split-line chunks newest first while reading backward.
     let pieces: Buffer[] = []
     // A last line without its newline is a write still landing; it is left for the next read.
     let complete = false
     const endLine = (): boolean => {
-      const row = complete ? parseRow(Buffer.concat(pieces.toReversed())) : null
+      const bytes = complete ? Buffer.concat(pieces.toReversed()) : null
+      decodedBytes += bytes?.length ?? 0
+      const row = bytes ? parseRow(bytes) : null
       pieces = []
       complete = true
       return row !== null && visit(row)
@@ -89,27 +131,34 @@ async function visitClaudeTranscriptTail(
       input.check()
       const remaining = maxBytes - (endBytes - position)
       if (remaining <= 0) {
-        return 'capacity'
+        return result('capacity')
       }
       const length = Math.min(CHUNK_BYTES, position, remaining)
       position -= length
       const chunk = Buffer.alloc(length)
-      await handle.read(chunk, 0, length, position)
+      const read = await handle.read(chunk, 0, length, position)
+      bytesRead += read.bytesRead
+      if (read.bytesRead !== length) {
+        throw new Error('Claude transcript changed while reading its window')
+      }
       input.check()
       let end = length
       for (let index = length - 1; index >= 0; index -= 1) {
         if (chunk[index] !== 0x0a) {
           continue
         }
+        if (!complete) {
+          consumedBytes = position + index + 1
+        }
         pieces.push(chunk.subarray(index + 1, end))
         end = index
         if (endLine()) {
-          return 'found'
+          return result('found')
         }
       }
       pieces.push(chunk.subarray(0, end))
     }
-    return endLine() ? 'found' : 'absent'
+    return result(endLine() ? 'found' : 'absent')
   } finally {
     await handle.close()
   }

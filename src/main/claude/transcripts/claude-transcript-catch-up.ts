@@ -175,8 +175,11 @@ export async function catchUpClaudeTranscript(input: {
         check()
       }
       if (!tail && !(leafAbsent && planned.covered)) {
+        if (!leafAbsent) {
+          return deferRecovery()
+        }
         warn('leaf-not-in-tail')
-        return leafAbsent ? null : deferRecovery()
+        return null
       }
       try {
         const items = await createClaudeTranscriptItemReader(

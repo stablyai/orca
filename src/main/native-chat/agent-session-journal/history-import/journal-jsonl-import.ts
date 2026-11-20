@@ -1,4 +1,4 @@
-import { readClaudeTranscriptFrontier } from '../../../claude/transcripts/claude-transcript-tail'
+import { importClaudeTranscript } from './journal-claude-import'
 import { createImportedForkTip, observeOmpForkTip } from './imported-fork-tip'
 import {
   adoptedTranscriptSourceObserver,
@@ -9,7 +9,6 @@ import type * as ids from '../../../../shared/agent-session/journal/agent-sessio
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { readLegacyImportTranscript, TRANSCRIPT_DECODERS } from './journal-legacy-transcript-stream'
 import { replacementItem } from './journal-replacement-items'
-import { mayBeClaudeConversationRecord } from '../../transcript-decoding/transcript-line-decoders-claude'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import { createNewestItemWindow } from './journal-newest-item-window'
 import { createCodexHistoryCollector } from './journal-codex-history'
@@ -71,6 +70,7 @@ async function decodeJsonlReplacementItems(input: {
   signal?: AbortSignal
   limits?: JournalPayloadLimits
   createCollector?: LegacyTranscriptCollectorFactory
+  boundedClaude?: true
 }): Promise<{
   items: JournalReplacementItem[]
   retainedBytes: number
@@ -79,6 +79,14 @@ async function decodeJsonlReplacementItems(input: {
   sourceFrontier?: string
   sourceConsumedBytes?: number
 }> {
+  if (input.transcriptAgent === 'claude') {
+    return importClaudeTranscript({
+      ...input,
+      limits: input.limits ?? LEGACY_IMPORT_BLOCK_LIMITS,
+      retainedBytes: MAX_LEGACY_IMPORT_RETAINED_BYTES,
+      bounded: input.boundedClaude
+    })
+  }
   const source = input.source
     ? adoptedTranscriptSourceObserver({
         agent: input.agent,
@@ -106,8 +114,6 @@ async function decodeJsonlReplacementItems(input: {
   )
   const forkTip = createImportedForkTip()
   let lineIndex = 0
-  // A Claude file of metadata alone is one nothing was sent in; an undecodable turn still counts.
-  let conversation = input.transcriptAgent !== 'claude'
   try {
     const { consumedBytes } = await readLegacyImportTranscript(
       {
@@ -129,7 +135,6 @@ async function decodeJsonlReplacementItems(input: {
           return null
         }
         const message = TRANSCRIPT_DECODERS[input.transcriptAgent](line, fallbackId)
-        conversation ||= !!message || mayBeClaudeConversationRecord(line)
         if (message) {
           const identity =
             recordId || input.decodedMessageIdentities
@@ -155,28 +160,18 @@ async function decodeJsonlReplacementItems(input: {
         : undefined
     )
     // A file with no conversation adopts nothing, so it has no identity to prove.
-    if (consumedBytes > 0 && conversation) {
+    if (consumedBytes > 0) {
       await source?.validate()
     }
     if (collector) {
       await collector.project(retained.push)
     }
-    const sourceEmpty = consumedBytes === 0 || !conversation
+    const sourceEmpty = consumedBytes === 0
     return {
       items: retained.items(),
       retainedBytes: retained.retainedBytes(),
       sourceEmpty,
-      forkTipItemIds: forkTip.settledItems(),
-      ...(input.transcriptAgent === 'claude'
-        ? {
-            sourceFrontier: await readClaudeTranscriptFrontier({
-              filePath: input.filePath,
-              consumedBytes,
-              check: () => input.signal?.throwIfAborted()
-            }),
-            sourceConsumedBytes: consumedBytes
-          }
-        : {})
+      forkTipItemIds: forkTip.settledItems()
     }
   } finally {
     collector?.close()

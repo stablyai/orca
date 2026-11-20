@@ -27,19 +27,20 @@ export async function closeClaudeCatchUpChats() {
 }
 
 export async function chat(
-  mode: 'tail' | 'batch' | 'metadata' | 'uuidless-metadata' | 'system' = 'tail'
+  mode: 'tail' | 'batch' | 'metadata' | 'uuidless-metadata' | 'system' = 'tail',
+  providerSessionId = PROVIDER
 ) {
   const root = await mkdtemp(join(tmpdir(), 'orca-claude-catch-up-'))
   const config = join(root, 'claude')
   const project = join(config, 'projects', 'project')
   await mkdir(project, { recursive: true })
-  const filePath = join(project, `${PROVIDER}.jsonl`)
+  const filePath = join(project, `${providerSessionId}.jsonl`)
   const file = await open(filePath, 'w')
   const row = (uuid: string, parentUuid: string | null, text: string, type = 'assistant') => ({
     type,
     uuid,
     parentUuid,
-    sessionId: PROVIDER,
+    sessionId: providerSessionId,
     timestamp: '2026-11-01T00:00:00.000Z',
     message: { role: type, id: uuid, content: [{ type: 'text', text }] }
   })
@@ -87,18 +88,18 @@ export async function chat(
       workspaceId: 'workspace',
       hostId: 'local',
       agent: 'claude' as const,
-      providerHandle: claudeProviderHandle(PROVIDER, 'old-leaf')
+      providerHandle: claudeProviderHandle(providerSessionId, 'old-leaf')
     },
     stateDirectory: root
   }
   let journal = await journals.open(options)
   await journal.appendItem(
-    { provider: 'claude', sessionId: PROVIDER, uuid: 'old-turn' },
+    { provider: 'claude', sessionId: providerSessionId, uuid: 'old-turn' },
     { kind: 'turn', turnId: 'old-turn', state: 'completed' },
     { fence: 1, turnScope: { kind: 'thread' } }
   )
   await journal.appendItem(
-    { provider: 'claude', sessionId: PROVIDER, uuid: 'old-leaf' },
+    { provider: 'claude', sessionId: providerSessionId, uuid: 'old-leaf' },
     { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'old answer' }] },
     { fence: 1, turnScope: { kind: 'thread' } }
   )
@@ -139,7 +140,7 @@ export async function chat(
         await file.close()
       }
       await journal.appendItem(
-        { provider: 'claude', sessionId: PROVIDER, uuid: 'saved-later-leaf' },
+        { provider: 'claude', sessionId: providerSessionId, uuid: 'saved-later-leaf' },
         {
           kind: 'message',
           role: 'assistant',
@@ -175,7 +176,7 @@ export async function chat(
     catchUp: async (leafUuid = 'old-leaf') => {
       const input = {
         sessionId: SESSION,
-        providerSessionId: PROVIDER,
+        providerSessionId: providerSessionId,
         leafUuid,
         claudeConfigDir: config,
         cwd: root,

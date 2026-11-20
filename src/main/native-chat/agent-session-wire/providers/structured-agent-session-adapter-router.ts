@@ -151,6 +151,10 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   confirmIdle = (id: string) => this.liveOwnerOrNull(id)?.confirmIdle?.(id)
 
+  startupSettled: NonNullable<Adapter['startupSettled']> = (sessionId, generation) =>
+    this.liveOwnerOrNull(sessionId)?.startupSettled?.(sessionId, generation)
+  pendingDelivery: NonNullable<Adapter['pendingDelivery']> = (sessionId) =>
+    this.liveOwnerOrNull(sessionId)?.pendingDelivery?.(sessionId)
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.liveOwnerOrNull(sessionId)?.liveTurnId?.(sessionId)
 

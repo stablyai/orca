@@ -34,6 +34,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
   }
   const prepared = await prepareJsonlTranscriptImport({
     agent: 'claude',
+    boundedClaude: true,
     transcriptAgent: 'claude',
     sessionId: input.providerSessionId,
     filePath: input.filePath,

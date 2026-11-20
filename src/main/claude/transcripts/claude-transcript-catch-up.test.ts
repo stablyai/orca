@@ -159,7 +159,7 @@ it('continues a system frontier without reporting a rewind', async () => {
   ).not.toContain('continued-outside-rewound')
 })
 
-it('drops a replacement when another write at the same fence wins after the captured view', async () => {
+it('drops a replacement when provider output wins after the captured view', async () => {
   const c = await chat()
   const replace = c.deferred.sink.tryReplaceHistory?.bind(c.deferred.sink)
   if (!replace) {
@@ -169,7 +169,7 @@ it('drops a replacement when another write at the same fence wins after the capt
   c.journal.epochReplacements.observe(replaced)
   vi.spyOn(c.deferred.sink, 'tryReplaceHistory').mockImplementationOnce((replacement) => {
     c.deferred.sink.appendItem(
-      { provider: 'orca', clientMessageId: 'concurrent' },
+      { provider: 'claude', sessionId: 'provider-catch-up', uuid: 'concurrent' },
       {
         kind: 'message',
         role: 'assistant',

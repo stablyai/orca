@@ -267,6 +267,10 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   }): Promise<{ ok: true } | { ok: false; rejected: string }>
   /** Retain the child for unfinished work or a named input hold; false without one. */
   holdsDispatch?(sessionId: string): boolean | 'history-catch-up'
+  /** Begin deferred history work after the host's required startup writes have settled. */
+  startupSettled?(sessionId: string, acquisitionGeneration: string): void
+  /** Await outside host serialization before selecting and recording a submission handover. */
+  pendingDelivery?(sessionId: string): Promise<void> | undefined
   /** Fresh answer before an idle stop: provider-declared work keeps the child; undefined has none to ask. */
   confirmIdle?(sessionId: string): Promise<AgentSessionIdleConfirmation> | undefined
   /** The root turn the live child is running, null when idle; absent when the agent cannot say. */
