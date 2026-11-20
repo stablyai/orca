@@ -25,8 +25,6 @@ type Episode = {
   revisits: number
   /** Awake-clock time the page went hidden; the deadline follows the live Memory Saver hours. */
   hiddenAt: number | null
-  /** Wall-clock hide time, so the perf notice can count pages without waking the awake clock. */
-  hiddenAtWallMs: number | null
   consumed: boolean
   send: (request: BrowserGuestIdleDiscardRequest) => void
 }
@@ -158,11 +156,6 @@ export function createBrowserPageIdleDiscard(sources: {
           : visible === false
             ? sources.now()
             : null,
-        hiddenAtWallMs: sameVisibility
-          ? (previous?.hiddenAtWallMs ?? null)
-          : visible === false
-            ? Date.now()
-            : null,
         consumed: sameVisibility && previous?.consumed === true,
         send
       }
@@ -225,18 +218,20 @@ export function createBrowserPageIdleDiscard(sources: {
       deadlines.delete(pageId)
       schedule()
     },
-    /** Pages Memory Saver could free that are still loaded after being hidden this long. */
-    countHiddenLoadedPages(hiddenForMs: number): number {
-      const cutoff = Date.now() - hiddenForMs
+    /** Pages Memory Saver would free: hidden this long on its own awake clock, and passing the
+     *  same protection check its discard admission runs. */
+    countHiddenLoadedPages(hiddenForMs: number, canFree: (pageId: string) => boolean): number {
+      const cutoff = sources.now() - hiddenForMs
       let count = 0
-      for (const episode of pages.values()) {
+      for (const [pageId, episode] of pages) {
         if (
           episode.visibilityKnown &&
           episode.visible === false &&
           episode.revisits <= 15 &&
           !episode.consumed &&
-          episode.hiddenAtWallMs !== null &&
-          episode.hiddenAtWallMs <= cutoff
+          episode.hiddenAt !== null &&
+          episode.hiddenAt <= cutoff &&
+          canFree(pageId)
         ) {
           count += 1
         }
