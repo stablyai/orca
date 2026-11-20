@@ -27,6 +27,8 @@ const UPDATE_TIMEOUT_MS = 10 * 60_000
 const UPDATE_OUTPUT_BYTES = 64 * 1024
 // An unread version (e.g. a slow first start) is asked again after this, not on every check.
 const UNREAD_RETRY_MS = 10 * 60_000
+// Checks asked before an update get this long to answer; one stuck on the network doesn't hold it.
+const ASKED_CHECKS_WAIT_MS = 10_000
 
 const versions = new Map<string, { stamp: string; version: string | null; at: number }>()
 const checks = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdate | null>>()
@@ -153,7 +155,14 @@ async function runUpdate(
     .filter((call) => call.agents.includes(agent))
     .map((call) => call.done)
   checks.delete(agent)
-  await Promise.all(asked)
+  let waited: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    Promise.all(asked),
+    new Promise((resolve) => {
+      waited = setTimeout(resolve, ASKED_CHECKS_WAIT_MS)
+    })
+  ])
+  clearTimeout(waited)
   const cli = await findOwnAgentCli(agent, settings)
   if (!cli) {
     return { ok: false, output: `No ${agent} command of your own was found on this computer.` }
