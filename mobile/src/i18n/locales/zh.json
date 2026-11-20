@@ -1514,7 +1514,7 @@
         "label": "{{name}}，来自 {{place}}",
         "open": "在 {{source}} 中打开",
         "noAccess": "无访问权限",
-        "earlierMessages_other": "讨论串中更早的 {{count}} 条消息",
+        "earlierMessages_other": "话题中更早的 {{count}} 条消息",
         "via": "{{name}}（通过 {{bot}}）"
       },
       "slackMirror": {
@@ -5053,7 +5053,7 @@
       "needsPermission": "需要权限",
       "needsPermissionDetail": "当它或工作者需要你批准时",
       "taskComplete": "任务完成",
-      "taskCompleteDetail": "讨论串、自动化或工作者完成时",
+      "taskCompleteDetail": "话题、自动化或工作者完成时",
       "couldNotFinish": "无法完成",
       "couldNotFinishDetail": "当自动化运行或工作者失败时",
       "general": "通用"
@@ -5312,7 +5312,7 @@
       "title": "聊天",
       "search": "搜索聊天和工作者",
       "noMatch": "没有匹配的聊天或工作者",
-      "empty": "支线聊天、Slack 和 Linear 讨论串以及自动化运行都会显示在这里，并附带各自启动的工作者",
+      "empty": "支线聊天、Slack 和 Linear 话题以及自动化运行都会显示在这里，并附带各自启动的工作者",
       "newTag": "新",
       "olderStep": "再显示 8 个 · 还有 {{count}} 个更早的",
       "older": "显示 {{count}} 个更早的",
@@ -5323,9 +5323,9 @@
       "handedOverInline": "已移交",
       "fromClosedChatInline": "来自已关闭的聊天",
       "statusUnknown": "状态未知",
-      "kindSlack": "Slack 讨论串",
+      "kindSlack": "Slack 话题",
       "kindLinear": "Linear 议题",
-      "kindGithub": "GitHub 讨论串",
+      "kindGithub": "GitHub 话题",
       "kindAutomation": "自动化运行",
       "kindSide": "支线聊天",
       "replyingState": "正在回复",
@@ -5349,14 +5349,14 @@
     "panel": {
       "needYou_other": "{{count}} 项需要你处理",
       "working": "{{count}} 个工作中",
-      "itemsNeedYou": "条目，{{count}} 个需要你处理",
+      "itemsNeedYou": "事项，{{count}} 个需要你处理",
       "chats": "聊天",
       "files": "文件",
       "backTo": "返回 {{name}}"
     },
     "items": {
       "chat": {
-        "opensInItems": "在“条目”中打开",
+        "opensInItems": "在“事项”中打开",
         "moreItems": "还有 {{count}} 项",
         "commentOn": "已开启",
         "marked": "将 {{items}} 标记为已完成",
@@ -5369,9 +5369,9 @@
         "linkedMany": "将 {{count}} 个链接关联到 {{items}}",
         "linked": "将 {{link}} 关联到 {{items}}",
         "aWorker": "一个工作者",
-        "youMarkedManyDone": "你将 {{count}} 个条目标记为已完成：{{items}}",
-        "youCanceledMany": "你取消了 {{count}} 个条目：{{items}}",
-        "youMovedMany": "你将 {{count}} 个条目移至“{{status}}”：{{items}}",
+        "youMarkedManyDone": "你将 {{count}} 个事项标记为已完成：{{items}}",
+        "youCanceledMany": "你取消了 {{count}} 个事项：{{items}}",
+        "youMovedMany": "你将 {{count}} 个事项移至“{{status}}”：{{items}}",
         "youMarked": "你将 {{items}} 标记为已完成",
         "youCanceled": "你取消了 {{items}}",
         "youMoved": "你将 {{items}} 移至“{{status}}”",
@@ -5403,17 +5403,17 @@
         "done": "已完成",
         "canceled": "已取消"
       },
-      "needYouCount_other": "{{count}} 个条目需要你处理",
+      "needYouCount_other": "{{count}} 个事项需要你处理",
       "homeChat": "主聊天",
       "chatFallback": "聊天",
       "filter": {
         "needsYou": "仅显示需要你处理的",
-        "label": "筛选条目",
+        "label": "筛选事项",
         "all": "所有聊天",
         "remove": "移除筛选条件 {{name}}",
         "clear": "清除筛选"
       },
-      "tab": "条目",
+      "tab": "事项",
       "field": {
         "doneMeansLower": "完成标准",
         "description": "描述",
@@ -5429,8 +5429,8 @@
         "canceled": "取消了此事项",
         "reopened": "重新打开了此事项",
         "moved": "将此事项移至",
-        "madeNeedsYou": "添加了此条目，并标记为“需要你处理”",
-        "made": "添加了此条目",
+        "madeNeedsYou": "添加了此事项，并标记为“需要你处理”",
+        "made": "添加了此事项",
         "linked": "关联了 {{links}}",
         "workerStarted": "工作者已启动：",
         "workerFailed": "工作者已停止：",
@@ -5468,14 +5468,14 @@
         "fileOutside": "{{path}} 不在此机器人的文件夹中"
       },
       "open": {
-        "failed": "无法打开此条目",
+        "failed": "无法打开此事项",
         "notFound": "{{host}} 上找不到它。它可能属于另一台电脑上的机器人",
         "noAnswer": "{{host}} 没有响应"
       },
       "retry": "重试",
-      "loading": "正在加载条目…",
+      "loading": "正在加载事项…",
       "view": {
-        "title": "条目",
+        "title": "事项",
         "canceledNote": "已取消：",
         "doneNote": "已完成：",
         "links": "链接",
@@ -5484,8 +5484,8 @@
         "showLess": "收起",
         "showMore": "展开"
       },
-      "readFailedShort": "无法加载条目",
-      "lastRead": "显示的是上次读取的条目",
+      "readFailedShort": "无法加载事项",
+      "lastRead": "显示的是上次读取的事项",
       "row": {
         "select": "选择“{{title}}”"
       },
@@ -5493,7 +5493,7 @@
       "pill": {
         "moveTo": "移至",
         "clear": "清除选择",
-        "moveCount_other": "将 {{count}} 个条目移至"
+        "moveCount_other": "将 {{count}} 个事项移至"
       },
       "menu": {
         "select": "选择",
@@ -5503,7 +5503,7 @@
         "cancelShort": "取消"
       },
       "stale": {
-        "confirm_other": "要取消 {{count}} 个长期无活动的条目吗？",
+        "confirm_other": "要取消 {{count}} 个长期无活动的事项吗？",
         "confirmWhy": "发送给机器人的原因：“{{reason}}”。不会删除任何内容",
         "reason": "{{count}} 天没有活动",
         "cancelAll": "全部取消"
@@ -5511,11 +5511,11 @@
       "cancel": {
         "keep": "保留",
         "confirmMany": "取消 {{count}} 项",
-        "titleMany": "要取消 {{count}} 个条目吗？",
+        "titleMany": "要取消 {{count}} 个事项吗？",
         "titleOne": "要取消“{{title}}”吗？",
         "why": "机器人会看到原因。不会删除任何内容",
         "placeholder": "原因",
-        "confirmOne": "取消条目",
+        "confirmOne": "取消事项",
         "offline": "{{host}} 已离线。你填写的原因已保留，{{action}} 会在它恢复连接后重新可用"
       },
       "strip": {
@@ -5529,23 +5529,23 @@
         "snoozed": "已暂缓"
       },
       "empty": {
-        "title": "还没有条目",
+        "title": "还没有事项",
         "body": "当 {{bot}} 为你接手任务时，会在这里显示它正在做什么，以及需要你做什么",
         "needsYou": "没有需要你处理的事项",
-        "filtered": "没有匹配的条目"
+        "filtered": "没有匹配的事项"
       },
       "toast": {
         "markedDone": "已将 {{title}} 标记为完成",
         "canceledOne": "已取消 {{title}}",
         "movedOne": "已将 {{title}} 移至 {{status}}",
-        "movedMany": "已将 {{count}} 个条目移至 {{status}}",
+        "movedMany": "已将 {{count}} 个事项移至 {{status}}",
         "doneFailed": "无法标记为完成：{{why}}",
-        "moveFailed_other": "无法移动 {{count}} 个条目：{{why}}",
+        "moveFailed_other": "无法移动 {{count}} 个事项：{{why}}",
         "snoozeFailed": "无法暂缓：{{why}}",
         "unsnoozedOne": "已取消暂缓 {{title}}",
         "snoozedOne": "已将 {{title}} 暂缓至 {{when}}",
-        "unsnoozedMany": "已取消暂缓 {{count}} 个条目",
-        "snoozedMany": "已将 {{count}} 个条目暂缓至 {{when}}"
+        "unsnoozedMany": "已取消暂缓 {{count}} 个事项",
+        "snoozedMany": "已将 {{count}} 个事项暂缓至 {{when}}"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",
@@ -5564,7 +5564,7 @@
         "pickDay": "暂缓到哪一天？",
         "pickHour": "几点？"
       },
-      "readFailedTitle": "无法加载条目",
+      "readFailedTitle": "无法加载事项",
       "ask": {
         "recommended": "推荐",
         "typeAnswer": "输入你的回答"
@@ -5628,7 +5628,7 @@
       "t0fbb9a90": "检查它",
       "t630cc96a": "事故记录",
       "t0489950f": "在事故频道中维护时间线，并起草事后报告",
-      "t6963d528": "关注你选择的事故频道及其讨论串，维护带时间戳的时间线，并在事故结束后起草不追责的事后报告",
+      "t6963d528": "关注你选择的事故频道及其话题，维护带时间戳的时间线，并在事故结束后起草不追责的事后报告",
       "tf87d0fa5": "14:02 告警触发；14:09 开始回滚；14:21 错误恢复正常",
       "ta07e23fc": "事后报告草稿已就绪",
       "t8e746011": "当有人在事故频道发消息时",
@@ -5642,7 +5642,7 @@
       "t3eefb825": "交接",
       "t459979ed": "待你回复",
       "t1f3516c3": "提醒你还欠着哪些回复",
-      "ta1401466": "在 Slack 讨论串和议题评论中，找出问你但还没回复的问题，以及你答应要做的事",
+      "ta1401466": "在 Slack 话题和议题评论中，找出问你但还没回复的问题，以及你答应要做的事",
       "t02941cd0": "2 天前你在 #design 中对一位队友说“我明天看看”",
       "t28810982": "ORC-881 中有一个昨天问你的问题",
       "t686c8d9a": "每天下午 4 点",
@@ -5683,7 +5683,7 @@
       "t9e760c50": "需要更新的文档",
       "t18b2cc97": "规格起草",
       "t37c0d1fe": "把讨论整理成可分享的简短规格说明",
-      "t81115a0c": "给它一个 Slack 讨论串或文档。它会起草一页规格说明，并就尚未确定的事项提问",
+      "t81115a0c": "给它一个 Slack 话题或文档。它会起草一页规格说明，并就尚未确定的事项提问",
       "t2884652f": "草稿：“机器人分享 v2”。3 项决策，2 个待定问题",
       "tcc79e991": "已作为文档保存到你的云端硬盘",
       "t63cd3964": "待办清理",
@@ -5737,7 +5737,7 @@
       "t1fdb9863": "Bug 报告收集",
       "tda3a602e": "把 Slack 中的 Bug 报告变成带复现步骤的跟踪议题",
       "t69523e0d": "读取你选择的频道，为每份新的 Bug 报告起草议题。只有在你批准后才会提交",
-      "ta5b03b4e": "已起草：“macOS 27 上睡眠后终端卡死”，步骤取自讨论串",
+      "ta5b03b4e": "已起草：“macOS 27 上睡眠后终端卡死”，步骤取自话题",
       "t2f477faa": "可能与 ORC-702 重复",
       "t4d39a234": "当有人在你的 Bug 频道发消息时",
       "t70d2a25c": "起草议题",
