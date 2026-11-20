@@ -186,6 +186,12 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onTransfer: 'notTransferred',
     onWorkspaceRemoval: 'ownerTabKey'
   },
+  // Marks for tabs no longer saved are inert: a key is owned only while its stored relay id matches.
+  desktopRelayOwnership: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred',
+    onWorkspaceRemoval: 'kept'
+  },
   lastVisitedAtByWorktreeId: {
     onRepoRemoval: 'prunedByOwnerKey',
     onTransfer: 'copiedByOwnerKey',

@@ -156,6 +156,7 @@ export function withoutDesktopFocus(session: WorkspaceSessionState): WorkspaceSe
 export function withoutPtyBindings(session: WorkspaceSessionState): WorkspaceSessionState {
   const {
     remoteSessionIdsByTabId: _remoteSessions,
+    desktopRelayOwnership: _relayOwnership,
     terminalPtyIncarnationsByPaneKey: _incarnations,
     ...rest
   } = session

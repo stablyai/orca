@@ -110,6 +110,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'strandedEditorDrafts'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
 
+export type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
+
 type _MissingSessionField = Exclude<
   keyof WorkspaceSessionSnapshot,
   (typeof SESSION_RELEVANT_FIELDS)[number]

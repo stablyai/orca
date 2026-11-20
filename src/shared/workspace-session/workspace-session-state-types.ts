@@ -45,6 +45,14 @@ export type PersistedOpenFile = {
 /** A saved page carries its unsent notes; the store keeps them in browserAnnotationsByPageId. */
 export type PersistedBrowserPage = BrowserPage & { annotations?: BrowserPageAnnotation[] }
 
+/** Per tab: the relay id the desktop window last wrote (it owns the key while the stored value matches),
+ *  or null once a main writer took the key over. `legacyAdoptionVersion` marks relay ids saved before
+ *  ownership was recorded as already sorted, so a revoked key is never adopted again. */
+export type DesktopRelayOwnership = {
+  legacyAdoptionVersion: number
+  relayIdByTabId: Record<string, string | null>
+}
+
 export type WorkspaceSessionState = {
   activeRepoId: string | null
   /** Scope-aware active owner for folder workspaces. Legacy worktree UI still reads activeWorktreeId. */
@@ -99,6 +107,8 @@ export type WorkspaceSessionState = {
   activeConnectionIdsAtShutdown?: string[]
   /** Relay PTY session IDs captured at shutdown for startup pty.attach. */
   remoteSessionIdsByTabId?: Record<string, string>
+  /** Main-owned: which remoteSessionIdsByTabId keys the desktop window wrote, so its saves change only those. */
+  desktopRelayOwnership?: DesktopRelayOwnership
   /** Cmd+J focus recency, distinct from background activity and navigation history (docs/cmd-j-empty-query-ordering.md). Accept missing/partial legacy maps; seed the active workspace on restore. Keys may be <hostId>|<worktreeId> or legacy bare IDs. */
   lastVisitedAtByWorktreeId?: Record<string, number>
   /** Persist default-tab admission so reopening a workspace after closing all tabs does not recreate its template. */

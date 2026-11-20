@@ -50,6 +50,15 @@ import {
   type AcknowledgedWorkspaceSessionEntries
 } from './workspace-session-acknowledged-entries'
 import { patchHostSlice, routedSessionHostIds } from './workspace-session-host-entries-write'
+import {
+  desktopRelaysSupported,
+  desktopRelayWriteFor,
+  relayWriteOutcome,
+  takeDesktopRelayWrite,
+  type SessionWriteOutcome,
+  type DesktopRelayApi
+} from './desktop-relay-writes'
+import type { DesktopRelayWrite } from '../../../../../shared/workspace-session/desktop-relay-write'
 
 export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
@@ -70,7 +79,7 @@ export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
   contestedPrimaryHostBySessionKey?: Record<string, ExecutionHostId>
 }
 
-export type SessionApi = {
+export type SessionApi = DesktopRelayApi & {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
   patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
   /** Absent on clients whose session store takes whole fields only (the paired web client). */
@@ -81,7 +90,11 @@ export type SessionApi = {
 }
 
 type DurableSessionApi = SessionApi & {
-  set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
+  set: (
+    args: WorkspaceSessionState,
+    hostId?: ExecutionHostId,
+    options?: { relays?: 'separate' }
+  ) => Promise<void>
   flush: () => Promise<void>
 }
 
@@ -256,8 +269,9 @@ export function patchWorkspaceSessionByHost(
   patch: WorkspaceSessionPatch,
   state: HostPersistenceState,
   acknowledged?: AcknowledgedWorkspaceSessionEntries
-): { localWrite: Promise<void>; written: Promise<void> } {
+): { localWrite: Promise<void>; written: Promise<SessionWriteOutcome | void> } {
   const slices = splitWorkspaceSessionForWrite(patch as WorkspaceSessionState, state, 'patch')
+  const relays = desktopRelayWriteFor(api, patch, slices, state)
   acknowledged?.retainHosts(routedSessionHostIds(state, slices))
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
   const localWrite = patchHostSlice(api, local, LOCAL_EXECUTION_HOST_ID, acknowledged)
@@ -267,13 +281,18 @@ export function patchWorkspaceSessionByHost(
       throw err
     })
   )
+  // After the partition patches, so main applies relay ids to the rows they just wrote.
+  const relayWrite = relays && api.applyDesktopRelays ? api.applyDesktopRelays(relays) : null
   // Why allSettled: every partition finishes before a retry rewrites the same fields.
-  const written = Promise.allSettled([localWrite, ...hostWrites]).then((results) => {
-    const failure = results.find((result) => result.status === 'rejected')
-    if (failure) {
-      throw failure.reason
+  const written = Promise.allSettled([localWrite, ...hostWrites, relayWrite]).then(
+    async (results): Promise<SessionWriteOutcome | void> => {
+      const failure = results.find((result) => result.status === 'rejected')
+      if (failure) {
+        throw failure.reason
+      }
+      return relayWriteOutcome(await relayWrite)
     }
-  })
+  )
   // Why: a host failure must not surface as an unhandled rejection on the upload chain's promise.
   localWrite.catch(() => {})
   return { localWrite, written }
@@ -285,26 +304,41 @@ export async function persistWorkspaceSessionByHost(
   payload: WorkspaceSessionState,
   state: HostPersistenceState
 ): Promise<void> {
-  await Promise.all(
-    buildWorkspaceSessionHostSnapshots(payload, state).map((s) => api.set(s.state, s.hostId))
+  const relaysSeparate = desktopRelaysSupported(api)
+  const { snapshots, desktopRelays } = buildWorkspaceSessionHostSnapshots(
+    payload,
+    state,
+    relaysSeparate
   )
+  await Promise.all(
+    snapshots.map((s) => api.set(s.state, s.hostId, desktopRelays ? { relays: 'separate' } : {}))
+  )
+  if (desktopRelays && api.applyDesktopRelays) {
+    await api.applyDesktopRelays(desktopRelays)
+  }
   await api.flush()
 }
 
-/** Build local-first full-session snapshots for the beforeunload / quit paths. */
+/** Build local-first full-session snapshots for the beforeunload / quit paths. With
+ *  `relaysSeparate`, the relay ids leave them for one write main applies by ownership. */
 export function buildWorkspaceSessionHostSnapshots(
   payload: WorkspaceSessionState,
-  state: HostPersistenceState
-): WorkspaceSessionHostSnapshot[] {
+  state: HostPersistenceState,
+  relaysSeparate = false
+): { snapshots: WorkspaceSessionHostSnapshot[]; desktopRelays: DesktopRelayWrite | null } {
   // Why 'replace': quit snapshots are applied as full partition sets.
   const slices = splitWorkspaceSessionForWrite(payload, state, 'replace')
+  const desktopRelays = relaysSeparate ? takeDesktopRelayWrite(slices, state) : null
   // They replace main's copy, including when the unload is vetoed and the window stays.
   windowAcknowledgedSessionEntries.forget()
-  return [
-    { state: slices[LOCAL_EXECUTION_HOST_ID] ?? payload },
-    ...nonLocalHostSessionEntries(slices).map(([hostId, hostState]) => ({
-      state: hostState,
-      hostId
-    }))
-  ]
+  return {
+    desktopRelays,
+    snapshots: [
+      { state: slices[LOCAL_EXECUTION_HOST_ID] ?? payload },
+      ...nonLocalHostSessionEntries(slices).map(([hostId, hostState]) => ({
+        state: hostState,
+        hostId
+      }))
+    ]
+  }
 }

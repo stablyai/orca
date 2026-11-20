@@ -5,6 +5,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 import { parseAppSshPtyId, toAppSshPtyId } from '../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
+import { withMainRelayKeys } from '../../../shared/workspace-session/desktop-relay-ownership'
 
 /** Re-adoption must migrate every persisted id carrier together or reconnect/reattach resurrects dead target ids (STA-1468). Non-session carriers mutate in place and report changes for save scheduling. */
 
@@ -78,7 +79,10 @@ export function migrateWorkspaceSessionSshTargetId(
     newTargetId
   )
   if (remoteSessionIdsByTabId) {
-    next = { ...(next ?? session), remoteSessionIdsByTabId }
+    next = {
+      ...withMainRelayKeys(next ?? session, Object.keys(remoteSessionIdsByTabId)),
+      remoteSessionIdsByTabId
+    }
   }
   if (session.activeConnectionIdsAtShutdown?.includes(oldTargetId)) {
     next = {

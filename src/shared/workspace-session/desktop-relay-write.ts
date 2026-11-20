@@ -1,0 +1,17 @@
+import type { ExecutionHostId } from '../execution-host/execution-host'
+import type { DesktopRelayHostWrite } from './desktop-relay-ownership'
+
+export const DESKTOP_RELAY_WRITE_VERSION = 1
+
+/** The desktop window's relay ids, per host partition, for main to apply by ownership. */
+export type DesktopRelayWrite = {
+  version: typeof DESKTOP_RELAY_WRITE_VERSION
+  hosts: (DesktopRelayHostWrite & { hostId: ExecutionHostId })[]
+}
+
+export type DesktopRelayWriteResult = {
+  applied: ExecutionHostId[]
+  unchanged: ExecutionHostId[]
+  /** Fenced partitions (a frozen source, a held move): nothing changed; resend later. */
+  skipped: ExecutionHostId[]
+}

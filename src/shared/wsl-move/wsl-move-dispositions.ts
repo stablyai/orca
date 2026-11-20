@@ -152,6 +152,7 @@ export const WORKSPACE_SESSION_DISPOSITIONS = {
   terminalLayoutsByTabId: moveDisposition(23),
   localOnlyScrollbackByTabId: moveDisposition(25, { newManifestSection: true }),
   remoteSessionIdsByTabId: { disposition: 'drop-pty-binding', item: 36 },
+  desktopRelayOwnership: { disposition: 'drop-pty-binding', item: 36 },
   browserPagesByWorkspace: moveDisposition(29),
   markdownFrontmatterVisible: moveDisposition(28, {
     rewriteDesktopCopy: true,

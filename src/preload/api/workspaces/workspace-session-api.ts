@@ -8,6 +8,10 @@ import type {
   WorkspaceSessionEntriesPatch,
   WorkspaceSessionEntriesPatchResult
 } from '../../../shared/workspace-session/workspace-session-entries-patch'
+import type {
+  DesktopRelayWrite,
+  DesktopRelayWriteResult
+} from '../../../shared/workspace-session/desktop-relay-write'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 
 export type WorkspaceSessionApi = {
@@ -16,13 +20,23 @@ export type WorkspaceSessionApi = {
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     /** Read persisted partitions at boot; the host catalog may omit some. */
     listHostIds: () => Promise<ExecutionHostId[]>
-    set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
+    /** `relays: 'separate'`: relay ids go through applyDesktopRelays, so main keeps its own. */
+    set: (
+      args: WorkspaceSessionState,
+      hostId?: ExecutionHostId,
+      options?: { relays?: 'separate' }
+    ) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
     /** Changed keys only; absent where the session store takes whole fields (paired web client). */
     patchEntries?: (
       args: WorkspaceSessionEntriesPatch,
       hostId?: ExecutionHostId
     ) => Promise<WorkspaceSessionEntriesPatchResult>
+    /** The relay-write version main supports; rejects on a main without it (and absent on the paired
+     *  web client), which keep relay ids in ordinary saves. */
+    desktopRelaysVersion?: () => Promise<number>
+    /** The window's relay ids per host, applied by main to the keys the window owns. */
+    applyDesktopRelays?: (args: DesktopRelayWrite) => Promise<DesktopRelayWriteResult>
     /** Commits a terminal tab or split-pane close into main's membership. */
     closeTerminalSurface: (args: {
       worktreeId: string

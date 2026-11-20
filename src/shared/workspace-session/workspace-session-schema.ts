@@ -236,6 +236,13 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'remoteSessionIdsByTabId',
     salvagingRecord(terminalTabIdSchema, z.string())
   ),
+  desktopRelayOwnership: salvagedOptional(
+    'desktopRelayOwnership',
+    z.object({
+      legacyAdoptionVersion: z.number().int().nonnegative(),
+      relayIdByTabId: salvagingRecord(terminalTabIdSchema, z.string().nullable())
+    })
+  ),
   // Why: the sort comparator in order-empty-query-worktrees.ts would produce NaN
   // (undefined sort order) from a NaN or Infinity persisted here.
   lastVisitedAtByWorktreeId: salvagedOptional(

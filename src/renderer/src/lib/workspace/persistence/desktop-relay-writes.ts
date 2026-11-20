@@ -1,0 +1,122 @@
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import { workspaceSessionPartitionHostId } from '../../../../../shared/workspace-session/workspace-session-partition-owner'
+import {
+  DESKTOP_RELAY_WRITE_VERSION,
+  type DesktopRelayWrite,
+  type DesktopRelayWriteResult
+} from '../../../../../shared/workspace-session/desktop-relay-write'
+import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-session-host-split'
+import type { SessionRelevantField } from './workspace-session'
+import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
+
+export type DesktopRelayApi = {
+  desktopRelaysVersion?: () => Promise<number>
+  applyDesktopRelays?: (args: DesktopRelayWrite) => Promise<DesktopRelayWriteResult>
+}
+
+type RelayHostState = {
+  repos: readonly { id: string; connectionId?: string | null; executionHostId?: string | null }[]
+  hydratedRuntimeSessionHostIds?: readonly ExecutionHostId[]
+  contestedHostWorkspaceSessions?: HostSessionSlices
+}
+
+let probedApi: DesktopRelayApi | null = null
+let supported = false
+
+/** Ask main once whether it applies relay ids by ownership. Until it answers, and on an older main
+ *  (no handler) or the paired web client (no method), relay ids stay in ordinary saves. */
+export function probeDesktopRelays(api: DesktopRelayApi): void {
+  if (probedApi === api) {
+    return
+  }
+  probedApi = api
+  supported = false
+  api.desktopRelaysVersion?.().then(
+    (version) => {
+      supported = probedApi === api && version === DESKTOP_RELAY_WRITE_VERSION
+    },
+    () => {}
+  )
+}
+
+export function desktopRelaysSupported(api: DesktopRelayApi): boolean {
+  return supported && probedApi === api && api.applyDesktopRelays !== undefined
+}
+
+/** Hosts whose relay ids this window speaks for in full: local, its SSH repos' partitions, and runtime
+ *  partitions it loaded. A partition holding rows parked for another host is never complete. */
+function completeRelayHostIds(state: RelayHostState): Set<ExecutionHostId> {
+  const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+  for (const repo of state.repos) {
+    if (repo.connectionId) {
+      hostIds.add(workspaceSessionPartitionHostId(getRepoExecutionHostId(repo)))
+    }
+  }
+  const catalogHostIds = new Set(state.repos.map((repo) => getRepoExecutionHostId(repo)))
+  for (const hostId of state.hydratedRuntimeSessionHostIds ?? []) {
+    if (catalogHostIds.has(hostId)) {
+      hostIds.add(hostId)
+    }
+  }
+  for (const hostId of hostIds) {
+    if (state.contestedHostWorkspaceSessions?.[hostId]) {
+      hostIds.delete(hostId)
+    }
+  }
+  return hostIds
+}
+
+/** Move the relay ids out of a split write into one write main applies by ownership. A host with no
+ *  slice still goes when complete, so the last relay that ended there is removed. */
+export function takeDesktopRelayWrite(
+  slices: HostSessionSlices,
+  state: RelayHostState
+): DesktopRelayWrite {
+  const complete = completeRelayHostIds(state)
+  const hosts: DesktopRelayWrite['hosts'] = []
+  const sliceHostIds = new Set<ExecutionHostId>()
+  const local = slices[LOCAL_EXECUTION_HOST_ID]
+  for (const [hostId, slice] of [
+    ...(local ? [[LOCAL_EXECUTION_HOST_ID, local] as const] : []),
+    ...nonLocalHostSessionEntries(slices)
+  ]) {
+    sliceHostIds.add(hostId)
+    const relayIdsByTabId = slice.remoteSessionIdsByTabId ?? {}
+    delete slice.remoteSessionIdsByTabId
+    if (complete.has(hostId) || Object.keys(relayIdsByTabId).length > 0) {
+      hosts.push({ hostId, relayIdsByTabId, complete: complete.has(hostId) })
+    }
+  }
+  for (const hostId of complete) {
+    if (!sliceHostIds.has(hostId)) {
+      hosts.push({ hostId, relayIdsByTabId: {}, complete: true })
+    }
+  }
+  return { version: DESKTOP_RELAY_WRITE_VERSION, hosts }
+}
+
+/** A write main accepted but could not apply yet (a fenced partition): resend these fields later. */
+export type SessionWriteOutcome = { pendingFields?: readonly SessionRelevantField[] }
+
+export function relayWriteOutcome(
+  result: DesktopRelayWriteResult | null | undefined
+): SessionWriteOutcome | void {
+  // A ptyIdsByTabId change rebuilds every host's relay ids on the next save.
+  return result?.skipped.length ? { pendingFields: ['ptyIdsByTabId'] } : undefined
+}
+
+/** For a save that carries relay ids, when main applies them by ownership: take them out of it. */
+export function desktopRelayWriteFor(
+  api: DesktopRelayApi,
+  patch: WorkspaceSessionPatch,
+  slices: HostSessionSlices,
+  state: RelayHostState
+): DesktopRelayWrite | null {
+  return Object.hasOwn(patch, 'remoteSessionIdsByTabId') && desktopRelaysSupported(api)
+    ? takeDesktopRelayWrite(slices, state)
+    : null
+}

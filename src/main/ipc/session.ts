@@ -10,6 +10,11 @@ import { windowViewPatchForMain, windowViewSaveForMain } from '../persistence/wi
 import { windowWrittenWorkspaces } from '../persistence/window-session-written-workspaces'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { windowSaveKeepingMainSleepRecords } from '../persistence/window-save-sleep-records'
+import {
+  windowSaveKeepingRelayOwnership,
+  type WindowSessionSetOptions
+} from '../persistence/window-save-relay-ownership'
+import { registerDesktopRelayHandlers } from './session-desktop-relays'
 import { isNoopWindowSessionPatch } from '../persistence/window-session-patch-noop'
 import { noteWindowSessionSaveUnchanged } from '../browser/extensions/tabs-and-windows/browser-extension-discarded-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
@@ -66,16 +71,26 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
   }
 
-  ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
-    if (!isFenced(hostId)) {
-      store.setWorkspaceSession(
-        ORCA_LAYOUT_OWNER_IS_MAIN
-          ? sessionForMain(args, hostId)
-          : windowSaveKeepingMainSleepRecords(store.getWorkspaceSession(hostId), args, 'set'),
-        hostId
-      )
+  ipcMain.handle(
+    'session:set',
+    (
+      _event,
+      args: WorkspaceSessionState,
+      hostId?: string | null,
+      options?: WindowSessionSetOptions
+    ) => {
+      if (!isFenced(hostId)) {
+        const stored = store.getWorkspaceSession(hostId)
+        const save = windowSaveKeepingRelayOwnership(stored, args, 'set', options)
+        store.setWorkspaceSession(
+          ORCA_LAYOUT_OWNER_IS_MAIN
+            ? sessionForMain(save, hostId)
+            : windowSaveKeepingMainSleepRecords(stored, save, 'set'),
+          hostId
+        )
+      }
     }
-  })
+  )
 
   const patchWindowSession = (
     toPatch: (stored: WorkspaceSessionState) => WorkspaceSessionPatch,
@@ -86,7 +101,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       return 'skipped'
     }
     const stored = store.getWorkspaceSession(hostId)
-    const args = toPatch(stored)
+    const args = windowSaveKeepingRelayOwnership(stored, toPatch(stored), 'patch')
     const { save, written } = ORCA_LAYOUT_OWNER_IS_MAIN
       ? patchForMain(args, hostId, entries)
       : { save: windowSaveKeepingMainSleepRecords(stored, args, 'patch'), written: undefined }
@@ -97,6 +112,10 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     store.patchWorkspaceSession(save, hostId, written)
     return 'applied'
   }
+
+  registerDesktopRelayHandlers(store, isFenced, (patch, hostId) => {
+    patchWindowSession(() => patch, hostId)
+  })
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
     patchWindowSession(() => args, hostId)
