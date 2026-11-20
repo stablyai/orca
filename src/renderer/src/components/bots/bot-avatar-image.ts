@@ -5,12 +5,7 @@ import { botRefKey, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { wornBotOutfit } from '../../../../shared/bots/bot-avatar-outfit'
-import {
-  useBotMascotLayers,
-  useBotMascotSrc,
-  type BotOutfitArt,
-  type BotPictureSize
-} from './bot-mascot-look'
+import { useBotMascotLayers, type BotOutfitArt, type BotPictureSize } from './bot-mascot-look'
 
 // Each bot's current upload only (by botRefKey), so a replaced picture is let go; a failed read is retried next time.
 const uploads = new Map<string, { version: string; src: Promise<string | null> }>()
@@ -33,19 +28,6 @@ function uploadSrc(bot: BotRef, version: string): Promise<string | null> {
 }
 
 type AvatarBot = Pick<Bot, 'id' | 'avatar' | 'avatarColor' | 'avatarOutfit'> & BotOnHost
-
-/** The picture's URL as one image (the outfit drawn in); null shows the emoji or initial. */
-export function useBotAvatarSrc(bot: AvatarBot, size: BotPictureSize = 'small'): string | null {
-  const parsed = parseBotAvatar(bot.avatar)
-  const mascotSrc = useBotMascotSrc(
-    parsed?.kind === 'mascot' ? parsed.id : null,
-    bot.avatarColor,
-    wornBotOutfit(bot.avatarOutfit),
-    size
-  )
-  const upload = useUploadSrc(bot)
-  return mascotSrc ?? upload
-}
 
 /** The picture with its outfit's art as a second image over it, for a tile that can stack the two. */
 export function useBotAvatarLook(

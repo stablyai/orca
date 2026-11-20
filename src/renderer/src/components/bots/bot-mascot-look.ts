@@ -1,12 +1,12 @@
 // A mascot as a bot shows it: its SVG on the bot's tile color (on a dark color, with the light rim) and wearing
 // its outfit. The SVGs ship with the page, so a new color is built in the same render; an outfit's art is read
 // the first time it is worn, and the picture shows the mascot without it until then.
-import type { BotMascotId } from '../../../../shared/bot-avatar'
+import { BOT_MASCOT_IDS, type BotMascotId } from '../../../../shared/bot-avatar'
 import {
   DEFAULT_BOT_AVATAR_COLOR,
   isDarkBotAvatarColor
 } from '../../../../shared/bots/bot-avatar-color'
-import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
+import { BOT_AVATAR_OUTFITS, type BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { BOT_MASCOT_URLS } from './bot-mascots'
 import {
   useBotOutfitLargeArt,
@@ -54,13 +54,6 @@ export function faceMascotSvg(svg: string, outfit: BotOutfitLayer): string {
     : trimmed
 }
 
-/** The SVG wearing `outfit` in one picture: its face, then its art (base64 WebP) drawn over it. */
-export function dressMascotSvg(svg: string, outfit: BotOutfitLayer, art = outfit.art): string {
-  const [x, y, width, height] = outfit.at
-  const image = `<image href="${artSrc(art)}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="none"/>`
-  return `${faceMascotSvg(svg, outfit).slice(0, -'</svg>'.length)}${image}</svg>`
-}
-
 function artSrc(art: string): string {
   return `data:image/webp;base64,${art}`
 }
@@ -81,8 +74,10 @@ export type BotMascotTileLook = { face: string | null; outfit: BotOutfitArt | nu
 
 // Bounded, since dragging the custom color makes a new one per step; an evicted entry is rebuilt on its next read.
 const MAX_CACHED = 300
+// One per mascot, outfit and size: an outfit's art is never built twice.
+const MAX_OUTFIT_ART = BOT_MASCOT_IDS.length * BOT_AVATAR_OUTFITS.length * 2
 
-function cached<T>(cache: Map<string, T>, key: string, build: () => T): T {
+function cached<T>(cache: Map<string, T>, key: string, build: () => T, max = MAX_CACHED): T {
   const hit = cache.get(key)
   if (hit !== undefined) {
     return hit
@@ -90,7 +85,7 @@ function cached<T>(cache: Map<string, T>, key: string, build: () => T): T {
   const value = build()
   cache.set(key, value)
   const oldest = cache.keys().next()
-  if (cache.size > MAX_CACHED && !oldest.done) {
+  if (cache.size > max && !oldest.done) {
     cache.delete(oldest.value)
   }
   return value
@@ -130,24 +125,6 @@ function outfitArt(
   return large ? { art: large, size: 'large' } : { art: layer.art, size: 'small' }
 }
 
-// `layers` undefined: the outfit's art hasn't arrived (or failed), so the plain picture shows meanwhile.
-function dressedSrc(
-  id: BotMascotId,
-  color: string | null,
-  outfit: BotAvatarOutfit | null,
-  layers: BotOutfitLayers | null | undefined,
-  largeArt: BotOutfitLargeArt | null | undefined
-): string {
-  const layer = outfit && layers ? layers[id] : undefined
-  if (!layer) {
-    return plainSrc(id, color)
-  }
-  const { art, size } = outfitArt(id, layer, largeArt)
-  return pictureSrc(id, color, `${outfit}|dressed|${size}`, (svg) =>
-    dressMascotSvg(svg, layer, art)
-  )
-}
-
 const faces = new Map<string, string>()
 
 // No mascot SVG is built here, so dragging the color builds none and the picker draws no SVG blur.
@@ -162,31 +139,21 @@ function tileLook(
     return { face: null, outfit: null }
   }
   const { art, size } = outfitArt(id, layer, largeArt)
-  const image = cached(arts, `${id}|${outfit}|${size}`, () => ({ src: artSrc(art), at: layer.at }))
+  const image = cached(
+    arts,
+    `${id}|${outfit}|${size}`,
+    () => ({ src: artSrc(art), at: layer.at }),
+    MAX_OUTFIT_ART
+  )
   const faceArt = size === 'large' ? largeArt?.[id]?.faceArt : layer.faceArt
-  const face = faceArt ? cached(faces, `${id}|${outfit}|${size}`, () => artSrc(faceArt)) : null
+  const face = faceArt
+    ? cached(faces, `${id}|${outfit}|${size}`, () => artSrc(faceArt), MAX_OUTFIT_ART)
+    : null
   return { face, outfit: image }
 }
 
 function tileColor(color: string | null | undefined): string | null {
   return !color || color === DEFAULT_BOT_AVATAR_COLOR ? null : color
-}
-
-/** One mascot's picture on `color`, wearing `outfit`, as one image (for places that draw a single picture). */
-export function useBotMascotSrc(
-  id: BotMascotId | null,
-  color: string | null | undefined,
-  outfit: BotAvatarOutfit | null | undefined = null,
-  size: BotPictureSize = 'small'
-): string | null {
-  const worn = id ? (outfit ?? null) : null
-  const layers = useBotOutfitLayers(worn)
-  const largeArt = useBotOutfitLargeArt(worn, size === 'large')
-  const tile = tileColor(color)
-  if (!id) {
-    return null
-  }
-  return dressedSrc(id, tile, worn, layers, largeArt)
 }
 
 /** Each mascot's tile layers wearing `outfit`, apart from the tile color: for the picker, where the

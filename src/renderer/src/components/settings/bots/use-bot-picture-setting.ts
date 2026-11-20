@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { BotPictureCustom, BotPictureValue } from '@/components/bots/BotPicturePicker'
-import { useBotAvatarSrc } from '@/components/bots/bot-avatar-image'
+import { useBotAvatarLook } from '@/components/bots/bot-avatar-image'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
 import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
 import { useTranslate } from '@/i18n/use-translate'
@@ -105,11 +105,11 @@ export function useBotPictureSetting(
   const t = useTranslate()
   const [kept, setKeptState] = useState(() => keptFrom(bot.avatar, 0, -1))
   const [shown, setShown] = useState(() => savedChoice(bot.avatar))
-  const keptSrc = useBotAvatarSrc({
+  const keptSrc = useBotAvatarLook({
     id: bot.id,
     hostId: bot.hostId,
     avatar: kept?.png ? null : (kept?.avatar ?? null)
-  })
+  }).src
   const src = kept?.png ? `${PNG_DATA_URL_PREFIX}${kept.png}` : keptSrc
   const savedDescription = useSavedPictureDescription({
     id: bot.id,
@@ -341,7 +341,7 @@ export function useBotPictureSetting(
     pickColor: (color) => look.pick({ avatarColor: color }),
     outfit:
       look.picked && 'avatarOutfit' in look.picked
-        ? (look.picked.avatarOutfit ?? null)
+        ? wornBotOutfit(look.picked.avatarOutfit)
         : wornBotOutfit(bot.avatarOutfit),
     pickOutfit: (outfit) => look.pick({ avatarOutfit: outfit })
   }

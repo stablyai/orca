@@ -16,8 +16,6 @@ export const BOT_AVATAR_OUTFITS = [
 
 export type BotAvatarOutfit = (typeof BOT_AVATAR_OUTFITS)[number]
 
-export const BotAvatarOutfitSchema = z.enum(BOT_AVATAR_OUTFITS)
-
 /** A stored outfit: any id, so one a newer version added survives this version's load and save. */
 export const BotStoredOutfitSchema = z.string().regex(/^[a-z0-9-]{1,40}$/)
 

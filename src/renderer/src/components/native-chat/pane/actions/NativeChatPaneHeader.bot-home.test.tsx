@@ -49,7 +49,6 @@ vi.mock('../../../bots/bot-workspace', () => ({
       : null
 }))
 vi.mock('../../../bots/bot-avatar-image', () => ({
-  useBotAvatarSrc: () => null,
   useBotAvatarLook: () => ({ src: null, outfit: null })
 }))
 vi.mock('./use-structured-chat-pane-actions', () => ({
