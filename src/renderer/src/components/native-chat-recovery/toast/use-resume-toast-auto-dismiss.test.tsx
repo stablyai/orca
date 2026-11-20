@@ -49,12 +49,12 @@ function Report({ view }: { view: ResumeToastView }): React.JSX.Element {
     },
     [view]
   )
-  const { onDetailsOpened, focusHandlers } = useResumeToastAutoDismiss(
+  const { onDetailsOpened, interactionHandlers } = useResumeToastAutoDismiss(
     view.phase === 'finished' && view.counts.needsYou === 0,
     setDuration
   )
   return (
-    <div {...focusHandlers}>
+    <div {...interactionHandlers}>
       <NativeChatResumeToast
         view={view}
         listedAt={1}
@@ -118,15 +118,32 @@ describe('resume report auto-dismiss', () => {
     expect(onAutoClose).toHaveBeenCalledTimes(1)
   })
 
-  it('pauses under the pointer and resumes when it leaves', () => {
-    show(allResumed)
-    advance(3000)
+  it('holds when the report finishes under the pointer, then dismisses after it leaves', () => {
+    const resuming = resumeToastView(
+      { ...run('continued'), inFlight: true, continued: undefined },
+      [],
+      new Map()
+    )
+    show(resuming)
+    const root = screen.getByRole('status').parentElement!
     const toaster = document.querySelector('[data-sonner-toaster]')!
+    fireEvent.pointerEnter(root)
     fireEvent.mouseMove(toaster)
-    advance(5000 * 3)
+    act(() => {
+      toast.custom(() => <Report view={allResumed} />, { id: toastId() })
+    })
+    advance(2)
+    advance(2)
+    advance(2)
+    advance(6000)
     expect(headline()).not.toBeNull()
+    fireEvent.pointerLeave(root)
     fireEvent.mouseLeave(toaster)
-    advance(5000 - 3000)
+    advance(2)
+    advance(2)
+    advance(4900)
+    expect(headline()).not.toBeNull()
+    advance(100)
     advance(EXIT_MS)
     advance(EXIT_MS)
     expect(headline()).toBeNull()

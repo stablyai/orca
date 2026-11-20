@@ -154,12 +154,12 @@ function ConnectedResumeToast({
     observer.observe(node)
     return () => observer.disconnect()
   }, [store, toastId])
-  // Only an all-resumed report leaves on its own; the toaster's timer pauses under the pointer.
+  // Only an all-resumed report leaves on its own.
   const setDuration = useCallback(
     (duration: number) => reissueResumeToast(store, toastId, { duration }),
     [store, toastId]
   )
-  const { onDetailsOpened, focusHandlers } = useResumeToastAutoDismiss(
+  const { onDetailsOpened, interactionHandlers } = useResumeToastAutoDismiss(
     view.phase === 'finished' && view.counts.needsYou === 0,
     setDuration
   )
@@ -198,7 +198,7 @@ function ConnectedResumeToast({
       ref={root}
       // Unstyled toasts aren't given the toaster's width; fill it rather than shrink to the text.
       className="w-[var(--width,100%)] max-w-full"
-      {...focusHandlers}
+      {...interactionHandlers}
     >
       {view.rows.length > 0 && (
         <NativeChatResumeToast

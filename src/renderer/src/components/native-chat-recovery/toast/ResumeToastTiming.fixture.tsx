@@ -37,9 +37,9 @@ function Report({ id }: { id: string }): React.JSX.Element {
     },
     [id]
   )
-  const { onDetailsOpened, focusHandlers } = useResumeToastAutoDismiss(true, setDuration)
+  const { onDetailsOpened, interactionHandlers } = useResumeToastAutoDismiss(true, setDuration)
   return (
-    <div {...focusHandlers}>
+    <div {...interactionHandlers}>
       <NativeChatResumeToast
         view={view}
         listedAt={1}
@@ -83,6 +83,9 @@ export const hovered = defineFixture({
   render,
   interact: async (frame) => {
     await wait(300)
+    frame
+      .querySelector('[role=status]')
+      ?.parentElement?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
     frame
       .querySelector('[data-sonner-toaster]')
       ?.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
