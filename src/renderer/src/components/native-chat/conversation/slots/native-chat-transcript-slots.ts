@@ -227,12 +227,7 @@ export function buildNativeChatTranscript(
         message.mergedInto === undefined &&
         (isNativeChatOrcaCard(message) || nativeChatRowRendersContent(message.blocks)) &&
         message.id !== liveReasoningId)
-    if (
-      drawsRow ||
-      status !== undefined ||
-      turnDiff !== undefined ||
-      openedPullRequests !== undefined
-    ) {
+    if (drawsRow || status || turnDiff || openedPullRequests) {
       slots.push({
         kind: 'message',
         message,

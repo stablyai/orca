@@ -5,6 +5,8 @@ import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixtur
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { BotItemCommentBox } from './BotItemCommentBox'
 import { BotItemNavRow, BotItemStepper } from './BotItemStepper'
+import { botRefKey } from '@/lib/bot-hosts'
+import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 
 const item = makeTestBotItem(7, { title: 'Fix the share dialog' })
 const NO_STEP = (): void => {}
@@ -139,3 +141,21 @@ function LoadingCycle(): React.JSX.Element {
   return <Row width={280} total={1204} attach loading={loading} />
 }
 export const loadingCycle = defineFixture({ width: 312, render: () => <LoadingCycle /> })
+
+/** A desktop-wide pane with typed text: lines use the box's full width, the controls sit below them. */
+function typed(text: string): ComponentFixture {
+  return defineFixture({
+    width: 1280,
+    setup: () =>
+      updateNativeChatComposerDraft(
+        `bot-item-comment:${botRefKey(fixtureCos)}:${item.uid}`,
+        { text, images: [] },
+        'immediate'
+      ),
+    render: () => <Row width={1248} total={219} attach />
+  })
+}
+export const wideUnbroken = typed('g'.repeat(400))
+export const wideLines = typed(
+  'Link expiry should default to 7 days, with a picker for 1 day, 30 days and never; owners can change it after sharing.\nResharing stays with editors.\nShip it behind the existing sharing flag.'
+)

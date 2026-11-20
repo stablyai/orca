@@ -209,6 +209,47 @@
       }
     },
     {
+      "files": ["src/main/{window,browser,updater,menu,tray,hang-watchdog}/**/*.ts"],
+      "excludeFiles": [
+        "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
+        "**/__tests__/**",
+        "src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@linear/sdk",
+                "allowTypeImports": true,
+                "message": "Value-importing @linear/sdk hoists its ~2.6MB CJS bundle into the eager top-level require block and defeats the lazy loader. Use `import type` plus loadLinearSdk() from src/main/linear/requests/linear-sdk.ts."
+              },
+              {
+                "name": "ssh2",
+                "allowTypeImports": true,
+                "message": "Value-importing ssh2 hoists it into the eager main-process require block and blocks startup (#35731). Use `import type` plus loadSsh2() from src/main/ssh/ssh2-module-load.ts."
+              }
+            ],
+            "patterns": [
+              {
+                "regex": "(?i)(?:^|[/\\\\])(?:web-session-tabs-sync-test-harness|web-runtime-browser-creation-placement-test-rig)(?:\\.[cm]?[jt]sx?)?(?:[?#].*)?$",
+                "message": "This module is unit-test support. Import the production web-session owner instead."
+              },
+              {
+                "regex": "\\.fixture(?:\\.tsx?)?(?:[?#].*)?$",
+                "message": "Component fixtures are dev-only and load through the fixture explorer's import.meta.glob; importing one would ship it in a production bundle."
+              },
+              {
+                "regex": "(?:^|[/\\\\])persistence[/\\\\]loading-store[/\\\\]store(?:\\.ts)?$",
+                "message": "Native code reads settings through NativeSettingsProjection (src/main/core-desktop/native-settings-projection.ts) and asks the core for writes; the profile Store belongs to the core."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": ["src/main/runtime/**/*.ts"],
       "excludeFiles": [
         "**/*.{test,spec}.{js,cjs,mjs,jsx,ts,tsx,mts,cts}",
