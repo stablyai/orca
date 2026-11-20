@@ -6,7 +6,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveProjectCompilerInfo } from '../project-execution/run-typecheck-projects-in-parallel.mjs'
 import { resolveTsrsLauncher, supportsTsrs } from '../project-execution/tsrs-typecheck-compiler.mjs'
 import { createServerSession } from './typescript-server-session.mjs'
-import { watchInstalls, watchWorkspace } from './workspace-file-watcher.mjs'
 
 const PULL_DEBOUNCE_MS = 100
 const BRIDGE_ID_PREFIX = 'orca-diagnostics-'
@@ -205,8 +204,6 @@ function runLanguageServer() {
   const session = createServerSession({
     root,
     idleMs: Number(process.env.ORCA_TYPESCRIPT_LSP_IDLE_MINUTES ?? IDLE_MINUTES) * 60_000,
-    watchWorkspace,
-    watchInstalls,
     isBackgroundRequest: (message) => bridge.isOwnRequest(message),
     toClient: (message) => bridge.fromServer(message),
     onEnd: (code) => process.exit(code),

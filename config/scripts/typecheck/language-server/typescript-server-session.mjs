@@ -1,6 +1,5 @@
-// Runs the TypeScript server behind a stable client connection: it stops after an idle period, starts again on the
-// next request, and serves the server's file watches from one workspace watcher when the client can't watch.
-import { pathToFileURL } from 'node:url'
+// Runs the TypeScript server behind a stable client connection: it stops after an idle period, freeing its memory and
+// file watches, and starts again on the next request.
 import { applyContentChanges } from './lsp-document-text.mjs'
 
 const SESSION_ID_PREFIX = 'orca-session-'
@@ -12,7 +11,6 @@ const REQUEST_FAILED = -32803
 const NON_WAKING = new Set(['$/cancelRequest', '$/setTrace', 'textDocument/didClose', 'exit', WATCHED_FILES])
 // Not agent activity: cancellations, and file events from a client that watches for itself.
 const NOT_ACTIVITY = new Set(['$/cancelRequest', WATCHED_FILES])
-const CHANGE_TYPE = { create: 1, update: 2, delete: 3 }
 
 export function createServerSession({
   root,
@@ -20,8 +18,6 @@ export function createServerSession({
   startServer,
   toClient,
   onEnd,
-  watchWorkspace,
-  watchInstalls,
   // Requests the wrapper makes on its own (diagnostic pulls after a refresh) are not agent activity.
   isBackgroundRequest = () => false,
   setTimer = setTimeout,
@@ -29,11 +25,8 @@ export function createServerSession({
 }) {
   let server = null
   let state = 'stopped'
-  let clientInitialize = null
   let initialize = null
   let configuration = null
-  let bridgingWatches = false
-  let restartWhenIdle = false
   let closed = false
   let nextId = 0
   let replayId = null
@@ -41,15 +34,12 @@ export function createServerSession({
   let withdrawId = null
   let idleTimer
   let killTimer
-  let workspaceWatch = null
-  let stopInstallWatch = null
   const queue = []
   const pending = new Set()
   // The current server's requests to the client, under wrapper ids so a late answer can't reach a newer server.
   const relayed = new Map()
   // What the running (or last) server has seen, so a new one can be brought to the same state.
   const documents = new Map()
-  const watchRegistrations = new Set()
   // Registrations the client holds for the current server, by id; withdrawn when that server stops.
   const clientRegistrations = new Map()
   const folderChanges = []
@@ -86,67 +76,6 @@ export function createServerSession({
     idleTimer = setTimer(onIdle, idleMs)
   }
 
-  const stopWatching = () => {
-    workspaceWatch?.stop()
-    workspaceWatch = null
-    stopInstallWatch?.()
-    stopInstallWatch = null
-  }
-
-  const startWatching = () => {
-    if (!bridgingWatches || state !== 'ready' || workspaceWatch || watchRegistrations.size === 0) {
-      return
-    }
-    workspaceWatch = watchWorkspace(root, onWorkspaceEvents, onWatchFailed)
-    stopInstallWatch = watchInstalls(root, () => {
-      restartWhenIdle = true
-      stopIfQuiet()
-    })
-  }
-
-  // Without a working watcher, hand watching back to the server rather than serve stale files.
-  const onWatchFailed = () => {
-    if (!bridgingWatches) {
-      return
-    }
-    bridgingWatches = false
-    initialize = clientInitialize
-    restartWhenIdle = true
-    stopIfQuiet()
-  }
-
-  const withWatchCapability = (message) => {
-    const capabilities = message.params?.capabilities ?? {}
-    return {
-      ...message,
-      params: {
-        ...message.params,
-        capabilities: {
-          ...capabilities,
-          workspace: {
-            ...capabilities.workspace,
-            didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true }
-          }
-        }
-      }
-    }
-  }
-
-  // Everything under the root that isn't excluded goes to the server, which ignores files no project uses.
-  const onWorkspaceEvents = (events) => {
-    if (state !== 'ready') {
-      return
-    }
-    const changes = []
-    for (const { type, path } of events) {
-      if (CHANGE_TYPE[type]) {
-        changes.push({ uri: pathToFileURL(path).href, type: CHANGE_TYPE[type] })
-      }
-    }
-    if (changes.length > 0) {
-      server.write({ jsonrpc: '2.0', method: WATCHED_FILES, params: { changes } })
-    }
-  }
 
   const launch = () => {
     state = 'starting'
@@ -155,17 +84,10 @@ export function createServerSession({
 
   const stop = () => {
     clearTimer(idleTimer)
-    stopWatching()
     state = 'stopping'
     shutdownId = `${SESSION_ID_PREFIX}${++nextId}`
     server.write({ jsonrpc: '2.0', id: shutdownId, method: 'shutdown' })
     killTimer = setTimer(() => server?.kill(), SHUTDOWN_GRACE_MS)
-  }
-
-  const stopIfQuiet = () => {
-    if (state === 'ready' && pending.size === 0) {
-      stop()
-    }
   }
 
   function onIdle() {
@@ -291,22 +213,10 @@ export function createServerSession({
   }
 
   const onRegister = (message) => {
-    const forwarded = []
     for (const registration of message.params?.registrations ?? []) {
-      if (bridgingWatches && registration.method === WATCHED_FILES) {
-        // Watches outside the root (package stores) are accepted and never fire; installs restart the server.
-        watchRegistrations.add(registration.id)
-      } else {
-        clientRegistrations.set(registration.id, { method: registration.method })
-        forwarded.push(registration)
-      }
+      clientRegistrations.set(registration.id, { method: registration.method })
     }
-    startWatching()
-    if (forwarded.length > 0) {
-      relayToClient({ ...message, params: { ...message.params, registrations: forwarded } })
-    } else {
-      answerServer(message.id)
-    }
+    relayToClient(message)
   }
 
   const onUnregister = (message) => {
@@ -314,13 +224,10 @@ export function createServerSession({
     const forwarded = []
     const withdrawn = []
     for (const unregistration of message.params?.unregisterations ?? []) {
-      if (!watchRegistrations.delete(unregistration.id) && clientRegistrations.has(unregistration.id)) {
+      if (clientRegistrations.has(unregistration.id)) {
         forwarded.push(unregistration)
         withdrawn.push([unregistration.id, clientRegistrations.get(unregistration.id)])
       }
-    }
-    if (watchRegistrations.size === 0) {
-      stopWatching()
     }
     if (forwarded.length > 0) {
       // Still the client's until it answers, so a stop in between withdraws them too.
@@ -350,9 +257,6 @@ export function createServerSession({
       server.write({ jsonrpc: '2.0', method: 'exit' })
     } else if (!message.method && pending.delete(message.id)) {
       toClient(message)
-      if (restartWhenIdle) {
-        stopIfQuiet()
-      }
     } else if (message.method === 'client/registerCapability') {
       onRegister(message)
     } else if (message.method === 'client/unregisterCapability') {
@@ -369,34 +273,23 @@ export function createServerSession({
     }
   }
 
-  const resumeAfterStop = () => {
-    if (restartWhenIdle) {
-      restartWhenIdle = false
-      wake()
-    } else {
-      drain()
-    }
-  }
-
   // The next server registers again, so the client must have dropped the old registrations first.
   function finishWithdraw() {
     clearTimer(killTimer)
     withdrawId = null
     state = 'stopped'
-    resumeAfterStop()
+    drain()
   }
 
   function onExit(code, signal) {
     clearTimer(killTimer)
     clearTimer(idleTimer)
-    stopWatching()
     const expected = state === 'stopping'
     const waking = state === 'starting' && replayId !== null
     server = null
     state = 'stopped'
     pending.clear()
     relayed.clear()
-    watchRegistrations.clear()
     replayId = null
     shutdownId = null
     if (closed || !(expected || waking)) {
@@ -408,7 +301,7 @@ export function createServerSession({
       return
     }
     if (clientRegistrations.size === 0) {
-      resumeAfterStop()
+      drain()
       return
     }
     state = 'withdrawing'
@@ -426,10 +319,13 @@ export function createServerSession({
   return {
     fromClient(message) {
       if (message.method === 'initialize' && !initialize) {
-        clientInitialize = message
-        bridgingWatches =
-          !message.params?.capabilities?.workspace?.didChangeWatchedFiles?.dynamicRegistration
-        initialize = bridgingWatches ? withWatchCapability(message) : message
+        // Replayed edits are applied in UTF-16 offsets, so offer no other encoding; the server reports its choice.
+        const { positionEncodings: _offered, ...general } = message.params?.capabilities?.general ?? {}
+        message = {
+          ...message,
+          params: { ...message.params, capabilities: { ...message.params?.capabilities, general } }
+        }
+        initialize = message
         launch()
         state = 'ready'
         armIdle()
