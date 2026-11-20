@@ -57,7 +57,6 @@ export const stale = defineFixture({
     <div className="flex h-[400px] items-end bg-background p-4">
       <ProviderDetailsMenu
         provider={codex}
-        compact={false}
         iconOnly={false}
         ariaLabel="Codex"
         open
