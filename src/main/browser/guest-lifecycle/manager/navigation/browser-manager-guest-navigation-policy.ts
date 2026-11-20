@@ -65,7 +65,11 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       _isInPlace: boolean,
       isMainFrame: boolean
     ): void => {
-      if (!navigationGuard(event, url) || !isMainFrame || isChromiumInternalErrorUrl(url)) {
+      if (!navigationGuard(event, url) || isChromiumInternalErrorUrl(url)) {
+        return
+      }
+      if (!isMainFrame) {
+        this.noteSubframeUserAgentDemand(guest, url)
         return
       }
       this.updatePendingNavigationForRedirect(guest.id, url)
@@ -174,7 +178,6 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       this.settleUserAgentDemand(guest, 'clear')
       // Committing makes the hidden error obsolete; a later abort must not restore it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
-      this.certificateTrustController?.onMainFrameNavigationCommitted(guest.id, url)
       this.siteDisplayController?.onMainFrameNavigationCommitted(guest.id)
       // Offscreen pages have no renderer to publish their committed URL.
       this.notifyBrowserGuestStateChanged(guest.id)

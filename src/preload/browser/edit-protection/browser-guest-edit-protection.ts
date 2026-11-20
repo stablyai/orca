@@ -115,10 +115,23 @@ function postedFormAction(
     submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
       ? submitter
       : null
-  const method = button?.hasAttribute('formmethod') ? button.formMethod : target.method
-  const formTarget = button?.hasAttribute('formtarget') ? button.formTarget : target.target
+  const method = button?.hasAttribute('formmethod')
+    ? button.formMethod
+    : formProperty(target, 'method')
+  const formTarget = button?.hasAttribute('formtarget')
+    ? button.formTarget
+    : formProperty(target, 'target')
   if (method !== 'post' || !['', '_self', '_top', '_parent'].includes(formTarget.toLowerCase())) {
     return null
   }
-  return button?.hasAttribute('formaction') ? button.formAction : target.action
+  return button?.hasAttribute('formaction') ? button.formAction : formProperty(target, 'action')
+}
+
+// A field named `action`, `method` or `target` shadows the form's own property; read the getter.
+function formProperty(form: HTMLFormElement, name: 'action' | 'method' | 'target'): string {
+  const value: unknown = Object.getOwnPropertyDescriptor(
+    HTMLFormElement.prototype,
+    name
+  )?.get?.call(form)
+  return typeof value === 'string' ? value : ''
 }

@@ -50,15 +50,14 @@ vi.mock('../webauthn/browser-webauthn-access', () => ({
   clearBrowserWebAuthnAccessHandlers: () => {},
   installBrowserWebAuthnAccessHandlers: () => {}
 }))
-// The real certificate guard, as the app's browser manager installs it on every browser session.
+// The real request gate, as the app's browser manager installs it on every browser session.
 vi.mock('../guest-lifecycle/manager/browser-manager', async () => {
-  const { BrowserCertificateRequestGuard } =
-    await import('../certificate-trust/browser-certificate-request-guard')
-  const guard = new BrowserCertificateRequestGuard({ onBlockedMainFrame: () => {} })
+  const { installBrowserSessionRequestGate, removeBrowserSessionRequestGate } =
+    await import('../sessions/requests/browser-session-request-gate')
   return {
     browserManager: {
-      installCertificateRequestGuard: (session: Electron.Session) => guard.installSession(session),
-      removeCertificateRequestGuard: (session: Electron.Session) => guard.removeSession(session),
+      installCertificateRequestGuard: installBrowserSessionRequestGate,
+      removeCertificateRequestGuard: removeBrowserSessionRequestGate,
       handleGuestWillDownload: () => {}
     }
   }

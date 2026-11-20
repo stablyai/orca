@@ -255,7 +255,9 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
       if (browserTabId) {
         this.recordAppliedViewportOverride(browserTabId, guest.id, null)
       }
-      this.settleUserAgentDemand(guest, 'keep')
+      if (!guest.isDestroyed()) {
+        this.settleUserAgentDemand(guest, 'keep')
+      }
       this.invalidateGuestMemoryProtection(guest)
     }
     try {
