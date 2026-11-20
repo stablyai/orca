@@ -101,14 +101,19 @@ export function removeFileAtomicallyIfUnchanged(
     throw error
   }
   let matched = false
+  let removed = false
   try {
     matched = nodeFileContentsEqualSync(heldPath, expectedContents)
     if (matched) {
       rmSync(heldPath, { force: true })
+      removed = true
     }
   } finally {
-    // A mismatch or a failure puts the held file back; a removed one is already gone.
-    restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+    // A mismatch or a failure puts the held file back. After a removal the held name may already
+    // be another removal's, which that one restores or drops itself.
+    if (!removed) {
+      restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+    }
   }
   return matched && !existsSync(targetPath)
 }
@@ -131,8 +136,9 @@ function restoreMovedFileWithoutOverwrite(
   if (!existsSync(sourcePath)) {
     return
   }
+  const drop = (): void => rmSync(sourcePath, { force: true })
   if (restore && publishFileWithoutOverwrite(sourcePath, targetPath)) {
-    rmSync(sourcePath, { force: true })
+    drop()
     return
   }
   let matches = false
@@ -142,7 +148,7 @@ function restoreMovedFileWithoutOverwrite(
     // An unreadable or vanished target proves nothing: keep the held bytes.
   }
   if (matches) {
-    rmSync(sourcePath, { force: true })
+    drop()
     return
   }
   const keptPath = `${targetPath}.orca-kept-${randomUUID()}`
@@ -156,7 +162,7 @@ function restoreMovedFileWithoutOverwrite(
     }
     // Left held, a later recovery could put stale bytes back after a logout: drop it as before.
     console.warn('[atomic-file] Could not keep an earlier version of', targetPath, error)
-    rmSync(sourcePath, { force: true })
+    drop()
     return
   }
   console.warn('[atomic-file] Kept an earlier version beside', targetPath, keptPath)
