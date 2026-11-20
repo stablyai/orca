@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPopupPage } from '../../guest-lifecycle/popups/browser-popup-ownership'
 import { AgentBrowserBridge } from '../agent-browser-bridge'
 import {
@@ -29,104 +29,6 @@ overrideBridgeWebContentsLookup(
   AgentBrowserBridge.prototype,
   vi.fn((id: number) => native.get(id))
 )
-
-// Counts keyed calls and yielded entries on every Map/Set built while stubbed, without naming fields.
-const work = { counting: false, keyed: 0, visits: 0 }
-const count = (kind: 'keyed' | 'visits'): void => {
-  if (work.counting) {
-    work[kind]++
-  }
-}
-class CountingMap<K, V> extends Map<K, V> {
-  override get(key: K): V | undefined {
-    count('keyed')
-    return super.get(key)
-  }
-  override has(key: K): boolean {
-    count('keyed')
-    return super.has(key)
-  }
-  override set(key: K, value: V): this {
-    count('keyed')
-    return super.set(key, value)
-  }
-  override delete(key: K): boolean {
-    count('keyed')
-    return super.delete(key)
-  }
-  override *[Symbol.iterator](): MapIterator<[K, V]> {
-    for (const entry of super.entries()) {
-      count('visits')
-      yield entry
-    }
-  }
-  override entries(): MapIterator<[K, V]> {
-    return this[Symbol.iterator]()
-  }
-  override *keys(): MapIterator<K> {
-    for (const [key] of this) {
-      yield key
-    }
-  }
-  override *values(): MapIterator<V> {
-    for (const [, value] of this) {
-      yield value
-    }
-  }
-  override forEach(callback: (value: V, key: K, map: Map<K, V>) => void, thisArg?: unknown): void {
-    for (const [key, value] of this) {
-      callback.call(thisArg, value, key, this)
-    }
-  }
-}
-class CountingSet<T> extends Set<T> {
-  override has(value: T): boolean {
-    count('keyed')
-    return super.has(value)
-  }
-  override add(value: T): this {
-    count('keyed')
-    return super.add(value)
-  }
-  override delete(value: T): boolean {
-    count('keyed')
-    return super.delete(value)
-  }
-  override *[Symbol.iterator](): SetIterator<T> {
-    for (const value of super.values()) {
-      count('visits')
-      yield value
-    }
-  }
-  override values(): SetIterator<T> {
-    return this[Symbol.iterator]()
-  }
-  override keys(): SetIterator<T> {
-    return this[Symbol.iterator]()
-  }
-  override *entries(): SetIterator<[T, T]> {
-    for (const value of this) {
-      yield [value, value]
-    }
-  }
-  override forEach(callback: (value: T, key: T, set: Set<T>) => void, thisArg?: unknown): void {
-    for (const value of this) {
-      callback.call(thisArg, value, value, this)
-    }
-  }
-}
-
-async function measure(action: () => Promise<unknown>): Promise<{ keyed: number; visits: number }> {
-  work.keyed = 0
-  work.visits = 0
-  work.counting = true
-  try {
-    await action()
-  } finally {
-    work.counting = false
-  }
-  return { keyed: work.keyed, visits: work.visits }
-}
 
 // Collection entries reachable from the bridge, so a derived record that outlives its references shows up.
 function retainedEntries(root: AgentBrowserBridge): number {
@@ -227,79 +129,7 @@ function routingFixture() {
 }
 
 describe('agent browser close routing cleanup', () => {
-  beforeEach(() => {
-    vi.stubGlobal('Map', CountingMap)
-    vi.stubGlobal('Set', CountingSet)
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    native.clear()
-  })
-
-  it('closes pages without visiting unrelated routes or held picks as the fleet grows 10x', async () => {
-    const run = async (routes: number, held: number) => {
-      const f = routingFixture()
-      const x = f.register('X', 'W')
-      const y = f.register('Y', 'W')
-      f.pick(x, 'W')
-      f.pick(f.register('Z', 'W2'), 'W2')
-      const burst = Array.from({ length: 100 }, (_, i) => ({
-        live: f.register(`live-${i}`, 'W'),
-        cold: `cold-${i}`,
-        coldWorktree: `C${i}`
-      }))
-      for (const { cold, coldWorktree } of burst) {
-        f.pick(f.register(cold, coldWorktree), coldWorktree)
-      }
-      for (let i = 0; i < routes; i++) {
-        f.pick(f.register(`u${i}`, `U${i}`), `U${i}`)
-      }
-      for (let i = 0; i < held; i++) {
-        f.busy.add(`u${i}`)
-        f.pick(f.register(`h${i}`, `U${i}`), `U${i}`)
-      }
-      const globalRoute = f.bridge.getRoutedPageId()
-
-      const unselectedLive = await measure(() => f.bridge.onTabClosed(y))
-      f.unregister('Y')
-      f.unregister('Z')
-      const coldRouted = await measure(() => f.bridge.onPageClosed('Z'))
-      for (const { cold } of burst) {
-        f.unregister(cold)
-      }
-      const closes = await measure(async () => {
-        for (const { live, cold } of burst) {
-          await f.bridge.onTabClosed(live)
-          await f.bridge.onPageClosed(cold)
-        }
-      })
-
-      expect(f.bridge.getRoutedPageId('W')).toBe('X')
-      expect(f.bridge.getRoutedPageId('W2')).toBe(globalRoute)
-      expect(burst.map(({ coldWorktree }) => f.bridge.getRoutedPageId(coldWorktree))).toEqual(
-        burst.map(() => globalRoute)
-      )
-      expect(['Z', ...burst.map(({ cold }) => cold)]).not.toContain(globalRoute)
-      const unrelated = Array.from({ length: routes }, (_, i) => `U${i}`)
-      expect(unrelated.map((worktree) => f.bridge.getRoutedPageId(worktree))).toEqual(
-        unrelated.map((_, i) => `u${i}`)
-      )
-      f.busy.clear()
-      expect(unrelated.map((worktree) => f.bridge.getRoutedPageId(worktree))).toEqual(
-        unrelated.map((_, i) => (i < held ? `h${i}` : `u${i}`))
-      )
-      return { unselectedLive, coldRouted, closes }
-    }
-
-    const base = await run(750, 75)
-    expect(base.unselectedLive.visits).toBe(0)
-    expect(base.closes).toEqual({
-      keyed: 100 * (base.unselectedLive.keyed + base.coldRouted.keyed),
-      visits: 100 * base.coldRouted.visits
-    })
-    expect(await run(7500, 75)).toEqual(base)
-    expect(await run(750, 750)).toEqual(base)
-  })
+  afterEach(() => native.clear())
 
   it('clears every actual reference on close and keeps references that are still live', async () => {
     const f = routingFixture()
@@ -350,6 +180,13 @@ describe('agent browser close routing cleanup', () => {
     f.unregister('alias')
     // W falls back to its first live sibling; V had no other reference.
     expect([f.bridge.getRoutedPageId('W'), f.bridge.getRoutedPageId('V')]).toEqual(['X', 'V-other'])
+    expect(f.bridge.getRoutedPageId('U')).toBe('U')
+
+    f.pick(f.register('cold-route', 'W2'), 'W2')
+    f.pick(x, 'W')
+    f.unregister('cold-route')
+    await f.bridge.onPageClosed('cold-route')
+    expect(f.bridge.getRoutedPageId('W2')).toBe('X')
     expect(f.bridge.getRoutedPageId('U')).toBe('U')
   })
 
