@@ -64,13 +64,13 @@ function copyFor(notice: PerfNotice): Copy {
         title: translate('perfNotices.disk.title', 'Your disk is almost full'),
         description: translate(
           'perfNotices.disk.description',
-          'Clean up workspaces you no longer need.'
+          'Find workspaces you no longer need in Settings > Workspace Cleanup.'
         ),
         action: {
           // Why: the arrow marks a button that opens another page, as Orca's other "go to" buttons do.
           label: (
             <span className="inline-flex items-center gap-1.5">
-              {translate('perfNotices.disk.cleanUp', 'Clean up workspaces')}
+              {translate('perfNotices.disk.reviewOld', 'Review old workspaces')}
               <ArrowRight className="size-3.5" aria-hidden />
             </span>
           ),

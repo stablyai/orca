@@ -29641,8 +29641,8 @@
     },
     "disk": {
       "title": "Your disk is almost full",
-      "description": "Clean up workspaces you no longer need.",
-      "cleanUp": "Clean up workspaces"
+      "description": "Find workspaces you no longer need in Settings > Workspace Cleanup.",
+      "reviewOld": "Review old workspaces"
     },
     "dontShowAgain": "Don't show again"
   },
