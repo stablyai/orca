@@ -7,6 +7,7 @@ import { countPiSubagentTranscripts } from './session-scanner-pi-subagent-transc
 
 const PARENT_STEM = '2026-05-01T10-00-00-000Z_cccccccc-dddd-4eee-8fff-000000000000'
 const PARENT_SESSION_ID = 'cccccccc-dddd-4eee-8fff-000000000000'
+const CHILD_SESSION_ID = '11111111-2222-4333-8444-555555555555'
 
 let tempRoots: string[] = []
 
@@ -63,7 +64,7 @@ describe('listPiSubagentSessions', () => {
     await writeFile(
       firstChildPath,
       childTranscript({
-        id: '11111111-2222-4333-8444-555555555555',
+        id: CHILD_SESSION_ID,
         timestamp: '2026-05-01T10:01:00.000Z',
         prompt: 'Map the auth surface',
         parentFilePath: parentPath
@@ -105,5 +106,52 @@ describe('listPiSubagentSessions', () => {
       listPiSubagentSessions({ parentFilePath: parentPath, platform: 'darwin' })
     ).resolves.toEqual({ sessions: [], issues: [] })
     await expect(countPiSubagentTranscripts(parentPath)).resolves.toBe(0)
+  })
+
+  it('names a child by its session record when the parent is itself a session.jsonl child', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'orca-pi-subagent-list-'))
+    tempRoots.push(workspace)
+    const topLevelParentPath = join(workspace, `${PARENT_STEM}.jsonl`)
+    const childPath = join(
+      workspace,
+      PARENT_STEM,
+      'd4306da3-ab96-4236-bf98-8865dc4ce978',
+      'run-0',
+      'session.jsonl'
+    )
+    const grandchildPath = join(
+      join(childPath, '..'),
+      'session',
+      '4684f05a-d72d-4cdf-9e88-0adc2d16a31c',
+      'run-0',
+      'session.jsonl'
+    )
+    await mkdir(join(childPath, '..'), { recursive: true })
+    await mkdir(join(grandchildPath, '..'), { recursive: true })
+    await writeFile(topLevelParentPath, '')
+    await writeFile(
+      childPath,
+      childTranscript({
+        id: CHILD_SESSION_ID,
+        timestamp: '2026-05-01T10:01:00.000Z',
+        prompt: 'Map the auth surface',
+        parentFilePath: topLevelParentPath
+      })
+    )
+    await writeFile(
+      grandchildPath,
+      childTranscript({
+        id: '66666666-7777-4888-8999-000000000000',
+        timestamp: '2026-05-01T10:02:00.000Z',
+        prompt: 'Read the DC API spec',
+        parentFilePath: childPath
+      })
+    )
+
+    const result = await listPiSubagentSessions({ parentFilePath: childPath, platform: 'darwin' })
+
+    expect(result.sessions.map((session) => session.subagent?.parentSessionId)).toEqual([
+      CHILD_SESSION_ID
+    ])
   })
 })

@@ -58,7 +58,7 @@ function head(
   return {
     kind: 'read',
     readCwd: async ({ file }, signal) => {
-      const cwd = await readTranscriptHeadCwd(file, { cwdOf, firstReadBytes }, signal)
+      const cwd = await readTranscriptHeadValue(file.path, cwdOf, firstReadBytes, signal)
       return cwd === null ? null : { cwd }
     }
   }
@@ -178,26 +178,25 @@ export function scopeWalksAgentFiles(
 const HEAD_READ_BYTES = 8 * 1024
 const HEAD_WIDENED_READ_BYTES = 64 * 1024
 
-/** Null means unknown, requiring a full parse; it never proves the transcript is out of scope. */
-export async function readTranscriptHeadCwd(
-  file: FileWithMtime,
-  source: { cwdOf: (record: HeadRecord) => unknown; firstReadBytes?: number },
+/** Null means unknown; a miss never proves the value is absent from the transcript. */
+export async function readTranscriptHeadValue(
+  path: string,
+  valueOf: (record: HeadRecord) => unknown,
+  firstReadBytes?: number,
   signal?: AbortSignal
 ): Promise<string | null> {
-  const { cwdOf } = source
-  let cwd: string | null = null
-  const first = source.firstReadBytes ?? HEAD_READ_BYTES
+  const first = firstReadBytes ?? HEAD_READ_BYTES
   for (const length of first < HEAD_WIDENED_READ_BYTES
     ? [first, HEAD_WIDENED_READ_BYTES]
     : [first]) {
     let head: Buffer
     try {
-      head = isZstdTranscriptPath(file.path)
+      head = isZstdTranscriptPath(path)
         ? await readZstdTranscriptSlice(
-            zstdTranscriptStream(openTranscriptReadStream(file.path, {}, 'scan', signal)),
+            zstdTranscriptStream(openTranscriptReadStream(path, {}, 'scan', signal)),
             length
           )
-        : await readTranscriptSlice(file.path, 0, length, 'scan', signal)
+        : await readTranscriptSlice(path, 0, length, 'scan', signal)
     } catch (error) {
       if (signal?.aborted) {
         throw error
@@ -207,23 +206,23 @@ export async function readTranscriptHeadCwd(
     const lines = head.toString('utf8').split(/\r?\n/)
     // A slice shorter than asked ended at EOF, so its last line is complete too.
     const complete = head.length < length ? lines : lines.slice(0, -1)
-    cwd = firstHeadCwd(complete, cwdOf)
-    if (cwd !== null || head.length < length) {
-      break
+    const value = firstHeadValue(complete, valueOf)
+    if (value !== null || head.length < length) {
+      return value
     }
   }
-  return cwd
+  return null
 }
 
-function firstHeadCwd(
+function firstHeadValue(
   lines: readonly string[],
-  cwdOf: (record: HeadRecord) => unknown
+  valueOf: (record: HeadRecord) => unknown
 ): string | null {
   for (const line of lines) {
     const record = parseJsonObject(line)
-    const cwd = record ? extractString(cwdOf(record)) : null
-    if (cwd) {
-      return cwd
+    const value = record ? extractString(valueOf(record)) : null
+    if (value) {
+      return value
     }
   }
   return null

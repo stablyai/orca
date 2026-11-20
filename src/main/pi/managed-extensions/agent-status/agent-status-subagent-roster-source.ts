@@ -158,10 +158,11 @@ export function getPiSubagentRosterEventSourceLines(): string[] {
     '    if (!details || details.asyncId !== undefined || !Array.isArray(details.results)) return',
     '    const foreground = (subagentRoster.foreground ??= new Map<string, SubagentDetail>())',
     '    let observed = false',
-    '    for (const value of details.results) {',
+    '    for (const [position, value] of details.results.entries()) {',
     '      const child = value && typeof value === "object" ? value as { index?: unknown; agent?: unknown; sessionName?: unknown; exitCode?: unknown; stopped?: unknown; timedOut?: unknown } : null',
     '      if (!child) continue',
-    '      const id = details.results.length > 1 && typeof child.index === "number" ? `${record.toolCallId}:${child.index}` : record.toolCallId',
+    // A child without a numeric index still needs its own key, or later siblings overwrite it.
+    '      const id = details.results.length > 1 ? `${record.toolCallId}:${typeof child.index === "number" ? child.index : position}` : record.toolCallId',
     '      foreground.set(id, { agentType: readLabel(child.agent), description: readLabel(child.sessionName), startedAt: Date.now() })',
     '      nativeChatEndings.set(id, child.stopped === true || child.timedOut === true ? "aborted" : child.exitCode === 0 ? "completed" : "failed")',
     '      observed = true',

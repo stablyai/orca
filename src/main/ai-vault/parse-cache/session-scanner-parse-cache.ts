@@ -269,8 +269,10 @@ async function reuseCachedSession(
     stats.reused++
   }
   let session = entry.session
-  // Zero-turn parents may never change again; recount late subagent transcripts outside the cached file signature.
-  if (session && session.messageCount === 0) {
+  // Zero-turn parents may never change again; Pi keeps its children beside the parent file, outside that signature.
+  const recountSubagents =
+    session !== null && (session.messageCount === 0 || session.agent === 'pi')
+  if (session && recountSubagents) {
     const subagentTranscriptCount =
       session.agent === 'claude'
         ? await countSubagentTranscripts(candidate.file.path, signal)

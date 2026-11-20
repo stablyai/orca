@@ -6,6 +6,7 @@ import type {
 import { wslGatedStat } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { recordSessionScanIssue, scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import { sessionIdFromFileName, sessionSortTime } from '../../parsing/session-scanner-accumulator'
+import { readTranscriptHeadValue } from '../../scope/session-scope-cwd'
 import { parseMessageGraphSessionFile } from '../session-scanner-graph-parsers'
 import { findPiSubagentTranscripts } from './session-scanner-pi-subagent-transcripts'
 
@@ -20,9 +21,9 @@ export async function listPiSubagentSessions(args: {
 }): Promise<AiVaultSubagentListResult> {
   const platform = args.platform ?? process.platform
   const issues: AiVaultScanIssue[] = []
-  const transcriptPaths = await findPiSubagentTranscripts(args.parentFilePath)
-  // Derive parent identity from the layout; the child transcript records its own session ID.
-  const parentSessionId = sessionIdFromFileName(args.parentFilePath)
+  const transcriptPaths = (await findPiSubagentTranscripts(args.parentFilePath)) ?? []
+  // A nested child sits at `<stem>/<agent>/run-N/session.jsonl`, so only its own session record names the parent.
+  const parentSessionId = await parentSessionIdFor(args.parentFilePath)
 
   const parsed: (AiVaultSession | null)[] = []
   for (let index = 0; index < transcriptPaths.length; index += PI_SUBAGENT_PARSE_CONCURRENCY) {
@@ -41,6 +42,14 @@ export async function listPiSubagentSessions(args: {
       .sort((left, right) => sessionSortTime(right) - sessionSortTime(left)),
     issues
   }
+}
+
+/** A child's own session record names a parent that may itself be a `session.jsonl` child. */
+async function parentSessionIdFor(transcriptFilePath: string): Promise<string> {
+  const recorded = await readTranscriptHeadValue(transcriptFilePath, (record) =>
+    record.type === 'session' ? record.id : null
+  )
+  return recorded ?? sessionIdFromFileName(transcriptFilePath)
 }
 
 async function parsePiSubagentTranscript(args: {

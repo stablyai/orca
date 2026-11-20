@@ -3,7 +3,9 @@ import {
   waitForAiVaultScan
 } from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { wslGatedReaddir } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import type { Dirent } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
+import { isMissingTranscriptPathError } from '../../discovery/session-path-absence'
 import type { SubagentTranscriptPartition } from '../claude/session-scanner-subagent-transcripts'
 
 // Infer lineage from stamp_UUID artifact directories: task transcripts are label-named and omit parentSession (#9330).
@@ -36,16 +38,17 @@ export function isOmpSubagentTranscriptFileName(name: string, isFile: boolean): 
 export async function countOmpSubagentTranscripts(
   transcriptFilePath: string,
   signal?: AbortSignal
-): Promise<number> {
-  let entries
+): Promise<number | null> {
+  let entries: Dirent[]
   try {
     entries = await waitForAiVaultScan(
       wslGatedReaddir(ompArtifactDirFor(transcriptFilePath), 'scan', signal),
       signal
     )
-  } catch {
+  } catch (err) {
     throwIfAiVaultScanCancelled(signal)
-    return 0
+    // Null keeps the stored count; a missing artifact directory really is zero.
+    return isMissingTranscriptPathError(err) ? 0 : null
   }
   return entries.filter((entry) => isOmpSubagentTranscriptFileName(entry.name, entry.isFile()))
     .length
