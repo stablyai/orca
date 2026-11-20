@@ -12,7 +12,6 @@
 2 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 1 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts
 1 src/main/codex-accounts/runtime-home/wsl/runtime-home-service-wsl.ts
-1 src/main/codex-accounts/service.ts
 1 src/main/daemon/endpoint/identity/daemon-process-identity-query.ts
 1 src/main/daemon/endpoint/identity/daemon-process-start-time.ts
 2 src/main/daemon/process-scopes/daemon-cgroup-scope.ts

@@ -54,7 +54,7 @@ type CodexLoginSessionDependencies = {
   killProcessTree: (
     child: CodexLoginChild,
     interactiveLogin?: WindowsHostInteractiveLoginSpawn | null
-  ) => void
+  ) => Promise<void>
   /** Registers the handle that abandons this login; the caller clears it. */
   setCancel: (cancel: () => boolean) => void
   /** The browser link codex printed, published as soon as it is complete. */
@@ -199,13 +199,19 @@ async function runCodexLoginProcess(
       void spawnConfig.interactiveLogin?.cleanup()
     }
 
-    const settle = (callback: () => void): void => {
+    // A tree kill settles once it ends (rollback must not meet open files); onError absorbs late errors.
+    const settle = (callback: () => void, killTreeFirst = false): void => {
       if (settled) {
         return
       }
       settled = true
-      cleanupListeners()
-      callback()
+      const treeStopped = killTreeFirst
+        ? dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
+        : Promise.resolve()
+      void treeStopped.then(() => {
+        cleanupListeners()
+        callback()
+      })
     }
 
     cancellation.setSpawnedCancel(() => {
@@ -217,16 +223,12 @@ async function runCodexLoginProcess(
       if (settled || alreadyAuthenticated) {
         return false
       }
-      dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
-      settle(() => rejectPromise(new Error(CODEX_LOGIN_CANCELLED_MESSAGE)))
+      settle(() => rejectPromise(new Error(CODEX_LOGIN_CANCELLED_MESSAGE)), true)
       return true
     })
 
     const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
-    timeout = setTimeout(() => {
-      dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
-      settle(() => rejectPromise(timeoutError))
-    }, loginTimeoutMs)
+    timeout = setTimeout(() => settle(() => rejectPromise(timeoutError), true), loginTimeoutMs)
 
     // After credentials change, stop lingering Windows login processes that hold home files open.
     if (process.platform === 'win32' && !wslInfo) {
@@ -240,7 +242,7 @@ async function runCodexLoginProcess(
         }
         postAuthExitTimeout = setTimeout(() => {
           loginTreeKilledAfterAuth = true
-          dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
+          void dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
         }, WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS)
       }, WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS)
     }
