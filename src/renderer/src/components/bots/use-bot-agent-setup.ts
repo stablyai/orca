@@ -3,7 +3,10 @@ import type { BotAgent } from '../../../../shared/bot-types'
 import type { BotAgentSetup } from './BotAgentLaunchPicker'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { agentChatPermissionModes } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import type { AgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import {
+  savedChatPermissionMode,
+  type AgentChatPermissionMode
+} from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 /** The owner's permission for the bot, whichever agent it ends up on: a mode, or the chats' own. */
 export type BotPermissionIntent = AgentChatPermissionMode | 'inherit'
@@ -12,16 +15,30 @@ function offersPermissions(agent: BotAgent): boolean {
   return Boolean(agentChatPermissionModes(agent)?.modes.length)
 }
 
-/** `setup` with `intent` as its permission, where its agent offers that mode. */
+/** The mode a bot with `intent` runs in on `agent`, as its chats resolve a saved override: the mode
+ *  itself where the agent offers it, else Ask. None for the chats' own or an agent without modes. */
+function effectiveMode(
+  agent: BotAgent,
+  intent: BotPermissionIntent
+): AgentChatPermissionMode | undefined {
+  const support = agentChatPermissionModes(agent)
+  return support?.modes.length && intent !== 'inherit'
+    ? savedChatPermissionMode(support, intent)
+    : undefined
+}
+
+/** `setup` showing what `intent` runs as on its agent, so the picker never shows the chats' own for a
+ *  kept mode the agent lacks. */
 function withIntent(setup: BotAgentSetup, intent: BotPermissionIntent): BotAgentSetup {
   const { permissionMode: _shown, ...rest } = setup
-  const offered = agentChatPermissionModes(setup.agent)?.modes.find((mode) => mode === intent)
-  return offered ? { ...rest, permissionMode: offered } : rest
+  const mode = effectiveMode(setup.agent, intent)
+  return mode ? { ...rest, permissionMode: mode } : rest
 }
 
 /** What a pick says about the owner's permission. An agent with no permissions says nothing, and
- *  neither does a move to another agent that only dropped it; clearing it on the same agent (Same as
- *  chats, Use chat defaults) chooses the chats' own. */
+ *  neither does a move to another agent that only dropped it, nor an edit (a model, an effort) that
+ *  keeps the mode shown. Clearing the shown mode on the same agent (Same as chats, Use chat defaults)
+ *  chooses the chats' own. */
 function nextIntent(
   intent: BotPermissionIntent,
   current: BotAgentSetup,
@@ -30,10 +47,15 @@ function nextIntent(
   if (!offersPermissions(next.agent)) {
     return intent
   }
-  if (next.permissionMode) {
-    return next.permissionMode
+  if (next.agent !== current.agent) {
+    return next.permissionMode && next.permissionMode !== effectiveMode(next.agent, intent)
+      ? next.permissionMode
+      : intent
   }
-  return next.agent === current.agent ? 'inherit' : intent
+  if (!next.permissionMode) {
+    return 'inherit'
+  }
+  return next.permissionMode === current.permissionMode ? intent : next.permissionMode
 }
 
 /** A new bot's agent, model and permissions on `hostId`. Follows the first agent that computer has,

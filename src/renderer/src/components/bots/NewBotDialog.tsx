@@ -361,6 +361,7 @@ export function NewBotDialog({
               model={menu.model}
               choices={choices}
               onSetupChange={agentSetup.setSetup}
+              keptPermission={agentSetup.intent}
               onAddHost={hosts ? undefined : setAddHostMode}
             />
             {template ? <NewBotTakesOver worktrees={proposal?.worktrees} /> : null}

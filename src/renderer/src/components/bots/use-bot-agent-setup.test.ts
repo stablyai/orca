@@ -34,6 +34,39 @@ describe('useBotAgentSetup with a kept permission', () => {
     act(() => result.current.setSetup({ agent: 'claude' }))
     expect(result.current.setup).toEqual({ agent: 'claude' })
   })
+  it('shows the mode a kept one runs as where the agent lacks it, and a model edit there keeps it', () => {
+    const { result } = renderHook(() => useBotAgentSetup(ALL, 'local', undefined, 'ask'))
+    act(() => result.current.setSetup({ agent: 'claude', permissionMode: 'accept-edits' }))
+    expect(result.current.intent).toBe('accept-edits')
+    // Codex has no Accept edits; its chats run a saved one as Ask, so the picker shows Ask.
+    act(() => result.current.setSetup({ agent: 'codex' }))
+    expect(result.current.setup).toEqual({ agent: 'codex', permissionMode: 'ask' })
+    expect(result.current.intent).toBe('accept-edits')
+    // A model or effort edit commits the shown mode; it is not a switch to the chats' own.
+    const launch = { model: 'gpt-x', options: { effort: 'high' } }
+    act(() => result.current.setSetup({ agent: 'codex', launch, permissionMode: 'ask' }))
+    expect(result.current.intent).toBe('accept-edits')
+    expect(result.current.setup).toEqual({ agent: 'codex', launch, permissionMode: 'ask' })
+    // Back on Claude, carried as the kept mode, it is Accept edits again.
+    act(() => result.current.setSetup({ agent: 'claude', permissionMode: 'accept-edits' }))
+    expect(result.current.setup).toEqual({ agent: 'claude', permissionMode: 'accept-edits' })
+  })
+
+  it('takes a mode picked on the fallback agent, and clearing it there as the chats’ own', () => {
+    const { result } = renderHook(() => useBotAgentSetup(ALL, 'local', undefined, 'accept-edits'))
+    act(() => result.current.setSetup({ agent: 'codex' }))
+    act(() => result.current.setSetup({ agent: 'codex', permissionMode: 'full-access' }))
+    expect(result.current.intent).toBe('full-access')
+    act(() => result.current.setSetup({ agent: 'codex' }))
+    expect(result.current.intent).toBe('inherit')
+    expect(result.current.setup).toEqual({ agent: 'codex' })
+  })
+
+  it('takes another mode picked on another agent’s pane', () => {
+    const { result } = renderHook(() => useBotAgentSetup(ALL, 'local', undefined, 'ask'))
+    act(() => result.current.setSetup({ agent: 'codex', permissionMode: 'auto' }))
+    expect(result.current.intent).toBe('auto')
+  })
 })
 
 describe('useBotAgentSetup without one', () => {
