@@ -22,6 +22,7 @@ import {
 } from './browser-session-cookie-scopes'
 import {
   readSessionCookieSnapshot,
+  removeOtherKeychainModeSnapshot,
   removeSessionCookieSnapshot,
   routeSnapshotPath,
   snapshotPath,
@@ -86,6 +87,7 @@ export async function forgetBrowserRoutePartitionSessionCookies(partition: strin
   try {
     // File first: any restore that starts from here on reads nothing.
     await removeSessionCookieSnapshot(filePath)
+    await removeOtherKeychainModeSnapshot(filePath)
   } finally {
     // One that read it already (or ran past its page's timeout) finishes before the jar is cleared,
     // and the next restore tracks the jar again even when the file could not go.
@@ -315,14 +317,20 @@ export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
   )
 }
 
+/** For cleared cookies: the live jar's snapshot follows the jar, but the other dev keychain mode's would not. */
+export async function forgetOtherKeychainModeSessionCookies(profileId: string): Promise<void> {
+  await removeOtherKeychainModeSnapshot(snapshotPath(profileId))
+}
+
 /** For a browser profile being deleted. */
 export function forgetBrowserSessionCookies(profileId: string): void {
   try {
     const filePath = snapshotPath(profileId)
     stopTracking(filePath)
-    void removeSessionCookieSnapshot(filePath).catch((error: unknown) =>
-      warnForgetFailed(profileId, error)
-    )
+    void Promise.all([
+      removeSessionCookieSnapshot(filePath),
+      removeOtherKeychainModeSnapshot(filePath)
+    ]).catch((error: unknown) => warnForgetFailed(profileId, error))
   } catch (error) {
     warnForgetFailed(profileId, error)
   }

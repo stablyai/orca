@@ -1,13 +1,19 @@
 import { app } from 'electron'
 import { readFile, rm } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { isBrowserRoutePartition } from '../../routing/partitions/browser-route-identity'
 import { getSecretStore, hasSecretStore } from '../../../../shared/secure-storage/secret-store'
 import { writeSecureFile } from '../../../../shared/secure-storage/secure-file'
 import type { CdpCookie } from '../browser-cdp-cookie'
+import {
+  canSwitchDevKeychainMode,
+  usesDevMockKeychain
+} from '../../../startup/chromium-policy/configure-dev-keychain'
 
 const SNAPSHOT_FORMAT = 'orca-browser-session-cookies-v1'
 const SNAPSHOT_DIRECTORY = 'browser-session-cookies'
+// Why a separate folder: a dev mock-keychain run can't decrypt real-keychain snapshots and must not replace them.
+const MOCK_KEYCHAIN_SNAPSHOT_DIRECTORY = 'browser-session-cookies-mock-keychain'
 const ROUTE_SNAPSHOT_DIRECTORY = 'route-partitions'
 
 let profileDirectory: string | null = null
@@ -16,8 +22,11 @@ export function configureBrowserSessionCookieSnapshots(directory: string): void 
   profileDirectory = directory
 }
 
-function snapshotDirectory(): string {
-  return join(profileDirectory ?? app.getPath('userData'), SNAPSHOT_DIRECTORY)
+function snapshotDirectory(mockKeychain = usesDevMockKeychain()): string {
+  return join(
+    profileDirectory ?? app.getPath('userData'),
+    mockKeychain ? MOCK_KEYCHAIN_SNAPSHOT_DIRECTORY : SNAPSHOT_DIRECTORY
+  )
 }
 
 export function snapshotPath(profileId: string): string {
@@ -94,4 +103,17 @@ export async function writeSessionCookieSnapshot(
 
 export async function removeSessionCookieSnapshot(filePath: string): Promise<void> {
   await rm(filePath, { force: true })
+}
+
+/** For deletes and clears: also drops the same snapshot saved under the other dev keychain mode. */
+export async function removeOtherKeychainModeSnapshot(filePath: string): Promise<void> {
+  if (!canSwitchDevKeychainMode()) {
+    return
+  }
+  const mockKeychain = usesDevMockKeychain()
+  const other = join(
+    snapshotDirectory(!mockKeychain),
+    relative(snapshotDirectory(mockKeychain), filePath)
+  )
+  await removeSessionCookieSnapshot(other)
 }

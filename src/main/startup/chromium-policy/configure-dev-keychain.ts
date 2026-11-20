@@ -1,10 +1,15 @@
 import { app } from 'electron'
 
 let devMockKeychain = false
+let devKeychainModeSwitchable = false
 
 /** Unpackaged macOS builds use Chromium's mock keychain unless ORCA_DEV_USE_KEYCHAIN=1. */
 export function configureDevKeychain(isDev: boolean): void {
-  if (process.platform !== 'darwin' || !isDev || process.env.ORCA_DEV_USE_KEYCHAIN === '1') {
+  if (process.platform !== 'darwin' || !isDev) {
+    return
+  }
+  devKeychainModeSwitchable = true
+  if (process.env.ORCA_DEV_USE_KEYCHAIN === '1') {
     return
   }
   // Why: fresh dev bundles otherwise block on hidden macOS Keychain prompts.
@@ -16,4 +21,9 @@ export function configureDevKeychain(isDev: boolean): void {
 /** True only when configureDevKeychain chose the mock keychain for this run. */
 export function usesDevMockKeychain(): boolean {
   return devMockKeychain
+}
+
+/** True on macOS dev builds, where data from both keychain modes can sit in one profile. */
+export function canSwitchDevKeychainMode(): boolean {
+  return devKeychainModeSwitchable
 }
