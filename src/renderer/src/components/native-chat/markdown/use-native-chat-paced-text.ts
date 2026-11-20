@@ -6,21 +6,18 @@ import {
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals'
 import {
+  nativeChatRevealStepFrames,
   nativeChatTextAppended,
   playNativeChatTextReveal,
   receiveNativeChatText,
   startNativeChatTextReveal,
-  type NativeChatTextReveal,
-  type NativeChatTextRevealFrames
+  type NativeChatTextReveal
 } from '../../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
 
 const WORD_FADE_MS = 300
 
-const FRAMES: NativeChatTextRevealFrames = {
-  now: () => performance.now(),
-  request: (step) => requestAnimationFrame(step),
-  cancel: (frame) => cancelAnimationFrame(frame)
-}
+// Text arrives every 60 ms; stepping faster would parse and draw the reply again between arrivals.
+const FRAMES = nativeChatRevealStepFrames(60)
 
 export type NativeChatPacedText = {
   text: string
