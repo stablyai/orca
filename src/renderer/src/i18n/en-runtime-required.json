@@ -1517,8 +1517,8 @@
       "confirmWarning": "They’ll act as you on {{computer}}.",
       "controlBrief": "They can act as you here.",
       "controlBriefIfAdded": "Anyone you add can act as you here.",
-      "controlBriefOnHost": "They can act as you on {{computer}}.",
       "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
+      "controlBriefOnHost": "They can act as you on {{computer}}.",
       "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
@@ -2650,18 +2650,18 @@
           "notListed_other": "{{count}} more kept workspaces are not listed."
         },
         "change": {
-          "fullDescription_one": "1 workspace matches now. It'll be deleted a few seconds after you apply this change.",
-          "fullDescription_other": "{{count}} workspaces match now. They'll be deleted a few seconds after you apply this change.",
-          "inheritDescription_one": "1 workspace matches the global rules now. It'll be deleted a few seconds after you switch.",
-          "inheritDescription_other": "{{count}} workspaces match the global rules now. They'll be deleted a few seconds after you switch.",
+          "fullDescription_one": "1 workspace matches now.",
+          "fullDescription_other": "{{count}} workspaces match now.",
+          "inheritDescription_one": "1 workspace matches the global rules now.",
+          "inheritDescription_other": "{{count}} workspaces match the global rules now.",
           "keptDeletedCount_one": "1 kept workspace was already deleted.",
           "keptDeletedCount_other": "{{count}} kept workspaces were already deleted.",
           "moreMatches_one": "1 more workspace matches now. Review and confirm again.",
           "moreMatches_other": "{{count}} more workspaces match now. Review and confirm again."
         },
         "enable": {
-          "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",
-          "description_other": "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on.",
+          "description_one": "1 workspace matches right now.",
+          "description_other": "{{count}} workspaces match right now.",
           "summary": "{{count}} will be deleted",
           "summary_one": "1 will be deleted",
           "summary_other": "{{count}} will be deleted"

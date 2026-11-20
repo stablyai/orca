@@ -20775,8 +20775,8 @@
           "keepNamed": "{{name}} behalten",
           "cancel": "Abbrechen",
           "turnOn": "Aktivieren",
-          "description_one": "1 Arbeitsbereich entspricht jetzt den Regeln. Er wird wenige Sekunden nach dem Aktivieren gelöscht.",
-          "description_other": "{{count}} Arbeitsbereiche entsprechen jetzt den Regeln. Sie werden wenige Sekunden nach dem Aktivieren gelöscht."
+          "description_one": "1 Arbeitsbereich entspricht jetzt den Regeln.",
+          "description_other": "{{count}} Arbeitsbereiche entsprechen jetzt den Regeln."
         },
         "change": {
           "thisHost": "diesem Host",
@@ -20791,10 +20791,10 @@
           "inheritTitle": "Globale Regeln für {{project}} verwenden?",
           "projectEnableTitle": "{{rule}} für {{project}} aktivieren?",
           "projectTitle": "{{rule}} für {{project}} ändern?",
-          "inheritDescription_one": "1 Arbeitsbereich entspricht jetzt den globalen Regeln. Er wird wenige Sekunden nach dem Wechsel gelöscht.",
-          "inheritDescription_other": "{{count}} Arbeitsbereiche entsprechen jetzt den globalen Regeln. Sie werden wenige Sekunden nach dem Wechsel gelöscht.",
-          "fullDescription_one": "1 Arbeitsbereich entspricht jetzt den Regeln. Er wird wenige Sekunden nach dem Anwenden dieser Änderung gelöscht.",
-          "fullDescription_other": "{{count}} Arbeitsbereiche entsprechen jetzt den Regeln. Sie werden wenige Sekunden nach dem Anwenden dieser Änderung gelöscht.",
+          "inheritDescription_one": "1 Arbeitsbereich entspricht jetzt den globalen Regeln.",
+          "inheritDescription_other": "{{count}} Arbeitsbereiche entsprechen jetzt den globalen Regeln.",
+          "fullDescription_one": "1 Arbeitsbereich entspricht jetzt den Regeln.",
+          "fullDescription_other": "{{count}} Arbeitsbereiche entsprechen jetzt den Regeln.",
           "keptDeleted": "{{name}} wurde bereits gelöscht.",
           "keptDeletedCount_one": "1 zum Behalten markierter Arbeitsbereich wurde bereits gelöscht.",
           "keptDeletedCount_other": "{{count}} zum Behalten markierte Arbeitsbereiche wurden bereits gelöscht.",

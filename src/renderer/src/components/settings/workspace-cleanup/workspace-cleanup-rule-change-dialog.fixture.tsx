@@ -299,3 +299,38 @@ export const previewError = defineFixture({
     <RepositoryWorkspaceCleanupSection repo={repo} forceVisible updateRepo={async () => true} />
   )
 })
+
+export const advancedPreviewError = defineFixture({
+  ...previewError,
+  interact: async (frame) => {
+    const waitFor = async (ready: () => boolean) => {
+      if (ready()) {
+        return
+      }
+      await new Promise<void>((resolve) => {
+        const observer = new MutationObserver(() => {
+          if (ready()) {
+            observer.disconnect()
+            resolve()
+          }
+        })
+        observer.observe(frame, { subtree: true, attributes: true, childList: true })
+      })
+    }
+    await waitFor(
+      () => frame.querySelector('[role="switch"]')?.getAttribute('aria-disabled') === 'false'
+    )
+    const advanced = [...frame.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
+      button.textContent?.includes('Advanced')
+    )!
+    advanced.click()
+    await waitFor(() => frame.querySelectorAll('[role="switch"]').length > 3)
+    frame.querySelectorAll<HTMLButtonElement>('[role="switch"]')[3].click()
+    await waitFor(
+      () =>
+        frame.querySelector('[role="switch"]')?.getAttribute('aria-disabled') === 'false' &&
+        (advanced.getAttribute('aria-expanded') === 'false' ||
+          frame.querySelector('[role="alert"]') !== null)
+    )
+  }
+})

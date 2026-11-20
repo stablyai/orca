@@ -40,17 +40,21 @@ export function SettingsSegmentedControl<T extends string | number>({
   const tabStop = options.some((opt) => opt.value === value) ? value : enabled[0]?.value
   // Radio-group keys: arrows (and Home/End) move to the next available option and pick it.
   const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, current: T): void => {
-    const index = enabled.findIndex((opt) => opt.value === current)
-    const next =
+    const index = options.findIndex((opt) => opt.value === current)
+    const direction =
       event.key === 'ArrowRight' || event.key === 'ArrowDown'
-        ? enabled[(index + 1) % enabled.length]
+        ? 1
         : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
-          ? enabled[(index - 1 + enabled.length) % enabled.length]
-          : event.key === 'Home'
-            ? enabled[0]
-            : event.key === 'End'
-              ? enabled.at(-1)
-              : undefined
+          ? -1
+          : 0
+    let next = event.key === 'Home' ? enabled[0] : event.key === 'End' ? enabled.at(-1) : undefined
+    for (let offset = 1; direction && offset <= options.length; offset++) {
+      const candidate = options[(index + direction * offset + options.length) % options.length]
+      if (!candidate.disabled) {
+        next = candidate
+        break
+      }
+    }
     if (!next) {
       return
     }

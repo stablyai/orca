@@ -38,10 +38,24 @@ it('moves to and picks the next available option with the arrow keys, skipping d
   fireEvent.keyDown(archive, { key: 'ArrowRight' })
   expect(onChange).toHaveBeenLastCalledWith('delete')
   expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Delete' }))
-  fireEvent.keyDown(archive, { key: 'ArrowLeft' })
-  expect(onChange).toHaveBeenLastCalledWith('delete')
+  onChange.mockClear()
+  fireEvent.keyDown(screen.getByRole('radio', { name: 'Delete' }), { key: 'ArrowLeft' })
+  expect(onChange).toHaveBeenCalledWith('archive')
+  expect(document.activeElement).toBe(archive)
   fireEvent.keyDown(archive, { key: 'Home' })
   expect(onChange).toHaveBeenLastCalledWith('archive')
+})
+
+it.each([
+  ['ArrowRight', 'delete', 'Delete'],
+  ['ArrowLeft', 'archive', 'Archive']
+])('navigates %s from a checked disabled option', (key, value, label) => {
+  const onChange = renderControl('soon')
+  const soon = screen.getByRole('radio', { name: 'Soon' })
+  soon.focus()
+  fireEvent.keyDown(soon, { key })
+  expect(onChange).toHaveBeenCalledWith(value)
+  expect(document.activeElement).toBe(screen.getByRole('radio', { name: label }))
 })
 
 it('leaves other keys, such as Tab, alone', () => {

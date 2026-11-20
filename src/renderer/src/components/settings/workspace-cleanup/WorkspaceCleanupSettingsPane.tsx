@@ -45,8 +45,10 @@ export function WorkspaceCleanupSettingsPane({
     onSavedPreview: (savedRules, next) => adoptPreview(savedRules, next)
   })
   const rules =
-    change.read?.state.rules ??
-    (hostRules.state === 'ready' ? hostRules.rules : getDefaultWorkspaceCleanupRules())
+    owner.kind === 'local' && hostRules.state === 'ready'
+      ? hostRules.rules
+      : (change.read?.state.rules ??
+        (hostRules.state === 'ready' ? hostRules.rules : getDefaultWorkspaceCleanupRules()))
   const { hostReport, preview, cleaningUp, cleanUpNow, adoptPreview } =
     useWorkspaceCleanupHostActivity(owner, rules)
   const matches = useMemo(() => summarizeMatches(preview), [preview])

@@ -180,6 +180,16 @@ function renderWithProviders(view: React.ReactNode) {
     </TooltipProvider>
   )
 }
+function GlobalSettingsPane() {
+  const settings = useAppStore((state) => state.settings)
+  return (
+    <WorkspaceCleanupSettingsPane
+      hostScope={{ target: { kind: 'local' }, available: true }}
+      settings={settings}
+      updateSettings={() => {}}
+    />
+  )
+}
 async function open() {
   renderWithProviders(<Harness />)
   await waitFor(() =>
@@ -262,6 +272,7 @@ it('blocks the first confirm when a kept incarnation was deleted', async () => {
   )
 })
 it('keeps old-host rule controls focusable and refuses a rule toggle', async () => {
+  const updateRepo = vi.fn(async () => true)
   runtime.mockResolvedValue({
     ok: false,
     error: { code: 'method_not_found', message: 'Unknown method' }
@@ -292,20 +303,34 @@ it('keeps old-host rule controls focusable and refuses a rule toggle', async () 
     ]
   })
   renderWithProviders(
-    <RepositoryWorkspaceCleanupSection
-      repo={staleRepo}
-      updateRepo={async () => true}
-      forceVisible
-    />
+    <RepositoryWorkspaceCleanupSection repo={staleRepo} updateRepo={updateRepo} forceVisible />
   )
   const control = await screen.findByRole('switch', { name: 'Delete merged workspaces' })
+  await screen.findByText('Update Orca on this host to change rules. Off still works.')
   await waitFor(() => expect(control.getAttribute('aria-disabled')).toBe('true'))
   expect(control.hasAttribute('disabled')).toBe(false)
   fireEvent.click(control)
-  expect(useAppStore.getState().repos[0].workspaceCleanupPolicy).toMatchObject({
-    mode: 'custom',
-    rules: { merged: { enabled: true }, inactive: { enabled: false } }
-  })
+  expect(
+    runtime.mock.calls.some(([request]) =>
+      [
+        'workspaceCleanup.previewChange',
+        'workspaceCleanup.reservePolicyWrite',
+        'settings.update'
+      ].includes(request.method)
+    )
+  ).toBe(false)
+  expect(save).not.toHaveBeenCalled()
+  expect(updateRepo).not.toHaveBeenCalled()
+})
+
+it('keeps the header match count factual when every reviewed workspace is kept', async () => {
+  await open()
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Keep existing' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Keep added' }))
+  const dialog = screen.getByRole('dialog')
+  const description = document.getElementById(dialog.getAttribute('aria-describedby')!)!
+  expect(description.textContent).toBe('2 workspaces match right now.')
+  expect(screen.getByText(/0 will be deleted/)).toBeTruthy()
 })
 it('routes the actual project switch through confirmation before saving', async () => {
   renderWithProviders(
@@ -350,13 +375,7 @@ it('settles an applied write whose acknowledgement was lost without resubmitting
 it('routes the actual global switch through the same full-set confirmation', async () => {
   read.state.repoId = null
   read.state.projects[0].policy = null
-  renderWithProviders(
-    <WorkspaceCleanupSettingsPane
-      hostScope={{ target: { kind: 'local' }, available: true }}
-      settings={getDefaultSettings('/synthetic')}
-      updateSettings={() => {}}
-    />
-  )
+  renderWithProviders(<GlobalSettingsPane />)
   const control = await screen.findByRole('switch', { name: 'Delete merged workspaces' })
   await waitFor(() => expect(control.getAttribute('aria-disabled')).toBe('false'))
   fireEvent.click(control)
@@ -469,13 +488,7 @@ it('retains confirmed global matches and excludes durable Keep when a background
     }
     return normal(request)
   })
-  renderWithProviders(
-    <WorkspaceCleanupSettingsPane
-      hostScope={{ target: { kind: 'local' }, available: true }}
-      settings={getDefaultSettings('/synthetic')}
-      updateSettings={() => {}}
-    />
-  )
+  renderWithProviders(<GlobalSettingsPane />)
   const control = await screen.findByRole('switch', { name: 'Delete merged workspaces' })
   await waitFor(() => expect(control.getAttribute('aria-disabled')).toBe('false'))
   fireEvent.click(control)

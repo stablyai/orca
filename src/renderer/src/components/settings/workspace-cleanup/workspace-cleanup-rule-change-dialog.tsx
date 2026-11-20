@@ -156,30 +156,27 @@ export function WorkspaceCleanupRuleChangeDialog({
       : request?.kind === 'inherit'
         ? t(
             'components.settings.workspaceCleanup.change.inheritDescription',
-            "{{count}} workspaces match the global rules now. They'll be deleted a few seconds after you switch.",
+            '{{count}} workspaces match the global rules now.',
             {
               count: rows.length,
-              defaultValue_one:
-                "1 workspace matches the global rules now. It'll be deleted a few seconds after you switch."
+              defaultValue_one: '1 workspace matches the global rules now.'
             }
           )
         : enabling
           ? t(
               'components.settings.workspaceCleanup.enable.description',
-              "{{count}} workspaces match right now. They'll be deleted a few seconds after you turn this on.",
+              '{{count}} workspaces match right now.',
               {
                 count: rows.length,
-                defaultValue_one:
-                  "1 workspace matches right now. It'll be deleted a few seconds after you turn this on."
+                defaultValue_one: '1 workspace matches right now.'
               }
             )
           : t(
               'components.settings.workspaceCleanup.change.fullDescription',
-              "{{count}} workspaces match now. They'll be deleted a few seconds after you apply this change.",
+              '{{count}} workspaces match now.',
               {
                 count: rows.length,
-                defaultValue_one:
-                  "1 workspace matches now. It'll be deleted a few seconds after you apply this change."
+                defaultValue_one: '1 workspace matches now.'
               }
             )
   return (

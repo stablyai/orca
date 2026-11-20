@@ -82,7 +82,7 @@ export function RepositoryWorkspaceCleanupSection({
     if (next !== 'global' && next !== 'off' && next !== 'custom') {
       return
     }
-    if (next === 'off' && hostRules.state !== 'ready') {
+    if (next === 'off' && change.capability !== 'ready' && hostRules.state !== 'ready') {
       return
     }
     change.requestChange({
@@ -169,7 +169,10 @@ export function RepositoryWorkspaceCleanupSection({
                 >
                   {t('components.settings.repository.workspaceCleanup.useGlobal', 'Use global')}
                 </SelectItem>
-                <SelectItem value="off" aria-disabled={hostRules.state !== 'ready'}>
+                <SelectItem
+                  value="off"
+                  aria-disabled={change.capability !== 'ready' && hostRules.state !== 'ready'}
+                >
                   {t('components.settings.repository.workspaceCleanup.off', 'Off')}
                 </SelectItem>
                 <SelectItem
@@ -219,7 +222,7 @@ export function RepositoryWorkspaceCleanupSection({
           {policy?.mode === 'custom' ? (
             <div className="ml-4 border-l border-border pl-4">
               <WorkspaceCleanupRuleRows
-                key={change.unsavedChanges}
+                inactiveDraftKey={change.unsavedChanges}
                 rules={policy.rules}
                 forceVisible
                 disabled={change.guarded}
