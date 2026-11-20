@@ -17,12 +17,13 @@ it.each(['Finish the task', 'a'.repeat(510)])(
       goalBackgroundWork: () => 'exited',
       sink: {
         appendItem: (identity, body) => {
-          const existing = items.find((item) => item.itemId === identity.uuid)
+          const itemId = JSON.stringify(identity)
+          const existing = items.find((item) => item.itemId === itemId)
           if (existing) {
             existing.body = body
           } else {
             items.push({
-              itemId: identity.uuid,
+              itemId,
               sequence: items.length + 1,
               revision: 1,
               observedAt: 1_000,
