@@ -19,6 +19,7 @@ const MAX_ATTEMPT_SPACING_MS = 24 * ATTEMPT_SPACING_MS
 // The copy blocks no one; this only bounds the disk and CPU it uses, at a slow disk's pace.
 const MIN_COPY_BUDGET_MS = 120_000
 const SLOW_COPY_BYTES_PER_MS = (4 * MIB) / 1000
+const MAX_BUDGET_DOUBLINGS = 6
 // Retention waits at most this long for a quit to use a ready copy, then prunes and the copy goes stale.
 const MAX_PRUNE_DEFERRAL_MS = MAX_ATTEMPT_SPACING_MS
 // journal_size_limit: closing at quit checkpoints at most this much.
@@ -177,10 +178,10 @@ export class OrchestrationDbCompaction {
     }
     // Read before the child takes its snapshot, so any later commit moves the stamp.
     const stamp = this.stamp()
-    const budgetMs = Math.max(
-      MIN_COPY_BUDGET_MS,
-      Math.round(state.liveBytes / SLOW_COPY_BYTES_PER_MS)
-    )
+    // Doubled with each attempt, so a disk slower than assumed still finishes one in the end.
+    const budgetMs =
+      Math.max(MIN_COPY_BUDGET_MS, Math.round(state.liveBytes / SLOW_COPY_BYTES_PER_MS)) *
+      2 ** Math.min(this.attempts - 1, MAX_BUDGET_DOUBLINGS)
     const copied = await this.runChild(stamp, budgetMs)
     if (copied && !this.stopped && this.stamp() === stamp) {
       this.ready = { stamp, at: Date.now() }

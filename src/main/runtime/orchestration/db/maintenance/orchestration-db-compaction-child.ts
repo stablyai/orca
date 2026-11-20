@@ -49,9 +49,13 @@ export function runCompactionChild(job: {
                 child.kill('SIGKILL')
               }
             })
-      walWatch?.on('error', () => walWatch?.close())
+      walWatch?.on('error', () => {
+        walWatch?.close()
+        child.kill('SIGKILL')
+      })
     } catch {
-      // No events on this file system: the check after the copy still drops a stale one.
+      // Without events nothing could stop a copy a write made useless before it rewrote all the history.
+      child.kill('SIGKILL')
     }
     // Any exit, update installs included: a child left running would hold the app's executable open.
     const killOnExit = (): void => {
