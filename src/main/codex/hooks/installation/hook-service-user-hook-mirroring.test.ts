@@ -180,6 +180,37 @@ describe('CodexHookService', () => {
     expect(runtimeToml).not.toContain(hookTrustHeader(`${systemHooksPath}:post_compact:0:0`, true))
   })
 
+  it('carries a trusted SessionEnd user hook into the runtime home (STA-16540)', async () => {
+    const systemCodexHome = join(homes.tmpHome, '.codex')
+    const systemHooksPath = join(systemCodexHome, 'hooks.json')
+    mkdirSync(systemCodexHome, { recursive: true })
+    const command = 'node -e "process.exit(0)"'
+    writeFileSync(
+      systemHooksPath,
+      `${JSON.stringify({
+        hooks: {
+          SessionEnd: [{ matcher: 'other', hooks: [{ type: 'command', command, timeout: 9 }] }]
+        }
+      })}\n`,
+      'utf-8'
+    )
+    // Hash codex-cli 0.170.0 reported for this hook.
+    const codexHash = 'sha256:b4f5513d145df2d6d400f79b73a8f6e1a4eaa96484fbe4b793e802d7906e9e02'
+    writeFileSync(
+      join(systemCodexHome, 'config.toml'),
+      `model = "system-model"\n\n${hookTrustHeader(`${systemHooksPath}:session_end:0:0`, true)}\nenabled = true\ntrusted_hash = "${codexHash}"\n`,
+      'utf-8'
+    )
+
+    expect((await new CodexHookService().install()).state).toBe('installed')
+
+    const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
+    const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
+    expect(runtimeToml).toContain(
+      `${hookTrustHeader(`${join(managedCodexHome, 'hooks.json')}:session_end:0:0`)}\nenabled = true\ntrusted_hash = "${codexHash}"`
+    )
+  })
+
   it('removes runtime user hook trust after system approval is revoked', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')

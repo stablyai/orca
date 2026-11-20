@@ -8,9 +8,12 @@ import { normalizeCodexHookTimeoutSec } from '../../trust/identity/codex-trust-i
 // Codex trust keys use snake_case event labels; hooks.json uses PascalCase.
 export const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
   SessionStart: 'session_start',
+  SessionEnd: 'session_end',
   UserPromptSubmit: 'user_prompt_submit',
   SubagentStart: 'subagent_start',
   SubagentStop: 'subagent_stop',
+  PreModelRequest: 'pre_model_request',
+  PostModelRequest: 'post_model_request',
   PreToolUse: 'pre_tool_use',
   PermissionRequest: 'permission_request',
   PostToolUse: 'post_tool_use',
@@ -22,9 +25,12 @@ export const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
 
 export const CODEX_EVENT_NAME_BY_LABEL: Record<CodexEventLabel, string> = {
   session_start: 'SessionStart',
+  session_end: 'SessionEnd',
   user_prompt_submit: 'UserPromptSubmit',
   subagent_start: 'SubagentStart',
   subagent_stop: 'SubagentStop',
+  pre_model_request: 'PreModelRequest',
+  post_model_request: 'PostModelRequest',
   pre_tool_use: 'PreToolUse',
   permission_request: 'PermissionRequest',
   post_tool_use: 'PostToolUse',

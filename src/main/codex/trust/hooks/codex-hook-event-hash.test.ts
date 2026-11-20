@@ -23,3 +23,31 @@ describe('the managed Codex Interrupt hook', () => {
     expect(computeTrustedHash(INTERRUPT_ENTRY)).toBe(REAL_INTERRUPT_HASH)
   })
 })
+
+// Frozen from codex-cli 0.162.1 and 0.170.0 hooks/list for this command.
+const PROBE_COMMAND = 'node -e "process.exit(0)"'
+
+describe('the SessionEnd hook', () => {
+  it.each<
+    [string, Omit<CodexTrustEntry, 'sourcePath' | 'groupIndex' | 'handlerIndex' | 'command'>]
+  >([
+    [
+      'sha256:9a8e5508f1534981f66caf8ad29fe27d669188ee71e2d6e3ef56d8e65390f578',
+      { eventLabel: 'session_end' }
+    ],
+    [
+      'sha256:b4f5513d145df2d6d400f79b73a8f6e1a4eaa96484fbe4b793e802d7906e9e02',
+      { eventLabel: 'session_end', matcher: 'other', timeoutSec: 9 }
+    ]
+  ])('reproduces the hash real Codex computed (%s)', (hash, entry) => {
+    expect(
+      computeTrustedHash({
+        sourcePath: '/home/dev/.codex/hooks.json',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: PROBE_COMMAND,
+        ...entry
+      })
+    ).toBe(hash)
+  })
+})
