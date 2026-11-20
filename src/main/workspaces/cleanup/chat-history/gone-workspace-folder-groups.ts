@@ -1,5 +1,6 @@
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import {
+  exactGoneFolderKey,
   goneFolderKey,
   goneFolderOf,
   isStillGone,
@@ -10,6 +11,10 @@ import {
   type GoneFolder,
   type ListedFolders
 } from './deleted-workspace-folders'
+import {
+  deletedFolderGeneration,
+  type DeletedWorkspaceFolderRecord
+} from './deleted-workspace-folder-records'
 
 export type ChatHistorySweepResult = { deleted: number; failed: number; freedBytes: number }
 
@@ -21,26 +26,34 @@ export type GoneFolderSweepScope = {
   /** Complete: an incomplete read can't prove any folder unclaimed. */
   listed: ListedFolders
   parentIds: Set<string>
+  /** Folders Orca deleted itself; a gone folder without one is never swept. */
+  deletedFolders: readonly DeletedWorkspaceFolderRecord[]
 }
 
 /**
  * Groups chats by the deleted Orca workspace folder their path is in, then removes each group after
  * re-checking the folder and Orca's rows. `remove` asks `stillGone` right before each chat's
- * removal, after its own slower checks.
+ * removal, after its own slower checks; each chat must have stayed idle since `deletedAt`.
  */
 export async function sweepGoneWorkspaceFolderGroups<T>(
   scope: GoneFolderSweepScope,
-  chats: readonly { path: string; chat: T }[],
+  // `startedAt`: when the chat began; null (unknown) keeps it.
+  chats: readonly { path: string; startedAt: number | null; chat: T }[],
   remove: (
+    /** Byte-exact; see `exactGoneFolderKey`. */
     folderKey: string,
     chats: T[],
-    stillGone: () => Promise<boolean>
+    stillGone: () => Promise<boolean>,
+    deletedAt: number
   ) => Promise<ChatHistorySweepResult>
 ): Promise<ChatHistorySweepResult> {
   const result: ChatHistorySweepResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const goneByPath = new Map<string, Promise<GoneFolder | null>>()
-  const byFolder = new Map<string, { folder: GoneFolder; chats: T[] }>()
-  for (const { path, chat } of chats) {
+  const byFolder = new Map<
+    string,
+    { key: string; folder: GoneFolder; deletedAt: number; chats: T[] }
+  >()
+  for (const { path, startedAt, chat } of chats) {
     if (scope.signal?.aborted) {
       return result
     }
@@ -59,9 +72,25 @@ export async function sweepGoneWorkspaceFolderGroups<T>(
     if (scope.listed.claims.has(key)) {
       continue
     }
-    const group = byFolder.get(key) ?? { folder, chats: [] }
+    // Orca deleted this exact folder, and the chat began while that folder was there.
+    const deletion = deletedFolderGeneration(
+      scope.deletedFolders,
+      folder.ancestorId,
+      folder.name,
+      startedAt
+    )
+    if (!deletion) {
+      continue
+    }
+    const groupKey = `${exactGoneFolderKey(folder)}\0${deletion.createdAt}`
+    const group = byFolder.get(groupKey) ?? {
+      key,
+      folder,
+      deletedAt: deletion.deletedAt,
+      chats: []
+    }
     group.chats.push(chat)
-    byFolder.set(key, group)
+    byFolder.set(groupKey, group)
   }
 
   // Re-read Orca's rows after each folder was seen gone, but stat them again only when they changed.
@@ -92,11 +121,16 @@ export async function sweepGoneWorkspaceFolderGroups<T>(
     scope.isEnabled() &&
     (await isUnclaimed(key, folder)) &&
     (await isStillGone(folder))
-  for (const [key, { folder, chats: group }] of byFolder) {
+  for (const { key, folder, deletedAt, chats: group } of byFolder.values()) {
     if (!(await stillGone(key, folder))) {
       continue
     }
-    const removed = await remove(key, group, () => stillGone(key, folder))
+    const removed = await remove(
+      exactGoneFolderKey(folder),
+      group,
+      () => stillGone(key, folder),
+      deletedAt
+    )
     result.deleted += removed.deleted
     result.failed += removed.failed
     result.freedBytes += removed.freedBytes

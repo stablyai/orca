@@ -13,6 +13,8 @@ import { listAiVaultSessions } from '../../../ai-vault/listing/cached-session-li
 import { deleteHostAiVaultSessionsPermanently } from '../../../ai-vault/deletion/host-session-delete'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { readListedFolders, readWorkspaceParents } from './deleted-workspace-folders'
+import { readDeletedWorkspaceFolderRecords } from './deleted-workspace-folder-records'
+import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
 import {
   sweepGoneWorkspaceFolderGroups,
   type ChatHistorySweepResult
@@ -45,10 +47,11 @@ export type ChatHistorySweepDeps = {
   ) => Promise<ChatHistorySweepResult>
   /** Orca's own chats on this host; absent sweeps none. */
   listNativeChats?: () => readonly AgentSessionRecord[]
-  /** `shouldForget` runs right before each chat's deletion. */
+  /** `shouldForget` runs right before each chat's deletion; a chat used after `idleBefore()` stays. */
   forgetNativeChats?: (
     chats: AgentSessionRecord[],
-    shouldForget: (chat: AgentSessionRecord) => Promise<boolean>
+    shouldForget: (chat: AgentSessionRecord) => Promise<boolean>,
+    idleBefore: () => number
   ) => Promise<ChatHistorySweepResult>
   /** Read before each deletion: the user may turn the setting off while a long scan runs. */
   isEnabled: () => boolean
@@ -89,33 +92,74 @@ async function listInScope(
   return [...sessions.values()]
 }
 
-/** Deletes transcripts and Orca chats whose Orca workspace folder is gone, however the workspace was deleted. */
-export async function sweepDeletedWorkspaceChatHistory(
+/** Not written after Orca deleted the folder, nor within the grace period. */
+function idleBefore(deletedAt: number): number {
+  return Math.min(deletedAt, Date.now() - WORKSPACE_CLEANUP_RULE_GRACE_MS)
+}
+
+function parseTime(value: string | null | undefined): number | null {
+  const time = value ? Date.parse(value) : Number.NaN
+  return Number.isFinite(time) ? time : null
+}
+
+/**
+ * Deletes transcripts and Orca chats of workspace folders Orca itself deleted, recorded when it
+ * deleted them. Folders gone any other way, including workspaces deleted before records existed,
+ * keep their history.
+ */
+export function sweepDeletedWorkspaceChatHistory(
   deps: ChatHistorySweepDeps
 ): Promise<ChatHistorySweepResult> {
+  const recordsDirectory = deps.store.getProfileStorageDirectory?.()
+  if (!recordsDirectory) {
+    return Promise.resolve({ deleted: 0, failed: 0, freedBytes: 0 })
+  }
+  // One sweep at a time: two could both pass a chat's checks before either removes it.
+  return runKeyedSerializedOperation(sweepsByRecordsDirectory, recordsDirectory, () =>
+    sweepRecordedFolders(deps, recordsDirectory)
+  )
+}
+
+const sweepsByRecordsDirectory = new Map<string, Promise<void>>()
+
+async function sweepRecordedFolders(
+  deps: ChatHistorySweepDeps,
+  recordsDirectory: string
+): Promise<ChatHistorySweepResult> {
   const result: ChatHistorySweepResult = { deleted: 0, failed: 0, freedBytes: 0 }
+  const deletedFolders = await readDeletedWorkspaceFolderRecords(recordsDirectory)
+  if (deletedFolders.length === 0) {
+    return result
+  }
   const listed = await readListedFolders(deps.store)
   // A listed path whose symlinks couldn't be followed could protect any folder: prove nothing.
   if (!listed.complete) {
     return result
   }
   const parents = await readWorkspaceParents(deps.store, listed)
-  if (parents.ids.size === 0) {
+  const recordedParents = new Set(deletedFolders.map((record) => record.parentId))
+  if (![...parents.ids].some((id) => recordedParents.has(id))) {
     return result
   }
-  const scope = { ...deps, listed, parentIds: parents.ids }
+  const scope = { ...deps, listed, parentIds: parents.ids, deletedFolders }
   const sessions = await listInScope(deps, parents.scopePaths)
   const transcripts = await sweepGoneWorkspaceFolderGroups(
     scope,
     // The recorded cwd only: cached scope aliases can describe an earlier symlink target.
     sessions.flatMap((session) =>
       session.cwd && isSweepableSession(session, deps.now)
-        ? [{ path: session.cwd, chat: { agent: session.agent, filePath: session.filePath } }]
+        ? [
+            {
+              path: session.cwd,
+              startedAt: parseTime(session.createdAt),
+              chat: { agent: session.agent, filePath: session.filePath }
+            }
+          ]
         : []
     ),
     // Reading one transcript can take a while, so each is checked right before its own removal:
     // the slow transcript reads first, then the cheap folder and row checks nearest the rm.
-    (key, targets, stillGone) =>
+    (key, targets, stillGone, deletedAt) =>
       deps.deleteSessions(
         targets,
         async (target) =>
@@ -123,7 +167,7 @@ export async function sweepDeletedWorkspaceChatHistory(
             target.agent === 'codex'
               ? isCodexRolloutStillIdleInGoneFolder
               : isChatStillIdleInGoneFolder
-          )(target.filePath, key, Date.now())) && (await stillGone())
+          )(target.filePath, key, idleBefore(deletedAt))) && (await stillGone())
       )
   )
   const { listNativeChats, forgetNativeChats } = deps
@@ -133,9 +177,10 @@ export async function sweepDeletedWorkspaceChatHistory(
           scope,
           listNativeChats().flatMap((record) => {
             const path = nativeChatWorkspaceFolder(record, deps.now)
-            return path ? [{ path, chat: record }] : []
+            return path ? [{ path, startedAt: record.createdAt, chat: record }] : []
           }),
-          (_key, chats, stillGone) => forgetNativeChats(chats, stillGone)
+          (_key, chats, stillGone, deletedAt) =>
+            forgetNativeChats(chats, stillGone, () => idleBefore(deletedAt))
         )
       : result
   return {

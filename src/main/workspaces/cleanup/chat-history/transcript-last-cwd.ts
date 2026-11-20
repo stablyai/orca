@@ -1,7 +1,6 @@
 import { open, readdir, stat } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
-import { WORKSPACE_CLEANUP_RULE_GRACE_MS } from '../../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
-import { goneFolderKey, goneFolderOf } from './deleted-workspace-folders'
+import { exactGoneFolderKey, goneFolderOf } from './deleted-workspace-folders'
 
 const CHUNK_BYTES = 256 * 1024
 const MAX_SCAN_BYTES = 16 * 1024 * 1024
@@ -61,17 +60,18 @@ export async function readLastRecordedCwd(
 }
 
 /**
- * Re-read right before deletion: still idle, and not resumed elsewhere since. Orca resumes a chat
- * whose folder is gone at a live workspace's root (#17745), and the transcript keeps its first cwd.
+ * Re-read right before deletion: not written after `idleBefore`, and not resumed elsewhere since.
+ * Orca resumes a chat whose folder is gone at a live workspace's root (#17745), and the transcript
+ * keeps its first cwd.
  */
 export async function isStillIdleInGoneFolder(
   filePath: string,
   folderKey: string,
-  now: number,
+  idleBefore: number,
   readLastCwd: (filePath: string) => Promise<string | null> = readLastRecordedCwd
 ): Promise<boolean> {
   try {
-    if (now - (await stat(filePath)).mtimeMs < WORKSPACE_CLEANUP_RULE_GRACE_MS) {
+    if ((await stat(filePath)).mtimeMs > idleBefore) {
       return false
     }
     // No recorded location means no proof the chat stayed in the gone folder: keep it.
@@ -80,7 +80,7 @@ export async function isStillIdleInGoneFolder(
       return false
     }
     const lastFolder = await goneFolderOf(lastCwd)
-    return lastFolder !== null && goneFolderKey(lastFolder) === folderKey
+    return lastFolder !== null && exactGoneFolderKey(lastFolder) === folderKey
   } catch {
     return false
   }
@@ -119,10 +119,10 @@ async function companionFiles(filePath: string): Promise<string[] | null> {
 export async function isChatStillIdleInGoneFolder(
   filePath: string,
   folderKey: string,
-  now: number
+  idleBefore: number
 ): Promise<boolean> {
   const before = await fileVersion(filePath)
-  if (before === null || !(await isStillIdleInGoneFolder(filePath, folderKey, now))) {
+  if (before === null || !(await isStillIdleInGoneFolder(filePath, folderKey, idleBefore))) {
     return false
   }
   const companions = await companionFiles(filePath)
@@ -133,9 +133,9 @@ export async function isChatStillIdleInGoneFolder(
   for (const companion of companions) {
     versions.set(companion, await fileVersion(companion))
     const idle = companion.endsWith('.jsonl')
-      ? await isStillIdleInGoneFolder(companion, folderKey, now)
+      ? await isStillIdleInGoneFolder(companion, folderKey, idleBefore)
       : await stat(companion).then(
-          (stats) => now - stats.mtimeMs >= WORKSPACE_CLEANUP_RULE_GRACE_MS,
+          (stats) => stats.mtimeMs <= idleBefore,
           () => false
         )
     if (!idle) {

@@ -68,7 +68,7 @@ function readLastRolloutCwd(filePath: string): Promise<string | null> {
 export function isCodexRolloutStillIdleInGoneFolder(
   filePath: string,
   folderKey: string,
-  now: number
+  idleBefore: number
 ): Promise<boolean> {
-  return isStillIdleInGoneFolder(filePath, folderKey, now, readLastRolloutCwd)
+  return isStillIdleInGoneFolder(filePath, folderKey, idleBefore, readLastRolloutCwd)
 }
