@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import type { Session } from '../sessions/session'
 import { inspectTerminalHostProcess } from './terminal-host-process-inspection'
 
@@ -32,14 +31,15 @@ afterEach(() => {
   Object.defineProperty(process, 'platform', { value: platform })
 })
 
-function shellPane(sample: TerminalForegroundSample): Session {
+function shellPane(foregroundGroup: number): Session {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a steady POSIX poll reads only these members
   return {
     isAlive: true,
     incarnationId: 'incarnation-1',
     pid: 4242,
     processNameIsSpawnFile: false,
-    observeForeground: async () => sample,
+    shellIsRootChild: false,
+    readForegroundGroup: () => foregroundGroup,
     getForegroundProcess: () => 'zsh'
   } as unknown as Session
 }
@@ -58,26 +58,12 @@ async function idlePoll(session: Session): Promise<void> {
 }
 
 it('answers idle shell polls without a whole-machine process capture', async () => {
-  await idlePoll(
-    shellPane({
-      verdict: 'observed',
-      source: 'pty-master',
-      foregroundKind: 'shell',
-      processName: 'zsh'
-    })
-  )
+  await idlePoll(shellPane(4242))
   expect(tables.strict).toHaveBeenCalledTimes(0)
   expect(tables.cheap).toHaveBeenCalledTimes(0)
 })
 
 it('still takes the full capture when a job owns the terminal', async () => {
-  await idlePoll(
-    shellPane({
-      verdict: 'observed',
-      source: 'pty-master',
-      foregroundKind: 'non-shell',
-      processName: 'node'
-    })
-  )
+  await idlePoll(shellPane(5151))
   expect(tables.strict).toHaveBeenCalledTimes(10)
 })

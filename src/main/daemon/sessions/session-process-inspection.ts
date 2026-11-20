@@ -42,6 +42,11 @@ export abstract class SessionProcessInspection {
     )
   }
 
+  /** The PTY's foreground process group (tcgetpgrp); undefined where the master cannot say. */
+  readForegroundGroup(): number | null | undefined {
+    return this.subprocess.readForegroundGroup?.()
+  }
+
   observeForeground(): Promise<TerminalForegroundSample> {
     return (
       this.subprocess.observeForeground?.() ??

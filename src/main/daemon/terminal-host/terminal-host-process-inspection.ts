@@ -18,6 +18,7 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
+import { readTerminalPs } from '../../pty/process-retirement/terminal-process-rows'
 import {
   steadyPollJudgesByJobMembership,
   type PtyProcessInspectionOptions
@@ -99,18 +100,22 @@ export async function inspectTerminalHostProcess(args: {
       }
     }
   }
-  // Idle shell panes poll forever; macOS reads the pane's own terminal in-process instead of the whole machine.
+  // Idle shell panes poll forever; prove the shell owns the terminal without a whole-machine capture.
   if (
     args.steadyState === true &&
     args.jobMembershipOnly === true &&
     incarnationMatches &&
-    process.platform === 'darwin'
+    process.platform === 'darwin' &&
+    !session.processNameIsSpawnFile
   ) {
-    const sample = await session.observeForeground()
-    const current = session.isAlive && (!args.currentSession || args.currentSession() === session)
-    if (current && sample.verdict === 'observed' && sample.foregroundKind === 'shell') {
+    const shell = await readIdleShellForeground(session)
+    if (
+      shell !== null &&
+      session.isAlive &&
+      (!args.currentSession || args.currentSession() === session)
+    ) {
       args.onTier?.('cheap')
-      return { foregroundProcess: sample.processName, hasChildProcesses: false }
+      return { foregroundProcess: shell, hasChildProcesses: false }
     }
   }
   if (args.steadyState === true && incarnationMatches) {
@@ -198,6 +203,27 @@ export async function inspectTerminalHostProcess(args: {
     ...(childProcessEvidence === undefined ? {} : { childProcessEvidence }),
     foregroundProcessEvidence: evidence
   }
+}
+
+/** A job-control shell gives every job its own process group, so the shell's own group in front means no job is.
+ * Returns the shell's name, or null when anything else may own the terminal. */
+async function readIdleShellForeground(session: Session): Promise<string | null> {
+  const name = session.getForegroundProcess({ rawFallback: true })
+  const group = session.readForegroundGroup()
+  if (!name || !isShellProcess(name) || !group || group <= 0) {
+    return null
+  }
+  if (!session.shellIsRootChild) {
+    return group === session.pid ? name : null
+  }
+  // login(1) wraps the shell: the group leader must be the root's own shell child, read by its pid alone.
+  const row = (await readTerminalPs(['-o', 'pid=,ppid=,pgid=', '-p', String(group)]))
+    ?.trim()
+    .split(/\s+/)
+    .map(Number)
+  return row?.length === 3 && row[0] === group && row[1] === session.pid && row[2] === group
+    ? name
+    : null
 }
 
 /** Reuse identity only while the pane fingerprint and raw foreground name still match the full capture. */
