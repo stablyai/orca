@@ -117,6 +117,7 @@ it('stops filtering for a chat that closed beside an open one', () => {
     )
   const mounted = show('term_coord')
   show('term_peer')()
+  model.read('term_coord')
   // The closed chat's crew starts another worker; the open chat's next read must not rebuild for it.
   const next = f.db.createTask({ runId: other.id, spec: 'More work' })
   f.db.createDispatchContext({

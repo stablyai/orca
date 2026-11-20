@@ -357,3 +357,41 @@ it('reads fresh for a chat no kept host covers, without subscribing', () => {
     vi.useRealTimers()
   }
 })
+
+it('shows a worker started for a chat that closed beside an open one when it reopens', () => {
+  const { db, deps, assign, handles } = fixture()
+  assign('term_worker')
+  const other = db.createRun({
+    objective: 'Other crew',
+    coordinatorHandle: 'term_peer',
+    coordinatorPaneKey: handles.get('term_peer')!
+  })
+  const start = (handle: string, title: string) => {
+    const task = db.createTask({ runId: other.id, spec: title, taskTitle: title })
+    db.updateTaskStatus(task.id, 'ready')
+    db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: handle,
+      assigneePaneKey: handles.get(handle),
+      creator: { kind: 'terminal', handle: 'term_peer', paneKey: handles.get('term_peer') },
+      maxDepth: 10
+    })
+  }
+  start('term_helper', 'Other work')
+  const model = new CrewReadModel(() => deps, db.crewChanges.subscribe)
+  const stopCoord = model.subscribe(() => {}, 'term_coord')
+  model.read('term_coord')
+  const firstPeer = model.subscribe(() => {}, 'term_peer')
+  model.read('term_peer')
+  firstPeer()
+  start('term_outbound', 'More work')
+  const stopPeer = model.subscribe(() => {}, 'term_peer')
+  expect(
+    model
+      .read('term_peer')
+      .sections.managing.map((row) => row.task?.title)
+      .sort()
+  ).toEqual(['More work', 'Other work'])
+  stopPeer()
+  stopCoord()
+})
