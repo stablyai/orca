@@ -42,25 +42,21 @@ it("counts Orca's installed copies before launch has read its releases, without 
   expect(await readInstalledManagedAgents()).toEqual(['grok'])
 })
 
-it("reads Orca's agy from its own folder, never the legacy server's", async () => {
+it('counts only the managed agy installation and omits it while switched off', async () => {
   await installed('antigravity')
   const { provideManagedAgentDetection, readInstalledManagedAgents } = await detection()
-  provideManagedAgentDetection(settingsOf({}))
+  const settings = { antigravityManagedAgyEnabled: true }
+  provideManagedAgentDetection(settingsOf(settings))
   expect(await readInstalledManagedAgents()).toEqual([])
 
   await installed('agy')
   expect(await readInstalledManagedAgents()).toEqual(['antigravity'])
-})
 
-it("leaves out Orca's agy while it is switched off", async () => {
-  await installed('agy')
-  const { provideManagedAgentDetection, readInstalledManagedAgents } = await detection()
-  provideManagedAgentDetection(settingsOf({ antigravityManagedAgyEnabled: false }))
-
+  settings.antigravityManagedAgyEnabled = false
   expect(await readInstalledManagedAgents()).toEqual([])
 })
 
-it('answers from the remembered releases once launch has read them, not the disk', async () => {
+it('uses remembered releases after the launch read and skips a refresh when they match', async () => {
   await installed('grok')
   const {
     provideManagedAgentDetection,
@@ -68,9 +64,14 @@ it('answers from the remembered releases once launch has read them, not the disk
     readInstalledManagedAgents,
     rememberManagedAgentRelease
   } = await detection()
+  const { onAgentsRefreshedOnHost } = await import('../../../../preflight/agents-refreshed-on-host')
+  const refreshed = vi.fn()
+  onAgentsRefreshedOnHost(refreshed)
   provideManagedAgentDetection(settingsOf({}))
+  expect(await readInstalledManagedAgents()).toEqual(['grok'])
   rememberManagedAgentRelease('grok', join(host.dataDirectory, 'agent-runtimes', 'grok', '1.0'))
   noteManagedReleasesRead()
+  expect(refreshed).not.toHaveBeenCalled()
   expect(await readInstalledManagedAgents()).toEqual(['grok'])
 
   // Removed: the receipt is still on disk, but the remembered release is gone.
@@ -91,26 +92,6 @@ it('announces a copy the disk check counted that the launch read found unusable'
   noteManagedReleasesRead()
 
   expect(refreshed).toHaveBeenCalled()
-})
-
-it('stays quiet when the launch read remembers what the disk check counted', async () => {
-  await installed('grok')
-  const {
-    provideManagedAgentDetection,
-    noteManagedReleasesRead,
-    readInstalledManagedAgents,
-    rememberManagedAgentRelease
-  } = await detection()
-  const { onAgentsRefreshedOnHost } = await import('../../../../preflight/agents-refreshed-on-host')
-  const refreshed = vi.fn()
-  onAgentsRefreshedOnHost(refreshed)
-  provideManagedAgentDetection(settingsOf({}))
-  await readInstalledManagedAgents()
-  rememberManagedAgentRelease('grok', join(host.dataDirectory, 'agent-runtimes', 'grok', '1.0'))
-
-  noteManagedReleasesRead()
-
-  expect(refreshed).not.toHaveBeenCalled()
 })
 
 it('never fails startup or detection when the settings store is unavailable', async () => {
