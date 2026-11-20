@@ -170,13 +170,9 @@ export const BOT_SLACK_METHODS = [
           if (state.value.state === 'not_created' || state.value.teamId !== teamId) {
             return { ok: true as const, value: undefined }
           }
-          const appId = 'appId' in state.value ? state.value.appId : undefined
-          if (
-            appId !== undefined &&
-            !expected.some((saved) => saved.teamId === teamId && saved.appId === appId)
-          ) {
-            return { ok: false as const, error: 'connection_changed' }
-          }
+        }
+        if ((cloud?.signedInAccount(true) ?? null) !== account) {
+          return { ok: false as const, error: CONNECT_ACCOUNT_CHANGED }
         }
         return client.removeSlackApp(botId, teamId)
       })

@@ -27346,7 +27346,7 @@
         "step1": "In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.",
         "step2": "Select the workspace for your bot.",
         "step3": "Copy the Refresh Token and paste it below.",
-        "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.",
+        "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace can reuse it.",
         "label": "Configuration refresh token",
         "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it.",
         "openSettings": "Open Slack app settings",
@@ -27377,8 +27377,7 @@
         "notInstalled": "Add this bot to Slack first.",
         "signedOut": "Sign in to Orca Cloud to connect Slack.",
         "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
-        "handOffExpired": "That hand-off expired or was already used. Try again.",
-        "connectionChanged": "This bot’s Slack app changed. Check its connection, then try again."
+        "handOffExpired": "That hand-off expired or was already used. Try again."
       },
       "howToAsk": "Mention <code>@{{name}}</code> in a channel, or send it a direct message.",
       "handOff": {
