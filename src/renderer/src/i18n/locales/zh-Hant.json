@@ -989,7 +989,7 @@
         "enabledToggleLabel": "開啟或關閉瀏覽器擴充功能"
       },
       "memorySaver": {
-        "description": "釋放你未檢視的分頁所占用的記憶體。開啟時會重新載入。",
+        "description": "釋放你未檢視的分頁所佔用的記憶體。開啟時會重新載入。",
         "hoursSuffix": "小時",
         "searchKeywords": {
           "idle": "閒置",
@@ -1754,7 +1754,7 @@
       }
     },
     "groupHooks": {
-      "description": "创建工作區時在此資料夾中執行的指令碼，所有工作區共享此資料夾。本地指令碼儲存在此電腦上；`orca.yaml` 指令碼會與你的團隊共享",
+      "description": "建立工作區時在此資料夾中執行的指令碼，所有工作區共享此資料夾。本地指令碼儲存在此電腦上；`orca.yaml` 指令碼會與你的團隊共享",
       "example": "範例：在每個存放庫中建立一個工作樹（僅限此電腦）",
       "invalidArchive": "檔案存在，但 Orca 找不到有效的設定或封存指令碼",
       "invalidSetup": "檔案存在，但 Orca 找不到有效的設定指令碼。",
@@ -2904,7 +2904,7 @@
       },
       "ephemeralVmEnvironmentCheck": {
         "backgroundFailed": "新虛擬機器工作區的環境檢查失敗，請在側邊欄中開啟它以繼續。",
-        "openedDegraded": "正在環境檢查未通過的虛擬機器上创建工作區。",
+        "openedDegraded": "正在環境檢查未通過的虛擬機器上建立工作區。",
         "unreachable": "環境檢查無法完成：{{error}}"
       },
       "executionHostFacts": {
@@ -4809,23 +4809,23 @@
           },
           "PendingNativeChatCreation": {
             "openingChat": "正在開啟聊天…",
-            "sendBlockedFailed": "請重試创建工作樹後再傳送",
+            "sendBlockedFailed": "請重試建立工作樹後再傳送",
             "sendBlockedHeld": "工作樹就緒後傳送"
           },
           "VmBuildSheet": {
             "checks": "檢查環境",
             "checksFailed": "虛擬機器已啟動，但環境檢查未通過",
-            "create": "创建工作區",
+            "create": "建立工作區",
             "editRecipe": "編輯環境範本",
             "fixWithAgent": "使用代理程式修正",
             "openAnyway": "仍要開啟",
-            "openAnywayHint": "「仍要開啟」會保留此虛擬機器，並按原樣在其上创建工作區。「關閉」則會銷毀該虛擬機器。",
+            "openAnywayHint": "「仍要開啟」會保留此虛擬機器，並按原樣在其上建立工作區。「關閉」則會銷毀該虛擬機器。",
             "provision": "佈建虛擬機器",
             "retryChecks": "重試檢查",
             "title": "正在建置虛擬機器"
           },
           "WorktreeSetupSteps": {
-            "create": "创建工作樹",
+            "create": "建立工作樹",
             "fetch": "擷取基礎分支",
             "prepare": "準備工作區",
             "setup": "設定工作區",
@@ -7406,7 +7406,7 @@
         "SidebarHeader": {
           "92154beb7e": "新工作區",
           "addProject": "新增專案",
-          "collapseAllProjects": "折疊所有專案",
+          "collapseAllProjects": "摺疊所有專案",
           "expandAllProjects": "展開所有專案"
         },
         "SidebarNav": {
@@ -11074,9 +11074,9 @@
             "muse": "muse",
             "museUsageDescription": "在狀態列中顯示 Muse 訂閱配額。",
             "statusBarUsageFormat": {
-              "description": "使用占位符自訂各提供商的用量在狀態列中的顯示方式。",
+              "description": "使用佔位符自訂各提供商的用量在狀態列中的顯示方式。",
               "format": "格式",
-              "placeholder": "占位符",
+              "placeholder": "佔位符",
               "template": "範本",
               "title": "用量格式"
             }
@@ -14730,7 +14730,7 @@
         "StatusBarUsageFormatSetting": {
           "placeholder": {
             "buckets": "Gemini 模型分組",
-            "optional": "其中的占位符為空時省略該組",
+            "optional": "其中的佔位符為空時省略該組",
             "plan": "套餐（Codex）",
             "provider": "提供商名稱",
             "reset": "距重設的時間，例如 3h 15m",
@@ -21512,7 +21512,7 @@
         "countdown": "如果無人回答，Claude 將在 {{time}} 後自動拒絕。",
         "folderTrust": {
           "exit": "退出",
-          "hint": "代理程式需要先征得你的同意，才能读取、編輯和執行此檔案夾中的文件。",
+          "hint": "代理程式需要先徵得你的同意，才能讀取、編輯和執行此資料夾中的檔案。",
           "title": "信任此檔案夾？",
           "trust": "信任檔案夾"
         },
@@ -21685,7 +21685,7 @@
         "orcaSessionIdCopied": "已複製 Orca 工作階段 ID",
         "orcaSessionIdCopyFailed": "無法複製 Orca 工作階段 ID",
         "orcaSessionIdTooltip": "Orca 為此聊天分配的 ID，獨立於代理程式 CLI 自身的工作階段 ID。代理程式透過 Orca 使用此 ID 互相指稱。",
-        "noSessionContext": "没有可用的聊天上下文。"
+        "noSessionContext": "沒有可用的聊天上下文。"
       },
       "dismissDeliveryNotice": "關閉",
       "addSelectionToChat": "新增到聊天",
@@ -21995,9 +21995,9 @@
       "splitRight": "向右分割",
       "splitDown": "向下分割",
       "ciResultLine": {
-        "at": "于",
-        "failingLead": "CI 失敗于",
-        "greenLead": "CI 通過于",
+        "at": "於",
+        "failingLead": "CI 失敗於",
+        "greenLead": "CI 通過於",
         "hidden": "Orca 將不再顯示 CI 結果列",
         "hide": "不再顯示 CI 結果列"
       },
@@ -22987,11 +22987,11 @@
         "linkPreviewsTitle": "連結預覽",
         "linkPreviewsToggleLabel": "切換連結預覽",
         "openedPullRequestsSearchPr": "PR",
-        "usageLimitContinueCopy": "额度重置後，Orca 會傳送「Continue where you left off.」。適用於所有已知重置時間的聊天。",
-        "usageLimitContinueSearchLimit": "使用额度",
+        "usageLimitContinueCopy": "額度重置後，Orca 會傳送「Continue where you left off.」。適用於所有已知重置時間的聊天。",
+        "usageLimitContinueSearchLimit": "使用額度",
         "usageLimitContinueSearchReset": "重置",
-        "usageLimitContinueTitle": "使用额度重置後自動繼續聊天",
-        "usageLimitContinueToggleLabel": "切換使用额度重置後自動繼續聊天",
+        "usageLimitContinueTitle": "使用額度重置後自動繼續聊天",
+        "usageLimitContinueToggleLabel": "切換使用額度重置後自動繼續聊天",
         "usageLimitContinueUnsupported": "請更新 {{host}} 上的 Orca 以在那裡變更此設定。",
         "usageLimitContinueUpdateFailed": "無法更新 {{host}} 上的設定。"
       },
@@ -23652,8 +23652,8 @@
           "action": "分割窗格"
         },
         "newTab": {
-          "body": "點擊 + 即可啟動代理程式、終端機或浏览器标签页。",
-          "title": "從这里啟動新代理程式"
+          "body": "點擊 + 即可啟動代理程式、終端機或瀏覽器分頁。",
+          "title": "從這裡啟動新代理程式"
         },
         "split": {
           "bodyWithoutShortcut": "右鍵點擊窗格查看拆分選項。"
@@ -23682,7 +23682,7 @@
       "cleanupNotice": {
         "dismiss": "關閉",
         "failed": "整理失敗，已按原文插入。",
-        "timedOut": "整理超时，已按原文插入。"
+        "timedOut": "整理超時，已按原文插入。"
       }
     },
     "toastFallbacks": {
@@ -23758,7 +23758,7 @@
     "RepositoryBrowserProfileSection": {
       "deleted": "此專案選取的設定檔已被刪除，因此新分頁將沿用瀏覽器設定。",
       "deletedOption": "已刪除的設定檔",
-      "description": "此專案中新开的瀏覽器分頁（包含代理程式開啟的）會使用此設定檔。讓多個專案指向同一個設定檔，即可共享登入狀態。",
+      "description": "此專案中新開的瀏覽器分頁（包含代理程式開啟的）會使用此設定檔。讓多個專案指向同一個設定檔，即可共享登入狀態。",
       "inherit": "瀏覽器設定（{{scope}}）",
       "keywordCookies": "Cookie",
       "keywordProfile": "瀏覽器設定檔",
@@ -25673,7 +25673,7 @@
       "orca": "Orca",
       "agents": "代理程式",
       "otherTerminals": "其他終端機",
-      "description": "Orca 是應用程式。代理程式是執行代理程式的終端機；其他終端機則是你在 Orca 中執行的其餘終端機。長條圖顯示各自在合併記憶體中所占的比例。",
+      "description": "Orca 是應用程式。代理程式是執行代理程式的終端機；其他終端機則是你在 Orca 中執行的其餘終端機。長條圖顯示各自在合併記憶體中所佔的比例。",
       "privateBytes": "由 Orca 與終端機認購"
     }
   },
@@ -29411,10 +29411,10 @@
   "wslDriveProject": {
     "blocker": {
       "gitMissing": "未安裝 Git for Windows。請從 git-scm.com 安裝，然後再試。",
-      "notWindowsDrive": "此專案的某個資料夾不在 Windows 驱動器上。",
+      "notWindowsDrive": "此專案的某個資料夾不在 Windows 驅動器上。",
       "notWsl": "此專案已在 Windows 上執行 Git。",
       "repair": "請先修復此專案的 WSL 執行階段：其發行版遺失，或 WSL 無法使用。",
-      "worktreeFolder": "此專案的新工作區被設定為建立在 WSL 內。請先在此專案的設定中選擇一個位於 Windows 驱動器上的資料夾。",
+      "worktreeFolder": "此專案的新工作區被設定為建立在 WSL 內。請先在此專案的設定中選擇一個位於 Windows 驅動器上的資料夾。",
       "wslWorktrees": "這些工作區由 WSL Git 建立，Git for Windows 無法讀取它們：{{paths}}。請移除它們，或讓此專案繼續使用 WSL Git。"
     },
     "cancel": "取消",
@@ -29422,7 +29422,7 @@
     "confirm": "使用 Git for Windows",
     "convertFailed": "Orca 無法切換 Git。",
     "converted": "Orca 會在 Windows 上為此專案執行 Git，終端機與代理程式仍在 {{distro}} 中執行。",
-    "description": "此專案位於 Windows 驱動器上，WSL 中的 Git 在此速度很慢，且會漏掉在 Windows 中所做的變更，請改用 Git for Windows；終端機與代理程式仍留在 {{distro}} 中。",
+    "description": "此專案位於 Windows 驅動器上，WSL 中的 Git 在此速度很慢，且會漏掉在 Windows 中所做的變更，請改用 Git for Windows；終端機與代理程式仍留在 {{distro}} 中。",
     "label": "Git",
     "lineEndings": "同時為此存放庫設定 core.autocrlf，讓 WSL 終端機中的 git 不再將每個檔案都顯示為已更改。",
     "review": "此專案在 Orca 中的一切都保持不變：其索引標籤、終端機、聊天與工作區都維持原樣，正在執行的終端機也會繼續執行。",
@@ -29432,9 +29432,9 @@
     "blocker": {
       "differingState": "Orca 在此資料夾的 WSL 路徑與 {{drivePath}} 下分別儲存了不同的詳細資訊，因此未做任何變更。",
       "duplicate": "{{drivePath}} 已是 Orca 中的專案。",
-      "mixed": "此專案的部分資料夾位於 WSL 內，而不在 Windows 驱動器上。",
-      "notConvertible": "此專案不在此電腦的 Windows 驱動器上。",
-      "notDriveMount": "在此發行版中，該資料夾並非 {{drivePath}}：它不是從該 Windows 驱動器掛載的。",
+      "mixed": "此專案的部分資料夾位於 WSL 內，而不在 Windows 驅動器上。",
+      "notConvertible": "此專案不在此電腦的 Windows 驅動器上。",
+      "notDriveMount": "在此發行版中，該資料夾並非 {{drivePath}}：它不是從該 Windows 驅動器掛載的。",
       "overlap": "此專案與一個 Orca 無法轉換的專案共用資料夾，轉換會導致它們被拆分。",
       "pending": "Orca 已在轉換一個專案，該轉換將在 Orca 重新啟動時完成。",
       "projectSplit": "此專案還包含一個不參與轉換的存放庫，因此未做任何變更。",
