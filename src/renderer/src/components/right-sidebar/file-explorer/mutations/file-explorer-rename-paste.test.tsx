@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { InlineInputRow } from './file-explorer-inline-input-row'
 
@@ -19,7 +19,7 @@ it('previews copied text and pastes into the selected part of a filename', async
       onCancel={() => {}}
     />
   )
-  const input = view.getByRole<HTMLInputElement>('textbox')
+  const input = screen.getByRole<HTMLInputElement>('textbox')
   await waitFor(() => expect(input.selectionEnd).toBe(5))
   fireEvent.contextMenu(input)
   const paste = await view.findByRole('menuitem', { name: /^Paste/ })
