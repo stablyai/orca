@@ -66,9 +66,10 @@ export function fdClosingLaunch(
 }
 
 /**
- * Holds 'spawn', 'exit' and 'close' until the helper's exec settles, then replays them in order.
- * A failed exec instead emits what a direct spawn would: 'error' (code, errno, syscall, path,
- * spawnargs), then 'close' with the negative errno, and no 'spawn' or 'exit'.
+ * Holds 'spawn', 'exit' and 'close' until the helper's exec settles, then replays them in order,
+ * one per macrotask as Node spaces them, so a listener added after awaiting one still sees the
+ * next. A failed exec instead emits what a direct spawn would: 'error' (code, errno, syscall,
+ * path, spawnargs), then 'close' with the negative errno, and no 'spawn' or 'exit'.
  */
 export function watchFdClosingExec<T extends ChildProcess>(child: T, launch: FdClosingLaunch): T {
   const status = child.stdio[launch.target.statusFd]
@@ -76,17 +77,41 @@ export function watchFdClosingExec<T extends ChildProcess>(child: T, launch: FdC
     return child
   }
   const emit = child.emit.bind(child)
-  const held: [string | symbol, unknown[]][] = []
-  let settled = false
+  const pending: [string | symbol, unknown[]][] = []
+  let gate: 'held' | 'open' | 'failed' = 'held'
   let failure: NodeJS.ErrnoException | null = null
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every event unchanged except lifecycle events held until the exec status settles.
-  child.emit = ((event: string | symbol, ...rest: unknown[]): boolean => {
-    const lifecycle = event === 'spawn' || event === 'exit' || event === 'close'
-    if (failure && lifecycle) {
-      return event === 'close' ? emit('close', failure.errno, null) : true
+  let flushing = false
+  const flush = (): void => {
+    const next = pending.shift()
+    if (next) {
+      emit(next[0], ...next[1])
     }
-    if (!settled && lifecycle) {
-      held.push([event, rest])
+    if (pending.length > 0) {
+      setImmediate(flush)
+    } else {
+      flushing = false
+    }
+  }
+  const startFlush = (): void => {
+    if (!flushing && pending.length > 0) {
+      flushing = true
+      flush()
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every event unchanged except lifecycle events, which are held until the exec status settles.
+  child.emit = ((event: string | symbol, ...rest: unknown[]): boolean => {
+    if (event !== 'spawn' && event !== 'exit' && event !== 'close') {
+      return emit(event, ...rest)
+    }
+    if (gate === 'failed') {
+      if (event === 'close' && failure) {
+        pending.push(['close', [failure.errno, null]])
+        startFlush()
+      }
+      return true
+    }
+    if (gate === 'held' || flushing) {
+      pending.push([event, rest])
       return true
     }
     return emit(event, ...rest)
@@ -97,19 +122,20 @@ export function watchFdClosingExec<T extends ChildProcess>(child: T, launch: FdC
   })
   status.on('error', () => {})
   status.once('close', () => {
-    settled = true
     const errno = Number.parseInt(report, 10)
     if (Number.isInteger(errno) && errno > 0) {
+      gate = 'failed'
       failure = execError(errno, launch.target)
-      emit('error', failure)
-      if (held.some(([event]) => event === 'close')) {
-        emit('close', failure.errno, null)
+      const closed = pending.some(([event]) => event === 'close')
+      pending.length = 0
+      pending.push(['error', [failure]])
+      if (closed) {
+        pending.push(['close', [failure.errno, null]])
       }
-      return
+    } else {
+      gate = 'open'
     }
-    for (const [event, rest] of held) {
-      emit(event, ...rest)
-    }
+    startFlush()
   })
   return child
 }
