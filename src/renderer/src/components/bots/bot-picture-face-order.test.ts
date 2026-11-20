@@ -2,13 +2,23 @@ import { describe, expect, it } from 'vitest'
 import { isGeneratedCustom, pictureFaceOrder } from './bot-picture-face-order'
 
 describe('pictureFaceOrder', () => {
-  it('puts Generate just before mascot 1 and the custom picture after its mascot', () => {
-    const order = pictureFaceOrder(1, true)
-    expect(order.slice(0, 5)).toEqual(['generate', 'A1', 'B1', 'custom', 'D1'])
+  it('puts Generate just left of the mascot selected at open', () => {
+    const order = pictureFaceOrder(1, { before: 'mascot', index: 3 })
+    expect(order.slice(0, 6)).toEqual(['A1', 'B1', 'custom', 'D1', 'generate', 'E1'])
+  })
+
+  it('puts Generate just left of a custom picture selected at open', () => {
+    const order = pictureFaceOrder(1, { before: 'custom', after: 1 })
+    expect(order.slice(0, 5)).toEqual(['A1', 'B1', 'generate', 'custom', 'D1'])
+  })
+
+  it('keeps Generate in its place once that custom picture is gone', () => {
+    const order = pictureFaceOrder(null, { before: 'custom', after: 1 })
+    expect(order.slice(0, 4)).toEqual(['A1', 'B1', 'generate', 'D1'])
   })
 
   it('has no Generate face without a capable agent', () => {
-    expect(pictureFaceOrder(null, false).slice(0, 2)).toEqual(['A1', 'B1'])
+    expect(pictureFaceOrder(null, null).slice(0, 2)).toEqual(['A1', 'B1'])
   })
 })
 

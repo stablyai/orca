@@ -30,6 +30,7 @@ import {
   GENERATE_FACE,
   isGeneratedCustom,
   pictureFaceOrder,
+  type GenerateSlot,
   type PictureFaceKey
 } from './bot-picture-face-order'
 
@@ -164,6 +165,12 @@ export function BotPicturePicker({
   const byPointer = useRef(false)
   const showingCustom = value.kind === 'custom' && custom !== null
   const mascotIndex = pictureMascotIndex(value, custom)
+  // One step back from the face selected at open reaches Generate; it keeps that place while open.
+  const [generateSlot] = useState<GenerateSlot>(() =>
+    showingCustom
+      ? { before: 'custom', after: custom.after }
+      : { before: 'mascot', index: mascotIndex }
+  )
   // Generate is current while chosen, even before it holds a picture; selected is applied.
   const [onGenerate, setOnGenerate] = useState(false)
   const face = useGenerateFace((made) => {
@@ -173,7 +180,10 @@ export function BotPicturePicker({
   })
   const withGenerate = face.agent !== null
   const generatedCustom = withGenerate && isGeneratedCustom(custom?.src, face.result?.png ?? null)
-  const order = pictureFaceOrder(custom && !generatedCustom ? custom.after : null, withGenerate)
+  const order = pictureFaceOrder(
+    custom && !generatedCustom ? custom.after : null,
+    withGenerate ? generateSlot : null
+  )
   const currentKey: PictureFaceKey =
     withGenerate && (onGenerate || (showingCustom && generatedCustom))
       ? GENERATE_FACE
