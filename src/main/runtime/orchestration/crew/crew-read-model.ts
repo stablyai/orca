@@ -7,7 +7,7 @@ import {
   type CrewInvalidation
 } from './crew-changes'
 import { buildCrewSnapshot } from './crew-party-snapshot'
-import { admitCrewWake, type CrewWakeSkips } from './crew-wake-admission'
+import { admitCrewWake, crewIdentityMoved, type CrewWakeSkips } from './crew-wake-admission'
 import type { CrewReadDependencies } from './crew-read-dependencies'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
 import {
@@ -89,17 +89,9 @@ export class CrewReadModel {
 
   /** A terminal record write changes a crew only if one of its panes or handles now resolves differently. */
   private identityMoved(): boolean {
-    if (!this.host || !this.relevance || this.identity === undefined) {
-      return true
-    }
-    try {
-      const moved = crewIdentityFingerprint(this.relevance, this.host.deps) !== this.identity
-      this.identitySkipped ||= !moved
-      return moved
-    } catch {
-      // An unreadable resolution is a change: rebuild rather than keep a stale row.
-      return true
-    }
+    const moved = crewIdentityMoved(this.relevance, this.host?.deps, this.identity)
+    this.identitySkipped ||= !moved
+    return moved
   }
 
   private invalidate = (facets: CrewInvalidation) => {
@@ -156,12 +148,11 @@ export class CrewReadModel {
       () => this.listeners.size === 0
     )
     // A party joining reads rows the skipped wakes may have changed; stale Dispatches it shows rebuild on read.
-    if (this.skipped === 'status') {
-      this.dirty.add('status').add('names')
-    }
-    this.skipped = undefined
+    this.applySkippedStatus()
     return () => {
-      this.listeners.delete(listener)
+      if (!this.listeners.delete(listener)) {
+        return
+      }
       if (party !== undefined && ![...this.listeners.values()].includes(party)) {
         // Only the last party to leave is kept for: beside other listeners its rows stop filtering wakes.
         if (this.listeners.size === 0) {
@@ -176,6 +167,13 @@ export class CrewReadModel {
         this.release.unref?.()
       }
     }
+  }
+
+  private applySkippedStatus(): void {
+    if (this.skipped === 'status') {
+      this.dirty.add('status').add('names')
+    }
+    this.skipped = undefined
   }
 
   private releaseHost = () => {
@@ -203,6 +201,10 @@ export class CrewReadModel {
         return buildCrewSnapshot(address, { ...host.deps, now: Date.now() }, host)
       }
       this.unwatch?.resume?.()
+      // A read kept for the party that left shows peers its rows did not: apply status wakes skipped since.
+      if (this.listeners.size === 0) {
+        this.applySkippedStatus()
+      }
       return this.readFresh(address)
     } finally {
       this.hosts.settle()
@@ -269,7 +271,7 @@ export class CrewReadModel {
       this.host = undefined
       let deps = this.readDependencies()
       this.identitySkipped = false
-      if (previous && this.listeners.size && !dirty.has('records')) {
+      if (previous && this.listeners.size && !dirty.has('records') && !this.forced) {
         previous.registry.refreshRecordNames(deps.records, renamed)
         deps = { ...deps, records: previous.deps.records }
       }

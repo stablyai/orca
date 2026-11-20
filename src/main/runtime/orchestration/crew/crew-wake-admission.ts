@@ -1,4 +1,5 @@
-import type { CrewInvalidation, CrewRelevance } from './crew-changes'
+import { crewIdentityFingerprint, type CrewInvalidation, type CrewRelevance } from './crew-changes'
+import type { CrewReadDependencies } from './crew-read-dependencies'
 
 /** What admission records about a wake it skips, so a later read can still show what it changed. */
 export type CrewWakeSkips = {
@@ -71,4 +72,21 @@ export function admitCrewWake(
     return shown
   }
   return true
+}
+
+/** A terminal record write changes a crew only if one of its panes or handles now resolves differently. */
+export function crewIdentityMoved(
+  relevance: CrewRelevance | undefined,
+  deps: CrewReadDependencies | undefined,
+  identity: string | undefined
+): boolean {
+  if (!deps || !relevance || identity === undefined) {
+    return true
+  }
+  try {
+    return crewIdentityFingerprint(relevance, deps) !== identity
+  } catch {
+    // An unreadable resolution is a change: rebuild rather than keep a stale row.
+    return true
+  }
 }

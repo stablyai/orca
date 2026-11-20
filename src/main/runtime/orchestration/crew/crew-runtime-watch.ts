@@ -148,9 +148,11 @@ export function watchCrewRuntimeSources(
   ]
   return Object.assign(() => disposers.forEach((dispose) => dispose()), {
     resume: () => {
-      const ids = [...written]
-      written.clear()
-      ids.forEach(compareSession)
+      // Each host stays noted until its own comparison has run.
+      for (const id of written) {
+        compareSession(id)
+        written.delete(id)
+      }
     }
   })
 }

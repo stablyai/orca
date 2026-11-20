@@ -130,3 +130,14 @@ it('stops filtering for a chat that closed beside an open one', () => {
   expect(builds).toBe(1)
   mounted()
 })
+
+it('schedules one release when a subscription is stopped twice', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const f = fixture()
+  const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
+  const stop = model.subscribe(() => {}, 'term_coord')
+  model.read('term_coord')
+  stop()
+  stop()
+  expect(vi.getTimerCount()).toBe(1)
+})
