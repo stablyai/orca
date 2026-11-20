@@ -8,8 +8,20 @@ const constructed = vi.hoisted((): Record<string, unknown>[] => [])
 
 vi.mock('pdfjs-dist/web/pdf_viewer.mjs', () => {
   class EventBus {
-    on(): void {}
-    off(): void {}
+    #listeners = new Map<string, Set<(event: unknown) => void>>()
+    on(name: string, listener: (event: unknown) => void): void {
+      const listeners = this.#listeners.get(name) ?? new Set()
+      listeners.add(listener)
+      this.#listeners.set(name, listeners)
+    }
+    off(name: string, listener: (event: unknown) => void): void {
+      this.#listeners.get(name)?.delete(listener)
+    }
+    dispatch(name: string, event: unknown): void {
+      for (const listener of this.#listeners.get(name) ?? []) {
+        listener(event)
+      }
+    }
   }
   class PDFLinkService {
     setViewer(): void {}
@@ -54,9 +66,44 @@ describe('createPdfViewerSession', () => {
       onScaleChanging: () => {},
       onWheelZoom: () => {}
     })
+    const layer = document.createElement('div')
+    layer.className = 'annotationLayer'
+    layer.innerHTML =
+      '<input type="password" value="secret"><input type="text" value="Ada"><select><option value="saved" selected>Saved</option></select><input type="checkbox" checked><a href="#page">Page</a>'
+    container.append(layer)
     try {
       expect(constructed).toHaveLength(1)
-      expect(constructed[0]?.annotationMode).toBe(AnnotationMode.ENABLE)
+      expect(constructed[0]?.annotationMode).toBe(AnnotationMode.ENABLE_FORMS)
+      session.eventBus.dispatch('annotationlayerrendered', {})
+      const password = layer.querySelector('input[type="password"]')
+      const text = layer.querySelector('input[type="text"]')
+      const choice = layer.querySelector('select')
+      const box = layer.querySelector('input[type="checkbox"]')
+      const link = layer.querySelector('a')
+      expect(password).toBeInstanceOf(HTMLInputElement)
+      expect(text).toBeInstanceOf(HTMLInputElement)
+      expect(choice).toBeInstanceOf(HTMLSelectElement)
+      expect(box).toBeInstanceOf(HTMLInputElement)
+      expect(link).toBeInstanceOf(HTMLAnchorElement)
+      if (
+        !(password instanceof HTMLInputElement) ||
+        !(text instanceof HTMLInputElement) ||
+        !(choice instanceof HTMLSelectElement) ||
+        !(box instanceof HTMLInputElement) ||
+        !(link instanceof HTMLAnchorElement)
+      ) {
+        return
+      }
+      expect(password.readOnly).toBe(true)
+      expect(password.type).toBe('password')
+      expect(password.value).toBe('secret')
+      expect(text.readOnly).toBe(true)
+      expect(text.value).toBe('Ada')
+      expect(choice.disabled).toBe(true)
+      expect(choice.value).toBe('saved')
+      expect(box.disabled).toBe(true)
+      expect(box.checked).toBe(true)
+      expect(link.getAttribute('href')).toBe('#page')
     } finally {
       session.dispose()
     }

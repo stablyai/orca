@@ -23,6 +23,36 @@ import {
 
 const PAGE_WIDTH_REFIT_SETTLE_MS = 150
 
+function isCheckableOrButton(control: HTMLInputElement): boolean {
+  return (
+    control.type === 'checkbox' ||
+    control.type === 'radio' ||
+    control.type === 'button' ||
+    control.type === 'submit' ||
+    control.type === 'reset' ||
+    control.type === 'file'
+  )
+}
+
+// Why: widget values live only in pdf.js memory, but static rendering reveals passwords and drops choice labels.
+function freezePdfPreviewFormControls(root: ParentNode): void {
+  for (const layer of root.querySelectorAll('.annotationLayer')) {
+    for (const control of layer.querySelectorAll('input, textarea, select, button')) {
+      if (
+        control instanceof HTMLSelectElement ||
+        control instanceof HTMLButtonElement ||
+        (control instanceof HTMLInputElement && isCheckableOrButton(control))
+      ) {
+        control.disabled = true
+        continue
+      }
+      if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
+        control.readOnly = true
+      }
+    }
+  }
+}
+
 const USER_SCROLL_INPUT_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
 
 function watchUserScrollInput(container: HTMLElement, onInput: () => void): () => void {
@@ -75,8 +105,8 @@ export function createPdfViewerSession({
     linkService,
     findController,
     textLayerMode: 1,
-    // Why: form edits stay in pdf.js memory; this preview never writes them back to the file.
-    annotationMode: AnnotationMode.ENABLE,
+    // Why: keep real widgets so saved values stay visible, then freeze them below.
+    annotationMode: AnnotationMode.ENABLE_FORMS,
     removePageBorders: true,
     abortSignal: abortController.signal
   }
@@ -210,7 +240,12 @@ export function createPdfViewerSession({
   // Why: border-box ignores the scrollbar a refit can toggle, which would refit again in a loop.
   fitWidthObserver.observe(container, { box: 'border-box' })
 
+  const handleAnnotationLayerRendered = (): void => {
+    freezePdfPreviewFormControls(container)
+  }
+
   eventBus.on('pagesinit', handlePagesInit)
+  eventBus.on('annotationlayerrendered', handleAnnotationLayerRendered)
   eventBus.on('pagesloaded', handlePagesLoaded)
   eventBus.on('updateviewarea', handleUpdateViewArea)
   // Why: finding a match moves the reader without input on the scroll container.
@@ -230,6 +265,7 @@ export function createPdfViewerSession({
     }
     recorder?.dispose()
     eventBus.off('pagesinit', handlePagesInit)
+    eventBus.off('annotationlayerrendered', handleAnnotationLayerRendered)
     eventBus.off('pagesloaded', handlePagesLoaded)
     eventBus.off('updateviewarea', handleUpdateViewArea)
     eventBus.off('find', markUserMoved)
