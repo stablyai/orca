@@ -33,6 +33,17 @@ async function hostChatRoute(runtime: OrcaRuntimeService) {
   return input ? (await antigravityHostChatRoute(input)).agy : false
 }
 
+/** Whether new chats here run on an agy that is definitely signed out; null when it can't say in
+ *  time. Reads what is already known, so it starts agy only where a login is present. */
+export async function hostChatAgySignedOut(runtime: OrcaRuntimeService): Promise<boolean | null> {
+  const agy = await withTimeout(
+    hostChatRoute(runtime).catch(() => false as const),
+    CHAT_BACKEND_WAIT_MS,
+    null
+  )
+  return agy === null ? null : agy === 'signedOut'
+}
+
 /** Adds whether new chats on this host run on agy, and so on the account these rows switch. */
 export async function withAntigravityChatBackend(
   runtime: OrcaRuntimeService,
