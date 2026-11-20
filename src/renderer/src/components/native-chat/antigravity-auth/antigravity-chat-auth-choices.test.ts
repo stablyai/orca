@@ -99,6 +99,8 @@ describe('antigravityAuthFailureOutlived', () => {
     expect(antigravityAuthFailureOutlived('refused', rejected, 'gemini-api-key')).toBe(false)
     expect(antigravityAuthFailureOutlived('noSubscription', '', 'gemini-api-key')).toBe(true)
     expect(antigravityAuthFailureOutlived('noSubscription', '', 'oauth-personal')).toBe(false)
+    // A key chat with no key reads as signed out; another detected method can still fix it.
+    expect(antigravityAuthFailureOutlived('signedOut', '', 'gemini-api-key')).toBe(false)
     expect(antigravityAuthFailureOutlived('refused', 'PERMISSION_DENIED', 'agent-platform')).toBe(
       false
     )

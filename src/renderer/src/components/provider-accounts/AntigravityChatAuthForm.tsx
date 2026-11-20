@@ -64,7 +64,7 @@ function AuthForm({
   const [loadFailed, setLoadFailed] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [method, setMethod] = useState<Method>('oauth-personal')
+  const [method, setMethod] = useState<Method | null>('oauth-personal')
   const [project, setProject] = useState('')
   const [location, setLocation] = useState('')
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
@@ -87,14 +87,20 @@ function AuthForm({
       const config = await callAntigravityChatAuthConfig(target)
       if (mounted.current && read === reads.current) {
         setLoaded(true)
-        show(config ?? { method: 'oauth-personal' })
+        // A saved choice the host can't read leaves nothing selected, so any pick saves it.
+        if (config) {
+          show(resolveAntigravityChatAuthConfig(config))
+        } else {
+          setMethod(null)
+          onMethod?.(null)
+        }
       }
     } catch {
       if (mounted.current && read === reads.current) {
         setLoadFailed(true)
       }
     }
-  }, [environmentId, show])
+  }, [environmentId, show, onMethod])
   useEffect(() => {
     mounted.current = true
     void load()
@@ -163,7 +169,7 @@ function AuthForm({
         label={t('accounts.antigravity.authMethod', 'Sign in with')}
       >
         <Select
-          value={method}
+          value={method ?? ''}
           disabled={blocked}
           onValueChange={(value) => {
             const next = keyAndAdc && (value === 'gemini-api-key' || value === 'agent-platform')
@@ -178,6 +184,11 @@ function AuthForm({
           </SelectContent>
         </Select>
       </AntigravityChatAuthSettingRow>
+      {method === null && (
+        <p className="text-xs text-muted-foreground">
+          {t('accounts.antigravity.chooseMethod', 'Choose how Antigravity signs in.')}
+        </p>
+      )}
       {method === 'agent-platform' && (
         <AntigravityChatGcpFields
           id={id}
@@ -187,7 +198,7 @@ function AuthForm({
           disabled={blocked}
           onProject={setProject}
           onLocation={setLocation}
-          onCommit={() => save(withProject(method))}
+          onCommit={() => save(withProject('agent-platform'))}
         />
       )}
       {method === 'gemini-api-key' && keyAndAdc && (

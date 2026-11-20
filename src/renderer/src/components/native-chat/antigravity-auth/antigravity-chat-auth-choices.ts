@@ -103,11 +103,11 @@ export function antigravityAuthFailureReason(input: {
   return REFUSED.test(text) ? 'refused' : null
 }
 
-// These failures belong to one method's credentials; once the chat uses another they're history.
+// These failures belong to the Google login; once the chat uses another method they're history. A
+// missing key or gcloud login also reads as signed out, so that one stays offerable.
 const GOOGLE_ONLY: ReadonlySet<AntigravityAuthFailureReason> = new Set([
   'noSubscription',
-  'ineligible',
-  'signedOut'
+  'ineligible'
 ])
 const KEY_REJECTED = /API key not valid/i
 

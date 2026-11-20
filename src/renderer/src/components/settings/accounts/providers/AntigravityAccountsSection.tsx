@@ -21,8 +21,9 @@ import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntim
 import { AntigravityChatAuthForm } from '../../../provider-accounts/AntigravityChatAuthForm'
 import {
   antigravityChatDescription,
-  type AntigravityChatDescription
+  antigravityChatDescriptionText
 } from '../../../provider-accounts/antigravity-chat-description'
+import { AntigravityAgySignInButton } from '../../../provider-accounts/AntigravityAgySignInButton'
 import type { AntigravityChatAuthConfig } from '../../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
@@ -106,6 +107,16 @@ export function AntigravityAccountsSection({
       mounted.current = false
     }
   }, [ownerKind, environmentId, runtime, wslDistro])
+
+  // A method change moves new chats between agy's home and Orca's, which the rows' status follows.
+  const seenMethod = useRef<AntigravityChatAuthConfig['method'] | null>(null)
+  useEffect(() => {
+    const previous = seenMethod.current
+    seenMethod.current = chatMethod
+    if (previous !== null && chatMethod !== null && previous !== chatMethod) {
+      void run('List')
+    }
+  })
 
   async function run(action: AntigravityAccountAction, accountId?: string) {
     if (pending.current) {
@@ -202,46 +213,6 @@ export function AntigravityAccountsSection({
       </ManagedRuntimeInstallRow>
     ) : null
 
-  const agyVersion = state?.chatAgyVersion
-  const chatDescriptions: Record<AntigravityChatDescription, string> = {
-    olderHost: t(
-      'accounts.antigravity.chatDescriptionOlderHost',
-      'Update Orca on this computer so its chats run on agy.'
-    ),
-    orcaHome: t(
-      'accounts.antigravity.chatDescriptionOrcaHome',
-      'Chats run on agy with the key or gcloud login below, apart from agy in the terminal.'
-    ),
-    installAgy: t(
-      'accounts.antigravity.chatDescriptionInstallAgy',
-      'Install agy below to use Chat. It signs in with its own account.'
-    ),
-    agySignedOut: t(
-      'accounts.antigravity.chatDescriptionAgySignedOut',
-      "New chats use agy, which isn't signed in yet. Run agy on this host to sign in."
-    ),
-    orcasAgy: managedVersion
-      ? t(
-          'accounts.antigravity.chatDescriptionOrcaAgyVersion',
-          "Chats run on Orca's agy (v{{version}}) and use agy's own sign-in.",
-          { version: managedVersion }
-        )
-      : t(
-          'accounts.antigravity.chatDescriptionOrcaAgy',
-          "Chats run on Orca's copy of agy and use agy's own sign-in."
-        ),
-    agy: agyVersion
-      ? t(
-          'accounts.antigravity.chatDescriptionAgyOwnSignInVersion',
-          "Chats run on your agy (v{{version}}) and use agy's own sign-in.",
-          { version: agyVersion }
-        )
-      : t(
-          'accounts.antigravity.chatDescriptionAgyOwnSignIn',
-          "Chats run on agy and use agy's own sign-in."
-        )
-  }
-
   // Chats on agy's own home share this login; a saved key or gcloud keeps new chats apart.
   const chatsUseAgyLogin = !chats
     ? null
@@ -251,12 +222,18 @@ export function AntigravityAccountsSection({
         ? null
         : Boolean(state?.chatUsesAgy || state?.chatAgySignedOut)
 
+  const chatDescription = antigravityChatDescription(state, chatRuntime, chatMethod)
+  // An older host still runs Orca's server, whose saved choices this client would misread.
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
-      <>
-        <AntigravityChatAuthForm owner={owner} disabled={busy} onMethod={setChatMethod} />
-        {runtimeRow}
-      </>
+      chatDescription === 'olderHost' ? (
+        <div />
+      ) : (
+        <>
+          <AntigravityChatAuthForm owner={owner} disabled={busy} onMethod={setChatMethod} />
+          {runtimeRow}
+        </>
+      )
     ) : null
 
   return (
@@ -264,7 +241,16 @@ export function AntigravityAccountsSection({
       {chatRows ? (
         <SettingsGroup
           title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
-          description={chatDescriptions[antigravityChatDescription(state, chatRuntime, chatMethod)]}
+          description={antigravityChatDescriptionText(chatDescription, {
+            managedVersion,
+            agyVersion: state?.chatAgyVersion,
+            t
+          })}
+          action={
+            chatDescription === 'agySignedOut' && owner.kind === 'local' ? (
+              <AntigravityAgySignInButton />
+            ) : undefined
+          }
         >
           {chatRows}
         </SettingsGroup>

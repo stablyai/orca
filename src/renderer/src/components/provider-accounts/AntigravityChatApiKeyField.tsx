@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { callAntigravityChatApiKey } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
+import { refreshAntigravityChatAuthDetection } from '@/runtime/provider-accounts/sign-in/antigravity-chat-auth-detection'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AntigravityChatApiKeyStatus } from '../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -48,6 +49,8 @@ export function AntigravityChatApiKeyField({ owner, disabled }: Props): React.JS
         setStatus(next)
         setDraft('')
         setReplacing(false)
+        // Open chats offer a detected key; they read the change now, not at next focus.
+        void refreshAntigravityChatAuthDetection(owner, { force: true })
       })
       .catch((cause: unknown) =>
         setError(
@@ -67,7 +70,12 @@ export function AntigravityChatApiKeyField({ owner, disabled }: Props): React.JS
           'accounts.antigravity.apiKeyFromEnvironment',
           'Using GEMINI_API_KEY from your environment. Paste a key to use a different one.'
         )
-      : null
+      : status
+        ? t(
+            'accounts.antigravity.apiKeyMissing',
+            "No key yet. Chats signing in with a key won't start until you add one."
+          )
+        : null
 
   return (
     <div className="space-y-1.5">

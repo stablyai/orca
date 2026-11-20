@@ -61,11 +61,16 @@ export function useNativeChatInstallSlot(
             host: props.target,
             ownHome: hostProgram,
             ...orcasAgy(observation),
-            // Until the host says which agy is there, or while none is, the chip names none.
+            // Until the host says which agy is there, while none is, or while Orca's is switched
+            // off, the chip names none.
             programPending:
               slot.kind === 'install' ||
               observation.kind === 'pending' ||
-              (observation.kind === 'active' && observation.snapshot.kind === 'unknown')
+              (observation.kind === 'active' &&
+                (observation.snapshot.kind === 'unknown' ||
+                  (observation.snapshot.kind === 'known' &&
+                    observation.snapshot.state.source === 'managed' &&
+                    !observation.snapshot.state.updatesAutomatically)))
           }
         : null
   }
