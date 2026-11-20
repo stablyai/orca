@@ -50,15 +50,19 @@ export type BotPictureCustom = {
   description: string
 }
 
-// A mascot from its bitmap with the outfit's art over it; an outfit that redraws the face shows its SVG.
+// A mascot from its bitmap with the outfit's art over it.
 function mascotFace(
   key: BotMascotId,
   look: BotMascotTileLook,
   color: string | null
 ): BotPictureFace {
-  return look.facedSrc
-    ? { key, src: look.facedSrc, outfit: look.outfit, fallback: '' }
-    : { key, src: null, outfit: look.outfit, fallback: '', mascot: { id: key, color } }
+  return {
+    key,
+    src: null,
+    outfit: look.outfit,
+    fallback: '',
+    mascot: { id: key, color, face: look.face }
+  }
 }
 
 /** The mascot a value stands on; a custom picture stands on the mascot before it. */

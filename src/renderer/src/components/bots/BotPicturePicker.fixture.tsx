@@ -181,21 +181,33 @@ export const newColor = defineFixture({
   }
 })
 
-export const newOutfit = defineFixture({
-  width: 560,
-  setup: stubUpload,
-  render: () => <NewBot />,
-  interact: async () => {
+function wearOutfit(name: string): () => Promise<void> {
+  return async () => {
     document.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Pink"]')?.click()
     Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
       .find((button) => button.textContent?.startsWith('Outfits'))
       ?.click()
     await settle(300)
     document
-      .querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Detective"]')
+      .querySelector<HTMLButtonElement>(`[role="dialog"] button[aria-label="${name}"]`)
       ?.click()
     await settle(600)
   }
+}
+
+export const newOutfit = defineFixture({
+  width: 560,
+  setup: stubUpload,
+  render: () => <NewBot />,
+  interact: wearOutfit('Detective')
+})
+
+// The reviewer redraws the eyes: its mascot is a baked bitmap too, so the carousel draws no SVG.
+export const newReviewer = defineFixture({
+  width: 560,
+  setup: stubUpload,
+  render: () => <NewBot />,
+  interact: wearOutfit('Reviewer')
 })
 
 export const newDrag = defineFixture({

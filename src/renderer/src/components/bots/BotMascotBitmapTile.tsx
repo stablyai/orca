@@ -23,11 +23,14 @@ function bitmap(name: string): string | undefined {
 export function BotMascotBitmapTile({
   id,
   color,
+  face,
   outfit,
   className
 }: {
   id: BotMascotId
   color: string | null | undefined
+  /** The mascot an outfit redraws (the eyes looking down), baked like the bitmaps here. */
+  face?: string | null
   /** Drawn over the mascot, apart from the tile so a new color never redraws it. */
   outfit?: BotOutfitArt | null
   className?: string
@@ -43,7 +46,12 @@ export function BotMascotBitmapTile({
       {rim ? (
         <img src={rim} alt="" draggable={false} className="absolute inset-0 size-full" />
       ) : null}
-      <img src={bitmap(id)} alt="" draggable={false} className="absolute inset-0 size-full" />
+      <img
+        src={face ?? bitmap(id)}
+        alt=""
+        draggable={false}
+        className="absolute inset-0 size-full"
+      />
       {outfit ? <OutfitArt art={outfit} /> : null}
     </span>
   )

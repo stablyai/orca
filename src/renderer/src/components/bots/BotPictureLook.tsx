@@ -12,7 +12,6 @@ import {
   DEFAULT_BOT_AVATAR_COLOR
 } from '../../../../shared/bots/bot-avatar-color'
 import { BOT_AVATAR_OUTFITS, type BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
-import { BotAvatarTile } from './BotAvatar'
 import { useBotMascotTileLooks } from './bot-mascot-look'
 import { BotMascotBitmapTile } from './BotMascotBitmapTile'
 
@@ -125,21 +124,13 @@ function OutfitTile({
             selected && 'ring-2 ring-foreground ring-offset-2 ring-offset-popover'
           )}
         >
-          {look.facedSrc ? (
-            <BotAvatarTile
-              src={look.facedSrc}
-              outfit={look.outfit}
-              fallback=""
-              className="size-9 rounded-md"
-            />
-          ) : (
-            <BotMascotBitmapTile
-              id={id}
-              color={color}
-              outfit={look.outfit}
-              className="size-9 rounded-md"
-            />
-          )}
+          <BotMascotBitmapTile
+            id={id}
+            color={color}
+            face={look.face}
+            outfit={look.outfit}
+            className="size-9 rounded-md"
+          />
         </button>
       </TooltipTrigger>
       <TooltipContent side={side} sideOffset={4}>

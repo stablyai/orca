@@ -14,14 +14,16 @@ export type BotOutfitLayer = {
   /** Where the art sits on the 128 px tile: x, y, width, height; the large art fills the same box. */
   at: readonly [number, number, number, number]
   face?: string
+  /** With `face`: the mascot it redraws, baked as a 96 px bitmap like the mascots' own, base64 WebP. */
+  faceArt?: string
   /** Path data swapped in the mascot's body (not its defs): [from, to]. */
   redraw?: readonly (readonly [string, string])[]
 }
 
 export type BotOutfitLayers = Partial<Record<BotMascotId, BotOutfitLayer>>
 
-/** Each mascot's art baked for a 384 px tile, base64 WebP. */
-export type BotOutfitLargeArt = Partial<Record<BotMascotId, string>>
+/** Each mascot's art baked for a 384 px tile, and any redrawn mascot at 512 px, base64 WebP. */
+export type BotOutfitLargeArt = Partial<Record<BotMascotId, { art: string; faceArt?: string }>>
 
 /** One lazily read file per outfit, with the pictures waiting for it. */
 type OutfitFile<T> = {

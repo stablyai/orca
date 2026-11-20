@@ -22,7 +22,7 @@ export type BotPictureFace =
       outfit?: BotOutfitArt | null
       fallback: string
       /** A mascot, drawn from its bitmap instead of `src`. */
-      mascot?: { id: BotMascotId; color: string | null }
+      mascot?: { id: BotMascotId; color: string | null; face?: string | null }
       render?: undefined
     }
   | { key: string; render: (current: boolean) => React.ReactNode; label: string }
@@ -171,6 +171,7 @@ export function BotPictureCarousel({
               <BotMascotBitmapTile
                 id={face.mascot.id}
                 color={face.mascot.color}
+                face={face.mascot.face}
                 outfit={face.outfit}
                 className="size-28 rounded-xl"
               />
