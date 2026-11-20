@@ -109,8 +109,10 @@ export function claudeLeadTurnStart(
   const retractsPersonFinish =
     event.opensTurn &&
     event.eventName !== 'UserPromptSubmit' &&
-    own?.turnOrigin === 'person' &&
+    own !== undefined &&
+    own.turnOrigin !== 'task-wakeup' &&
     own.state === 'done' &&
+    own.outcome !== 'cancellation' &&
     own.turnCompletedAt === undefined &&
     Date.now() - own.stateStartedAt < AGENT_DONE_QUIET_MS
   if (event.isWaitingInducing) {

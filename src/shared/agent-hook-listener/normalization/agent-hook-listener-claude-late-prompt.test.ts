@@ -406,6 +406,22 @@ describe('Claude prompt event arriving after its turn', () => {
     ).toBeUndefined()
   })
 
+  it('keeps that news when the person’s own prompt event is missing', () => {
+    const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
+    claude({ hook_event_name: 'PreToolUse', prompt_id: FIRST, tool_name: 'Bash', tool_use_id: 'a' })
+    claude({ hook_event_name: 'Stop', prompt_id: FIRST })
+    claude({
+      hook_event_name: 'PreToolUse',
+      prompt_id: SECOND,
+      tool_name: 'Bash',
+      tool_use_id: 'b'
+    })
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+    expect(
+      claude({ hook_event_name: 'Stop', prompt_id: SECOND })?.mainAgent?.taskWakeup
+    ).toBeUndefined()
+  })
+
   describe('a turn whose Stop beats its prompt event while a shell runs', () => {
     function startWatching(): number | undefined {
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })
