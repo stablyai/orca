@@ -286,6 +286,34 @@ describe('questions of a bot turn typed in Orca (10:27Z regression)', () => {
     expect(h.events).toEqual([])
   })
 
+  it.each([
+    ['an Orca-typed opener', false, 'someone_else'],
+    ["another conversation's opener", true, undefined]
+  ] as const)(
+    'names whom an adopted turn acts for from %s kept at adoption',
+    async (_, relinked, turnFor) => {
+      const h = mailStartedBot('bot-chat')
+      if (relinked) {
+        h.relink()
+      }
+      const turns = h.create()
+      turns.observe(h.link.paneKey)
+      turns.news({ kind: 'prompt', sessionId: SESSION })
+      turns.news({
+        kind: 'turn-ended',
+        sessionId: SESSION,
+        outcome: 'success',
+        at: 600,
+        readTurn: async () => ({})
+      })
+      await vi.waitFor(() =>
+        expect(h.events.at(-1)).toMatchObject({ kind: 'turn-ended', origin: 'local' })
+      )
+      const ended = h.events.at(-1)
+      expect(ended?.kind === 'turn-ended' ? ended.turnFor : null).toBe(turnFor)
+    }
+  )
+
   it('keeps a relinked conversation’s prompt restricted even when its turn has a delivery stamp', () => {
     const h = mailStartedBot('bot-chat')
     h.relink()

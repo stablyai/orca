@@ -12,8 +12,9 @@ import { promptAudience } from './external-conversation-prompt-audience'
 
 export class PromptTurns {
   // Bot chats whose current turn, which their conversation didn't ask for, it was shown to see its
-  // prompt: it hears that turn's state, never its words.
-  readonly adopted = new Set<string>()
+  // prompt: it hears that turn's state, never its words. Kept with the turn's opener, which says
+  // whom its end acts for without reading the journal.
+  readonly adopted = new Map<string, { opener: AgentJournalRenderItem | null }>()
   // Who raised each chat's shown prompt, read once per prompt and conversation.
   private readonly audiences = new Map<
     string,
@@ -52,7 +53,7 @@ export class PromptTurns {
       link.adoptedTurn &&
       this.deps.turnOpener(link.sessionId)?.itemId === link.adoptedTurn.itemId
     ) {
-      this.adopted.add(link.paneKey)
+      this.adopted.set(link.paneKey, { opener: this.deps.turnOpener(link.sessionId) })
       this.deps.remember(link.paneKey, link.adoptedTurn.at)
       return true
     }
@@ -87,8 +88,8 @@ export class PromptTurns {
   private adoptFor(linked: LinkedConversation, tellStart: boolean): void {
     const { link } = linked
     const at = this.deps.turnOf(link.paneKey)
-    this.adopted.add(link.paneKey)
     const opener = this.deps.turnOpener(link.sessionId)
+    this.adopted.set(link.paneKey, { opener })
     if (opener && at !== null) {
       this.deps.keepAdoptedTurn(linked, { itemId: opener.itemId, at })
     }
@@ -120,6 +121,13 @@ export class PromptTurns {
       audience
     })
     return audience
+  }
+
+  /** The chat's adopted turn, now ended. */
+  take(paneKey: string): { opener: AgentJournalRenderItem | null } | undefined {
+    const adopted = this.adopted.get(paneKey)
+    this.adopted.delete(paneKey)
+    return adopted
   }
 
   clear(): void {

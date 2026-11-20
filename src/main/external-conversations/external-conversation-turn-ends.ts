@@ -17,18 +17,23 @@ export type ChatTurnEnd = {
   news: Extract<ChatNews, { kind: 'turn-ended' }>
   agent: NativeChatAgent
   emit: (event: ConversationEvent) => void
-  /** Whom the turn acts for, once its journal is read. */
-  turnFor: (turn: EndedChatTurn) => Pick<ChatTurnEnd['ended'], 'turnFor'>
+  /** Whom the turn acts for, once its opener and the deliveries it answered are known. */
+  turnFor: (turn: Pick<EndedChatTurn, 'opener' | 'stamps'>) => Pick<ChatTurnEnd['ended'], 'turnFor'>
   /** The turn's workers are read, so its end never reads done while they run. */
   workersChecked: () => Promise<unknown>
   /** Still the same signed-in account: false after a reset, so the end reaches no one. */
   current: () => boolean
 }
 
-/** An adopted turn's end: how it went, never what it said or the links its work opened. */
-export function endAdoptedTurn(end: ChatTurnEnd, promptsAudience: () => boolean): void {
+/** An adopted turn's end: how it went, never what it said or the links its work opened. Whom it
+ *  acts for comes from `known` (the opener kept at adoption), so a success never reads the journal. */
+export function endAdoptedTurn(
+  end: ChatTurnEnd,
+  promptsAudience: () => boolean,
+  known: Pick<EndedChatTurn, 'opener' | 'stamps'>
+): void {
   const failed = end.news.outcome === 'failure'
-  void end.news.readTurn().then(async (turn) => {
+  void (failed ? end.news.readTurn() : Promise.resolve(null)).then(async (turn) => {
     if (!end.current()) {
       return
     }
@@ -38,9 +43,9 @@ export function endAdoptedTurn(end: ChatTurnEnd, promptsAudience: () => boolean)
     }
     end.emit({
       ...end.ended,
-      ...end.turnFor(turn),
+      ...end.turnFor(known),
       origin: 'local',
-      ...(failed ? { failure: connectorFailure(turn.failure, end.agent) } : {})
+      ...(failed ? { failure: connectorFailure(turn?.failure, end.agent) } : {})
     })
   })
 }
