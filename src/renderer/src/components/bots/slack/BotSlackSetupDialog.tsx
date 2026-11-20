@@ -94,6 +94,8 @@ function BotSlackSetupFlow({
   const installed = step.kind === 'installed'
   // The setup hook follows the bot's Slack, so this read is current on every render.
   const view = readBotSlack(bot)
+  const workspaceState =
+    view.status === 'ready' && 'teamId' in step ? slackTeamState(view.slack, step.teamId) : null
   const installedState =
     installed && view.status === 'ready' ? slackTeamState(view.slack, step.teamId) : null
   // Progressive disclosure: until installed, the header names only the bot; how to ask waits for Done.
@@ -130,7 +132,11 @@ function BotSlackSetupFlow({
         return (
           <SlackSetupPrepare
             update={step.update}
-            workspace={step.teamId}
+            workspace={
+              workspaceState?.state === 'installed'
+                ? (workspaceState.teamName ?? step.teamId)
+                : step.teamId
+            }
             onContinue={() => void setUp(step.teamId)}
             onClose={onClose}
           />

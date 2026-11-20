@@ -5,14 +5,14 @@ import { BOT_SLACK_METHODS, nextSlackApps } from './bots-slack'
 
 const mocks = vi.hoisted(() => {
   const account: string | null = 'acct-1'
-  return { call: vi.fn(), update: vi.fn(), held: new Array<string>(), account }
+  return { list: vi.fn(), call: vi.fn(), update: vi.fn(), held: new Array<string>(), account }
 })
 
 // The bot an update function is given, with one Slack workspace.
 const inT1 = { slack: { appId: 'A1', teamId: 'T1' } }
 const createdIn = (teamId: string) => ({
   ok: true,
-  value: { state: 'created', appId: 'A1', teamId }
+  value: { state: 'created', appId: teamId === 'T2' ? 'A2' : 'A1', teamId }
 })
 const editedFrom = (bot: Parameters<typeof nextSlackApps>[0]): unknown => {
   const [, edit] = mocks.update.mock.lastCall ?? []
@@ -23,7 +23,7 @@ function invoke(name: string, params: unknown): Promise<unknown> {
   const method = BOT_SLACK_METHODS.find((entry) => entry.name === name)
   const context = {
     runtime: {
-      bots: { update: mocks.update },
+      bots: { list: mocks.list, update: mocks.update },
       getConnectorCloud: () => ({
         call: mocks.call,
         signedInAccount: () => mocks.account,
@@ -43,6 +43,13 @@ function invoke(name: string, params: unknown): Promise<unknown> {
 }
 
 beforeEach(() => {
+  mocks.list.mockReset().mockReturnValue([
+    {
+      id: 'bot-1',
+      slack: inT1.slack,
+      slackApps: [inT1.slack, { appId: 'A2', teamId: 'T2' }]
+    }
+  ])
   mocks.call.mockReset()
   mocks.update.mockReset().mockResolvedValue({})
   mocks.held.length = 0
@@ -213,6 +220,25 @@ describe('bots.slack', () => {
     mocks.call.mockResolvedValueOnce({ ok: true, value: { state: 'not_created' } })
     await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T2' })
     expect(editedFrom(inT1)).toBeNull()
+  })
+
+  it('keeps an app replaced while an absent-workspace check was in flight', async () => {
+    mocks.call.mockResolvedValueOnce({ ok: true, value: { state: 'not_created' } })
+    await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })
+    expect(editedFrom({ slack: { teamId: 'T1', appId: 'A-new' } })).toBeNull()
+  })
+
+  it('does not remove a different app the cloud holds in the selected workspace', async () => {
+    mocks.call.mockResolvedValueOnce({
+      ok: true,
+      value: { state: 'created', teamId: 'T1', appId: 'A-new' }
+    })
+    expect(await invoke('bots.slack.remove', { botId: 'bot-1', teamId: 'T1' })).toEqual({
+      ok: false,
+      error: 'connection_changed'
+    })
+    expect(mocks.call.mock.calls.map((call) => call[3]?.method)).toEqual(['GET'])
+    expect(mocks.update).not.toHaveBeenCalled()
   })
 
   it('takes nothing that is not a configuration refresh token', () => {
