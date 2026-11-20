@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -163,14 +163,27 @@ describe('ACP launch: standing instructions', () => {
   it("writes them to Hermes's .hermes.md in the folder it runs in, rewriting it at each launch", async () => {
     const home = await mkdtemp(join(tmpdir(), 'acp-instructions-hermes-'))
     try {
-      const first = await launch('hermes', { instructions: 'first preamble', workspacePath: home })
+      const agentsPath = join(home, 'AGENTS.md')
+      const contextPath = join(home, '.hermes.md')
+      const instructions = `---\ntitle: bot\n---\n${PREAMBLE}`
+      const priorInstructions =
+        'The previous set of standing instructions is intentionally longer than the replacement.'
+      await writeFile(agentsPath, 'Workspace instructions')
+      const first = await launch('hermes', { instructions: priorInstructions, workspacePath: home })
       expect(first.args).toEqual((await launch('hermes', { workspacePath: home })).args)
       expect(first.sessionMeta).toBeUndefined()
-      await launch('hermes', { instructions: PREAMBLE, workspacePath: home })
-      const written = await readFile(join(home, '.hermes.md'), 'utf8')
-      expect(written).toContain(PREAMBLE)
-      expect(written).not.toContain('first preamble')
-      expect((await readdir(home)).sort()).toEqual(['.hermes.md'])
+      expect(await readFile(contextPath, 'utf8')).toContain(priorInstructions)
+
+      await launch('hermes', { instructions, workspacePath: home })
+
+      const written = await readFile(contextPath, 'utf8')
+      expect(written).toMatch(/^<!--[^\n]+-->\n\n/)
+      expect(written.slice(written.indexOf('\n\n') + 2)).toBe(`${instructions}\n`)
+      expect(await readFile(agentsPath, 'utf8')).toBe('Workspace instructions')
+      expect((await readdir(home)).sort()).toEqual(['.hermes.md', 'AGENTS.md'])
+      if (process.platform !== 'win32') {
+        expect((await stat(contextPath)).mode & 0o777).toBe(0o600)
+      }
     } finally {
       await rm(home, { recursive: true, force: true })
     }
