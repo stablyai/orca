@@ -4,6 +4,7 @@ import * as stored from './plugin-host-api-storage-schemas'
 import { PLUGIN_PANEL_BRIDGE_API } from './plugin-host-api-panel-methods'
 import { PLUGIN_WORKER_ACTIONS_API } from './plugin-host-api-worker-actions'
 import { PLUGIN_EDITOR_TYPOGRAPHY_API } from './plugin-host-api-editor-typography'
+import { notificationsShowParams, notificationsShowResult } from './plugin-host-api-notifications'
 import {
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
   pluginWorkspaceContextSchema
@@ -53,12 +54,6 @@ const terminalSendTextParams = z.strictObject({
   enter: z.boolean().default(false)
 })
 const terminalSendTextResult = z.object({ accepted: z.boolean() })
-
-const notificationsShowParams = z.strictObject({
-  title: z.string().min(1).max(120),
-  body: z.string().max(1000).optional()
-})
-const notificationsShowResult = z.object({ delivered: z.boolean() })
 
 export {
   PLUGIN_STORAGE_KEY_LIMIT,
@@ -142,8 +137,10 @@ export const PLUGIN_HOST_API = {
     result: terminalSendTextResult
   }),
   'notifications.show': spec({
-    summary: 'Shows a desktop notification.',
+    summary:
+      "Shows a desktop notification. `onClick` opens an http(s) `url` (asking the person per new host, like `shell.openExternal`) or runs one of the plugin's own `command`s.",
     since: 0,
+    paramsSince: { onClick: 11 },
     scope: 'desktop',
     capability: 'notifications:show',
     mutation: true,
