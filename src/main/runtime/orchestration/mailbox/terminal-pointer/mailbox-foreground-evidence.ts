@@ -85,13 +85,15 @@ export class MailboxForegroundEvidence {
 
   captureForegroundObservation(
     ptyId: string,
-    processIncarnation: string
+    processIncarnation: string,
+    agentUnprovable?: boolean
   ): OrchestrationMailboxForegroundObservation {
     const observation = this.foregroundObservation(ptyId, processIncarnation)
     return {
       observation,
       generation: observation.generation,
-      contradiction: observation.contradiction
+      contradiction: observation.contradiction,
+      ...(agentUnprovable ? { agentUnprovable } : {})
     }
   }
 
