@@ -14,9 +14,11 @@ import { buildInstalledGeminiHooks, GEMINI_EVENTS, type GeminiEvent } from './ge
 import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
 import {
+  isPlainObject,
   parseHooksJsonText,
   readHooksJson
 } from '../agent-hooks/installation/configuration/hooks-json-read'
+import type { HooksConfig } from '../agent-hooks/installation/configuration/hook-config-schema'
 import {
   findOutdatedManagedEvents,
   type OutdatedManagedEvents
@@ -108,16 +110,27 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   ].join('\n')
 }
 
+function readDisabledGeminiHooks(config: HooksConfig | null): Set<unknown> {
+  const disabled = isPlainObject(config?.hooksConfig) ? config.hooksConfig.disabled : undefined
+  return new Set(Array.isArray(disabled) ? disabled : [])
+}
+
 async function scanManagedEntries(scriptPath: string): Promise<OutdatedManagedEvents<GeminiEvent>> {
   // A missing or unreadable file has no Orca entries to repair.
   const raw = await readFile(getConfigPath(), 'utf8').catch(() => null)
+  const config = raw === null ? null : parseHooksJsonText(raw)
   const command = getManagedCommand(scriptPath)
+  // Gemini keys disabled hooks by name or command; a new command would re-enable what the user turned off.
+  const disabled = readDisabledGeminiHooks(config)
   return findOutdatedManagedEvents(
-    raw === null ? {} : (parseHooksJsonText(raw)?.hooks ?? {}),
+    config?.hooks ?? {},
     GEMINI_EVENTS,
     (event) => event,
     createManagedCommandMatcher(getManagedScriptFileName()),
-    (definition) => (definition.hooks ?? []).some((hook) => hook.command === command)
+    (definition) =>
+      (definition.hooks ?? []).some(
+        (hook) => hook.command === command || disabled.has(hook.name || hook.command)
+      )
   )
 }
 
