@@ -18,6 +18,10 @@ import { createTables } from './schema/create-tables'
 import { createPeerRunQueueTriggers } from './peer-runs/peer-run-queue-sql'
 import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
+import {
+  installCoordinatorSessionAliasIndexes,
+  pruneStaleChatCoordinatorAliases
+} from './runs/run-coordinator-session-alias'
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 import { installWorkerStatusNotice, type DispatchRowChange } from './worker-status-notice'
 import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
@@ -89,12 +93,29 @@ class OrchestrationDbCore {
         }
       }
     }
+    const coordinatorHandleColumns = new Set(
+      this.db
+        .prepare('PRAGMA table_info(run_coordinator_handles)')
+        .all()
+        .map((row) => row.name)
+    )
+    for (const [column, definition] of [
+      ['first_bound_sequence', 'INTEGER NOT NULL DEFAULT 0'],
+      ['is_structured_worker', 'INTEGER NOT NULL DEFAULT 0']
+    ] as const) {
+      if (!coordinatorHandleColumns.has(column)) {
+        this.db.exec(`ALTER TABLE run_coordinator_handles ADD COLUMN ${column} ${definition}`)
+      }
+    }
     createRunCoordinatorAddressTriggers(this.db)
     createPeerRunQueueTriggers(this.db)
     backfillFederatedStubHomeRuns(this.db)
     // After every open step that creates Runs, before any step that deletes work.
     installRemovedWorkCapture(this.db, removedWorkCaptureWasIntact)
     backfillStructuredWorkerOrcaSessionIds(this.db)
+    // Install the incarnation index and stamp active worker aliases before pruning stale chats.
+    installCoordinatorSessionAliasIndexes(this.db)
+    pruneStaleChatCoordinatorAliases(this.db)
     this.db.exec(`
       DROP INDEX IF EXISTS idx_dispatch_creator_account_work;
       CREATE INDEX IF NOT EXISTS idx_dispatch_contexts_run ON dispatch_contexts(run_id);

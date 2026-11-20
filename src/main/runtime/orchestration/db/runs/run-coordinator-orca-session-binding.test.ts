@@ -131,6 +131,7 @@ describe('Run binding by Orca session id', () => {
     olderBinaryRebind(run.id, 'term_taker', PTY_PANE)
 
     expect(db.getCurrentRunForCoordinator(chat(CHAT_X_ID))).toBeUndefined()
+    expect(db.getRunMailboxOwnerIdsForHandle(CHAT_X)).toEqual([])
     expect(
       db.getCurrentRunForCoordinator({
         terminalHandle: 'term_taker',
@@ -154,6 +155,7 @@ describe('Run binding by Orca session id', () => {
       coordinator_orca_session_id: CHAT_X_ID
     })
     expect(db.getCurrentRunForCoordinator(chat(CHAT_X_ID))).toBeUndefined()
+    expect(db.getRunMailboxOwnerIdsForHandle(CHAT_X)).toEqual([])
     const next = createChatRun(CHAT_X_ID, 'next')
     expect(db.getCurrentRunForCoordinator(chat(CHAT_X_ID))?.id).toBe(next.id)
   })
@@ -171,6 +173,10 @@ describe('Run binding by Orca session id', () => {
     olderBinaryUnbind(run.id)
     expect(db.getCurrentRunForCoordinator(worker)).toBeUndefined()
     expect(db.getCurrentRunForCoordinator(chat(worker.orcaSessionId))).toBeUndefined()
+    expect(db.getRunMailboxOwnerIdsForHandle(worker.terminalHandle)).toEqual([run.id])
+    expect(
+      db.getRunMailboxOwnerIdsForHandle(formatOrcaSessionAddress(worker.orcaSessionId))
+    ).toEqual([run.id])
   })
 
   it('hands a Run to a different session like a terminal takeover: fenced, rerouted, remembered', () => {

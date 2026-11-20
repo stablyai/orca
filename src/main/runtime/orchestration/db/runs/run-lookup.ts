@@ -1,5 +1,6 @@
 import type { RunRow } from '../orchestration-records'
 import {
+  chatCoordinatorAddress,
   mailboxAddressOf,
   runBoundToCoordinator,
   runCoordinatorKey,
@@ -17,7 +18,7 @@ import type { RunListPage } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
 import { RUN_COLUMN_LIST } from '../row-column-lists'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { workerSeatGrabSql } from './run-coordinator-mail-routing'
+import { coordinatorAliasRowSql } from './run-coordinator-mail-routing'
 
 export type LegacyAdoptedMailboxOwner = {
   runId: string
@@ -73,7 +74,7 @@ export function getRunMailboxOwnerIdsForHandle(
       `SELECT coordinator.run_id
        FROM run_coordinator_handles AS coordinator
        JOIN runs ON runs.id = coordinator.run_id AND runs.legacy = 0
-       WHERE coordinator.terminal_handle = ? AND NOT ${workerSeatGrabSql('coordinator')}
+       WHERE coordinator.terminal_handle = ? AND ${coordinatorAliasRowSql('coordinator')}
        ORDER BY coordinator.run_id`
     )
     .all(terminalHandle)
@@ -193,9 +194,15 @@ export function unbindOtherRunsForCoordinator(
   const changed: string[] = []
   for (const run of this.runsBoundToCoordinator(caller)) {
     if (run.id !== exceptRunId) {
-      const address = mailboxAddressOf(runCoordinatorKey(run))
+      const key = runCoordinatorKey(run)
+      const address = mailboxAddressOf(key)
       if (address !== null && this.routeAllUnreadDirectMessagesToRunMailbox(run.id, address) > 0) {
         changed.push(address)
+      }
+      // The chat still exists and reads its own address. Keeping the alias would send that mail to this Run.
+      const chat = chatCoordinatorAddress(key)
+      if (chat !== null && this.forgetRunCoordinatorHandle(run.id, chat)) {
+        changed.push(chat)
       }
       changed.push(`run:${run.id}`)
       this.db

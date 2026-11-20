@@ -8,7 +8,7 @@ import {
   RUN_PANE_KEY_MATCH_SUFFIX_SQL,
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL
 } from '../db/pane-key-match'
-import { workerSeatGrabSql } from '../db/runs/run-coordinator-mail-routing'
+import { coordinatorAliasRowSql } from '../db/runs/run-coordinator-mail-routing'
 import { formerlyOwnedResourceIdSql } from '../db/worker-terminal/worker-terminal-prior-owner-index'
 
 const nullable = z.string().nullable()
@@ -191,7 +191,7 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
           .prepare(`
       SELECT json_extract(requested.value, '$.key') AS key, coordinator.run_id FROM json_each(?) requested
       CROSS JOIN run_coordinator_handles coordinator JOIN runs ON runs.id = coordinator.run_id AND runs.legacy = 0
-      WHERE coordinator.terminal_handle = json_extract(requested.value, '$.handle') AND NOT ${workerSeatGrabSql('coordinator')}
+      WHERE coordinator.terminal_handle = json_extract(requested.value, '$.handle') AND ${coordinatorAliasRowSql('coordinator')}
       ORDER BY coordinator.run_id`)
           .all(JSON.stringify(request))
       )
