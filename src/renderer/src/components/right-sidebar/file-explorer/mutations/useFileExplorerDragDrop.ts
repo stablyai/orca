@@ -92,12 +92,17 @@ export function useFileExplorerDragDrop({
 
     document.addEventListener('drop', handleGlobalDragFinish, true)
     document.addEventListener('dragend', handleGlobalDragFinish, true)
+    // Chromium drops dragend after some external DownloadURL drops; no HTML5 drag spans a pointerdown or refocus.
+    document.addEventListener('pointerdown', handleGlobalDragFinish, true)
+    window.addEventListener('focus', handleGlobalDragFinish)
     window.addEventListener('blur', handleGlobalDragFinish)
 
     return () => {
       stopDragEdgeScroll()
       document.removeEventListener('drop', handleGlobalDragFinish, true)
       document.removeEventListener('dragend', handleGlobalDragFinish, true)
+      document.removeEventListener('pointerdown', handleGlobalDragFinish, true)
+      window.removeEventListener('focus', handleGlobalDragFinish)
       window.removeEventListener('blur', handleGlobalDragFinish)
     }
   }, [stopAndClearDragState, stopDragEdgeScroll])
