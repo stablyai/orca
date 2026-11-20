@@ -1,5 +1,4 @@
-import { runProcess } from '@orca/process-host'
-import { scanAgentSessionSpawnTokenProcesses } from '../../../runtime/agent-session/ownership/agent-session-spawn-token-process-scan'
+import { scanCodexLeaseProcesses } from './codex-shared-lease-process-scan'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
 import { isCodexAppServerUnsupportedError } from '../codex-app-server-session'
 import {
@@ -9,8 +8,6 @@ import {
 import { CODEX_SHARED_LEASE_ENV } from './codex-shared-server-lease-requests'
 
 const SWEEP_SETTLE_MS = 1_000
-const PS_TIMEOUT_MS = 5_000
-const PS_MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 
 export type CodexSharedServerProcessSweep = (serverPid: number, leaseId: string) => Promise<boolean>
 
@@ -79,70 +76,54 @@ async function stopListedTerminals(input: {
   }
 }
 
-/** Every process on the host carrying this lease's tag, wherever it was reparented; null when
- *  the host's processes can't all be read (which proves nothing). */
-async function findTagged(leaseId: string, platform: NodeJS.Platform): Promise<number[] | null> {
-  if (platform === 'linux') {
-    const scan = await scanAgentSessionSpawnTokenProcesses('linux', CODEX_SHARED_LEASE_ENV)
-    return scan ? [...(scan.get(leaseId) ?? [])] : null
-  }
-  if (platform !== 'darwin') {
-    return null
-  }
-  // `ps -E` appends each own-user process's environment to its command line; others show none,
-  // and a chat's commands always run as this user.
-  const result = await runProcess({
-    program: 'ps',
-    args: ['-E', '-ww', '-A', '-o', 'pid=,command='],
-    timeoutMs: PS_TIMEOUT_MS,
-    maxOutputBytes: PS_MAX_OUTPUT_BYTES,
-    env: { ...process.env, LC_ALL: 'C', LANG: 'C' }
-  }).catch(() => null)
-  if (!result || result.timedOut || result.outputTruncated || result.code !== 0) {
-    return null
-  }
-  const tag = ` ${CODEX_SHARED_LEASE_ENV}=${leaseId}`
-  const tagged: number[] = []
-  for (const line of result.stdout.split('\n')) {
-    const match = /^\s*(\d+)\s/.exec(line)
-    const rest = match ? line.slice(match[0].length - 1) : ''
-    if (match && (rest.includes(`${tag} `) || rest.endsWith(tag))) {
-      tagged.push(Number(match[1]))
-    }
-  }
-  return tagged
-}
-
-/** Stops every process carrying this lease's tag, then proves none is left. Windows can't read a
- *  process's environment, so it never proves this (the pool isn't used there). */
+/** Stops every process carrying this lease's tag, wherever it was reparented, then proves none
+ *  is left. Any own process whose environment couldn't be read, or a target seen alive and later
+ *  unreadable, leaves it unproven. */
 async function stopTaggedProcesses(
-  _serverPid: number,
+  serverPid: number,
   leaseId: string,
   platform: NodeJS.Platform = process.platform
 ): Promise<boolean> {
   try {
-    const found = await findTagged(leaseId, platform)
-    if (found === null) {
+    const first = await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform)
+    if (!first) {
       return false
     }
-    if (found.length === 0) {
-      return true
-    }
-    // Re-read just before signalling, so a reused pid is never hit.
-    const confirmed = new Set((await findTagged(leaseId, platform)) ?? [])
-    for (const pid of found) {
-      if (confirmed.has(pid)) {
-        try {
-          process.kill(pid, 'SIGKILL')
-        } catch {
-          // Already gone.
+    const targets = first.tagged(leaseId)
+    if (targets.length > 0) {
+      // Signalled only if a second reading still shows the tag, so a reused pid is never hit.
+      const confirm = await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform)
+      const still = new Set(confirm?.tagged(leaseId) ?? [])
+      for (const pid of targets) {
+        if (still.has(pid)) {
+          try {
+            process.kill(pid, 'SIGKILL')
+          } catch {
+            // Already gone.
+          }
         }
       }
+      await new Promise((resolve) => setTimeout(resolve, SWEEP_SETTLE_MS))
     }
-    await new Promise((resolve) => setTimeout(resolve, SWEEP_SETTLE_MS))
-    const after = await findTagged(leaseId, platform)
-    return after !== null && after.length === 0
+    const after =
+      targets.length > 0
+        ? await scanCodexLeaseProcesses(CODEX_SHARED_LEASE_ENV, serverPid, platform)
+        : first
+    if (!after || after.unreadable.length > 0 || after.tagged(leaseId).length > 0) {
+      return false
+    }
+    // A target the last reading didn't list must really be gone, not merely unreadable now.
+    return targets.every((pid) => !isAlive(pid))
   } catch {
     return false
+  }
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
   }
 }
