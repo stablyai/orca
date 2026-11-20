@@ -17,8 +17,14 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { CrewRowView, IconButton } from './CrewRowView'
-import { CrewAgentStack, useCrewRowLooks, type CrewRowLook } from './CrewAgentIcons'
-import { CREW_STATUS_GROUPS, crewStatusGroup, type CrewStatusGroup } from './crew-party-status'
+import {
+  CREW_STATUS_GROUPS,
+  CrewAgentStack,
+  crewStatusGroup,
+  useCrewRowLooks,
+  type CrewRowLook,
+  type CrewStatusGroup
+} from './CrewAgentIcons'
 
 function runningWorker(row: OrchestrationCrewRow): boolean {
   return Boolean(

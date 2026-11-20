@@ -1,14 +1,5 @@
-import { scopedCrewChange, type CrewInvalidation } from './crew-changes'
+import type { CrewInvalidation } from './crew-changes'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import {
-  collectDispatchWrites,
-  createdDispatchParties,
-  dispatchMutations,
-  dispatchOf,
-  noticedMutations,
-  progressMutations,
-  runCoordinatorParties
-} from './crew-mutation-scopes'
 
 type CrewMutationPrototype = Partial<OrchestrationDb>
 type CrewMutationInvocation = (this: OrchestrationDb, ...args: unknown[]) => unknown
@@ -200,13 +191,7 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
       configurable: true,
       writable: true,
       value(this: OrchestrationDb, ...args: unknown[]) {
-        const scoped =
-          (progressMutations.has(name) || dispatchMutations.has(name)) && dispatchOf(args[0])
-        const noticed = noticedMutations.has(name)
-        const [result, written] =
-          scoped || noticed
-            ? collectDispatchWrites(this, () => original.apply(this, args), !noticed)
-            : [original.apply(this, args), null]
+        const result = original.apply(this, args)
         if (
           typeof result === 'object' &&
           result !== null &&
@@ -216,48 +201,11 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
         ) {
           return result
         }
-        if (
-          typeof result === 'object' &&
-          result !== null &&
-          'duplicate' in result &&
-          result.duplicate === true &&
-          name === 'recordAttemptObservation'
-        ) {
-          return result
-        }
+        const facets = new Set([trafficMutations.has(name) ? 'traffic' : 'topology'] as const)
         const mailboxes = mailboxScopes[name]?.(args, result)
-        const notify = (change: CrewInvalidation) =>
-          this.crewChanges.notify(
-            mailboxes ? Object.assign(change, { trafficAddresses: new Set(mailboxes) }) : change
-          )
-        const runParties = name === 'createRun' ? runCoordinatorParties(args[0]) : null
-        if (scoped && written) {
-          written.dispatchIds.add(scoped)
-          notify(
-            scopedCrewChange([progressMutations.has(name) ? 'assignments' : 'topology'], {
-              dispatchIds: written.dispatchIds
-            })
-          )
-        } else if (noticed && written) {
-          // Nothing noticed: the call wrote no row a crew shows.
-          if (written.dispatchIds.size > 0) {
-            notify(
-              scopedCrewChange(['topology'], {
-                dispatchIds: written.dispatchIds,
-                ...(written.created.size > 0
-                  ? { parties: createdDispatchParties(this, written.created) }
-                  : {})
-              })
-            )
-          }
-        } else if (runParties) {
-          notify(scopedCrewChange(['topology'], { parties: runParties }))
-        } else if (name === 'closeQuestionsForDispatch' && dispatchOf(args[0])) {
-          // One Dispatch's questions and helper mail: the crews showing that Dispatch read them.
-          notify(scopedCrewChange(['traffic'], { dispatchIds: new Set([dispatchOf(args[0])!]) }))
-        } else {
-          notify(new Set([trafficMutations.has(name) ? 'traffic' : 'topology']))
-        }
+        this.crewChanges.notify(
+          mailboxes ? Object.assign(facets, { trafficAddresses: new Set(mailboxes) }) : facets
+        )
         return result
       }
     })

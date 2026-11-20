@@ -1,4 +1,3 @@
-import { crewStatusRowChange } from '../orchestration/crew/crew-changes'
 import type { PairedDeviceAccountLookup } from '../rpc/server/pairing/device-entry'
 import { worktreesUnderHomes } from '../../bots/bot-handed-workspaces'
 import { forgetPairedReads } from '../../bots/bot-paired-handed-agents'
@@ -291,9 +290,8 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     // Attach connector watches at hook-store startup, before any connector call.
     this.externalConversations.current()
     const detachTransitions = this.agentTransitions.attach(store)
-    // A row names its pane: a crew that shows neither pane reads nothing for it.
-    const detachCrew = store.subscribeStatusRowMutations((mutation) =>
-      this.crewChanges.notify(crewStatusRowChange(mutation))
+    const detachCrew = store.subscribeStatusRowMutations(() =>
+      this.crewChanges.notify(new Set(['status', 'names']))
     )
     this.crewChanges.notify(new Set(['status', 'names']))
     const detachRows = store.subscribeStatusRowMutations(() => this.worktreeRowsChanges?.changed())

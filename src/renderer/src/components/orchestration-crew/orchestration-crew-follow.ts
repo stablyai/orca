@@ -12,7 +12,7 @@ import {
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CrewSubscriptionAttemptArgs } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
-import { CrewSubscription, UNKNOWN_CREW_STATE } from './orchestration-crew-subscription'
+import { CrewSubscription, UNKNOWN_CREW } from './orchestration-crew-subscription'
 
 type SourceSelection = {
   identity: string
@@ -105,22 +105,7 @@ export class CrewFollowSource {
         }
       })
       const revisions = onRuntimeEnvironmentRevisionsChanged(changed)
-      // A local source never changes; a remote one only with its own status entry.
-      const target = this.target
-      let entry =
-        target.kind === 'environment'
-          ? useAppStore.getState().runtimeStatusByEnvironmentId.get(target.environmentId)
-          : undefined
-      const store =
-        target.kind === 'environment'
-          ? useAppStore.subscribe((state) => {
-              const next = state.runtimeStatusByEnvironmentId.get(target.environmentId)
-              if (next !== entry) {
-                entry = next
-                this.update()
-              }
-            })
-          : () => {}
+      const store = useAppStore.subscribe(() => this.update())
       const gone = (): void => {
         this.retiredIdentity = this.current.identity
         this.block(false)
@@ -242,10 +227,6 @@ export function observeCrew(target: RuntimeClientTarget, party: string) {
       entry = crewInterest(target, party)
       return entry.subscribe(listener)
     },
-    read: () => entry?.read() ?? UNKNOWN_CREW_STATE,
-    /** Rows for an open list or `@` menu, on the same subscription; call once subscribed. */
-    wantRows: (): (() => void) => entry?.wantRows() ?? (() => {})
+    read: () => entry?.read() ?? UNKNOWN_CREW
   }
 }
-
-export type CrewObservation = ReturnType<typeof observeCrew>

@@ -10,8 +10,6 @@ export const NativeChatRoomContext = createContext<{
   mentions: NativeChatComposerRoom['mentions']
   withFiles: boolean
   unavailable: readonly string[]
-  /** This chat's crew agents, listed above the bots; their values lead the `@` list. */
-  agents?: NativeChatComposerRoom['mentions']
   /** A bot's chats one level under its row; absent where none can be picked. */
   chats?: { picker: NativeChatBotChatPicker; drill: NativeChatMentionChatDrill }
 } | null>(null)

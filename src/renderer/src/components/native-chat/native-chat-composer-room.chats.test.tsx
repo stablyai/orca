@@ -4,10 +4,7 @@ import type { KeyboardEvent, ReactNode } from 'react'
 import { expect, it, vi } from 'vitest'
 import type { ComposerAutocomplete } from '../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import { useNativeChatComposerMentions } from './native-chat-composer-room'
-import {
-  applyNativeChatMention,
-  type NativeChatMentionToken
-} from './composer/editor/native-chat-composer-input'
+import { applyNativeChatMention } from './composer/editor/native-chat-composer-input'
 import {
   NativeChatBotChatPickerContext,
   NativeChatBotChatRoomContext,
@@ -138,7 +135,7 @@ it('picks the highlighted chat after a spaced filter and uses a plain mention fo
 
 it('returns from chat selection without editing the draft and replaces the filter when a file is picked', () => {
   let draft = 'Ask @'
-  const completeMention = (path: string, token?: NativeChatMentionToken, from?: number) => {
+  const completeMention = (path: string, token?: string, from?: number) => {
     draft = applyNativeChatMention(null, draft, draft.length, path, token, from).draft
   }
   const { result, rerender } = renderHook(

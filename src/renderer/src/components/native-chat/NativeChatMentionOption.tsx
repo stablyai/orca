@@ -40,9 +40,6 @@ export function NativeChatMentionOption({
           {member.host ? (
             <span className="flex min-w-0 self-center overflow-hidden">{member.host}</span>
           ) : null}
-          {member.noteIcon ? (
-            <span className="flex shrink-0 self-center">{member.noteIcon}</span>
-          ) : null}
           {purpose ? (
             <span title={purpose} className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
               {purpose}

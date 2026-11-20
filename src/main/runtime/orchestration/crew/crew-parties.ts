@@ -15,12 +15,8 @@ import type { CrewReadDependencies, CrewIdentityRead } from './crew-read-depende
 
 export type Party = AgentMessageSender['party'] & { paneKey: string | null }
 
-export function createCrewPartyRegistry({
-  records: sourceRecords,
-  ...identityInputs
-}: CrewReadDependencies) {
-  // Closures must not capture the source reader: it is the previous generation's, and holding it chains every generation's maps.
-  const recordList = sourceRecords?.listRecords() ?? []
+export function createCrewPartyRegistry(deps: CrewReadDependencies) {
+  const recordList = deps.records?.listRecords() ?? []
   const recordMap = new Map(recordList.map((record) => [record.sessionId, record]))
   const adjacent = new Map<string, Set<string>>()
   const incoming = new Map<string, number>()
@@ -74,9 +70,9 @@ export function createCrewPartyRegistry({
     }
   }
   const root = (id: string) => roots.get(id) ?? id
-  const records = sourceRecords
+  const records = deps.records
     ? {
-        ...sourceRecords,
+        ...deps.records,
         listRecords: () => [...recordMap.values()],
         getRecord: (id: string) => recordMap.get(id) ?? null
       }
@@ -107,7 +103,7 @@ export function createCrewPartyRegistry({
       process?: string | null,
       read?: CrewIdentityRead
     ): Party | undefined => {
-      const inputs = read ?? identity ?? identityInputs.openIdentityRead?.() ?? identityInputs
+      const inputs = read ?? identity ?? deps.openIdentityRead?.() ?? deps
       const sessionId = session ? root(session) : null
       const liveHandle = pane ? inputs.handleForPane(pane) : null
       const candidateHandle =

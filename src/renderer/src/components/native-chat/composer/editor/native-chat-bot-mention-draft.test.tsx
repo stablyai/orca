@@ -78,7 +78,7 @@ const UPGRADED: JSONContent = {
         { type: 'text', text: ' ' },
         IMAGE,
         { type: 'text', text: ' ' },
-        { ...AGENT, attrs: { ...AGENT.attrs, agentType: '' } },
+        AGENT,
         { type: 'text', text: TAIL }
       ]
     }

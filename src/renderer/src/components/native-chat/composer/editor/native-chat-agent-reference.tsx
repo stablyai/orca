@@ -7,7 +7,6 @@ import {
 } from '@tiptap/react'
 import { Users } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
 import {
   agentReferenceToken,
@@ -18,7 +17,6 @@ import { closeHistory } from '@tiptap/pm/history'
 function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Element {
   const t = useTranslate()
   const label = String(node.attrs.label)
-  const agentType = String(node.attrs.agentType ?? '')
   return (
     <NodeViewWrapper
       as="span"
@@ -28,12 +26,6 @@ function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Elemen
     >
       <NativeChatPromptPill
         icon={Users}
-        // The agent's logo where it was picked from a list that knows it; older drafts keep the generic icon.
-        avatar={
-          agentType ? (
-            <AgentTypeIcon agentType={agentType} size={12} className="size-3" />
-          ) : undefined
-        }
         label={label}
         spokenLabel={t('components.native-chat.composer.agentPillLabel', 'Agent: {{name}}', {
           name: label
@@ -53,8 +45,7 @@ export const NativeChatAgentReference = Node.create({
   addAttributes: () => ({
     label: { default: '' },
     address: { default: '' },
-    hostKey: { default: '' },
-    agentType: { default: '' }
+    hostKey: { default: '' }
   }),
   addNodeView: () => ReactNodeViewRenderer(AgentReferencePill),
   renderText: ({ node }) =>
@@ -99,10 +90,7 @@ export function insertAgentReferences(
   editor.view.dispatch(closeHistory(editor.state.tr))
   editor.commands.insertContent(
     references.flatMap((attrs, index) => [
-      {
-        type: NativeChatAgentReference.name,
-        attrs: { ...attrs, agentType: attrs.agentType ?? '' }
-      },
+      { type: NativeChatAgentReference.name, attrs },
       ...(index < references.length - 1 || !hasRightSeparator ? [{ type: 'text', text: ' ' }] : [])
     ])
   )

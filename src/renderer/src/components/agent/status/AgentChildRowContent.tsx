@@ -16,10 +16,6 @@ type AgentChildRowContentProps = {
   tooltipSide?: StateIndicatorTooltipSide
   /** Name the whole line on hover, for surfaces that truncate it tightly. */
   lineTitle?: boolean
-  /** After the state dot, where rows of several kinds mix and each shows its kind's icon there. */
-  icon?: React.ReactNode
-  /** A kind label after the name, such as "Subagent" where rows of several kinds mix. */
-  badge?: React.ReactNode
 }
 
 /** Keep sidebar-child and chat-strip state/name/detail rendering consistent. */
@@ -31,9 +27,7 @@ export const AgentChildRowContent = React.memo(function AgentChildRowContent({
   separator,
   dotTitle,
   tooltipSide,
-  lineTitle = false,
-  icon,
-  badge
+  lineTitle = false
 }: AgentChildRowContentProps): React.JSX.Element {
   const { lead, trail } = agentChildRowText(row, now)
   return (
@@ -44,13 +38,11 @@ export const AgentChildRowContent = React.memo(function AgentChildRowContent({
         title={dotTitle}
         tooltipSide={tooltipSide}
       />
-      {icon}
       <span
         className="min-w-0 flex-1 truncate"
         title={lineTitle ? `${lead}${trail ? `${separator}${trail}` : ''}` : undefined}
       >
         <span className={leadClassName}>{lead}</span>
-        {badge}
         {trail ? (
           <span className={trailClassName}>
             {separator}

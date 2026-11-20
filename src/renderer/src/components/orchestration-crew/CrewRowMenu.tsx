@@ -15,27 +15,17 @@ export function CrewRowMenu({
   row,
   open,
   canMention,
-  mention,
-  onOpenChange
+  mention
 }: {
   row: OrchestrationCrewRow
   open: () => void
   canMention: boolean
   mention: () => void
-  /** Lets a row keep its hover actions shown while the menu is open. */
-  onOpenChange?: (open: boolean) => void
 }) {
   const t = useTranslate()
   const menu = useCrewMenuFocus()
   return (
-    <DropdownMenu
-      modal={false}
-      open={menu.open}
-      onOpenChange={(value) => {
-        menu.onOpenChange(value)
-        onOpenChange?.(value)
-      }}
-    >
+    <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
