@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { Suspense } from 'react'
+import { Suspense, useState } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { BotChatsSkeleton } from '../bots/BotChatsSkeleton'
 import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome/ui-chrome-types'
@@ -32,6 +32,34 @@ type RightSidebarPanelContentProps = {
   onVaultSearchFocusHandled: () => void
 }
 
+type RetainedSidebarPanels = {
+  explorer: boolean
+  vault: boolean
+}
+
+function retainOpenedSidebarPanel(
+  visited: RetainedSidebarPanels,
+  effectiveTab: ActiveRightSidebarTab
+): RetainedSidebarPanels {
+  if (effectiveTab !== 'explorer' && effectiveTab !== 'vault') return visited
+  if (visited[effectiveTab]) return visited
+  return { ...visited, [effectiveTab]: true }
+}
+
+function RetainedSidebarPanel({
+  visible,
+  children
+}: {
+  visible: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div className={visible ? 'contents' : undefined} hidden={!visible}>
+      {children}
+    </div>
+  )
+}
+
 export function RightSidebarPanelContent({
   effectiveTab,
   rightSidebarOpen,
@@ -41,6 +69,13 @@ export function RightSidebarPanelContent({
   const isFolderWorkspace = useAppStore(
     (state) => state.activeWorkspaceKey?.startsWith('folder:') ?? false
   )
+  const [visitedPanels, setVisitedPanels] = useState(() =>
+    retainOpenedSidebarPanel({ explorer: false, vault: false }, effectiveTab)
+  )
+  const openedPanels = retainOpenedSidebarPanel(visitedPanels, effectiveTab)
+  if (openedPanels !== visitedPanels) {
+    setVisitedPanels(openedPanels)
+  }
   return (
     <div
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -48,7 +83,12 @@ export function RightSidebarPanelContent({
       data-plugin-panel-surface={isPluginPanelTabKey(effectiveTab) ? effectiveTab : undefined}
     >
       <Suspense fallback={effectiveTab === 'bot-chats' ? <BotChatsSkeleton toolbar /> : null}>
-        {effectiveTab === 'explorer' && <FileExplorer />}
+        {/* Files keeps its tree after the first open. A contents wrapper avoids an extra flex item. */}
+        {openedPanels.explorer && (
+          <RetainedSidebarPanel key="explorer" visible={effectiveTab === 'explorer'}>
+            <FileExplorer />
+          </RetainedSidebarPanel>
+        )}
         {effectiveTab === 'source-control' &&
           (isFolderWorkspace ? (
             rightSidebarOpen && <FolderWorkspaceSourceControl />
@@ -60,11 +100,14 @@ export function RightSidebarPanelContent({
         {effectiveTab === 'ports' && (
           <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
         )}
-        {effectiveTab === 'vault' && (
-          <AiVaultSidebarPanel
-            focusSearch={focusVaultSearch}
-            onFocusSearchHandled={onVaultSearchFocusHandled}
-          />
+        {/* Agents keeps its session list after the first open. Other tabs still unmount. */}
+        {openedPanels.vault && (
+          <RetainedSidebarPanel key="vault" visible={effectiveTab === 'vault'}>
+            <AiVaultSidebarPanel
+              focusSearch={focusVaultSearch}
+              onFocusSearchHandled={onVaultSearchFocusHandled}
+            />
+          </RetainedSidebarPanel>
         )}
         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
         {effectiveTab === 'pr-checks' && (
