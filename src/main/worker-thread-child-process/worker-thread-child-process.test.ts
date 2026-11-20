@@ -7,12 +7,12 @@ import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads'
 import { runProcess } from '@orca/process-host'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
-  PROCESS_LAUNCHER_LOST_CODE,
   WORKER_CHILD_ABANDONED_CODE,
   WorkerThreadChildProcessHost,
   type WorkerThreadChildProcess
 } from './worker-thread-child-process'
 import { serveWorkerThreadChildProcesses } from './worker-thread-child-process-server'
+import { openSpawnRecords, type SpawnRecords } from './spawn-record-writes'
 import { createWorkerThreadChildProcessTestEntry } from './worker-thread-child-process-worker.test-fixtures'
 
 // Use a real MessageChannel so protocol tests include structured-clone behavior.
@@ -314,55 +314,82 @@ describe('WorkerThreadChildProcessHost on a real worker thread', () => {
   )
 })
 
-async function sleepChildrenOfThisProcess(): Promise<number[]> {
+async function processesRunning(argv: readonly string[]): Promise<number[]> {
+  const wanted = `${argv.join('\0')}\0`
   const pids: number[] = []
   for (const entry of await readdir('/proc')) {
-    const stat = await readFile(`/proc/${entry}/stat`, 'utf8').catch(() => '')
-    const tail = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
-    if (stat.includes('(sleep)') && Number(tail[1]) === process.pid && tail[0] !== 'Z') {
+    if ((await readFile(`/proc/${entry}/cmdline`, 'utf8').catch(() => '')) === wanted) {
       pids.push(Number(entry))
     }
   }
   return pids
 }
 
+/** A launcher in another process that dies with everything but 'ready' still unsent. */
+function hostLosingItsLauncher(records: SpawnRecords | null): {
+  host: WorkerThreadChildProcessHost
+  loseLauncher: () => void
+} {
+  let transport: EventEmitter | undefined
+  const host = new WorkerThreadChildProcessHost(
+    () => {
+      const { port1, port2 } = new MessageChannel()
+      openPorts.push(port1, port2)
+      serveWorkerThreadChildProcesses(port2, { records })
+      const emitter = new EventEmitter()
+      transport = emitter
+      port1.on('message', (message: { type: string }) => {
+        if (message.type === 'ready') {
+          emitter.emit('message', message)
+        }
+      })
+      return Object.assign(emitter, {
+        postMessage: (message: unknown) => port1.postMessage(message),
+        unref: () => port1.unref(),
+        terminate: async () => 0
+      })
+    },
+    { tagSpawns: true }
+  )
+  return { host, loseLauncher: () => transport?.emit('exit', 1) }
+}
+
 describe.runIf(process.platform === 'linux')(
   'WorkerThreadChildProcessHost in another process',
   () => {
-    it('ends a child whose pid never arrived before reporting the lost launcher', async () => {
-      let transport: EventEmitter | undefined
-      const host = new WorkerThreadChildProcessHost(
-        () => {
-          const { port1, port2 } = new MessageChannel()
-          openPorts.push(port1, port2)
-          serveWorkerThreadChildProcesses(port2)
-          const emitter = new EventEmitter()
-          transport = emitter
-          // The launcher dies with everything but 'ready' still unsent: main never hears the pid.
-          port1.on('message', (message: { type: string }) => {
-            if (message.type === 'ready') {
-              emitter.emit('message', message)
-            }
-          })
-          return Object.assign(emitter, {
-            postMessage: (message: unknown) => port1.postMessage(message),
-            unref: () => port1.unref(),
-            terminate: async () => 0
-          })
-        },
-        { tagSpawns: true }
-      )
-      const child = host.spawn({ program: '/bin/sleep', args: ['300'] })
-      const failure = new Promise<Error>((resolve) => child.once('error', resolve))
+    it("ends a lost barrier child's whole group, including a process that cleared its environment", async () => {
+      const { host, loseLauncher } = hostLosingItsLauncher(openSpawnRecords())
+      const writer = ['/bin/sleep', '3017']
+      const child = host.spawn({
+        program: '/bin/sh',
+        args: ['-c', `env -i ${writer.join(' ')} & exit 0`],
+        terminationBarrier: true
+      })
+      const errors: Error[] = []
+      child.on('error', (error) => errors.push(error))
       const closed = waitForClose(child)
-      await vi.waitFor(async () => expect(await sleepChildrenOfThisProcess()).not.toEqual([]), {
+      await vi.waitFor(async () => expect(await processesRunning(writer)).not.toEqual([]), {
+        timeout: 5_000
+      })
+      loseLauncher()
+      await expect(closed).resolves.toEqual([null, 'SIGKILL'])
+      expect(child.ownedGroupTerminated).toBe(true)
+      expect(errors).toEqual([])
+      expect(await processesRunning(writer)).toEqual([])
+    })
+
+    it('ends a child the launcher never recorded and main never heard of', async () => {
+      const { host, loseLauncher } = hostLosingItsLauncher(null)
+      const sleeper = ['/bin/sleep', '3018']
+      const child = host.spawn({ program: sleeper[0], args: [sleeper[1]] })
+      const closed = waitForClose(child)
+      await vi.waitFor(async () => expect(await processesRunning(sleeper)).not.toEqual([]), {
         timeout: 5_000
       })
       expect(child.pid).toBeUndefined()
-      transport?.emit('exit', 1)
-      await expect(failure).resolves.toMatchObject({ code: PROCESS_LAUNCHER_LOST_CODE })
+      loseLauncher()
       await expect(closed).resolves.toEqual([null, 'SIGKILL'])
-      expect(await sleepChildrenOfThisProcess()).toEqual([])
+      expect(await processesRunning(sleeper)).toEqual([])
     })
   }
 )

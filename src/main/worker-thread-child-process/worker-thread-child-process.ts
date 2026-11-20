@@ -3,7 +3,7 @@ import type { Worker } from 'node:worker_threads'
 import { assertWslNotLatchedAbsent } from '@orca/process-host/wsl-not-installed-latch'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../worker-threads/lazy-worker-thread-host'
-import { endLostSpawns, SPAWN_KEY_ENV } from './lost-spawn-processes'
+import { endLostSpawns, type LostSpawn, SPAWN_KEY_ENV } from './lost-spawn-processes'
 import {
   PROCESS_LAUNCHER_LOST_CODE,
   WORKER_CHILD_ABANDONED_CODE,
@@ -44,8 +44,10 @@ export class WorkerThreadChildProcessHost {
   // A worker that dies before answering anything is broken here (e.g. an unloadable chunk); stop offering it.
   private failedToStart = false
 
-  /** Spawn key per in-flight child: set when the worker runs in another process (see endLostSpawns). */
-  private readonly spawnKeys: Map<number, string> | null
+  /** Per in-flight child when the worker runs in another process (see endLostSpawns). */
+  private readonly spawnKeys: Map<number, Omit<LostSpawn, 'pid'>> | null
+  /** Where the current worker records its children's pids, from its 'ready'. */
+  private spawnRecordDir: string | null = null
 
   constructor(factory: WorkerThreadFactory, options: { tagSpawns?: boolean } = {}) {
     this.spawnKeys = options.tagSpawns ? new Map() : null
@@ -85,6 +87,7 @@ export class WorkerThreadChildProcessHost {
       // A fresh worker (first use or after idle teardown) has not proven it starts yet.
       this.workerAnswered = false
       this.workerError = null
+      this.spawnRecordDir = null
     }
     return this.host.ensure() !== null
   }
@@ -128,7 +131,14 @@ export class WorkerThreadChildProcessHost {
   private route(event: WorkerThreadChildEvent): void {
     this.workerAnswered = true
     if (event.type === 'ready') {
+      this.spawnRecordDir = event.spawnRecordDir ?? null
       return
+    }
+    if (event.type === 'spawn' && event.recorded) {
+      const lost = this.spawnKeys?.get(event.id)
+      if (lost) {
+        lost.recorded = true
+      }
     }
     const child = this.children.get(event.id)
     if (!child) {
@@ -151,7 +161,12 @@ export class WorkerThreadChildProcessHost {
       return spec
     }
     const key = randomUUID()
-    this.spawnKeys.set(id, key)
+    this.spawnKeys.set(id, {
+      key,
+      recorded: false,
+      ownsGroup: spec.terminationBarrier === true,
+      spawnedAtMs: Date.now()
+    })
     return { ...spec, env: { ...(spec.env ?? process.env), [SPAWN_KEY_ENV]: key } }
   }
 
@@ -165,30 +180,36 @@ export class WorkerThreadChildProcessHost {
 
   /**
    * The worker ran in another process, so a pid or exit it posted may never have arrived. Its
-   * children are found by spawn key and ended first; only then does each hear an error and close,
-   * so admission, fences and output readers release exactly as for a finished child.
+   * children are ended first (see endLostSpawns); only then does each hear it was killed, so
+   * admission, fences and output readers release as for any killed child. One that never started
+   * fails to spawn instead.
    */
   private endLost(abandoned: readonly WorkerThreadChildProcess[], message: string): void {
-    const keys = new Map<WorkerThreadChildProcess, string>()
+    const lost = new Map<WorkerThreadChildProcess, LostSpawn>()
     for (const child of abandoned) {
-      const key = this.spawnKeys?.get(child.id)
+      const entry = this.spawnKeys?.get(child.id)
       this.spawnKeys?.delete(child.id)
-      if (key) {
-        keys.set(child, key)
+      if (entry) {
+        lost.set(child, { ...entry, ...(child.pid === undefined ? {} : { pid: child.pid }) })
       }
     }
-    void endLostSpawns([...keys.values()]).then((started) => {
+    if (abandoned.length > 0) {
+      console.warn(`[worker-thread-child-process] ${message}; ending ${abandoned.length} children.`)
+    }
+    void endLostSpawns([...lost.values()], this.spawnRecordDir).then((started) => {
       for (const child of abandoned) {
-        const key = keys.get(child)
-        const error = { message, code: PROCESS_LAUNCHER_LOST_CODE }
+        const key = lost.get(child)?.key
         if (child.pid === undefined && (!key || !started.has(key))) {
+          const error = { message, code: PROCESS_LAUNCHER_LOST_CODE }
           child.receive({ type: 'spawn-error', id: child.id, error })
           continue
         }
-        // Every process carrying its key is gone, so its owned group is too.
+        const pid = key === undefined ? undefined : started.get(key)
+        if (child.pid === undefined && pid !== undefined) {
+          child.receive({ type: 'spawn', id: child.id, pid })
+        }
         child.receive({ type: 'group-terminated', id: child.id })
         if (!child.closed) {
-          child.receive({ type: 'error', id: child.id, error })
           child.receive({ type: 'exit', id: child.id, code: null, signal: 'SIGKILL' })
           child.receive({ type: 'close', id: child.id, code: null, signal: 'SIGKILL' })
         }

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
-import { lstatSync, mkdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { isAbsolute, join as pathJoin } from 'node:path'
+import { rmSync } from 'node:fs'
+import { join as pathJoin } from 'node:path'
+import { findPrivateRuntimeDirectory } from '../../filesystem/private-runtime-directory'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 
@@ -39,7 +39,7 @@ export function getControlSocketPath(
     return null
   }
 
-  const dir = findControlSocketDirectory(uid)
+  const dir = findPrivateRuntimeDirectory('orca-ssh', uid)
   if (!dir) {
     return null
   }
@@ -71,37 +71,6 @@ export function removeControlSocketPath(socketPath: string): void {
   try {
     rmSync(socketPath, { force: true })
   } catch {}
-}
-
-function findControlSocketDirectory(uid: number): string | null {
-  const candidates = getControlSocketDirectoryCandidates(uid)
-  for (const dir of candidates) {
-    if (ensurePrivateDirectory(dir, uid)) {
-      return dir
-    }
-  }
-  return null
-}
-
-function getControlSocketDirectoryCandidates(uid: number): string[] {
-  const candidates: string[] = []
-  const xdgRuntimeDir = process.env.XDG_RUNTIME_DIR
-  if (xdgRuntimeDir && isAbsolute(xdgRuntimeDir)) {
-    candidates.push(pathJoin(xdgRuntimeDir, 'orca-ssh'))
-  }
-  candidates.push(pathJoin(tmpdir(), `orca-ssh-${uid}`))
-  return candidates
-}
-
-function ensurePrivateDirectory(dir: string, uid: number): boolean {
-  try {
-    mkdirSync(dir, { recursive: true, mode: 0o700 })
-    // Existing mkdir mode is ignored; lstat plus owner/perms checks prevent symlink swaps and cross-user mux access.
-    const st = lstatSync(dir)
-    return st.isDirectory() && st.uid === uid && (st.mode & 0o77) === 0
-  } catch {
-    return false
-  }
 }
 
 function normalizeResolvedConfig(

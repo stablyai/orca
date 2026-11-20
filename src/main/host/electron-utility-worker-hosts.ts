@@ -26,6 +26,7 @@ import { HEAVY_WORKER_HOST_NAME } from '../utility-worker-host/heavy-worker-host
 import { CHILD_SPAWNER_HOST_NAME } from '../utility-worker-host/child-spawner-host-name'
 import { UTILITY_WORKER_NO_HEAP_SAMPLING_ARG } from '../utility-worker-host/utility-worker-host-protocol'
 import { installIsolatedChildSpawner } from '../worker-thread-child-process/worker-thread-child-process'
+import { pruneOrphanedSpawnRecords } from '../worker-thread-child-process/lost-spawn-processes'
 import { resolveProviderExecPath } from '../provider-process/provider-process-supervisor'
 import { setDefaultProcessLaunch } from '@orca/process-host/default-process-launch'
 import { launchProcessSpecOnWorker } from '../git/command-runner/process-capture/process-spec-worker-launch'
@@ -150,10 +151,11 @@ export function installElectronChildSpawnerHost(): void {
         'worker-thread-child-process-entry.js'
       ),
       name: 'orca-child-process-spawner',
-      workerData: {},
+      workerData: { recordSpawns: true },
       inProcessWorkerData: { fdClosingHelper: resolveProviderExecPath('linux') }
     })
   )
+  void pruneOrphanedSpawnRecords()
   // Every runProcess without its own launch (git probes, gh, ps, lsof...) starts there too.
   setDefaultProcessLaunch((spec, onTerminated) =>
     launchProcessSpecOnWorker(spec, undefined, onTerminated, !spec.onChildTerminated, true)
