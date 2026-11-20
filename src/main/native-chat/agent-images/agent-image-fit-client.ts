@@ -1,8 +1,16 @@
+import { transientAgentImageDirectory } from './agent-image-fit-storage'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { toLinuxPath, toWindowsWslDrivePath } from '../../../shared/file-access/wsl-paths'
 import { stat } from 'node:fs/promises'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
+import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
+import { isInsideNativeChatPasteFolder } from '../paste-files/native-chat-paste-files'
 import { dirname, join } from 'node:path'
-import { AGENT_IMAGE_MAX_BYTES } from '../../../shared/clipboard/clipboard-image'
+import {
+  AGENT_IMAGE_MAX_BYTES,
+  AGENT_IMAGE_MAX_LONG_EDGE
+} from '../../../shared/clipboard/clipboard-image'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { WorkerThreadRequestQueue } from '../../worker-threads/worker-thread-request-queue'
@@ -25,14 +33,28 @@ export async function fitAgentImagePath(path: string, signal?: AbortSignal): Pro
     process.platform === 'win32' ? (toWindowsWslDrivePath(path) ?? path) : path
   )
   const info = await stat(readablePath).catch(() => null)
-  if (!info?.isFile() || info.size <= AGENT_IMAGE_MAX_BYTES) {
+  if (!info?.isFile()) {
     return path
   }
+  if (info.size <= AGENT_IMAGE_MAX_BYTES) {
+    const { buffer } = await readNodeFileWithinLimit(readablePath, 1024 * 1024, {
+      regularFileOnly: true,
+      signal,
+      window: { offset: 0, length: Math.min(info.size, 1024 * 1024) }
+    })
+    const dimensions = readRasterImageDimensions(buffer)
+    if (!dimensions || Math.max(dimensions.width, dimensions.height) <= AGENT_IMAGE_MAX_LONG_EDGE) {
+      return path
+    }
+  }
   const root = getAgentSessionAttachmentStore()?.rootDir
+  const transient = transientAgentImageDirectory(getAppEnvironment().getPath('temp'))
   const outputDirectory =
     root && parseAgentSessionAttachmentStorePath(root, path)
       ? join(dirname(path), '.agent-images')
-      : join(nativeChatPasteFolder(), 'agent-images')
+      : isInsideNativeChatPasteFolder(nativeChatPasteFolder(), path)
+        ? join(dirname(path), '.agent-images')
+        : transient.directory
   queue ??= new WorkerThreadRequestQueue({
     factory: () =>
       spawnWorkerThread(
@@ -53,7 +75,12 @@ export async function fitAgentImagePath(path: string, signal?: AbortSignal): Pro
   })
   try {
     const response = await queue.dispatch(
-      (id) => ({ id, path: readablePath, outputDirectory }),
+      (id) => ({
+        id,
+        path: readablePath,
+        outputDirectory,
+        ...(outputDirectory === transient.directory ? { transientRoot: transient.root } : {})
+      }),
       60_000,
       signal
     )
@@ -71,15 +98,21 @@ export async function fitAgentImagePath(path: string, signal?: AbortSignal): Pro
 
 export async function fitAgentMessageImages(
   body: AgentJournalMessageItem,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  fitted = new Map<string, string>()
 ): Promise<AgentJournalMessageItem> {
-  const blocks = []
+  const blocks: AgentJournalMessageItem['blocks'] = []
   for (const block of body.blocks) {
-    blocks.push(
-      block.type === 'image-ref' && block.path && !block.url
-        ? { ...block, path: await fitAgentImagePath(block.path, signal) }
-        : block
-    )
+    if (block.type !== 'image-ref' || !block.path || block.url) {
+      blocks.push(block)
+      continue
+    }
+    let path = fitted.get(block.path)
+    if (path === undefined) {
+      path = await fitAgentImagePath(block.path, signal)
+      fitted.set(block.path, path)
+    }
+    blocks.push({ ...block, path })
   }
   return { ...body, blocks }
 }

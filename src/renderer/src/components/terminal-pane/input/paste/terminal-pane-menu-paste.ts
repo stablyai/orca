@@ -102,6 +102,7 @@ export const pasteTerminalPaneMenuClipboard = async (
   const connectionId = getConnectionId(worktreeId) ?? null
   const state = useAppStore.getState()
   const transport = context.paneTransportsRef.current.get(pane.id) ?? null
+  const imageTargetPtyId = transport?.getPtyId() ?? null
   const runtimeEnvironmentId = resolveTerminalPasteRuntimeEnvironmentId(
     state,
     worktreeId,
@@ -117,7 +118,14 @@ export const pasteTerminalPaneMenuClipboard = async (
           pane.leafId,
           transport?.getPtyId() ?? null,
           [path],
-          runtimeEnvironmentId
+          runtimeEnvironmentId,
+          {
+            executionHostId: transport?.getExecutionHostId?.(),
+            cwd: transport?.getLocalSessionMetadata?.()?.cwd,
+            isCurrent: () =>
+              context.paneTransportsRef.current.get(pane.id) === transport &&
+              transport?.getPtyId() === imageTargetPtyId
+          }
         )
       )[0] ?? path,
     copiedFiles: createTerminalClipboardCopiedFiles({

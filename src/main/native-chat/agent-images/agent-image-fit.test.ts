@@ -40,11 +40,11 @@ it('fits a retina screenshot into an immutable agent-readable copy while preserv
   expect(decoded.width).toBeLessThanOrEqual(2000)
   expect(decoded.height).toBeLessThanOrEqual(2000)
   expect(decoded.data[3]).toBe(128)
-  expect(await readFile(source)).toEqual(original)
+  expect((await readFile(source)).equals(original)).toBe(true)
   expect(await fitAgentImageFile(source, join(root, 'copies'))).toBe(fitted)
 }, 30_000)
 
-it('keeps already-small images byte-for-byte and refuses oversized pixel headers before decode allocation', async () => {
+it('keeps already-small images and leaves sources beyond the safe decode budget to their provider', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-image-fit-'))
   roots.push(root)
   const source = join(root, 'small.png')
@@ -57,5 +57,5 @@ it('keeps already-small images byte-for-byte and refuses oversized pixel headers
   oversized.writeUInt32BE(100_000, 20)
   oversized.writeUInt32BE(crc32(oversized.subarray(12, 29)), 29)
   await writeFile(source, oversized)
-  await expect(fitAgentImageFile(source, join(root, 'copies'))).rejects.toThrow(/exceed the limit/)
+  expect(await fitAgentImageFile(source, join(root, 'copies'))).toBe(source)
 })

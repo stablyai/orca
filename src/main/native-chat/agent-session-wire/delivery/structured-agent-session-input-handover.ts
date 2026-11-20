@@ -1,4 +1,3 @@
-import { fitAgentMessageImages } from '../../agent-images/agent-image-fit-client'
 import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionInputAdmission
@@ -80,7 +79,7 @@ export async function beginStructuredAgentSessionInputHandover(
       record: () => deps.record(sessionId),
       turnContext: deps.turnContext,
 
-      admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh') => {
+      admitFreshInput: async (enqueue, signal, prepare, kind = 'fresh', prepareImages) => {
         let admission: StructuredAgentSessionInputAdmission | undefined
         const prepared =
           kind === 'fresh'
@@ -89,7 +88,7 @@ export async function beginStructuredAgentSessionInputHandover(
                 return prepare(binding.fence)
               })
             : undefined
-        const body = prepared ? await fitAgentMessageImages(prepared, signal) : undefined
+        const body = prepared && prepareImages ? await prepareImages(prepared, signal) : prepared
         const invoked = deps.serialize(sessionId, async () => {
           await validate(signal)
           const mode = deps.immediatePermission?.(sessionId)

@@ -187,7 +187,8 @@ export function registerTerminalPanePasteListeners({
       worktreeId,
       paneTransportsRef.current.get(pane.id)
     )
-    const imageTargetPtyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+    const imageTransport = paneTransportsRef.current.get(pane.id)
+    const imageTargetPtyId = imageTransport?.getPtyId() ?? null
     void pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
@@ -198,7 +199,14 @@ export function registerTerminalPanePasteListeners({
             pane.leafId,
             imageTargetPtyId,
             [path],
-            runtimeEnvironmentId
+            runtimeEnvironmentId,
+            {
+              executionHostId: imageTransport?.getExecutionHostId?.(),
+              cwd: imageTransport?.getLocalSessionMetadata?.()?.cwd,
+              isCurrent: () =>
+                paneTransportsRef.current.get(pane.id) === imageTransport &&
+                imageTransport?.getPtyId() === imageTargetPtyId
+            }
           )
         )[0] ?? path,
       copiedFiles: createPaneClipboardCopiedFiles(pane),

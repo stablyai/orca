@@ -64,8 +64,8 @@ export function sendNativeChatMessageWithImageAttachments(
       })
       return writes
     }
-    return sendNativeChatObservedWrites(ptyId, buildWrites(imagePaths), options, async () =>
-      buildWrites(await prepareAgentImagePaths(ptyId, imagePaths))
+    return sendNativeChatObservedWrites(ptyId, buildWrites(imagePaths), options, async (signal) =>
+      buildWrites(await prepareAgentImagePaths(ptyId, imagePaths, undefined, { signal }))
     )
   }
   const durationMs =
@@ -75,11 +75,11 @@ export function sendNativeChatMessageWithImageAttachments(
   return enqueueNativeChatPtySend(
     ptyId,
     durationMs,
-    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
+    ({ isCancelled, signal, delay, markSubmitted, markWriteStarted }) => {
       if (isCancelled()) {
         return
       }
-      void prepareAgentImagePaths(ptyId, imagePaths).then(
+      void prepareAgentImagePaths(ptyId, imagePaths, undefined, { signal }).then(
         (preparedPaths) => {
           if (isCancelled()) {
             return

@@ -1,5 +1,4 @@
-import { fitAgentImagePath } from '../../native-chat/agent-images/agent-image-fit-client'
-import { isAgentInlineImagePath } from '../../../shared/native-chat/input/composer/agent-inline-image-types'
+import { prepareAgentImagePathsOnHost } from './agent-image-preparation'
 import { open, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
@@ -204,23 +203,12 @@ export class RuntimeFileReads {
     return readLocalFileRange(filePath, offset, length)
   }
 
-  async prepareAgentImages(paths: readonly string[], signal?: AbortSignal): Promise<string[]> {
-    const store = this.host.requireStore()
-    const prepared: string[] = []
-    for (const path of paths) {
-      signal?.throwIfAborted()
-      if (!isAgentInlineImagePath(path)) {
-        prepared.push(path)
-        continue
-      }
-      prepared.push(
-        await guardWslUncPathAccess(path, async () => {
-          const authorized = await resolveLocalFileRequestPath(path, CHAT_IMAGE_ACCESS, store)
-          return fitAgentImagePath(authorized, signal)
-        })
-      )
-    }
-    return prepared
+  prepareAgentImages(
+    paths: readonly string[],
+    signal?: AbortSignal,
+    wslDistro?: string
+  ): Promise<string[]> {
+    return prepareAgentImagePathsOnHost(paths, this.host.requireStore(), signal, wslDistro)
   }
 
   /** A host image a chat names, under desktop's chat-image rule; the path must be on this machine. */

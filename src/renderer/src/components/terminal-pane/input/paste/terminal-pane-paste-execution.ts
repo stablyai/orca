@@ -153,7 +153,8 @@ export function createTerminalPanePasteExecution(
       paneTransportsRef.current.get(pane.id)
     )
     const activeElementAtDispatch = document.activeElement
-    const imageTargetPtyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+    const imageTransport = paneTransportsRef.current.get(pane.id)
+    const imageTargetPtyId = imageTransport?.getPtyId() ?? null
     void pasteTerminalClipboard({
       readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
@@ -164,7 +165,14 @@ export function createTerminalPanePasteExecution(
             pane.leafId,
             imageTargetPtyId,
             [path],
-            runtimeEnvironmentId
+            runtimeEnvironmentId,
+            {
+              executionHostId: imageTransport?.getExecutionHostId?.(),
+              cwd: imageTransport?.getLocalSessionMetadata?.()?.cwd,
+              isCurrent: () =>
+                paneTransportsRef.current.get(pane.id) === imageTransport &&
+                imageTransport?.getPtyId() === imageTargetPtyId
+            }
           )
         )[0] ?? path,
       copiedFiles: createPaneClipboardCopiedFiles(pane),

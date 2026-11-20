@@ -279,6 +279,7 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'stt-worker.js' },
   // Reads a Drive PDF's text off the event loop for `orca drive read`.
   { filename: 'google-pdf-text-worker-entry.js' },
+  { filename: 'agent-image-fit-worker-entry.js' },
   // The forked computer sidecar finds platform runtimes beside itself (#31777).
   { filename: ORCAD_COMPUTER_SIDECAR_ENTRY },
   ...ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS.map((filename) => ({ filename })),

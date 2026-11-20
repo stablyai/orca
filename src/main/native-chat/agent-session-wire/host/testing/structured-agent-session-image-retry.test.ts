@@ -14,7 +14,6 @@ import {
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { preparePiRpcPrompt, PiRpcPromptError } from '../../../../pi/rpc/prompts/rpc-prompt'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const fitting = vi.hoisted(() => ({ enabled: false }))
@@ -64,6 +63,7 @@ it('sends an old returned image card through fitting without editing its stored 
         }
       }
     })
+    await rig.workingSend()
     const body: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
@@ -73,7 +73,7 @@ it('sends an old returned image card through fitting without editing its stored 
       ]
     }
     const id = hostTestOperationId()
-    const fields = { body }
+    const fields = { body, delivery: 'queue-if-active' as const }
     expect(
       await rig.host.send(CALLER, {
         ...fields,
@@ -81,6 +81,7 @@ it('sends an old returned image card through fitting without editing its stored 
         envelope: rig.envelope(fields, 'agentSession.send', id)
       })
     ).toMatchObject({ ok: true })
+    expect(await rig.sendNow(id)).toMatchObject({ ok: true })
     await eventually(async () =>
       expect(
         (await rig.drafts()).some((draft) => draft.messageId === id && draft.state === 'returned')
@@ -97,8 +98,8 @@ it('sends an old returned image card through fitting without editing its stored 
       ])
     })
     const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    expect(await journal.reads.itemBody(agentJournalSubmissionKey(id))).toEqual(body)
-    expect(await readFile(source)).toEqual(original)
+    expect((await journal.queuedMessages.get(id))?.body).toEqual(body)
+    expect((await readFile(source)).equals(original)).toBe(true)
   } finally {
     await rig.dispose()
   }

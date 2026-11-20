@@ -19,7 +19,7 @@ export function sendNativeChatObservedWrites(
   ptyId: string,
   writes: readonly NativeChatObservedWrite[],
   options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number },
-  prepareWrites?: () => Promise<readonly NativeChatObservedWrite[]>
+  prepareWrites?: (signal: AbortSignal) => Promise<readonly NativeChatObservedWrite[]>
 ) {
   // Dismiss answer cards only after provider acknowledgment.
   const writeOptions = options.onDeliverySettled
@@ -30,7 +30,7 @@ export function sendNativeChatObservedWrites(
     writes.reduce((total, write) => total + write.delayBeforeMs, 0) +
       clearConfirmDurationMs(options) +
       (options.settleDelayMs ?? 0),
-    ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
+    ({ isCancelled, signal, delay, markSubmitted, markWriteStarted }) => {
       let reportedUnconfirmed = false
       let acknowledged = true
       let lineWasEmpty = false
@@ -119,7 +119,7 @@ export function sendNativeChatObservedWrites(
         )
       }
       if (prepareWrites) {
-        void prepareWrites().then(
+        void prepareWrites(signal).then(
           (prepared) => {
             writes = prepared
             begin()

@@ -2,6 +2,7 @@ export type AgentImageFitRequest = {
   id: number
   path: string
   outputDirectory: string
+  transientRoot?: string
 }
 
 export type AgentImageFitResponse =

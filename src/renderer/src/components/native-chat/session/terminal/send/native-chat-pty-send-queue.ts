@@ -73,6 +73,7 @@ export function enqueueNativeChatPtySend(
   durationMs: number,
   start: (ctx: {
     isCancelled: () => boolean
+    signal: AbortSignal
     delay: (ms: number, fn: () => void) => void
     /** Call when Enter (or the terminal write that completes the send) fires. */
     markWriteStarted: () => void
@@ -87,6 +88,7 @@ export function enqueueNativeChatPtySend(
   state.freeAt = Math.max(now, state.freeAt) + Math.max(0, durationMs)
   state.depth += 1
 
+  const controller = new AbortController()
   let cancelled = false
   let bodyStarted = false
   let finished = false
@@ -137,6 +139,7 @@ export function enqueueNativeChatPtySend(
       bodyStarted = true
       start({
         isCancelled: () => cancelled,
+        signal: controller.signal,
         delay,
         markSubmitted,
         markWriteStarted: () => {
@@ -175,6 +178,7 @@ export function enqueueNativeChatPtySend(
         return
       }
       cancelled = true
+      controller.abort()
       for (const timer of timers) {
         clearTimeout(timer)
       }

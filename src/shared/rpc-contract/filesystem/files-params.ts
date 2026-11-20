@@ -20,7 +20,8 @@ export const FilePathSearch = WorktreeSelector.extend({
 })
 
 export const PrepareAgentImages = z.object({
-  paths: z.array(z.string().min(1).max(4096)).max(256)
+  paths: z.array(z.string().min(1).max(4096)).max(256),
+  wslDistro: z.string().min(1).max(256).optional()
 })
 
 export const ChatImageRead = WorktreeSelector.extend({ path: z.string().min(1).max(4096) })

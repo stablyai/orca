@@ -51,7 +51,15 @@ export async function writeTerminalDropPathsToCapturedTarget({
         dropTarget.leafId,
         dropTarget.ptyId,
         paths,
-        dropTarget.transport.getRuntimeEnvironmentId?.()
+        dropTarget.transport.getRuntimeEnvironmentId?.(),
+        {
+          executionHostId: dropTarget.transport.getExecutionHostId?.(),
+          cwd: dropTarget.transport.getLocalSessionMetadata?.()?.cwd,
+          isCurrent: () =>
+            paneTransports.get(dropTarget.paneId) === dropTarget.transport &&
+            dropTarget.transport.isConnected() &&
+            dropTarget.transport.getPtyId() === dropTarget.ptyId
+        }
       )
     } catch {
       return {
