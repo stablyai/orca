@@ -7,7 +7,10 @@ import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-d
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
-import { validCrossStoreLineage } from '../../../shared/worktree/lineage/cross-store-lineage-records'
+import {
+  normalizeCrossStoreLineageByChildKey,
+  validCrossStoreLineage
+} from '../../../shared/worktree/lineage/cross-store-lineage-records'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import type { CrossStoreWorkspaceLineage } from '../../../shared/worktree/lineage-types'
 
@@ -107,7 +110,10 @@ function childrenOfAnswer(
     throw new Error('no paired lineage answer')
   }
   // A server from before cross-machine parents sends none, and has none.
-  const saved = (answer.result as { crossStoreLineage?: Record<string, unknown> }).crossStoreLineage
+  const saved =
+    'crossStoreLineage' in answer.result
+      ? normalizeCrossStoreLineageByChildKey(answer.result.crossStoreLineage)
+      : undefined
   const hostId = toRuntimeExecutionHostId(answer.environmentId)
   return Object.values(validCrossStoreLineage(saved)).flatMap((link) => {
     const child = parseWorkspaceKey(link.childWorkspaceKey)
