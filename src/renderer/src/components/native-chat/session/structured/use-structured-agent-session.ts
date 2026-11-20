@@ -216,6 +216,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     enabled: queueCapability === 'supported' && transportState.fence !== null,
     hasPendingPrompt: prompts.length > 0,
     isWorking,
+    stopping: stopControl.stopping,
     // Hidden from the transcript, a queue send on its way reads as sending among the cards.
     sending: pending,
     composerScopeKey: args.composerScopeKey,

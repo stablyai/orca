@@ -39,7 +39,7 @@ function card(
   id: string,
   position: number,
   overrides: Partial<AgentSessionQueuedMessage> = {},
-  from: AgentMessageSource | undefined = FROM
+  from: AgentMessageSource | null = FROM
 ): AgentSessionQueuedMessage {
   return {
     messageId: id,
@@ -55,7 +55,7 @@ function card(
   }
 }
 
-const personCard = (id: string, position: number) => card(id, position, {}, undefined)
+const personCard = (id: string, position: number) => card(id, position, {}, null)
 
 /** The host's record of a card it took off the queue to hand over. */
 function handOff(

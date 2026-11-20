@@ -69,6 +69,8 @@ export type StructuredAgentSessionQueuedMessagesController = {
   isWorking: boolean
   /** The host still holds this message: a card here, or another agent's mail the transcript draws. */
   holds: (messageId: string) => boolean
+  /** A Stop is ending the turn: nothing steers into it. */
+  stopping: boolean
 }
 
 export type QueuedMessagesPendingAction = 'send' | 'delete' | 'resume' | 'clear'
@@ -93,6 +95,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   hasPendingPrompt: boolean
   /** A turn is running, whoever started it, or the queue is about to send its next card. */
   isWorking: boolean
+  stopping: boolean
   /** This pane's sends without a host record yet show as sending cards. */
   sending?: readonly StructuredAgentSessionPendingSend[]
   composerScopeKey: string | undefined
@@ -235,7 +238,9 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   const pause = useMemo(() => queuedMessagesQueuePause(cards, queuePause), [cards, queuePause])
   const waitingAgentMailIds = useMemo(
     () =>
-      new Set(waitingAgentMailEchoes(queuedMessages, submissions).map((echo) => echo.clientMessageId)),
+      new Set(
+        waitingAgentMailEchoes(queuedMessages, submissions).map((echo) => echo.clientMessageId)
+      ),
     [queuedMessages, submissions]
   )
   const holds = useCallback(
@@ -316,6 +321,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     editor: editing.editor,
     steerHead: headSteers ? steerHead : undefined,
     isWorking,
-    holds
+    holds,
+    stopping: args.stopping
   }
 }

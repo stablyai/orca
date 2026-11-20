@@ -9,16 +9,11 @@ import type { StructuredAgentSessionQueuedMessagesController } from './use-struc
 
 type WaitingAgentMailActions = Pick<
   StructuredAgentSessionQueuedMessagesController,
-  'steer' | 'remove' | 'pending' | 'isWorking'
-> & {
-  /** The chat reads Stopping: nothing steers into the turn a Stop is ending. */
-  steerHeld: boolean
-}
+  'steer' | 'remove' | 'pending' | 'isWorking' | 'stopping'
+>
 
 /** The chat's queue actions, for other agents' mail the transcript draws while it waits. */
-export const NativeChatWaitingAgentMailContext = createContext<WaitingAgentMailActions | null>(
-  null
-)
+export const NativeChatWaitingAgentMailContext = createContext<WaitingAgentMailActions | null>(null)
 
 /** Steer (Send while idle) and Delete on a waiting agent message, as its queued card offered. */
 export function NativeChatWaitingAgentMailActions({
@@ -43,7 +38,7 @@ export function NativeChatWaitingAgentMailActions({
             type="button"
             variant="ghost"
             size="xs"
-            disabled={actions.steerHeld || busy}
+            disabled={actions.stopping || busy}
             onClick={() => void actions.steer(queuedMessageId)}
           >
             <NativeChatPendingIcon pending={pending === 'send'} className="size-3">

@@ -250,7 +250,9 @@ export function useMobileStructuredQueuedMessageControls(args: {
   const pause = queuedMessagesQueuePause(cards, queuePause)
   const waitingAgentMailIds = useMemo(
     () =>
-      new Set(waitingAgentMailEchoes(queuedMessages, submissions).map((echo) => echo.clientMessageId)),
+      new Set(
+        waitingAgentMailEchoes(queuedMessages, submissions).map((echo) => echo.clientMessageId)
+      ),
     [queuedMessages, submissions]
   )
   const holds = useCallback(

@@ -153,7 +153,9 @@ export function projectQueuedMessageCards(
   )
   const ordered = [...(queuedMessages ?? [])]
     .filter((message) => !session.steersInTranscript || !queuedMessageSteersIn(message, session))
-    .filter((message) => !session.agentMailInTranscript || !queuedMessageIsWaitingAgentMail(message))
+    .filter(
+      (message) => !session.agentMailInTranscript || !queuedMessageIsWaitingAgentMail(message)
+    )
     // Orca's own sends draw nothing in the chat, so they wait unseen; one on hold needs the person, so it shows.
     .filter(
       (message) =>
@@ -269,7 +271,9 @@ export function queuedMessagesQueuePause(
 }
 
 /** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */
-export function queuedMessageCardSteers(card: Pick<QueuedMessageCard, 'hold' | 'command'>): boolean {
+export function queuedMessageCardSteers(
+  card: Pick<QueuedMessageCard, 'hold' | 'command'>
+): boolean {
   return card.hold !== 'paused' && card.hold !== 'returned' && !card.command
 }
 

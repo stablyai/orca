@@ -6,6 +6,8 @@ import {
 } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import type { AgentSessionQueuedMessage } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import { waitingAgentMailEchoes } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { createStructuredAgentSessionMessageProjection } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-stream'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { withNativeChatCutTurnNotices } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
@@ -32,8 +34,9 @@ const mobileStructuredTranscript = createStructuredQuestionProjection(
 export function useMobileStructuredTranscript(
   agent: string | null,
   state: Pick<StructuredAgentSessionState, 'epoch' | 'items' | 'submissions'>,
-  optimistic: readonly StructuredAgentSessionOptimisticMessage[],
-  sessionKey: string
+  sends: readonly StructuredAgentSessionOptimisticMessage[],
+  sessionKey: string,
+  host: { queuedMessages: readonly AgentSessionQueuedMessage[] | null }
 ) {
   const [clearSent, setClearSent] = useState<{
     sessionKey: string
@@ -71,6 +74,11 @@ export function useMobileStructuredTranscript(
       }),
     [agent, floor, state.items]
   )
+  // Other agents' waiting mail follows this phone's sends at the transcript's end, as on desktop.
+  const optimistic = useMemo(() => {
+    const agentMail = waitingAgentMailEchoes(host.queuedMessages, state.submissions)
+    return agentMail.length > 0 ? [...sends, ...agentMail] : sends
+  }, [host.queuedMessages, sends, state.submissions])
   const projectMessages = useMemo(
     () => createStructuredAgentSessionMessageProjection(mobileStructuredTranscript.messages),
     []

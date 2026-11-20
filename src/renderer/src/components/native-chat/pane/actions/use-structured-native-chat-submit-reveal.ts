@@ -11,7 +11,10 @@ import type { StructuredAgentSessionQueuedMessagesController } from '../../queue
 type StructuredController = ReturnType<typeof useStructuredAgentSession>
 
 export function useStructuredNativeChatSubmitReveal(
-  controller: Pick<StructuredController, 'respond' | 'queuedMessages' | 'capturePresentation'>,
+  controller: Pick<
+    StructuredController,
+    'respond' | 'queuedMessages' | 'capturePresentation' | 'rewind'
+  >,
   retryLaunch: () => void,
   /** The host may take no turn: no card is sent now or resumed, and no failed start retried. */
   startsHeld = false
@@ -22,9 +25,11 @@ export function useStructuredNativeChatSubmitReveal(
   retryLaunch: () => void
   respond: StructuredController['respond']
   queuedMessages: StructuredAgentSessionQueuedMessagesController
+  /** What transcript rows act through: rewind, and the queue as its cards reach it. */
+  rows: Pick<StructuredController, 'rewind' | 'queuedMessages'>
 } {
   const { messageListRef, revealLatest, captureRevealLatest } = useNativeChatRevealLatest()
-  const { respond, queuedMessages, capturePresentation } = controller
+  const { respond, queuedMessages, capturePresentation, rewind } = controller
   const revealingRetryLaunch = useCallback(() => {
     if (startsHeld) {
       return
@@ -77,12 +82,14 @@ export function useStructuredNativeChatSubmitReveal(
         })
     }
   }, [capturePresentation, captureRevealLatest, queuedMessages, revealLatest, startsHeld])
+  const rows = useMemo(() => ({ rewind, queuedMessages: revealingQueue }), [rewind, revealingQueue])
   return {
     messageListRef,
     revealLatest,
     captureRevealLatest,
     retryLaunch: revealingRetryLaunch,
     respond: revealingRespond,
-    queuedMessages: revealingQueue
+    queuedMessages: revealingQueue,
+    rows
   }
 }

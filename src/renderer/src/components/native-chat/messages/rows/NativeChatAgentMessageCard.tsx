@@ -119,7 +119,9 @@ export function NativeChatAgentMessageCard({
           ? `${words} ${sender ? senderName : unnamedSenderLabel(t)}${waiting ? `, ${notSentYet}` : ''}`
           : undefined
       }
-      action={waitingId ? <NativeChatWaitingAgentMailActions queuedMessageId={waitingId} /> : undefined}
+      action={
+        waitingId ? <NativeChatWaitingAgentMailActions queuedMessageId={waitingId} /> : undefined
+      }
       timestamp={waiting ? null : message.timestamp}
       disclosureKey={`agent-message:${message.id}`}
       onOpenChange={(open) => {

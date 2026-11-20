@@ -11,6 +11,7 @@ import {
 import type { MobileStructuredBackgroundTasks } from '../../input/tasks/use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../../input/queued-messages/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../../input/queued-messages/mobile-queued-head-light'
+import type { MobileWaitingAgentMailActionsValue } from '../../transcript/agent-messages/MobileWaitingAgentMailActions'
 import {
   createMobileQueuedCardActionStore,
   useMobileQueuedCardActions
@@ -30,6 +31,8 @@ export type MobileNativeChatComposerTray = {
   content?: ReactNode
   composerInputRef?: RefObject<TextInputInstance | null>
   steerHead?: MobileNativeChatSteerHead
+  /** Steer and Delete on other agents' waiting mail, which the transcript draws instead of a card. */
+  waitingAgentMail?: MobileWaitingAgentMailActionsValue
 }
 
 export type ComposerTrayProps = {
@@ -106,6 +109,8 @@ export function useMobileNativeChatComposerTray({
         })
       ),
       composerInputRef,
+      // Shares the cards' action guard, so a press here and on a card never overlap.
+      waitingAgentMail: { actions, send: onSend, delete: onDelete, steerHeld, agentWorking },
       steerHead: {
         steers: (alternateSteers: boolean) => {
           const head = mobileNativeChatChordHeadId(

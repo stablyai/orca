@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { CornerDownRight, Send, Trash2 } from 'lucide-react-native'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -6,8 +6,11 @@ import { colors } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { queuedMessageStyles } from '../../input/queued-messages/mobile-native-chat-queued-message-styles'
+import type { MobileQueuedCardActions } from '../../input/queued-messages/mobile-queued-card-actions'
 
-type MobileWaitingAgentMailActionsValue = {
+export type MobileWaitingAgentMailActionsValue = {
+  /** The queued cards' guard: one action per message at a time. */
+  actions: MobileQueuedCardActions
   send: (messageId: string) => Promise<boolean>
   delete: (messageId: string) => Promise<boolean>
   agentWorking: boolean
@@ -16,8 +19,22 @@ type MobileWaitingAgentMailActionsValue = {
 }
 
 /** The chat's queue actions, for other agents' mail the transcript draws while it waits. */
-export const MobileWaitingAgentMailContext =
-  createContext<MobileWaitingAgentMailActionsValue | null>(null)
+const MobileWaitingAgentMailContext = createContext<MobileWaitingAgentMailActionsValue | null>(null)
+
+/** Gives the transcript's waiting agent mail the chat's queue actions. */
+export function MobileWaitingAgentMail({
+  value,
+  children
+}: {
+  value: MobileWaitingAgentMailActionsValue | undefined
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <MobileWaitingAgentMailContext.Provider value={value ?? null}>
+      {children}
+    </MobileWaitingAgentMailContext.Provider>
+  )
+}
 
 /** Steer (Send while idle) and Delete on a waiting agent message, as its queued card offered. */
 export function MobileWaitingAgentMailActions({
@@ -28,17 +45,12 @@ export function MobileWaitingAgentMailActions({
   useMobileColorScheme()
   const t = useMobileTranslation()
   const actions = useContext(MobileWaitingAgentMailContext)
-  const [busy, setBusy] = useState(false)
   if (!actions) {
     return null
   }
-  const run = (action: (messageId: string) => Promise<boolean>) => {
-    if (busy) {
-      return
-    }
-    setBusy(true)
-    void action(queuedMessageId).finally(() => setBusy(false))
-  }
+  const busy = actions.actions.busyIds.has(queuedMessageId)
+  const run = (action: (messageId: string) => Promise<boolean>) =>
+    actions.actions.run(queuedMessageId, action)
   const steers = actions.agentWorking
   const sendDisabled = busy || actions.steerHeld
   return (
@@ -95,5 +107,11 @@ const styles = themedStyleSheet(() => ({
   actions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   // Sized to the row's line, so a waiting row is as tall as the delivered row that replaces it.
   pill: { minHeight: 20, paddingHorizontal: 8 },
-  delete: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }
+  delete: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10
+  }
 }))
