@@ -39,11 +39,11 @@ type InstalledCursorHooks = {
 const EXPECTED_CURSOR_HOOK_STDOUT = {
   beforeSubmitPrompt: { continue: true },
   stop: {},
-  preToolUse: { permission: 'allow' },
+  preToolUse: {},
   postToolUse: {},
   postToolUseFailure: {},
-  beforeShellExecution: { permission: 'allow' },
-  beforeMCPExecution: { permission: 'allow' },
+  beforeShellExecution: {},
+  beforeMCPExecution: {},
   afterAgentResponse: {}
 } satisfies Record<CursorEvent, Record<string, unknown>>
 
