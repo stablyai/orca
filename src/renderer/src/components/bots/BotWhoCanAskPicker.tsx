@@ -65,12 +65,15 @@ const asMember = (found: Found, service: BotWhoCanAskService): BotMember => ({
   ...service.stamp
 })
 
+// A long login stops at about 60% of the row, so the real name beside it keeps room: for a
+// teammate, the real name is what tells them apart.
 function PersonLabel({ name, handle }: { name: string; handle?: string }): React.JSX.Element {
+  const shown = handle && handle !== name ? handle : undefined
   return (
-    <span className="min-w-0 flex-1 truncate">
-      {name}
-      {handle && handle !== name ? (
-        <span className="ml-1.5 text-xs text-muted-foreground">{handle}</span>
+    <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+      <span className={shown ? 'max-w-[60%] shrink-0 truncate' : 'min-w-0 truncate'}>{name}</span>
+      {shown ? (
+        <span className="min-w-0 truncate text-xs text-muted-foreground">{shown}</span>
       ) : null}
     </span>
   )
@@ -158,9 +161,11 @@ export function BotWhoCanAskPicker({
         aria-checked={on}
         disabled={full && !on}
         onSelect={() => toggle(member, handle, realName)}
+        className="group/person"
       >
         <Checkbox checked={on} tabIndex={-1} aria-hidden className="pointer-events-none" />
-        <span className="size-6 shrink-0">
+        {/* The highlight's fill swallows an initials avatar's own in the light theme. */}
+        <span className="size-6 shrink-0 rounded-full group-data-[selected=true]/person:ring-1 group-data-[selected=true]/person:ring-border">
           <BotMemberAvatar member={member} />
         </span>
         <PersonLabel name={member.name || member.id} handle={handle} />
@@ -189,7 +194,9 @@ export function BotWhoCanAskPicker({
     search.status === 'ready' &&
     addable.length === 0 &&
     withAccess.length === 0 &&
-    !ownerShown
+    !ownerShown &&
+    // A ticked person still matching the search is a result: "no one found" would contradict it.
+    offScreen.length === 0
   // A note on what the search couldn't cover replaces a hint or empty result's usual detail.
   const peopleGroup = idle ? (
     <PickerNote title={idle.title} detail={note ?? idle.detail} />
@@ -213,13 +220,19 @@ export function BotWhoCanAskPicker({
       ) : null}
       {unsorted.length > 0 ? (
         <CommandGroup heading={service.peopleHeading}>
-          {unsorted.map((person) => pickRow(asMember(person, service), person.handle))}
+          {unsorted.map((person) =>
+            pickRow(asMember(person, service), person.tag ?? person.handle, person.handle)
+          )}
         </CommandGroup>
       ) : null}
       {outside.length > 0 ? (
         <CommandGroup heading={service.outsideHeading ?? service.peopleHeading}>
           {outside.map((person) =>
-            pickRow(asMember(person, service), service.outsideTag ?? person.handle, person.handle)
+            pickRow(
+              asMember(person, service),
+              person.tag ?? service.outsideTag ?? person.handle,
+              person.handle
+            )
           )}
         </CommandGroup>
       ) : null}

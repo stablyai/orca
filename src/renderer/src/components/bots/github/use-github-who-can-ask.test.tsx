@@ -98,7 +98,7 @@ describe('useGitHubWhoCanAsk', () => {
     renderList(<BotGitHubWhoCanAsk bot={bot(mocks.members)} linked />)
     fireEvent.click(screen.getByRole('button', { name: 'Add' }))
     // With no connected repositories to suggest people from, an empty box asks for a name.
-    expect(await screen.findByText('Type a name or GitHub username')).toBeDefined()
+    expect(await screen.findByText('Find people')).toBeDefined()
     fireEvent.change(await screen.findByPlaceholderText('Search by name or username'), {
       target: { value: 'hubot' }
     })

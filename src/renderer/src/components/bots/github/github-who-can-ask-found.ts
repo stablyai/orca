@@ -9,52 +9,44 @@ export function gitHubWhoCanAskFound(
   ownerLogin: string | null,
   t: Translate
 ): BotWhoCanAskFound {
+  const coverage = people.coverage
+  // An exact match the repos couldn't vouch for either way: neutral heading, but never untagged,
+  // or it would read as a teammate.
+  const uncheckedTag =
+    coverage?.local === 'limited'
+      ? t('bots.github.whoCanAsk.reposPartlyChecked', 'Not all repos checked')
+      : t('bots.github.whoCanAsk.reposNotChecked', 'Repos not checked')
   const members = people.members.map(({ found, ...member }) => ({
     ...member,
     // An older host says nothing about where someone was found: they stay unlabelled.
     ...(found === 'scope' ? { group: 'scoped' as const } : {}),
-    ...(found === 'outside' ? { group: 'outside' as const } : {})
+    ...(found === 'outside' ? { group: 'outside' as const } : {}),
+    ...(found === 'exact' ? { tag: uncheckedTag } : {})
   }))
-  const coverage = people.coverage
   if (!coverage) {
     return { members, complete: people.complete }
   }
   const notes: string[] = []
   if (coverage.local === 'unavailable') {
     notes.push(
-      t(
-        'bots.github.whoCanAsk.localUnavailable',
-        'Couldn’t search your repos from this computer, so only exact GitHub usernames were checked.'
-      )
+      t('bots.github.whoCanAsk.localUnavailable', 'Repos unavailable here. Exact usernames only.')
     )
   } else if (coverage.local === 'none') {
     notes.push(
-      t(
-        'bots.github.whoCanAsk.localNone',
-        'No repos to search yet, so only exact GitHub usernames were checked.'
-      )
+      t('bots.github.whoCanAsk.localNone', 'No repos to search yet. Exact usernames only.')
     )
   } else if (coverage.local === 'limited') {
-    notes.push(
-      t(
-        'bots.github.whoCanAsk.localLimited',
-        'Not every repo or person was searched. Type more of the name to narrow it down.'
-      )
-    )
+    notes.push(t('bots.github.whoCanAsk.localLimited', 'Partial results. Keep typing to narrow.'))
   }
   if (coverage.exact === 'failed') {
-    notes.push(
-      t('bots.github.whoCanAsk.exactFailed', 'Couldn’t check exact GitHub usernames just now.')
-    )
+    notes.push(t('bots.github.whoCanAsk.exactFailed', 'Couldn’t check GitHub usernames.'))
   }
   const searchedAs = coverage.searchedAs
   if (searchedAs && ownerLogin && searchedAs.toLowerCase() !== ownerLogin.toLowerCase()) {
     notes.push(
-      t(
-        'bots.github.whoCanAsk.searchedAs',
-        'Your repos were searched as @{{login}}, the GitHub CLI account on this computer.',
-        { login: searchedAs }
-      )
+      t('bots.github.whoCanAsk.searchedAs', 'Repos searched as @{{login}} on this computer.', {
+        login: searchedAs
+      })
     )
   }
   return {

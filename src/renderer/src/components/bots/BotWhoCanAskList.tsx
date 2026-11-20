@@ -26,6 +26,8 @@ export type BotWhoCanAskFound = {
     handle?: string
     avatarUrl?: string
     group?: 'scoped' | 'outside'
+    /** Muted in the real-name slot, saying why this person's source is uncertain. */
+    tag?: string
   }[]
   complete: boolean
   /** What this search could not cover, shown in place of the generic incomplete line. */

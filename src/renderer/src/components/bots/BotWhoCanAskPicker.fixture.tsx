@@ -53,11 +53,11 @@ const make = (
   outsideTag: 'Not in your repos',
   noMatch: (query) => ({
     title: `No one found for “${query}”`,
-    detail: 'Checked your repos and exact GitHub usernames.'
+    detail: 'Searched your repos and exact usernames.'
   }),
   idleHint: {
-    title: 'Type a name or GitHub username',
-    detail: 'Find teammates by name, or anyone by exact GitHub username.'
+    title: 'Find people',
+    detail: 'Teammates by name, others by exact username.'
   },
   ownerId: null,
   ownerName: null,
@@ -177,8 +177,8 @@ export const longNameNarrow = defineFixture({
 // gh missing or signed out on the bot's computer: only the exact-username lookup ran.
 const unavailable = make((query) => {
   const stranger = strangers[query.toLowerCase()]
-  return stranger ? [{ id: stranger.id, name: stranger.name }] : []
-}, 'Couldn’t search your repos from this computer, so only exact GitHub usernames were checked.')
+  return stranger ? [{ id: stranger.id, name: stranger.name, tag: 'Repos not checked' }] : []
+}, 'Repos unavailable here. Exact usernames only.')
 
 /** gh couldn't search: an exact match is not called an outsider, and the note says why. */
 export const ghUnavailable = defineFixture({
@@ -192,4 +192,14 @@ export const ghUnavailableNoMatch = defineFixture({
   width: 340,
   render: pickerOf(unavailable),
   interact: searching('neil par')
+})
+
+// Some repositories or matches were left out: the results come with a short note.
+const partial = make(find, 'Partial results. Keep typing to narrow.')
+
+/** A caps-hit search: results shown, with the partial-results note under them. */
+export const capsHit = defineFixture({
+  width: 340,
+  render: pickerOf(partial),
+  interact: searching('a')
 })
