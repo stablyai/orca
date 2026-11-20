@@ -122,10 +122,12 @@ export const readOmpMcpServers: AcpOwnMcpServersLoader = async ({ cwd, env, vers
   ) {
     return []
   }
-  const [settings, user, userDot] = await Promise.all([
+  const [settings, user, userDot, ...project] = await Promise.all([
     readObject([join(agentDir, 'config.yml'), join(agentDir, 'config.yaml')], parseYaml),
     readJsonObject(join(agentDir, 'mcp.json')),
-    readJsonObject(join(agentDir, '.mcp.json'))
+    readJsonObject(join(agentDir, '.mcp.json')),
+    readJsonObject(join(cwd, '.omp', 'mcp.json')),
+    readJsonObject(join(cwd, '.omp', '.mcp.json'))
   ])
   if (strings(settings.disabledProviders).includes('native')) {
     return []
@@ -133,12 +135,6 @@ export const readOmpMcpServers: AcpOwnMcpServersLoader = async ({ cwd, env, vers
   const disabledExtensions = new Set(strings(settings.disabledExtensions))
   const projectEnabled =
     (record(settings.mcp).enableProjectConfig ?? settings['mcp.enableProjectConfig']) !== false
-  const project = projectEnabled
-    ? await Promise.all([
-        readJsonObject(join(cwd, '.omp', 'mcp.json')),
-        readJsonObject(join(cwd, '.omp', '.mcp.json'))
-      ])
-    : []
   const disabled = new Set(strings(user.disabledServers))
   const forced = new Set(strings(user.enabledServers))
   // OMP points PI_CODING_AGENT_DIR at a named profile's folder before it reads these files.
@@ -146,7 +142,7 @@ export const readOmpMcpServers: AcpOwnMcpServersLoader = async ({ cwd, env, vers
   const claimed = new Set<string>()
   const servers: McpServer[] = []
   // OMP's order: project files before user files, and the first entry of a name owns it.
-  for (const file of [...project, user, userDot]) {
+  for (const file of [...(projectEnabled ? project : []), user, userDot]) {
     for (const [name, raw] of Object.entries(record(file.mcpServers))) {
       if (claimed.has(name) || disabledExtensions.has(`mcp:${name}`)) {
         continue
