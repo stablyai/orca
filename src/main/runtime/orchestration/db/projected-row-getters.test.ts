@@ -270,27 +270,13 @@ describe('projected row getters', () => {
     expect(db.getWorkerTerminalResourceByProcessIncarnation('proc-full')).toEqual(NEWEST_RESOURCE)
   })
 
-  it('return the same rows from a reopened connection', () => {
-    const path = fileDbPath()
-    const first = openDb(path)
-    seed(first)
-    expectSeededRows(first)
-    first.close()
-    opened.pop()
-
-    const reopened = openDb(path)
-    expectSeededRows(reopened)
-    expectSeededRows(reopened)
-  })
-
-  it('return the same rows after DDL on this connection, and after DDL from another connection', () => {
+  it('return the same rows after local and external DDL and after reopening', () => {
     const path = fileDbPath()
     const db = openDb(path)
     seed(db)
     expectSeededRows(db)
 
     db.db.exec('ALTER TABLE worker_terminal_resources ADD COLUMN probe_here TEXT')
-    expectSeededRows(db)
     expectSeededRows(db)
 
     // Another connection's DDL is invisible to this connection's cache; SQLite re-prepares the statement.
@@ -299,6 +285,10 @@ describe('projected row getters', () => {
     other.close()
     expectSeededRows(db)
     expect(db.getWorkerDispatch('d-min')?.state).toBe('starting')
+
+    db.close()
+    opened.pop()
+    expectSeededRows(openDb(path))
   })
 
   // The `satisfies` clause pins each list to its row type; the migrated schema is the other side.
