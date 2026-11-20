@@ -114,15 +114,15 @@ function parseIncludedConfigPaths(
   let inIncludeSection = false
   let onBranch = false
   for (const rawLine of configText.split(/\r?\n/)) {
-    const line = rawLine.trim()
+    let line = rawLine.trim()
     if (!line || line.startsWith('#') || line.startsWith(';')) {
       continue
     }
-    const sectionName = parseConfigSectionName(line)
-    if (sectionName) {
-      inIncludeSection = sectionName === 'include' || sectionName.startsWith('includeif ')
-      onBranch ||= /^includeif\s+"onbranch:/.test(sectionName)
-      continue
+    const section = parseConfigSection(line)
+    if (section) {
+      inIncludeSection = section.name === 'include' || /^includeif\s/.test(section.name)
+      onBranch ||= /^includeif\s+"onbranch:/.test(section.name)
+      line = section.rest
     }
     if (!inIncludeSection) {
       continue
@@ -135,7 +135,7 @@ function parseIncludedConfigPaths(
   return { paths: includedPaths, onBranch }
 }
 
-function parseConfigSectionName(line: string): string | null {
+function parseConfigSection(line: string): { name: string; rest: string } | null {
   if (!line.startsWith('[')) {
     return null
   }
@@ -155,11 +155,10 @@ function parseConfigSectionName(line: string): string | null {
     if (char !== ']') {
       continue
     }
-    const trailing = line.slice(index + 1).trim()
-    if (trailing && !trailing.startsWith('#') && !trailing.startsWith(';')) {
-      return null
+    return {
+      name: line.slice(1, index).trim().toLowerCase(),
+      rest: line.slice(index + 1).trim()
     }
-    return line.slice(1, index).trim().toLowerCase()
   }
   return null
 }
