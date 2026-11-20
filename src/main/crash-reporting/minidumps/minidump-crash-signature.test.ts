@@ -228,31 +228,6 @@ describe('parseMinidumpCrashSignature', () => {
     expect((await parseMinidumpCrashSignature(dumpWithMemory))?.checkMessage).toBeUndefined()
   })
 
-  it('resolves the faulting module from the exception address', async () => {
-    const { dump } = buildDump({
-      exception: { code: 0x80000003, address: 0x7ff8_0000_1234n },
-      modules: [
-        {
-          base: 0x7ff7_0000_0000n,
-          size: 0x1000,
-          name: 'C:\\Program Files\\Orca\\Orca.exe'
-        },
-        {
-          base: 0x7ff8_0000_0000n,
-          size: 0x10_0000,
-          name: 'C:\\Program Files\\Orca\\chrome_elf.dll'
-        }
-      ]
-    })
-
-    const signature = await parseMinidumpCrashSignature(dump)
-
-    expect(signature?.exceptionCode).toBe(0x80000003)
-    expect(signature?.exceptionAddress).toBe('0x7ff800001234')
-    expect(signature?.faultingModule).toBe('chrome_elf.dll')
-    expect(signature?.faultingModuleOffset).toBe('0x1234')
-  })
-
   it('resolves a faulting module past index 1024 on a real macOS image count', async () => {
     const modules = Array.from({ length: 1042 }, (_, index) => ({
       base: 0x1_0000_0000n + BigInt(index) * 0x1_0000n,
@@ -266,6 +241,8 @@ describe('parseMinidumpCrashSignature', () => {
 
     const signature = await parseMinidumpCrashSignature(dump)
 
+    expect(signature?.exceptionCode).toBe(11)
+    expect(signature?.exceptionAddress).toBe('0x104060024')
     expect(signature?.faultingModule).toBe('lib1030.dylib')
     expect(signature?.faultingModuleOffset).toBe('0x24')
   })

@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
+import { runtimeStatusSubscriptionsFor } from '../runtime-status/views/runtime-status-subscriptions'
 import {
   AGENT_CLI_UPDATE_AGENTS,
   AGENT_CLI_UPDATE_RUNTIME_CAPABILITY,
@@ -81,7 +82,8 @@ export type AgentCliUpdatesSlice = {
 
 export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCliUpdatesSlice> = (
   set,
-  get
+  get,
+  store
 ) => {
   const writeHost = (key: string, write: (host: AgentCliUpdateHost) => AgentCliUpdateHost) =>
     set((state) => {
@@ -94,7 +96,7 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
   const hostAnswers = (target: RuntimeClientTarget): boolean =>
     target.kind === 'local' ||
     lastVerifiedRuntimeStatus(
-      get().runtimeStatusByEnvironmentId.get(target.environmentId)
+      runtimeStatusSubscriptionsFor(store).readStatuses().get(target.environmentId)
     )?.capabilities?.includes(AGENT_CLI_UPDATE_RUNTIME_CAPABILITY) === true
   // An update run from any window re-checks here at once, so this window drops its older answer.
   const followLocal = (): void => {

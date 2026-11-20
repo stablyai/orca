@@ -1644,6 +1644,20 @@
         "confirm_other": "Cancel {{count}} stale items?"
       }
     },
+    "new": {
+      "parts": {
+        "automations_one": "{{count}} automation",
+        "automations_other": "{{count}} automations",
+        "needsApps_one": "Needs {{count}} app",
+        "needsApps_other": "Needs {{count}} apps",
+        "schedules_one": "{{count}} schedule",
+        "schedules_other": "{{count}} schedules",
+        "skillsKept_one": "{{kept}}/{{count}} skill",
+        "skillsKept_other": "{{kept}}/{{count}} skills",
+        "skills_one": "{{count}} skill",
+        "skills_other": "{{count}} skills"
+      }
+    },
     "options": {
       "activeFilters_one": "Bot options ({{count}} filter active)",
       "activeFilters_other": "Bot options ({{count}} filters active)"
@@ -2085,6 +2099,8 @@
         "soul": "Updated soul applied"
       },
       "botCreateOffer": {
+        "askedMany": "Asked to take over {{count}} workspaces",
+        "askedOne": "Asked to take over 1 workspace",
         "create": "Create bot",
         "created": "Created",
         "createdAskedMany": "Created · asked to take over {{count}} workspaces",
@@ -2105,6 +2121,9 @@
         "takesOverMany": "Takes over {{count}} workspaces",
         "takesOverOne": "Takes over 1 workspace",
         "template": "Template",
+        "tookOverMany": "Took over {{count}} workspaces",
+        "tookOverOne": "Took over 1 workspace",
+        "tookOverSome": "Took over {{taken}} of {{count}} workspaces",
         "watches": "Watches",
         "willPropose": "Will propose"
       },
@@ -2136,6 +2155,7 @@
       },
       "failureWords": {
         "accountSwitchInProgress": "{{agent}}'s setup is changing on this host. Try again after it finishes.",
+        "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
         "agentCommandNotSignedIn": "Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.",
         "agentNotSignedIn": "Sign in to {{agent}}.",
@@ -2591,6 +2611,10 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
+      },
+      "goal": {
+        "checks_one": "{{count}} check",
+        "checks_other": "{{count}} checks"
       }
     },
     "onboarding": {
@@ -2814,6 +2838,14 @@
     "toggleFullScreen": "Toggle Full Screen",
     "unhide": "Show All",
     "zoom": "Zoom"
+  },
+  "perfNotices": {
+    "hiddenTabs": {
+      "descriptionOneHour_one": "You have {{count}} tab you haven't viewed in over an hour. Turn on Memory Saver to free up its memory.",
+      "descriptionOneHour_other": "You have {{count}} tabs you haven't viewed in over an hour. Turn on Memory Saver to free up their memory.",
+      "description_one": "You have {{count}} tab you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up its memory.",
+      "description_other": "You have {{count}} tabs you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up their memory."
+    }
   },
   "pet": {
     "defaultLabels": {

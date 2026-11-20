@@ -4,6 +4,11 @@ import type { RuntimeBrowserCommandHost } from '../commands/browser-command-cont
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import { BrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
+import { setRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
+import {
+  rendererWindowSurfaceForTest,
+  TEST_RENDERER_WINDOW_ID
+} from '../../construction/renderer-window-surface-test-double'
 
 const {
   ipcMainOnMock,
@@ -105,8 +110,8 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
     // No paired desktop: headless creates stay on this host.
     getBrowserHostLeaseRegistry: () => new BrowserHostLeaseRegistry({ authorityRuntimeId: 'host' }),
     getBrowserHostRequestRegistry: () => new BrowserHostRequestRegistry(),
-    getAuthoritativeWindow: vi.fn<RuntimeBrowserCommandHost['getAuthoritativeWindow']>(),
-    getAvailableAuthoritativeWindow: vi.fn(() => null),
+    getAuthoritativeWindowId: vi.fn<RuntimeBrowserCommandHost['getAuthoritativeWindowId']>(),
+    getAvailableAuthoritativeWindowId: vi.fn(() => null),
     getOffscreenBrowserBackend: vi.fn(() => null),
     getAgentBrowserBridge: () => bridge,
     ...overrides
@@ -176,13 +181,17 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     )
     bridge.getActivePageId.mockReturnValue('page-new')
     bridge.tabList.mockReturnValue({ tabs: [] })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: renderer tab creation reads only webContents.send; native BrowserWindow construction is unavailable in this unit test.
-    const window = { webContents } as unknown as Electron.BrowserWindow
+    setRuntimeDesktopSurface(
+      rendererWindowSurfaceForTest(webContents, {
+        on: ipcMainOnMock,
+        removeListener: ipcMainRemoveListenerMock
+      })
+    )
     const commands = new RuntimeBrowserCommands(
       createHost({
         getAgentBrowserBridge: () => bridge,
-        getAvailableAuthoritativeWindow: () => window,
-        getAuthoritativeWindow: () => window
+        getAvailableAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID,
+        getAuthoritativeWindowId: () => TEST_RENDERER_WINDOW_ID
       })
     )
 

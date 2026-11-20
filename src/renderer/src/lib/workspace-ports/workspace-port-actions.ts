@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
@@ -82,7 +83,7 @@ export async function resolveWorkspacePortBrowserUrl(args: {
 // Why: servers without a browser engine (managed SSH, desktop-hosted pages) open links here; ports must too.
 function opensRuntimePortOnThisDesktop(worktreeId: string, environmentId: string): boolean {
   const state = useAppStore.getState()
-  const capabilities = state.runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities
+  const capabilities = readRuntimeStatuses().get(environmentId)?.status?.capabilities
   return (
     !capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&
     canOpenWorkspaceBrowserTabOnRuntime(state, worktreeId, environmentId)

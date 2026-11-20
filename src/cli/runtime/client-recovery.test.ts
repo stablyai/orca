@@ -1,9 +1,10 @@
 import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
+import { randomUUID } from 'node:crypto'
 import { createServer, type Server } from 'node:net'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import '../../shared/remote-runtime/protocol/protocol-version'
 import '../orchestration/recovery/orchestration-mutation-recovery'
 import { reportCliError } from '../output/cli-error'
@@ -31,7 +32,7 @@ function writeRuntimeConnection(userDataPath: string, endpoint: string, runtimeI
     JSON.stringify({
       runtimeId,
       pid: 1,
-      transports: [{ kind: 'unix', endpoint }],
+      transports: [{ kind: process.platform === 'win32' ? 'named-pipe' : 'unix', endpoint }],
       authToken: 'token',
       startedAt: 1
     })
@@ -59,7 +60,11 @@ function expectPromptRetryBlockedJson(error: unknown, requestId: string): void {
 describe('RuntimeClient orchestration recovery identity', () => {
   it('blocks retry when a downgraded runtime loses the prompt reply', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-lost-prompt-reply-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
+    onTestFinished(() => rmSync(userDataPath, { recursive: true, force: true }))
+    const endpoint =
+      process.platform === 'win32'
+        ? `\\\\.\\pipe\\orca-runtime-lost-prompt-reply-${randomUUID()}`
+        : join(userDataPath, 'runtime.sock')
     let receivedRequest: Record<string, unknown> | undefined
     const server = createServer((socket) => {
       socket.once('data', (data) => {

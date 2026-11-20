@@ -67,7 +67,7 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
     return { ok: true, id: created.id, key: created.key, url: issueUrl(entry.site, created.key) }
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     return error instanceof Error
@@ -143,7 +143,7 @@ export async function updateIssue(
     return { ok: true }
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     return error instanceof Error
@@ -176,7 +176,7 @@ export async function addIssueComment(
     return { ok: true, id: comment.id }
   } catch (error) {
     if (isAuthError(error)) {
-      await clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     return error instanceof Error

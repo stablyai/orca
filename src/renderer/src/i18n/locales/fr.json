@@ -4104,6 +4104,7 @@
             "e518f544b1": "Aucun agent détecté",
             "8dea9b5cdf": "Aucun agent activé",
             "chatNotInstalled": "Non installé",
+            "chatInstallRequired": "Installation requise",
             "startChat": "Démarrer un chat avec {{value0}}",
             "chatNotOverSsh": "Chat indisponible via SSH",
             "chatCheckFailed": "Impossible de vérifier la disponibilité du chat",
@@ -4731,13 +4732,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Somme des working sets (WS). Les pages partagées peuvent apparaître dans plusieurs processus.",
-                "footprintDescription": "Somme des empreintes mémoire, la valeur affichée par le Moniteur d’activité : la mémoire propre à chaque processus, mémoire graphique comprise. Les pages partagées entre processus ne sont pas comptées deux fois.",
-                "rssDescription": "Somme des tailles résidentes (RSS). Les pages partagées ou aliasées peuvent apparaître dans plusieurs processus.",
-                "privateBytesDescription": "Octets privés additionnés : mémoire engagée par ces processus, comptée si elle est résidente ou paginée. C'est ce que l'hôte facture par rapport à sa limite de validation, de sorte qu'elle continue d'augmenter tandis que l'ensemble de travail ci-dessus diminue sous la pagination.",
                 "memColumn": "Mém.",
-                "memorySummary": "Σ Mémoire",
-                "privateSummary": "Σ Privée"
+                "memorySummary": "Σ Mémoire"
               }
             },
             "manager": {
@@ -12470,7 +12466,8 @@
           "source": {
             "cli": "Fichier d'authentification du CLI Cursor",
             "desktop": "Cursor IDE",
-            "keychain": "Trousseau macOS (cursor-agent)"
+            "keychain": "Trousseau macOS (cursor-agent)",
+            "keyring": "Trousseau Linux (cursor-agent)"
           },
           "staleUsage": "Dernière utilisation connue — la dernière actualisation a échoué : {{reason}}",
           "subtitle": "Affiche l'utilisation de votre forfait Cursor à partir de la connexion déjà présente sur cet ordinateur. Orca se contente de la lire — il ne modifie jamais votre connexion Cursor.",
@@ -16004,7 +16001,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Le collage est trop volumineux pour la saisie clavier de l'émulateur.",
-            "unsupportedPasteText": "Le collage via le clavier de l'émulateur prend uniquement en charge le texte de clavier US.",
             "pasteTargetUnavailable": "Le collage via le clavier de l'émulateur a échoué car l'appareil n'est pas prêt."
           }
         }
@@ -17317,8 +17313,6 @@
             "27d863542c": "Annotations du navigateur",
             "e48569ac6d": "Impossible d'accéder à ce site.",
             "bbe8f15e83": "Ce volet est rendu depuis le serveur runtime actif.",
-            "8b7e6d1f5a": "Les annotations du navigateur ne sont disponibles que dans les onglets locaux.",
-            "deb5293610": "Annotations du navigateur indisponibles dans un runtime distant",
             "90d021f2ad": "Ajouter",
             "0cb3bd6221": "Intention d'annotation",
             "532bac48c5": "Décrivez ce que l'agent doit modifier ici...",
@@ -18143,10 +18137,6 @@
           "standaloneTerminal": "Terminal autonome"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Chemin copié dans le presse-papiers",
-          "copyPathFailed": "Échec de la copie du chemin",
-          "workspace": "Espace de travail",
-          "copyPath": "Copier le chemin",
           "jumpToWorkspace": "Accéder à l'espace de travail"
         },
         "ActivityThreadContextMenu": {
@@ -18959,7 +18949,6 @@
         "stoppedRestart_many": "{{count}} chats arrêtés à la fermeture d’Orca.",
         "stoppedRestart_other": "{{count}} chats arrêtés à la fermeture d’Orca.",
         "promptsNotResent": "La reprise ne renverra pas vos prompts.",
-        "promptsNotSent": "Vos prompts n’ont pas été renvoyés.",
         "resume": "Reprendre",
         "details": "Détails",
         "close": "Fermer",
@@ -19127,7 +19116,8 @@
       "install": {
         "checking": "Vérification que {{agent}} est prêt sur cet hôte…",
         "cliInstall": "Installer",
-        "cliRecheck": "Revérifier"
+        "cliRecheck": "Revérifier",
+        "openAgentSettings": "Ouvrir les réglages"
       },
       "reasoning": "Raisonnement",
       "contextMenu": {
@@ -19168,6 +19158,7 @@
         "claudeAccountFolderMissing": "Le dossier du compte Claude sélectionné est introuvable. Reconnectez-vous à ce compte ou choisissez-en un autre.",
         "claudeAccountSetupFailed": "Le compte Claude sélectionné n'a pas pu être configuré. Réessayez ou choisissez un autre compte.",
         "agentCommandNotRunnable": "La Commande de {{agent}} dans Réglages → Agents doit commencer par un programme qu’Orca peut trouver. Les variables, tubes et autres syntaxes shell ne sont pas pris en charge ; utilisez le réglage Environnement pour les variables. Modifiez-la ou réinitialisez-la.",
+        "agentCommandFailed": "La Commande de {{agent}} dans Réglages → Agents n’a pas lancé {{agent}} : {{detail}}. Modifiez-la ou réinitialisez-la.",
         "runtimeNotInstalled": "{{agent}} n'est pas installé sur l'ordinateur qui exécute ce chat. Installez-le depuis le chat dans une version récente d'Orca.",
         "fullAccessAsRoot": "{{agent}} n'utilisera pas l'Accès complet tant qu'il s'exécute en tant que root. Choisissez une autre autorisation pour {{agent}} dans Paramètres → Agents pour l'ordinateur qui exécute ce chat, puis démarrez un nouveau chat.",
         "launchPreparationFailed": "Orca n'a pas pu préparer le démarrage de {{agent}} sur l'ordinateur qui exécute ce chat.",
@@ -20980,7 +20971,6 @@
       "cancelFailed": "Impossible d'annuler l'installation. Réessayez.",
       "install": "Installer {{agent}}",
       "installManaged": "Installer la copie d'Orca",
-      "installed": "Installé",
       "notInstalled": "Non installé.",
       "progress": "Téléchargement de {{agent}}",
       "readFailed": "Impossible de vérifier {{agent}} sur cet hôte. Nouvel essai en cours.",
@@ -22454,8 +22444,7 @@
     "refresh": "Actualiser",
     "restartLocal": "Redémarrer le daemon local",
     "killAllLocal": "Terminer toutes les sessions locales",
-    "killFailed": "Le terminal n’a pas pu être arrêté. Les sessions observées en dernier sont conservées.",
-    "metricDetails": "Détails des métriques"
+    "killFailed": "Le terminal n’a pas pu être arrêté. Les sessions observées en dernier sont conservées."
   },
   "csv": {
     "detectingDelimiter": "Détection du délimiteur…",
@@ -24235,7 +24224,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, tout afficher",
       "searchEverything": "Tout rechercher pour « {{text}} »",
-      "searchBotsFor": "Rechercher des bots pour « {{text}} »",
       "noMatch": "Aucun bot ne correspond à « {{text}} »",
       "noBotsYet": "Aucun bot pour l’instant",
       "filtersPaused": "Les filtres s’appliquent aux espaces de travail, pas aux bots",
@@ -24252,7 +24240,7 @@
       "browse": "Parcourir les modèles"
     },
     "new": {
-      "fromTemplate": "Utiliser un modèle"
+      "fromTemplate": "Modèle"
     },
     "googleSetup": {
       "otherAccount": "Changer de compte"

@@ -118,7 +118,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         sleepingAgentWake = phoneWakeReport(
           records?.sleepingAgentSessionsByPaneKey,
           worktreeId,
-          Boolean(this.getAvailableAuthoritativeWindow())
+          Boolean(this.hasAuthoritativeWindow())
         )
       }
     }

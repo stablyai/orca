@@ -59,28 +59,7 @@ describe('DaemonStreamDataBatcher', () => {
     }
   })
 
-  it('lets a small session write through the gate while a flooding session holds (per-session fairness)', () => {
-    vi.useFakeTimers()
-    try {
-      const { batcher, streamSocket } = createBatcher()
-
-      streamSocket.writableLength = 128 * 1024
-      batcher.enqueue('client-1', 'session-flood', 'x'.repeat(256 * 1024))
-      // Omit the interactive fast path to exercise small-session bypass.
-      batcher.enqueue('client-1', 'session-typing', 'echo-line')
-      vi.advanceTimersByTime(2)
-
-      const written = nonSentinelWrites(streamSocket)
-      expect(written.some((m) => m.sessionId === 'session-typing')).toBe(true)
-      expect(writtenData(streamSocket)).toContain('echo-line')
-      expect(written.some((m) => m.sessionId === 'session-flood')).toBe(false)
-      expect(batcher.queuedCharsForClient('client-1')).toBe(256 * 1024)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('never reorders bytes within a session around the small-session bypass', () => {
+  it('lets a small session bypass held bulk while keeping each session in order', () => {
     vi.useFakeTimers()
     try {
       const { batcher, streamSocket } = createBatcher()
@@ -91,8 +70,12 @@ describe('DaemonStreamDataBatcher', () => {
       batcher.enqueue('client-1', 'session-b', 'other')
       batcher.enqueue('client-1', 'session-a', 'tail')
       vi.advanceTimersByTime(2)
-      const written = streamSocket.write.mock.calls.map(([line]) => String(line)).join('')
-      expect(written).not.toContain('tail')
+      expect(nonSentinelWrites(streamSocket)).toEqual([
+        expect.objectContaining({
+          sessionId: 'session-b',
+          payload: expect.objectContaining({ data: 'other' })
+        })
+      ])
 
       streamSocket.writableLength = 0
       batcher.flush('client-1')

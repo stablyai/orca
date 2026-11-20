@@ -20,6 +20,7 @@ import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
 import { observeCrew } from './orchestration-crew-follow'
 import { UNKNOWN_CREW_STATE, type CrewState } from './orchestration-crew-subscription'
+import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'
 
 /** A crew row picked to mention, with the agent logo its pill shows. */
 export type CrewMention = { row: OrchestrationCrewRow; agentType: string }
@@ -60,7 +61,10 @@ export function useNativeChatCrewSource({
   composerRef: RefObject<NativeChatComposerHandle | null>
   canMention: boolean
 }): NativeChatCrewSource | null {
-  const party = isVisible && isOrcaSessionId(sessionId) ? formatOrcaSessionAddress(sessionId) : null
+  // Shares the crew panel's suspension: each followed chat runs a crew rebuild on main.
+  const enabled = useOrchestrationPanelEnabled()
+  const party =
+    enabled && isVisible && isOrcaSessionId(sessionId) ? formatOrcaSessionAddress(sessionId) : null
   const kind = target.kind
   const environmentId = target.kind === 'environment' ? target.environmentId : null
   const observation = useMemo(() => {

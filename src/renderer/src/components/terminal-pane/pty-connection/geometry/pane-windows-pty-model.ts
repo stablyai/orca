@@ -11,6 +11,10 @@ import {
   type PaneOwnerTransport,
   type PtyOwnerMachineState
 } from '../../pty-transport/host-ownership/pty-owner-machine-platform'
+import {
+  runtimeStatusSubscriptionsFor,
+  type RuntimeStatusStore
+} from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 
 export type PaneWindowsPtyModelContext = {
   terminal: Pick<Terminal, 'options'>
@@ -23,7 +27,7 @@ export type PaneWindowsPtyModelContext = {
 }
 
 type OwnerMachineStore = {
-  getState: () => PtyOwnerMachineState
+  getState: () => PtyOwnerMachineState & ReturnType<RuntimeStatusStore['getState']>
   subscribe: (listener: () => void) => () => void
 }
 
@@ -61,7 +65,11 @@ export function createPaneWindowsPtyModel(
       return true
     }
     const remoteOwnerPlatform = machine
-      ? remotePtyOwnerMachinePlatform(store.getState(), machine)
+      ? remotePtyOwnerMachinePlatform(
+          store.getState(),
+          runtimeStatusSubscriptionsFor(store).readStatuses(),
+          machine
+        )
       : null
     if (machine && remoteOwnerPlatform === null) {
       return false
@@ -91,11 +99,14 @@ export function createPaneWindowsPtyModel(
       stopWatchingStore()
       return
     }
-    unsubscribeStore ??= store.subscribe(() => {
-      if (applyKnown()) {
-        stopWatchingStore()
+    if (!unsubscribeStore) {
+      const onChange = (): void => {
+        if (applyKnown()) {
+          stopWatchingStore()
+        }
       }
-    })
+      unsubscribeStore = runtimeStatusSubscriptionsFor(store).subscribeStore(onChange)
+    }
   }
   return {
     apply,

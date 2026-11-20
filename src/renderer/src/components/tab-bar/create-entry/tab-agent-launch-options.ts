@@ -8,7 +8,8 @@ import type { AgentPickerSetupIdentity } from '../../agent/agent-launch-picker-d
 import {
   rowLabel,
   rowId,
-  chatUnavailableLabel
+  rowStatusLabel,
+  entrySetupLabel
 } from '../../agent/launch-menu/agent-menu-row-presentation'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
@@ -106,7 +107,7 @@ export function buildTabAgentLaunchOptionsFromRows(
       aliases: base?.aliases ?? [],
       label: rowLabel(row, t),
       disabled: row.kind === 'chat-unavailable',
-      reason: row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason, t) : undefined,
+      reason: rowStatusLabel(row, t),
       row,
       id: row.kind === 'terminal' ? `agent:${row.agent}` : rowId(row)
     }
@@ -220,6 +221,7 @@ export function matchingAgentPickerLaunchOptions(
         kind: surface === 'chat' ? 'chat' : 'cli',
         executionHostId: setup.entry.rows[0]?.executionHostId
       },
+      ...(surface === 'chat' ? { reason: entrySetupLabel(setup.entry) } : {}),
       preset: { model: setup.model.id, effort: setup.choices.options?.effort },
       setup: { agent: setup.entry.agent, surface, choices: setup.choices },
       pickerEntry: setup.entry

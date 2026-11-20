@@ -1,91 +1,93 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { findOwnAgentCli, latestAgentCliRelease, readAgentCliVersion, runProcess } = vi.hoisted(
-  () => ({
-    findOwnAgentCli: vi.fn(),
-    latestAgentCliRelease: vi.fn(),
-    readAgentCliVersion: vi.fn(),
-    runProcess: vi.fn()
-  })
-)
+const { runProcess, findOwnAgentCli, latestAgentCliRelease } = vi.hoisted(() => ({
+  runProcess: vi.fn(),
+  findOwnAgentCli: vi.fn(),
+  latestAgentCliRelease: vi.fn()
+}))
 
 vi.mock('@orca/process-host', () => ({ runProcess }))
 vi.mock('./agent-cli-own-install', () => ({ findOwnAgentCli }))
-vi.mock('../agent-launch/preflight/agent-cli-version-probe', () => ({ readAgentCliVersion }))
-// The launcher file stays put while the version behind it changes.
-vi.mock('../native-chat/agent-model-catalog/agent-model-catalog-input-stamp', () => ({
-  agentModelCatalogInputStamp: async () => 'launcher'
-}))
-vi.mock('../native-chat/agent-model-catalog/agent-model-catalog-store', () => ({
-  agentModelCatalogStore: { expireLaunchScopes: () => {} }
-}))
 vi.mock('./agent-cli-latest-release', () => ({ latestAgentCliRelease }))
-vi.mock('./agent-cli-model-requirements', () => ({ readModelsNeedingCliUpdate: async () => [] }))
+vi.mock('./agent-cli-model-requirements', () => ({
+  readModelsNeedingCliUpdate: async () => []
+}))
 
-import { checkAgentCliUpdates, runAgentCliUpdate } from './agent-cli-update-service'
+import { checkAgentCliUpdates } from './agent-cli-update-service'
 
-const cliAt = (program: string) => ({
-  program,
-  realPath: program,
-  env: {},
-  command: 'claude',
-  version: { prefixArgs: [], env: {} }
+let dir: string
+
+const printVersion = (version: string) =>
+  runProcess.mockResolvedValue({ code: 0, stdout: `Hermes Agent v${version}\n`, stderr: '' })
+
+const installedVersions = async () =>
+  (await checkAgentCliUpdates({}, ['hermes'])).map((update) => update.installedVersion)
+
+beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  runProcess.mockReset()
+  latestAgentCliRelease.mockResolvedValue('0.14.0')
+  dir = await mkdtemp(join(tmpdir(), 'agent-cli-update-'))
+  // Each test gets its own unchanged launcher, as `hermes update` leaves it.
+  const program = join(dir, 'hermes')
+  await writeFile(program, '')
+  findOwnAgentCli.mockResolvedValue({
+    program,
+    realPath: program,
+    env: {},
+    command: 'hermes',
+    version: { prefixArgs: [], env: {} }
+  })
 })
 
-// The CLIs on disk and the one a new chat finds; the updater changes them as a real one would.
-let onDisk = new Map<string, string>()
-let found = ''
-let update = () => {}
-
-beforeEach(() => {
-  vi.resetAllMocks()
-  findOwnAgentCli.mockImplementation(async () => cliAt(found))
-  readAgentCliVersion.mockImplementation(async ({ program }: { program: string }) => ({
-    version: onDisk.get(program) ?? null
-  }))
-  runProcess.mockImplementation(async () => {
-    update()
-    return { code: 0, stdout: '', stderr: '', timedOut: false }
-  })
-  latestAgentCliRelease.mockResolvedValue('2.0.0')
+afterEach(async () => {
+  vi.useRealTimers()
+  await rm(dir, { recursive: true, force: true })
 })
 
-describe('runAgentCliUpdate', () => {
-  it('reads the CLI a new chat finds once the update moved it', async () => {
-    onDisk = new Map([['/old/bin/claude', '1.0.0']])
-    found = '/old/bin/claude'
-    update = () => {
-      onDisk.set('/new/bin/claude', '2.0.0')
-      found = '/new/bin/claude'
-    }
+describe('checkAgentCliUpdates', () => {
+  it('drops Hermes once `hermes update` replaced the checkout behind an unchanged launcher', async () => {
+    printVersion('0.13.0')
+    expect(await installedVersions()).toEqual(['0.13.0'])
 
-    expect(await runAgentCliUpdate('claude', {})).toEqual({ ok: true })
+    printVersion('0.14.0')
+    const firstRead = Date.now()
+    vi.setSystemTime(firstRead + 60_000)
+    expect(await installedVersions()).toEqual(['0.13.0'])
+
+    vi.setSystemTime(firstRead + 11 * 60_000)
+    expect(await installedVersions()).toEqual([])
   })
 
-  it('answers checks asked before and during an update with the updated version', async () => {
-    onDisk = new Map([['/slow/bin/claude', '1.0.0']])
-    found = '/slow/bin/claude'
-    update = () => onDisk.set('/slow/bin/claude', '2.0.0')
-    let lookupStarted = () => {}
-    const started = new Promise<void>((resolve) => {
-      lookupStarted = resolve
-    })
-    let answerLookup = () => {}
-    latestAgentCliRelease.mockImplementationOnce(() => {
-      lookupStarted()
-      return new Promise((resolve) => {
-        answerLookup = () => resolve('2.0.0')
-      })
-    })
+  it('reads Hermes again before listing it behind a release that shipped since the last read', async () => {
+    printVersion('0.14.0')
+    await installedVersions()
 
-    const before = checkAgentCliUpdates({}, ['claude'])
-    await started
-    const run = runAgentCliUpdate('claude', {})
-    const during = checkAgentCliUpdates({}, ['claude'])
-    answerLookup()
+    latestAgentCliRelease.mockResolvedValue('0.15.0')
+    printVersion('0.15.0')
+    vi.setSystemTime(Date.now() + 11 * 60_000)
+    expect(await installedVersions()).toEqual([])
+  })
 
-    expect(await run).toEqual({ ok: true })
-    expect(await before).toEqual([])
-    expect(await during).toEqual([])
+  it('keeps listing Hermes when reading it again times out', async () => {
+    printVersion('0.13.0')
+    await installedVersions()
+
+    runProcess.mockResolvedValue({ code: null, stdout: '', stderr: '', timedOut: true })
+    vi.setSystemTime(Date.now() + 11 * 60_000)
+    expect(await installedVersions()).toEqual(['0.13.0'])
+    expect(runProcess).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not read an up-to-date Hermes again', async () => {
+    printVersion('0.14.0')
+    await installedVersions()
+
+    vi.setSystemTime(Date.now() + 11 * 60_000)
+    await installedVersions()
+    expect(runProcess).toHaveBeenCalledTimes(1)
   })
 })

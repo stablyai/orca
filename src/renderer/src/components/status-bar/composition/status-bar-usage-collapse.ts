@@ -1,28 +1,78 @@
-export type UsageChipMeasure = {
-  provider: string
-  width: number
-  urgent: boolean
-  /** The chip renders a percentage, so the leading unit label covers it. */
-  percentage: boolean
-  collapsed: boolean
-}
+/** Usage row forms, roomiest first: full chips, compact chips, one percentage each. "+N" joins the last. */
+export const USAGE_ROW_LEVELS = [
+  { compact: false, tightestOnly: false },
+  { compact: true, tightestOnly: false },
+  { compact: true, tightestOnly: true }
+] as const
 
-export type UsageRowMeasure = {
-  /** Width of the usage row as if every chip were shown, so collapsing never reads as a content change. */
-  naturalWidth: number
-  /** Width with every calm chip collapsed into "+N", keeping urgent ones. */
-  pinnedWidth: number
-  /** Width the row actually occupies right now. */
-  renderedWidth: number
-  chips: UsageChipMeasure[]
-  moreChipWidth: number
+export type UsageRowLevel = 0 | 1 | 2
+
+/** Natural widths read off the hidden measuring row, which no layout choice changes. */
+export type UsageRowWidths = {
+  /** Room for the chips: the usage area minus the trigger's padding and the refresh button. */
+  available: number
   chipGap: number
   unitLabelWidth: number
+  moreChipWidth: number
+  /** Per provider, its chip width at each level. */
+  chips: Record<string, readonly [number, number, number]>
+}
+
+export type UsageChipFacts = {
+  provider: string
+  urgent: boolean
+  /** Per level: the chip renders a percentage, so the leading unit label covers it. */
+  percentage: readonly [boolean, boolean, boolean]
+}
+
+export type UsageRowLayout = { level: UsageRowLevel; collapsed: string[] }
+
+// Why: hidden measuring chips don't tick their countdowns, so a live label can run a character wider.
+const STALE_LABEL_SLACK_PX = 8
+
+function rowWidth(
+  widths: UsageRowWidths,
+  chips: readonly UsageChipFacts[],
+  level: UsageRowLevel
+): number {
+  const items = chips.map((chip) => widths.chips[chip.provider]?.[level] ?? 0)
+  if (chips.some((chip) => chip.percentage[level])) {
+    items.push(widths.unitLabelWidth)
+  }
+  return (
+    items.reduce((sum, width) => sum + width, 0) + widths.chipGap * Math.max(0, items.length - 1)
+  )
+}
+
+/** Roomiest form whose full row fits; else one percentage each with chips folded into "+N". */
+export function chooseUsageRowLayout(
+  widths: UsageRowWidths,
+  chips: readonly UsageChipFacts[]
+): UsageRowLayout {
+  const room = widths.available - STALE_LABEL_SLACK_PX
+  for (const level of [0, 1, 2] as const) {
+    if (rowWidth(widths, chips, level) <= room) {
+      return { level, collapsed: [] }
+    }
+  }
+  const collapsed = pickCollapsedUsageChips(
+    chips.map((chip) => ({
+      provider: chip.provider,
+      width: widths.chips[chip.provider]?.[2] ?? 0,
+      urgent: chip.urgent,
+      percentage: chip.percentage[2]
+    })),
+    rowWidth(widths, chips, 2) - room,
+    widths.moreChipWidth,
+    widths.chipGap,
+    widths.unitLabelWidth
+  )
+  return { level: 2, collapsed }
 }
 
 /** Collapse calm chips from the roster’s end before urgent chips until the overflow and replacement chip fit. */
 export function pickCollapsedUsageChips(
-  chips: readonly Pick<UsageChipMeasure, 'provider' | 'width' | 'urgent' | 'percentage'>[],
+  chips: readonly { provider: string; width: number; urgent: boolean; percentage: boolean }[],
   overflowPx: number,
   moreChipWidth: number,
   chipGap: number,
@@ -54,62 +104,4 @@ export function pickCollapsedUsageChips(
     }
   }
   return collapsed
-}
-
-export function measureUsageRow(usage: HTMLElement | null): UsageRowMeasure {
-  if (!usage) {
-    return {
-      naturalWidth: 0,
-      pinnedWidth: 0,
-      renderedWidth: 0,
-      chips: [],
-      moreChipWidth: 0,
-      chipGap: 0,
-      unitLabelWidth: 0
-    }
-  }
-  const renderedWidth = usage.getBoundingClientRect().width
-  const chipElements = [...usage.querySelectorAll<HTMLElement>('[data-usage-chip]')]
-  const chipRow = chipElements[0]?.parentElement
-  const chipGap = chipRow ? Number.parseFloat(getComputedStyle(chipRow).columnGap) || 0 : 0
-  const chips = chipElements.map((element) => ({
-    provider: element.dataset.usageChip ?? '',
-    width: element.getBoundingClientRect().width,
-    urgent: element.dataset.usageUrgent === 'true',
-    percentage: element.dataset.usagePercentage === 'true',
-    collapsed: element.dataset.usageCollapsed === 'true'
-  }))
-  const more = usage.querySelector<HTMLElement>('[data-usage-more]')
-  const moreChipWidth = more?.getBoundingClientRect().width ?? 0
-  const moreInRow = more !== null && more.dataset.usageCollapsed !== 'true'
-  const collapsedWidth = chips
-    .filter((chip) => chip.collapsed)
-    .reduce((sum, chip) => sum + chip.width + chipGap, 0)
-  // Why: the unit label stays mounted while collapsed, so count it like a collapsed chip.
-  const unit = usage.querySelector<HTMLElement>('[data-usage-unit]')
-  const unitLabelWidth = unit?.getBoundingClientRect().width ?? 0
-  const unitWidth = unit ? unitLabelWidth + chipGap : 0
-  const unitCollapsed = unit?.dataset.usageCollapsed === 'true'
-  const naturalWidth =
-    renderedWidth +
-    collapsedWidth -
-    (moreInRow ? moreChipWidth + chipGap : 0) +
-    (unitCollapsed ? unitWidth : 0)
-  const calmChips = chips.filter((chip) => !chip.urgent)
-  // Pinned keeps the label only when an urgent chip it labels stays in the row.
-  const pinnedUnitWidth = chips.some((chip) => chip.urgent && chip.percentage) ? 0 : unitWidth
-  const pinnedWidth =
-    naturalWidth -
-    calmChips.reduce((sum, chip) => sum + chip.width + chipGap, 0) +
-    (calmChips.length > 0 ? moreChipWidth + chipGap : 0) -
-    pinnedUnitWidth
-  return {
-    naturalWidth,
-    pinnedWidth,
-    renderedWidth,
-    chips,
-    moreChipWidth,
-    chipGap,
-    unitLabelWidth
-  }
 }

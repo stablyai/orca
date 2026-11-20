@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/lib/bot-catalog', () => ({
-  readBots: () => [{ id: 'bot-1', chatSessionId: 'home-session' }],
+  readBots: () => [{ id: 'bot-1', folderWorkspaceId: 'fw-1', chatSessionId: 'home-session' }],
   readBotsEnabled: () => true,
   useBots: () => []
 }))
@@ -11,7 +11,9 @@ import { closeMobileSessionTabInStore } from './web-session-tabs-sync/closing/mo
 function store(entityId: string) {
   return {
     unifiedTabsByWorktree: {
-      'folder:fw-1': [{ id: 'tab-1', entityId, contentType: 'agent-session' as const }]
+      'folder:fw-1': [
+        { id: 'tab-1', entityId, worktreeId: 'folder:fw-1', contentType: 'agent-session' as const }
+      ]
     },
     openFiles: [],
     closeFile: vi.fn(),

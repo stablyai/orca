@@ -237,6 +237,12 @@ import { BotWorkForget, BotWorkList } from './bots-work-params'
 import { CertificateProceed, PageZoom, Reload } from './browser/browser-core-params'
 import { ExtensionList, ExtensionReload } from './browser/browser-extension-params'
 import { MouseClick } from './browser/browser-extras-params'
+import {
+  GrabAwait,
+  GrabCaptureSelection,
+  GrabSetMode,
+  GrabViewportBridge
+} from './browser/browser-grab-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser/browser-identity-params'
 import { Screenshot, Snapshot } from './browser/browser-observation-params'
 import {
@@ -708,6 +714,7 @@ import {
   PluginsPanelActionParams
 } from './plugins/plugins-params'
 import {
+  PreflightAgentDetection,
   PreflightAgentRefresh,
   PreflightCheck,
   PreflightDetectRemoteAgents,
@@ -878,6 +885,7 @@ import {
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
   RespondParams,
+  RestartLaunchSettledParams,
   RestartResumableParams,
   RestartResumeParams,
   RevealParams,
@@ -1128,6 +1136,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.respondToApproval': RespondParams,
   'agentSession.respondToQuestion': RespondToQuestionParams,
   'agentSession.restartContinue': RestartResumeParams,
+  'agentSession.restartLaunchSettled': RestartLaunchSettledParams,
   'agentSession.restartResumable': RestartResumableParams,
   'agentSession.restartResumableDismiss': RestartResumableParams,
   'agentSession.restartResume': RestartResumeParams,
@@ -1351,6 +1360,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.geolocation': Geolocation,
   'browser.get': Get,
   'browser.goto': Goto,
+  'browser.grab.await': GrabAwait,
+  'browser.grab.cancel': BrowserTarget,
+  'browser.grab.captureSelection': GrabCaptureSelection,
+  'browser.grab.extractHover': BrowserTarget,
+  'browser.grab.setMode': GrabSetMode,
+  'browser.grab.viewportBridge': GrabViewportBridge,
+  'browser.grab.watch': BrowserTarget,
   'browser.highlight': Highlight,
   'browser.hover': Element,
   'browser.identity.get': null,
@@ -1913,6 +1929,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
   'preflight.detectRemoteWindowsTerminalCapabilities':
     PreflightDetectRemoteWindowsTerminalCapabilities,
+  'preflight.installedAgents': PreflightAgentDetection,
   'preflight.refreshAgents': PreflightAgentRefresh,
   'project.list': null,
   'project.update': ProjectUpdate,
