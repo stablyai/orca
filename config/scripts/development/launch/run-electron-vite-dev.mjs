@@ -43,7 +43,7 @@ import {
   recordDevWebClientInputs
 } from '../web-client/dev-web-client-freshness.mjs'
 import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-limit.mjs'
-import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
+import { spawnOwnedElectronVite } from './owned-electron-vite-cli.mjs'
 import { copyPrivateTree } from '../../artifact-storage/reflink-copy/space-sharing-copy.mjs'
 import { buildDevSwiftCliHelpers } from '../../native-build/macos/swift-cli-helper-macos.mjs'
 import {
@@ -585,12 +585,7 @@ if (!isHelpOrVersion) {
   announceDevInstance({ repoRoot, profile: devProfile, ...ports })
 }
 const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
-const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
-  stdio: 'inherit',
-  env: withDevRolldownRuntimeEnv(process.env),
-  // Own process group so Ctrl+C terminates electron-vite’s Electron descendants on macOS too.
-  detached: process.platform !== 'win32'
-})
+const child = spawnOwnedElectronVite([electronViteCli, ...forwardedArgs], beginShutdown)
 
 let webClientBuild = null
 let isShuttingDown = false

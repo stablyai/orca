@@ -177,9 +177,9 @@ describe('run-electron-vite-dev', () => {
     processesToCleanUp.clear()
   })
 
-  it.skipIf(process.platform === 'win32')(
-    'kills the descendant process tree on SIGINT',
-    async () => {
+  it.skipIf(process.platform === 'win32').each(['SIGINT', 'SIGKILL', 'SIGHUP'] as const)(
+    'kills the descendant process tree on %s',
+    async (signal) => {
       const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
       const pidFile = join(tempDir, 'grandchild.pid')
       const wrapperPath = resolve('config/scripts/development/launch/run-electron-vite-dev.mjs')
@@ -216,8 +216,12 @@ describe('run-electron-vite-dev', () => {
       expect(processExists(fakeCliPid)).toBe(true)
       expect(processExists(grandchildPid)).toBe(true)
 
-      const { code } = await stopWrapper(wrapper)
-      expect(code).toBe(130)
+      wrapper.kill(signal)
+      const result = await waitForExit(wrapper)
+      processesToCleanUp.delete(wrapper.pid!)
+      if (signal === 'SIGINT') {
+        expect(result.code).toBe(130)
+      }
 
       await waitFor(() => !processExists(fakeCliPid) && !processExists(grandchildPid))
       processesToCleanUp.delete(fakeCliPid)

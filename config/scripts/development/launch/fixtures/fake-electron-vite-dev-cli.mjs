@@ -78,10 +78,3 @@ if (envFile) {
     'utf8'
   )
 }
-// The wrapper detaches this process group; exit with it so a killed test run cannot orphan us.
-const parentPid = process.ppid
-setInterval(() => {
-  if (process.ppid !== parentPid) {
-    exitAfterGrandchild('SIGTERM', 143)
-  }
-}, 1000)
