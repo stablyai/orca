@@ -24,7 +24,7 @@ const REPLY_MENTION_END = /^(?![\p{L}\p{N}_])/u
 const QUOTED_ROOM_HISTORY = /<quoted_room_history>[\s\S]*?(?:<\/quoted_room_history>|(?![\s\S]))/gu
 // Code and quoted prose is data, never an address; blanked to keep every offset in place.
 const UNADDRESSED_PROSE =
-  /```[\s\S]*?(?:```|(?![\s\S]))|`[^`\n]*`|^[ \t]*>.*$|\u201c[^\u201d]*\u201d|"[^"\n]*"/gmu
+  /```[\s\S]*?(?:```|(?![\s\S]))|~~~[\s\S]*?(?:~~~|(?![\s\S]))|`[^`\n]*`|^[ \t]*>.*$|\u201c[^\u201d]*\u201d|"[^"\n]*"/gmu
 // A file's `@path`, as drops and attachments write it, is data too: quoted, or rooted at a path.
 const FILE_REFERENCE = new RegExp(
   `${NATIVE_CHAT_QUOTED_FILE_REFERENCE.source}|@(?:[\\\\/~]|[a-z]:[\\\\/])\\S*`,

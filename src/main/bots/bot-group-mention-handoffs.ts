@@ -22,7 +22,8 @@ export async function handOffGroupMentions(
   const rootSequence = message.rootSequence ?? message.sequence
   const { groupId, threadId } = message
   const woken = await runKeyedSerializedOperation(groups.queues, groupId, async () => {
-    if (groups.store.message(rootRequestId)?.author.kind !== 'owner') {
+    const root = groups.store.message(rootRequestId)
+    if (root?.author.kind !== 'owner') {
       return []
     }
     const room = groups.store.room(groupId, threadId)
@@ -45,15 +46,18 @@ export async function handOffGroupMentions(
     if (targets.length === 0) {
       return []
     }
-    // A post's hand-offs sit among the room's newest lines; a newer person's post starts its own count.
-    const lines = groups.store
-      .roomMessages(groupId, threadId, 200)
-      .filter((line) => line.rootRequestId === rootRequestId)
     const place = { groupId, ...(threadId ? { threadId } : {}), rootRequestId, rootSequence }
     const speaker = { kind: 'bot' as const, id: turn.botId, name: turn.botName }
-    const used = lines.filter((line) => line.mentioned).length
+    const used = root.handoffs ?? 0
     const waking = targets.slice(0, Math.max(0, BOT_GROUP_HANDOFF_LIMIT - used))
     const { turns, contexts } = await reserveGroupTurns(groups, room, threadId, bots, waking)
+    // A member whose context was reserved after a later post still sees the reply that named it.
+    for (const [operationId, context] of contexts) {
+      contexts.set(operationId, withSpeakerReply(context, turn, reply))
+    }
+    if (turns.length > 0) {
+      groups.store.update({ ...root, handoffs: used + turns.length })
+    }
     const stored = turns.map((woken) =>
       groups.store.append(
         {
@@ -70,10 +74,11 @@ export async function handOffGroupMentions(
         contexts
       )
     )
-    if (waking.length < targets.length && !lines.some((line) => line.pausedAfter)) {
+    const pausedId = `handoffs-paused:${rootRequestId}`
+    if (waking.length < targets.length && !groups.store.message(pausedId)) {
       groups.store.append({
         ...place,
-        id: `handoffs-paused:${rootRequestId}`,
+        id: pausedId,
         author: speaker,
         text: `Paused after ${BOT_GROUP_HANDOFF_LIMIT} hand-offs. Reply to continue.`,
         createdAt: Date.now(),
@@ -89,4 +94,18 @@ export async function handOffGroupMentions(
       void deliverTurn(groups, line, wokenTurn)
     }
   }
+}
+
+/** `context` (the quoted history lines) with the speaker's reply as its last line, unless it has it. */
+function withSpeakerReply(context: string, speaker: BotGroupTurn, reply: string): string {
+  const lines: unknown[] = JSON.parse(context)
+  const has = lines.some(
+    (line) => typeof line === 'object' && line !== null && 'text' in line && line.text === reply
+  )
+  return has
+    ? context
+    : JSON.stringify([
+        ...lines,
+        { author: { kind: 'bot', id: speaker.botId, name: speaker.botName }, text: reply }
+      ])
 }

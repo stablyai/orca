@@ -187,7 +187,7 @@ describe("a member's reply hand-offs", () => {
   it('ignores code, quoted lines and quoted room history', () => {
     expect(
       wakes(
-        'Run `@Sage` or\n```\n@Scout go\n```\n> @Ops said\n<quoted_room_history>@Ops Lead</quoted_room_history>'
+        'Run `@Sage` or\n```\n@Scout go\n```\n~~~\n@Sage\n~~~\n> @Ops said\n<quoted_room_history>@Ops Lead</quoted_room_history>'
       )
     ).toEqual([])
   })

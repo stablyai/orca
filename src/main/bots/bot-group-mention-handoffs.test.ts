@@ -62,6 +62,22 @@ describe('group @Name hand-offs', () => {
     expect(lines()).toHaveLength(2)
   })
 
+  it('quotes the naming reply to a member whose history was taken after a later post', async () => {
+    const { post, reply, newest } = await room()
+    const asked = await post('@Scout plan')
+    await post('@Forge something else')
+    await reply(asked, 'Plan X is ready. @Forge review it.')
+    const operationId = newest().turns[0]!.operationId
+    await vi.waitFor(() =>
+      expect(mocks.send).toHaveBeenCalledWith(
+        expect.objectContaining({ turn: expect.objectContaining({ operationId }) })
+      )
+    )
+    const sent = mocks.send.mock.calls.find((call) => call[0].turn.operationId === operationId)
+    const prompt: string = sent![0].turn.body.blocks[0].text
+    expect(prompt).toContain('Plan X is ready.')
+  })
+
   it('ignores names in code and pauses once after six hand-offs until a person posts', async () => {
     const { post, reply, lines, newest } = await room()
     await reply(await post('@Scout start'), 'Run `@Forge` first.')
