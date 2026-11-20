@@ -244,6 +244,8 @@ function ShareBody({
       <>
         <div className={BODY}>
           <BotShareDrillIn
+            // Each page mounts fresh, so it takes focus as it opens.
+            key={nav.length}
             page={page}
             ctx={ctx}
             backLabel={nav.length > 1 ? pageTitle(nav.at(-2)!, t) : bot.name}

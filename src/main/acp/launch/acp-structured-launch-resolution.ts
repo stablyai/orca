@@ -70,6 +70,7 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   sessionMeta?: Record<string, unknown>
   sessionMetaOnReopen?: true
   takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
+  aroundNewSession?: AcpInstructionsLaunch['aroundNewSession']
   /** The bot's own tools, opened with each session; absent: none. */
   mcpServers?: McpServer[]
   /** The saved model the launch line carries. */
@@ -235,7 +236,9 @@ export function acpStructuredLaunchPart(
           linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
         )
       ),
-      env: childEnvironmentView({ ...env, ...skill?.env }, inherited, envToDelete)
+      env: childEnvironmentView({ ...env, ...skill?.env }, inherited, envToDelete),
+      cwd,
+      version: launchVersion.version
     })
     const fullAccess = basis.permissionMode === 'full-access'
     const tools = await basis.toolServers()
@@ -264,6 +267,9 @@ export function acpStructuredLaunchPart(
               sessionMetaOnReopen: instructions.sessionMetaOnReopen,
               takesSessionMeta: instructions.takesSessionMeta
             }
+          : {}),
+        ...(instructions?.aroundNewSession
+          ? { aroundNewSession: instructions.aroundNewSession }
           : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
         ...(model ? { launchModel: model } : {}),

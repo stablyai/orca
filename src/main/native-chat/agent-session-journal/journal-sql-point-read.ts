@@ -171,6 +171,7 @@ function read(
     case 'message-options':
     case 'continuation-context':
     case 'continuation-spill':
+    case 'restart-cut':
     case 'history-items':
     case 'claude-history-prompts':
     case 'canonical-item-ids':

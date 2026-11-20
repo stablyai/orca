@@ -76,7 +76,7 @@ describe('Google with no app on this computer', () => {
     mocks.bots.current = []
     renderNoApp()
     expect(screen.queryByRole('button', { name: 'Set up Google' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Create a bot to set up Google' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New bot' }))
     fireEvent.click(screen.getByRole('button', { name: 'Create bot' }))
     expect(mocks.startGoogleSetupInChat).toHaveBeenCalledWith(NEW_BOT, 'settings')
   })

@@ -1,4 +1,4 @@
-// The phone's bot templates, from New bot's "Start from a template": search, category pills, then the
+// The phone's bot templates, from New bot's "Use template": search, category pills, then the
 // desktop page's rows; a tap opens the template's detail, whose Use template… prefills New bot.
 import { useState } from 'react'
 import { Keyboard, ScrollView, View } from 'react-native'

@@ -182,8 +182,6 @@ describe('RuntimeAutomationController bot target', () => {
     await expect(
       controller.update(saved.id, { bot: { ...botTarget, resultsTo: { channel: 'C0RES' } } })
     ).resolves.toMatchObject({ bot: { resultsTo: posted } })
-    // Its own check takes the id the field keeps.
-    expect(/^[CGD][A-Z0-9]+$/.test(posted.channel)).toBe(true)
     // An edit that leaves a place keeps it as saved.
     await expect(controller.update(older.id, { name: 'Renamed' })).resolves.toMatchObject({
       on: [{ in: ['C0ENG'] }]

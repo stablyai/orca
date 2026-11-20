@@ -89,6 +89,57 @@ afterEach(() => {
 })
 
 describe('Windows process creation off the calling loop', () => {
+  it.each([
+    ['abort', false],
+    ['deadline', false],
+    ['abort', true],
+    ['deadline', true]
+  ] as const)(
+    'settles %s with prior overflow=%s while cleanup is queued, retaining lifetime until close',
+    async (reason, overflow) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        const child = new WorkerThreadChildProcess(1, () => true)
+        worker.spawn.mockReturnValue(child)
+        const controller = new AbortController()
+        const timeoutError = new Error('Git deadline expired')
+        const terminated = vi.fn()
+        const outcome = execFileCapture('git', ['status'], {
+          signal: controller.signal,
+          timeout: 100,
+          createTimeoutError: () => timeoutError,
+          maxBuffer: 4,
+          onChildTerminated: terminated
+        }).catch((error: unknown) => error)
+        child.receive({ type: 'spawn', id: 1, pid: 4242 })
+        if (overflow) {
+          child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('overflow') })
+        }
+
+        if (reason === 'abort') {
+          controller.abort()
+        } else {
+          await vi.advanceTimersByTimeAsync(100)
+        }
+
+        await Promise.resolve()
+        const result = await Promise.race([outcome, Promise.resolve('still waiting for worker')])
+        if (reason === 'abort') {
+          expect(result).toMatchObject({ name: 'AbortError' })
+        } else {
+          expect(result).toBe(timeoutError)
+        }
+        expect(terminated).not.toHaveBeenCalled()
+
+        treeKills.killers[0]!.emit('close', 0)
+        child.receive({ type: 'close', id: 1, code: null, signal: 'SIGTERM' })
+        expect(terminated).toHaveBeenCalledOnce()
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it('starts the command on the worker with the current environment', async () => {
     worker.spawn.mockReturnValue(finishedWorkerChild(0, 'origin\n', ''))
     const result = await execFileCapture('git', ['remote'], { encoding: 'utf8' })
@@ -233,13 +284,17 @@ describe('Windows process creation off the calling loop', () => {
     worker.spawn.mockReturnValue(child)
     const terminated = vi.fn()
     const pending = execFileCapture('git', ['log'], { maxBuffer: 4, onChildTerminated: terminated })
+    const outcome = pending.catch((error: unknown) => error)
     await vi.waitFor(() => expect(worker.spawn).toHaveBeenCalled())
     child.receive({ type: 'spawn', id: 1, pid: 4242 })
     child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('more than four') })
     await vi.waitFor(() => expect(treeKills.args).toEqual([['/pid', '4242', '/t', '/f']]))
     expect(treeKills.via).toEqual(['worker'])
+    expect(await Promise.race([outcome, Promise.resolve('cleanup pending')])).toBe(
+      'cleanup pending'
+    )
     treeKills.killers[0]!.emit('close', 0)
-    await expect(pending).rejects.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
+    await expect(outcome).resolves.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
     child.receive({ type: 'close', id: 1, code: 1, signal: null })
     expect(terminated).toHaveBeenCalledOnce()
   })
@@ -249,6 +304,9 @@ describe('Windows process creation off the calling loop', () => {
     const child = new WorkerThreadChildProcess(1, send)
     worker.spawn.mockReturnValue(child)
     const pending = execFileCapture('git', ['log'], { maxBuffer: 4 })
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+    })
     await vi.waitFor(() => expect(worker.spawn).toHaveBeenCalled())
     child.receive({ type: 'spawn', id: 1, pid: 4242 })
     child.receive({ type: 'exit', id: 1, code: 0, signal: null })
@@ -259,13 +317,16 @@ describe('Windows process creation off the calling loop', () => {
     expect(treeKills.args).toEqual([])
     expect(send).toHaveBeenCalledWith({ type: 'discard-output', id: 1 })
     child.receive({ type: 'close', id: 1, code: 0, signal: null })
-    await expect(pending).rejects.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
+    await rejected
   })
 
   it('starts the tree kill from main when the worker dies before running it', async () => {
     const child = new WorkerThreadChildProcess(1, () => true)
     worker.spawn.mockReturnValue(child)
     const pending = execFileCapture('git', ['log'], { maxBuffer: 4 })
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+    })
     await vi.waitFor(() => expect(worker.spawn).toHaveBeenCalled())
     child.receive({ type: 'spawn', id: 1, pid: 4242 })
     child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('more than four') })
@@ -285,7 +346,7 @@ describe('Windows process creation off the calling loop', () => {
     await vi.waitFor(() => expect(treeKills.via).toEqual(['worker', 'main']))
     expect(treeKills.args[1]).toEqual(['/pid', '4242', '/t', '/f'])
     treeKills.killers[1]!.emit('close', 0)
-    await expect(pending).rejects.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
+    await rejected
   })
 
   it('runs on the calling loop when the worker cannot start', async () => {

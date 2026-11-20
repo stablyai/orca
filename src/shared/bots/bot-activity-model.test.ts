@@ -155,7 +155,9 @@ describe('buildBotActivity', () => {
           worker('w-child', { parentPaneKey: 'w-parent', taskTitle: 'Child' }),
           worker('w-run', { parentPaneKey: 'run-terminal:pane', taskTitle: 'From terminal run' }),
           worker('w-loop-a', { parentPaneKey: 'w-loop-b' }),
-          worker('w-loop-b', { parentPaneKey: 'w-loop-a' })
+          worker('w-loop-b', { parentPaneKey: 'w-loop-a' }),
+          worker('w-elsewhere', { parentPaneKey: 'tab-elsewhere:pane' }),
+          worker('w-root', { dispatchStatus: 'completed' })
         ]
       })
     )
@@ -166,20 +168,7 @@ describe('buildBotActivity', () => {
       Child: { kind: 'chat' },
       'From terminal run': { kind: 'automation', name: 'Nightly sweep' }
     })
-  })
-
-  it("leaves out workers that none of the bot's sessions started", () => {
-    const activity = buildBotActivity(
-      input({
-        workers: [
-          worker('w-elsewhere', { parentPaneKey: 'tab-elsewhere:pane' }),
-          worker('w-root', {})
-        ]
-      })
-    )
-
-    expect(activity.workers).toEqual([])
-    expect(activity.completed).toEqual([])
+    expect(activity.completed.map((row) => row.key)).toEqual(['run:r1'])
   })
 
   it('moves finished workers to Completed and opens their own workspace', () => {
@@ -254,43 +243,8 @@ describe('buildBotActivity', () => {
     expect(activity.completed.map((row) => row.key)).toEqual(['worker:d-chat'])
   })
 
-  it('keeps an open worker up top whatever its agent reports; a settled one is history', () => {
-    const terminalWorker = (
-      dispatchId: string,
-      state: OrchestrationSessionWorker['state'],
-      activity?: OrchestrationSessionWorker['activity']
-    ): OrchestrationSessionWorker => ({
-      dispatchId,
-      taskId: `task-${dispatchId}`,
-      runId: 'run-1',
-      title: dispatchId,
-      agent: 'claude',
-      state,
-      ...(activity ? { activity } : {}),
-      liveness: 'live',
-      host: 'local',
-      worktreeId: null,
-      paneKey: `pane-${dispatchId}`,
-      chatSessionId: null,
-      startedAt: 50,
-      settledAt: state === 'working' ? null : 60
-    })
-    const activity = buildBotActivity(
-      input({
-        recordedWorkers: [
-          terminalWorker('d-idle', 'working', 'done'),
-          terminalWorker('d-new', 'working'),
-          terminalWorker('d-failed', 'failed')
-        ].map((worker) => ({ worker, creatorSessionId: 'chat-session', creatorPaneKey: null }))
-      })
-    )
-
-    expect(activity.workers.map((row) => row.key).sort()).toEqual(['worker:d-idle', 'worker:d-new'])
-    expect(activity.completed.map((row) => row.key)).toEqual(['worker:d-failed'])
-  })
-
   it("counts only working agents as running; a worker's open question is its coordinator's, not the owner's", () => {
-    const openWorker = (
+    const recordedWorker = (
       dispatchId: string,
       fields: Partial<OrchestrationSessionWorker>
     ): OrchestrationSessionWorker => ({
@@ -312,21 +266,28 @@ describe('buildBotActivity', () => {
     const activity = buildBotActivity(
       input({
         recordedWorkers: [
-          openWorker('d-busy', { activity: 'working' }),
-          openWorker('d-idle', { activity: 'done' }),
-          openWorker('d-asks', { activity: 'working', pendingQuestion: true }),
-          openWorker('d-asks-unseen', {
+          recordedWorker('d-busy', { activity: 'working' }),
+          recordedWorker('d-idle', { activity: 'done' }),
+          recordedWorker('d-asks', { activity: 'working', pendingQuestion: true }),
+          recordedWorker('d-asks-unseen', {
             state: 'unverifiable',
             liveness: 'unverifiable',
             activity: 'unknown',
             pendingQuestion: true
-          })
+          }),
+          recordedWorker('d-failed', { state: 'failed', settledAt: 60 })
         ].map((worker) => ({ worker, creatorSessionId: 'chat-session', creatorPaneKey: null }))
       })
     )
     const dotOf = (key: string) => activity.workers.find((row) => row.key === key)?.dot
 
-    expect(activity.workers).toHaveLength(4)
+    expect(activity.workers.map((row) => row.key).sort()).toEqual([
+      'worker:d-asks',
+      'worker:d-asks-unseen',
+      'worker:d-busy',
+      'worker:d-idle'
+    ])
+    expect(activity.completed.map((row) => row.key)).toEqual(['worker:d-failed'])
     expect(workingWorkerRowCount(activity.workers)).toBe(1)
     expect(dotOf('worker:d-asks')).toBe('done')
     expect(dotOf('worker:d-asks-unseen')).toBe('unverifiable')
@@ -334,41 +295,6 @@ describe('buildBotActivity', () => {
     expect(
       botNow({ activity, chatState: null }).needs.filter((need) => need.kind === 'session')
     ).toEqual([])
-  })
-
-  it('adds the workers of a run chat that has no tab', () => {
-    const activity = buildBotActivity(
-      input({
-        sessions: [],
-        automations: [automation('a1')],
-        runs: [run('r1', 'a1', { chatSessionId: 'run-chat' })],
-        recordedWorkers: [
-          {
-            worker: {
-              dispatchId: 'd-run',
-              taskId: 'task-run',
-              runId: 'run-1',
-              title: 'From the run',
-              agent: 'claude',
-              state: 'working' as const,
-              liveness: 'live' as const,
-              host: 'local' as const,
-              worktreeId: null,
-              paneKey: null,
-              chatSessionId: null,
-              startedAt: 50,
-              settledAt: null
-            },
-            creatorSessionId: 'run-chat',
-            creatorPaneKey: null
-          }
-        ]
-      })
-    )
-
-    expect(activity.workers).toMatchObject([
-      { key: 'worker:d-run', origin: { kind: 'automation', name: 'Automation a1' } }
-    ])
   })
 
   it("keeps a terminal run's settled worker, by the pane that created it, after its terminal is gone", () => {
@@ -505,6 +431,27 @@ describe('buildBotActivity', () => {
         automations: [automation('a1')],
         runs: [run('r1', 'a1', { status: 'dispatched', chatSessionId: 'run-chat' })],
         workers: [worker('w1', { parentPaneKey: chat, taskTitle: 'From run chat' })],
+        recordedWorkers: [
+          {
+            worker: {
+              dispatchId: 'd-run',
+              taskId: 'task-run',
+              runId: 'run-1',
+              title: 'From the run',
+              agent: 'claude',
+              state: 'working',
+              liveness: 'live',
+              host: 'local',
+              worktreeId: null,
+              paneKey: null,
+              chatSessionId: null,
+              startedAt: 50,
+              settledAt: null
+            },
+            creatorSessionId: 'run-chat',
+            creatorPaneKey: null
+          }
+        ],
         sessionStatus: (sessionId) =>
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model reads only state and workingMode.
           sessionId === 'run-chat' ? ({ state: 'blocked' } as AgentStatusEntry) : null
@@ -514,9 +461,10 @@ describe('buildBotActivity', () => {
     expect(activity.inProgress).toMatchObject([
       { kind: 'run', sessionId: 'run-chat', dot: 'blocked' }
     ])
-    expect(activity.workers).toMatchObject([
-      { kind: 'worker', origin: { kind: 'automation', name: 'Automation a1' } }
-    ])
+    expect(Object.fromEntries(activity.workers.map((row) => [row.key, row.origin]))).toEqual({
+      'worker:d-w1': { kind: 'automation', name: 'Automation a1' },
+      'worker:d-run': { kind: 'automation', name: 'Automation a1' }
+    })
   })
 
   it("files runs that share a busy chat by each run's own status", () => {
@@ -532,7 +480,12 @@ describe('buildBotActivity', () => {
             chatSessionId: 'home',
             dispatchedAt: 3
           }),
-          run('live', 'a1', { status: 'dispatched', chatSessionId: 'home', dispatchedAt: 4 })
+          run('skipped', 'a1', {
+            status: 'skipped_unavailable',
+            chatSessionId: 'home',
+            dispatchedAt: 4
+          }),
+          run('live', 'a1', { status: 'dispatched', chatSessionId: 'home', dispatchedAt: 5 })
         ],
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model reads only state and workingMode.
         sessionStatus: () => ({ state: 'working' }) as AgentStatusEntry
@@ -541,32 +494,11 @@ describe('buildBotActivity', () => {
 
     expect(activity.inProgress).toMatchObject([{ key: 'run:live', dot: 'working' }])
     expect(activity.completed).toMatchObject([
+      { key: 'run:skipped', dot: 'idle' },
       { key: 'run:failed', dot: 'failed' },
       { key: 'run:done-2', dot: 'done' },
       { key: 'run:done-1', dot: 'done' }
     ])
-  })
-
-  it('shows a run that failed or never started by its own status, over its chat’s done', () => {
-    const activity = buildBotActivity(
-      input({
-        sessions: [],
-        automations: [automation('a1')],
-        runs: [
-          run('failed', 'a1', { status: 'dispatch_failed', chatSessionId: 'failed-chat' }),
-          run('skipped', 'a1', { status: 'skipped_unavailable', chatSessionId: 'skipped-chat' }),
-          run('ok', 'a1', { status: 'completed', chatSessionId: 'ok-chat' })
-        ],
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model reads only state and workingMode.
-        sessionStatus: () => ({ state: 'done' }) as AgentStatusEntry
-      })
-    )
-
-    const dotByKey = Object.fromEntries(
-      activity.completed.map((row) => [row.key, row.kind === 'run' ? row.dot : null])
-    )
-    expect(dotByKey).toEqual({ 'run:failed': 'failed', 'run:skipped': 'idle', 'run:ok': 'done' })
-    expect(activity.inProgress).toEqual([])
   })
 })
 

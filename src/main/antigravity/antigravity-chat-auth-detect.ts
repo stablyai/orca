@@ -1,4 +1,5 @@
-// What credentials the host's Antigravity chat could use, read from files only: no server, no gcloud.
+// What credentials the host's Antigravity chat could use, read from files and caches only: no server,
+// no gcloud, no agy.
 
 import { stat } from 'node:fs/promises'
 import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
@@ -19,6 +20,8 @@ type DetectSources = {
   apiKeyStatus: () => Promise<AntigravityChatApiKeyStatus>
   googleSignIn?: (method: AntigravityChatAuthConfig['method']) => Promise<boolean>
   liveChats: () => number
+  /** Already known, never looked up here. */
+  agyVersion?: () => string | null
 }
 
 async function isFile(path: string): Promise<boolean> {
@@ -54,6 +57,7 @@ export async function detectAntigravityChatAuth(
       source: key.saved ? 'saved' : key.inEnvironment ? 'environment' : null
     },
     adc: { available: adcAvailable, project },
-    liveChats: sources.liveChats()
+    liveChats: sources.liveChats(),
+    ...(sources.agyVersion ? { agyVersion: sources.agyVersion() } : {})
   }
 }

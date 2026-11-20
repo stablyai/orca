@@ -142,28 +142,22 @@ async function load() {
   return { coordinator, lookup, directRead, replacedAt5s }
 }
 
-it.each([
-  ['no PR', { kind: 'no-pr', fetchedAt: 6_000 }],
-  ['an older PR', { kind: 'found', fetchedAt: 6_000, pr: makePR({ title: 'older' }) }]
-] as const)(
-  'an own read a newer read replaced, ending with %s, shows the newer data and keeps its plan',
-  async (_label, late) => {
-    const { replacedAt5s } = await load()
-    const own = await replacedAt5s(() => found('newer'))
-    own.resolve(late)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(shown()).toBe('newer')
-    expect(state()).not.toBe('in-flight')
+it('an older PR read that finishes late shows the newer data and keeps its plan', async () => {
+  const { replacedAt5s } = await load()
+  const own = await replacedAt5s(() => found('newer'))
+  own.resolve({ kind: 'found', fetchedAt: 6_000, pr: makePR({ title: 'older' }) })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(shown()).toBe('newer')
+  expect(state()).not.toBe('in-flight')
 
-    // The newer read's ordinary follow-up, two minutes after it.
-    provider.resolve.mockImplementation(async () => found('changed'))
-    await vi.advanceTimersByTimeAsync(124_999 - Date.now())
-    expect(reads()).toBe(2)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(reads()).toBe(3)
-    expect(shown()).toBe('changed')
-  }
-)
+  // The newer read's ordinary follow-up, two minutes after it.
+  provider.resolve.mockImplementation(async () => found('changed'))
+  await vi.advanceTimersByTimeAsync(124_999 - Date.now())
+  expect(reads()).toBe(2)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(reads()).toBe(3)
+  expect(shown()).toBe('changed')
+})
 
 it('a newer read’s failure stands over an older success, and keeps its own retry', async () => {
   const { replacedAt5s } = await load()

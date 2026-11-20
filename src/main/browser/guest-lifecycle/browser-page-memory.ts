@@ -166,9 +166,10 @@ export function isRetiredBrowserGuest(pageId: string, guestId: number): boolean 
   return pages.get(pageId)?.retired.has(guestId) === true
 }
 
-export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
+/** Whether a discard reservation would be granted right now, without taking one. */
+export function canReserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
   const page = pages.get(pageId)
-  if (
+  return !(
     !page ||
     page.guest !== guest ||
     page.claim.held ||
@@ -180,7 +181,12 @@ export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebCon
     guest.isDevToolsOpened() ||
     guest.debugger.isAttached() ||
     readBrowserGuestDiscardProtection(guest).protection !== 'discardable'
-  ) {
+  )
+}
+
+export function reserveBrowserPageDiscard(pageId: string, guest: Electron.WebContents): boolean {
+  const page = pages.get(pageId)
+  if (!page || !canReserveBrowserPageDiscard(pageId, guest)) {
     return false
   }
   let history: History

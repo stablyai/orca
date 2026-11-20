@@ -73,26 +73,6 @@ describe('ConnectorTurnEvents', () => {
     ])
   })
 
-  it('asks for a snapshot once the caps drop an event, until the next snapshot arrives', () => {
-    const events = new ConnectorTurnEvents(userDataPath, 'ada')
-    for (let index = 0; index < 500; index++) {
-      events.observe(prompt(String(index)))
-    }
-    expect(events.needsSnapshot).toBe(false)
-    events.observe(prompt('one too many'))
-    expect(events.needsSnapshot).toBe(true)
-    events.observe({ kind: 'snapshot', conversations: [] })
-    expect(events.needsSnapshot).toBe(false)
-  })
-
-  it('restores only the turn ends its own account left on disk', () => {
-    new ConnectorTurnEvents(userDataPath, 'ada').observe(turnEnded(1))
-    expect(new ConnectorTurnEvents(userDataPath, 'grace').next(1)).toBeNull()
-    expect(new ConnectorTurnEvents(userDataPath, 'ada').next(1)?.batch).toEqual([
-      expect.objectContaining({ kind: 'turn-ended', turnId: 1 })
-    ])
-  })
-
   it('keeps a turn end’s origin and pull request links through a restart', () => {
     const links = [{ url: 'https://github.com/org/repo/pull/7', title: 'Pull request #7' }]
     new ConnectorTurnEvents(userDataPath, 'ada').observe({

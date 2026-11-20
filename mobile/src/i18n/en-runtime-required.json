@@ -203,6 +203,8 @@
         "removed": "Removed"
       },
       "offer": {
+        "askedMany": "Asked to take over {{count}} workspaces",
+        "askedOne": "Asked to take over 1 workspace",
         "create": "Create bot",
         "created": "Created",
         "createdAskedMany": "Created · asked to take over {{count}} workspaces",
@@ -223,6 +225,9 @@
         "takesOverMany": "Takes over {{count}} workspaces",
         "takesOverOne": "Takes over 1 workspace",
         "template": "Template",
+        "tookOverMany": "Took over {{count}} workspaces",
+        "tookOverOne": "Took over 1 workspace",
+        "tookOverSome": "Took over {{taken}} of {{count}} workspaces",
         "watches": "Watches",
         "willPropose": "Will propose"
       },
@@ -402,6 +407,10 @@
     }
   },
   "hostScreen": {
+    "deleteConfirm": {
+      "changes_one": "{{count}} uncommitted change",
+      "changes_other": "{{count}} uncommitted changes"
+    },
     "hostBottomBar": {
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)"
