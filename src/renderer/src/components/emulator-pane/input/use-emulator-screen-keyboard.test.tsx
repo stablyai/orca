@@ -64,18 +64,27 @@ function press(init: { key: string; altKey?: boolean; ctrlKey?: boolean; altGrap
 }
 
 describe('Android emulator pane keys', () => {
-  it('sends any character the Mac or PC layout produced as text', () => {
+  it('sends any character the host layout produced as text, and leaves shortcuts to Orca', () => {
     press({ key: 'Enter' })
     press({ key: 'ş' })
     press({ key: '中' })
-    // Option on a Mac and AltGr on Windows compose characters such as "@" on German layouts.
-    press({ key: '@', altKey: true })
+    // AltGr arrives as Ctrl+Alt on Windows and Linux and composes characters such as "€".
     press({ key: '€', altKey: true, ctrlKey: true, altGraph: true })
     press({ key: 'Backspace' })
-    // Ctrl shortcuts stay Orca's; only AltGr's Ctrl+Alt pair composes text.
+    // Plain Alt and Ctrl combinations off a Mac stay shortcuts.
+    press({ key: 'c', altKey: true })
     press({ key: 'c', ctrlKey: true })
 
-    expect(scrcpyKeyboard.sendText.mock.calls).toEqual([['ş'], ['中'], ['@'], ['€']])
+    expect(scrcpyKeyboard.sendText.mock.calls).toEqual([['ş'], ['中'], ['€']])
     expect(scrcpyKeyboard.sendKey).toHaveBeenCalledWith('backspace', false)
+  })
+
+  it('sends Mac Option characters as text', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0)' })
+    press({ key: 'Enter' })
+    // German Option+L types "@".
+    press({ key: '@', altKey: true })
+
+    expect(scrcpyKeyboard.sendText.mock.calls).toEqual([['@']])
   })
 })

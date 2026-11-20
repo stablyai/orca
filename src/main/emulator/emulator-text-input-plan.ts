@@ -1,4 +1,4 @@
-import { buildServeSimKeyboardFramesForText } from '../../shared/emulator/emulator-keyboard-frame'
+import { isUSKeyboardText } from '../../shared/emulator/emulator-keyboard-frame'
 
 export type EmulatorTextInputPlan =
   | { kind: 'keys' }
@@ -16,7 +16,7 @@ export function planEmulatorTextInput(
   if (options.paste) {
     return { kind: 'paste', text: text.replaceAll('\r', ''), enterCount: 0 }
   }
-  if (options.usKeys && buildServeSimKeyboardFramesForText(text)) {
+  if (options.usKeys && isUSKeyboardText(text)) {
     return { kind: 'keys' }
   }
   const body = text.replace(/[\r\n]+$/, '')

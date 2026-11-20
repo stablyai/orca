@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
-import { sendScrcpyButton, sendScrcpyText } from '../../emulator/android/scrcpy-control-input'
+import { sendScrcpyKey, sendScrcpyText } from '../../emulator/android/scrcpy-keyboard-queue'
 
 type ScrcpyKeyboardInput =
   | { deviceId: string; text: string; paste: boolean }
@@ -23,11 +23,11 @@ function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
   return null
 }
 
-// Live Android pane typing and paste go to the same scrcpy control socket as the pane's
-// touches (emulator-scrcpy-touch.ts), so keys and taps reach the device in the order sent.
+// Live Android pane typing and paste go to the same scrcpy control socket as the pane's touches
+// (emulator-scrcpy-touch.ts); keys can wait up to a paste's settle time while touches go at once.
 export function registerEmulatorScrcpyKeyboardHandler(): void {
   ipcMain.removeHandler('emulator:scrcpyKeyboard')
-  ipcMain.handle('emulator:scrcpyKeyboard', (event, value: unknown): boolean => {
+  ipcMain.handle('emulator:scrcpyKeyboard', async (event, value: unknown): Promise<boolean> => {
     const input = parseScrcpyKeyboardInput(value)
     if (!BrowserWindow.fromWebContents(event.sender) || !input) {
       return false
@@ -36,13 +36,11 @@ export function registerEmulatorScrcpyKeyboardHandler(): void {
     if (!control) {
       return false
     }
-    try {
-      return 'text' in input
+    // Text and keys share one queue per device, so a key pressed during a paste lands after it.
+    const sent =
+      'text' in input
         ? sendScrcpyText(control, input.text, { paste: input.paste })
-        : sendScrcpyButton(control, input.key, { shift: input.shift })
-    } catch {
-      // Unknown key names throw from the keycode table.
-      return false
-    }
+        : sendScrcpyKey(control, input.key, { shift: input.shift })
+    return sent.catch(() => false)
   })
 }

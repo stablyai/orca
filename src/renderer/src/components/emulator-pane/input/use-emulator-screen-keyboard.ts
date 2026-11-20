@@ -9,6 +9,7 @@ import {
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import {
   buildServeSimKeyboardFramesForCode,
   buildServeSimKeyboardFramesForKey,
@@ -167,12 +168,14 @@ export function useEmulatorScreenKeyboard({
       const androidText = scrcpyKeyboard !== null && [...event.key].length === 1
       // AltGr arrives as Ctrl+Alt on Windows and Linux; its characters are text, not a Ctrl shortcut.
       const altGraphText = androidText && event.getModifierState('AltGraph')
+      // Only Mac Option composes a character; plain Alt+letter elsewhere stays a shortcut.
+      const optionText = androidText && isMacUserAgent()
       if (
         !canInteract ||
         event.nativeEvent.isComposing ||
         event.metaKey ||
         (event.ctrlKey && !altGraphText) ||
-        (event.altKey && !simulatorOption && !androidText)
+        (event.altKey && !simulatorOption && !optionText && !altGraphText)
       ) {
         return
       }
