@@ -15,7 +15,10 @@ import { chat, SESSION } from '../../transcripts/claude-transcript-catch-up.test
 import { adapterAtPublishFor, fakeClaude } from '../claude-structured-session-test-support'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
-export async function restoredChatWithBlockedRecovery(cleanups: (() => Promise<void>)[]) {
+export async function restoredChatWithBlockedRecovery(
+  cleanups: (() => Promise<void>)[],
+  userSend?: true
+) {
   const providerSessionId = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
   const c = await chat('batch', providerSessionId)
   await c.journal.appendItem(
@@ -87,7 +90,7 @@ export async function restoredChatWithBlockedRecovery(cleanups: (() => Promise<v
         envelope: {
           sessionId: SESSION,
           clientOperationId,
-          expectedRuntimeFence: host.deps.store.getRecord(SESSION)!.currentFence,
+          expectedRuntimeFence: host.deps.store.getRecord(SESSION)!.lease.runtimeFence,
           payloadFingerprint: computeAgentSessionPayloadFingerprint({
             method: 'agentSession.send',
             sessionId: SESSION,
@@ -95,7 +98,7 @@ export async function restoredChatWithBlockedRecovery(cleanups: (() => Promise<v
           })
         },
         body: message,
-        userSend: true
+        ...(userSend ? { userSend } : {})
       }
     )
   return { ...c, host, adapter, claude, blocked: blocked.promise, release, body, send }

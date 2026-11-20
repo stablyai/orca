@@ -111,31 +111,6 @@ export function readJournalDomainQueuePauses(
   })
 }
 
-export function journalDomainQueueHasInterruptedSend(
-  db: Database.Database,
-  target: Target,
-  reopenFloor: AgentJournalCursor | null
-): boolean {
-  const interrupted = db
-    .prepare(`SELECT 1 FROM journal_queue_cards card INDEXED BY journal_queue_order
-      CROSS JOIN journal_submission_attempts attempt ON attempt.session_id=card.session_id
-        AND attempt.epoch=card.epoch AND attempt.message_id=card.message_id AND attempt.current=1
-      WHERE card.session_id=? AND card.epoch=?
-        AND card.state='waiting'
-        AND json_extract(card.payload_json,'$.holdReason') IS NULL
-        AND attempt.dispatch_state='rejected' AND attempt.recovered=1
-        AND json_extract(attempt.payload_json,'$.keptAsQueuedMessageId')=card.message_id
-        AND json_extract(attempt.payload_json,'$.handedOverAt') IS NULL
-        AND json_extract(attempt.payload_json,'$.rejection.kind') IN ('hostRestarted','chatClosed')
-      LIMIT 1`)
-    .get(target.sessionId, target.epoch)
-  if (!interrupted) {
-    return false
-  }
-  const pauses = readJournalDomainQueuePauses(db, target, reopenFloor)
-  return pauses.length > 0 && pauses.every((pause) => pause.reason === 'restarted')
-}
-
 export function readJournalDomainUserStopInForce(
   db: Database.Database,
   target: Target

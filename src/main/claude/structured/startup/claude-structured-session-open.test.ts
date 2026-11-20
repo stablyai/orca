@@ -209,7 +209,7 @@ it('keeps the send that acquires a restored chat queued until recovery commits, 
 })
 
 it('delivers a send interrupted by closing during recovery before a newer send after reopen, once each', async () => {
-  const c = await restoredChatWithBlockedRecovery(cleanups)
+  const c = await restoredChatWithBlockedRecovery(cleanups, true)
   expect(await c.send('1800000000000-00000000000000000000000000000001')).toMatchObject({ ok: true })
   await c.blocked
   expect(c.adapter.holdsDispatch(SESSION)).toBe('history-catch-up')
