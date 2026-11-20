@@ -54,7 +54,11 @@ describe('checkAgentCliUpdates', () => {
     expect(await installedVersions()).toEqual(['0.13.0'])
 
     printVersion('0.14.0')
-    vi.setSystemTime(Date.now() + 11 * 60_000)
+    const firstRead = Date.now()
+    vi.setSystemTime(firstRead + 60_000)
+    expect(await installedVersions()).toEqual(['0.13.0'])
+
+    vi.setSystemTime(firstRead + 11 * 60_000)
     expect(await installedVersions()).toEqual([])
   })
 
@@ -76,15 +80,6 @@ describe('checkAgentCliUpdates', () => {
     vi.setSystemTime(Date.now() + 11 * 60_000)
     expect(await installedVersions()).toEqual(['0.13.0'])
     expect(runProcess).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not read a listed Hermes again within the retry window', async () => {
-    printVersion('0.13.0')
-    await installedVersions()
-
-    vi.setSystemTime(Date.now() + 60_000)
-    expect(await installedVersions()).toEqual(['0.13.0'])
-    expect(runProcess).toHaveBeenCalledTimes(1)
   })
 
   it('does not read an up-to-date Hermes again', async () => {
