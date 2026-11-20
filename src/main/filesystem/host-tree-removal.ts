@@ -93,6 +93,10 @@ export async function removeHostCheckout(
 // The volume decides case folding: `.GIT` is the marker only if it is the same file `.git` resolves to.
 async function namesExceptCheckoutMarker(root: string): Promise<string[]> {
   const names = await readdir(root)
+  if (names.includes('.git')) {
+    return names.filter((name) => name !== '.git')
+  }
+  // A case-folding volume may list the marker under another spelling; only the entry `.git` resolves to is it.
   const marker = await lstat(join(root, '.git')).catch(() => null)
   const kept: string[] = []
   for (const name of names) {
@@ -116,7 +120,7 @@ export async function removeUnregisteredHostCheckout(
     await lstat(toHostRemovalPath(targetPath))
   } catch (error) {
     // Like rm -rf, an already-missing folder is done.
-    if (getErrorCode(error) === 'ENOENT') {
+    if (getErrorCode(error) === 'ENOENT' || getErrorCode(error) === 'ENOTDIR') {
       return
     }
     throw error
