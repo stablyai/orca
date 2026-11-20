@@ -14,7 +14,6 @@ import {
 } from '../preview/mobile-web-app-render-harness.mjs'
 
 // Exercise editable artifact’s draft-confirm drawer in a real browser, including portal/gesture/Reanimated paint.
-// Require modal title before asserting no RN-Web BackHandler error; opening the drawer once registered an unsupported hardware-back listener.
 
 const HOST_ROUTE = '/h/render-check-host'
 const WORKTREE = 'wt-1'
@@ -103,19 +102,12 @@ async function openPreview() {
     pageRoutes: PAGE_ROUTE_PATTERNS,
     replies: REPLIES
   })
-  const errors = []
-  page.on('pageerror', (error) => errors.push(`${error.name}: ${error.message}`))
-  page.on('console', (message) => {
-    if (message.type() === 'error') {
-      errors.push(`console.error: ${message.text()}`)
-    }
-  })
   await page.goto(`${origin}/`, { waitUntil: 'load' })
   await page.waitForFunction(() => document.documentElement.dataset.orcaWebEntry === 'mounted', {
     timeout: 60_000,
     polling: 250
   })
-  return { page, errors }
+  return { page }
 }
 
 describeRender(

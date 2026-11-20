@@ -1,14 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
-import { terminalCreateFeatureRequirement } from '../../agent-launch-feature-requirement'
-import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
-import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { defineMethod, defineStreamingMethod } from '../../core'
-import {
-  CreateTerminalTab,
-  WorktreeTabSelector
-} from '../../../../../shared/rpc-contract/session-tabs-schemas-params'
+import { WorktreeTabSelector } from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 import {
   listSessionTabsInventory,
@@ -17,17 +11,21 @@ import {
 } from './session-tabs-inventory'
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
+import { SESSION_TAB_SHELL_CHOICE_METHODS } from './session-tab-shell-choice-methods'
+import { SESSION_TAB_CREATE_TERMINAL_METHOD } from './session-tab-create-terminal-method'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
+import {
+  projectSessionTabUnreadForClient,
+  sessionTabUnreadMarks
+} from './session-tab-unread-projection'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
-import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
-import '../../../../../shared/protocol-version'
-import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
-import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/session-tabs-tab-delta'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
+import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/remote-runtime/session-graph/session-tabs-tab-delta'
 import {
   SESSION_TABS_UNSUBSCRIBE_METHOD,
   SESSION_TABS_UNSUBSCRIBE_ALL_METHOD
 } from './session-tabs-unsubscribe'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
 export const SESSION_TAB_METHODS = [
   defineMethod({
@@ -36,14 +34,20 @@ export const SESSION_TAB_METHODS = [
     params: WorktreeTabSelector,
     handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
       await prepareStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
-      return projectSessionTabsForClient(
-        await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
-          includeInitialSurfaceLaunch: true,
-          includeAgentSenders: clientKind !== 'mobile'
-        }),
-        clientKind,
-        clientCapabilities
+      const result = projectSessionTabUnreadForClient(
+        runtime,
+        projectSessionTabsForClient(
+          await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
+            includeInitialSurfaceLaunch: true,
+            includeAgentSenders: clientKind !== 'mobile'
+          }),
+          clientKind,
+          clientCapabilities
+        ),
+        clientKind
       )
+      runtime.observeClientHostedPageSnapshots?.([result], pairedDeviceId)
+      return result
     }
   }),
   defineMethod({
@@ -57,60 +61,8 @@ export const SESSION_TAB_METHODS = [
   }),
   ...SESSION_TAB_MUTATION_METHODS,
   ...SESSION_TAB_CLOSE_METHODS,
-  defineMethod({
-    name: 'session.tabs.createTerminal',
-    requires: terminalCreateFeatureRequirement,
-    permission: 'workspace',
-    params: CreateTerminalTab,
-    handler: async (params, context) => {
-      const { runtime, signal, clientKind, pairedDeviceId, clientCapabilities } = context
-      if (params.command) {
-        await assertLegacyAiVaultResumeCommandAllowed(params.command, () =>
-          runtime.ensureStructuredAgentSessionHost()
-        )
-      }
-      return runtime.createMobileSessionTerminal(params.worktree, {
-        ...(params.sourceChatFork ? { sourceChatFork: params.sourceChatFork } : {}),
-        terminalImageViewerSupported: terminalImageViewerSupported(context),
-        afterTabId: params.afterTabId,
-        targetGroupId: params.targetGroupId,
-        command: params.command,
-        ...(params.shell ? { shellOverride: params.shell } : {}),
-        cwd: params.cwd,
-        ...(params.env ? { env: params.env } : {}),
-        ...(params.envToDelete ? { envToDelete: params.envToDelete } : {}),
-        startupCommandDelivery: params.startupCommandDelivery,
-        agent: params.agent,
-        ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),
-        ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
-        ...(params.launchToken ? { launchToken: params.launchToken } : {}),
-        ...(params.resumeProviderSession
-          ? { resumeProviderSession: params.resumeProviderSession }
-          : {}),
-        ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
-        ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
-        ...(params.viewMode ? { viewMode: params.viewMode } : {}),
-        activate: params.activate,
-        select: params.select,
-        clientNavigationId: pairedDeviceId,
-        navigation: resolveRuntimeNavigationTarget({
-          navigation: params.navigation,
-          clientKind
-        }),
-        clientMutationId: params.clientMutationId,
-        ...(pairedDeviceId
-          ? {
-              supportsSplitGroupPlacement:
-                clientCapabilities?.includes(
-                  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
-                ) === true
-            }
-          : {}),
-        // Cancel surface waits on disconnect rather than timing out and rolling back a live tab (#7718).
-        signal
-      })
-    }
-  }),
+  ...SESSION_TAB_SHELL_CHOICE_METHODS,
+  SESSION_TAB_CREATE_TERMINAL_METHOD,
   defineStreamingMethod({
     name: 'session.tabs.subscribe',
     permission: 'workspace',
@@ -129,18 +81,19 @@ export const SESSION_TAB_METHODS = [
       },
       emit
     ) => {
+      const observation = Symbol('session-tabs-stream')
       let subscriptionId: string | null = null
       let released = false
       let endOnRelease = true
       let stopListening = (): void => {}
-      let stopCapabilities = (): void => {}
+      let stopReprojecting = (): void => {}
       // Safe without a version check: any other release of this key runs our cleanup first, which latches `released`.
       const release = (): void => {
         if (!released && subscriptionId) {
           runtime.cleanupSubscription(subscriptionId)
         } else {
           released = true
-          stopCapabilities()
+          stopReprojecting()
           signal?.removeEventListener('abort', release)
         }
       }
@@ -164,7 +117,8 @@ export const SESSION_TAB_METHODS = [
             closePhoneSession?.()
             signal?.removeEventListener('abort', release)
             stopListening()
-            stopCapabilities()
+            runtime.forgetClientHostedPageObservation?.(pairedDeviceId, observation)
+            stopReprojecting()
             if (endOnRelease) {
               emit({ type: 'end' })
             }
@@ -183,17 +137,64 @@ export const SESSION_TAB_METHODS = [
       const project = (
         snapshot: NonNullable<typeof currentSnapshot>,
         capabilities = capabilitySource?.current ?? clientCapabilities
-      ) => projectSessionTabsForClient(snapshot, clientKind, capabilities)
-      stopCapabilities =
+      ) =>
+        projectSessionTabUnreadForClient(
+          runtime,
+          projectSessionTabsForClient(snapshot, clientKind, capabilities),
+          clientKind
+        )
+      let sentUnreadMarks = ''
+      const emitSnapshot = (
+        projected: NonNullable<typeof currentSnapshot>,
+        type: 'snapshot' | 'updated'
+      ): void => {
+        if (released) {
+          return
+        }
+        sentUnreadMarks = currentSnapshot
+          ? sessionTabUnreadMarks(runtime, currentSnapshot, clientKind)
+          : ''
+        emit({
+          type,
+          ...(type === 'snapshot'
+            ? tabDelta.full(withProofDelta(projected))
+            : tabDelta.update(withProofDelta(projected)))
+        })
+        if (!released) {
+          runtime.observeClientHostedPageSnapshots?.([projected], pairedDeviceId, observation)
+        }
+      }
+      const stopObservingCapabilities =
         capabilitySource?.observe((previous) => {
           if (!released && currentSnapshot) {
             const projected = project(currentSnapshot)
             // The last frame was projected with the previous set; a change it ignores sends nothing.
             if (!isDeepStrictEqual(projected, project(currentSnapshot, previous))) {
-              emit({ type: 'updated', ...tabDelta.update(withProofDelta(projected)) })
+              emitSnapshot(projected, 'updated')
             }
           }
         }) ?? (() => {})
+      // Verdicts move on every agent step; project and re-send only when this workspace's unread tabs change.
+      const stopObservingVerdicts =
+        clientKind === 'mobile'
+          ? runtime.onClientEvent(
+              (event) => {
+                if (
+                  event.type === 'agentListChanged' &&
+                  !released &&
+                  currentSnapshot &&
+                  sessionTabUnreadMarks(runtime, currentSnapshot, clientKind) !== sentUnreadMarks
+                ) {
+                  emitSnapshot(project(currentSnapshot), 'updated')
+                }
+              },
+              { consumesTerminalSideEffects: false }
+            )
+          : () => {}
+      stopReprojecting = () => {
+        stopObservingCapabilities()
+        stopObservingVerdicts()
+      }
       signal?.addEventListener('abort', release, { once: true })
       if (signal?.aborted) {
         release()
@@ -223,45 +224,44 @@ export const SESSION_TAB_METHODS = [
         }
         let subscribedWorktree = initial.worktree
         currentSnapshot = initial
-        emit({
-          type: 'snapshot',
-          ...tabDelta.full(withProofDelta(project(initial)))
-        })
+        emitSnapshot(project(initial), 'snapshot')
         if (released) {
           return
         }
+        const acceptsWorktree = (worktree: string): boolean => {
+          if (released) {
+            return false
+          }
+          if (worktree !== subscribedWorktree && worktreeIdsEqual(worktree, subscribedWorktree)) {
+            // Subscribe can precede publication of the host's stored spelling.
+            try {
+              subscribedWorktree =
+                runtime.getExplicitSessionWorktreeIdSelector(`id:${initial.worktree}`) ??
+                subscribedWorktree
+            } catch {
+              // An ambiguous alias cannot authorize switching to either session.
+              return false
+            }
+          }
+          return worktree === subscribedWorktree
+        }
         stopListening = runtime.onMobileSessionTabsChanged(
           (snapshot) => {
-            if (
-              snapshot.worktree !== subscribedWorktree &&
-              worktreeIdsEqual(snapshot.worktree, subscribedWorktree)
-            ) {
-              // Subscribe can precede publication of the host's stored spelling.
-              try {
-                subscribedWorktree =
-                  runtime.getExplicitSessionWorktreeIdSelector(`id:${initial.worktree}`) ??
-                  subscribedWorktree
-              } catch {
-                // An ambiguous alias cannot authorize switching to either session.
-                return
-              }
+            if (released) {
+              return
             }
-            if (snapshot.worktree === subscribedWorktree) {
-              // Keep one stream spelling because clients index frames by worktree.
-              const streamSnapshot =
-                snapshot.worktree === initial.worktree
-                  ? snapshot
-                  : { ...snapshot, worktree: initial.worktree }
-              const { navigationIntent: _intent, ...retained } = streamSnapshot
-              currentSnapshot = retained
-              emit({
-                type: 'updated',
-                ...tabDelta.update(withProofDelta(project(streamSnapshot)))
-              })
-            }
+            // Keep one stream spelling because clients index frames by worktree.
+            const streamSnapshot =
+              snapshot.worktree === initial.worktree
+                ? snapshot
+                : { ...snapshot, worktree: initial.worktree }
+            const { navigationIntent: _intent, ...retained } = streamSnapshot
+            currentSnapshot = retained
+            emitSnapshot(project(streamSnapshot), 'updated')
           },
           pairedDeviceId,
-          clientKind
+          clientKind,
+          { observation: 'caller', acceptsWorktree }
         )
       } catch (error) {
         // A stream already ended by its release must not also report an error.

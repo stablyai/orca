@@ -5,11 +5,11 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../../../shared/execution-host'
+import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../../../shared/execution-host/execution-host'
 import type {
   VisibleWorkspaceHostIds,
   WorkspaceHostScope
-} from '../../../../../../shared/ui-chrome-types'
+} from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import {
   getCheckedHostRows,
@@ -22,7 +22,10 @@ import { HostListSearchField } from '../../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { translateExecutionHostDetail, translateHostDisplayLabel } from '../../execution-host-label'
+import {
+  translateExecutionHostDetail,
+  translateHostDisplayLabel
+} from '../../../../runtime/hosts/display/execution-host-label'
 
 type SidebarHostScopeMenuSectionProps = {
   hostVisibilityLabel: string

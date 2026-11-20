@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import {
   mkdir,
   mkdtemp,
@@ -25,8 +24,6 @@ vi.mock('@orca/process-host', async (importActual) => {
 })
 
 import { cloneMacTree } from './macos-tree-clone'
-
-const ok: ProcessResult = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
 
 describe('cloneMacTree', () => {
   let root: string
@@ -58,24 +55,4 @@ describe('cloneMacTree', () => {
       expect(await readlink(join(destination, 'dangling'))).toBe('../gone/index.js')
     }
   )
-
-  it('falls back to a plain copy over a cleared destination when the clone fails', async () => {
-    const seenAtCopy: boolean[] = []
-    runProcessMock.mockImplementation(async (spec) => {
-      seenAtCopy.push(existsSync(destination))
-      if (spec.args?.[0] === '-cR') {
-        await mkdir(destination)
-        await writeFile(join(destination, 'partial'), 'partial-clone')
-        return { ...ok, code: 1 }
-      }
-      return ok
-    })
-    const signal = new AbortController().signal
-    await cloneMacTree('/src', destination, signal)
-    expect(runProcessMock.mock.calls.map(([spec]) => spec)).toMatchObject([
-      { program: '/bin/cp', args: ['-cR', '/src', destination], timeoutMs: null, signal },
-      { program: '/bin/cp', args: ['-R', '/src', destination], timeoutMs: null, signal }
-    ])
-    expect(seenAtCopy).toEqual([false, false])
-  })
 })

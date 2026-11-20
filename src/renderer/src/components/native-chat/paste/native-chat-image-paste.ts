@@ -1,5 +1,5 @@
-import { NATIVE_CHAT_PASTE_FOLDER } from '../../../../../shared/native-chat/input/native-chat-paste-folder'
-import { isNativeChatPastedImagePath } from '../../../../../shared/native-chat/native-chat-image-label'
+import { NATIVE_CHAT_PASTE_FOLDER } from '../../../../../shared/native-chat/input/composer/native-chat-paste-folder'
+import { isNativeChatPastedImagePath } from '../../../../../shared/native-chat/attachments/native-chat-image-label'
 
 /** Recognize legacy paste-folder paths; main still validates the actual file before restore. */
 export function isNativeChatKeptPastePath(path: string): boolean {

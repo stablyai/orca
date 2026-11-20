@@ -1,8 +1,8 @@
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { nextProviderRequestId } from '../requests/request-coordination'
 import {
   applyTaskChange,
@@ -72,9 +72,12 @@ export abstract class TaskRecordReads extends TaskRecordOwners {
     return stored
   }
   /** Each external delivery retries at most one owed read per binding, the longest-waiting first. */
-  protected wake(incarnation: BindingIncarnation) {
+  protected wake(
+    incarnation: BindingIncarnation,
+    candidates: Iterable<AcceptedTask> = this.records.values()
+  ) {
     let next: AcceptedTask | undefined
-    for (const record of this.records.values()) {
+    for (const record of candidates) {
       if (
         record.binding.incarnation === incarnation &&
         record.needsRead &&

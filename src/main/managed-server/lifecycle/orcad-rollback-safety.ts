@@ -1,5 +1,5 @@
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import {
   assessOrcadLiveDaemonCrossing,
   describeDaemonProtocols

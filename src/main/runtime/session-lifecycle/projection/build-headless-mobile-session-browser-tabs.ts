@@ -1,17 +1,19 @@
-import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
-import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
+import { buildRuntimeClientBrowserTabs } from './build-runtime-client-browser-tabs'
+import { getBrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry-instance'
+import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/restoration/mobile-session-publication-preservation'
+import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-retirement/terminal-surface-retirements'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
-import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
-import type { Tab } from '../../../../shared/tab-types'
+import { holdAgentSessionInventory } from '../../session-tabs/inventory/structured-agent-session-inventory-hold'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   captureTerminalCloseRequest,
   resolveTerminalCloseTarget,
@@ -22,10 +24,10 @@ import {
 import type {
   TerminalPaneCloseTarget,
   TerminalSurfaceCloseTarget
-} from '../../../../shared/workspace-layout/terminal-surface-close-target'
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { captureAcknowledgedTerminalTabRetirement } from '../../terminal/surface/workspace-session-terminal-tab-retirement-identity'
 import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
@@ -51,6 +53,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
           ].filter((tab) => !rendererPageIds.has(tab.browserPageId))
         : []
     const publishedServerTabs = serverTabs.map((tab) => {
+      const navigation = this.agentBrowserBridge?.getPageNavigationState(tab.browserPageId)
       const persistedProps = this.getPersistedUnifiedSessionTabProps(
         worktreeId,
         this.serveBrowserTabs.unifiedTabId(worktreeId, tab.browserPageId)
@@ -64,9 +67,9 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         browserPageId: tab.browserPageId,
         browserProfileId: tab.profileId ?? undefined,
         url: tab.url || 'about:blank',
-        loading: false,
-        canGoBack: false,
-        canGoForward: false,
+        loading: navigation?.loading ?? false,
+        canGoBack: navigation?.canGoBack ?? false,
+        canGoForward: navigation?.canGoForward ?? false,
         faviconUrl: this.agentBrowserBridge?.getRemoteTabFaviconUrl(tab.browserPageId) ?? null,
         loadError: tab.loadError ?? undefined,
         certificateFailure: tab.certificateFailure ?? undefined,
@@ -75,23 +78,10 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         isActive: tab.active === true
       }
     })
-    const publishedClientTabs = getRuntimeBrowserPageRegistry(this)
-      .listPages(worktreeId)
-      .map((page) => ({
-        type: 'browser' as const,
-        id: page.browserPageId,
-        title: page.title || page.url || 'Browser',
-        browserWorkspaceId: page.browserPageId,
-        browserPageId: page.browserPageId,
-        browserProfileId: page.browserProfileId,
-        executionHostKey: page.executionHostKey,
-        placement: page.placement,
-        url: page.url,
-        loading: page.loading,
-        canGoBack: page.canGoBack,
-        canGoForward: page.canGoForward,
-        isActive: page.active
-      }))
+    const publishedClientTabs = buildRuntimeClientBrowserTabs(
+      getRuntimeBrowserPageRegistry(this).listPages(worktreeId),
+      getBrowserHostLeaseRegistry(this)
+    )
     return [...publishedServerTabs, ...publishedClientTabs]
   }
 

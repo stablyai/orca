@@ -10,14 +10,14 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   buildWorktreeComparator,
   sortWorktreesSmart
-} from '../../../../../../shared/sidebar-list/smart-sort'
+} from '../../../../../../shared/sidebar-list/sorting/smart-sort'
 import './visible-worktree-activity-inputs'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
-import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   computeRenderedSidebarWorktreeOrder,
   computeRenderedSidebarWorktrees

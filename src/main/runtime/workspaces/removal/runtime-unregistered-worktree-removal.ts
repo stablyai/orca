@@ -1,7 +1,7 @@
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
 import { usesNativeWindowsRemoval } from '../../../git/worktrees/removal/windows-worktree-removal'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
@@ -11,9 +11,9 @@ import {
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
+  toLocalWorktreeRuntimePaths
 } from '../../../workspaces/removal/local-worktree-filesystem'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaWorktreeDirectory,
@@ -23,6 +23,7 @@ import {
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../../../workspaces/removal/worktree-removal-safety'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
 import { isLocalRuntimeWorktreePathMissing } from '../catalog/runtime-worktree-filesystem'
 
@@ -49,14 +50,18 @@ export async function removeRuntimeUnregisteredWorktree(args: {
   let canCleanOrphanedDirectory = false
   if (canCleanupUnregisteredOrcaWorktreeDirectory({ meta: removedMeta })) {
     const access = getLocalWorktreePathAccess(args.localOptions)
-    canCleanOrphanedDirectory =
-      !isDangerousWorktreeRemovalPath(target.path, repo.path, removalHome) &&
-      (await canSafelyRemoveOrphanedWorktreeDirectory(
-        toLocalWorktreeRuntimePath(target.path, args.localOptions),
-        toLocalWorktreeRuntimePath(repo.path, args.localOptions),
+    if (!isDangerousWorktreeRemovalPath(target.path, repo.path, removalHome)) {
+      const [runtimeTarget, runtimeRepo] = await toLocalWorktreeRuntimePaths(
+        [target.path, repo.path],
+        args.localOptions
+      )
+      canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+        runtimeTarget,
+        runtimeRepo,
         removalHome,
         access
-      ))
+      )
+    }
   }
   const native = usesNativeWindowsRemoval(target.path, args.localOptions)
   if (canCleanOrphanedDirectory || (native && removedMeta)) {
@@ -77,6 +82,12 @@ export async function removeRuntimeUnregisteredWorktree(args: {
       try {
         await cleanupPushTarget(args)
       } finally {
+        // Deleting an archived workspace forgets it; the purge keeps only rows still marked.
+        if (removedMeta?.archivedCheckout) {
+          args.store.setWorktreeMeta(hostWorktreeTarget({ id: target.id, hostId: route.hostId }), {
+            archivedCheckout: undefined
+          })
+        }
         await args.finishRemoval()
       }
     } finally {

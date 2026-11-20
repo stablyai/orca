@@ -3,7 +3,7 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { removeTreeSync } from '../../../../src/shared/windows-transient-lock-removal.ts'
+import { removeTreeSync } from '../../../../src/shared/file-write/windows-transient-lock-removal.ts'
 
 import {
   mkTempProject,

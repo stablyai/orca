@@ -1,8 +1,8 @@
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import {
   normalizePluginThemeSettings,
   type PluginThemeSettingsInput
-} from '../../plugin-theme-settings'
+} from '../appearance/plugin-theme-settings'
 import {
   normalizePluginFileTypeSuggestionSettings,
   type PluginFileTypeSuggestionSettingsInput

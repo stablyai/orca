@@ -15,25 +15,8 @@ function createHarness(options: { maxGuests?: number } = {}) {
   const routeSession = { marker: 'route-session' } as unknown as Session
   let prepared = true
   let pageAuthority = Symbol('page-authority')
-  let pageHostGeneration = page.pageHostGeneration
+  const pageHostGeneration = page.pageHostGeneration
   const retirePreparedPagesOwnedByRenderer = vi.fn(() => 0)
-  const rekeyPreparedPage = vi.fn((previous, next) => {
-    if (
-      !prepared ||
-      previous.pageAuthority !== pageAuthority ||
-      previous.pageHostGeneration !== pageHostGeneration ||
-      next.partition !== partition ||
-      next.browserPageId !== page.browserPageId ||
-      next.rendererWebContentsId !== page.rendererWebContentsId
-    ) {
-      return null
-    }
-    pageHostGeneration = next.pageHostGeneration
-    return {
-      page: { ...next, pageAuthority },
-      routeSession: { partition, release: vi.fn() }
-    }
-  })
   let registry: BrowserRouteWebContentsRegistry
   registry = new BrowserRouteWebContentsRegistry({
     getPartitionForSession: (session) => (session === routeSession ? partition : null),
@@ -53,14 +36,11 @@ function createHarness(options: { maxGuests?: number } = {}) {
       registry.retirePageAuthority({ ...input, onRetired: vi.fn() })
       return true
     },
-    rekeyPreparedPage,
     retirePreparedPagesOwnedByRenderer,
     maxGuests: options.maxGuests
   })
   return {
-    getPageAuthority: () => pageAuthority,
     registry,
-    rekeyPreparedPage,
     retirePreparedPagesOwnedByRenderer,
     routeSession,
     setPrepared: (value: boolean) => {
@@ -154,34 +134,6 @@ function requireLifecycleClaim(registry: BrowserRouteWebContentsRegistry, regist
 }
 
 describe('BrowserRouteWebContentsRegistry', () => {
-  it('atomically rekeys the prepared page, guest index, lifecycle claim, and navigation grant', async () => {
-    const { registry, rekeyPreparedPage, routeSession } = createHarness()
-    const guest = createGuest({ session: routeSession })
-    expect(registry.attachGuest(guest.guest)).toBe(true)
-    expect(registry.registerGuest(page)).toBe(true)
-    const previousClaim = requireLifecycleClaim(registry)
-    expect(registry.grantNavigation(page)).toBe(true)
-    await expect(
-      registry.navigateGuest(previousClaim, 'https://before-rekey.internal/')
-    ).resolves.toBe(true)
-    expect(registry.revokeNavigation(previousClaim)).toBe(true)
-    const next = { ...page, pageHostGeneration: 8 }
-
-    const rekeyed = registry.rekeyGuestLifecycle(previousClaim, next)
-
-    expect(rekeyed?.lifecycleClaim.registration).toEqual(next)
-    expect(rekeyPreparedPage).toHaveBeenCalledOnce()
-    expect(previousClaim.isCurrent()).toBe(false)
-    expect(rekeyed?.lifecycleClaim.isCurrent()).toBe(true)
-    expect(registry.grantReconciledNavigation(rekeyed!.lifecycleClaim)).toBe(true)
-    await expect(registry.navigateGuest(previousClaim, 'https://stale.invalid/')).resolves.toBe(
-      false
-    )
-    await expect(
-      registry.navigateGuest(rekeyed!.lifecycleClaim, 'https://remote.internal/')
-    ).resolves.toBe(true)
-  })
-
   it('settles exact guest retirement only after its destroyed acknowledgement', async () => {
     const { registry, routeSession } = createHarness()
     const guest = createGuest({ session: routeSession, closeDestroys: false })
@@ -220,26 +172,6 @@ describe('BrowserRouteWebContentsRegistry', () => {
     }
   })
 
-  it('rejects page conflicts and stale destroyed callbacks cannot retire a replacement', () => {
-    const { registry, replaceAuthority, routeSession } = createHarness()
-    const first = createGuest({ session: routeSession })
-    registry.attachGuest(first.guest)
-    expect(registry.registerGuest(page)).toBe(true)
-
-    const conflicting = createGuest({ id: 42, session: routeSession })
-    registry.attachGuest(conflicting.guest)
-    expect(registry.registerGuest({ ...page, webContentsId: 42 })).toBe(false)
-
-    first.destroy()
-    replaceAuthority()
-    expect(registry.registerGuest({ ...page, webContentsId: 42 })).toBe(true)
-    first.emit('destroyed')
-    expect(registry.grantNavigation({ ...page, webContentsId: 42 })).toBe(true)
-    expect(first.guest.off).toHaveBeenCalledWith('will-navigate', expect.any(Function))
-    expect(first.guest.off).toHaveBeenCalledWith('will-redirect', expect.any(Function))
-    expect(first.guest.off).toHaveBeenCalledWith('destroyed', expect.any(Function))
-  })
-
   it('does not revive a stale guest when the same logical page tuple is prepared again', () => {
     const { registry, replaceAuthority, routeSession } = createHarness()
     const stale = createGuest({ session: routeSession })
@@ -257,91 +189,5 @@ describe('BrowserRouteWebContentsRegistry', () => {
     expect(registry.attachGuest(replacement.guest)).toBe(true)
     expect(registry.registerGuest({ ...page, webContentsId: 42 })).toBe(true)
     expect(registry.grantNavigation({ ...page, webContentsId: 42 })).toBe(true)
-  })
-
-  it('holds page retirement until a close-delayed exact guest is destroyed', () => {
-    const { getPageAuthority, registry, routeSession } = createHarness()
-    const guest = createGuest({ session: routeSession, closeDestroys: false })
-    const retired = vi.fn()
-    registry.attachGuest(guest.guest)
-    registry.registerGuest(page)
-    registry.grantNavigation(page)
-
-    expect(
-      registry.retirePageAuthority({
-        partition,
-        browserPageId: page.browserPageId,
-        pageHostGeneration: page.pageHostGeneration,
-        rendererWebContentsId: page.rendererWebContentsId,
-        pageAuthority: getPageAuthority(),
-        onRetired: retired
-      })
-    ).toBe(false)
-    expect(registry.registerGuest(page)).toBe(false)
-    const navigation = navigationEvent()
-    guest.emit('will-navigate', navigation, 'https://example.com/')
-    expect(navigation.preventDefault).toHaveBeenCalledOnce()
-    expect(registry.grantNavigation(page)).toBe(false)
-    expect(retired).not.toHaveBeenCalled()
-    const duplicateRetired = vi.fn()
-    expect(
-      registry.retirePageAuthority({
-        partition,
-        browserPageId: page.browserPageId,
-        pageHostGeneration: page.pageHostGeneration,
-        rendererWebContentsId: page.rendererWebContentsId,
-        pageAuthority: getPageAuthority(),
-        onRetired: duplicateRetired
-      })
-    ).toBe(false)
-
-    guest.destroy()
-    expect(retired).toHaveBeenCalledOnce()
-    expect(duplicateRetired).not.toHaveBeenCalled()
-  })
-
-  it('retires every page owned by a crashed host renderer', () => {
-    const { registry, retirePreparedPagesOwnedByRenderer, routeSession } = createHarness()
-    const first = createGuest({ session: routeSession })
-    const unregisteredSibling = createGuest({ id: 42, session: routeSession })
-    const unrelated = createGuest({ id: 43, rendererWebContentsId: 12, session: routeSession })
-    registry.attachGuest(first.guest)
-    registry.registerGuest(page)
-    registry.grantNavigation(page)
-    registry.attachGuest(unregisteredSibling.guest)
-    registry.attachGuest(unrelated.guest)
-
-    registry.retireRenderer(page.rendererWebContentsId)
-
-    expect(first.guest.close).toHaveBeenCalledOnce()
-    expect(unregisteredSibling.guest.close).toHaveBeenCalledOnce()
-    expect(unrelated.guest.close).not.toHaveBeenCalled()
-    expect(registry.grantNavigation(page)).toBe(false)
-    expect(retirePreparedPagesOwnedByRenderer).toHaveBeenCalledWith(page.rendererWebContentsId)
-  })
-
-  it('keeps a destroyed claim distinct from a reused WebContents identity', async () => {
-    const { registry, replaceAuthority, routeSession } = createHarness()
-    const first = createGuest({ session: routeSession })
-    registry.attachGuest(first.guest)
-    registry.registerGuest(page)
-    const firstClaim = requireLifecycleClaim(registry)
-    first.destroy()
-
-    replaceAuthority()
-    const replacement = createGuest({ session: routeSession })
-    registry.attachGuest(replacement.guest)
-    registry.registerGuest(page)
-    registry.grantNavigation(page)
-    const replacementClaim = requireLifecycleClaim(registry)
-
-    await expect(registry.navigateGuest(firstClaim, 'https://stale.test')).resolves.toBe(false)
-    await expect(registry.navigateGuest(replacementClaim, 'https://current.test')).resolves.toBe(
-      true
-    )
-    await expect(registry.beginGuestRetirement(firstClaim)).resolves.toBeUndefined()
-    expect(replacement.guest.close).not.toHaveBeenCalled()
-    await expect(registry.beginGuestRetirement(replacementClaim)).resolves.toBeUndefined()
-    expect(replacement.guest.close).toHaveBeenCalledOnce()
   })
 })

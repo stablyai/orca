@@ -1,5 +1,5 @@
 import type { ResumeFailure } from '../tree/native-chat-resume-on-restart-grouping'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { createRuntimeRpcAbortError } from '@/runtime/rpc/calls/abortable-runtime-environment-call'
 import {
@@ -11,7 +11,7 @@ import {
 import {
   restartContinuationHistory,
   type RestartContinuationOutcome
-} from './native-chat-restart-action-notifications'
+} from './native-chat-restart-continuation-outcomes'
 
 export type RestartContinuationBatchResult = {
   attempted: string[]
@@ -77,8 +77,7 @@ export async function continueRestartChunks(
       result.continued.push(
         ...restartContinuationHistory(
           chunk.filter((id) => !result.skipped.has(id)),
-          answer.continued,
-          listed
+          answer.continued
         )
       )
     } catch (error) {

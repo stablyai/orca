@@ -1,6 +1,6 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { ProfileStateMaintenance } from '../../persistence/loading-store/profile-state-authority'
-import type { ProfileStateMaintenanceOptions } from '../../persistence/loading-store/profile-state-maintenance'
+import type { ProfileStateMaintenance } from '../../persistence/loading-store/profile-writing/profile-state-authority'
+import type { ProfileStateMaintenanceOptions } from '../../persistence/loading-store/profile-writing/profile-state-maintenance'
 
 const PROFILE_PERSISTENCE_TIMEOUT_MS = 60_000
 

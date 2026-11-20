@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,

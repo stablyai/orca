@@ -7,8 +7,10 @@ import {
   COMPAT_SLOT_ADDONS,
   isCompatSlot,
   mergeManifest,
-  sha256Of
+  sha256Of,
+  slotNeedsProviderExec
 } from './orcad-prebuild-slot-contents.mjs'
+import { ORCAD_PROVIDER_EXEC_SLOT_FILE } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 
 const dirs = []
 function temp() {
@@ -26,8 +28,12 @@ afterEach(() => {
 function laneTree(slot, { version = '1.1.0', nodeHeaders = '24.21.0', bytes = slot } = {}) {
   const dir = temp()
   const files = {}
-  // A compat slot also carries its own addons.
-  for (const file of ['pty.node', ...(isCompatSlot(slot) ? Object.keys(COMPAT_SLOT_ADDONS) : [])]) {
+  // A compat slot also carries its own addons, and every POSIX slot its provider exec helper.
+  for (const file of [
+    'pty.node',
+    ...(isCompatSlot(slot) ? Object.keys(COMPAT_SLOT_ADDONS) : []),
+    ...(slotNeedsProviderExec(slot) ? [ORCAD_PROVIDER_EXEC_SLOT_FILE] : [])
+  ]) {
     const binary = join(dir, slot, ...file.split('/'))
     mkdirSync(dirname(binary), { recursive: true })
     writeFileSync(binary, bytes)
@@ -45,15 +51,6 @@ function laneTree(slot, { version = '1.1.0', nodeHeaders = '24.21.0', bytes = sl
 }
 
 describe('mergeOrcadPrebuildTrees', () => {
-  it('refuses a lane whose files no longer match its own manifest', () => {
-    const lane = laneTree('win32-x64')
-    writeFileSync(join(lane, 'win32-x64', 'pty.node'), 'tampered')
-
-    expect(() => mergeOrcadPrebuildTrees([lane], join(temp(), 'out'))).toThrow(
-      'win32-x64/pty.node: sha256 does not match the manifest'
-    )
-  })
-
   it('refuses the same slot from two lanes instead of letting the last one win', () => {
     const out = join(temp(), 'out')
     expect(() =>

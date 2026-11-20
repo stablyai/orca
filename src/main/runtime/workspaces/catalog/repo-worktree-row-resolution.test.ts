@@ -1,18 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
-import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-meta-write-normalization'
+import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
 import { buildDetectedGitWorktrees } from '../../../ipc/worktrees/listing/ssh-worktree-fallback'
 import {
+  projectRepoWorktreeRows,
   resolveRepoWorktreeRows,
-  resolveScopedWorktreeIdRow,
+  scanRepoWorktreeRows,
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
+import { resolveScopedWorktreeIdRow } from './scoped-worktree-row-resolution'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import {
+  pendingWorktreeRemovals,
+  recordedWorktreeRemovals,
+  finishedWorktreeRemovals
+} from '../../../workspaces/removal/worktree-removal-table'
 
 function repo(
   id: string,
@@ -197,4 +205,41 @@ describe('folder-to-Git checkout identity', () => {
       expect(Object.keys(deps.metaById)).toEqual([oldId])
     }
   )
+})
+
+describe('durable removal projection onto cached host rows', () => {
+  it('retires admitted rows without another scan and fences old rows after cleanup, only on their host', async () => {
+    const local = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const remote = repo('shared', '/remote/repo', { executionHostId: 'ssh:builder' })
+    const deps = createDeps([local, remote])
+    const scan = await scanRepoWorktreeRows(deps, local, new Map())
+    const id = 'shared::/same/worktree'
+    const record = {
+      worktreeId: id,
+      repoId: local.id,
+      repoPath: local.path,
+      worktreePath: '/same/worktree',
+      branch: 'feature',
+      head: 'abc123',
+      deleteBranch: false,
+      force: false,
+      requestedAt: 1
+    }
+    pendingWorktreeRemovals.set(id, record)
+    try {
+      expect(projectRepoWorktreeRows(deps, local, scan, {})).toMatchObject([{ id }])
+      expect(projectRepoWorktreeRows(deps, local, scan, {})[0].removalRecorded).toBeUndefined()
+      recordedWorktreeRemovals.add(record)
+      expect(projectRepoWorktreeRows(deps, local, scan, {})).toMatchObject([
+        { id, removing: true, removalRecorded: true }
+      ])
+      expect(projectRepoWorktreeRows(deps, remote, scan, {})[0].removalRecorded).toBeUndefined()
+      pendingWorktreeRemovals.delete(id)
+      finishedWorktreeRemovals.add(record)
+      expect(projectRepoWorktreeRows(deps, local, scan, {})).toEqual([])
+      expect(projectRepoWorktreeRows(deps, remote, scan, {})).toMatchObject([{ id }])
+    } finally {
+      pendingWorktreeRemovals.delete(id)
+    }
+  })
 })

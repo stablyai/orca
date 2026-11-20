@@ -4,7 +4,7 @@ import { savedCredentialUnreadable } from '../credentials/saved-credential-reada
 import type {
   OpenAiCompatibleSpeechProvider,
   OpenAiCompatibleSpeechProviderSummary
-} from '../../shared/speech-types'
+} from '../../shared/speech/speech-types'
 
 // URL, model and key are sealed together so a key can never be sent to a host it wasn't saved for.
 const store = createEncryptedApiKeyFileStore({
@@ -46,9 +46,9 @@ export function openAiCompatibleTranscriptionUrl(baseUrl: string): string {
   return url.toString()
 }
 
-export function readOpenAiCompatibleSpeechProvider(): OpenAiCompatibleSpeechProvider | null {
+export async function readOpenAiCompatibleSpeechProvider(): Promise<OpenAiCompatibleSpeechProvider | null> {
   // The store caches what it read; another process (desktop vs orca serve) may have removed the file since.
-  const raw = store.has() ? store.read() : null
+  const raw = (await store.has()) ? await store.read() : null
   if (raw === null) {
     return null
   }
@@ -56,33 +56,35 @@ export function readOpenAiCompatibleSpeechProvider(): OpenAiCompatibleSpeechProv
 }
 
 /** Headless hosts may not open a desktop-sealed file; checks the disk quietly, since readiness is polled. */
-export function canReadOpenAiCompatibleSpeechProvider(): boolean {
-  return store.has() && savedCredentialUnreadable(store.envelopeFile()) === undefined
+export async function canReadOpenAiCompatibleSpeechProvider(): Promise<boolean> {
+  return (
+    (await store.has()) && (await savedCredentialUnreadable(store.envelopeFile())) === undefined
+  )
 }
 
-export function summarizeOpenAiCompatibleSpeechProvider(): OpenAiCompatibleSpeechProviderSummary | null {
-  const provider = readOpenAiCompatibleSpeechProvider()
+export async function summarizeOpenAiCompatibleSpeechProvider(): Promise<OpenAiCompatibleSpeechProviderSummary | null> {
+  const provider = await readOpenAiCompatibleSpeechProvider()
   return provider
     ? { baseUrl: provider.baseUrl, model: provider.model, hasApiKey: provider.apiKey !== '' }
     : null
 }
 
 /** A blank key keeps the saved one only while the base URL is unchanged. */
-export function resolveOpenAiCompatibleSpeechProviderInput(
+export async function resolveOpenAiCompatibleSpeechProviderInput(
   input: OpenAiCompatibleSpeechProvider
-): OpenAiCompatibleSpeechProvider {
+): Promise<OpenAiCompatibleSpeechProvider> {
   const baseUrl = input.baseUrl.trim()
   const model = input.model.trim()
   openAiCompatibleTranscriptionUrl(baseUrl)
   if (!model) {
     throw new Error('Enter the model name the provider expects')
   }
-  return { baseUrl, model, apiKey: input.apiKey.trim() || savedKeyFor(baseUrl) }
+  return { baseUrl, model, apiKey: input.apiKey.trim() || (await savedKeyFor(baseUrl)) }
 }
 
-function savedKeyFor(baseUrl: string): string {
+async function savedKeyFor(baseUrl: string): Promise<string> {
   try {
-    const saved = readOpenAiCompatibleSpeechProvider()
+    const saved = await readOpenAiCompatibleSpeechProvider()
     const sameEndpoint =
       saved !== null &&
       openAiCompatibleTranscriptionUrl(saved.baseUrl) === openAiCompatibleTranscriptionUrl(baseUrl)
@@ -93,6 +95,8 @@ function savedKeyFor(baseUrl: string): string {
   }
 }
 
-export function saveOpenAiCompatibleSpeechProvider(provider: OpenAiCompatibleSpeechProvider): void {
-  store.save(JSON.stringify(provider))
+export async function saveOpenAiCompatibleSpeechProvider(
+  provider: OpenAiCompatibleSpeechProvider
+): Promise<void> {
+  await store.save(JSON.stringify(provider))
 }

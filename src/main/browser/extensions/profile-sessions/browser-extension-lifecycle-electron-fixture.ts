@@ -1,12 +1,13 @@
 import { app, BaseWindow, protocol, session } from 'electron'
 import { renameSync, writeFileSync } from 'node:fs'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
-import { applyBackgroundActivationPolicy } from '../../../window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'
 import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../api-runtime/browser-extension-api-scheme'
 import { attachBrowserExtensionsToProfileSession } from './browser-extension-session-loader'
+import { closeBrowserExtensionProfileStateStore } from '../profile-storage/browser-extension-profile-state-store'
 import {
   addUnpackedBrowserExtension,
   reloadUnpackedBrowserExtension
@@ -81,11 +82,11 @@ function capture(message: string): void {
   }
   if (count >= EXPECTED_EVENTS) {
     clearTimeout(settleTimer)
-    // Why quit, not exit: will-quit flushes the versions the next launch compares against.
+    // Saves the versions the next launch compares against, as Orca's quit does.
     settleTimer = setTimeout(() => {
       status.done = true
       writeStatus()
-      app.quit()
+      void closeBrowserExtensionProfileStateStore().then(() => app.quit())
     }, SETTLE_MS)
   }
 }

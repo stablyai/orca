@@ -4,7 +4,8 @@ import {
   bestEffortFsyncDirectorySync,
   fsyncFileSync
 } from '../../../shared/secure-storage/secure-file'
-import { hashProfileStateJson } from '../../persistence/profile-state/profile-state-documents'
+import '../../persistence/profile-state/documents/profile-state-documents'
+import { hashProfileStatePayload as hashProfileStateJson } from '../../persistence/profile-state/documents/profile-state-document-validation'
 import {
   readProfileStateWithRevision,
   writeSerializedProfileState,

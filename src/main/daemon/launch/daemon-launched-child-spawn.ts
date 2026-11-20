@@ -1,7 +1,7 @@
 import { forkProcess, type ForkSpec } from '@orca/process-host/fork-process'
 import { spawnProcess } from '@orca/process-host'
 import type { ChildProcess } from 'node:child_process'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
 import { hostMallocTunablesDaemonEnv } from '../../memory/host-malloc-tunables'
 import {
@@ -16,6 +16,7 @@ import {
 } from '../executable-host/linux/daemon-appimage-generation-launch'
 import { daemonLogArgs } from './daemon-launch-paths'
 import { TERMINAL_SPAWN_ADMISSION_ARG } from '../admission/terminal-spawn-admission-mode'
+import { FD_CLOSING_EXEC_ARGS } from './daemon-fd-closing-exec'
 
 // Idle terminal polling churns short-lived strings; uncapped, V8 grows the young generation to 64 MB semispaces (~120 MB resident).
 export const DAEMON_V8_FLAGS = ['--max-semi-space-size=4'] as const
@@ -37,6 +38,8 @@ export type DaemonChildSpawnOptions = {
   spawnAdmission?: 'observe' | 'enforce'
   /** Defaults to 10 s; a cold first exec on Windows can need longer. */
   startupTimeoutMs?: number
+  /** Linux: the helper that execs the outermost command with only stdio and the IPC fd. */
+  fdClosingExec?: string
 }
 
 export function buildDaemonScriptArgs(
@@ -86,7 +89,8 @@ export function spawnDaemonChildProcess(
     appImage,
     extractedGeneration,
     userDataPath,
-    launchNonce
+    launchNonce,
+    fdClosingExec
   } = options
   const scriptArgs = buildDaemonScriptArgs(options)
   // Plain Node avoids Electron display initialization interfering with node-pty spawn-helper.
@@ -106,7 +110,8 @@ export function spawnDaemonChildProcess(
     detached: true,
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
   }
-  if (!useDurableScope && !appImage && !extractedGeneration) {
+  const unwrapped = !useDurableScope && !appImage && !extractedGeneration
+  if (unwrapped && !fdClosingExec) {
     return forkProcess({
       ...childOptions,
       modulePath: forkEntryPath,
@@ -130,16 +135,24 @@ export function spawnDaemonChildProcess(
       ? buildAppImageDaemonCommand(appImage, [...scriptArgs, ...scopeArgs], daemonEnv)
       : {
           command: relocatedExecPath ?? process.execPath,
-          args: [...DAEMON_V8_FLAGS, forkEntryPath, ...scriptArgs, ...scopeArgs],
+          args: [
+            // The fork this replaces passed main's execArgv.
+            ...(unwrapped ? process.execArgv : []),
+            ...DAEMON_V8_FLAGS,
+            forkEntryPath,
+            ...scriptArgs,
+            ...scopeArgs
+          ],
           env: daemonEnv
         }
   const scoped = useDurableScope
     ? buildDurableDaemonScopeCommand(direct.command, direct.args, launchNonce, direct.env)
     : direct
+  // Outermost, so neither systemd-run nor the AppImage runtime's FUSE server holds main's fds.
   return spawnProcess({
     ...childOptions,
-    program: scoped.command,
-    args: scoped.args,
+    program: fdClosingExec ?? scoped.command,
+    args: fdClosingExec ? [...FD_CLOSING_EXEC_ARGS, scoped.command, ...scoped.args] : scoped.args,
     env: scoped.env
   })
 }

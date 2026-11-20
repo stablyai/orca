@@ -1,7 +1,7 @@
 import {
   prepareNativeChatMessages,
   surfaceNativeChatHarnessTurns
-} from '../../../../../../../shared/native-chat/transcript/native-chat-message-preparation'
+} from '../../../../../../../shared/native-chat/transcript/messages/native-chat-message-preparation'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import { assembleNativeChatSession } from './native-chat-session-assembler'

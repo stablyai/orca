@@ -1,10 +1,10 @@
-import type { StatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import type {
   ActivityGroupBy,
   ThreadReadFilter
-} from '../../../../../shared/agents-view-thread-filters'
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
@@ -15,17 +15,19 @@ import type {
   WorkspaceHostOrder,
   WorkspaceHostScope,
   VisibleWorkspaceHostIds
-} from '../../../../../shared/ui-chrome-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
-import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
-import type { CustomPet } from '../../../../../shared/pet-types'
-import type { ReleaseChannel } from '../../../../../shared/release-channel'
-import type { ChangelogData, UpdateStatus } from '../../../../../shared/update-status-types'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
+import type { CustomPet } from '../../../../../shared/pets/pet-types'
+import type { ReleaseChannel } from '../../../../../shared/updater/release-channel'
+import type { ChangelogData, UpdateStatus } from '../../../../../shared/updater/update-status-types'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import type { PersistedUIWriteBaseline } from './persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
+import type { BotSidebarView } from '../../../../../shared/bots/bot-sidebar-view'
+import type { BotChatFold } from '../../../../../shared/bots/bot-chat-tree'
 
 export type UISlicePreferences = {
   gitGraphFiltersByWorktree?: PersistedUIState['gitGraphFiltersByWorktree']
@@ -58,6 +60,15 @@ export type UISlicePreferences = {
   setHideAutomationGeneratedWorkspaces: (v: boolean) => void
   hideCliCreatedWorkspaces: boolean
   setHideCliCreatedWorkspaces: (v: boolean) => void
+  hideBotCreatedWorkspaces: boolean
+  setHideBotCreatedWorkspaces: (v: boolean) => void
+  botSidebarView: BotSidebarView
+  setBotSidebarView: (patch: Partial<BotSidebarView>) => void
+  botChatFolds: Record<string, BotChatFold>
+  /** A chat's manual fold, shared by Activity and the sidebar; undefined while it folds by default. */
+  botChatFold: (hostId: string, botId: string, chatId: string) => BotChatFold | undefined
+  /** Null clears the manual choice, so the chat folds by its default again. */
+  setBotChatFold: (hostId: string, botId: string, chatId: string, fold: BotChatFold | null) => void
   hideDetachedHeadWorkspaces: boolean
   setHideDetachedHeadWorkspaces: (v: boolean) => void
   hideWorkspacesFromOtherDevices: boolean
@@ -69,6 +80,9 @@ export type UISlicePreferences = {
   setExplorerDisplayRootForWorktree: (worktreeId: string, value: string) => void
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
+  /** Per-worktree notification mute. Missing entries inherit the default: not muted. */
+  notificationsMutedByWorktree: Record<string, boolean>
+  toggleWorktreeNotificationsMuted: (worktreeId: string) => void
   filterRepoIds: readonly string[]
   setFilterRepoIds: (ids: readonly string[]) => void
   /** Agents-view scope filters, independent from workspace navigation filters. */
@@ -113,6 +127,11 @@ export type UISlicePreferences = {
   setWorkspaceBoardOpacity: (opacity: number) => void
   workspaceBoardColumnWidth: number
   setWorkspaceBoardColumnWidth: (width: number) => void
+  /** Dragged cap on the sidebar Bots section; null keeps the default 40% cap. */
+  sidebarBotsHeight: number | null
+  setSidebarBotsHeight: (height: number | null) => void
+  sidebarProjectsFirst: boolean
+  setSidebarProjectsFirst: (projectsFirst: boolean) => void
   syncTaskStatusFromWorkspaceBoard: boolean
   setSyncTaskStatusFromWorkspaceBoard: (enabled: boolean) => void
   /** Transient: the in-window Agent Dashboard companion drawer is open. Not persisted. */
@@ -233,4 +252,6 @@ export type UISlicePersistence = {
   setBrowserKagiSessionLink: (link: string | null) => void
   browserDevToolsDock: BrowserDevToolsDockLayout
   setBrowserDevToolsDock: (layout: BrowserDevToolsDockLayout) => void
+  browserExtensionSidePanelWidth: number
+  setBrowserExtensionSidePanelWidth: (width: number) => void
 }

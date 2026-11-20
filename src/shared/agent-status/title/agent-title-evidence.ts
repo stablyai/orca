@@ -10,7 +10,7 @@ import {
   isClaudeIdentityFrameSegment,
   isClaudeManagementTitle,
   isCursorNativeAgentTitle,
-  isGrokRotatingWorkingTitle
+  grokFrameTitleStatus
 } from './agent-title-core'
 import {
   isOpenCodeNativeTitle,
@@ -30,6 +30,7 @@ import {
 } from './providers/pi-compatible-synthetic-title'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
 import { hasQoderTitleLabelPayload, isQoderTerminalTitle } from './providers/qoder-terminal-title'
+import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
 import {
   SYNTHETIC_AGENT_TITLE_AGENTS,
   SYNTHETIC_AGENT_TITLE_PROFILES
@@ -178,6 +179,9 @@ function collectAnchoredNames(
     if (synthetic) {
       anchored.add(synthetic)
     }
+    if (grokFrameTitleStatus(segment)) {
+      anchored.add('grok')
+    }
     if (isClaudeIdentityFrameSegment(segment)) {
       anchored.add('claude')
     }
@@ -259,12 +263,13 @@ function collectObserverAnchors(title: string): TerminalAgent[] {
     agent = agentForNativeFrame(segment) === 'claude' ? 'claude' : null
   } else {
     agent =
-      (isGrokRotatingWorkingTitle(segment) ? 'grok' : null) ??
+      (grokFrameTitleStatus(segment) ? 'grok' : null) ??
       (isDeepSeekBuildWorkingTitle(segment) ||
       (!segment.includes('|') && isDeepSeekBuildTerminalTitle(segment))
         ? 'dsb'
         : null) ??
       agentForNativeFrame(segment) ??
+      (isJcodeIdentityTerminalTitle(segment) ? 'jcode' : null) ??
       agentForWholeTitle(segment) ??
       agentForSyntheticTitle(segment) ??
       (ANTIGRAVITY_MODEL_TITLE_RE.test(undecorated) ? 'antigravity' : null) ??

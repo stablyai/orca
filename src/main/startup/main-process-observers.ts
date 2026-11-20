@@ -1,8 +1,13 @@
-import { app, powerMonitor } from 'electron'
+import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
+import { provideHostUsageAnalytics } from '../usage/host-usage-analytics'
+import { BACKEND_PUBLIC_USAGE_METHOD } from '../../shared/backend/backend-service-contract'
+import { app, powerMonitor, powerSaveBlocker } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
-import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
+import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
+import { recordWakeSignal } from '../power/wake-signal-clock'
+import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
@@ -13,23 +18,35 @@ import { installHookStatusSessionTabsRepublish } from '../agent-hooks/runtime/ho
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-grant-telemetry'
 import { initObservability } from '../observability/index'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
+import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { recoverPendingSkillTransactions } from '../skills/transaction-state/skill-transaction-startup-recovery'
 import { initCohortClassifier } from '../telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
 import { StatsCollector } from '../stats/collector'
+import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
-import { ClaudeUsageStore } from '../claude-usage/store'
-import { CodexUsageStore } from '../codex-usage/store'
-import { OpenCodeUsageStore } from '../opencode-usage/store'
-import { MuseUsageStore } from '../muse-usage/store'
 import { installRepoMaintenanceIdleGate } from '../workspaces/catalog/repo-maintenance-idle-gate'
 import { mainProcessState as state } from './main-process-state'
-import { runAfterFirstWindowShown } from './first-window-deferral'
+import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 
 const TELEMETRY_CLIENT_START_FALLBACK_MS = 15_000
+
+function feedWakeSignalClock(): () => void {
+  const onResume = (): void => recordWakeSignal('resume')
+  const onUnlock = (): void => recordWakeSignal('unlock-screen')
+  const onUserActive = (): void => recordWakeSignal('user-did-become-active')
+  powerMonitor.on('resume', onResume)
+  powerMonitor.on('unlock-screen', onUnlock)
+  powerMonitor.on('user-did-become-active', onUserActive)
+  return () => {
+    powerMonitor.off('resume', onResume)
+    powerMonitor.off('unlock-screen', onUnlock)
+    powerMonitor.off('user-did-become-active', onUserActive)
+  }
+}
 
 export function initializeMainProcessObservers(): void {
   const store = state.store
@@ -37,6 +54,18 @@ export function initializeMainProcessObservers(): void {
     throw new Error('Store must be initialized before observers')
   }
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
+  if (process.platform === 'darwin') {
+    state.unsubscribeWakeSignalClock = feedWakeSignalClock()
+  }
+  // Bots' Tidy-up and Look around hold off idle sleep while they run; display sleep is fine.
+  installBackgroundRunAwakeHold(() => {
+    const id = powerSaveBlocker.start('prevent-app-suspension')
+    return () => {
+      if (powerSaveBlocker.isStarted(id)) {
+        powerSaveBlocker.stop(id)
+      }
+    }
+  })
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
     listTargets: listCapableSharedControlSockets,
@@ -66,9 +95,30 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
-  const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
-    state.agentAwakeService?.setStatuses(statuses)
-  })
+  const unsubscribeStatusChanges = agentHookServer.subscribeStatusRowMutations(
+    ({ before, after }) => {
+      for (const paneKey of new Set([before?.paneKey, after?.paneKey])) {
+        if (!paneKey) {
+          continue
+        }
+        const row = agentHookServer
+          .getStatusSnapshotForPane(paneKey)
+          .find((row) => !row.providerSessionOnly)
+        state.agentAwakeService?.updateStatus(
+          paneKey,
+          row
+            ? {
+                paneKey,
+                state: row.state,
+                receivedAt: row.receivedAt,
+                observedInCurrentRuntime:
+                  row.isReplay !== true && row.restoredUnconfirmed !== true && !row.paneSleep
+              }
+            : undefined
+        )
+      }
+    }
+  )
   const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
     state.agentAwakeService?.observeStatusFreshness(status)
   })
@@ -115,10 +165,23 @@ export function initializeMainProcessObservers(): void {
   })
   state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
   if (state.hangDetection) {
-    track('main_thread_hang_detected', {
-      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
-      self_recovered: state.hangDetection.selfRecovered
-    })
+    const marker = state.hangDetection
+    const report = (details: NativeHangTelemetry): void => {
+      track('main_thread_hang_detected', {
+        unresponsive_ms: Math.round(marker.unresponsiveMs),
+        self_recovered: marker.selfRecovered,
+        ...details
+      })
+    }
+    if (process.platform === 'darwin') {
+      void import('../hang-watchdog/previous-native-hang-telemetry')
+        .then(({ readPreviousNativeHangTelemetry }) =>
+          readPreviousNativeHangTelemetry(getCanonicalUserDataPath(), marker)
+        )
+        .then(report, () => report({}))
+    } else {
+      report({})
+    }
   }
   state.skillTransactionRecovery = recoverPendingSkillTransactions(
     join(app.getPath('userData'), 'skill-installs')
@@ -146,8 +209,15 @@ export function initializeMainProcessObservers(): void {
   initOnboardingCohortClassifier(store)
   state.stats = new StatsCollector()
   feedAgentSessionStats(state.stats, agentHookServer)
-  state.claudeUsage = new ClaudeUsageStore(store)
-  state.codexUsage = new CodexUsageStore(store)
-  state.openCodeUsage = new OpenCodeUsageStore(store)
-  state.museUsage = new MuseUsageStore(store)
+  const usageWorktrees = new UsageWorktreeHistory(
+    store,
+    join(getCanonicalUserDataPath(), 'orca-usage-worktree-history.json')
+  )
+  state.usageWorktreeHistory = usageWorktrees
+  const backend = new BackendSupervisor(usageWorktrees)
+  state.backend = backend
+  // Paired clients get a renderer's usage privileges, never the automation-only methods.
+  provideHostUsageAnalytics((call) => backend.callControl(BACKEND_PUBLIC_USAGE_METHOD, call))
+  state.claudeUsage = state.backend.automationClient('claudeUsage')
+  state.codexUsage = state.backend.automationClient('codexUsage')
 }

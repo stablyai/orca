@@ -101,7 +101,7 @@ export async function getIssueComments(
   strict = false,
   mediaFormat?: JiraMediaFormat
 ): Promise<JiraComment[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   const entry = entries[0]
   if (!entry) {
@@ -126,7 +126,7 @@ export async function getIssueComments(
     mediaRequest = await collectCommentMediaRequest(entry, key, comments, mediaFormat)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry.site.id)
       throw error
     }
     console.warn('[jira] getIssueComments failed:', error)

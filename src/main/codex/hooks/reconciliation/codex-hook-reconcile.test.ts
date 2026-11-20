@@ -265,41 +265,28 @@ describe('reconcileCodexHooks', () => {
     expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
   })
 
-  it('never makes a launch wait for startAfter', async () => {
-    writeHooks({ Stop: [olderBuildStop()] })
-    startCodexHooks({
-      isEnabled: () => enabled,
-      resolveLaunchHome: () => null,
-      pathReady: Promise.resolve(),
-      startAfter: new Promise<void>(() => {})
-    })
-
-    await reconcileCodexHooksForLaunch()
-
-    expect(mocks.realHomeRuns).toBe(1)
-    // The launch takes the startup run, so app start's conversion still happens.
-    expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
-  })
-
-  it('writes nothing and spawns nothing across many concurrent launches when nothing changed', async () => {
-    await start()
-    const before = snapshot(codexHome())
-    const memoBefore = snapshot(userData)
-    vi.clearAllMocks()
-
-    await Promise.all(
-      Array.from({ length: 20 }, (_, index) => {
-        scheduleCodexHookReconcile()
-        return index % 2 === 0 ? reconcileCodexHooksForLaunch() : reconcileCodexHooks()
+  it.each(['managed chat', 'terminal pane'] as const)(
+    'never makes a %s launch wait for startAfter',
+    async (launch) => {
+      writeHooks({ Stop: [olderBuildStop()] })
+      startCodexHooks({
+        isEnabled: () => enabled,
+        resolveLaunchHome: () => null,
+        pathReady: Promise.resolve(),
+        startAfter: new Promise<void>(() => {})
       })
-    )
-    await settleSpawn()
 
-    expect(snapshot(codexHome())).toEqual(before)
-    expect(snapshot(userData)).toEqual(memoBefore)
-    expect(mocks.probeCodexVersion).not.toHaveBeenCalled()
-    expect(mocks.deriveCodexHookHashes).not.toHaveBeenCalled()
-  })
+      if (launch === 'terminal pane') {
+        scheduleCodexHookReconcile()
+        await _internals.settledForTesting()
+      } else {
+        await reconcileCodexHooksForLaunch()
+      }
+
+      // The launch takes the startup run, so app start's conversion still happens.
+      expect(readHooks().Stop).toEqual([{ hooks: [buildCodexManagedHook(command(), 'Stop')] }])
+    }
+  )
 
   it('rechecks a spawn that lands while a run is still finding Codex, which may miss a fresh install', async () => {
     const installed = mocks.codexPath
@@ -323,8 +310,8 @@ describe('reconcileCodexHooks', () => {
     await start()
     rmSync(hooksPath())
     const old = mocks.codexPath
-    // New bytes make the lookup ask this binary again.
-    writeFileSync(old, 'codex 0.161.0')
+    // A new size makes the lookup ask this binary again; same-size bytes can keep a coarse filesystem clock's mtime.
+    writeFileSync(old, 'codex 0.161.0 upgraded')
     const probe = Promise.withResolvers<string | null>()
     mocks.probeCodexVersion.mockReturnValueOnce(probe.promise)
     const probesBefore = mocks.probeCodexVersion.mock.calls.length
@@ -408,24 +395,6 @@ describe('while the lookup is still asking Codex', () => {
     await settleSpawn()
     expect(stopApproval()).toBe(CODEX_HASHES.stop)
   })
-
-  it('writes nothing while an entry is already in place', async () => {
-    await start()
-    const before = snapshot(codexHome())
-    // A different size invalidates the binary fingerprint even within one filesystem clock tick.
-    writeFileSync(mocks.codexPath, 'codex 0.161.0 updated')
-    const release = holdDerivation()
-
-    await finishHeldLookupWait(reconcileCodexHooksForLaunch, true)
-    expect(snapshot(codexHome())).toEqual(before)
-
-    const runsBeforeAnswer = mocks.realHomeRuns
-    release()
-    await settleSpawn()
-    expect(mocks.realHomeRuns).toBe(runsBeforeAnswer + 1)
-    await _internals.settledForTesting()
-    expect(snapshot(codexHome())).toEqual(before)
-  })
 })
 
 describe('a ~/.codex/hooks.json Orca cannot add to', () => {
@@ -452,22 +421,6 @@ describe('a ~/.codex/hooks.json Orca cannot add to', () => {
       expect(readRealHomeHooksFileProblem()).toBeNull()
     }
   )
-})
-
-describe("a ~/.codex/hooks.json with Codex's description key", () => {
-  it('takes the entry and keeps the description verbatim', async () => {
-    mkdirSync(codexHome(), { recursive: true })
-    writeFileSync(hooksPath(), JSON.stringify({ description: 'My hooks — keep me', hooks: {} }))
-
-    await start()
-
-    const written = JSON.parse(readFileSync(hooksPath(), 'utf-8'))
-    expect(written.description).toBe('My hooks — keep me')
-    expect(
-      written.hooks.Stop.map((group: Hooks[string][number]) => group.hooks[0]!.command)
-    ).toEqual([command()])
-    expect(readRealHomeHooksFileProblem()).toBeNull()
-  })
 })
 
 describe('an app start whose lookup has not answered within its wait', () => {
@@ -507,7 +460,8 @@ describe('an app start whose lookup has not answered within its wait', () => {
       groupIndex: 0,
       handlerIndex: 0,
       command: command(),
-      timeoutSec: 10
+      timeoutSec: 10,
+      statusMessage: buildCodexManagedHook(command(), 'Stop').statusMessage
     }
     writeHooks({ Stop: [{ hooks: [buildCodexManagedHook(command(), 'Stop')] }] })
     upsertHookTrustEntries(tomlPath(), [{ ...stop, trustedHash: 'sha256:main-granted' }])

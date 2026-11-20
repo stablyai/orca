@@ -2,7 +2,7 @@ import { defineMethod } from '../../../core'
 import {
   BindableAccounts,
   ValidateAccountBinding
-} from '../../../../../../shared/rpc-contract/github-account-binding-params'
+} from '../../../../../../shared/rpc-contract/github/github-account-binding-params'
 
 export const GITHUB_ACCOUNT_BINDING_METHODS = [
   defineMethod({

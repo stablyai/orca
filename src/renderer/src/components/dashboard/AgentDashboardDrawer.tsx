@@ -2,10 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useAppStore } from '@/store'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { revealDashboardAgent } from './reveal-dashboard-agent'
-import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
+import { revealDashboardAgent } from './navigation/reveal-dashboard-agent'
+import { AgentKanbanBoard } from './board/AgentKanbanBoard'
 import { isXtermHelperTextarea } from '../terminal-pane/input/focus/regular-terminal-focus-ownership'
-import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
+import type { DashboardRevealAgentArgs as AgentRevealArgs } from '../../../../shared/agent-status/presentation/dashboard-snapshot'
 import {
   isWorkspaceBoardKeepOpenTarget,
   useWorkspaceKanbanOutsideDismiss
@@ -13,12 +13,14 @@ import {
 import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
-} from '../sidebar/workspace-chrome-metrics'
-import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
-import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
-import { useAgentDashboardTelemetry } from '../dashboard-popout/use-agent-dashboard-telemetry'
+} from '../../app-shell/chrome/workspace-chrome-metrics'
+import { AgentDashboardSettingsMenu } from './settings/AgentDashboardSettingsMenu'
+import { useLiveDashboardSnapshot } from './snapshot/useLiveDashboardSnapshot'
+import { useAgentDashboardTelemetry } from './board/use-agent-dashboard-telemetry'
 import { useTranslate } from '@/i18n/use-translate'
-import { trackSidebarLiveWidth } from '@/components/sidebar/sidebar-live-width'
+import { trackSidebarLiveWidth } from '@/components/sidebar/chrome/sidebar-live-width'
+import { resolveSidebarDrawerLeftEdge } from '@/components/sidebar/chrome/sidebar-drawer-left-edge'
+import { selectAppRailWidth } from '@/components/app-rail/app-rail-layout'
 
 // Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
 const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
@@ -180,10 +182,12 @@ export function AgentDashboardDrawer({
     return () => document.removeEventListener('keydown', handleKeyDown, true)
   }, [close, open])
 
-  const drawerLeft = sidebarOpen ? sidebarWidth : 0
-  const drawerLeftCss = sidebarOpen
-    ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
-    : '0px'
+  const railWidth = useAppStore(selectAppRailWidth)
+  const { left: drawerLeft, leftCss: drawerLeftCss } = resolveSidebarDrawerLeftEdge({
+    sidebarOpen,
+    sidebarWidth,
+    railWidth
+  })
   // Reserve the same status-row space as App so the portal cannot cover its controls.
   const drawerBottom = `${statusBarVisible ? STATUS_BAR_RESERVE_HEIGHT : 0}px`
 

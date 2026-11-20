@@ -1,4 +1,4 @@
-import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
@@ -20,28 +20,74 @@ function localDispatch(dispatch: DispatchContextRow): boolean {
   return scope.kind === 'absent' || (scope.kind === 'local' && scope.id === 'local')
 }
 
-/** Delivery-time evidence only; missing, ambiguous or foreign lineage is unknown. */
-export function agentMessageRelation(args: {
+/** How a sender relates to its recipient, and, for a worker, the Dispatch that proves it. */
+export type Lineage = {
+  relation: AgentMessageSender['relation']
+  workerDispatch?: DispatchContextRow
+}
+
+const UNKNOWN: Lineage = { relation: undefined }
+
+/** A federated worker mails as its dispatch: 'worker' only when this host started that dispatch in
+ *  the Run for the recipient; anything else is unknown. */
+function federatedWorkerLineage(
+  db: OrchestrationDb,
+  dispatchId: string,
+  runId: string,
+  recipient: Party
+): Lineage {
+  const dispatch = db.getFederatedDispatch(dispatchId)
+    ? db.getDispatchContextById(dispatchId)
+    : null
+  const creator = dispatch?.run_id === runId ? dispatch : null
+  return creator &&
+    sameParty(
+      { terminalHandle: creator.creator_handle, orcaSessionId: creator.creator_orca_session_id },
+      recipient
+    )
+    ? { relation: 'worker', workerDispatch: creator }
+    : UNKNOWN
+}
+
+type RelationArgs = {
   db: OrchestrationDb | null
   sender: AgentMessageSender['party']
   recipient: string
   runId: string
   reportedDispatchId?: string
   recipientDispatchId: string | null
-}): AgentMessageSender['relation'] {
+}
+
+/** Delivery-time evidence only; missing, ambiguous or foreign lineage is unknown. */
+export function agentMessageRelation(args: RelationArgs): AgentMessageSender['relation'] {
+  return agentMessageLineage(args).relation
+}
+
+/** A worker's mail reports to where the turn that started it came from: a turn its coordinator's
+ *  connector conversation woke sends it back there; any other stays in Orca. */
+export function reportsToConversation(lineage: Lineage): boolean {
+  return (
+    lineage.relation === 'worker' && lineage.workerDispatch?.creator_turn_source === 'connector'
+  )
+}
+
+export function agentMessageLineage(args: RelationArgs): Lineage {
   try {
     const { db, sender, runId } = args
-    if (!db || sender.address.startsWith('dispatch:') || args.recipient.startsWith('dispatch:')) {
-      return undefined
+    if (!db || args.recipient.startsWith('dispatch:')) {
+      return UNKNOWN
     }
     const run = db.getRun(runId)
     if (!run) {
-      return undefined
+      return UNKNOWN
     }
     const recipient =
       args.recipient === `run:${runId}`
         ? runCoordinatorKey(run)
         : resolveOrchestrationParty(args.recipient, db)
+    if (sender.address.startsWith('dispatch:')) {
+      return federatedWorkerLineage(db, sender.address.slice('dispatch:'.length), runId, recipient)
+    }
     const coordinator = runCoordinatorKey(run)
     const dispatchFor = (party: Party, id?: string | null) => {
       const candidates = id
@@ -90,18 +136,18 @@ export function agentMessageRelation(args: {
     const recipientParent = parentOf(recipientDispatch)
     if (!sameParty(sender, recipient)) {
       if (senderParent && sameParty(senderParent, recipient)) {
-        return 'worker'
+        return { relation: 'worker', ...(senderDispatch ? { workerDispatch: senderDispatch } : {}) }
       }
       if (recipientParent && sameParty(recipientParent, sender)) {
-        return 'coordinator'
+        return { relation: 'coordinator' }
       }
     }
     return (senderParent || sameParty(sender, coordinator)) &&
       (recipientParent || sameParty(recipient, coordinator))
-      ? 'none'
-      : undefined
+      ? { relation: 'none' }
+      : UNKNOWN
   } catch {
     // Lineage is informational; an unavailable database must never block delivery.
-    return undefined
+    return UNKNOWN
   }
 }

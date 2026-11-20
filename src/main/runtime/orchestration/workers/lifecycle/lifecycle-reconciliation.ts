@@ -2,6 +2,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow, WorkerReportOutcome } from '../../db/orchestration-records'
 import { workerReportObservation } from '../reports/worker-report-observation'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { getRemoteDispatch } from '../../db/remote-owned/remote-dispatch-records'
 
 // Pane break-out changes tab ids; unparseable legacy keys support exact equality only.
 function isSamePane(assigneePaneKey: string, senderPaneKey: string): boolean {
@@ -24,6 +25,20 @@ export function hasLifecycleAuthority(
   }
   // Legacy rows require the recorded handle; payload knowledge alone grants no authority.
   return dispatch.assignee_handle === msg.from_handle
+}
+
+/** The sender the home's relay import stores a federated Dispatch's reports under. */
+export function isFederatedRelaySender(
+  db: OrchestrationDb,
+  dispatchId: string,
+  from: string,
+  paneKey: string | null | undefined
+): boolean {
+  return (
+    from === `dispatch:${dispatchId}` &&
+    !paneKey &&
+    db.getFederatedDispatch(dispatchId) !== undefined
+  )
 }
 
 export type LifecycleReconciliationResult =
@@ -229,6 +244,10 @@ function reconcileWorkerDoneMessage(
 
   // Task id alone cannot authorize completion across racing retries.
   const dispatch = db.getDispatchContextById(dispatchId)
+  // A paired server's own worker: its report came home with the server's state, which settles the Task.
+  if (!dispatch && getRemoteDispatch(db, dispatchId)?.task_id === taskId) {
+    return { action: 'ignored' }
+  }
   if (!dispatch) {
     return rejectLifecycleMessage(
       db,
@@ -246,6 +265,9 @@ function reconcileWorkerDoneMessage(
       `worker_done dispatch ${dispatchId} belongs to ${dispatch.task_id}, not ${taskId}.`,
       onLog
     )
+  }
+  if (isFederatedRelaySender(db, dispatchId, msg.from_handle, msg.sender_pane_key)) {
+    return { action: 'ignored' }
   }
   if (!hasLifecycleAuthority(dispatch, msg)) {
     const reason = buildLifecycleAuthorityRejectionReason(dispatchId, dispatch, msg)

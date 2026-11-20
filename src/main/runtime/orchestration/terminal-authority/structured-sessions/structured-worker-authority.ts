@@ -1,10 +1,14 @@
 /** Rehydrate worker identity from durable rows after restart; records, tab index and orchestration state decide custody.
  * Mail reaches agents at rest and starts them, so routing ignores process liveness. Resolve clear successors for every worker-level operation. */
 
-import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { isOrcaSessionId, type OrcaSessionId } from '../../../../../shared/orca-session-address'
+import type { SessionPartyReader } from '../../addressing/session-party-reader'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
-import type { RuntimeTerminalState } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalState } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -89,7 +93,7 @@ export function resolveStructuredWorkerIdentityForSession(
 /** The worker minted for a lineage root session, rehydrated from its durable row after a restart. */
 export function resolveStructuredWorkerIdentityForRoot(
   rootSessionId: string,
-  db: OrchestrationDb | null | undefined
+  db: SessionPartyReader | null | undefined
 ): StructuredWorkerIdentity | null {
   const known = structuredWorkerIdentities.getBySessionId(rootSessionId)
   if (known) {
@@ -104,7 +108,7 @@ export function resolveStructuredWorkerIdentityForRoot(
 /** Recorded workers must retain handle identity; a missing handle cannot turn one into an ordinary chat caller. */
 export function isRecordedStructuredWorkerSession(
   sessionId: OrcaSessionId,
-  db: OrchestrationDb
+  db: SessionPartyReader
 ): boolean {
   return db.hasRecordedStructuredWorkerSession(
     sessionId,

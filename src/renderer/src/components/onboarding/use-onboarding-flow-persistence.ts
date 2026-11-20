@@ -6,10 +6,10 @@ import { useAppStore } from '@/store/index'
 import {
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
-} from '../../../../shared/onboarding-defaults'
-import type { EventProps } from '../../../../shared/telemetry-events'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+} from '../../../../shared/onboarding/onboarding-defaults'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { applyAllAgentsPermission } from '../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import type { AgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'

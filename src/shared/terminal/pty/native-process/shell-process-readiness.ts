@@ -4,10 +4,10 @@ import { access, readlink, realpath, stat } from 'node:fs/promises'
 import { delimiter, isAbsolute, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { runProcess } from '@orca/process-host'
-import { LSOF_NONBLOCKING_ARGS } from '../../../lsof-nonblocking-args'
-import { readLibprocProcessFilePath } from '../../../libproc-addon'
-import { readPsStdoutInProcess } from '../../../libproc-process-table'
-import { PS_MAX_BUFFER_BYTES } from '../../../process-table-snapshot'
+import { LSOF_NONBLOCKING_ARGS } from '../../../process-observation/lsof-nonblocking-args'
+import { readLibprocProcessFilePath } from '../../../process-observation/darwin/libproc-addon'
+import { readPsStdoutInProcess } from '../../../process-observation/darwin/libproc-process-table'
+import { PS_MAX_BUFFER_BYTES } from '../../../process-observation/tables/process-table-snapshot'
 
 const execFile = promisify(execFileCallback)
 const PROCESS_READINESS_TIMEOUT_MS = 3000

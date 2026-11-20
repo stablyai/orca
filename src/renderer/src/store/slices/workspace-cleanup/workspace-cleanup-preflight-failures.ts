@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 import {
   type WorkspaceCleanupCandidate,
@@ -119,4 +119,8 @@ export function getWorkspaceCleanupGitUnavailableFailure(
 }
 
 // Unlike unknown-base and git-status-error, these facts prove known work is at risk.
-const WORKSPACE_CLEANUP_CONCRETE_RISK_BLOCKERS = ['dirty-files', 'unpushed-commits'] as const
+const WORKSPACE_CLEANUP_CONCRETE_RISK_BLOCKERS = [
+  'dirty-files',
+  'ignored-files',
+  'unpushed-commits'
+] as const

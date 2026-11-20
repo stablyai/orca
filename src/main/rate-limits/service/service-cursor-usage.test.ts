@@ -83,7 +83,7 @@ describe('RateLimitService Cursor usage', () => {
     })
     const service = new RateLimitService()
     await service.refresh()
-    expect(service.getState().cursor?.session?.usedPercent).toBe(80)
+    expect((await service.getState()).cursor?.session?.usedPercent).toBe(80)
 
     vi.mocked(fetchCursorRateLimits).mockResolvedValue({
       provider: 'cursor',
@@ -96,7 +96,7 @@ describe('RateLimitService Cursor usage', () => {
       usageMetadata: { source: 'cli', failureKind: 'stale-token', authProvenance: 'account-b' }
     })
     await service.refresh()
-    expect(service.getState().cursor?.session).toBeNull()
-    expect(service.getState().cursor?.status).toBe('error')
+    expect((await service.getState()).cursor?.session).toBeNull()
+    expect((await service.getState()).cursor?.status).toBe('error')
   })
 })

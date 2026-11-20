@@ -17,20 +17,20 @@ import {
 import type {
   SshTarget as SshTargetRecord,
   SshTargetSummary
-} from '../../../../../shared/ssh-types'
-import { isRemoteCliControlAllowed } from '../../../../../shared/ssh-remote-cli-control'
+} from '../../../../../shared/remote-runtime/ssh/ssh-types'
+import { isRemoteCliControlAllowed } from '../../../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
 import type {
   SshEditableTarget,
   SshEditableTargetField,
   SshEditableTargetInput
-} from '../../../../../shared/ssh-target-management'
+} from '../../../../../shared/remote-runtime/ssh/ssh-target-management'
 import {
   SshBrowseDir,
   SshConnect,
   SshTarget,
   SshTargetAdd,
   SshTargetUpdate
-} from '../../../../../shared/rpc-contract/ssh-params'
+} from '../../../../../shared/rpc-contract/ssh/ssh-params'
 
 // Keep generation optional so older server rows still key by target id.
 function toSshTargetSummary(

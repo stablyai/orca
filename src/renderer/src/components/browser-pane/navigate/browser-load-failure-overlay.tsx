@@ -10,12 +10,16 @@ import type {
   BrowserCertificateProceedFailureReason,
   BrowserCertificateProceedResult,
   BrowserLoadError
-} from '../../../../../shared/browser-workspace-types'
-import { normalizeCertificateError } from '../../../../../shared/browser/certificate-trust/browser-certificate-errors'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import {
+  browserCertificatePresentationLoadError,
+  browserCertificateProceedFailureKind,
+  matchBrowserCertificateFailure
+} from '../../../../../shared/browser/certificate-trust/browser-certificate-failure-match'
 import {
   describeBrowserLoadFailure,
   type BrowserLoadFailureRoute
-} from '../../../../../shared/browser-load-failure'
+} from '../../../../../shared/browser/navigation/browser-load-failure'
 import {
   formatLoadFailureDescription,
   formatLoadFailureTitle,
@@ -52,56 +56,24 @@ type CertificateProceedAttempt = {
   reason?: BrowserCertificateProceedFailureReason | 'request-failed'
 }
 
-function getMatchingCertificateFailure(args: {
-  loadError: BrowserLoadError
-  certificateFailure?: BrowserCertificateFailure | null
-  expectedBrowserPageId?: string | null
-  canProceed: boolean
-}): BrowserCertificateFailure | null {
-  const { loadError, certificateFailure, expectedBrowserPageId, canProceed } = args
-  const errorMatchesChallenge = Boolean(
-    certificateFailure &&
-    (loadError.code === -1 ||
-      (loadError.code === certificateFailure.errorCode &&
-        normalizeCertificateError(certificateFailure.error) ===
-          normalizeCertificateError(loadError.description)))
-  )
-  if (
-    !canProceed ||
-    !certificateFailure?.canProceed ||
-    !expectedBrowserPageId ||
-    certificateFailure.browserPageId !== expectedBrowserPageId ||
-    certificateFailure.errorCode !== -202 ||
-    !errorMatchesChallenge
-  ) {
-    return null
-  }
-  try {
-    return new URL(loadError.validatedUrl).origin === certificateFailure.origin
-      ? certificateFailure
-      : null
-  } catch {
-    return null
-  }
-}
-
 function formatCertificateProceedFailure(
   reason: BrowserCertificateProceedFailureReason | 'request-failed',
   t: Translate = translate
 ): string {
-  if (reason === 'expired') {
+  const kind = browserCertificateProceedFailureKind(reason)
+  if (kind === 'expired') {
     return t(
       'browser.loadFailure.certificateChallengeExpired',
       'This certificate approval expired. Retry the page to request a new one.'
     )
   }
-  if (reason === 'changed' || reason === 'navigated') {
+  if (kind === 'changed') {
     return t(
       'browser.loadFailure.certificateChallengeChanged',
       'The certificate request changed. Retry the page and review the new warning.'
     )
   }
-  if (reason === 'request-failed') {
+  if (kind === 'request-failed') {
     return t(
       'browser.loadFailure.certificateProceedFailed',
       'Orca could not approve this certificate request. Retry the page and try again.'
@@ -132,21 +104,16 @@ export function BrowserLoadFailureOverlay({
     timer: ReturnType<typeof setTimeout>
   } | null>(null)
   const [proceedAttempt, setProceedAttempt] = useState<CertificateProceedAttempt | null>(null)
-  const matchingCertificateFailure = getMatchingCertificateFailure({
+  const matchingCertificateFailure = matchBrowserCertificateFailure({
     loadError,
     certificateFailure,
     expectedBrowserPageId,
     canProceed: Boolean(onProceedCertificate)
   })
-  // Chromium can replace the diagnostic code with -1 after main captures an exact certificate challenge.
-  const presentationLoadError =
-    matchingCertificateFailure && loadError.code === -1
-      ? {
-          ...loadError,
-          code: matchingCertificateFailure.errorCode ?? loadError.code,
-          description: matchingCertificateFailure.error
-        }
-      : loadError
+  const presentationLoadError = browserCertificatePresentationLoadError(
+    loadError,
+    matchingCertificateFailure
+  )
   const certificateError = isCertificateLoadError(presentationLoadError)
   const failure = describeBrowserLoadFailure(presentationLoadError, route)
   const description = formatLoadFailureDescription(presentationLoadError, failure, sshRoutedHint, t)

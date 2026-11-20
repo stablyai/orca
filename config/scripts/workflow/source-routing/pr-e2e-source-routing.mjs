@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process'
+import { resolve } from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import {
@@ -5,9 +7,7 @@ import {
   isDaemonInitTestSupportChange,
   isUnitTestSupportSource
 } from './pr-code-change-scope.mjs'
-import { MANAGED_SSH_E2E_SPEC_PREFIX } from '../../ci/e2e-selection/ci-e2e-job-selection.mjs'
-import { LAYOUT_ORACLE_E2E_SPECS } from './pr-layout-oracle-route.mjs'
-import { PR_BROWSER_E2E_SOURCE_ROUTES } from './pr-browser-e2e-source-routes.mjs'
+import { MANAGED_SSH_E2E_SPECS } from '../../ci/e2e-selection/ci-e2e-job-selection.mjs'
 import { PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES } from './pr-editor-preview-e2e-source-routes.mjs'
 import { PR_FEATURE_AREA_E2E_SOURCE_ROUTES } from './pr-feature-area-e2e-source-routes.mjs'
 import { PR_PLUGIN_E2E_SOURCE_ROUTES } from './pr-plugin-e2e-source-routes.mjs'
@@ -19,179 +19,94 @@ const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupp
 const XTERM_CORE_PATCH =
   /^config\/patches\/(?:@xterm__xterm@[^/]+\.patch|xterm-src\/@xterm__xterm@[^/]+\.src\.patch)$/
 
+// Paths follow the input/ime and input/keyboard owners (#39113); the pre-move paths matched nothing.
 const NATIVE_IME_PRODUCT_SOURCE =
-  /^(?:src\/shared\/terminal-unicode-provider\.ts$|src\/renderer\/src\/lib\/pane-manager\/terminal-ime-|src\/renderer\/src\/components\/terminal-pane\/(?:terminal-ime-|terminal-ios-hangul-|xterm-bypass-policy))/
+  /^(?:src\/shared\/terminal-unicode-provider\.ts$|src\/renderer\/src\/lib\/pane-manager\/terminal-input\/terminal-ime-|src\/renderer\/src\/components\/terminal-pane\/input\/(?:ime\/|keyboard\/xterm-bypass-policy|terminal-pane-pane-input\.ts$))/
 
 /** The harness itself: the session runner, the boundary probes, and the native specs. */
 const NATIVE_IME_HARNESS =
-  /^(?:config\/scripts\/(?:runtime-verification\/terminal-e2e\/)?(?:diagnostics\/wayland\/)?focus-nested-wayland-terminal\.sh$|config\/scripts\/(?:runtime-verification\/terminal-e2e\/)?(?:diagnostics\/wayland\/)?(?:run-terminal-ibus-hangul-e2e|terminal-ime-engagement-receipt)\.mjs$|tests\/e2e\/terminal-ime-(?:boundary-probe|byte-reader|engagement-receipt)\.ts$|tests\/e2e\/terminal-(?:ibus-hangul|hangul-terminating-digit|macos-2set-korean)-native\.spec\.ts$)/
+  /(?:^(?:config\/scripts\/(?:runtime-verification\/terminal-e2e\/)?(?:diagnostics\/wayland\/)?focus-nested-wayland-terminal\.sh$|config\/scripts\/(?:runtime-verification\/terminal-e2e\/)?(?:diagnostics\/wayland\/)?(?:run-terminal-ibus-hangul-e2e|terminal-ime-engagement-receipt)\.mjs$)|^(?:tests\/e2e\/terminal\/ime\/terminal-ibus-hangul-native\.spec\.ts|tests\/e2e\/terminal\/ime\/terminal-ime-boundary-probe\.ts|tests\/e2e\/terminal\/ime\/terminal-ime-byte-reader\.ts|tests\/e2e\/terminal\/ime\/terminal-ime-engagement-receipt\.ts)$)/
 
 // This spec requires ORCA_SIDEBAR_INPUTS=main; ordinary PR builds can only skip it.
-export const MANUAL_ONLY_E2E_SPECS = ['tests/e2e/ssh-orcad-phone-feed-list.spec.ts']
+export const MANUAL_ONLY_E2E_SPECS = []
 
 // Shared fixtures and workflow changes must exercise every managed-SSH consumer.
 const MANAGED_SSH_HARNESS =
-  /^tests\/e2e\/helpers\/(?:orcad-managed-workspace|orcad-convert-(?:flow|host|teardown)|orcad-template-variant|orcad-upgrade-(?:profile|retained-state)|docker-ssh-host-target|reserve-local-port|ssh-remote-only-browser-fixture|windows-host-orcad-processes)\.ts$/
-
-// An enabled SSH automation moves with its host and is re-enabled on the server (#29083).
-const ENABLED_AUTOMATION_MOVE =
-  /^src\/(?:main\/(?:persistence\/(?:migrating-orcad-catalog\/orcad-(?:source-automation-state|source-dormant-state|source-dependency-census|destination-automation-state)|scheduling-automations\/automation-schedule-operations)|automations\/(?:run-target-resolution|automation-dispatch-request|orcad-fenced-automation)|ssh\/orcad-migration-(?:moved-automations|source-retention))|shared\/orcad-migration\/orcad-migration-(?:dormant-automation-validation|source-cutover))\.ts$/
+  /^(?:tests\/e2e\/browser\/remote-hosted\/ssh-remote-only-browser-fixture\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/docker-ssh-host-target\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/orcad-convert-flow\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/orcad-convert-host\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/orcad-managed-workspace\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/orcad-template-variant\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/orcad-upgrade-profile\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/orcad-upgrade-retained-state\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/reserve-local-port\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/windows-host-orcad-processes\.ts)$/
 
 export const PR_E2E_SOURCE_ROUTES = [
-  ...PR_BROWSER_E2E_SOURCE_ROUTES,
   ...PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES,
   ...PR_FEATURE_AREA_E2E_SOURCE_ROUTES,
   ...PR_PLUGIN_E2E_SOURCE_ROUTES,
   ...PR_WSL_E2E_SOURCE_ROUTES,
   {
-    id: 'ssh.orcad-editor-ownership',
-    specs: ['tests/e2e/ssh-orcad-editor-ownership.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/renderer\/src\/runtime\/(?:web-session-existing-tab-index|web-session-tabs-sync\/(?:mirrored-editor-file-identity|tab-builders|apply-preparation-browser|state-equality-files|terminal-surfaces))\.ts$/.test(
-        file
-      )
-  },
-  {
-    id: 'ssh.orcad-markdown-conversion',
-    specs: ['tests/e2e/ssh-orcad-markdown-conversion.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/renderer\/src\/components\/editor\/(?:markdown\/documents\/useMarkdownDocuments|restored-editor-workspace-runtime-owner|migrate-restored-editor-file-owner)\.ts$/.test(
-        file
-      )
-  },
-  {
-    id: 'ssh.orcad-markdown-link-refresh',
-    specs: ['tests/e2e/ssh-orcad-markdown-link-refresh.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/renderer\/src\/components\/editor\/rich-markdown\/(?:doc-links\/rich-markdown-doc-link|instance\/useRichMarkdownProgrammaticSync)\.ts$/.test(
-        file
-      )
-  },
-  {
-    id: 'ssh.orcad-markdown-live-documents',
-    specs: ['tests/e2e/ssh-orcad-markdown-live-documents.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/renderer\/src\/components\/editor\/markdown\/documents\/(?:useMarkdownDocuments|use-markdown-document-watch-refresh|markdown-document-list-request)\.ts$/.test(
-        file
-      )
-  },
-  {
     id: 'ssh.orcad-explorer-watch-recovery',
-    specs: ['tests/e2e/ssh-orcad-explorer-watch-recovery.spec.ts'],
+    specs: [
+      'tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-explorer-watch-recovery.spec.ts'
+    ],
     matches: (file) =>
       isProductSource(file) &&
       (file ===
         'src/renderer/src/components/right-sidebar/file-explorer/watching/useFileExplorerWatch.ts' ||
-        file === 'src/renderer/src/hooks/worktree-file-change-event.ts')
+        file === 'src/renderer/src/runtime/files/watching/worktree-file-change-event.ts')
   },
   {
     id: 'ssh.orcad-editor-watch-recovery',
-    specs: ['tests/e2e/ssh-orcad-editor-watch-recovery.spec.ts'],
+    specs: ['tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-editor-watch-recovery.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/renderer\/src\/hooks\/(?:useEditorExternalWatch|editor-runtime-file-watch)\.ts$/.test(
+      /^(?:src\/renderer\/src\/hooks\/useEditorExternalWatch\.ts|src\/renderer\/src\/components\/editor\/external-changes\/watching\/editor-runtime-file-watch\.ts)$/.test(
         file
       )
   },
+
   {
-    id: 'ssh.orcad-explorer-selected-host',
-    specs: ['tests/e2e/ssh-orcad-explorer-selected-host.spec.ts'],
+    id: 'serve.orcad-mode-switch',
+    specs: ['tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts'],
     matches: (file) =>
-      isProductSource(file) &&
-      (file ===
-        'src/renderer/src/components/right-sidebar/file-explorer/watching/useFileExplorerWatch.ts' ||
-        file ===
-          'src/renderer/src/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner.ts' ||
-        file === 'src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorer.tsx' ||
-        file === 'src/renderer/src/hooks/editor-external-watch-targets.ts' ||
-        file ===
-          'src/renderer/src/components/right-sidebar/file-explorer/tree/useFileExplorerTree.ts' ||
-        file ===
-          'src/renderer/src/components/right-sidebar/file-explorer/tree/use-file-explorer-tree-load-effects.ts')
-  },
-  {
-    // A paired client refuses project setup on its server's SSH host with a clear reason (#33124).
-    id: 'paired.ssh-host-project-setup',
-    specs: ['tests/e2e/headless-paired-ssh-host-project-setup.spec.ts'],
-    matches: (file) =>
-      file === 'tests/e2e/helpers/headless-paired-runtime-host.ts' ||
+      /^(?:tests\/e2e\/remote\/paired-runtime\/client-hosts\/headless-paired-runtime-host\.ts|tests\/e2e\/remote\/paired-runtime\/client-hosts\/orca-serve-cli-host\.ts)$/.test(
+        file
+      ) ||
       (isProductSource(file) &&
-        /^src\/(?:renderer\/src\/store\/projects\/project-host-setup-actions|main\/runtime\/runtime-project-host-setup-controller|shared\/project-host-setup-target)\.ts$/.test(
+        /^src\/(?:cli\/runtime\/(?:launch|profile\/launch-user-data-path|commands\/serve-|app-launch\/serve-|serve\/(?:startup|supervision|updates)\/serve-)|main\/orcad\/(?:[^/]+\/)?(?:main|orcad-entry|orcad-command-startup|orcad-instance-lock|orcad-command-arguments|orcad-lifecycle)\.ts$|main\/backend\/core-runtime(?:-activation)?\.ts$|main\/startup\/profile-startup\/desktop-profile-instance-lock\.ts$|main\/daemon\/(?:[^/]+\/)*daemon-(?:spawner|endpoint-adoption|init)|main\/server\/serve-)/.test(
           file
         ))
   },
   {
-    id: 'serve.orcad-mode-switch',
-    specs: ['tests/e2e/orcad-serve-mode-switch.spec.ts'],
+    // A Slack event reaches a bot on a signed-in orcad; sign-out and quit fence its connector.
+    id: 'serve.orcad-connector-server-bot',
+    specs: ['tests/e2e/integrations/connectors/orcad-connector-server-bot.spec.ts'],
     matches: (file) =>
-      /^tests\/e2e\/helpers\/(?:orca-serve-cli-host|headless-paired-runtime-host)\.ts$/.test(
+      /^tests\/e2e\/integrations\/connectors\/(?:orca-cloud-auth-fixture|connector-actions-cloud-fixture)\.ts$/.test(
         file
       ) ||
       (isProductSource(file) &&
-        /^src\/(?:cli\/runtime\/(?:launch|serve-)|main\/orcad\/(?:main|orcad-entry|orcad-command-startup|orcad-instance-lock|orcad-command-arguments|orcad-lifecycle)\.ts$|main\/startup\/desktop-profile-instance-lock\.ts$|main\/daemon\/(?:[^/]+\/)*daemon-(?:spawner|endpoint-adoption|init)|main\/server\/serve-)/.test(
+        /^src\/(?:main\/(?:orcad\/orcad-(?:connector|orca-account|entry|runtime-lifetime|relay)|connector-cloud\/connector-(?:host-install|cloud|cloud-install|token-mint)|ipc\/pty\/host-env\/inherited-orca-identity-(?:env|claim))|cli\/handlers\/bot-reply)\.ts$/.test(
           file
         ))
   },
   {
     id: 'startup.windows-missing-appdata',
-    specs: ['tests/e2e/windows-missing-appdata-startup.spec.ts'],
+    specs: ['tests/e2e/desktop/startup-recovery/windows-missing-appdata-startup.spec.ts'],
     matches: (file) =>
-      file === 'tests/e2e/helpers/orca-serve-cli-host.ts' ||
+      file === 'tests/e2e/remote/paired-runtime/client-hosts/orca-serve-cli-host.ts' ||
       (isProductSource(file) &&
-        /^src\/main\/startup\/(?:windows-app-data-path|main-process-preflight)\.ts$/.test(file))
+        /^src\/main\/startup\/(?:windows-startup\/windows-app-data-path|main-process-preflight)\.ts$/.test(
+          file
+        ))
   },
   {
     id: 'clipboard.windows-copy-file',
-    specs: ['tests/e2e/file-explorer-copy-file-windows.spec.ts'],
+    specs: ['tests/e2e/editor/file-explorer/file-explorer-copy-file-windows.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/window\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer\/panel\/file-explorer-row-file-transfer)\.ts$/.test(
+      /^src\/(?:main\/window\/clipboard\/clipboard-(?:file-copy|ipc-handlers)|renderer\/src\/components\/right-sidebar\/file-explorer\/panel\/file-explorer-row-file-transfer)\.ts$/.test(
         file
       )
   },
   {
-    id: 'ssh.orcad-auto-convert',
-    specs: ['tests/e2e/ssh-orcad-auto-convert.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      (isProductSource(file) &&
-        /^src\/main\/(?:ipc\/(?:ssh\/)?ssh-host-server-|(?:ssh|managed-server\/[a-z-]+)\/(?:ssh-host-server-|orcad-runtime-conversion|orcad-migration-|orcad-retained-source|orcad-runtime-deployment))/.test(
-          file
-        ))
-  },
-  {
-    id: 'ssh.orcad-connect-failure',
-    specs: [
-      'tests/e2e/ssh-orcad-ssh-failure-reason.spec.ts',
-      'tests/e2e/ssh-orcad-move-anyway-inline.spec.ts',
-      'tests/e2e/ssh-orcad-enabled-automation-move.spec.ts'
-    ],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      ENABLED_AUTOMATION_MOVE.test(file) ||
-      (isProductSource(file) &&
-        /^src\/(?:main\/(?:ipc\/ssh\/(?:ssh-connect-flow|ssh-host-server-)|ssh\/(?:ssh-session-start-failure|ssh-host-server-|connection\/ssh-connection-manager|orcad-migration-refusal-reason|targets\/ssh-target-orcad-preflight)|managed-server\/lifecycle\/orcad-runtime-conversion|persistence\/migrating-orcad-catalog\/orcad-source-(?:automation-state|leave-behind-view))|renderer\/src\/(?:ssh\/(?:ssh-host-server-status-copy|ssh-connect-failure-toast)|components\/settings\/(?:SshTargetServerStatus|SshHostMoveAnywayAction|SshTargetCard)))/.test(
-          file
-        ))
-  },
-  {
-    id: 'ssh.orcad-identity-file-tokens',
-    specs: ['tests/e2e/ssh-orcad-identity-file-tokens.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      /^tests\/e2e\/helpers\/ssh-config-host-picker\.ts$/.test(file) ||
-      (isProductSource(file) &&
-        /^src\/main\/ssh\/(?:config\/(?:ssh-g-config-resolution|ssh-identity-file-tokens|ssh-config-path-expansion)|ssh-auth-resolution|ssh-identity-file-read)\.ts$/.test(
-          file
-        ))
-  },
-  {
     id: 'ssh.orcad-update-anyway',
-    specs: ['tests/e2e/ssh-orcad-update-anyway.spec.ts'],
+    specs: ['tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-update-anyway.spec.ts'],
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
@@ -199,104 +114,9 @@ export const PR_E2E_SOURCE_ROUTES = [
           file
         ))
   },
-  // COMPAT(legacy-relay-bridge): revisit 2027-01-15 with src/main/ssh/legacy-relay/.
-  {
-    id: 'ssh.orcad-legacy-relay-bridge',
-    specs: [
-      'tests/e2e/ssh-orcad-legacy-relay-bridge.spec.ts',
-      'tests/e2e/ssh-orcad-relay-tab-only-shell.spec.ts'
-    ],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      /^tests\/e2e\/(?:helpers\/(?:legacy-relay-docker-host|build-released-relay-bundle)|cross-version-wire\/released-relay-(?:daemon|transport))\.m?ts$/.test(
-        file
-      ) ||
-      (isProductSource(file) &&
-        /(?:legacy-relay(?:-bridge|\/)|orcad-migration-terminal-gate|ssh-host-relay-terminals-on-connect|orcad-source-dependency-census)/.test(
-          file
-        ))
-  },
-  {
-    id: 'browser.orcad-service-status',
-    specs: ['tests/e2e/ssh-orcad-browser-service-status.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/renderer\/src\/components\/browser-pane\/stream-remote\/remote-browser-stream-(?:errors|status|lifecycle|restart-attempt)\.ts$/.test(
-        file
-      )
-  },
-  {
-    id: 'ssh.orcad-browser-routing',
-    specs: ['tests/e2e/ssh-orcad-browser-routing.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/(?:main\/browser\/routing\/local-host-partitions\/local-ssh-browser|main\/ipc\/browser\.ts$|renderer\/src\/(?:lib\/(?:ssh-workspace-browser-route-eligibility|worktree-host-connection-phase)|components\/browser-pane\/use-ssh-workspace-browser-route|store\/repos\/converted-ssh-browser-pages|store\/slices\/browser\/tabs\/browser-tab-actions|hooks\/ipc-events\/ssh-managed-server-state-effects))/.test(
-        file
-      )
-  },
-  {
-    id: 'ssh.orcad-terminal-browser-link',
-    specs: ['tests/e2e/ssh-orcad-terminal-browser-link.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/renderer\/src\/(?:lib\/(?:workspace-browser-tab-open|http-link-(?:destinations|routing)|ssh-workspace-browser-route-eligibility)|components\/terminal-pane\/terminal-http-link-source-owner)\.ts$/.test(
-        file
-      )
-  },
-  {
-    id: 'ssh.orcad-desktop-browser-bridge',
-    specs: ['tests/e2e/ssh-orcad-desktop-browser-bridge.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/(?:shared\/desktop-browser-bridge-protocol\.ts$|main\/(?:runtime\/desktop-browser-bridge\/|browser\/desktop-browser-bridge\/|ipc\/desktop-browser-bridge-|runtime\/rpc\/methods\/desktop-browser-bridge\.ts$))/.test(
-        file
-      )
-  },
-  {
-    id: 'ssh.orcad-browser-drop-owner',
-    specs: ['tests/e2e/ssh-orcad-browser-drop-owner.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      /^tests\/e2e\/helpers\/browser-split-(?:guest-probes|page-server)\.ts$/.test(file) ||
-      (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:lib\/(?:browser\/documents\/file-preview|workspace-file-drag|worktree-runtime-owner)\.ts|lib\/workspace\/ownership\/connection-context\.ts|components\/(?:right-sidebar\/file-explorer\/panel\/FileExplorer(?:Row|VirtualRows)\.tsx|browser-pane\/(?:navigate\/use-browser-page-navigation-downloads\.ts|host-guest\/attach-browser-page-webview\.ts)))$/.test(
-          file
-        ))
-  },
-  {
-    id: 'ssh.orcad-open-in-owner',
-    specs: ['tests/e2e/ssh-orcad-open-in-owner.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:lib\/(?:local-path-open-guard|external-editor-open-capability|worktree-runtime-owner)\.ts|components\/(?:sidebar\/workspace-actions\/(?:open\/WorktreeOpenInMenu|context-menu\/WorktreeContextMenuView)\.tsx|right-sidebar\/(?:file-explorer\/panel\/FileExplorer(?:Toolbar)?\.tsx|source-control\/listing\/entry-context-menu\.tsx)))$/.test(
-          file
-        ))
-  },
-  {
-    id: 'ssh.orcad-terminal-root-owner',
-    specs: ['tests/e2e/ssh-orcad-terminal-root-owner.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      file === 'tests/e2e/helpers/terminal-workspace-root-link.ts' ||
-      (isProductSource(file) &&
-        /^src\/renderer\/src\/(?:components\/terminal-pane\/terminal-(?:worktree-path-link|file-link-actions|file-link-hit-testing|file-open-routing|link-handlers)\.ts|(?:runtime\/files\/workspace-file-host-routing|lib\/workspace\/ownership\/(?:worktree-owner-route|worktree-operation-route|worktree-operation-catalog-route))\.ts)$/.test(
-          file
-        ))
-  },
-  {
-    id: 'ssh.orcad-sleep-disconnected',
-    specs: ['tests/e2e/ssh-orcad-sleep-disconnected.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      (isProductSource(file) &&
-        /^src\/(?:main\/runtime\/(?:workspaces\/(?:workspace-sleep-|remote-workspace-terminal-sleep)|terminal\/stop\/worktree-terminal-sleep)|renderer\/src\/components\/sidebar\/workspace-actions\/sleep\/(?:sleep-|workspace-sleep-))/.test(
-          file
-        ))
-  },
   {
     id: 'ssh.orcad-idle-exit',
-    specs: ['tests/e2e/ssh-orcad-idle-exit.spec.ts'],
+    specs: ['tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-idle-exit.spec.ts'],
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
@@ -305,61 +125,9 @@ export const PR_E2E_SOURCE_ROUTES = [
         ))
   },
   {
-    // Managed SSH is the only SSH path; include Connect/Disconnect so journeys exercise reconnect (#30130).
-    id: 'ssh.orcad-journeys',
-    specs: [
-      'tests/e2e/ssh-orcad-terminal-journeys.spec.ts',
-      'tests/e2e/ssh-orcad-workspace-tools.spec.ts',
-      'tests/e2e/ssh-orcad-vm-provisioned-root.spec.ts'
-    ],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      /^tests\/e2e\/helpers\/(?:paired-host-terminal|terminal-workspace-root-link)\.ts$/.test(
-        file
-      ) ||
-      (isProductSource(file) &&
-        /^src\/(?:main\/(?:ssh|managed-server\/[a-z-]+)\/orcad-managed-|main\/ipc\/(?:ssh\/)?ssh-port-forward|main\/(?:ipc\/(?:(?:ssh\/)?ssh-(?:connect-flow|connection-handlers|host-user-disconnect|session-teardown)|(?:runtime-environments\/)?runtime-environment-(?:connectivity-handlers|manual-disconnect))|ssh\/(?:connection\/ssh-connection-manager|ssh-user-disconnect))\.ts$|renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts$|renderer\/src\/runtime\/(?:web-runtime-session|web-session-close-|runtime-terminal-artifact-read\.ts$)|renderer\/src\/components\/terminal-pane\/(?:pty-transport\/remote-runtime\/remote-runtime-|terminal-host-(?:workspace-file|file-link-existence)\.ts$))/.test(
-          file
-        ))
-  },
-  {
-    // A Claude chat a managed host's CLI refuses to start names why (#33768).
-    id: 'ssh.orcad-claude-chat-start-failure',
-    specs: ['tests/e2e/ssh-orcad-claude-chat-start-failure.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      file === 'tests/e2e/fixtures/structured-claude-stub.cjs' ||
-      (isProductSource(file) &&
-        /^src\/(?:main\/(?:claude\/claude-(?:stream-json-connection|stream-json-exit-error|structured-session-exit-lifecycle)|native-chat\/agent-session-wire\/structured-agent-session-failure-text)|renderer\/src\/components\/native-chat\/structured-agent-session-delivery-notices)\.ts$/.test(
-          file
-        ))
-  },
-  {
-    // A reconnect the host cannot image must still bring an idle full-screen program up to date (#26887).
-    id: 'ssh.orcad-reconnect-idle-frame',
-    specs: ['tests/e2e/ssh-orcad-terminal-reconnect-idle-frame.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      (isProductSource(file) &&
-        /^src\/(?:renderer\/src\/components\/terminal-pane\/(?:pty-transport\/remote-runtime\/remote-runtime-|pty-connection\/(?:geometry\/remote-program-redraw|output-restore\/(?:hidden-output-restore-|park-reveal-snapshot-verdict)))|main\/runtime\/rpc\/methods\/terminal\/terminal-(?:multiplex-initial-snapshot|snapshot-publication)\.ts$)/.test(
-          file
-        ))
-  },
-  {
-    // Unsaved drafts stay on the desktop and are renamed to the server when a move commits.
-    id: 'ssh.orcad-editor-drafts-migration',
-    specs: ['tests/e2e/ssh-orcad-editor-drafts-migration.spec.ts'],
-    matches: (file) =>
-      MANAGED_SSH_HARNESS.test(file) ||
-      (isProductSource(file) &&
-        /^src\/main\/(?:persistence\/migrating-orcad-catalog\/orcad-source-(?:draft-rename|workspace-session|session-copy-resolution|export)|ssh\/orcad-migration-source-retention|ipc\/ssh\/ssh)\.ts$/.test(
-          file
-        ))
-  },
-  {
     // A saved managed tunnel port that can no longer be bound moves to a free one (#33182).
     id: 'ssh.orcad-unbindable-tunnel-port',
-    specs: ['tests/e2e/ssh-orcad-unbindable-tunnel-port.spec.ts'],
+    specs: ['tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-unbindable-tunnel-port.spec.ts'],
     matches: (file) =>
       MANAGED_SSH_HARNESS.test(file) ||
       (isProductSource(file) &&
@@ -371,25 +139,24 @@ export const PR_E2E_SOURCE_ROUTES = [
     // Why: hand-kept routes missed #30130 and #30120; scoped to managed-host code to bound lane cost.
     id: 'ssh.orcad-remote-sources',
     specs: [
-      'tests/e2e/ssh-orcad-paired-phone-projects.spec.ts',
-      'tests/e2e/ssh-orcad-pairing-repair.spec.ts',
-      'tests/e2e/ssh-orcad-shared-home-machines.spec.ts',
-      'tests/e2e/ssh-orcad-shared-login-migration.spec.ts',
-      'tests/e2e/ssh-orcad-terminal-network-outage.spec.ts',
-      'tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts'
+      'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-pairing-repair.spec.ts',
+      'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-shared-home-machines.spec.ts'
     ],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/(?:ssh|orcad|managed-server)\/|main\/ipc\/(?:ssh|runtime-environment|orcad-)|cli\/runtime\/(?:launch-)?serve|shared\/(?:remote-runtime|orcad-|protocol-version\.ts$|runtime-capability)|renderer\/src\/store\/repos\/(?:repo-removal|runtime-project-terminal-stop)|renderer\/src\/components\/sidebar\/(?:workspace-actions\/sleep\/(?:sleep-|SleepTwin|WorkspaceSleep|use-worktree-sleep)|ssh-host-remove|host-rename-remove|HostRemove)|renderer\/src\/components\/terminal-pane\/(?:pty-transport\/remote-runtime\/recovery\/(?:TerminalRemoteRuntimeReconnectBanner|use-managed-pairing-refused)|controller\/TerminalPaneCodexRestartPortals|process-exit\/TerminalPaneProcessExitPortals|pty-transport\/recovery\/ssh\/TerminalPaneSshReconnectPortals|mobile-driver\/TerminalPaneMobileDriverPortals))/.test(
+      /^src\/(?:main\/(?:ssh|orcad|managed-server)\/|main\/ipc\/(?:ssh|runtime-environment|orcad-)|cli\/runtime\/(?:launch-serve|(?:commands|app-launch)\/serve|serve\/(?:startup|supervision|updates)\/serve)|shared\/(?:remote-runtime|orcad-|protocol-version\.ts$|runtime-capability)|renderer\/src\/store\/repos\/(?:repo-removal|runtime-project-terminal-stop)|renderer\/src\/components\/sidebar\/(?:workspace-actions\/sleep\/(?:sleep-|SleepTwin|WorkspaceSleep|use-worktree-sleep)|ssh-host-remove|host-rename-remove|HostRemove)|renderer\/src\/components\/terminal-pane\/(?:pty-transport\/remote-runtime\/recovery\/(?:TerminalRemoteRuntimeReconnectBanner|use-managed-pairing-refused)|controller\/TerminalPaneCodexRestartPortals|process-exit\/TerminalPaneProcessExitPortals|pty-transport\/recovery\/ssh\/TerminalPaneSshReconnectPortals|mobile-driver\/TerminalPaneMobileDriverPortals))/.test(
         file
       )
   },
   {
     id: 'browser-network.ssh-docker-route',
-    specs: ['tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts'],
+    specs: ['tests/e2e/remote/ssh-hosts/ssh-browser-network-execution-route.docker.unit.test.ts'],
     matches: (file) =>
-      file === 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts' ||
-      /^tests\/e2e\/helpers\/docker-ssh-host-(?:image|target)\.ts$/.test(file) ||
+      file ===
+        'tests/e2e/remote/ssh-hosts/ssh-browser-network-execution-route.docker.unit.test.ts' ||
+      /^(?:tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/docker-ssh-host-image\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/docker-ssh-host-target\.ts)$/.test(
+        file
+      ) ||
       (isProductSource(file) &&
         /^src\/main\/(?:browser\/network\/(?:execution-routes\/(?:ssh-browser-network-execution-route|browser-network-deferred-socket|browser-network-execution-route)|tunnels\/system-ssh-socks-client-socket)|ssh\/system-transport\/system-ssh-dynamic-forward-process)\.ts$/.test(
           file
@@ -397,48 +164,22 @@ export const PR_E2E_SOURCE_ROUTES = [
   },
   {
     id: 'terminal-input.ime-and-synthetic-forwarding',
-    specs: [
-      'tests/e2e/terminal-cjk-ime-committed-text.spec.ts',
-      'tests/e2e/terminal-hangul-wrap-boundary-bytes.spec.ts',
-      'tests/e2e/terminal-ime-exact-byte.spec.ts',
-      'tests/e2e/terminal-korean-composing-chord-order.spec.ts',
-      'tests/e2e/terminal-korean-endofrow-preedit-cell-span.spec.ts',
-      'tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts',
-      'tests/e2e/terminal-korean-preedit-visibility.spec.ts'
-    ],
+    specs: ['tests/e2e/terminal/ime/terminal-korean-preedit-visibility.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
       (XTERM_CORE_PATCH.test(file) ||
-        /^src\/renderer\/src\/components\/terminal-pane\/(?:terminal-ime-|use-terminal-pane-lifecycle|xterm-bypass-policy|terminal-option-shortcut-policy)/.test(
+        /^src\/renderer\/src\/components\/terminal-pane\/(?:input\/ime\/terminal-ime-|controller\/use-terminal-pane-lifecycle|input\/keyboard\/(?:xterm-bypass-policy|terminal-option-shortcut-policy))/.test(
           file
         ))
   },
   {
     // CDP Input.imeSetComposition proves synthetic handling without an IME; this separate route alone selects the real ibus-hangul lane.
     id: 'terminal-ime.native-input-method',
-    specs: ['tests/e2e/terminal-ibus-hangul-native.spec.ts'],
+    specs: ['tests/e2e/terminal/ime/terminal-ibus-hangul-native.spec.ts'],
     matches: (file) =>
       (isProductSource(file) &&
         (XTERM_CORE_PATCH.test(file) || NATIVE_IME_PRODUCT_SOURCE.test(file))) ||
       NATIVE_IME_HARNESS.test(file)
-  },
-  {
-    id: 'terminal-startup.quick-command-pre-bind-recovery',
-    specs: ['tests/e2e/terminal-quick-command-pre-bind-recovery.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^(?:src\/renderer\/src\/components\/tab-bar\/TabBarQuickCommandsMenu\.tsx|src\/renderer\/src\/hooks\/use-terminal-quick-command-hosts\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:pty-transport\/ipc\/pty-transport|pty-transport\/ipc\/terminal-pty-pre-spawn-e2e-barrier)\.ts|src\/renderer\/src\/components\/terminal-pane\/pty-connection\/(?:connect-pane-pty|spawn\/fresh-spawn-start|lifecycle\/active-pane-pty-binding|notifications\/terminal-bell-completion-arbitration|input\/terminal-input-activity|host-ownership\/pane-transport-bootstrap|emulation\/(?:pane-capability-replies|pane-mode-2031-state)|geometry\/pane-viewport-claim|lifecycle\/pty-input-recovery)\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:TerminalPane|use-terminal-pane-lifecycle)\.tsx?|src\/renderer\/src\/store\/slices\/terminals\.ts)$/.test(
-        file
-      )
-  },
-  {
-    id: 'terminal-session.host-cold-park-stream-continuity',
-    specs: ['tests/e2e/host-parked-pane-remote-viewer.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:terminal-hidden-view-parking|terminal-tab-park-candidates|parking\/retention\/terminal-tab-activation-order|terminal-parked-pty-watcher|terminal-parked-tab-watchers|terminal-parked-watcher-registry)\.ts|src\/renderer\/src\/runtime\/sync-runtime-graph\.ts)$/.test(
-        file
-      )
   },
   {
     // Route unbind/retirement as well as binders: missed lifecycle edges can strand PTYs or leave blank mounted leaves.
@@ -446,75 +187,23 @@ export const PR_E2E_SOURCE_ROUTES = [
     id: 'terminal-pane.close-and-retirement',
     specs: [
       // Closing a tab whose pane is parked (never mounted) must retire that exact PTY.
-      'tests/e2e/terminal-parked-close-retirement.spec.ts',
-      // Split-leaf close must preserve agreement among root leaves, leaf-to-PTY bindings and live panes to prevent ghost blanks.
-      'tests/e2e/terminal-pane-close-layout-consistency.spec.ts',
-      // The runtime half: a leaf the host retires must stop being mounted on a paired client.
-      'tests/e2e/paired-remote-split-pane-host-retired-ghost.spec.ts'
+      'tests/e2e/terminal/retention/terminal-parked-close-retirement.spec.ts'
     ],
     matches: (file) =>
       isProductSource(file) &&
-      /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:layout\/close\/retire-unbound-(?:ipc|runtime)-terminal-pane|terminal-pane-(?:close-admission|close-identity|lifecycle-close|pane-closed|retirement-ownership)|use-terminal-pane-close-actions)|src\/renderer\/src\/store\/(?:terminals\/terminal-tab-close(?:-providers)?|slices\/(?:terminal-tab-retirement|terminal-retirement-teardown-reservation|retired-terminal-tab-state-sweep)))\.ts$/.test(
+      /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:layout\/close\/retire-unbound-(?:ipc|runtime)-terminal-pane|terminal-pane-(?:close-admission|close-identity|lifecycle-close|pane-closed|retirement-ownership)|use-terminal-pane-close-actions)|src\/renderer\/src\/store\/(?:terminals\/retirement\/(?:terminal-tab-close(?:-providers)?|terminal-tab-retirement|terminal-retirement-teardown-reservation|retired-terminal-tab-state-sweep)))\.ts$/.test(
         file
       )
   },
   {
-    id: 'terminal-session.parked-cli-split',
-    specs: ['tests/e2e/terminal-parked-cli-split.spec.ts'],
+    // A bot link opens the chat its conversation is linked to.
+    id: 'connectors.bot-link-opens-chat',
+    specs: ['tests/e2e/integrations/bots/bot-deep-link.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^(?:src\/main\/window\/attach-main-window-services\.ts|src\/preload\/(?:index|api\/ui-command-event-api)\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:terminal-pane-split-request-routing|use-terminal-pane-lifecycle|use-terminal-tab-cold-parking)\.ts|src\/renderer\/src\/hooks\/ipc-events\/terminal-ui-routing-ipc-bridge\.ts)$/.test(
+      /^src\/(?:main\/bots\/bot-deep-link-open\.ts|main\/external-conversations\/external-conversation-links\.ts|shared\/bot-deep-link\.ts|renderer\/src\/hooks\/ipc-events\/bot-deep-link-ipc-bridge\.ts)$/.test(
         file
       )
-  },
-  {
-    id: 'terminal-session.paired-serve-restart-binding-continuity',
-    specs: ['tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^(?:src\/main\/daemon\/(?:[^/]+\/)*(?:daemon-attach-only-retirement|daemon-pty-applied-size|daemon-pty-session-control|daemon-pty-spawn-result)\.ts|src\/renderer\/src\/components\/terminal-pane\/(?:pty-transport\/remote-runtime\/remote-runtime-pty-transport|errors\/terminal-error-accumulation)\.ts|src\/renderer\/src\/runtime\/(?:web-runtime-terminal-creation|web-runtime-session-tab-lifecycle|web-session-tabs-sync\/use-web-session-tabs-sync|web-session-terminal-orphan-(?:topology|recovery(?:-(?:adoption|surface|inventory|inventory-validation|cache|queue|rpc-lane|pane))?))\.ts)$/.test(
-        file
-      )
-  },
-  {
-    id: 'terminal-provider.ssh-remote-reattach-contract',
-    specs: ['tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      !file.endsWith('-test-harness.ts') &&
-      /^(?:src\/renderer\/src\/components\/terminal-pane\/pty-transport\/remote-runtime\/remote-runtime-pty-transport(?:-[a-z0-9-]+)?\.ts|src\/renderer\/src\/runtime\/remote-runtime-terminal-multiplexer\.ts)$/.test(
-        file
-      )
-  },
-  {
-    // Layout resolution can invent split directions; publishing the guess overwrites the original tree irreversibly.
-    id: 'terminal-session.split-orientation-resolution',
-    specs: ['tests/e2e/desktop-published-split-orientation-legacy-leaf.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^src\/renderer\/src\/runtime\/(?:remote-terminal-layout-resolution\.ts|sync-runtime-graph\/(?:graph-publication|mobile-session-terminal-tabs|mobile-session-surfaces)\.ts|web-session-tabs-sync\/terminal-surfaces\.ts)$/.test(
-        file
-      )
-  },
-  {
-    id: 'terminal-session.remote-pane-layout-retry',
-    specs: ['tests/e2e/paired-remote-pane-layout-retry.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^(?:src\/renderer\/src\/components\/terminal-pane\/(?:layout\/persistence\/remote-pane-layout-push|TerminalPane)\.tsx?|src\/renderer\/src\/lib\/terminal-layout-equality\.ts|src\/renderer\/src\/runtime\/web-session-tabs-sync\/use-web-session-tabs-sync\.ts|src\/renderer\/src\/store\/slices\/terminals\.ts)$/.test(
-        file
-      )
-  },
-  {
-    // Connector code only: the shared launcher, writer and hook store it reuses already have their own routes.
-    id: 'connectors.headless-serve-conversation',
-    specs: ['tests/e2e/connector-headless-serve.spec.ts'],
-    matches: (file) =>
-      file === 'tests/e2e/helpers/connector-fake-claude.ts' ||
-      (isProductSource(file) &&
-        /^src\/(?:main\/external-conversations\/|main\/runtime\/rpc\/methods\/connector\.ts$|cli\/(?:handlers|specs)\/connector\.ts$|shared\/rpc-contract\/connector-params\.ts$)/.test(
-          file
-        ))
   }
 ]
 
@@ -526,13 +215,12 @@ export function selectPrE2eSpecs(
   const routePaths = isDaemonInitTestSupportChange(changedPaths, allowDaemonInitTestSupport)
     ? changedPaths.filter((file) => file !== DAEMON_INIT_TEST_SUPPORT)
     : changedPaths
-  // The required layout_oracle job owns the oracle specs; running them here too would double the cost.
   const specs = new Set(
     changedPaths.filter(
       (file) =>
-        /^tests\/e2e\/.*\.spec\.ts$/.test(file) &&
-        !LAYOUT_ORACLE_E2E_SPECS.includes(file) &&
-        !MANUAL_ONLY_E2E_SPECS.includes(file)
+        /^(?:tests\/e2e\/activity\/ai-vault-session-delete\.spec\.ts|tests\/e2e\/agents\/native-chat\/native-chat-automation-saved-card\.spec\.ts|tests\/e2e\/agents\/native-chat\/native-chat-send-focus\.spec\.ts|tests\/e2e\/agents\/native-chat\/native-chat-worker-follow-up\.spec\.ts|tests\/e2e\/agents\/remote-sessions\/paired-serve-cold-restore-agent-status\.spec\.ts|tests\/e2e\/agents\/remote-sessions\/paired-server-agent-tab-placement\.spec\.ts|tests\/e2e\/agents\/session-lifecycle\/agent-descendant-process-kill\.spec\.ts|tests\/e2e\/agents\/session-lifecycle\/grok-hook-session-cleanup\.spec\.ts|tests\/e2e\/agents\/session-lifecycle\/issue-12907-pi-eof-agent-row\.spec\.ts|tests\/e2e\/agents\/session-lifecycle\/omp-launch-environment\.spec\.ts|tests\/e2e\/agents\/session-lifecycle\/omp-model-picker\.spec\.ts|tests\/e2e\/agents\/settings\/codex-account-switch-dismiss\.spec\.ts|tests\/e2e\/agents\/settings\/settings-agent-awake\.spec\.ts|tests\/e2e\/browser\/client-hosted\/paired-client-hosted-browser-markup\.spec\.ts|tests\/e2e\/browser\/client-hosted\/paired-client-hosted-profile-cookies\.spec\.ts|tests\/e2e\/browser\/guest-lifecycle\/browser-embedded-owner-routing\.spec\.ts|tests\/e2e\/browser\/guest-lifecycle\/browser-guest-crash-recovery\.spec\.ts|tests\/e2e\/browser\/input-navigation\/browser-agent-input-focus-isolation\.spec\.ts|tests\/e2e\/browser\/input-navigation\/browser-grab-top-layer\.spec\.ts|tests\/e2e\/browser\/input-navigation\/browser-split-grab-shortcut\.spec\.ts|tests\/e2e\/browser\/input-navigation\/browser-tab\.spec\.ts|tests\/e2e\/browser\/remote-hosted\/headless-serve-browser-tab-restart\.spec\.ts|tests\/e2e\/browser\/remote-hosted\/paired-remote-browser-blank-link\.spec\.ts|tests\/e2e\/browser\/remote-hosted\/paired-remote-browser-ghost-subscriber-rejoin\.spec\.ts|tests\/e2e\/browser\/remote-hosted\/paired-remote-browser-in-page-address\.spec\.ts|tests\/e2e\/browser\/security\/browser-fedcm-fallback\.spec\.ts|tests\/e2e\/desktop\/clipboard\/app-menu-paste-ownership\.spec\.ts|tests\/e2e\/desktop\/clipboard\/clipboard-macos-image-paste\.spec\.ts|tests\/e2e\/desktop\/clipboard\/editable-context-paste-ownership\.spec\.ts|tests\/e2e\/desktop\/clipboard\/tab-rename-paste-ownership\.spec\.ts|tests\/e2e\/desktop\/daemon-lifecycle\/daemon-lifecycle-retirement\.spec\.ts|tests\/e2e\/desktop\/startup-recovery\/electron-home-isolation\.spec\.ts|tests\/e2e\/desktop\/startup-recovery\/renderer-crash-recovery-terminal-input\.spec\.ts|tests\/e2e\/desktop\/startup-recovery\/restart-restore-terminal-input\.spec\.ts|tests\/e2e\/desktop\/startup-recovery\/restart-unopened-workspace-terminal-attach\.spec\.ts|tests\/e2e\/desktop\/startup-recovery\/windows-missing-appdata-startup\.spec\.ts|tests\/e2e\/editor\/csv\/csv-paged-preview\.spec\.ts|tests\/e2e\/editor\/csv\/csv-url-links\.spec\.ts|tests\/e2e\/editor\/file-explorer\/file-explorer-copy-file-windows\.spec\.ts|tests\/e2e\/editor\/file-explorer\/runtime-file-browser-windows-drives\.spec\.ts|tests\/e2e\/editor\/file-lifecycle\/editor-model-host-isolation\.spec\.ts|tests\/e2e\/editor\/markdown\/markdown-callout-source-fidelity\.spec\.ts|tests\/e2e\/editor\/markdown\/markdown-find-adversarial\.spec\.ts|tests\/e2e\/editor\/markdown\/markdown-nested-toggle\.spec\.ts|tests\/e2e\/editor\/markdown\/rich-markdown-inline-image\.spec\.ts|tests\/e2e\/editor\/pdf\/pdf-detail-device-pixels\.spec\.ts|tests\/e2e\/editor\/pdf\/pdf-find-counter\.spec\.ts|tests\/e2e\/editor\/previews\/media-preview-partition-isolation\.spec\.ts|tests\/e2e\/golden-journeys\/golden-agent-tui-launch\.spec\.ts|tests\/e2e\/golden-journeys\/golden-file-open-edit-save\.spec\.ts|tests\/e2e\/golden-journeys\/golden-fresh-profile-terminal\.spec\.ts|tests\/e2e\/golden-journeys\/golden-posix-profile-index-fsync\.spec\.ts|tests\/e2e\/golden-journeys\/golden-shell-after-agent-exit\.spec\.ts|tests\/e2e\/golden-journeys\/golden-shell-command\.spec\.ts|tests\/e2e\/golden-journeys\/golden-source-control-commit\.spec\.ts|tests\/e2e\/golden-journeys\/golden-source-control-open-diff\.spec\.ts|tests\/e2e\/golden-journeys\/golden-tab-bar-agent-launch\.spec\.ts|tests\/e2e\/golden-journeys\/golden-worktree-create-switch\.spec\.ts|tests\/e2e\/integrations\/bots\/bot-automation-result-note\.spec\.ts|tests\/e2e\/integrations\/bots\/bot-deep-link\.spec\.ts|tests\/e2e\/integrations\/bots\/bot-item-view-width\.spec\.ts|tests\/e2e\/integrations\/bots\/bot-reveal-current\.spec\.ts|tests\/e2e\/integrations\/bots\/paired-server-bots-survive-disconnect\.spec\.ts|tests\/e2e\/integrations\/connectors\/connector-actions-bot-run\.spec\.ts|tests\/e2e\/integrations\/connectors\/connector-first-setup\.spec\.ts|tests\/e2e\/integrations\/connectors\/orcad-connector-server-bot\.spec\.ts|tests\/e2e\/integrations\/linear\/linear-url-workspace-entry\.spec\.ts|tests\/e2e\/integrations\/skills\/staging-skill-sharing\.spec\.ts|tests\/e2e\/layout\/window-tabs\/floating-tab-rename-filesystem-alias\.spec\.ts|tests\/e2e\/layout\/window-tabs\/floating-tab-rename\.spec\.ts|tests\/e2e\/layout\/window-tabs\/floating-terminal-tab-rename-focus\.spec\.ts|tests\/e2e\/layout\/window-tabs\/floating-workspace-reopen-webgl-recovery\.spec\.ts|tests\/e2e\/layout\/window-tabs\/floating-workspace-shared-glyph-atlas\.spec\.ts|tests\/e2e\/layout\/window-tabs\/narrow-tab-group-drag-handle\.spec\.ts|tests\/e2e\/layout\/window-tabs\/tabs\.spec\.ts|tests\/e2e\/plugins\/plugin-declarative-panel\.spec\.ts|tests\/e2e\/plugins\/plugin-isolated-frame\.spec\.ts|tests\/e2e\/plugins\/plugin-name-clash\.spec\.ts|tests\/e2e\/plugins\/plugin-new-file\.spec\.ts|tests\/e2e\/plugins\/plugin-panel-agents\.spec\.ts|tests\/e2e\/plugins\/plugin-workspace-persist-switch\.spec\.ts|tests\/e2e\/remote\/managed-ssh\/file-lifecycle\/ssh-orcad-editor-watch-recovery\.spec\.ts|tests\/e2e\/remote\/managed-ssh\/file-lifecycle\/ssh-orcad-explorer-watch-recovery\.spec\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/orcad-serve-mode-switch\.spec\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/ssh-orcad-idle-exit\.spec\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/ssh-orcad-pairing-repair\.spec\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/ssh-orcad-shared-home-machines\.spec\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/ssh-orcad-unbindable-tunnel-port\.spec\.ts|tests\/e2e\/remote\/managed-ssh\/host-lifecycle\/ssh-orcad-update-anyway\.spec\.ts|tests\/e2e\/remote\/mobile-mirror\/headless-mobile-markdown\.spec\.ts|tests\/e2e\/remote\/mobile-mirror\/headless-serve-mobile-markdown\.spec\.ts|tests\/e2e\/remote\/mobile-mirror\/headless-serve-mobile-native-chat-identity\.spec\.ts|tests\/e2e\/remote\/mobile-mirror\/mobile-subscribe-idle-hidden-pane-fit\.spec\.ts|tests\/e2e\/remote\/mobile-mirror\/paired-mobile-desktop-mirror-files-git-review\.spec\.ts|tests\/e2e\/remote\/mobile-mirror\/paired-mobile-serve-restart-terminal-tabs\.spec\.ts|tests\/e2e\/remote\/paired-runtime\/workspace-routing\/headless-serve-desktop-activation\.spec\.ts|tests\/e2e\/remote\/paired-runtime\/workspace-routing\/paired-client-project-removal-stops-host-terminals\.spec\.ts|tests\/e2e\/remote\/paired-runtime\/workspace-routing\/paired-server-rows-shadow\.spec\.ts|tests\/e2e\/remote\/paired-runtime\/workspace-routing\/paired-startup-exec-readiness\.spec\.ts|tests\/e2e\/remote\/paired-runtime\/workspace-routing\/paired-worktree-activation-isolation\.spec\.ts|tests\/e2e\/remote\/paired-runtime\/workspace-routing\/pr11346-selected-runtime-add\.spec\.ts|tests\/e2e\/remote\/ssh-hosts\/ephemeral-vm-cleanup-retry\.spec\.ts|tests\/e2e\/remote\/wsl-hosts\/wsl-bridge-no-background-boot\.spec\.ts|tests\/e2e\/remote\/wsl-hosts\/wsl-host-fake-transport\.spec\.ts|tests\/e2e\/remote\/wsl-hosts\/wsl-move-host-pane-history\.spec\.ts|tests\/e2e\/remote\/wsl-hosts\/wsl-move-moved-project-chat-send\.spec\.ts|tests\/e2e\/source-control\/source-control-commit-message-ai\.spec\.ts|tests\/e2e\/source-control\/source-control-create-pr\.spec\.ts|tests\/e2e\/source-control\/source-control-discard-confirmation\.spec\.ts|tests\/e2e\/source-control\/source-control-pr-generation-switch\.spec\.ts|tests\/e2e\/source-control\/source-control-pr-linked-issue-ai\.spec\.ts|tests\/e2e\/source-control\/source-control-staged-rename\.spec\.ts|tests\/e2e\/terminal\/ime\/terminal-ibus-hangul-native\.spec\.ts|tests\/e2e\/terminal\/ime\/terminal-korean-preedit-visibility\.spec\.ts|tests\/e2e\/terminal\/ime\/terminal-linux-claimed-preedit-selector\.spec\.ts|tests\/e2e\/terminal\/ime\/terminal-option-composed-ascii\.spec\.ts|tests\/e2e\/terminal\/input\/terminal-paste-ownership\.spec\.ts|tests\/e2e\/terminal\/input\/terminal-shortcuts\.spec\.ts|tests\/e2e\/terminal\/input\/terminal-windows-codex-multiline-paste\.spec\.ts|tests\/e2e\/terminal\/input\/terminal-windows-path-expansion\.spec\.ts|tests\/e2e\/terminal\/input\/terminal-windows-shell-paste-ownership\.spec\.ts|tests\/e2e\/terminal\/layout\/terminal-close-pane-focus\.spec\.ts|tests\/e2e\/terminal\/layout\/terminal-closed-pane-quit-relaunch\.spec\.ts|tests\/e2e\/terminal\/layout\/terminal-pane-content-retention\.spec\.ts|tests\/e2e\/terminal\/layout\/terminal-pane-split-identity\.spec\.ts|tests\/e2e\/terminal\/layout\/terminal-split-pane-paste-ownership\.spec\.ts|tests\/e2e\/terminal\/lifecycle\/automation-hidden-terminal-first-mount\.spec\.ts|tests\/e2e\/terminal\/lifecycle\/terminal-codex-home\.spec\.ts|tests\/e2e\/terminal\/lifecycle\/terminal-osc-color-queries\.spec\.ts|tests\/e2e\/terminal\/lifecycle\/terminal-scroll-intent-follow\.spec\.ts|tests\/e2e\/terminal\/lifecycle\/terminal-tab-level-binding-upgrade\.spec\.ts|tests\/e2e\/terminal\/lifecycle\/terminal-wedged-write-pipeline-recovery\.spec\.ts|tests\/e2e\/terminal\/links\/terminal-link-click-ownership\.spec\.ts|tests\/e2e\/terminal\/remote-input\/headless-paired-remote-terminal-early-typing\.spec\.ts|tests\/e2e\/terminal\/remote-input\/headless-paired-remote-terminal-stall-recovery\.spec\.ts|tests\/e2e\/terminal\/remote-layout\/headless-paired-remote-terminal-reveal-grid\.spec\.ts|tests\/e2e\/terminal\/remote-layout\/headless-paired-remote-terminal-viewer-size\.spec\.ts|tests\/e2e\/terminal\/remote-layout\/paired-remote-terminal-pane-move-to-new-tab\.spec\.ts|tests\/e2e\/terminal\/remote-parking\/paired-remote-terminal-initial-snapshot-scrollback\.spec\.ts|tests\/e2e\/terminal\/remote-parking\/paired-remote-terminal-truncated-tail-first-paint\.spec\.ts|tests\/e2e\/terminal\/rendering\/terminal-column-desync-repro\.spec\.ts|tests\/e2e\/terminal\/rendering\/terminal-dom-block-decorations\.spec\.ts|tests\/e2e\/terminal\/rendering\/terminal-tab-switch-visual-restore\.spec\.ts|tests\/e2e\/terminal\/retention\/terminal-parked-close-retirement\.spec\.ts|tests\/e2e\/terminal\/retention\/terminal-restart-persistence\.spec\.ts|tests\/e2e\/terminal\/retention\/terminal-sleep-wake-restore\.spec\.ts|tests\/e2e\/terminal\/retention\/terminal-tab-close-running-confirm-mouse\.spec\.ts|tests\/e2e\/workspaces\/lifecycle\/default-branch-visibility\.spec\.ts|tests\/e2e\/workspaces\/lifecycle\/local-worktree-visibility-runtime-active\.spec\.ts|tests\/e2e\/workspaces\/lifecycle\/worktree-jump-palette-folder-workspaces\.spec\.ts|tests\/e2e\/workspaces\/project-admission\/new-workspace-cross-project-dialog\.spec\.ts|tests\/e2e\/workspaces\/project-admission\/new-workspace-linked-item-project-switch\.spec\.ts|tests\/e2e\/workspaces\/project-admission\/project-group-manual-sort\.spec\.ts|tests\/e2e\/workspaces\/project-admission\/repo-registration-async\.spec\.ts|tests\/e2e\/workspaces\/sidebar\/sidebar-folder-keyboard-navigation\.spec\.ts|tests\/e2e\/workspaces\/sidebar\/sidebar-unread-older-paired-host\.spec\.ts|tests\/e2e\/workspaces\/sidebar\/sidebar-workspace-rows\.spec\.ts|tests\/e2e\/workspaces\/sidebar\/workspace-board-lane-virtualization\.spec\.ts|tests\/e2e\/workspaces\/sidebar\/worktree-parent-reorder\.spec\.ts|tests\/e2e\/workspaces\/sleep\/workspace-sleep-in-main\.spec\.ts)$/.test(
+          file
+        ) && !MANUAL_ONLY_E2E_SPECS.includes(file)
     )
   )
   for (const route of PR_E2E_SOURCE_ROUTES) {
@@ -546,14 +234,210 @@ export function selectPrE2eSpecs(
   if (
     routePaths.some(
       (file) =>
-        (file.startsWith('tests/e2e/helpers/') &&
-          [...specs].some((spec) => spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX))) ||
+        ([
+          'tests/e2e/agents/session-fixtures/agent-hook-endpoint.ts',
+          'tests/e2e/agents/session-fixtures/claude-plugin-image-fixture.ts',
+          'tests/e2e/agents/session-fixtures/fake-agent-command-override.ts',
+          'tests/e2e/agents/session-fixtures/fake-agent-paste-end-scanner.ts',
+          'tests/e2e/agents/session-fixtures/fake-codex-launch-probes.ts',
+          'tests/e2e/agents/session-fixtures/native-chat-transcript-fixture.ts',
+          'tests/e2e/agents/session-fixtures/native-chat-view.ts',
+          'tests/e2e/agents/session-fixtures/structured-claude-stub.ts',
+          'tests/e2e/agents/settings/cursor-quota-wire.fixture.ts',
+          'tests/e2e/browser/client-hosted/client-hosted-browser-fixture.ts',
+          'tests/e2e/browser/client-hosted/client-hosted-browser-observer.ts',
+          'tests/e2e/browser/guest-lifecycle/browser-sidecar-launch.ts',
+          'tests/e2e/browser/input-navigation/browser-agent-composition-scenario.ts',
+          'tests/e2e/browser/input-navigation/browser-agent-focus-scenarios.ts',
+          'tests/e2e/browser/input-navigation/browser-link-server.ts',
+          'tests/e2e/browser/input-navigation/browser-split-fixture.ts',
+          'tests/e2e/browser/input-navigation/browser-split-guest-probes.ts',
+          'tests/e2e/browser/input-navigation/browser-split-page-server.ts',
+          'tests/e2e/browser/placement/paired-browser-placement-fixture.ts',
+          'tests/e2e/browser/remote-hosted/materialized-remote-browser-pane.ts',
+          'tests/e2e/browser/remote-hosted/ssh-remote-only-browser-fixture.ts',
+          'tests/e2e/browser/security/local-https-test-server.ts',
+          'tests/e2e/desktop/cli-invocation/compiled-orca-cli.ts',
+          'tests/e2e/desktop/computer-use/computer-cli-driver.ts',
+          'tests/e2e/desktop/computer-use/computer-coordinate-click-driver.ts',
+          'tests/e2e/desktop/computer-use/computer-driver.ts',
+          'tests/e2e/desktop/computer-use/notepad-document.ts',
+          'tests/e2e/desktop/computer-use/windows-fixture-actions.ts',
+          'tests/e2e/desktop/computer-use/windows-form-fixture.ts',
+          'tests/e2e/desktop/computer-use/windows-ime-native-events.ts',
+          'tests/e2e/desktop/computer-use/windows-semantic-controls-fixture.ps1',
+          'tests/e2e/desktop/computer-use/windows-semantic-controls-fixture.ts',
+          'tests/e2e/desktop/computer-use/windows-semantic-controls-fixture.winforms.ps1',
+          'tests/e2e/desktop/daemon-lifecycle/daemon-generation-processes.ts',
+          'tests/e2e/desktop/daemon-lifecycle/daemon-generation-runtime-fixture.ts',
+          'tests/e2e/desktop/daemon-lifecycle/daemon-generation-safety-fixtures.ts',
+          'tests/e2e/desktop/electron-fixtures/e2e-completed-onboarding-profile.ts',
+          'tests/e2e/desktop/electron-fixtures/electron-crashpad-cleanup.ts',
+          'tests/e2e/desktop/electron-fixtures/electron-home-isolation.ts',
+          'tests/e2e/desktop/electron-fixtures/electron-home-isolation.unit.test.ts',
+          'tests/e2e/desktop/electron-fixtures/electron-launch-args.ts',
+          'tests/e2e/desktop/electron-fixtures/electron-main-evaluate-retry.ts',
+          'tests/e2e/desktop/electron-fixtures/electron-process-shutdown.ts',
+          'tests/e2e/desktop/electron-fixtures/electron-shutdown-timing.ts',
+          'tests/e2e/desktop/electron-fixtures/hidden-renderer-frame-capture.ts',
+          'tests/e2e/desktop/electron-fixtures/hold-window-graph-publication.ts',
+          'tests/e2e/desktop/electron-fixtures/orca-app.ts',
+          'tests/e2e/desktop/electron-fixtures/orca-restart-launch-options.ts',
+          'tests/e2e/desktop/electron-fixtures/orca-restart.ts',
+          'tests/e2e/desktop/electron-fixtures/persisted-profile-state.ts',
+          'tests/e2e/desktop/electron-fixtures/persisted-profile-state.unit.test.ts',
+          'tests/e2e/desktop/electron-fixtures/renderer-console-forwarding.ts',
+          'tests/e2e/desktop/renderer-probes/event-loop-delay-report.ts',
+          'tests/e2e/desktop/renderer-probes/first-drawn-watch.ts',
+          'tests/e2e/desktop/renderer-probes/onboarding-navigation.ts',
+          'tests/e2e/desktop/renderer-probes/page-evaluate-polled.ts',
+          'tests/e2e/desktop/renderer-probes/runtime-types.ts',
+          'tests/e2e/desktop/renderer-probes/shortcuts.ts',
+          'tests/e2e/desktop/renderer-probes/store.ts',
+          'tests/e2e/desktop/settings/settings-pane-visits.ts',
+          'tests/e2e/editor/file-explorer/file-explorer.ts',
+          'tests/e2e/editor/markdown/markdown-editor-fixture.ts',
+          'tests/e2e/editor/markdown/markdown-inline-image.ts',
+          'tests/e2e/editor/markdown/markdown-nested-toggle.ts',
+          'tests/e2e/editor/pdf/pdf-find-fixture.ts',
+          'tests/e2e/editor/previews/paired-html-preview-inventory.ts',
+          'tests/e2e/golden-journeys/golden-source-control.ts',
+          'tests/e2e/golden-journeys/golden-stub-agent.ts',
+          'tests/e2e/layout/publication/host-split-and-sleep-journeys.ts',
+          'tests/e2e/layout/publication/layout-owner-build.ts',
+          'tests/e2e/layout/publication/main-terminal-layout.ts',
+          'tests/e2e/layout/publication/paired-desktop-server-layout.ts',
+          'tests/e2e/layout/publication/terminal-layout-journeys.ts',
+          'tests/e2e/layout/version-compatibility/layout-compat-baseline.ts',
+          'tests/e2e/layout/workspace-oracle/headless-layout-oracle-hosts.ts',
+          'tests/e2e/layout/workspace-oracle/workspace-layout-oracle-compare.ts',
+          'tests/e2e/layout/workspace-oracle/workspace-layout-oracle-expected.ts',
+          'tests/e2e/layout/workspace-oracle/workspace-layout-oracle-feed.ts',
+          'tests/e2e/layout/workspace-oracle/workspace-layout-oracle-markers.ts',
+          'tests/e2e/layout/workspace-oracle/workspace-layout-oracle-model.ts',
+          'tests/e2e/layout/workspace-oracle/workspace-layout-oracle-session.ts',
+          'tests/e2e/layout/workspace-oracle/workspace-layout-oracle-stream.ts',
+          'tests/e2e/layout/workspace-oracle/workspace-layout-oracle-views.ts',
+          'tests/e2e/layout/workspace-oracle/workspace-layout-oracle-watch.ts',
+          'tests/e2e/layout/workspace-oracle/workspace-layout-oracle.ts',
+          'tests/e2e/orchestration/completed-worker-retirement-fixture.ts',
+          'tests/e2e/orchestration/orchestration-mail-pane-agent.ts',
+          'tests/e2e/orchestration/orchestration-mail-store.ts',
+          'tests/e2e/plugins/plugin-frame-guest.ts',
+          'tests/e2e/plugins/plugin-git-fixture.ts',
+          'tests/e2e/plugins/plugin-gleam-catalog-fixture.ts',
+          'tests/e2e/plugins/plugin-panel-navigation-observer.ts',
+          'tests/e2e/plugins/plugin-smoke.ts',
+          'tests/e2e/plugins/plugin-update-catalog-fixture.ts',
+          'tests/e2e/remote/managed-ssh/host-lifecycle/docker-ssh-host-image.ts',
+          'tests/e2e/remote/managed-ssh/host-lifecycle/docker-ssh-host-target.ts',
+          'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-convert-flow.ts',
+          'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-convert-host.ts',
+          'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-managed-workspace.ts',
+          'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-template-variant.ts',
+          'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-upgrade-profile.ts',
+          'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-upgrade-retained-state.ts',
+          'tests/e2e/remote/managed-ssh/host-lifecycle/reserve-local-port.ts',
+          'tests/e2e/remote/managed-ssh/host-lifecycle/windows-host-orcad-processes.ts',
+          'tests/e2e/remote/mobile-mirror/paired-mobile-client.ts',
+          'tests/e2e/remote/mobile-mirror/phone-feed-list.ts',
+          'tests/e2e/remote/mobile-mirror/phone-mirror-topology.ts',
+          'tests/e2e/remote/network-outages/freezable-tcp-proxy.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/client-hosted-runtime-relaunch.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/headless-paired-runtime-host.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/headless-paired-runtime-serve-readiness.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/headless-paired-runtime-serve-readiness.unit.test.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/nested-runtime-same-id-pairing.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/orca-serve-cli-host.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/packaged-old-orca.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/paired-client-host-session.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/paired-client-runtime-environment.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/paired-client-window-reveal.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/paired-electron-client.ts',
+          'tests/e2e/remote/paired-runtime/client-hosts/paired-web-client-url.ts',
+          'tests/e2e/remote/paired-runtime/ssh-routing/nested-runtime-ssh-client-route.ts',
+          'tests/e2e/remote/paired-runtime/ssh-routing/nested-runtime-ssh-filesystem-route.ts',
+          'tests/e2e/remote/paired-runtime/ssh-routing/nested-runtime-ssh-terminal-creation.ts',
+          'tests/e2e/remote/relay/build-released-relay-bundle.mts',
+          'tests/e2e/remote/relay/legacy-relay-docker-host.ts',
+          'tests/e2e/remote/relay/relay-execution-process.ts',
+          'tests/e2e/remote/ssh-hosts/remote-skill-cloud-fixture.ts',
+          'tests/e2e/remote/ssh-hosts/ssh-config-host-picker.ts',
+          'tests/e2e/remote/ssh-hosts/staging-skill-ssh-target.ts',
+          'tests/e2e/remote/wsl-hosts/wsl-boot-diagnostics-log.ts',
+          'tests/e2e/remote/wsl-hosts/wsl-boot-guard.ts',
+          'tests/e2e/remote/wsl-hosts/wsl-golden-stub-agent.ts',
+          'tests/e2e/remote/wsl-hosts/wsl-host-fake-desktop.ts',
+          'tests/e2e/remote/wsl-hosts/wsl-moved-host-profile.ts',
+          'tests/e2e/remote/wsl-hosts/wsl-terminate-retry.ts',
+          'tests/e2e/source-control/pr-comments-sidebar-fixture.ts',
+          'tests/e2e/source-control/source-control-ai-generation.ts',
+          'tests/e2e/source-control/source-control-ai-generators.ts',
+          'tests/e2e/source-control/source-control-generation-app.ts',
+          'tests/e2e/terminal/input/dead-terminal.ts',
+          'tests/e2e/terminal/input/run-node-script-in-terminal.ts',
+          'tests/e2e/terminal/input/terminal-accessibility-tree.ts',
+          'tests/e2e/terminal/input/terminal-active-pane.ts',
+          'tests/e2e/terminal/input/terminal-input-probes.ts',
+          'tests/e2e/terminal/input/terminal-kitty-file-image-proof.ts',
+          'tests/e2e/terminal/input/terminal-kitty-keyboard.ts',
+          'tests/e2e/terminal/input/terminal-pty-injection.ts',
+          'tests/e2e/terminal/input/terminal-pty-write-spy.ts',
+          'tests/e2e/terminal/input/terminal.ts',
+          'tests/e2e/terminal/layout/terminal-inventory-observation.ts',
+          'tests/e2e/terminal/layout/terminal-pane-geometry.ts',
+          'tests/e2e/terminal/layout/terminal-pane-identity.ts',
+          'tests/e2e/terminal/layout/terminal-pane-mount-readiness.ts',
+          'tests/e2e/terminal/layout/terminal-pane-operations.ts',
+          'tests/e2e/terminal/layout/terminal-pane-title-actions.ts',
+          'tests/e2e/terminal/layout/terminal-tab-menu.ts',
+          'tests/e2e/terminal/layout/terminal-title-log.ts',
+          'tests/e2e/terminal/links/terminal-workspace-root-link.ts',
+          'tests/e2e/terminal/output/alt-screen-frame.ts',
+          'tests/e2e/terminal/performance/layout-latency-probe.ts',
+          'tests/e2e/terminal/performance/tab-render-recorder.ts',
+          'tests/e2e/terminal/performance/terminal-typing-benchmark.ts',
+          'tests/e2e/terminal/readiness/restored-terminal-input-readiness.ts',
+          'tests/e2e/terminal/readiness/startup-exec-readiness-oracle.ts',
+          'tests/e2e/terminal/remote-hosts/host-session-tabs.ts',
+          'tests/e2e/terminal/remote-hosts/paired-desktop-server-terminal-tab.ts',
+          'tests/e2e/terminal/remote-hosts/paired-host-terminal.ts',
+          'tests/e2e/terminal/remote-hosts/remote-terminal-lifecycle-observer.ts',
+          'tests/e2e/terminal/remote-hosts/streaming-terminal-cleanup.ts',
+          'tests/e2e/terminal/remote-layout/remote-session-bulk-open-fixture.ts',
+          'tests/e2e/terminal/remote-layout/remote-session-bulk-open-oracle.ts',
+          'tests/e2e/terminal/remote-parking/host-created-terminal-retention-oracle.ts',
+          'tests/e2e/terminal/remote-parking/paired-terminal-cold-activation-observation.ts',
+          'tests/e2e/terminal/remote-parking/paired-terminal-cold-activation-oracle.ts',
+          'tests/e2e/terminal/remote-parking/paired-terminal-hidden-output-oracle.ts',
+          'tests/e2e/terminal/remote-parking/paired-terminal-parking-fixture.ts',
+          'tests/e2e/terminal/remote-parking/paired-terminal-parking-oracle.ts',
+          'tests/e2e/terminal/remote-parking/paired-terminal-title-fanout-oracle.ts',
+          'tests/e2e/terminal/remote-reconnect/paired-terminal-restart-renderer-probes.ts',
+          'tests/e2e/terminal/rendering/terminal-inline-image-proof.ts',
+          'tests/e2e/terminal/rendering/xterm-render-dimensions.ts',
+          'tests/e2e/terminal/resource-management/resource-manager-visible-fixture.ts',
+          'tests/e2e/terminal/retention/terminal-hidden-parking.ts',
+          'tests/e2e/terminal/retention/terminal-host-focus-storm-oracle.ts',
+          'tests/e2e/terminal/retention/terminal-restart-persistence.ts',
+          'tests/e2e/workspaces/repository-fixtures/git-status-retry-barrier.ts',
+          'tests/e2e/workspaces/repository-fixtures/repo-with-workspaces.ts',
+          'tests/e2e/workspaces/repository-fixtures/seeded-ssh-workspaces.ts',
+          'tests/e2e/workspaces/repository-fixtures/seeded-test-repo.ts',
+          'tests/e2e/workspaces/repository-fixtures/worktree-registration.ts',
+          'tests/e2e/workspaces/sidebar/sidebar-inputs-build.ts',
+          'tests/e2e/workspaces/sidebar/sidebar-project-dialog.ts',
+          'tests/e2e/workspaces/sidebar/sidebar-project-visibility.ts',
+          'tests/e2e/workspaces/sidebar/sidebar-setup-prompt.ts',
+          'tests/e2e/workspaces/sleep/slept-workspace-probe.ts'
+        ].includes(file) &&
+          [...specs].some((spec) => MANAGED_SSH_E2E_SPECS.includes(spec))) ||
         file === '.github/workflows/e2e.yml' ||
         file === '.github/scripts/prepare-ubuntu-apt.sh' ||
         file === 'config/scripts/ci/e2e-selection/ci-e2e-job-selection.mjs'
     )
   ) {
-    specs.add(MANAGED_SSH_E2E_SPEC_PREFIX)
+    MANAGED_SSH_E2E_SPECS.forEach((spec) => specs.add(spec))
   }
   return [...specs].sort((left, right) => left.localeCompare(right))
 }
@@ -571,7 +455,7 @@ export function hasNativeImeSourceChange(changedPaths) {
 export function shouldRunReusablePrE2e(changedPaths, options = {}) {
   // Native IME has its own workflow.
   return selectPrE2eSpecs(changedPaths, undefined, options).some(
-    (spec) => spec !== 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
+    (spec) => spec !== 'tests/e2e/terminal/ime/terminal-ibus-hangul-native.spec.ts'
   )
 }
 
@@ -582,7 +466,29 @@ export function hasWslSourceChange(changedPaths) {
   return changedPaths.some(route.matches)
 }
 
+/** A route naming a deleted spec fails every later PR that touches its sources, so refuse it here. */
+function missingRouteSpecs() {
+  const specs = [...new Set(PR_E2E_SOURCE_ROUTES.flatMap((route) => route.specs))]
+  // CI's sparse checkout omits tests/e2e/, so ask the index rather than the disk.
+  const tracked = new Set(
+    execFileSync('git', ['ls-files', '-z', '--', ...specs], {
+      cwd: resolve(import.meta.dirname, '../../../..'),
+      encoding: 'utf8'
+    }).split('\0')
+  )
+  return PR_E2E_SOURCE_ROUTES.flatMap((route) =>
+    route.specs.filter((spec) => !tracked.has(spec)).map((spec) => `${route.id}: ${spec}`)
+  )
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const missing = missingRouteSpecs()
+  if (missing.length > 0) {
+    console.error(
+      `E2E source routes name specs that are not tracked; remove each from its route along with the spec:\n${missing.join('\n')}`
+    )
+    process.exit(1)
+  }
   let input = ''
   process.stdin.setEncoding('utf8')
   for await (const chunk of process.stdin) {
