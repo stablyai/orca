@@ -1658,7 +1658,6 @@
         "missing": "This project is no longer in Orca.",
         "notYet": "Not available yet",
         "none": "No skills in this project yet. Run your project’s setup to add its skills; they load in {{bot}}’s next chat.",
-        "more": "and {{count}} more",
         "openFolder": "Open folder",
         "noneShort": "No skills",
         "link": "Link a project",
