@@ -50,6 +50,14 @@ export function readOpenCodeComposerTypedText(context: TerminalCursorContext): s
   return placeholder ? '' : textarea.join('\n').trim()
 }
 
+/** Whether OpenCode's composer shows a typed draft, so mail must wait. False when the cursor is not
+ *  in a box laid out as OpenCode's. Callers check that OpenCode is the pane's agent. */
 export function openCodeComposerHoldsDraft(context: TerminalCursorContext): boolean {
   return !!readOpenCodeComposerTypedText(context)
+}
+
+/** The draft OpenCode's composer shows, its rows joined by spaces; null for an empty box, its
+ *  placeholder, or a cursor outside a box laid out as OpenCode's. */
+export function readOpenCodeComposerDraft(context: TerminalCursorContext): string | null {
+  return readOpenCodeComposerTypedText(context)?.replaceAll('\n', ' ') || null
 }

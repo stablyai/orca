@@ -1,3 +1,4 @@
+import { piComposerHoldsDraft } from '../../../../shared/terminal/input/pi-composer'
 import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 import {
   openCodeComposerHoldsDraft,
@@ -121,9 +122,11 @@ export function mailboxComposerHoldsDraft(
   agent: string | null,
   context: TerminalCursorContext
 ): boolean {
-  return agent === 'opencode' || agent === 'opencode2'
-    ? openCodeComposerHoldsDraft(context)
-    : !!readTerminalComposerTypedText(context)
+  if (agent === 'opencode' || agent === 'opencode2') {
+    return openCodeComposerHoldsDraft(context)
+  }
+  // Why: Pi's editor has no prompt glyph either; it is read between its own rules.
+  return agent === 'pi' ? piComposerHoldsDraft(context) : !!readTerminalComposerTypedText(context)
 }
 
 export function readAgentTerminalComposerTypedText(

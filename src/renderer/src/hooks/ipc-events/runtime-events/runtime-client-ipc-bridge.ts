@@ -3,7 +3,8 @@ import {
   registerLinearLinkedIssueRefresh,
   refreshDefaultLinkedLinearIssue
 } from '../../../lib/work-items/linear/linear-linked-issue-refresh'
-import { emitPairedBotsChanged } from '@/lib/bot-host-listing'
+import { applyRemoteTerminalSideEffects } from './runtime-client-remote-terminal-side-effects'
+import { emitPairedBotsChanged, emitPairedBotsStreamCameBack } from '@/lib/bot-host-listing'
 import { readBotChangeScope } from '../../../../../shared/bots/bot-change-scope'
 import { emitRuntimeClientWindowEvent } from './runtime-client-window-events'
 import { applyHostWorkspaceRowEvent } from '../workspace-catalog/worktree-metadata-set-events'
@@ -91,10 +92,6 @@ export function registerRuntimeClientIpcBridge(
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
-    if (event.type === 'agentAttentionChanged') {
-      receiveRetainedAttention.receive(environmentId, event)
-      return
-    }
     if (event.type === 'notificationAttentionAcknowledged') {
       void window.api.notifications
         .acknowledgeAttention(event.acknowledgement, toRuntimeExecutionHostId(environmentId))
@@ -103,7 +100,11 @@ export function registerRuntimeClientIpcBridge(
         )
       return
     }
-    if (applyHostWorkspaceRowEvent(environmentId, event)) {
+    if (
+      receiveRetainedAttention.apply(environmentId, event) ||
+      applyHostWorkspaceRowEvent(environmentId, event) ||
+      applyRemoteTerminalSideEffects(environmentId, event)
+    ) {
       return
     }
     if (event.type === 'nativeChatLaunchDraftResolved') {
@@ -252,8 +253,8 @@ export function registerRuntimeClientIpcBridge(
             },
             requestProjectRefresh: () => {
               requestProjectRefresh(environmentId)
-              // Changes during the outage were lost, not queued.
-              emitPairedBotsChanged(environmentId)
+              // Changes during the outage were lost, not queued: reads from before prove nothing now.
+              emitPairedBotsStreamCameBack(environmentId)
             },
             markEnvironmentSshStateStale: () =>
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),
@@ -265,11 +266,8 @@ export function registerRuntimeClientIpcBridge(
         {
           hostsBrowserPages: hostsBrowserPagesFor(environmentId),
           onClose,
-          onAgentAttentionSnapshot: (notices) => {
-            if (accepts()) {
-              receiveRetainedAttention.reconcile(environmentId, notices)
-            }
-          }
+          onAgentAttentionSnapshot: (notices) =>
+            accepts() && receiveRetainedAttention.reconcile(environmentId, notices)
         }
       )
       return subscription

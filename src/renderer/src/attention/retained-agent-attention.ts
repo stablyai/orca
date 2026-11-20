@@ -86,7 +86,14 @@ export function createRetainedAgentAttentionReceiver() {
     }
   }
   return {
-    receive,
+    /** Presents or retires a host's notice; false for any other event. */
+    apply: (environmentId: string, event: RuntimeClientEvent): boolean => {
+      if (event.type !== 'agentAttentionChanged') {
+        return false
+      }
+      receive(environmentId, event)
+      return true
+    },
     reconcile: (environmentId: string, notices: RetainedAgentAttention[]): void => {
       const host = toRuntimeExecutionHostId(environmentId)
       const retained = new Set(
