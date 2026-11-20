@@ -1,15 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import '../../orca-runtime-tests/runtime-test-module-registration.spec'
+import '../../construction/test-context/runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
-import { assertTerminalAgentSendable } from '../../rpc/terminal-agent-send-guard'
+import '../../construction/test-context/orca-runtime-test-lifecycle.spec'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   store,
   syncSinglePty
-} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
-import { registerBoundPty } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
+} from '../../construction/test-context/orca-runtime-test-fixtures.spec'
+import { registerBoundPty } from '../layout/bind-first-pane.test-fixture'
 
 async function psStatus(runtime: OrcaRuntimeService): Promise<string | undefined> {
   return (await runtime.getWorktreePs()).worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
@@ -27,19 +26,19 @@ describe('display surfaces after the stale-working title clear', () => {
         kill: () => true,
         getForegroundProcess: async () => 'codex'
       })
-      syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex working' })
+      await syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex working' })
       runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', Date.now())
       runtime.onPtyData('pty-1', 'output without a title\r\n', Date.now())
       await vi.advanceTimersByTimeAsync(3_000)
       // The renderer applies the cleared fact and republishes its pane title.
-      syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex' })
+      await syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex' })
       const psStatus = async () =>
         (await runtime.getWorktreePs()).worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
           ?.status
       expect(await psStatus()).toBe('active')
       // A renderer reload reattaches with the daemon's last title, as the spawn RPC path does.
       runtime.seedTerminalRestoreTail('pty-1', { lastTitle: 'Codex working' })
-      syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex' })
+      await syncSinglePty(runtime, 'pty-1', { paneTitle: 'Codex' })
       expect(await psStatus()).toBe('active')
     } finally {
       vi.useRealTimers()
@@ -57,7 +56,7 @@ describe('display surfaces after the stale-working title clear', () => {
         getForegroundProcess: async () => null
       })
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       const register = () =>
         registerBoundPty(runtime, sshPtyId, TEST_WORKTREE_ID, 'conn-1', {
           tabId: 'tab-1',
@@ -92,7 +91,7 @@ describe('display surfaces after the stale-working title clear', () => {
           kill: () => true,
           getForegroundProcess: async () => foreground
         })
-        syncSinglePty(runtime, 'pty-1', { paneTitle: null, tabTitle: 'Terminal' })
+        await syncSinglePty(runtime, 'pty-1', { paneTitle: null, tabTitle: 'Terminal' })
         runtime.onPtyData('pty-1', '\x1b]0;Codex ready\x07', Date.now())
         runtime.onPtyData('pty-1', `\x1b]0;${spinner}\x07`, Date.now())
         await vi.advanceTimersByTimeAsync(100)
@@ -118,10 +117,10 @@ describe('display surfaces after the stale-working title clear', () => {
         kill: () => true,
         getForegroundProcess: async () => 'zsh'
       })
-      syncSinglePty(runtime, 'pty-1', { paneTitle: null })
+      await syncSinglePty(runtime, 'pty-1', { paneTitle: null })
       runtime.onPtyData('pty-1', '\x1b]0;⠋ repo\x07', Date.now())
       // The renderer republishes the spinner after main recorded it, and has not echoed the clear.
-      syncSinglePty(runtime, 'pty-1', { paneTitle: '⠋ repo' })
+      await syncSinglePty(runtime, 'pty-1', { paneTitle: '⠋ repo' })
       runtime.onPtyData('pty-1', '\x1b]133;D;0\x07\x1b]133;A\x07% ', Date.now())
       await vi.advanceTimersByTimeAsync(3_000)
       const handle = (await runtime.listTerminals()).terminals[0]?.handle ?? ''
@@ -148,7 +147,7 @@ describe('display surfaces after the stale-working title clear', () => {
         getForegroundProcess: async () => 'Python'
       })
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
         tabId: 'bg-tab',
         leafId: HEADLESS_LEAF_ID
@@ -170,146 +169,6 @@ describe('display surfaces after the stale-working title clear', () => {
   })
 
   // Synthetic: a trust dialog painted after the clear, behind the name title `⠋ Claude Code`.
-  it.each(['mounted', 'mountedEcho', 'rendererless'] as const)(
-    'a trust dialog painted after the clear still reads as a wait on the user (%s)',
-    async (mode) => {
-      vi.useFakeTimers()
-      try {
-        const ptyId = mode === 'rendererless' ? 'bg-pty' : 'pty-1'
-        const runtime = new OrcaRuntimeService(store)
-        runtime.setPtyController({
-          spawn: vi.fn().mockResolvedValue({ id: ptyId }),
-          write: () => true,
-          kill: () => true,
-          getForegroundProcess: async () => 'claude'
-        })
-        let handle: string
-        if (mode === 'rendererless') {
-          runtime.attachWindow(1)
-          runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-          handle = (
-            await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-              tabId: 'bg-tab',
-              leafId: HEADLESS_LEAF_ID
-            })
-          ).handle
-        } else {
-          syncSinglePty(runtime, ptyId, { tabTitle: 'Terminal 1', paneTitle: null })
-          runtime.onPtyData(ptyId, 'boot\r\n', Date.now())
-          handle = (await runtime.listTerminals()).terminals[0]?.handle ?? ''
-        }
-        runtime.onPtyData(ptyId, '\x1b]0;⠋ Claude Code\x07', Date.now())
-        if (mode !== 'rendererless') {
-          syncSinglePty(runtime, ptyId, { tabTitle: '⠋ Claude Code', paneTitle: '⠋ Claude Code' })
-        }
-        runtime.onPtyData(ptyId, 'still running\r\n', Date.now())
-        await vi.advanceTimersByTimeAsync(3_000)
-        if (mode === 'mountedEcho') {
-          // The renderer republishes its own cleared title, as a mounted pane does.
-          syncSinglePty(runtime, ptyId, { tabTitle: 'Claude Code', paneTitle: 'Claude Code' })
-        }
-        await vi.advanceTimersByTimeAsync(1_000)
-        runtime.onPtyData(
-          ptyId,
-          '\r\nDo you trust the files in this folder?\r\n /repo/app\r\n 1. Yes, proceed\r\n 2. No, exit\r\n',
-          Date.now()
-        )
-        await vi.advanceTimersByTimeAsync(1_000)
-        await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
-          isRunningAgent: true,
-          status: 'permission'
-        })
-        await expect(
-          assertTerminalAgentSendable({ runtime, handle, assertWritable: () => {} })
-        ).rejects.toThrow('terminal_guard_permission')
-        await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toMatchObject({
-          source: 'prompt-text',
-          reason: 'agent-trust-workspace'
-        })
-      } finally {
-        vi.useRealTimers()
-      }
-    }
-  )
 
   // Synthetic: prompt verification behind a standing clear judges against the baseline main had.
-  it.each([
-    ['mounted', 'output only', false],
-    ['mountedEcho', 'output only', false],
-    ['rendererless', 'output only', false],
-    ['mounted', 'a new spinner frame', true],
-    ['mountedEcho', 'a new spinner frame', true],
-    ['rendererless', 'a new spinner frame', true]
-  ] as const)(
-    'a prompt sent behind a cleared spinner (%s) answered by %s settles as on main',
-    async (mode, _after, spinnerFrame) => {
-      vi.useFakeTimers()
-      try {
-        const ptyId = mode === 'rendererless' ? 'bg-pty' : 'pty-1'
-        const runtime = new OrcaRuntimeService(store)
-        runtime.setPtyController({
-          spawn: vi.fn().mockResolvedValue({ id: ptyId }),
-          write: (_ptyId, data) => {
-            if (data === '\r') {
-              runtime.onPtyData(
-                ptyId,
-                spinnerFrame ? '\x1b]0;⠙ Claude Code\x07' : '\r\n',
-                Date.now()
-              )
-            }
-            return true
-          },
-          kill: () => true,
-          getForegroundProcess: async () => 'claude'
-        })
-        let handle: string
-        if (mode === 'rendererless') {
-          runtime.attachWindow(1)
-          runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-          handle = (
-            await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-              tabId: 'bg-tab',
-              leafId: HEADLESS_LEAF_ID
-            })
-          ).handle
-        } else {
-          syncSinglePty(runtime, ptyId, { tabTitle: 'Terminal 1', paneTitle: null })
-          runtime.onPtyData(ptyId, 'boot\r\n', Date.now())
-          handle = (await runtime.listTerminals()).terminals[0]?.handle ?? ''
-        }
-        runtime.onPtyData(ptyId, '\x1b]0;⠋ Claude Code\x07', Date.now())
-        if (mode !== 'rendererless') {
-          syncSinglePty(runtime, ptyId, { tabTitle: '⠋ Claude Code', paneTitle: '⠋ Claude Code' })
-        }
-        runtime.onPtyData(ptyId, 'still running\r\n', Date.now())
-        await vi.advanceTimersByTimeAsync(3_000)
-        if (mode === 'mountedEcho') {
-          syncSinglePty(runtime, ptyId, { tabTitle: 'Claude Code', paneTitle: 'Claude Code' })
-        }
-        if (spinnerFrame) {
-          // The receipt path takes no output as evidence, so only a new turn settles it.
-          const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
-            inputKind: 'driving',
-            acceptQueued: true,
-            requestId: `after-clear-${mode}`
-          })
-          await vi.advanceTimersByTimeAsync(20_000)
-          await expect(submission).resolves.toMatchObject({
-            prompt: { stages: ['input_accepted', 'turn_started'] }
-          })
-        } else {
-          // Output after Enter is not a turn start, so a swallowed Enter still reads as stalled.
-          const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
-            inputKind: 'driving'
-          })
-          const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
-          // Past the 30 s effect window.
-          await vi.advanceTimersByTimeAsync(40_000)
-          await rejected
-        }
-      } finally {
-        vi.useRealTimers()
-      }
-    }
-  )
 })

@@ -19,6 +19,7 @@ import { useAppStore } from '@/store/index'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
+import { recordRecentTerminalImage } from '../recent-terminal-images'
 
 export type TerminalPaneMenuPasteContext = {
   managerRef: React.RefObject<PaneManager | null>
@@ -119,6 +120,7 @@ export const pasteTerminalPaneMenuClipboard = async (
     }),
     connectionId,
     runtimeEnvironmentId,
+    onLocalImagePasted: (path) => recordRecentTerminalImage(pane.terminal, path, true),
     protectedMultilineTextPasteOptions: resolveProtectedMultilinePasteOptionsForPane({
       isWindowsClient: forceBracketedMultilineTextPaste,
       hostPlatform: resolveTerminalInputHostPlatform({

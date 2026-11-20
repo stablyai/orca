@@ -31,6 +31,7 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 }))
 
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { _resetWorktreeCatalogOwnerForTests } from '../../../workspaces/catalog/repo-worktree-catalog-owner'
 import { WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS } from './worktree-scan-admin-budget'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
@@ -166,6 +167,8 @@ function stallProbeOnce(): (fingerprint: string | null) => void {
 
 describe('worktree scan admin-fingerprint gate', () => {
   beforeEach(() => {
+    // The catalog owner is process-wide, like production's single runtime; each case starts unobserved.
+    _resetWorktreeCatalogOwnerForTests()
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockResolvedValue([
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
@@ -247,31 +250,18 @@ describe('worktree scan admin-fingerprint gate', () => {
 
 describe('scoped explicit worktree-id resolution', () => {
   beforeEach(() => {
+    // The catalog owner is process-wide, like production's single runtime; each case starts unobserved.
+    _resetWorktreeCatalogOwnerForTests()
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockImplementation(async (repoPath: string) => [
-      { path: repoPath, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
-      {
-        path: `${repoPath}-feature`,
-        head: 'def',
-        branch: 'feature',
-        isBare: false,
-        isMainWorktree: false
-      }
+      { path: repoPath, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ])
     readRepoWorktreeAdminFingerprintMock.mockReset()
     readRepoWorktreeAdminFingerprintMock.mockResolvedValue('fp-1')
   })
 
-  function scannedRepoPaths(): string[] {
-    return listWorktreesStrictMock.mock.calls.map((call) => call[0] as string)
-  }
-
-  it('keeps cross-repo selectors on the fleet path so ambiguity still throws', async () => {
-    const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
-    const resolve = (selector: string): Promise<unknown> =>
-      runtime['resolveGitWorktreeSelector'](selector)
-
-    await expect(resolve('branch:main')).rejects.toThrow('selector_ambiguous')
-    expect(new Set(scannedRepoPaths()).size).toBe(10)
+  it('rejects a branch selector that matches two repositories', async () => {
+    const { runtime } = makeRuntime({ repoCount: 2 })
+    await expect(runtime.showManagedWorktree('branch:main')).rejects.toThrow('selector_ambiguous')
   })
 })

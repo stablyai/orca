@@ -4,14 +4,18 @@ import {
   acquireElectronDebugger,
   type ElectronDebuggerLease
 } from '../debugger/electron-debugger-lease'
-import { createBrowserScreencastMessageHandler } from './browser-screencast-cdp-events'
+import {
+  browserScreencastDialogEvent,
+  createBrowserScreencastMessageHandler
+} from './browser-screencast-cdp-events'
 import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import { createBrowserScreencastDeviceMetrics } from './browser-screencast-device-metrics'
 import { createBrowserScreencastFramePacer } from './browser-screencast-frame-pacer'
 import { createBrowserScreencastSnapshotCapture } from './browser-screencast-snapshot-capture'
 import {
   answerBrowserJavaScriptDialog,
-  getBrowserJavaScriptDialog
+  getBrowserJavaScriptDialog,
+  onBrowserJavaScriptDialogOpened
 } from '../../guest-lifecycle/prompts/browser-javascript-dialogs'
 import {
   clampScreencastViewportToGuestView,
@@ -57,6 +61,7 @@ export async function startBrowserScreencast(
   })
   const isClosed = (): boolean => closed
   const isStopping = (): boolean => stopping
+  const stopRequested = new AbortController()
 
   // Preserve the client request so the viewport can grow back after the guest view limit shrinks it.
   const embedderSizedGuest = isEmbedderSizedScreencastGuest(webContents)
@@ -81,13 +86,20 @@ export async function startBrowserScreencast(
   }
 
   const deviceMetrics = createBrowserScreencastDeviceMetrics(webContents, dbg, options)
-  const framePacer = createBrowserScreencastFramePacer({ dbg, options, isClosed, isStopping })
+  const framePacer = createBrowserScreencastFramePacer({
+    dbg,
+    options,
+    isClosed,
+    isStopping,
+    readZoomFactor: () => (webContents.isDestroyed() ? 1 : webContents.getZoomFactor())
+  })
   const snapshotCapture = createBrowserScreencastSnapshotCapture({
     webContents,
     dbg,
     options,
     isClosed,
     isStopping,
+    stopSignal: stopRequested.signal,
     getSeq: framePacer.getSeq,
     queueFrame: framePacer.queueFrame,
     applyDeviceMetricsOverride: () => {
@@ -162,6 +174,7 @@ export async function startBrowserScreencast(
     framePacer.clearPending()
     dbg.removeListener('message', handleMessage as never)
     dbg.removeListener('detach', handleDetach as never)
+    stopWatchingDialogs()
     debuggerLease?.release()
     debuggerLease = null
     resolveDone()
@@ -174,6 +187,12 @@ export async function startBrowserScreencast(
   }
 
   dbg.on('message', handleMessage as never)
+  // The owner names the asking frame and turns away a second frame's dialog before viewers see it.
+  const stopWatchingDialogs = onBrowserJavaScriptDialogOpened(webContents.id, (dialog) => {
+    if (!isClosed() && !isStopping()) {
+      options.onEvent?.(browserScreencastDialogEvent(dialog))
+    }
+  })
   dbg.on('detach', handleDetach as never)
 
   try {
@@ -225,6 +244,7 @@ export async function startBrowserScreencast(
         return
       }
       stopping = true
+      stopRequested.abort()
       snapshotCapture.bumpGeneration()
       snapshotCapture.clearNavigationCaptureTimer()
       framePacer.clearPending(true)

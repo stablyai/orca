@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { readoptOrphanedWorkspacesForTarget } from './ssh-target-readoption'
 import type { Store } from '../../persistence/loading-store/store'
-import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
+import type {
+  RemovedSshTargetTombstone,
+  SshTarget
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 
 function makeTarget(overrides: Partial<SshTarget> = {}): SshTarget {
   return {

@@ -3,7 +3,7 @@
 import { useAppStore } from '@/store/index'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/draft-paste-ready-timeout'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { waitForAgentDraftInputReady } from '@/lib/agent-session/messaging/paste/agent-draft-readiness'
 import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
 import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
@@ -93,7 +93,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       phase = 'closed'
       return
     }
-    const status = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]?.state
+    const status = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)?.state
     // Why drop: the user is already driving the screen, or a prompt is waiting on an answer.
     if (liveInputSinceBind || status === 'blocked' || status === 'waiting') {
       dropDraft(draftAgent)

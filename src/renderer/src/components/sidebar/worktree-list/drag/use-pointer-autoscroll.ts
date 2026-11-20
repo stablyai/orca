@@ -1,3 +1,7 @@
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import { useCallback } from 'react'
 import type React from 'react'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
@@ -45,7 +49,9 @@ export function useWorktreePointerDragAutoscroll(args: {
       })
       if (autoscroll) {
         markScrollMovement()
+        supersedeVirtualizedScrollAnchorRestore(container, autoscroll.scrollTop)
         container.scrollTop = autoscroll.scrollTop
+        requestVirtualizedScrollAnchorRecord(container)
         if (!session.refreshWorktreeDragSession()) {
           clearWorktreeDrag()
           return

@@ -2,8 +2,8 @@ import type {
   BrowserSelectResult,
   BrowserScrollResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
-import { iterateBrowserTextInsertionChunks } from '../../../../shared/browser-text-insertion-chunks'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
+import { iterateBrowserTextInsertionChunks } from '../../../../shared/browser/automation/browser-text-insertion-chunks'
 import { AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES } from '../protocol/agent-browser-text-argument-budget'
 import { AgentBrowserBridgeCoreCommands } from './agent-browser-bridge-core-commands'
 import { SELECT_OPTION_TARGET_FUNCTION } from '../../cdp/input/browser-element-functions'
@@ -42,7 +42,7 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserScrollResult> {
-    return this.enqueuePageAction(worktreeId, browserPageId, async (sessionName) => {
+    return this.enqueueInertAction(worktreeId, browserPageId, async (sessionName) => {
       const args = ['scroll', direction]
       if (amount != null) {
         args.push(String(amount))
@@ -56,7 +56,7 @@ export abstract class AgentBrowserBridgeInputCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueuePageAction(
+    return this.enqueueInertAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {

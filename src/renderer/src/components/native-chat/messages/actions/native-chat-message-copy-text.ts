@@ -1,5 +1,6 @@
-import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/agent-message-display-text'
-import { nativeChatMessageCopyText } from '../../../../../../shared/native-chat/transcript/native-chat-message-copy-text'
+import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
+import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import { nativeChatMessageCopyText } from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-copy-text'
 import { nativeChatStoppedBeforeStartLabel } from '../rows/native-chat-stopped-before-start-row'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 
@@ -9,9 +10,12 @@ export function nativeChatSlotCopyText(
   messageId: string
 ): string | null {
   const slot = slots.find((entry) => entry.kind === 'message' && entry.message.id === messageId)
-  return slot?.kind === 'message'
-    ? slot.message.from && (slot.message.role === 'user' || slot.message.agentStart)
-      ? agentMessageTranscriptText(slot.message.blocks, slot.message.from, slot.message.shortened)
-      : nativeChatMessageCopyText(slot.message, nativeChatStoppedBeforeStartLabel())
-    : null
+  return slot?.kind === 'message' ? nativeChatRowCopyText(slot.message) : null
+}
+
+/** What "Copy message" copies for a row drawing `message`. */
+export function nativeChatRowCopyText(message: NativeChatMessage): string {
+  return message.from && (message.role === 'user' || message.agentStart)
+    ? agentMessageTranscriptText(message.blocks, message.from, message.shortened)
+    : nativeChatMessageCopyText(message, nativeChatStoppedBeforeStartLabel())
 }

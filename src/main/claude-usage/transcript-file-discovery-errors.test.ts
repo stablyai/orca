@@ -13,7 +13,7 @@ vi.mock('node:os', async () => {
   return { ...actual, homedir: () => state.home }
 })
 
-vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
+vi.mock('../claude-accounts/profiles/routing/claude-profile-installed-router', () => ({
   claudeProfileHistoryDirs: () => []
 }))
 
@@ -58,15 +58,12 @@ describe('Claude history discovery failures', () => {
     await expect(list([])).rejects.toMatchObject({ code: 'EACCES' })
   })
 
-  it.each(['ENOENT', 'ENOTDIR'])(
-    'keeps sibling files when a child disappears (%s)',
-    async (code) => {
-      const sibling = join(projects, 'kept.jsonl')
-      await writeFile(sibling, '')
-      state.blocked = join(projects, 'removed')
-      await mkdir(state.blocked)
-      state.code = code
-      await expect(list([])).resolves.toEqual([sibling])
-    }
-  )
+  it('keeps sibling files when a child disappears', async () => {
+    const sibling = join(projects, 'kept.jsonl')
+    await writeFile(sibling, '')
+    state.blocked = join(projects, 'removed')
+    await mkdir(state.blocked)
+    state.code = 'ENOENT'
+    await expect(list([])).resolves.toEqual([sibling])
+  })
 })

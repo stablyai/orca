@@ -30,6 +30,8 @@ export const CONSUMERS = new Map([
       coldPaths: new Set(['reconcileFromSnapshot']),
       helpers: {
         getStructuredAgentSessionTabs: ['reconcileFromSnapshot'],
+        // A bot's tabless sessions plus every tab: the same whole-map walk.
+        withBotSessions: ['reconcileFromSnapshot'],
         reconcileFromSnapshot: ['reconcile']
       },
       imports: new Set([
@@ -49,7 +51,16 @@ export const CONSUMERS = new Map([
         'ownerInputChanged',
         'ownerInputs',
         'createStructuredSessionMembership',
-        'sameSemanticTab'
+        'createStructuredSessionStatusBurst',
+        'sameCapturedInput',
+        'sameStatusInput',
+        'sameSemanticTab',
+        'readBotBackgroundSessionTabs',
+        'subscribeBotBackgroundSessionTabs',
+        'withBotSessions',
+        // Read only the named sessions' members, never a tab map.
+        'subscribeHostGroupStatus',
+        'sessionMembers'
       ])
     }
   ],
@@ -66,8 +77,8 @@ const ENUMERATING_CALLS = new Set(['keys', 'values', 'entries'])
 
 /** Shared tab-map writers wired to the seam: a raw record literal for these fields bypasses provenance. */
 export const WRITERS = [
-  'src/renderer/src/runtime/web-session-tabs-sync/scoped-patch-annotation.ts',
-  'src/renderer/src/runtime/web-session-tabs-sync/store-patch.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/snapshots/scoped-patch-annotation.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/snapshots/store-patch.ts',
   'src/renderer/src/runtime/workspace-layout/frames/workspace-layout-frame-sync.ts',
   'src/renderer/src/store/slices/browser/pages/browser-page-state-actions.ts',
   'src/renderer/src/store/slices/editor/file-ids/hydrated-editor-file-ids.ts',
@@ -96,13 +107,13 @@ export const WRITERS = [
   'src/renderer/src/store/slices/worktrees/session/worktree-identity-rename-state.ts',
   'src/renderer/src/store/slices/worktrees/session/worktree-slice-lookups.ts',
   'src/renderer/src/store/slices/worktrees/teardown/record-key-omission.ts',
-  'src/renderer/src/store/terminals/terminal-tab-close.ts',
-  'src/renderer/src/store/terminals/terminal-tab-creation.ts',
-  'src/renderer/src/store/terminals/terminal-tab-navigation.ts',
-  'src/renderer/src/store/terminals/terminal-tab-title-batch.ts',
-  'src/renderer/src/store/terminals/workspace-terminal-hydration-patch.ts',
-  'src/renderer/src/store/terminals/workspace-terminal-hydration.ts',
-  'src/renderer/src/store/terminals/workspace-terminal-reconnect.ts',
+  'src/renderer/src/store/terminals/retirement/terminal-tab-close.ts',
+  'src/renderer/src/store/terminals/tabs/creation/terminal-tab-creation.ts',
+  'src/renderer/src/store/terminals/tabs/terminal-tab-navigation.ts',
+  'src/renderer/src/store/terminals/tabs/presentation/terminal-tab-title-batch.ts',
+  'src/renderer/src/store/terminals/hydration/workspace-terminal-hydration-patch.ts',
+  'src/renderer/src/store/terminals/hydration/workspace-terminal-hydration.ts',
+  'src/renderer/src/store/terminals/hydration/workspace-terminal-reconnect.ts',
   'src/renderer/src/store/workspace-layout/frames/workspace-layout-frame-store-patch.ts'
 ]
 export const SEAM_FIELDS = new Set([

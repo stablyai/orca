@@ -1,7 +1,9 @@
 import React from 'react'
-import { LinearAgentSkillSetupPrompt } from '../../LinearAgentSkillSetupPrompt'
+import { LinearAgentSkillSetupPrompt } from '../../../skills/setup/LinearAgentSkillSetupPrompt'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import WorktreeCardAgents from '../activity/WorktreeCardAgents'
+import { WorktreeCardLineAgents } from '../activity/worktree-card-line-agents'
+import { WorktreeCardLineAgentMore } from '../activity/worktree-card-line-agent-more'
 import {
   renderWorktreeCardIndicators,
   WorktreeCardIdentityHover,
@@ -53,10 +55,16 @@ export const CARD_ACTIVITY_PARTS = {
   Agents: part(['tight'], (props, _children, card) => (
     <WorktreeCardAgents
       worktreeId={card.worktree.id}
-      agents={card.agentActivityDisplayMode === 'compact' ? card.compactInlineAgentRows : undefined}
+      executionHostId={card.worktree.hostId}
       // Why: counterbalance the card stack gap so agents right after the title read as one group.
       className={props.tight === true ? '-mt-1' : 'mt-0'}
     />
+  )),
+  LineAgents: part([], (_props, _children, card) => (
+    <WorktreeCardLineAgents worktreeId={card.worktree.id} />
+  )),
+  LineAgentMore: part([], (_props, _children, card) => (
+    <WorktreeCardLineAgentMore worktreeId={card.worktree.id} />
   )),
   RemoteBranchConflict: part([], (_props, _children, { remoteBranchConflict }) =>
     remoteBranchConflict ? (

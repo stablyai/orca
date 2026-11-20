@@ -1,6 +1,6 @@
 import type { DispatchCreator } from '../db/dispatch-depth'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
-import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { AgentSessionRecordReader } from '../addressing/session-lineage/structured-session-lineage'
@@ -15,7 +15,7 @@ export type CrewReadDependencies = {
   paneForHandle: (handle: string) => string | null
   name: (
     party: AgentMessageSender['party'],
-    taskName: string | null,
+    dispatchId: string | undefined,
     records: AgentSessionRecordReader | null
   ) => string | null
   callerPaneForHandle?: (handle: string) => string | null

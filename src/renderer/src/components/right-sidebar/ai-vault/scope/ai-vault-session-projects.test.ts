@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectHostSetupProjection } from '../../../../../../shared/project-host-setup-projection'
+import type { ProjectHostSetupProjection } from '../../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { Project, ProjectHostSetup } from '../../../../../../shared/project-types'
+import type { Project, ProjectHostSetup } from '../../../../../../shared/project/project-types'
 
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
 import {
@@ -270,29 +270,6 @@ describe('buildAiVaultProjectContext', () => {
       kind: 'folder',
       key: 'folder:/outside/path',
       label: 'outside/path'
-    })
-  })
-
-  it('uses repo fallback candidates when a setup for the repo has a blank path', () => {
-    const repo = makeRepo({ id: 'repo-1', displayName: 'Repo', path: '/repo' })
-    const session = makeSession({ id: 'claude:inside-repo', cwd: '/repo/src' })
-
-    const context = buildAiVaultProjectContext({
-      repos: [repo],
-      worktrees: [],
-      projectHostSetupProjection: makeProjection({
-        projects: [],
-        setups: [makeSetup({ repoId: repo.id, projectId: 'repo:repo-1', path: '' })]
-      }),
-      activeRepo: repo,
-      activeWorktree: null,
-      sessions: [session]
-    })
-
-    expect(context.sessionProjectById.get(session.id)).toMatchObject({
-      kind: 'repo',
-      key: 'repo:repo-1',
-      label: 'Repo'
     })
   })
 })

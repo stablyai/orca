@@ -1,13 +1,13 @@
 import {
   openTranscriptReadStream,
   readTranscriptSlice
-} from '../../../native-chat/wsl-transcript-fs-access'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import {
   isZstdTranscriptPath,
   readZstdTranscriptSlice,
   zstdTranscriptStream
-} from '../../../native-chat/transcript-zstd-decompression'
-import type { WslTranscriptFsTaskPriority } from '../../../native-chat/wsl-transcript-fs-gate'
+} from '../../../native-chat/transcript-streaming/transcript-zstd-decompression'
+import type { WslTranscriptFsTaskPriority } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-gate'
 
 const ROLLOUT_READ_LIMIT = 64 * 1024
 

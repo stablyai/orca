@@ -11,7 +11,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as NodePath from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ClaudeFolderTrustFile from '../../claude/claude-folder-trust-file'
+import type * as ClaudeFolderTrustFile from '../../claude/configuration/claude-folder-trust-file'
+import type * as QoderWorkspaceTrust from '../../qoder/workspace-trust'
 
 const CODEX_CONFIG_FILES = ['/orca/codex-home/config.toml', '/home/u/.codex/config.toml']
 
@@ -46,8 +47,12 @@ vi.mock('./agent-trust-presets', () => ({
 vi.mock('../../codex/configuration/homes/codex-home-paths', () => ({
   getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
 }))
-vi.mock('../../qoder/workspace-trust', () => ({ markQoderWorkspaceTrusted: mocks.qoder }))
-vi.mock('../../claude/claude-folder-trust-file', async (importOriginal) => {
+// Qwen reuses the real Qoder trustDirectories helper.
+vi.mock('../../qoder/workspace-trust', async (importOriginal) => ({
+  ...(await importOriginal<typeof QoderWorkspaceTrust>()),
+  markQoderWorkspaceTrusted: mocks.qoder
+}))
+vi.mock('../../claude/configuration/claude-folder-trust-file', async (importOriginal) => {
   const actual = await importOriginal<typeof ClaudeFolderTrustFile>()
   mocks.claudeGrant.mockImplementation(actual.grantClaudeWorkspaceTrust)
   return { ...actual, grantClaudeWorkspaceTrust: mocks.claudeGrant }
@@ -198,6 +203,50 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     })
     expect(JSON.parse(readFileSync(join(root, '.claude.json'), 'utf-8'))).toEqual({
       projects: { [root]: { hasTrustDialogAccepted: true } }
+    })
+  })
+})
+
+describe('applyAgentWorkspaceTrustToSpawn for qwen-code', () => {
+  let root: string
+
+  beforeEach(() => {
+    root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-agent-trust-')))
+    // The spawn merges process.env, so a developer's Qwen config overrides must not leak in.
+    vi.stubEnv('QWEN_CONFIG_DIR', '')
+    vi.stubEnv('QWEN_CLI_HOME', '')
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('adds only the fresh worktree to Qwen trustDirectories and keeps other settings', async () => {
+    const home = join(root, 'home')
+    const worktree = join(root, 'workspaces', 'repo', 'feature')
+    mkdirSync(worktree, { recursive: true })
+    mkdirSync(join(home, '.qwen'), { recursive: true })
+    const settingsPath = join(home, '.qwen', 'settings.json')
+    const existing = {
+      general: { enableAutoUpdate: false },
+      permissions: { allow: ['Bash(git status)'], trustDirectories: ['/elsewhere'] }
+    }
+    writeFileSync(settingsPath, JSON.stringify(existing))
+    await applyAgentWorkspaceTrustToSpawn({
+      ...local,
+      env: { HOME: home, USERPROFILE: home },
+      launchAgent: 'qwen-code',
+      worktreeId: `repo::${worktree}`,
+      cwd: worktree,
+      store: { getFolderWorkspace: () => undefined },
+      isFreshLaunch: true,
+      settings: {},
+      spawnOptions: {}
+    })
+    expect(JSON.parse(readFileSync(settingsPath, 'utf8'))).toEqual({
+      ...existing,
+      permissions: { ...existing.permissions, trustDirectories: ['/elsewhere', worktree] }
     })
   })
 })

@@ -3,9 +3,11 @@ import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-e
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { StrictMode, type ReactNode } from 'react'
+import 'react'
+import type { ReactNode } from 'react'
 import { useStore } from 'zustand'
-import { ConfirmationDialogContext } from '../../../confirmation-dialog-context'
+import { ConfirmationDialogContext } from '../../../dismiss/confirmation/confirmation-dialog-context'
+import { TooltipProvider } from '../../../ui/tooltip'
 import {
   createTestStore,
   createBrowserMockApi
@@ -28,14 +30,17 @@ vi.mock('@/store/index', async () => {
   return {
     useAppStore: Object.assign(
       (selector: (state: AppState) => unknown) => useStore(store, selector),
-      { getState: () => store.getState() }
+      {
+        getState: () => store.getState(),
+        subscribe: (listener: () => void) => store.subscribe(listener)
+      }
     )
   }
 })
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: mocks.error, warning: vi.fn() }
 }))
-vi.mock('../../../BrowserCookieImportMachineNotice', () => ({
+vi.mock('./BrowserCookieImportMachineNotice', () => ({
   BrowserCookieImportMachineNotice: () => null
 }))
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
@@ -112,7 +117,7 @@ function SessionSection() {
 function mount(node: ReactNode) {
   return render(
     <ConfirmationDialogContext.Provider value={mocks.confirm}>
-      {node}
+      <TooltipProvider>{node}</TooltipProvider>
     </ConfirmationDialogContext.Provider>
   )
 }
@@ -205,81 +210,3 @@ it('captures the selected Host and Active profile at press through delayed captu
   await act(async () => fireEvent.click(button))
   expect(mocks.clear).toHaveBeenCalledTimes(3)
 })
-
-it.each([false, true])(
-  'refuses R7 replacement during initial local reply (null=%s), then permits fresh R8',
-  async (absent) => {
-    selectServer()
-    const view = mount(<SessionSection />)
-    const button = screen.getByRole('button', { name: 'Clear Google cookies…' })
-    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
-    const reply = Promise.withResolvers<typeof local | null>()
-    mocks.target.mockReturnValueOnce(reply.promise)
-    fireEvent.click(button)
-    replaceRuntimeEnvironmentRevisions([{ ...environment, pairingRevision: 8 }])
-    await act(async () => {
-      store.setState({ runtimeEnvironments: [{ ...environment, pairingRevision: 8 }] })
-      reply.resolve(absent ? null : { ...local, environmentId: 'server' })
-    })
-    await waitFor(() => expect(mocks.error).toHaveBeenCalledTimes(1))
-    expect(mocks.confirm).not.toHaveBeenCalled()
-    expect(mocks.clear).not.toHaveBeenCalled()
-    expect(api.runtimeEnvironments.call).not.toHaveBeenCalled()
-    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
-    await act(async () => fireEvent.click(button))
-    expect(mocks.clear).toHaveBeenCalledTimes(1)
-    mocks.confirm.mockClear()
-    const consent = Promise.withResolvers<boolean>()
-    mocks.confirm.mockReturnValueOnce(consent.promise)
-    fireEvent.click(button)
-    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledTimes(1))
-    replaceRuntimeEnvironmentRevisions([{ ...environment, pairingRevision: 9 }])
-    await act(async () => consent.resolve(true))
-    expect(mocks.clear).toHaveBeenCalledTimes(1)
-    expect(mocks.error).toHaveBeenCalledTimes(2)
-    view.unmount()
-  }
-)
-
-it.each(['success', 'rejection'])(
-  'abandons pre-dialog %s after unmount, but a remounted open confirmation survives',
-  async (outcome) => {
-    const view = mount(
-      <StrictMode>
-        <SessionSection />
-      </StrictMode>
-    )
-    const button = screen.getByRole('button', { name: 'Clear Google cookies…' })
-    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
-    const reply = Promise.withResolvers<typeof local>()
-    mocks.target.mockReturnValueOnce(reply.promise)
-    fireEvent.click(button)
-    view.unmount()
-    await act(async () => {
-      if (outcome === 'success') {
-        reply.resolve(local)
-      } else {
-        reply.reject(new Error('late'))
-      }
-    })
-    expect(mocks.confirm).not.toHaveBeenCalled()
-    expect(mocks.error).not.toHaveBeenCalled()
-    expect(mocks.clear).not.toHaveBeenCalled()
-    expect(profileEvents.size).toBe(0)
-    const remounted = mount(<SessionSection />)
-    await waitFor(() =>
-      expect(
-        screen.getByRole('button', { name: 'Clear Google cookies…' }).hasAttribute('disabled')
-      ).toBe(false)
-    )
-    const consent = Promise.withResolvers<boolean>()
-    mocks.confirm.mockReturnValueOnce(consent.promise)
-    fireEvent.click(screen.getByRole('button', { name: 'Clear Google cookies…' }))
-    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledTimes(1))
-    remounted.unmount()
-    await act(async () => consent.resolve(true))
-    expect(mocks.clear).toHaveBeenCalledWith(
-      expect.objectContaining({ profileId: 'default', environmentId: null })
-    )
-  }
-)

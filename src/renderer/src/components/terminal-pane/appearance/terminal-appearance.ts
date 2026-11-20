@@ -1,13 +1,13 @@
 import type { ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/appearance/terminal-ligatures'
 import {
   resolvePaneStyleOptions,
   resolveEffectiveTerminalAppearance
 } from '@/lib/terminal/appearance/terminal-theme'
-import { buildFontFamily } from '../../../../../shared/monospace-font-family'
+import { buildFontFamily } from '../../../../../shared/styles/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import '@/lib/pane-manager/pane-layout/pane-tree-ops'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/terminal-fit/pane-fit'
@@ -27,7 +27,7 @@ import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit
 import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-focus/pane-cursor-blink-suspension'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
-import { HEX_COLOR_RE } from '../../../../../shared/color-validation'
+import { HEX_COLOR_RE } from '../../../../../shared/color/color-validation'
 import type { TerminalViewAttributes } from '../../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
 import { normalizeTerminalLineHeight } from '../../../../../shared/terminal/appearance/terminal-line-height-settings'

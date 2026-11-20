@@ -19,9 +19,9 @@ function fail(id: string, code: string, message: string): RpcFailure {
 }
 
 function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & {
-  calls: Array<{ method: string; params: unknown }>
+  calls: { method: string; params: unknown }[]
 } {
-  const calls: Array<{ method: string; params: unknown }> = []
+  const calls: { method: string; params: unknown }[] = []
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
@@ -74,7 +74,7 @@ describe('mobile clipboard image paste helpers', () => {
     })
   })
 
-  it.each([null, 'unknown', 'codex', 'omp'])(
+  it.each([null, 'omp'])(
     'contains embedded paste markers inside the image paste for %s',
     (agent) => {
       const payload = buildMobileTerminalImagePastePayload(

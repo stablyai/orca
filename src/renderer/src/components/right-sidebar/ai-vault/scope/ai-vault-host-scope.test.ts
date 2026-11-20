@@ -2,131 +2,48 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
+import { useAppStore } from '@/store/index'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import type { AiVaultSessionResumeTargetState } from '../session-actions/ai-vault-session-resume'
-import { useAiVaultExecutionHostScope } from './ai-vault-host-scope'
-import type { ExecutionHostId, ExecutionHostScope } from '../../../../../../shared/execution-host'
+import { useAiVaultPanelHostScope } from './ai-vault-host-scope'
 
-type HostScopeResult = ReturnType<typeof useAiVaultExecutionHostScope>
+const WORKTREE_ID = 'repo-1::/remote/repo'
+const resumeTargetState = {
+  folderWorkspaces: [],
+  projectGroups: [],
+  repos: [{ ...TEST_REPO, id: 'repo-1' }],
+  worktreesByRepo: {
+    'repo-1': [makeWorktree({ id: WORKTREE_ID, repoId: 'repo-1', hostId: 'runtime:server-1' })]
+  }
+}
 
 let root: Root | null = null
-let latest: HostScopeResult | null = null
+let scope: string | null = null
 
-function HookProbe(props: {
-  activeWorktreeId: string | null
-  resumeTargetState: AiVaultSessionResumeTargetState
-  availableExecutionHostScopes?: readonly ExecutionHostScope[]
-}): null {
-  latest = useAiVaultExecutionHostScope(props)
+function HookProbe(): null {
+  scope = useAiVaultPanelHostScope(null, resumeTargetState).executionHostScope
   return null
 }
 
-async function renderHook(props: {
-  activeWorktreeId: string | null
-  resumeTargetState: AiVaultSessionResumeTargetState
-  availableExecutionHostScopes?: readonly ExecutionHostScope[]
-}): Promise<void> {
-  if (!root) {
-    const container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-  }
-  await act(async () => {
-    root?.render(createElement(HookProbe, props))
-  })
-}
-
-function stateForWorktree(args: {
-  worktreeId: string
-  repoId: string
-  executionHostId?: ExecutionHostId | null
-  hostId?: ExecutionHostId | null
-}): AiVaultSessionResumeTargetState {
-  return {
-    folderWorkspaces: [],
-    projectGroups: [],
-    repos: [
-      {
-        ...TEST_REPO,
-        id: args.repoId,
-        connectionId: null,
-        executionHostId: args.executionHostId ?? 'local'
-      }
-    ],
-    worktreesByRepo: {
-      [args.repoId]: [
-        makeWorktree({
-          id: args.worktreeId,
-          repoId: args.repoId,
-          hostId: args.hostId ?? undefined
-        })
-      ]
-    }
-  }
-}
-
 afterEach(() => {
-  if (root) {
-    act(() => root?.unmount())
-  }
+  act(() => root?.unmount())
   root = null
-  latest = null
-  document.body.replaceChildren()
+  scope = null
 })
 
-describe('useAiVaultExecutionHostScope', () => {
-  it('does not claim local history when the active workspace host cannot be resolved (#13713)', async () => {
-    await renderHook({
-      activeWorktreeId: 'repo-1::/remote/repo',
-      resumeTargetState: {
-        folderWorkspaces: [],
-        projectGroups: [],
-        repos: [],
-        worktreesByRepo: {}
-      }
-    })
-
-    expect(latest?.executionHostScope).not.toBe('local')
-    expect(latest?.executionHostScope).toBe('all')
+it('opens on the last workspace host after that workspace closed its last tab', async () => {
+  useAppStore.setState({
+    activeWorktreeId: null,
+    worktreesByRepo: resumeTargetState.worktreesByRepo,
+    worktreeNavHistory: [WORKTREE_ID, 'tasks'],
+    worktreeNavHistoryIndex: 1
   })
-
-  it('preserves manual host scope changes across unrelated rerenders', async () => {
-    const props = {
-      activeWorktreeId: 'repo-1::/remote/repo',
-      resumeTargetState: stateForWorktree({
-        worktreeId: 'repo-1::/remote/repo',
-        repoId: 'repo-1',
-        hostId: 'ssh:dev-box'
-      })
-    }
-    await renderHook(props)
-
-    await act(async () => {
-      latest?.onExecutionHostScopeChange('all')
-    })
-    await renderHook({ ...props, resumeTargetState: { ...props.resumeTargetState } })
-
-    expect(latest?.executionHostScope).toBe('all')
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  await act(async () => {
+    root?.render(createElement(HookProbe))
   })
-
-  it('preserves manual runtime host scope choices while they are still available', async () => {
-    const props = {
-      activeWorktreeId: 'repo-1::/local/repo',
-      resumeTargetState: stateForWorktree({
-        worktreeId: 'repo-1::/local/repo',
-        repoId: 'repo-1'
-      }),
-      availableExecutionHostScopes: ['runtime:remote-server'] as const
-    }
-    await renderHook(props)
-
-    await act(async () => {
-      latest?.onExecutionHostScopeChange('runtime:remote-server')
-    })
-    await renderHook({ ...props, resumeTargetState: { ...props.resumeTargetState } })
-
-    expect(latest?.executionHostScope).toBe('runtime:remote-server')
-  })
+  expect(scope).toBe('runtime:server-1')
 })

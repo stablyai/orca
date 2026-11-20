@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -12,7 +12,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   partialRuntimeStore,
   storeWorktreeMeta
-} from '../../orca-runtime-tests/runtime-store-partial-fixture'
+} from '../../construction/test-context/runtime-store-partial-fixture'
 
 // BUG-9: lost relay contact must report unverifiable, never live:0/pty:no for a surviving terminal.
 
@@ -49,10 +49,10 @@ function makeStore() {
   }
 }
 
-function makeRuntime(controller: {
+async function makeRuntime(controller: {
   hasPty: () => boolean | null
   listProcesses: () => Promise<{ id: string; worktreeId: string }[]>
-}): OrcaRuntimeService {
+}): Promise<OrcaRuntimeService> {
   const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
   runtime.setPtyController(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: worktree.ps reaches only listProcesses and hasPty on this controller.
@@ -64,7 +64,7 @@ function makeRuntime(controller: {
     } as never
   )
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   runtime.registerPty(PTY_ID, WORKTREE_ID, CONNECTION_ID)
   return runtime
 }
@@ -75,11 +75,15 @@ async function psRow(runtime: OrcaRuntimeService) {
 }
 
 describe('worktree.ps terminal verdicts for an SSH host', () => {
-  it('reports a terminal on an unreachable host as unverifiable, not zero', async () => {
-    const runtime = makeRuntime({
-      hasPty: () => null,
+  it('reports an unreachable terminal as unverifiable until its host lists it again', async () => {
+    let reachable = false
+    const runtime = await makeRuntime({
+      hasPty: () => (reachable ? true : null),
       listProcesses: async () => {
-        throw new Error('relay connection lost')
+        if (!reachable) {
+          throw new Error('relay connection lost')
+        }
+        return [{ id: PTY_ID, worktreeId: WORKTREE_ID }]
       }
     })
     // The relay drop reports every PTY of the host with an unconfirmed exit.
@@ -92,31 +96,22 @@ describe('worktree.ps terminal verdicts for an SSH host', () => {
       hasAttachedPty: false,
       unverifiableTerminalCount: 1
     })
+
+    reachable = true
+    expect(await psRow(runtime)).toMatchObject({
+      liveTerminalCount: 1,
+      hasAttachedPty: true,
+      unverifiableTerminalCount: 0
+    })
   })
 
   it('reports nothing for a terminal whose host confirmed the exit', async () => {
-    const runtime = makeRuntime({ hasPty: () => false, listProcesses: async () => [] })
+    const runtime = await makeRuntime({ hasPty: () => false, listProcesses: async () => [] })
     runtime.onPtyExit(PTY_ID, -1, undefined, { hostExitConfirmed: true })
 
     const row = await psRow(runtime)
 
     expect(row).toMatchObject({ liveTerminalCount: 0, hasAttachedPty: false })
-    expect(row?.unverifiableTerminalCount).toBe(0)
-  })
-
-  it('returns to live once the reconnected host lists the terminal again', async () => {
-    let reachable = false
-    const runtime = makeRuntime({
-      hasPty: () => (reachable ? true : null),
-      listProcesses: async () => (reachable ? [{ id: PTY_ID, worktreeId: WORKTREE_ID }] : [])
-    })
-    runtime.onPtyExit(PTY_ID, -1)
-    expect((await psRow(runtime))?.unverifiableTerminalCount).toBe(1)
-
-    reachable = true
-    const row = await psRow(runtime)
-
-    expect(row).toMatchObject({ liveTerminalCount: 1, hasAttachedPty: true })
     expect(row?.unverifiableTerminalCount).toBe(0)
   })
 })

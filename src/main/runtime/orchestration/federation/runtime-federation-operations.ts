@@ -2,12 +2,17 @@ import type {
   OrchestrationEnvironmentCallOptions,
   OrchestrationWorkerServer
 } from './environment-transport'
-import type { RuntimeOrchestrationEnvelope } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeOrchestrationEnvelope } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity } from '../../workspaces/persisted-surfaces/has-exact-persisted-terminal-surface-identity'
 
 export abstract class RuntimeFederationOperations extends OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity {
-  resolveOrchestrationWorkerServer(selector: string): OrchestrationWorkerServer {
-    return this.orchestrationFederation.resolveWorkerServer(selector)
+  async resolveOrchestrationWorkerServer(selector: string): Promise<OrchestrationWorkerServer> {
+    return await this.orchestrationFederation.resolveWorkerServer(selector)
+  }
+
+  /** Every server paired to this host; none in a runtime that can't dial servers. */
+  listOrchestrationWorkerServers(): Promise<readonly { environmentId: string; name: string }[]> {
+    return this.orchestrationFederation.listWorkerServers()
   }
 
   callOrchestrationWorkerServer(
@@ -32,16 +37,16 @@ export abstract class RuntimeFederationOperations extends OrcaRuntimeWithHasExac
     return this.orchestrationFederation.sync(runId)
   }
 
-  syncOrchestrationFederatedDispatch(dispatchId: string): Promise<void> {
-    return this.orchestrationFederation.syncDispatch(dispatchId)
+  async syncOrchestrationFederatedDispatch(dispatchId: string): Promise<void> {
+    await this.orchestrationFederation.syncDispatch(dispatchId)
   }
 
   syncOrchestrationFederatedDispatchAfterCurrent(dispatchId: string): Promise<void> {
     return this.orchestrationFederation.syncDispatchAfterCurrent(dispatchId)
   }
 
-  ensureOrchestrationFederationRelay(runId?: string): void {
-    this.orchestrationFederation.ensureRelay(runId)
+  ensureOrchestrationFederationRelay(runId?: string, options?: { keepAwake?: boolean }): void {
+    this.orchestrationFederation.ensureRelay(runId, options)
   }
 
   stopOrchestrationFederationRelay(): void {

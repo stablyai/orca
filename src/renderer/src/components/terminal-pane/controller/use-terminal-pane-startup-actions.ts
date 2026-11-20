@@ -1,6 +1,5 @@
 import { useQueuedTabStartupAcknowledgement } from '../mounting/use-queued-tab-startup-acknowledgement'
 import { useVisibleTerminalMeasurement } from '../viewport/use-visible-terminal-measurement'
-import { useIssueCommandSplitSettlement } from '../layout/split/use-issue-command-split-settlement'
 import { useRestoredSessionBannerActions } from '../session-restore/use-restored-session-banner-actions'
 import { useTerminalSessionSaveRecovery } from '../errors/use-terminal-session-save-recovery'
 import { useTerminalQuickCommandEditor } from '../quick-commands/use-terminal-quick-command-editor'
@@ -16,10 +15,8 @@ import type { TerminalPaneStoreController } from './use-terminal-pane-store-bind
 
 export function useTerminalPaneStartupActions(controller: TerminalPaneStoreController) {
   const {
-    consumeTabIssueCommandSplit,
     consumeTabStartupCommand,
     containerRef,
-    issueCommandSplit,
     isVisible,
     managerRef,
     onPtyExit,
@@ -86,8 +83,6 @@ export function useTerminalPaneStartupActions(controller: TerminalPaneStoreContr
     setQuickCommandEditorOpen,
     quickCommandEditorHostId
   })
-
-  useIssueCommandSplitSettlement({ consumeTabIssueCommandSplit, issueCommandSplit, tabId })
 
   const settingsRef = useRef(settings)
   // Startup callbacks can run before the next effect commit.

@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { GITHUB_WEB_RPC_METHODS } from '@/web/preload-api/web-github-routes'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { GITHUB_WEB_RPC_METHODS } from '@/web/preload-api/github/web-github-routes'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import {
   forgeCredentialTarget,
