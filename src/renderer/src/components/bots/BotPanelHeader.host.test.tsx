@@ -11,6 +11,8 @@ vi.mock('./BotPictureButton', () => ({
   BotPictureButton: ({ children }: { children?: React.ReactNode }) => <span>{children}</span>
 }))
 
+import { useAppStore } from '@/store'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Bot } from '../../../../shared/bot-types'
 import { mascotAvatar } from '../../../../shared/bot-avatar'
@@ -47,12 +49,14 @@ const picture: Parameters<typeof BotPanelHeader>[0]['picture'] = {
   pickColor: () => {}
 }
 
-function header(hostId: ExecutionHostId): string {
+function header(hostId: ExecutionHostId, offline = false): string {
   const { container } = render(
     <TooltipProvider>
       <BotPanelHeader
         bot={stampBotHost(hostId, BOT)}
         now={{ needsYou: 0, working: 0 }}
+        offline={offline}
+        quiet={{ running: 'Nightly report', next: null }}
         picture={picture}
       />
     </TooltipProvider>
@@ -84,6 +88,26 @@ describe('remote bot host in the panel header', () => {
     const text = line('runtime:m4', true)
     expect(text).toContain('m4 air')
     expect(text).not.toContain('next 9:00 PM')
+  })
+
+  it('hides the stale activity of a bot whose paired server went offline', () => {
+    const previous = useAppStore.getState().folderWorkspaces
+    useAppStore.setState({
+      folderWorkspaces: [
+        makeFolderWorkspace({ id: BOT.folderWorkspaceId, executionHostId: 'runtime:m4' })
+      ]
+    })
+    try {
+      expect(header('runtime:m4')).toContain('Nightly report')
+      cleanup()
+      const text = header('runtime:m4', true)
+      expect(text).toContain('m4 air')
+      expect(text).toContain('Disconnected')
+      expect(text).not.toContain('Nightly report')
+    } finally {
+      cleanup()
+      useAppStore.setState({ folderWorkspaces: previous })
+    }
   })
 
   it('keeps the status while the server is up', () => {
