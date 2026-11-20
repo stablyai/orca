@@ -5,7 +5,7 @@ import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platfo
 import { invalidateDeletedAiVaultSessionPaths } from '../../../ai-vault/deletion/host-session-delete'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { resolveOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
-import { codexDatedRolloutRelativePath } from '../resume/codex-session-resume-home'
+import { rolloutNames, rolloutStem, type RolloutName } from './codex-rollout-names'
 import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
 import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
 import { isOpenInCodex } from './codex-rollout-writer-lock'
@@ -24,8 +24,6 @@ import {
 type RolloutTarget = { agent: AiVaultAgent; filePath: string }
 type DeleteResult = { deleted: number; failed: number; freedBytes: number }
 
-type RolloutName = { path: string; root: string }
-
 /** One name as found: what it reads (a link's target), and enough to tell if it changed. */
 type NameState = {
   name: RolloutName
@@ -36,33 +34,6 @@ type NameState = {
   version: string
   size: number
   nlink: bigint
-}
-
-/** The `YYYY/MM/DD/rollout-*.jsonl` stem in one of these homes; archived `.zst` maps to its `.jsonl`. */
-function rolloutStem(homes: readonly string[], filePath: string): string | null {
-  for (const home of homes) {
-    const relativePath = codexDatedRolloutRelativePath(join(home, 'sessions'), filePath)
-    if (relativePath) {
-      return relativePath.replace(/\.zst$/, '')
-    }
-  }
-  return null
-}
-
-/** Codex compresses idle rollouts and history passes link them across homes, so match by name. */
-function rolloutNames(homes: readonly string[], stem: string): RolloutName[] {
-  const parts = stem.split('/')
-  const fileName = parts.at(-1) ?? stem
-  return homes.flatMap((home) => {
-    const sessions = join(home, 'sessions')
-    const archived = join(home, 'archived_sessions')
-    return [
-      { path: join(sessions, ...parts), root: sessions },
-      { path: `${join(sessions, ...parts)}.zst`, root: sessions },
-      { path: join(archived, fileName), root: archived },
-      { path: `${join(archived, fileName)}.zst`, root: archived }
-    ]
-  })
 }
 
 /** Null when absent; throws when it can't be proven absent, is no file, or leaves its home. */
@@ -184,7 +155,8 @@ async function deleteRollout(
   shouldDelete: (target: RolloutTarget) => Promise<boolean>,
   references: CodexRolloutHistoryReferences,
   result: DeleteResult,
-  deletedPaths: string[]
+  deletedPaths: string[],
+  released: string[]
 ): Promise<DeleteOutcome> {
   const release = await holdCodexRolloutForDeletion(target.filePath)
   try {
@@ -209,7 +181,7 @@ async function deleteRollout(
       return 'done'
     }
     // Unreadable rollouts prove nothing unreferenced: keep this one.
-    if (!(await references.refresh(homes))) {
+    if (!(await references.prepare(homes))) {
       return 'done'
     }
     if (references.isReferenced(rolloutId)) {
@@ -274,7 +246,10 @@ async function deleteRollout(
     result.deleted += 1
     // A name left (in the import folder) still reads its own parent.
     if ((await readNames(names)).length === 0) {
-      references.forget(rolloutId)
+      const freed = references.forget(rolloutId)
+      if (freed) {
+        released.push(freed)
+      }
     }
     // A name another process links meanwhile is a fresh candidate for the next sweep's full checks.
     await removeCopyMarker(
@@ -282,6 +257,10 @@ async function deleteRollout(
       protectedRoots
     ).catch(() => undefined)
   } catch (error) {
+    // A cancelled sweep stops here; the rest of the batch isn't a failure.
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw error
+    }
     console.warn('[workspace-cleanup] Failed to delete Codex rollout:', target.filePath, error)
     result.failed += 1
   } finally {
@@ -305,37 +284,46 @@ export async function deleteCodexRolloutsPermanently(
   const result: DeleteResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const deletedPaths: string[] = []
   const references = sweepReferences ?? createCodexRolloutHistoryReferences()
-  let pending = [...targets]
-  const waiting = new Map<string, RolloutTarget[]>()
-  // A parent is retried only once its last fork went, so a chain takes one attempt per link.
-  while (pending.length > 0) {
-    for (const target of pending) {
-      const outcome = await deleteRollout(
-        target,
-        listHomes,
-        shouldDelete,
-        references,
-        result,
-        deletedPaths
-      )
-      if (outcome !== 'done') {
-        waiting.set(outcome.referencedId, [...(waiting.get(outcome.referencedId) ?? []), target])
+  try {
+    // The first full read happens here, before any rollout is held from a resume.
+    await references.prepare((await listHomes()).homes).catch((error: unknown) => {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw error
       }
-    }
-    pending = []
-    for (const [rolloutId, waitingTargets] of waiting) {
-      if (!references.isReferenced(rolloutId)) {
+    })
+    let pending = [...targets]
+    const waiting = new Map<string, RolloutTarget[]>()
+    // A parent is retried once its last fork went, so a chain takes one attempt per link.
+    while (pending.length > 0) {
+      const released: string[] = []
+      for (const target of pending) {
+        const outcome = await deleteRollout(
+          target,
+          listHomes,
+          shouldDelete,
+          references,
+          result,
+          deletedPaths,
+          released
+        )
+        if (outcome !== 'done') {
+          waiting.set(outcome.referencedId, [...(waiting.get(outcome.referencedId) ?? []), target])
+        }
+      }
+      pending = released.flatMap((rolloutId) => {
+        const ready = waiting.get(rolloutId) ?? []
         waiting.delete(rolloutId)
-        pending.push(...waitingTargets)
-      }
+        return ready
+      })
     }
-  }
-  if (!sweepReferences) {
-    await references.save()
-  }
-  await invalidateDeletedAiVaultSessionPaths(deletedPaths)
-  if (deletedPaths.length > 0) {
-    forgetCodexHistoryDiskUsage()
+  } finally {
+    if (!sweepReferences) {
+      await references.save()
+    }
+    await invalidateDeletedAiVaultSessionPaths(deletedPaths)
+    if (deletedPaths.length > 0) {
+      forgetCodexHistoryDiskUsage()
+    }
   }
   return result
 }
