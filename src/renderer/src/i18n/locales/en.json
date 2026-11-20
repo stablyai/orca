@@ -29675,6 +29675,12 @@
   },
   "openOnHost": {
     "noRemote": "Add a git remote to open this project on another machine",
-    "updateOrca": "Update Orca on {{host}} to use this"
+    "updateOrca": "Update Orca on {{host}} to use this",
+    "cloneFolderTaken": "{{path}} is already used on {{host}}. Set this project's location on {{host}} in Project Settings",
+    "sourceUnavailable": "Can't reach the host of this workspace",
+    "noRemoteBranch": "This branch has no remote branch {{host}} can open",
+    "missingRemote": "{{host}}'s clone has no remote {{remote}}",
+    "headMismatch": "{{host}}'s copy of {{branch}} is at a different commit than this Mac",
+    "localCommitsStay": "Your {{count}} local commits stay on this Mac"
   }
 }
