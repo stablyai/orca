@@ -161,18 +161,25 @@ describe('session fields a window clears', () => {
     }
   })
 
-  it('the first save after launch clears a relay id saved before it, and keeps one main saved since', async () => {
+  it('the first save after launch clears a relay id saved before it, and keeps ones main saved since or for folders', async () => {
     const main = inMemoryMain()
     const hostId = getRepoExecutionHostId(SSH_REPO)
     main.partitions.set(hostId, {
       ...EMPTY_PARTITION,
-      tabsByWorktree: { [WORKTREE_ID]: [makeTab({ id: 'tab-a', worktreeId: WORKTREE_ID })] },
-      remoteSessionIdsByTabId: { 'tab-gone': 'relay-gone' }
+      tabsByWorktree: {
+        [WORKTREE_ID]: [
+          makeTab({ id: 'tab-a', worktreeId: WORKTREE_ID }),
+          makeTab({ id: 'tab-gone', worktreeId: WORKTREE_ID })
+        ],
+        // This window's session builder writes no relay ids for folder workspaces.
+        'folder-workspace-1': [makeTab({ id: 'tab-folder', worktreeId: 'folder-workspace-1' })]
+      },
+      remoteSessionIdsByTabId: { 'tab-gone': 'relay-gone', 'tab-folder': 'relay-folder' }
     })
     const acknowledged = new AcknowledgedWorkspaceSessionEntries()
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(main.api, [SSH_REPO])
-    for (const [readHostId, partition] of read.wholeReadPartitions) {
-      acknowledged.ownSavedKeys(readHostId, partition, 'stored')
+    for (const [readHostId, relayIds] of read.relayIdsReadByHost) {
+      acknowledged.ownSavedKeys(readHostId, { remoteSessionIdsByTabId: relayIds }, 'stored')
     }
     // A pane move in main saves a relay for another tab before this window's first save.
     const saved = main.partitions.get(hostId)!
@@ -186,7 +193,8 @@ describe('session fields a window clears', () => {
       await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
       expect(main.holding(WORKTREE_ID).remoteSessionIdsByTabId).toEqual({
         'tab-a': 'relay-a',
-        'tab-b': 'relay-b'
+        'tab-b': 'relay-b',
+        'tab-folder': 'relay-folder'
       })
     } finally {
       stop()

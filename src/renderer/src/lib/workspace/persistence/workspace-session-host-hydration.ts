@@ -1,4 +1,5 @@
 import type { Repo } from '../../../../../shared/repository/repo-types'
+import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
@@ -36,8 +37,9 @@ export type WorkspaceSessionHostRead = {
   contestedPrimaryHostBySessionKey: Record<string, ExecutionHostId>
   /** Runtime partitions this read actually loaded, so a later write may speak for all of their rows. */
   hydratedRuntimeSessionHostIds: ExecutionHostId[]
-  /** Partitions read with no rows parked for another host: their saved relay ids are this window's. */
-  wholeReadPartitions: [ExecutionHostId, WorkspaceSessionState][]
+  /** Per partition read with no rows parked for another host, the saved relay ids this window's
+   *  session builder writes back (SSH repo worktree tabs), so its saves may remove them. */
+  relayIdsReadByHost: [ExecutionHostId, Record<string, string>][]
 }
 
 const WORKSPACE_SESSION_KEYED_FIELDS = [
@@ -225,8 +227,9 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
       primaryHostBySessionKey[workspaceId] = hostId
     }
   }
-  const wholeReadPartitions: [ExecutionHostId, WorkspaceSessionState][] = []
+  const relayIdsReadByHost: [ExecutionHostId, Record<string, string>][] = []
   const localSlice = slices[LOCAL_EXECUTION_HOST_ID]
+  const sshRepoIds = new Set(repos.filter((repo) => repo.connectionId).map((repo) => repo.id))
   for (const entry of [
     ...(localSlice ? [[LOCAL_EXECUTION_HOST_ID, localSlice] as const] : []),
     ...nonLocalHostSessionEntries(slices),
@@ -234,18 +237,43 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   ]) {
     const [hostId, slice] = entry
     if (slice && !shadow[hostId]) {
-      wholeReadPartitions.push([hostId, slice])
+      relayIdsReadByHost.push([hostId, relayIdsTheBuilderWrites(slice, sshRepoIds)])
     }
   }
   return {
     session,
-    wholeReadPartitions,
+    relayIdsReadByHost,
     // Derive owners from surviving merged rows, never parked raw rows, or startup creates runtime placeholders for local winners.
     runtimeHostIdByWorkspaceSessionKey: buildRuntimeHostIdByWorkspaceSessionKey(merged.slices),
     contestedHostWorkspaceSessions: shadow,
     contestedPrimaryHostBySessionKey: primaryHostBySessionKey,
     hydratedRuntimeSessionHostIds: [...runtimeHostIds].filter((hostId) => slices[hostId])
   }
+}
+
+/** Folder workspaces and repos without an SSH connection never get relay ids from this window's
+ *  builder; claiming theirs would let a save remove ids main saved for them. */
+function relayIdsTheBuilderWrites(
+  slice: WorkspaceSessionState,
+  sshRepoIds: ReadonlySet<string>
+): Record<string, string> {
+  const saved = slice.remoteSessionIdsByTabId
+  const relayIds: Record<string, string> = {}
+  if (!saved) {
+    return relayIds
+  }
+  for (const [worktreeId, tabs] of Object.entries(slice.tabsByWorktree ?? {})) {
+    if (!sshRepoIds.has(getRepoIdFromWorktreeId(worktreeId))) {
+      continue
+    }
+    for (const tab of tabs) {
+      const relayId = saved[tab.id]
+      if (relayId) {
+        relayIds[tab.id] = relayId
+      }
+    }
+  }
+  return relayIds
 }
 
 /** Include every stored SSH partition even without a repo; older mains lacking census fall back to catalog hosts. */

@@ -198,8 +198,12 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               sessionRead.runtimeHostIdByWorkspaceSessionKey
             )
           }
-          for (const [hostId, partition] of sessionRead.wholeReadPartitions) {
-            windowAcknowledgedSessionEntries.ownSavedKeys(hostId, partition, 'stored')
+          for (const [hostId, relayIds] of sessionRead.relayIdsReadByHost) {
+            windowAcknowledgedSessionEntries.ownSavedKeys(
+              hostId,
+              { remoteSessionIdsByTabId: relayIds },
+              'stored'
+            )
           }
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
             // The read's host-ownership fields are named as the hydration options it feeds.
