@@ -260,7 +260,7 @@ it('shows a waiting child only once the root is proven its parent', async () => 
   })
 })
 
-it('retires a child verified after a background command already finished the root', async () => {
+it('tracks a child that first reports after a background command finished the root', async () => {
   transcript('first')
   transcript('second')
   descriptor('first')
@@ -271,7 +271,6 @@ it('retires a child verified after a background command already finished the roo
   spawn()
   spawn()
   hook('first', 'PreInvocation')
-  hook('second', 'PreInvocation')
   await poll()
   hook('root', 'Stop', { fullyIdle: false })
   hook('first', 'Stop', { fullyIdle: true })
@@ -279,7 +278,12 @@ it('retires a child verified after a background command already finished the roo
     hook('root', 'PostToolUse', { stepIdx: 5, toolCall: { name: 'run_command' } })?.payload.state
   ).toBe('done')
   descriptor('second')
-  expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['second'])
+  hook('second', 'PreInvocation')
+  hook('second', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
+  expect((await poll())?.payload).toMatchObject({
+    state: 'waiting',
+    subagents: [{ id: 'second', state: 'waiting' }]
+  })
   hook('second', 'Stop', { fullyIdle: true })
   expect((await poll())?.payload.subagents).toBeUndefined()
 })

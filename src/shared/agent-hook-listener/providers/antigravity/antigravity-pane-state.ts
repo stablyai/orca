@@ -35,6 +35,7 @@ export type AntigravityPaneChildState = {
   discoversChildren?: boolean
   awaitingInitialHelperDiscovery?: true
   helpersIdleAt?: number
+  rootStoppedIdle?: true
   leadState?: AgentStatusState
   leadStateStartedAt?: number
   leadObservedAt?: number
