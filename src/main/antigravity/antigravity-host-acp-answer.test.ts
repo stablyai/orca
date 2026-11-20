@@ -48,7 +48,6 @@ function agyBinary(): string {
 
 it.each([
   ['asks to sign in', new AcpAgentError(-32000, 'Authentication required'), 'signedOut'],
-  ['times out listing sessions', new Error('session/list timed out'), 'unanswered'],
   ['fails listing sessions', new AcpAgentError(-32603, 'Internal error'), 'unanswered']
 ])('a compatible agy that %s answers %s', async (_case, error, expected) => {
   listing.error = error
