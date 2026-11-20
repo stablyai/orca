@@ -1,4 +1,4 @@
-import { mkdir, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, realpath, unlink, writeFile } from 'node:fs/promises'
 import { basename, join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
@@ -14,13 +14,20 @@ import {
   LINKED_MANAGED_HOME_MARKER,
   MANAGED_HOME_MARKER
 } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
+import {
+  COORDINATION_LOCK,
+  holdsThreadLock,
+  keepsThreadLock,
+  moveIdleThreadLockFolder,
+  WRITER_LOCKS
+} from './codex-thread-writer-locks'
 import { writeSharedSqliteHome } from './codex-account-sqlite-home-config'
 import {
-  CODEX_DATABASE_FILE,
   PRE_SHARE_DATABASES_DIR,
   SET_ASIDE_ROLLOUTS_DIR,
   recordCodexHistoryLeftBehind
 } from './codex-account-history-cleanup-manifest'
+import { setAsideCodexDatabases } from './codex-account-databases-set-aside'
 import {
   compressedRolloutsFirst,
   holdsRolloutTwins,
@@ -58,7 +65,6 @@ const PRIVATE_DIRECTORIES = new Set([
 
 const HISTORY_DIRECTORIES = new Set(['sessions', 'archived_sessions'])
 // Linked before any history, so a home never writes shared rollouts under private locks.
-const WRITER_LOCKS = 'thread-writer-locks'
 // Present from the first unlinked folder until the databases moved aside, so a retry finishes.
 const UNSHARE_PENDING = '.orca-unshare-pending'
 
@@ -110,18 +116,6 @@ async function sharedDirectoryNames(storeHome: string, accountHome: string): Pro
   }
   names.delete(WRITER_LOCKS)
   return [...names].filter(isSharedDirectoryName)
-}
-
-// Codex deletes a thread lock on release, so one left may guard a live writer; Codex itself
-// clears stale ones on its next start, after which a later launch shares the home.
-async function hasThreadWriter(accountHome: string): Promise<boolean> {
-  const locks = join(accountHome, WRITER_LOCKS)
-  if ((await lstatIfPresent(locks))?.isSymbolicLink()) {
-    return false
-  }
-  return (await readDirectoryEntries(locks)).some(
-    (entry) => entry.name.endsWith('.lock') && entry.name !== '.coordination.lock'
-  )
 }
 
 async function isSameDirectory(left: string, right: string): Promise<boolean> {
@@ -196,9 +190,13 @@ export async function shareCodexAccountHistory(
   if (args.platform === 'win32' && !(await markHomeLinked(args.accountHome))) {
     return 'private'
   }
-  if (await hasThreadWriter(args.accountHome)) {
-    return (await isCodexAccountHistoryLinked(args.accountHome, args.storeHome)) ? 'shared' : 'busy'
+  // A thread lock a merge kept apart guards that thread beside the store's own lock.
+  const keptLocks = join(args.accountHome, `${WRITER_LOCKS}${MERGE_PENDING_SUFFIX}`)
+  if ((await keepsThreadLock(keptLocks)) && (await holdsThreadLock(keptLocks))) {
+    return 'busy'
   }
+  const accountLocks = join(args.accountHome, WRITER_LOCKS)
+  const storeLocks = join(args.storeHome, WRITER_LOCKS)
   await Promise.all(
     [WRITER_LOCKS, ...STORE_DIRECTORIES].map((name) =>
       mkdir(join(args.storeHome, name), { recursive: true })
@@ -233,23 +231,36 @@ export async function shareCodexAccountHistory(
         // The `.zst` reaches the store first, so its `.jsonl` is set aside only beside it.
         entryOrder: compressedRolloutsFirst
       }),
+      // A thread lock is never dropped unproven; only an empty coordination file is.
       dropEmptyConflicts: name.endsWith('-locks')
+        ? (path) => name !== WRITER_LOCKS || basename(path) === COORDINATION_LOCK
+        : undefined
     })
-  try {
-    // A held lock file moves by hard link, so its inode keeps guarding the thread.
-    await link(WRITER_LOCKS)
-  } catch (error) {
-    onWarning(error)
-    return 'private'
+  // Once linked, both names are one folder: no twin can exist, so there is nothing to hold.
+  if (!(await isLinkedDirectory(accountLocks, storeLocks))) {
+    try {
+      // A held lock file moves by hard link, so its inode keeps guarding the thread.
+      const moved = await moveIdleThreadLockFolder(args.accountHome, args.storeHome, () =>
+        link(WRITER_LOCKS)
+      )
+      if (moved !== 'moved') {
+        return moved === 'held' &&
+          (await isCodexAccountHistoryLinked(args.accountHome, args.storeHome))
+          ? 'shared'
+          : 'busy'
+      }
+    } catch (error) {
+      onWarning(error)
+      return 'private'
+    }
   }
   // A user's own link elsewhere would split the lock namespace from the history's.
-  if (
-    !(await isLinkedDirectory(
-      join(args.accountHome, WRITER_LOCKS),
-      join(args.storeHome, WRITER_LOCKS)
-    ))
-  ) {
+  if (!(await isLinkedDirectory(accountLocks, storeLocks))) {
     return 'private'
+  }
+  // A thread locked in both homes since the check: history stays apart until that lock is free.
+  if (await keepsThreadLock(keptLocks)) {
+    return 'busy'
   }
   for (const name of await sharedDirectoryNames(args.storeHome, args.accountHome)) {
     try {
@@ -312,17 +323,8 @@ export async function unshareCodexAccountHistory(args: {
     return complete
   }
   const holding = join(args.accountHome, PRE_SHARE_DATABASES_DIR, String(Date.now()))
-  for (const entry of await readDirectoryEntries(args.accountHome)) {
-    if (!entry.isFile() || !CODEX_DATABASE_FILE.test(entry.name)) {
-      continue
-    }
-    try {
-      await mkdir(holding, { recursive: true })
-      await rename(join(args.accountHome, entry.name), join(holding, entry.name))
-    } catch (error) {
-      complete = false
-      args.onWarning(error)
-    }
+  if (!(await setAsideCodexDatabases(args.accountHome, holding, args.onWarning))) {
+    complete = false
   }
   if (complete) {
     await unlink(pending)

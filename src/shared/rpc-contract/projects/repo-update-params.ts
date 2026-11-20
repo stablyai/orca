@@ -54,6 +54,8 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
         .optional(),
       upstream: RepoUpstream,
       hookSettings: z.unknown().optional(),
+      // Changes only this hook setting on the row as saved now; older hosts strip it and change nothing.
+      setupAgentStartupPolicy: z.enum(['start-immediately', 'wait-for-setup']).optional(),
       editorFormatter: editorFormatterSchema.optional(),
       worktreeBaseRef: OptionalString,
       worktreeBasePath: OptionalString,

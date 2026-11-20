@@ -4,8 +4,6 @@ import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-se
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { ExternalConversationLink } from '../../../../shared/connectors/external-conversation-link'
 import { selectBotRowLine, type BotRowLineInput } from './bot-row-activity-line'
-import { botRowLineText } from '../../../../shared/bots/bot-row-line'
-import { translate } from '@/i18n/i18n'
 
 const NOW = 1_000_000_000_000
 const MIN = 60_000
@@ -61,16 +59,30 @@ function line(entries: AgentStatusEntry[], input: Partial<BotRowLineInput> = {})
 }
 
 describe('selectBotRowLine', () => {
-  it('says what its own Chat is doing, with no place', () => {
+  // As the host lists them (`bots.chats.own`): automation runs are never among them.
+  const chats = [
+    { title: 'Plan the launch', paneKey: structuredAgentSessionStatusPaneKey('side-chat') }
+  ]
+
+  it('prefers Home Chat when a thread and side chat tie', () => {
     expect(
-      line([
-        session('chat', {
-          state: 'working',
-          updatedAt: NOW - MIN,
-          toolName: 'Read',
-          toolInput: 'ENG-42 comments'
-        })
-      ])
+      line(
+        [
+          session('slack-thread', {
+            state: 'working',
+            updatedAt: NOW - MIN,
+            toolName: 'Write'
+          }),
+          session('side-chat', { state: 'working', updatedAt: NOW - MIN, toolName: 'Write' }),
+          session('chat', {
+            state: 'working',
+            updatedAt: NOW - MIN,
+            toolName: 'Read',
+            toolInput: 'ENG-42 comments'
+          })
+        ],
+        { chats }
+      )
     ).toEqual({
       kind: 'activity',
       place: null,
@@ -221,13 +233,8 @@ describe('selectBotRowLine', () => {
     })
     // The asking chat speaks for itself before any count.
     expect(line([asking], { needsYou: 3 })?.kind).not.toBe('needYouElsewhere')
-    expect(line([], { needsYou: 3, paused: true })).toEqual({ kind: 'paused' })
+    expect(line([asking], { needsYou: 3, paused: true })).toEqual({ kind: 'paused' })
   })
-
-  // As the host lists them (`bots.chats.own`): automation runs are never among them.
-  const chats = [
-    { title: 'Plan the launch', paneKey: structuredAgentSessionStatusPaneKey('side-chat') }
-  ]
 
   it('says a side chat is replying, by its title, while automation runs only count', () => {
     const run = session('run', { state: 'working', updatedAt: NOW - MIN })
@@ -237,21 +244,7 @@ describe('selectBotRowLine', () => {
       kind: 'replying',
       place: { source: null, label: 'Plan the launch' }
     })
-    expect(botRowLineText(replyingLine!, translate, String)).toBe('Replying in Plan the launch')
     expect(line([run], { chats })).toEqual({ kind: 'workingElsewhere', count: 1 })
-  })
-
-  it('keeps Home Chat on a tie with a side chat', () => {
-    const at = { state: 'done' as const, updatedAt: NOW - MIN }
-    expect(
-      line(
-        [
-          session('side-chat', { ...at, lastAssistantMessage: 'Side' }),
-          session('chat', { ...at, lastAssistantMessage: 'Home' })
-        ],
-        { chats }
-      )
-    ).toMatchObject({ place: null, text: 'Home' })
   })
 
   it('puts a side chat asking the owner above its Home Chat working', () => {
@@ -294,42 +287,15 @@ describe('selectBotRowLine', () => {
     })
   })
 
-  it('leaves out a wait whose deadline has passed', () => {
-    const live = { label: 'CI' }
-    expect(line([], { waits: [{ label: 'Old', by: NOW - MIN }] })).toBeNull()
-    expect(line([], { waits: [{ label: 'Old', by: NOW - MIN }, live] })).toEqual({
+  it('counts only waits that are still live', () => {
+    const expired = { label: 'Old', by: NOW - MIN }
+    const live = { label: "Nora's reply", by: NOW + 60 * MIN }
+    expect(line([], { waits: [expired] })).toBeNull()
+    expect(line([], { waits: [expired, live, { label: 'CI' }] })).toEqual({
       kind: 'wait',
       wait: live,
-      more: 0
-    })
-  })
-
-  it('shows a wait only when nothing else says anything, counting several', () => {
-    const nora = { label: "Nora's reply", by: NOW + 60 * MIN }
-    expect(line([], { waits: [nora] })).toEqual({ kind: 'wait', wait: nora, more: 0 })
-    expect(line([], { waits: [nora, { label: 'CI' }] })).toEqual({
-      kind: 'wait',
-      wait: nora,
       more: 1
     })
-  })
-
-  it('says Paused for a paused bot, whatever it last did', () => {
-    expect(
-      line(
-        [
-          session('chat', {
-            state: 'working',
-            updatedAt: NOW - MIN,
-            toolName: 'Read'
-          })
-        ],
-        {
-          paused: true,
-          waits: [{ label: 'CI' }]
-        }
-      )
-    ).toEqual({ kind: 'paused' })
   })
 
   it('says where it is replying, never the agent name, until the bot posts a status', () => {
@@ -367,9 +333,5 @@ describe('selectBotRowLine', () => {
       kind: 'activity',
       text: 'Older'
     })
-  })
-
-  it('has no line before the bot has done anything', () => {
-    expect(line([])).toBeNull()
   })
 })

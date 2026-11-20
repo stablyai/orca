@@ -39,7 +39,11 @@ export const SelectAccountParams = z.object({
 
 export const SelectClaudeAccountParams = SelectAccountParams.extend({
   // The web client moves running sessions in its own window; older hosts strip this.
-  movesRunningSessions: z.literal(true).optional()
+  movesRunningSessions: z.literal(true).optional(),
+  // The switching client's own choice for the host's running terminals; older hosts strip this.
+  runningSessions: z.enum(['ask', 'restart', 'keep']).optional(),
+  // Answers the Ask an earlier switch to this account left open; never switches accounts itself.
+  answersAsk: z.literal(true).optional()
 })
 
 export const SelectCodexAccountForTargetParams = SelectAccountParams.extend({

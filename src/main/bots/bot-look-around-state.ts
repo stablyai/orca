@@ -284,6 +284,7 @@ export function upNextState(state: BotLookState, nextAt: number | undefined): Up
     ...(last?.endedAt !== undefined
       ? { lastLookedAt: last.endedAt, tookMs: last.endedAt - last.startedAt }
       : {}),
+    ...(last ? { lastSessionId: last.sessionId } : {}),
     ...(last?.error ? { error: last.error } : {}),
     ...(nextAt !== undefined ? { nextAt } : {})
   }

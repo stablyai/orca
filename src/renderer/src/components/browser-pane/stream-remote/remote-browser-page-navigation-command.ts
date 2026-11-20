@@ -45,7 +45,8 @@ export async function runRemoteBrowserNavigationCommand(
     applyRemoteTabMetadata
   }: RemoteBrowserNavigationCommandOptions,
   method: 'browser.goto' | 'browser.back' | 'browser.forward' | 'browser.reload',
-  url?: string
+  url?: string,
+  ignoreCache?: boolean
 ): Promise<void> {
   const target = runtimeTarget()
   if (!target) {
@@ -104,7 +105,8 @@ export async function runRemoteBrowserNavigationCommand(
     const params =
       method === 'browser.goto'
         ? { worktree: runtimeWorktree, page: pageId, url: url ?? 'about:blank' }
-        : { worktree: runtimeWorktree, page: pageId }
+        : // Older hosts drop ignoreCache and reload normally, as both chords did before.
+          { worktree: runtimeWorktree, page: pageId, ...(ignoreCache ? { ignoreCache } : {}) }
     let commandError: unknown
     let result: BrowserGotoResult | BrowserBackResult | BrowserReloadResult | undefined
     try {

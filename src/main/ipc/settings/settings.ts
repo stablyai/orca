@@ -6,6 +6,7 @@ import { listSystemFontFamilies } from '../../window/desktop-integration/system-
 import { registerSettingsImportHandlers } from './settings-import-handlers'
 import { applyDesktopSettingsUpdate } from './desktop-settings-update'
 import type { AgentAwakeService } from '../../power/agent-awake-service'
+import { applyAutomaticUpdatesSetting } from '../../updater/updater-service'
 import { registerCustomAppIconHandlers } from '../custom-app-icon'
 import { applyPRBotAuthorOverride } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
@@ -32,6 +33,7 @@ export function registerSettingsHandlers(
   })
 
   store.onSettingsChanged((updates, _settings, originWebContentsId) => {
+    applyAutomaticUpdatesSetting(updates.automaticUpdates)
     for (const window of BrowserWindow.getAllWindows()) {
       const isOrigin =
         originWebContentsId !== undefined && window.webContents.id === originWebContentsId

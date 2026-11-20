@@ -17,7 +17,10 @@ import { TextSelection } from '@tiptap/pm/state'
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import { EditorContent } from '@tiptap/react'
-import { useNativeChatComposerEditor } from './native-chat-composer-editor-owner'
+import {
+  NativeChatComposerEditorView,
+  useNativeChatComposerEditor
+} from './native-chat-composer-editor-owner'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import {
@@ -332,7 +335,7 @@ function NativePromptEditor({
               // Why both: the text check covers other paragraphs, the view covers soft wraps.
               return (
                 !beyond.includes('\n') &&
-                editor.view.endOfTextblock(edge === 'start' ? 'up' : 'down')
+                mountedEditorView(editor)?.endOfTextblock(edge === 'start' ? 'up' : 'down') === true
               )
             },
             select: () => {
@@ -358,7 +361,8 @@ function NativePromptEditor({
                 .run()
               editor.view.dispatch(closeHistory(editor.state.tr))
             },
-            insertMention: (from, to, token) => insertPromptMention(editor, from, to, token),
+            insertMention: (from, to, token, agent) =>
+              insertPromptMention(editor, from, to, token, agent),
             removeImageReferences: (attachmentId) => {
               const { tr } = editor.state
               editor.state.doc.descendants((node, position) => {
@@ -401,6 +405,7 @@ function NativePromptEditor({
   return (
     <NativeChatPastedTextScopeProvider value={scopeKey ?? ''}>
       <NativeChatImageRowProvider value={imageRow}>
+        <NativeChatComposerEditorView editor={editor} />
         <EditorContent
           editor={editor}
           {...events}

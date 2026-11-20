@@ -36,6 +36,9 @@ export type SkillDiscoverySource = {
   providers: SkillProvider[]
   /** Agent that owns this root; null is the explicit shared-skills scope. */
   owner: AgentType | null
+  /** A relocated owner home is read only by its owner, and the default one only by agents that
+   *  read the owner's folders; absent means both. */
+  readers?: 'owner' | 'borrowers'
   exists: boolean
   /** Unavailable means unanswered, so skills are unknown rather than absent. */
   skippedReason?: 'missing' | 'remote-repo' | 'unavailable'

@@ -31,13 +31,14 @@ describe('bot card readers', () => {
       name: 'Molty',
       items: [{ group: 'comes' as const, what: 'Who Molty is', to: 'Soul', why: 'Its persona.' }]
     }
-    // A status item as the journal stores it, carrying three card fields.
+    // A newer host can send a bot request purpose this client cannot read.
     const status = {
       kind: 'status' as const,
       text: 'Memory updated',
       botMemoryUpdated: note,
       connectorOffer: offer,
-      botImportPlan: plan
+      botImportPlan: plan,
+      botRequest: { ...request, purpose: 'delegate' }
     }
     const block = structuredAgentSessionStatusBlock(status)
     expect(block).toMatchObject({
@@ -45,6 +46,7 @@ describe('bot card readers', () => {
       connectorOffer: offer,
       botImportPlan: plan
     })
+    expect(block).not.toHaveProperty('botRequest')
     expect(nativeChatBotCardsOf(block).map((card) => card.kind)).toEqual([
       'memoryUpdated',
       'connectorOffer',

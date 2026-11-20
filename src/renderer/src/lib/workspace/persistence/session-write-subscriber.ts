@@ -5,6 +5,7 @@ import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './worksp
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 import { createWorktreeTabBucketProjection } from '../tabs/worktree-tab-bucket-projection'
 import { createBrowserSessionHandlesProjection } from './browser-session-handles-projection'
+import { createUnifiedTabSessionCache } from './workspace-session-unified-tabs'
 
 type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
 type TabsByWorktree = AppState['tabsByWorktree']
@@ -111,6 +112,7 @@ export function createSessionWriteSubscriber({
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
   const browserHandlesProjection = createBrowserSessionHandlesProjection()
+  const unifiedTabSessionCache = createUnifiedTabSessionCache()
   const flushPendingWrite = (): void => {
     timer = null
     if (disposed || writing || pendingChangedFields.size === 0) {
@@ -124,7 +126,7 @@ export function createSessionWriteSubscriber({
     }
     const changed = new Set(pendingChangedFields)
     pendingChangedFields.clear()
-    const patch = buildWorkspaceSessionPatch(fresh, changed)
+    const patch = buildWorkspaceSessionPatch(fresh, changed, unifiedTabSessionCache)
     if (Object.keys(patch).length === 0) {
       return
     }

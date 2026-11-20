@@ -34,7 +34,8 @@ const OTHER = owner(folderWorkspaceKey('fw-other'))
 function renderAnswer(
   text: string,
   chat: ReturnType<typeof owner>,
-  inAutomationTurn = false
+  turn: { inAutomationTurn?: boolean; inActingTurn?: boolean } = {},
+  live = false
 ): void {
   render(
     <TooltipProvider>
@@ -48,7 +49,9 @@ function renderAnswer(
             blocks: [{ type: 'text', text }]
           }}
           expandSignal={false}
-          inAutomationTurn={inAutomationTurn}
+          {...turn}
+          activeTurnIsWorking={live}
+          trailingRun={live}
           onScrollMessageToTop={vi.fn()}
         />
       </NativeChatVisualOwnerContext.Provider>
@@ -57,29 +60,22 @@ function renderAnswer(
 }
 
 describe('a bot’s quiet result in its home chat', () => {
-  it('reads as Nothing to report instead of the marker', () => {
-    renderAnswer('NO_REPLY', BOT_HOME)
-    expect(screen.getByText('Nothing to report')).toBeInTheDocument()
-    expect(screen.queryByText(/NO_REPLY/)).toBeNull()
-  })
-
-  it('keeps what came before the marker', () => {
-    renderAnswer('Checked the inbox; nothing new.\n\nNO_REPLY\n', BOT_HOME)
-    expect(screen.getByText('Checked the inbox; nothing new.')).toBeInTheDocument()
-    expect(screen.getByText('Nothing to report')).toBeInTheDocument()
-    expect(screen.queryByText(/NO_REPLY/)).toBeNull()
-  })
-
-  it('leaves a marker that is not at the end as written', () => {
-    renderAnswer('NO_REPLY is the quiet word', BOT_HOME)
-    expect(screen.getByText('NO_REPLY is the quiet word')).toBeInTheDocument()
+  it('draws no caption when its turn did something others see', () => {
+    renderAnswer('NO_REPLY', BOT_HOME, { inActingTurn: true })
     expect(screen.queryByText('Nothing to report')).toBeNull()
+    expect(screen.queryByText(/NO_REPLY/)).toBeNull()
   })
 
   it('draws no line under the automation row that opened its turn', () => {
-    renderAnswer('NO_REPLY', BOT_HOME, true)
+    renderAnswer('NO_REPLY', BOT_HOME, { inAutomationTurn: true })
     expect(screen.queryByText('Nothing to report')).toBeNull()
     expect(screen.queryByText(/NO_REPLY/)).toBeNull()
+  })
+
+  it('never draws the marker while the row still reads as live', () => {
+    renderAnswer('Checked the inbox.\n\nNO_REP', BOT_HOME, {}, true)
+    expect(screen.getByText('Checked the inbox.')).toBeInTheDocument()
+    expect(screen.queryByText(/NO_REP/)).toBeNull()
   })
 
   it('leaves any other chat’s message as written', () => {

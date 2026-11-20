@@ -5,11 +5,13 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatResolutionReceipt } from '../../prompts/NativeChatResolutionReceipt'
 import { NativeChatWorkingStatus } from '../../conversation/turns/NativeChatWorkingStatus'
+import { NativeChatQuietTurnLeave } from '../../conversation/turns/NativeChatQuietTurnLeave'
 import { NativeChatTurnDiffRollup } from '../../tools/diffs/NativeChatTurnDiffRollup'
 import { NativeChatOpenedPullRequestCard } from '../../tools/pull-requests/NativeChatOpenedPullRequestCard'
 import { NativeChatSubagentHead } from '../../subagents/NativeChatSubagentHead'
 import type { NativeChatTaskListPredecessors } from '../../../../../../shared/native-chat/input/task-lists/native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
+import { nativeChatSlotLeavesWhole } from '../../conversation/slots/native-chat-quiet-turn-rows'
 import type { NativeChatTimedRow } from '../../conversation/slots/native-chat-timed-rows'
 import type {
   NativeChatDiffReveal,
@@ -45,6 +47,7 @@ export type NativeChatTranscriptRowContext = {
   /** Opens a subagent's own view; absent where the transcript has none to open. */
   onOpenSubagent?: (agentId: string) => void
   onScrollMessageToTop: (element: HTMLElement) => void
+  readerAtEnd: () => boolean
   onRevealDiff: (target: NativeChatDiffTarget) => void
 }
 
@@ -80,9 +83,15 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   const marker = newRowsMarker ? (
-    <NativeChatNewRowsMarker marker={newRowsMarker} onReveal={context.onScrollMessageToTop} />
+    <NativeChatNewRowsMarker
+      marker={newRowsMarker}
+      readerAtEnd={context.readerAtEnd}
+      onReveal={context.onScrollMessageToTop}
+    />
   ) : null
-  const statusRow = status ? (
+  // A settling quiet turn's bar fades alone, or with its whole row when nothing else draws in it.
+  const leavesWhole = nativeChatSlotLeavesWhole(slot)
+  const bar = status ? (
     <NativeChatWorkingStatus
       bot={context.turnBot}
       startedAt={status.startedAt}
@@ -94,7 +103,15 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       }
     />
   ) : null
-  return (
+  const statusRow =
+    bar && slot.leaving === 'bar' && !leavesWhole ? (
+      <NativeChatQuietTurnLeave gap={slot.statusAbove ? 'below' : 'above'}>
+        {bar}
+      </NativeChatQuietTurnLeave>
+    ) : (
+      bar
+    )
+  const row = (
     // The negative margin shortens the measured row, which is what moves the next one up.
     // A row that holds its response's actions keeps the gap whole: they stay in flow above the
     // agent's next step (`actionsHang` is unset there), which then sits a full gap below them.
@@ -143,6 +160,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           trailingRun={slot.trailingRun}
           continuesTurn={slot.continuesTurn}
           inAutomationTurn={slot.inAutomationTurn === true}
+          inActingTurn={slot.inActingTurn === true}
           endsResponse={slot.endsResponse}
           latestResponse={slot.latestResponse === true}
           actionsHang={slot.actionsHang === true && !newRowsMarkerBelow}
@@ -174,7 +192,10 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {slot.statusAbove ? null : statusRow}
       {turnDiff ? <NativeChatTurnDiffRollup diff={turnDiff} /> : null}
       {openedPullRequests ? (
-        <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
+        <NativeChatOpenedPullRequestCard
+          pullRequests={openedPullRequests}
+          timestamp={message.timestamp}
+        />
       ) : null}
       {(itemNotes ?? [message]).flatMap(
         (member) =>
@@ -183,4 +204,5 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       )}
     </div>
   )
+  return leavesWhole ? <NativeChatQuietTurnLeave gap="row">{row}</NativeChatQuietTurnLeave> : row
 })

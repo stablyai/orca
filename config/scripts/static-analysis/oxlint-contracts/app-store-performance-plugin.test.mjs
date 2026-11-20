@@ -34,12 +34,23 @@ const sources = {
       function selectStatuses(state) { return state.runtimeStatusByEnvironmentId }
       const Sibling = () => useRuntimeStore(s => s.runtimeStatusByEnvironmentId)
       const ShallowMap = () => useStore(useShallow(s => s.runtimeStatusByEnvironmentId))
+      const Fallback = () => useStore(s => s.agentStatusByPaneKey ?? EMPTY)
+      const Branches = () => useStore(s => (flag ? s.tabsByWorktree : s.gitStatusByWorktree))
+      const ShallowFields = () => useStore(useShallow(s => ({ statuses: s.agentStatusByPaneKey, tabs: s.tabsByWorktree })))
+      const ShallowFallback = () => useStore(useShallow(s => [s.ptyIdsByTabId ?? EMPTY]))
+      const AliasFallback = () => useStore(s => { const layouts = s.layoutByWorktree ?? EMPTY; return layouts })
+      const ShallowAliasBranches = () => useStore(useShallow(s => { const result = { titles: s.runtimePaneTitlesByTabId }; const alias = result; return flag ? [alias] : alias }))
+      const ShallowSpread = () => useStore(useShallow(s => { const fields = { panes: s.paneForegroundAgentByPaneKey }; return { ...fields } }))
+      const RepeatedSpread = () => useStore(useShallow(s => { const fields = { titles: s.runtimeAgentOrchestrationByPaneKey }; return { ...fields, titles: s.runtimeAgentOrchestrationByPaneKey[id], ...fields } }))
     `,
   focusedHotMapReads: `
       import { useAppStore } from '@/store'
       import { useShallow } from 'zustand/react/shallow'
       const Primitive = () => useAppStore(s => s.runtimeStatusByEnvironmentId.get(hostId)?.status !== null)
       const NonHot = () => useAppStore(s => s.someOtherMap)
+      const GuardedEntry = () => useAppStore(s => s.agentStatusByPaneKey && s.agentStatusByPaneKey[key])
+      const SpreadOverride = () => useAppStore(useShallow(s => { const fields = { tabs: s.tabsByWorktree }; return { ...fields, tabs: s.tabsByWorktree[id] } }))
+      const ComputedOverride = () => useAppStore(useShallow(s => ({ tabs: s.tabsByWorktree, ['tabs']: s.tabsByWorktree[id] })))
       const Action = () => useAppStore(s => s.action)
       const onClick = () => useAppStore.getState().runtimeStatusByEnvironmentId
       const Shallow = () => useAppStore(useShallow(s => ({ online: Boolean(s.runtimeStatusByEnvironmentId.get(hostId)?.status) })))
@@ -118,7 +129,7 @@ describe('app store performance Oxlint plugin', () => {
   it('reports whole hot-map returns through local bindings', () => {
     expect(
       diagnosticsBySource.get(sources.hotMapReturns).map((diagnostic) => diagnostic.code)
-    ).toEqual(Array(9).fill('app-store-performance(no-whole-hot-map-selector)'))
+    ).toEqual(Array(19).fill('app-store-performance(no-whole-hot-map-selector)'))
   })
 
   it('allows stable projections of hot-map fields', () => {

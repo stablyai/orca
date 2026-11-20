@@ -1,4 +1,6 @@
+import { slackPeopleOf } from '../../../../src/shared/connectors/slack-mention-tokens'
 import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
+import { MobileMarkdownSlackPeopleContext } from '../../components/markdown/parsing/mobile-markdown-mentions'
 import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
@@ -121,6 +123,7 @@ function MobileNativeChatOverlayContent({
     session.messages,
     controller.nativeChatItemSource
   )
+  const slackPeople = useMemo(() => slackPeopleOf(session.messages), [session.messages])
   const folded = useMobileNativeChatProjection(
     fullContent.messages,
     agent,
@@ -235,6 +238,7 @@ function MobileNativeChatOverlayContent({
       ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
       onRunInTerminal: runInTerminal,
       usageLimit: controller.nativeChatUsageLimit,
+      unresolvedFailureRows: controller.nativeChatUnresolvedFailureRows,
       ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
       ...(continuation
         ? {
@@ -256,6 +260,7 @@ function MobileNativeChatOverlayContent({
       onClearSendError,
       runInTerminal,
       controller.nativeChatUsageLimit,
+      controller.nativeChatUnresolvedFailureRows,
       onOpenAccounts
     ]
   )
@@ -268,7 +273,7 @@ function MobileNativeChatOverlayContent({
     isWorking: controller.nativeChatTurnActive
   })
   const continueFailed = sendErrorMessage === null && continuation?.failed === true
-  return (
+  const chat = (
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
@@ -393,6 +398,11 @@ function MobileNativeChatOverlayContent({
         </MobileQueuedMessageComposerContext.Provider>
       </MobileMarkdownLinksContext.Provider>
     </MobileNativeChatRowOverlaysHost>
+  )
+  return (
+    <MobileMarkdownSlackPeopleContext.Provider value={slackPeople}>
+      {chat}
+    </MobileMarkdownSlackPeopleContext.Provider>
   )
 }
 

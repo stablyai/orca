@@ -5,6 +5,7 @@ import {
 } from '../../messages/rows/NativeChatTranscriptRow'
 import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
+import { nativeChatSlotLeavesWhole } from '../../conversation/slots/native-chat-quiet-turn-rows'
 import {
   useNativeChatTimedRows,
   type NativeChatTimedRow
@@ -52,7 +53,12 @@ export function NativeChatTranscriptItems({
           return (
             <Fragment key={item.key}>
               <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
-              <div data-index={item.index} ref={window.measureRow} className="flow-root w-full">
+              {/* A leaving row's negative top margin passes through to close the gap before it. */}
+              <div
+                data-index={item.index}
+                ref={window.measureRow}
+                className={nativeChatSlotLeavesWhole(slot) ? 'w-full' : 'flow-root w-full'}
+              >
                 <NativeChatTranscriptRow
                   slot={slot}
                   context={rowContext}

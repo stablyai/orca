@@ -255,6 +255,7 @@ describe("a /clear's carried cards", () => {
     expect(
       (await structuredQueuePauses(journal(replacementId))).map((pause) => pause.reason)
     ).toEqual(['stopped', 'cleared'])
+    expect((await journal(replacementId).queuedMessages.list())[0]?.messageId).toBe(carried)
     // Idle there, so the person's send goes straight out rather than queueing.
     const text = hostTestMessage('hi')
     const person = rig.host.send(QUEUED_RIG_CALLER, {
@@ -288,7 +289,6 @@ describe("a /clear's carried cards", () => {
         ordinal: 0
       }
     })
-    expect((await journal(replacementId).queuedMessages.list())[0]?.messageId).toBe(carried)
     expect(await structuredQueuePauses(journal(replacementId))).toEqual([])
   })
 })

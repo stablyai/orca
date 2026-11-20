@@ -34,6 +34,66 @@ describe('how the structured lane draws its rows, as desktop does', () => {
     renderer = null
   })
 
+  it('hides a settled quiet reply and its bar, but keeps a pull request turn visible', () => {
+    const worker: NativeChatMessage['from'] = { kind: 'agent', senders: [], orchestration: null }
+    const note: NativeChatMessage = {
+      ...answer('note'),
+      role: 'system',
+      blocks: [],
+      botItemNote: {
+        noteId: 'note',
+        by: 'bot',
+        entries: [
+          {
+            uid: 'i',
+            number: 1,
+            title: 'Export',
+            status: 'working',
+            event: 'commented',
+            text: 'Yes.'
+          }
+        ]
+      }
+    }
+    const quietReply = (id: string): NativeChatMessage => ({
+      ...answer(id),
+      blocks: [{ type: 'text', text: 'NO_REPLY' }]
+    })
+    act(() => {
+      renderer = create(
+        createElement(Harness, {
+          messages: [
+            { ...userMessage('quiet-mail'), from: worker },
+            note,
+            quietReply('quiet-reply'),
+            { ...userMessage('pr-mail'), from: worker },
+            toolRow('gh pr create --fill'),
+            quietReply('pr-reply')
+          ],
+          enabled: true,
+          isWorking: false,
+          settledTurns: new Map([
+            ['quiet-mail', { startedAt: 0, workedSeconds: 9 }],
+            ['pr-mail', { startedAt: 10_000, workedSeconds: 4 }]
+          ])
+        })
+      )
+    })
+    const disclosure = renderer!.root.findByType(Result).props.disclosure
+    expect(disclosure.listMessages.map((row: NativeChatMessage) => row.id)).toEqual([
+      'quiet-mail',
+      'note',
+      'pr-mail',
+      'gh pr create --fill',
+      'pr-reply'
+    ])
+    const bars = disclosure.listMessages.flatMap((row: NativeChatMessage, index: number) => {
+      const status = disclosure.resolveRow(index, row).turnStatus
+      return status ? [status.workedSeconds] : []
+    })
+    expect(bars).toEqual([4])
+  })
+
   it('renders generated output in the shipping answer list through collapse and expansion', () => {
     const generated: NativeChatMessage = {
       ...answer('image'),
@@ -42,18 +102,38 @@ describe('how the structured lane draws its rows, as desktop does', () => {
         { type: 'image-ref' as const, path: '/tmp/elephant.png' }
       ]
     }
-    const messages = [userMessage('u1'), toolRow('work'), answer('final'), generated]
+    const cardAnswer: NativeChatMessage = {
+      ...userMessage('card-answer'),
+      orcaNotice: 'card-answer'
+    }
+    const quiet: NativeChatMessage = {
+      ...answer('quiet'),
+      blocks: [{ type: 'text', text: 'NO_REPLY' }]
+    }
+    const messages = [
+      userMessage('u1'),
+      toolRow('work'),
+      answer('final'),
+      generated,
+      cardAnswer,
+      quiet
+    ]
     act(() => {
       renderer = create(
         createElement(Harness, {
           messages,
           enabled: true,
           isWorking: false,
-          settledTurns: new Map([['u1', { startedAt: 0, workedSeconds: 3 }]])
+          settledTurns: new Map([
+            ['u1', { startedAt: 0, workedSeconds: 3 }],
+            ['card-answer', { startedAt: 4_000, workedSeconds: 7 }]
+          ])
         })
       )
     })
     const read = () => renderer!.root.findByType(Result).props.disclosure
+    expect(read().listMessages.map((row: NativeChatMessage) => row.id)).not.toContain('card-answer')
+    expect(read().listMessages.map((row: NativeChatMessage) => row.id)).not.toContain('quiet')
     const final = read().listMessages.find((row: NativeChatMessage) => row.id === 'final')!
     expect(final.blocks).toEqual([
       { type: 'text', text: 'Done.' },

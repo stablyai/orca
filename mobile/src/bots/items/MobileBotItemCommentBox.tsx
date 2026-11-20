@@ -1,4 +1,4 @@
-// The item page's comment box, docked at the bottom: it names the bot's open question, sends with the
+// The item page's comment box, docked at the bottom: it sends with the
 // chat composer's arrow, and keeps its text until a send lands (closing the panel keeps each item's draft for
 // the session). Offline, Comment waits; a dropped reply says the comment may have arrived, never resends.
 // The chat's field and mic: the session's dictation lands here while the box is its target.
@@ -12,7 +12,7 @@ import {
   type Ref
 } from 'react'
 import { Text, View, type HostInstance, type TextInputInstance } from 'react-native'
-import { CornerDownRight, WifiOff } from 'lucide-react-native'
+import { WifiOff } from 'lucide-react-native'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import { ComposerSendButton } from '../../components/composer-input/ComposerSendButton'
 import { COMPOSER_COMPACT_CONTROL_SIZE } from '../../components/composer-input/composer-input-styles'
@@ -121,15 +121,6 @@ export function MobileBotItemCommentBox({
     : null
   return (
     <View style={styles.box}>
-      {item.question ? (
-        <View style={styles.answering}>
-          <CornerDownRight size={12} color={colors.textMuted} />
-          <Text style={styles.answeringText} numberOfLines={1}>
-            {t('bots.items.comment.answering', 'Answering:')}{' '}
-            <Text style={styles.answeringQuestion}>{item.question.text}</Text>
-          </Text>
-        </View>
-      ) : null}
       <View style={styles.row}>
         <View style={styles.field}>
           <MobileNativeChatComposerField
@@ -209,14 +200,6 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.sheetGroup
   },
-  answering: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs
-  },
-  answeringText: { flex: 1, fontSize: typography.metaSize, color: colors.textMuted },
-  answeringQuestion: { fontWeight: '500', color: colors.textSecondary },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
   field: { flex: 1 },
   micSlot: { height: COMPOSER_COMPACT_CONTROL_SIZE, justifyContent: 'center' },

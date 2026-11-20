@@ -57,14 +57,19 @@ export abstract class UpdaterState {
   // Modifier checks include prereleases but still pin a manifest-probed tag, skipping cancelled RCs.
   protected includePrereleaseActive = false
   protected availableVersion: string | null = null
+  protected automaticDownloadOfferVersion: string | null = null
+  protected automaticDownloadVersion: string | null = null
+  protected getAutomaticUpdates: (() => boolean) | null = null
   protected availableReleaseUrl: string | null = null
   protected pendingCheckFailureKey: string | null = null
   protected pendingCheckFailurePromise: Promise<void> | null = null
   protected autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
   protected nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
   protected pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
+  protected macInstallerStagingVersion: string | null = null
   protected macDeferredStagingTimer: ReturnType<typeof setTimeout> | null = null
   protected quitAndInstallInProgress = false
+  protected cancelAutomaticInstallPreparation: (() => void) | null = null
   protected updateInstallMode: UpdateInstallMode = 'interactive'
   protected lastInstallDeferralVersion = {
     download: null as string | null,
