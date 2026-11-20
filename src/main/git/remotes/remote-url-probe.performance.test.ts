@@ -27,6 +27,10 @@ vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
+import {
+  _resetProjectRefCache,
+  getProjectRefForRemoteWithSignature
+} from '../../gitlab/projects/gitlab-project-ref-resolution'
 import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { listCachedRemoteNames } from './remote-name-listing'
 import { readRemoteUrl } from './remote-url-probe'
@@ -37,6 +41,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'remote-url-probe-perf-'))
   gitExecFileAsyncMock.mockReset()
   headReadMock.mockClear()
+  _resetProjectRefCache()
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     if (args[0] === 'remote' && args[1] === 'get-url') {
       throw new Error(`error: No such remote '${args[2]}'`)
@@ -155,4 +160,17 @@ it('does not sign branch-dependent config with a reftable HEAD placeholder', asy
   )
   await writeFile(join(root, '.git', 'HEAD'), 'ref: refs/heads/.invalid\n')
   expect(await readLocalGitConfigSignature({ repoPath: root, connectionId: null })).toBeUndefined()
+})
+
+it.each([10, 100])('bounds unsigned project-ref probes and expires them (N=%i)', async (reads) => {
+  gitExecFileAsyncMock.mockResolvedValue({ stdout: 'https://gitlab.com/example/first.git\n' })
+  const read = () => getProjectRefForRemoteWithSignature(Promise.resolve(undefined), root, 'origin')
+  for (let index = 0; index < reads; index += 1) {
+    expect(await read()).toEqual({ host: 'gitlab.com', path: 'example/first' })
+  }
+  expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  gitExecFileAsyncMock.mockResolvedValue({ stdout: 'https://gitlab.com/example/next.git\n' })
+  vi.setSystemTime(1_030_000)
+  expect(await read()).toEqual({ host: 'gitlab.com', path: 'example/next' })
+  expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
 })
