@@ -194,3 +194,48 @@ it('rolls back an epoch replacement completely when one replacement write fails'
     context_boundary: replaced.contextBoundary
   })
 })
+
+it('uses an explicit replacement origin without carrying it into a later legacy import', () => {
+  const { context, one } = fixture()
+  const providerHandle = { kind: 'claude' as const, sessionId: 'conversation', leafUuid: 'latest' }
+  const historyOrigin = {
+    version: 1,
+    kind: 'native_copy',
+    agent: 'claude',
+    unit: 'claude-entry',
+    providerHandle,
+    ids: ['latest'],
+    sourceFrontier: 'latest-progress'
+  }
+  const replacement = {
+    kind: 'epoch-replace' as const,
+    reason: 'legacy_import' as const,
+    providerHandle,
+    fence: 1,
+    items: [
+      {
+        identity: { provider: 'orca' as const, clientMessageId: 'answer' },
+        body: say('imported answer'),
+        ownerFence: 0
+      }
+    ]
+  }
+  context({ ...replacement, historyOrigin })
+  expect(
+    JSON.parse(
+      String(one('SELECT history_origin_json FROM journal_chat_state')?.history_origin_json)
+    )
+  ).toEqual({
+    providerHandle,
+    raw: historyOrigin
+  })
+  context(replacement)
+  expect(
+    JSON.parse(
+      String(one('SELECT history_origin_json FROM journal_chat_state')?.history_origin_json)
+    )
+  ).toEqual({
+    providerHandle,
+    raw: { version: 1, kind: 'legacy_import', providerHandle, importedAt: 200 }
+  })
+})

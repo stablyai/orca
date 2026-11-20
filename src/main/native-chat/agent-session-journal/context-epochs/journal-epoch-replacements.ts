@@ -5,7 +5,8 @@ export class JournalEpochReplacements {
   notify = (replaced: Promise<unknown>): void => this.listener?.(replaced)
 
   /** Writer commands that replace the epoch announce themselves; others pass through. */
-  notifyFor = <T>(kind: string, written: Promise<T>): Promise<T> => {
+  notifyFor = <T>(operation: { kind: string }, written: Promise<T>): Promise<T> => {
+    const { kind } = operation
     if (kind === 'epoch-replace' || kind === 'context-rewind' || kind === 'rewind-cut') {
       this.notify(written)
     }

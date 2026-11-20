@@ -159,6 +159,7 @@ function settleReady(
         child.fence,
         event.reportedOptions
       )
+      context.deps.adapter.startupSettled?.(event.sessionId, event.acquisitionGeneration)
       void context.wakeDelivery(event.sessionId)
       noteStructuredAgentSessionProviderStarted(
         context.deps,

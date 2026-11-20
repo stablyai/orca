@@ -146,11 +146,15 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
   backgroundTaskStops: NonNullable<Adapter['backgroundTaskStops']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.backgroundTaskStops?.(sessionId)
 
-  holdsDispatch = (sessionId: string): boolean =>
+  holdsDispatch: NonNullable<Adapter['holdsDispatch']> = (sessionId) =>
     this.liveOwnerOrNull(sessionId)?.holdsDispatch?.(sessionId) ?? false
 
   confirmIdle = (id: string) => this.liveOwnerOrNull(id)?.confirmIdle?.(id)
 
+  startupSettled: NonNullable<Adapter['startupSettled']> = (sessionId, generation) =>
+    this.liveOwnerOrNull(sessionId)?.startupSettled?.(sessionId, generation)
+  pendingDelivery: NonNullable<Adapter['pendingDelivery']> = (sessionId) =>
+    this.liveOwnerOrNull(sessionId)?.pendingDelivery?.(sessionId)
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.liveOwnerOrNull(sessionId)?.liveTurnId?.(sessionId)
 

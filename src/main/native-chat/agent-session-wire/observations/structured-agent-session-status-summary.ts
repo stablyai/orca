@@ -31,6 +31,7 @@ export function structuredAgentSessionStatusSummary({
   state,
   stopping,
   starting,
+  dispatchHold,
   usageLimitContinue,
   runningPermissionMode,
   childWork,
@@ -50,6 +51,7 @@ export function structuredAgentSessionStatusSummary({
   record: AgentSessionConversationView | null
   state: StructuredAgentSessionStatusState
   starting?: boolean
+  dispatchHold?: boolean | 'history-catch-up'
   usageLimitContinue?: AgentSessionStatusSummary['usageLimitContinue']
   runningPermissionMode?: string
   stopping: boolean
@@ -77,7 +79,10 @@ export function structuredAgentSessionStatusSummary({
     ...(session.child || starting
       ? {
           hostExecutionOwned: true as const,
-          hostExecutionPhase: session.child?.phase ?? 'starting'
+          hostExecutionPhase:
+            dispatchHold === 'history-catch-up'
+              ? 'catching-up'
+              : (session.child?.phase ?? 'starting')
         }
       : {}),
     ...(session.restartResume ? { restartResume: { phase: session.restartResume.phase } } : {}),

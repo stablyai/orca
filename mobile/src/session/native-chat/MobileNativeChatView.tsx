@@ -1,3 +1,4 @@
+import { nativeChatHostStatusCopy } from './transcript/notices/native-chat-notice-copy'
 import { MobileBotCardSendContext } from './transcript/bot-cards/mobile-bot-card-host'
 import { mobileNativeChatOtherBotCard } from './transcript/bot-cards/mobile-native-chat-bot-cards'
 import { MobileMarkdownBotCardContext } from '../../components/markdown/blocks/mobile-markdown-bot-card-context'
@@ -156,11 +157,12 @@ export function MobileNativeChatView({
   // Lock only terminal-backed Send: it can answer an agent prompt, while drafting is harmless and structured sends queue.
   const promptShown = !collapsedPrompt && (ask ?? permission ?? question) != null
   const expandedPromptOwnsSend = !structuredActivityUi && promptShown
+  const catchingUp = structured?.catchingUp === true
   const offlineQueue = useMobileNativeChatOfflineQueue({
     scope: draftKey,
-    inputLockReason: inputLockReason ?? null,
+    inputLockReason: inputLockReason ?? (catchingUp ? 'waiting' : null),
     held: structuredActivityUi
-      ? status !== 'ready'
+      ? status !== 'ready' || catchingUp
       : (ask ?? permission ?? question ?? collapsedPrompt ?? awaitingInput) != null,
     send: onSend
   })
@@ -267,10 +269,9 @@ export function MobileNativeChatView({
   const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
   const emptyState = mobileNativeChatEmptyState(status, agent, error, sessionLive, clearing)
 
-  const composerPlaceholder = mobileNativeChatComposerPlaceholder(
-    offlineQueue.lockReason,
-    turnIndicator?.afterStop
-  )
+  const composerPlaceholder = catchingUp
+    ? nativeChatHostStatusCopy(t)['continued-outside-catching-up']
+    : mobileNativeChatComposerPlaceholder(offlineQueue.lockReason, turnIndicator?.afterStop)
   // A collapsed structured question still holds the input: the agent waits on that answer alone.
   const promptHeld = promptShown || collapsedPrompt?.holdsInput === true
   const workerApproval = useMobileNativeChatWorkerApprovalSlot(
@@ -336,7 +337,7 @@ export function MobileNativeChatView({
           {...{ isAttaching, onMicPress, micActive, micStarting, micProcessing }}
           {...{ dictationMode, onMicPressIn, onMicPressOut }}
           {...offlineQueue.composerLock}
-          sendDisabled={expandedPromptOwnsSend}
+          sendDisabled={expandedPromptOwnsSend || catchingUp}
           placeholder={composerPlaceholder}
           {...{ filePaths, onNeedFiles, skillDiscovery, onNeedSkills }}
           stop={canStop ? { onStop, held: turnIndicator?.stopRequestInFlight === true } : null}

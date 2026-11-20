@@ -4,7 +4,10 @@ import {
   type AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { HISTORY_CATCH_UP_MAX_OPERATIONS } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
+import {
+  HISTORY_CATCH_UP_MAX_OPERATIONS,
+  HistoryCatchUpCapacityError
+} from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import type { AgentSessionJournalReads } from '../../native-chat/agent-session-journal/journal-reads'
 import { createJournalHistoryItems } from '../../native-chat/agent-session-journal/journal-history-items'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -66,7 +69,7 @@ export async function createClaudeTranscriptItemReader(
       dependencies.set(key, item)
     }
     if (dependencies.size > HISTORY_CATCH_UP_MAX_OPERATIONS) {
-      throw new Error('too-large')
+      throw new HistoryCatchUpCapacityError()
     }
     return item
   }

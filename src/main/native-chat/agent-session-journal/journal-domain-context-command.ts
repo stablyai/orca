@@ -41,6 +41,7 @@ export type JournalDomainContextCoordinate = {
 }
 
 export type JournalDomainContextCommit = {
+  dropped?: true
   /** Public context identity at the last position, as the conversation receipt binds it. */
   cursor: AgentJournalCursor
   physicalCursor: AgentJournalCursor

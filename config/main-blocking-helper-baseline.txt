@@ -785,7 +785,7 @@
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
 1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
-5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
+4 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
