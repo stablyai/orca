@@ -8,7 +8,6 @@ import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
-import { agentStatusGroup } from '../../agents/agent-list-rows'
 import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useNow } from '../../hooks/use-now'
@@ -30,17 +29,6 @@ const TILE_SIZE = 34
 const TILE_DOT_RING = 2
 const GROUP_ORDER: readonly MobileSessionTabGroup[] = ['needs-you', 'working', 'other']
 
-type MobileSessionTabsSheetController = Pick<
-  MobileSessionController,
-  | 'activeSessionTabId'
-  | 'worktreeName'
-  | 'switchSessionTab'
-  | 'handleCloseSessionTab'
-  | 'createTabBusy'
-  | 'connState'
-  | 'handleOpenNewTab'
->
-
 /** Every tab in the workspace, what needs you first; tap one to go there, swipe one to close it. */
 export function MobileSessionTabsSheet({
   controller,
@@ -48,7 +36,7 @@ export function MobileSessionTabsSheet({
   visible,
   onClose
 }: {
-  controller: MobileSessionTabsSheetController
+  controller: MobileSessionController
   tabs: readonly MobileSessionTabSummary[]
   visible: boolean
   onClose: () => void
@@ -85,7 +73,7 @@ function MobileSessionTabsSheetContent({
   onClose,
   onOpenNewTab
 }: {
-  controller: MobileSessionTabsSheetController
+  controller: MobileSessionController
   tabs: readonly MobileSessionTabSummary[]
   onClose: () => void
   onOpenNewTab: () => void
@@ -123,9 +111,7 @@ function MobileSessionTabsSheetContent({
   const renderRow = (row: MobileSessionTabRow) => {
     const current = row.tab.id === activeSessionTabId
     const badge = row.dotState && row.dotState !== 'idle' ? row.dotState : undefined
-    const showUnreadBell =
-      row.unread &&
-      (!badge || (agentStatusGroup(badge) !== 'needs-you' && agentStatusGroup(badge) !== 'working'))
+    const unreadBell = row.unread && row.group === 'other'
     const time = current
       ? t('session.tabsSheet.open', 'Open')
       : row.timeAt !== null
@@ -170,18 +156,10 @@ function MobileSessionTabsSheetContent({
                 {current || pressed ? <View pointerEvents="none" style={styles.wash} /> : null}
                 <View style={styles.tile}>
                   <MobileSessionTabMark row={row} size={17} />
-                  {showUnreadBell || badge ? (
-                    <View
-                      testID={`session-tabs-sheet-badge-${row.tab.id}`}
-                      style={styles.tileBadge}
-                    >
-                      {showUnreadBell ? (
-                        <Bell
-                          size={10}
-                          color={colors.statusAmber}
-                          fill={colors.statusAmber}
-                          accessibilityLabel={t('agents.list.unread', 'Unread')}
-                        />
+                  {unreadBell || badge ? (
+                    <View style={styles.tileBadge}>
+                      {unreadBell ? (
+                        <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
                       ) : badge ? (
                         <AgentStateDot state={badge} />
                       ) : null}
