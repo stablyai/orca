@@ -3,9 +3,13 @@ import { spawnProcess } from '@orca/process-host'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveProjectCompilerInfo } from '../project-execution/run-typecheck-projects-in-parallel.mjs'
 import { resolveTsrsLauncher, supportsTsrs } from '../project-execution/tsrs-typecheck-compiler.mjs'
+import { createServerSession } from './typescript-server-session.mjs'
+import { watchInstalls, watchWorkspace } from './workspace-file-watcher.mjs'
 
 const PULL_DEBOUNCE_MS = 100
 const BRIDGE_ID_PREFIX = 'orca-diagnostics-'
+// Agents sit idle for hours; a stopped server frees its memory and file watches and restarts on the next request.
+const IDLE_MINUTES = 10
 
 export function resolveTypescriptLanguageServer({
   root,
@@ -175,29 +179,43 @@ function runLanguageServer() {
   const root =
     process.env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL('../../../..', import.meta.url))
   const command = resolveTypescriptLanguageServer({ root })
-  const child = spawnProcess({ ...command, stdio: ['pipe', 'pipe', 'inherit'] })
-  const bridge = createDiagnosticsBridge({
-    toClient: (message) => process.stdout.write(encodeLspMessage(message)),
-    toServer: (message) => child.stdin.write(encodeLspMessage(message))
+  const writeClient = (message) => process.stdout.write(encodeLspMessage(message))
+  let bridge
+  const session = createServerSession({
+    root,
+    idleMs: Number(process.env.ORCA_TYPESCRIPT_LSP_IDLE_MINUTES ?? IDLE_MINUTES) * 60_000,
+    watchWorkspace,
+    watchInstalls,
+    toClient: (message) => bridge.fromServer(message),
+    onEnd: (code) => process.exit(code),
+    startServer: ({ onMessage, onExit }) => {
+      const child = spawnProcess({ ...command, stdio: ['pipe', 'pipe', 'inherit'] })
+      child.stdout.on('data', createLspMessageReader(onMessage))
+      child.on('error', (error) => {
+        console.error(`agent-typescript-lsp: ${error.message}`)
+        process.exit(1)
+      })
+      child.on('exit', onExit)
+      return {
+        write: (message) => child.stdin.write(encodeLspMessage(message)),
+        end: () => child.stdin.end(),
+        kill: (signal) => child.kill(signal)
+      }
+    }
+  })
+  bridge = createDiagnosticsBridge({
+    toClient: writeClient,
+    toServer: (message) => session.fromClient(message)
   })
   process.stdin.on(
     'data',
     createLspMessageReader((message) => bridge.fromClient(message))
   )
-  child.stdout.on(
-    'data',
-    createLspMessageReader((message) => bridge.fromServer(message))
-  )
   // The client owns the session: when it goes away, so does the server.
-  process.stdin.on('end', () => child.stdin.end())
+  process.stdin.on('end', () => session.close())
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-    process.on(signal, () => child.kill(signal))
+    process.on(signal, () => session.kill(signal))
   }
-  child.on('error', (error) => {
-    console.error(`agent-typescript-lsp: ${error.message}`)
-    process.exit(1)
-  })
-  child.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)))
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
