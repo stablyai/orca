@@ -52,14 +52,12 @@ it.each(['folder', 'linked worktree'])(
       join(root, '.git', 'branch-remote'),
       '[remote "origin"]\n  url = https://gitlab.com/example/project.git\n'
     )
-    if (kind === 'folder') {
-      await git(root, 'config', 'includeIf.onbranch:with-remote.path', 'branch-remote')
-    } else {
-      await appendFile(
-        join(root, '.git', 'config'),
-        '[includeIf "onbranch:with-remote"] path = branch-remote\n'
-      )
-    }
+    await (kind === 'folder'
+      ? git(root, 'config', 'includeIf.onbranch:with-remote.path', 'branch-remote')
+      : appendFile(
+          join(root, '.git', 'config'),
+          '[includeIf "onbranch:with-remote"] path = branch-remote\n'
+        ))
     let repoPath = root
     if (kind === 'linked worktree') {
       repoPath = join(root, 'checkout')
