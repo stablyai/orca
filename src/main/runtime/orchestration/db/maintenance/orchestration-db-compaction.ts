@@ -162,8 +162,7 @@ export class OrchestrationDbCompaction {
     if ((await availableBytesIn(dirname(this.filename))) < 2 * liveBytes) {
       return
     }
-    // Read again after the await, right before the child takes its snapshot: any later write shows.
-    if (this.stopped || fingerprint === null || readFileState(db).fingerprint !== fingerprint) {
+    if (this.stopped || fingerprint === null) {
       return
     }
     this.attempts++
@@ -176,6 +175,7 @@ export class OrchestrationDbCompaction {
       () => true,
       () => false
     )
+    // Read again after the awaits, right before the child takes its snapshot: any later write shows.
     if (!counted || this.stopped || readFileState(db).fingerprint !== fingerprint) {
       return
     }
