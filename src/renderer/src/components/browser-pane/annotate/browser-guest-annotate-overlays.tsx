@@ -206,6 +206,7 @@ export function BrowserGuestAnnotateOverlays({
           canPickElements={canPickElements}
           unavailableReason={toolsUnavailableReason}
           showKeyHints={showPaletteKeyHints}
+          drawWaitingForPage={toolSwitch.drawWaitingForPage}
           hint={paletteHint.text}
           hintIsError={paletteHint.isError}
           annotateActions={

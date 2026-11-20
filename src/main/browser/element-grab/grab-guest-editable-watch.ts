@@ -8,6 +8,7 @@
  * - One watch per pick: arming a new pick, turning the picker off, navigating or losing the page ends it.
  */
 import type { WebContents } from 'electron'
+import { executeGrabScript } from './grab-guest-execution'
 
 // Clear of Electron's 999 and the 1207/1208/1998/1999 Orca already uses.
 export const GRAB_EDITABLE_WATCH_WORLD_ID = 1_209
@@ -33,7 +34,9 @@ const TRACKER = String.raw`
     if (el.isContentEditable || tag === 'TEXTAREA' || tag === 'SELECT') return true;
     if (tag === 'INPUT') return NON_TEXT_INPUTS.indexOf(String(el.type || 'text').toLowerCase()) === -1;
     // A focused custom element without an open shadow root may hold a field in a closed one; leave it its keys.
-    if (tag.indexOf('-') !== -1 && !el.shadowRoot) return true;
+    // Built-in shadow hosts can hide fields too; an unfocused body is ordinary off-field input.
+    var canHideRoot = tag.indexOf('-') !== -1 || /^(ARTICLE|ASIDE|BLOCKQUOTE|BODY|DIV|FOOTER|H[1-6]|HEADER|MAIN|NAV|P|SECTION|SPAN)$/.test(tag);
+    if (canHideRoot && !el.shadowRoot && el.matches(':focus')) return true;
     return false;
   }
   function install(token) {
@@ -97,20 +100,20 @@ export function buildEditableNowScript(): string {
 
 /** Asks a page now whether a field has focus; anything but a clear "no" counts as a field. */
 export async function askGuestHasField(
-  guest: Pick<WebContents, 'executeJavaScriptInIsolatedWorld' | 'isDestroyed'>
+  guest: Pick<WebContents, 'executeJavaScriptInIsolatedWorld' | 'isDestroyed' | 'on' | 'off'>
 ): Promise<boolean> {
-  if (guest.isDestroyed()) {
-    return true
-  }
-  try {
-    const reply: unknown = await guest.executeJavaScriptInIsolatedWorld(
-      GRAB_EDITABLE_WATCH_WORLD_ID,
-      [{ code: buildEditableNowScript() }]
-    )
-    return reply !== false
-  } catch {
-    return true
-  }
+  const noField = await executeGrabScript(
+    guest,
+    async () => {
+      const reply: unknown = await guest.executeJavaScriptInIsolatedWorld(
+        GRAB_EDITABLE_WATCH_WORLD_ID,
+        [{ code: buildEditableNowScript() }]
+      )
+      return reply === false
+    },
+    150
+  )
+  return !noField
 }
 
 /** Whether an element matching the selector is in the page; read in the isolated world so the page can't answer. */
@@ -161,7 +164,10 @@ export class GuestEditableWatch {
   private refillTimer: ReturnType<typeof setTimeout> | null = null
   private readonly token = ++nextToken
 
-  constructor(private readonly guest: WatchHost) {}
+  constructor(
+    private readonly guest: WatchHost,
+    private readonly onStopped: () => void = () => {}
+  ) {}
 
   /** Unknown counts as a focused field: letters then stay with the page. */
   get editable(): boolean {
@@ -184,6 +190,7 @@ export class GuestEditableWatch {
       return
     }
     this.stopped = true
+    this.onStopped()
     this.state = null
     if (this.refillTimer) {
       clearTimeout(this.refillTimer)

@@ -60,6 +60,7 @@ export function useBrowserAnnotateToolSwitch({
   // Why a generation and not just the key: A → B → A, or a reload of the same URL, brings the key back while the
   // document under it is new. Every key change or loss of readiness starts a new generation, so state held for an
   // older document (pending Draw, held pick, Undo) never matches again.
+  const cancelMarkup = markup.cancel
   const documentBase = `${toolTargetId}\n${documentKey}`
   const usable = documentReady && canPickElements
   const [documentGeneration, setDocumentGeneration] = useState({
@@ -125,10 +126,11 @@ export function useBrowserAnnotateToolSwitch({
   useEffect(() => {
     return () => {
       transitionRef.current += 1
+      cancelMarkup()
       // An Undo from another page or document would reopen a stale screenshot.
       dismissUndo()
     }
-  }, [dismissUndo, drawOwner])
+  }, [cancelMarkup, dismissUndo, drawOwner])
 
   const reportShapes = useCallback((shapes: readonly MarkupShape[]): void => {
     shapesRef.current = shapes
@@ -203,7 +205,7 @@ export function useBrowserAnnotateToolSwitch({
         return
       }
       const owner = drawOwner
-      setWaitingForPageOwner(null)
+      setWaitingForPageOwner(documentReadyRef.current ? null : owner)
       setDrawStartingFor(owner)
       cancelPendingBrowserCapture()
       // Why a second, awaited disable: with the pick already cancelled it awaits the overlay teardown script, which
@@ -278,22 +280,35 @@ export function useBrowserAnnotateToolSwitch({
       }
       const transition = (transitionRef.current += 1)
       setDrawStartingFor(null)
+      setWaitingForPageOwner(null)
+      captureWhenReadyRef.current = null
       if (tool === 'draw') {
         startDraw(transition)
         return
       }
       if (markup.isActive) {
         leaveDraw()
+      } else {
+        cancelMarkup()
       }
       startGrabIntent(tool)
     },
-    [activeTool, canPickElements, leaveDraw, markup.isActive, startDraw, startGrabIntent]
+    [
+      activeTool,
+      cancelMarkup,
+      canPickElements,
+      leaveDraw,
+      markup.isActive,
+      startDraw,
+      startGrabIntent
+    ]
   )
 
   const exit = useCallback((): void => {
     transitionRef.current += 1
     setDrawStartingFor(null)
     setWaitingForPageOwner(null)
+    captureWhenReadyRef.current = null
     if (markup.isActive) {
       leaveDraw()
       return

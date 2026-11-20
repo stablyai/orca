@@ -79,6 +79,7 @@ export function useGrabLabelAvoidArea({
   const sentRef = useRef<BrowserGrabLabelAvoidArea | null>(null)
   const sentPageRef = useRef<string | null>(null)
   const reportedPageRef = useRef<string | null>(null)
+  const deliveryRef = useRef<Promise<unknown>>(Promise.resolve())
 
   useLayoutEffect(() => {
     const frame = frameRef?.current
@@ -97,26 +98,35 @@ export function useGrabLabelAvoidArea({
         return
       }
       latest = area
+      // An outstanding send can replace the last accepted area, even if the new measurement returns to it.
+      sentRef.current = null
       reportedPageRef.current = pageId
-      void window.api.browser.setGrabLabelAvoidArea({ browserPageId: pageId, area }).then(
-        (accepted) => {
-          // A newer measurement, a closed palette or another page supersedes this reply.
-          if (disposed || latest !== area) {
-            return
-          }
-          if (accepted) {
-            sentRef.current = area
-            sentPageRef.current = pageId
-            retries = 0
-            return
-          }
-          if (retries < MAX_RETRIES) {
-            retries += 1
-            retryTimer = window.setTimeout(report, RETRY_MS)
-          }
-        },
-        () => {}
-      )
+      const delivery = deliveryRef.current.then(() => {
+        if (disposed || latest !== area) {
+          return false
+        }
+        return window.api.browser.setGrabLabelAvoidArea({ browserPageId: pageId, area })
+      })
+      deliveryRef.current = delivery.catch(() => false)
+      const retry = (): void => {
+        if (!disposed && latest === area && retries < MAX_RETRIES) {
+          retries += 1
+          retryTimer = window.setTimeout(report, RETRY_MS)
+        }
+      }
+      void delivery.then((accepted) => {
+        // A newer measurement, a closed palette or another page supersedes this reply.
+        if (disposed || latest !== area) {
+          return
+        }
+        if (accepted) {
+          sentRef.current = area
+          sentPageRef.current = pageId
+          retries = 0
+          return
+        }
+        retry()
+      }, retry)
     }
     report()
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report)
@@ -136,7 +146,11 @@ export function useGrabLabelAvoidArea({
         sentRef.current = null
         sentPageRef.current = null
         reportedPageRef.current = null
-        void window.api.browser.setGrabLabelAvoidArea({ browserPageId: pageId, area: null })
+        deliveryRef.current = deliveryRef.current
+          .then(() =>
+            window.api.browser.setGrabLabelAvoidArea({ browserPageId: pageId, area: null })
+          )
+          .catch(() => false)
       }
     },
     [pageId]

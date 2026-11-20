@@ -61,6 +61,16 @@ describe('turning the picker off before Draw captures', () => {
 
     await expect(off).resolves.toBe(true)
   })
+  it('rejects a teardown superseded by a new document, including its late completion', async () => {
+    const manager = new BrowserManager()
+    const { page, guest, mainWorld } = heldGuest()
+    const off = manager.setGrabMode('page-1', false, page)
+    guest.emit('did-start-navigation', {}, 'https://example.test/new', false, true)
+    await expect(off).resolves.toBe(false)
+    for (const finish of mainWorld.splice(0)) {
+      finish()
+    }
+  })
 })
 
 describe("a pick's view of page field focus", () => {

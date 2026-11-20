@@ -26,6 +26,7 @@ async function page() {
   closedHost.tabIndex = 0
   closedHost.attachShadow({ mode: 'closed' }).appendChild(document.createElement('textarea'))
   document.body.append(field, button, openHost, closedHost)
+  button.focus()
   // The isolated world: same DOM, its own globals.
   const world = { window, document, setTimeout: window.setTimeout.bind(window), globalThis: {} }
   world.globalThis = world

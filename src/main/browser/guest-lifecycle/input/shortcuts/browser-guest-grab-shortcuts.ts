@@ -173,10 +173,28 @@ export function setupGrabShortcutForwarding(args: {
       })
   }
 
+  const discardOnNavigation = (
+    _event: unknown,
+    _url: unknown,
+    isInPlace: boolean,
+    isMainFrame: boolean
+  ): void => {
+    if (isMainFrame && !isInPlace) {
+      hold.discard()
+    }
+  }
+  guest.on('did-start-navigation', discardOnNavigation)
+  guest.on('destroyed', holdDiscard)
+  function holdDiscard(): void {
+    hold.discard()
+  }
   guest.on('before-input-event', handler)
   guest.on('blur', forgetAltGraph)
   return () => {
+    hold.discard()
     try {
+      guest.off('did-start-navigation', discardOnNavigation)
+      guest.off('destroyed', holdDiscard)
       guest.off('before-input-event', handler)
       guest.off('blur', forgetAltGraph)
     } catch {

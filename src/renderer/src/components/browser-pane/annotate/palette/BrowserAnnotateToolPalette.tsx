@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import { Crosshair, MessageSquarePlus, PenTool, X } from 'lucide-react'
+import { Crosshair, Loader2, MessageSquarePlus, PenTool, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -56,7 +56,8 @@ export function BrowserAnnotateToolPalette({
   onDrawSlotChange,
   onDrawDensityChange,
   labelAvoidFrameRef,
-  unavailableReason
+  unavailableReason,
+  drawWaitingForPage = false
 }: {
   /** The page area the palette floats over and may not leave. */
   boundsRef: RefObject<HTMLElement | null>
@@ -89,6 +90,7 @@ export function BrowserAnnotateToolPalette({
   labelAvoidFrameRef?: RefObject<HTMLElement | null>
   /** Why the other tools can't be used right now (e.g. the page didn't load); shown as their tooltip. */
   unavailableReason?: string
+  drawWaitingForPage?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const paletteRef = useRef<HTMLDivElement>(null)
@@ -254,7 +256,8 @@ export function BrowserAnnotateToolPalette({
           {options.map((option) => {
             const checked = option.tool === activeTool
             const unavailable = !canPickElements && !checked
-            const Icon = option.icon
+            const waiting = option.tool === 'draw' && drawWaitingForPage
+            const Icon = waiting ? Loader2 : option.icon
             return (
               <Tooltip
                 key={option.tool}
@@ -279,6 +282,7 @@ export function BrowserAnnotateToolPalette({
                     }}
                     type="button"
                     aria-pressed={checked}
+                    aria-busy={waiting || undefined}
                     aria-label={option.label}
                     aria-keyshortcuts={
                       !showKeyHints
@@ -315,7 +319,12 @@ export function BrowserAnnotateToolPalette({
                       }
                     }}
                   >
-                    <Icon className="size-3.5 shrink-0" />
+                    <Icon
+                      className={cn(
+                        'size-3.5 shrink-0',
+                        waiting && 'animate-spin motion-reduce:animate-none'
+                      )}
+                    />
                     {showToolLabels ? <span>{option.label}</span> : null}
                   </button>
                 </TooltipTrigger>
@@ -390,6 +399,9 @@ export function BrowserAnnotateToolPalette({
           {hint}
         </div>
       ) : null}
+      <span className="sr-only" role="status" aria-live="polite">
+        {drawWaitingForPage ? t('browser.annotatePalette.waitingForPage', 'Waiting for page…') : ''}
+      </span>
       {/* Polite announcements: the active tool, and errors from the picker. */}
       <span className="sr-only" role="status" aria-live="polite">
         {hintIsError ? hint : activeLabel}

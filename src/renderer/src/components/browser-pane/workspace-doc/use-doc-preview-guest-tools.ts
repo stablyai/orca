@@ -1,3 +1,4 @@
+import { useBrowserAnnotateKeys } from '../host-guest/input/use-browser-annotate-keys'
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
@@ -21,7 +22,8 @@ export function useDocPreviewGuestTools({
   grantId,
   webviewRef,
   containerRef,
-  toolsReady
+  toolsReady,
+  isActive
 }: {
   previewId: string
   worktreeId: string
@@ -29,6 +31,7 @@ export function useDocPreviewGuestTools({
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   containerRef: MutableRefObject<HTMLDivElement | null>
   toolsReady: boolean
+  isActive: boolean
 }): {
   grab: ReturnType<typeof useGrabMode>
   markup: ReturnType<typeof useBrowserPageMarkupCapture>
@@ -102,6 +105,16 @@ export function useDocPreviewGuestTools({
     canPickElements: toolsReady,
     toolTargetId,
     documentKey: grantId ?? ''
+  })
+
+  useBrowserAnnotateKeys({
+    browserTabId: toolTargetId,
+    isActive: isActive && toolsReady,
+    grabIsInteractive: grab.state !== 'idle' && grab.state !== 'error',
+    markupIsActive: markup.isActive,
+    annotateToolOn: toolSwitch.activeTool !== null,
+    handleAnnotateToolKey: toolSwitch.selectToolByKey,
+    handleGrabActionShortcut: grabAnnotations.handleGrabActionShortcut
   })
 
   const elementTools = useMemo<BrowserChromeElementTools>(

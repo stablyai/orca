@@ -65,6 +65,8 @@ export class GuestKeyHold {
   private held: KeyInput[] | null = null
   // Keys this hold sends back pass through the page's handler once without being held or taken again.
   private replaying = 0
+  private generation = 0
+  private timer: ReturnType<typeof setTimeout> | undefined
 
   constructor(
     private readonly guest: Pick<WebContents, 'sendInputEvent' | 'isDestroyed'>,
@@ -90,16 +92,19 @@ export class GuestKeyHold {
 
   /** Starts holding at a letter main would take as a tool key. */
   start(letter: KeyInput): void {
+    this.release()
+    const generation = ++this.generation
     this.held = [letter]
     let settled = false
     const settle = (pageHasField: boolean): void => {
-      if (settled) {
+      if (settled || this.generation !== generation) {
         return
       }
       settled = true
       this.finish(pageHasField)
     }
     const timer = setTimeout(() => settle(true), GUEST_KEY_HOLD_MS)
+    this.timer = timer
     this.askPageHasField().then(
       (hasField) => {
         clearTimeout(timer)
@@ -124,7 +129,17 @@ export class GuestKeyHold {
     }
   }
 
+  /** Navigation/disposal invalidates input for the old document; it must never reach a replacement document. */
+  discard(): void {
+    this.generation += 1
+    clearTimeout(this.timer)
+    this.held = null
+    this.replaying = 0
+  }
+
   private finish(pageHasField: boolean): void {
+    this.generation += 1
+    clearTimeout(this.timer)
     const held = this.held ?? []
     this.held = null
     if (this.guest.isDestroyed()) {

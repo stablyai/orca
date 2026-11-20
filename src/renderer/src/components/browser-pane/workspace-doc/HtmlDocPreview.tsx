@@ -137,6 +137,7 @@ export function HtmlDocPreview({
     grantId,
     webviewRef,
     containerRef,
+    isActive,
     toolsReady: state === 'ready' && !isUnavailable
   })
   const previewDocument = useMemo(
@@ -384,7 +385,7 @@ export function HtmlDocPreview({
           toolSwitch={toolSwitch}
           canPickElements={state === 'ready' && !isUnavailable}
           // Why: the preview wires no A/G/D keys, so its tooltips don't name them.
-          showPaletteKeyHints={false}
+          showPaletteKeyHints={true}
         />
         {state === 'loading' && failureReason === null ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-editor-surface">

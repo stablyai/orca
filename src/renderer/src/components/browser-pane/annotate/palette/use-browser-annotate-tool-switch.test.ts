@@ -315,13 +315,11 @@ describe('switching annotate tools', () => {
     rerender({ ...FIRST_PAGE, documentReady: false })
     const release = await startDrawWithTeardownHeld(result)
 
-    await act(async () => release({ ok: true }))
-    expect(markup.start).not.toHaveBeenCalled()
-    expect(result.current.tools.activeTool).toBe('draw')
-    // The palette says it is waiting.
+    // Production teardown cannot finish until loading ends. Feedback precedes that acknowledgement.
     expect(result.current.tools.drawWaitingForPage).toBe(true)
-
+    expect(markup.start).not.toHaveBeenCalled()
     rerender(FIRST_PAGE)
+    await act(async () => release({ ok: true }))
     await waitFor(() => expect(markup.start).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(result.current.tools.drawWaitingForPage).toBe(false))
   })

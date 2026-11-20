@@ -1,4 +1,5 @@
 import { webContents } from 'electron'
+import { executeGrabScript } from '../../../element-grab/grab-guest-execution'
 import { buildGuestOverlayScript } from '../../../element-grab/grab-guest-script'
 import { buildGrabLabelAvoidScript } from '../../../element-grab/grab-guest-overlay-script'
 import {
@@ -22,40 +23,20 @@ import type {
 } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewport } from '../viewport/browser-manager-viewport'
 
-// Electron's executeJavaScript waits for did-stop-loading, so a guest destroyed mid-load never settles it.
 function runOverlayScript(guest: Electron.WebContents, mode: 'arm' | 'teardown'): Promise<boolean> {
-  return new Promise((resolve) => {
-    const settle = (ran: boolean): void => {
-      guest.off('destroyed', onDestroyed)
-      resolve(ran)
-    }
-    const onDestroyed = (): void => settle(false)
-    guest.once('destroyed', onDestroyed)
-    guest.executeJavaScript(buildGuestOverlayScript(mode)).then(
-      () => settle(true),
-      () => settle(false)
-    )
-  })
+  return executeGrabScript(guest, () => guest.executeJavaScript(buildGuestOverlayScript(mode)))
 }
 
-// Removing the overlay from the DOM is not yet a painted frame without it; on a busy page the next capture can still
-// show the old frame. Two animation frames mean a frame was produced after the removal. The cap keeps a throttled or
-// frozen page from stalling the caller.
+// A stalled or throttled renderer has not established a clean frame: fail rather than capture old pixels.
 const PAINTED_FRAME_SCRIPT = `new Promise((resolve) => {
   let done = false
-  const finish = () => { if (!done) { done = true; resolve(true) } }
-  requestAnimationFrame(() => requestAnimationFrame(finish))
-  setTimeout(finish, 500)
+  const finish = (painted) => { if (!done) { done = true; resolve(painted) } }
+  requestAnimationFrame(() => requestAnimationFrame(() => finish(true)))
+  setTimeout(() => finish(false), 500)
 })`
 
-function waitForPaintedFrame(guest: Electron.WebContents): Promise<void> {
-  if (guest.isDestroyed()) {
-    return Promise.resolve()
-  }
-  return guest.executeJavaScript(PAINTED_FRAME_SCRIPT).then(
-    () => {},
-    () => {}
-  )
+function waitForPaintedFrame(guest: Electron.WebContents): Promise<boolean> {
+  return executeGrabScript(guest, () => guest.executeJavaScript(PAINTED_FRAME_SCRIPT))
 }
 
 // Fire-and-forget: a page that is gone or mid-navigation simply has no picker to tell.
@@ -103,7 +84,11 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
 
   private watchGuestEditable(browserTabId: string, guest: Electron.WebContents): void {
     this.stopEditableWatch(browserTabId)
-    const watch = new GuestEditableWatch(guest)
+    const watch = new GuestEditableWatch(guest, () => {
+      if (this.editableWatchByTabId.get(browserTabId) === watch) {
+        this.editableWatchByTabId.delete(browserTabId)
+      }
+    })
     this.editableWatchByTabId.set(browserTabId, watch)
     watch.start()
   }
@@ -165,10 +150,7 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
       // this settles only once the cancelled pick's own teardown has run too. Draw captures the page after this
       // resolves and must never freeze the picker's highlight into the screenshot.
       const tornDown = await runOverlayScript(guest, 'teardown')
-      if (tornDown) {
-        await waitForPaintedFrame(guest)
-      }
-      return tornDown
+      return tornDown && (await waitForPaintedFrame(guest))
     }
     // Arm eagerly so hover feedback appears before selection starts.
     const armed = await runOverlayScript(guest, 'arm')
