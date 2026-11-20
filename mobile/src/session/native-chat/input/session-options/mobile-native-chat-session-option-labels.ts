@@ -1,10 +1,36 @@
 import { translate } from '../../../../i18n/mobile-i18n'
-import type { SessionOptionDescriptor } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionSelectChoice
+} from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
   nativeChatSessionChoiceLabel,
   selectedNativeChatChoice
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+
+export function mobileModelChoiceParts(
+  choice: SessionOptionSelectChoice | undefined
+): { model: string; provider: string } | null {
+  if (!choice) {
+    return null
+  }
+  const separator = ' · '
+  const split = choice.label.lastIndexOf(separator)
+  if (split < 1) {
+    return null
+  }
+  const model = choice.label.slice(split + separator.length).trim()
+  const provider = choice.label.slice(0, split).trim()
+  // Only split a catalog label when its suffix identifies the model in its selection value.
+  return model &&
+    provider &&
+    (choice.value === model ||
+      choice.value.endsWith(':' + model) ||
+      choice.value.endsWith('/' + model))
+    ? { model, provider }
+    : null
+}
 
 /** The value a drill-in row shows beside its label; desktop lists the choices in place instead. */
 export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescriptor): string {
