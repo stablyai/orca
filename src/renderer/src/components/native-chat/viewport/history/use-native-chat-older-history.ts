@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  type RefObject,
-  type Dispatch,
-  type SetStateAction
-} from 'react'
+import { useCallback, useRef, type RefObject, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { ReadState } from '../../session/terminal/read/native-chat-live-session-contract'
@@ -19,6 +12,8 @@ import {
   nextNativeChatLimit,
   type NativeChatOlderPageResult
 } from './native-chat-pagination'
+
+import type { TranscriptByteRange } from '../../../../../../shared/native-chat/transcript/transcript-byte-range'
 
 const USER_PAGING = { wakeWslDistro: true } as const
 
@@ -40,8 +35,10 @@ export function useNativeChatOlderHistory({
   transcriptEpochRef,
   setLoadingEarlier,
   setRead,
-  setHasMore
+  setHasMore,
+  onHistoryRead
 }: {
+  onHistoryRead?: (ranges: TranscriptByteRange[] | undefined, prepend: boolean) => void
   agent: AgentType
   sessionId: string | null
   transcriptPath?: string | null
@@ -69,10 +66,6 @@ export function useNativeChatOlderHistory({
     epoch: number
     promise: Promise<NativeChatOlderPageResult>
   } | null>(null)
-  // Only a committed new read or paging generation resets it; a render that skipped a queued page leaves it alone.
-  useLayoutEffect(() => {
-    heldRef.current = read
-  }, [heldRef, read, olderHistoryGeneration])
   return useCallback((): Promise<NativeChatOlderPageResult> => {
     // A callback from before a trim, snapshot or rebind holds a base that has since moved.
     if (transcriptEpochRef.current !== olderHistoryGeneration) {
@@ -111,6 +104,7 @@ export function useNativeChatOlderHistory({
           }
           limitRef.current = nextLimit
           // Replace the ordered base tail to prepend history; preserve separate live appends.
+          onHistoryRead?.(result.ranges, false)
           heldRef.current = { phase: 'ready', messages: result.messages }
           setRead(heldRef.current)
           transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
@@ -147,6 +141,7 @@ export function useNativeChatOlderHistory({
           const page = result.messages
           // Keep every source row; the assembler resolves shared ids exactly as a full reread would.
           // A rewrite racing this page is corrected by the replacement frame that follows it.
+          onHistoryRead?.(result.ranges, true)
           heldRef.current = { phase: 'ready', messages: [...page, ...held.messages] }
           setRead(heldRef.current)
           limitRef.current = Math.max(limitRef.current, held.messages.length + page.length)
@@ -196,6 +191,7 @@ export function useNativeChatOlderHistory({
     transcriptEpochRef,
     setLoadingEarlier,
     setRead,
-    setHasMore
+    setHasMore,
+    onHistoryRead
   ])
 }

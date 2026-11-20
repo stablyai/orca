@@ -1,3 +1,7 @@
+import {
+  verifyTranscriptRanges,
+  cancelTranscriptRangeVerification
+} from './native-chat-range-verification'
 import { ipcRenderer } from 'electron'
 import type {
   NativeChatAppendedPayload,
@@ -13,6 +17,8 @@ import {
 } from '../../../shared/native-chat/visuals/native-chat-visual-shell'
 
 export const nativeChatApi = {
+  verifyTranscriptRanges,
+  cancelTranscriptRangeVerification,
   // Acknowledge the in-memory snapshot before guest creation can start its preload.
   publishVisualGuestTheme: (theme: NativeChatVisualTheme): void => {
     ipcRenderer.sendSync(NATIVE_CHAT_VISUAL_GUEST_THEME_PUBLISH, theme)

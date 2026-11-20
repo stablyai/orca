@@ -363,6 +363,107 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.hasMore).toBe(false)
   })
 
+  it('rereads a held prefix after a same-size rewrite outside the replacement window', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = Object.assign(getMockTransport('env-1'), {
+        pagesByCursor: true,
+        verifyTranscriptRanges: vi.fn().mockResolvedValue([false])
+      })
+      const rows = Array.from({ length: 500 }, (_, n) => ({
+        ...user(`row-${n}`, n === 100 ? 'stale text' : `text-${n}`),
+        transcriptOrder: n
+      }))
+      const ranges = [{ start: 200, end: 500, digest: '0000000000000300' }]
+      await render({
+        paneKey: PANE,
+        agent: AGENT,
+        sessionId: SESSION,
+        runtimeEnvironmentId: 'env-1'
+      })
+      await act(async () =>
+        transport.emit({ type: 'snapshot', messages: rows.slice(200), hasMore: true, ranges })
+      )
+      transport.readSession.mockResolvedValueOnce({
+        messages: rows.slice(0, 200),
+        hasMore: true,
+        ranges: [{ start: 0, end: 200, digest: '0000000000000200' }]
+      })
+      await act(async () => {
+        await latest?.loadEarlier()
+      })
+      transport.readSession.mockResolvedValueOnce({
+        messages: rows.map((row) =>
+          row.id === 'row-100' ? { ...row, blocks: [{ type: 'text', text: 'fresh text' }] } : row
+        ),
+        hasMore: false,
+        ranges: [{ start: 0, end: 500, digest: '0000000000000501' }]
+      })
+      await act(async () =>
+        transport.emit({ type: 'replacement', messages: rows.slice(200), hasMore: true, ranges })
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(latest?.messages).toHaveLength(500)
+      expect(latest?.messages.find((row) => row.id === 'row-100')?.blocks).toEqual([
+        { type: 'text', text: 'fresh text' }
+      ])
+      expect(JSON.stringify(latest?.messages)).not.toContain('stale text')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps all held objects when a touch-only replacement verifies', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = Object.assign(getMockTransport('env-1'), {
+        pagesByCursor: true,
+        verifyTranscriptRanges: vi.fn().mockResolvedValue([true])
+      })
+      const rows = Array.from({ length: 500 }, (_, n) => ({
+        ...user(`row-${n}`, `text-${n}`),
+        transcriptOrder: n
+      }))
+      const ranges = [{ start: 200, end: 500, digest: '0000000000000300' }]
+      await render({
+        paneKey: PANE,
+        agent: AGENT,
+        sessionId: SESSION,
+        runtimeEnvironmentId: 'env-1'
+      })
+      await act(async () =>
+        transport.emit({ type: 'snapshot', messages: rows.slice(200), hasMore: true, ranges })
+      )
+      transport.readSession.mockResolvedValueOnce({
+        messages: rows.slice(0, 200),
+        hasMore: true,
+        ranges: [{ start: 0, end: 200, digest: '0000000000000200' }]
+      })
+      await act(async () => {
+        await latest?.loadEarlier()
+      })
+      const held = latest?.messages
+      await act(async () =>
+        transport.emit({
+          type: 'replacement',
+          messages: rows.slice(200).map((row) => ({ ...row })),
+          hasMore: true,
+          ranges
+        })
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(latest?.messages).toHaveLength(500)
+      expect(latest?.messages).toBe(held)
+      expect(latest?.messages.every((row, index) => row === held?.[index])).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps paged-in history when the host re-sends the latest window', async () => {
     const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
     const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })

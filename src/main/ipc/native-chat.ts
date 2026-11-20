@@ -1,10 +1,9 @@
+import { registerNativeChatRangeVerification } from './native-chat-range-verification'
+import type { NativeChatAppendedPayload } from '../../preload/api/native-chat/native-chat-api'
+export type { NativeChatAppendedPayload } from '../../preload/api/native-chat/native-chat-api'
 import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watching/transcript-watch-contract'
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
-import type {
-  NativeChatMessage,
-  NativeChatTurnLifecycle
-} from '../../shared/native-chat/native-chat-types'
 
 import { subscribeNativeChatTranscript } from '../native-chat/transcript-watch'
 import { readNativeChatTranscriptTail } from '../native-chat/transcript-tail-reader'
@@ -58,31 +57,6 @@ export type NativeChatSubscribeArgs = {
   limit?: number
   /** The user opened this chat: may start its stopped WSL distro (E9). Absent never does. */
   wakeWslDistro?: boolean
-}
-
-export type NativeChatAppendedPayload = {
-  subscriptionId: string
-  frame:
-    | {
-        type: 'snapshot'
-        messages: NativeChatMessage[]
-        hasMore: boolean
-        error?: string
-        lifecycle?: NativeChatTurnLifecycle
-        /** The current window has no transcript yet; do not treat it as settled history. */
-        pending?: boolean
-      }
-    | {
-        type: 'replacement'
-        messages: NativeChatMessage[]
-        hasMore: boolean
-        lifecycle?: NativeChatTurnLifecycle
-      }
-    | {
-        type: 'appended'
-        messages: NativeChatMessage[]
-        lifecycle?: NativeChatTurnLifecycle
-      }
 }
 
 type LiveSubscription = {
@@ -210,7 +184,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       }
       sender.send('nativeChat:appended', payload)
     },
-    onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle) => {
+    onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle, ranges) => {
       if (!canPublish()) {
         return
       }
@@ -220,6 +194,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
         frame: {
           type: 'snapshot',
           messages,
+          ranges,
           hasMore,
           ...(error ? { error } : {}),
           ...(lifecycle ? { lifecycle } : {})
@@ -227,7 +202,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
       }
       sender.send('nativeChat:appended', payload)
     },
-    onReplace: (messages, hasMore, _beforeOffset, lifecycle) => {
+    onReplace: (messages, hasMore, _beforeOffset, lifecycle, ranges) => {
       if (!canPublish()) {
         return
       }
@@ -236,12 +211,13 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
         frame: {
           type: 'replacement',
           messages,
+          ranges,
           hasMore,
           ...(lifecycle ? { lifecycle } : {})
         }
       } satisfies NativeChatAppendedPayload)
     },
-    onAppend: (messages, lifecycle) => {
+    onAppend: (messages, lifecycle, ranges) => {
       if (!canPublish()) {
         return
       }
@@ -250,6 +226,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
         frame: {
           type: 'appended',
           messages,
+          ranges,
           ...(lifecycle ? { lifecycle } : {})
         }
       }
@@ -320,6 +297,7 @@ export function _getNativeChatPendingSubscriptionCountForTest(): number {
 }
 
 export function registerNativeChatHandlers(): void {
+  registerNativeChatRangeVerification()
   ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
     readSession(args)
   )

@@ -1,3 +1,4 @@
+import type { TranscriptByteRange } from '../../../shared/native-chat/transcript/transcript-byte-range'
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatVisualTheme } from '../../../shared/native-chat/visuals/native-chat-visual-shell'
 import type {
@@ -8,6 +9,7 @@ import type {
 // notFound marks a not-yet-on-disk miss (retry-worthy) vs a real read/parse error (#8401).
 export type NativeChatReadSessionResult =
   | {
+      ranges?: TranscriptByteRange[]
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
       /** Older rows exist before this window; absent from hosts that predate cursor paging. */
@@ -21,6 +23,7 @@ export type NativeChatAppendedMessages = NativeChatMessage[]
 export type NativeChatSubscriptionFrame =
   | {
       type: 'snapshot'
+      ranges?: TranscriptByteRange[]
       messages: NativeChatMessage[]
       hasMore: boolean
       error?: string
@@ -30,12 +33,14 @@ export type NativeChatSubscriptionFrame =
     }
   | {
       type: 'replacement'
+      ranges?: TranscriptByteRange[]
       messages: NativeChatMessage[]
       hasMore: boolean
       lifecycle?: NativeChatTurnLifecycle
     }
   | {
       type: 'appended'
+      ranges?: TranscriptByteRange[]
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
     }
@@ -76,6 +81,14 @@ export type NativeChatApi = {
     /** The user opened or paged this chat: may start its stopped local WSL distro (E9). */
     options?: NativeChatReadSessionOptions
   ) => Promise<NativeChatReadSessionResult>
+  verifyTranscriptRanges?: (
+    agent: AgentType,
+    sessionId: string,
+    ranges: TranscriptByteRange[],
+    transcriptPath: string | undefined,
+    requestId: string
+  ) => Promise<boolean[] | null>
+  cancelTranscriptRangeVerification?: (requestId: string) => void
   /** First frame is a bounded snapshot; later frames contain only appended messages. */
   subscribe: (
     args: NativeChatSubscribeArgs,
