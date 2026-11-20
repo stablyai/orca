@@ -8,15 +8,21 @@ const SHUTDOWN_GRACE_MS = 5000
 // Matches the plugin's startupTimeout: a restart that hasn't initialized by then is abandoned.
 const RESTART_TIMEOUT_MS = 60_000
 const REQUEST_CANCELLED = -32800
+const SERVER_CANCELLED = -32802
 const REQUEST_FAILED = -32803
-// These carry no work for a stopped server; a new one rereads the disk anyway.
-const NON_WAKING = new Set([
-  '$/cancelRequest',
-  '$/setTrace',
+// Requests held while a server starts or stops; past this the agent is told to retry.
+const MAX_QUEUED_REQUESTS = 64
+// A server this far behind on answers is treated as stuck, and an agent this far behind gets no more server requests.
+const MAX_OPEN_REQUESTS = 4096
+// Without a running server these only update what the next one is given at start.
+const SESSION_STATE = new Set([
+  'textDocument/didOpen',
+  'textDocument/didChange',
   'textDocument/didClose',
-  'exit',
-  WATCHED_FILES
+  'workspace/didChangeConfiguration',
+  'workspace/didChangeWorkspaceFolders'
 ])
+const WAKING_STATE = new Set(['textDocument/didOpen', 'textDocument/didChange'])
 // Not agent activity: cancellations, and file events from a client that watches for itself.
 const NOT_ACTIVITY = new Set(['$/cancelRequest', WATCHED_FILES])
 
@@ -45,7 +51,9 @@ export function createServerSession({
   let killTimer
   let idleExpired = false
   let generation = 0
-  const queue = []
+  // Requests by id (in arrival order) plus a queued exit; notifications never wait here.
+  const queue = new Map()
+  let wakeWanted = false
   const pending = new Set()
   // The current server's requests to the client, under wrapper ids so a late answer can't reach a newer server.
   const relayed = new Map()
@@ -112,6 +120,9 @@ export function createServerSession({
 
   // A server that misses a deadline is treated as gone now, then killed for good if it lingers.
   const retire = () => {
+    if (state === 'ready') {
+      state = 'stopping'
+    }
     const stuck = server
     stuck.kill()
     setTimer(() => stuck.kill('SIGKILL'), SHUTDOWN_GRACE_MS)
@@ -145,20 +156,21 @@ export function createServerSession({
     state = 'stopped'
     server = null
     replayId = null
+    wakeWanted = false
     let exit = false
-    for (const message of queue.splice(0)) {
+    const queued = [...queue.values()]
+    queue.clear()
+    for (const message of queued) {
       if (message.method === 'exit') {
         exit = true
       } else if (message.method === 'shutdown') {
         toClient({ jsonrpc: '2.0', id: message.id, result: null })
-      } else if (message.id !== undefined) {
+      } else {
         toClient({
           jsonrpc: '2.0',
           id: message.id,
           error: { code: REQUEST_FAILED, message: reason }
         })
-      } else {
-        track(message)
       }
     }
     if (exit) {
@@ -213,8 +225,30 @@ export function createServerSession({
   }
 
   const drain = () => {
-    for (const message of queue.splice(0)) {
+    const queued = [...queue.values()]
+    queue.clear()
+    for (const message of queued) {
       dispatch(message)
+    }
+    if (wakeWanted && state === 'stopped') {
+      wake()
+    }
+    if (state === 'ready') {
+      wakeWanted = false
+    }
+  }
+
+  const enqueue = (message) => {
+    if (message.id === undefined) {
+      queue.set(Symbol('exit'), message)
+    } else if (queue.size < MAX_QUEUED_REQUESTS) {
+      queue.set(message.id, message)
+    } else {
+      toClient({
+        jsonrpc: '2.0',
+        id: message.id,
+        error: { code: SERVER_CANCELLED, message: 'server restarting' }
+      })
     }
   }
 
@@ -243,34 +277,43 @@ export function createServerSession({
       })
       return
     }
-    if (state === 'stopped') {
-      if (method === 'shutdown') {
-        toClient({ jsonrpc: '2.0', id: message.id, result: null })
-      } else if (method === 'exit') {
-        onEnd(0)
-      } else if (method === 'textDocument/didClose') {
-        documents.delete(message.params?.textDocument?.uri)
-      } else if (!NON_WAKING.has(method)) {
-        queue.push(message)
-        wake()
-      }
-      return
-    }
     if (state !== 'ready') {
-      // The new server rereads the disk, and a cancel takes back a queued request, so neither waits in the queue.
-      if (method === '$/cancelRequest') {
-        const index = queue.findIndex((queued) => queued.id === message.params?.id)
-        if (index !== -1) {
-          const [cancelled] = queue.splice(index, 1)
+      if (SESSION_STATE.has(method)) {
+        // The next server is given the current documents, settings and folders when it starts.
+        track(message)
+        if (WAKING_STATE.has(method)) {
+          wakeWanted = true
+          if (state === 'stopped') {
+            wake()
+          }
+        }
+      } else if (state === 'stopped' && method === 'shutdown') {
+        toClient({ jsonrpc: '2.0', id: message.id, result: null })
+      } else if (state === 'stopped' && method === 'exit') {
+        onEnd(0)
+      } else if (method === '$/cancelRequest') {
+        const cancelled = queue.get(message.params?.id)
+        if (cancelled) {
+          queue.delete(cancelled.id)
           toClient({
             jsonrpc: '2.0',
             id: cancelled.id,
             error: { code: REQUEST_CANCELLED, message: 'cancelled' }
           })
         }
-      } else if (method !== WATCHED_FILES) {
-        queue.push(message)
+      } else if (message.id !== undefined || method === 'exit') {
+        // Other notifications (file events, traces, saves) mean nothing to a server that rereads everything.
+        enqueue(message)
+        if (state === 'stopped') {
+          wake()
+        }
       }
+      return
+    }
+    if (message.id !== undefined && pending.size >= MAX_OPEN_REQUESTS) {
+      console.error('agent-typescript-lsp: server stopped answering; restarting it')
+      retire()
+      dispatch(message)
       return
     }
     if (!NOT_ACTIVITY.has(method) && !background) {
@@ -282,6 +325,14 @@ export function createServerSession({
   const answerServer = (id) => server.write({ jsonrpc: '2.0', id, result: null })
 
   const relayToClient = (message, onAnswer) => {
+    if (relayed.size >= MAX_OPEN_REQUESTS) {
+      server.write({
+        jsonrpc: '2.0',
+        id: message.id,
+        error: { code: REQUEST_FAILED, message: 'client not answering' }
+      })
+      return
+    }
     const id = `${SESSION_ID_PREFIX}${++nextId}`
     relayed.set(id, { serverId: message.id, onAnswer })
     relayedByServerId.set(message.id, id)
