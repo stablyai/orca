@@ -49,6 +49,6 @@ export function withStructuredChatStatus(
 export function withChatTabShowing(
   tab: RuntimeMobileSessionAgentTab
 ): RuntimeMobileSessionAgentTab {
-  const showing = getStructuredAgentSessionHost()?.deps.store.getSessionTabShowing?.(tab.sessionId)
+  const showing = getStructuredAgentSessionHost()?.deps.store.getSessionTabShowing(tab.sessionId)
   return showing ? { ...tab, showing } : tab
 }

@@ -1,4 +1,5 @@
 import { OrchestrationError } from '../../orchestration-error'
+import { guardChatCustody } from '../chat-custody-guard'
 import type { OrchestrationDb } from '../orchestration-db'
 import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
 
@@ -40,6 +41,7 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} already has a different launch-token commitment.`
       )
     }
+    guardChatCustody(this, params.handle, 'custody')
     const existing = this.findActiveDispatchForAssignee(params.handle, params.paneKey ?? undefined)
     if (existing && existing.id !== params.dispatchId) {
       throw new Error(
