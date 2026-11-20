@@ -14,7 +14,7 @@ const pairs = (record: Readonly<Record<string, string>> | undefined) =>
 const atUrl = (server: BotToolServer) => 'url' in server
 
 const httpToolsOffReason = (agentName: string, version: string | null | undefined) =>
-  `${agentName}${version ? ` ${version}` : ''} doesn't take tools at a URL. Update it to turn them on.`
+  `${agentName}${version ? ` ${version}` : ''} doesn't take tools at a URL.`
 
 export function acpBotMcpServers(tools: BotLaunchTools): McpServer[] {
   return tools.servers.map((server) =>

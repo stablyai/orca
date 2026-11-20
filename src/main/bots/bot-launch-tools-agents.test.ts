@@ -154,7 +154,10 @@ describe('bot tools an agent cannot take', () => {
       accountHome: { variable: 'PI_CODING_AGENT_DIR', path: '/home/user/.omp/agent' }
     }
     noteAcpLaunchVersion('omp', '17.2.9')
-    observeAcpInitialize('omp', { protocolVersion: 1, agentCapabilities: {} })
+    observeAcpInitialize('omp', {
+      protocolVersion: 1,
+      agentCapabilities: { mcpCapabilities: { http: false } }
+    })
     const launch = await createAcpStructuredLaunchResolver(acpLaunchSpecFor('omp')!, {
       ...sources(record),
       resolveInstructions: async () => 'You are Scout.',
@@ -170,7 +173,7 @@ describe('bot tools an agent cannot take', () => {
     expect(await botToolProblems(home('omp'))).toEqual({
       docs: {
         kind: 'failed',
-        detail: "OMP 17.2.9 doesn't take tools at a URL. Update it to turn them on."
+        detail: "OMP 17.2.9 doesn't take tools at a URL."
       }
     })
   })

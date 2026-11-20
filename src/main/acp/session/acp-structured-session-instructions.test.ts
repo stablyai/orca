@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { closeProviderTimelineRigs } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpAdapterRig } from './testing/acp-structured-adapter.test-support'
 import { antigravityTakesSystemPrompt } from '../launch/acp-instructions'
+import AGY_1_5_13_INITIALIZE from '../fixtures/antigravity-v1.5.13-initialize.json'
 
 afterEach(async () => {
   await closeProviderTimelineRigs()
@@ -92,17 +93,19 @@ describe('ACP tools at a URL', () => {
   const docs = { type: 'http' as const, name: 'docs', url: 'https://docs.example/mcp', headers: [] }
   const files = { name: 'files', command: 'files-mcp', args: [], env: [] }
 
-  it('sends them only to an agent that advertises taking them, and says why the rest are off', async () => {
-    const takes = await openAcpAdapterRig({
+  it('sends them unless the agent says it takes none, and says why those are off', async () => {
+    // Antigravity 1.5.13 advertises no MCP capabilities, yet uses URL servers it is given.
+    const silent = await openAcpAdapterRig({
       launch: { mcpServers: [docs, files] },
-      initialize: { agentCapabilities: { mcpCapabilities: { http: true } } }
+      initialize: AGY_1_5_13_INITIALIZE
     })
-    await takes.acquire()
-    expect(takes.sent('session/new')[0]?.params).toMatchObject({ mcpServers: [docs, files] })
+    await silent.acquire()
+    expect(silent.sent('session/new')[0]?.params).toMatchObject({ mcpServers: [docs, files] })
 
     const off: string[] = []
     const refuses = await openAcpAdapterRig({
-      launch: { mcpServers: [docs, files], httpToolsOff: (reason) => off.push(reason) }
+      launch: { mcpServers: [docs, files], httpToolsOff: (reason) => off.push(reason) },
+      initialize: { agentCapabilities: { mcpCapabilities: { http: false } } }
     })
     await refuses.acquire()
     expect(refuses.sent('session/new')[0]?.params).toMatchObject({ mcpServers: [files] })

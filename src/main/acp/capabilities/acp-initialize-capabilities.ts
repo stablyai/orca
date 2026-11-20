@@ -23,9 +23,10 @@ export function acpInitializeForkSupport(initialized: InitializeResponse): ForkS
     : 'unsupported'
 }
 
-/** Whether the agent takes MCP servers at a URL in `session/new` and `session/load`. */
+/** Whether the agent may take MCP servers at a URL; only an explicit `http: false` says no, since
+ *  Antigravity 1.5.13 advertises no MCP capabilities yet uses the URL servers it is given. */
 export function acpTakesHttpTools(initialized: InitializeResponse): boolean {
-  return initialized.agentCapabilities?.mcpCapabilities?.http === true
+  return initialized.agentCapabilities?.mcpCapabilities?.http !== false
 }
 
 export function observeAcpInitialize(agent: string, initialized: InitializeResponse): void {
