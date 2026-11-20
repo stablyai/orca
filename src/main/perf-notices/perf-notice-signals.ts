@@ -37,8 +37,9 @@ type PerfNoticeSignalStore = Omit<ProjectRuntimeResolutionStore, 'getSettings'> 
 
 type DiskRoot = { path: string; earlier: boolean }
 
-/** Roots whose filesystem call is still running; a hung mount is skipped, never asked twice. */
-const busyRoots = new Set<string>()
+/** A filesystem call still running. While one is, no other starts: a dead mount then holds one
+ *  libuv thread, not the whole pool, and disk checks resume once it returns. */
+let callInFlight = false
 
 let disk: {
   key: string
@@ -78,6 +79,10 @@ function localWorktreeRoots(store: PerfNoticeSignalStore): DiskRoot[] {
       continue
     }
     add(computeWorkspaceRoot(repo.path, pathSettings), false)
+    if (repo.worktreeBasePath) {
+      // Workspaces made before the repo got its own folder stay in the global one.
+      earlierRoots.push(computeWorkspaceRoot(repo.path, { workspaceDir: settings.workspaceDir }))
+    }
     for (const layout of relativeHistory) {
       earlierRoots.push(computeWorkspaceRoot(repo.path, { workspaceDir: layout.path }))
     }
@@ -126,20 +131,18 @@ async function readRoot(root: DiskRoot): Promise<PerfNoticeDisk | null> {
   return statDisk(root.path)
 }
 
-/** One filesystem call at a time, and none on a root whose last call hasn't returned: a hung
- *  network mount holds one libuv thread, and the other roots keep being read. */
 async function readFullestDisk(roots: DiskRoot[]): Promise<PerfNoticeDisk | null> {
   let first: PerfNoticeDisk | null = null
   for (const root of roots) {
-    if (busyRoots.has(root.path)) {
-      continue
+    if (callInFlight) {
+      return first
     }
-    busyRoots.add(root.path)
+    callInFlight = true
     let disk: PerfNoticeDisk | null
     try {
       disk = await readRoot(root)
     } finally {
-      busyRoots.delete(root.path)
+      callInFlight = false
     }
     if (isDiskAlmostFull(disk)) {
       return disk
@@ -149,8 +152,7 @@ async function readFullestDisk(roots: DiskRoot[]): Promise<PerfNoticeDisk | null
   return first
 }
 
-/** A hung mount answers "no reading" so the notice loop moves on; its root stays busy, so the
- *  next read skips it. */
+/** A hung mount answers "no reading" so the notice loop moves on. */
 function withDeadline(read: Promise<PerfNoticeDisk | null>): Promise<PerfNoticeDisk | null> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<null>((resolve) => {
