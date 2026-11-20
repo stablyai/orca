@@ -278,8 +278,11 @@ export function useAgentLaunchPickerInventorySource(
                   ? build(defaults.settings).map((entry) => ({
                       ...entry,
                       defaultsPending: false,
+                      // Without a workspace there are no workspace chat seeds to wait for.
                       structuredDefaultsPending:
-                        entry.surfaces.includes('chat') && !defaults.structuredKnown,
+                        entry.surfaces.includes('chat') &&
+                        !defaults.structuredKnown &&
+                        selector !== undefined,
                       ownerKey: key,
                       draftTarget,
                       worktreeId

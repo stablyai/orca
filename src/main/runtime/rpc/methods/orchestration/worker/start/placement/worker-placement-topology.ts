@@ -96,7 +96,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
-  /** `--model`/`--effort`; the session seeds them exactly as a saved selection is seeded. */
+  /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {

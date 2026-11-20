@@ -79,7 +79,7 @@ const setupFor = (repoId: string) => {
 }
 
 describe('project host setups under a WSL move', () => {
-  it('refuses IPC edits to a local setup of a moving repo and leaves others alone', async () => {
+  it('blocks edits to the moving setup through both cutover phases and leaves other setups writable', async () => {
     store.addRepo(repo('repo-1'))
     store.addRepo(repo('repo-2'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
@@ -105,21 +105,11 @@ describe('project host setups under a WSL move', () => {
         updates: { displayName: 'renamed' }
       })
     ).resolves.toMatchObject({ setup: { displayName: 'renamed' } })
-  })
-
-  it("keeps a setup's own repo frozen once the WSL host owns it", async () => {
-    store.addRepo(repo('repo-1'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
-    registerProjectHostSetupHandlers(new BrowserWindow(), store, {
-      enqueueRepositoryMetadata: vi.fn(),
-      resolveRepositoryMetadata: vi.fn().mockResolvedValue(true)
-    })
-    const owned = setupFor('repo-1')
-
     await expect(
-      invoke('projectHostSetups:update', { setupId: owned.id, updates: { displayName: 'x' } })
+      invoke('projectHostSetups:update', { setupId: moving.id, updates: { displayName: 'x' } })
     ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
-    await expect(invoke('projectHostSetups:delete', { setupId: owned.id })).rejects.toBeInstanceOf(
+    await expect(invoke('projectHostSetups:delete', { setupId: moving.id })).rejects.toBeInstanceOf(
       WslMoveProjectFencedError
     )
   })
