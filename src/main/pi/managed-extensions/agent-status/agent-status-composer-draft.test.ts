@@ -108,6 +108,37 @@ describe('Pi composer draft reporting', () => {
     })
   })
 
+  it('reports a draft typed again while the empty-box report is in flight', async () => {
+    const emptyReport: { release?: () => void } = {}
+    const harness = createAgentStatusExtensionHarness({
+      kind: 'pi',
+      fetchImpl: async (_url, init) => {
+        const body = String(init?.body)
+        const isEmptyReport =
+          body.includes('"hook_event_name":"composer_draft"') &&
+          body.includes('"composer_draft":false')
+        if (isEmptyReport && !emptyReport.release) {
+          await new Promise<void>((resolve) => {
+            emptyReport.release = resolve
+          })
+        }
+        return { ok: true }
+      }
+    })
+    const editor = piEditor()
+    await harness.callHook('session_start', { reason: 'startup' }, { ui: editor.ui })
+    editor.type('h')
+    await vi.waitFor(() => expect(lastDraftReport(harness)).toBe(true))
+
+    editor.type('')
+    await vi.waitFor(() => expect(emptyReport.release).toBeDefined())
+    // Typed while Orca has not yet received the empty box.
+    editor.type('again')
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    emptyReport.release?.()
+    await vi.waitFor(() => expect(lastDraftReport(harness)).toBe(true))
+  })
+
   it('reports a draft cleared during /reload', async () => {
     const harness = createAgentStatusExtensionHarness({ kind: 'pi' })
     const editor = piEditor()

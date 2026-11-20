@@ -87,7 +87,7 @@ describe('piComposerHoldsDraft', () => {
     expect(piComposerHoldsDraft(context)).toBe(false)
   })
 
-  it.each(['| cat notes.txt', '│ a quoted note'])(
+  it.each(['| cat notes.txt', '│ a quoted note', '|', '│'])(
     "holds typed text in Pi's own box that starts with a side line: %s",
     (typed) => {
       expect(piComposerHoldsDraft(editor([RULE], typed, [RULE]))).toBe(true)

@@ -48,6 +48,8 @@ export function getPiAgentStatusComposerDraftSourceLines(kind: PiAgentKind): str
     '  if (delivered) {',
     '    composerDraftState.acked = sent',
     '    composerDraftState.retries = 0',
+    // Why: the box may have changed back while this report was in flight; an unchanged box posts nothing.
+    '    scheduleComposerDraftCheck()',
     '    return',
     '  }',
     // A dropped report must not stand: recheck with backoff so the reading reaches Orca.

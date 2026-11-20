@@ -11,8 +11,8 @@ function isPiEditorRule(row: string | undefined): boolean {
 
 // An extension's own editor (pi-zentui's `| ` rail, a `│ … │` box) can put status rows, such as the
 // model, between the rules. Its layout is unknown here; Orca's Pi extension reports that box's draft.
-// Such a box draws an empty padding row that is only its gutter; text typed into Pi's own box,
-// even text starting with `|`, never is.
+// Such a box draws an empty padding row that is only its gutter beside at least one other row; a
+// lone `|` typed into Pi's own box is one row, and longer text starting with `|` is not padding.
 const EXTENSION_EDITOR_GUTTERS = ['|', '│', '┃', '▎', '▌', '▏']
 
 function isGutter(char: string | undefined): boolean {
@@ -30,7 +30,11 @@ function isExtensionPaddingRow(row: string): boolean {
 
 function isExtensionEditor(rows: string[]): boolean {
   const drawn = rows.filter((row) => row.trim() !== '')
-  return drawn.some(isExtensionPaddingRow) && drawn.every((row) => isGutter(row.trim()[0]))
+  return (
+    drawn.length > 1 &&
+    drawn.some(isExtensionPaddingRow) &&
+    drawn.every((row) => isGutter(row.trim()[0]))
+  )
 }
 
 /** Whether Pi's built-in editor shows a typed draft, so mail must wait. False when the cursor is not
