@@ -1,13 +1,18 @@
 import {
   mergeTranscriptRanges,
+  TRANSCRIPT_RANGES_UNSETTLED,
   transcriptDigestHex,
-  type TranscriptByteRange
+  type TranscriptByteRange,
+  type TranscriptRangeVerification
 } from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
 
 type VerificationOptions<T> = {
   visible: () => boolean
   olderSpan: () => { start: number; end: number } | undefined
-  verify?: (ranges: TranscriptByteRange[], signal: AbortSignal) => Promise<boolean[] | null>
+  verify?: (
+    ranges: TranscriptByteRange[],
+    signal: AbortSignal
+  ) => Promise<TranscriptRangeVerification | null>
   reread: (signal: AbortSignal) => Promise<T>
   /** False leaves the held rows as they are; `superseded` means a newer window landed during the re-read. */
   apply: (result: T | undefined, superseded: boolean) => TranscriptByteRange[] | undefined | false
@@ -19,8 +24,8 @@ export class NativeChatHeldHistoryVerify<T> {
   private unsupported = false
   // A known mismatch goes straight to the re-read instead of verifying again.
   private stale = false
-  // Re-reads refused for a live-tail gap back off, so heavy streaming can't repeat them every quiet period.
-  private refusals = 0
+  // Unsettled verifies and refused re-reads back off, so a file that never goes quiet isn't re-hashed or re-read every second.
+  private backoff = 0
   private generation = 0
   private revision = 0
   private pending = false
@@ -106,13 +111,13 @@ export class NativeChatHeldHistoryVerify<T> {
     this.ranges = []
     this.window = []
     this.stale = false
-    this.refusals = 0
+    this.backoff = 0
   }
 
   private applyResult(result: T | undefined, superseded: boolean): void {
     const ranges = this.options.apply(result, superseded)
     if (ranges === false) {
-      this.refusals++
+      this.backoff++
       this.schedule()
       return
     }
@@ -131,7 +136,7 @@ export class NativeChatHeldHistoryVerify<T> {
           void this.run()
         }
       },
-      1_000 * 2 ** Math.min(this.refusals, 5)
+      1_000 * 2 ** Math.min(this.backoff, 5)
     )
   }
 
@@ -183,6 +188,12 @@ export class NativeChatHeldHistoryVerify<T> {
             }
             return
           }
+          if (result === TRANSCRIPT_RANGES_UNSETTLED) {
+            this.backoff++
+            this.schedule()
+            return
+          }
+          this.backoff = 0
           if (result.length === ranges.length && result.every(Boolean)) {
             return
           }

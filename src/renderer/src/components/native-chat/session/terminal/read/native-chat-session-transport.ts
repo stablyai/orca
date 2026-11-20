@@ -1,5 +1,9 @@
 import { verifyLocalTranscriptRanges } from './native-chat-local-range-verification'
-import type { TranscriptByteRange } from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
+import {
+  parseTranscriptRangeVerification,
+  type TranscriptByteRange,
+  type TranscriptRangeVerification
+} from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
 import type { NativeChatApi } from '../../../../../../../preload/api/native-chat/native-chat-api'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -23,7 +27,7 @@ export type NativeChatSessionTransport = Pick<NativeChatApi, 'readSession' | 'su
     ranges: TranscriptByteRange[],
     transcriptPath?: string,
     signal?: AbortSignal
-  ) => Promise<boolean[] | null>
+  ) => Promise<TranscriptRangeVerification | null>
   /** Older pages read by row cursor; other routes keep the full reread and its existing depth limits. */
   pagesByCursor?: true
 }
@@ -67,11 +71,13 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
   return {
     verifyTranscriptRanges: async (agent, sessionId, ranges, transcriptPath, signal) => {
       try {
-        return await callRuntimeRpc<boolean[]>(
-          target,
-          'nativeChat.verifyTranscriptRanges',
-          { agent, sessionId, ranges, transcriptPath },
-          { signal, timeoutMs: 120_000 }
+        return parseTranscriptRangeVerification(
+          await callRuntimeRpc<unknown>(
+            target,
+            'nativeChat.verifyTranscriptRanges',
+            { agent, sessionId, ranges, transcriptPath },
+            { signal, timeoutMs: 120_000 }
+          )
         )
       } catch (error) {
         signal?.throwIfAborted()

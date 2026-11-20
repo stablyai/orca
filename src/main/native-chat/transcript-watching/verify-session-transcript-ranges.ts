@@ -1,5 +1,8 @@
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
-import type { TranscriptByteRange } from '../../../shared/native-chat/transcript/transcript-byte-range'
+import type {
+  TranscriptByteRange,
+  TranscriptRangeVerification
+} from '../../../shared/native-chat/transcript/transcript-byte-range'
 import { resolveSessionFilePath } from '../session-file-resolver'
 import { verifyTranscriptRanges } from './transcript-range-verifier'
 
@@ -11,7 +14,7 @@ export async function verifySessionTranscriptRanges(
     ranges: TranscriptByteRange[]
   },
   signal?: AbortSignal
-): Promise<boolean[]> {
+): Promise<TranscriptRangeVerification> {
   try {
     const path = await resolveSessionFilePath(args.agent, args.sessionId, args, signal)
     return path

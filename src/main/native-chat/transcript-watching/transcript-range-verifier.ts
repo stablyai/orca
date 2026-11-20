@@ -1,6 +1,10 @@
 import { setImmediate } from 'node:timers/promises'
 import type { TranscriptByteRange } from '../../../shared/native-chat/transcript/transcript-byte-range'
-import { transcriptDigestHex } from '../../../shared/native-chat/transcript/transcript-byte-range'
+import {
+  TRANSCRIPT_RANGES_UNSETTLED,
+  transcriptDigestHex,
+  type TranscriptRangeVerification
+} from '../../../shared/native-chat/transcript/transcript-byte-range'
 import {
   closeTranscriptHandle,
   openTranscriptFile,
@@ -16,7 +20,7 @@ export async function verifyTranscriptRanges(
   filePath: string,
   ranges: readonly TranscriptByteRange[],
   signal?: AbortSignal
-): Promise<boolean[]> {
+): Promise<TranscriptRangeVerification> {
   try {
     signal?.throwIfAborted()
     const before = await readTranscriptFileVersion(filePath, signal)
@@ -86,13 +90,14 @@ export async function verifyTranscriptRanges(
       await closeTranscriptHandle(handle, filePath)
     }
     const after = await readTranscriptFileVersion(filePath, signal)
-    // Appends past the hashed ranges leave those bytes valid; a swap, shrink or same-size write may not.
+    // A swap or a shrink into held bytes is a rewrite; appends past them leave the hash valid.
     const heldEnd = Math.max(...ranges.map((range) => range.end))
-    const rewritten =
-      after.identity !== before.identity ||
-      after.size < heldEnd ||
-      (after.size === before.size && transcriptFileVersionChanged(after, before))
-    return rewritten ? ranges.map(() => false) : results
+    if (after.identity !== before.identity || after.size < heldEnd) {
+      return ranges.map(() => false)
+    }
+    return after.size === before.size && transcriptFileVersionChanged(after, before)
+      ? TRANSCRIPT_RANGES_UNSETTLED
+      : results
   } catch {
     signal?.throwIfAborted()
     return ranges.map(() => false)

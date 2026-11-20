@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -79,7 +79,7 @@ describe.each([10_000, 100_000])('transcript range continuity at %i messages', (
       await rm(directory, { recursive: true, force: true })
     }
   })
-  it('keeps a match when the agent appends while held ranges are being verified', async () => {
+  it('keeps a match on appends and stays unsettled on touches while held ranges are verified', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'native-chat-continuity-'))
     const file = join(directory, 'session.jsonl')
     const decode: NativeChatLineDecoder = (line, id) =>
@@ -98,6 +98,9 @@ describe.each([10_000, 100_000])('transcript range continuity at %i messages', (
       const verifying = verifyTranscriptRanges(file, snapshot.ranges ?? [])
       await appendFile(file, '{"message":true}\n')
       expect(await verifying).toEqual([true])
+      const touched = verifyTranscriptRanges(file, snapshot.ranges ?? [])
+      await utimes(file, new Date(1_000), new Date(2_000))
+      expect(await touched).toBe('unsettled')
     } finally {
       await rm(directory, { recursive: true, force: true })
     }

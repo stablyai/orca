@@ -1,5 +1,6 @@
 import type { NativeChatApi } from '../../../../../preload/api/native-chat/native-chat-api'
 import { buildNativeChatUnsubscribe } from '../../../../../shared/native-chat/transcript/streaming/native-chat-stream-unsubscribe'
+import { parseTranscriptRangeVerification } from '../../../../../shared/native-chat/transcript/transcript-byte-range'
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatFrame,
@@ -39,9 +40,7 @@ export function createWebNativeChatApi(): NativeChatApi {
             { signal, timeoutMs: 120_000 }
           )
         )
-        return Array.isArray(result) && result.every((item) => typeof item === 'boolean')
-          ? result
-          : null
+        return parseTranscriptRangeVerification(result)
       } catch (error) {
         signal?.throwIfAborted()
         if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {

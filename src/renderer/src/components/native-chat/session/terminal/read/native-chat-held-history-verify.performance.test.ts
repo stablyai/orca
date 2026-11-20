@@ -164,6 +164,28 @@ describe.each([
     }
   })
 
+  it('verifies once more after quiet when touches during a verify leave it unsettled', async () => {
+    const verify = vi.fn(async (): Promise<'unsettled' | boolean[]> => {
+      // ast-grep-ignore: test-no-real-time-wait -- fake timers advance this simulated verify
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      return verify.mock.calls.length === 1 ? 'unsettled' : [true]
+    })
+    const { scheduler, replace, readSession } = history(verify)
+    try {
+      replace()
+      await vi.advanceTimersByTimeAsync(1_000)
+      for (let i = 0; i < 3; i++) {
+        replace()
+        await vi.advanceTimersByTimeAsync(200)
+      }
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(verify).toHaveBeenCalledTimes(2)
+      expect(readSession).toHaveBeenCalledTimes(0)
+    } finally {
+      scheduler.clear()
+    }
+  })
+
   it('coalesces reconnect windows without ranges into one matching verification', async () => {
     const verify = vi.fn().mockResolvedValue([true])
     const { scheduler, replace, readSession, held, current } = history(verify)

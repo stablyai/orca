@@ -1,4 +1,7 @@
-import type { TranscriptByteRange } from '../../../shared/native-chat/transcript/transcript-byte-range'
+import type {
+  TranscriptByteRange,
+  TranscriptRangeVerification
+} from '../../../shared/native-chat/transcript/transcript-byte-range'
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatVisualTheme } from '../../../shared/native-chat/visuals/native-chat-visual-shell'
 import type {
@@ -87,7 +90,7 @@ export type NativeChatApi = {
     ranges: TranscriptByteRange[],
     transcriptPath: string | undefined,
     requestId: string
-  ) => Promise<boolean[] | null>
+  ) => Promise<TranscriptRangeVerification | null>
   cancelTranscriptRangeVerification?: (requestId: string) => void
   /** First frame is a bounded snapshot; later frames contain only appended messages. */
   subscribe: (

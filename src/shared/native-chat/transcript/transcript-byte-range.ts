@@ -25,3 +25,18 @@ export function mergeTranscriptRanges(
   }
   return merged
 }
+
+/** Bytes that changed while they were hashed prove nothing either way, so the caller verifies again later. */
+export const TRANSCRIPT_RANGES_UNSETTLED = 'unsettled'
+
+export type TranscriptRangeVerification = boolean[] | typeof TRANSCRIPT_RANGES_UNSETTLED
+
+export function parseTranscriptRangeVerification(value: unknown): TranscriptRangeVerification {
+  if (value === TRANSCRIPT_RANGES_UNSETTLED) {
+    return value
+  }
+  if (Array.isArray(value) && value.every((item): item is boolean => typeof item === 'boolean')) {
+    return value
+  }
+  throw new Error('Invalid transcript range verification result')
+}
