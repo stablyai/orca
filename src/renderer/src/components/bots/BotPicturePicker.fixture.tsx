@@ -183,14 +183,14 @@ export const newColor = defineFixture({
 
 function wearOutfit(name: string): () => Promise<void> {
   return async () => {
-    document.querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Pink"]')?.click()
-    Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'))
+    document.querySelector<HTMLButtonElement>('button[aria-label="Change picture"]')?.click()
+    await settle(300)
+    document.querySelector<HTMLButtonElement>('button[aria-label="Pink"]')?.click()
+    Array.from(document.querySelectorAll<HTMLButtonElement>('button'))
       .find((button) => button.textContent?.startsWith('Outfits'))
       ?.click()
     await settle(300)
-    document
-      .querySelector<HTMLButtonElement>(`[role="dialog"] button[aria-label="${name}"]`)
-      ?.click()
+    document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)?.click()
     await settle(600)
   }
 }
