@@ -20,10 +20,8 @@ function withoutHash(rawUrl: string): string {
  */
 export function createFormPostNavigationTracker(): {
   submitted: (actionUrl: string) => void
-  /** The page cancelled the reported submission's navigation. */
-  cancelled: () => void
-  /** A same-document navigation; one to the form's address means the page handled it in place. */
-  startedInPlace: (url: string) => void
+  /** The page cancelled, intercepted or aborted the navigation of the submission to this URL. */
+  cancelled: (actionUrl: string) => void
   started: (url: string) => void
   /** `method` is the request's own method when a request listener saw it. */
   committed: (url: string, method: string | null) => boolean
@@ -50,11 +48,8 @@ export function createFormPostNavigationTracker(): {
     submitted: (actionUrl) => {
       submitted = withoutHash(actionUrl)
     },
-    cancelled: () => {
-      submitted = null
-    },
-    startedInPlace: (url) => {
-      if (submitted === withoutHash(url)) {
+    cancelled: (actionUrl) => {
+      if (submitted === withoutHash(actionUrl)) {
         submitted = null
       }
     },

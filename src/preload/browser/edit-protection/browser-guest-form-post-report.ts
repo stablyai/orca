@@ -18,35 +18,64 @@ export function installBrowserGuestFormPostReport(port: {
     },
     true
   )
+  const isTop = window === window.top
+  const navigation = isTop ? window.navigation : undefined
+  const retract = (formPost: string): void => {
+    port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPostCancelled: formPost })
+  }
+  // The top page's form navigation still pending; another navigation replaces it.
+  let pendingForm: string | null = null
   // Fires only for a submission that wasn't cancelled; main matches it to the navigation it starts.
   window.addEventListener(
     'formdata',
     (event) => {
       const formPost = event.isTrusted ? postedFormAction(event.target, lastSubmitByForm) : null
-      if (formPost) {
-        port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost })
+      if (!formPost) {
+        return
+      }
+      port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost })
+      // A navigate event follows at once; without one (the page removed the form, say) no POST loads.
+      if (navigation) {
+        setTimeout(() => {
+          if (pendingForm === null) {
+            retract(formPost)
+          }
+        }, 0)
       }
     },
     true
   )
   // Form events stay inside a shadow root; the top page's own navigation still carries the POST
   // body. Only the top frame listens: an embedded frame's navigation doesn't replace the page.
-  if (window !== window.top) {
+  if (!navigation) {
     return
   }
-  window.navigation?.addEventListener('navigate', (event) => {
+  navigation.addEventListener('navigate', (event) => {
+    pendingForm = null
     if (!event.isTrusted || !event.formData || event.hashChange) {
       return
     }
-    port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost: event.destination.url })
-    // This listener runs before the page's; once dispatch ends, retract a navigation it cancelled
-    // so a later visit to that address isn't taken for the POST.
+    const formPost = event.destination.url
+    pendingForm = formPost
+    port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost })
+    // This listener runs before the page's; once dispatch ends, retract a navigation it cancelled.
     setTimeout(() => {
-      if (event.defaultPrevented) {
-        port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPostCancelled: true })
+      if (event.defaultPrevented && pendingForm === formPost) {
+        pendingForm = null
+        retract(formPost)
       }
     }, 0)
   })
+  // Only a navigation handled in this document settles here: intercepted by the page, or aborted
+  // (stopped, or "Stay" at a leave prompt). A cross-document POST unloads this document instead.
+  const settled = (): void => {
+    if (pendingForm !== null) {
+      retract(pendingForm)
+      pendingForm = null
+    }
+  }
+  navigation.addEventListener('navigatesuccess', settled)
+  navigation.addEventListener('navigateerror', settled)
 }
 
 /** The action URL of a POST that replaces the top page; null for GET or another target. */
