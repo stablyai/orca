@@ -40,6 +40,8 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   private paused = false
   private draining = false
   private queue: { frame: CodexSharedServerFrame; bytes: number }[] = []
+  /** Next frame to dispatch; drained slots are dropped in one splice so a drain stays linear. */
+  private queueHead = 0
   private queuedBytes = 0
 
   constructor(
@@ -121,12 +123,12 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     if (this.state === 'ended') {
       return
     }
-    if (this.paused || this.queue.length > 0) {
+    if (this.paused || this.queue.length > this.queueHead) {
       const bytes = Buffer.byteLength(JSON.stringify(codexSharedFrameParams(frame) ?? null), 'utf8')
       this.queue.push({ frame, bytes })
       this.queuedBytes += bytes
       if (
-        this.queue.length > CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES ||
+        this.queue.length - this.queueHead > CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES ||
         this.queuedBytes > CODEX_SHARED_LEASE_MAX_QUEUED_BYTES
       ) {
         this.fail(new Error('codex chat fell too far behind its shared app-server'), true)
@@ -142,12 +144,15 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     }
     this.draining = true
     try {
-      while (!this.paused && this.queue.length > 0 && this.state !== 'ended') {
-        const { frame, bytes } = this.queue.shift()!
+      while (!this.paused && this.queueHead < this.queue.length && this.state !== 'ended') {
+        const { frame, bytes } = this.queue[this.queueHead]!
+        this.queueHead += 1
         this.queuedBytes -= bytes
         this.dispatch(frame)
       }
     } finally {
+      this.queue.splice(0, this.queueHead)
+      this.queueHead = 0
       this.draining = false
     }
   }
@@ -243,6 +248,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     }
     this.state = 'ended'
     this.queue = []
+    this.queueHead = 0
     this.queuedBytes = 0
     this.closeResult = CLOSED_RESULT
     this.handlers.onExit?.(error, { expected })
