@@ -15,6 +15,7 @@ import {
   warnUncheckedSessions
 } from './claude-account-switch-toasts'
 import { getClaudeAccountLabel } from './claude-account-label'
+import { moveUnheldClaudeSessions } from './claude-account-switch-unheld-sessions'
 import {
   claudeLaunchAccountId,
   type ClaudeHostFolders
@@ -152,6 +153,22 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   if (readClaudeRunningSessionsPolicy() === 'keep') {
     return 'show-confirmation'
   }
+  const { target, before, after } = args
+  // Why: terminals no pane here is bound to have no other owner; the host moves them by this window's rule.
+  const unheld = moveUnheldClaudeSessions({
+    target,
+    before,
+    after,
+    runningSessions: readClaudeRunningSessionsPolicy(args.madeElsewhere)
+  })
+  const restartUnheld = () =>
+    moveUnheldClaudeSessions({
+      target,
+      before,
+      after,
+      runningSessions: 'restart',
+      answersAskFor: after.accountId
+    })
   let uncheckedCount = 0
   let sharedCount = 0
   let strandedPtyIds: ReadonlySet<string> = new Set()
@@ -178,6 +195,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     console.warn('[claude-account-switch] session scan failed:', error)
     return null
   })
+  const hostMove = await unheld
   if (generation !== switchGeneration) {
     return 'handled'
   }
@@ -229,15 +247,17 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
         })
       )
     }
-    return 'show-confirmation'
+    return announceHostMove(hostMove, before, after, restartUnheld)
   }
   if (policy === 'restart') {
     queueClaudeRestarts(sessions.onAccount.map((candidate) => candidate.ptyId))
-    const others = sessions.elsewhere.length + sessions.cantMove.length
-    announceRestart(sessions.onAccount.length, nextAccountLabel, others, () => openReview())
+    const others = sessions.elsewhere.length + sessions.cantMove.length + (hostMove?.notMoved ?? 0)
+    const restarting = sessions.onAccount.length + (hostMove?.restarting ?? 0)
+    announceRestart(restarting, nextAccountLabel, others, () => openReview())
     return 'handled'
   }
   setPrompt({ id: generation, sessions, ...labels })
+  announceHostMove(hostMove, before, after, restartUnheld)
   return 'handled'
 }
 
