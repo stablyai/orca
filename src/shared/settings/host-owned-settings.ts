@@ -6,6 +6,9 @@ import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/n
 const HostOwnedSettingsSchema = z.object({
   branchPrefix: z.enum(['git-username', 'custom', 'none']),
   branchPrefixCustom: z.string(),
+  nestWorkspaces: z.boolean(),
+  refreshLocalBaseRefOnWorktreeCreate: z.boolean(),
+  localBaseRefSuggestionDismissed: z.boolean(),
   codexShareHistoryAcrossAccounts: z.boolean(),
   deleteChatHistoryWithWorkspace: z.boolean(),
   nativeChatAutoContinueAfterUsageLimit: z.boolean(),
@@ -22,6 +25,9 @@ export type HostOwnedSettingKey = keyof HostOwnedSettings
 const HOST_OWNED_SETTING_FALLBACKS: HostOwnedSettings = {
   branchPrefix: 'git-username',
   branchPrefixCustom: '',
+  nestWorkspaces: true,
+  refreshLocalBaseRefOnWorktreeCreate: false,
+  localBaseRefSuggestionDismissed: false,
   codexShareHistoryAcrossAccounts: true,
   deleteChatHistoryWithWorkspace: false,
   nativeChatAutoContinueAfterUsageLimit: false,
