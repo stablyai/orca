@@ -1,11 +1,13 @@
 import { Loader2, Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { parseHostAccessLink } from '../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { HostCombobox } from '../host-picker/HostCombobox'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   translateHostAccessLinkError,
@@ -21,6 +23,22 @@ import {
 const HEADLESS_SERVE_COMMAND = 'orca serve --pairing-address <address>'
 
 const NO_TAKEN_NAMES: readonly { name: string }[] = []
+const NO_SSH_TARGETS: readonly SshTarget[] = []
+const DEFAULT_SSH_ROUTE_REMOTE_PORT = '6768'
+
+/** Same fields Settings' SSH access link takes, so both paths save the same tunnel. */
+export type RuntimeHostSshRoute = { sshTargetId: string; remotePort: number }
+
+export function parseRuntimeHostSshRoute(
+  sshTargetId: string,
+  remotePort: string
+): RuntimeHostSshRoute | null {
+  const port = Number(remotePort.trim())
+  if (sshTargetId === '' || !Number.isInteger(port) || port < 1 || port > 65_535) {
+    return null
+  }
+  return { sshTargetId, remotePort: port }
+}
 
 type RuntimeHostAccessFormProps = {
   name: string
@@ -32,7 +50,9 @@ type RuntimeHostAccessFormProps = {
   onNameChange: (value: string) => void
   onAccessLinkChange: (value: string) => void
   onCancel: () => void
-  onSubmit: (allowLoopback: boolean) => void
+  onSubmit: (allowLoopback: boolean, sshRoute?: RuntimeHostSshRoute) => void
+  /** SSH hosts a route can go through; the route fields stay hidden when empty. */
+  sshTargets?: readonly SshTarget[]
 }
 
 export function RuntimeHostAccessForm({
@@ -44,15 +64,30 @@ export function RuntimeHostAccessForm({
   onNameChange,
   onAccessLinkChange,
   onCancel,
-  onSubmit
+  onSubmit,
+  sshTargets = NO_SSH_TARGETS
 }: RuntimeHostAccessFormProps): React.JSX.Element {
   const t = useTranslate()
   const [allowLoopback, setAllowLoopback] = useState(false)
+  const [useSshRoute, setUseSshRoute] = useState(false)
+  const [sshTargetId, setSshTargetId] = useState(
+    sshTargets.length === 1 ? (sshTargets[0]?.id ?? '') : ''
+  )
+  const [sshRemotePort, setSshRemotePort] = useState(DEFAULT_SSH_ROUTE_REMOTE_PORT)
+  const sshHostFieldId = useId()
+  const sshPortFieldId = useId()
+  const sshRouteAvailable = sshTargets.length > 0
+  const sshRouteEnabled = sshRouteAvailable && useSshRoute
+  const sshRoute = sshRouteEnabled ? parseRuntimeHostSshRoute(sshTargetId, sshRemotePort) : null
   const parsed = useMemo(() => parseHostAccessLink(accessLink), [accessLink])
   const tunnelOverrideEnabled =
-    allowLoopback && parsed.ok && parsed.value.endpointKind === 'loopback'
+    !sshRouteEnabled && allowLoopback && parsed.ok && parsed.value.endpointKind === 'loopback'
+  // An SSH route reaches the server's own loopback address, so loopback links are expected.
   const loopbackBlocked =
-    parsed.ok && parsed.value.endpointKind === 'loopback' && !tunnelOverrideEnabled
+    parsed.ok &&
+    parsed.value.endpointKind === 'loopback' &&
+    !tunnelOverrideEnabled &&
+    !sshRouteEnabled
   const inputError = accessLink.trim() !== '' && !parsed.ok
   const describedBy = failure
     ? 'runtime-server-verification-error'
@@ -61,7 +96,8 @@ export function RuntimeHostAccessForm({
       : loopbackBlocked
         ? 'runtime-server-loopback-error'
         : 'runtime-server-access-link-help'
-  const canSubmit = parsed.ok && !loopbackBlocked && !busy
+  const canSubmit =
+    parsed.ok && !loopbackBlocked && !busy && (!sshRouteEnabled || sshRoute !== null)
   const defaultName = defaultServerNameForAccessLink(accessLink, takenNames)
 
   return (
@@ -70,7 +106,7 @@ export function RuntimeHostAccessForm({
       onSubmit={(event) => {
         event.preventDefault()
         if (canSubmit) {
-          onSubmit(tunnelOverrideEnabled)
+          onSubmit(tunnelOverrideEnabled, sshRoute ?? undefined)
         }
       }}
     >
@@ -152,7 +188,7 @@ export function RuntimeHostAccessForm({
         </div>
       ) : null}
 
-      {parsed.ok && parsed.value.endpointKind === 'loopback' ? (
+      {parsed.ok && parsed.value.endpointKind === 'loopback' && !sshRouteEnabled ? (
         <label className="flex items-start gap-2 text-sm">
           <Checkbox
             className="mt-0.5"
@@ -175,6 +211,64 @@ export function RuntimeHostAccessForm({
             </span>
           </span>
         </label>
+      ) : null}
+
+      {sshRouteAvailable ? (
+        <div className="space-y-3">
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox
+              className="mt-0.5"
+              checked={useSshRoute}
+              disabled={busy}
+              onCheckedChange={(checked) => setUseSshRoute(checked === true)}
+            />
+            <span className="space-y-0.5">
+              <span className="block">
+                {t(
+                  'auto.components.settings.RuntimeHostAccessForm.sshRoute',
+                  'Connect through an SSH host'
+                )}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                {t(
+                  'auto.components.settings.RuntimeHostAccessForm.sshRouteHelp',
+                  'Orca opens a tunnel through the host and checks the server over it.'
+                )}
+              </span>
+            </span>
+          </label>
+          {sshRouteEnabled ? (
+            <div className="flex flex-wrap items-end gap-3 pl-6">
+              <div className="min-w-0 flex-1 space-y-2">
+                <Label htmlFor={sshHostFieldId}>
+                  {t('auto.components.settings.managedServers.deploy.host', 'SSH host')}
+                </Label>
+                <HostCombobox
+                  id={sshHostFieldId}
+                  options={[...sshTargets]}
+                  value={sshTargetId}
+                  onChange={setSshTargetId}
+                  placeholder={t(
+                    'auto.components.settings.managedServers.access.chooseHost',
+                    'Choose a host'
+                  )}
+                />
+              </div>
+              <div className="w-32 space-y-2">
+                <Label htmlFor={sshPortFieldId}>
+                  {t('auto.components.settings.managedServers.access.port', 'Server port')}
+                </Label>
+                <Input
+                  id={sshPortFieldId}
+                  value={sshRemotePort}
+                  inputMode="numeric"
+                  disabled={busy}
+                  onChange={(event) => setSshRemotePort(event.target.value)}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="space-y-2">
@@ -220,7 +314,7 @@ export function RuntimeHostAccessForm({
         </Button>
         <Button type="submit" size="sm" disabled={!canSubmit}>
           {busy ? <Loader2 className="animate-spin" /> : <Plus />}
-          {tunnelOverrideEnabled
+          {tunnelOverrideEnabled || sshRouteEnabled
             ? t(
                 'auto.components.settings.RuntimeHostAccessForm.addServerWithTunnel',
                 'Add via tunnel'
