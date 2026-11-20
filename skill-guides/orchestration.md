@@ -60,7 +60,7 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
 - Place work where the project lives. `ORCA host list --json` names this
   machine and paired servers; `ORCA project setups --environment local --json`
   lists this machine's setups, so also query each paired server with
-  `--host <server>`.
+  `--environment <server>`.
   When the target project is set up only on a paired server, load
   `references/placement-and-remote.md` and start the worker there with `--on`
   instead of locally.

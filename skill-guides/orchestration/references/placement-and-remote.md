@@ -22,15 +22,17 @@ target project lives:
 ```text
 ORCA host list --json
 ORCA project setups --environment local --json
-ORCA project setups --host <server> --json
+ORCA project setups --environment <server> --json
 ```
 
 `host list` names the current machine (`local`) and every paired server.
 `project setups --environment local` lists this machine's setups even when
 `ORCA_ENVIRONMENT` names a paired server; without it the query runs on that
 server, and `--host local` does not override it. Run it once per paired server
-with `--host <server>` to see that server's setups (use
-`--host runtime:<environment-id>` when the name is ambiguous). When the target
+with `--environment <server>` to see that server's setups (use
+`--environment <environment-id>` when the name is ambiguous). `--environment`
+selects that server directly; under an ambient `ORCA_ENVIRONMENT` a bare
+`--host <server>` does not. When the target
 project is set up only on a paired server, start the worker there with
 `--on <server>` and the exact remote repo selector, without waiting for the
 user to name the server. When several hosts have it, follow the host the user

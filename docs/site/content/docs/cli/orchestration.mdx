@@ -102,7 +102,7 @@ Do not leave completed worker terminals open just to re-read output — use `wor
 
 ## Federated workers (optional)
 
-Resolve the host before placing: `orca host list --json` names this machine and every paired server. `orca project setups --environment local --json` lists this machine's setups even when `ORCA_ENVIRONMENT` names a paired server, so also run it with `--host <server>` for each paired server. When the target project is set up only on a paired server, start the worker there with `--on` and its exact repo selector; when several hosts have it, follow the user's choice or ask.
+Resolve the host before placing: `orca host list --json` names this machine and every paired server. `orca project setups --environment local --json` lists this machine's setups even when `ORCA_ENVIRONMENT` names a paired server, so also run it with `--environment <server>` for each paired server. When the target project is set up only on a paired server, start the worker there with `--on` and its exact repo selector; when several hosts have it, follow the user's choice or ask.
 
 ```bash
 orca orchestration worker-start \
@@ -196,7 +196,7 @@ orca orchestration reset --all
 
 ## Choosing the right command
 
-Use `orca orchestration send` for a one-way message to another agent. For ordinary mail, a chat receives the whole message with its sender header (a message too large for one chat message gets a note to run `orca orchestration check` instead), Orca never types your words into a terminal agent's input (it reads mail through `check`), and the receipt means the mail was stored, not read. A send to a finished worker's `dispatch:<id>` can instead start a follow-up Task, whose body the worker gets as its task; the receipt says which. Use `orca terminal send` for shells, dev servers and REPLs, never to message an agent.
+Use `orca orchestration send` for a one-way message to another agent. For ordinary mail, a chat receives the whole message with its sender header (a message too large for one chat message gets a note to run `orca orchestration check` instead), Orca never types your words into a terminal agent's input (it reads mail through `check`), and the receipt means the mail was stored, not read. A send to a finished local worker's `dispatch:<id>` can instead start a follow-up Task, whose body the worker gets as its task; the receipt says which. A finished paired-server worker refuses `send`; start new work there with `worker-start --on`. Use `orca terminal send` for shells, dev servers and REPLs, never to message an agent.
 
 Use `orca orchestration worker-start` (or `dispatch --inject`) when a worker must report `worker_done`, ask questions through the coordinator, and be tracked by task ID.
 
