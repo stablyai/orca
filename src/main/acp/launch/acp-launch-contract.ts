@@ -83,6 +83,8 @@ export type AcpLaunchSpec = {
   /** How a session's standing instructions reach the agent's system prompt; absent, a session
    *  with any cannot start. */
   instructions?: AcpInstructionsDelivery
+  /** `instructions` writes into the chat's own folder, so Orca never adds any just for visuals. */
+  instructionsInWorkspace?: true
   transcriptImport: StructuredAgentTranscriptImport | null
   sessionHistory: StructuredAgentSessionHistory
   /** Tools run in a process other chats share, which keeps the environment of the chat that
