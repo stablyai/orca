@@ -73,6 +73,18 @@ export function followLatestRelease(
   }
 }
 
+const loggedLookupErrors = new WeakMap<ManagedRuntime, unknown>()
+
+/** Look up the latest release for a status read; a failure answers every read of its hour, so it is logged once. */
+export async function refreshPinForStatus(runtime: ManagedRuntime, agent: string): Promise<void> {
+  await runtime.refreshPin?.().catch((error: unknown) => {
+    if (loggedLookupErrors.get(runtime) !== error) {
+      console.warn(`[managed-runtime] ${agent} latest release unknown:`, error)
+    }
+    loggedLookupErrors.set(runtime, error)
+  })
+}
+
 /** Look up the latest release before an install; a failed lookup installs the last known one, as status reads keep it. */
 export async function refreshRuntimePin(
   runtime: ManagedRuntime,

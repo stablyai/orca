@@ -151,15 +151,18 @@ export function appendManagedAgentDirsToChildPath(
   }
   const key = resolvePathEnvKey(env, platform)
   const separator = platform === 'win32' ? ';' : delimiter
-  const entries = readInheritedPath(env, platform).split(separator).filter(Boolean)
-  const missing = folders.filter((folder) => !entries.includes(folder))
-  // On a WSL host, Windows-drive entries hold shims it can't run, so Orca's copies go before them.
+  const inherited = readInheritedPath(env, platform).split(separator).filter(Boolean)
+  // On a WSL host, Windows-drive entries hold shims it can't run: Orca's copies go after the user's
+  // own entries but ahead of the Windows ones that follow them.
   const mounts = knownGuestWindowsDriveMounts()
+  const entries =
+    mounts.length > 0 ? inherited.filter((entry) => !folders.includes(entry)) : inherited
+  const missing = folders.filter((folder) => !entries.includes(folder))
   if (missing.length > 0) {
-    const drive = entries.findIndex((entry) =>
-      isUnderWindowsDriveMount(entry.replace(/\/+$/, ''), mounts)
-    )
-    const at = drive === -1 ? entries.length : drive
+    let at = entries.length
+    while (at > 0 && isUnderWindowsDriveMount(entries[at - 1].replace(/\/+$/, ''), mounts)) {
+      at--
+    }
     env[key] = [...entries.slice(0, at), ...missing, ...entries.slice(at)].join(separator)
   }
   // Startup files re-add them, in the same place, after a login profile rebuilds PATH.

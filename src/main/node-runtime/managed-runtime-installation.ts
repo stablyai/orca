@@ -20,7 +20,7 @@ import {
   type ReportedRuntimeRelease
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
-import { refreshRuntimePin } from './managed-runtime-latest-release'
+import { refreshPinForStatus, refreshRuntimePin } from './managed-runtime-latest-release'
 
 const DEADLINE_MS = 45 * 60_000
 const AUTO_UPDATE_RETRY_MS = 60 * 60_000
@@ -72,10 +72,8 @@ export class ManagedRuntimeInstallation {
     const { value: operation, revision } = this.state.get()
     const phase = `${operation?.id}:${operation?.phase}`
     let facts = this.facts
-    if (fresh && this.runtime.refreshPin) {
-      await this.runtime.refreshPin().catch((error: unknown) => {
-        console.warn(`[managed-runtime] ${this.agent} latest release unknown:`, error)
-      })
+    if (fresh) {
+      await refreshPinForStatus(this.runtime, this.agent)
     }
     if (fresh || facts?.phase !== phase) {
       const read = this.readInstalledFacts()
