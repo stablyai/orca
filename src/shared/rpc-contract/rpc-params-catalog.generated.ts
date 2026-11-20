@@ -117,8 +117,10 @@ import {
 } from './artifacts/artifacts-params'
 import {
   AutomationCreate,
+  AutomationDispatchResult,
   AutomationId,
   AutomationList,
+  AutomationPrecheckRequest,
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
@@ -403,6 +405,7 @@ import {
 import { BindableAccounts, ValidateAccountBinding } from './github/github-account-binding-params'
 import { UploadGitHubAttachment } from './github/github-attachment-params'
 import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github/github-issue-params'
+import { GetPipelineConfig } from './github/github-pipeline-params'
 import {
   ClearProjectItemField,
   GithubProjectListAccessibleParams,
@@ -1160,7 +1163,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.create': AutomationCreate,
   'automation.delete': AutomationId,
   'automation.list': AutomationList,
+  'automation.markDispatchResult': AutomationDispatchResult,
   'automation.runNow': AutomationId,
+  'automation.runPrecheck': AutomationPrecheckRequest,
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
@@ -1867,6 +1872,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
+  'pipeline.config.get': GetPipelineConfig,
   'plugins.catalogAdd': PluginCatalogAddParams,
   'plugins.catalogList': null,
   'plugins.catalogRemove': PluginCatalogRemoveParams,

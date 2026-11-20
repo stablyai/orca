@@ -43,6 +43,7 @@ import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
 import { FILE_METHODS } from './files/files'
 import { GIT_METHODS } from './source-control/git/git'
 import { GITHUB_METHODS } from './source-control/github/github'
+import { PIPELINE_CONFIG_METHODS } from './pipeline-config'
 import { GITLAB_METHODS } from './source-control/gitlab/gitlab'
 import { HOSTED_REVIEW_METHODS } from './source-control/reviews/hosted-review'
 import { LINEAR_METHODS } from './integrations/linear/linear'
@@ -218,6 +219,7 @@ const SERVICE_RPC_METHODS = [
   ...FILE_METHODS,
   ...GIT_METHODS,
   ...GITHUB_METHODS,
+  ...PIPELINE_CONFIG_METHODS,
   ...GITLAB_METHODS,
   ...HOSTED_REVIEW_METHODS,
   ...LINEAR_METHODS,
