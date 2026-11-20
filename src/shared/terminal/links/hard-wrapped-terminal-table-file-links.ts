@@ -9,9 +9,18 @@ const TABLE_PATH_FRAGMENT_CHAR = /[\p{L}\p{N}\p{M}._~@%+=:,/\\()[\]-]/u
 // A cell this full is a hard wrap. Matches framed HTTP links, and still allows one padding space.
 const MIN_TABLE_PATH_FILL_RATIO = 0.8
 const MAX_TABLE_PATH_ROWS = 20
-// A full cell may finish these. Other tails longer than four characters are the next row's word.
 const BORDER_WRAPPED_LONG_EXTENSIONS = new Set(['markdown'])
-const DOTTED_EXTENSION_CONTINUATION = /^\.[\p{L}\p{N}]+(?::\d+(?::\d+)?)?$/u
+const TEST_OR_SPEC_EXTENSIONS = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts'])
+// Stem -> allowed final extensions for a flush border cut (`widget.test` + `.ts`, `archive.tar` + `.gz`).
+const COMPOUND_EXTENSION_CONTINUATIONS = new Map<string, ReadonlySet<string>>([
+  ['d', new Set(['ts', 'tsx', 'mts', 'cts'])],
+  ['min', new Set(['js', 'css', 'mjs', 'cjs'])],
+  ['module', new Set(['css', 'scss', 'sass', 'less'])],
+  ['spec', TEST_OR_SPEC_EXTENSIONS],
+  ['stories', new Set(['ts', 'tsx', 'js', 'jsx', 'mdx', 'svelte'])],
+  ['tar', new Set(['gz', 'bz2', 'xz', 'zst', 'lzma'])],
+  ['test', TEST_OR_SPEC_EXTENSIONS]
+])
 
 type TranslatedLine = ReturnType<typeof translateLineWithColumns>
 
@@ -35,15 +44,7 @@ function isTablePathFragmentChar(char: string): boolean {
 }
 
 function isTablePathFragment(text: string): boolean {
-  if (text.length === 0 || !/[\p{L}\p{N}]/u.test(text)) {
-    return false
-  }
-  for (const char of text) {
-    if (!isTablePathFragmentChar(char)) {
-      return false
-    }
-  }
-  return true
+  return text.length > 0 && /[\p{L}\p{N}]/u.test(text) && [...text].every(isTablePathFragmentChar)
 }
 
 function canStartTablePath(text: string): boolean {
@@ -54,10 +55,19 @@ function fileExtensionSuffix(text: string): string | null {
   return /\.([\p{L}\p{N}]+)$/u.exec(text)?.[1] ?? null
 }
 
+function isDottedExtensionBorderCut(ext: string, fragment: string): boolean {
+  const body = /^\.([\p{L}\p{N}]+)(?::\d+(?::\d+)?)?$/u.exec(fragment)?.[1]
+  return (
+    body !== undefined &&
+    (COMPOUND_EXTENSION_CONTINUATIONS.get(ext.toLowerCase())?.has(body.toLowerCase()) ?? false)
+  )
+}
+
 // Once joined text ends in a file extension, only allow an unambiguous continuation of
 // that token (`:line[:col]`, `/subpath`, a split tail like `.t` + `s:42:10`, a border-cut
 // `.ts` after `widget.test`, or `.mark` + `down`). Never a separate row's path
-// (`src/bar.ts`, `README.md`), a padded `.map`, or a prose tail (`nextword`).
+// (`src/bar.ts`, `README.md`), a dotted file name (`.gitignore`, `.env`), a padded `.map`,
+// or a prose tail (`nextword`).
 function canContinueAfterFileExtension(
   ext: string,
   fragment: string,
@@ -66,8 +76,8 @@ function canContinueAfterFileExtension(
   if (/^:\d+(?::\d+)?$/.test(fragment) || /^[\\/]/.test(fragment)) {
     return true
   }
-  // The border cut before the real extension (`widget.test` + `.ts`). Padding means it ended.
-  if (!prevHasTrailingPadding && DOTTED_EXTENSION_CONTINUATION.test(fragment)) {
+  // Padding means the name already ended, so the next dotted token is its own row.
+  if (!prevHasTrailingPadding && isDottedExtensionBorderCut(ext, fragment)) {
     return true
   }
   const tailMatch = /^([\p{L}\p{N}]+)(?::\d+(?::\d+)?)?$/u.exec(fragment)
@@ -80,7 +90,9 @@ function canContinueAfterFileExtension(
     return true
   }
   // `.markdown` is past the four-character split. A full cell may finish it; a padded name may not.
-  return !prevHasTrailingPadding && BORDER_WRAPPED_LONG_EXTENSIONS.has(`${ext}${tail}`)
+  return (
+    !prevHasTrailingPadding && BORDER_WRAPPED_LONG_EXTENSIONS.has(`${ext}${tail}`.toLowerCase())
+  )
 }
 
 function sliceHasTrailingPadding(

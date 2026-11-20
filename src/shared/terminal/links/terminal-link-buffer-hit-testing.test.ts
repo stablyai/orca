@@ -56,6 +56,11 @@ function framedRow(cells: readonly string[], widths: readonly number[], vertical
   return `${vertical}${cells.map((cell, index) => cell.padEnd(widths[index] ?? 0)).join(vertical)}${vertical}`
 }
 
+function unpaddedRows(head: string, next: string): string[] {
+  const widths = [head.length, 8]
+  return [framedRow([head, ' notes '], widths), framedRow([next, ' more '], widths)]
+}
+
 describe('file paths wrapped inside terminal table cells', () => {
   it.each([
     { name: 'box-drawing borders', rows: ISSUE_ROWS },
@@ -120,6 +125,147 @@ describe('file paths wrapped inside terminal table cells', () => {
     expect(fileLinksAt(rows, 2, '.ts')).toContainEqual(reading)
   })
 
+  it.each([
+    {
+      head: ' src/components/widget.spec',
+      next: ' .tsx',
+      pathText: 'src/components/widget.spec.tsx',
+      line: null,
+      column: null,
+      headNeedle: 'widget.spec',
+      nextNeedle: '.tsx'
+    },
+    {
+      head: ' dist/archive.tar',
+      next: ' .gz',
+      pathText: 'dist/archive.tar.gz',
+      line: null,
+      column: null,
+      headNeedle: 'archive.tar',
+      nextNeedle: '.gz'
+    },
+    {
+      head: ' src/types/index.d',
+      next: ' .ts',
+      pathText: 'src/types/index.d.ts',
+      line: null,
+      column: null,
+      headNeedle: 'index.d',
+      nextNeedle: '.ts'
+    },
+    {
+      head: ' src/components/button.min',
+      next: ' .js',
+      pathText: 'src/components/button.min.js',
+      line: null,
+      column: null,
+      headNeedle: 'button.min',
+      nextNeedle: '.js'
+    },
+    {
+      head: ' src/styles/widget.module',
+      next: ' .css',
+      pathText: 'src/styles/widget.module.css',
+      line: null,
+      column: null,
+      headNeedle: 'widget.module',
+      nextNeedle: '.css'
+    },
+    {
+      head: ' src/components/widget.stories',
+      next: ' .tsx',
+      pathText: 'src/components/widget.stories.tsx',
+      line: null,
+      column: null,
+      headNeedle: 'widget.stories',
+      nextNeedle: '.tsx'
+    },
+    {
+      head: ' src/components/widget.test',
+      next: ' .ts:42:10',
+      pathText: 'src/components/widget.test.ts',
+      line: 42,
+      column: 10,
+      headNeedle: 'widget.test',
+      nextNeedle: '.ts:42:10'
+    },
+    {
+      head: ' src/components/WIDGET.TEST',
+      next: ' .TS',
+      pathText: 'src/components/WIDGET.TEST.TS',
+      line: null,
+      column: null,
+      headNeedle: 'WIDGET.TEST',
+      nextNeedle: '.TS'
+    },
+    {
+      head: ' dist/Archive.TAR',
+      next: ' .GZ',
+      pathText: 'dist/Archive.TAR.GZ',
+      line: null,
+      column: null,
+      headNeedle: 'Archive.TAR',
+      nextNeedle: '.GZ'
+    },
+    {
+      head: ' src/components/widget.stories',
+      next: ' .svelte',
+      pathText: 'src/components/widget.stories.svelte',
+      line: null,
+      column: null,
+      headNeedle: 'widget.stories',
+      nextNeedle: '.svelte'
+    }
+  ])(
+    'joins a compound extension cut at the border ($pathText)',
+    ({ head, next, pathText, line, column, headNeedle, nextNeedle }) => {
+      const rows = unpaddedRows(head, next)
+      const reading = { pathText, line, column }
+      expect(fileLinksAt(rows, 1, headNeedle)).toContainEqual(reading)
+      expect(fileLinksAt(rows, 2, nextNeedle)).toContainEqual(reading)
+    }
+  )
+
+  it('joins a source map split inside the extension at the cell border', () => {
+    const rows = unpaddedRows(' src/widget.ts.m', ' ap')
+    const reading = { pathText: 'src/widget.ts.map', line: null, column: null }
+    expect(fileLinksAt(rows, 1, 'widget.ts')).toContainEqual(reading)
+    expect(fileLinksAt(rows, 2, 'ap')).toContainEqual(reading)
+  })
+
+  it('joins a source map whose dot stays on the first row', () => {
+    const rows = unpaddedRows(' src/widget.ts.', ' map')
+    const reading = { pathText: 'src/widget.ts.map', line: null, column: null }
+    expect(fileLinksAt(rows, 1, 'widget.ts')).toContainEqual(reading)
+    expect(fileLinksAt(rows, 2, 'map')).toContainEqual(reading)
+  })
+
+  it.each([
+    { path: 'src/widget.ts', next: '.gitignore' },
+    { path: 'src/widget.ts', next: '.env' },
+    { path: 'src/widget.ts', next: '.npmrc' },
+    { path: 'src/widget.ts', next: '.eslintrc' },
+    { path: 'src/widget.ts', next: '.bak' },
+    { path: 'src/widget.ts', next: '.map' },
+    { path: 'src/widget.ts', next: '.git' },
+    { path: '\\\\server\\share\\src\\widget.ts', next: '.gitignore' },
+    { path: 'dist/archive.tar', next: '.env' },
+    { path: 'dist/archive.tar', next: '.git' },
+    { path: 'dist/archive.tar', next: '.gitignore' },
+    { path: 'dist/archive.tar', next: '.bak' },
+    { path: 'dist/archive.tar', next: '.map' },
+    { path: '\\\\server\\share\\dist\\archive.tar', next: '.bak' },
+    { path: 'src/components/widget.test', next: '.gitignore' },
+    { path: 'src/components/widget.test', next: '.bak' },
+    { path: 'src/main.d', next: '.md' },
+    { path: 'src/button.min', next: '.map' },
+    { path: 'src/main.c', next: '.h' }
+  ])('does not join $next onto $path in an unpadded cell', ({ path, next }) => {
+    const rows = unpaddedRows(` ${path}`, ` ${next}`)
+    expect(fileLinksAt(rows, 1, path)).toEqual([{ pathText: path, line: null, column: null }])
+    expect(fileLinksAt(rows, 2, next)).toEqual([])
+  })
+
   it('joins a markdown extension split on a full cell', () => {
     const head = ' docs/guide.mark'
     const widths = [head.length, 8]
@@ -128,6 +274,11 @@ describe('file paths wrapped inside terminal table cells', () => {
     const reading = { pathText: 'docs/guide.markdown', line: null, column: null }
     expect(fileLinksAt(rows, 1, 'docs/guide')).toContainEqual(reading)
     expect(fileLinksAt(rows, 2, 'down')).toContainEqual(reading)
+
+    const upperRows = unpaddedRows(' docs/guide.MARK', ' down')
+    const upperReading = { pathText: 'docs/guide.MARKdown', line: null, column: null }
+    expect(fileLinksAt(upperRows, 1, 'docs/guide')).toContainEqual(upperReading)
+    expect(fileLinksAt(upperRows, 2, 'down')).toContainEqual(upperReading)
   })
 
   it('keeps :line:col after a dotted basename that reaches the cell border', () => {
