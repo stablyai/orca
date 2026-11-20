@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotOwnTool } from '../../../../../shared/bot-tools'
+import type { BotMcpAppSite } from '../../../../../shared/bots/bot-mcp-apps'
 import { LoadedEditor } from '../AddBotToolDialog'
 import { BotToolFinishSignIn } from '../BotToolFinishSignIn'
 import {
@@ -21,6 +22,7 @@ import {
 import { updateLine } from '../bot-tool-sign-in-action'
 import { openBotHostPageOrSay } from '@/lib/bot-host-page'
 import { BotAppLogo } from './BotAppRow'
+import { BotAppSiteStep } from './BotAppSiteStep'
 import {
   BotAppBrowserWait,
   BotAppOutcome,
@@ -32,6 +34,8 @@ const FORM_BODY = 'px-6 pt-1 pb-6'
 
 type CustomPhase =
   | { kind: 'edit' }
+  /** The vendor runs regions apart: the account's site picks the URL. */
+  | { kind: 'site'; sites: readonly BotMcpAppSite[] }
   | { kind: 'adding' }
   /** owned: Orca signs in (pasted back only when its host runs it); else the tool's agent CLI does. */
   | {
@@ -50,7 +54,13 @@ const urlLogo = (size: 'md' | 'lg') => (
 )
 
 /** An MCP app the catalog lists: added by its URL under its own name, no editor. */
-export type BotMcpAppPreset = { name: string; title: string; url: string; logo: React.ReactNode }
+export type BotMcpAppPreset = {
+  name: string
+  title: string
+  url: string
+  sites?: readonly BotMcpAppSite[]
+  logo: React.ReactNode
+}
 
 /**
  * Add by URL: the bot's Tools editor, then the server's browser sign-in, waited for here. With a
@@ -68,7 +78,9 @@ export function CustomAppStep({
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [phase, setPhase] = useState<CustomPhase>({ kind: preset ? 'adding' : 'edit' })
+  const [phase, setPhase] = useState<CustomPhase>(
+    preset?.sites ? { kind: 'site', sites: preset.sites } : { kind: preset ? 'adding' : 'edit' }
+  )
   const attempts = useRef(0)
   const { hostId, id: botId } = bot
   const signIn = useCallback(
@@ -107,7 +119,7 @@ export function CustomAppStep({
   // Once per step: the parent redraws with a fresh preset object.
   const addStarted = useRef(false)
   useEffect(() => {
-    if (!preset || addStarted.current) {
+    if (!preset || preset.sites || addStarted.current) {
       return
     }
     addStarted.current = true
@@ -119,6 +131,9 @@ export function CustomAppStep({
       (names) => {
         if (names.has(name)) {
           signIn(name, owned)
+        } else if (preset?.sites) {
+          // Back to the choice: a wrong site is the likeliest reason it failed.
+          setPhase({ kind: 'site', sites: preset.sites })
         } else if (preset) {
           add(preset)
         } else {
@@ -142,6 +157,18 @@ export function CustomAppStep({
           actions={null}
         />
       </>
+    )
+  }
+  if (phase.kind === 'site') {
+    return (
+      <BotAppSiteStep
+        logo={appLogo}
+        title={preset?.title ?? ''}
+        sites={phase.sites}
+        onAdd={(url) => preset && add({ ...preset, url })}
+        onBack={onBack}
+        onClose={onClose}
+      />
     )
   }
   if (phase.kind === 'edit') {
