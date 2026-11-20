@@ -3,8 +3,6 @@ import type { JournalSqlRequest } from './journal-sql-protocol'
 
 const MAX_STEPS = 64
 const MAX_BYTES = 1024 * 1024
-/** Target, facts and step framing beside the reserved bodies; the batch budget is soft. */
-const ENVELOPE_BYTES = 1024
 
 /** Sender work only: sizing reads each step's admission reservation, never its body. */
 export function prepareJournalSqlRequest(
@@ -22,7 +20,13 @@ export function prepareJournalSqlRequest(
       batch = {
         sessionId: command.command.target.sessionId,
         steps: operation.steps.length,
-        bytes: operation.steps.reduce((total, step) => total + step.reservedBytes, ENVELOPE_BYTES)
+        // Bodies are reserved at admission; only the envelope (target, host facts) is measured.
+        bytes:
+          operation.steps.reduce((total, step) => total + step.reservedBytes, 0) +
+          Buffer.byteLength(
+            JSON.stringify({ ...command.command, operation: { ...operation, steps: [] } }),
+            'utf8'
+          )
       }
     }
   }

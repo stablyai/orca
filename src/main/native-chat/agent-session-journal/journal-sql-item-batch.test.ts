@@ -132,3 +132,45 @@ it('a crash inside a batch of tool outputs from several chats acknowledges and k
   }
   expect(itemIds(filename)).toEqual(['orca:a1', 'orca:b1', 'orca:c1'])
 })
+
+it('a full disk that rolls back a batch of several chats reruns each write alone, so the others still commit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'journal-item-batch-full-'))
+  roots.push(root)
+  const filename = join(root, 'journal.db')
+  const { db } = openJournalDomainDatabase(filename)
+  for (const sessionId of ['chat-b', 'chat-c']) {
+    db.prepare(
+      `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('workspace',?,'epoch',1,1)`
+    ).run(sessionId)
+  }
+  db.close()
+  // Any transaction holding two chats' writes runs out of space and SQLite rolls it back.
+  const fullWorker = join(root, 'full-worker.cjs')
+  await writeFile(
+    fullWorker,
+    `const { DatabaseSync } = require('node:sqlite')
+const exec = DatabaseSync.prototype.exec
+let applied = 0
+DatabaseSync.prototype.exec = function (sql) {
+  if (sql === 'BEGIN IMMEDIATE') applied = 0
+  if (sql === 'RELEASE journal_command' && ++applied === 2) {
+    exec.call(this, 'ROLLBACK')
+    throw Object.assign(new Error('database or disk is full'), { code: 'ERR_SQLITE_ERROR', errcode: 13 })
+  }
+  return exec.call(this, sql)
+}
+require(${JSON.stringify(journalSqlWorkerPath())})`
+  )
+  const owner = new JournalSqlOwner(filename, root, fullWorker)
+  try {
+    expect(await owner.opened()).toBe(false)
+    const written = await Promise.allSettled([
+      owner.write(toolOutput('chat-b', 'b1')),
+      owner.write(toolOutput('chat-c', 'c1'))
+    ])
+    expect(written.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled'])
+  } finally {
+    await owner.close()
+  }
+  expect(itemIds(filename)).toEqual(['orca:b1', 'orca:c1'])
+})
