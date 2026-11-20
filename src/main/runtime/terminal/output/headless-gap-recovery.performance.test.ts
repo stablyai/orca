@@ -4,10 +4,11 @@ import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/pr
 import { anchorStream, createRuntime, grid, headlessOf } from './headless-recovery-test-harness'
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
-// A recovered model owns screen mode; no provider mirror may keep parsing its later output.
+// A recovered model owns screen mode; no provider mirror may keep parsing its later output (#43889).
 it.each([10, 100])(
   'recovers %i gapped terminals without a leftover mode scan per chunk',
   async (count) => {
@@ -54,7 +55,7 @@ it.each([10, 100])(
   30_000
 )
 
-// A read that started while recovery owned the screen must not reinstall the mirror when it lands after.
+// A read that started while recovery owned the screen must not reinstall the mirror when it lands after (#43889).
 it.each([10, 100])(
   'keeps %i recovered terminals free of mode scans after a late ordinary read lands',
   async (count) => {
@@ -116,7 +117,7 @@ it.each([10, 100])(
   30_000
 )
 
-// A screen the provider owned before the gap is read from its settled frame, as on main, not recaptured per read.
+// A screen the provider owned before the gap is read from its settled frame, as on main, not recaptured per read (#43889).
 it.each([10, 100])(
   'captures each of %i provider-owned recovering screens once across repeated unchanged reads',
   async (count) => {
@@ -163,7 +164,7 @@ it.each([10, 100])(
   30_000
 )
 
-// A preview of a provider-owned normal screen uses its raw tail, as on main; it never fetches a frame to discard.
+// A preview of a provider-owned normal screen uses its raw tail, as on main; it never fetches a frame to discard (#43889).
 it.each([10, 100])(
   'previews %i provider-owned normal recovering screens without reader captures',
   async (count) => {
@@ -192,6 +193,8 @@ it.each([10, 100])(
         })
       }
     })
+    // Recovery's retry pacing runs on these clocks; waitFor advances them.
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
     try {
       for (const ptyId of ptyIds) {
         anchorStream(runtime, ptyId)

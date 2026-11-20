@@ -121,12 +121,12 @@ export class TerminalWorkerTurnStops {
     needsScreen: boolean,
     awaitDialog: boolean
   ): Promise<string | undefined> {
-    // A prompt is what the grid shows now; an unavailable screen's tail is older transcript.
+    // A prompt is what the grid shows now; an unavailable screen's tail is older transcript, a stale one an older frame.
     const read = () =>
       this.deps
         .readScreen(handle)
         .then((view) =>
-          needsScreen && view.source === 'screen-unavailable'
+          needsScreen && (view.source === 'screen-unavailable' || view.source === 'screen-stale')
             ? null
             : redactWorkerTerminalView(view).tail
         )

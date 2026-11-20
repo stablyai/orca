@@ -303,12 +303,16 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     if (!projection || projection.lines.length === 0) {
       return { ...read, source: 'screen-unavailable' }
     }
-    return buildVisibleSnapshotReadFallback(
+    const screen = buildVisibleSnapshotReadFallback(
       read,
       projection.lines,
       opts.limit,
       projection.draft,
       projection.tailRows
     )
+    // A rebuilding screen's kept frame: current only while no output has landed after it.
+    return 'capturedAt' in projection && this.getPtyOutputSequence(ptyId) > projection.seq
+      ? { ...screen, source: 'screen-stale', screenCapturedAt: projection.capturedAt }
+      : screen
   }
 }

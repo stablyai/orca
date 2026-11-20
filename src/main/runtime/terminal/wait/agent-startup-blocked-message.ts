@@ -21,9 +21,11 @@ export async function agentStartupBlockedMessage(
   // The pane may already be gone; the bare reason is still the right failure.
   const screen = await Promise.resolve()
     .then(() => runtime.readTerminal(handle, { screen: true }))
-    // An unavailable screen's tail is older transcript, not the dialog blocking startup now.
+    // Only the current frame shows the dialog blocking startup now: not older transcript or an older frame.
     .then((read) =>
-      read.source === 'screen-unavailable' ? '' : read.tail.join('\n').toLowerCase()
+      read.source === 'screen-unavailable' || read.source === 'screen-stale'
+        ? ''
+        : read.tail.join('\n').toLowerCase()
     )
     .catch(() => '')
   return CLAUDE_BYPASS_WARNING_RE.test(screen)

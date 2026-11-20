@@ -20,6 +20,7 @@ import {
   moveCodexNoticeTrackers,
   resetCodexNoticeTrackersAfterGap
 } from './codex-notice-terminal-status'
+import { keepPreGapScreen } from './gap-recovery-screen'
 
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
@@ -43,6 +44,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     opts: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true },
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null>
+  protected abstract readWholeScreenModel(ptyId: string): RuntimeHeadlessTerminal | null
 
   private gapCapturesInFlight = 0
   // Keyed and insertion-ordered: FIFO admission, and a retired model leaves without a scan.
@@ -61,11 +63,15 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       this.disposeHeadlessTerminal(ptyId)
       return
     }
-    this.countGap(ptyId)
+    // Kept until the PTY exits: replacing the model must not erase a reader's evidence.
+    this.ptyGapCounts.set(ptyId, (this.ptyGapCounts.get(ptyId) ?? 0) + 1)
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const gapEnd = this.getPtyOutputSequence(ptyId)
+    // Only a trusted screen is worth keeping; one already rebuilding keeps what it has.
+    const keepScreen = !state.gapReseed && this.readWholeScreenModel(ptyId) === state
     state.writeChain = state.writeChain
       .then(async () => {
+        keepPreGapScreen(state, keepScreen)
         // CAN grounds the parser: the kept output can resume inside an escape whose start was dropped.
         await state.emulator.write('\x18')
         // Here, in stream order: chunks queued before the gap finished their carries already.
@@ -86,11 +92,6 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     this.startGapRecovery(ptyId, state)
   }
 
-  /** Kept until the PTY exits: replacing the model must not erase a reader's evidence. */
-  private countGap(ptyId: string): void {
-    this.ptyGapCounts.set(ptyId, (this.ptyGapCounts.get(ptyId) ?? 0) + 1)
-  }
-
   protected override onProviderSequenceAnchored(ptyId: string): void {
     if (
       this.gapRecoveryAwaitingStamp.delete(ptyId) &&
@@ -98,7 +99,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     ) {
       const state = this.getOrCreateHeadlessTerminal(ptyId)
       if (!state.gapReseed) {
-        this.countGap(ptyId)
+        this.ptyGapCounts.set(ptyId, (this.ptyGapCounts.get(ptyId) ?? 0) + 1)
         this.startGapRecovery(ptyId, state)
       }
     }

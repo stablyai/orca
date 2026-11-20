@@ -15,6 +15,7 @@ import type { TerminalAgent } from '../../../../shared/agent-status/identity/ter
 import type { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { RetainedTailRedrawCursor } from '../output/tail/terminal-tail-redraw-buffer'
+import type { RuntimeTerminalProjection } from '../output/terminal-projection'
 import type { TerminalTailWaitState } from '../wait/terminal-wait-tail-state'
 import type { TerminalCommandPaint } from '../input/terminal-command-paint'
 import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
@@ -252,4 +253,12 @@ export type GapRecovery = {
   contextChangePending?: boolean
   /** The provider already owned the screen before this gap, so reads keep main's provider path. */
   providerOwnedBeforeGap: boolean
+  /** The newest frame known correct at its seq, answered while the rebuild runs. */
+  keptScreen?: GapRecoveryScreen
+}
+
+export type GapRecoveryScreen = {
+  seq: number
+  capturedAt: number
+  read: () => Promise<RuntimeTerminalProjection>
 }
