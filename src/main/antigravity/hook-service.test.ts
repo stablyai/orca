@@ -165,6 +165,38 @@ describe('AntigravityHookService', () => {
     expect(readFileSync(exePath, 'utf8')).toBe('bundled native hook')
   })
 
+  it('rewrites only existing outdated Orca entries on script refresh, without CLI detection', async () => {
+    const configPath = join(homeDir, '.gemini', 'config', 'hooks.json')
+    mkdirSync(dirname(configPath), { recursive: true })
+    const oldScript = join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook.sh')
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        'orca-status': {
+          PreToolUse: [
+            { matcher: '*', hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] },
+            {
+              matcher: '*',
+              hooks: [{ type: 'command', command: `printf '{"decision":"ask"}'; # ${oldScript}` }]
+            }
+          ]
+        }
+      })
+    )
+
+    await new AntigravityHookService().refreshManagedScripts()
+
+    const bundle = JSON.parse(readFileSync(configPath, 'utf8'))['orca-status'] as Record<
+      string,
+      { hooks: { command: string }[] }[]
+    >
+    expect(Object.keys(bundle)).toEqual(['PreToolUse'])
+    expect(bundle.PreToolUse[0].hooks[0].command).toBe('/usr/local/bin/user-hook')
+    const command = bundle.PreToolUse[1].hooks[0].command
+    expect(command).toContain(ANTIGRAVITY_PRE_TOOL_USE_COMMAND)
+    expect(command).not.toContain('"decision":"ask"')
+  })
+
   it('preserves user-authored hook bundles and entries in Orca bundle', () => {
     const configPath = join(homeDir, '.gemini', 'config', 'hooks.json')
     mkdirSync(dirname(configPath), { recursive: true })
