@@ -247,7 +247,7 @@ describe('Claude prompt event arriving after its turn', () => {
   describe('a finished background task’s wakeup after the person’s turn was announced', () => {
     const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
 
-    function personTurnHeldByShell(): number | undefined {
+    function personTurnHeldByShell(): void {
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'watch' })
       claude({
         hook_event_name: 'PostToolUse',
@@ -256,77 +256,59 @@ describe('Claude prompt event arriving after its turn', () => {
         tool_input: { command: SHELL.command, run_in_background: true },
         tool_response: { backgroundTaskId: SHELL.id }
       })
-      return claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL] })
-        ?.turnCompletedAt
+      const end = claude({ hook_event_name: 'Stop', prompt_id: FIRST, background_tasks: [SHELL] })
+      expect(typeof end?.turnCompletedAt).toBe('number')
     }
 
-    it('repeats the person’s end when the wakeup’s tool call beats its prompt event', () => {
-      const personEnd = personTurnHeldByShell()
-      expect(typeof personEnd).toBe('number')
+    it('marks the wakeup as the agent’s own when its tool call beats its prompt event', () => {
+      personTurnHeldByShell()
       claude({
         hook_event_name: 'PreToolUse',
         prompt_id: SECOND,
         tool_name: 'Bash',
         tool_use_id: 'w'
       })
-
       expect(
-        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
-          ?.turnCompletedAt
-      ).toBe(personEnd)
-      expect(
-        claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })
-      ).toMatchObject({ state: 'done', turnCompletedAt: personEnd })
+        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })?.mainAgent
+      ).toMatchObject({ state: 'working', taskWakeup: true })
+      const end = claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })
+      expect(end).toMatchObject({ state: 'done', turnCompletedAt: undefined })
+      expect(end?.mainAgent).toMatchObject({ state: 'done', taskWakeup: true })
     })
 
-    it('repeats the person’s end when the wakeup’s Stop beats its prompt event', () => {
-      const personEnd = personTurnHeldByShell()
+    it('marks the wakeup as the agent’s own when its Stop beats its prompt event', () => {
+      personTurnHeldByShell()
       claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })
-
-      expect(
-        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
-      ).toMatchObject({ state: 'done', turnCompletedAt: personEnd })
+      const late = claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+      expect(late).toMatchObject({ state: 'done', turnCompletedAt: undefined })
+      expect(late?.mainAgent).toMatchObject({ state: 'done', taskWakeup: true })
     })
 
-    it('lets a wakeup the person typed into, or one that failed, announce its own end', () => {
-      const personEnd = personTurnHeldByShell()
+    it('makes the wakeup the person’s once they type into it', () => {
+      personTurnHeldByShell()
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
       claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })
-
-      expect(
-        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: 'also this' })
-      ).toMatchObject({ state: 'done', turnCompletedAt: undefined })
-
-      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: THIRD, prompt: done })
-      expect(
-        claude({ hook_event_name: 'StopFailure', prompt_id: THIRD, background_tasks: [] })
-          ?.turnCompletedAt
-      ).not.toBe(personEnd)
-    })
-
-    it('stops repeating the announced end once a turn ends with its prompt event still missing', () => {
-      const personEnd = personTurnHeldByShell()
-      claude({
-        hook_event_name: 'PreToolUse',
+      const joined = claude({
+        hook_event_name: 'UserPromptSubmit',
         prompt_id: SECOND,
-        tool_name: 'Bash',
-        tool_use_id: 'c'
+        prompt: 'also this'
       })
-      claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [SHELL] })
-
+      expect(joined?.state).toBe('done')
+      expect(joined?.mainAgent?.taskWakeup).toBeUndefined()
+      // A later wakeup notification in the same turn does not take it back.
       expect(
-        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: THIRD, prompt: done })
-          ?.turnCompletedAt
-      ).not.toBe(personEnd)
+        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })?.mainAgent
+          ?.taskWakeup
+      ).toBeUndefined()
     })
 
-    it('never gives the person’s next turn the end it already announced', () => {
-      const personEnd = personTurnHeldByShell()
+    it('starts the person’s next turn with no wakeup mark', () => {
+      personTurnHeldByShell()
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
-      // The wakeup is interrupted without a hook; the person's next turn ends before its prompt event lands.
       expect(
-        claude({ hook_event_name: 'Stop', prompt_id: THIRD, background_tasks: [] })?.turnCompletedAt
-      ).not.toBe(personEnd)
+        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: THIRD, prompt: 'next' })?.mainAgent
+          ?.taskWakeup
+      ).toBeUndefined()
     })
   })
 
@@ -352,14 +334,14 @@ describe('Claude prompt event arriving after its turn', () => {
       return first?.turnCompletedAt
     }
 
-    it('never announces the wakeup as a finished turn of its own', () => {
-      const personEnd = startWatching()
+    it('never announces the wakeup as a finished turn', () => {
+      startWatching()
       const late = claude({
         hook_event_name: 'UserPromptSubmit',
         prompt_id: SECOND,
         prompt: `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<event>tick</event>`
       })
-      expect(late?.turnCompletedAt).toBe(personEnd)
+      expect(late?.turnCompletedAt).toBeUndefined()
     })
 
     it('announces a person’s turn once its prompt event arrives', () => {

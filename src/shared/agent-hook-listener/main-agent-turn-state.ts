@@ -6,6 +6,8 @@ export type ClaudeLeadTurnState = {
   state: AgentStatusState
   /** A known background task opened this foreground finishing turn. */
   taskWakeupTurn?: true
+  /** Who started the current turn, through its end; a person's prompt in it wins. Unknown until its prompt event. */
+  turnOrigin?: 'person' | 'task-wakeup'
   /** Done-turn verdict from provider, inferred cancellation or persisted seed; the fold reads cancellation as interrupted. */
   outcome?: AgentTurnOutcome
   /** When `state` first appeared; the main agent's own clock, distinct from the gated row's. */
@@ -18,16 +20,12 @@ export type ClaudeLeadTurnState = {
   turnCompletedAt?: number
   /** That end time, held because the turn's late prompt event has not said whether a task wakeup started it. */
   unclassifiedTurnCompletedAt?: number
-  /** The end last announced, until the person starts another turn; the task wakeups between repeat it. */
-  announcedTurnCompletedAt?: number
-  /** This ended wakeup repeats that end instead of announcing its own. */
-  repeatsAnnouncedEnd?: true
   /** Claude hook model. Later events that omit it keep the last reported value. */
   model?: string
   /** Restore the lead state displaced by a child wait; inventing working cannot later fold back to done. */
   stateBeforeWait?: Pick<
     ClaudeLeadTurnState,
-    'state' | 'outcome' | 'stateStartedAt' | 'turnCompletedAt' | 'taskWakeupTurn'
+    'state' | 'outcome' | 'stateStartedAt' | 'turnCompletedAt' | 'taskWakeupTurn' | 'turnOrigin'
   >
 }
 

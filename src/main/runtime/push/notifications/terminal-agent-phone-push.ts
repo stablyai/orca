@@ -89,7 +89,8 @@ export class TerminalAgentPhonePush {
             : news
         )
       },
-      setTimer: (run, delayMs) => deps.setTimer(run, delayMs)
+      setTimer: (run, delayMs) => deps.setTimer(run, delayMs),
+      quietTaskWakeups: true
     })
     this.hooklessNews = new TerminalHooklessNews({
       hasHookRow: (paneKey) => deps.readHookRow(paneKey) !== null,

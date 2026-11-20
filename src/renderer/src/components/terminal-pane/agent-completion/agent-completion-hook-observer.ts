@@ -1,4 +1,5 @@
 import { isRecognizedAgentType } from '../../../../../shared/agent-status/process/agent-process-recognition'
+import { isQuietTaskWakeup } from '../../../../../shared/agent-status/lifecycle/main-agent-status'
 import type {
   AgentCompletionCoordinatorOptions,
   AgentCompletionStatusSnapshot
@@ -116,6 +117,11 @@ export function createAgentCompletionHookObserver({
         options.dispatchHookLifecycle?.(payload)
         return
       }
+      // The agent waking itself for a finished background task is not a turn the person started.
+      if (isQuietTaskWakeup(payload)) {
+        options.dispatchHookLifecycle?.(payload)
+        return
+      }
       clearOriginStampedTail()
       // Clear exit identity on a new turn or agent-only matching would swallow every later Done from that agent.
       clearProcessExitCompletion()
@@ -145,6 +151,12 @@ export function createAgentCompletionHookObserver({
     const turnCompletedAt = isFiniteTurnCompletedAt(payload.turnCompletedAt)
       ? payload.turnCompletedAt
       : undefined
+    // Nor is its end; a person's prompt reaching that turn later restates the row and announces it then.
+    if (turnCompletedAt === undefined && isQuietTaskWakeup(payload)) {
+      clearPendingHookDone()
+      options.dispatchHookLifecycle?.(payload)
+      return
+    }
     if (
       turnCompletedAt === undefined &&
       consumePendingStampedTailForAgent(hookCompletionAgentIdentity(payload), identity)

@@ -9,10 +9,7 @@ import { resolvePrompt, resolveToolState } from '../../../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../../../provider-event-routing'
 import type { HookListenerState } from '../../../listener-state'
 import { mainAgentTurnInterrupted } from '../../../../agent-status/lifecycle/agent-lead-status-fold'
-import {
-  claudeMainAgentStatusForPayload,
-  claudePublishedTurnCompletedAt
-} from './claude-roster-state'
+import { claudeMainAgentStatusForPayload } from './claude-roster-state'
 
 export function buildClaudeStatusPayload(
   state: HookListenerState,
@@ -58,7 +55,7 @@ export function buildClaudeStatusPayload(
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted: mainAgentTurnInterrupted(mainAgentRecord),
     sessionBoundary: options.sessionBoundary,
-    turnCompletedAt: mainAgentRecord ? claudePublishedTurnCompletedAt(mainAgentRecord) : undefined,
+    turnCompletedAt: mainAgentRecord?.turnCompletedAt,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey)),
     mainAgent: mainAgentRecord ? claudeMainAgentStatusForPayload(mainAgentRecord) : undefined
   })

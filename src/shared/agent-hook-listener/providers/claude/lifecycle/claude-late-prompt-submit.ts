@@ -30,26 +30,14 @@ export function settleLateClaudePromptSubmit(
   if (isTaskWakeup && own && own.state !== 'done') {
     own.taskWakeupTurn = true
   }
+  // A person's prompt in the turn makes it theirs, whatever started it.
+  if (own) {
+    own.turnOrigin = isTaskWakeup && own.turnOrigin !== 'person' ? 'task-wakeup' : 'person'
+  }
   // A person's turn that Stop already ended earns the completion it held; a wakeup's never does.
   if (isTaskWakeup) {
     lead.unclassifiedTurnCompletedAt = undefined
-    // A wakeup that Stop already ended repeats the person's announced end instead of announcing its own.
-    if (
-      own?.state === 'done' &&
-      own.outcome !== 'failure' &&
-      lead.turnCompletedAt === undefined &&
-      lead.announcedTurnCompletedAt !== undefined
-    ) {
-      lead.turnCompletedAt = lead.announcedTurnCompletedAt
-      lead.repeatsAnnouncedEnd = true
-    }
   } else {
-    // The person typed into a wakeup Stop already ended: its end is theirs to announce, not a repeat.
-    if (lead.repeatsAnnouncedEnd) {
-      lead.turnCompletedAt = undefined
-      lead.repeatsAnnouncedEnd = undefined
-    }
-    lead.announcedTurnCompletedAt = undefined
     releaseClaudeUnclassifiedTurnEnd(state, paneKey, lead)
   }
   resolvePrompt(state, paneKey, promptText)

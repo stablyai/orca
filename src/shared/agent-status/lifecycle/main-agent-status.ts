@@ -10,6 +10,8 @@ export type AgentMainAgentStatus = {
   outcome?: AgentTurnOutcome
   /** A user’s Stop is ending the working turn. Structured hosts publish it; readers display it without storing it. */
   stopping?: true
+  /** The agent started this turn itself to handle a finished background task; its end is no news to the person. */
+  taskWakeup?: true
   /** When the main agent’s state began (ms); the row’s stateStartedAt dates its combined state and can differ while children run. */
   stateStartedAt: number
 }
@@ -46,6 +48,12 @@ export function mainAgentStatusEqual(
     a.state === b.state &&
     a.outcome === b.outcome &&
     a.stopping === b.stopping &&
+    a.taskWakeup === b.taskWakeup &&
     a.stateStartedAt === b.stateStartedAt
   )
+}
+
+/** The agent started this turn for its own finished background task and it has not failed: neither its start nor its end is news. */
+export function isQuietTaskWakeup(row: { mainAgent?: AgentMainAgentStatus }): boolean {
+  return row.mainAgent?.taskWakeup === true && row.mainAgent.outcome !== 'failure'
 }

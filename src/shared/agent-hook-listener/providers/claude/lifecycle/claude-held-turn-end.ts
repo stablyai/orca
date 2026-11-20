@@ -73,32 +73,29 @@ export function releaseClaudeUnclassifiedTurnEnd(
     claudePaneHasRunningChildWork(state, paneKey)
   ) {
     lead.turnCompletedAt = heldEnd
-    lead.announcedTurnCompletedAt = heldEnd
   }
 }
 
-/** A wakeup's end repeats the person's announced end; a person's prompt starts a turn that announces its own. */
-export function claudeAnnouncedTurnEnd(
-  event: { name: unknown; isTaskWakeup: boolean; opensTurn: boolean },
+/**
+ * A lead event that starts a turn names its origin; one before its prompt event leaves it unknown. A turn whose prompt
+ * event never came is the person's: when the next turn starts first, its held end is announced then.
+ */
+export function claudeLeadTurnStart(
+  state: HookListenerState,
+  paneKey: string,
+  event: { name: unknown; agentId: string | undefined; isTaskWakeup: boolean; opensTurn: boolean },
   previousLead: ClaudeLeadTurnState | undefined
-): Pick<
-  ClaudeLeadTurnState,
-  'turnCompletedAt' | 'announcedTurnCompletedAt' | 'repeatsAnnouncedEnd'
-> {
-  // A turn whose prompt event never said who started it may be the person's, so it ends the repeat too.
-  if (
-    (event.name === 'UserPromptSubmit' && !event.isTaskWakeup) ||
-    previousLead?.unclassifiedTurnCompletedAt !== undefined
-  ) {
-    return { announcedTurnCompletedAt: undefined }
+): Pick<ClaudeLeadTurnState, 'turnOrigin' | 'turnCompletedAt'> {
+  const isPrompt = event.name === 'UserPromptSubmit'
+  if (event.agentId !== undefined || (!isPrompt && !event.opensTurn)) {
+    return {}
   }
-  const own =
-    previousLead?.waitingAgentId !== undefined ? previousLead.stateBeforeWait : previousLead
-  // A failed wakeup is news of its own, so it never repeats an announced end.
-  return event.name === 'Stop' &&
-    !event.opensTurn &&
-    own?.taskWakeupTurn === true &&
-    previousLead?.announcedTurnCompletedAt !== undefined
-    ? { turnCompletedAt: previousLead.announcedTurnCompletedAt, repeatsAnnouncedEnd: true }
-    : {}
+  return {
+    turnOrigin: !isPrompt ? undefined : event.isTaskWakeup ? 'task-wakeup' : 'person',
+    ...(previousLead?.unclassifiedTurnCompletedAt !== undefined &&
+    previousLead.state === 'done' &&
+    claudePaneHasRunningChildWork(state, paneKey)
+      ? { turnCompletedAt: previousLead.unclassifiedTurnCompletedAt }
+      : {})
+  }
 }

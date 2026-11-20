@@ -190,6 +190,36 @@ describe('TerminalAgentPhonePush on a windowless host', () => {
     ])
   })
 
+  it("keeps a background task's wakeup quiet until the person joins its turn", () => {
+    const host = windowlessHost()
+    const pane = 'tab-1:leaf-1'
+    const wakeupEnd: AgentStatusIpcPayload = {
+      paneKey: pane,
+      agentType: 'claude',
+      connectionId: null,
+      prompt: 'watch',
+      state: 'done',
+      receivedAt: host.now(),
+      stateStartedAt: host.now(),
+      mainAgent: { state: 'done', taskWakeup: true, stateStartedAt: host.now() }
+    }
+    host.hookRows.set(pane, wakeupEnd)
+    host.moved(pane, 'done', 'turn-finished')
+    host.advance(5_000)
+    expect(host.sent).toEqual([])
+
+    host.hookRows.set(pane, {
+      ...wakeupEnd,
+      prompt: 'also this',
+      mainAgent: { state: 'done', stateStartedAt: host.now() }
+    })
+    host.push.observe({ kind: 'observed', paneKey: pane, workspace, phase: 'done', at: host.now() })
+    host.advance(5_000)
+    expect(host.sent.map((event) => [event.source, event.paneKey])).toEqual([
+      ['agent-task-complete', pane]
+    ])
+  })
+
   it('rings a bell its finish held once the agent resumes work instead', () => {
     const host = windowlessHost()
     const idle: TerminalSideEffectFact = { kind: 'agent-idle', title: '◇ Ready (gemini)' }
