@@ -8,6 +8,7 @@ import type {
 import type { StructuredAgentSessionRestartAudience } from './structured-agent-session-restart-resume-set'
 import type { RecoveryDismissal } from '../../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
 import { restartCutOfMarker } from './structured-agent-session-restart-witnesses'
+import type { StructuredAgentSessionRestartFailureLedger } from './structured-agent-session-restart-failure-ledger'
 
 export type StructuredAgentSessionDismissedCut = {
   sessionId: string
@@ -16,8 +17,12 @@ export type StructuredAgentSessionDismissedCut = {
 
 type BeforeClearAll = (audience?: StructuredAgentSessionRestartAudience) => Promise<void>
 
+type Settle = StructuredAgentSessionRestartFailureLedger['settle']
+
 export function createRestartOfferDismissals(): {
-  onDismissed: StructuredAgentSessionRestartResume['onDismissed']
+  listeners: Pick<StructuredAgentSessionRestartResume, 'onDismissed' | 'onContinueSettled'>
+  /** Tells `onContinueSettled` once a Continue's chats are settled (continued, refused or unconfirmed). */
+  settling: (settle: Settle) => Settle
   dismissing: (
     dismiss: (
       sessionIds: readonly string[] | undefined,
@@ -28,9 +33,26 @@ export function createRestartOfferDismissals(): {
   ) => StructuredAgentSessionRestartResume['dismiss']
 } {
   const listeners = new Set<(dismissed: readonly StructuredAgentSessionDismissedCut[]) => void>()
+  const settledListeners = new Set<(sessionIds: readonly string[]) => void>()
   return {
-    onDismissed: (listener) => {
-      listeners.add(listener)
+    listeners: {
+      onDismissed: (listener) => {
+        listeners.add(listener)
+      },
+      onContinueSettled: (listener) => {
+        settledListeners.add(listener)
+      }
+    },
+    settling: (settle) => async (operationId, outcomes, action) => {
+      await settle(operationId, outcomes, action)
+      const sessionIds = outcomes.map((outcome) => outcome.sessionId)
+      for (const listener of sessionIds.length > 0 ? settledListeners : []) {
+        try {
+          listener(sessionIds)
+        } catch (error) {
+          console.warn('[agent-session] a restart settlement listener failed', error)
+        }
+      }
     },
     dismissing: (dismiss, beforeClearAll) => async (sessionIds, audience) => {
       const { count, abandoned } = await dismiss(sessionIds, beforeClearAll, audience)

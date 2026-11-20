@@ -192,12 +192,16 @@ export function releaseStructuredMailSend(
 export function retireStructuredMailSend(
   this: OrchestrationDb,
   row: StructuredMailSendRow,
-  consumed: boolean
+  consumed: boolean,
+  /** Who took it whole: the chat's agent, or the person who withdrew it. */
+  takenBy?: 'agent' | 'person'
 ): boolean {
-  return runLifecycleWriteTransaction(this.db, 'retire_structured_mail_send', () => {
+  let taken = false
+  const retired = runLifecycleWriteTransaction(this.db, 'retire_structured_mail_send', () => {
     const retired = deleteCurrentAttempt(this, row)
     if (retired && consumed) {
       this.markAsReadAndDelivered([row.message_id])
+      taken = takenBy !== undefined && this.takeBotRequest(row.message_id, row.session_id, takenBy)
     } else if (retired) {
       this.db
         .prepare(
@@ -208,6 +212,11 @@ export function retireStructuredMailSend(
     }
     return retired
   })
+  if (taken) {
+    // The chat may already be at rest: its rest decides the question now.
+    this.botRequestTakenListener?.(row.session_id)
+  }
+  return retired
 }
 
 export type StructuredMailSendStoreMethods = {

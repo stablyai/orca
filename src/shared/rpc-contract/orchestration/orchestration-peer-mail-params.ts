@@ -38,7 +38,11 @@ export const PeerMailDeliverParams = z.object({
   item: OptionalString,
   /** With `item`: files the sender uploaded to this Orca's attachment store for the item's chat. */
   attachments: z.array(z.string().min(1).max(4096)).max(30).optional(),
-  sender: PeerMailSender.optional()
+  sender: PeerMailSender.optional(),
+  /** The sender's asker takes one notice per unanswered question; absent from earlier builds. */
+  questionNotice: z.literal('once').optional(),
+  /** The same send from the same turn on the sender's computer; absent from earlier builds. */
+  sendKey: z.string().min(1).max(512).optional()
 })
 
 /** The opening Orca pulls replies queued for its conversations; waits up to waitMs for one. */
@@ -69,5 +73,7 @@ export const PeerMailRelayPayload = z.object({
   threadId: z.string().nullable(),
   sender: PeerMailSender.optional(),
   /** A bot's answer to a request the opening Orca sent, and what the asker does with it. */
-  botAnswer: z.object({ requestId: LINE, view: z.record(z.string(), LINE) }).optional()
+  botAnswer: z.object({ requestId: LINE, view: z.record(z.string(), LINE) }).optional(),
+  /** Orca's notice that a request the opening Orca sent ends with no answer; names which one. */
+  notice: z.object({ requestId: LINE, outcome: LINE }).optional()
 })

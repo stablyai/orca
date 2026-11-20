@@ -1,5 +1,6 @@
 /** Stores mail to a bot with Orca's record of the request beside it, after the checks pass. */
 
+import { peerBotRequestAdmission, type PeerBotRequestOrigin } from './peer-bot-request-origin'
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { randomUUID } from 'node:crypto'
@@ -11,6 +12,7 @@ import { admitInOwnConversation, sessionAddress } from './bot-request-conversati
 import { actsForOwner } from '../../../../../../shared/bots/bot-acts-for'
 import { ownerChatCard } from './bot-request-owner-card'
 import { botRequestPayload, type BotRequestRecord } from '../../../../../bots/bot-request-view'
+import { botRequestBlockedReceipt } from './bot-request-blocked-receipt'
 import type { BotRequestAdmission } from '../../../../orchestration/db/bot-requests/bot-request-store'
 import {
   BOT_REQUEST_TYPE_REFUSAL,
@@ -74,7 +76,7 @@ export async function sendToBot(
     /** About something in the addressed chat (a comment on its item): lands there, a teammate's
      *  request included, instead of in a conversation of its own. */
     keepChat?: boolean
-  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'images'>
+  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'images' | 'fromPeer'>
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
@@ -129,6 +131,8 @@ type SendBotRequestArgs = {
   images?: readonly string[]
   /** Nudges the sender runs later instead of now. */
   held?: (() => void)[]
+  /** From a paired computer: its way back, filed with the request, and the sender's own rules. */
+  fromPeer?: PeerBotRequestOrigin
 }
 
 /** Every refusal, from the first check to a blocked admission, leaves the owner's card. */
@@ -208,26 +212,17 @@ async function admitBotRequestMail(
     !groupScope && (receiving.newChat === true || (!args.keepChat && !actsForOwner(record.askers)))
   // A worker's send is its own: another worker asking the same still gets an answer.
   const sendTurn = acting.worker ? `dispatch:${acting.worker}` : chain.turnKey
+  const peer = peerBotRequestAdmission(args.fromPeer)
+  const sendKey = sendTurn ? botRequestSendKey(sendTurn, target.id, purpose, params) : peer.sendKey
   const key = {
     rootKey: chain.rootKey ?? `send:${randomUUID()}`,
     // Only this same send again is a duplicate; a new request to a bot the chain reached is delivered.
-    ...(sendTurn ? { sendKey: botRequestSendKey(sendTurn, target.id, purpose, params) } : {}),
+    ...(sendKey ? { sendKey } : {}),
     toBotId: target.id,
     purpose
   }
-  const blockedReceipt = (
-    blocked: Exclude<BotRequestAdmission, { kind: 'sent' }>
-  ): { sent: false; receipt: unknown } => {
-    const earlier = db.getMessageById(blocked.messageId)
-    return {
-      sent: false,
-      receipt: {
-        ...(earlier ? { message: exposeMessage(earlier) } : {}),
-        duplicate: true,
-        next: `${target.name} already has this request, so no second message was sent.`
-      }
-    }
-  }
+  const blockedReceipt = (blocked: Exclude<BotRequestAdmission, { kind: 'sent' }>) =>
+    botRequestBlockedReceipt(db, blocked, target.name)
   const messageId = args.messageId ?? generateId('msg')
   // Checked before a conversation is made for it; the store checks again as it stores.
   const blocked = db.botRequestBlocked(key)
@@ -240,7 +235,9 @@ async function admitBotRequestMail(
     ...key,
     fromBotId: record.fromBotId,
     depth: record.depth,
-    record: JSON.stringify(record)
+    record: JSON.stringify(record),
+    debtRule: peer.debtRule,
+    ...(peer.peerLink ? { peerLink: peer.peerLink } : {})
   }
   /** `reserved`: the request's place is already held, so only its mail is stored. */
   /** `held`: the chat a failed turn holds that this request was kept out of, named to the sender. */
@@ -277,7 +274,7 @@ async function admitBotRequestMail(
       answerSenderSnapshot: args.senderSnapshot
     }
     const admission: BotRequestAdmission = reserved
-      ? { kind: 'sent', message: db.admitReservedBotRequest(mail) }
+      ? { kind: 'sent', message: db.admitReservedBotRequest(mail, peer.peerLink) }
       : db.admitBotRequest({ ...request, message: mail })
     if (admission.kind !== 'sent') {
       return blockedReceipt(admission)

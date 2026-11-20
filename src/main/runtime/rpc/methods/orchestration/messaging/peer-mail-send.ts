@@ -17,6 +17,9 @@ import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
 import { uploadPeerMailFiles } from './peer-mail-files'
+import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { readBotTurn } from './bot-recipient'
+import { botRequestSendKey } from './bot-request-chain'
 import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 const NOTHING_SENT = { effectsApplied: false } as const
@@ -122,7 +125,9 @@ export async function sendPeerMail(args: {
     chat: params.chat,
     item: params.item,
     attachments,
-    sender: peerMailSender(runtime, caller.address)
+    sender: peerMailSender(runtime, caller.address),
+    // Keyed for any agent: a chat address can name a bot there too.
+    ...(await peerSendKey(runtime, args.orchestrationCaller, to, type, params))
   })
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,
@@ -130,6 +135,26 @@ export async function sendPeerMail(args: {
     () => runtime.ensureOrchestrationPeerMailRelay(server.environmentId),
     { kind: 'federation', environmentId: server.environmentId }
   )
+}
+
+/** A chat's question or handoff from one turn: the receiver admits the same send from it once. */
+async function peerSendKey(
+  runtime: OrcaRuntimeService,
+  caller: OrchestrationEntryCaller | undefined,
+  to: string,
+  type: string,
+  params: { subject: string; body?: string | null }
+): Promise<{ sendKey?: string }> {
+  const sessionId = sessionCallerOf(caller)?.sessionId
+  if (!sessionId || (type !== 'question' && type !== 'handoff')) {
+    return {}
+  }
+  const { turn } = await readBotTurn(runtime, runtime.getOrchestrationDb(), sessionId).catch(
+    () => ({ turn: null })
+  )
+  return turn?.rootItemId
+    ? { sendKey: botRequestSendKey(`${sessionId}:${turn.rootItemId}`, to, type, params) }
+    : {}
 }
 
 type SendInput = z.infer<typeof SendParams>

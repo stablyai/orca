@@ -177,3 +177,75 @@ it('still continues the other chats when one chat cannot be read', async () => {
   await sweep.tick()
   expect(sent).toEqual(['chat-a', 'chat-c'])
 })
+
+function coldBotChat(readSavedCut: (id: string) => Promise<ReturnType<typeof savedCut>>) {
+  const changed: (() => void)[] = []
+  const settings = { enabled: true, changed }
+  const published: string[] = []
+  const sweep = new StructuredAgentSessionUsageLimitContinue({
+    host: {
+      logger: recordingStructuredAgentSessionLogger().logger,
+      usageLimitAutoContinue: {
+        isEnabled: () => settings.enabled,
+        isWorkspaceAsleep: () => false,
+        subscribe: (listener) => {
+          settings.changed.push(listener)
+          return () => {}
+        }
+      },
+      store: {
+        hostId: 'local',
+        listVisibleSessionIds: () => [],
+        isSessionTabVisible: () => false,
+        listBackgroundSessionIds: () => ['bot-chat'],
+        isSessionInBackground: (id) => id === 'bot-chat',
+        cancelUsageLimitContinue: async (id) => hostTestRestingOptionsRecord(id),
+        getRecord: (id) => hostTestRestingOptionsRecord(id)
+      }
+    },
+    sessions: new Map(),
+    readSavedCut,
+    readLoadedCut: async () => null,
+    serialize: (_id, run) => run(),
+    send: async () => {
+      throw new RestartContinuationSupersededError()
+    },
+    publish: (id) => published.push(id),
+    now: () => HOST_TEST_NOW
+  })
+  return { sweep, settings, published }
+}
+
+const savedCut = () => ({
+  turnItemId: 'bot-chat-turn',
+  resetsAt: HOST_TEST_NOW + 60_000,
+  turnEndedAt: HOST_TEST_NOW - 60_000,
+  chain: 0
+})
+
+it('tells whoever waits on an unopened chat when automatic continue is turned off', async () => {
+  const { sweep, settings, published } = coldBotChat(async () => savedCut())
+  sweep.start()
+  try {
+    expect(await sweep.willContinue('bot-chat')).toBe(true)
+    settings.enabled = false
+    settings.changed.forEach((changed) => changed())
+    await eventually(async () => expect(published).toContain('bot-chat'))
+    expect(await sweep.willContinue('bot-chat')).toBe(false)
+  } finally {
+    sweep.dispose()
+  }
+})
+
+it("can't tell whether an unopened chat continues while its saved cut fails to read", async () => {
+  let reads = 0
+  const { sweep } = coldBotChat(async () => {
+    reads += 1
+    if (reads === 1) {
+      throw new Error('database is locked')
+    }
+    return savedCut()
+  })
+  expect(await sweep.willContinue('bot-chat')).toBeNull()
+  expect(await sweep.willContinue('bot-chat')).toBe(true)
+})

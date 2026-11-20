@@ -275,6 +275,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         work: this.botWork,
         lookAround: this.lookAround,
         requestTurnEnded: (sessionId, ended) => this.botSessions.turnEnded(sessionId, ended),
+        requestRested: (sessionId) => this.botSessions.rested?.(sessionId),
         recentChats: (botId, sessionId, message) =>
           this.botSessions.recentChats(botId, sessionId, message),
         unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),

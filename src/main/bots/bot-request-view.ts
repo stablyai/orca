@@ -160,6 +160,11 @@ export function botRequestView(
     ...originLine(record),
     kind,
     answer: reply('<your answer>'),
+    ...(record.purpose === 'question'
+      ? {
+          ifYouCantTakeIt: `${reply("<that you can't take it now>")}, so ${sender} can go on without you`
+        }
+      : {}),
     answerAppears:
       record.purpose === 'question'
         ? `${sender}'s conversation, waking it to finish the job`
@@ -211,11 +216,26 @@ export function botAnswerView(record: BotRequestRecord, posted: boolean): Record
 }
 
 /** Why a request came back with no answer, for the sender to act on. */
+export type BotRequestUnansweredWhy =
+  | 'ended'
+  | 'failed'
+  | 'failed-continues'
+  | 'paused'
+  | 'deleted'
+  | 'new-chat'
+  /** Its turn was stopped (a person's Stop, or a cut restart nobody continued). */
+  | 'stopped'
+  /** Its owner deleted the waiting message before the agent read it. */
+  | 'withdrawn'
+
+/** Why a request came back with no answer, for the sender to act on. `once`: the request is told
+ *  this one time, whatever its chat does next, so the sender is released rather than told to wait. */
 export function botRequestUnansweredText(
   record: BotRequestRecord,
-  why: 'ended' | 'failed' | 'failed-continues' | 'paused' | 'deleted' | 'new-chat',
+  why: BotRequestUnansweredWhy,
   /** On a failure: why, as its chat words it; absent when the host recorded no reason. */
-  failure?: string
+  failure?: string,
+  once = false
 ): string {
   const bot = record.toBotName
   const failedTurn = `${bot}'s turn failed${failure ? `: ${failure}` : ' with an error.'}`
@@ -234,10 +254,16 @@ export function botRequestUnansweredText(
         ? `${failedTurn} It ended without answering your ${record.purpose}`
         : why === 'new-chat'
           ? `${bot} started a new Chat before it read your ${record.purpose}`
-          : `${bot} was ${why} before it read your ${record.purpose}`
-  return record.fromWorker
-    ? `${what}, so do it yourself or tell ${record.fromBotName} that ${bot} couldn't take it.`
-    : `${what}, so do it yourself or tell ${askersOf(record)} that ${bot} couldn't take it.`
+          : why === 'stopped'
+            ? `${bot}'s turn was stopped before it answered your ${record.purpose}`
+            : why === 'withdrawn'
+              ? `Your ${record.purpose} was removed from ${bot}'s chat before ${bot} read it`
+              : `${bot} was ${why} before it read your ${record.purpose}`
+  const tell = record.fromWorker ? record.fromBotName : askersOf(record)
+  if (once && record.purpose === 'question') {
+    return `${what}. You can go on without its answer or tell ${tell} that ${bot} couldn't take it; don't send it again. If ${bot} answers later, its answer still reaches you.`
+  }
+  return `${what}, so do it yourself or tell ${tell} that ${bot} couldn't take it.`
 }
 
 /** A bot request's mail payload: its view, and any store images claimed for the receiving chat

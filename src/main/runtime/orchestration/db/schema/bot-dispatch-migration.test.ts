@@ -1,3 +1,4 @@
+import { SCHEMA_VERSION } from '../contract-constants'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -53,7 +54,7 @@ describe('v47-v48 bot dispatch migrations', () => {
   function expectCurrentSchema(path: string, seededTaskId?: string): void {
     const db = new OrchestrationDb(path)
     try {
-      expect(db.db.pragma('user_version', { simple: true })).toBe(49)
+      expect(db.db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
       expect(db.hasColumn('dispatch_contexts', 'creator_turn_source')).toBe(true)
       expect(db.hasColumn('dispatch_contexts', 'origin_ref')).toBe(true)
       expect(db.hasColumn('bot_requests', 'send_key')).toBe(true)
@@ -85,7 +86,7 @@ describe('v47-v48 bot dispatch migrations', () => {
     raw.close()
   }
 
-  it('opens a fresh database at v48, and again unchanged', () => {
+  it('opens a fresh database at the current version, and again unchanged', () => {
     const path = dbPath()
     expectCurrentSchema(path)
     expectCurrentSchema(path)

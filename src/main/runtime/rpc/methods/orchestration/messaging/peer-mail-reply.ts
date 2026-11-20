@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { PeerMailMessageRow } from '../../../../orchestration/db/federation/peer-mail-store'
 import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
@@ -53,17 +54,20 @@ export async function replyOverPeerMail(args: {
   }
 
   if (conversation.role === 'peer') {
-    queuePeerMailReply(db, conversation.conversation_id, id, {
-      senderLabel,
-      fromAddress: replier,
-      subject,
-      body: params.body,
-      threadId,
-      sender: peerMailSender(runtime, replier),
-      // Refuses a second answer to a bot request, before the original is marked read.
-      ...botAnswerOf(db, original)
+    // An answer and its relay row commit together.
+    runLifecycleWriteTransaction(db.db, 'peer_reply_message', () => {
+      queuePeerMailReply(db, conversation.conversation_id, id, {
+        senderLabel,
+        fromAddress: replier,
+        subject,
+        body: params.body,
+        threadId,
+        sender: peerMailSender(runtime, replier),
+        // Refuses a second answer, before the original is marked read.
+        ...botAnswerOf(db, original)
+      })
+      db.markAsRead([original.id])
     })
-    db.markAsRead([original.id])
     return recordReceiptBeforeNudge(
       args.recordMutationReceipt,
       { message: { id, subject }, to: original.from_handle },

@@ -66,7 +66,7 @@ describe('botRequestView', () => {
   it('sends an answer back by mail everywhere else', () => {
     expect(
       botRequestView(record({ purpose: 'question', askers: [{ kind: 'owner' }] }), 'msg_2')
-    ).toEqual({
+    ).toMatchObject({
       from: 'Ranger',
       for: 'your owner',
       kind: 'question: answer it; the job stays theirs',

@@ -6,6 +6,7 @@ import type {
   StructuredMailReportItem
 } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
 import { RuntimeConstructionServices } from './runtime-construction-services'
+import type { BotSessionHooks } from '../../bots/bot-turn-ended'
 
 /** Bot hooks the construction classes call; later runtime classes implement them. */
 export abstract class RuntimeBotConstructionHooks extends RuntimeConstructionServices {
@@ -19,6 +20,9 @@ export abstract class RuntimeBotConstructionHooks extends RuntimeConstructionSer
 
   // The open item a finished worker's report was started for, from this host's item store.
   protected structuredMailReportItem?: StructuredMailReportItem
+
+  // Session hooks: questions a chat took are decided at its rest.
+  abstract get botSessions(): BotSessionHooks
 
   // The chat's bound conversation and whether its answer to this mail lands there; null if unbound.
   protected chatConversationPlace?(

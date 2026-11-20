@@ -46,6 +46,7 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       this.orchestrationDbMaintenance.start()
       this.bindMailHandBack(this._orchestrationDb)
       this.bindCrewChanges(this._orchestrationDb)
+      db.botRequestTakenListener = (sessionId) => this.botSessions.rested?.(sessionId)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
       this.bindWorkerTerminalAutoRelease(this._orchestrationDb)
@@ -56,6 +57,11 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       closeOrphanedTerminalApprovals(this._orchestrationDb)
     }
     return this._orchestrationDb
+  }
+
+  /** The database if this run opened it already; never touches the disk. */
+  getOpenOrchestrationDb(): OrchestrationDb | null {
+    return this._orchestrationDb ?? null
   }
 
   /** The database, opened only if it already exists: a profile without one has no mail to redrive. */

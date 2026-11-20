@@ -280,3 +280,17 @@ export type AbandonedOffer = { marker: AgentSessionResumeMarker; unconfirmed?: t
 export type RecoveryDismissal = { count: number; abandoned: AbandonedOffer[] }
 
 export const NO_RECOVERY_DISMISSAL: RecoveryDismissal = { count: 0, abandoned: [] }
+
+/** Chats Orca may still continue: an offer waiting, a Continue reserved but not settled, or one
+ *  whose continuation it never saw taken. A refused continuation is not one. */
+export function continuingSessions({
+  entries,
+  failed
+}: Pick<RecoveryCapsuleState, 'entries' | 'failed'>): Set<string> {
+  return new Set([
+    ...entries.map((entry) => entry.marker.sessionId),
+    ...failed
+      .filter((failure) => failure.outcome === 'unconfirmed')
+      .map((failure) => failure.marker.sessionId)
+  ])
+}

@@ -22,11 +22,12 @@ export function recordBotRequestOutcome(
   messageId: string,
   outcome: BotRequestOutcome
 ): boolean {
-  return (
+  const recorded =
     this.db
       .prepare('INSERT OR IGNORE INTO bot_request_outcomes (message_id, outcome) VALUES (?, ?)')
       .run(messageId, outcome).changes > 0
-  )
+  clearBotRequestTake(this, messageId)
+  return recorded
 }
 
 /** Records a bot's answer by mail: the first, or the one after its post in the thread (`posted`);
@@ -45,7 +46,19 @@ export function recordBotAnswer(
        ON CONFLICT(message_id) DO UPDATE SET outcome = 'answered'`
     )
     .run(messageId)
+  clearBotRequestTake(this, messageId)
   return { posted: before === 'posted' }
+}
+
+/** A request with an outcome is owed nothing more, so the chat that took it no longer holds it. */
+function clearBotRequestTake(db: OrchestrationDb, messageId: string): void {
+  db.db
+    .prepare(
+      `UPDATE bot_requests
+          SET taken_session_id = NULL, taken_by = NULL
+        WHERE message_id = ? AND taken_session_id IS NOT NULL`
+    )
+    .run(messageId)
 }
 
 export function getBotRequestOutcome(

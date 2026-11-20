@@ -37,11 +37,14 @@ export class CheckMailReconciliation {
   private readonly deadline = new AbortController()
   private timer: ReturnType<typeof setTimeout> | undefined
   private readonly host = createStructuredMailboxPointerHost()
+  private tookQuestion = false
 
   constructor(
     private readonly runtime: OrcaRuntimeService,
     private readonly db: OrchestrationDb,
-    private readonly signal?: AbortSignal
+    private readonly signal?: AbortSignal,
+    /** The chat whose turn runs this check: questions it takes are decided at its next rest. */
+    private readonly takerSessionId: string | null = null
   ) {}
 
   dispose(): void {
@@ -130,7 +133,8 @@ export class CheckMailReconciliation {
             this.assertCurrent(args.revalidate)
           }
         }
-        const take = () =>
+        const take = () => this.wakeTaker(transact)
+        const transact = () =>
           runLifecycleWriteTransaction(this.db.db, 'check_reconciled_mail', () => {
             this.assertCurrent(args.revalidate)
             const current = this.db.getStructuredMailSendsForMessages(ids)
@@ -212,6 +216,16 @@ export class CheckMailReconciliation {
     }
   }
 
+  /** Commits a take, then wakes the checking chat's decision: its last rest may already be past. */
+  private wakeTaker<T>(transact: () => T): T {
+    this.tookQuestion = false
+    const result = transact()
+    if (this.tookQuestion && this.takerSessionId) {
+      this.db.botRequestTakenListener?.(this.takerSessionId)
+    }
+    return result
+  }
+
   async takeDirect<T>(args: {
     selected: MessageRow[]
     revalidate: () => void
@@ -222,7 +236,9 @@ export class CheckMailReconciliation {
       ...args,
       direct: true,
       finalize: (messages) => {
-        this.db.markAsRead(messages.map((message) => message.id))
+        const ids = messages.map((message) => message.id)
+        this.db.markAsRead(ids)
+        this.tookQuestion = this.db.noteBotRequestsChecked(ids, this.takerSessionId)
         const response = args.respond(messages)
         args.record?.(response)
         return response
@@ -268,6 +284,10 @@ export class CheckMailReconciliation {
       finalize: (messages) => {
         const batch = this.db.finalizeMailboxDelivery({ ...args.mailbox, claim, messages })
         if (batch) {
+          this.tookQuestion = this.db.noteBotRequestsChecked(
+            batch.messages.map((message) => message.id),
+            this.takerSessionId
+          )
           batch.finalResponse = args.respond(batch)
         }
         if (batch) {

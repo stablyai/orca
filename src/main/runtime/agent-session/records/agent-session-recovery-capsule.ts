@@ -31,7 +31,7 @@ import {
 
 export const AGENT_SESSION_RECOVERY_CAPSULE_FILE = 'agent-session-recovery.json'
 
-type StoredRecords = Pick<RecoveryCapsuleState, 'entries' | 'failed'>
+export type StoredRecords = Pick<RecoveryCapsuleState, 'entries' | 'failed'>
 
 /** Durable, per-session restart offers. Listing never spends an offer. */
 export class AgentSessionRecoveryCapsule {
@@ -41,19 +41,22 @@ export class AgentSessionRecoveryCapsule {
     this.filePath = join(stateDirectory, AGENT_SESSION_RECOVERY_CAPSULE_FILE)
   }
 
+  /** One consistent read of the offers and failures, under the lock. */
+  read<T>(now: number, pick: (records: StoredRecords) => T): Promise<T> {
+    return withFileTransactionLock(this.filePath, async () =>
+      pick(normalizeState(await this.readState(), now))
+    )
+  }
+
   list(now: number): Promise<AgentSessionResumeMarker[]> {
-    return withFileTransactionLock(this.filePath, async () => {
-      const { entries } = normalizeState(await this.readState(), now)
-      return entries.filter((entry) => entry.state === 'pending').map((entry) => entry.marker)
-    })
+    return this.read(now, ({ entries }) =>
+      entries.filter((entry) => entry.state === 'pending').map((entry) => entry.marker)
+    )
   }
 
   /** Read settled failed actions without consuming their records. */
   listFailed(now: number): Promise<AgentSessionResumeFailureRecord[]> {
-    return withFileTransactionLock(
-      this.filePath,
-      async () => normalizeState(await this.readState(), now).failed
-    )
+    return this.read(now, ({ failed }) => failed)
   }
 
   /** Adds fresh teardown witnesses while preserving an action already in progress. */

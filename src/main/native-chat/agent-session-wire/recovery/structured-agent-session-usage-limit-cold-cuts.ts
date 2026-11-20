@@ -29,6 +29,11 @@ export class UsageLimitColdCuts {
     return this.cuts.has(id)
   }
 
+  /** Unopened chats already read to hold a cut. */
+  unopenedWithCuts(): string[] {
+    return [...this.cuts].flatMap(([id, cut]) => (cut && !this.deps.sessions.has(id) ? [id] : []))
+  }
+
   async read(id: string, cold = false): Promise<HostUsageLimitCut | null> {
     if (this.deps.sessions.has(id)) {
       this.cuts.delete(id)

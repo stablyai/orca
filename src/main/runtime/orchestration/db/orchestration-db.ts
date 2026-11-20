@@ -46,6 +46,8 @@ class OrchestrationDbCore {
   crewDispatchNotice: ((dispatchId: string | null, change: DispatchRowChange) => void) | undefined
   /** Told of the creating chat session whenever one of its Dispatches or workers is written. */
   sessionWorkersListener: ((sessionId: string) => void) | undefined
+  /** Told of the chat that took an agent question whole, once the take has committed. */
+  botRequestTakenListener: ((sessionId: string) => void) | undefined
   /** Told when a paired server's answer for these Dispatches' workers changed; no row was written. */
   federatedWorkersListener: ((dispatchIds: readonly string[]) => void) | undefined
   private closed = false

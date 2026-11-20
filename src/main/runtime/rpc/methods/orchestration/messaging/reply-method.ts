@@ -1,4 +1,5 @@
 import { acceptedAnswerSender } from '../../../../orchestration/mailbox/senders/accepted-answer-sender'
+import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import { resolveTerminalAgentRecipient } from './session-recipient'
 import { answerSenderRelayReport } from '../../../../orchestration/mailbox/senders/answer-sender-relay-report'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
@@ -161,21 +162,25 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       terminalRecipient
     })
     const replyFrom = params.from ?? original.to_handle
-    const reply = db.insertMessage({
-      from: replyFrom,
-      senderDispatchId: db.getActiveDispatchForIdentity(
-        replyFrom,
-        runtime.getTerminalPaneKey(replyFrom) ?? undefined
-      )?.id,
-      to: recipient.to,
-      subject: `Re: ${original.subject}`,
-      body: params.body,
-      threadId: original.thread_id ?? original.id,
-      runId: recipient.runId,
-      // Refuses a second answer to a bot request, before the original is marked read.
-      payload: botAnswerPayload(db, original)
+    // An answer and its mail commit together, so a crash can't keep only one.
+    const reply = runLifecycleWriteTransaction(db.db, 'reply_message', () => {
+      const stored = db.insertMessage({
+        from: replyFrom,
+        senderDispatchId: db.getActiveDispatchForIdentity(
+          replyFrom,
+          runtime.getTerminalPaneKey(replyFrom) ?? undefined
+        )?.id,
+        to: recipient.to,
+        subject: `Re: ${original.subject}`,
+        body: params.body,
+        threadId: original.thread_id ?? original.id,
+        runId: recipient.runId,
+        // Refuses a second answer, before the original is marked read.
+        payload: botAnswerPayload(db, original)
+      })
+      db.markAsRead([original.id])
+      return stored
     })
-    db.markAsRead([original.id])
 
     const receipt = {
       message: exposeMessage(reply),

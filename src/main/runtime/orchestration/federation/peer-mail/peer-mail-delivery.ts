@@ -149,6 +149,8 @@ export async function deliverPeerMail(
     item?: string
     attachments?: readonly string[]
     sender: PeerMailSender
+    /** The same send from the same turn here, so the receiver refuses it twice. */
+    sendKey?: string
   }
 ): Promise<void> {
   await runtime.callOrchestrationWorkerServer(
@@ -167,7 +169,9 @@ export async function deliverPeerMail(
       ...(message.chat ? { chat: message.chat } : {}),
       ...(message.item ? { item: message.item } : {}),
       ...(message.attachments?.length ? { attachments: message.attachments } : {}),
-      sender: message.sender
+      sender: message.sender,
+      questionNotice: 'once',
+      ...(message.sendKey ? { sendKey: message.sendKey } : {})
     },
     DELIVER_TIMEOUT_MS,
     undefined,

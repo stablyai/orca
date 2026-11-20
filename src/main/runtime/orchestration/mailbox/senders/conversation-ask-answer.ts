@@ -5,7 +5,7 @@ import type { MessageRow } from '../../db/orchestration-records'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { isOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 
-/** The request a reply answers: its answer payload names it, else its thread is it. */
+/** The request a reply answers: its answer or notice payload names it, else its thread is it. */
 function answeredRequestId(
   message: Pick<MessageRow, 'payload'> & { thread_id?: string | null }
 ): string | null {
@@ -15,7 +15,7 @@ function answeredRequestId(
       if (
         typeof payload === 'object' &&
         payload !== null &&
-        'botAnswer' in payload &&
+        ('botAnswer' in payload || 'botRequestNotice' in payload) &&
         'requestId' in payload &&
         typeof payload.requestId === 'string'
       ) {

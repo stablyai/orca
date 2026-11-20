@@ -57,6 +57,8 @@ export function botStructuredSessionWiring(deps: {
   lookAround: Pick<BotLookAroundStore, 'botOfLook' | 'botOfTidyUp' | 'lookTurnIsQuiet'>
   /** A turn ended: one that worked on another bot's request and left it unanswered tells that bot. */
   requestTurnEnded?: (sessionId: string, ended?: TurnEndedVerdict) => void
+  /** A chat may have come to rest: agent questions it took are decided then. */
+  requestRested?: (sessionId: string) => void
   /** The bots the host holds when this is installed; none when it has no store yet. */
   botsAtInstall?: readonly Bot[]
   /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
@@ -298,7 +300,8 @@ export function botStructuredSessionWiring(deps: {
         deps.work.turnEnded(sessionId)
         deps.requestTurnEnded?.(sessionId, ended)
         turnContext.turnEnded?.(sessionId, turnId, readItems, writeNote)
-      }
+      },
+      rested: (sessionId) => deps.requestRested?.(sessionId)
     },
     // A look reads through its allow-list; a tidy-up only replies, its new memory in its reply.
     readOnlySession: (sessionId) =>

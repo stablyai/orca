@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { dropUnreadBotRequests } from './bot-request-outcome'
+import { reconcileBotRequestTakesAtStartup } from './bot-request-take-reconcile'
 import { installSenderHost, removeSenderHost } from './bot-request-sender-host.test-fixture'
 
 const SENDER_ID = '11111111-1111-4111-8111-111111111111'
@@ -16,6 +17,8 @@ describe('a dropped bot request tells its sender', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the drop path reads only these members.
     return {
       getOrchestrationDb: () => db,
+      getOpenOrchestrationDb: () => db,
+      getExistingOrchestrationDb: () => db,
       notifyMessageArrived: () => {},
       getLiveTerminalPaneKey: () => null,
       ensureStructuredAgentSessionHost: async () => install()
@@ -69,14 +72,13 @@ describe('a dropped bot request tells its sender', () => {
     expect(db.listUnreadBotRequests('receiver')).toHaveLength(0)
   })
 
-  it('keeps the request when its sender cannot be verified yet, and tells it once it can', async () => {
+  it('keeps the request owed when its sender cannot be verified yet, and tells it at the next start', async () => {
     await dropUnreadBotRequests(runtime(), 'receiver', 'paused')
     expect(notices()).toHaveLength(0)
     expect(db.getBotRequestOutcome(requestId)).toBeNull()
-    expect(db.listUnreadBotRequests('receiver')).toHaveLength(1)
 
     install = () => installSenderHost([SENDER_ID])
-    await dropUnreadBotRequests(runtime(), 'receiver', 'paused')
+    await reconcileBotRequestTakesAtStartup(runtime(), null)
     expect(notices()).toHaveLength(1)
     expect(db.getBotRequestOutcome(requestId)).toBe('dropped')
   })

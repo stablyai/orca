@@ -38,6 +38,8 @@ export type SessionRecipientRefusal = {
   message: string
   /** Set by the reach check alone, so a chat list can say why without parsing the message. */
   unreachable?: SessionRecipientUnreachable
+  /** Not provable now, though a later read may reach it: a /clear successor not readable yet. */
+  transient?: true
 }
 
 /** Whether a recipient may name a session, so the caller can install the session host first. */
@@ -195,7 +197,8 @@ function refuseUnreachableSessionRecipient(
     return {
       code: CODES.notLive,
       message: `The session continuing agent session ${sessionId} after a /clear cannot be verified: ${reached.reason} ${noEffect}`,
-      unreachable: 'unverifiable'
+      unreachable: 'unverifiable',
+      transient: true
     }
   }
   if (reached.kind === 'ended') {
