@@ -239,12 +239,16 @@ function CommentLine({
   return (
     // A message, so a row gap below what the note drew above it, not the lines' 3 pt.
     <View style={[messageStyles.userBubble, styles.comment, belowAnother && styles.belowAnother]}>
-      <View style={styles.commentOn}>
-        <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
-        <Text style={[styles.text, scaledType(typography.metaSize, fontScale)]}>
-          {t('bots.items.chat.commentOn', 'On')}
-        </Text>
-        <ItemChip item={line.item} fontScale={fontScale} open={open} />
+      {/* The chip's line, laid over a box of its height that adds no width: the words alone size the
+          bubble, and a long title cuts short to them instead of stretching it. */}
+      <View style={{ height: CHIP_HEIGHT * fontScale }}>
+        <View style={styles.commentOn}>
+          <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
+          <Text style={[styles.text, scaledType(typography.metaSize, fontScale)]}>
+            {t('bots.items.chat.commentOn', 'On')}
+          </Text>
+          <ItemChip item={line.item} fontScale={fontScale} open={open} />
+        </View>
       </View>
       <Prose block={{ type: 'text', text }} text={text} userMessage fontScale={fontScale} />
     </View>
@@ -377,11 +381,17 @@ const styles = themedStyleSheet(() => ({
   },
   comment: {
     alignSelf: 'flex-end',
-    gap: spacing.xs
+    minWidth: 200,
+    gap: 6
   },
   // With the lines' gap, the 12 pt a note row (4) and a message row (8) leave between them.
   belowAnother: { marginTop: spacing.md - MOBILE_NATIVE_CHAT_ACTIVITY_ROW_GAP },
   commentOn: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6
