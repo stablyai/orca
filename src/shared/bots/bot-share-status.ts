@@ -57,12 +57,12 @@ export function botShareStatusOf(shares: readonly BotOwnedShare[], botId: string
     : { shared: false }
 }
 
-/** Whether the link is this bot's package; a link the list no longer shows counts as its own. */
+/** Whether the list confirms the link serves this bot's package. */
 export function shareServesBot(
   shares: readonly BotOwnedShare[],
   shareId: string,
   botId: string
 ): boolean {
   const name = shares.find((share) => share.id === shareId)?.name
-  return name === undefined || name === botPackageName(botId)
+  return name === botPackageName(botId)
 }

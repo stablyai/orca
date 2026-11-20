@@ -3,7 +3,7 @@ import { shareServesBot } from '../../../shared/bots/bot-share-status'
 import type { SkillCloudOperation } from '../../../shared/skills/sharing/skill-cloud-contract'
 import type { BotSharePicksStore } from './bot-share-picks-store'
 
-/** Revokes the link; the named bot's picks go too, unless the list shows the link is another bot's. */
+/** Revokes the link; forgets picks only when the list confirms the named bot owns it. */
 export async function stopBotShare(
   deps: {
     client: {
@@ -17,7 +17,7 @@ export async function stopBotShare(
 ): Promise<SkillCloudOperation<boolean>> {
   const shares = botId ? await deps.client.listShares().catch(() => null) : null
   const stopped = await deps.client.revokeShare(shareId)
-  const own = shares?.status !== 'ok' || shareServesBot(shares.value, shareId, botId ?? '')
+  const own = shares?.status === 'ok' && shareServesBot(shares.value, shareId, botId ?? '')
   if (stopped.status === 'ok' && botId && own) {
     await deps.picks?.forget(botId).catch(() => undefined)
   }
