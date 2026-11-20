@@ -170,6 +170,30 @@ describe('ACP launch: standing instructions', () => {
     expect(await readFile(join(source, 'AGENTS.md'), 'utf8')).toBe('Mine.\n')
   })
 
+  it("keeps a lowercase-named global agents.md of the user's out of the generated file's write path", async () => {
+    const source = join(dataDirectory, 'opencode-lowercase-agents')
+    await mkdir(source, { recursive: true })
+    await writeFile(join(source, 'agents.md'), 'Mine.\n')
+    const resolved = await launch('opencode', {
+      instructions: PREAMBLE,
+      version: '2.0.14',
+      launchEnv: { OPENCODE_CONFIG_DIR: source }
+    })
+    const configDir = resolved.env.OPENCODE_CONFIG_DIR ?? ''
+    expect(await readFile(join(source, 'agents.md'), 'utf8')).toBe('Mine.\n')
+    const foldsCase = await readFile(join(source, 'AGENTS.md'), 'utf8').then(
+      () => true,
+      () => false
+    )
+    expect(await readFile(join(configDir, 'AGENTS.md'), 'utf8')).toBe(
+      `${foldsCase ? 'Mine.\n\n' : ''}${PREAMBLE}\n`
+    )
+    expect((await lstat(join(configDir, 'AGENTS.md'))).isSymbolicLink()).toBe(false)
+    expect((await readdir(configDir)).sort()).toEqual(
+      foldsCase ? ['AGENTS.md'] : ['AGENTS.md', 'agents.md']
+    )
+  })
+
   it('writes only the preamble when the explicitly configured OpenCode folder is missing', async () => {
     const xdg = join(dataDirectory, 'other-opencode-xdg')
     await mkdir(join(xdg, 'opencode'), { recursive: true })
