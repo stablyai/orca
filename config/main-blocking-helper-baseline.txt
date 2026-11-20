@@ -683,7 +683,7 @@
 2 src/main/ipc/session.ts
 3 src/main/ipc/settings/settings.ts
 3 src/main/ipc/shell/shell.ts
-5 src/main/ipc/source-control/hosted-review.ts
+2 src/main/ipc/source-control/hosted-review.ts
 3 src/main/ipc/ssh/plain-ssh-terminal-handlers.ts
 2 src/main/ipc/ssh/ssh-connection-handlers.ts
 2 src/main/ipc/ssh/ssh-host-server-on-connect-wiring.ts
@@ -1471,8 +1471,6 @@
 2 src/main/workspaces/catalog/provisioned-root-ssh-adoption.ts
 2 src/main/workspaces/catalog/repo-worktree-catalog-owner.ts
 1 src/main/workspaces/cleanup/chat-history/deleted-workspace-chat-history.ts
-4 src/main/workspaces/cleanup/workspace-cleanup-removal-step.ts # folder workspace group (#44715): decideWorkspaceCleanups wraps the per-workspace decision; same orca.yaml read, now also for folder siblings in the re-check
-2 src/main/workspaces/cleanup/workspace-cleanup-runner.ts
 3 src/main/workspaces/creation/preparation/worktree-create-preparation-pool.ts
 2 src/main/workspaces/creation/preparation/worktree-create-preparation-stale-cleanup.ts
 2 src/main/workspaces/creation/preparation/worktree-create-preparation.ts
