@@ -26,6 +26,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
+  const manuallyUnreadTurnsByPaneKey = useAppStore((s) => s.manuallyUnreadTurnsByPaneKey)
   const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
   const prCache = useAppStore((s) => s.prCache)
   // Why: controls idle visibility and gates generated conversation names.
@@ -75,6 +76,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           ptyIdsByTabId,
           runtimePaneTitlesByTabId,
           acknowledgedAgentsByPaneKey,
+          manuallyUnreadTurnsByPaneKey,
           hostedReviewCache,
           prCache,
           settings,
@@ -110,6 +112,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       ptyIdsByTabId,
       runtimePaneTitlesByTabId,
       acknowledgedAgentsByPaneKey,
+      manuallyUnreadTurnsByPaneKey,
       hostedReviewCache,
       prCache,
       settings,

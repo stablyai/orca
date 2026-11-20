@@ -151,7 +151,7 @@ export function buildMirroredAgentStatusPatch(
           }
         : entry
     // The host owns the launch fact whichever writer wins presentation.
-    const accepted =
+    let accepted =
       nextEntry === entry
         ? entry
         : withHostOrcaSessionId(
@@ -163,6 +163,17 @@ export function buildMirroredAgentStatusPatch(
             },
             entry
           )
+    if (accepted.lastCompletionAt === undefined) {
+      const lastCompletionAt =
+        accepted.state === 'done' && accepted.sessionBoundary !== true
+          ? (agentEntryCompletionAt(accepted) ?? existing?.lastCompletionAt ?? 0)
+          : (existing?.lastCompletionAt ??
+            (existing
+              ? agentEntryCompletionAt({ ...existing, state: 'done', sessionBoundary: true })
+              : null) ??
+            0)
+      accepted = { ...accepted, lastCompletionAt }
+    }
     const source = { ...accepted, isReplay: true }
     const conversation = classifyAgentPaneConversation(
       state,

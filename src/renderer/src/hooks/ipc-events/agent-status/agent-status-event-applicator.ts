@@ -28,6 +28,7 @@ import {
 } from './agent-status-pane-routing-index'
 import {
   normalizeAgentStatusEvent,
+  normalizeAgentStatusTiming,
   normalizeAgentStatusMetadata
 } from './normalize-agent-status-event'
 import {
@@ -212,7 +213,6 @@ export function createAgentStatusEventApplicator(
     const statusPayloadWithObservation = data.observation
       ? { ...statusPayloadWithProvenance, observation: data.observation }
       : statusPayloadWithProvenance
-    // Why null: main stitches the pane's current facet onto every publish, so absence means cleared.
     const statusPayloadWithProgramStatus = {
       ...statusPayloadWithObservation,
       programStatus,
@@ -233,16 +233,7 @@ export function createAgentStatusEventApplicator(
       paneKey,
       payload: statusPayloadWithProgramStatus,
       terminalTitle,
-      timing: {
-        updatedAt: data.receivedAt,
-        isReplay: data.isReplay,
-        ...(data.evidenceObservedAt !== undefined
-          ? { evidenceObservedAt: data.evidenceObservedAt }
-          : {}),
-        stateStartedAt: data.stateStartedAt,
-        ...(Number.isFinite(data.turnStartedAt) ? { turnStartedAt: data.turnStartedAt } : {}),
-        ...pickHostTurnEnd(data)
-      },
+      timing: normalizeAgentStatusTiming(data),
       routing: {
         tabId: ownerTabId,
         worktreeId: statusWorktreeId,

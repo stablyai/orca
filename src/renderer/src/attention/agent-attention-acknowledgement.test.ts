@@ -17,12 +17,39 @@ describe('isAgentSubjectUnread', () => {
       read({
         state: 'done',
         sessionBoundary: true,
+        lastCompletionAt: 1_000,
         stateStartedAt: 5_000,
         stateHistory: [done(1_000)]
       })
     ).toBe(false)
     expect(
       read({ state: 'done', stateStartedAt: 9_000, stateHistory: [done(1_000), working(7_000)] })
+    ).toBe(true)
+    expect(
+      read({
+        state: 'done',
+        sessionBoundary: true,
+        lastCompletionAt: 1_000,
+        stateStartedAt: 5_000,
+        stateHistory: [done(1_000), working(3_000)]
+      })
+    ).toBe(false)
+    expect(
+      isAgentSubjectUnread(
+        {
+          liveTurns: {
+            pane: {
+              state: 'done',
+              sessionBoundary: true,
+              lastCompletionAt: 3_000,
+              stateStartedAt: 5_000,
+              stateHistory: []
+            }
+          },
+          acknowledgedTurnStartedAt: { pane: 2_000 }
+        },
+        'pane'
+      )
     ).toBe(true)
   })
 })

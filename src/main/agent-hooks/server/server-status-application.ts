@@ -163,7 +163,10 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         incomingPromptInteractionKey: payload.promptInteractionKey
       })
     const stateStartedAt =
-      previousTurn && previousTurn.payload.state === payload.payload.state && !commandCodeNewTurn
+      previousTurn &&
+      previousTurn.payload.state === payload.payload.state &&
+      !commandCodeNewTurn &&
+      !(previousTurn.payload.sessionBoundary === true && payload.payload.sessionBoundary !== true)
         ? previousTurn.stateStartedAt
         : (observedAt ?? now)
     const turnStartedAt = resolveTurnStartedAt(previousTurn, payload, observedAt ?? now)

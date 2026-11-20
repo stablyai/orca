@@ -9,6 +9,10 @@ import {
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 import { drawTabsFromMain } from '../tabs/tabs-drawn-from-main.test-fixture'
+import {
+  isAgentSubjectUnread,
+  computeLapsedManualUnreadProtections
+} from '@/attention/agent-attention-acknowledgement'
 
 vi.mock('@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()
@@ -45,6 +49,79 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+it('retains read and manual-unread intent when session boundaries replace work or an empty session', () => {
+  const store = createTestStore()
+  const publish = (state: 'working' | 'done', at: number, boundary = false) =>
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state, prompt: '', agentType: 'codex', sessionBoundary: boundary },
+        undefined,
+        { updatedAt: at, stateStartedAt: at }
+      )
+  const unread = () => {
+    const s = store.getState()
+    return isAgentSubjectUnread(
+      {
+        liveTurns: s.agentStatusByPaneKey,
+        acknowledgedTurnStartedAt: s.acknowledgedAgentsByPaneKey,
+        manuallyUnreadTurnStartedAt: s.manuallyUnreadTurnsByPaneKey
+      },
+      'tab-1:1'
+    )
+  }
+  publish('done', 1_000)
+  store.setState({ acknowledgedAgentsByPaneKey: { 'tab-1:1': 2_000 } })
+  publish('working', 3_000)
+  publish('done', 5_000, true)
+  expect(unread()).toBe(false)
+  store.setState({
+    acknowledgedAgentsByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: { 'tab-1:1': 5_000 }
+  })
+  expect(unread()).toBe(true)
+  expect(
+    computeLapsedManualUnreadProtections(
+      {
+        liveTurns: store.getState().agentStatusByPaneKey,
+        manuallyUnreadTurnStartedAt: store.getState().manuallyUnreadTurnsByPaneKey
+      },
+      new Set(['tab-1:1'])
+    )
+  ).toEqual([])
+  publish('done', 6_000, true)
+  expect(unread()).toBe(true)
+  publish('done', 7_000)
+  expect(
+    computeLapsedManualUnreadProtections(
+      {
+        liveTurns: store.getState().agentStatusByPaneKey,
+        manuallyUnreadTurnStartedAt: store.getState().manuallyUnreadTurnsByPaneKey
+      },
+      new Set(['tab-1:1'])
+    )
+  ).toEqual(['tab-1:1'])
+  const empty = createTestStore()
+  empty
+    .getState()
+    .setAgentStatus('empty:1', { state: 'done', sessionBoundary: true, prompt: '' }, undefined, {
+      updatedAt: 8_000,
+      stateStartedAt: 8_000
+    })
+  empty.getState().unacknowledgeAgents(['empty:1'])
+  expect(
+    isAgentSubjectUnread(
+      {
+        liveTurns: empty.getState().agentStatusByPaneKey,
+        acknowledgedTurnStartedAt: {},
+        manuallyUnreadTurnStartedAt: empty.getState().manuallyUnreadTurnsByPaneKey
+      },
+      'empty:1'
+    )
+  ).toBe(true)
 })
 
 {

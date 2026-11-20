@@ -24,7 +24,8 @@ import {
 } from './agent-auto-ack-surfaces'
 import {
   computeAgentAcknowledgementTargets,
-  computeLapsedManualUnreadProtections
+  computeLapsedManualUnreadProtections,
+  isAgentManualUnreadTurn
 } from '@/attention/agent-attention-acknowledgement'
 import {
   isWorkspaceFlagSet,
@@ -33,6 +34,7 @@ import {
 import { paneKeyTabId } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
 import type { ClientWorkspaceViewReporter } from './client-workspace-view-report'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 
 type ScanStore = {
   getState: () => AppState
@@ -79,6 +81,8 @@ export function startOnScreenAttentionScan(
   let lastGroupLayouts: unknown = undefined
   let lastAgentStatus: unknown = undefined
   let lastAcknowledged: unknown = undefined
+  let lastManualMarks: AppState['manuallyUnreadTurnsByPaneKey'] | undefined
+  const protectedManualSubjects = new Map<string, number>()
   let lastLayouts: unknown = undefined
   let lastUnreadTerminalTabs: unknown = undefined
   let lastUnreadTerminalPanes: unknown = undefined
@@ -121,6 +125,7 @@ export function startOnScreenAttentionScan(
       s.layoutByWorktree === lastGroupLayouts &&
       s.agentStatusByPaneKey === lastAgentStatus &&
       s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
+      s.manuallyUnreadTurnsByPaneKey === lastManualMarks &&
       s.terminalLayoutsByTabId === lastLayouts &&
       s.unreadTerminalTabs === lastUnreadTerminalTabs &&
       s.unreadTerminalPanes === lastUnreadTerminalPanes &&
@@ -139,6 +144,27 @@ export function startOnScreenAttentionScan(
     lastGroupLayouts = s.layoutByWorktree
     lastAgentStatus = s.agentStatusByPaneKey
     lastAcknowledged = s.acknowledgedAgentsByPaneKey
+    if (s.manuallyUnreadTurnsByPaneKey !== lastManualMarks) {
+      const changes = lastManualMarks
+        ? readRecordChanges(s.manuallyUnreadTurnsByPaneKey, lastManualMarks)
+        : null
+      const keys =
+        changes?.kind === 'addressed'
+          ? changes.keys
+          : new Set([
+              ...protectedManualSubjects.keys(),
+              ...Object.keys(s.manuallyUnreadTurnsByPaneKey)
+            ])
+      for (const key of keys) {
+        const mark = s.manuallyUnreadTurnsByPaneKey[key]
+        if (mark === undefined) {
+          protectedManualSubjects.delete(key)
+        } else {
+          protectedManualSubjects.set(key, mark)
+        }
+      }
+      lastManualMarks = s.manuallyUnreadTurnsByPaneKey
+    }
     lastLayouts = s.terminalLayoutsByTabId
     lastUnreadTerminalTabs = s.unreadTerminalTabs
     lastUnreadTerminalPanes = s.unreadTerminalPanes
@@ -215,12 +241,22 @@ export function startOnScreenAttentionScan(
       const lapsedProtections = computeLapsedManualUnreadProtections(
         {
           liveTurns: s.agentStatusByPaneKey,
-          manuallyUnreadTurnStartedAt: s.manuallyUnreadTurnsByPaneKey
+          manuallyUnreadTurnStartedAt: protectedManualSubjects
         },
         activeSubjectKeys
       )
       if (lapsedProtections.length > 0) {
-        s.clearManuallyUnreadTurns(lapsedProtections)
+        const expired: string[] = []
+        for (const key of lapsedProtections) {
+          protectedManualSubjects.delete(key)
+          const entry = s.agentStatusByPaneKey.get(key)
+          if (entry && !isAgentManualUnreadTurn(entry, s.manuallyUnreadTurnsByPaneKey[key])) {
+            expired.push(key)
+          }
+        }
+        if (expired.length > 0) {
+          s.clearManuallyUnreadTurns(expired)
+        }
       }
     }
 
@@ -229,6 +265,7 @@ export function startOnScreenAttentionScan(
       // Reread after each acknowledgement: synchronous store re-entry may already have handled later targets.
       acknowledgeViewedAutoAckTarget(store.getState(), target, {
         reads,
+        protectedManualSubjects,
         readViewed: options?.force
       })
     }

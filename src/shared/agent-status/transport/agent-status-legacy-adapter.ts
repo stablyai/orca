@@ -1,4 +1,5 @@
 import type { AgentHookEventPayload } from '../../agent-hook-listener/listener-event'
+import { retainAgentLastCompletionAt } from '../lifecycle/agent-last-completion'
 import {
   deserializeAgentStatusCapabilities,
   hasAgentStatusRunCapability
@@ -176,6 +177,7 @@ export function createAgentStatusLegacyAdapter(
         listingOrderByPaneKey.set(entry.paneKey, order)
       }
       if (!Object.isFrozen(entry)) {
+        entry.lastCompletionAt = retainAgentLastCompletionAt(entry, entries.get(entry.paneKey))
         options.prepareRow?.(entry, entries.get(entry.paneKey))
       }
       freezeStatusEntry(entry)

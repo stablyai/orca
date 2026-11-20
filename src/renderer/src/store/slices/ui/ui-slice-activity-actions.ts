@@ -1,6 +1,5 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
-import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
 import { linkRecordWrite } from '@/store/record-transitions/keyed-record-transitions'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
@@ -98,7 +97,15 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
               }
             : {}),
           ...(nextUnreadCompletions ? { unreadAgentCompletionPanes: nextUnreadCompletions } : {}),
-          ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
+          ...(nextManual
+            ? {
+                manuallyUnreadTurnsByPaneKey: linkRecordWrite(
+                  nextManual,
+                  s.manuallyUnreadTurnsByPaneKey,
+                  paneKeys
+                )
+              }
+            : {})
         }
       })
       // Dismiss main’s announced subjects; rebuilt IDs cover restart-empty notification records.
@@ -119,7 +126,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             delete next[key]
           }
           const liveEntry = s.agentStatusByPaneKey.get(key)
-          const turnTimestamp = liveEntry ? agentAttentionTurnAt(liveEntry) : undefined
+          const turnTimestamp = liveEntry?.stateStartedAt
           if (
             turnTimestamp !== undefined &&
             s.manuallyUnreadTurnsByPaneKey[key] !== turnTimestamp
@@ -142,7 +149,15 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
                 )
               }
             : {}),
-          ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
+          ...(nextManual
+            ? {
+                manuallyUnreadTurnsByPaneKey: linkRecordWrite(
+                  nextManual,
+                  s.manuallyUnreadTurnsByPaneKey,
+                  paneKeys
+                )
+              }
+            : {})
         }
       }),
     manuallyUnreadTurnsByPaneKey: {},
@@ -155,7 +170,15 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             delete next[key]
           }
         }
-        return next ? { manuallyUnreadTurnsByPaneKey: next } : s
+        return next
+          ? {
+              manuallyUnreadTurnsByPaneKey: linkRecordWrite(
+                next,
+                s.manuallyUnreadTurnsByPaneKey,
+                paneKeys
+              )
+            }
+          : s
       }),
     activityClearedAtByPaneKey: {},
     applyActivityClearedAt: (patch) =>

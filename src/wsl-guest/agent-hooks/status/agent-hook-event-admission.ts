@@ -124,10 +124,12 @@ export function applyRelayHookEvent(
     turnEndedAt: _turnEndedAt,
     turnEndDisposition: _turnEndDisposition,
     hostTurn: _hostTurn,
+    lastCompletionAt: _lastCompletionAt,
     ...unflagged
   } = revised
   const event: AgentHookEventPayload = {
     ...unflagged,
+    ...(options.isReplay ? { lastCompletionAt: revised.lastCompletionAt } : {}),
     ...reduceHostTurnEnd(
       previousCodexTurnContext(previous, revised),
       revised,

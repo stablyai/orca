@@ -129,6 +129,9 @@ export function buildDashboardSnapshotCard(args: {
     stateChangedAt: row.entry.stateStartedAt || row.startedAt,
     statusUpdatedAt: row.entry.updatedAt,
     unseen,
+    sessionBoundary: row.entry.sessionBoundary,
+    acknowledgedAt: state.acknowledgedAgentsByPaneKey[row.paneKey] ?? 0,
+    manuallyUnreadAt: state.manuallyUnreadTurnsByPaneKey?.[row.paneKey],
     askSummary:
       bucket === 'attention'
         ? interactivePromptLabel(

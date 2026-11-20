@@ -55,6 +55,7 @@ export function buildRelayHookEnvelope(
     ...(event.providerSessionOnly ? { providerSessionOnly: true } : {}),
     isReplay: options.isReplay === true ? true : undefined,
     ...pickHostTurnEnd(event),
+    lastCompletionAt: event.lastCompletionAt,
     env,
     version,
     payload: event.payload

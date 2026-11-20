@@ -29,6 +29,7 @@ export type AllAgentPaneThreadsStoreData = Pick<
   | 'detectedWorktreesByRepo'
   | 'getKnownWorktreeById'
   | 'acknowledgedAgentsByPaneKey'
+  | 'manuallyUnreadTurnsByPaneKey'
   | 'activityClearedAtByPaneKey'
   | 'acknowledgeAgents'
   | 'unacknowledgeAgents'
@@ -91,6 +92,7 @@ export function selectAllAgentPaneThreadStoreData(s: AppState): AllAgentPaneThre
     worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(s)),
     repoMap: getIndexedRepoMap(s.repos),
     acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
+    manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey,
     activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
     acknowledgeAgents: s.acknowledgeAgents,
     unacknowledgeAgents: s.unacknowledgeAgents,

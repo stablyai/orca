@@ -10,7 +10,10 @@ import {
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { dashboardBucketForDotState } from '../../dashboard/snapshot/dashboard-card-bucket'
 import { dashboardCardDotState } from '../../dashboard/rows/dashboard-row-bucket'
-import { isAgentTurnUnacknowledged } from '@/attention/agent-attention-acknowledgement'
+import {
+  isAgentManualUnreadTurn,
+  isAgentTurnUnacknowledged
+} from '@/attention/agent-attention-acknowledgement'
 
 export type DashboardAgentStatusPatchResult = {
   matched: boolean
@@ -50,11 +53,23 @@ export function patchDashboardSnapshotFromAgentStatus(
     return { matched: true, snapshot }
   }
 
-  const stateChanged = event.stateStartedAt > card.stateChangedAt
   const restatesTurn = event.state === 'done' && event.sessionBoundary === true
-  // Why ack 0: the event is a live turn and the pop-out holds no acks; the next snapshot has them.
+  const resolvesBoundary = card.sessionBoundary === true && event.state === 'done' && !restatesTurn
+  const stateStartedAt = resolvesBoundary
+    ? Math.max(event.stateStartedAt, event.receivedAt)
+    : event.stateStartedAt
+  const stateChanged = stateStartedAt > card.stateChangedAt || resolvesBoundary
+  const manuallyUnreadAt =
+    restatesTurn && card.manuallyUnreadAt === card.stateChangedAt
+      ? stateStartedAt
+      : card.manuallyUnreadAt
   const unseen =
-    stateChanged && !restatesTurn ? isAgentTurnUnacknowledged(0, event.stateStartedAt) : card.unseen
+    isAgentManualUnreadTurn({ ...event, stateStartedAt }, manuallyUnreadAt) ||
+    (restatesTurn && card.acknowledgedAt !== undefined && event.lastCompletionAt !== undefined
+      ? isAgentTurnUnacknowledged(card.acknowledgedAt, event.lastCompletionAt)
+      : stateChanged && !restatesTurn
+        ? isAgentTurnUnacknowledged(card.acknowledgedAt ?? 0, stateStartedAt)
+        : card.unseen)
   const dotState = event.state
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
@@ -76,10 +91,16 @@ export function patchDashboardSnapshotFromAgentStatus(
     verdict: agentVerdictDisplayMark(event) ?? undefined,
     workingMode,
     unseen,
-    stateChangedAt: stateChanged ? event.stateStartedAt : card.stateChangedAt,
+    sessionBoundary: restatesTurn,
+    manuallyUnreadAt: stateChanged && !restatesTurn ? undefined : manuallyUnreadAt,
+    stateChangedAt: stateChanged ? stateStartedAt : card.stateChangedAt,
     statusUpdatedAt: event.receivedAt,
     finishedAt:
-      dotState === 'done' && stateChanged && !restatesTurn ? event.stateStartedAt : card.finishedAt,
+      restatesTurn && event.lastCompletionAt !== undefined
+        ? event.lastCompletionAt || null
+        : dotState === 'done' && stateChanged
+          ? stateStartedAt
+          : card.finishedAt,
     askSummary:
       bucket === 'attention'
         ? event.interactivePrompt !== undefined

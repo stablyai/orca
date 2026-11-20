@@ -9,11 +9,17 @@ import type {
   ActivityLiveAgentSnapshot,
   AgentPaneThread
 } from './activity-thread-types'
+import {
+  isAgentSubjectUnread,
+  isAgentSubjectManuallyUnread,
+  type AgentAttentionTurnRecords
+} from '@/attention/agent-attention-acknowledgement'
 
 type PaneThreadInputs = {
   events: readonly ActivityEvent[]
   live: ActivityLiveAgentSnapshot | undefined
   paneEntry: AgentStatusEntry | undefined
+  turnUnread: boolean
 }
 
 /** Reuse unchanged thread objects and list identity so memoized rows/search caches survive unrelated store writes. */
@@ -72,7 +78,7 @@ function reuseThreadIfEqual(
 /** One pane's thread from its events (newest first) and live turn. */
 function buildPaneThread(
   paneKey: string,
-  { events, live, paneEntry }: PaneThreadInputs,
+  { events, live, paneEntry, turnUnread }: PaneThreadInputs,
   generatedTitlesEnabled: boolean
 ): AgentPaneThread {
   let thread: AgentPaneThread | undefined
@@ -153,6 +159,7 @@ function buildPaneThread(
   }
   // Every listed pane has an event or a live turn.
   const built = thread!
+  built.unread ||= turnUnread
   return { ...built, events: [...built.events].sort((a, b) => b.observedAt - a.observedAt) }
 }
 
@@ -162,6 +169,7 @@ export function buildAgentPaneThreads(
     liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
     paneEntryByPaneKey?: Record<string, AgentStatusEntry>
     generatedTitlesEnabled?: boolean
+    turnRecords?: AgentAttentionTurnRecords
   },
   reuseCache?: AgentPaneThreadReuseCache
 ): AgentPaneThread[] {
@@ -193,7 +201,12 @@ export function buildAgentPaneThreads(
         live: Object.hasOwn(args.liveAgentByPaneKey, paneKey)
           ? args.liveAgentByPaneKey[paneKey]
           : undefined,
-        paneEntry: args.paneEntryByPaneKey?.[paneKey]
+        paneEntry: args.paneEntryByPaneKey?.[paneKey],
+        turnUnread: args.turnRecords
+          ? args.paneEntryByPaneKey?.[paneKey]?.sessionBoundary === true
+            ? isAgentSubjectUnread(args.turnRecords, paneKey)
+            : isAgentSubjectManuallyUnread(args.turnRecords, paneKey)
+          : false
       }
       const previous = reuseCache?.previousByPaneKey.get(paneKey)
       const thread =
@@ -201,6 +214,7 @@ export function buildAgentPaneThreads(
         previous !== undefined &&
         previous.live === inputs.live &&
         previous.paneEntry === inputs.paneEntry &&
+        previous.turnUnread === inputs.turnUnread &&
         arrayItemsEqual(previous.events, inputs.events)
           ? previous.thread
           : reuseThreadIfEqual(

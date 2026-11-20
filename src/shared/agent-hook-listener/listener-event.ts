@@ -16,6 +16,8 @@ export type HostTurnRecord = {
 }
 
 export type AgentHookEventPayload = {
+  /** Latest real result on this pane; zero proves no result, absence denotes an older producer. */
+  lastCompletionAt?: number
   paneKey: string
   agentPresence?: AgentProcessPresence
   /** Authenticated hook route that produced this event. */

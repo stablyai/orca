@@ -50,6 +50,8 @@ export function agentStatusEntryEqual(
     a.prompt === b.prompt &&
     a.updatedAt === b.updatedAt &&
     a.stateStartedAt === b.stateStartedAt &&
+    a.lastCompletionAt === b.lastCompletionAt &&
+    a.sessionBoundary === b.sessionBoundary &&
     a.turnStartedAt === b.turnStartedAt &&
     a.turnEndedAt === b.turnEndedAt &&
     a.turnEndDisposition === b.turnEndDisposition &&

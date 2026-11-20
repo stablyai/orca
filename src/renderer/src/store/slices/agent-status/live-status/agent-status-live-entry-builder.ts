@@ -1,4 +1,6 @@
 import { agentProviderSessionsEqual } from '../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import { retainAgentLastCompletionAt } from '../../../../../../shared/agent-status/lifecycle/agent-last-completion'
+import { agentEntryCompletionAt } from '../../../../../../shared/agent-status/lifecycle/agent-completion-time'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { sameAgentStatusTerminalOwner } from '../../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { resolveAgentStatusLiveEntryTiming } from './agent-status-live-entry-timing'
@@ -206,6 +208,30 @@ export function buildAgentStatusLiveEntry(
     tabId: statusTabId,
     terminalTitle: effectiveTitle,
     stateHistory: history,
+    lastCompletionAt:
+      timing?.lastCompletionAt ??
+      retainAgentLastCompletionAt(
+        {
+          ...payload,
+          payload,
+          paneKey,
+          connectionId: routing?.connectionId ?? existing?.connectionId ?? null,
+          worktreeId: routing?.worktreeId ?? existing?.worktreeId,
+          stateStartedAt
+        },
+        existing
+          ? {
+              ...existing,
+              payload: existing,
+              connectionId: existing.connectionId ?? null,
+              lastCompletionAt:
+                existing.lastCompletionAt ??
+                agentEntryCompletionAt(existing) ??
+                agentEntryCompletionAt({ ...existing, state: 'done', sessionBoundary: true }) ??
+                0
+            }
+          : undefined
+      ),
     toolName: payload.toolName,
     toolInput: payload.toolInput,
     interactivePrompt: payload.interactivePrompt,

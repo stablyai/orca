@@ -197,6 +197,7 @@ export function buildRuntimeMobileAgentStatus(
           : {}),
         stateStartedAt: liveRow.stateStartedAt,
         ...pickHostTurnEnd(liveRow),
+        lastCompletionAt: liveRow.lastCompletionAt,
         stateHistory: [],
         ...(terminalHandle ? { terminalHandle } : {}),
         ...((pty?.worktreeId ?? liveRow.worktreeId)

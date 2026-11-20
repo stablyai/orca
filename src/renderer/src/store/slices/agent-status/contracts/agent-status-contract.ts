@@ -66,6 +66,7 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
 }
 
 export type AgentStatusTiming = {
+  lastCompletionAt?: number
   isReplay?: boolean
   /** Ordered authoritative sources may correct a prior publication clock. */
   allowOlderTimestamp?: boolean

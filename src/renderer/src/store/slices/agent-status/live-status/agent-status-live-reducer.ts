@@ -9,6 +9,8 @@ import type { AgentStatusLiveEntryBuild } from './agent-status-live-entry-contra
 import { agentProviderSessionsEqual } from '../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { liveResumeRecordChange } from '../../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import { retiresLaunch } from '../launch-config/agent-status-launch-config'
+import { isAgentManualUnreadTurn } from '@/attention/agent-attention-acknowledgement'
+import { linkRecordWrite } from '@/store/record-transitions/keyed-record-transitions'
 
 export type AgentStatusLiveUpdateReduction = {
   patch: Partial<AppState>
@@ -35,6 +37,19 @@ export function reduceAgentStatusLiveUpdate(
     sortRelevantChange
   } = build
   const paneKey = entry.paneKey
+  const markedAt = state.manuallyUnreadTurnsByPaneKey[paneKey]
+  const previous = state.agentStatusByPaneKey.get(paneKey)
+  const manual =
+    entry.sessionBoundary === true &&
+    previous &&
+    isAgentManualUnreadTurn(previous, markedAt) &&
+    !isAgentManualUnreadTurn(entry, markedAt)
+      ? linkRecordWrite(
+          { ...state.manuallyUnreadTurnsByPaneKey, [paneKey]: entry.stateStartedAt },
+          state.manuallyUnreadTurnsByPaneKey,
+          [paneKey]
+        )
+      : state.manuallyUnreadTurnsByPaneKey
   let nextSleepingAgentSessions = state.sleepingAgentSessionsByPaneKey
   let nextLaunchConfigs = state.agentLaunchConfigByPaneKey
   if (
@@ -102,6 +117,9 @@ export function reduceAgentStatusLiveUpdate(
     build.conversationSource
   )
   const patch: Partial<AppState> = {
+    ...(manual !== state.manuallyUnreadTurnsByPaneKey
+      ? { manuallyUnreadTurnsByPaneKey: manual }
+      : {}),
     agentStatusByPaneKey: nextLive,
     ...(nextConversations !== state.agentConversationsByPaneKey
       ? { agentConversationsByPaneKey: nextConversations }
