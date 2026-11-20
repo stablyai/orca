@@ -2,8 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
   existsSync,
-  linkSync,
-  readdirSync,
   mkdirSync,
   readlinkSync,
   readFileSync,
@@ -52,14 +50,20 @@ function writeHistory(accountId: string, contents: string): string {
   return managedHomePath
 }
 
-function archivedHistoryPath(accountId: string): string {
-  return join(
-    testState.userDataDir,
-    'codex-runtime-home',
-    'legacy-account-history',
-    accountId,
-    'history.jsonl'
-  )
+function blockSessionCopies(managedHomePath: string): void {
+  // A file where a session folder must go: the session copy throws.
+  mkdirSync(join(managedHomePath, 'sessions', 'nested'), { recursive: true })
+  writeFileSync(join(managedHomePath, 'sessions', 'nested', 'rollout.jsonl'), '{}', 'utf-8')
+  mkdirSync(join(getRuntimeCodexHomePath(), 'sessions'), { recursive: true })
+  writeFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested'), 'not a folder', 'utf-8')
+}
+
+function migrationMarkerPath(): string {
+  return join(testState.userDataDir, 'codex-runtime-home', 'migration-v1.json')
+}
+
+async function waitForImportOutcomes(outcomes: string[]): Promise<void> {
+  await vi.waitFor(() => expect(trackedImportOutcomes()).toEqual(outcomes), { timeout: WAIT_MS })
 }
 
 async function constructService(): Promise<void> {
@@ -73,19 +77,10 @@ async function startService(): Promise<void> {
   await waitForMigrationMarker()
 }
 
-// Settled: the marker exists and any kept history finished its import attempt.
 async function waitForMigrationMarker(): Promise<void> {
-  const runtimeHome = join(testState.userDataDir, 'codex-runtime-home')
-  await vi.waitFor(
-    () => {
-      expect(existsSync(join(runtimeHome, 'migration-v1.json'))).toBe(true)
-      const kept = join(runtimeHome, 'legacy-account-history')
-      if (existsSync(kept)) {
-        expect(readFileSync(join(kept, 'import-state.json'), 'utf-8')).toContain('"done":true')
-      }
-    },
-    { timeout: WAIT_MS }
-  )
+  await vi.waitFor(() => expect(existsSync(migrationMarkerPath())).toBe(true), {
+    timeout: WAIT_MS
+  })
 }
 
 // Slow CI hosts take seconds to construct the service.
@@ -101,7 +96,12 @@ async function removeAccountHome(managedHomePath: string): Promise<void> {
   )
 }
 
-const fsHooks = vi.hoisted(() => ({ afterRead: new Map<string, () => void>() }))
+const fsHooks = vi.hoisted(
+  (): { afterRead: Map<string, () => void>; linkError: NodeJS.ErrnoException | null } => ({
+    afterRead: new Map(),
+    linkError: null
+  })
+)
 vi.mock(import('node:fs/promises'), async (importOriginal) => {
   const actual = await importOriginal()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards every overload unchanged.
@@ -110,7 +110,13 @@ vi.mock(import('node:fs/promises'), async (importOriginal) => {
     fsHooks.afterRead.get(String(args[0]))?.()
     return contents
   }) as typeof actual.readFile
-  return { ...actual, default: { ...actual, readFile }, readFile }
+  const link = async (...args: Parameters<typeof actual.link>): Promise<void> => {
+    if (fsHooks.linkError) {
+      throw fsHooks.linkError
+    }
+    await actual.link(...args)
+  }
+  return { ...actual, default: { ...actual, readFile, link }, readFile, link }
 })
 
 vi.mock(import('node:os'), async (importOriginal) => {
@@ -128,6 +134,7 @@ describe('CodexRuntimeHomeService', () => {
 
   afterEach(() => {
     fsHooks.afterRead.clear()
+    fsHooks.linkError = null
     trackMock.mockClear()
     teardownRuntimeHomeTest()
   })
@@ -177,51 +184,38 @@ describe('CodexRuntimeHomeService', () => {
     expect(trackedImportOutcomes()).toEqual(['imported'])
   })
 
-  it('keeps every legacy history aside before startup returns, even when a session copy fails', async () => {
-    const accountOneHome = writeHistory('account-1', '{"id":"a-1"}\n')
-    const accountTwoHome = writeHistory('account-2', '{"id":"b-1"}\n')
-    mkdirSync(join(accountTwoHome, 'sessions', 'nested'), { recursive: true })
-    writeFileSync(join(accountTwoHome, 'sessions', 'nested', 'rollout.jsonl'), '{}', 'utf-8')
-    mkdirSync(join(getRuntimeCodexHomePath(), 'sessions'), { recursive: true })
-    // A file where account 2's session folder must go: its session copy throws.
-    writeFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested'), 'not a folder', 'utf-8')
-    await constructService()
-    await removeAccountHome(accountOneHome)
-
-    expect(existsSync(join(accountOneHome, 'history.jsonl'))).toBe(false)
-    expect(readFileSync(archivedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"a-1"}\n')
-    expect(readFileSync(archivedHistoryPath('account-2'), 'utf-8')).toBe('{"id":"b-1"}\n')
-    await vi.waitFor(() => expect(trackedImportOutcomes()).toEqual(['imported']), {
-      timeout: WAIT_MS
-    })
-    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
-      '{"id":"a-1"}\n{"id":"b-1"}\n'
-    )
-  })
-
-  it('never writes an existing shared history and keeps the legacy one aside, even past account removal', async () => {
+  it('never writes an existing shared history, and account removal keeps the account history', async () => {
     const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
     writeFileSync(runtimeHistoryPath, '{"id":"shared-1"}', 'utf-8')
     const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
 
     await startService()
+    await removeAccountHome(managedHomePath)
 
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"shared-1"}')
     expect(trackedImportOutcomes()).toEqual(['skipped_existing'])
     expect(readFileSync(join(managedHomePath, 'history.jsonl'), 'utf-8')).toBe(
       '{"id":"legacy-1"}\n'
     )
+  })
 
-    await removeAccountHome(managedHomePath)
+  it('imports history even when a session copy fails', async () => {
+    const managedHomePath = writeHistory('account-1', '{"id":"a-1"}\n')
+    blockSessionCopies(managedHomePath)
 
-    expect(existsSync(join(managedHomePath, 'history.jsonl'))).toBe(false)
-    expect(readFileSync(archivedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"legacy-1"}\n')
+    await constructService()
+    await waitForImportOutcomes(['imported'])
+
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
+      '{"id":"a-1"}\n'
+    )
+    expect(existsSync(migrationMarkerPath())).toBe(false)
   })
 
   it('leaves a shared history Codex creates during the import as it is', async () => {
     const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
-    writeHistory('account-1', '{"id":"legacy-1"}\n')
-    fsHooks.afterRead.set(archivedHistoryPath('account-1'), () =>
+    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
+    fsHooks.afterRead.set(join(managedHomePath, 'history.jsonl'), () =>
       writeFileSync(runtimeHistoryPath, '{"id":"codex-new"}\n', 'utf-8')
     )
 
@@ -229,97 +223,30 @@ describe('CodexRuntimeHomeService', () => {
 
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"codex-new"}\n')
     expect(trackedImportOutcomes()).toEqual(['skipped_existing'])
-    expect(readFileSync(archivedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"legacy-1"}\n')
   })
 
-  it('keeps one real copy per account, refreshed while the migration is unfinished', async () => {
-    const managedHomePath = writeHistory('account-1', '{"id":"first"}\n')
-    const keptPath = archivedHistoryPath('account-1')
-    mkdirSync(join(keptPath, '..'), { recursive: true })
-    linkSync(join(managedHomePath, 'history.jsonl'), keptPath)
-    // A file where a session folder must go keeps the migration unfinished across launches.
-    mkdirSync(join(managedHomePath, 'sessions', 'nested'), { recursive: true })
-    writeFileSync(join(managedHomePath, 'sessions', 'nested', 'rollout.jsonl'), '{}', 'utf-8')
-    mkdirSync(join(getRuntimeCodexHomePath(), 'sessions'), { recursive: true })
-    writeFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested'), 'not a folder', 'utf-8')
+  it('creates the shared history where hard links are refused', async () => {
+    writeHistory('account-1', '{"id":"legacy-1"}\n')
+    fsHooks.linkError = Object.assign(new Error('no hard links'), { code: 'ENOTSUP' })
 
-    await constructService()
-    await vi.waitFor(() => expect(trackedImportOutcomes()).toEqual(['imported']), {
-      timeout: WAIT_MS
-    })
-    writeFileSync(
-      join(managedHomePath, 'history.jsonl'),
-      '{"id":"first"}\n{"id":"later"}\n',
-      'utf-8'
-    )
-    vi.resetModules()
-    await constructService()
-    await removeAccountHome(managedHomePath)
+    await startService()
 
-    expect(readFileSync(keptPath, 'utf-8')).toBe('{"id":"first"}\n{"id":"later"}\n')
-    expect(readdirSync(join(keptPath, '..'))).toEqual(['history.jsonl'])
-  })
-
-  it('sets the earlier kept copy aside when Codex trimmed the account history in between', async () => {
-    writeFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), '{"id":"shared"}\n', 'utf-8')
-    const managedHomePath = writeHistory('account-1', '{"id":"A"}\n{"id":"B"}\n')
-    mkdirSync(join(managedHomePath, 'sessions', 'nested'), { recursive: true })
-    writeFileSync(join(managedHomePath, 'sessions', 'nested', 'rollout.jsonl'), '{}', 'utf-8')
-    mkdirSync(join(getRuntimeCodexHomePath(), 'sessions'), { recursive: true })
-    writeFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested'), 'not a folder', 'utf-8')
-    await constructService()
-    await vi.waitFor(() => expect(trackedImportOutcomes()).toEqual(['skipped_existing']), {
-      timeout: WAIT_MS
-    })
-
-    writeFileSync(join(managedHomePath, 'history.jsonl'), '{"id":"B"}\n{"id":"C"}\n', 'utf-8')
-    vi.resetModules()
-    await constructService()
-    await removeAccountHome(managedHomePath)
-
-    const keptDir = join(archivedHistoryPath('account-1'), '..')
-    expect(readFileSync(archivedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"B"}\n{"id":"C"}\n')
-    expect(readFileSync(join(keptDir, 'history.orca-legacy-account-1.jsonl'), 'utf-8')).toBe(
-      '{"id":"A"}\n{"id":"B"}\n'
-    )
-  })
-
-  it('never keeps a copy through a linked folder', async () => {
-    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
-    const elsewhere = join(testState.userDataDir, 'elsewhere')
-    mkdirSync(elsewhere, { recursive: true })
-    writeFileSync(join(elsewhere, 'history.jsonl'), '{"id":"someone-else"}\n', 'utf-8')
-    const keptRoot = join(testState.userDataDir, 'codex-runtime-home', 'legacy-account-history')
-    mkdirSync(keptRoot, { recursive: true })
-    symlinkSync(
-      elsewhere,
-      join(keptRoot, 'account-1'),
-      process.platform === 'win32' ? 'junction' : 'dir'
-    )
-
-    await constructService()
-
-    expect(readFileSync(join(elsewhere, 'history.jsonl'), 'utf-8')).toBe('{"id":"someone-else"}\n')
-    expect(readFileSync(join(managedHomePath, 'history.jsonl'), 'utf-8')).toBe(
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
       '{"id":"legacy-1"}\n'
     )
-    expect(existsSync(join(testState.userDataDir, 'codex-runtime-home', 'migration-v1.json'))).toBe(
-      false
-    )
+    expect(trackedImportOutcomes()).toEqual(['imported'])
   })
 
-  it('retries a failed import on a later launch from the kept copy, after the account is gone', async () => {
+  it('retries a failed import on the next launch', async () => {
     const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
     const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
-    fsHooks.afterRead.set(archivedHistoryPath('account-1'), () => {
+    fsHooks.afterRead.set(join(managedHomePath, 'history.jsonl'), () => {
       throw Object.assign(new Error('busy'), { code: 'EBUSY' })
     })
     await constructService()
-    await vi.waitFor(() => expect(trackedImportOutcomes()).toEqual(['failed']), {
-      timeout: WAIT_MS
-    })
+    await waitForImportOutcomes(['failed'])
     expect(existsSync(runtimeHistoryPath)).toBe(false)
-    await removeAccountHome(managedHomePath)
+    expect(existsSync(migrationMarkerPath())).toBe(false)
     fsHooks.afterRead.clear()
 
     vi.resetModules()

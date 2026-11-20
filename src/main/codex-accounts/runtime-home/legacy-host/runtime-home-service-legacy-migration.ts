@@ -5,19 +5,17 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  lstatSync,
   readdirSync,
   statSync
 } from 'node:fs'
 import { dirname, extname, join, parse, relative } from 'node:path'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
-import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-migration'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
 import { CodexRuntimeHomePaths } from '../runtime-home-service-paths'
-import { importKeptLegacyHistoriesOnce } from './legacy-prompt-history-import'
+import { importLegacyHistoriesIfSharedAbsent } from './legacy-prompt-history-import'
 
 export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePaths {
   protected safeMigrateLegacySharedAuth(): void {
@@ -61,49 +59,40 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
 
   protected migrateLegacyManagedStateIfNeeded(): void {
     if (existsSync(this.getMigrationMarkerPath())) {
-      void this.importKeptLegacyHistories()
       return
     }
 
-    const managedHomes: { accountId: string; homePath: string }[] = []
-    for (const homePath of this.getLegacyManagedHomes()) {
-      const accountId = parse(relative(this.getManagedAccountsRoot(), homePath)).dir.split(
+    // Started first and independent of the session copies, so one that fails can't hold it back.
+    const historyImported = importLegacyHistoriesIfSharedAbsent(
+      this.getManagedAccountsRoot(),
+      join(this.getRuntimeHomePath(), 'history.jsonl')
+    ).then(
+      () => true,
+      (error: unknown) => {
+        console.warn('[codex-runtime-home] Failed to import legacy Codex prompt history:', error)
+        return false
+      }
+    )
+    const managedHomes = this.getLegacyManagedHomes()
+    for (const managedHomePath of managedHomes) {
+      const accountId = parse(relative(this.getManagedAccountsRoot(), managedHomePath)).dir.split(
         /[\\/]/
       )[0]
       if (accountId) {
-        managedHomes.push({ accountId, homePath })
+        this.migrateLegacySessions(managedHomePath, accountId)
       }
     }
-    // First and synchronously: nothing later (a failed session copy, an account removed while the
-    // import runs) may leave a legacy history without a copy Orca keeps.
-    this.keepLegacyHistoriesAside(managedHomes)
-    // Independent of the session copies below, so one that fails can't hold the import back.
-    void this.importKeptLegacyHistories()
-    for (const { accountId, homePath } of managedHomes) {
-      this.migrateLegacySessions(homePath, accountId)
-    }
 
-    // Mark completion so later startups cannot replay stale managed-home state.
-    writeFileAtomically(
-      this.getMigrationMarkerPath(),
-      `${JSON.stringify({ completedAt: Date.now(), migratedHomeCount: managedHomes.length })}\n`
-    )
-  }
-
-  // Off the startup path (a large history takes tens of milliseconds), from Orca's kept copies only.
-  protected async importKeptLegacyHistories(): Promise<void> {
-    try {
-      await importKeptLegacyHistoriesOnce(
-        this.getKeptLegacyHistoryRoot(),
-        join(this.getRuntimeHomePath(), 'history.jsonl')
+    void historyImported.then((imported) => {
+      if (!imported) {
+        return
+      }
+      // Mark completion so later startups cannot replay stale managed-home state.
+      writeFileAtomically(
+        this.getMigrationMarkerPath(),
+        `${JSON.stringify({ completedAt: Date.now(), migratedHomeCount: managedHomes.length })}\n`
       )
-    } catch (error) {
-      console.warn('[codex-runtime-home] Failed to import legacy Codex prompt history:', error)
-    }
-  }
-
-  protected getKeptLegacyHistoryRoot(): string {
-    return join(this.getRuntimeMetadataDir(), 'legacy-account-history')
+    })
   }
 
   protected getLegacyManagedHomes(): string[] {
@@ -124,73 +113,6 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
       }
     }
     return managedHomes.sort()
-  }
-
-  /** Copies each account's legacy history under Orca's metadata, which no removal or cleanup reaches. */
-  protected keepLegacyHistoriesAside(
-    managedHomes: { accountId: string; homePath: string }[]
-  ): void {
-    let firstError: unknown = null
-    for (const { accountId, homePath } of managedHomes) {
-      const legacyHistoryPath = join(homePath, 'history.jsonl')
-      if (!existsSync(legacyHistoryPath)) {
-        continue
-      }
-      try {
-        const keptDir = join(this.getKeptLegacyHistoryRoot(), accountId)
-        mkdirSync(keptDir, { recursive: true })
-        // A linked folder could aim the kept copy at a real history somewhere else.
-        if (
-          !lstatSync(this.getKeptLegacyHistoryRoot()).isDirectory() ||
-          !lstatSync(keptDir).isDirectory()
-        ) {
-          throw new Error(`Refusing to keep legacy Codex history in a linked folder: ${keptDir}`)
-        }
-        // Read once rather than copied (a copy of a file Codex trims mid-copy never finishes), then
-        // published by rename: never partial, and a link at the name is replaced, not written through.
-        // Each unfinished launch refreshes the copy so it holds what the account has now.
-        const keptPath = join(keptDir, 'history.jsonl')
-        const current = readFileSync(legacyHistoryPath)
-        this.setAsideKeptHistoryCodexTrimmed(keptPath, accountId, current)
-        writeFileDurableSync(durableWriteTempPath(keptPath), keptPath, current, 0o600)
-      } catch (error) {
-        firstError ??= error
-      }
-    }
-    if (firstError) {
-      throw firstError
-    }
-  }
-
-  // Codex trims history from the front; lines the earlier copy has and the account lost stay kept.
-  protected setAsideKeptHistoryCodexTrimmed(
-    keptPath: string,
-    accountId: string,
-    current: Buffer
-  ): void {
-    let previous: Buffer
-    try {
-      previous = readFileSync(keptPath)
-    } catch {
-      return
-    }
-    const currentLines = new Set(current.toString('utf-8').split('\n'))
-    if (
-      previous
-        .toString('utf-8')
-        .split('\n')
-        .every((line) => currentLines.has(line))
-    ) {
-      return
-    }
-    for (let attempt = 0; ; attempt++) {
-      const preservedPath = this.getPreservedLegacySessionPath(keptPath, accountId, attempt)
-      if (
-        this.copyLegacyFileWithoutOverwrite(keptPath, preservedPath, () => previous) !== 'conflict'
-      ) {
-        return
-      }
-    }
   }
 
   protected migrateLegacySessions(managedHomePath: string, accountId: string): void {

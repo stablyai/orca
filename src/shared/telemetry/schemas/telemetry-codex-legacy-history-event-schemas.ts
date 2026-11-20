@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-/** Orca keeps every legacy history aside in its metadata whatever the outcome; `failed` retries. */
+/** Account histories are only read, whatever the outcome; `failed` retries on the next launch. */
 export const CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES = [
   'imported',
   'skipped_existing',
