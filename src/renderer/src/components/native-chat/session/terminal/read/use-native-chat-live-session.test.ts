@@ -363,6 +363,57 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.hasMore).toBe(false)
   })
 
+  it('keeps paged-in history when the host re-sends the latest window', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
+    const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    transport.readSession.mockResolvedValueOnce({
+      messages: [at('older-0', 10), at('older-1', 20)],
+      hasMore: true,
+      beforeOffset: 10
+    })
+    await act(async () => {
+      await latest?.loadEarlier()
+    })
+
+    const reply = at('reply', 1300)
+    await act(async () =>
+      transport.emit({ type: 'replacement', messages: [...held.slice(1), reply], hasMore: true })
+    )
+
+    expect(latest?.messages.slice(0, 3).map((m) => m.id)).toEqual(['older-0', 'older-1', 'held-0'])
+    expect(latest?.messages.at(-1)?.id).toBe('reply')
+    expect(latest?.hasMore).toBe(true)
+  })
+
+  it('keeps paged-in history when the re-sent window starts inside the live tail', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
+    const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    transport.readSession.mockResolvedValueOnce({
+      messages: [at('older-0', 10), at('older-1', 20)],
+      hasMore: true,
+      beforeOffset: 10
+    })
+    await act(async () => {
+      await latest?.loadEarlier()
+    })
+    const live = Array.from({ length: 301 }, (_unused, n) => at(`live-${n}`, 2000 + n))
+    await act(async () => transport.emit({ type: 'appended', messages: live }))
+
+    await act(async () =>
+      transport.emit({ type: 'replacement', messages: live.slice(1), hasMore: true })
+    )
+
+    const ids = latest?.messages.map((m) => m.id) ?? []
+    expect(ids.slice(0, 3)).toEqual(['older-0', 'older-1', 'held-0'])
+    expect(ids.slice(301, 304)).toEqual(['held-299', 'live-0', 'live-1'])
+  })
+
   it('rereads when appends evict the live overlap while a cursor page is in flight', async () => {
     const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
     const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })

@@ -29,6 +29,7 @@ export function useNativeChatOlderHistory({
   transport,
   hasMore,
   read,
+  heldRef,
   liveTailRef,
   olderHistoryGeneration,
   transcriptLifecycleControl,
@@ -47,6 +48,8 @@ export function useNativeChatOlderHistory({
   transport: NativeChatSessionTransport
   hasMore: boolean
   read: ReadState
+  /** Latest held base, advanced synchronously by applied pages so a retained callback cannot reuse its stale cursor. */
+  heldRef: RefObject<ReadState>
   /** Bounded live-append list; read at page time so streaming does not rebuild the callback. */
   liveTailRef: RefObject<{ list: readonly NativeChatMessage[] }>
   /** The paging epoch this render saw; a mismatch marks a stale callback. */
@@ -66,12 +69,10 @@ export function useNativeChatOlderHistory({
     epoch: number
     promise: Promise<NativeChatOlderPageResult>
   } | null>(null)
-  // Latest held base, advanced synchronously by applied pages so a retained callback cannot reuse its stale cursor.
-  const heldRef = useRef(read)
   // Only a committed new read or paging generation resets it; a render that skipped a queued page leaves it alone.
   useLayoutEffect(() => {
     heldRef.current = read
-  }, [read, olderHistoryGeneration])
+  }, [heldRef, read, olderHistoryGeneration])
   return useCallback((): Promise<NativeChatOlderPageResult> => {
     // A callback from before a trim, snapshot or rebind holds a base that has since moved.
     if (transcriptEpochRef.current !== olderHistoryGeneration) {
@@ -184,6 +185,7 @@ export function useNativeChatOlderHistory({
     transport,
     hasMore,
     read,
+    heldRef,
     liveTailRef,
     olderHistoryGeneration,
     transcriptLifecycleControl,
