@@ -12,30 +12,35 @@ type SerializeCursorTerminal = {
   buffer: { active: { cursorX: number; cursorY: number } }
 }
 
-type BufferSerializer<TOpts> = {
-  serialize: (opts?: TOpts) => string
+type ReprintCell = { getChars: () => string; getWidth: () => number }
+
+// Structural view of an xterm Terminal for reprinting the cursor row.
+type SnapshotTerminal = SerializeCursorTerminal & {
+  modes: { insertMode: boolean }
+  buffer: {
+    active: {
+      cursorX: number
+      cursorY: number
+      baseY: number
+      getLine: (y: number) => { getCell: (x: number) => ReprintCell | undefined } | undefined
+    }
+    normal: { length: number }
+  }
 }
 
-type ReprintCell = { getChars: () => string; getWidth: () => number }
-type ReprintBuffer = {
-  baseY: number
-  cursorY: number
-  getLine: (y: number) => { getCell: (x: number) => ReprintCell | undefined } | undefined
+type SnapshotSerializeOptions = {
+  scrollback?: number
+  range?: { start: number; end: number }
+  excludeAltBuffer?: boolean
+  excludeModes?: boolean
 }
-type ReprintTerminal = SerializeCursorTerminal & {
-  modes?: { insertMode?: boolean }
-  buffer: { active: ReprintBuffer; normal: { length: number } }
-}
-type RowSerializer = {
-  serialize: (opts: {
-    range: { start: number; end: number }
-    excludeAltBuffer: true
-    excludeModes: true
-  }) => string
+
+type SnapshotSerializer = {
+  serialize(opts?: SnapshotSerializeOptions): string
   // Vendored addon internal: serializes rows of any buffer (the public range API reads only normal).
   _serializeBufferByRange?: (
-    terminal: unknown,
-    buffer: unknown,
+    terminal: SnapshotTerminal,
+    buffer: SnapshotTerminal['buffer']['active'],
     range: { start: number; end: number },
     excludeFinalCursorPosition: boolean
   ) => string
@@ -83,10 +88,10 @@ export function readSavedCursorRegister(
   return { x, y, originMode }
 }
 
-export function serializeWithAbsoluteCursor<TOpts>(
-  serializer: BufferSerializer<TOpts>,
-  terminal: SerializeCursorTerminal,
-  opts?: TOpts,
+export function serializeWithAbsoluteCursor(
+  serializer: SnapshotSerializer,
+  terminal: SnapshotTerminal,
+  opts?: SnapshotSerializeOptions,
   savedCursor?: SavedCursorRegister | null
 ): string {
   const serialized = serializer.serialize(opts)
@@ -98,14 +103,20 @@ export function serializeWithAbsoluteCursor<TOpts>(
   const mouseEncodingRestore = serializesModes(opts)
     ? buildMouseEncodingRestoreSequence(readTerminalMouseEncoding(terminal))
     : ''
-  return `${serialized}${mouseEncodingRestore}${buildAbsoluteCursorRestoreSequence(terminal, savedCursor, { serializer })}`
+  const cursorRestore = buildAbsoluteCursorRestoreSequence(terminal, savedCursor, {
+    pendingWrapRestore: (cupCursorY) => buildPendingWrapRestore(serializer, terminal, cupCursorY)
+  })
+  return `${serialized}${mouseEncodingRestore}${cursorRestore}`
 }
 
 /** Live pen SGR and OSC 8 link, without cells. */
-export function serializeCurrentPenState(serializer: unknown, terminal: unknown): string {
+export function serializeCurrentPenState(
+  serializer: SnapshotSerializer,
+  terminal: { buffer: { normal: { length: number } } }
+): string {
   // Our vendored addon’s undocumented out-of-range row behavior emits only the live pen state.
-  const emptyRow = (terminal as ReprintTerminal).buffer.normal.length
-  return (serializer as RowSerializer).serialize({
+  const emptyRow = terminal.buffer.normal.length
+  return serializer.serialize({
     range: { start: emptyRow, end: emptyRow },
     excludeAltBuffer: true,
     excludeModes: true
@@ -114,25 +125,28 @@ export function serializeCurrentPenState(serializer: unknown, terminal: unknown)
 
 // A cursor move cannot set pending wrap; reprinting the row so it ends on the edge cell can (STA-16354).
 function buildPendingWrapRestore(
-  serializer: unknown,
-  terminal: SerializeCursorTerminal,
+  serializer: SnapshotSerializer,
+  terminal: SnapshotTerminal,
   cupCursorY: number
 ): string | null {
-  const source = terminal as ReprintTerminal
-  const serializeRows = (serializer as RowSerializer)._serializeBufferByRange
-  if (typeof serializeRows !== 'function') {
+  if (typeof serializer._serializeBufferByRange !== 'function') {
     return null
   }
-  const buffer = source.buffer.active
+  const buffer = terminal.buffer.active
   const row = buffer.baseY + buffer.cursorY
   const edge = buffer.getLine(row)?.getCell(terminal.cols - 1)
   // A blank edge serializes to nothing, so the reprint would stop short of the wrap.
   if (!edge || (edge.getChars() === '' && edge.getWidth() !== 0)) {
     return null
   }
-  const rowAnsi = serializeRows.call(serializer, terminal, buffer, { start: row, end: row }, true)
+  const rowAnsi = serializer._serializeBufferByRange(
+    terminal,
+    buffer,
+    { start: row, end: row },
+    true
+  )
   // Insert mode would shift the old cells into the reprint's skipped blanks.
-  const insertMode = source.modes?.insertMode === true
+  const insertMode = terminal.modes.insertMode
   return `${insertMode ? '\x1b[4l' : ''}\x1b[${cupCursorY + 1};1H\x1b[0m${rowAnsi}${insertMode ? '\x1b[4h' : ''}\x1b[0m${serializeCurrentPenState(serializer, terminal)}`
 }
 
@@ -149,7 +163,10 @@ function serializesModes(opts: unknown): boolean {
 export function buildAbsoluteCursorRestoreSequence(
   terminal: SerializeCursorTerminal,
   savedCursor?: SavedCursorRegister | null,
-  options: { restoreModesWithoutCursor?: boolean; serializer?: unknown } = {}
+  options: {
+    restoreModesWithoutCursor?: boolean
+    pendingWrapRestore?: (cupCursorY: number) => string | null
+  } = {}
 ): string {
   const { cursorX, cursorY } = terminal.buffer.active
   const terminalWithCore = terminal as TerminalWithSavedCursorCore
@@ -161,8 +178,8 @@ export function buildAbsoluteCursorRestoreSequence(
   const cursorRowInView = cupCursorY >= 0 && cupCursorY < terminal.rows
   // Trailing DECSTBM/DECOM home the cursor, so a wrap-pending cursor (cursorX == cols) needs its row reprinted.
   const pendingWrapRestore =
-    cursorX === terminal.cols && cursorRowInView && options.serializer !== undefined
-      ? buildPendingWrapRestore(options.serializer, terminal, cupCursorY)
+    cursorX === terminal.cols && cursorRowInView
+      ? (options.pendingWrapRestore?.(cupCursorY) ?? null)
       : null
   // Never emit a CUP that clamps; a clamped wrap-pending cursor would overwrite the edge cell.
   const canRestoreCurrentCursor =
