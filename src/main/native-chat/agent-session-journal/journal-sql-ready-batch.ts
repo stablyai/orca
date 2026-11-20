@@ -10,7 +10,8 @@ export function prepareJournalSqlRequest(
   command: JournalSqlRequest['command']
 ): JournalSqlRequest {
   let batch: JournalSqlRequest['batch']
-  if (command.type === 'write' && !command.command.effects) {
+  // Receipts and fork installs keep their own transaction (a fork install raises it to FULL sync).
+  if (command.type === 'write' && !command.command.effects && !command.command.forkInstall) {
     const { operation } = command.command
     if (
       operation.kind === 'steps' &&

@@ -179,12 +179,15 @@ async function drain(): Promise<void> {
     }
     let { responses, rolledBack } = await runWrites(context, batch, writes, urgent)
     // A whole-transaction failure (a full disk) sends each write back alone, so only its cause fails.
+    const runMs = performance.now() - startedAt - gate.ms
     if (rolledBack && writes.length > 1) {
+      for (const request of writes) {
+        clock.retried(request.id, gate.ms, runMs)
+      }
       queue.retryAlone(writes)
       retried = true
       responses = []
     }
-    const runMs = performance.now() - startedAt - gate.ms
     const walFrames = checkpoint?.log ?? 0
     // A transfer failure after COMMIT must surface as a lost acknowledgement, never a rollback.
     for (const [index, response] of responses.entries()) {
@@ -193,8 +196,7 @@ async function drain(): Promise<void> {
         ...response,
         timing: {
           depth,
-          ...clock.timing(request, startedAt, gate.ms),
-          runMs,
+          ...clock.timing(request, startedAt, gate.ms, runMs),
           batch: writes.length,
           walFrames
         }
