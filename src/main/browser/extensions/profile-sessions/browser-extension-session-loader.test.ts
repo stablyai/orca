@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
   /** Holds prepareBrowserExtensionDirectory until released, to land a load late. */
   const prepareGate: { held: Promise<void> | null } = { held: null }
   const storage: { path: string | null } = { path: null }
+  const resumed: { session?: object } = {}
   return {
     userData: '',
     storage,
@@ -27,7 +28,7 @@ const mocks = vi.hoisted(() => {
     emitWorkerStart: vi.fn(),
     uninstalled: vi.fn(),
     /** A partition of its own, so another test's removed-storage marks don't reach it. */
-    resumed: {} as { session?: object },
+    resumed,
     session: {
       serviceWorkers: {
         on: (_name: string, listener: (event: unknown, details: { scope: string }) => void) =>
