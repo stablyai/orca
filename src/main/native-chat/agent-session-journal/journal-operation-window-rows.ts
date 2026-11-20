@@ -96,7 +96,8 @@ export function readOperationWindowItems(
   const cutSize = scope.db.prepare(`SELECT ${projectedStoredText} AS stored,
       CASE WHEN ${projectedStoredText} = 0 THEN octet_length(${cutJson}) END AS cut_bytes
     FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
-  const storedSize = scope.db.prepare(`SELECT output_blob,
+  const storedSize = scope.db
+    .prepare(`SELECT output_blob, octet_length(${projected}) AS whole_bytes,
       octet_length(json_remove(${projected},'$.body.output.stored','$.body.patch.stored')) AS projected_bytes,
       octet_length(json_quote(${field('head')})) AS head_bytes,
       ${field('byteLength')} AS byte_length, ${field('stored.truncated')} AS truncated
@@ -118,13 +119,13 @@ export function readOperationWindowItems(
           Number(stored.byte_length),
           Boolean(stored.truncated)
         )
-        // An unreadable blob leaves the preview, which is shorter than the cut head.
+        // An unreadable blob leaves the row as stored, preview and marker; decoding drops the marker.
         cutBytes =
-          Number(stored.projected_bytes) +
-          (text === null
-            ? 0
-            : Buffer.byteLength(JSON.stringify(journalShortenedHead(text))) -
-              Number(stored.head_bytes))
+          text === null
+            ? Number(stored.whole_bytes)
+            : Number(stored.projected_bytes) +
+              Buffer.byteLength(JSON.stringify(journalShortenedHead(text))) -
+              Number(stored.head_bytes)
       } else {
         cut.push(row.itemId)
       }
