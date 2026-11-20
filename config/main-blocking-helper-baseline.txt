@@ -514,7 +514,7 @@
 5 src/main/filesystem/durable-file-write.ts
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
 7 src/main/filesystem/owner-only-durable-file-write.ts # Windows only: the addon load (realpathSync, once per process) and a sync DACL read per staged file, plus a second after a failed check; I/O is async
-2 src/main/filesystem/rolling-file-backup.ts
+3 src/main/filesystem/rolling-file-backup.ts # writeRollingFileBackup is now stageRollingFileBackup + commit (same sync copy and rename), so a refused config write can keep the previous backup
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
 6 src/main/gemini/hook-service.ts

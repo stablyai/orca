@@ -6,6 +6,21 @@ import {
 } from '../../shared/file-write/windows-retry-file-operations'
 
 export function writeRollingFileBackup(sourcePath: string, backupPath: string): void {
+  stageRollingFileBackup(sourcePath, backupPath).commit()
+}
+
+export type StagedRollingFileBackup = {
+  /** Replaces the previous backup with the staged copy. */
+  commit: () => void
+  /** Drops the staged copy and keeps the previous backup. */
+  discard: () => void
+}
+
+/** Copies `sourcePath` beside the backup without touching the previous backup until `commit`. */
+export function stageRollingFileBackup(
+  sourcePath: string,
+  backupPath: string
+): StagedRollingFileBackup {
   let existing: Stats | null = null
   try {
     const backup = lstatSync(backupPath)
@@ -21,6 +36,7 @@ export function writeRollingFileBackup(sourcePath: string, backupPath: string): 
   }
 
   const tempPath = `${backupPath}.${process.pid}.${randomUUID()}.tmp`
+  const discard = (): void => rmSync(tempPath, { force: true })
   try {
     // A fresh inode avoids hard-link mutation; rename preserves the old backup on failure.
     copyFileWithWindowsRetry(sourcePath, tempPath)
@@ -33,9 +49,19 @@ export function writeRollingFileBackup(sourcePath: string, backupPath: string): 
         chmodSync(path, 0o666)
       }
     }
-    renameFileWithWindowsRetry(tempPath, backupPath)
-  } finally {
-    rmSync(tempPath, { force: true })
+  } catch (error) {
+    discard()
+    throw error
+  }
+  return {
+    commit: () => {
+      try {
+        renameFileWithWindowsRetry(tempPath, backupPath)
+      } finally {
+        discard()
+      }
+    },
+    discard
   }
 }
 

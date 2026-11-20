@@ -11,7 +11,7 @@ import {
 import { dirname, join } from 'node:path'
 import '../../../filesystem/atomic-file-publication'
 import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
-import { writeRollingFileBackup } from '../../../filesystem/rolling-file-backup'
+import { stageRollingFileBackup } from '../../../filesystem/rolling-file-backup'
 import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import {
@@ -53,8 +53,7 @@ export function writeTomlConfigAtomically(
       encoding: 'utf-8',
       mode: resolveCodexConfigTomlFileMode(writePath)
     })
-    // Checked before the backup (a rejected update must not rotate it) and before every rename
-    // attempt, so only the re-read is left between check and rename.
+    // Checked before every rename attempt, so only the re-read is left between check and rename.
     const stillCurrent = (): boolean => {
       assertGuardedFileCurrent(writePath)
       return readRawTomlConfig(writePath) === computedFrom
@@ -62,14 +61,31 @@ export function writeTomlConfigAtomically(
     if (!stillCurrent()) {
       return false
     }
-    if (options.backup && existsSync(writePath)) {
-      writeRollingFileBackup(writePath, `${writePath}.bak`)
+    // Staged, then committed only after publishing: a refused update keeps the previous backup,
+    // even when a save lands while the copy is being made.
+    const backup =
+      options.backup && existsSync(writePath)
+        ? stageRollingFileBackup(writePath, `${writePath}.bak`)
+        : null
+    let published = false
+    try {
+      published = renameFileWithWindowsRetry(temporaryPath, writePath, stillCurrent)
+    } finally {
+      if (!published) {
+        backup?.discard()
+      }
     }
-    if (!renameFileWithWindowsRetry(temporaryPath, writePath, stillCurrent)) {
+    if (!published) {
       return false
     }
     observeFilePublication(writePath, contents)
     renamed = true
+    try {
+      backup?.commit()
+    } catch (error) {
+      // The config is already published; a missed backup rotation must not report it as failed.
+      console.warn('[codex-config] Failed to rotate the config.toml backup:', error)
+    }
     return true
   } finally {
     if (!renamed && existsSync(temporaryPath)) {
