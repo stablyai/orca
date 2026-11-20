@@ -61,31 +61,28 @@ export function writeTomlConfigAtomically(
     if (!stillCurrent()) {
       return false
     }
-    // Staged, then committed only after publishing: a refused update keeps the previous backup,
-    // even when a save lands while the copy is being made.
-    const backup =
-      options.backup && existsSync(writePath)
-        ? stageRollingFileBackup(writePath, `${writePath}.bak`)
-        : null
-    let published = false
-    try {
-      published = renameFileWithWindowsRetry(temporaryPath, writePath, stillCurrent)
-    } finally {
-      if (!published) {
-        backup?.discard()
+    if (options.backup && existsSync(writePath)) {
+      // Staged, then rotated only once the file is still current after the copy: a save that lands
+      // while the copy is made refuses the update and keeps the previous backup.
+      const backup = stageRollingFileBackup(writePath, `${writePath}.bak`)
+      let current = false
+      try {
+        current = stillCurrent()
+      } finally {
+        if (!current) {
+          backup.discard()
+        }
       }
+      if (!current) {
+        return false
+      }
+      backup.commit()
     }
-    if (!published) {
+    if (!renameFileWithWindowsRetry(temporaryPath, writePath, stillCurrent)) {
       return false
     }
     observeFilePublication(writePath, contents)
     renamed = true
-    try {
-      backup?.commit()
-    } catch (error) {
-      // The config is already published; a missed backup rotation must not report it as failed.
-      console.warn('[codex-config] Failed to rotate the config.toml backup:', error)
-    }
     return true
   } finally {
     if (!renamed && existsSync(temporaryPath)) {
