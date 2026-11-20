@@ -271,6 +271,34 @@ describe('CodexRuntimeHomeService', () => {
     await waitForHistorySettled()
   })
 
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'copies a history again on retry when it changed after an earlier attempt',
+    async () => {
+      const firstHome = writeHistory('account-1', '{"id":"a-1"}\n')
+      const blockedHistory = join(writeHistory('account-2', '{"id":"b-1"}\n'), 'history.jsonl')
+      chmodSync(blockedHistory, 0o000)
+      try {
+        await constructService()
+        await waitForImportOutcomes(['failed'])
+      } finally {
+        chmodSync(blockedHistory, 0o644)
+      }
+      expect(existsSync(migrationMarkerPath())).toBe(false)
+      writeFileSync(join(firstHome, 'history.jsonl'), '{"id":"a-1"}\n{"id":"a-2"}\n', 'utf-8')
+
+      vi.resetModules()
+      await startService()
+
+      expect(
+        readFileSync(
+          join(getRuntimeCodexHomePath(), 'history.orca-legacy-account-1-1.jsonl'),
+          'utf-8'
+        )
+      ).toBe('{"id":"a-1"}\n{"id":"a-2"}\n')
+      expect(existsSync(migrationMarkerPath())).toBe(true)
+    }
+  )
+
   it('makes a real copy when the shared history and the preserved name only link to the account history', async () => {
     const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
     mkdirSync(getRuntimeCodexHomePath(), { recursive: true })

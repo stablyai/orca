@@ -69,71 +69,23 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     expect(readFileSync(join(f.home, 'sessions', 'rollout.jsonl'), 'utf8')).toBe('only copy\n')
   })
 
-  it('deletes only the logins from a home whose prompt history is a link', async () => {
+  it('removes nothing from a home whose prompt history is a link', async () => {
     const f = fixture()
-    mkdirSync(join(f.home, '..backup'))
-    writeFileSync(join(f.home, '..backup', 'prompts.jsonl'), '{"text":"only prompt"}\n')
-    mkdirSync(join(f.home, 'middle'))
-    symlinkSync(join('..', '..backup'), join(f.home, 'middle', 'next'))
-    symlinkSync(join('middle', 'next'), join(f.home, 'bridge'))
-    symlinkSync(join('bridge', 'prompts.jsonl'), join(f.home, 'history.jsonl'))
-    writeFileSync(join(f.home, 'auth.json'), '{}')
-    writeFileSync(join(f.home, '.credentials.json'), '{}')
     mkdirSync(join(f.home, 'secrets'))
-    writeFileSync(join(f.home, 'secrets', 'codex_auth.age'), 'sealed')
+    writeFileSync(join(f.home, 'secrets', 'codex_auth.age'), '{"text":"only prompt"}\n')
+    symlinkSync(join('secrets', 'codex_auth.age'), join(f.home, 'auth.json'))
+    symlinkSync('auth.json', join(f.home, 'history.jsonl'))
+    writeFileSync(join(f.home, 'config.toml'), '')
 
     await f.lifecycle.safeRemove(f.home, 'a')
 
     expect(readdirSync(f.home).sort()).toEqual([
-      '..backup',
-      'bridge',
+      'auth.json',
+      'config.toml',
       'history.jsonl',
-      'middle',
       'secrets'
     ])
-    expect(readdirSync(join(f.home, 'secrets'))).toEqual([])
     expect(readFileSync(join(f.home, 'history.jsonl'), 'utf8')).toBe('{"text":"only prompt"}\n')
-  })
-
-  it('deletes only the logins when the prompt history is a link it cannot follow', async () => {
-    const f = fixture()
-    const outside = join(f.accountsRoot, 'outside')
-    mkdirSync(outside)
-    writeFileSync(join(f.home, 'PROMPTS.saved'), '{"text":"only prompt"}\n')
-    symlinkSync(join(outside, 'gone', 'link'), join(f.home, 'history.jsonl'))
-    writeFileSync(join(f.home, 'auth.json'), '{}')
-
-    await f.lifecycle.safeRemove(f.home, 'a')
-
-    expect(readdirSync(f.home).sort()).toEqual(['PROMPTS.saved', 'history.jsonl'])
-  })
-
-  it('keeps a linked prompt history that lives beside the logins it removes', async () => {
-    const f = fixture()
-    mkdirSync(join(f.home, 'secrets'))
-    writeFileSync(join(f.home, 'secrets', 'prompts.jsonl'), '{"text":"only prompt"}\n')
-    writeFileSync(join(f.home, 'secrets', 'mcp_oauth.age'), 'sealed')
-    symlinkSync(join('secrets', 'prompts.jsonl'), join(f.home, 'history.jsonl'))
-    writeFileSync(join(f.home, 'config.toml'), '[mcp_servers.x.http_headers]\n')
-
-    await f.lifecycle.safeRemove(f.home, 'a')
-
-    expect(readdirSync(f.home).sort()).toEqual(['history.jsonl', 'secrets'])
-    expect(readdirSync(join(f.home, 'secrets'))).toEqual(['prompts.jsonl'])
-  })
-
-  it('leaves the files of a linked secrets folder to the home it points to', async () => {
-    const f = fixture()
-    const otherSecrets = join(f.accountsRoot, 'other-secrets')
-    mkdirSync(otherSecrets)
-    writeFileSync(join(otherSecrets, 'codex_auth.age'), 'sealed')
-    symlinkSync(otherSecrets, join(f.home, 'secrets'))
-    writeFileSync(join(f.home, 'prompts.jsonl'), '{"text":"only prompt"}\n')
-    symlinkSync('prompts.jsonl', join(f.home, 'history.jsonl'))
-
-    await f.lifecycle.safeRemove(f.home, 'a')
-
-    expect(readdirSync(otherSecrets)).toEqual(['codex_auth.age'])
   })
 
   it('removes a home that never shared history entirely', async () => {

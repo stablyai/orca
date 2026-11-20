@@ -107,12 +107,9 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
   ): void {
     const managedHomes = this.getLegacyManagedHomes()
     if (!migrated) {
-      const preserved = new Set(state.preservedAccounts)
-      this.preserveLegacyHistories(managedHomes, preserved, (accountId) => {
-        preserved.add(accountId)
-        state = { ...state, preservedAccounts: [...preserved] }
-        this.writeMigrationRecord(historyStatePath, state)
-      })
+      // Every retry copies again: an unchanged history is found identical, a changed one gets a
+      // fresh copy, so no copy is ever stale.
+      this.preserveLegacyHistories(managedHomes)
     }
     let sessionsPending = false
     for (const managedHomePath of managedHomes) {
@@ -133,11 +130,7 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
 
   // Each account's own history, copied into the runtime home, where no Orca path deletes it. A
   // folder Orca doesn't own can't be removed through Orca, so one that fails is skipped.
-  protected preserveLegacyHistories(
-    managedHomes: readonly string[],
-    alreadyPreserved: ReadonlySet<string>,
-    recordPreserved: (accountId: string) => void
-  ): void {
+  protected preserveLegacyHistories(managedHomes: readonly string[]): void {
     const managedAccounts = new Set(managedHomes.map((home) => basename(dirname(home))))
     const runtimeHistoryPath = join(this.getRuntimeHomePath(), 'history.jsonl')
     mkdirSync(this.getRuntimeHomePath(), { recursive: true })
@@ -145,9 +138,6 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     const sharedHistory = this.legacyHistorySource(runtimeHistoryPath, { followLink: false })
     const copiedSources = new Set<string>()
     for (const accountId of this.listLegacyAccountIds()) {
-      if (alreadyPreserved.has(accountId)) {
-        continue
-      }
       try {
         const historyPath = join(this.getManagedAccountsRoot(), accountId, 'home', 'history.jsonl')
         const source = this.legacyHistorySource(historyPath, { followLink: true })
@@ -158,7 +148,6 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
           this.copyLegacyFilePreservingConflicts(source, runtimeHistoryPath, accountId, true)
           copiedSources.add(source)
         }
-        recordPreserved(accountId)
       } catch (error) {
         if (managedAccounts.has(accountId)) {
           throw error
