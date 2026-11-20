@@ -83,3 +83,17 @@ export const waitingOnAnotherMachine = defineFixture({
     <ZotzQueuedPaneCard task={task(1, 'pressure')} snapshot={SNAPSHOT} hostLabel="MSI Server" />
   )
 })
+
+/** The same wait on a server that also lets this window cancel it or launch anyway. */
+export const waitingOnAnotherMachineWithControls = defineFixture({
+  width: 520,
+  render: () => (
+    <ZotzQueuedPaneCard
+      task={task(1, 'pressure')}
+      snapshot={SNAPSHOT}
+      hostLabel="MSI Server"
+      onCancel={() => {}}
+      onForceStart={() => {}}
+    />
+  )
+})

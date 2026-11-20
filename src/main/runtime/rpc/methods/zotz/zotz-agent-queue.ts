@@ -1,7 +1,8 @@
 import { defineMethod, defineStreamingMethod } from '../../core'
 import {
   ZotzAgentQueueSnapshotParams,
-  ZotzAgentQueueSubscribeParams
+  ZotzAgentQueueSubscribeParams,
+  ZotzAgentQueueTaskParams
 } from '../../../../../shared/rpc-contract/zotz/zotz-agent-queue-params'
 import {
   EMPTY_ZOTZ_AGENT_QUEUE_SNAPSHOT,
@@ -68,7 +69,41 @@ export const ZOTZ_AGENT_QUEUE_SUBSCRIBE_METHOD = defineStreamingMethod({
   }
 })
 
+export const ZOTZ_AGENT_QUEUE_CANCEL_METHOD = defineMethod({
+  name: 'zotz.agentQueue.cancel',
+  permission: 'workspace',
+  params: ZotzAgentQueueTaskParams,
+  handler: async ({ id }) => {
+    getZotzAgentQueueSource()?.queue.cancel(id)
+    return { ok: true }
+  }
+})
+
+// Starts the launch even though memory says wait; a paired client needs the same permission that opens terminals.
+export const ZOTZ_AGENT_QUEUE_FORCE_START_METHOD = defineMethod({
+  name: 'zotz.agentQueue.forceStart',
+  permission: 'workspace',
+  params: ZotzAgentQueueTaskParams,
+  handler: async ({ id }) => {
+    getZotzAgentQueueSource()?.queue.forceStart(id)
+    return { ok: true }
+  }
+})
+
+export const ZOTZ_AGENT_QUEUE_DISMISS_CANCELED_METHOD = defineMethod({
+  name: 'zotz.agentQueue.dismissCanceled',
+  permission: 'workspace',
+  params: ZotzAgentQueueTaskParams,
+  handler: async ({ id }) => {
+    getZotzAgentQueueSource()?.queue.dismissCanceled(id)
+    return { ok: true }
+  }
+})
+
 export const ZOTZ_AGENT_QUEUE_METHODS = [
   ZOTZ_AGENT_QUEUE_SNAPSHOT_METHOD,
-  ZOTZ_AGENT_QUEUE_SUBSCRIBE_METHOD
+  ZOTZ_AGENT_QUEUE_SUBSCRIBE_METHOD,
+  ZOTZ_AGENT_QUEUE_CANCEL_METHOD,
+  ZOTZ_AGENT_QUEUE_FORCE_START_METHOD,
+  ZOTZ_AGENT_QUEUE_DISMISS_CANCELED_METHOD
 ]

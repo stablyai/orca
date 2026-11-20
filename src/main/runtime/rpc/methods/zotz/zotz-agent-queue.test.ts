@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { registerZotzAgentQueueSource } from '../../../../zotz/memory-governor/zotz-agent-queue-source'
+import { ZotzAgentQueueTaskParams } from '../../../../../shared/rpc-contract/zotz/zotz-agent-queue-params'
 import {
+  ZOTZ_AGENT_QUEUE_CANCEL_METHOD as cancelMethod,
+  ZOTZ_AGENT_QUEUE_DISMISS_CANCELED_METHOD as dismissMethod,
+  ZOTZ_AGENT_QUEUE_FORCE_START_METHOD as forceStartMethod,
   ZOTZ_AGENT_QUEUE_SNAPSHOT_METHOD as snapshotMethod,
   ZOTZ_AGENT_QUEUE_SUBSCRIBE_METHOD as subscribeMethod
 } from './zotz-agent-queue'
@@ -43,6 +47,9 @@ describe('zotz.agentQueue', () => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the snapshot builder copies only id, agent, priority, label, estimatedBytes, enqueuedAt, position and waitReason from each task.
         list: () => queued as never,
         listCanceled: () => [],
+        cancel: vi.fn(),
+        forceStart: vi.fn(),
+        dismissCanceled: vi.fn(),
         subscribe: (listener) => {
           queueListeners.add(listener)
           return () => {
@@ -81,5 +88,43 @@ describe('zotz.agentQueue', () => {
     expect(stopQueue).toHaveBeenCalledTimes(1)
     expect(queueListeners.size).toBe(0)
     unregister()
+  })
+  it('sends cancel, launch anyway and dismiss to the limiter of this host', async () => {
+    const cancel = vi.fn()
+    const forceStart = vi.fn()
+    const dismissCanceled = vi.fn()
+    const unregister = registerZotzAgentQueueSource({
+      governor: { getState: () => null, wake: vi.fn(), subscribe: () => () => {} },
+      queue: {
+        list: () => [],
+        listCanceled: () => [],
+        subscribe: () => () => {},
+        cancel,
+        forceStart,
+        dismissCanceled
+      }
+    })
+    const context = rpcContext(new AbortController().signal)
+
+    await expect(cancelMethod.handler({ id: 'pane-1' }, context)).resolves.toEqual({ ok: true })
+    await forceStartMethod.handler({ id: 'pane-2' }, context)
+    await dismissMethod.handler({ id: 'pane-3' }, context)
+
+    expect(cancel).toHaveBeenCalledWith('pane-1')
+    expect(forceStart).toHaveBeenCalledWith('pane-2')
+    expect(dismissCanceled).toHaveBeenCalledWith('pane-3')
+    unregister()
+  })
+
+  it('does nothing, without failing, on a host that runs no memory limiter', async () => {
+    await expect(
+      forceStartMethod.handler({ id: 'pane-1' }, rpcContext(new AbortController().signal))
+    ).resolves.toEqual({ ok: true })
+  })
+
+  it('rejects an empty or oversized task id', () => {
+    expect(ZotzAgentQueueTaskParams.safeParse({ id: '' }).success).toBe(false)
+    expect(ZotzAgentQueueTaskParams.safeParse({ id: 'x'.repeat(1025) }).success).toBe(false)
+    expect(ZotzAgentQueueTaskParams.safeParse({ id: 'pane-1' }).success).toBe(true)
   })
 })

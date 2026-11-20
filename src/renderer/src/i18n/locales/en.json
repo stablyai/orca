@@ -25893,6 +25893,7 @@
       "waitStarting": "Checking memory…",
       "autoStart": "The agent starts on its own when there is room. Nothing is lost if you wait.",
       "onHost": "On {{host}}",
+      "remoteActionFailed": "Could not reach {{host}}: {{error}}",
       "cancel": "Cancel",
       "forceStart": "Launch anyway",
       "board": {

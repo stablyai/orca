@@ -792,7 +792,8 @@ import {
 import { WorktreeAdoptProvisionedRoot } from './workspaces/worktree-provisioned-root-params'
 import {
   ZotzAgentQueueSnapshotParams,
-  ZotzAgentQueueSubscribeParams
+  ZotzAgentQueueSubscribeParams,
+  ZotzAgentQueueTaskParams
 } from './zotz/zotz-agent-queue-params'
 import { RepoIconDataUrlsParams } from '../sidebar-list/catalog/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/feed/sidebar-inputs-feed-contract'
@@ -1705,6 +1706,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.show': WorktreeShow,
   'worktree.sleep': WorktreeSleepParams,
   'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams,
+  'zotz.agentQueue.cancel': ZotzAgentQueueTaskParams,
+  'zotz.agentQueue.dismissCanceled': ZotzAgentQueueTaskParams,
+  'zotz.agentQueue.forceStart': ZotzAgentQueueTaskParams,
   'zotz.agentQueue.snapshot': ZotzAgentQueueSnapshotParams,
   'zotz.agentQueue.subscribe': ZotzAgentQueueSubscribeParams
 } as const
