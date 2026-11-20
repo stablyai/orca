@@ -127,8 +127,18 @@ export function botItemQuickReplyText(
   reply: BotItemQuickReply
 ): string {
   return shape.decisions.length > 1
-    ? `${botItemQuestionLine(decision.question)} → ${reply.label}`
+    ? `${botItemAnswerHead(shape, shape.decisions.indexOf(decision))} → ${reply.label}`
     : reply.label
+}
+
+/** How an answer line names its question ("Head → answer"): the question's first line, numbered as
+ *  the ask numbers it where another question of the ask starts the same way. */
+export function botItemAnswerHead(shape: BotItemQuestionShape, index: number): string {
+  const line = botItemQuestionLine(shape.decisions[index]?.question ?? '')
+  const shared = shape.decisions.some(
+    (other, at) => at !== index && botItemQuestionLine(other.question) === line
+  )
+  return shared ? `${index + 1}. ${line}` : line
 }
 
 /** The quick replies an owner's reply picked for each question line, none where they wrote their own
@@ -160,7 +170,7 @@ function multiPicks(
   decision: BotItemDecision,
   lines: readonly string[]
 ): BotItemQuickReply[] {
-  const head = `${botItemQuestionLine(decision.question)} →`
+  const head = `${botItemAnswerHead(shape, shape.decisions.indexOf(decision))} →`
   const line = shape.decisions.length > 1 ? lines.find((at) => at.startsWith(head)) : lines[0]
   const words = (line?.startsWith(head) ? line.slice(head.length).trim() : line) ?? ''
   const picks = words ? labelRun(words, 0, decision.replies, new Set()) : null

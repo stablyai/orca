@@ -1,5 +1,6 @@
 // An item's Activity on a rail: comments on one quiet surface, and between them one muted line per event
-// (worker started and finished from the worker's record, edits, links and status changes).
+// (worker started and finished from the worker's record, edits, links and status changes). Comments on
+// their way to the host come last, as sent, and then your answers held on this device, not sent yet.
 import { useCallback, useRef, useState } from 'react'
 import {
   AlarmClock,
@@ -22,12 +23,16 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import {
   botItemActivity,
-  type BotItemActivityEntry
+  botItemAnswered,
+  type BotItemActivityEntry,
+  type BotItemAnswered
 } from '../../../../../shared/bots/bot-item-activity'
+import { botItemAnswersComment } from '../../../../../shared/bots/bot-item-answer-lines'
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
 import { botItemStatusName } from './bot-item-status-name'
-import { BOT_ITEM_COMMENT_ATTRIBUTE, BotItemCommentCard } from './BotItemCommentCard'
-import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
+import { BotItemCommentCard } from './BotItemCommentCard'
+import type { BotItemQuestionSteps, BotItemQuickReplyActions } from './use-bot-item-question-steps'
+import { jumpInBotItemActivity, type BotItemJumpTarget } from './bot-item-jump'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
@@ -259,21 +264,23 @@ export function BotItemActivityList({
   quickReplies?: BotItemQuickReplyActions
 }): React.JSX.Element {
   const t = useTranslate()
-  const entries = botItemActivity(item, events)
+  const shown = pending?.shown ?? []
+  const entries = botItemActivity(
+    item,
+    events,
+    shown.map(({ event }) => event),
+    new Set(shown.flatMap(({ event, failed }) => (failed ? [event.id] : [])))
+  )
+  const sending = new Map(shown.map((entry) => [entry.event.id, entry]))
   const list = useRef<HTMLDivElement | null>(null)
-  // A reply's quote leads to its question: centred, so the sticky header never covers it, and
-  // focused, so Tab goes on from there.
-  const jump = useCallback((eventId: string) => {
-    const target = list.current?.querySelector<HTMLElement>(
-      `[${BOT_ITEM_COMMENT_ATTRIBUTE}="${CSS.escape(eventId)}"]`
-    )
-    if (!target) {
-      return
-    }
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    target.scrollIntoView({ block: 'center', behavior: still ? 'auto' : 'smooth' })
-    target.focus({ preventScroll: true })
-  }, [])
+  const jump = useCallback(
+    (target: BotItemJumpTarget) => jumpInBotItemActivity(list.current, target),
+    []
+  )
+  const steps = quickReplies?.steps
+  const held = steps ? heldAnswersCard(steps) : null
+  // A question asked in prose waits until a reply is on its way; an ask's lines pair with that reply.
+  const replied = shown.some(({ failed }) => !failed)
   // The rail runs through the event glyphs; each glyph and card sits on the panel fill over it.
   return (
     <>
@@ -282,24 +289,25 @@ export function BotItemActivityList({
         className="relative flex flex-col before:absolute before:inset-y-2.5 before:left-[9.5px] before:w-px before:bg-foreground/12"
       >
         {entries.map((entry) => {
-          // An answer reads on its question's lines.
-          if (entry.kind === 'comment' && entry.onAsk) {
-            return null
-          }
           if (entry.kind === 'comment') {
+            const sent = sending.get(entry.event.id)
             return (
               <BotItemCommentCard
                 key={entry.key}
                 bot={bot}
                 item={item}
-                // A reply already sent answers the question, before the host's read says so.
-                entry={
-                  pending?.shown.some(({ failed }) => !failed)
-                    ? { ...entry, waiting: false }
-                    : entry
-                }
+                entry={replied && !entry.answers ? { ...entry, waiting: false } : entry}
                 onJump={jump}
-                quickReplies={quickReplies}
+                quickReplies={sent ? undefined : quickReplies}
+                sending={sent !== undefined && !sent.failed}
+                failed={
+                  sent?.failed && pending
+                    ? {
+                        retry: () => pending.retry(sent.event.id),
+                        discard: () => pending.discard(sent.event.id)
+                      }
+                    : undefined
+                }
               />
             )
           }
@@ -325,33 +333,50 @@ export function BotItemActivityList({
             </div>
           )
         })}
-        {/* Last, as sent: never placed by this machine's clock among the host's events. */}
-        {pending?.shown.map(({ event, failed }) =>
-          // Answers posted as one comment show on their lines already.
-          !failed && event.data.text === quickReplies?.sent?.text ? null : (
-            <BotItemCommentCard
-              key={event.id}
-              bot={bot}
-              item={item}
-              entry={{ event }}
-              failed={
-                failed
-                  ? {
-                      retry: () => pending.retry(event.id),
-                      discard: () => pending.discard(event.id)
-                    }
-                  : undefined
-              }
-            />
-          )
-        )}
+        {held && steps ? (
+          <BotItemCommentCard
+            key={held.event.id}
+            bot={bot}
+            item={item}
+            entry={held}
+            onJump={jump}
+            held={{ sendNow: steps.sendNow, edit: steps.edit }}
+          />
+        ) : null}
       </div>
       {entries.some((entry) => entry.kind !== 'worker' && entry.kind !== 'event') ||
-      pending?.shown.length ? null : (
+      shown.length ||
+      held ? null : (
         <p className="pt-0.5 text-xs leading-[18px] text-muted-foreground">
           {t('bots.items.activity.noComments', 'No comments yet.')}
         </p>
       )}
     </>
   )
+}
+
+/** Your answers held for the waiting ask, as the comment they post as. */
+function heldAnswersCard(steps: BotItemQuestionSteps): {
+  event: BotItemEvent
+  answered: BotItemAnswered
+} | null {
+  const lines = steps.held.flatMap((answer, index) => (answer ? [index] : []))
+  const { text, paths } = botItemAnswersComment(steps.shape, steps.held)
+  const answered = botItemAnswered(steps.askId, steps.shape, text, lines)
+  if (!answered) {
+    return null
+  }
+  return {
+    answered,
+    event: {
+      id: `held:${steps.askId}`,
+      kind: 'commented',
+      actor: { kind: 'owner' },
+      data: {
+        text,
+        images: paths.map((path) => ({ path, name: path.split(/[\\/]/).pop() ?? path, bytes: 0 }))
+      },
+      at: 0
+    }
+  }
 }
