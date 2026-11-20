@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import type { Store } from '../../persistence/loading-store/store'
 
 const constructed = vi.fn()
@@ -32,6 +32,30 @@ vi.mock('../../../shared/app-lifecycle/app-environment', () => ({
   })
 }))
 vi.mock('../../network/http-client', () => ({ getMainHttpClient: () => ({ fetch }) }))
+
+// Each test starts from a fresh module: its download state lives for the process.
+beforeEach(() => {
+  vi.resetModules()
+  constructed.mockClear()
+  start.mockClear()
+  stop.mockClear()
+})
+
+it('gives an ask made before downloads were allowed its download, then stops', async () => {
+  const live = await import('./journal-retirement-policy-live-update')
+  const store = { getSettings: () => ({ telemetry: { installId: 'install' } }) }
+  // The cleanup asks (reading only the cache) and finishes before the proxy settings apply.
+  expect(await live.journalRetirementMode()).toEqual({ mode: 'report', revision: 0 })
+  live.releaseJournalRetirementPolicyUpdates()
+  expect(constructed).not.toHaveBeenCalled()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only getSettings is read.
+  live.allowJournalRetirementPolicyUpdates(store as unknown as Store)
+  expect(start).toHaveBeenCalledTimes(1)
+  await Promise.resolve()
+  expect(stop).not.toHaveBeenCalled()
+  finishDownload()
+  await vi.waitFor(() => expect(stop).toHaveBeenCalledTimes(1))
+})
 
 it('downloads the policy only once the cleanup asks, and stops after the download in flight', async () => {
   const live = await import('./journal-retirement-policy-live-update')

@@ -121,8 +121,8 @@ export class JournalLegacyRetirement {
         this.report(error)
       }
     }
-    // Over for this launch (removed, refused, off, or never there): the policy stops downloading.
-    if (this.done) {
+    // Over for this launch (removed, refused, off, never there, or stopped): downloads stop.
+    if (this.done || this.stopped.signal.aborted) {
       releaseLegacyJournalRetirementHost()
     }
   }

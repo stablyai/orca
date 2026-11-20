@@ -34,14 +34,18 @@ let readInstallId: () => string | undefined = () => undefined
 let refreshing: Promise<void> | null = null
 let refreshFailedAt: number | null = null
 let starting: Promise<void> | null = null
-// Set once downloads may start (after the proxy settings apply); cleared when the cleanup is over.
+// Set once downloads may start (after the proxy settings apply); cleared on quit.
 let createUpdater: (() => ReleaseAssetPolicyLiveUpdater<JournalRetirementPolicy>) | null = null
+// A cleanup asked this run (so at least one download is owed), and one still needs the policy.
+let asked = false
+let needed = false
 // The newest policy seen this run: only its `off` counts, so a later failed read can't undo it.
 let newestKnown: JournalRetirementPolicy | null = null
 
 /**
- * Allows downloads; none starts until the cleanup first asks, so a profile without an old journal
- * never downloads this policy. Unpackaged runs never fetch, so they stay in report mode.
+ * Allows downloads. None starts until a cleanup asks, so a profile without an old journal never
+ * downloads this policy; an ask made before this still gets its download, so a newer revision can
+ * always replace a cached `off`. Unpackaged runs never fetch, so they stay in report mode.
  */
 export function allowJournalRetirementPolicyUpdates(store: Store): void {
   const environment = getAppEnvironment()
@@ -58,36 +62,48 @@ export function allowJournalRetirementPolicyUpdates(store: Store): void {
     updater?.stop()
     updater = null
   })
-}
-
-/**
- * The cleanup needs the policy no longer: downloads stop, but only after the one in flight has
- * written the cache, since a newer revision must be able to replace a cached `off`. A cleanup
- * that asks again starts them again.
- */
-export function releaseJournalRetirementPolicyUpdates(): void {
-  const released = updater
-  if (!released) {
-    return
+  if (asked) {
+    startDownloads()
+    stopWhenUnneeded()
   }
-  updater = null
-  const inFlight = [starting, refreshing].filter((pending) => pending !== null)
-  starting = null
-  refreshing = null
-  void Promise.allSettled(inFlight).then(() => released.stop())
 }
 
-function startOnFirstAsk(): void {
+/** The cleanup needs the policy no longer; a cleanup that asks again starts downloads again. */
+export function releaseJournalRetirementPolicyUpdates(): void {
+  needed = false
+  stopWhenUnneeded()
+}
+
+function startDownloads(): void {
   if (updater || !createUpdater) {
     return
   }
   const started = createUpdater()
   updater = started
   starting = started.start().finally(() => {
-    starting = null
-    refreshFailedAt = started.lastFetched() ? null : Date.now()
+    if (updater === started) {
+      starting = null
+      refreshFailedAt = started.lastFetched() ? null : Date.now()
+    }
   })
   void starting.catch(() => {})
+}
+
+/** Stops once the download in flight has written the cache, unless a cleanup asked again. */
+function stopWhenUnneeded(): void {
+  const running = updater
+  if (!running || needed) {
+    return
+  }
+  const inFlight = [starting, refreshing].filter((pending) => pending !== null)
+  void Promise.allSettled(inFlight).then(() => {
+    if (!needed && updater === running) {
+      running.stop()
+      updater = null
+      starting = null
+      refreshing = null
+    }
+  })
 }
 
 /**
@@ -99,7 +115,9 @@ export async function journalRetirementMode(): Promise<{
   mode: JournalRetirementMode
   revision: number
 }> {
-  startOnFirstAsk()
+  asked = true
+  needed = true
+  startDownloads()
   const fetchedAt = updater?.lastFetched()?.at
   const now = Date.now()
   if (
@@ -110,8 +128,10 @@ export async function journalRetirementMode(): Promise<{
   ) {
     const running = updater
     refreshing ??= running.refresh().finally(() => {
-      refreshing = null
-      refreshFailedAt = running.lastFetched() ? null : Date.now()
+      if (updater === running) {
+        refreshing = null
+        refreshFailedAt = running.lastFetched() ? null : Date.now()
+      }
     })
     void refreshing.catch(() => {})
   }
