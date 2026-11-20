@@ -39,6 +39,7 @@ import {
 import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
 import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
 import { subscribeRuntimeAccountChanges } from './runtime-account-change-subscription'
+import { readRuntimeAccountsSnapshot } from './runtime-account-snapshot'
 import type { ManagedAccountNameProvider } from '../../../../shared/agent-accounts/managed-account-display-names'
 
 export type RuntimeAccountServices = {
@@ -126,24 +127,18 @@ export class RuntimeAccountController {
     return this.services?.claudeAccounts.getRuntimeConfigDir(target) ?? null
   }
 
-  getSnapshot(): AccountsSnapshot {
-    const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
-    return {
-      ...this.dataAccountsSnapshot(),
-      claude: claudeAccounts.listAccounts(),
-      codex: codexAccounts.listAccounts(),
-      rateLimits: rateLimits.getState()
-    }
+  getClaudeAccountsSnapshot(): ClaudeRateLimitAccountsState {
+    return this.requireServices().claudeAccounts.listAccounts()
   }
 
-  getStreamSnapshot(): AccountsSnapshot {
-    const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
-    return {
-      ...this.streamDataAccountsSnapshot(),
-      claude: claudeAccounts.listAccounts(),
-      codex: codexAccounts.listAccounts(),
-      rateLimits: rateLimits.getState()
-    }
+  async getSnapshot(): Promise<AccountsSnapshot> {
+    return readRuntimeAccountsSnapshot(this.requireServices(), () => this.dataAccountsSnapshot())
+  }
+
+  async getStreamSnapshot(): Promise<AccountsSnapshot> {
+    return readRuntimeAccountsSnapshot(this.requireServices(), () =>
+      this.streamDataAccountsSnapshot()
+    )
   }
 
   private streamDataAccountsSnapshot(): Pick<AccountsSnapshot, 'opencode' | 'devin'> {
