@@ -9,7 +9,6 @@ export type CrewRebuildTrigger =
   | 'topology'
   | 'records'
   | 'clock'
-  | 'expiry'
   | 'status-identity'
   | 'stale-dispatch'
 
@@ -33,7 +32,7 @@ export function crewRebuildTrigger(
   if (dirty.has('records')) {
     return 'records'
   }
-  return now < previous.now ? 'clock' : 'expiry'
+  return 'clock'
 }
 
 /** Builds hosts for one read model. Each rebuild is recorded in the main-process trace (a no-op span

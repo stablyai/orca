@@ -97,9 +97,20 @@ export function getUniqueLegacyCoordinatorHandle(
   if (!adoption || adoption.adopted_run_id !== runId) {
     return null
   }
+  return this.legacyCoordinatorOwner.read(
+    JSON.stringify([runId, adoption.adopted_at]),
+    () => readUniqueLegacyCoordinatorHandle(this, runId, adoption.adopted_at)
+  )
+}
+
+function readUniqueLegacyCoordinatorHandle(
+  db: OrchestrationDb,
+  runId: string,
+  adoptedAt: string
+): string | null {
   const workerHandles = new Set(
     (
-      this.db
+      db.db
         .prepare(
           `SELECT DISTINCT assignee_handle AS handle
            FROM dispatch_contexts
@@ -114,9 +125,9 @@ export function getUniqueLegacyCoordinatorHandle(
     ).map((row) => row.handle)
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both UNION branches select one non-null TEXT column aliased handle.
-  const durableRows = this.db
+  const durableRows = db.db
     .prepare(LEGACY_COORDINATOR_DURABLE_HANDLES_SQL)
-    .all(adoption.adopted_at, runId, adoption.adopted_at) as {
+    .all(adoptedAt, runId, adoptedAt) as {
     handle: string
   }[]
   if (durableRows.some((row) => workerHandles.has(row.handle))) {
@@ -124,9 +135,9 @@ export function getUniqueLegacyCoordinatorHandle(
   }
   const candidates = new Set(durableRows.map((row) => row.handle))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both UNION branches select one non-null TEXT column aliased handle.
-  const mailRows = this.db
+  const mailRows = db.db
     .prepare(LEGACY_COORDINATOR_MAIL_HANDLES_SQL)
-    .all(runId, adoption.adopted_at) as { handle: string }[]
+    .all(runId, adoptedAt) as { handle: string }[]
   for (const row of mailRows) {
     if (
       !workerHandles.has(row.handle) &&

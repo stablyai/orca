@@ -20,6 +20,10 @@ import { migrate } from './schema/migrate'
 import { backfillStructuredWorkerOrcaSessionIds } from './schema/structured-worker-orca-session-backfill'
 import { reconcileSettledWorkerDispatches } from './worker-dispatch/worker-dispatch-settlement'
 import { installWorkerStatusNotice, type DispatchRowChange } from './worker-status-notice'
+import {
+  installLegacyCoordinatorOwnerMemo,
+  type LegacyCoordinatorOwnerMemo
+} from './runs/legacy-coordinator-owner-memo'
 import { refreshOutstandingDeliveryTrigger } from './schema/migrate-v41'
 import { revokeAgentSessionPublicationFences } from '../../agent-session/agent-session-publication-fence'
 import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
@@ -48,6 +52,8 @@ class OrchestrationDbCore {
   sessionWorkersListener: ((sessionId: string) => void) | undefined
   /** Told when a paired server's answer for these Dispatches' workers changed; no row was written. */
   federatedWorkersListener: ((dispatchIds: readonly string[]) => void) | undefined
+  /** The legacy coordinator lookup's last answer, cleared by any write to what it reads. */
+  readonly legacyCoordinatorOwner: LegacyCoordinatorOwnerMemo
   private closed = false
   private readonly closeListeners = new Set<() => void>()
   private changedDispatchIds: Set<string> | null = null
@@ -134,6 +140,7 @@ class OrchestrationDbCore {
     reconcileSettledWorkerDispatches(this.db)
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)
     rememberCurrentRunCoordinatorHandles.call(this as unknown as OrchestrationDb)
+    this.legacyCoordinatorOwner = installLegacyCoordinatorOwnerMemo(this.db)
     installWorkerStatusNotice(this.db, (dispatchId, change) => {
       if (dispatchId) {
         revokeAgentSessionPublicationFences([JSON.stringify(['worker', dispatchId])])

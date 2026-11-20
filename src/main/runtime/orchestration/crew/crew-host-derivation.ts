@@ -8,9 +8,22 @@ import { creatorFirstParent } from './crew-rules'
 import { createCrewPartyRegistry, type Party } from './crew-parties'
 import { readCrewAssignmentIds, readCrewAssignments, type CrewAssignmentRow } from './crew-query'
 import { createCrewSourceInputs } from './crew-source-inputs'
+import { dispatchCompletionEpoch } from '../db/dispatch-context/dispatch-completion-epoch'
 import type { CrewReadDependencies } from './crew-read-dependencies'
 
-export function createCrewHostDerivation(deps: CrewReadDependencies, capacity?: () => number) {
+/** What a host keeps across an in-memory re-derivation: its assignment rows and the source caches,
+ *  which only a database write (never the clock) makes stale. */
+type CrewHostCarry = {
+  rows: readonly CrewAssignmentRow[]
+  sourceInputs: ReturnType<typeof createCrewSourceInputs>
+  recipientInputs: ReturnType<typeof createCrewRecipientInputs> | null
+}
+
+export function createCrewHostDerivation(
+  deps: CrewReadDependencies,
+  capacity?: () => number,
+  carry?: CrewHostCarry
+) {
   const { statuses, ...sources } = captureCrewIdentityInputs(deps)
   // Reading statuses can refresh the same source; capture its cutoff afterwards.
   const now = deps.now ?? Date.now()
@@ -25,7 +38,11 @@ export function createCrewHostDerivation(deps: CrewReadDependencies, capacity?: 
         Number(['pending', 'dispatched'].includes(b.status)) -
           Number(['pending', 'dispatched'].includes(a.status)) || b.ordinal - a.ordinal
     )
-  const assignments = deps.db ? [...selected(readCrewAssignments(deps.db, now))] : []
+  const assignments = carry
+    ? selected([...carry.rows])
+    : deps.db
+      ? selected(readCrewAssignments(deps.db, now))
+      : []
   const assignmentsById = new Map(assignments.map((row) => [row.id, row]))
   const assignmentParty = new Map<string, Party>()
   const addAssignment = (row: CrewAssignmentRow): Party => {
@@ -139,28 +156,24 @@ export function createCrewHostDerivation(deps: CrewReadDependencies, capacity?: 
   }))
   let expiresAt = Infinity
   for (const row of assignments) {
-    if (row.completed_at) {
-      const completed = Date.parse(
-        row.completed_at.includes('T') ? row.completed_at : `${row.completed_at.replace(' ', 'T')}Z`
-      )
-      if (Number.isFinite(completed)) {
-        expiresAt = Math.min(expiresAt, completed + AGENT_STATUS_STALE_AFTER_MS + 1)
-      }
-    }
+    expiresAt = Math.min(expiresAt, assignmentExpiry(row))
   }
-  const sourceInputs = createCrewSourceInputs(deps.db, capacity)
+  const sourceInputs = carry?.sourceInputs ?? createCrewSourceInputs(deps.db, capacity)
   return indexCrewStatuses(
     {
       registry,
       sourceInputs,
-      recipientInputs: deps.db
-        ? createCrewRecipientInputs(
-            deps.db,
-            registry.records,
-            registry.commandCanonical,
-            sourceInputs.legacyOwner
-          )
-        : null,
+      capacity,
+      recipientInputs: carry
+        ? carry.recipientInputs
+        : deps.db
+          ? createCrewRecipientInputs(
+              deps.db,
+              registry.records,
+              registry.commandCanonical,
+              sourceInputs.legacyOwner
+            )
+          : null,
       deps: { ...sources, statuses, records: registry.records },
       now,
       expiresAt,
@@ -170,6 +183,26 @@ export function createCrewHostDerivation(deps: CrewReadDependencies, capacity?: 
     },
     statuses
   )
+}
+
+/** When a completed assignment leaves the crew: the first instant past its stale window. */
+function assignmentExpiry(row: CrewAssignmentRow): number {
+  const completed = row.completed_at ? dispatchCompletionEpoch(row.completed_at) : null
+  return completed === null ? Infinity : completed + AGENT_STATUS_STALE_AFTER_MS + 1
+}
+
+export const expiresBy = (row: CrewAssignmentRow, now: number): boolean =>
+  assignmentExpiry(row) <= now
+
+/** The host at a later `now` with no database write between: completed assignments past their
+ *  window drop out and nothing else moves, so it re-derives from the rows it holds. */
+export function expireCrewAssignments(host: CrewHostDerivation, now: number): CrewHostDerivation {
+  const rows = [...host.assignmentsById.values()].filter((row) => !expiresBy(row, now))
+  return createCrewHostDerivation({ ...host.deps, now }, host.capacity, {
+    rows,
+    sourceInputs: host.sourceInputs,
+    recipientInputs: host.recipientInputs
+  })
 }
 
 export function refreshCrewStatuses<

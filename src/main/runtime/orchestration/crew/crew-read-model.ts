@@ -11,6 +11,8 @@ import { admitCrewWake, crewIdentityMoved, type CrewWakeSkips } from './crew-wak
 import type { CrewReadDependencies } from './crew-read-dependencies'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
 import {
+  expireCrewAssignments,
+  expiresBy,
   patchCrewAssignmentStages,
   refreshCrewStatuses,
   type CrewHostDerivation
@@ -58,6 +60,8 @@ export class CrewReadModel {
   /** A terminal record write while nobody listened, checked by the next read instead of on every notice. */
   private identityDeferred = false
   private readonly hosts = crewHostBuilder(() => this.listeners.size)
+  /** Wakes the parties showing the next completed assignment to age out; only while someone listens. */
+  private expiry: { at: number; timer: ReturnType<typeof setTimeout> } | undefined
 
   constructor(
     private readonly readDependencies: (previous?: CrewReadDependencies) => CrewReadDependencies,
@@ -162,6 +166,7 @@ export class CrewReadModel {
         }
       }
       if (this.listeners.size === 0) {
+        this.clearExpiry()
         // The watch stays for the grace period, so the kept host sees every change; then nothing runs.
         this.release = setTimeout(this.releaseHost, CREW_HOST_GRACE_MS)
         this.release.unref?.()
@@ -176,11 +181,54 @@ export class CrewReadModel {
     this.skipped = undefined
   }
 
+  private clearExpiry(): void {
+    clearTimeout(this.expiry?.timer)
+    this.expiry = undefined
+  }
+
+  /** One timer for the host's earliest expiry; a read at that time drops the row in memory. */
+  private scheduleExpiry(): void {
+    const at = this.host?.expiresAt ?? Infinity
+    if (this.listeners.size === 0 || !Number.isFinite(at)) {
+      this.clearExpiry()
+      return
+    }
+    if (this.expiry?.at === at) {
+      return
+    }
+    this.clearExpiry()
+    const timer = setTimeout(
+      () => {
+        this.expiry = undefined
+        if (!this.host) {
+          return
+        }
+        const now = Date.now()
+        const expiring = [...this.host.assignmentsById.values()]
+          .filter((row) => expiresBy(row, now))
+          .map((row) => row.id)
+        // Dropped here, so the parties that show none of them read nothing new and the next expiry arms.
+        this.host = expireCrewAssignments(this.host, now)
+        this.scheduleExpiry()
+        for (const [listener, party] of this.listeners) {
+          const relevance = party === undefined ? undefined : this.partyRelevance.get(party)
+          if (!relevance || expiring.some((id) => relevance.dispatches.has(id))) {
+            listener()
+          }
+        }
+      },
+      Math.max(0, at - Date.now())
+    )
+    timer.unref?.()
+    this.expiry = { at, timer }
+  }
+
   private releaseHost = () => {
     this.release = undefined
     if (this.listeners.size > 0) {
       return
     }
+    this.clearExpiry()
     this.unwatch?.()
     this.unwatch = this.host = this.relevance = this.identity = this.skipped = undefined
     this.broadTraffic = false
@@ -262,11 +310,19 @@ export class CrewReadModel {
     }
     this.patches.clear()
     if (
+      this.host &&
+      now >= this.host.expiresAt &&
+      now >= this.host.now &&
+      !dirty.has('topology') &&
+      !dirty.has('records')
+    ) {
+      this.host = expireCrewAssignments(this.host, now)
+    }
+    if (
       !this.host ||
       dirty.has('topology') ||
       dirty.has('records') ||
-      now < this.host.now ||
-      now >= this.host.expiresAt
+      now < this.host.now
     ) {
       const previous = this.host
       this.host = undefined
@@ -341,6 +397,7 @@ export class CrewReadModel {
     } catch {
       this.identity = undefined
     }
+    this.scheduleExpiry()
     return snapshot
   }
 }

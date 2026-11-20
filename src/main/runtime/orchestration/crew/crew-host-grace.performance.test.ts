@@ -5,6 +5,7 @@ import { fixture } from './crew-read-model.test-fixture'
 import { seedLegacyCrewLoad, LEGACY_COORDINATOR } from './legacy-crew-load.test-fixture'
 import { CrewReadModel, CREW_HOST_GRACE_MS } from './crew-read-model'
 import { subscribeCrew } from './crew-stream'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 
 afterEach(() => vi.useRealTimers())
 
@@ -140,4 +141,32 @@ it('schedules one release when a subscription is stopped twice', () => {
   stop()
   stop()
   expect(vi.getTimerCount()).toBe(1)
+})
+
+it('ages a completed worker out of a mounted crew with one wake and no rebuild', () => {
+  const f = fixture()
+  const worker = f.assign('term_worker')
+  f.assign('term_helper')
+  f.db.completeDispatch(worker.id)
+  const completed = Date.parse('2026-10-28T00:00:00Z')
+  f.db.db
+    .prepare('UPDATE dispatch_contexts SET completed_at = ? WHERE id = ?')
+    .run(new Date(completed).toISOString(), worker.id)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], now: completed })
+  let builds = 0
+  const model = new CrewReadModel((previous) => {
+    if (!previous) {
+      builds++
+    }
+    return f.deps
+  }, f.db.crewChanges.subscribe)
+  let wakes = 0
+  const stop = model.subscribe(() => wakes++, 'term_coord')
+  expect(model.read('term_coord').sections.managing).toHaveLength(2)
+  vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
+  expect(model.read('term_coord').sections.managing).toHaveLength(1)
+  expect({ builds, wakes, timers: vi.getTimerCount() }).toEqual({ builds: 1, wakes: 1, timers: 0 })
+  stop()
+  vi.advanceTimersByTime(CREW_HOST_GRACE_MS)
+  expect(vi.getTimerCount()).toBe(0)
 })

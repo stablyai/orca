@@ -7,6 +7,7 @@ import {
   LEGACY_COORDINATOR_DURABLE_HANDLES_SQL,
   LEGACY_COORDINATOR_MAIL_HANDLES_SQL
 } from './legacy-coordinator-mail-takeover'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 
 const RUN = 'run_adopted'
 const ADOPTED_AT = '2026-06-01 00:00:00'
@@ -130,5 +131,32 @@ describe('legacy coordinator lookup', () => {
       .all(...params)
       .map((row) => String(row.handle))
     expect(handles.sort()).toEqual(['term_coord_a'])
+  })
+
+  it('answers a repeat lookup without rereading until one of its inputs is written', () => {
+    const db = seedLargeRun()
+    db.db
+      .prepare(
+        `INSERT INTO legacy_adoptions (source_run_id, adopted_run_id, scheduler_state_lost, adopted_at)
+         VALUES (?, ?, 1, ?)`
+      )
+      .run(ORCHESTRATION_LEGACY_RUN_ID, RUN, ADOPTED_AT)
+    expect(db.getUniqueLegacyCoordinatorHandle(RUN)).toBeNull()
+    let reads = 0
+    const prepare = db.db.prepare.bind(db.db)
+    db.db.prepare = (sql: string) => {
+      if (!sql.includes('legacy_adoptions')) {
+        reads++
+      }
+      return prepare(sql)
+    }
+    expect(db.getUniqueLegacyCoordinatorHandle(RUN)).toBeNull()
+    expect(reads).toBe(0)
+    db.db
+      .prepare(
+        "UPDATE tasks SET created_by_terminal_handle = 'term_coord_a' WHERE created_by_terminal_handle = 'term_coord_b'"
+      )
+      .run()
+    expect(db.getUniqueLegacyCoordinatorHandle(RUN)).toBe('term_coord_a')
   })
 })

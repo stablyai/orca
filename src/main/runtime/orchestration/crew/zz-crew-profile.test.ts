@@ -11,8 +11,11 @@ it('profiles', () => {
   const parties = [LEGACY_COORDINATOR, 'term_coord', 'term_worker', 'term_lw1', 'term_lw2', 'term_c0', 'term_c1', 'term_o0_1', 'term_c2', 'run:run_legacy_adopted']
   const sqlTime = new Map<string, { n: number; ms: number }>()
   const prepare = f.db.db.prepare.bind(f.db.db)
+  const wrapped = new WeakSet<object>()
   f.db.db.prepare = (sql: string) => {
     const stmt = prepare(sql)
+    if (wrapped.has(stmt)) return stmt
+    wrapped.add(stmt)
     const key = sql.replace(/\s+/g, ' ').slice(0, 90)
     const wrap = (name: 'all' | 'get' | 'run') => {
       const orig = (stmt as any)[name].bind(stmt)
@@ -29,18 +32,22 @@ it('profiles', () => {
   }
   for (let round = 0; round < 3; round++) {
     sqlTime.clear()
+    if (round === 2) f.db.db.prepare("UPDATE tasks SET status = status WHERE id = 'task_l0'").run()
     let t = performance.now()
     const a = readCrewAssignments(f.db, Date.now())
     const tAssign = performance.now() - t
     t = performance.now()
     const host = createCrewHostDerivation(f.deps)
     const tHost = performance.now() - t
+    let total = 0
     const per: string[] = []
     for (const p of parties) {
       const s = performance.now()
       buildCrewSnapshot(p, { ...host.deps, now: Date.now() }, host)
+      total += performance.now() - s
       per.push(`${p}=${(performance.now() - s).toFixed(1)}`)
     }
+    console.log(`TOTAL round ${round} snapshots=${total.toFixed(1)}ms rebuild=${(total + tHost).toFixed(1)}ms`)
     const per2: string[] = []
     for (const p of parties) {
       const s = performance.now()
