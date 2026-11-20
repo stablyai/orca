@@ -15,10 +15,12 @@ type ClaudeBypassFacts = Partial<
   Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'bypassDisabled'>
 >
 
-function record(value: unknown): Record<string, unknown> | null {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null
 }
 
 /** Claude's merged settings, policy tiers included, as its `get_settings` reports them. */
@@ -116,7 +118,10 @@ export function claimClaudeFullAccessRefusalNotice(sessionId: string): boolean {
   }
   announced.add(sessionId)
   if (announced.size > MAX_ANNOUNCED) {
-    announced.delete(announced.values().next().value as string)
+    const oldest = announced.values().next().value
+    if (oldest !== undefined) {
+      announced.delete(oldest)
+    }
   }
   return true
 }

@@ -27,9 +27,11 @@ function launch(sessionId: string, session: Launch) {
     {
       attempt,
       initProof: createClaudeInitProof(),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callbacks run only on a journal write failure, which this sink never reports.
       callbacks: {} as ClaudeAcquireCallbacks,
       sessionId
     },
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the notice reads only launchIntent, firstRootInit and bypassDisabled, which the stub sets.
     () => session as ClaudeSession,
     () => false
   )
