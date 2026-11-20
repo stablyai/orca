@@ -32,7 +32,7 @@ it('shows a stall reported after app launch but before any status bubble mounted
   deliver({
     browserPageId: 'page-1',
     webContentsId: 7,
-    stall: { phase: 'sent', host: 'localhost:3000', hiddenSameOriginPages: 0 }
+    stall: { host: 'localhost:3000' }
   })
   const { result } = renderHook(() => useBrowserLoadStallStatus('page-1'))
   expect(result.current).toContain('localhost:3000')

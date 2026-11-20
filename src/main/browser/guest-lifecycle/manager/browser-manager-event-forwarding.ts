@@ -117,7 +117,7 @@ export abstract class BrowserManagerEventForwarding extends BrowserManagerBindin
     this.resolveRendererForBrowserTab(browserPageId)?.send('browser:load-stall', {
       browserPageId,
       webContentsId,
-      stall
+      stall: stall && { host: stall.host }
     } satisfies BrowserLoadStallEvent)
   }
 

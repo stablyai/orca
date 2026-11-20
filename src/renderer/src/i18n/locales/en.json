@@ -598,9 +598,7 @@
       "profile": "Profile"
     },
     "loadStall": {
-      "waitingForHost": "Waiting for {{host}}…",
-      "waitingWithBackgroundTabs_one": "Waiting for {{host}}… 1 other tab on this site is open in the background.",
-      "waitingWithBackgroundTabs_other": "Waiting for {{host}}… {{count}} other tabs on this site are open in the background."
+      "waitingForHost": "Waiting for {{host}}…"
     }
   },
   "editor": {

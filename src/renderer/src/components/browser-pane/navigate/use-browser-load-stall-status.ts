@@ -1,12 +1,12 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import type {
-  BrowserLoadStall,
-  BrowserLoadStallEvent
-} from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import type { BrowserLoadStallEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { useTranslate } from '@/i18n/use-translate'
 
 // One subscription for the app, so a pane that remounts mid-stall still knows its load is stuck.
-const stalls = new Map<string, { webContentsId: number; stall: BrowserLoadStall }>()
+const stalls = new Map<
+  string,
+  { webContentsId: number; stall: NonNullable<BrowserLoadStallEvent['stall']> }
+>()
 const listenersByPage = new Map<string, Set<() => void>>()
 let stopListening: (() => void) | null = null
 
@@ -73,17 +73,6 @@ export function useBrowserLoadStallStatus(browserPageId: string): string | null 
   if (!stall) {
     return null
   }
-  // States the background tabs as a fact: Orca can't see which pages hold the site's connections.
-  return stall.hiddenSameOriginPages > 0
-    ? t(
-        'browser.loadStall.waitingWithBackgroundTabs',
-        'Waiting for {{host}}… {{count}} other tabs on this site are open in the background.',
-        {
-          host: stall.host,
-          count: stall.hiddenSameOriginPages,
-          defaultValue_one:
-            'Waiting for {{host}}… 1 other tab on this site is open in the background.'
-        }
-      )
-    : t('browser.loadStall.waitingForHost', 'Waiting for {{host}}…', { host: stall.host })
+  // Like a browser's status bubble: the host only; the stuck phase and background tabs go to the trace.
+  return t('browser.loadStall.waitingForHost', 'Waiting for {{host}}…', { host: stall.host })
 }
