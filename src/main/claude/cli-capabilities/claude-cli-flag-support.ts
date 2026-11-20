@@ -14,6 +14,18 @@ export const CLAUDE_PLUGIN_DIR_FLAG: ClaudeCliFlag = {
   firstVersion: '2.0.25'
 }
 
+/** Claude loads the folders this variable names as plugins; managed settings can refuse it. */
+export const CLAUDE_PLUGIN_DIRS_ENV: ClaudeCliFlag = {
+  option: 'CLAUDE_CODE_PLUGIN_DIRS',
+  firstVersion: '0.0.0'
+}
+
+/** A managed agent's own tools; managed settings can refuse it. */
+export const CLAUDE_MCP_CONFIG_FLAG: ClaudeCliFlag = {
+  option: '--mcp-config',
+  firstVersion: '0.0.0'
+}
+
 export const CLAUDE_EFFORT_FLAG: ClaudeCliFlag = {
   option: '--effort',
   firstVersion: '2.1.38'
@@ -41,9 +53,11 @@ export const CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS = 250
 
 // Only an explicit unknown-option or managed-settings refusal proves flag rejection.
 const UNKNOWN_OPTION_DIAGNOSTIC = /unknown option '(--[a-z][a-z0-9-]*)'/
-// Lists the refused flags first, e.g. `--plugin-dir, --agents, plugins (initialize request) are`.
-const MANAGED_SIDELOAD_REFUSAL =
-  /((?:--[a-z][a-z0-9-]*, )*--[a-z][a-z0-9-]*)(?:, (?!--)[^,\n]+)* (?:is|are) disabled by your organization's managed settings \(disableSideloadFlags\)/
+// Lists every refused item, e.g. `--plugin-dir, --agents, plugins (initialize request), CLAUDE_CODE_PLUGIN_DIRS are`.
+const SIDELOAD_ITEM = String.raw`(?:--[a-z][a-z0-9-]*|[A-Z][A-Z0-9_]+|[a-z]+ \([a-z ]+\))`
+const MANAGED_SIDELOAD_REFUSAL = new RegExp(
+  String.raw`(?<![\w-])((?:${SIDELOAD_ITEM}, )*${SIDELOAD_ITEM}) (?:is|are) disabled by your organization's managed settings \(disableSideloadFlags\)`
+)
 
 // Managed settings can come from the signed-in account, so their refusals hold only for its config folder.
 function refusedOptions(message: string): { options: string[]; perAccount: boolean } {
@@ -55,6 +69,15 @@ function refusedOptions(message: string): { options: string[]; perAccount: boole
     options: MANAGED_SIDELOAD_REFUSAL.exec(message)?.[1].split(', ') ?? [],
     perAccount: true
   }
+}
+
+/** Whether Claude exited because the organization's managed settings refuse `option`. */
+export function claudeManagedSettingsRefuse(error: unknown, option: string): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const { options, perAccount } = refusedOptions(error.message)
+  return perAccount && options.includes(option)
 }
 
 const MAX_REMEMBERED = 32

@@ -7,6 +7,10 @@ import {
   summaryHostId,
   summaryIdentity
 } from './workspace-cleanup-folder-membership'
+import {
+  pairedFolderChildrenOnce,
+  type PairedFolderChildren
+} from './workspace-cleanup-paired-folder-children'
 import { listClientUnsavedEditorWorktreeIds } from './workspace-cleanup-client-unsaved-editors'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 import { scanWorkspaceCleanup } from '../../ipc/workspace-cleanup/workspace-cleanup-scan'
@@ -49,6 +53,7 @@ export type WorkspaceCleanupWorkspace = {
   identity: string
   /** The host identities of the other worktrees its folder workspace lists, on any host. */
   folderSiblings: string[]
+  readPairedFolderChildren: () => Promise<PairedFolderChildren>
 }
 
 /** Repos whose checkouts this process owns; a host served by its own orcad is that server's to clean. */
@@ -188,6 +193,8 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   now: number
   worktreeId?: string
   withFolderSiblings?: boolean
+  /** The scan's read of paired servers, so a re-check never asks them again. */
+  readPairedFolderChildren?: () => Promise<PairedFolderChildren>
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupWorkspace[]> {
   const { store, runtime, globalRules, now, worktreeId, signal } = args
@@ -203,7 +210,13 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   if (ps.truncated) {
     throw new Error('Could not list every workspace on this host.')
   }
-  const folderSiblingsOf = folderSiblingsByWorktree(store, ps.worktrees)
+  const readPairedFolderChildren =
+    args.readPairedFolderChildren ?? pairedFolderChildrenOnce(runtime)
+  const folderSiblingsOf = await folderSiblingsByWorktree(
+    store,
+    ps.worktrees,
+    readPairedFolderChildren
+  )
   const owned = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
   const summaries =
     args.withFolderSiblings && worktreeId !== undefined
@@ -262,7 +275,8 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       paneAgentStates,
       removing: summary.removing === true,
       identity: summaryIdentity(summary),
-      folderSiblings: folderSiblingsOf(summary)
+      folderSiblings: folderSiblingsOf(summary),
+      readPairedFolderChildren
     }
   })
 }

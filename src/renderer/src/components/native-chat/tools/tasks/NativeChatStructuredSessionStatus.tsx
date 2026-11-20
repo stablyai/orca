@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
 import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
 import type { StructuredSessionTaskStop } from './use-structured-session-task-stop'
 import { openNativeChatSubagent } from '../../subagents/native-chat-open-subagent'
+import {
+  NativeChatCrewContext,
+  useNativeChatCrew
+} from '../../../orchestration-crew/use-native-chat-crew'
 
 export function NativeChatStructuredSessionStatus(props: {
   sessionId: string
@@ -16,6 +20,8 @@ export function NativeChatStructuredSessionStatus(props: {
   /** The agent whose view the pane shows, marked current in the strip. */
   currentAgentId?: string | null
 }): React.JSX.Element {
+  // The chat's crew, when it has one: the strip then shows even with no background work.
+  const crew = useNativeChatCrew(useContext(NativeChatCrewContext))
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
   const childRowContext = useStructuredSessionChildRowContext(
     props.paneKey,
@@ -25,7 +31,7 @@ export function NativeChatStructuredSessionStatus(props: {
 
   return (
     <>
-      {backgroundTasks.show ? (
+      {backgroundTasks.show || crew ? (
         <NativeChatBackgroundTasksStatus
           isVisible={props.isVisible}
           tasks={backgroundTasks.tasks}
@@ -44,6 +50,7 @@ export function NativeChatStructuredSessionStatus(props: {
           onStop={stop.onStop}
           currentAgentId={props.currentAgentId ?? null}
           onShowAgent={(providerId) => openNativeChatSubagent(props.paneKey, providerId)}
+          crew={crew}
         />
       ) : null}
     </>

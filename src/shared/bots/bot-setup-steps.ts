@@ -2,17 +2,24 @@
 // message. Read from the kickoff turn's own journal rows, so a network retry or a failure shows with
 // the agent's words instead of a step that looks done while nothing happens.
 import type { NativeChatMessage } from '../native-chat/native-chat-types'
+import { agentSessionFailureDetailText } from '../agent-session/failures/agent-session-failure-quoted-detail'
 
 export type BotSetupStepState = 'pending' | 'running' | 'done' | 'failed'
 
-/** `detail`: the latest status line about the step (a retry, a failure), as the agent reported it. */
-export type BotSetupStep = { state: BotSetupStepState; detail?: string }
+/** `detail`: the latest status line about the step (a retry, a failure), as the agent reported it.
+ *  `providerDetail`: the agent's own words behind a failure, such as why its CLI exited. */
+export type BotSetupStep = { state: BotSetupStepState; detail?: string; providerDetail?: string }
+
+/** Why the host refused the kickoff before any turn opened, with the agent's own words when it has them. */
+export type BotSetupRefusal = { reason: string; providerDetail?: string }
+
+type Problem = { detail?: string; providerDetail?: string }
 
 export type BotSetupSteps = { start: BotSetupStep; reply: BotSetupStep }
 
 const PROBLEM_TONES: ReadonlySet<string> = new Set(['warning', 'error', 'failed', 'failure'])
 
-function problemText(message: NativeChatMessage): string | null {
+function problemOf(message: NativeChatMessage): Problem | null {
   if (message.role !== 'system') {
     return null
   }
@@ -22,10 +29,19 @@ function problemText(message: NativeChatMessage): string | null {
       block.text.trim() !== '' &&
       (block.failure !== undefined || (block.tone !== undefined && PROBLEM_TONES.has(block.tone)))
     ) {
-      return block.text.trim()
+      return withProviderDetail(block.text, agentSessionFailureDetailText(block.failure))
     }
   }
   return null
+}
+
+function withProviderDetail(text: string, providerDetail: string | undefined): Problem {
+  const detail = text.trim()
+  const words = providerDetail?.trim()
+  return {
+    ...(detail ? { detail } : {}),
+    ...(words && words !== detail ? { providerDetail: words } : {})
+  }
 }
 
 /** `turn`: the kickoff turn's rows so far. `ended`: it ended without the bot's words. `agentReady`:
@@ -34,12 +50,15 @@ export function botSetupSteps(input: {
   turn: readonly NativeChatMessage[]
   ended: boolean
   agentReady: boolean
-  refused: string | null
+  refused: BotSetupRefusal | null
 }): BotSetupSteps {
   const { turn, ended, agentReady, refused } = input
   if (refused !== null) {
     return {
-      start: { state: 'failed', ...(refused.trim() ? { detail: refused.trim() } : {}) },
+      start: {
+        state: 'failed',
+        ...withProviderDetail(refused.reason, refused.providerDetail)
+      },
       reply: { state: 'pending' }
     }
   }
@@ -48,10 +67,10 @@ export function botSetupSteps(input: {
   // Ended, the last problem line says why; running, a retry line is current only while nothing came after it.
   const last = turn.at(-1)
   const problem = ended
-    ? turn.flatMap((message) => problemText(message) ?? []).at(-1)
-    : last && problemText(last)
+    ? turn.flatMap((message) => problemOf(message) ?? []).at(-1)
+    : last && problemOf(last)
   const step = (state: BotSetupStepState): BotSetupStep =>
-    problem ? { state, detail: problem } : { state }
+    problem ? { state, ...problem } : { state }
   const now = step(ended ? 'failed' : 'running')
   return started
     ? { start: { state: 'done' }, reply: now }

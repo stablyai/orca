@@ -49,16 +49,17 @@ export class LegacyRelayHiddenOutput {
     }
   }
 
-  setPaused(ptyId: string, paused: boolean): void {
+  setPaused(ptyId: string, paused: boolean, replayNeeded = false): void {
     const hidden = this.hidden.get(ptyId)
     if (paused) {
       if (hidden) {
         hidden.revealing = false
+        hidden.dropped ||= replayNeeded
       } else {
         const salvage = this.openSequences.get(ptyId) ?? EMPTY_OUTPUT_SALVAGE
         this.openSequences.delete(ptyId)
         this.hidden.set(ptyId, {
-          dropped: false,
+          dropped: replayNeeded,
           revealing: false,
           salvage,
           stateful: '',

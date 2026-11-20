@@ -56,7 +56,7 @@ describe('bots DB worker client', () => {
 
     expect(await first.get(a.uid)).toMatchObject({ number: 1, title: 'Share dialog' })
     expect(await first.get(b.uid)).toMatchObject({ number: 2, title: 'Share dialog v2' })
-    expect(await codeOf(first.set(a.uid, { status: 'needs_you' }, owner))).toBe('invalid_argument')
+    expect(await codeOf(first.set(a.uid, { status: 'canceled' }, owner))).toBe('invalid_argument')
   })
 
   it('fails every call caught in a crash visibly, then restarts on the next call', async () => {

@@ -1,5 +1,5 @@
 import { PluginUpdateReviewHost } from './components/plugins/dialogs/PluginUpdateReviewHost'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -21,7 +21,8 @@ import {
   MAC_TRAFFIC_LIGHTS_WIDTH,
   WINDOW_CONTROLS_HEIGHT,
   WINDOW_CONTROLS_WIDTH,
-  hasCustomTitleBar
+  hasCustomTitleBar,
+  supportsLinuxTilingWindowMode
 } from './app-shell/chrome/app-window-chrome'
 import { useAppChromeLayout } from './app-shell/chrome/use-app-chrome-layout'
 import { useAppSessionPersistence } from './app-shell/storage/use-app-session-persistence'
@@ -42,9 +43,22 @@ import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSsh
 import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
 import { AddToChatPointMenuHost } from './components/native-chat/selection-quotes/AddToChatMenu'
 import { installActiveWorktreeRemovalSuccessor } from './lib/workspace/activation/active-worktree-removal-successor'
+import { useAppStore } from './store'
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
+  const tilingWindowMode = useAppStore(
+    (s) => supportsLinuxTilingWindowMode && s.settings?.linuxTilingWindowMode === true
+  )
+  const windowControlsWidth = tilingWindowMode ? '46px' : WINDOW_CONTROLS_WIDTH
+  const compactWorkspaceChrome = tilingWindowMode && layout.workspaceChromeActive
+  const windowControlsHeight = compactWorkspaceChrome
+    ? 'var(--workspace-tab-row-height)'
+    : WINDOW_CONTROLS_HEIGHT
+  const layoutStyle: React.CSSProperties & Record<`--${string}`, string> = {
+    '--collapsed-sidebar-header-width': `${layout.collapsedSidebarHeaderWidth}px`,
+    ...(compactWorkspaceChrome && { '--app-header-height': windowControlsHeight })
+  }
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
 
@@ -66,12 +80,12 @@ function App(): React.JSX.Element {
   useEffect(() => installActiveWorktreeRemovalSuccessor(), [])
 
   // Portaled sheets/dialogs live outside .app-layout and need root offsets to clear Windows/Linux controls.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement.style
-    root.setProperty('--window-controls-width', WINDOW_CONTROLS_WIDTH)
-    root.setProperty('--window-controls-height', WINDOW_CONTROLS_HEIGHT)
+    root.setProperty('--window-controls-width', windowControlsWidth)
+    root.setProperty('--window-controls-height', windowControlsHeight)
     root.setProperty('--mac-traffic-lights-width', MAC_TRAFFIC_LIGHTS_WIDTH)
-  }, [])
+  }, [windowControlsHeight, windowControlsWidth])
 
   const { cancelReturnFocusFrame } = floatingWorkspace
   const setAppRootNode = useCallback(
@@ -88,17 +102,8 @@ function App(): React.JSX.Element {
     <div
       ref={setAppRootNode}
       className="app-layout"
-      style={
-        {
-          '--collapsed-sidebar-header-width': `${layout.collapsedSidebarHeaderWidth}px`,
-          // Shared so surfaces can avoid the Windows/Linux window-controls overlay without hardcoding 138px everywhere.
-          '--window-controls-width': WINDOW_CONTROLS_WIDTH,
-          // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
-          '--window-controls-height': WINDOW_CONTROLS_HEIGHT,
-          // Full-bleed surfaces use this to keep the macOS traffic lights uncovered.
-          '--mac-traffic-lights-width': MAC_TRAFFIC_LIGHTS_WIDTH
-        } as React.CSSProperties
-      }
+      data-linux-tiling-window-mode={tilingWindowMode || undefined}
+      style={layoutStyle}
     >
       <TooltipProvider>
         <ConfirmationDialogProvider>
@@ -131,7 +136,7 @@ function App(): React.JSX.Element {
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />
       {/* Electron drag hit-testing follows DOM order, ignoring z-index; render controls last to keep them clickable. */}
-      {hasCustomTitleBar && <WindowControls />}
+      {hasCustomTitleBar && <WindowControls closeOnly={tilingWindowMode} />}
     </div>
   )
 }

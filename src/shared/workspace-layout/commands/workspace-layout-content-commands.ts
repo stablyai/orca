@@ -249,6 +249,13 @@ export function openAgentSessionTab(
   if (drawn) {
     return drawn
   }
+  // One chat, one tab: an open under another slot id shows the tab the chat already has.
+  const shown = model.workspaces[command.workspace]?.tabs.find(
+    (tab) => tab.kind === 'agent-session' && tab.entityId === command.sessionId
+  )
+  if (shown) {
+    return applied(model, { tabId: shown.id })
+  }
   const tab = contentTab(context, {
     ...(command.tabId ? { id: command.tabId } : {}),
     ...(command.createdAt !== undefined ? { createdAt: command.createdAt } : {}),

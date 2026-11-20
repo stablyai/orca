@@ -70,14 +70,6 @@ describe('readPairedHandedAgents', () => {
       ])
     )
   })
-
-  it('keeps every workspace when the computer does not answer', async () => {
-    const { runtime, calls } = runtimeAnswering(async () => {
-      throw new Error('offline')
-    })
-    expect(await readPairedHandedAgents(runtime, bot, 50_000)).toEqual([])
-    expect(calls.bots.update).not.toHaveBeenCalled()
-  })
 })
 
 describe('readPairedHandedAgents, a computer that is away', () => {
@@ -99,6 +91,7 @@ describe('readPairedHandedAgents, a computer that is away', () => {
     expect(asked()).toBe(2)
     await readPairedHandedAgents(runtime, bot, 14_999)
     expect(asked()).toBe(2)
+    expect(calls.bots.update).not.toHaveBeenCalled()
     // Back online: the next ask after the wait answers, and later reads reuse it as any answer.
     online = true
     expect(await readPairedHandedAgents(runtime, bot, 15_000)).toHaveLength(1)

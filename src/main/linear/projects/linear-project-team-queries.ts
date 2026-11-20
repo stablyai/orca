@@ -26,7 +26,7 @@ export async function listProjectTeams(
   return coalesce(
     key,
     async () => {
-      const entry = getClients(concreteWorkspaceId, signal)[0]
+      const entry = (await getClients(concreteWorkspaceId, signal))[0]
       if (!entry) {
         return []
       }
@@ -71,7 +71,7 @@ export async function listProjectTeams(
         return teams
       } catch (error) {
         if (isAuthError(error)) {
-          clearToken(entry.workspace.id)
+          await clearToken(entry.workspace.id)
         }
         throw error
       } finally {
