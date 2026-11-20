@@ -1,3 +1,4 @@
+import { probeRender } from '@/diagnostics/bot-home/bot-home-render-probe'
 // Hover or keyboard focus swaps the age for Done, Snooze, and More on open items.
 import { useId } from 'react'
 import { Check, CircleCheck, CircleSlash, Clock, MoreHorizontal } from 'lucide-react'
@@ -62,6 +63,7 @@ export function BotItemRow({
   /** Its chat's name, when the list shows chats beyond the one it is about. */
   place?: string | null
 }): React.JSX.Element {
+  probeRender('BotItemRow')
   const t = useTranslate()
   const closed = item.status === 'done' || item.status === 'canceled'
   const doneLabel = t('bots.items.row.done', 'Done')

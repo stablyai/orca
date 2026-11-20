@@ -1,3 +1,4 @@
+import { probeRender } from '@/diagnostics/bot-home/bot-home-render-probe'
 // A bot's items in groups: Needs you (led by Orca's asks) and In progress open; Planned, Snoozed, Stale
 // and Closed folded. Each shows five rows, then Show N more. Checked rows get the floating pill; Stale's header
 // cancels them all. Asks have no checkbox, so selection and ranges never reach them.
@@ -97,6 +98,7 @@ function listOwner(bot: Bot | BotItemsListMembers, seenEventId: string): ListOwn
 }
 
 export function BotItemsList(props: BotItemsListProps): React.JSX.Element {
+  probeRender('BotItemsList')
   const { groups, onOpen } = props
   const owner = listOwner(props.bot, props.seenEventId)
   const { botOf } = owner
@@ -234,6 +236,7 @@ function BotItemGroup({
   onCancelAll: (() => Promise<void>) | null
   staleReason: string
 }): React.JSX.Element | null {
+  probeRender('BotItemGroup')
   const t = useTranslate()
   const items = groups[id]
   const fold = useBotPanelFold(owner.foldKey, foldId(id))
