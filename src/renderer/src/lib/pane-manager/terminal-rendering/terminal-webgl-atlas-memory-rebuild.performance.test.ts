@@ -162,6 +162,28 @@ describe('terminal WebGL atlas-memory rebuild', () => {
     expect(rebuilds).toHaveLength(0)
   })
 
+  it('visits only the due atlas owners on each attempt, however many terminals are attached', async () => {
+    const atlas = await loadModule({ userAgent: MAC_AGENT })
+    const atlasReads = { count: 0 }
+    for (let i = 0; i < 300; i++) {
+      const { pane } = fakePane(atlas, newAtlas())
+      const addon = pane.webglAddon
+      Object.defineProperty(pane, 'webglAddon', {
+        get: () => {
+          atlasReads.count++
+          return addon
+        }
+      })
+    }
+    const visible = fakePane(atlas, newAtlas())
+    visible.terminal.modes.synchronizedOutputMode = true
+    visible.output()
+    atlas.handleTerminalWebglAtlasPage(LARGE_PAGE, visible.pane)
+    await vi.advanceTimersByTimeAsync(70_000)
+    expect(visibilityScans.count).toBe(7)
+    expect(atlasReads.count).toBe(0)
+  })
+
   it('ignores a hidden pane mid synchronized-output frame', async () => {
     const atlas = await loadModule({ userAgent: MAC_AGENT })
     const hidden = fakePane(atlas, newAtlas(), false)

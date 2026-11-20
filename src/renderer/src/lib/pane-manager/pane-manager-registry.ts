@@ -15,6 +15,8 @@ type RegisteredPaneManager = {
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
+// Kept at visibility changes so atlas recovery never walks hidden managers.
+const visibleManagers = new Set<RegisteredPaneManager>()
 const managerIds = new WeakMap<RegisteredPaneManager, number>()
 /** Detaches a manager's WebGL renderers and returns the step that reattaches them. */
 type WebglRendererDetacher = () => () => void
@@ -32,10 +34,20 @@ export function registerLivePaneManager(
     webglRendererDetachers.set(manager, detachWebglRenderers)
   }
   liveManagers.add(manager)
+  notePaneManagerVisibility(manager)
 }
 
 export function unregisterLivePaneManager(manager: RegisteredPaneManager): void {
   liveManagers.delete(manager)
+  visibleManagers.delete(manager)
+}
+
+export function notePaneManagerVisibility(manager: RegisteredPaneManager): void {
+  if (liveManagers.has(manager) && manager.isVisibleForAtlasRecovery?.() !== false) {
+    visibleManagers.add(manager)
+  } else {
+    visibleManagers.delete(manager)
+  }
 }
 
 export function resetAndRefreshAllTerminalWebglAtlases(
@@ -112,10 +124,7 @@ export function rebuildAllTerminalWebglRenderers(reason: string): void {
 /** Terminals of panes whose manager is on screen. */
 export function getVisiblePaneTerminals(): Set<unknown> {
   const terminals = new Set<unknown>()
-  for (const manager of liveManagers) {
-    if (manager.isVisibleForAtlasRecovery?.() === false) {
-      continue
-    }
+  for (const manager of visibleManagers) {
     try {
       for (const pane of manager.getPanes?.() ?? []) {
         terminals.add(pane.terminal)

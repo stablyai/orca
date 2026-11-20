@@ -2,6 +2,7 @@ import type { ManagedPaneInternal } from '../pane-manager-types'
 import type { ForegroundTerminalOutputTarget } from '../terminal-output/pane-terminal-foreground-render-settle'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { getVisiblePaneTerminals } from '../pane-manager-registry'
+import { getWindowParkVisible } from '../../window-activity/window-park-visibility'
 
 // A 4096² merged page means the shared atlas reached ~64 MiB; on Apple GPUs each context keeps its upload memory until the context is destroyed (GiBs across panes).
 const ATLAS_REBUILD_PAGE_SIZE = 4096
@@ -26,8 +27,13 @@ let lastAttemptAt = Number.NEGATIVE_INFINITY
 // Per atlas, so one atlas's output never re-arms another; weak so a retired atlas is never kept alive.
 const atlasesWithLargePage = new WeakSet<GlyphAtlas>()
 const atlasesWithOutput = new WeakSet<GlyphAtlas>()
-const attachedPanes = new Map<unknown, ManagedPaneInternal>()
 const deferredRetries = new WeakMap<GlyphAtlas, number>()
+const attachedPanes = new Map<unknown, ManagedPaneInternal>()
+// Owners indexed per atlas, so an attempt visits only the due atlases' panes, never every terminal.
+const atlasOwners = new WeakMap<GlyphAtlas, Set<ManagedPaneInternal>>()
+const paneAtlases = new WeakMap<ManagedPaneInternal, GlyphAtlas>()
+// Strong only until rebuilt or ownerless.
+const dueAtlases = new Set<GlyphAtlas>()
 
 function atlasOf(pane: ManagedPaneInternal): GlyphAtlas | undefined {
   const addon = pane.webglAddon
@@ -47,6 +53,46 @@ function isGlyphAtlas(value: unknown): value is GlyphAtlas {
   )
 }
 
+function forgetOwner(pane: ManagedPaneInternal): void {
+  const previous = paneAtlases.get(pane)
+  if (!previous) {
+    return
+  }
+  paneAtlases.delete(pane)
+  const owners = atlasOwners.get(previous)
+  owners?.delete(pane)
+  if (!owners?.size) {
+    dueAtlases.delete(previous)
+  }
+}
+
+/** Files the pane under its current atlas; xterm swaps atlases on font or theme changes. */
+function indexOwner(pane: ManagedPaneInternal): GlyphAtlas | undefined {
+  const atlas = atlasOf(pane)
+  if (paneAtlases.get(pane) === atlas) {
+    return atlas
+  }
+  forgetOwner(pane)
+  if (!atlas) {
+    return undefined
+  }
+  paneAtlases.set(pane, atlas)
+  const owners = atlasOwners.get(atlas)
+  if (owners) {
+    owners.add(pane)
+  } else {
+    atlasOwners.set(atlas, new Set([pane]))
+  }
+  return atlas
+}
+
+function markIfDue(atlas: GlyphAtlas): void {
+  if (atlasesWithLargePage.has(atlas) && atlasesWithOutput.has(atlas)) {
+    dueAtlases.add(atlas)
+    scheduleRebuild()
+  }
+}
+
 /** Wired by the reattach module, which owns detaching and reattaching pane renderers. */
 export function setTerminalWebglAtlasRebuilder(rebuilder: AtlasRebuilder): void {
   rebuildPanes = rebuilder
@@ -54,50 +100,41 @@ export function setTerminalWebglAtlasRebuilder(rebuilder: AtlasRebuilder): void 
 
 /** On screen: window shown, tab shown, and the pane laid out (not an expanded split's hidden sibling). */
 function onScreenPaneFilter(): PaneFilter {
-  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+  if (!getWindowParkVisible()) {
     return () => false
   }
   const visibleTerminals = getVisiblePaneTerminals()
   return (pane) => visibleTerminals.has(pane.terminal) && pane.container.getClientRects().length > 0
 }
 
-function isRebuildDue(atlas: GlyphAtlas | undefined): atlas is GlyphAtlas {
-  return atlas !== undefined && atlasesWithLargePage.has(atlas) && atlasesWithOutput.has(atlas)
-}
-
 function rebuildDueAtlases(): void {
   rebuildTimer = null
-  const owners = new Map<GlyphAtlas, ManagedPaneInternal[]>()
-  for (const pane of attachedPanes.values()) {
-    const atlas = atlasOf(pane)
-    if (!isRebuildDue(atlas)) {
-      continue
-    }
-    const atlasPanes = owners.get(atlas)
-    if (atlasPanes) {
-      atlasPanes.push(pane)
-    } else {
-      owners.set(atlas, [pane])
-    }
-  }
-  if (owners.size === 0) {
+  if (dueAtlases.size === 0) {
     return
   }
   lastAttemptAt = Date.now()
   const onScreen = onScreenPaneFilter()
   const panes: ManagedPaneInternal[] = []
   let retry = false
-  for (const [atlas, atlasPanes] of owners) {
+  for (const atlas of dueAtlases) {
+    const atlasPanes = [...(atlasOwners.get(atlas) ?? [])].filter(
+      (pane) => attachedPanes.get(pane.terminal) === pane && atlasOf(pane) === atlas
+    )
     // A new canvas paints straight from the buffer, so an on-screen pane mid synchronized-output (DEC 2026) frame would flash it half drawn; that atlas waits.
     if (atlasPanes.some((pane) => onScreen(pane) && pane.terminal.modes.synchronizedOutputMode)) {
       const retries = deferredRetries.get(atlas) ?? 0
       if (retries < DEFERRED_REBUILD_MAX_RETRIES) {
         deferredRetries.set(atlas, retries + 1)
         retry = true
+      } else {
+        // Out of retries: the frame's closing output re-arms it.
+        dueAtlases.delete(atlas)
+        atlasesWithOutput.delete(atlas)
       }
       continue
     }
     // Normally retired by the rebuild; clearing also stops a surviving atlas from rebuilding again without new output.
+    dueAtlases.delete(atlas)
     atlasesWithLargePage.delete(atlas)
     atlasesWithOutput.delete(atlas)
     deferredRetries.delete(atlas)
@@ -113,8 +150,10 @@ function rebuildDueAtlases(): void {
     panes: panes.length,
     reason: 'atlas-memory'
   })
+  // Decided before any detach: detaching changes layout, and reading rects afterwards forces one layout per pane.
+  const reattach = new Set(panes.filter(onScreen))
   // Every owner of a due atlas detaches before any reattaches, or a remaining owner keeps it alive; only on-screen owners reattach now.
-  rebuildPanes?.(panes, onScreen)
+  rebuildPanes?.(panes, (pane) => reattach.has(pane))
 }
 
 function scheduleRebuild(): void {
@@ -130,25 +169,25 @@ function scheduleRebuild(): void {
 export function trackTerminalWebglAtlasPane(pane: ManagedPaneInternal): void {
   if (ATLAS_MEMORY_REBUILD_ENABLED) {
     attachedPanes.set(pane.terminal, pane)
+    indexOwner(pane)
   }
 }
 
 /** Forgets a detached pane so a closed pane is not kept alive. */
 export function untrackTerminalWebglAtlasPane(pane: ManagedPaneInternal): void {
   attachedPanes.delete(pane.terminal)
+  forgetOwner(pane)
 }
 
 /** Marks PTY output for the pane's atlas; repaints, warm-up, reveals and empty parse barriers never come through here. */
 export function noteTerminalWebglAtlasOutput(terminal: ForegroundTerminalOutputTarget): void {
   const pane = attachedPanes.get(terminal)
-  const atlas = pane ? atlasOf(pane) : undefined
+  const atlas = pane ? indexOwner(pane) : undefined
   if (!atlas) {
     return
   }
   atlasesWithOutput.add(atlas)
-  if (isRebuildDue(atlas)) {
-    scheduleRebuild()
-  }
+  markIfDue(atlas)
 }
 
 /** Requests a rebuild of the grown atlas's renderers, at most every 10 s and only after PTY output into that atlas. */
@@ -156,16 +195,15 @@ export function handleTerminalWebglAtlasPage(
   page: { width: number },
   pane: ManagedPaneInternal
 ): void {
-  // Exact match: the larger oversized-glyph page comes back as soon as its glyph redraws, so a rebuild can't free it.
-  if (!ATLAS_MEMORY_REBUILD_ENABLED || page.width !== ATLAS_REBUILD_PAGE_SIZE) {
+  if (!ATLAS_MEMORY_REBUILD_ENABLED || attachedPanes.get(pane.terminal) !== pane) {
     return
   }
-  const atlas = atlasOf(pane)
-  if (!atlas) {
+  // xterm forwards every page event to each renderer sharing the atlas, so this also completes the owner index.
+  const atlas = indexOwner(pane)
+  // Exact match: the larger oversized-glyph page comes back as soon as its glyph redraws, so a rebuild can't free it.
+  if (!atlas || page.width !== ATLAS_REBUILD_PAGE_SIZE) {
     return
   }
   atlasesWithLargePage.add(atlas)
-  if (isRebuildDue(atlas)) {
-    scheduleRebuild()
-  }
+  markIfDue(atlas)
 }

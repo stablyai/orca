@@ -32,7 +32,11 @@ import {
   suspendPaneRendering
 } from './terminal-rendering/pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
+import {
+  notePaneManagerVisibility,
+  registerLivePaneManager,
+  unregisterLivePaneManager
+} from './pane-manager-registry'
 import { releaseHiddenWebglRetention } from './terminal-rendering/terminal-webgl-hidden-retention'
 import {
   schedulePaneRevealPresent,
@@ -270,6 +274,7 @@ export class PaneManager {
 
   setAtlasRecoveryVisible(visible: boolean): void {
     this.atlasRecoveryVisible = visible
+    notePaneManagerVisibility(this)
   }
 
   isVisibleForAtlasRecovery(): boolean {

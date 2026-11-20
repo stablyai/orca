@@ -150,6 +150,20 @@ export function isSynchronizedOutputHeld(terminal: unknown): boolean {
   )
 }
 
+/** Paints an unpaused viewport now: a replacement canvas is blank until it paints, and a DEC 2026 frame parsed before a scheduled paint would hold it blank until the frame closes. */
+export function paintReplacementCanvasNow(terminal: unknown): void {
+  const service = getRenderService(terminal)
+  const rows = (terminal as TerminalWithRenderService | null)?.rows
+  if (!service || service._isPaused === true || typeof rows !== 'number' || rows < 1) {
+    return
+  }
+  try {
+    service.refreshRows(0, rows - 1, true)
+  } catch {
+    // A pane disposed mid-rebuild keeps its scheduled refresh.
+  }
+}
+
 /** A new or resized WebGL canvas holds no frame to keep, so DEC 2026 must not leave it blank until the frame closes. A paused one paints on its reveal present instead. */
 export function presentEmptiedCanvas(terminal: unknown): boolean {
   const service = getRenderService(terminal)
