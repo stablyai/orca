@@ -22,6 +22,8 @@ const MAX_ATTEMPT_SPACING_MS = 24 * ATTEMPT_SPACING_MS
 // The copy blocks no one; this only bounds the disk and CPU it uses, at a slow disk's pace.
 const MIN_COPY_BUDGET_MS = 120_000
 const SLOW_COPY_BYTES_PER_MS = (4 * MIB) / 1000
+// Retention waits at most this long for a quit to use a ready copy, then prunes and the copy goes stale.
+const MAX_PRUNE_DEFERRAL_MS = MAX_ATTEMPT_SPACING_MS
 // journal_size_limit: closing at quit checkpoints at most this much.
 const MAX_WAL_BYTES = 8 * MIB
 const UNLINK_WAIT_MS = 1_000
@@ -66,7 +68,7 @@ export class OrchestrationDbCompaction {
   private lastAttemptAt = Number.NEGATIVE_INFINITY
   private diskShortAt = Number.NEGATIVE_INFINITY
   private copying: ChildProcess | undefined
-  private ready: { stamp: string } | undefined
+  private ready: { stamp: string; at: number } | undefined
   // Read-only, opened on the first legacy minute and kept until the swap: its data_version moves with every
   // commit to the file, the runtime's included, and nothing else (the runtime's TEMP tables write, for one).
   private observer: Database.Database | undefined
@@ -158,15 +160,20 @@ export class OrchestrationDbCompaction {
     if (!counted || this.stopped) {
       return
     }
+    // Best effort, off main; the truncation moves the stamp, so it comes first.
+    await this.runChild(undefined, MIN_COPY_BUDGET_MS)
+    if (this.stopped) {
+      return
+    }
     // Read before the child takes its snapshot, so any later commit moves the stamp.
     const stamp = this.stamp()
     const budgetMs = Math.max(
       MIN_COPY_BUDGET_MS,
       Math.round(state.liveBytes / SLOW_COPY_BYTES_PER_MS)
     )
-    const copied = await this.copy(stamp, budgetMs)
+    const copied = await this.runChild(stamp, budgetMs)
     if (copied && !this.stopped && this.stamp() === stamp) {
-      this.ready = { stamp }
+      this.ready = { stamp, at: Date.now() }
     } else if (!this.stopped) {
       await this.removeCopy()
     }
@@ -188,7 +195,8 @@ export class OrchestrationDbCompaction {
     await this.removeCopy()
   }
 
-  private copy(stamp: string, budgetMs: number): Promise<boolean> {
+  /** With a stamp, writes the copy and stops once a commit moves it; without, only truncates the WAL. */
+  private runChild(stamp: string | undefined, budgetMs: number): Promise<boolean> {
     return new Promise((resolve) => {
       let child: ChildProcess
       try {
@@ -200,7 +208,7 @@ export class OrchestrationDbCompaction {
             ELECTRON_RUN_AS_NODE: '1',
             ORCA_ORCHESTRATION_COMPACTION: JSON.stringify({
               filename: this.filename,
-              target: this.copyPath,
+              target: stamp === undefined ? undefined : this.copyPath,
               budgetMs
             })
           },
@@ -217,17 +225,20 @@ export class OrchestrationDbCompaction {
       // commits (seen on a busy Linux disk). Every commit touches the WAL; the stamp stays the judge.
       let walWatch: FSWatcher | undefined
       try {
-        walWatch = watch(`${this.filename}-wal`, () => {
-          let stale = true
-          try {
-            stale = this.stamp() !== stamp
-          } catch {
-            // A closed database: nothing left to copy for.
-          }
-          if (stale) {
-            child.kill('SIGKILL')
-          }
-        })
+        walWatch =
+          stamp === undefined
+            ? undefined
+            : watch(`${this.filename}-wal`, () => {
+                let stale = true
+                try {
+                  stale = this.stamp() !== stamp
+                } catch {
+                  // A closed database: nothing left to copy for.
+                }
+                if (stale) {
+                  child.kill('SIGKILL')
+                }
+              })
         walWatch.on('error', () => walWatch?.close())
       } catch {
         // No events on this file system: the check after the copy still drops a stale one.
@@ -262,6 +273,11 @@ export class OrchestrationDbCompaction {
 
   get hasCopy(): boolean {
     return this.ready !== undefined
+  }
+
+  /** True while a ready copy is young enough that maintenance holds its prune, whose writes would stale it. */
+  get defersPrune(): boolean {
+    return this.ready !== undefined && Date.now() - this.ready.at < MAX_PRUNE_DEFERRAL_MS
   }
 
   /**

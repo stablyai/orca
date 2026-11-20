@@ -115,6 +115,23 @@ describe('OrchestrationDbCompaction', () => {
     expect(await copiesAfter(`9 ${now - 25 * hour}`)).toBe(true)
   })
 
+  it('swaps in a copy after a burst left a drained WAL over 8 MiB', async () => {
+    const file = legacyDatabase()
+    const orchestration = new OrchestrationDb(file)
+    orchestration.db.exec('PRAGMA wal_autocheckpoint = 0; BEGIN')
+    for (let i = 0; i < 10; i++) {
+      orchestration.db.exec('INSERT INTO qa_filler (body) VALUES (randomblob(1048576))')
+    }
+    orchestration.db.exec('COMMIT; PRAGMA wal_checkpoint(PASSIVE)')
+    expect(statSync(`${file}-wal`).size).toBeGreaterThan(8 * 1024 * 1024)
+    const compaction = new OrchestrationDbCompaction(orchestration, file, () => true, 1)
+    await compaction.tick()
+    await compaction.tick()
+
+    expect((await compaction.swapAtQuit(async () => {})).kind).toBe('compacted')
+    expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok', tasks: 1 })
+  })
+
   it('converts a legacy file with little free space', async () => {
     const file = legacyDatabase(1)
     const { compaction } = await copiedWhileQuiet(file)

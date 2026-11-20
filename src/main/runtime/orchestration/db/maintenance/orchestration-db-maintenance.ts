@@ -67,8 +67,8 @@ export class OrchestrationDbMaintenance {
   }
 
   private async pass(): Promise<void> {
-    // A copy waiting for quit would go stale on the prune's writes; until then, nothing new needs pruning.
-    if (!this.compaction?.hasCopy && this.pruneIsDue() && !(await this.prune())) {
+    // A copy waiting for quit would go stale on the prune's writes, so retention waits for it, for a day at most.
+    if (!this.compaction?.defersPrune && this.pruneIsDue() && !(await this.prune())) {
       return
     }
     // Converts a file made before incremental auto-vacuum, and clears what a past conversion left.

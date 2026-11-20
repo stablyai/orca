@@ -1,24 +1,35 @@
 // The copy, on a thread of its own: VACUUM INTO reads one snapshot and takes no write lock, so the
-// runtime's writes never wait on it.
+// runtime's writes never wait on it. Without a target it only truncates the WAL first: a passive checkpoint
+// leaves its size, which quit would otherwise read as work still pending.
 const copySource = `
 const { DatabaseSync } = require('node:sqlite');
 const { closeSync, fsyncSync, openSync, writeFileSync } = require('node:fs');
 const { filename, target } = require('node:worker_threads').workerData;
-// Created private first: VACUUM INTO keeps the empty file's mode, and the copy holds the same data.
-writeFileSync(target, '', { flag: 'wx', mode: 0o600 });
-const db = new DatabaseSync(filename, { readOnly: true });
-try {
-  db.exec('PRAGMA busy_timeout = 1000; PRAGMA auto_vacuum = INCREMENTAL');
-  db.prepare('VACUUM INTO ?').run(target);
-} finally {
-  db.close();
-}
-// On disk before quit renames it over the original.
-const fd = openSync(target, 'r+');
-try {
-  fsyncSync(fd);
-} finally {
-  closeSync(fd);
+if (!target) {
+  const db = new DatabaseSync(filename);
+  try {
+    // Drained without the writer lock first, so the truncation holds it only for a moment, and never waits.
+    db.exec('PRAGMA busy_timeout = 0; PRAGMA wal_checkpoint(PASSIVE); PRAGMA wal_checkpoint(TRUNCATE)');
+  } finally {
+    db.close();
+  }
+} else {
+  // Created private first: VACUUM INTO keeps the empty file's mode, and the copy holds the same data.
+  writeFileSync(target, '', { flag: 'wx', mode: 0o600 });
+  const db = new DatabaseSync(filename, { readOnly: true });
+  try {
+    db.exec('PRAGMA busy_timeout = 1000; PRAGMA auto_vacuum = INCREMENTAL');
+    db.prepare('VACUUM INTO ?').run(target);
+  } finally {
+    db.close();
+  }
+  // On disk before quit renames it over the original.
+  const fd = openSync(target, 'r+');
+  try {
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
 }
 `
 
