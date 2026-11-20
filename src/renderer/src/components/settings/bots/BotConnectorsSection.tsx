@@ -5,7 +5,7 @@ import { BotAppBrandLogo } from '@/components/bots/apps/BotAppBrandLogo'
 import { BotToolAppRow } from '@/components/bots/apps/BotToolAppRow'
 import {
   type BotConnectorEntry,
-  useBotConnectorEntries
+  useBotConnectorInventory
 } from '@/components/bots/bot-connector-entries'
 import { ACCOUNT_CONNECTORS } from '@/components/bots/bot-connectors'
 import {
@@ -121,10 +121,15 @@ function NoConnectors({ bot, onAdd }: { bot: Bot; onAdd: () => void }): React.JS
 export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
   const t = useTranslate()
   const webhooks = useWebhooksConnector(bot)
-  const entries = useBotConnectorEntries(bot, 'apps').filter(
+  const inventory = useBotConnectorInventory(bot, 'apps')
+  const entries = inventory.entries.filter(
     (entry) => entry.kind !== 'webhooks' || webhooks === 'added'
   )
-  const page = useBotConnectorPage(bot, entries)
+  const page = useBotConnectorPage(
+    bot,
+    entries,
+    webhooks === null ? [...inventory.unresolved, 'webhooks'] : inventory.unresolved
+  )
   // Keyed by host and bot too, so showing another bot gives each of its rows a fresh mount.
   const rows = entries.map((entry) => (
     <BotConnectorEntryRow key={botConnectorRowKey(bot, entry.key)} bot={bot} entry={entry} />

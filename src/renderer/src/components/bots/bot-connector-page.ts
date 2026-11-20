@@ -5,7 +5,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
   useSyncExternalStore
 } from 'react'
@@ -33,6 +32,12 @@ export function openBotConnectorPage(rowKey: string | null): void {
   listeners.forEach((listener) => listener())
 }
 
+export function forgetBotConnectorPage(rowKey: string): void {
+  if (openPage === rowKey) {
+    openBotConnectorPage(null)
+  }
+}
+
 /** Changing bots closes the previous bot's page even while another tab is visible. */
 export function useResetOtherBotConnectorPage(bot: BotRef | null): void {
   const prefix = bot ? botConnectorRowKey(bot, '') : null
@@ -45,24 +50,24 @@ export function useResetOtherBotConnectorPage(bot: BotRef | null): void {
 
 const readPage = (): string | null => openPage
 
-/** A selected page can be waiting for its connector to load. Only forget one that disappeared. */
+/** An absent row is only a removal after its service has answered. */
 export function useBotConnectorPage(
   bot: BotRef,
-  entries: readonly { key: string }[]
+  entries: readonly { key: string }[],
+  unresolved: readonly string[]
 ): string | null {
   useResetOtherBotConnectorPage(bot)
   const selected = useSyncExternalStore(subscribe, readPage, readPage)
-  const page =
-    selected && entries.some((entry) => botConnectorRowKey(bot, entry.key) === selected)
-      ? selected
-      : null
-  const lastShown = useRef(page)
+  const prefix = botConnectorRowKey(bot, '')
+  const key = selected?.startsWith(prefix) ? selected.slice(prefix.length) : null
+  const page = key && entries.some((entry) => entry.key === key) ? selected : null
+  const removed =
+    key && page === null && !unresolved.includes(key.split(':', 1)[0]) ? selected : null
   useEffect(() => {
-    if (page === null && lastShown.current !== null && openPage === lastShown.current) {
-      openBotConnectorPage(null)
+    if (removed) {
+      forgetBotConnectorPage(removed)
     }
-    lastShown.current = page
-  }, [page])
+  }, [removed])
   return page
 }
 

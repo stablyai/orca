@@ -3,7 +3,7 @@
 import { withBotConnectorRuntime } from '../../../lib/bot-connector-host-calls.test-fixture'
 import '@testing-library/jest-dom/vitest'
 import type { ReactElement } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
@@ -13,6 +13,7 @@ import type { ConnectorBotSlackStateResponse } from '../../../../../shared/conne
 import { useAppStore } from '@/store'
 import { ORCA_SIGNED_OUT, orcaSignIn } from '@/components/bots/orca-sign-in.test-fixture'
 import { botConnectorRowKey, openBotConnectorPage } from '@/components/bots/bot-connector-page'
+import { refreshGoogle } from '@/components/bots/google/google-connect-client'
 import { BotConnectorsSection } from './BotConnectorsSection'
 
 function bot(overrides: Partial<Bot> = {}): Bot {
@@ -99,10 +100,17 @@ function sectionFor(subject: Bot): ReactElement {
 function renderWith(
   subject: Bot,
   slack: ConnectorBotSlackStateResponse,
-  github: unknown = gitHubOff
+  github: unknown = gitHubOff,
+  googleStatus?: () => unknown
 ): (next: Bot) => void {
   Object.assign(window, {
     api: withBotConnectorRuntime({
+      runtime: {
+        call: ({ method }) =>
+          method === 'google.status' && googleStatus
+            ? { ok: true, result: googleStatus() }
+            : undefined
+      },
       botSlack: {
         state: slackState.mockResolvedValue({ ok: true, value: slack })
       },
@@ -321,12 +329,27 @@ describe('BotConnectorsSection pages', () => {
   it('focuses a deep-linked page and forgets it when its connector is removed', async () => {
     const first = bot({ linear: { workspaceId: 'org-1', workspaceName: 'Acme' } })
     openBotConnectorPage(botConnectorRowKey(first, 'linear:org-1'))
-    const show = renderWith(first, installedSlack)
+    renderWith(first, installedSlack)
     expect(await screen.findByRole('button', { name: 'Connectors' })).toHaveFocus()
-    show({ ...first, linear: null })
+    cleanup()
+    const show = renderWith({ ...first, linear: null }, installedSlack)
     expect(await screen.findByRole('button', { name: 'Slack · Globex' })).toBeVisible()
     show(first)
     expect(await screen.findByRole('button', { name: 'Linear · Acme' })).toBeVisible()
+  })
+
+  it('restores an open Google page when its host read recovers', async () => {
+    const googleStatus = vi.fn(() => ({ accounts: [], client: null, bots: [] }))
+    renderWith(bot({ google: true }), installedSlack, gitHubOff, googleStatus)
+    fireEvent.click(await screen.findByRole('button', { name: 'Google' }))
+    expect(screen.getByRole('heading', { name: 'Google' })).toBeVisible()
+    googleStatus.mockImplementationOnce(() => {
+      throw new Error('offline')
+    })
+    await act(() => refreshGoogle({ kind: 'local' }))
+    expect(screen.queryByRole('heading', { name: 'Google' })).toBeNull()
+    await act(() => refreshGoogle({ kind: 'local' }))
+    expect(screen.getByRole('heading', { name: 'Google' })).toBeVisible()
   })
 
   it('keeps the list open when a pending Slack installation finishes loading', async () => {
