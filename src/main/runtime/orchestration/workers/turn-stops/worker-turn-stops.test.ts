@@ -14,7 +14,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
-import { stopReportId } from './worker-turn-stop-report'
+import { forgetDeliveredWakes, stopReportId } from './worker-turn-stop-report'
 import {
   observeWorker,
   reconsiderCreatorRest,
@@ -299,6 +299,63 @@ describe('terminal worker turn stops', () => {
     // Woken by it, the worker ignored the answer and ended its next turn: that is a stop.
     await turnEnds(300)
     await elapse()
+    expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+  })
+
+  it('gives up on a wake that was delivered and never acted on once Orca restarts', () => {
+    const ctx = setup()
+    const mail = ctx.db.insertMessage({
+      from: 'term_coordinator',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'Answer',
+      runId: ctx.run.id
+    })
+    observeWorker(
+      ctx.db,
+      { kind: 'local', dispatch: ctx.dispatch },
+      {
+        presence: 'at-rest',
+        fence: 'turn-1',
+        legacyStopKey: 'turn-1',
+        rest: { from: HANDLE, reason: 'finished', lastOutput: 'Waiting.', mailDelivered: [] }
+      },
+      ctx.deps
+    )
+    expect(ctx.mail()).toHaveLength(0)
+    ctx.db.markAsDelivered([mail.id], `dispatch:${ctx.dispatch.id}`)
+    reconsiderWorkerRest(ctx.db, ctx.dispatch.id, ctx.deps)
+    expect(ctx.mail()).toHaveLength(0)
+    forgetDeliveredWakes(ctx.db, ctx.dispatch.id)
+    reconsiderWorkerRest(ctx.db, ctx.dispatch.id, ctx.deps)
+    expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+  })
+
+  it('reports a stop whose untaken mail its own check already claimed, since no pointer follows', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ state: 'working', stateStartedAt: 100 }) }
+    const stops = terminal(ctx, current)
+    stops.observe({
+      kind: 'observed',
+      paneKey: PANE,
+      workspace: { worktreeId: 'repo::/tmp/wt', sshHostId: null },
+      phase: 'working',
+      at: 1
+    })
+    ctx.db.insertMessage({
+      from: 'term_coordinator',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'Keep going',
+      runId: ctx.run.id
+    })
+    // The worker's check claimed the mail mid-turn and never acknowledged it.
+    ctx.db.getOrCreateMailboxDelivery({
+      runId: ctx.run.id,
+      mailboxHandle: `dispatch:${ctx.dispatch.id}`,
+      consumerGeneration: ctx.db.getDispatchContextById(ctx.dispatch.id)!.consumer_generation
+    })
+    current.row = hookRow({ stateStartedAt: 200, lastAssistantMessage: 'Paused.' })
+    stops.observe(moved('working', 'done'))
+    await settle()
     expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
   })
 

@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto'
+import {
+  readWorkerPresence,
+  writeWorkerPresence
+} from '../../db/worker-presence/worker-presence-store'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
 import { rejectedReportInTurn } from '../../db/messages/rejected-worker-report'
@@ -87,6 +91,30 @@ export function isDeliberateRest(
   )
 }
 
+/** The worker's untaken mail whose pointer was delivered to it. */
+export function deliveredUntakenMail(db: OrchestrationDb, dispatchId: string): string[] {
+  return db
+    .getUnreadMessages(`dispatch:${dispatchId}`)
+    .flatMap((mail) => (mail.delivered_at ? [mail.id] : []))
+}
+
+/** Every pointer delivered before a restart has had its chance to wake the worker: none holds its rest. */
+export function forgetDeliveredWakes(db: OrchestrationDb, dispatchId: string): void {
+  const row = readWorkerPresence(db, dispatchId)
+  try {
+    const rest = row?.report ? JSON.parse(row.report) : null
+    if (row && Array.isArray(rest?.mailDelivered)) {
+      const mailDelivered = deliveredUntakenMail(db, dispatchId)
+      writeWorkerPresence(db, dispatchId, {
+        ...row,
+        report: JSON.stringify({ ...rest, mailDelivered })
+      })
+    }
+  } catch {
+    // An unreadable stored rest is decided as it is.
+  }
+}
+
 /** Untaken mail not yet delivered when the stop was seen is waking the worker: until it moves, the rest is no stop. */
 function wakingMail(
   db: OrchestrationDb,
@@ -97,11 +125,10 @@ function wakingMail(
     return false
   }
   const mailbox = `dispatch:${dispatchId}`
+  const waking = db.getUnreadMessages(mailbox).filter((mail) => !delivered.includes(mail.id))
   // A batch its own check claimed gets no pointer: the worker was shown it.
-  const claimed = db.getOutstandingMailboxDelivery(mailbox)?.messageIds ?? []
-  return db
-    .getUnreadMessages(mailbox)
-    .some((mail) => !delivered.includes(mail.id) && !claimed.includes(mail.id))
+  const claimed = waking.length > 0 ? db.getOutstandingMailboxDelivery(mailbox)?.messageIds : []
+  return waking.some((mail) => !claimed?.includes(mail.id))
 }
 
 /** Writes a stop report under `id`; `stored` runs in the same transaction as a local report's mail.

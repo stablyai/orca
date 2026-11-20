@@ -14,6 +14,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {
+  deliveredUntakenMail,
   workerTurnStopDispatchId,
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
@@ -203,9 +204,7 @@ function readMailAtStop(
 ): Pick<PreparedStop, 'mailTaken' | 'mailDelivered'> {
   return {
     mailTaken: readCoordinatorMailCount(db, dispatchId),
-    mailDelivered: db
-      .getUnreadMessages(`dispatch:${dispatchId}`)
-      .flatMap((mail) => (mail.delivered_at ? [mail.id] : []))
+    mailDelivered: deliveredUntakenMail(db, dispatchId)
   }
 }
 

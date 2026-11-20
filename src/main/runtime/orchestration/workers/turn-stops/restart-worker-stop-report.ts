@@ -9,7 +9,7 @@ import type {
   StructuredAgentSessionRestartResume
 } from '../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
-import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
+import { forgetDeliveredWakes, type WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
 import {
   listUndecidedWorkerRests,
@@ -222,7 +222,10 @@ export async function reportWorkerStopsAcrossRestart(
   for (const dispatchId of listUndecidedWorkerRests(db)) {
     const session = db.getDispatchContextById(dispatchId)?.assignee_orca_session_id
     if (!session || (awaitingDecision && !awaitingDecision.has(session))) {
-      visit(dispatchId, () => void reconsiderWorkerRest(db, dispatchId, deps.reportDeps))
+      visit(dispatchId, () => {
+        forgetDeliveredWakes(db, dispatchId)
+        void reconsiderWorkerRest(db, dispatchId, deps.reportDeps)
+      })
     }
   }
   await Promise.all(visits.values())
