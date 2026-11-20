@@ -21693,7 +21693,10 @@
         "paused": "Paused goal",
         "blocked": "Goal blocked",
         "limited": "Goal limited",
-        "attachmentsUnsupported": "Remove attachments before setting a goal."
+        "attachmentsUnsupported": "Remove attachments before setting a goal.",
+        "checks_one": "{{count}} check",
+        "checks_other": "{{count}} checks",
+        "last-check": "Last goal check"
       },
       "fileLinks": {
         "notFound": "File not found: {{value0}}",

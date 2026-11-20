@@ -3660,7 +3660,10 @@
       "collapse": "Hide full goal",
       "attachmentsUnsupported": "Remove attachments before setting a goal.",
       "pause": "Pause",
-      "resume": "Resume"
+      "resume": "Resume",
+      "checks_one": "{{count}} check",
+      "checks_other": "{{count}} checks",
+      "last-check": "Last goal check"
     },
     "rewind": {
       "title": "Rewind to here?",
