@@ -246,6 +246,7 @@ export function BrowserPageToolbar({
           extensionDiscoveryTarget={extensionDiscoveryTarget}
           currentProfileId={sessionProfileId}
           workspaceId={workspaceId}
+          worktreeId={worktreeId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
           isActive={isActive}

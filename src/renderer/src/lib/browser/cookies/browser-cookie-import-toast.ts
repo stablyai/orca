@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import type { BrowserCookieImportSummary } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { isHandledWireDiscriminant } from '../../../../../shared/rpc-contract/handled-wire-discriminant'
 import { translate } from '@/i18n/i18n'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 type CookieImportWarning = NonNullable<BrowserCookieImportSummary['warning']>
 type CookieImportWarningCode = CookieImportWarning['code']
@@ -113,6 +114,7 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
 
 // Match store execution results directly; client means this desktop, remote means the paired runtime.
 export type BrowserCookieImportExecution = {
+  executionHostId: string
   executionHostLabel: string
   executionMachine: 'client' | 'remote'
   executionRemoteEnvironment: boolean
@@ -122,6 +124,12 @@ export type BrowserCookieImportExecution = {
 function cookieImportLocationDescription(execution: BrowserCookieImportExecution): string | null {
   if (!execution.executionRemoteEnvironment) {
     return null
+  }
+  // An SSH page's jar belongs to its host, not to one workspace.
+  if (parseExecutionHostId(execution.executionHostId)?.kind === 'ssh') {
+    return translate('browser.cookieImport.sshPage.stored', 'Stored in the browser for {{host}}.', {
+      host: execution.executionHostLabel
+    })
   }
   return execution.executionMachine === 'client'
     ? translate(

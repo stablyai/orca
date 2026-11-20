@@ -67,6 +67,7 @@ import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
   BrowserCookieImportResult,
+  BrowserProfileCookieImportArgs,
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileScope,
@@ -238,17 +239,15 @@ export type BrowserApi = {
   identityGet: () => Promise<BrowserIdentityModeStatus | null>
   identitySet: (mode: BrowserUserAgentMode) => Promise<BrowserIdentityModeSetResult | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
-  sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
+  sessionImportCookies: (args: BrowserProfileCookieImportArgs) => Promise<BrowserCookieImportResult>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionDetectBrowsersForClientHost: (args: {
     environmentId: string
   }) => Promise<DetectedBrowserInfo[] | null>
-  sessionImportFromBrowser: (args: {
-    profileId: string
-    browserFamily: string
-    browserProfile?: string
-  }) => Promise<BrowserCookieImportResult>
+  sessionImportFromBrowser: (
+    args: BrowserProfileCookieImportArgs & { browserFamily: string; browserProfile?: string }
+  ) => Promise<BrowserCookieImportResult>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionImportFromBrowserForClientHost: (args: {
     environmentId: string

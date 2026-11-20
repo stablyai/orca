@@ -129,7 +129,9 @@ const COPY: Record<BrowserCookieImportFailureCode, (values: Values) => string | 
   },
   connectionEnded: () =>
     translate('browser.cookieImport.errors.connectionEnded', EN.connectionEnded),
-  serverRepaired: () => translate('browser.cookieImport.errors.serverRepaired', EN.serverRepaired)
+  serverRepaired: () => translate('browser.cookieImport.errors.serverRepaired', EN.serverRepaired),
+  sshHostDisconnected: () =>
+    translate('browser.cookieImport.errors.sshHostDisconnected', EN.sshHostDisconnected)
 }
 
 function isBrowserCookieImportFailureCode(code: unknown): code is BrowserCookieImportFailureCode {

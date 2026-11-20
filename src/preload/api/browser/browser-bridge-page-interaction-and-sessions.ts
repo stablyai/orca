@@ -189,7 +189,7 @@ export const browserPageInteractionAndSessionsApi = {
   identitySet: (mode: BrowserUserAgentMode) => ipcRenderer.invoke('browser:identity:set', mode),
   sessionDeleteProfile: (args: { profileId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:deleteProfile', args),
-  sessionImportCookies: (args: { profileId: string }) =>
+  sessionImportCookies: (args: { profileId: string; sshTargetId?: string }) =>
     ipcRenderer.invoke('browser:session:importCookies', args),
   sessionImportCookiesForClientHost: (args: { environmentId: string; profileId: string }) =>
     ipcRenderer.invoke('browser:session:importCookiesForClientHost', args),
@@ -198,8 +198,12 @@ export const browserPageInteractionAndSessionsApi = {
   sessionDetectBrowsers: () => ipcRenderer.invoke('browser:session:detectBrowsers'),
   sessionDetectBrowsersForClientHost: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:detectBrowsersForClientHost', args),
-  sessionImportFromBrowser: (args: { profileId: string; browserFamily: string }) =>
-    ipcRenderer.invoke('browser:session:importFromBrowser', args),
+  sessionImportFromBrowser: (args: {
+    profileId: string
+    browserFamily: string
+    browserProfile?: string
+    sshTargetId?: string
+  }) => ipcRenderer.invoke('browser:session:importFromBrowser', args),
   sessionImportFromBrowserForClientHost: (args: {
     environmentId: string
     profileId: string
