@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, normalize } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
@@ -70,19 +70,37 @@ export function registerNotificationSoundHandlers(store: Store): void {
   })
 }
 
-/** Plays the selected custom sound for an alert main delivered itself; the renderer owns audio. */
-export function playDeliveredSound(store: Store): void {
+// One load listener per page; each entry asks whether its alert is still showing.
+const awaitingLoad = new WeakMap<WebContents, (() => boolean)[]>()
+
+function sendIfCustom(store: Store, renderer: WebContents): void {
   const settings = store.getSettings().notifications
+  if (usesCustomNotificationSound(getEffectiveNotificationSoundId(settings))) {
+    renderer.send('notifications:playDeliveredSound', settings.customSoundVolume)
+  }
+}
+
+/** Plays the selected custom sound for an alert main delivered itself; the renderer owns audio. */
+export function playDeliveredSound(store: Store, isLive: () => boolean): void {
   const renderer = getTrustedUIRendererWebContents()
-  if (!renderer || !usesCustomNotificationSound(getEffectiveNotificationSoundId(settings))) {
+  if (!renderer) {
     return
   }
-  const play = (): void =>
-    renderer.send('notifications:playDeliveredSound', settings.customSoundVolume)
-  // Why: a reloading page has no listener yet, so the sound waits for the page to load.
-  if (renderer.isLoading()) {
-    renderer.once('did-finish-load', play)
-  } else {
-    play()
+  if (!renderer.isLoading()) {
+    sendIfCustom(store, renderer)
+    return
   }
+  // Why: a reloading page has no listener yet, so one sound waits for it, and only for alerts still showing.
+  const waiting = awaitingLoad.get(renderer)
+  awaitingLoad.set(renderer, [...(waiting ?? []).filter((live) => live()), isLive])
+  if (waiting) {
+    return
+  }
+  renderer.once('did-finish-load', () => {
+    const live = awaitingLoad.get(renderer)?.some((check) => check())
+    awaitingLoad.delete(renderer)
+    if (live) {
+      sendIfCustom(store, renderer)
+    }
+  })
 }

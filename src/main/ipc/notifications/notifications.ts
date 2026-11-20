@@ -274,7 +274,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     dismiss: (id) => retireAnnouncements(announced.takeNotification(id)),
     readWorkspaceSession: () => store.getWorkspaceSession(),
     retained: runtime?.getRetainedAgentAttention?.(),
-    onDelivered: () => playDeliveredSound(store)
+    onDelivered: (isLive) => playDeliveredSound(store, isLive)
   })
   stopRuntimeAttentionEvents?.()
   stopRuntimeAttentionEvents = runtime?.onClientEvent?.(
