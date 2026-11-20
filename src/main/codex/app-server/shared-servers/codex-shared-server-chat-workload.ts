@@ -17,7 +17,8 @@ const PS_TIMEOUT_MS = 5_000
 export type CodexSharedServerProcessSweep = (serverPid: number, leaseId: string) => Promise<boolean>
 
 /** A process's lease tag: its value, absent, or unreadable (which proves nothing). */
-type LeaseTag = string | null | 'unknown'
+const UNREADABLE = Symbol('unreadable')
+type LeaseTag = string | null | typeof UNREADABLE
 
 /** A dedicated server's close reaped the chat's whole tree; on a shared one only this lease's
  *  commands are stopped. Resolves true only on positive evidence that none is left. */
@@ -105,10 +106,10 @@ async function candidates(
   const mine: number[] = []
   let unknown = 0
   for (const pid of descendants) {
-    const tag = tags.get(pid) ?? 'unknown'
+    const tag = tags.get(pid) ?? UNREADABLE
     if (tag === leaseId) {
       mine.push(pid)
-    } else if (tag === 'unknown') {
+    } else if (tag === UNREADABLE) {
       unknown += 1
     }
   }
@@ -192,7 +193,7 @@ async function readLeaseTags(
           const block = await readFile(`/proc/${pid}/environ`, 'utf-8')
           tags.set(pid, spawnTokenFromEnvironBlock(block, CODEX_SHARED_LEASE_ENV))
         } catch {
-          tags.set(pid, 'unknown')
+          tags.set(pid, UNREADABLE)
         }
       })
     )
