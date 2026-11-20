@@ -23,6 +23,7 @@ import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-back
 import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
 import { swapLegacySessionCopy } from '../bridges/codex-legacy-session-copy'
+import { sourceStartsWithCopy } from '../bridges/codex-legacy-session-copy-prefix'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
@@ -122,7 +123,9 @@ export async function prepareCodexAccountRestartResume(args: {
   await materializeLegacyRollout(
     args.transcriptPath,
     join(args.targetHome, 'sessions', relativePath),
-    paths.auditLogPath
+    paths.auditLogPath,
+    // The account may hold this rollout from before the source above was linked in to grow it.
+    { acceptEarlierTarget: true }
   )
   return args.targetHome
 }
@@ -173,7 +176,8 @@ async function resolveSelectedAccountCodexHomeForResume(
 async function materializeLegacyRollout(
   sourcePath: string,
   targetPath: string,
-  auditLogPath: string
+  auditLogPath: string,
+  options: { acceptEarlierTarget?: boolean } = {}
 ): Promise<void> {
   const sourceStat = await lstat(sourcePath)
   if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
@@ -181,8 +185,9 @@ async function materializeLegacyRollout(
   }
   // A cleanup deleting every name of this rollout would miss one installed meanwhile.
   if (
-    (await linkCodexRolloutUnlessHeld(sourcePath, () => installRollout(sourcePath, targetPath))) ===
-    'held'
+    (await linkCodexRolloutUnlessHeld(sourcePath, () =>
+      installRollout(sourcePath, targetPath, options)
+    )) === 'held'
   ) {
     throw new Error('This rollout is being deleted with its workspace.')
   }
@@ -207,18 +212,22 @@ async function materializeLegacyRollout(
   )
 }
 
-async function installRollout(sourcePath: string, targetPath: string): Promise<void> {
+async function installRollout(
+  sourcePath: string,
+  targetPath: string,
+  options: { acceptEarlierTarget?: boolean }
+): Promise<void> {
   await mkdir(dirname(targetPath), { recursive: true })
   try {
     await link(sourcePath, targetPath)
   } catch (linkError) {
     if (isExistsError(linkError)) {
-      await assertMatchingExistingTarget(sourcePath, targetPath)
+      await assertMatchingExistingTarget(sourcePath, targetPath, options)
     } else {
       try {
         const outcome = await copyCodexRolloutWithoutOverwrite(sourcePath, targetPath)
         if (outcome === 'existing') {
-          await assertMatchingExistingTarget(sourcePath, targetPath)
+          await assertMatchingExistingTarget(sourcePath, targetPath, options)
         }
       } catch (copyError) {
         if (copyError instanceof AtomicNoReplaceUnsupportedError) {
@@ -232,8 +241,21 @@ async function installRollout(sourcePath: string, targetPath: string): Promise<v
   }
 }
 
-async function assertMatchingExistingTarget(sourcePath: string, targetPath: string): Promise<void> {
+async function assertMatchingExistingTarget(
+  sourcePath: string,
+  targetPath: string,
+  options: { acceptEarlierTarget?: boolean }
+): Promise<void> {
   const [sourceStat, targetStat] = await Promise.all([lstat(sourcePath), lstat(targetPath)])
+  // An earlier state of the same rollout: resuming there continues it as before the source grew.
+  if (
+    options.acceptEarlierTarget &&
+    targetStat.isFile() &&
+    targetStat.size < sourceStat.size &&
+    (await sourceStartsWithCopy(targetPath, sourcePath, await lstat(targetPath, { bigint: true })))
+  ) {
+    return
+  }
   if (
     !targetStat.isFile() ||
     targetStat.isSymbolicLink() ||

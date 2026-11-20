@@ -1,4 +1,4 @@
-import { readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, normalize, sep } from 'node:path'
 import { z } from 'zod'
 
@@ -72,7 +72,11 @@ export async function writeMarker(
   return marker
 }
 
-/** Older builds match a marker's source by exact path; the respelled one makes them skip it. */
+/**
+ * Older builds swap a copy whose size and mtime still match its marker, finding the source by the
+ * marker's exact path; respelling that path makes them skip it. Only those copies are respelled:
+ * older builds' usage scan keys a changed copy's skipped bytes on the exact spelling.
+ */
 export async function protectLegacySessionCopyMarker(
   managedHome: string,
   relativePath: string
@@ -83,18 +87,23 @@ export async function protectLegacySessionCopyMarker(
     () => null
   )
   if (marker) {
-    await protectMarker(markerPath, marker)
+    await protectMarker(markerPath, marker, join(managedHome, 'sessions', relativePath))
   }
 }
 
 export async function protectMarker(
   markerPath: string,
-  marker: LegacyCopiedSessionMarker
+  marker: LegacyCopiedSessionMarker,
+  copyPath: string
 ): Promise<LegacyCopiedSessionMarker> {
-  return marker.sourcePath.includes(`${sep}.${sep}`)
-    ? marker
-    : writeMarker(markerPath, {
+  if (marker.sourcePath.includes(`${sep}.${sep}`)) {
+    return marker
+  }
+  const copy = await lstat(copyPath).catch(() => null)
+  return copy?.isFile() && copy.size === marker.targetSize && copy.mtimeMs === marker.targetMtimeMs
+    ? writeMarker(markerPath, {
         ...marker,
         sourcePath: protectedSpelling(normalize(marker.sourcePath))
       })
+    : marker
 }

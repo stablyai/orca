@@ -18,7 +18,10 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { syncSystemCodexSessionsIntoManagedHomeIncrementally } from './codex-session-bridge'
-import { prepareLegacySharedCodexSessionResume } from '../resume/codex-legacy-session-resume'
+import {
+  prepareCodexAccountRestartResume,
+  prepareLegacySharedCodexSessionResume
+} from '../resume/codex-legacy-session-resume'
 
 const renameHook = vi.hoisted((): { beforeAside: (() => void) | null } => ({ beforeAside: null }))
 
@@ -254,6 +257,33 @@ describe('legacy session copy swap', () => {
     expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
     expect(readFileSync(aside, 'utf-8')).toBe(OLD_TURNS)
     expect(existsSync(markerPath)).toBe(false)
+  })
+
+  it('keeps the exact source spelling of a copy written since it was copied', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    writeFileSync(copyPath, `${OLD_TURNS}{"resumed":true}\n`)
+
+    await bridgePass()
+
+    // Older builds skip a changed copy anyway; their usage scan keys its skipped bytes on this path.
+    expect(JSON.parse(readFileSync(markerPath, 'utf-8')).sourcePath).toBe(sourcePath)
+    expect(readFileSync(copyPath, 'utf-8')).toBe(`${OLD_TURNS}{"resumed":true}\n`)
+  })
+
+  it('restarts in an account that already holds the copy from before its source grew', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    const accountHome = join(root, 'account-home')
+    writeFile(join(accountHome, 'sessions', RELATIVE_PATH), OLD_TURNS)
+
+    await expect(
+      prepareCodexAccountRestartResume({
+        sourceHome: runtimeHome(),
+        transcriptPath: copyPath,
+        targetHome: accountHome,
+        systemCodexHomePath: systemHome
+      })
+    ).resolves.toBe(accountHome)
+    expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
   })
 
   it('points the copy at its grown source before a resume launches Codex', async () => {

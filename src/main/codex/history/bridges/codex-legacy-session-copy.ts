@@ -75,7 +75,7 @@ async function swap(
     return 'none'
   }
   // First, so no exit below leaves the marker to an older build's destructive swap.
-  marker = await protectMarker(markerPath, marker)
+  marker = await protectMarker(markerPath, marker, copyPath)
   let copy = await lstatIfPresent(copyPath)
   if (!copy) {
     // A pass stopped after moving the copy aside: its name comes back before anything else.
@@ -113,7 +113,8 @@ async function swap(
   // Written since it was copied: a pane resumed it here, so it is its own history for good.
   const copyTimes = await lstat(copyPath)
   if (copyTimes.size !== marker.targetSize || copyTimes.mtimeMs !== marker.targetMtimeMs) {
-    await writeMarker(markerPath, { ...marker, kept: true })
+    // Older builds skip a changed copy anyway, and their usage scan needs the exact spelling.
+    await writeMarker(markerPath, { ...marker, sourcePath, kept: true })
     return 'kept'
   }
   // Before the reads and names below: a home without lock files never proves a copy idle.

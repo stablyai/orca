@@ -82,14 +82,21 @@ describe('legacy session copy swap budget', () => {
       legacyCopy('20', index, 33 * 1024 * 1024)
     }
 
-    await syncSystemCodexSessionsIntoManagedHomeIncrementally(
-      { yieldMs: 0 },
-      join(root, 'real-codex-home')
-    )
+    const pass = (): Promise<unknown> =>
+      syncSystemCodexSessionsIntoManagedHomeIncrementally(
+        { yieldMs: 0 },
+        join(root, 'real-codex-home')
+      )
 
-    // One marker read per copy, as before this change; no copy past the budget is examined.
+    await pass()
+    // One marker read per copy, as before this change; past the budget a copy is only stat'd once,
+    // to protect its marker from older builds.
     expect(markerReads.count).toBe(n + 2)
-    // Only the first two copies are examined, whatever N is.
+    expect(markerReads.transcriptStats).toBeLessThanOrEqual(n + 12)
+
+    markerReads.transcriptStats = 0
+    await pass()
+    // Once protected, the copies past the budget aren't examined at all.
     expect(markerReads.transcriptStats).toBeLessThanOrEqual(12)
   })
 })
