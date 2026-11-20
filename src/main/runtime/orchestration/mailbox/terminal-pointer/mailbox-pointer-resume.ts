@@ -165,6 +165,13 @@ export class UncertainMailboxReconciliation<T extends OrchestrationMessageWaiter
     })
   }
 
+  /** Every terminal whose uncertainty was reconstructed, e.g. after a reset deleted mail under its notice. */
+  reconcileAll(): void {
+    for (const ptyId of this.initialized.keys()) {
+      this.reconcile(ptyId)
+    }
+  }
+
   retire(ptyId: string): void {
     this.pending.delete(ptyId)
     this.initialized.delete(ptyId)

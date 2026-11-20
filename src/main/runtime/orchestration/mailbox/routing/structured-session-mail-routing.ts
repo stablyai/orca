@@ -80,6 +80,10 @@ export abstract class OrcaRuntimeWithStructuredSessionMail extends OrcaRuntimeWi
    *  only those the action touched; without it, every mailbox (a reset, a store becoming readable). */
   withdrawStaleChatMail(mailboxes?: Iterable<string>): void {
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
+    if (!mailboxes) {
+      // A reset deletes mail without a consuming read, so terminal missed-mail notices recount too.
+      this.orchestrationMailboxPointerDelivery.reconcileAllUncertainMail()
+    }
   }
 
   settleConsumedTerminalMail(

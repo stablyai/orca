@@ -450,3 +450,58 @@ it.each(['missing pointer', 'unverifiable Enter'])(
     }
   }
 )
+
+it('a message reset withdraws a terminal missed-mail notice and leaves nothing to replay', async () => {
+  vi.useFakeTimers()
+  const db = createDatabase('orca-uncertain-reset-')
+  const { runtime, write } = await createRuntime(db, { launchAgent: 'claude' })
+  const ready = `\x1b[2J\x1b[H${readRuntimeFixture('claude-2-1-316-default-unlabelled-empty')}`
+  let foreground = 'zsh'
+  runtime.setPtyController({
+    write,
+    kill: vi.fn(),
+    getSize: () => ({ cols: 100, rows: 30 }),
+    getForegroundProcess: async () => foreground,
+    supportsForegroundObservation: () => true,
+    inspectProcess: async () => inspectedForeground(foreground),
+    // The pointer never reaches the screen, so its delivery stays uncertain.
+    writeWithSettlement: (ptyId, text) => {
+      write(ptyId, text)
+      if (text !== '\r') {
+        runtime.onPtyData(PTY_ID, ready, Date.now())
+      }
+      return { outcome: 'accepted' }
+    }
+  })
+  const events: { type: string; notificationId?: string }[] = []
+  runtime.onNotificationDispatched((event) => events.push(event))
+  try {
+    await runtime.listTerminals()
+    runtime.onPtyData(PTY_ID, ready, Date.now())
+    const run = createBoundRun(db, 'Reset under a notice')
+    insertDirectRunMessage(db, run.id, 'Mail the reset removes')
+    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+    await vi.advanceTimersByTimeAsync(1000)
+    foreground = 'claude'
+    await vi.advanceTimersByTimeAsync(65000)
+    const notice = events.find((event) => event.notificationId?.startsWith('orchestration-mail:'))
+    expect(notice?.type).toBe('notification')
+
+    const reset = await new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS }).dispatch({
+      id: 'uncertain-mail-reset',
+      authToken: 'synthetic-token',
+      method: 'orchestration.reset',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      params: { messages: true }
+    })
+    expect(reset).toMatchObject({ ok: true })
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: 'dismiss', notificationId: notice?.notificationId })
+    )
+    expect(runtime.getRetainedAgentAttention()).toEqual([])
+  } finally {
+    db.close()
+  }
+})

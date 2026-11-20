@@ -183,6 +183,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   readonly restoreUncertainMail = (ptyId: string): void => this.uncertainty.ensure(ptyId)
 
   readonly reconcileUncertainMail = (ptyId: string): void => this.uncertainty.reconcile(ptyId)
+  readonly reconcileAllUncertainMail = (): void => this.uncertainty.reconcileAll()
 
   readonly completeRecovery = this.state.completeRecovery.bind(this.state)
 

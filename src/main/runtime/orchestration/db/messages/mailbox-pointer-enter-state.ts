@@ -26,7 +26,7 @@ export function getPendingMailboxPointerMessages(
       `SELECT * FROM messages
        WHERE to_handle = ? AND read = 0 AND pointer_enter_pending > 0
          AND delivery_contract = 'current_delivery'
-       ORDER BY sequence LIMIT ?`
+       ORDER BY pointer_enter_pending = ${MAILBOX_POINTER_RESERVED} DESC, sequence LIMIT ?`
     )
     .all(mailboxHandle, ORCHESTRATION_DELIVERY_BATCH_LIMIT) as MessageRow[]
 }

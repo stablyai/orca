@@ -48,6 +48,11 @@ it.each([10, 100])(
         coordinatorPaneKey: PANE_KEY
       })
     }
+    const elsewhere = db.createRun({
+      objective: 'elsewhere',
+      coordinatorHandle: 'term_elsewhere',
+      coordinatorPaneKey: 'tab-elsewhere:leaf-elsewhere'
+    })
     const owner = new OrchestrationMailboxOwner({
       getDb: () => db,
       getTerminal: () => null,
@@ -79,6 +84,19 @@ it.each([10, 100])(
       })
       owner.resolveAll(terminal, { routeDirectMail: false })
     }
+    expect(historyQueries).toHaveBeenCalledTimes(1)
+
+    // Mail to Runs another pane coordinates owes this pane nothing.
+    for (let message = 0; message < emptyRuns; message++) {
+      mail(elsewhere.id)
+      owner.resolveAll(terminal, { routeDirectMail: false })
+    }
+    expect(historyQueries).toHaveBeenCalledTimes(1)
+
+    // Read mail leaves the list without another history walk.
+    const owedMail = db.getUndeliveredUnreadMessages(`run:${owed.id}`)
+    db.markAsReadAndDelivered(owedMail.map((message) => message.id))
+    expect(owner.resolveAll(terminal, { routeDirectMail: false })).not.toContain(`run:${owed.id}`)
     expect(historyQueries).toHaveBeenCalledTimes(1)
 
     mail(later.id)

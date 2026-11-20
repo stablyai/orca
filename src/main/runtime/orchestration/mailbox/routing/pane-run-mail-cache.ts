@@ -1,12 +1,17 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { CrewInvalidation } from '../../crew/crew-changes'
+import { paneKeyMatchSuffix } from '../../db/pane-key-match'
 
-/** Each pane's Run mailboxes that owe pointer work, until the next crew change.
+/** Bounds the cache when many panes come and go; an evicted pane only queries again. */
+const MAX_CACHED_PANES = 256
+
+/** Each pane's Run mailboxes that owe pointer work, until a change that could add some.
  * Why: held-mail retries ask on a timer, and the query visits every Run ever bound to the pane. */
 export class PaneRunMailCache {
   private db: OrchestrationDb | null = null
   private unsubscribe: (() => void) | null = null
-  private readonly byPane = new Map<string, string[]>()
+  /** Keyed by the pane's match suffix, which the query and Run binding both use. */
+  private readonly bySuffix = new Map<string, string[]>()
 
   read(db: OrchestrationDb, paneKey: string): string[] {
     // Why uncached without the bus: nothing would tell the cache that new mail arrived.
@@ -15,31 +20,50 @@ export class PaneRunMailCache {
     }
     if (db !== this.db) {
       this.unsubscribe?.()
-      this.byPane.clear()
+      this.bySuffix.clear()
       this.db = db
-      // Why most changes clear all: new Run mail, routing, rebinding and resets all arrive as crew changes.
-      this.unsubscribe = db.crewChanges.subscribe((notice) => {
-        if (!isNonRunTraffic(notice)) {
-          this.byPane.clear()
-        }
-      })
+      this.unsubscribe = db.crewChanges.subscribe((notice) => this.invalidate(db, notice))
     }
-    let mailboxes = this.byPane.get(paneKey)
-    if (!mailboxes) {
-      mailboxes = db.runMailboxesWithPointerWorkForPane(paneKey)
-      this.byPane.set(paneKey, mailboxes)
+    const suffix = paneKeyMatchSuffix(paneKey)
+    const cached = this.bySuffix.get(suffix)
+    if (!cached) {
+      const mailboxes = db.runMailboxesWithPointerWorkForPane(paneKey)
+      if (this.bySuffix.size >= MAX_CACHED_PANES) {
+        this.bySuffix.delete(this.bySuffix.keys().next().value ?? suffix)
+      }
+      this.bySuffix.set(suffix, mailboxes)
+      return mailboxes
     }
-    return mailboxes
+    if (cached.length === 0) {
+      return cached
+    }
+    // Why: reading mail sends no crew change, so drop mailboxes whose work is gone in one indexed query.
+    const live = db.getMailboxesWithPointerWork(cached)
+    if (live.size === cached.length) {
+      return cached
+    }
+    const remaining = cached.filter((mailbox) => live.has(mailbox))
+    this.bySuffix.set(suffix, remaining)
+    return remaining
   }
-}
 
-/** Mail between terminals or chats never adds work to a Run mailbox; routing it there notifies separately. */
-function isNonRunTraffic(notice: CrewInvalidation | undefined): boolean {
-  const addresses = notice?.trafficAddresses
-  return (
-    !!addresses &&
-    notice.size === 1 &&
-    notice.has('traffic') &&
-    ![...addresses].some((address) => address.startsWith('run:'))
-  )
+  /** New mail to a Run touches only its coordinator's pane; any other change (routing, rebinding, resets) clears all. */
+  private invalidate(db: OrchestrationDb, notice: CrewInvalidation): void {
+    const addresses = notice.trafficAddresses
+    if (!addresses || notice.size !== 1 || !notice.has('traffic')) {
+      this.bySuffix.clear()
+      return
+    }
+    for (const address of addresses) {
+      if (!address.startsWith('run:')) {
+        continue
+      }
+      const paneKey = db.getRun(address.slice('run:'.length))?.coordinator_pane_key
+      if (!paneKey) {
+        this.bySuffix.clear()
+        return
+      }
+      this.bySuffix.delete(paneKeyMatchSuffix(paneKey))
+    }
+  }
 }
