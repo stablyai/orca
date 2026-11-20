@@ -15,6 +15,7 @@ import {
 // Codex creates a rollout empty and writes its header after collecting git info.
 const UNFINISHED_HEADER_GRACE_MS = 10 * 60 * 1000
 const PENDING_RETRY_MS = 5000
+const ARCHIVE_RELISTS_PER_SWEEP = 25
 
 /**
  * Which rollouts other rollouts read their history prefix from (`session_meta.history_base`); a
@@ -58,6 +59,8 @@ export function createCodexRolloutHistoryReferences(
   // Read again on every pass; while any is left, no rollout is proven unreferenced.
   const pending = new Map<string, Pending>()
   let pendingRetriedAt = 0
+  let archiveRelistsLeft = ARCHIVE_RELISTS_PER_SWEEP
+  let archiveRelistsRefused = 0
   // Recently named rollout links with no target: a target can appear without a folder changing.
   const dangling = new Map<string, string>()
 
@@ -212,7 +215,7 @@ export function createCodexRolloutHistoryReferences(
   }
 
   /** Lists a flat folder again only when its entries changed since the last listing. */
-  const relist = async (folder: string, visited: Set<string>): Promise<boolean> => {
+  const relist = async (folder: string, visited: Set<string>, archive = false) => {
     // A dated folder linked into WSL is skipped like any link below the roots.
     if (await linksIntoWsl(folder)) {
       return true
@@ -225,6 +228,13 @@ export function createCodexRolloutHistoryReferences(
     if (stamps.isCurrent(folder, entry.mtimeMs)) {
       return true
     }
+    // Each deletion of an archived name changes this folder, and re-listing it is O(entries): past
+    // the cap, a candidate is kept for the next sweep instead of re-listing again.
+    if (archive && archiveRelistsLeft === 0) {
+      archiveRelistsRefused += 1
+      return false
+    }
+    archiveRelistsLeft -= archive ? 1 : 0
     const listed = await relistNames(folder, visited)
     if (listed) {
       stamps.listed(folder, entry.mtimeMs, statAt)
@@ -281,7 +291,7 @@ export function createCodexRolloutHistoryReferences(
             const folders =
               name === 'sessions' ? dates.map((parts) => join(root, ...parts)) : [root]
             for (const folder of folders) {
-              complete = (await relist(folder, visited)) && complete
+              complete = (await relist(folder, visited, name !== 'sessions')) && complete
             }
           }
         }
@@ -324,6 +334,12 @@ export function createCodexRolloutHistoryReferences(
       return children?.size === 0 ? base : null
     },
     save: async () => {
+      if (archiveRelistsRefused > 0) {
+        console.info(
+          `[workspace-cleanup] Kept ${archiveRelistsRefused} Codex rollouts for the next sweep: archive re-list cap reached`
+        )
+        archiveRelistsRefused = 0
+      }
       await cache?.save()
     }
   }
