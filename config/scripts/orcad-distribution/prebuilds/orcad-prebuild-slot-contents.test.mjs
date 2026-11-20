@@ -35,12 +35,18 @@ const next = (slot, overrides = {}) => ({
 describe('findSlotProblems', () => {
   it('passes only when every named slot is present and every file matches its hash', () => {
     const dir = temp()
-    mkdirSync(join(dir, 'darwin-arm64'))
+    mkdirSync(join(dir, 'darwin-arm64', 'provider-exec'), { recursive: true })
     writeFileSync(join(dir, 'darwin-arm64', 'pty.node'), 'binary')
+    writeFileSync(join(dir, 'darwin-arm64', 'provider-exec', 'orca-provider-exec'), 'helper')
     const manifest = mergeManifest(
       null,
       next('darwin-arm64', {
-        entry: entry({ 'pty.node': sha256Of(join(dir, 'darwin-arm64', 'pty.node')) })
+        entry: entry({
+          'pty.node': sha256Of(join(dir, 'darwin-arm64', 'pty.node')),
+          'provider-exec/orca-provider-exec': sha256Of(
+            join(dir, 'darwin-arm64', 'provider-exec', 'orca-provider-exec')
+          )
+        })
       })
     )
     expect(findSlotProblems(manifest, dir, ['darwin-arm64'])).toEqual([])

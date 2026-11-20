@@ -12,7 +12,7 @@ import {
   isUnconfirmedSshCommandTermination
 } from '../../remote-exec/remote-exec-command'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../remote-host/ssh-remote-platform'
-import { filesystemTypeIsLocalDisk } from '../../../orcad/orcad-data-root-locality'
+import { filesystemTypeIsLocalDisk } from '../../../orcad/instance-lock/orcad-data-root-locality'
 
 type RelayEndpointVerdict = 'live' | 'unverifiable' | 'exited'
 

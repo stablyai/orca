@@ -31,23 +31,20 @@ describe('skills CLI runtime closure', () => {
     }
   })
 
-  it('rejects bare imports resolved outside the artifact', async () => {
+  it('checks shared worker entries that are spawned by path, not required', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
     try {
-      const artifactRoot = join(root, 'artifact')
-      const outDir = join(artifactRoot, 'out')
-      const externalPackageDir = join(root, 'node_modules', 'external-package')
-      await mkdir(externalPackageDir, { recursive: true })
-      await writeSkillsCliFixture(outDir, "require('external-package')\n")
+      await writeSkillsCliFixture(root, '')
+      const storeDir = join(root, 'shared', 'host-store')
+      await mkdir(storeDir, { recursive: true })
       await writeFile(
-        join(externalPackageDir, 'package.json'),
-        JSON.stringify({ main: 'index.js' }),
+        join(storeDir, 'store-worker-entry.js'),
+        "require('../../main/worker-threads/worker-send-ledger')\n",
         'utf8'
       )
-      await writeFile(join(externalPackageDir, 'index.js'), '', 'utf8')
 
-      expect(() => collectRuntimeClosure(outDir, artifactRoot)).toThrow(
-        /external-package.*resolved outside/s
+      expect(() => collectRuntimeClosure(root)).toThrow(
+        /missing runtime import "\.\.\/\.\.\/main\/worker-threads\/worker-send-ledger" from shared\/host-store\/store-worker-entry\.js/
       )
     } finally {
       await rm(root, { recursive: true, force: true })

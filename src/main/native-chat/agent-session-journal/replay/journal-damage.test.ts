@@ -1,3 +1,7 @@
+import { seedTestJournalHistoricalRows } from './journal-historical-inputs.test-support'
+import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { JournalRow } from '../durable-rows/journal-row-schema'
+import { readTestJournalSnapshot } from '../journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +14,7 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type Database from '../../../sqlite/sync-database'
 import type { openAgentSessionJournal } from '../journal-store-factory'
 import {
@@ -70,14 +74,26 @@ async function storedRows(): Promise<{ seq: number; rowJson: string }[]> {
 }
 
 async function writeChat(): Promise<void> {
-  const journal = await open()
-  for (let ordinal = 0; ordinal < 5; ordinal += 1) {
-    await journal.appendItem(item(ordinal), body(`m${ordinal}`), {
-      fence: 1,
+  const base = (seq: number) => ({ v: 3, epoch: 'historical', seq, fence: 1, ts: 1_000 })
+  const rows: JournalRow[] = [
+    {
+      ...base(1),
+      kind: 'epoch',
+      reason: 'session_created',
+      providerHandle: { kind: 'codex', threadId: 'thread-1' }
+    }
+  ]
+  for (let ordinal = 0; ordinal < 5; ordinal++) {
+    rows.push({
+      ...base(ordinal + 2),
+      kind: 'item',
+      itemId: agentJournalItemKey(item(ordinal)),
+      revision: 1,
+      body: body(`m${ordinal}`),
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     })
   }
-  await journal.close()
+  await withJournalDatabase((db) => seedTestJournalHistoricalRows(db, IDENTITY, rows))
 }
 
 beforeEach(async () => {
@@ -168,19 +184,21 @@ describe('a row the reader would reject', () => {
   it('rolls back a whole epoch replacement that holds one, keeping the epoch it would replace', async () => {
     const journal = await open()
     await journal.appendItem(item(0), body('kept'), scope)
-    // Closing the shared test connection would also close the live journal.
-    const liveRows = () =>
-      liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId)
-    const before = liveRows()
+    const before = await readTestJournalSnapshot(journal)
 
     await expect(
-      journal.replaceEpochItems('legacy_import', 1, [
-        { identity: item(5), body: body('replacement'), ownerFence: 1 },
-        { identity: item(6), body: blankCallId, ownerFence: 1 }
-      ])
+      journal.write({
+        kind: 'epoch-replace',
+        reason: 'legacy_import',
+        fence: 1,
+        items: [
+          { identity: item(5), body: body('replacement'), ownerFence: 1 },
+          { identity: item(6), body: blankCallId, ownerFence: 1 }
+        ]
+      })
     ).rejects.toMatchObject({ code: 'journal_row_rejected' })
 
-    expect(liveRows()).toEqual(before)
+    expect(await readTestJournalSnapshot(journal)).toEqual(before)
     await journal.appendItem(item(1), body('still writable'), scope)
     await journal.close()
     await expect(open()).resolves.toBeTruthy()

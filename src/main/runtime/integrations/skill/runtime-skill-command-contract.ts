@@ -1,20 +1,20 @@
 import type {
   AgentSkillShareOperation,
   AgentSkillShareRequest
-} from '../../../../shared/agent-skill-sharing-contract'
-import type { DiscoveredSkill } from '../../../../shared/skills'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+} from '../../../../shared/skills/sharing/agent-skill-sharing-contract'
+import type { DiscoveredSkill } from '../../../../shared/skills/discovery/skills'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type {
   SkillBundleInstallPreview,
   SkillBundleInstallPreviewRequest,
   SkillBundleInstallProgress,
   SkillBundleInstallRequest,
   SkillBundleInstallResult
-} from '../../../../shared/skill-bundle-install-contract'
+} from '../../../../shared/skills/installation/skill-bundle-install-contract'
 import type {
   SkillUploadBeginRequest,
   SkillUploadChunkRequest
-} from '../../../../shared/skill-upload-session-contract'
+} from '../../../../shared/skills/sharing/skill-upload-session-contract'
 import type { SkillUploadSessionService } from '../../../skills/runtime-upload/skill-upload-session-service'
 import type { RuntimeSkillCommands } from './runtime-skill-command-surface'
 import type {
@@ -25,7 +25,7 @@ import type {
   SkillCloudPublishRequest,
   SkillCloudPublishResult,
   SkillCloudVersion
-} from '../../../../shared/skill-cloud-contract'
+} from '../../../../shared/skills/sharing/skill-cloud-contract'
 import type { SkillCloudService } from '../../../skills/cloud/skill-cloud-package-service'
 import type {
   ManagedSkillInstall,
@@ -34,7 +34,7 @@ import type {
   SkillInstallRequest,
   SkillInstallResult,
   SkillRemoveRequest
-} from '../../../../shared/skill-install-contract'
+} from '../../../../shared/skills/installation/skill-install-contract'
 import type { SkillProviderRootOverrides } from '../../../skills/providers/skill-provider-destinations'
 import type {
   BundledSkillAutoUpdateRequest,
@@ -42,7 +42,7 @@ import type {
   BundledSkillInstallResult,
   BundledSkillPlan,
   LocalBundledSkillPlanRequest
-} from '../../../../shared/bundled-skill-plan'
+} from '../../../../shared/skills/bundled/bundled-skill-plan'
 export type RuntimeSkillCommandSurface = {
   setSkillCloudService(service: SkillCloudService): void
   assertAgentSkillSharingAllowed(): void

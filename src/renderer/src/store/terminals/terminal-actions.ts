@@ -1,6 +1,6 @@
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalState } from './terminal-state'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
 import type {
   TerminalLayoutSnapshot,
@@ -17,13 +17,19 @@ import type { StartupCommandDelivery } from '../../../../shared/agent-launch/sta
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/workspace/creation/worktree-startup-payload'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
-import type { GeneratedTabTitleUpdate, TerminalTabTitleUpdate } from './terminal-tab-title-batch'
+import type {
+  GeneratedTabTitleUpdate,
+  TerminalTabTitleUpdate
+} from './tabs/presentation/terminal-tab-title-batch'
 import type {
   NativeChatLaunchDraft,
   NativeChatLaunchPrompt
 } from '@/components/native-chat/drafts/native-chat-launch-prompt'
-import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
-import type { TerminalTabCloseReason, TerminalTabRetirementPlan } from './terminal-tab-retirement'
+import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/contracts/agent-status-contract'
+import type {
+  TerminalTabCloseReason,
+  TerminalTabRetirementPlan
+} from './retirement/terminal-tab-retirement'
 import type {
   AccountRestartAgent,
   TerminalCreationExecutionFacts,

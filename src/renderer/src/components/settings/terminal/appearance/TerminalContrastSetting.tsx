@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { Slider } from '../../../ui/slider'
 import {
   NumberField,

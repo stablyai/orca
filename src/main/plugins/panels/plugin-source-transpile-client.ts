@@ -9,7 +9,7 @@ import type {
   PluginSourceTranspiled,
   PluginSourceTranspileRequest,
   PluginSourceTranspileResponse
-} from './plugin-source-transpile-protocol'
+} from './source-transpilation/plugin-source-transpile-protocol'
 
 /** A file still transpiling after this is cut short: its worker is terminated and replaced. */
 export const PLUGIN_SOURCE_MODULE_BUDGET_MS = 2_000
@@ -35,7 +35,7 @@ function defaultWorkerFactory(): PluginSourceTranspileWorker {
   if (!existsSync(path)) {
     throw new Error(`plugin source transpile worker entry not found: ${path}`)
   }
-  return spawnWorkerThread(path)
+  return spawnWorkerThread(path, { name: 'orca-plugin-transpile' })
 }
 
 /**

@@ -17,8 +17,10 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'settings', 'preferences'],
-    // Leave Cmd/Ctrl+, to terminal apps such as Codex unless the user opts in.
-    defaultBindings: platformBindings([]),
+    // macOS convention: ⌘, opens Settings; keep Ctrl+, on Windows/Linux for terminal apps such as Codex.
+    defaultBindings: { darwin: ['Mod+Comma'], linux: [], win32: [] },
+    // Why: ⌘, was unbound from #23136 until now, so a user may have assigned it to another action.
+    implicitDefaultYields: true,
     conflictGroup: 'menu'
   },
   {
@@ -32,10 +34,10 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
   },
   {
     id: 'worktree.palette',
-    title: 'Switch worktree',
+    title: 'Search everything',
     group: 'Global',
     scope: 'global',
-    searchKeywords: ['shortcut', 'global', 'worktree', 'switch', 'jump'],
+    searchKeywords: ['shortcut', 'global', 'search', 'palette', 'switch worktree', 'jump'],
     defaultBindings: platformBindings(['Mod+K'])
   },
   {
@@ -82,22 +84,22 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
   },
   {
     id: 'workspace.delete',
-    title: 'Delete Workspace',
+    title: 'Delete Selected Workspace',
     group: 'Global',
     scope: 'global',
     searchKeywords: [
       'shortcut',
       'global',
       'workspace',
-      'current workspace',
+      'selected workspace',
+      'sidebar',
       'worktree',
       'delete',
       'remove',
       'trash'
     ],
     // Why: Backspace avoids the terminal pane's D-based split shortcuts on every platform.
-    defaultBindings: platformBindings(['Mod+Shift+Backspace']),
-    allowInTerminal: true
+    defaultBindings: platformBindings(['Mod+Shift+Backspace'])
   },
   {
     id: 'workspace.openBoard',

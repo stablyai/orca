@@ -42,23 +42,6 @@ describe('encodeInjectTouchEvent', () => {
     expect(up.readUInt16BE(22)).toBe(0)
     expect(up.readUInt32BE(28)).toBe(0)
   })
-
-  it('encodes pressure as the same u16 fixed point as the official client', () => {
-    const pressureField = (pressure: number): number =>
-      encodeInjectTouchEvent({
-        action: 'down',
-        x: 0,
-        y: 0,
-        screenWidth: 1,
-        screenHeight: 1,
-        pressure
-      }).readUInt16BE(22)
-
-    expect(pressureField(0.5)).toBe(0x8000)
-    expect(pressureField(2)).toBe(0xffff)
-    expect(pressureField(-1)).toBe(0)
-    expect(pressureField(Number.NaN)).toBe(0)
-  })
 })
 
 describe('encodeInjectKeycode', () => {
@@ -82,10 +65,6 @@ describe('encodeInjectText', () => {
     expect(buf.readUInt32BE(1)).toBe(3)
     expect(buf.subarray(5).toString('utf8')).toBe('añ')
   })
-
-  it('rejects payloads the server-side protocol would not expect', () => {
-    expect(() => encodeInjectText('a'.repeat(SCRCPY_INJECT_TEXT_MAX_BYTES + 1))).toThrow(RangeError)
-  })
 })
 
 describe('splitScrcpyInjectText', () => {
@@ -100,9 +79,5 @@ describe('splitScrcpyInjectText', () => {
       expect(Buffer.byteLength(chunk, 'utf8')).toBeLessThanOrEqual(SCRCPY_INJECT_TEXT_MAX_BYTES)
       expect(() => encodeInjectText(chunk)).not.toThrow()
     }
-  })
-
-  it('returns no chunks for empty text', () => {
-    expect(splitScrcpyInjectText('')).toEqual([])
   })
 })

@@ -198,8 +198,10 @@ async function seedHookRow(
     ).isClaudeAgent
   )
   realStore.getState().setAgentStatus(paneKey, { state, prompt: 'ship it', agentType })
-  const row = realStore.getState().agentStatusByPaneKey[paneKey]
-  mockStoreState.agentStatusByPaneKey[paneKey] = row
+  const row = realStore.getState().agentStatusByPaneKey.get(paneKey)!
+  mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+    [paneKey, row]
+  ])
   return row
 }
 
@@ -217,7 +219,9 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     mockStoreState = createInitialStoreState(() => mockStoreState)
     await installTerminalTestGlobals()
     mockStoreState.dropAgentStatus.mockImplementation((paneKey: string) => {
-      delete mockStoreState.agentStatusByPaneKey[paneKey]
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [paneKey, null]
+      ])
     })
   })
 
@@ -248,28 +252,43 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     )
   })
 
-  it('drops the row and retires main latches when Claude exits in a pane without command marks', async () => {
-    let foreground: string | null = 'claude'
-    let children = true
-    vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
-    vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(async () => children)
-    const { paneKey } = await connectAgentPane({ ptyId: 'pty-cmd-claude', visible: true })
-    await seedHookRow(paneKey, 'claude')
-    await vi.advanceTimersByTimeAsync(3_000)
-    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeDefined()
+  it.each(['codex'] as const)(
+    'asks main to retire %s recovery after a process exit without command marks',
+    async (agent) => {
+      let foreground: string | null = agent
+      let children = true
+      vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
+      vi.mocked(window.api.pty.hasChildProcesses).mockImplementation(async () => children)
+      const { paneKey } = await connectAgentPane({ ptyId: 'pty-cmd-claude', visible: true })
+      await seedHookRow(paneKey, agent)
+      mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+        paneKey,
+        worktreeId: 'wt-1',
+        agent,
+        providerSession: { key: 'session_id', id: 'quit-session' },
+        capturedAt: 1,
+        updatedAt: 1
+      }
+      await vi.advanceTimersByTimeAsync(3_000)
+      expect(mockStoreState.agentStatusByPaneKey.get(paneKey)!).toBeDefined()
 
-    // `/exit` in cmd.exe: the shell is back and no 133;D ever arrives.
-    foreground = 'cmd.exe'
-    children = false
-    await vi.advanceTimersByTimeAsync(10_000)
-    await flushAsyncTicks()
+      // `/exit` in cmd.exe: the shell is back and no 133;D ever arrives.
+      foreground = 'cmd.exe'
+      children = false
+      await vi.advanceTimersByTimeAsync(10_000)
+      await flushAsyncTicks()
 
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
-    // No `paneRemoved`: the pane outlived the agent, so main keeps the resume identity.
-    expect(mockStoreState.dropAgentStatus.mock.calls).toEqual([[paneKey]])
-    expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
-    expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBeUndefined()
-  })
+      // Main owns retirement; a process exit requests its proof rather than deleting recovery here.
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+        providerSession: { id: 'quit-session' }
+      })
+      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
+      // No `paneRemoved`: the pane outlived the agent, so main keeps the resume identity.
+      expect(mockStoreState.dropAgentStatus.mock.calls).toEqual([[paneKey]])
+      expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.agentStatusByPaneKey.get(paneKey)!).toBeUndefined()
+    }
+  )
 
   it('keeps the row when the agent is relaunched before the exit settles', async () => {
     const hostAnswer = createDeferred<boolean>()
@@ -280,14 +299,19 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     confirmExit('claude')
     // The relaunched Claude's first hook lands while the host is still answering.
     vi.setSystemTime(Date.now() + 1_000)
-    mockStoreState.agentStatusByPaneKey[paneKey] = {
-      ...exitedRow,
-      state: 'working',
-      prompt: 'next session',
-      updatedAt: Date.now(),
-      stateStartedAt: Date.now(),
-      acceptedStatusSeq: (exitedRow.acceptedStatusSeq ?? 0) + 1
-    }
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        paneKey,
+        {
+          ...exitedRow,
+          state: 'working',
+          prompt: 'next session',
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          acceptedStatusSeq: (exitedRow.acceptedStatusSeq ?? 0) + 1
+        }
+      ]
+    ])
     hostAnswer.resolve(false)
     await flushAsyncTicks()
 
@@ -308,6 +332,6 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     expect(vi.mocked(window.api.agentStatus.reconcileEndedProcess).mock.calls).toEqual([
       [left.paneKey]
     ])
-    expect(mockStoreState.agentStatusByPaneKey[right.paneKey]).toBeDefined()
+    expect(mockStoreState.agentStatusByPaneKey.get(right.paneKey)!).toBeDefined()
   })
 })

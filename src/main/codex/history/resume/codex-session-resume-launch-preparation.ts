@@ -1,5 +1,5 @@
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   trustedCodexResumeHomes,
   type CodexSessionResumePreparation
@@ -9,7 +9,7 @@ import {
   prepareCodexAccountRestartResume,
   prepareLegacySharedCodexSessionResume
 } from './codex-legacy-session-resume'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 import { codexHookService } from '../../hooks/installation/hook-service'
 import { reconcileCodexHooksForLaunch } from '../../hooks/reconciliation/codex-hook-reconcile'
 import { ensureCodexDaemonSocketGuard } from '../../configuration/settings/codex-config-mirror'
@@ -18,9 +18,9 @@ import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { CodexRuntimeHomeService } from '../../../codex-accounts/runtime-home-service'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 export function createCodexSessionResumeLaunchPreparation(deps: {
   getRuntimeHome: () => CodexRuntimeHomeService | null
@@ -48,6 +48,7 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
     }
     if (!isSystemHome) {
+      await deps.getRuntimeHome()?.prepareAccountHistoryForPinnedHome(home)
       // Hook repair may skip or fail before its config mirror applies the guard.
       ensureCodexDaemonSocketGuard(home)
     }

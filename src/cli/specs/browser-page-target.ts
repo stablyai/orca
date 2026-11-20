@@ -1,4 +1,4 @@
-import type { CommandSpec } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
 
 // These open, list or configure pages, so there is no one page to target.
 const NOT_PAGE_TARGETED = new Set([

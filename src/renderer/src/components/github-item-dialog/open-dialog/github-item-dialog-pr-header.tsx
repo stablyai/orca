@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { WorkItemIssueSourceIndicator } from './work-item-issue-source-indicator'
 import { WorkItemStateBadge } from '../load-item-details/work-item-state-badge'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -113,12 +113,9 @@ export function GitHubItemDialogPRHeader({
               size="sm"
               onClick={() => onUse(workItem)}
               className="gap-1.5 whitespace-nowrap"
-              aria-label={t(
-                'auto.components.GitHubItemDialog.0caac1a18f',
-                'Start workspace from PR'
-              )}
+              aria-label={t('auto.components.GitHubItemDialog.0caac1a18f', 'Start workspace')}
             >
-              {t('auto.components.GitHubItemDialog.0caac1a18f', 'Start workspace from PR')}
+              {t('auto.components.GitHubItemDialog.0caac1a18f', 'Start workspace')}
               <ArrowRight className="size-3.5" />
             </Button>
           )}

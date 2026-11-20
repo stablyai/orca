@@ -7,7 +7,7 @@ import type {
   TerminalConfigImportSource
 } from '../../../../../../shared/terminal/appearance/terminal-config-import-preview'
 import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 export type UseTerminalConfigImportReturn = {
   format: TerminalConfigImportFormat

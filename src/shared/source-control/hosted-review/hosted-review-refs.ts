@@ -1,4 +1,4 @@
-import type { BaseRefSearchResult } from '../../repo-types'
+import type { BaseRefSearchResult } from '../../repository/repo-types'
 
 export function normalizeHostedReviewHeadRef(ref: string): string {
   return ref
@@ -36,7 +36,10 @@ export function normalizeCreateReviewBaseSearchResults(
   const branches: string[] = []
   for (const result of results) {
     // APIs need branch names; detailed search resolves remote-qualified refs, including slash-containing remote names.
-    const branch = normalizeHostedReviewBaseRef((result.localBranchName || result.refName).trim())
+    const branch =
+      result.refName.startsWith('refs/') && result.localBranchName
+        ? result.localBranchName.trim()
+        : normalizeHostedReviewBaseRef((result.localBranchName || result.refName).trim())
     if (!branch || seen.has(branch)) {
       continue
     }

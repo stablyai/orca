@@ -4,7 +4,7 @@ import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import { getWorkItemCountedTotalPages } from '../../../../../shared/work-items/work-item-pagination'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
-import { isGitHubWorkItemsQueryTooLarge } from '../../../../../shared/github/work-items-query-bounds'
+import { isGitHubWorkItemsQueryTooLarge } from '../../../../../shared/github/work-items/work-items-query-bounds'
 import { workItemsCacheKey, workItemsInflightRequestKey } from '../cache/cache-identity'
 import {
   acquireProviderRequestSlot as acquireWorkItemSlot,
@@ -40,6 +40,9 @@ export const createWorkItemCountActions = (
     )
     const counts = await Promise.all(
       repos.map(async (r, index) => {
+        if (r.hostUnreachable) {
+          return undefined
+        }
         const requestState = get(),
           attempt = attempts[index]
         const requestContext = getGitHubWorkItemRequestContext(

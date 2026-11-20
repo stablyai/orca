@@ -14,7 +14,8 @@ vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => host.dataDirectory
 }))
 vi.mock('../../../agent-session/launch/structured-agent-launch-support', () => ({
-  resolveHostStructuredAgentLaunchEnvironment: async () => ({ PATH: '' })
+  resolveHostStructuredAgentLaunchEnvironment: async () => ({ PATH: '' }),
+  structuredAgentHostAlternativeReady: async () => false
 }))
 // The download never answers until its cancel.
 vi.mock('../../../../network/http-client', () => ({
@@ -34,7 +35,7 @@ vi.mock(
     ...(await actual<object>()),
     getStructuredAgentSessionHost: () => ({
       loadedSessionIds: () => [...chats.loaded],
-      sessionAgent: () => 'opencode',
+      sessionAgent: () => 'hermes',
       close: async (id: string) => {
         chats.closed.push(id)
         chats.loaded = chats.loaded.filter((loaded) => loaded !== id)
@@ -45,15 +46,15 @@ vi.mock(
 vi.mock('../../../../acp/launch/acp-launch-registry', async (importOriginal) => {
   const actual = await importOriginal<typeof LaunchSpecs>()
   const { AcpLaunchGate } = await import('../../../../acp/launch/acp-launch-gate')
-  const launchGate = new AcpLaunchGate('Grok')
+  const launchGate = new AcpLaunchGate('Agent')
   const pin = {
     version: '1.0',
-    url: 'https://example.test/grok-1.0.tar.gz',
+    url: 'https://example.test/agent-1.0.tar.gz',
     archiveSha256: 'a'.repeat(64),
     archiveBytes: 10,
     members: [{ path: 'server', sha256: 'b'.repeat(64), bytes: 6 }]
   }
-  const managedRuntime = { label: 'Grok', root: (data: string) => `${data}/rt`, pin: () => pin }
+  const managedRuntime = { label: 'Agent', root: (data: string) => `${data}/rt`, pin: () => pin }
   return {
     ...actual,
     acpLaunchSpecFor: (agent: string) => {
@@ -79,31 +80,34 @@ it('pushes a snapshot, then the install another client starts, until the transpo
   const transport = new AbortController()
   const frames: unknown[] = []
   const watcher = { ...ctx, signal: transport.signal }
-  await subscribeMethod.handler({ agent: 'grok' }, watcher, (frame) => frames.push(frame))
+  await subscribeMethod.handler({ agent: 'antigravity' }, watcher, (frame) => frames.push(frame))
   expect(frames).toEqual([
     expect.objectContaining({ available: true, installedVersion: null, operation: null })
   ])
-  const started = await installMethod.handler({ agent: 'grok' }, ctx)
+  const started = await installMethod.handler({ agent: 'antigravity' }, ctx)
   const id = String(started.operation?.id)
   await vi.waitFor(() =>
     expect(frames.at(-1)).toMatchObject({ operation: { id, phase: 'downloading' } })
   )
   // Cancel answers with the outcome once the run has unwound.
-  const outcome = await cancelMethod.handler({ agent: 'grok', operationId: id }, ctx)
+  const outcome = await cancelMethod.handler({ agent: 'antigravity', operationId: id }, ctx)
   expect(outcome).toMatchObject({ id, phase: 'cancelled' })
   await vi.waitFor(() => expect(frames.at(-1)).toMatchObject({ operation: { phase: 'cancelled' } }))
 
   transport.abort()
   const seen = frames.length
-  const again = await installMethod.handler({ agent: 'grok' }, ctx)
-  await cancelMethod.handler({ agent: 'grok', operationId: String(again.operation?.id) }, ctx)
+  const again = await installMethod.handler({ agent: 'antigravity' }, ctx)
+  await cancelMethod.handler(
+    { agent: 'antigravity', operationId: String(again.operation?.id) },
+    ctx
+  )
   expect(frames).toHaveLength(seen)
   await rm(host.dataDirectory, { recursive: true, force: true })
 })
 
 it('removes the files only once every chat and unclosed child that may run them is stopped', async () => {
   host.dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-remove-rpc-'))
-  const agent = 'opencode'
+  const agent = 'hermes'
   const spec = acpLaunchSpecFor(agent)
   const pin = spec?.managedRuntime?.pin()
   if (!spec?.launchGate || !pin) {

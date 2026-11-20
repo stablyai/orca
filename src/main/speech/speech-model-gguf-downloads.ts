@@ -1,4 +1,4 @@
-import type { SpeechModelDownloadFile } from '../../shared/speech-types'
+import type { SpeechModelDownloadFile } from '../../shared/speech/speech-types'
 
 type GgufDownload = readonly [
   repository: string,
@@ -16,6 +16,13 @@ const GGUF_DOWNLOADS = {
     'parakeet-tdt-0.6b-v3-Q8_0.gguf',
     739_508_576,
     '5859f77944efcd8eafa23a6350731960b2b55b2203df51f319665c807d802cc7'
+  ],
+  'parakeet-unified-en-0.6b': [
+    'handy-computer/parakeet-unified-en-0.6b-gguf',
+    '843b1b175ace04f5a89d379c79e2518c0d065b25',
+    'parakeet-unified-en-0.6b-Q8_0.gguf',
+    731_357_568,
+    '4b50b6dd862bf6e346929aaf4f5eaacec003bfa3f56462d6c874b41ef2f38795'
   ],
   'parakeet-tdt-0.6b-v2-int8': [
     'handy-computer/parakeet-tdt-0.6b-v2-gguf',

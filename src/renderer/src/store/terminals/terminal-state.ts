@@ -1,5 +1,5 @@
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
-import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -7,14 +7,14 @@ import type {
 import type {
   PaneResumeOutcome,
   PaneStartStatus
-} from '../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentStartedTelemetry } from '../../lib/workspace/creation/worktree-startup-payload'
@@ -32,7 +32,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalActions } from './terminal-actions'
 import type { AgentPaneLaunchRequest } from '../../../../shared/agent-launch/contracts/agent-pane-launch-request'
-import type { PairedTerminalTabCloseIntentSlice } from './paired-terminal-tab-close-intent-actions'
+import type { PairedTerminalTabCloseIntentSlice } from './retirement/paired-terminal-tab-close-intent-actions'
 
 export type TerminalState = {
   tabsByWorktree: Record<string, TerminalTab[]>

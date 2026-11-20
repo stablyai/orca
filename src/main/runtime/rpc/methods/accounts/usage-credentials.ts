@@ -2,7 +2,7 @@ import { defineMethod } from '../../core'
 import {
   UsageCredentialApiKeyParams,
   UsageCredentialSessionCookieParams
-} from '../../../../../shared/rpc-contract/usage-credentials-params'
+} from '../../../../../shared/rpc-contract/accounts/usage-credentials-params'
 import {
   assertMiniMaxCredentialOpensHere,
   clearMiniMaxApiKeyCredential,
@@ -36,7 +36,7 @@ export const USAGE_CREDENTIAL_METHODS = [
     params: UsageCredentialApiKeyParams,
     handler: async ({ apiKey }, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
-      assertMiniMaxCredentialOpensHere('apiKey')
+      await assertMiniMaxCredentialOpensHere('apiKey')
       return saveMiniMaxApiKeyCredential(rateLimits, apiKey)
     }
   }),
@@ -55,7 +55,7 @@ export const USAGE_CREDENTIAL_METHODS = [
     params: UsageCredentialSessionCookieParams,
     handler: async ({ cookie }, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
-      assertMiniMaxCredentialOpensHere('cookie')
+      await assertMiniMaxCredentialOpensHere('cookie')
       return saveMiniMaxSessionCookieCredential(rateLimits, cookie)
     }
   }),
@@ -83,7 +83,7 @@ export const USAGE_CREDENTIAL_METHODS = [
     params: UsageCredentialApiKeyParams,
     handler: async ({ apiKey }, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
-      assertZcodePlanApiKeyOpensHere()
+      await assertZcodePlanApiKeyOpensHere()
       return saveZcodePlanApiKeyCredential(rateLimits, apiKey)
     }
   }),

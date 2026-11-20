@@ -30,7 +30,7 @@ import {
 } from '../../agent-hooks/installation/configuration/hooks-json-remote'
 import { readTextFileRemote } from '../../agent-hooks/installation/remote/hook-text-files-remote'
 import { renamePlain } from '../../agent-hooks/installation/remote/hook-sftp-operations'
-import { CLAUDE_AGENT_VIEW_PLUGIN } from '../../../shared/claude-agent-view'
+import { CLAUDE_AGENT_VIEW_PLUGIN } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 // Called only after the user opts in; a surviving marker remembers deletions and edited chords.
 export function installClaudeAgentView(configPath: string): boolean {

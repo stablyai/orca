@@ -6,7 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 
 import { useAppStore } from '@/store/index'
-import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
+import { useRepoAssignees } from '@/lib/work-items/github/useGitHubRepoMetadata'
 import {
   canUseGitHubRepoContext,
   getGitHubRepoRoutingTarget
@@ -18,27 +18,25 @@ import {
   type PRCommentAudienceFilter
 } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import { groupPRComments } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
-import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
+import { resolveCommentReplyTarget } from '@/components/github/comment-reply-target-state'
 import { runWorkItemBodyUpdate } from '@/components/github/github-work-item-edit-mutations'
-import {
-  parseOwnerRepoFromItemUrl,
-  resolvePullRequestRepo
-} from '@/components/github/github-work-item-identity'
+import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
+import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
 import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
-} from '@/components/github-body-draft-state'
+} from '@/components/github/github-body-draft-state'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type {
   GitHubAssignableUser,
   GitHubPRFile
-} from '../../../../../shared/github/pull-request-types'
+} from '../../../../../shared/github/pull-requests/pull-request-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+} from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -242,6 +240,7 @@ export function ConversationTab({
       <div className="flex h-fit flex-col gap-5 xl:sticky xl:top-4">
         <PRActionsPanel
           item={item}
+          headSha={headSha}
           repoPath={repoPath}
           repoId={item.repoId}
           sourceContext={sourceContext}

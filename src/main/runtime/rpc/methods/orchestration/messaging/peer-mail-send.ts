@@ -7,12 +7,15 @@ import {
   deliverPeerMail,
   peerMailMessageId,
   peerMailPairing,
+  peerMailSender,
   peerMailSenderLabel,
   requirePeerMailServer
 } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
 import type { RpcContext } from '../../../core'
+import { parseBotAddress } from '../../../../../../shared/bot-roster'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { SendParams } from './send-params'
+import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -61,18 +64,19 @@ export async function sendPeerMail(args: {
   if (!to || /^(run|dispatch|task):/.test(to) || to.startsWith('@')) {
     throw new OrchestrationError(
       'invalid_argument',
-      `--on sends to one terminal or chat agent on that server: --to term_… or --to orca_session_id:…${to ? `, not ${to}` : ''}. Nothing was sent.`,
+      `--on sends to one agent or bot on that server: --to term_…, orca_session_id:… or bot:<name>${to ? `, not ${to}` : ''}. Nothing was sent.`,
       NOTHING_SENT
     )
   }
-  const type = params.type ?? 'status'
-  if (type !== 'status' && type !== 'handoff') {
+  const ordinaryType = PeerMailMessageType.safeParse(params.type ?? 'status')
+  if (!ordinaryType.success) {
     throw new OrchestrationError(
       'invalid_argument',
-      `--on carries --type status or handoff, not ${type}. Nothing was sent.`,
+      `--type ${params.type} requires Dispatch authority on its Run home. Send it through that Dispatch without --on. Nothing was sent.`,
       NOTHING_SENT
     )
   }
+  const type = ordinaryType.data
   if (params.payload !== undefined) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -81,7 +85,9 @@ export async function sendPeerMail(args: {
     )
   }
   const caller = peerMailLocalCaller({ ...args, from: params.from })
-  const server = await requirePeerMailServer(runtime, params.on)
+  const toBot =
+    parseBotAddress(to) !== null || params.chat !== undefined || params.item !== undefined
+  const server = await requirePeerMailServer(runtime, params.on, toBot, type)
   const conversation = runtime.getOrchestrationDb().openHomePeerMailConversation({
     environmentId: server.environmentId,
     peerFingerprint: peerMailPairing(server),
@@ -97,13 +103,16 @@ export async function sendPeerMail(args: {
     body: params.body,
     type,
     priority: params.priority,
-    threadId: params.threadId
+    threadId: params.threadId,
+    chat: params.chat,
+    item: params.item,
+    sender: peerMailSender(runtime, caller.address)
   })
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,
     { message: { id, to }, server: server.name },
-    () => runtime.ensureOrchestrationFederationRelay(),
-    { kind: 'federation' }
+    () => runtime.ensureOrchestrationPeerMailRelay(server.environmentId),
+    { kind: 'federation', environmentId: server.environmentId }
   )
 }
 

@@ -38,7 +38,8 @@ async function waitForPredecessor(
 export async function runWithGitOperationLock<T>(
   key: string,
   signal: AbortSignal | undefined,
-  run: () => Promise<T>
+  run: () => Promise<T>,
+  releaseAfter?: () => Promise<void> | null
 ): Promise<T> {
   const predecessor = lanes.get(key)?.tail ?? Promise.resolve()
   let release!: () => void
@@ -57,6 +58,11 @@ export async function runWithGitOperationLock<T>(
     await waitForPredecessor(predecessor, signal)
     return await run()
   } finally {
-    lane.release()
+    const termination = releaseAfter?.()
+    if (termination) {
+      void termination.then(lane.release, lane.release)
+    } else {
+      lane.release()
+    }
   }
 }

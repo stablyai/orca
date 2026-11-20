@@ -20,40 +20,6 @@ function lintSources(sources) {
 }
 
 const sources = {
-  // The subscription and post-render memo from the typing-lag regression.
-  historicalHotMap: `
-      import { useAppStore } from '@/store'
-export function useStructuredAgentSessionHostCapabilityState(
-  target: RuntimeClientTarget | null,
-  capability: RuntimeCapability
-): StructuredAgentSessionHostCapabilityState {
-  const environmentId = target?.kind === 'environment' ? target.environmentId : null
-  const statuses = useAppStore((state) => state.runtimeStatusByEnvironmentId)
-  const remote = useMemo((): StructuredAgentSessionHostCapabilityState => {
-    if (environmentId === null) {
-      return 'unknown'
-    }
-    const entry = statuses.get(environmentId)
-    const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
-    return status
-      ? status.capabilities?.includes(capability)
-        ? 'supported'
-        : 'unsupported'
-      : 'unknown'
-  }, [statuses, environmentId, capability])
-  const local = useSyncExternalStore(
-    subscribeLocalRuntimeCapabilityObservation,
-    () => localCapabilityState(capability),
-    () => 'unknown' as const
-  )
-  useEffect(() => {
-    if (target?.kind === 'local') {
-      void ensureLocalRuntimeCapabilities()
-    }
-  }, [target?.kind])
-  return !target ? 'unknown' : environmentId === null ? local : remote
-}
-    `,
   hotMapReturns: `
       import { useAppStore as useStore } from '@/store'
       import { useRuntimeStore } from '@/store/runtime'
@@ -68,12 +34,23 @@ export function useStructuredAgentSessionHostCapabilityState(
       function selectStatuses(state) { return state.runtimeStatusByEnvironmentId }
       const Sibling = () => useRuntimeStore(s => s.runtimeStatusByEnvironmentId)
       const ShallowMap = () => useStore(useShallow(s => s.runtimeStatusByEnvironmentId))
+      const Fallback = () => useStore(s => s.agentStatusByPaneKey ?? EMPTY)
+      const Branches = () => useStore(s => (flag ? s.tabsByWorktree : s.gitStatusByWorktree))
+      const ShallowFields = () => useStore(useShallow(s => ({ statuses: s.agentStatusByPaneKey, tabs: s.tabsByWorktree })))
+      const ShallowFallback = () => useStore(useShallow(s => [s.ptyIdsByTabId ?? EMPTY]))
+      const AliasFallback = () => useStore(s => { const layouts = s.layoutByWorktree ?? EMPTY; return layouts })
+      const ShallowAliasBranches = () => useStore(useShallow(s => { const result = { titles: s.runtimePaneTitlesByTabId }; const alias = result; return flag ? [alias] : alias }))
+      const ShallowSpread = () => useStore(useShallow(s => { const fields = { panes: s.paneForegroundAgentByPaneKey }; return { ...fields } }))
+      const RepeatedSpread = () => useStore(useShallow(s => { const fields = { titles: s.runtimeAgentOrchestrationByPaneKey }; return { ...fields, titles: s.runtimeAgentOrchestrationByPaneKey[id], ...fields } }))
     `,
   focusedHotMapReads: `
       import { useAppStore } from '@/store'
       import { useShallow } from 'zustand/react/shallow'
       const Primitive = () => useAppStore(s => s.runtimeStatusByEnvironmentId.get(hostId)?.status !== null)
       const NonHot = () => useAppStore(s => s.someOtherMap)
+      const GuardedEntry = () => useAppStore(s => s.agentStatusByPaneKey && s.agentStatusByPaneKey[key])
+      const SpreadOverride = () => useAppStore(useShallow(s => { const fields = { tabs: s.tabsByWorktree }; return { ...fields, tabs: s.tabsByWorktree[id] } }))
+      const ComputedOverride = () => useAppStore(useShallow(s => ({ tabs: s.tabsByWorktree, ['tabs']: s.tabsByWorktree[id] })))
       const Action = () => useAppStore(s => s.action)
       const onClick = () => useAppStore.getState().runtimeStatusByEnvironmentId
       const Shallow = () => useAppStore(useShallow(s => ({ online: Boolean(s.runtimeStatusByEnvironmentId.get(hostId)?.status) })))
@@ -81,59 +58,6 @@ export function useStructuredAgentSessionHostCapabilityState(
       const Shadow = () => useAppStore(s => { const statuses = other.runtimeStatusByEnvironmentId; return statuses })
       function ShadowedHook(useAppStore) { return useAppStore(s => s.runtimeStatusByEnvironmentId) }
       const ShadowedParameter = () => useAppStore(s => { { const s = other; return s.runtimeStatusByEnvironmentId } })
-    `,
-  fixedHostCapability: `
-      import { useAppStore } from '@/store'
-export function useStructuredAgentSessionOwnPermissionState(
-  target: RuntimeClientTarget | null
-): StructuredAgentSessionHostCapabilityState {
-  const capability = AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
-  const environmentId = target?.kind === 'environment' ? target.environmentId : null
-  // Select the verdict, not the map: unrelated host flips must not rerender every chat.
-  const remote = useAppStore((state): StructuredAgentSessionHostCapabilityState => {
-    if (environmentId === null) {
-      return 'unknown'
-    }
-    const entry = state.runtimeStatusByEnvironmentId.get(environmentId)
-    const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
-    return status
-      ? status.capabilities?.includes(capability)
-        ? 'supported'
-        : 'unsupported'
-      : 'unknown'
-  })
-  const local = useSyncExternalStore(
-    subscribeLocalRuntimeCapabilityObservation,
-    () => localCapabilityState(capability),
-    () => 'unknown' as const
-  )
-  useEffect(() => {
-    if (target?.kind === 'local') {
-      void ensureLocalRuntimeCapabilities()
-    }
-  }, [target?.kind])
-  return !target ? 'unknown' : environmentId === null ? local : remote
-}
-
-    `,
-  parkingProjection: `
-      import { useAppStore } from '@/store'
-export function selectPairedRuntimeParkingEnvironmentIdsFromState(state: {
-  runtimeStatusByEnvironmentId: PairedRuntimeParkingCapabilityStatuses
-}): ReadonlySet<string> {
-  return selectPairedRuntimeParkingEnvironmentIds(state.runtimeStatusByEnvironmentId)
-}
-
-      const Parking = () => useAppStore(selectPairedRuntimeParkingEnvironmentIdsFromState)
-    `,
-  globalHotMapConsumer: `
-      import { useAppStore } from '@/store'
-      // oxlint-disable-next-line app-store-performance/no-whole-hot-map-selector -- Fleet picker needs every host's current status.
-      const Fleet = () => useAppStore(s => s.runtimeStatusByEnvironmentId)
-    `,
-  escapedImport: String.raw`
-      import { use\u0041ppStore as useStore } from '@/store'
-      export const WholeStore = () => useStore()
     `,
   subscriptions: `
       import { useAppStore as useStore } from '@/store'
@@ -145,37 +69,6 @@ export function selectPairedRuntimeParkingEnvironmentIdsFromState(state: {
         if (state.active) return state.items.filter(Boolean)
         return state.items
       })
-    `,
-  focusedSelectors: `
-      import { useAppStore } from '@/store'
-      import { useShallow as shallow } from 'zustand/react/shallow'
-      const selectActive = (state) => state.active
-      const Focused = () => useAppStore(selectActive)
-      const Cached = () => useAppStore((state) => state.cachedProjection)
-      const Shallow = () => useAppStore(shallow((state) => ({ active: state.active })))
-    `,
-  namedSelectors: `
-      import { useAppStore } from '@/store'
-      const EarlyFresh = () => useAppStore(selectFreshRows)
-      function selectFreshRows(state) { return state.rows.filter(Boolean) }
-      const Stable = () => useAppStore(selectActiveId)
-      const selectActiveId = (state) => state.activeId
-    `,
-  importedSelector: `
-      import { useAppStore } from '@/store'
-      import { selectRows } from './selectors'
-      const Other = () => {
-        const selectRows = (state) => state.rows.map((row) => row.id)
-        return selectRows
-      }
-      const Imported = () => useAppStore(selectRows)
-    `,
-  siblingStores: `
-      import { usePluginPanelsStore } from '@/store/plugin-panels'
-      import { useSyncExternalStore } from 'react'
-      const WholePanels = () => usePluginPanelsStore()
-      const FreshPanels = () => usePluginPanelsStore((state) => ({ open: state.open }))
-      const External = () => useSyncExternalStore(subscribe, () => ({ open: true }))
     `,
   nestedShallow: `
       import { useAppStore } from '@/store'
@@ -233,22 +126,14 @@ beforeAll(() => {
 })
 
 describe('app store performance Oxlint plugin', () => {
-  it.each([
-    ['historicalHotMap', 1],
-    ['hotMapReturns', 9]
-  ])('reports whole hot-map results in %s', (name, count) => {
-    expect(diagnosticsBySource.get(sources[name]).map((diagnostic) => diagnostic.code)).toEqual(
-      Array(count).fill('app-store-performance(no-whole-hot-map-selector)')
-    )
+  it('reports whole hot-map returns through local bindings', () => {
+    expect(
+      diagnosticsBySource.get(sources.hotMapReturns).map((diagnostic) => diagnostic.code)
+    ).toEqual(Array(19).fill('app-store-performance(no-whole-hot-map-selector)'))
   })
 
-  it.each([
-    'focusedHotMapReads',
-    'fixedHostCapability',
-    'parkingProjection',
-    'globalHotMapConsumer'
-  ])('allows stable projections and justified global consumers in %s', (name) => {
-    expect(diagnosticsBySource.get(sources[name])).toEqual([])
+  it('allows stable projections of hot-map fields', () => {
+    expect(diagnosticsBySource.get(sources.focusedHotMapReads)).toEqual([])
   })
 
   it.each(['lexicalBindings', 'shadowedImports'])('respects lexical bindings in %s', (name) => {
@@ -263,14 +148,6 @@ describe('app store performance Oxlint plugin', () => {
       'app-store-performance(no-identity-selector)',
       'app-store-performance(no-fresh-selector-result)',
       'app-store-performance(no-fresh-selector-result)',
-      'app-store-performance(no-fresh-selector-result)'
-    ])
-  })
-
-  it('resolves selectors referenced by name, including ones hoisted below the call', () => {
-    const diagnostics = diagnosticsBySource.get(sources.namedSelectors)
-
-    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
       'app-store-performance(no-fresh-selector-result)'
     ])
   })

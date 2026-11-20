@@ -1,9 +1,9 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
   getClaudeWslSelectionKey,
   normalizeClaudeRuntimeSelection,
   type ClaudeAccountSelectionTarget
-} from '../../../claude-accounts/runtime-selection'
+} from '../../../claude-accounts/selection/runtime-selection'
 import { getInitialAccountRateLimitTarget } from '../../initial-account-rate-limit-target'
 
 export function getInitialClaudeRateLimitTarget(
