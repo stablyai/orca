@@ -13,13 +13,14 @@ const NON_WAKING = new Set(['$/cancelRequest', '$/setTrace', 'textDocument/didCl
 const NOT_ACTIVITY = new Set(['$/cancelRequest', WATCHED_FILES])
 
 export function createServerSession({
-  root,
   idleMs,
   startServer,
   toClient,
   onEnd,
   // Requests the wrapper makes on its own (diagnostic pulls after a refresh) are not agent activity.
   isBackgroundRequest = () => false,
+  // Files may have changed while no server was watching; the caller re-pulls diagnostics for open documents.
+  onRestarted = () => {},
   setTimer = setTimeout,
   clearTimer = clearTimeout
 }) {
@@ -73,9 +74,10 @@ export function createServerSession({
 
   const armIdle = () => {
     clearTimer(idleTimer)
-    idleTimer = setTimer(onIdle, idleMs)
+    if (Number.isFinite(idleMs)) {
+      idleTimer = setTimer(onIdle, idleMs)
+    }
   }
-
 
   const launch = () => {
     state = 'starting'
@@ -154,6 +156,7 @@ export function createServerSession({
     state = 'ready'
     armIdle()
     drain()
+    onRestarted()
   }
 
   const drain = () => {
@@ -177,7 +180,8 @@ export function createServerSession({
       return
     }
     const background = isBackgroundRequest(message)
-    if (background && state !== 'ready' && state !== 'starting') {
+    // A pull while a server is stopping waits for the next one; with nothing to wake it, it is answered as cancelled.
+    if (background && state === 'stopped') {
       toClient({ jsonrpc: '2.0', id: message.id, error: { code: REQUEST_CANCELLED, message: 'server stopped' } })
       return
     }

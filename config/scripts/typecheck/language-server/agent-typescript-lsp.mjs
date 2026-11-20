@@ -1,5 +1,6 @@
 // Adapt TypeScript 7 pull diagnostics for agent clients that only accept publishDiagnostics.
 import { spawnProcess } from '@orca/process-host'
+import { signalProcessTree } from '@orca/process-host/process-tree-termination'
 import { realpathSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -11,6 +12,14 @@ const PULL_DEBOUNCE_MS = 100
 const BRIDGE_ID_PREFIX = 'orca-diagnostics-'
 // Agents sit idle for hours; a stopped server frees its memory and file watches and restarts on the next request.
 const IDLE_MINUTES = 10
+// setTimeout fires at once past 2^31-1 ms, so longer periods mean "never stop".
+const MAX_IDLE_MS = 2 ** 31 - 1
+
+export function resolveIdleMs(value = process.env.ORCA_TYPESCRIPT_LSP_IDLE_MINUTES) {
+  const minutes = value === undefined ? IDLE_MINUTES : Number(value)
+  const ms = minutes * 60_000
+  return Number.isFinite(ms) && ms > 0 && ms <= MAX_IDLE_MS ? ms : Infinity
+}
 
 export function resolveTypescriptLanguageServer({
   root,
@@ -100,7 +109,16 @@ export function createDiagnosticsBridge({
     )
   }
 
+  const refreshAll = () => {
+    if (bridging) {
+      for (const uri of versions.keys()) {
+        schedule(uri)
+      }
+    }
+  }
+
   return {
+    refreshAll,
     // Pulls the bridge makes itself, as opposed to requests it forwards for the client.
     isOwnRequest: (message) => ownRequests.has(message),
     fromClient(message) {
@@ -171,9 +189,7 @@ export function createDiagnosticsBridge({
       }
       if (bridging && message.method === 'workspace/diagnostic/refresh') {
         toServer({ jsonrpc: '2.0', id: message.id, result: null })
-        for (const uri of versions.keys()) {
-          schedule(uri)
-        }
+        refreshAll()
         return
       }
       toClient(message)
@@ -202,9 +218,9 @@ function runLanguageServer() {
   let command
   let bridge
   const session = createServerSession({
-    root,
-    idleMs: Number(process.env.ORCA_TYPESCRIPT_LSP_IDLE_MINUTES ?? IDLE_MINUTES) * 60_000,
+    idleMs: resolveIdleMs(),
     isBackgroundRequest: (message) => bridge.isOwnRequest(message),
+    onRestarted: () => bridge.refreshAll(),
     toClient: (message) => bridge.fromServer(message),
     onEnd: (code) => process.exit(code),
     startServer: ({ onMessage, onExit }) => {
@@ -216,11 +232,19 @@ function runLanguageServer() {
       const child = spawnProcess({ ...command, stdio: ['pipe', 'pipe', 'inherit'] })
       child.stdout.on('data', createLspMessageReader(onMessage))
       child.stdin.on('error', () => {})
+      let exited = false
+      const exitOnce = (code, signal) => {
+        if (!exited) {
+          exited = true
+          onExit(code, signal)
+        }
+      }
+      // A spawn error emits no exit; reporting it as one lets a failed restart retry instead of ending the session.
       child.on('error', (error) => {
         console.error(`agent-typescript-lsp: ${error.message}`)
-        process.exit(1)
+        exitOnce(1, null)
       })
-      child.on('exit', onExit)
+      child.on('exit', exitOnce)
       return {
         write: (message) => {
           if (child.stdin.writable) {
@@ -228,7 +252,15 @@ function runLanguageServer() {
           }
         },
         end: () => child.stdin.end(),
-        kill: (signal) => child.kill(signal)
+        kill: (signal) => {
+          // Closing stdin ends a native server the launcher started as its own child (the Windows tsc path).
+          child.stdin.destroy()
+          if (process.platform === 'win32') {
+            void signalProcessTree(child, signal)
+          } else {
+            child.kill(signal)
+          }
+        }
       }
     }
   })
