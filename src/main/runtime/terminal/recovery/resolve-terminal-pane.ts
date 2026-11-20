@@ -312,8 +312,11 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       projection.tailRows
     )
     // A rebuilding screen's kept frame: current only while no output has landed after it.
-    return 'capturedAt' in projection && this.getPtyOutputSequence(ptyId) > projection.seq
-      ? { ...screen, source: 'screen-stale', screenCapturedAt: projection.capturedAt }
-      : screen
+    if (!('capturedAt' in projection) || this.getPtyOutputSequence(ptyId) <= projection.seq) {
+      return screen
+    }
+    // An older frame's composer text is no evidence of the draft now (mobile sizes its clear from it).
+    const { draft: _staleDraft, ...stale } = screen
+    return { ...stale, source: 'screen-stale', screenCapturedAt: projection.capturedAt }
   }
 }

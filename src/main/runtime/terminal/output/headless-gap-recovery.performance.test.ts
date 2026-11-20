@@ -9,9 +9,10 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// A recovered model owns screen mode; no provider mirror may keep parsing its later output (#43889).
+// A recovered model owns screen mode; no provider mirror may keep parsing its later output, and a rebuild that
+// succeeds never parses its snapshot a second time for a screen read nobody made (#43889).
 it.each([10, 100])(
-  'recovers %i gapped terminals without a leftover mode scan per chunk',
+  'recovers %i gapped terminals without a spare snapshot parse or a leftover mode scan per chunk',
   async (count) => {
     const runtime = createRuntime()
     const ptyIds = Array.from({ length: count }, (_, index) => `pty-recovered-${index}`)
@@ -28,6 +29,7 @@ it.each([10, 100])(
         alternateScreen: false
       })
     })
+    const parses = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
     try {
       for (const ptyId of ptyIds) {
         anchorStream(runtime, ptyId)
@@ -42,6 +44,7 @@ it.each([10, 100])(
         },
         { timeout: 20_000 }
       )
+      expect(parses).toHaveBeenCalledTimes(0)
       const scan = vi.spyOn(TerminalKittyKeyboardModeTracker.prototype, 'scan')
       for (let chunk = 0; chunk < 5; chunk += 1) {
         for (const ptyId of ptyIds) {
