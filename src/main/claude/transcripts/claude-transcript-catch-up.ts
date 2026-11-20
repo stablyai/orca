@@ -1,5 +1,4 @@
-import { prepareJsonlTranscriptImport } from '../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
-import { journalLifecycleItemMutation } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
+import { prepareClaudeTranscriptCapacityRecovery } from './claude-transcript-capacity-recovery'
 import {
   nativeCopyIds,
   usableJournalHistoryOrigin,
@@ -8,16 +7,11 @@ import {
 import { recoverClaudeTranscript } from './claude-transcript-recovery'
 import { join } from 'node:path'
 import { stat } from 'node:fs/promises'
-import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   HistoryCatchUpCapacityError,
-  continuedOutsideNotice,
-  continuedOutsideRecordId,
   createHistoryCatchUpBatch,
-  type HistoryCatchUpPlan,
-  type HistoryCatchUpReplacementPlan,
   captureHistoryCatchUpView,
   runHistoryCatchUp
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
@@ -32,6 +26,7 @@ import {
 } from './claude-transcript-item-reader'
 
 const DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS = 30_000
+export type ClaudeTranscriptCatchUpOutcome = boolean | { kind: 'capacity'; deadline: number }
 type ClaudeHistoryView = {
   physicalCursor: AgentJournalCursor
   origin: JournalHistoryOrigin | null
@@ -40,9 +35,7 @@ type ClaudeHistoryView = {
   newest: { key: string; sequence: number; index: number } | null
 }
 
-// Rows after the saved turn-end leaf come from an external resume or interrupted local turn; skip items already held.
-
-/** Display only and optional: it never settles a send and never gates opening. */
+/** Display-only reconciliation; capacity recovery runs in a separate invocation after open. */
 export async function catchUpClaudeTranscript(input: {
   sessionId: string
   providerSessionId: string
@@ -53,9 +46,11 @@ export async function catchUpClaudeTranscript(input: {
   signal?: AbortSignal
   assertCurrent?: () => void
   timeoutMs?: number
+  mode?: 'recovery'
   logger?: StructuredAgentSessionLogger
-}): Promise<boolean> {
+}): Promise<ClaudeTranscriptCatchUpOutcome> {
   let complete = false
+  let capacity: { kind: 'capacity'; deadline: number } | undefined
   const outcome = await runHistoryCatchUp({
     agentName: 'Claude',
     scope: 'claude-transcript-catch-up',
@@ -97,7 +92,7 @@ export async function catchUpClaudeTranscript(input: {
             : undefined
         return { hasRows, newest, origin, covered }
       }),
-    prepare: async ({ view, history, signal, check, yieldTurn, warn }) => {
+    prepare: async ({ view, history, signal, deadline, check, yieldTurn, warn }) => {
       const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
       // A moved project can leave its transcript outside the cwd's bucket; the resolver probes both.
       const filePath = await resolveSessionFilePath(
@@ -111,91 +106,33 @@ export async function catchUpClaudeTranscript(input: {
         return null
       }
       const planned = await view()
-      const recent = async (): Promise<HistoryCatchUpPlan | HistoryCatchUpReplacementPlan> => {
-        complete = false
-        const noticeIdentity = {
-          provider: 'legacy' as const,
-          agent: 'claude' as const,
-          sessionId: input.sessionId,
-          recordId: continuedOutsideRecordId(
-            `capacity:${input.providerSessionId}:${input.leafUuid}`
-          )
-        }
-        const prepared = await prepareJsonlTranscriptImport({
-          agent: 'claude',
-          transcriptAgent: 'claude',
-          sessionId: input.providerSessionId,
-          filePath,
-          signal
-        })
-        check()
-        if (!prepared.ok || !prepared.items.length) {
-          warn('replacement-unreadable', prepared.ok ? undefined : prepared.error)
-          const batch = createHistoryCatchUpBatch()
-          const noticeKey = agentJournalItemKey(noticeIdentity)
-          const notices = await history.reads.historyItems([noticeKey])
-          const notice = notices.find(({ key }) => key === noticeKey)
-          if (
-            notice?.item?.body.kind !== 'status' ||
-            notice.item.body.presentation !== 'continued-outside-unloaded'
-          ) {
-            const mutation = journalLifecycleItemMutation(
-              { turnScope: { kind: 'thread' } },
-              noticeIdentity,
-              continuedOutsideNotice(false, 'unloaded')
-            )
-            if (notice?.item) {
-              batch.revise(mutation, {
-                canonicalItemId: notice.canonicalItemId,
-                revision: notice.item.revision
-              })
-            } else {
-              batch.push(mutation)
-            }
-          }
-          return batch.finish('claude-history-unloaded', planned.physicalCursor)
-        }
-        const ids = prepared.items.flatMap((item) =>
-          item.identity.provider === 'claude' ? [item.identity.uuid] : []
+      if (input.mode === 'recovery') {
+        const plan = await prepareClaudeTranscriptCapacityRecovery(
+          { ...input, filePath, physicalCursor: planned.physicalCursor },
+          { history, signal, check, warn }
         )
-        const providerHandle = {
-          kind: 'claude' as const,
-          sessionId: input.providerSessionId,
-          leafUuid: ids.at(-1) ?? null
-        }
-        complete = true
-        return {
-          kind: 'replace',
-          operation: {
-            kind: 'epoch-replace',
-            reason: 'legacy_import',
-            providerHandle,
-            historyOrigin: {
-              version: 1,
-              kind: 'native_copy',
-              agent: 'claude',
-              unit: 'claude-entry',
-              providerHandle,
-              ids,
-              sourceFrontier: prepared.sourceFrontier,
-              sourceConsumedBytes: prepared.sourceConsumedBytes
-            },
-            items: [
-              {
-                identity: noticeIdentity,
-                body: continuedOutsideNotice(false, 'recent'),
-                ownerFence: 0,
-                turnScope: { kind: 'thread' }
-              },
-              ...prepared.items
-            ]
-          }
-        }
+        complete = 'operation' in plan
+        return plan
+      }
+      const deferRecovery = () => {
+        capacity = { kind: 'capacity', deadline }
+        return null
       }
       const copy = usableJournalHistoryOrigin(planned.origin)
       const recovery = planned.covered && copy?.kind === 'native_copy' ? copy : null
       const copiedLeaf = recovery?.ids.at(-1) ?? input.leafUuid
       const sourceFrontier = recovery?.sourceFrontier
+      if (recovery?.sourceConsumedBytes !== undefined) {
+        const { size } = await stat(filePath)
+        check()
+        if (size === recovery.sourceConsumedBytes) {
+          complete = true
+          return createHistoryCatchUpBatch().finish('claude-history-unchanged', [
+            planned.physicalCursor,
+            size
+          ])
+        }
+      }
       const chainBoundaries = sourceFrontier ? [sourceFrontier, copiedLeaf] : []
       let leafAbsent = input.leafUuid === '' && !!planned.covered
       let tail = leafAbsent
@@ -228,20 +165,9 @@ export async function catchUpClaudeTranscript(input: {
         tail = await readClaudeTranscriptTail({ filePath, leafUuid: copiedLeaf, check })
         check()
       }
-      if (!tail && recovery?.sourceConsumedBytes !== undefined) {
-        const { size } = await stat(filePath)
-        check()
-        if (size === recovery.sourceConsumedBytes) {
-          complete = true
-          return createHistoryCatchUpBatch().finish('claude-history-unchanged', [
-            planned.physicalCursor,
-            size
-          ])
-        }
-      }
       if (!tail && !(leafAbsent && planned.covered)) {
         warn('leaf-not-in-tail')
-        return leafAbsent ? null : recent()
+        return leafAbsent ? null : deferRecovery()
       }
       try {
         const items = await createClaudeTranscriptItemReader(
@@ -293,9 +219,11 @@ export async function catchUpClaudeTranscript(input: {
           throw error
         }
         check()
-        return recent()
+        return deferRecovery()
       }
     }
   })
-  return complete && (outcome === 'committed' || outcome === 'checked')
+  return outcome === 'nothing' && capacity
+    ? capacity
+    : complete && (outcome === 'committed' || outcome === 'checked')
 }

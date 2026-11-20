@@ -99,11 +99,10 @@ async function openStartingClaudeSession(
   const origin = usableJournalHistoryOrigin(
     (await events?.journalHistory?.()?.reads.historyOrigin()) ?? null
   )
+  let recoverHistory: (() => Promise<void>) | undefined
   if (resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {
-    const catchUp = withStructuredHistoryInvocation(
-      session,
-      request.signal,
-      async (signal, revoke) => {
+    const catchUp = (recoveryDeadline?: number) =>
+      withStructuredHistoryInvocation(session, request.signal, async (signal, revoke) => {
         const release = session.translator?.subscribeContextActivity(revoke)
         try {
           return await catchUpClaudeTranscript({
@@ -114,6 +113,9 @@ async function openStartingClaudeSession(
             cwd: session.initialization.cwd,
             sink: events,
             signal,
+            ...(recoveryDeadline === undefined
+              ? {}
+              : { mode: 'recovery', timeoutMs: recoveryDeadline - Date.now() }),
             assertCurrent: () => {
               current()
               if (
@@ -128,14 +130,27 @@ async function openStartingClaudeSession(
         } finally {
           release?.()
         }
-      }
-    )
-    history.covered = await waitForPromiseWithSignal(
-      startup.race(catchUp, request.signal),
+      })
+    const outcome = await waitForPromiseWithSignal(
+      startup.race(catchUp(), request.signal),
       request.signal
     )
+    history.covered = outcome === true
+    if (typeof outcome === 'object') {
+      recoverHistory = () =>
+        catchUp(outcome.deadline).then((covered) => {
+          history.covered = covered === true
+        })
+    }
     current()
   }
   startup.open()
+  void recoverHistory?.().catch((error: unknown) => {
+    deps.logger?.warn('Claude transcript recovery failed', {
+      scope: 'claude-transcript-catch-up',
+      sessionId: request.sessionId,
+      error
+    })
+  })
   return { ...result, link: session.link, newConversation: !resumesTranscript }
 }
