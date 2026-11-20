@@ -57,6 +57,8 @@ export const BOT_ACCESS_COPY = {
   whoeverAskedApproves: 'If it asks, whoever asked can approve.',
   reachLinear: 'Comment on, update and create Linear issues as you',
   reachSlack: 'Post in Slack as @{{name}}',
+  // Cliq bots act through the owner's own Zoho sign-in, so the line says so.
+  reachCliq: 'Post in Zoho Cliq as {{name}}, through your Zoho account',
   reachGitHub: 'Comment, review and push on GitHub as you',
   reachGoogleEmail: 'Read and send your email',
   reachGoogleCalendar: 'Use your calendar',

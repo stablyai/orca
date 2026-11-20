@@ -34,6 +34,7 @@ const WORKER_NOTES = hostUnionArms<NonNullable<BotChatTreeWorker['note']>>({
 const ORIGINS = hostUnionArms<BotChatOrigin>({
   home: true,
   slack: true,
+  cliq: true,
   linear: true,
   github: true,
   automation: true,

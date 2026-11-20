@@ -33,6 +33,11 @@ export function connectorDescription(id: BotConnectorId): string {
         'bots.connectors.discord',
         'Chat with the bot from Discord channels, threads, and direct messages.'
       )
+    case 'cliq':
+      return translate(
+        'bots.connectors.cliq',
+        'Chat with the bot from Zoho Cliq channels, threads and direct messages.'
+      )
     case 'google':
       return translate(
         'bots.connectors.google',

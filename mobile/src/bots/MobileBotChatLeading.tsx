@@ -14,7 +14,7 @@ import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { BotChatTreeChat } from '../../../src/shared/bots/bot-chat-tree'
-import type { SuggestionSource } from '../../../src/shared/bots/bot-look-around'
+import type { ConnectorSource } from '../../../src/shared/connectors/external-conversation-link'
 import { MobileConnectorSourceIcon, SOURCE_ICON_VIEW_BOX } from './MobileConnectorSourceIcon'
 
 type LeadingChat = Pick<BotChatTreeChat, 'origin' | 'live'>
@@ -58,8 +58,10 @@ export function ChatBadgedIcon({ chat }: { chat: LeadingChat }) {
 const SOURCE_SIZE = 14
 const LUCIDE_SIZE = 15
 
-function isSource(origin: BotChatTreeChat['origin']): origin is SuggestionSource {
-  return origin === 'slack' || origin === 'linear' || origin === 'github'
+function isSource(
+  origin: BotChatTreeChat['origin']
+): origin is Extract<BotChatTreeChat['origin'], ConnectorSource> {
+  return origin === 'slack' || origin === 'cliq' || origin === 'linear' || origin === 'github'
 }
 // The 7 pt badge sits 2 pt past the icon's corner; a 1 pt gap is cut around it.
 const BADGE_SIZE = 7
@@ -100,6 +102,7 @@ function ChatIcon({ chat, cutout = false }: { chat: LeadingChat; cutout?: boolea
   )
   switch (chat.origin) {
     case 'slack':
+    case 'cliq':
     case 'linear':
     case 'github':
       return (
@@ -136,13 +139,15 @@ export function useMobileBotChatLabel(chat: LeadingChat, title: string): string 
       ? t('bots.chats.home', 'Home Chat')
       : chat.origin === 'slack'
         ? t('bots.chats.kindSlack', 'Slack thread')
-        : chat.origin === 'linear'
-          ? t('bots.chats.kindLinear', 'Linear issue')
-          : chat.origin === 'github'
-            ? t('bots.chats.kindGithub', 'GitHub thread')
-            : chat.origin === 'automation'
-              ? t('bots.chats.kindAutomation', 'Automation run')
-              : t('bots.chats.kindSide', 'Side chat')
+        : chat.origin === 'cliq'
+          ? t('bots.chats.kindCliq', 'Cliq thread')
+          : chat.origin === 'linear'
+            ? t('bots.chats.kindLinear', 'Linear issue')
+            : chat.origin === 'github'
+              ? t('bots.chats.kindGithub', 'GitHub thread')
+              : chat.origin === 'automation'
+                ? t('bots.chats.kindAutomation', 'Automation run')
+                : t('bots.chats.kindSide', 'Side chat')
   const state =
     chat.live === 'replying'
       ? t('bots.chats.replyingState', 'Replying')

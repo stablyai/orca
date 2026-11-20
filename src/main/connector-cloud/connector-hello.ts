@@ -39,7 +39,7 @@ const FEATURES = [
 ]
 const PROMPT_KINDS = ['approval', 'question']
 // Listed by hand: a source joins only once this build's seam handles its conversations.
-const SOURCES = ['slack', 'linear', 'github']
+const SOURCES = ['slack', 'cliq', 'linear', 'github']
 
 export type ConnectorHelloSaid = {
   /** Null: left out, so the cloud keeps the bots it has until its answer says whether it takes pages. */

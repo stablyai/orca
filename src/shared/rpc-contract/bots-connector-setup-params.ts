@@ -1,5 +1,5 @@
-// `bots.slack.*`, `bots.linear.*`, `bots.github.*` and `bots.connect.*`: a host's Slack, Linear and
-// GitHub setup, run as that host's own Orca account for whichever client asks.
+// `bots.slack.*`, `bots.linear.*`, `bots.github.*`, `bots.cliq.*` and `bots.connect.*`: a host's
+// Slack, Linear, GitHub and Zoho Cliq setup, run as that host's own Orca account for whichever client asks.
 import * as z from 'zod'
 import {
   SLACK_CONFIG_REFRESH_TOKEN_MAX_LENGTH,
@@ -39,6 +39,12 @@ export const BotLinearDefaultBot = z.object({ workspaceId: Id, botId: Id.nullabl
 
 export const BotGitHubUsers = z.object({ query: Query })
 export const BotGitHubDefaultBot = z.object({ botId: Id.nullable() })
+
+export const BotCliqOrg = z.object({ orgId: Id })
+/** Without an org, the bot's first organization. */
+export const BotCliqBotState = z.object({ botId: Id, orgId: Id.optional() })
+export const BotCliqBotOrg = z.object({ botId: Id, orgId: Id })
+export const BotCliqMembers = z.object({ botId: Id, orgId: Id, query: Query })
 
 const Source = z.enum(CONNECTOR_CONNECT_SOURCES)
 /** `switchAccount` is "Not you?", which lets the person pick another account. */

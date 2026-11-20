@@ -1,4 +1,4 @@
-// A host's Slack, Linear and GitHub setup (`bots.slack/linear/github/connect.*`), run on that host as
+// A host's Slack, Linear, GitHub and Zoho Cliq setup (`bots.slack/linear/github/cliq/connect.*`), run on that host as
 // its own Orca account: this app's runtime for its own bots, a paired server's for the server's.
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
@@ -20,6 +20,11 @@ import type {
   ConnectorGitHubState,
   ConnectorGitHubUsersResponse
 } from '../../../shared/connector-bot-github-contract'
+import type {
+  ConnectorBotCliqMembersResponse,
+  ConnectorBotCliqStateResponse,
+  ConnectorCliqState
+} from '../../../shared/connector-bot-cliq-contract'
 import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
 import type { ConnectorConnectRedeem } from '../../../../cloud/packages/connector-contract/src/connect-messages'
 import { botHostTarget } from './bot-hosts'
@@ -95,6 +100,24 @@ export function botGitHubCalls(hostId: ExecutionHostId) {
     unlink: () => call<undefined>(hostId, 'bots.github.unlink'),
     setDefaultBot: (args: { botId: string | null }) =>
       call<undefined>(hostId, 'bots.github.setDefaultBot', args)
+  }
+}
+
+export function botCliqCalls(hostId: ExecutionHostId) {
+  return {
+    /** The Cliq organizations the host's Orca account signed in to. */
+    orgs: () => call<ConnectorCliqState>(hostId, 'bots.cliq.orgs'),
+    forgetOrg: (args: { orgId: string }) => call<undefined>(hostId, 'bots.cliq.forgetOrg', args),
+    state: (args: { botId: string; orgId?: string }) =>
+      call<ConnectorBotCliqStateResponse>(hostId, 'bots.cliq.state', args),
+    /** Creates the bot's Cliq bot there, or repairs it; the host records it on the bot. */
+    setUp: (args: { botId: string; orgId: string }) =>
+      call<ConnectorBotCliqStateResponse>(hostId, 'bots.cliq.setUp', args),
+    /** Deletes the bot's Cliq bot there; the host takes it off the bot with its people. */
+    remove: (args: { botId: string; orgId: string }) =>
+      call<undefined>(hostId, 'bots.cliq.remove', args),
+    members: (args: { botId: string; orgId: string; query: string }) =>
+      call<ConnectorBotCliqMembersResponse>(hostId, 'bots.cliq.members', args)
   }
 }
 

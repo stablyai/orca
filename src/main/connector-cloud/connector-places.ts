@@ -12,6 +12,8 @@ import {
   botSlackApps,
   gitHubMembersOf,
   linearMembersOf,
+  botCliqBots,
+  cliqMembersOf,
   slackMembersOf,
   type Bot,
   type BotMember
@@ -97,6 +99,8 @@ export function connectorBots(
   // that answered without it never reads them, so it gets none.
   const slackTeams = cloudFeatures?.has('slack.teams' satisfies ConnectorCloudFeature) === true
   const sendSlack = cloudFeatures === null || slackTeams
+  // A cloud without Cliq would drop its rows; they also count against an older cloud's caps.
+  const sendCliq = cloudFeatures?.has('cliq' satisfies ConnectorCloudFeature) === true
   const plain = (id: string, max: number): boolean => id.length <= max && PLAIN_ID.test(id)
   const memberIds = (members: BotMember[], maxLength: number, maxCount: number): string[] =>
     members
@@ -173,6 +177,18 @@ export function connectorBots(
             workspaceId: linear.workspaceId,
             members: memberIds(
               linearMembersOf(bot.members, linear.workspaceId),
+              maxBotWorkspaceMemberIdLength,
+              maxBotWorkspaceMembers
+            )
+          })),
+        // Before GitHub's, which a full hello drops first.
+        ...(sendCliq ? botCliqBots(bot) : [])
+          .filter((cliq) => plain(cliq.orgId, maxBotIdLength))
+          .map((cliq) => ({
+            source: 'cliq' as const,
+            workspaceId: cliq.orgId,
+            members: memberIds(
+              cliqMembersOf(bot.members, cliq.orgId),
               maxBotWorkspaceMemberIdLength,
               maxBotWorkspaceMembers
             )

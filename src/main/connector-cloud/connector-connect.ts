@@ -1,4 +1,4 @@
-// "Connect in one trip" for Linear and GitHub: listen on 127.0.0.1, let the cloud send the browser
+// "Connect in one trip" for Linear, GitHub and Zoho Cliq: listen on 127.0.0.1, let the cloud send the browser
 // through sign-in (and install), then redeem the one-time result it hands back to this computer.
 import { randomBytes } from 'node:crypto'
 import { serveLoopbackCallback } from '../orca-profiles/cloud-auth/loopback-callback'
@@ -23,7 +23,11 @@ type ConnectClient = Pick<ReturnType<typeof botsCloudClient>, 'startConnect' | '
 // The life of the cloud's connect session and of its result code.
 const CONNECT_TIMEOUT_MS = 10 * 60_000
 
-const SOURCE_LABELS: Record<ConnectorConnectSource, string> = { linear: 'Linear', github: 'GitHub' }
+const SOURCE_LABELS: Record<ConnectorConnectSource, string> = {
+  linear: 'Linear',
+  github: 'GitHub',
+  cliq: 'Zoho Cliq'
+}
 
 const EXPIRED: ConnectorConnectError = 'expired'
 

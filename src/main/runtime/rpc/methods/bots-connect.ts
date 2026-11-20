@@ -1,4 +1,4 @@
-// `bots.connect.*`: "Connect Linear" / "Connect GitHub" in one trip, run on this host as its own Orca
+// `bots.connect.*`: "Connect Linear" / "Connect GitHub" / "Connect Zoho Cliq" in one trip, run on this host as its own Orca
 // account. The client opens the page this answers (for a server, in the server's own browser session,
 // so the return reaches this host's loopback), then waits here for the trip's end.
 import {
@@ -17,11 +17,12 @@ import {
 } from '../../../connector-cloud/connector-connect-trips'
 import { keepConnectedLinearLogin } from '../../../linear/accounts/linear-login-store'
 import { CONNECTOR_CONNECT_CODE_PATTERN } from '../../../../../cloud/packages/connector-contract/src/connect-messages'
+import type { ConnectorConnectSource } from '../../../../shared/connectors/connector-cloud-contract'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { withHostCloudClient } from './bots-slack'
 
 // Linear's link hands the linked user's own sign-in to this host, which keeps it.
-const keepLogin = (source: 'linear' | 'github') =>
+const keepLogin = (source: ConnectorConnectSource) =>
   source === 'linear' ? keepConnectedLinearLogin : undefined
 
 export const BOT_CONNECT_METHODS = [

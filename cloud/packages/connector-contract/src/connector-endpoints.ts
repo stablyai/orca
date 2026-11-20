@@ -33,7 +33,11 @@ export const CONNECTOR_PATHS = {
   github: '/v1/connector/github',
   // GET lists the account's pending access requests; POST `…/redeem` opens one from its link; POST
   // `…/<request id>/decision` closes one.
-  accessRequests: '/v1/connector/access-requests'
+  accessRequests: '/v1/connector/access-requests',
+  // POST `${cliq}/connect` and `…/connect/redeem` (cliq-messages.ts); GET `…/state`; DELETE
+  // `…/orgs/<org id>`. A bot's own: POST `${bots}/<bot id>/cliq/bots`, GET and DELETE
+  // `${bots}/<bot id>/cliq?org=`, GET `${bots}/<bot id>/cliq/members?org=&q=`.
+  cliq: '/v1/connector/cliq'
 } as const
 
 export const CONNECTOR_ERROR_CODES = [
@@ -54,7 +58,12 @@ export const CONNECTOR_ERROR_CODES = [
   // Slack refused to create or configure the app; the message says why.
   'slack_refused',
   // The bot has no Slack install to read its workspace through.
-  'not_installed'
+  'not_installed',
+  // Zoho refused the account's refresh token for that organization: sign in again.
+  'cliq_grant_expired',
+  'cliq_unavailable',
+  // Cliq refused to create or configure the bot; the message says why.
+  'cliq_refused'
 ] as const
 export type ConnectorErrorCode = (typeof CONNECTOR_ERROR_CODES)[number]
 

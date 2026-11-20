@@ -36,6 +36,7 @@ const slackOnComposio: ComposioConnection = {
 
 function sources(overrides: Partial<BotConnectorSources> = {}): BotConnectorSources {
   return {
+    cliq: { status: 'off' },
     slack: {
       status: 'ready',
       slack: {

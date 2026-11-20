@@ -1739,7 +1739,12 @@
       "soulEdit": "Edit",
       "soulStats": "{{lines}} lines · {{words}} words",
       "soulDoubleClickHint": "Double-click to edit",
-      "soulEmpty": "No instructions yet. Double-click or select Edit to write."
+      "soulEmpty": "No instructions yet. Double-click or select Edit to write.",
+      "cliqStatus": {
+        "checking": "Checking",
+        "unknown": "Can’t check",
+        "signInNeeded": "Sign-in needed"
+      }
     },
     "windowMaterial": {
       "description": "What shows behind translucent terminals. Requires restart.",
@@ -27314,7 +27319,8 @@
       "emptyNote": "Let people reach {{name}} in Slack, GitHub and Linear, and let it work in your Google and other apps.",
       "add": "Add",
       "needYou_one": "{{count}} needs you",
-      "needYou_other": "{{count}} need you"
+      "needYou_other": "{{count}} need you",
+      "cliq": "Chat with the bot from Zoho Cliq channels, threads and direct messages."
     },
     "files": {
       "tab": "Files"
@@ -27665,6 +27671,7 @@
       "whoeverAskedApproves": "If it asks, whoever asked can approve.",
       "reachLinear": "Comment on, update and create Linear issues as you",
       "reachSlack": "Post in Slack as @{{name}}",
+      "reachCliq": "Post in Zoho Cliq as {{name}}, through your Zoho account",
       "reachGitHub": "Comment, review and push on GitHub as you",
       "trust": "Add only people you’d trust at your keyboard.",
       "adviceHeading": "Before you share",
@@ -28776,7 +28783,8 @@
         "github": "Mentions and events on issues and PRs",
         "slack": "Messages and mentions",
         "linear": "Assigned issues and mentions",
-        "google": "Gmail, Calendar and Drive, as you"
+        "google": "Gmail, Calendar and Drive, as you",
+        "cliq": "Messages, mentions and threads"
       },
       "mcp": {
         "adding": "Adding {{app}}…"
@@ -29019,7 +29027,8 @@
       "workers": "Workers",
       "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
-      "readFailed": "Couldn't read this bot's chats."
+      "readFailed": "Couldn't read this bot's chats.",
+      "kindCliq": "Cliq thread"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -29037,7 +29046,8 @@
       "signedIn": "Signed in to Orca",
       "continue": "Continue",
       "webhooksChat": "Webhooks need Orca sign-in. I’ll make it once you’re in.",
-      "eventsChat": "{{source}} events need Orca sign-in. I’ll save this rule once you’re in."
+      "eventsChat": "{{source}} events need Orca sign-in. I’ll save this rule once you’re in.",
+      "cliq": "Zoho Cliq connects through Orca Cloud. Sign in to Orca to continue."
     },
     "tabs": {
       "homeDetail": "Home: the bot's main chat. Its memory, automations and requests from others land here.",
@@ -29332,6 +29342,56 @@
       "itemsNeedYou_other": "{{count}} items it flagged for you",
       "review": "Review",
       "openHome": "Open {{name}}’s Home"
+    },
+    "cliq": {
+      "connection": {
+        "signedOut": "Sign in to Zoho again so {{org}} can reach the bot.",
+        "removeNote": "Orca deletes the {{name}} bot from {{org}}’s Cliq, and its Cliq people are cleared.",
+        "removeConfirm": "Remove",
+        "finishSetup": "Finish setup"
+      },
+      "setup": {
+        "titleOn": "{{name}} in Zoho Cliq",
+        "title": "Add {{name}} to Zoho Cliq",
+        "close": "Close",
+        "isOn": "{{name}} is on Zoho Cliq",
+        "connectTitle": "Connect Zoho Cliq",
+        "checking": "Checking Zoho Cliq…",
+        "retry": "Try again",
+        "repair": "Set up again",
+        "tryIt": "Try it in any Cliq channel",
+        "dmNote": "To message it directly, open {{name}} under Bots in Cliq first.",
+        "openCliq": "Open Cliq",
+        "finish": "Done"
+      },
+      "connect": {
+        "another": "Use another organization",
+        "who": "{{name}} in {{org}}",
+        "pickOrg": "Sign in to Zoho and pick the Cliq organization {{name}} works in. Orca creates a Cliq bot named {{name}} there, as you.",
+        "button": "Connect Zoho Cliq",
+        "pick": "Choose a Cliq organization.",
+        "waiting": "Finish signing in to Zoho in your browser…",
+        "again": "Sign in again",
+        "turnOn": "Turn on {{name}}"
+      },
+      "errors": {
+        "off": "Zoho Cliq is coming soon.",
+        "replaced": "Zoho didn’t finish. A newer sign-in may have replaced it. Start again.",
+        "wrongAccount": "This sign-in was started from another Orca account. Connect Zoho Cliq again from this one.",
+        "grantExpired": "Zoho no longer accepts your sign-in for this organization. Sign in again.",
+        "refused": "Zoho Cliq refused to set up the bot. Check that bots are allowed in your organization.",
+        "unavailable": "Zoho Cliq did not answer. Try again.",
+        "rateLimited": "Too many tries. Wait a few minutes, then try again.",
+        "signedOut": "Sign in to Orca to connect Zoho Cliq.",
+        "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
+        "otherOrg": "That sign-in reached another Cliq organization. Sign in to the one this bot is set up in."
+      },
+      "howToAsk": "Mention <code>{{mention}}</code> in a channel or thread, or message it directly.",
+      "whoCanAsk": {
+        "noMatchDetail": "Active users of {{org}}’s Cliq can be added. The bot doesn’t answer anyone else.",
+        "outsiders": "Everyone else in {{org}} is ignored.",
+        "needsSetup": "Finish setup to sign in to Zoho in {{org}}, then pick people here."
+      }
     }
   },
   "plugins": {

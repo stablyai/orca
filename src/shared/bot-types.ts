@@ -94,6 +94,14 @@ export const BotLinearSchema = z.object({
   urlKey: z.string().optional()
 })
 
+/** The bot's own Cliq bot in one Zoho organization, once created; its state is read from the cloud. */
+export const BotCliqBotSchema = z.object({
+  orgId: z.string().min(1),
+  orgName: z.string(),
+  /** Zoho's data center (us, eu, in…), which picks the Cliq host people open. */
+  dataCenter: z.string().min(1)
+})
+
 /** The bot answers on GitHub, in every installation of Orca's one shared GitHub app the owner's link can see but the removed ones. */
 export const BotGitHubSchema = z.object({
   removedInstallationIds: z.array(z.string().min(1)).max(100).optional()
@@ -107,6 +115,7 @@ export const BOT_MAX_CONNECTOR_WORKSPACES = 8
 export const BOT_MAX_SKILL_PROJECTS = 20
 const BotSlackLinkSchema = BotSlackAppSchema.extend(BotLinkOwner)
 const BotLinearLinkSchema = BotLinearSchema.extend(BotLinkOwner)
+const BotCliqLinkSchema = BotCliqBotSchema.extend(BotLinkOwner)
 
 export const BotItemsStaleSchema = z.union([
   z.literal(3),
@@ -146,6 +155,8 @@ export const BotSchema = z.object({
   linear: BotLinearLinkSchema.nullable().default(null),
   linearWorkspaces: z.array(BotLinearLinkSchema).max(BOT_MAX_CONNECTOR_WORKSPACES).optional(),
   github: BotGitHubSchema.extend(BotLinkOwner).nullable().default(null),
+  /** Every Zoho organization the bot has its own Cliq bot in, first one first; older hosts drop it. */
+  cliqBots: z.array(BotCliqLinkSchema).max(BOT_MAX_CONNECTOR_WORKSPACES).optional(),
   /** Whether a new Slack thread the owner starts posts the owner's Orca messages back to it; absent is on.
    *  Threads others start, and the owner's teammates' DMs, start off whatever this says. */
   slackMirror: z.boolean().optional().catch(undefined),
@@ -213,6 +224,8 @@ export type BotGitHub = z.infer<typeof BotGitHubSchema>
 export type Bot = z.infer<typeof BotSchema>
 export type BotSlackLink = z.infer<typeof BotSlackLinkSchema>
 export type BotLinearLink = z.infer<typeof BotLinearLinkSchema>
+export type BotCliqBot = z.infer<typeof BotCliqBotSchema>
+export type BotCliqLink = z.infer<typeof BotCliqLinkSchema>
 
 /** Every Slack workspace the bot is in, first one first. */
 export function botSlackApps(bot: Pick<Bot, 'slack' | 'slackApps'>): BotSlackLink[] {
@@ -226,11 +239,21 @@ export function botLinearWorkspaces(
   return bot.linearWorkspaces ?? (bot.linear ? [bot.linear] : [])
 }
 
-/** Whether the cloud can bring the bot work: a Slack app, a Linear workspace or a GitHub link. */
+/** Every Zoho organization the bot has its own Cliq bot in, first one first. */
+export function botCliqBots(bot: Pick<Bot, 'cliqBots'>): BotCliqLink[] {
+  return bot.cliqBots ?? []
+}
+
+/** Whether the cloud can bring the bot work: a Slack app, a Linear workspace, a GitHub link or a Cliq bot. */
 export function botHasConnector(
-  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github'>
+  bot: Pick<Bot, 'slack' | 'slackApps' | 'linear' | 'linearWorkspaces' | 'github' | 'cliqBots'>
 ): boolean {
-  return botSlackApps(bot).length > 0 || botLinearWorkspaces(bot).length > 0 || bot.github !== null
+  return (
+    botSlackApps(bot).length > 0 ||
+    botLinearWorkspaces(bot).length > 0 ||
+    bot.github !== null ||
+    botCliqBots(bot).length > 0
+  )
 }
 
 /**
@@ -290,6 +313,11 @@ export function withoutBotMember(members: readonly BotMember[], key: BotMemberKe
 /** The Linear people allowed to ask the bot in one Linear workspace. */
 export function linearMembersOf(members: readonly BotMember[], workspaceId: string): BotMember[] {
   return botMembersFrom(members, 'linear').filter((member) => member.workspaceId === workspaceId)
+}
+
+/** The Cliq people (Zoho user ids) allowed to ask the bot in one organization. */
+export function cliqMembersOf(members: readonly BotMember[], orgId: string): BotMember[] {
+  return botMembersFrom(members, 'cliq').filter((member) => member.workspaceId === orgId)
 }
 
 /**

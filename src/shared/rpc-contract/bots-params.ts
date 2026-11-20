@@ -12,6 +12,7 @@ import {
   BotNameSchema,
   NewBotNameSchema,
   BotNotificationsSchema,
+  BotCliqBotSchema,
   BotGitHubSchema,
   BotLinearSchema,
   BotSlackAppSchema,
@@ -149,6 +150,8 @@ export const BotUpdate = z.object({
       linear: BotLinearSchema.nullable().optional(),
       linearWorkspaces: z.array(BotLinearSchema).max(BOT_MAX_CONNECTOR_WORKSPACES).optional(),
       github: BotGitHubSchema.nullable().optional(),
+      /** Every organization the bot has a Cliq bot in; an org's people go with it. */
+      cliqBots: z.array(BotCliqBotSchema).max(BOT_MAX_CONNECTOR_WORKSPACES).optional(),
       skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
       // Only the changed fields; the host merges them into the saved setting.
       lookAround: BotLookAroundSchema.omit({ since: true }).partial().optional(),
@@ -375,6 +378,14 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     next.linear = rest.linearWorkspaces[0] ?? null
   } else if (rest.linear !== undefined) {
     next.linearWorkspaces = rest.linear ? [rest.linear] : []
+  }
+  if (next.cliqBots) {
+    const orgs = new Set(next.cliqBots.map((link) => link.orgId))
+    next.members = next.members.filter(
+      (member) =>
+        botMemberSource(member) !== 'cliq' ||
+        (member.workspaceId !== undefined && orgs.has(member.workspaceId))
+    )
   }
   if (permissionMode === null) {
     delete next.permissionMode

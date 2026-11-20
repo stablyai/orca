@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { signedInOrcaAccount } from './signed-in-orca-account'
 import { refreshBotGitHub } from './bot-github-state'
 import { refreshBotLinear } from './bot-linear-state'
+import { refreshBotCliq } from './bot-cliq-state'
 import { connectorTripCalls } from './bot-connector-host-calls'
 import { openBotHostPage } from './bot-host-page'
 import { CONNECT_NOT_ROUTED } from '@/components/bots/bot-host-copy'
@@ -15,7 +16,10 @@ import {
   BOT_SLACK_DESKTOP_ERRORS,
   type BotSlackResult
 } from '../../../shared/connector-bot-slack-contract'
-import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
+import {
+  CONNECTOR_CONNECT_SOURCES,
+  type ConnectorConnectSource
+} from '../../../shared/connectors/connector-cloud-contract'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -76,7 +80,11 @@ function set(trip: Trip, next: ConnectorConnectView): void {
 }
 
 function refresh(hostId: ExecutionHostId, source: ConnectorConnectSource): Promise<unknown> {
-  return source === 'linear' ? refreshBotLinear(hostId) : refreshBotGitHub(hostId)
+  return source === 'linear'
+    ? refreshBotLinear(hostId)
+    : source === 'cliq'
+      ? refreshBotCliq(hostId)
+      : refreshBotGitHub(hostId)
 }
 
 async function settle(
@@ -325,7 +333,7 @@ function watchSignedInAccount(): void {
       return
     }
     shownAccount = account
-    for (const source of ['linear', 'github'] as const) {
+    for (const source of CONNECTOR_CONNECT_SOURCES) {
       const trip = trips.get(tripKey(LOCAL_EXECUTION_HOST_ID, source))
       if (trip) {
         trip.latest++

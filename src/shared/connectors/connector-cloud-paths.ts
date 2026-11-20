@@ -23,5 +23,8 @@ export const CONNECTOR_PATHS = {
   github: '/v1/connector/github',
   // GET lists pending access requests; POST `…/redeem` {v:1, token} opens one from
   // orca://bot/access-request?t=<token>; POST `…/<request id>/decision` {v:1, decision} closes one.
-  accessRequests: '/v1/connector/access-requests'
+  accessRequests: '/v1/connector/access-requests',
+  // POST `${cliq}/connect` and `…/connect/redeem`; GET `…/state`; DELETE `…/orgs/<org id>`. A bot's own:
+  // POST `${bots}/<bot id>/cliq/bots`, GET and DELETE `…/cliq?org=`, GET `…/cliq/members?org=&q=`.
+  cliq: '/v1/connector/cliq'
 } as const

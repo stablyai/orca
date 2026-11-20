@@ -157,6 +157,8 @@ export const CONNECTOR_CLOUD_FEATURES = [
   'refs',
   'triggers.people',
   'slack.teams',
+  // Cliq rows in a bot's sharedAppWorkspaces, Cliq conversations and the cliq routes.
+  'cliq',
   // The places verb, and workspace refs (slack:T1:workspace) as a rule's place.
   'places',
   // find's `search`, on the sources whose find capability lists it.
