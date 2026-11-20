@@ -16,8 +16,14 @@ export async function verifyGrabRetiredPolicy(
   }
   const originalSend = page.send
   page.send = function (channel: string, ...args: unknown[]): void {
-    const policy = args[0] as { enabled?: boolean } | undefined
-    if (channel === GRAB_NATIVE_KEY_POLICY && policy?.enabled === false) {
+    const policy = args[0]
+    if (
+      channel === GRAB_NATIVE_KEY_POLICY &&
+      policy &&
+      typeof policy === 'object' &&
+      'enabled' in policy &&
+      policy.enabled === false
+    ) {
       return
     }
     originalSend.call(this, channel, ...args)

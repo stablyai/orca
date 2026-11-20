@@ -1,3 +1,4 @@
+import { GRAB_PICK_CONTROL_SCRIPT } from './grab-guest-pick-control-script'
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 
 import { GRAB_GUEST_LABEL_PLACEMENT_SCRIPT } from './grab-guest-overlay-helpers-script'
@@ -155,36 +156,7 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
     previousSelectedValue = null;
   }
 
-  function pickControl(element, payload, contextMenu) {
-    var original = new WeakRef(element);
-    var response = { payload: payload, contextMenu: contextMenu };
-    var hidden = null;
-    function snapshot() {
-      var target = original.deref();
-      if (!target || !target.isConnected) return false;
-      var rect = target.getBoundingClientRect();
-      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, viewportWidth: window.innerWidth };
-    }
-    return function(action, id) {
-      if (action === 'payload') { var result = response; response = null; return result; }
-      if (action === 'present') { var target = original.deref(); return Boolean(target && target.isConnected); }
-      if (action === 'snapshot') return snapshot();
-      if (action === 'hide') {
-        var rect = snapshot();
-        if (!rect || hidden) return false;
-        var nodes = [host].concat(Array.from(document.querySelectorAll('[data-orca-browser-annotation-overlay]')));
-        hidden = { id: id, nodes: nodes.map(function(node) { return { node: node, display: node.style.display }; }) };
-        hidden.nodes.forEach(function(item) { item.node.style.display = 'none'; });
-        return rect;
-      }
-      if (action === 'restore' && hidden && hidden.id === id) {
-        hidden.nodes.forEach(function(item) { item.node.style.display = item.display; });
-        hidden = null;
-        return true;
-      }
-      return false;
-    };
-  }
+  ${GRAB_PICK_CONTROL_SCRIPT}
 
   var grab = window.__orcaGrab = {
     host: host,

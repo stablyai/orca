@@ -102,10 +102,10 @@ export function registerBrowserGrabHandlers(): void {
       ) {
         return { ok: false, reason: 'not-authorized' }
       }
-      const owner = {
+      const owner: { requestId?: string; senderId: number; scope?: GrabDocumentScope } = {
         requestId: args.requestId,
         senderId: event.sender.id,
-        scope: undefined as GrabDocumentScope | undefined
+        scope: undefined
       }
       grabModeOwnerByPageId.set(args.browserPageId, owner)
       const intent = {

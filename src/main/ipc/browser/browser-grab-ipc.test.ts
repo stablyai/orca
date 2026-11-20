@@ -1,11 +1,17 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({
-  guest: null as (EventEmitter & { id: number; isDestroyed: () => boolean }) | null,
-  handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
-  run: async (_enabled: boolean, _signal: AbortSignal): Promise<boolean> => true
-}))
+const mocks = vi.hoisted(
+  (): {
+    guest: (EventEmitter & { id: number; isDestroyed: () => boolean }) | null
+    handlers: Map<string, (event: unknown, args: unknown) => unknown>
+    run: (enabled: boolean, signal: AbortSignal) => Promise<boolean>
+  } => ({
+    guest: null,
+    handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
+    run: async (_enabled: boolean, _signal: AbortSignal): Promise<boolean> => true
+  })
+)
 vi.mock('electron', () => ({
   ipcMain: {
     handle: (name: string, handler: (event: unknown, args: unknown) => unknown) =>

@@ -23,18 +23,19 @@ installNativeChatVisualGuestTheme(ipcRenderer, electron.webFrame)
 
 // Subframe window.close() is already inert; preserve the frame's own implementation.
 if (process.isMainFrame) {
+  const retireNativePolicy = installBrowserGuestNativeToolKeys({
+    send: (channel, payload) => ipcRenderer.send(channel, payload),
+    on: (channel, listener) =>
+      ipcRenderer.on(channel, (_event, payload: unknown) => listener(payload))
+  })
   installBrowserGuestExecution(
     {
       send: (channel, payload) => ipcRenderer.send(channel, payload),
       on: (channel, listener) => ipcRenderer.on(channel, (_event, payload) => listener(payload))
     },
-    electron.webFrame
+    electron.webFrame,
+    retireNativePolicy
   )
-  installBrowserGuestNativeToolKeys({
-    send: (channel, payload) => ipcRenderer.send(channel, payload),
-    on: (channel, listener) =>
-      ipcRenderer.on(channel, (_event, payload: unknown) => listener(payload))
-  })
   installBrowserGuestEditProtection({
     send: (channel, payload) => ipcRenderer.send(channel, payload),
     on: (channel, listener) =>

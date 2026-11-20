@@ -17,7 +17,7 @@ type InjectionTarget = Pick<WebContents, 'id' | 'isDestroyed' | 'setIgnoreMenuSh
 const suspensions = new WeakMap<InjectionTarget, Set<(suspended: boolean) => Promise<void>>>()
 
 async function setSuspended(target: InjectionTarget, suspended: boolean): Promise<void> {
-  await setBrowserInputGuard(target as WebContents, suspended)
+  await setBrowserInputGuard(target, suspended)
   await Promise.all(Array.from(suspensions.get(target) ?? [], (update) => update(suspended)))
 }
 const unacknowledged = new WeakSet<InjectionTarget>()
@@ -42,10 +42,10 @@ function markUnacknowledged(target: InjectionTarget): void {
 async function suspendBeforeInput(target: InjectionTarget): Promise<void> {
   const suspend = suspensions.get(target)
   if (!suspend) {
-    if (unacknowledged.has(target) && !hasBrowserInputGuard(target as WebContents)) {
+    if (unacknowledged.has(target) && !hasBrowserInputGuard(target)) {
       throw new Error('Browser tool shortcuts have not acknowledged suspension')
     }
-    await setBrowserInputGuard(target as WebContents, true)
+    await setBrowserInputGuard(target, true)
     unacknowledged.delete(target)
     return
   }

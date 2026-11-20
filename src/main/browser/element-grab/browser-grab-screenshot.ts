@@ -13,12 +13,26 @@ function readSnapshot(value: unknown): Snapshot | null {
   if (!value || typeof value !== 'object') {
     return null
   }
-  const rect = value as Snapshot
-  return [rect.x, rect.y, rect.width, rect.height, rect.viewportWidth].every(Number.isFinite) &&
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.viewportWidth > 0
-    ? rect
+  if (
+    !('x' in value) ||
+    !('y' in value) ||
+    !('width' in value) ||
+    !('height' in value) ||
+    !('viewportWidth' in value)
+  ) {
+    return null
+  }
+  const { x, y, width, height, viewportWidth } = value
+  const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n)
+  return finite(x) &&
+    finite(y) &&
+    finite(width) &&
+    finite(height) &&
+    finite(viewportWidth) &&
+    width > 0 &&
+    height > 0 &&
+    viewportWidth > 0
+    ? { x, y, width, height, viewportWidth }
     : null
 }
 
@@ -79,11 +93,14 @@ export async function captureSelectionScreenshot(
     }
     const bitmap = image.getSize()
     const scale = bitmap.width / rect.viewportWidth
+    if (!Number.isFinite(scale) || scale <= 0) {
+      return null
+    }
     const x = Math.max(0, Math.round(rect.x * scale))
     const y = Math.max(0, Math.round(rect.y * scale))
     const width = Math.min(bitmap.width - x, Math.round(rect.width * scale))
     const height = Math.min(bitmap.height - y, Math.round(rect.height * scale))
-    if (width <= 0 || height <= 0) {
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
       return null
     }
     const png = image.crop({ x, y, width, height }).toPNG()

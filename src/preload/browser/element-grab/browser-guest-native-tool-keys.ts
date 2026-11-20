@@ -22,7 +22,7 @@ import {
 export function installBrowserGuestNativeToolKeys(port: {
   on: (channel: string, listener: (payload: unknown) => void) => void
   send: (channel: string, payload: unknown) => void
-}): void {
+}): () => void {
   let inputSuspended = true
   let guardRevision = 0
   let nativeToken: string | null = null
@@ -57,6 +57,11 @@ export function installBrowserGuestNativeToolKeys(port: {
     })
   })
   let policy: GrabNativeKeyPolicy | null = null
+  let retiredNativeToken: string | null = null
+  const retireNativePolicy = (): void => {
+    retiredNativeToken = policy?.token ?? nativeToken
+    policy = null
+  }
   let chord: GrabChordPolicy | null = null
   port.on(GRAB_CHORD_POLICY, (payload) => {
     if (
@@ -96,6 +101,12 @@ export function installBrowserGuestNativeToolKeys(port: {
       typeof payload.token !== 'string' ||
       typeof payload.revision !== 'number' ||
       typeof payload.enabled !== 'boolean'
+    ) {
+      return
+    }
+    if (
+      payload.enabled &&
+      (payload.token === retiredNativeToken || payload.token !== nativeToken)
     ) {
       return
     }
@@ -173,4 +184,5 @@ export function installBrowserGuestNativeToolKeys(port: {
     },
     true
   )
+  return retireNativePolicy
 }

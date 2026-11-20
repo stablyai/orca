@@ -12,6 +12,7 @@ type PendingGuard = {
   cancel: () => void
 }
 type Guard = {
+  guest: WebContents
   token: string
   revision: number
   suspended: boolean
@@ -19,14 +20,15 @@ type Guard = {
   chordToken: string | null
   pending?: PendingGuard
 }
-const guards = new WeakMap<WebContents, Guard>()
+const guards = new WeakMap<object, Guard>()
 
 /** The guard covers all private policies, including one whose main-side callback retired. */
-export function setBrowserInputGuard(guest: WebContents, suspended: boolean): Promise<void> {
-  const guard = guards.get(guest)
+export function setBrowserInputGuard(target: object, suspended: boolean): Promise<void> {
+  const guard = guards.get(target)
   if (!guard) {
     return Promise.resolve()
   }
+  const guest = guard.guest
   guard.suspended = suspended
   const revision = ++guard.revision
   if (guard.pending?.suspended === suspended) {
@@ -103,7 +105,7 @@ export function setBrowserInputGuard(guest: WebContents, suspended: boolean): Pr
   return promise
 }
 
-export function hasBrowserInputGuard(guest: WebContents): boolean {
+export function hasBrowserInputGuard(guest: object): boolean {
   return guards.has(guest)
 }
 
@@ -115,6 +117,7 @@ export function setBrowserInputPolicy(
   let guard = guards.get(guest)
   if (!guard) {
     guard = {
+      guest,
       token: randomUUID(),
       revision: 0,
       suspended: true,

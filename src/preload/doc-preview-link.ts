@@ -17,18 +17,19 @@ const electron: {
 } = require('electron')
 const { ipcRenderer, webFrame } = electron
 if (process.isMainFrame) {
+  const retireNativePolicy = installBrowserGuestNativeToolKeys({
+    send: (channel, payload) => ipcRenderer.send(channel, payload),
+    on: (channel, listener) =>
+      ipcRenderer.on(channel, (_event, payload: unknown) => listener(payload))
+  })
   installBrowserGuestExecution(
     {
       send: (channel, payload) => ipcRenderer.send(channel, payload),
       on: (channel, listener) => ipcRenderer.on(channel, (_event, payload) => listener(payload))
     },
-    webFrame
+    webFrame,
+    retireNativePolicy
   )
-  installBrowserGuestNativeToolKeys({
-    send: (channel, payload) => ipcRenderer.send(channel, payload),
-    on: (channel, listener) =>
-      ipcRenderer.on(channel, (_event, payload: unknown) => listener(payload))
-  })
   installBrowserGuestEditProtection({
     send: (channel, payload) => ipcRenderer.send(channel, payload),
     on: (channel, listener) =>

@@ -14,7 +14,8 @@ export function installBrowserGuestExecution(
     on: (channel: string, listener: (payload: GrabExecutionRequest) => void) => void
     send: (channel: string, payload: unknown) => void
   },
-  frame: Pick<WebFrame, 'executeJavaScript' | 'executeJavaScriptInIsolatedWorld'>
+  frame: Pick<WebFrame, 'executeJavaScript' | 'executeJavaScriptInIsolatedWorld'>,
+  retireNativePolicy: () => void = () => {}
 ): void {
   const documentId = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-')
   const occupied = new Set<string>()
@@ -56,6 +57,7 @@ export function installBrowserGuestExecution(
         retiredOverlay = request.overlayId
       }
       if (overlay?.id === request.overlayId) {
+        retireNativePolicy()
         overlay.control('teardown')
         overlay = null
       }
@@ -78,6 +80,7 @@ export function installBrowserGuestExecution(
       try {
         let value: unknown
         if (request.clean) {
+          retireNativePolicy()
           if (overlay) {
             overlay.control('teardown')
             overlay = null
@@ -148,8 +151,10 @@ export function installBrowserGuestExecution(
             if (typeof value !== 'function') {
               throw new Error('Missing overlay control')
             }
-            const control = value as Control
+            const returnedControl = value
+            const control: Control = (action, argument) => returnedControl(action, argument)
             if (retiredOverlay === request.id) {
+              retireNativePolicy()
               control('teardown')
               value = false
             } else {
@@ -157,13 +162,41 @@ export function installBrowserGuestExecution(
               value = true
             }
           } else if (request.capturePick && typeof value === 'function') {
-            const control = value as Control
-            const result = control('payload') as { payload: { page: object }; contextMenu: boolean }
+            const returnedControl = value
+            const control: Control = (action, argument) => returnedControl(action, argument)
+            const result = control('payload')
+            if (!result || typeof result !== 'object' || !('payload' in result)) {
+              throw new Error('Missing selection payload')
+            }
+            const source = result.payload
+            if (
+              !source ||
+              typeof source !== 'object' ||
+              !('page' in source) ||
+              !source.page ||
+              typeof source.page !== 'object'
+            ) {
+              throw new Error('Invalid selection payload')
+            }
             const id = `${documentId}-${request.id}`
             picks[request.capturePick] = { id, control, overlayId: selectedOverlayId }
-            const payload = { ...result.payload, page: { ...result.payload.page, selectionId: id } }
-            value = result.contextMenu ? { __orcaContextMenu: true, payload } : payload
+            const payload = { ...source, page: { ...source.page, selectionId: id } }
+            value =
+              'contextMenu' in result && result.contextMenu === true
+                ? { __orcaContextMenu: true, payload }
+                : payload
           }
+        }
+        if (
+          request.capturePick &&
+          value &&
+          typeof value === 'object' &&
+          '__orcaCancelled' in value &&
+          value.__orcaCancelled === true &&
+          !('__orcaPreserveOverlay' in value && value.__orcaPreserveOverlay === true) &&
+          overlay?.id === selectedOverlayId
+        ) {
+          retireNativePolicy()
         }
         answer({ ok: true, value })
       } catch {

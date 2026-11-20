@@ -42,7 +42,7 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       grab.cancelAwait = null;
       if (removeOverlay !== false) grab.cleanup();
       // Resolve cancellation to avoid guest-console errors during normal teardown.
-      resolve({ __orcaCancelled: true });
+      resolve({ __orcaCancelled: true, __orcaPreserveOverlay: removeOverlay === false });
     };
   });
 })()`

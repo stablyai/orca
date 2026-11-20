@@ -111,10 +111,15 @@ describe('awaitClick under a Zone.js-patched global Promise', () => {
     expect(types.isPromise(completion)).toBe(true)
 
     harness.click()
-    const control = (await crossExecuteJavaScriptBoundary(completion)) as (action: string) => {
-      payload: unknown
+    const control = await crossExecuteJavaScriptBoundary(completion)
+    if (typeof control !== 'function') {
+      throw new Error('Missing private selection control')
     }
-    const received = control('payload').payload
+    const result: unknown = control('payload')
+    if (!result || typeof result !== 'object' || !('payload' in result)) {
+      throw new Error('Missing selection payload')
+    }
+    const received = result.payload
 
     expect(received).toHaveProperty('page')
     expect(received).toHaveProperty('target')
