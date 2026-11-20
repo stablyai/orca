@@ -21,8 +21,11 @@ const SAVE_GROUNDED_CURSOR = '\x1b7'
 export const RESET_MOUSE_REPORTING =
   '\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l'
 
+// A dead PTY's ConPTY/console app cannot keep win32 input mode; its replacement re-requests it.
+export const RESET_WIN32_INPUT_MODE = '\x1b[?9001l'
+
 // Why: serialized panes can end with a live pen, but the following shell assumes default attributes.
-export const POST_REPLAY_MODE_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_MODIFY_OTHER_KEYS}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l\x1b[?2004l${SAVE_GROUNDED_CURSOR}`
+export const POST_REPLAY_MODE_RESET = `${RESET_GRAPHIC_RENDITION}${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${RESET_MODIFY_OTHER_KEYS}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l\x1b[?2004l${RESET_WIN32_INPUT_MODE}${SAVE_GROUNDED_CURSOR}`
 
 // Why: same-session live replay; keep cursor/focus cleanup (the replay epilogue re-asserts Kitty flags).
 export const POST_REPLAY_LIVE_SNAPSHOT_RESET = `${RESET_TERMINAL_CURSOR_STYLE}\x1b[?25h\x1b[?1004l`

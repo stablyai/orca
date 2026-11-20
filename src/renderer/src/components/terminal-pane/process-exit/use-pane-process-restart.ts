@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useAppStore } from '../../../store'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { connectPanePty } from '../pty-connection/connect-pane-pty'
+import { RESET_WIN32_INPUT_MODE } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { releasePaneTransportForRestart } from './pane-restart-transport-handoff'
 import { holdPaneResumeInPlace } from '../session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import { clearPaneTerminalError } from '../errors/terminal-error-accumulation'
@@ -107,6 +108,8 @@ export function usePaneProcessRestart({
         syncPanePtyLayoutBinding(paneId, null)
         const replacesPtyId = releasePaneTransportForRestart(transport)
         paneTransportsRef.current.delete(paneId)
+        // The replacement process re-requests win32 input mode itself if it wants it.
+        paneKittyKeyboardModesRef?.current.get(paneId)?.scan(RESET_WIN32_INPUT_MODE)
         setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
         setTerminalError(null)
         setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
