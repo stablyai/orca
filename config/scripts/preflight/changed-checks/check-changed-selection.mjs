@@ -43,8 +43,11 @@ const MAIN_BLOCKING_GRAPH_INPUTS = [
 const RATCHET_INPUTS = {
   'check-application-ipc-ratchet.mjs': [
     'src/main/ipc/',
-    'src/main/startup/main-process-ipc-bootstrap.ts',
-    'config/application-ipc-native-channels.json'
+    'src/main/startup/',
+    'src/main/star-nag/',
+    'src/main/rate-limits/',
+    'config/application-ipc-native-channels.json',
+    'config/scripts/static-analysis/process-boundaries/application-ipc-publication-policy.mjs'
   ],
   'check-daemon-blocking-call-ratchet.mjs': ['src/main/'],
   'check-e2e-typecheck-ratchet.mjs': ['tests/', 'config/tsconfig.e2e.json'],

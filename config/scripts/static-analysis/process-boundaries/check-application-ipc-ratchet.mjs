@@ -18,7 +18,7 @@ const REGISTRATION_METHODS = new Set(['handle', 'handleOnce', 'on', 'once'])
 export function collectNativeRegistrations(root = process.cwd()) {
   const sources = readTrackedSources(
     root,
-    ['src/main/ipc', 'src/main/startup'],
+    ['src/main/ipc', 'src/main/startup', 'src/main/star-nag'],
     (file) =>
       file.endsWith('.ts') &&
       !file.includes('.test.') &&
@@ -27,6 +27,7 @@ export function collectNativeRegistrations(root = process.cwd()) {
       !TRANSPORT_FAMILIES.test(file) &&
       file !== ADAPTER &&
       (file.startsWith('src/main/ipc/') ||
+        file.startsWith('src/main/star-nag/') ||
         file === 'src/main/startup/main-process-ipc-bootstrap.ts')
   )
   const registrations = new Map()
@@ -41,6 +42,12 @@ export function collectNativeRegistrations(root = process.cwd()) {
         continue
       }
       const bindings = statement.importClause?.namedBindings
+      if (bindings && ts.isNamespaceImport(bindings)) {
+        receivers.add(`${bindings.name.text}.ipcMain`)
+      }
+      if (statement.importClause?.name) {
+        receivers.add(`${statement.importClause.name.text}.ipcMain`)
+      }
       if (bindings && ts.isNamedImports(bindings)) {
         for (const element of bindings.elements) {
           if ((element.propertyName ?? element.name).text === 'ipcMain') {
@@ -52,13 +59,20 @@ export function collectNativeRegistrations(root = process.cwd()) {
     const channels = []
     const visit = (node) => {
       if (
-        ts.isCallExpression(node) &&
-        ts.isPropertyAccessExpression(node.expression) &&
-        receivers.has(node.expression.expression.getText(tree)) &&
-        REGISTRATION_METHODS.has(node.expression.name.text)
+        ts.isPropertyAccessExpression(node) &&
+        receivers.has(node.expression.getText(tree)) &&
+        REGISTRATION_METHODS.has(node.name.text)
       ) {
-        const argument = node.arguments[0]
-        channels.push(ts.isStringLiteral(argument) ? argument.text : argument.getText(tree))
+        const call = node.parent
+        const argument =
+          ts.isCallExpression(call) && call.expression === node ? call.arguments[0] : undefined
+        channels.push(
+          argument
+            ? ts.isStringLiteral(argument)
+              ? argument.text
+              : argument.getText(tree)
+            : `indirect:${node.name.text}`
+        )
       }
       ts.forEachChild(node, visit)
     }

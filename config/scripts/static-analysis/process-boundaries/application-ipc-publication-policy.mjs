@@ -8,6 +8,8 @@ export const DEFERRED_APPLICATION_PUBLICATIONS = new Map([
 ])
 
 export const APPLICATION_PUBLICATION_ROOTS = [
+  'src/main/star-nag/service.ts',
+  'src/main/rate-limits/service/service-state.ts',
   'src/main/startup/plugin-startup/main-process-plugins.ts',
   'src/main/startup/main-window/main-window-agent-status.ts',
   'src/main/startup/cloud-startup/main-process-relay-status.ts',
