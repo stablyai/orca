@@ -21,7 +21,7 @@ vi.mock('os', async () => {
 })
 
 import { CursorHookService } from './hook-service'
-import type { CursorEvent } from './hook-events'
+import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
@@ -156,6 +156,9 @@ describe('CursorHookService', () => {
         () => ''
       ]
 
+      for (const eventName of CURSOR_EVENTS) {
+        requireRegisteredCommand(config, eventName)
+      }
       for (const eventName of RESPONSE_SHAPE_EVENTS) {
         const command = requireRegisteredCommand(config, eventName)
         for (const payloadFor of payloads) {
