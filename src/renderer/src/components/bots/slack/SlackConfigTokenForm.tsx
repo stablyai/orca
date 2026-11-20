@@ -70,15 +70,26 @@ export function SlackConfigTokenForm({
     return kind !== null
   }
 
+  // Counts clipboard reads, so one still pending when a later one starts, or the form closes, is dropped.
+  const reads = useRef(0)
+  useEffect(
+    () => () => {
+      reads.current++
+    },
+    []
+  )
   useEffect(() => {
     const onFocus = (): void => {
       if (!awaitingCopy.current) {
         return
       }
+      // One read per opening of Slack's page, whatever it finds.
+      awaitingCopy.current = false
+      const read = ++reads.current
       void window.api.ui
         .readClipboardText()
         .then((text) => {
-          if (awaitingCopy.current) {
+          if (read === reads.current) {
             take(text)
           }
         })
@@ -105,8 +116,8 @@ export function SlackConfigTokenForm({
         variant="outline"
         className="w-full"
         onClick={() => {
-          awaitingCopy.current = true
-          openBotHostPageOrSay(hostId, SLACK_APPS_URL, { local: 'system' })
+          awaitingCopy.current =
+            openBotHostPageOrSay(hostId, SLACK_APPS_URL, { local: 'system' }) !== 'unrouted'
         }}
       >
         {t('bots.slack.token.open', 'Get config token')}

@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SlackConfigTokenForm } from './SlackConfigTokenForm'
 
-vi.mock('@/lib/bot-host-page', () => ({ openBotHostPageOrSay: vi.fn() }))
+const opened = vi.hoisted((): { result: string } => ({ result: 'system' }))
+vi.mock('@/lib/bot-host-page', () => ({ openBotHostPageOrSay: () => opened.result }))
 
 // Made-up values with only the prefixes Slack gives its two tokens.
 const REFRESH = 'xoxe-refresh-example'
@@ -27,6 +28,7 @@ function shown(clipboard: string) {
 }
 
 afterEach(() => {
+  opened.result = 'system'
   cleanup()
   vi.unstubAllGlobals()
 })
@@ -43,6 +45,33 @@ describe('SlackConfigTokenForm', () => {
     fireEvent.focus(window)
     expect(readClipboardText).toHaveBeenCalledTimes(1)
     expect(onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it('reads the clipboard once per opening, and not at all when Slack’s page did not open', async () => {
+    const { onSubmit, readClipboardText } = shown('just some notes')
+    const open = screen.getByRole('button', { name: /Get config token/ })
+    fireEvent.click(open)
+    fireEvent.focus(window)
+    fireEvent.focus(window)
+    await waitFor(() => expect(readClipboardText).toHaveBeenCalledTimes(1))
+    opened.result = 'unrouted'
+    fireEvent.click(open)
+    fireEvent.focus(window)
+    expect(readClipboardText).toHaveBeenCalledTimes(1)
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('drops a read still pending when the form closes', async () => {
+    let resolve: (text: string) => void = () => {}
+    const { onSubmit, readClipboardText } = shown('')
+    readClipboardText.mockReturnValue(new Promise<string>((done) => (resolve = done)))
+    fireEvent.click(screen.getByRole('button', { name: /Get config token/ }))
+    fireEvent.focus(window)
+    cleanup()
+    resolve(REFRESH)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(onSubmit).not.toHaveBeenCalled()
   })
 
   it('sends a pasted refresh token at once, and points from the access token to the other', () => {
