@@ -116,6 +116,8 @@ function replies(capabilities, botsEnabled = true, extraWorkers = []) {
         { id: 'repo-2', displayName: 'lone-project', path: '/repo-2' }
       ]
     },
+    // The host's New bot choices; a host that can't answer offers none.
+    'bots.agentChoices': { agents: ['claude', 'codex'] },
     'bots.list': {
       botsEnabled,
       hideBotCreatedWorkspaces: true,
