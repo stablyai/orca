@@ -161,9 +161,11 @@ function itemsRuntime() {
     },
     botItems: host,
     getOrchestrationDb: () => db,
-    ensureStructuredAgentSessionHost: async () => {}
+    ensureStructuredAgentSessionHost: async () => {},
+    // No connector: no chat's turn is its conversation's.
+    getExternalConversationSeam: () => null
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only bots, lookAround, botItems, the orchestration database and the runtime id, which the stub provides.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only bots, lookAround, botItems, the orchestration database, the conversation seam and the runtime id, which the stub provides.
   const service = runtime as unknown as OrcaRuntimeService
   return {
     dispatcher: new RpcDispatcher({ runtime: service, methods: BOT_ITEMS_METHODS }),
