@@ -53,7 +53,7 @@ export function SlackConfigTokenForm({
         className="w-full"
         onClick={() => openBotHostPageOrSay(hostId, SLACK_APPS_URL, { local: 'system' })}
       >
-        {t('bots.slack.token.open', 'Get your configuration token')}
+        {t('bots.slack.token.open', 'Get config token')}
         <ExternalLink />
       </Button>
       <ol className="list-decimal space-y-1.5 pl-5 text-sm">

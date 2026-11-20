@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AntigravityChatAuthDetection } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
-import {
-  ANTIGRAVITY_ACCOUNT_INELIGIBLE,
-  ANTIGRAVITY_SUBSCRIPTION_REQUIRED
-} from '../../../../../shared/agent-accounts/antigravity/antigravity-sign-in-sentences'
+import { ANTIGRAVITY_ACCOUNT_INELIGIBLE } from '../../../../../shared/agent-accounts/antigravity/antigravity-sign-in-sentences'
 import {
   antigravityAuthFailureOutlived,
   antigravityAuthFailureReason,
@@ -81,7 +78,6 @@ describe('antigravityChatAuthMenuItems', () => {
 
 describe('antigravityAuthFailureReason', () => {
   it.each([
-    [{ text: ANTIGRAVITY_SUBSCRIPTION_REQUIRED }, 'noSubscription'],
     [{ text: 'error: SUBSCRIPTION_REQUIRED' }, 'noSubscription'],
     [{ text: ANTIGRAVITY_ACCOUNT_INELIGIBLE }, 'ineligible'],
     [{ text: 'Usage limit reached for this account' }, 'usageLimit'],

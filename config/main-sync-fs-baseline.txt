@@ -273,7 +273,6 @@
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
-1 src/main/ipc/keyboard/macos-keyboard-layout-snapshot.ts
 1 src/main/ipc/notifications/notification-authorization-status.ts
 1 src/main/ipc/pty/host-env/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts
