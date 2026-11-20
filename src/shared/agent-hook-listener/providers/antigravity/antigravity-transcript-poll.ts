@@ -30,7 +30,8 @@ export function hasAntigravityPollWork(
     pane &&
     (pane.dirty ||
       (pane.rootBrainDir &&
-        (pane.children.size > 0 || (readsLeadModel(pane) && pane.leadState === 'working'))))
+        (pane.children.size > 0 ||
+          (readsLeadModel(pane) && pane.leadState === 'working' && pane.rootConversationId))))
   )
 }
 export type AntigravityTranscriptPollReads = {
@@ -158,7 +159,8 @@ export function pollAntigravityTranscriptStatus(
       if (child.stopped || metadata.killed) {
         proven.push(child.id)
       }
-    } else if (child.stopped) {
+    } else if (child.stopped && pane.pendingHelperSpawns === undefined) {
+      // While a spawn is pending a failed read retries next poll instead of losing its proof.
       retireAntigravityChild(pane, child.id)
     }
   }

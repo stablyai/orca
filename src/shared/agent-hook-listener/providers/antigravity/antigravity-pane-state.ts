@@ -50,7 +50,8 @@ export type AntigravityPaneChildState = {
   commands?: Set<number>
   children: Map<string, TrackedAntigravityChild>
   verifiedChildren: Set<string>
-  retiredChildren: Set<string>
+  /** Retired child ids, and whether each was proven ours; descriptors never change, so the proof holds. */
+  retiredChildren: Map<string, boolean>
   brainCache: AntigravityBrainCache
   dirty?: boolean
 }
@@ -63,7 +64,7 @@ export function getOrCreateAntigravityPaneState(
     pane = {
       children: new Map(),
       verifiedChildren: new Set(),
-      retiredChildren: new Set(),
+      retiredChildren: new Map(),
       brainCache: createAntigravityBrainCache()
     }
     state.antigravityChildWorkByPaneKey.set(paneKey, pane)
@@ -71,12 +72,12 @@ export function getOrCreateAntigravityPaneState(
   return pane
 }
 export function retireAntigravityChild(pane: AntigravityPaneChildState, id: string): void {
-  pane.retiredChildren.delete(id)
-  pane.retiredChildren.add(id)
-  if (pane.retiredChildren.size > 4096) {
-    pane.retiredChildren.delete(pane.retiredChildren.values().next().value!)
-  }
   const verified = pane.verifiedChildren.delete(id)
+  pane.retiredChildren.delete(id)
+  pane.retiredChildren.set(id, verified)
+  if (pane.retiredChildren.size > 4096) {
+    pane.retiredChildren.delete(pane.retiredChildren.keys().next().value!)
+  }
   pane.children.delete(id)
   if (pane.rootBrainDir) {
     const transcript = antigravityTranscriptFilePath(pane.rootBrainDir, id)
@@ -126,6 +127,7 @@ export function recordAntigravityChildHook(
   if (existing?.stopped && eventName !== 'PreInvocation') {
     return
   }
+  const provenBefore = pane.retiredChildren.get(id) === true
   const wokeAgain = pane.retiredChildren.delete(id) && !existing ? true : undefined
   const child: TrackedAntigravityChild = existing ?? {
     id,
@@ -166,7 +168,7 @@ export function recordAntigravityChildHook(
     pane.children.set(id, child)
     pane.dirty = true
   }
-  if (!pane.rootBrainDir) {
+  if (!pane.rootBrainDir || (wokeAgain && provenBefore)) {
     verifyAntigravityChild(pane, id)
   }
   if (pane.verifiedChildren.has(id)) {

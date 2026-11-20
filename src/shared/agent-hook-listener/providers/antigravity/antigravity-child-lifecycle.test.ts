@@ -351,3 +351,28 @@ it('counts only a swarm add as a spawn that holds the parent', async () => {
   expect(swarm('status')?.antigravitySpawnPending).toBeUndefined()
   expect(swarm('add')?.antigravitySpawnPending).toBe(true)
 })
+
+it('retries proving a stopped subagent while its spawn is pending', async () => {
+  transcript('child')
+  spawn()
+  hook('child', 'PreInvocation')
+  hook('root', 'Stop', { fullyIdle: false })
+  hook('child', 'Stop', { fullyIdle: true })
+  expect((await poll())?.payload.subagents).toBeUndefined()
+  descriptor('child')
+  expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['child'])
+})
+
+it('holds the parent for a proven subagent woken again by a message', async () => {
+  transcript('child')
+  descriptor('child')
+  spawn()
+  hook('child', 'PreInvocation')
+  await poll()
+  hook('child', 'Stop', { fullyIdle: true })
+  hook('root', 'PreToolUse', { toolCall: { name: 'send_message', args: {} } })
+  hook('child', 'PreInvocation')
+  expect(
+    hook('root', 'Stop', { fullyIdle: false })?.payload.subagents?.map((child) => child.id)
+  ).toEqual(['child'])
+})
