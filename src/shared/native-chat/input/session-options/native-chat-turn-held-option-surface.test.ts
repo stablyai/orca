@@ -97,4 +97,43 @@ describe('native chat turn-held option picks', () => {
     other.surface.setWorking(true)
     expect(other.model()?.appliesAfterTurn).toBeUndefined()
   })
+
+  it('keeps a rebuilt surface waiting while a held pick is typed', async () => {
+    let finish: (() => void) | undefined
+    const dispatch = vi.fn(() => new Promise<object>((resolve) => (finish = () => resolve({}))))
+    const { surface } = create(dispatch)
+    surface.setWorking(true)
+    await surface.setOption('model', 'sonnet')
+    surface.setWorking(false)
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
+
+    const rebuilt = create(dispatch)
+    expect(rebuilt.surface.sendingHeldPick()).toBe('model')
+    finish?.()
+    await vi.waitFor(() => expect(rebuilt.surface.sendingHeldPick()).toBeNull())
+  })
+
+  it('holds the rest of the picks again when a turn starts while they are typed', async () => {
+    let finish: (() => void) | undefined
+    const dispatch = vi.fn(
+      (_command: string) => new Promise<object>((resolve) => (finish = () => resolve({})))
+    )
+    const { surface } = create(dispatch)
+    surface.setWorking(true)
+    await surface.setOption('model', 'sonnet')
+    await surface.setOption('effort', 'low')
+    surface.setWorking(false)
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
+    expect(dispatch.mock.calls[0]?.[0]).toBe('/model sonnet')
+
+    surface.setWorking(true)
+    finish?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(surface.getSnapshot().find(({ id }) => id === 'effort')?.appliesAfterTurn).toBe(true)
+
+    surface.setWorking(false)
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2))
+    expect(dispatch.mock.calls[1]?.[0]).toContain('low')
+  })
 })
