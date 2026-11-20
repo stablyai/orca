@@ -23,7 +23,14 @@ export function retireRemovedNativeChatTabs(before: readonly Tab[], after: reado
         readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(tab.entityId)),
         tab.id
       )
-      retireNativeChatSubagentViews(chatPaneAddressTabId(tab.entityId))
+      // Views follow the conversation; another tab still showing it keeps them.
+      if (
+        !after.some(
+          (other) => other.contentType === 'agent-session' && other.entityId === tab.entityId
+        )
+      ) {
+        retireNativeChatSubagentViews(chatPaneAddressTabId(tab.entityId))
+      }
     }
   }
 }
