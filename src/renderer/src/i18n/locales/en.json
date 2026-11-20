@@ -1921,11 +1921,17 @@
     },
     "notifications": {
       "perfNotices": {
+        "disk": {
+          "label": "Disk almost full",
+          "description": "Suggest cleaning up workspaces when your disk is almost full."
+        },
         "hiddenTabs": {
           "label": "Hidden browser tabs",
           "description": "Suggest Memory Saver when many hidden browser tabs stay loaded."
         },
         "search": {
+          "disk": "disk",
+          "warning": "warning",
           "tabs": "tabs",
           "memory": "memory"
         }
@@ -29646,6 +29652,11 @@
       "descriptionOneHour_one": "You have {{count}} tab you haven't viewed in over an hour. Turn on Memory Saver to free up its memory.",
       "descriptionOneHour_other": "You have {{count}} tabs you haven't viewed in over an hour. Turn on Memory Saver to free up their memory.",
       "turnOnMemorySaver": "Turn on Memory Saver"
+    },
+    "disk": {
+      "title": "Your disk is almost full",
+      "description": "Find workspaces you no longer need in Settings > Workspace Cleanup.",
+      "reviewOld": "Review old workspaces"
     },
     "dontShowAgain": "Don't show again"
   },
