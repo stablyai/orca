@@ -256,11 +256,13 @@ function EntryIcon({ entry }: { entry: LineEntry }) {
 function CommentCard({
   item,
   entry,
-  quickReplies
+  quickReplies,
+  busy
 }: {
   item: BotItem
   entry: Extract<BotItemActivityEntry, { kind: 'comment' }>
   quickReplies: MobileBotItemQuickReplyActions
+  busy: boolean
 }) {
   const t = useMobileTranslation()
   const { event, replyTo, waiting } = entry
@@ -280,8 +282,9 @@ function CommentCard({
         <MobileBotItemQuestionLines
           shape={shape}
           waiting={waiting}
-          answeredBy={entry.answeredBy}
+          answers={entry.answers}
           actions={quickReplies}
+          busy={busy}
         />
       ) : null}
     </View>
@@ -291,10 +294,13 @@ function CommentCard({
 export function MobileBotItemActivity({
   item,
   events,
-  quickReplies
+  quickReplies,
+  busy = false
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
+  /** A quick reply is on its way or just landed: the quick replies wait for its outcome. */
+  busy?: boolean
   /** What the waiting question's quick replies do. */
   quickReplies: MobileBotItemQuickReplyActions
 }) {
@@ -305,7 +311,13 @@ export function MobileBotItemActivity({
     <View>
       {entries.map((entry) =>
         entry.kind === 'comment' ? (
-          <CommentCard key={entry.key} item={item} entry={entry} quickReplies={quickReplies} />
+          <CommentCard
+            key={entry.key}
+            item={item}
+            entry={entry}
+            quickReplies={quickReplies}
+            busy={busy}
+          />
         ) : (
           <View key={entry.key} style={styles.event}>
             <View style={styles.eventIcon}>

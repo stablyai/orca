@@ -36,31 +36,37 @@ function ChipWords({ reply, muted = false }: { reply: BotItemQuickReply; muted?:
   )
 }
 
+const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
+
 export function MobileBotItemQuestionLines({
   shape,
   waiting,
-  answeredBy,
+  answers = NO_ANSWERS,
+  busy = false,
   actions
 }: {
   shape: BotItemQuestionShape
   waiting: boolean
-  answeredBy?: BotItemEvent
+  answers?: readonly (BotItemEvent | null)[]
+  /** A reply is on its way or just landed: the quick replies wait for its outcome. */
+  busy?: boolean
   actions?: MobileBotItemQuickReplyActions
 }) {
   const t = useMobileTranslation()
-  const picked = !waiting && answeredBy ? botItemPickedReplies(shape, answeredBy.data) : []
   return (
     <View style={[styles.footer, shape.body.trim() ? styles.divided : null]}>
       {shape.decisions.map((decision, index) => {
-        const picks = picked[index] ?? []
+        const answer = answers[index] ?? null
+        const open = waiting && !answer
+        const picks = answer ? (botItemPickedReplies(shape, answer.data)[index] ?? []) : []
         return (
           <View key={decision.question} style={styles.decision}>
             <View>
               {/* Hangs in the gutter, so the question and its chips share the body's left edge. */}
-              {waiting ? <View style={styles.dot} /> : null}
-              <Text style={[styles.question, !waiting && styles.muted]}>{decision.question}</Text>
+              {open ? <View style={styles.dot} /> : null}
+              <Text style={[styles.question, !open && styles.muted]}>{decision.question}</Text>
             </View>
-            {waiting && actions && decision.replies.length > 0 ? (
+            {open && actions && decision.replies.length > 0 ? (
               <View style={styles.chips}>
                 {decision.replies.map((reply) => {
                   const text = botItemQuickReplyText(shape, decision, reply)
@@ -69,9 +75,10 @@ export function MobileBotItemQuestionLines({
                       key={reply.label}
                       accessibilityRole="button"
                       accessibilityHint={reply.detail}
+                      disabled={busy}
                       onPress={() => actions.send(text)}
                       onLongPress={() => actions.edit(text)}
-                      style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+                      style={({ pressed }) => [styles.chip, (pressed || busy) && styles.pressed]}
                     >
                       <ChipWords reply={reply} />
                     </Pressable>

@@ -15,7 +15,7 @@ import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/wor
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemStatus } from '../../../../../shared/bots/bot-items'
-import { botItemQuestionLine } from '../../../../../shared/bots/bot-item-ask'
+import { botItemWaitingLine } from '../../../../../shared/bots/bot-item-question-answers'
 import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatPaneFileDropSurface } from '../../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import {
@@ -244,17 +244,10 @@ export function BotItemBody({
     [deleted, comment, sendLatest]
   )
   // The question the item waits on, as the comment box names it, until a reply is on its way.
+  const waitingLine = botItemWaitingLine(item, view.events)
   const waitingOn =
-    item.status === 'needs_you' && item.question && !pending.shown.some(({ failed }) => !failed)
-      ? {
-          id: item.question.eventId,
-          line: botItemQuestionLine(
-            item.question.decisions?.[0]?.question ?? item.question.gist ?? item.question.text
-          ),
-          replies:
-            item.question.decisions?.some((decision) => decision.replies.length > 0) ?? false,
-          asker: item.owner.name ?? bot.name
-        }
+    waitingLine && !pending.shown.some(({ failed }) => !failed)
+      ? { ...waitingLine, asker: item.owner.name ?? bot.name }
       : null
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {
     sessionId: null,

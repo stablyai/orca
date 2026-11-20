@@ -39,8 +39,9 @@ const drafts = new Map<string, string>()
 
 export type BotItemCommentBoxHandle = {
   focus: () => void
-  /** Post `text` as the owner's comment, as Comment does (a quick reply). */
-  send: (text: string) => void
+  /** Post `text` as the owner's comment, as Comment does (a quick reply): `landed` when it went or
+   *  may have gone (the reply dropped after sending), `failed` when it surely didn't. */
+  send: (text: string) => Promise<'landed' | 'failed'>
   /** Put `text` in the box in place of its words, to add to before sending. */
   fill: (text: string) => void
 }
@@ -107,9 +108,9 @@ export function MobileBotItemCommentBox({
     })
   const micActive = mic?.micActive ?? false
   const canSend = online && text.trim().length > 0 && !micActive
-  const post = async (words: string, typed: boolean) => {
+  const post = async (words: string, typed: boolean): Promise<'landed' | 'failed'> => {
     if (!online || !words || sending || !client) {
-      return
+      return 'failed'
     }
     setSending(true)
     const outcome = await commentOnBotItem(client, item.uid, words)
@@ -120,10 +121,11 @@ export function MobileBotItemCommentBox({
       if (typed && (drafts.get(uid) ?? '').trim() === words) {
         setText('')
       }
-      return
+      return 'landed'
     }
     triggerError()
     setError(botItemWriteFailure(outcome, hostName, t))
+    return outcome.kind === 'unknown' ? 'landed' : 'failed'
   }
   const send = async () => {
     if (canSend) {
@@ -132,7 +134,7 @@ export function MobileBotItemCommentBox({
   }
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
-    send: (words) => void post(words.trim(), false),
+    send: (words) => post(words.trim(), false),
     fill: (words) => {
       setText(`${words} `)
       input.current?.focus()

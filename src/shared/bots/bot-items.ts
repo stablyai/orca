@@ -20,6 +20,7 @@ export const BOT_ITEM_ERROR_CODES = [
   'items_read_only',
   'items_unavailable',
   'item_changed',
+  // From hosts that recorded answers (v1.4.265); this host no longer refuses with it.
   'question_closed'
 ] as const
 export type BotItemErrorCode = (typeof BOT_ITEM_ERROR_CODES)[number] | 'invalid_argument'

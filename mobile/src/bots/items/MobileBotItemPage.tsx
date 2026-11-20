@@ -28,6 +28,7 @@ import {
   type MobileScrollTailMetrics
 } from '../../session/native-chat/transcript/viewport/use-mobile-native-chat-tail-follow'
 import { MobileBotTextButton } from '../MobileBotTextButton'
+import { botItemWaitingLine } from '../../../../src/shared/bots/bot-item-question-answers'
 import { MobileBotItemActivity } from './MobileBotItemActivity'
 import { MobileBotItemCommentBox, type BotItemCommentBoxHandle } from './MobileBotItemCommentBox'
 import { MobileBotItemLinks } from './MobileBotItemLinks'
@@ -72,6 +73,15 @@ export function MobileBotItemPage({
   const view = usePhoneBotItemView({ client, uid, reads })
   const now = useNow(60_000)
   const comment = useRef<BotItemCommentBoxHandle>(null)
+  // A quick reply on its way or landed: its chips wait for the item's next event, or come back if it
+  // surely failed, so a second tap never posts it twice.
+  const [replyAfter, setReplyAfter] = useState<string | null>(null)
+  const lastEventId = view.events.at(-1)?.id ?? ''
+  const replyBusy = replyAfter !== null && replyAfter === lastEventId
+  const waitingLine = view.item ? botItemWaitingLine(view.item, view.events) : null
+  const waitingOn = waitingLine
+    ? { replies: waitingLine.replies, asker: view.item?.owner.name ?? bot.name }
+    : null
   const jump = useJumpToEnd()
   // Titled like the drawer's other pages; the item's number leads its own heading below.
   const back = (
@@ -244,8 +254,16 @@ export function MobileBotItemPage({
           <MobileBotItemActivity
             item={item}
             events={view.events}
+            busy={replyBusy}
             quickReplies={{
-              send: (text) => comment.current?.send(text),
+              send: (text) => {
+                setReplyAfter(lastEventId)
+                void comment.current?.send(text).then((outcome) => {
+                  if (outcome === 'failed') {
+                    setReplyAfter(null)
+                  }
+                })
+              },
               edit: (text) => comment.current?.fill(text),
               type: () => comment.current?.focus()
             }}
@@ -262,16 +280,7 @@ export function MobileBotItemPage({
           item={item}
           online={online && !view.failed}
           hostName={hostName}
-          waitingOn={
-            item.status === 'needs_you' && item.question
-              ? {
-                  replies:
-                    item.question.decisions?.some((decision) => decision.replies.length > 0) ??
-                    false,
-                  asker: item.owner.name ?? ''
-                }
-              : null
-          }
+          waitingOn={waitingOn}
         />
       </View>
     </View>

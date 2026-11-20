@@ -87,3 +87,38 @@ it('keeps a question asked while snoozed paired with its own Needs you move', ()
 
   expect(entries.map((entry) => entry.key)).toEqual(['e1', 'e2', 'e3', 'e4'])
 })
+
+it('keeps each question of an ask waiting until its own reply, a quick reply or the typed one after', () => {
+  const ask = {
+    questions: [
+      { prompt: 'Ship it?', options: [{ label: 'Ship' }, { label: 'Wait' }] },
+      { prompt: 'Tell the team?', options: [{ label: 'Yes' }, { label: 'No' }] }
+    ]
+  }
+  const asked = [
+    event('e2', 'commented', 200, { text: 'copy', ask }),
+    event('e3', 'status', 200, { from: 'working', to: 'needs_you' })
+  ]
+  const firstReply = [
+    owner('e4', 'commented', 250, { text: 'Tell the team? → No', answers: 'e2' }),
+    owner('e5', 'status', 250, { from: 'needs_you', to: 'working', cause: 'answer' })
+  ]
+  const item = makeTestBotItem(6, { status: 'working' })
+
+  const halfway = botItemActivity(item, [...asked, ...firstReply])
+  const done = botItemActivity(item, [
+    ...asked,
+    ...firstReply,
+    owner('e6', 'commented', 300, { text: 'Ship it after lunch' })
+  ])
+
+  expect(halfway).toMatchObject([
+    { key: 'e2', waiting: true, answers: [null, { id: 'e4' }] },
+    { key: 'e4', replyTo: { eventId: 'e2', text: 'Tell the team?' } }
+  ])
+  expect(done).toMatchObject([
+    { key: 'e2', waiting: false, answers: [{ id: 'e6' }, { id: 'e4' }] },
+    { key: 'e4' },
+    { key: 'e6', replyTo: { eventId: 'e2', text: 'Ship it?' } }
+  ])
+})

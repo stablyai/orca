@@ -1,15 +1,16 @@
 // An item's Activity in time order: its own events, plus each linked worker's start and finish read
 // from the worker's own record (never stored on the item). A worker's link event is its start.
 // A Needs you question and its status move come in one write: the comment carries both.
-// The owner's reply names its question (`answers`) and quotes it; the move it caused (`cause: 'answer'`)
-// is not shown while the question is loaded. Answers recorded by older hosts are replies like any other.
+// The owner's reply quotes the question line it answers (bot-item-question-answers.ts); the move the
+// first one caused (`cause: 'answer'`) is not shown while the question is loaded. Answers recorded by
+// older hosts are replies like any other.
 import {
   botItemLinksOnePerChain,
   type BotItem,
   type BotItemEvent,
   type BotItemLinkView
 } from './bot-items'
-import { botItemQuestionShape } from './bot-item-ask'
+import { botItemQuestionPairing, type BotItemQuestionPairing } from './bot-item-question-answers'
 
 type DispatchLink = Extract<BotItemLinkView, { kind: 'dispatch' }>
 
@@ -20,10 +21,10 @@ export type BotItemActivityEntry =
       key: string
       at: number
       event: BotItemEvent
-      /** The agent's question the item waits on now: it shows Needs you and its quick replies. */
+      /** The agent waits on this question (an ask: on its open lines): its mark and quick replies show. */
       waiting: boolean
-      /** On a question: the owner's first reply to it, which may be one of its quick replies. */
-      answeredBy?: BotItemEvent
+      /** On an ask: per question line, the owner comment that answered it. */
+      answers?: (BotItemEvent | null)[]
       /** On the owner's reply to a question: the question it answers, by its first line. */
       replyTo?: { eventId: string; text: string }
     }
@@ -70,41 +71,38 @@ export function botItemQuestionFirstLine(text: string): string {
     .trim()
 }
 
-/** What a reply quotes: its loaded question's (first) question line or first line, else the question an older host kept with a
- *  recorded answer (`asked`). */
+/** What a reply quotes: the ask's line it answered, else its loaded question's first line, else the
+ *  question an older host kept with a recorded answer (`asked`). */
 function replyQuote(
   event: BotItemEvent,
-  comments: ReadonlyMap<string, BotItemEvent>
+  comments: ReadonlyMap<string, BotItemEvent>,
+  pairing: BotItemQuestionPairing
 ): { eventId: string; text: string } | undefined {
+  const paired = pairing.replies.get(event.id)
+  if (paired) {
+    return { eventId: paired.questionId, text: botItemQuestionFirstLine(paired.decision.question) }
+  }
   const eventId = answeredQuestion(event)
   if (eventId === null) {
     return undefined
   }
-  const question = comments.get(eventId)
-  // An ask's reply quotes its question line, not the body above it.
-  const asked = question
-    ? (botItemQuestionShape(question.data).decisions[0]?.question ?? question.data.text)
-    : event.data.asked
+  const asked = comments.get(eventId)?.data.text ?? event.data.asked
   const text = typeof asked === 'string' ? botItemQuestionFirstLine(asked) : ''
   return text ? { eventId, text } : undefined
 }
 
 function eventEntries(
-  item: Pick<BotItem, 'question'>,
+  item: Pick<BotItem, 'question' | 'status'>,
   events: readonly BotItemEvent[]
 ): BotItemActivityEntry[] {
   const entries: BotItemActivityEntry[] = []
   const comments = new Map<string, BotItemEvent>()
-  const replies = new Map<string, BotItemEvent>()
   for (const event of events) {
     if (event.kind === 'commented') {
       comments.set(event.id, event)
     }
-    const question = answeredQuestion(event)
-    if (question !== null && !replies.has(question)) {
-      replies.set(question, event)
-    }
   }
+  const pairing = botItemQuestionPairing(item, events)
   const kept = events.filter((event) => !isSnoozeMark(event))
   const place = new Map(kept.map((event, index) => [event, index]))
   const prev = (event: BotItemEvent): BotItemEvent | undefined => {
@@ -130,15 +128,18 @@ function eventEntries(
       entries.push({ kind: 'event', key: event.id, at: event.at, event })
       continue
     }
-    const replyTo = replyQuote(event, comments)
-    const answeredBy = replies.get(event.id)
+    const replyTo = replyQuote(event, comments, pairing)
+    const asked = pairing.questions.get(event.id)
     entries.push({
       kind: 'comment',
       key: event.id,
       at: event.at,
       event,
-      waiting: event.id === item.question?.eventId && event.actor.kind !== 'owner',
-      ...(answeredBy ? { answeredBy } : {}),
+      // A question asked in prose waits while it is the item's question.
+      waiting: asked
+        ? asked.waiting
+        : event.id === item.question?.eventId && event.actor.kind !== 'owner',
+      ...(asked ? { answers: asked.answers } : {}),
       ...(replyTo ? { replyTo } : {})
     })
   }
@@ -146,7 +147,7 @@ function eventEntries(
 }
 
 export function botItemActivity(
-  item: Pick<BotItem, 'links' | 'question'>,
+  item: Pick<BotItem, 'links' | 'question' | 'status'>,
   events: readonly BotItemEvent[]
 ): BotItemActivityEntry[] {
   const entries = eventEntries(item, events)

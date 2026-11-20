@@ -38,22 +38,23 @@ function ChipWords({ reply }: { reply: BotItemQuickReply }): React.JSX.Element {
   )
 }
 
+const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
+
 export function BotItemQuestionLines({
   shape,
   waiting,
-  answeredBy,
+  answers = NO_ANSWERS,
   actions
 }: {
   shape: BotItemQuestionShape
   /** The item waits on this question now. */
   waiting: boolean
-  /** The owner's reply to it, whose pick stays shown. */
-  answeredBy?: BotItemEvent
+  /** Per line, the owner comment that answered it: that line closes and keeps only its pick. */
+  answers?: readonly (BotItemEvent | null)[]
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
 }): React.JSX.Element {
   const t = useTranslate()
-  const picked = !waiting && answeredBy ? botItemPickedReplies(shape, answeredBy.data) : []
   return (
     <div
       data-bot-item-question={waiting ? 'waiting' : 'closed'}
@@ -61,17 +62,20 @@ export function BotItemQuestionLines({
     >
       <div className="space-y-3">
         {shape.decisions.map((decision, index) => {
-          const picks = picked[index] ?? []
+          const answer = answers[index] ?? null
+          // Each line waits until its own reply; the agent stops waiting when it asks again or the item closes.
+          const open = waiting && !answer
+          const picks = answer ? (botItemPickedReplies(shape, answer.data)[index] ?? []) : []
           return (
             // A decision's question is unique within its ask.
             <div key={decision.question}>
               <div
                 className={cn(
                   'relative font-medium [&_p]:font-medium',
-                  !waiting && 'text-muted-foreground [&_*]:text-muted-foreground'
+                  !open && 'text-muted-foreground [&_*]:text-muted-foreground'
                 )}
               >
-                {waiting ? (
+                {open ? (
                   // Hangs in the gutter, so the question, the body and the chips share one left edge.
                   <span
                     aria-hidden
@@ -80,7 +84,7 @@ export function BotItemQuestionLines({
                 ) : null}
                 <BotItemMarkdown text={decision.question} />
               </div>
-              {waiting && actions && decision.replies.length > 0 ? (
+              {open && actions && decision.replies.length > 0 ? (
                 <div className="mt-1.5 flex flex-wrap gap-[5px]">
                   {decision.replies.map((reply) => (
                     <button
