@@ -51,7 +51,7 @@ export function SlackConfigTokenForm({
   const [token, setToken] = useState('')
   const [accessPasted, setAccessPasted] = useState(false)
   const trimmed = token.trim()
-  // Set once Slack's page is opened from here: the token copied there is taken on the way back.
+  // Set once Slack's page is opened from here: the token copied there fills the field on the way back.
   const awaitingCopy = useRef(false)
   // Counts clipboard reads, so one still pending when a later one starts, a token is sent, or the
   // form closes, is dropped.
@@ -63,11 +63,17 @@ export function SlackConfigTokenForm({
     setToken('')
     onSubmit(value)
   }
-  // Text that is the refresh token goes straight in; the access token gets a pointer to the other.
-  const take = (text: string): boolean => {
+  // A token pasted by the user goes straight in; one read off the clipboard only fills the field,
+  // so sending it stays the user's own click. The access token gets a pointer to the other.
+  const take = (text: string, pasted: boolean): boolean => {
     const kind = busy ? null : slackConfigTokenKind(text)
     if (kind === 'refresh') {
-      send(text.trim())
+      if (pasted) {
+        send(text.trim())
+      } else {
+        setAccessPasted(false)
+        setToken(text.trim())
+      }
     } else if (kind === 'access') {
       setAccessPasted(true)
     }
@@ -92,7 +98,7 @@ export function SlackConfigTokenForm({
         .readClipboardText()
         .then((text) => {
           if (read === reads.current) {
-            take(text)
+            take(text, false)
           }
         })
         .catch(() => {})
@@ -157,7 +163,7 @@ export function SlackConfigTokenForm({
             setToken(event.target.value)
           }}
           onPaste={(event) => {
-            if (take(event.clipboardData.getData('text'))) {
+            if (take(event.clipboardData.getData('text'), true)) {
               event.preventDefault()
             }
           }}

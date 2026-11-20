@@ -16,6 +16,18 @@ const SEND_MESSAGE_TYPE_ERROR = [
   'To answer a worker question, use the same Orca CLI executable with orchestration reply --id <msg_id> --body <text>.'
 ].join(' ')
 
+function payloadClaimsBotRequest(payload: string | undefined): boolean {
+  if (!payload?.includes('botRequest')) {
+    return false
+  }
+  try {
+    const parsed: unknown = JSON.parse(payload)
+    return typeof parsed === 'object' && parsed !== null && 'botRequest' in parsed
+  } catch {
+    return false
+  }
+}
+
 export const SendParams = z
   .object({
     to: OptionalString,
@@ -46,6 +58,14 @@ export const SendParams = z
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
+    if (payloadClaimsBotRequest(params.payload)) {
+      // Only Orca writes a bot request's payload; the receiver trusts its image paths.
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: '--payload may not carry a botRequest field.',
+        path: ['payload']
+      })
+    }
     if (!isDispatchMutationMessageType(params.type) || !params.to || !isGroupAddress(params.to)) {
       return
     }
