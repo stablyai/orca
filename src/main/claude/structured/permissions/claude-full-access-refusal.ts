@@ -86,8 +86,19 @@ export async function setClaudeAllowedPermissionMode(
     session.bypassDisabled !== undefined ||
     session.firstRootInit?.permissionMode === 'bypassPermissions'
   if (allowed !== 'bypassPermissions' || known) {
-    await session.connection.setPermissionMode(allowed, options)
-    return allowed
+    try {
+      await session.connection.setPermissionMode(allowed, options)
+      return allowed
+    } catch (error) {
+      // Claude rereads its settings, so bypass it allowed earlier can be refused later.
+      if (allowed !== 'bypassPermissions' || !isClaudeBypassRefusal(error)) {
+        throw error
+      }
+      session.bypassDisabled = true
+      const fallback = claudeAllowedPermissionMode(session, mode)
+      await session.connection.setPermissionMode(fallback, options)
+      return fallback
+    }
   }
   const fallback = claudeAllowedPermissionMode({ ...session, bypassDisabled: true }, mode)
   const [fallbackWrite, bypassWrite] = await Promise.allSettled([

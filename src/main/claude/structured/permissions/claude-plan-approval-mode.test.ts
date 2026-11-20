@@ -88,4 +88,28 @@ describe('leaving Plan mode after an approved plan', () => {
       'bypassPermissions'
     ])
   })
+
+  it('falls back when Claude starts refusing bypass it allowed earlier', async () => {
+    let refuse = false
+    const setPermissionMode = vi.fn((mode: string) =>
+      refuse && mode === 'bypassPermissions'
+        ? Promise.reject(
+            new Error(
+              'Cannot set permission mode to bypassPermissions because it is disabled by settings or configuration'
+            )
+          )
+        : Promise.resolve()
+    )
+    const session = {
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      firstRootInit: { permissionMode: 'bypassPermissions' },
+      connection: { setPermissionMode }
+    }
+    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe(
+      'bypassPermissions'
+    )
+    refuse = true
+    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('default')
+    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('default')
+  })
 })
