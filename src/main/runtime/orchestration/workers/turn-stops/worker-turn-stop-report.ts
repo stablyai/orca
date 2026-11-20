@@ -93,10 +93,15 @@ function wakingMail(
   dispatchId: string,
   delivered: string[] | undefined
 ): boolean {
-  return (
-    delivered !== undefined &&
-    db.getUnreadMessages(`dispatch:${dispatchId}`).some((mail) => !delivered.includes(mail.id))
-  )
+  if (delivered === undefined) {
+    return false
+  }
+  const mailbox = `dispatch:${dispatchId}`
+  // A batch its own check claimed gets no pointer: the worker was shown it.
+  const claimed = db.getOutstandingMailboxDelivery(mailbox)?.messageIds ?? []
+  return db
+    .getUnreadMessages(mailbox)
+    .some((mail) => !delivered.includes(mail.id) && !claimed.includes(mail.id))
 }
 
 /** Writes a stop report under `id`; `stored` runs in the same transaction as a local report's mail.
