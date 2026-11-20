@@ -50,19 +50,25 @@ function rememberedManagedAgents(runtime: ManagedCopySettingsSource): ManagedAge
 export function provideManagedAgentDetection(runtime: ManagedCopySettingsSource): void {
   detectionSettings = runtime
   provideInstalledManagedAgents(async () => {
-    if (releasesRead) {
-      return rememberedManagedAgents(runtime)
-    }
-    const dataDirectory = getProfileUserDataPath()
-    const present = await Promise.all(
-      MANAGED_AGENT_CLI_IDS.map(
-        async (agent) =>
-          managedCopyMayRun(agent, runtime) &&
-          (await runtimeReleaseMayBePublished(managedAgentCli(agent).runtime.root(dataDirectory)))
+    try {
+      if (releasesRead) {
+        return rememberedManagedAgents(runtime)
+      }
+      const dataDirectory = getProfileUserDataPath()
+      const present = await Promise.all(
+        MANAGED_AGENT_CLI_IDS.map(
+          async (agent) =>
+            managedCopyMayRun(agent, runtime) &&
+            (await runtimeReleaseMayBePublished(managedAgentCli(agent).runtime.root(dataDirectory)))
+        )
       )
-    )
-    countedOnDisk = MANAGED_AGENT_CLI_IDS.filter((_, index) => present[index])
-    return countedOnDisk
+      countedOnDisk = MANAGED_AGENT_CLI_IDS.filter((_, index) => present[index])
+      return countedOnDisk
+    } catch (error) {
+      // Without settings Orca can't tell which copies may run; detection goes on without them.
+      console.warn('[managed-runtime] Orca-installed agents left out of detection:', error)
+      return []
+    }
   })
 }
 
@@ -70,9 +76,18 @@ export function provideManagedAgentDetection(runtime: ManagedCopySettingsSource)
  *  disk check counted that the read found unusable (damaged, another platform's) is announced. */
 export function noteManagedReleasesRead(): void {
   releasesRead = true
-  const remembered = detectionSettings ? rememberedManagedAgents(detectionSettings) : []
-  if (countedOnDisk.some((agent) => !remembered.includes(agent))) {
-    notifyAgentsRefreshedOnHost()
-  }
+  const counted = countedOnDisk
   countedOnDisk = []
+  if (counted.length === 0 || !detectionSettings) {
+    return
+  }
+  try {
+    const remembered = rememberedManagedAgents(detectionSettings)
+    if (counted.some((agent) => !remembered.includes(agent))) {
+      notifyAgentsRefreshedOnHost()
+    }
+  } catch (error) {
+    // Startup goes on; at worst a list keeps a copy until it is next read.
+    console.warn('[managed-runtime] could not compare Orca-installed agents:', error)
+  }
 }

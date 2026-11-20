@@ -92,3 +92,45 @@ it('announces a copy the disk check counted that the launch read found unusable'
 
   expect(refreshed).toHaveBeenCalled()
 })
+
+it('stays quiet when the launch read remembers what the disk check counted', async () => {
+  await installed('grok')
+  const {
+    provideManagedAgentDetection,
+    noteManagedReleasesRead,
+    readInstalledManagedAgents,
+    rememberManagedAgentRelease
+  } = await detection()
+  const { onAgentsRefreshedOnHost } = await import('../../../../preflight/agents-refreshed-on-host')
+  const refreshed = vi.fn()
+  onAgentsRefreshedOnHost(refreshed)
+  provideManagedAgentDetection(settingsOf({}))
+  await readInstalledManagedAgents()
+  rememberManagedAgentRelease('grok', join(host.dataDirectory, 'agent-runtimes', 'grok', '1.0'))
+
+  noteManagedReleasesRead()
+
+  expect(refreshed).not.toHaveBeenCalled()
+})
+
+it('never fails startup or detection when the settings store is unavailable', async () => {
+  await installed('grok')
+  const { provideManagedAgentDetection, noteManagedReleasesRead, readInstalledManagedAgents } =
+    await detection()
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  let storeReady = true
+  provideManagedAgentDetection({
+    requireStore: () => {
+      if (!storeReady) {
+        throw new Error('store not ready')
+      }
+      return { getSettings: () => ({}) }
+    }
+  })
+  expect(await readInstalledManagedAgents()).toEqual(['grok'])
+
+  storeReady = false
+  // Launch reclaim compares what the disk check counted; a failing store must not fail it.
+  expect(() => noteManagedReleasesRead()).not.toThrow()
+  expect(await readInstalledManagedAgents()).toEqual([])
+})
