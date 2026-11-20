@@ -80,15 +80,19 @@ export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRes
       return false
     }
     const windowId = this.getAvailableAuthoritativeWindowId()
-    // No authoritative window (shutdown/headless): subscribe keeps its empty-snapshot fallback.
-    return (
-      windowId !== null &&
-      getRuntimeDesktopSurface().sendToWindow(windowId, 'terminal:requestTabMount', {
-        worktreeId: record.worktreeId,
-        ...(tabId ? { tabId } : {}),
-        ...(ptyId ? { ptyId } : {})
-      })
-    )
+    // No authoritative window, or a send that throws in teardown: subscribe keeps its empty-snapshot fallback.
+    try {
+      return (
+        windowId !== null &&
+        getRuntimeDesktopSurface().sendToWindow(windowId, 'terminal:requestTabMount', {
+          worktreeId: record.worktreeId,
+          ...(tabId ? { tabId } : {}),
+          ...(ptyId ? { ptyId } : {})
+        })
+      )
+    } catch {
+      return false
+    }
   }
 
   getRendererTerminalSerializerGeneration(ptyId: string): number {
