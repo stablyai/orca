@@ -20,11 +20,16 @@ import {
 import { getWorktreeMirrorDistro } from '../workspaces/execution-host/project-runtime-git-options'
 import type { ProjectRuntimeResolutionStore } from '../workspaces/execution-host/local-project-runtime-resolution'
 import { wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
+import { buildKnownOrcaWorkspaceLayouts } from '../../shared/worktree/visibility/ownership'
 
 const DISK_READ_INTERVAL_MS = 10 * 60_000
+const DISK_READ_DEADLINE_MS = 15_000
 
 type PerfNoticeSignalStore = Omit<ProjectRuntimeResolutionStore, 'getSettings'> & {
-  getSettings: () => Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'> &
+  getSettings: () => Pick<
+    GlobalSettings,
+    'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'
+  > &
     ReturnType<NonNullable<ProjectRuntimeResolutionStore['getSettings']>>
   getRepos: () => Repo[]
 }
@@ -36,8 +41,8 @@ let disk: {
   value: Promise<PerfNoticeDisk | null>
 } | null = null
 
-/** Where local worktrees land, resolved per repo as creation does, so relative and per-repo
- *  folders point at their real volumes. WSL roots are skipped: reading them can wake a distro. */
+/** Where local worktrees live, resolved per repo as creation does, so relative, per-repo and
+ *  earlier folders point at their real volumes. WSL roots are skipped: reading them can wake a distro. */
 function localWorktreeRoots(store: PerfNoticeSignalStore): string[] {
   const settings = store.getSettings()
   const roots = new Set<string>()
@@ -51,9 +56,12 @@ function localWorktreeRoots(store: PerfNoticeSignalStore): string[] {
     if (workspaceRootMirrorsIntoWsl(repo.path, pathSettings)) {
       continue
     }
-    const root = computeWorkspaceRoot(repo.path, pathSettings)
-    if (!wslDistroForPath(root)) {
-      roots.add(root)
+    // Earlier workspace folders still hold workspaces until they are cleaned up.
+    const known = buildKnownOrcaWorkspaceLayouts(settings, repo).map((layout) => layout.path)
+    for (const root of [computeWorkspaceRoot(repo.path, pathSettings), ...known]) {
+      if (!wslDistroForPath(root)) {
+        roots.add(root)
+      }
     }
   }
   return [...roots]
@@ -101,7 +109,17 @@ export function readPerfNoticeSignals(store: PerfNoticeSignalStore): Promise<Per
   if (current.key !== key) {
     return Promise.resolve({ disk: null })
   }
-  return current.value.then((value) => ({ disk: value }))
+  return withDeadline(current.value).then((value) => ({ disk: value }))
+}
+
+/** A hung mount answers "no reading" so the notice loop moves on; the read itself stays pending,
+ *  so no second one starts behind it. */
+function withDeadline(read: Promise<PerfNoticeDisk | null>): Promise<PerfNoticeDisk | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), DISK_READ_DEADLINE_MS)
+  })
+  return Promise.race([read, deadline]).finally(() => clearTimeout(timer))
 }
 
 /** Asked only when the hidden-tabs notice could show, so idle reads never touch browser state. */
