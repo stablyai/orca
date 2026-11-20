@@ -89,9 +89,14 @@ afterEach(() => {
 })
 
 describe('Windows process creation off the calling loop', () => {
-  it.each(['abort', 'deadline'] as const)(
-    'settles %s while tree cleanup is still queued, retaining the child lifetime until close',
-    async (reason) => {
+  it.each([
+    ['abort', false],
+    ['deadline', false],
+    ['abort', true],
+    ['deadline', true]
+  ] as const)(
+    'settles %s with prior overflow=%s while cleanup is queued, retaining lifetime until close',
+    async (reason, overflow) => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       try {
         const child = new WorkerThreadChildProcess(1, () => true)
@@ -103,9 +108,13 @@ describe('Windows process creation off the calling loop', () => {
           signal: controller.signal,
           timeout: 100,
           createTimeoutError: () => timeoutError,
+          maxBuffer: 4,
           onChildTerminated: terminated
         }).catch((error: unknown) => error)
         child.receive({ type: 'spawn', id: 1, pid: 4242 })
+        if (overflow) {
+          child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('overflow') })
+        }
 
         if (reason === 'abort') {
           controller.abort()
@@ -275,16 +284,17 @@ describe('Windows process creation off the calling loop', () => {
     worker.spawn.mockReturnValue(child)
     const terminated = vi.fn()
     const pending = execFileCapture('git', ['log'], { maxBuffer: 4, onChildTerminated: terminated })
-    const rejected = expect(pending).rejects.toMatchObject({
-      code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
-    })
+    const outcome = pending.catch((error: unknown) => error)
     await vi.waitFor(() => expect(worker.spawn).toHaveBeenCalled())
     child.receive({ type: 'spawn', id: 1, pid: 4242 })
     child.receive({ type: 'stdout', id: 1, chunk: new TextEncoder().encode('more than four') })
     await vi.waitFor(() => expect(treeKills.args).toEqual([['/pid', '4242', '/t', '/f']]))
     expect(treeKills.via).toEqual(['worker'])
+    expect(await Promise.race([outcome, Promise.resolve('cleanup pending')])).toBe(
+      'cleanup pending'
+    )
     treeKills.killers[0]!.emit('close', 0)
-    await rejected
+    await expect(outcome).resolves.toMatchObject({ code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' })
     child.receive({ type: 'close', id: 1, code: 1, signal: null })
     expect(terminated).toHaveBeenCalledOnce()
   })

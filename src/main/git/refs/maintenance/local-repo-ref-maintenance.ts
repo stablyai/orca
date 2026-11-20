@@ -89,14 +89,20 @@ export function disposeLocalRepoRefMaintenance(): Promise<void> {
 /** Wait out packed-refs rewrites before ref work; killing the pack can strand persistent per-ref locks. */
 export async function withRepoRefMaintenancePaused<T>(
   reason: string,
-  run: () => Promise<T>
+  run: () => Promise<T>,
+  releaseAfter?: () => Promise<void> | null
 ): Promise<T> {
   // Pause even before arming: run may schedule maintenance. Recreated shutdown instances fail closed.
   const release = await getLocalRepoRefMaintenance().pause(reason)
   try {
     return await run()
   } finally {
-    release()
+    const termination = releaseAfter?.()
+    if (termination) {
+      void termination.then(release, release)
+    } else {
+      release()
+    }
   }
 }
 
