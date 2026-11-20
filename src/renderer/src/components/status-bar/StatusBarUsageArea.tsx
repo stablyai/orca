@@ -25,7 +25,8 @@ import {
 import {
   USAGE_ROW_LEVELS,
   chooseUsageRowLayout,
-  type UsageChipFacts
+  type UsageChipFacts,
+  type UsageRowLayout
 } from './composition/status-bar-usage-collapse'
 import { useUsageRowWidths } from './composition/use-usage-row-widths'
 import { UsageUnitLabel, usageChipShowsPercentage } from './usage/usage-unit-label'
@@ -77,7 +78,7 @@ export function StatusBarUsageArea({
       usageChipShowsPercentage(p, levelMode(2), t)
     ]
   }))
-  const usageLayout = usageWidths
+  const usageLayout: UsageRowLayout = usageWidths
     ? chooseUsageRowLayout(usageWidths, chipFacts)
     : { level: 0, collapsed: [] }
   const usageMode = levelMode(usageLayout.level)
