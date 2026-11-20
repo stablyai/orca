@@ -3,6 +3,7 @@ import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import {
   isBlankBrowserPopupUrl,
+  isUndecidedWindowOpenerRequest,
   normalizeBrowserPopupUrl,
   type NewBrowserTabPopupRequest
 } from '../../guest-lifecycle/popups/browser-popup-new-tab-intent'
@@ -22,6 +23,7 @@ import { openPopupWithOriginBar } from '../../guest-lifecycle/popups/presentatio
 import type { PopupChildWindowOptions } from '../../guest-lifecycle/popups/presentation/browser-popup-window-contract'
 import {
   allowNativeBrowserPopup,
+  discardBrowserPopupContents,
   isNativeBrowserPopupRequest
 } from '../../guest-lifecycle/popups/presentation/browser-popup-native-window'
 import { allowPageUnload } from '../../guest-lifecycle/navigation/browser-guest-unload-policy'
@@ -39,6 +41,8 @@ export type BrowserRouteGuestPopupDependencies = {
     request: NewBrowserTabPopupRequest,
     observed: ObservedBrowserGuestGesture | null
   ) => boolean
+  /** An agent download claim is waiting. Must not take the claim. */
+  claimsAgentDownload?: (source: WebContents) => boolean
   /** The desktop user's own input in a popup takes its opener's page back from the agent. */
   releaseAgentLead?: (openerWebContentsId: number) => void
   openPopupWindow?: (
@@ -200,22 +204,37 @@ export function createBrowserRouteGuestPopupController(input: {
       const observed = gesture.consume()
       const normalized = normalizeBrowserPopupUrl(details?.url)
       const permitted = !disposed && normalized !== null && navigationAllowed(normalized)
+      const request: NewBrowserTabPopupRequest = {
+        url: details?.url ?? normalized ?? '',
+        frameName: details?.frameName ?? '',
+        disposition: details?.disposition ?? '',
+        postBody: details?.postBody,
+        features: details?.features
+      }
+      // Same details as a _blank link. Creating the child is what reveals window.opener.
+      // Without a gesture, deny as before so window.open returns null.
+      const openerUndecided = permitted && isUndecidedWindowOpenerRequest(request)
+      let claimedDownload = false
+      if (openerUndecided && observed !== null) {
+        try {
+          claimedDownload = input.dependencies.claimsAgentDownload?.(source) === true
+        } catch {
+          // A destroyed guest has no claim left to honor.
+          claimedDownload = false
+        }
+      }
+      const inspectOpener = openerUndecided && observed !== null && !claimedDownload
       if (
         permitted &&
-        input.dependencies.openNewTabPopup?.(
-          source,
-          {
-            url: details?.url ?? normalized,
-            frameName: details?.frameName ?? '',
-            disposition: details?.disposition ?? '',
-            postBody: details?.postBody
-          },
-          observed
-        )
+        !inspectOpener &&
+        input.dependencies.openNewTabPopup?.(source, request, observed)
       ) {
         return { action: 'deny' }
       }
-      if (!permitted || popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS || !observed) {
+      if (
+        !permitted ||
+        (!inspectOpener && (popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS || !observed))
+      ) {
         if (!disposed) {
           reportBlockedPopup(details?.url)
         }
@@ -235,7 +254,7 @@ export function createBrowserRouteGuestPopupController(input: {
           opener: source,
           options,
           background: details?.disposition === 'background-tab',
-          showWhenAppActive: observed.byAgent,
+          showWhenAppActive: observed?.byAgent === true,
           canPresent: () => !disposed && navigationAllowed(ORCA_BROWSER_BLANK_URL),
           onCreated: (nativeOptions) => openPopup(nativeOptions, details?.url ?? normalized)
         })
@@ -243,17 +262,39 @@ export function createBrowserRouteGuestPopupController(input: {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: options,
-        createWindow: (options: PopupChildWindowOptions) =>
-          openPopup(
+        createWindow: (childOptions: PopupChildWindowOptions) => {
+          const child = childOptions.webContents
+          if (
+            openerUndecided &&
+            child &&
+            !child.opener &&
+            input.dependencies.openNewTabPopup?.(source, request, observed)
+          ) {
+            discardBrowserPopupContents(child)
+            return child
+          }
+          if (openerUndecided && popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS) {
+            if (!disposed) {
+              reportBlockedPopup(details?.url)
+            }
+            if (child) {
+              discardBrowserPopupContents(child)
+              return child
+            }
+          }
+          return openPopup(
             {
-              ...options,
-              showWhenAppActive: observed.byAgent,
+              ...childOptions,
+              showWhenAppActive: observed?.byAgent === true,
               // Reopening a POST by URL would discard its body.
               loadInitialUrl:
-                !options.webContents && !details?.postBody && !isBlankBrowserPopupUrl(normalized)
+                !childOptions.webContents &&
+                !details?.postBody &&
+                !isBlankBrowserPopupUrl(normalized)
             },
             details?.url ?? normalized
           )
+        }
       }
     }
   }

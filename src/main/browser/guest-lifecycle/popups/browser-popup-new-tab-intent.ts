@@ -3,6 +3,7 @@ export type NewBrowserTabPopupRequest = {
   frameName: string
   disposition: string
   postBody?: Electron.PostBody | null
+  features?: string
 }
 
 // Keep named and OAuth popups attached to their opener; tab conversion returns null to the page.
@@ -11,6 +12,16 @@ export function isNewBrowserTabPopupIntent(details: NewBrowserTabPopupRequest): 
     isBrowserTabPopupRequest(details) &&
     !isBlankBrowserPopupUrl(details.url) &&
     !isOAuthAuthorizationUrl(details.url)
+  )
+}
+
+// <a target="_blank"> and window.open(url, "_blank") arrive with the same details.
+// Chromium sets webContents.opener only after the child exists.
+export function isUndecidedWindowOpenerRequest(details: NewBrowserTabPopupRequest): boolean {
+  return (
+    details.disposition === 'foreground-tab' &&
+    isNewBrowserTabPopupIntent(details) &&
+    !windowFeaturesDropOpener(details.features ?? '')
   )
 }
 
@@ -48,6 +59,33 @@ export function normalizeBrowserPopupUrl(rawUrl: unknown): string | null {
   } catch {
     return null
   }
+}
+
+function windowFeaturesDropOpener(features: string): boolean {
+  for (const part of features.split(',')) {
+    const [rawKey, rawValue] = part.split('=', 2)
+    const key = rawKey?.trim().toLowerCase()
+    if ((key === 'noopener' || key === 'noreferrer') && featureValueEnabled(rawValue)) {
+      return true
+    }
+  }
+  return false
+}
+
+// Chromium's window feature booleans: a bare token is true, and 0/no/false is false.
+function featureValueEnabled(rawValue: string | undefined): boolean {
+  if (rawValue === undefined) {
+    return true
+  }
+  const value = rawValue.trim().toLowerCase()
+  if (value === '' || value === 'yes' || value === 'true') {
+    return true
+  }
+  if (value === 'no' || value === 'false') {
+    return false
+  }
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed !== 0
 }
 
 function isOAuthAuthorizationUrl(rawUrl: string): boolean {

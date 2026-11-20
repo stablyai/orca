@@ -9,6 +9,7 @@ import {
 } from '../../input/browser-guest-input-gesture'
 import {
   isNewBrowserTabPopupIntent,
+  isUndecidedWindowOpenerRequest,
   isBrowserTabPopupRequest,
   normalizeBrowserPopupUrl,
   type NewBrowserTabPopupRequest
@@ -47,7 +48,12 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     guest.setWindowOpenHandler(({ url, frameName, disposition, postBody, features, referrer }) => {
       // Spend activation even on popups so it cannot fund a later tab.
       const observed = gesture.consume()
-      if (this.openNewTabPopup(guest, { url, frameName, disposition, postBody }, observed)) {
+      const request = { url, frameName, disposition, postBody, features }
+      const openerUndecided = isUndecidedWindowOpenerRequest(request)
+      // window.opener exists only after the child is created. An ungestured open or a
+      // claimed download stays denied, so the tab budget and download claim still apply.
+      const inspectOpener = openerUndecided && observed !== null && !this.claimsAgentDownload(guest)
+      if (!inspectOpener && this.openNewTabPopup(guest, request, observed)) {
         return { action: 'deny' }
       }
       const clicked = observed !== null
@@ -60,7 +66,10 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
 
       // Native popups must not target local files.
       const canOpenAsChild = normalizeBrowserPopupUrl(url) !== null
-      if (browserTabId && canOpenAsChild) {
+      if (
+        browserTabId &&
+        (canOpenAsChild || (openerUndecided && isLocalFileLinkFromLocalPage(guest, url)))
+      ) {
         // A tab-shaped GET needs no OAuth child window when it has no opener.
         const tabUrl =
           externalUrl && isBrowserTabPopupRequest({ frameName, disposition, postBody })
@@ -93,14 +102,26 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           action: 'allow',
           overrideBrowserWindowOptions: SAFE_POPUP_WINDOW_OPTIONS,
           // Host child windows with an origin bar so users can verify the destination.
-          createWindow: (options: PopupChildWindowOptions) =>
-            openAsTabWithoutOpener(options) ??
-            this.createPopupChildWindowWithOriginBar(guest, url, {
-              ...options,
-              showWhenAppActive,
-              // Bind link-created contents to the opener's session.
-              webPreferences: { ...options.webPreferences, session: guest.session }
-            })
+          createWindow: (options: PopupChildWindowOptions) => {
+            const child = options.nativeWindow?.webContents ?? options.webContents
+            if (
+              openerUndecided &&
+              child &&
+              !child.opener &&
+              this.openNewTabPopup(guest, request, observed)
+            ) {
+              return discardProvisionalPopup(options, url)
+            }
+            return (
+              openAsTabWithoutOpener(options) ??
+              this.createPopupChildWindowWithOriginBar(guest, url, {
+                ...options,
+                showWhenAppActive,
+                // Bind link-created contents to the opener's session.
+                webPreferences: { ...options.webPreferences, session: guest.session }
+              })
+            )
+          }
         }
       } else if (externalUrl && !postBody && observed?.byAgent === false) {
         // The OS browser takes the foreground, so only the desktop user's own click opens it. Redact Kagi's bearer token first.
@@ -127,6 +148,12 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         // guest may already be destroyed
       }
     }
+  }
+
+  /** An agent `download` claim is waiting on this guest. Looking does not take the claim. */
+  claimsAgentDownload(guest: Electron.WebContents): boolean {
+    const owner = this.resolvePopupOwnerContext(guest.id)
+    return owner !== null && this.isAwaitingDownloadFrom(guest.id, owner.rootGuestWebContentsId)
   }
 
   /** Answers a new-tab request as an Orca tab; false leaves opener-dependent requests to a child window. */
@@ -202,12 +229,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       origin: safeOrigin(url),
       action: opened ? 'opened-in-orca' : 'blocked'
     })
-    if (options.webContents && !options.nativeWindow) {
-      // Discard directly to avoid flashing a window that would immediately close.
-      discardBrowserPopupContents(options.webContents)
-      return options.webContents
-    }
-    return openPopupWithOriginBar(options, url, () => false).contentWebContents
+    return discardProvisionalPopup(options, url)
   }
 
   reportRouteGuestPopupBlocked(input: { openerWebContentsId: number; url: string }): void {
@@ -257,6 +279,18 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     })
     return popup.contentWebContents
   }
+}
+
+function discardProvisionalPopup(
+  options: PopupChildWindowOptions,
+  url: string
+): Electron.WebContents {
+  if (options.webContents && !options.nativeWindow) {
+    // Discard directly to avoid flashing a window that would immediately close.
+    discardBrowserPopupContents(options.webContents)
+    return options.webContents
+  }
+  return openPopupWithOriginBar(options, url, () => false).contentWebContents
 }
 
 // Web pages must not reach the filesystem; only a local page may link to local files.

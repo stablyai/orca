@@ -48,6 +48,7 @@ import {
   registerBrowserRouteGuestPopup,
   releaseBrowserRouteGuestPopup
 } from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
+import { MAX_PAGE_INITIATED_TABS_PER_WINDOW } from '../../popups/browser-page-initiated-tab-budget'
 import {
   guestNavigationMethods,
   rendererWebContentsId,
@@ -77,6 +78,30 @@ describe('browserManager', () => {
   // #36804: headless serve pages have no renderer to own Orca's tab model.
   // orcad's Electron browser registers pages without a workspace, so there is no tab list to open into.
 
+  function provisionalChild(opener: object | null) {
+    return {
+      opener,
+      isDestroyed: () => false,
+      on: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      close: vi.fn()
+    }
+  }
+
+  function finishOpenedWindow(response: unknown, opener: object | null): void {
+    if (
+      typeof response !== 'object' ||
+      response === null ||
+      !('action' in response) ||
+      response.action !== 'allow' ||
+      !('createWindow' in response) ||
+      typeof response.createWindow !== 'function'
+    ) {
+      return
+    }
+    response.createWindow({ webContents: provisionalChild(opener) })
+  }
+
   function attachGuest(): {
     guest: { id: number }
     rendererSendMock: ReturnType<typeof vi.fn>
@@ -95,6 +120,7 @@ describe('browserManager', () => {
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
       setIgnoreMenuShortcuts: vi.fn(),
       on: guestOnMock,
+      once: vi.fn(),
       prependListener: vi.fn(),
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
@@ -122,7 +148,11 @@ describe('browserManager', () => {
       guest,
       rendererSendMock,
       openLink: (url) => {
-        handler({ url, frameName: '', features: '', disposition: 'foreground-tab' })
+        // A target=_blank link has no opener. Electron only reveals that after allow.
+        finishOpenedWindow(
+          handler({ url, frameName: '', features: '', disposition: 'foreground-tab' }),
+          null
+        )
       },
       pressMouse: () => mouseEventHandler({}, { type: 'mouseUp' })
     }
@@ -210,12 +240,15 @@ describe('browserManager', () => {
     const popupHandler = guestSetWindowOpenHandlerMock.mock.calls[1][0]
 
     vi.advanceTimersByTime(60_000)
-    popupHandler({
-      url: 'https://login.example.com/from-popup',
-      frameName: '',
-      features: '',
-      disposition: 'foreground-tab'
-    })
+    finishOpenedWindow(
+      popupHandler({
+        url: 'https://login.example.com/from-popup',
+        frameName: '',
+        features: '',
+        disposition: 'foreground-tab'
+      }),
+      null
+    )
 
     expect(openedTabs(rendererSendMock)).toEqual([
       [
@@ -322,5 +355,206 @@ describe('browserManager', () => {
     expect(browserMocks.shellOpenExternalMock.mock.calls).toEqual([
       ['https://docs.example.com/user']
     ])
+  })
+
+  function openDetails(
+    features: string,
+    disposition: 'foreground-tab' | 'background-tab' | 'new-window'
+  ) {
+    return {
+      url: 'https://docs.example.com/opened',
+      frameName: '',
+      features,
+      disposition,
+      referrer: { url: 'https://example.com/', policy: 'strict-origin-when-cross-origin' as const }
+    }
+  }
+
+  it('keeps window.opener for window.open(url, "_blank") with no features', () => {
+    browserMocks.openPopupWithOriginBarMock.mockImplementation(
+      (options: { webContents: { close: () => void } }) => ({
+        contentWebContents: options.webContents,
+        close: vi.fn(),
+        onClosed: vi.fn()
+      })
+    )
+    const { guest, rendererSendMock, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    pressMouse()
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+    const child = provisionalChild({ frameTreeNodeId: 7 })
+
+    const response = handler(openDetails('', 'foreground-tab'))
+    const adopted = response.createWindow?.({ webContents: child })
+
+    expect(response.action).toBe('allow')
+    expect(adopted).toBe(child)
+    expect(child.close).not.toHaveBeenCalled()
+    expect(openedTabs(rendererSendMock)).toEqual([])
+  })
+
+  it('denies an ungestured window.open and stops it once the page-initiated tab budget is spent', () => {
+    const { guest, rendererSendMock } = attachGuest()
+    registerAsTab(guest)
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+    const events: unknown[] = []
+    browserManager.observePageEvents('browser-1', (event) => events.push(event))
+
+    for (let opened = 0; opened < MAX_PAGE_INITIATED_TABS_PER_WINDOW; opened += 1) {
+      expect(handler(openDetails('', 'foreground-tab'))).toEqual({ action: 'deny' })
+    }
+    expect(openedTabs(rendererSendMock)).toHaveLength(MAX_PAGE_INITIATED_TABS_PER_WINDOW)
+
+    expect(handler(openDetails('', 'foreground-tab'))).toEqual({ action: 'deny' })
+
+    expect(openedTabs(rendererSendMock)).toHaveLength(MAX_PAGE_INITIATED_TABS_PER_WINDOW)
+    expect(events).toContainEqual({
+      kind: 'popup',
+      action: 'blocked',
+      origin: 'https://docs.example.com'
+    })
+    expect(browserMocks.openPopupWithOriginBarMock).not.toHaveBeenCalled()
+  })
+
+  it('downloads a claimed agent file opened with window.open instead of creating a popup', () => {
+    const { guest, rendererSendMock, pressMouse } = attachGuest()
+    const downloadURL = vi.fn()
+    Object.assign(guest, { downloadURL })
+    registerAsTab(guest)
+    pressMouse()
+    const claim = browserManager.claimNextDownload(guest.id, '/tmp/claimed.bin')
+    try {
+      const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+      const response = handler(openDetails('', 'foreground-tab'))
+
+      expect(response).toEqual({ action: 'deny' })
+      expect(downloadURL).toHaveBeenCalledTimes(1)
+      expect(downloadURL).toHaveBeenCalledWith('https://docs.example.com/opened')
+      expect(openedTabs(rendererSendMock)).toEqual([])
+      expect(browserMocks.openPopupWithOriginBarMock).not.toHaveBeenCalled()
+    } finally {
+      claim.release()
+    }
+  })
+
+  it('opens window.open(url, "_blank", "noopener") as a tab without an opener', () => {
+    const { guest, rendererSendMock, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    pressMouse()
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+
+    const response = handler(openDetails('noopener', 'foreground-tab'))
+
+    expect(response).toEqual({ action: 'deny' })
+    expect(openedTabs(rendererSendMock)).toEqual([
+      [
+        'browser:open-link-in-orca-tab',
+        { browserPageId: 'browser-1', url: 'https://docs.example.com/opened' }
+      ]
+    ])
+  })
+
+  it('opens window.open(url, "_blank", "noreferrer") as a tab without an opener', () => {
+    const { guest, rendererSendMock, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    pressMouse()
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+
+    const response = handler(openDetails('noreferrer', 'foreground-tab'))
+
+    expect(response).toEqual({ action: 'deny' })
+    expect(openedTabs(rendererSendMock)).toEqual([
+      [
+        'browser:open-link-in-orca-tab',
+        { browserPageId: 'browser-1', url: 'https://docs.example.com/opened' }
+      ]
+    ])
+  })
+
+  it('opens a target="_blank" link as a tab because its child has no opener', () => {
+    const { guest, rendererSendMock, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    pressMouse()
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+    const child = provisionalChild(null)
+
+    const response = handler(openDetails('', 'foreground-tab'))
+    if (response.action === 'allow') {
+      response.createWindow?.({ webContents: child })
+    }
+
+    expect(openedTabs(rendererSendMock)).toEqual([
+      [
+        'browser:open-link-in-orca-tab',
+        { browserPageId: 'browser-1', url: 'https://docs.example.com/opened' }
+      ]
+    ])
+    expect(child.close).toHaveBeenCalled()
+    expect(browserMocks.openPopupWithOriginBarMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps window.opener for a target="_blank" link that sets rel="opener"', () => {
+    browserMocks.openPopupWithOriginBarMock.mockImplementation(
+      (options: { webContents: { close: () => void } }) => ({
+        contentWebContents: options.webContents,
+        close: vi.fn(),
+        onClosed: vi.fn()
+      })
+    )
+    const { guest, rendererSendMock, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    pressMouse()
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+    const child = provisionalChild({ frameTreeNodeId: 9 })
+
+    const response = handler(openDetails('', 'foreground-tab'))
+    const adopted = response.createWindow?.({ webContents: child })
+
+    expect(response.action).toBe('allow')
+    expect(adopted).toBe(child)
+    expect(openedTabs(rendererSendMock)).toEqual([])
+  })
+
+  it('opens a middle-clicked link as a background tab', () => {
+    const { guest, rendererSendMock, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    pressMouse()
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+
+    const response = handler(openDetails('', 'background-tab'))
+
+    expect(response).toEqual({ action: 'deny' })
+    expect(openedTabs(rendererSendMock)).toEqual([
+      [
+        'browser:open-link-in-orca-tab',
+        {
+          browserPageId: 'browser-1',
+          url: 'https://docs.example.com/opened',
+          activate: false
+        }
+      ]
+    ])
+  })
+
+  it('keeps a features popup on the opener-preserving child window', () => {
+    browserMocks.openPopupWithOriginBarMock.mockImplementation(
+      (options: { webContents: { close: () => void } }) => ({
+        contentWebContents: options.webContents,
+        close: vi.fn(),
+        onClosed: vi.fn()
+      })
+    )
+    const { guest, rendererSendMock, pressMouse } = attachGuest()
+    registerAsTab(guest)
+    pressMouse()
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0]
+    const child = provisionalChild({ frameTreeNodeId: 11 })
+
+    const response = handler(openDetails('popup,width=420,height=600', 'new-window'))
+    const adopted = response.createWindow?.({ webContents: child })
+
+    expect(response.action).toBe('allow')
+    expect(adopted).toBe(child)
+    expect(openedTabs(rendererSendMock)).toEqual([])
   })
 })

@@ -11,6 +11,7 @@ import {
   resetBrowserRouteGuestPopupOwnership,
   resolveBrowserRouteGuestPopupOpener
 } from './browser-route-guest-popup-ownership'
+import { MAX_BROWSER_ROUTE_GUEST_POPUPS } from './browser-route-guest-popups'
 import { BrowserRouteWebContentsRegistry } from './browser-route-webcontents-registry'
 const partition = `persist:orca-browser-v1-${'a'.repeat(64)}`
 const page = {
@@ -96,6 +97,144 @@ describe('route guest OAuth popups', () => {
     contents.emitInput('mouseDown')
     expect(contents.openWindow('about:blank')).toEqual({ action: 'deny' })
   })
+
+  it('keeps a route window.open child and tabs a target=_blank link that has no opener', () => {
+    const tabs: string[] = []
+    const { guest, popups } = attachRegisteredGuest({
+      openNewTabPopup: (_source, request) => {
+        tabs.push(request.url)
+        return true
+      }
+    })
+    guest.emitInput('mouseDown')
+    const scriptChild = createPopupContents({ opener: { frameTreeNodeId: 4 } })
+    const scriptOpen = guest.openWindowDetails({
+      url: 'https://docs.example.com/script-blank',
+      frameName: '',
+      disposition: 'foreground-tab',
+      features: ''
+    })
+    const adopted = scriptOpen.createWindow?.(popupOptions(scriptChild))
+
+    expect(scriptOpen.action).toBe('allow')
+    expect(adopted).toBe(scriptChild)
+    expect(scriptChild.isDestroyed()).toBe(false)
+    expect(tabs).toEqual([])
+    expect(popups()[0]?.loaded).toBe(true)
+
+    guest.emitInput('mouseDown')
+    const linkChild = createPopupContents({ opener: null })
+    const linkOpen = guest.openWindowDetails({
+      url: 'https://docs.example.com/a-blank',
+      frameName: '',
+      disposition: 'foreground-tab',
+      features: ''
+    })
+    linkOpen.createWindow?.(popupOptions(linkChild))
+
+    expect(tabs).toEqual(['https://docs.example.com/a-blank'])
+    expect(linkChild.isDestroyed()).toBe(true)
+    expect(popups()).toHaveLength(1)
+  })
+
+  it('denies an ungestured window.open instead of allowing a child and closing it', () => {
+    const tabs: string[] = []
+    const { guest, popups, blockedPopups } = attachRegisteredGuest({
+      openNewTabPopup: (_source, request, observed) => {
+        tabs.push(`${observed === null ? 'ungestured' : 'gestured'}:${request.url}`)
+        return true
+      }
+    })
+
+    const response = guest.openWindowDetails({
+      url: 'https://docs.example.com/script-blank',
+      frameName: '',
+      disposition: 'foreground-tab',
+      features: ''
+    })
+
+    expect(response).toEqual({ action: 'deny' })
+    expect(tabs).toEqual(['ungestured:https://docs.example.com/script-blank'])
+    expect(popups()).toHaveLength(0)
+    expect(blockedPopups()).toEqual([])
+  })
+
+  it('denies an ungestured window.open when no new tab is opened', () => {
+    const { guest, popups, blockedPopups } = attachRegisteredGuest()
+
+    const response = guest.openWindowDetails({
+      url: 'https://docs.example.com/script-blank',
+      frameName: '',
+      disposition: 'foreground-tab',
+      features: ''
+    })
+
+    expect(response).toEqual({ action: 'deny' })
+    expect(popups()).toHaveLength(0)
+    expect(blockedPopups()).toEqual([
+      { openerWebContentsId: page.webContentsId, url: 'https://docs.example.com/script-blank' }
+    ])
+  })
+
+  it('opens a gestured target=_blank link as a tab when the live popup cap is full', () => {
+    const tabs: string[] = []
+    const { guest, popups } = attachRegisteredGuest({
+      openNewTabPopup: (_source, request) => {
+        tabs.push(request.url)
+        return true
+      }
+    })
+    for (let index = 0; index < MAX_BROWSER_ROUTE_GUEST_POPUPS; index += 1) {
+      guest.emitInput('mouseDown')
+      const child = createPopupContents({ opener: { frameTreeNodeId: index + 1 } })
+      const response = guest.openWindowDetails({
+        url: `https://docs.example.com/popup-${index}`,
+        frameName: '',
+        disposition: 'foreground-tab',
+        features: ''
+      })
+      expect(response.action).toBe('allow')
+      response.createWindow?.(popupOptions(child))
+    }
+
+    guest.emitInput('mouseDown')
+    const linkChild = createPopupContents({ opener: null })
+    const linkOpen = guest.openWindowDetails({
+      url: 'https://docs.example.com/a-blank',
+      frameName: '',
+      disposition: 'foreground-tab',
+      features: ''
+    })
+    linkOpen.createWindow?.(popupOptions(linkChild))
+
+    expect(linkOpen.action).toBe('allow')
+    expect(tabs).toEqual(['https://docs.example.com/a-blank'])
+    expect(linkChild.isDestroyed()).toBe(true)
+    expect(popups()).toHaveLength(MAX_BROWSER_ROUTE_GUEST_POPUPS)
+  })
+
+  it('denies a gestured window.open when an agent download claim owns it', () => {
+    const downloads: string[] = []
+    const { guest, popups } = attachRegisteredGuest({
+      claimsAgentDownload: () => true,
+      openNewTabPopup: (_source, request) => {
+        downloads.push(request.url)
+        return true
+      }
+    })
+    guest.emitInput('mouseDown')
+
+    const response = guest.openWindowDetails({
+      url: 'https://docs.example.com/file.bin',
+      frameName: '',
+      disposition: 'foreground-tab',
+      features: ''
+    })
+
+    expect(response).toEqual({ action: 'deny' })
+    expect(downloads).toEqual(['https://docs.example.com/file.bin'])
+    expect(popups()).toHaveLength(0)
+  })
 })
 
 function popupOptions(
@@ -106,7 +245,14 @@ function popupOptions(
 
 type OpenedPopup = { order: string[]; loaded: boolean; closed: boolean }
 
-function attachGuest() {
+function attachGuest(options?: {
+  openNewTabPopup?: (
+    source: WebContents,
+    request: { url: string; frameName: string; disposition: string },
+    observed: { byAgent: boolean } | null
+  ) => boolean
+  claimsAgentDownload?: (source: WebContents) => boolean
+}) {
   popupMocks.openPopupWithOriginBar.mockReset()
   const opened: OpenedPopup[] = []
   popupMocks.openPopupWithOriginBar.mockImplementation(
@@ -152,6 +298,8 @@ function attachGuest() {
     reportBlockedPopup: (input) => {
       blocked.push(input)
     },
+    openNewTabPopup: options?.openNewTabPopup,
+    claimsAgentDownload: options?.claimsAgentDownload,
     getPartitionForSession: (session) =>
       session === routeSession
         ? partition
@@ -169,8 +317,8 @@ function attachGuest() {
   return { registry, guest, popups: () => opened, blockedPopups: () => blocked }
 }
 
-function attachRegisteredGuest() {
-  const harness = attachGuest()
+function attachRegisteredGuest(options?: Parameters<typeof attachGuest>[0]) {
+  const harness = attachGuest(options)
   expect(harness.registry.registerGuest(page)).toBe(true)
   expect(harness.registry.grantNavigation(page)).toBe(true)
   return harness
@@ -223,6 +371,12 @@ function createRouteGuest(session: Session) {
     },
     openWindow: (url: string, postBody?: Electron.PostBody): Electron.WindowOpenHandlerResponse =>
       windowOpenHandler?.({ url, postBody }) ?? { action: 'deny' },
+    openWindowDetails: (details: {
+      url: string
+      frameName?: string
+      disposition?: string
+      features?: string
+    }): Electron.WindowOpenHandlerResponse => windowOpenHandler?.(details) ?? { action: 'deny' },
     destroy: () => {
       destroyed = true
       for (const listener of listeners.get('destroyed') ?? []) {
@@ -234,8 +388,15 @@ function createRouteGuest(session: Session) {
 
 let nextPopupWebContentsId = 900
 
-function createPopupContents(options: { partition?: string; webRtcPolicyThrows?: boolean } = {}): {
+function createPopupContents(
+  options: {
+    partition?: string
+    webRtcPolicyThrows?: boolean
+    opener?: object | null
+  } = {}
+): {
   id: number
+  opener: object | null
   order: string[]
   session: Session
   setWebRTCIPHandlingPolicy: ReturnType<typeof vi.fn>
@@ -264,6 +425,7 @@ function createPopupContents(options: { partition?: string; webRtcPolicyThrows?:
   }
   return {
     id: ++nextPopupWebContentsId,
+    opener: options.opener ?? null,
     order,
     session: { partition: options.partition ?? partition } as unknown as Session,
     setWebRTCIPHandlingPolicy: vi.fn(() => {
