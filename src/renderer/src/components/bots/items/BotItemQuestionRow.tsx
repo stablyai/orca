@@ -26,12 +26,14 @@ import {
 } from './BotItemAskLook'
 import { BotItemClampedText } from './BotItemClampedText'
 import { BOT_ITEM_COMMENT_ATTRIBUTE } from './BotItemCommentCard'
+import { botItemCommentFiles } from '../../../../../shared/bots/bot-item-comment-files'
 import { BotItemQuestionReply } from './BotItemQuestionReply'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 
+/** The question's words; its files show on the card above it. */
 function textOf(event: BotItemEvent): string {
-  return typeof event.data.text === 'string' ? event.data.text : ''
+  return botItemCommentFiles(typeof event.data.text === 'string' ? event.data.text : '').words
 }
 
 /** The agent's own words around its decisions, shown as its comment; null for a prose question. */

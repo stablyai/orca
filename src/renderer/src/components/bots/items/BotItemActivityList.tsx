@@ -18,9 +18,11 @@ import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   BOT_ITEM_STATUSES,
+  botItemCommentImages,
   type BotItem,
   type BotItemEvent
 } from '../../../../../shared/bots/bot-items'
+import { botItemCommentFiles } from '../../../../../shared/bots/bot-item-comment-files'
 import {
   botItemActivity,
   type BotItemActivityEntry
@@ -298,15 +300,18 @@ export function BotItemActivityList({
           if (entry.kind === 'comment' && entry.question !== null) {
             const context = botItemQuestionContext(entry.event)
             const carded = entry.question === 'open' && askShown
+            const attached =
+              botItemCommentImages(entry.event.data).length > 0 ||
+              botItemCommentFiles(String(entry.event.data.text ?? '')).files.length > 0
             return (
               <Fragment key={entry.key}>
-                {context ? (
+                {context || attached ? (
                   <BotItemCommentCard
                     bot={bot}
                     item={item}
                     entry={entry}
                     onJump={jump}
-                    textOverride={context}
+                    textOverride={context ?? ''}
                     // A jump to the question lands on its card when Activity draws one.
                     jumpTarget={carded}
                   />

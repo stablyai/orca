@@ -27,6 +27,10 @@ import { openBotSession } from '../bot-session-open'
 import { useBotTranscriptFollow } from '../use-bot-transcript-follow'
 import { useBotGroupFileContexts } from '../BotGroupTranscriptOwner'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
+import {
+  isNativeChatAttachmentPeekable,
+  NativeChatAttachmentPeek
+} from '../../native-chat/media/text/NativeChatAttachmentPeek'
 import { NativeChatFileLinkExistenceContext } from '../../native-chat/links/actions/native-chat-file-link-existence'
 import { NativeChatLinkClickContext } from '../../native-chat/links/actions/native-chat-link-click-context'
 import { useNativeChatLinkActions } from '../../native-chat/links/actions/use-native-chat-link-actions'
@@ -351,7 +355,17 @@ export function BotItemBody({
                 />
               </NativeChatLinkClickContext>
             </NativeChatFileLinkExistenceContext>
-            <LinkActionPopover request={links.linkActionRequest} onClose={links.closeLinkActions} />
+            <LinkActionPopover
+              request={links.linkActionRequest}
+              onClose={links.closeLinkActions}
+              renderPreview={(request) => {
+                // A comment's file: its first lines, read from the bot's host.
+                const path = request.copyValue ?? request.destination
+                return request.kind === 'file' && isNativeChatAttachmentPeekable(path) ? (
+                  <NativeChatAttachmentPeek path={path} target={runtimeContext?.target ?? null} />
+                ) : null
+              }}
+            />
             {deleted ? (
               nav ? (
                 <BotItemNavRow nav={nav} />

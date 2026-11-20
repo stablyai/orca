@@ -1,7 +1,6 @@
 // A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, and
 // the text as Markdown. An agent's Needs you question is not drawn here: its row and card are chat's
 // question's. A reply to a question quotes it, and leads back to it.
-import { useContext } from 'react'
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
@@ -12,9 +11,9 @@ import {
   type BotItem,
   type BotItemEvent
 } from '../../../../../shared/bots/bot-items'
-import { NativeChatMarkdownImageOwnerContext } from '../../native-chat/media/images/native-chat-markdown-image-owner'
-import { NativeChatTextAttachments } from '../../native-chat/media/text/NativeChatTextAttachments'
+import { botItemCommentFiles } from '../../../../../shared/bots/bot-item-comment-files'
 import { BotItemCommentImages } from './BotItemCommentImages'
+import { BotItemCommentFiles } from './BotItemCommentFiles'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { botInitial } from '../../../../../shared/bots/bot-avatar-fallback'
 import { BotAvatar, BotAvatarTile } from '../BotAvatar'
@@ -71,19 +70,21 @@ export function BotItemCommentCard({
   onJump?: (eventId: string) => void
   /** A comment sent from the box that the host refused. */
   failed?: { retry: () => void; discard: () => void }
-  /** Words to show instead of the event's text (a question's context, without its decisions). */
+  /** Words to show instead of the event's text (a question's context, without its decisions); its
+   *  images and files show either way. */
   textOverride?: string
   /** False when another card (its question's) is where a jump to this event lands. */
   jumpTarget?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const runtimeContext = useContext(NativeChatMarkdownImageOwnerContext)?.runtimeContext ?? null
   const { event, replyTo } = entry
   const images = botItemCommentImages(event.data)
   // Its images show above the words, so the [Image #N] its send wrote go, as in chat's sent messages.
-  const text = stripSentImagePromptMarkers(
-    textOverride ?? (typeof event.data.text === 'string' ? event.data.text : ''),
-    images.length
+  const eventText = typeof event.data.text === 'string' ? event.data.text : ''
+  // Its files show as buttons under the words, so their `@path`s go from the words.
+  const { files } = botItemCommentFiles(eventText)
+  const { words } = botItemCommentFiles(
+    stripSentImagePromptMarkers(textOverride ?? eventText, images.length)
   )
   const name = botItemActorName(event, item, t)
   const format = uiDateTimeFormat(TIME)
@@ -131,18 +132,11 @@ export function BotItemCommentCard({
         ) : null}
         <div className="pl-7">
           <BotItemCommentImages images={images} />
-          {/* Files keep their `@path` in the text, with chat's opener for text-like ones. */}
-          <NativeChatTextAttachments
-            content={text}
-            structured
-            runtimeContext={runtimeContext}
-            renderText={(shown) =>
-              !shown.trim() ? null : (
-                // 8 lines of 19 px.
-                <BotItemClampedText text={shown} clampClassName="max-h-[152px]" fade />
-              )
-            }
-          />
+          {words.trim() ? (
+            // 8 lines of 19 px.
+            <BotItemClampedText text={words} clampClassName="max-h-[152px]" fade />
+          ) : null}
+          <BotItemCommentFiles paths={files} />
           {failed ? (
             <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
               <span>{t('bots.items.activity.notSent', 'Not sent.')}</span>

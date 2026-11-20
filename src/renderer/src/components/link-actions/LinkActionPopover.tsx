@@ -16,6 +16,8 @@ type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
   onClose: (dismissed?: TRequest) => void
   onPointerDownOutside?: (event: Event) => void
   onOpenSettings?: (() => void) | null
+  /** Shown above the actions, such as a file's first lines; null for none. */
+  renderPreview?: (request: TRequest) => React.ReactNode
 }
 
 function ActionRow({
@@ -57,7 +59,8 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   request,
   onClose,
   onPointerDownOutside,
-  onOpenSettings
+  onOpenSettings,
+  renderPreview
 }: LinkActionPopoverProps<TRequest>): React.JSX.Element {
   const t = useTranslate()
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
@@ -223,6 +226,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
               </Tooltip>
             ) : null}
           </div>
+          {renderPreview?.(request)}
           <ActionRow
             action={request.primary}
             shortcut="primary"
