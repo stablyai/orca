@@ -240,7 +240,8 @@ export class StructuredAgentSessionIdleSweep {
       }
       await this.deps.stopAgent(sessionId)
     }
-    observe?.((await this.deps.closeConversation(sessionId)) ? 'released' : 'unconfirmed')
+    const closed = await this.deps.closeConversation(sessionId)
+    observe?.(closed ? 'released' : 'unconfirmed')
     return null
   }
 

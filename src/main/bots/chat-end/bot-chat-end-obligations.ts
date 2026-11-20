@@ -27,8 +27,8 @@ function placeholders(values: readonly unknown[]): string {
 }
 
 function count(db: OrchestrationDb, sql: string, values: readonly string[]): number {
-  const row = db.db.prepare(sql).get(...values) as { n?: unknown } | undefined
-  return typeof row?.n === 'number' ? row.n : 0
+  const n: unknown = db.db.prepare(sql).get(...values)?.n
+  return typeof n === 'number' ? n : 0
 }
 
 function exists(db: OrchestrationDb, sql: string, values: readonly string[]): boolean {

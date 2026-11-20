@@ -14,14 +14,14 @@ import {
 } from '../../runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail-rig.test-fixture'
 import { attachParams } from '../../runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-fake-codex-fixture'
 import { runtimeBotChatEndDeps } from '../../runtime/rpc/methods/bots-end-chat'
-import { formatOrcaSessionAddress } from '../../../shared/agent-session/identity/orca-session-address'
-import type { OrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
 import { makeTestBot } from '../bot.test-fixture'
 import { endBotChat, type BotChatEndRequest } from './bot-chat-end'
 import { installBotChatEndGuards } from './bot-chat-end-guards'
 import { fenceChatEnd, liftChatEndFence, resetChatEndFencesForTests } from './bot-chat-end-fence'
 
 const SIDE = COORDINATOR
+const SIDE_ADDRESS = `${ORCA_SESSION_ADDRESS_PREFIX}${SIDE}`
 const BOT = makeTestBot({ folderWorkspaceId: 'bot-home', chatSessionId: PEER_CHAT })
 
 async function openBotChat(sessionId: string, place: 'tab' | 'background'): Promise<void> {
@@ -83,7 +83,7 @@ describe('ending a bot side chat', () => {
     await openBotChat(SIDE, 'background')
     db.insertMessage({
       from: 'term_someone',
-      to: formatOrcaSessionAddress(SIDE as OrcaSessionId),
+      to: SIDE_ADDRESS,
       subject: 'Waiting',
       body: 'read me'
     })
@@ -162,7 +162,7 @@ describe('while a chat is being ended', () => {
     await openBotChat(SIDE, 'background')
     const mail = {
       from: 'term_someone',
-      to: formatOrcaSessionAddress(SIDE as OrcaSessionId),
+      to: SIDE_ADDRESS,
       subject: 'Hi',
       body: 'hello'
     }

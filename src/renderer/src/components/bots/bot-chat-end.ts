@@ -3,6 +3,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { callBotRpc } from '@/lib/bot-hosts'
+import { readBotsEnabled } from '@/lib/bot-catalog'
 import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { botHostHas } from '@/lib/bot-host-status'
 import type { Bot } from '../../../../shared/bot-types'
@@ -15,8 +16,9 @@ import {
 } from '../../../../shared/bots/bot-chat-end'
 import { openBotSession } from './bot-session-open'
 
+/** With bots off a home is a plain folder, and its chats close as any chat does. */
 export function botHostEndsChats(bot: Pick<Bot, 'hostId'>): boolean {
-  return botHostHas(bot.hostId, BOTS_END_CHAT_RUNTIME_CAPABILITY)
+  return readBotsEnabled() && botHostHas(bot.hostId, BOTS_END_CHAT_RUNTIME_CAPABILITY)
 }
 
 export function requestBotChatEnd(

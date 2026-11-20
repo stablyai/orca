@@ -14,12 +14,17 @@ import { attachParams } from '../../runtime/orchestration/terminal-authority/str
 import { BOT_END_CHAT_METHOD, runtimeBotChatEndDeps } from '../../runtime/rpc/methods/bots-end-chat'
 import type { RpcContext } from '../../runtime/rpc/core'
 import { makeTestBot } from '../bot.test-fixture'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../shared/agent-session/identity/orca-session-address'
 import { endBotChat } from './bot-chat-end'
 import { installBotChatEndGuards } from './bot-chat-end-guards'
 import { fenceChatEnd, resetChatEndFencesForTests } from './bot-chat-end-fence'
 import { resetBotChatEndOpsForTests } from './bot-chat-end-ops'
 
 const SIDE = COORDINATOR
+const SIDE_ID: OrcaSessionId = isOrcaSessionId(SIDE) ? SIDE : expect.fail('not an Orca session id')
 const BOT = makeTestBot({ folderWorkspaceId: 'bot-home', chatSessionId: PEER_CHAT })
 
 async function backgroundBotChat(sessionId: string): Promise<void> {
@@ -59,12 +64,12 @@ describe('an ended bot chat', () => {
         objective: 'late work',
         coordinatorHandle: null,
         coordinatorPaneKey: null,
-        coordinatorOrcaSessionId: SIDE as never
+        coordinatorOrcaSessionId: SIDE_ID
       })
     ).toThrow('This chat was ended')
     expect(
       db.runsBoundToCoordinator({
-        orcaSessionId: SIDE as never,
+        orcaSessionId: SIDE_ID,
         paneKey: null,
         terminalHandle: null
       })
