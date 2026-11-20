@@ -44,13 +44,20 @@ export function followLatestRelease(
   return { pin: () => release.latest() ?? null, refreshPin: release.refresh }
 }
 
-/** Look up the latest release before an install; a failed lookup says what failed, not a raw network error. */
+/** Look up the latest release before an install; a failed lookup installs the last known one, as status reads keep it. */
 export async function refreshRuntimePin(
   runtime: ManagedRuntime,
   signal: AbortSignal
 ): Promise<void> {
   await runtime.refreshPin?.(signal).catch((error: unknown) => {
     signal.throwIfAborted()
+    if (runtime.pin()) {
+      console.warn(
+        `[managed-runtime] ${runtime.label} latest release unknown; installing the last known:`,
+        error
+      )
+      return
+    }
     throw new Error(
       `Couldn't look up the latest ${runtime.label} release. Check your connection and try again.`,
       { cause: error }

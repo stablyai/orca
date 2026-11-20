@@ -57,6 +57,7 @@ export class ManagedRuntimeInstallation {
   /** One attempt per release per hour, so a failing update isn't redownloaded on every use. */
   private lastAutoUpdate: { version: string; at: number } | null = null
   private reported: ReportedRuntimeRelease | null = null
+  private reports = 0
 
   constructor(
     private readonly agent: string,
@@ -307,12 +308,13 @@ export class ManagedRuntimeInstallation {
     if (!onRelease) {
       return
     }
+    const report = ++this.reports
     const known = this.reported?.folder === folder ? this.reported.link : null
     this.reported = folder === null ? null : { folder, link: known }
     onRelease(this.reported)
     const link = folder === null ? null : await runtimeReleaseLink(this.root, folder)
-    // A newer read may have reported another release meanwhile.
-    if (folder !== null && this.reported?.folder === folder && this.reported.link !== link) {
+    // Only the newest report may set the link; an older one may have read the disk before it changed.
+    if (folder !== null && report === this.reports && this.reported?.link !== link) {
       this.reported = { folder, link }
       onRelease(this.reported)
     }

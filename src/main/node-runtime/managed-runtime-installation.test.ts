@@ -342,3 +342,43 @@ it.each([
     }
   }
 )
+
+it('installs the last known release when a later lookup of the latest fails', async () => {
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+  roots.push(dataDirectory)
+  const binary = 'binary bytes'
+  let latest: ManagedRuntimePin | null = null
+  const runtime: ManagedRuntime = {
+    label: 'Agent',
+    root: () => join(dataDirectory, 'agent-runtimes', 'agent'),
+    pin: () => latest,
+    refreshPin: async () => {
+      if (latest) {
+        throw new Error('API rate limit exceeded')
+      }
+      latest = {
+        version: '2.0',
+        url: 'https://example.test/2.0/agent',
+        archiveSha256: sha256(binary),
+        archiveBytes: 12,
+        format: 'file',
+        members: [{ path: 'agent', sha256: sha256(binary), bytes: 12 }]
+      }
+    }
+  }
+  const installation = new ManagedRuntimeInstallation('agent', runtime, {
+    dataDirectory,
+    findExternal: async () => false,
+    fence: (work) => work(),
+    fetcher: async () => new Response(binary)
+  })
+  await installation.status()
+  installation.install()
+  await vi.waitFor(async () =>
+    expect(['succeeded', 'failed']).toContain((await installation.status()).operation?.phase)
+  )
+  expect(await installation.status()).toMatchObject({
+    installedVersion: '2.0',
+    operation: { phase: 'succeeded' }
+  })
+})
