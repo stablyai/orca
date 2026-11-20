@@ -30,7 +30,7 @@ export class GrabNativeKeySession {
     guest.on('destroyed', this.stop)
     guest.on('did-start-navigation', this.onNavigation)
     this.unregisterSuspension = registerAgentInputSuspension(guest, async (suspended) => {
-      if (!(await this.setEnabled(!suspended)) && !this.stopped) {
+      if (!(await this.setEnabled(!suspended))) {
         throw new Error('Could not suspend browser tool shortcuts safely')
       }
     })
