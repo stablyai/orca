@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipc = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, payload: unknown) => unknown>(),
-  fromWebContents: vi.fn((): unknown => ({}))
+  fromWebContents: vi.fn((): unknown => ({ id: 7 }))
 }))
 
 vi.mock('electron', () => ({
@@ -13,7 +13,7 @@ vi.mock('electron', () => ({
       ipc.handlers.set(channel, handler)
     }
   },
-  BrowserWindow: { fromWebContents: ipc.fromWebContents }
+  BrowserWindow: { fromWebContents: ipc.fromWebContents, fromId: (id: number) => ({ id }) }
 }))
 
 import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
@@ -27,7 +27,7 @@ function sendKeyboard(payload: unknown): unknown {
 
 beforeEach(() => {
   sendControl.mockClear()
-  ipc.fromWebContents.mockReturnValue({})
+  ipc.fromWebContents.mockReturnValue({ id: 7 })
   scrcpyVideoRegistry.register('serial-1', () => {})
   scrcpyVideoRegistry.attachControl('serial-1', {
     videoSize: () => ({ width: 600, height: 1280 }),
