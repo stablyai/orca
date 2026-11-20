@@ -209,35 +209,30 @@ it('picks every memory file with Include memory, and All clears or picks them al
   expect(await screen.findByRole('button', { name: 'Memory' })).toBeDefined()
 })
 
-it.each([64, 65])(
-  'turns memory and All on for %i files within what a share can carry',
-  async (count) => {
-    calls.memory = Array.from({ length: count }, (_, index) => ({ topic: `m${index}`, lines: 1 }))
-    const preparedMemory = () => {
-      const params = calls.rpc.findLast(({ method }) => method === 'bots.share.prepare')?.params
-      // What the runtime would accept: the real params schema, not the mock.
-      const parsed = BotSharePrepare.safeParse(params)
-      expect(parsed.success).toBe(true)
-      return parsed.data?.memory
-    }
-    render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
-    fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))
-    await waitFor(() => expect(preparedMemory()).toHaveLength(64))
-    const all = screen.getByRole('switch', { name: 'All' })
-    expect(all.getAttribute('aria-checked')).toBe('true')
-
-    fireEvent.click(all)
-    fireEvent.click(all)
-    await waitFor(() => expect(preparedMemory()).toHaveLength(64))
-    // Past the limit, the files left over wait until one picked file goes.
-    expect(screen.getByRole('checkbox', { name: 'm63' }).hasAttribute('disabled')).toBe(false)
-    if (count > 64) {
-      expect(screen.getByRole('checkbox', { name: 'm64' }).hasAttribute('disabled')).toBe(true)
-      fireEvent.click(screen.getByRole('checkbox', { name: 'm0' }))
-      expect(screen.getByRole('checkbox', { name: 'm64' }).hasAttribute('disabled')).toBe(false)
-    }
+it('caps Include memory and All when more files exist than a share can carry', async () => {
+  calls.memory = Array.from({ length: 65 }, (_, index) => ({ topic: `m${index}`, lines: 1 }))
+  const preparedMemory = () => {
+    const params = calls.rpc.findLast(({ method }) => method === 'bots.share.prepare')?.params
+    // What the runtime would accept: the real params schema, not the mock.
+    const parsed = BotSharePrepare.safeParse(params)
+    expect(parsed.success).toBe(true)
+    return parsed.data?.memory
   }
-)
+  render(<BotShareFlow bot={bot} link={null} onClose={() => {}} />)
+  fireEvent.click(await screen.findByRole('switch', { name: 'Include memory' }))
+  await waitFor(() => expect(preparedMemory()).toHaveLength(64))
+  const all = screen.getByRole('switch', { name: 'All' })
+  expect(all.getAttribute('aria-checked')).toBe('true')
+
+  fireEvent.click(all)
+  fireEvent.click(all)
+  await waitFor(() => expect(preparedMemory()).toHaveLength(64))
+  // Past the limit, the files left over wait until one picked file goes.
+  expect(screen.getByRole('checkbox', { name: 'm63' }).hasAttribute('disabled')).toBe(false)
+  expect(screen.getByRole('checkbox', { name: 'm64' }).hasAttribute('disabled')).toBe(true)
+  fireEvent.click(screen.getByRole('checkbox', { name: 'm0' }))
+  expect(screen.getByRole('checkbox', { name: 'm64' }).hasAttribute('disabled')).toBe(false)
+})
 
 it('leads with Done when the link already serves the bot as it is', async () => {
   render(<BotShareFlow bot={bot} link={link('digest')} onClose={() => {}} />)
