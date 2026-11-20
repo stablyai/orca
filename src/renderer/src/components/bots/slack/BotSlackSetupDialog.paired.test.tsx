@@ -128,6 +128,14 @@ afterEach(() => {
 })
 
 describe('BotSlackSetupDialog on a paired computer', () => {
+  it('signs the server in, not this desktop, when the server is signed out', async () => {
+    mocks.hosts[SERVER].state.mockResolvedValue({ ok: false, error: 'signed_out' })
+    openDialog()
+
+    await screen.findByRole('button', { name: /^Sign in on / })
+    expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull()
+  })
+
   it('copies the approval link without opening Slack and shows a wrong-installer failure', async () => {
     mocks.bots.push(bot({ id: 'other', slack: { appId: 'A9', teamId: 'T1' } }))
     serverState({ state: 'not_created' })
