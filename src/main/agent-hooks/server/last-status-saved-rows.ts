@@ -6,10 +6,17 @@ import type { LastStatusFile } from './server-types'
 type RowKind = 'entry' | 'commitment' | 'exits'
 
 // Follows LAST_STATUS_FILE_VERSION (a mismatched cache rebuilds empty, as the file did); the
-// low digits version the row layout.
-export const LAST_STATUS_SCHEMA_VERSION = LAST_STATUS_FILE_VERSION * 100 + 2
+// low digits version the row layout. Bumped to 3 when the key separator stopped being NUL: rows
+// written with the old separator cannot be matched, so they must rebuild rather than reload.
+export const LAST_STATUS_SCHEMA_VERSION = LAST_STATUS_FILE_VERSION * 100 + 3
 
-const rowKey = (kind: RowKind, key: string): string => `${kind}\u0000${key}`
+// Not NUL: node:sqlite stores TEXT as a C string on Windows and truncates at the first NUL, which
+// collapsed every row key to its bare kind and lost all restored status on the next start.
+export const ROW_KEY_SEPARATOR = '\u001f'
+
+export const rowKeyFor = (kind: RowKind, key: string): string => `${kind}${ROW_KEY_SEPARATOR}${key}`
+
+const rowKey = rowKeyFor
 
 /** One row per pane entry and per authority commitment, plus the exit list. */
 export function rowsOf(file: LastStatusFile): KeyedJsonRow[] {
@@ -35,7 +42,11 @@ export function assemble(rows: readonly KeyedJsonRow[]): Required<LastStatusFile
     agentExits: []
   }
   for (const { key: id, value } of parseKeyedJsonRows(rows)) {
-    const separator = id.indexOf('\u0000')
+    const separator = id.indexOf(ROW_KEY_SEPARATOR)
+    // A key without the separator was truncated at a NUL by an older writer; drop it like a bad row.
+    if (separator <= 0) {
+      continue
+    }
     const kind = id.slice(0, separator)
     const key = id.slice(separator + 1)
     if (kind === 'entry') {
