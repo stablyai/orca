@@ -23,12 +23,22 @@ import {
   prepareLegacySharedCodexSessionResume
 } from '../resume/codex-legacy-session-resume'
 
-const renameHook = vi.hoisted((): { beforeAside: (() => void) | null } => ({ beforeAside: null }))
+const renameHook = vi.hoisted((): { beforeAside: (() => void) | null; failAsideStat: boolean } => ({
+  beforeAside: null,
+  failAsideStat: false
+}))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   return {
     ...actual,
+    lstat: (...args: Parameters<typeof actual.lstat>) => {
+      if (renameHook.failAsideStat && /\.orca-legacy-copy\.\d+$/.test(String(args[0]))) {
+        renameHook.failAsideStat = false
+        return Promise.reject(Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }))
+      }
+      return actual.lstat(...args)
+    },
     rename: async (from: string, to: string) => {
       if (String(to).includes('.orca-legacy-copy.')) {
         renameHook.beforeAside?.()
@@ -97,6 +107,7 @@ beforeEach(() => {
   copyPath = join(runtimeHome(), 'sessions', RELATIVE_PATH)
   markerPath = join(runtimeHome(), '.orca-session-copies', `${RELATIVE_PATH}.json`)
   renameHook.beforeAside = null
+  renameHook.failAsideStat = false
   // A Codex that keeps thread-writer locks ran in the copy's home, and holds none now.
   mkdirSync(join(runtimeHome(), 'thread-writer-locks'), { recursive: true })
 })
@@ -241,6 +252,17 @@ describe('legacy session copy swap', () => {
     expect(readFileSync(copyPath, 'utf-8')).toBe('{"rewritten":true}\n')
     // The name went back to what was moved; the attempt's aside name stays as a second name.
     expect(asides().map((path) => lstatSync(path).ino)).toEqual([lstatSync(copyPath).ino])
+  })
+
+  it('gives the copy its name back when checking the moved file fails', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    renameHook.beforeAside = () => {
+      renameHook.failAsideStat = true
+    }
+
+    await bridgePass()
+
+    expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
   })
 
   it('finishes a swap that stopped after moving the copy aside', async () => {

@@ -81,15 +81,16 @@ describe('sweepDeletedWorkspaceChatHistory with Codex rollouts', () => {
         join(managed, '.orca-session-copies', '2026', '11', '01', `${NAME('1')}.json`),
         '{}'
       )
-      // A legacy copy's own bytes, set aside when its name was pointed at the source.
+      // A legacy copy's own bytes, set aside when its name was pointed at the source, past a gap
+      // an interrupted cleanup left at .1.
       const aside = write(
-        join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy.1`),
+        join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy.2`),
         rollout(gone, [gone])
       )
       // What a swap leaves beside it: the empty probe, and an earlier attempt's unused reservation.
       const asideProbe = write(join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy.probe`), '')
       const unusedReservation = write(
-        join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy.2`),
+        join(managed, ...DATED, `${NAME('1')}.orca-legacy-copy.3`),
         ''
       )
 

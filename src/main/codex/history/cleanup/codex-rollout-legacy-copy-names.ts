@@ -1,36 +1,20 @@
-import { lstat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import {
   LEGACY_SESSION_COPY_ASIDE_SUFFIX,
   LEGACY_SESSION_COPY_MAX_ASIDES
 } from '../bridges/codex-legacy-session-copy'
 import type { RolloutName } from './codex-rollout-permanent-delete'
 
-/**
- * An old session copy's own bytes, kept beside the name once its source was linked in. Swaps number
- * them from 1 and never remove one, so counting up to the first gap finds them all.
- */
-export async function legacyCopyAsideNames(
-  homes: readonly string[],
-  stem: string
-): Promise<RolloutName[]> {
+/** An old session copy's own bytes, kept beside the name once its source was linked in. */
+export function legacyCopyAsideNames(homes: readonly string[], stem: string): RolloutName[] {
   const parts = stem.split('/')
   const names: RolloutName[] = []
   for (const home of homes) {
     const sessions = join(home, 'sessions')
     const base = `${join(sessions, ...parts)}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}`
     for (let attempt = 1; attempt <= LEGACY_SESSION_COPY_MAX_ASIDES; attempt += 1) {
-      const name = { path: `${base}.${attempt}`, root: sessions }
-      if (
-        !(await lstat(name.path).then(
-          () => true,
-          (error: unknown) => !isDefinitiveAbsence(error)
-        ))
-      ) {
-        break
-      }
-      names.push(name)
+      // Every number: a cleanup that stopped partway may have left a gap below a later one.
+      names.push({ path: `${base}.${attempt}`, root: sessions })
     }
     names.push({ path: `${base}.probe`, root: sessions })
   }

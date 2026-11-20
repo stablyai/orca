@@ -188,19 +188,20 @@ async function publishSourceOverCopy({
   }
   // A rename never leaves the copy's bytes unnamed; on Windows it fails while a writer holds it.
   await rename(copyPath, asidePath)
-  const moved = await lstatIfPresent(asidePath)
-  if (!moved || !isUnchangedCopy(moved, copy)) {
-    // Replaced or written in the moment before the rename: the name goes back to what was moved.
-    await restoreName(asidePath, copyPath)
-    return 'deferred'
-  }
-  // The prefix check covered this source file; one put in its place since gets checked next pass.
-  const currentSource = await lstatIfPresent(sourcePath)
-  if (!currentSource || !sameFile(currentSource, source)) {
-    await restoreName(asidePath, copyPath)
-    return 'deferred'
-  }
+  // From here on, any outcome but a published source gives the copy its name back.
   try {
+    const moved = await lstatIfPresent(asidePath)
+    // Replaced or written in the moment before the rename: the name goes back to what was moved.
+    if (!moved || !isUnchangedCopy(moved, copy)) {
+      await restoreName(asidePath, copyPath)
+      return 'deferred'
+    }
+    // The prefix check covered this source file; one put in its place since gets checked next pass.
+    const currentSource = await lstatIfPresent(sourcePath)
+    if (!currentSource || !sameFile(currentSource, source)) {
+      await restoreName(asidePath, copyPath)
+      return 'deferred'
+    }
     // Unlike a rename, a link never replaces a file another process put at the name meanwhile.
     await link(sourcePath, copyPath)
     return 'swapped'
