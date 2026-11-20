@@ -13,8 +13,7 @@ import { OrchestrationDbCompaction } from './orchestration-db-compaction'
 const dirs: string[] = []
 
 /** A real orchestration database as an older build left it: no auto-vacuum, `freedMiB` of free pages. */
-function legacyDatabase(freedMiB = 40): string {
-  const keptMiB = 8
+function legacyDatabase(freedMiB = 40, keptMiB = 8): string {
   const dir = mkdtempSync(join(tmpdir(), 'orca-orchestration-compaction-'))
   dirs.push(dir)
   const file = join(dir, 'orchestration.db')
@@ -142,6 +141,24 @@ describe('OrchestrationDbCompaction', () => {
     orchestration.close()
 
     expect(existsSync(`${file}-wal`)).toBe(false)
+  })
+
+  it('removes a copy still being written when the app quits', async () => {
+    // Enough live data that the copy is still running when its file appears.
+    const file = legacyDatabase(8, 96)
+    const orchestration = new OrchestrationDb(file)
+    const compaction = new OrchestrationDbCompaction(orchestration, file, () => true, 1)
+    await compaction.tick()
+    const copying = compaction.tick()
+    await vi.waitFor(() => expect(existsSync(`${file}-compacted`)).toBe(true), { interval: 5 })
+    expect(compaction.hasCopy).toBe(false)
+
+    await compaction.discardUnfinishedCopy()
+    await copying
+    orchestration.close()
+
+    expect(existsSync(`${file}-compacted`)).toBe(false)
+    expect(existsSync(`${file}-compacted-journal`)).toBe(false)
   })
 
   it('converts a legacy file with little free space', async () => {

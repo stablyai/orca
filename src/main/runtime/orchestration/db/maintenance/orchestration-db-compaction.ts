@@ -66,6 +66,7 @@ export class OrchestrationDbCompaction {
   private lastAttemptAt = Number.NEGATIVE_INFINITY
   private diskShortAt = Number.NEGATIVE_INFINITY
   private copying: CompactionChild | undefined
+  private running: Promise<boolean> | undefined
   private ready: { stamp: string; at: number } | undefined
   // Read-only, opened on the first legacy minute and kept until the swap: its data_version moves with every
   // commit to the file, the runtime's included, and nothing else (the runtime's TEMP tables write, for one).
@@ -220,11 +221,24 @@ export class OrchestrationDbCompaction {
       }
     })
     this.copying = run.child
+    this.running = run.done
     try {
       return await run.done
     } finally {
       this.copying = undefined
+      this.running = undefined
     }
+  }
+
+  /** At quit without a ready copy: stops one still being written and removes its output before returning. */
+  async discardUnfinishedCopy(): Promise<void> {
+    if (this.ready) {
+      return
+    }
+    const running = this.running
+    this.stop()
+    await running
+    await this.removeCopy()
   }
 
   /** Stops a copy in progress; a finished copy stays for the quit swap. */

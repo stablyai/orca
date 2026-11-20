@@ -95,6 +95,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   async swapCompactedOrchestrationDbForQuit(): Promise<OrchestrationDbSwap> {
     const compaction = this.orchestrationDbCompaction
     if (!compaction?.hasCopy) {
+      // A partial copy is as large as the live data; a later launch may never clean it up.
+      await compaction?.discardUnfinishedCopy()
       return { kind: 'none' }
     }
     // Its idle connection would hold the file open and make every swap busy.
