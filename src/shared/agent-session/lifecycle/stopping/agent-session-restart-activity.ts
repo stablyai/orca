@@ -25,3 +25,11 @@ export function restartActivityWaitsOnPerson(
 ): boolean {
   return activity?.state === 'blocked' && activity.prompts.length > 0
 }
+
+/** The lead had finished and only its background work was cut; it waits for the person instead of
+ *  starting an agent at launch, so a restart does not start every chat that had a helper running. */
+export function restartActivityLeadFinished(
+  activity: AgentSessionRestartActivity | undefined
+): boolean {
+  return activity?.state === 'done'
+}
