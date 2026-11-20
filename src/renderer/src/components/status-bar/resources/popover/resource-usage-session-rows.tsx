@@ -259,7 +259,12 @@ export function WorktreeRow({
           <ChatRow
             key={chat.agentSessionId}
             chat={chat}
-            onOpen={(agentSessionId) => onOpenChat(worktree.worktreeId, agentSessionId)}
+            onOpen={
+              // A paired machine's workspace this window doesn't list has no tab to open.
+              storeRecord !== null || worktree.hostLabel === undefined
+                ? (agentSessionId) => onOpenChat(worktree.worktreeId, agentSessionId)
+                : undefined
+            }
           />
         ))}
       {!isCollapsed &&
