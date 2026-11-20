@@ -4,12 +4,26 @@ import { useBotGroups } from '@/lib/bot-group-list'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
 import { isBotHomeTab } from '../../../../shared/bots/bot-home-tab'
 
-export function findBotByWorkspace(bots: readonly Bot[], workspaceId: string | null): Bot | null {
-  return botOfHomeWorkspace(bots, workspaceId)
+/** With `hostId`, a bot on that host wins, so the same workspace id on two hosts names each its own bot. */
+export function findBotByWorkspace(
+  bots: readonly Bot[],
+  workspaceId: string | null,
+  hostId?: ExecutionHostId
+): Bot | null {
+  const onHost = hostId
+    ? bots.find(
+        (bot) => bot.hostId === hostId && folderWorkspaceKey(bot.folderWorkspaceId) === workspaceId
+      )
+    : undefined
+  return onHost ?? botOfHomeWorkspace(bots, workspaceId)
 }
 
 /** With bots off a home is a plain folder. */
@@ -18,10 +32,13 @@ export function isBotPage(workspaceId: string): boolean {
 }
 
 /** Only folder workspaces can be a bot's home, so other workspaces never read the bots; with bots off a home is a plain folder. */
-export function useBotForWorkspace(workspaceId: string | null): Bot | null {
+export function useBotForWorkspace(
+  workspaceId: string | null,
+  hostId?: ExecutionHostId
+): Bot | null {
   const botsEnabled = useBotsEnabled()
   const bots = useBots(botsEnabled && parseWorkspaceKey(workspaceId ?? '')?.type === 'folder')
-  return findBotByWorkspace(bots, workspaceId)
+  return findBotByWorkspace(bots, workspaceId, hostId)
 }
 
 /** The group whose room lives in this folder workspace; like a bot's home, only with bots on. */

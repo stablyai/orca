@@ -79,17 +79,28 @@ export function placeBotHomeInSnapshot(
     return snapshot
   }
   const dropped = new Set(homes.filter((tab) => tab !== home).map((tab) => tab.id))
-  const survive = (id: string | null): string | null =>
-    id !== null && dropped.has(id) ? home.id : id
-  let groups = (snapshot.tabGroups ?? []).map((group) => ({
-    ...group,
-    activeTabId: survive(group.activeTabId),
-    tabOrder: group.tabOrder.filter((id) => !dropped.has(id)),
-    ...(group.recentTabIds
-      ? { recentTabIds: group.recentTabIds.filter((id) => !dropped.has(id)) }
-      : {})
-  }))
-  const activeTabId = survive(snapshot.activeTabId)
+  // A group's selection stays inside it: a dropped duplicate hands over to Home there, else to its first tab.
+  const reselect = (selected: string | null, tabOrder: string[], gone: (id: string) => boolean) =>
+    selected !== null && gone(selected)
+      ? tabOrder.includes(home.id)
+        ? home.id
+        : (tabOrder[0] ?? null)
+      : selected
+  let groups = (snapshot.tabGroups ?? []).map((group) => {
+    const tabOrder = group.tabOrder.filter((id) => !dropped.has(id))
+    return {
+      ...group,
+      tabOrder,
+      activeTabId: reselect(group.activeTabId, tabOrder, (id) => dropped.has(id)),
+      ...(group.recentTabIds
+        ? { recentTabIds: group.recentTabIds.filter((id) => !dropped.has(id)) }
+        : {})
+    }
+  })
+  const activeTabId =
+    snapshot.activeTabId !== null && dropped.has(snapshot.activeTabId)
+      ? home.id
+      : snapshot.activeTabId
   const byId = new Map(groups.map((group) => [group.id, group]))
   const target = [...collectTabGroupLayoutGroupIds(snapshot.tabGroupLayout)]
     .flatMap((id) => byId.get(id) ?? [])
@@ -99,32 +110,31 @@ export function placeBotHomeInSnapshot(
   if (dropped.size === 0 && !moved) {
     return snapshot
   }
-  // Focus follows Home when it moves, as a focused duplicate's does when it is dropped.
-  const focusHome = activeTabId === home.id
   if (target && moved) {
     groups = groups.map((group) => {
       if (group.id === target.id) {
-        return {
-          ...group,
-          activeTabId: focusHome ? home.id : group.activeTabId,
-          tabOrder: [home.id, ...group.tabOrder.filter((id) => id !== home.id)]
-        }
-      }
-      if (!group.tabOrder.includes(home.id)) {
-        return group
+        return { ...group, tabOrder: [home.id, ...group.tabOrder.filter((id) => id !== home.id)] }
       }
       const tabOrder = group.tabOrder.filter((id) => id !== home.id)
       return {
         ...group,
         tabOrder,
-        activeTabId: group.activeTabId === home.id ? (tabOrder[0] ?? null) : group.activeTabId
+        activeTabId: reselect(group.activeTabId, tabOrder, (id) => id === home.id)
       }
     })
+  }
+  // Focus on Home, its own or a dropped duplicate's, lands on the group that now holds it.
+  const focusHome = activeTabId === home.id
+  const homeGroupId = groups.find((group) => group.tabOrder.includes(home.id))?.id
+  if (focusHome && homeGroupId) {
+    groups = groups.map((group) =>
+      group.id === homeGroupId ? { ...group, activeTabId: home.id } : group
+    )
   }
   return {
     ...snapshot,
     activeTabId,
-    ...(focusHome && target && moved ? { activeGroupId: target.id } : {}),
+    ...(focusHome && homeGroupId ? { activeGroupId: homeGroupId } : {}),
     ...(snapshot.tabGroups ? { tabGroups: groups } : {}),
     tabs: snapshot.tabs
       .filter((tab) => !dropped.has(tab.id))

@@ -6,6 +6,7 @@ import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/con
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
+import { placeBotHomeInSnapshot } from './bot-home-snapshot'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const PAGE = 'folder:bot-home'
@@ -135,5 +136,36 @@ describe("a windowless paired server's bot page", () => {
         isPinned: false
       })
     ).rejects.toThrow("A bot's Home chat stays pinned")
+  })
+
+  it('hands focus on a dropped duplicate to Home in its own group, keeping each group on its own tabs', () => {
+    const placed = placeBotHomeInSnapshot(
+      {
+        ...savedPage(),
+        activeGroupId: 'right',
+        activeTabId: 'agent-session:home',
+        tabGroups: [
+          {
+            id: 'left',
+            activeTabId: 'agent-session:side',
+            tabOrder: [REOPENED_HOME, 'agent-session:side']
+          },
+          {
+            id: 'right',
+            activeTabId: 'agent-session:home',
+            tabOrder: ['agent-session:home', 'agent-session:other']
+          }
+        ],
+        tabs: [...savedPage().tabs, chat('agent-session:other', 'other')]
+      },
+      'home',
+      REOPENED_HOME
+    )
+    expect(placed.activeGroupId).toBe('left')
+    expect(placed.activeTabId).toBe(REOPENED_HOME)
+    expect(placed.tabGroups?.map((group) => [group.id, group.activeTabId])).toEqual([
+      ['left', REOPENED_HOME],
+      ['right', 'agent-session:other']
+    ])
   })
 })

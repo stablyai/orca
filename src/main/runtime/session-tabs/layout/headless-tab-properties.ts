@@ -224,8 +224,8 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
       snapshotVersion: snapshot.snapshotVersion + 1,
       tabs
     }
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    // Storing can place a bot's Home; publish what was stored.
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
   }
 
   protected getMobileSessionTopLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {
@@ -308,7 +308,6 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
       snapshotVersion: snapshot.snapshotVersion + 1,
       tabs
     }
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(worktreeId, nextSnapshot))
   }
 }

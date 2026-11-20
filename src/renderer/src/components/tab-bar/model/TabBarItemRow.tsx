@@ -92,7 +92,10 @@ function TabBarItemRow({
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
   )
-  const bot = useBotForWorkspace(worktreeId)
+  const bot = useBotForWorkspace(
+    worktreeId,
+    item.type === 'agent-session' ? item.data.executionHostId : undefined
+  )
   const isBotChat = item.type === 'agent-session' && isBotHomeTab(item.data, bot)
   const homeRule = useBotHomeRuleApplies(bot)
   const ruledHome = useAppStore(

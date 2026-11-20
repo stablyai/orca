@@ -44,7 +44,11 @@ export function NativeChatPaneHeader({
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = useStructuredChatPaneActions(tabId, worktreeId, groupId)
-  const bot = useBotForWorkspace(worktreeId)
+  const tabHostId = useAppStore(
+    (state) =>
+      state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)?.executionHostId
+  )
+  const bot = useBotForWorkspace(worktreeId, tabHostId)
   // A bot's chats stay native chats.
   const onBotPage = bot !== null
   const homeRule = useBotHomeRuleApplies(bot)
