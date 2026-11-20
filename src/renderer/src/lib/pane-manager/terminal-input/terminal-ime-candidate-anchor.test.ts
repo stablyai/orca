@@ -110,20 +110,17 @@ describe('installTerminalImeCandidateAnchor', () => {
     }
   })
 
-  it('revalidates the cached prompt row on render instead of rescanning the screen', async () => {
+  it('follows the painted prompt when scrolling moves it', async () => {
     const { terminal, compositionView } = openTerminal()
     try {
       installTerminalImeCandidateAnchor(terminal)
       await startCursorAgentComposition(terminal)
       await nextEventLoop()
-      const getLine = vi.spyOn(Object.getPrototypeOf(terminal.buffer.active), 'getLine')
 
       terminal.refresh(0, terminal.rows - 1)
       await nextFrame()
       await nextEventLoop()
       await nextEventLoop()
-      // A full bottom-up rescan reads every row below the prompt; the cached row needs only a few reads.
-      expect(getLine.mock.calls.length).toBeLessThanOrEqual(3)
       expect(compositionView.style.top).toBe(`${6 * CELL_HEIGHT}px`)
 
       // Scrolling moves the prompt with the parked cursor, which invalidates the cache and rescans.

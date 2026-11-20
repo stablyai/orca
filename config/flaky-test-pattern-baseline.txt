@@ -230,7 +230,7 @@
 1 test-no-wall-clock:src/main/git/refs/maintenance/pack-refs-lock-ownership.test.ts
 1 test-no-wall-clock:src/main/git/source-control/diffs/blob-absence-real-git.test.ts
 2 test-no-wall-clock:src/main/git/worktrees/catalog/worktree-created-description-real-git.test.ts
-8 test-no-wall-clock:src/main/github/pull-requests/refresh/pr-refresh-coordinator-alias-coalescing.test.ts
+6 test-no-wall-clock:src/main/github/pull-requests/refresh/pr-refresh-coordinator-alias-coalescing.test.ts
 1 test-no-wall-clock:src/main/ipc/terminal-views/terminal-render-desync-evidence.test.ts
 2 test-no-wall-clock:src/main/macos-permissions/macos-tcc-log-stream-orphans.test.ts
 4 test-no-wall-clock:src/main/managed-server/activation/orcad-exited-own-fence-mutation-race.test.ts
