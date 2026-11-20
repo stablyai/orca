@@ -26,6 +26,7 @@ import type { JournalSqlOwner } from './journal-sql-owner'
 import {
   LegacyJournalRetirementReporter,
   legacyProofFailureOutcome,
+  releaseLegacyJournalRetirementHost,
   legacyJournalRetirementMode,
   type LegacyJournalRetirementMode,
   type LegacyJournalRetirementOutcome
@@ -40,11 +41,9 @@ import {
   laterVersion,
   legacyProofWaits,
   provenOutcome,
+  readRetirementState,
   sourceBytes
 } from './journal-legacy-retirement-held'
-import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
-
-type RetirementState = Extract<JournalSqlMaintenanceResult, { kind: 'legacy-retirement-state' }>
 
 /**
  * Deletes the original journal once this store provably holds all of it, read from content: on a
@@ -121,6 +120,10 @@ export class JournalLegacyRetirement {
         this.report(error)
       }
     }
+    // Over for this launch (removed, refused, off, or never there): the policy stops downloading.
+    if (this.done) {
+      releaseLegacyJournalRetirementHost()
+    }
   }
 
   private async attempt(): Promise<void> {
@@ -132,7 +135,7 @@ export class JournalLegacyRetirement {
       // Finishing a removal cut short deletes too, so it needs the same permission.
       if (this.ownsProfile() && (await legacyCompanionsPresent(this.filename))) {
         // Asked last, right before the unlink: the saved-state read can take a while.
-        const saved = await this.savedState()
+        const saved = await readRetirementState(this.writer)
         const absorbed = absorbedWal(saved.retirement)
         if (!(await this.enforced())) {
           this.reporter.saved(saved.reported)
@@ -150,7 +153,7 @@ export class JournalLegacyRetirement {
       return
     }
     this.firstAttemptAt ??= performance.now()
-    const saved = await this.savedState()
+    const saved = await readRetirementState(this.writer)
     this.reporter.saved(saved.reported)
     this.policy = await this.mode()
     // Off: no proof and no deletion; chats still convert as they are opened or idle.
@@ -309,19 +312,6 @@ export class JournalLegacyRetirement {
     this.proof.forgetFinished()
     this.retryAt = performance.now() + this.retryDelay
     this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
-  }
-
-  private async savedState(): Promise<RetirementState> {
-    const saved = await this.writer.maintain({ kind: 'legacy-retirement-state' })
-    if (
-      !saved ||
-      typeof saved !== 'object' ||
-      !('kind' in saved) ||
-      saved.kind !== 'legacy-retirement-state'
-    ) {
-      throw new Error('legacy retirement state is unavailable')
-    }
-    return saved
   }
 
   private async matches(observation: LegacyProofObservation): Promise<boolean> {

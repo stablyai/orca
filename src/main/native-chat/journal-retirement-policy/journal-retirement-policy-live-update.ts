@@ -34,40 +34,58 @@ let readInstallId: () => string | undefined = () => undefined
 let refreshing: Promise<void> | null = null
 let refreshFailedAt: number | null = null
 let starting: Promise<void> | null = null
+// Set once downloads may start (after the proxy settings apply); cleared when the cleanup is over.
+let createUpdater: (() => ReleaseAssetPolicyLiveUpdater<JournalRetirementPolicy>) | null = null
 // The newest policy seen this run: only its `off` counts, so a later failed read can't undo it.
 let newestKnown: JournalRetirementPolicy | null = null
 
 /**
- * Unpackaged runs never fetch, so they stay in report mode. The cleanup runs in this process's
- * runtime: it reads the policy and reports its outcome here, through the usage-event client.
+ * Allows downloads; none starts until the cleanup first asks, so a profile without an old journal
+ * never downloads this policy. Unpackaged runs never fetch, so they stay in report mode.
  */
-export function startJournalRetirementPolicyLiveUpdates(store: Store): void {
+export function allowJournalRetirementPolicyUpdates(store: Store): void {
   const environment = getAppEnvironment()
   readInstallId = () => readStoredInstallId(store)
-  updater = new ReleaseAssetPolicyLiveUpdater(JOURNAL_RETIREMENT_POLICY, {
-    userDataPath: environment.getPath('userData'),
-    appVersion: environment.getVersion(),
-    isPackaged: environment.isPackaged(),
-    fetch: (url, init) => getMainHttpClient().fetch(url, init)
-  })
-  const started = updater
+  createUpdater = () =>
+    new ReleaseAssetPolicyLiveUpdater(JOURNAL_RETIREMENT_POLICY, {
+      userDataPath: environment.getPath('userData'),
+      appVersion: environment.getVersion(),
+      isPackaged: environment.isPackaged(),
+      fetch: (url, init) => getMainHttpClient().fetch(url, init)
+    })
+  environment.onWillQuit(stopJournalRetirementPolicyUpdates)
+}
+
+/** The cleanup is over for this launch: downloads stop and never start again. */
+export function stopJournalRetirementPolicyUpdates(): void {
+  createUpdater = null
+  updater?.stop()
+  updater = null
+}
+
+function startOnFirstAsk(): void {
+  if (updater || !createUpdater) {
+    return
+  }
+  const started = createUpdater()
+  updater = started
   starting = started.start().finally(() => {
     starting = null
     refreshFailedAt = started.lastFetched() ? null : Date.now()
   })
   void starting.catch(() => {})
-  environment.onWillQuit(() => started.stop())
 }
 
 /**
  * Decides from what is known now and never waits on the network: the cleanup runs during startup
- * maintenance. A stale download is refreshed in the background for the next ask. Before updates
- * start, the cached policy alone decides, so a cached `off` holds from the first ask.
+ * maintenance. The first ask starts the downloads; until one arrives, the cached policy alone
+ * decides, so a cached `off` holds from the first ask.
  */
 export async function journalRetirementMode(): Promise<{
   mode: JournalRetirementMode
   revision: number
 }> {
+  startOnFirstAsk()
   const fetchedAt = updater?.lastFetched()?.at
   const now = Date.now()
   if (
@@ -117,6 +135,7 @@ export function installJournalRetirementHost(store: Store): void {
   setLegacyJournalRetirementHost({
     report: async (event) =>
       track('legacy_journal_retirement', legacyJournalRetirementSchema.parse(event)),
-    mode: journalRetirementMode
+    mode: journalRetirementMode,
+    release: stopJournalRetirementPolicyUpdates
   })
 }

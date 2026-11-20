@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { expect, it, vi } from 'vitest'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { cleanup, fakeLease, profile } from './journal-legacy-retirement.test-fixture'
@@ -288,4 +288,32 @@ it('reports the leftover table an older build left behind, even when it is empty
   expect(events).toMatchObject([
     { outcome: 'refused', reason: 'source-inventory', artifact: 'pause_table' }
   ])
+})
+
+it('never asks the policy without an old journal, and keeps it only while a file waits', async () => {
+  const released = vi.fn()
+  setLegacyJournalRetirementHost({
+    report: async () => true,
+    mode: async () => ({ mode: 'report', revision: 0 }),
+    release: released
+  })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  // No old journal: no ask, so no download starts, and the downloads are released.
+  const none = await profile()
+  for (const name of companions(none.filename)) {
+    rmSync(name)
+  }
+  const asked = vi.fn(legacyJournalRetirementMode)
+  await none.launch('1.0.1', true, undefined, undefined, asked).run()
+  expect(asked).not.toHaveBeenCalled()
+  expect(released).toHaveBeenCalledTimes(1)
+  // A file held for permission keeps asking, so its downloads stay; deleting it releases them.
+  released.mockClear()
+  const held = await profile()
+  await held.launch('1.0.1', true, undefined, undefined, legacyJournalRetirementMode).run()
+  expect(released).not.toHaveBeenCalled()
+  await held.launch('1.0.1', true, undefined, undefined, policy('enforce', 2)).run()
+  expect(companions(held.filename)).toEqual([])
+  expect(released).toHaveBeenCalledTimes(1)
 })

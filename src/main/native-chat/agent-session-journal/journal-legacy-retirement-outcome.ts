@@ -20,11 +20,19 @@ export type LegacyJournalRetirementMode = { mode: 'off' | 'report' | 'enforce'; 
 type Host = {
   report: (event: LegacyJournalRetirementEvent) => Promise<unknown>
   mode: () => Promise<unknown>
+  /** The cleanup is over for this launch: nothing will ask the policy again. */
+  release?: () => void
 }
 let host: Host | undefined
 
 export function setLegacyJournalRetirementHost(next: Host | undefined): void {
   host = next
+}
+
+export function releaseLegacyJournalRetirementHost(): void {
+  try {
+    host?.release?.()
+  } catch {}
 }
 
 /** No answer, or anything but a valid one, reads as `report`: deletion needs fresh permission. */

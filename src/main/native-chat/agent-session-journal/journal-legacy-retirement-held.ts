@@ -12,6 +12,29 @@ import {
 import { LEGACY_PROOF_LAYOUT, type LegacySourceHeld } from './journal-legacy-retirement-state'
 import type { LegacyProofObservation } from './journal-legacy-proof'
 import type { LegacyJournalRetirementOutcome } from './journal-legacy-retirement-outcome'
+import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
+import type { JournalSqlOwner } from './journal-sql-owner'
+
+export type RetirementState = Extract<
+  JournalSqlMaintenanceResult,
+  { kind: 'legacy-retirement-state' }
+>
+
+/** The cleanup's saved state, read through the store's writer. */
+export async function readRetirementState(
+  writer: Pick<JournalSqlOwner, 'maintain'>
+): Promise<RetirementState> {
+  const saved = await writer.maintain({ kind: 'legacy-retirement-state' })
+  if (
+    !saved ||
+    typeof saved !== 'object' ||
+    !('kind' in saved) ||
+    saved.kind !== 'legacy-retirement-state'
+  ) {
+    throw new Error('legacy retirement state is unavailable')
+  }
+  return saved
+}
 
 // The saved records the cleanup reads back: when it may run, a WAL a cut-short removal left, the
 // held record a report-mode proof leaves, and what an outcome says about a finished proof.
