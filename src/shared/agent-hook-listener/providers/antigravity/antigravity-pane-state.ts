@@ -78,7 +78,7 @@ export function retireAntigravityChild(pane: AntigravityPaneChildState, id: stri
     }
   }
   pane.dirty = true
-  if (verified) {
+  if (verified && !pane.commands?.size) {
     pane.helpersIdleAt = Date.now()
   }
 }

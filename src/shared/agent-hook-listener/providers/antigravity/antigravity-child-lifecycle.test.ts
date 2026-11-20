@@ -210,3 +210,26 @@ it('resolves automatic models from transcripts and preserves them across automat
       .model
   ).toBe('model-a')
 })
+
+it('keeps a root command monitoring after its child finishes', async () => {
+  transcript('child')
+  descriptor('child')
+  hook('root', 'PreToolUse', {
+    stepIdx: 4,
+    toolCall: { name: 'run_command', args: { CommandLine: 'long-task' } }
+  })
+  spawn()
+  hook('child', 'PreInvocation')
+  await poll()
+  hook('root', 'Stop', { fullyIdle: false })
+  hook('child', 'Stop', { fullyIdle: true })
+  expect((await poll())?.payload).toMatchObject({
+    state: 'working',
+    workingMode: 'monitoring',
+    subagents: undefined
+  })
+  expect(hook('root', 'Stop', { fullyIdle: false })?.payload.workingMode).toBe('monitoring')
+  expect(
+    hook('root', 'PostToolUse', { stepIdx: 4, toolCall: { name: 'run_command' } })?.payload.state
+  ).toBe('done')
+})
