@@ -92,9 +92,12 @@ export function useBotChatComposerRoom(
         if (!bot) {
           return undefined
         }
-        return bot.hostId === hostId
-          ? botMentionToken(bot)
-          : botMentionToken(bot, undefined, botMentionServer(bot.hostId) ?? undefined)
+        if (bot.hostId === hostId) {
+          return botMentionToken(bot)
+        }
+        // No token names this computer from a server's chat yet, so its bots go by plain name.
+        const server = botMentionServer(bot.hostId)
+        return server === null ? undefined : botMentionToken(bot, undefined, server)
       },
       placeholder: t(
         'bots.chat.mentionPlaceholder',

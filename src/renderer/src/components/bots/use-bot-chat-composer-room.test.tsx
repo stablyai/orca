@@ -117,11 +117,14 @@ it("lists a paired server's bots after this computer's, with its pill, dimmed wh
 })
 
 it("lists a paired server's chat's own bots first, then this computer's and other servers' with their pill", () => {
-  const { result, openAt } = chat('runtime:m4')
+  const { result, completeMention, openAt } = chat('runtime:m4')
   openAt()
   expect(result.current.mentionFiles.files).toEqual([BUILD, PERF_M4, PERF, 'src/perf.ts'])
   expect(result.current.roomContext?.mentions.find((m) => m.key === PERF)?.host).toBeTruthy()
   expect(result.current.roomContext?.mentions.find((m) => m.key === BUILD)?.host).toBe(undefined)
+
+  act(() => result.current.chooseMention(PERF))
+  expect(completeMention).toHaveBeenCalledWith(PERF, '@Perf bot')
 })
 
 it("lists every reachable host's bots where the chat's own computer has none", () => {
