@@ -30,7 +30,8 @@ import type { OrderedGroupEntry, WorktreeGroupEntry } from './sections/worktree-
 
 import {
   appendProjectGroupSections,
-  getProjectGroupOccurrencePaths
+  getProjectGroupOccurrencePaths,
+  getProjectWorkspaceRevealPath
 } from './sections/project-group-sections'
 import { getSidebarLineageChildren } from './lineage/pinned-section-worktrees'
 import { emitPinnedGroup } from './sections/pinned-group-rows'
@@ -65,6 +66,7 @@ export type SidebarRowPlanInputs = {
   sortBy: WorkspaceSortBy
   /** Visible worktrees in the frozen sort order. */
   worktrees: Worktree[]
+  allWorktrees?: readonly Worktree[]
   repoMap: Map<string, Repo>
   /** Defaults to repoMap's registration for the row's repo id. */
   repoOfWorktree?: RepoOfWorktree
@@ -99,7 +101,6 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     sortBy,
     worktrees,
     repoMap,
-    repoOfWorktree,
     prGroupOf,
     repoOrder,
     workspaceStatuses,
@@ -113,15 +114,14 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
     pendingCreations,
-    projectGrouping,
     folderWorkspaces,
     hostLabelById,
     defaultHostId,
     pinnedDisplayPolicy,
     filterRepoIds
   } = inputs
-  const projectIndex = buildProjectGroupingIndex(projectGrouping)
-  const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
+  const projectIndex = buildProjectGroupingIndex(inputs.projectGrouping)
+  const repoOf = inputs.repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
   const pendingByRepo = new Map<string, PendingCreationRef[]>()
@@ -130,6 +130,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     list.push(creation)
     pendingByRepo.set(creation.repoId, list)
   }
+  const extraRowsByRepo = [pendingByRepo, importedWorktreesByRepo, newExternalWorktreesInboxByRepo]
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   // Folder rows are occurrences too, so a folder parent nests its children like any other row.
@@ -166,6 +167,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           : buildOrderedGroups({
               groupBy,
               naturalWorktrees,
+              projectWorktrees:
+                projectGroups.length > 0 ? (inputs.allWorktrees ?? worktrees) : undefined,
               repoMap,
               prGroupOf,
               workspaceStatuses,
@@ -183,10 +186,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
         groups.unshift([PINNED_GROUP_KEY, { label: '', items: pinned, repoIds: new Set() }])
       }
       const sections = groups.map(([key, group]): SidebarOccurrenceSection => {
-        const revealPath =
-          groupBy === 'repo' && key !== PINNED_GROUP_KEY && group.repo?.projectGroupId
-            ? projectGroupPaths.get(group.repo.projectGroupId)
-            : undefined
+        const parent = projectGroupPaths.get(group.repo?.projectGroupId ?? '')
         const items = (
           groupBy === 'repo' && key !== PINNED_GROUP_KEY
             ? orderMainWorktreeFirst(group.items, sortBy)
@@ -201,7 +201,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
             key === ALL_GROUP_KEY
               ? [...items, ...folders.rows]
               : [...items, ...folders.rowsOf(group.folderWorkspaces)],
-          revealPath: { key, parent: revealPath }
+          revealPath: getProjectWorkspaceRevealPath({ key, parent }, group, items, extraRowsByRepo)
         }
       })
       return [...sections, ...getFolderLaneSections(folderBound, projectGroupPaths)]

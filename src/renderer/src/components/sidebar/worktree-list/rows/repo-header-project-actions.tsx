@@ -85,7 +85,7 @@ export type RepoHeaderProjectActions = {
 }
 
 // Memoized: the sidebar re-renders every header row when the active workspace changes.
-export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjectActionsMenu({
+const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjectActionsMenu({
   repo,
   hostRepos,
   label,
@@ -208,7 +208,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
   )
 })
 
-export const RepoHeaderCreateWorkspaceButton = React.memo(function RepoHeaderCreateWorkspaceButton({
+const RepoHeaderCreateWorkspaceButton = React.memo(function RepoHeaderCreateWorkspaceButton({
   repo,
   label,
   pinHost = false,
@@ -279,3 +279,33 @@ export const RepoHeaderCreateWorkspaceButton = React.memo(function RepoHeaderCre
     </Tooltip>
   )
 })
+
+export function RepoProjectActionButtons({
+  repo,
+  hostRepos,
+  label,
+  projectGroups,
+  actions,
+  pinHost
+}: React.ComponentProps<typeof RepoHeaderProjectActionsMenu> & {
+  pinHost: boolean
+}): React.JSX.Element {
+  return (
+    <>
+      <RepoHeaderProjectActionsMenu
+        repo={repo}
+        hostRepos={hostRepos}
+        label={label}
+        projectGroups={projectGroups}
+        actions={actions}
+      />
+      <RepoHeaderCreateWorkspaceButton
+        key={`${repo.executionHostId ?? 'local'}:${repo.connectionId ?? ''}`}
+        repo={repo}
+        label={label}
+        pinHost={pinHost}
+        onCreateForRepo={actions.onCreateForRepo}
+      />
+    </>
+  )
+}

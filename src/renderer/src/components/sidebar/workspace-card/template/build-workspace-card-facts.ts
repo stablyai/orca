@@ -61,7 +61,13 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
       removalError: worktree.removalError || null,
       comment: worktree.comment
     },
-    repo: repo ? { id: repo.id, name: repo.displayName, ssh: Boolean(repo.connectionId) } : null,
+    repo: repo
+      ? {
+          id: repo.id,
+          name: card.inlineProjectName ?? repo.displayName,
+          ssh: Boolean(repo.connectionId)
+        }
+      : null,
     host: {
       kind: repo?.connectionId ? 'ssh' : runtimeHost ? 'runtime' : 'local',
       contextLabel: card.hostContextLabel || null,

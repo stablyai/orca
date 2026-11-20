@@ -51,6 +51,7 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
       groupBy: args.groupBy,
       sortBy: 'smart',
       worktrees: [...(args.visibleWorktrees ?? args.worktrees)],
+      allWorktrees: args.worktrees,
       repoMap: args.repoMap,
       prGroupOf: createSidebarPRGroupReader(args.repoMap, args.prCache),
       workspaceStatuses: args.workspaceStatuses,

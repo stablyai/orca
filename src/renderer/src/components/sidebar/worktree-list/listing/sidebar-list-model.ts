@@ -57,6 +57,7 @@ export type SectionRowsArgs = {
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   defaultHostId: ExecutionHostId
   worktrees: Worktree[]
+  allWorktrees?: readonly Worktree[]
   repos: readonly Repo[]
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>

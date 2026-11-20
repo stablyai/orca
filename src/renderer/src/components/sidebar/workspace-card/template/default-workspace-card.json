@@ -7,8 +7,8 @@
     "newStyle": "options.style == 'new'",
     "folder": "ws.kind == 'folder'",
     "pinnedRepo": "place.inPinnedSection && repo != null && !place.showProjectName",
-    "inlineRepo": "!vars.classic && repo != null && !place.hideRepoBadge && !vars.folder && !vars.pinnedRepo && !place.compactLine",
-    "lineRepo": "place.compactLine && repo != null && !vars.folder",
+    "inlineRepo": "!vars.classic && repo != null && !place.hideRepoBadge && (!vars.folder || place.showProjectName) && !vars.pinnedRepo && !place.compactLine",
+    "lineRepo": "place.compactLine && repo != null && (!vars.folder || place.showProjectName)",
     "metaRepo": "vars.classic && repo != null && !place.hideRepoBadge && !vars.pinnedRepo",
     "hostLabel": "options.show.host ? host.contextLabel : null",
     "hostBadge": "vars.hostLabel != null && (!vars.compact || place.showProjectName)",
@@ -139,7 +139,8 @@
                 { "el": "PrimaryStar", "when": "vars.star" },
                 { "el": "DeleteQuickAction", "when": "place.deleteQuickAction" }
               ]
-            }
+            },
+            { "el": "ProjectActions" }
           ]
         },
         {

@@ -12,20 +12,27 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { formatSparseDirectoryPreview } from '../controller/worktree-card-model'
 
-export function WorktreeCardRepoChip({ repo }: { repo: Repo }): React.JSX.Element {
+export function WorktreeCardRepoChip({
+  repo,
+  name
+}: {
+  repo: Repo
+  name?: string
+}): React.JSX.Element {
   const t = useTranslate()
+  const label = name ?? repo.displayName
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <ProjectChip
-          repo={repo}
+          repo={{ ...repo, displayName: label }}
           aria-label={t('auto.components.sidebar.WorktreeCard.35ccfe2475', 'Project {{value0}}', {
-            value0: repo.displayName
+            value0: label
           })}
         />
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>
-        {repo.displayName}
+        {label}
       </TooltipContent>
     </Tooltip>
   )

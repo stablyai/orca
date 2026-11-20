@@ -43,6 +43,9 @@ export function rowKeyMatchesRenderRow(row: RenderRow, rowKey: string): boolean 
   if (row.type === 'folder-workspace' && rowKey === folderWorkspaceKey(row.folderWorkspace.id)) {
     return true
   }
+  if (row.type === 'item' && row.inlineProjectName !== undefined && rowKey === row.sectionKey) {
+    return true
+  }
   return getRenderRowSidebarKey(row) === rowKey
 }
 

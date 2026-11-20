@@ -54,8 +54,21 @@ export type ProjectSectionEntry<Item, R extends ProjectSectionRepo = Repo> = {
   items: Item[]
   /** Owning-project activity, when display placement files rows under another project. */
   activityItems?: readonly Item[]
+  /** Catalog membership before visibility and pinning change the section's rows. */
+  workspaceCount?: number
   repo?: R
   repoIds: Set<string>
+}
+
+export function isSingleWorkspaceProject<Item>(
+  section: Pick<ProjectSectionEntry<Item>, 'workspaceCount' | 'activityItems'>,
+  displayed: readonly Item[]
+): boolean {
+  return (
+    section.workspaceCount === 1 &&
+    displayed.length === 1 &&
+    displayed[0] === section.activityItems?.[0]
+  )
 }
 
 const projectGroupingIndexCache = new WeakMap<ProjectSectionModel, ProjectGroupingIndex | null>()
@@ -265,6 +278,7 @@ export function buildProjectSections<
   R extends ProjectSectionRepo
 >(args: {
   items: readonly Item[]
+  allItems?: readonly Item[]
   repoIdOf: (item: Item) => string
   displayRepoIdOf?: (item: Item) => string
   repoMap: ReadonlyMap<string, R>
@@ -278,6 +292,9 @@ export function buildProjectSections<
   const { repoMap, projectIndex } = args
   const sections = new Map<string, ProjectSectionEntry<Item, R>>()
   const ownership = buildProjectOwnershipIndex(args)
+  const allOwnership = args.allItems
+    ? buildProjectOwnershipIndex({ ...args, items: args.allItems })
+    : ownership
   for (const item of args.items) {
     const repoId = args.repoIdOf(item)
     addItemToProjectSection(
@@ -302,6 +319,7 @@ export function buildProjectSections<
   }
   for (const [key, section] of sections) {
     section.activityItems = ownership.get(key)?.items ?? []
+    section.workspaceCount = allOwnership.get(key)?.items.length ?? 0
   }
   return orderProjectSections(sections, repoMap, args.repoOrder, args.projectOrderBy)
 }

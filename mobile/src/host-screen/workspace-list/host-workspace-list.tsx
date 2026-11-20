@@ -123,6 +123,9 @@ export function HostWorkspaceList({
 
   const renderSectionHeader = useCallback(
     ({ section }: { section: Section }) => {
+      if (section.hideHeader) {
+        return null
+      }
       const collapseKey = section.collapseKey ?? section.key
       return (
         bots.header(section, collapsedGroups, pendingCollapseKeys, toggleCollapsed) ?? (

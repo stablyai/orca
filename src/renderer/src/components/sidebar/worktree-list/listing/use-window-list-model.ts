@@ -44,6 +44,7 @@ export function useWindowSidebarListModel(args: SidebarListModelArgs): SidebarLi
     pinnedDisplayPolicy: args.pinnedDisplayPolicy,
     defaultHostId,
     worktrees: visibleWorktrees,
+    allWorktrees: args.allWorktrees,
     repos,
     repoMap,
     worktreeMap: args.worktreeMap,

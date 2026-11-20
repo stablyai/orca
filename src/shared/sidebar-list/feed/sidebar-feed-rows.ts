@@ -216,6 +216,7 @@ export function planSidebarFeedRows(
     groupBy,
     sortBy: view.sortBy,
     worktrees: visibleWorktrees,
+    allWorktrees,
     repoMap,
     repoOfWorktree: index.repoOf,
     prGroupOf: (worktree) =>

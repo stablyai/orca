@@ -9,6 +9,9 @@ export function collectRenderedSidebarRowKeys(sectionRows: readonly HostSectionR
       keys.add(row.key)
     } else if (row.type === 'item') {
       keys.add(row.rowKey)
+      if (row.inlineProjectName !== undefined) {
+        keys.add(row.sectionKey)
+      }
     } else if (row.type === 'folder-workspace') {
       keys.add(getFolderWorkspaceHostIdentity(row.folderWorkspace))
       keys.add(folderWorkspaceKey(row.folderWorkspace.id))

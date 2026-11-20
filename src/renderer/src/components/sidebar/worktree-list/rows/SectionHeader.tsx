@@ -38,10 +38,7 @@ import {
   ProjectGroupCreateWorkspaceButton,
   ProjectGroupHeaderMenu
 } from './project-group-header-actions'
-import {
-  RepoHeaderCreateWorkspaceButton,
-  RepoHeaderProjectActionsMenu
-} from './repo-header-project-actions'
+import { RepoProjectActionButtons } from './repo-header-project-actions'
 import {
   handleRepoHeaderCollapseAffordancePointerDown,
   shouldIgnoreRepoHeaderToggle,
@@ -380,22 +377,13 @@ export function renderWorktreeSectionHeaderRow(
             ) : null}
 
             {row.repo && ctx.groupBy === 'repo' ? (
-              <RepoHeaderProjectActionsMenu
+              <RepoProjectActionButtons
                 repo={row.repo}
                 hostRepos={row.hostRepos}
                 label={label}
                 projectGroups={ctx.projectGroups}
                 actions={ctx.projectActions}
-              />
-            ) : null}
-
-            {row.repo && ctx.groupBy === 'repo' ? (
-              <RepoHeaderCreateWorkspaceButton
-                key={`${row.repo.executionHostId ?? 'local'}:${row.repo.connectionId ?? ''}`}
-                repo={row.repo}
-                label={label}
                 pinHost={isSingleHostProjectHeader(row)}
-                onCreateForRepo={ctx.projectActions.onCreateForRepo}
               />
             ) : null}
           </ProjectHeaderActions>

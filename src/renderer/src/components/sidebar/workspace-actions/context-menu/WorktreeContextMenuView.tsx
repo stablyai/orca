@@ -114,7 +114,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
         setMenuOpenState(true)
       }}
       onClickCapture={(event) => {
-        suppressOpeningPointerEvent(event)
+        if (isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
+          suppressOpeningPointerEvent(event)
+        }
       }}
     >
       {children}

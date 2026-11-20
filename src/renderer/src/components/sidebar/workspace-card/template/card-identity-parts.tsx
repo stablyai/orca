@@ -107,8 +107,9 @@ export const CARD_IDENTITY_PARTS = {
     <CardTitle props={props} card={card} />
   )),
   TitleStatus: part([], () => <WorktreeCardTitleStatus />),
-  RepoChip: part([], (_props, _children, { repo }) =>
-    repo ? <WorktreeCardRepoChip repo={repo} /> : null
+  ProjectActions: part([], (_props, _children, card) => card.projectActions),
+  RepoChip: part([], (_props, _children, { repo, inlineProjectName }) =>
+    repo ? <WorktreeCardRepoChip repo={repo} name={inlineProjectName} /> : null
   ),
   SshControl: part(['iconOnly'], (props, _children, card) => sshControl(props, card)),
   RuntimeHostMark: part([], (_props, _children, card) => (
@@ -143,8 +144,8 @@ export const CARD_IDENTITY_PARTS = {
       onClick={card.handleWorkspaceQuickAction}
     />
   )),
-  MetaRepoBadge: part([], (_props, _children, { repo }) =>
-    repo ? <WorktreeCardMetaRepoBadge repo={repo} /> : null
+  MetaRepoBadge: part([], (_props, _children, { repo, inlineProjectName }) =>
+    repo ? <WorktreeCardMetaRepoBadge repo={repo} name={inlineProjectName} /> : null
   ),
   HostBadge: part(['label'], (props, _children, card) => (
     <CardHostBadge card={card} label={typeof props.label === 'string' ? props.label : ''} />

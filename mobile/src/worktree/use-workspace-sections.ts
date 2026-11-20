@@ -119,7 +119,7 @@ export function useWorkspaceSections(args: {
     () =>
       rawSections.map((s) => ({
         ...s,
-        data: collapsedGroups.has(s.key) ? [] : s.data
+        data: !s.hideHeader && collapsedGroups.has(s.key) ? [] : s.data
       })),
     [rawSections, collapsedGroups]
   )
