@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle
-} from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
@@ -163,42 +157,37 @@ export function ZotzAgentQueueDrawer({
       modal={false}
     >
       <SheetContent
-        side="left"
+        side="sidebarCompanion"
         showCloseButton={false}
         ref={trackSidebarLiveWidth}
-        className="workspace-kanban-sheet-content bg-worktree-sidebar p-0 sm:max-w-none"
         overlayStyle={{
           top: WORKSPACE_TOP_CHROME_HEIGHT,
           bottom: drawerBottom,
           left: drawerLeftCss,
           pointerEvents: 'none'
         }}
-        style={
-          {
-            ...leftSidebarStyle,
-            left: drawerLeftCss,
-            top: WORKSPACE_TOP_CHROME_HEIGHT,
-            bottom: drawerBottom,
-            height: 'auto',
-            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
-          } as React.CSSProperties
-        }
+        style={{
+          ...leftSidebarStyle,
+          left: drawerLeftCss,
+          top: WORKSPACE_TOP_CHROME_HEIGHT,
+          bottom: drawerBottom,
+          height: 'auto',
+          width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
+        }}
         data-zotz-agent-queue-sheet=""
         onOpenAutoFocus={(event) => event.preventDefault()}
         onPointerDownOutside={guardSidebarInteraction}
         onInteractOutside={guardSidebarInteraction}
       >
-        <SheetHeader className="border-b border-worktree-sidebar-border px-4 py-3 pr-12">
-          <SheetTitle className="text-sm">
-            {t('zotz.agentQueue.board.title', 'Agent queue')}
-          </SheetTitle>
-          <SheetDescription className="text-xs">
+        <div className="flex flex-col gap-0.5 border-b border-worktree-sidebar-border px-4 py-3 pr-12">
+          <SheetTitle>{t('zotz.agentQueue.board.title', 'Agent queue')}</SheetTitle>
+          <SheetDescription>
             {t(
               'zotz.agentQueue.board.description',
               'Each machine has its own memory: its agents start when they fit there, the rest wait their turn.'
             )}
           </SheetDescription>
-        </SheetHeader>
+        </div>
         <Button
           type="button"
           variant="ghost"

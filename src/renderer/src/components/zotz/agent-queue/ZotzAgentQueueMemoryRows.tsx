@@ -78,16 +78,17 @@ function MemoryRow({ machine }: { machine: ZotzAgentQueueMachine }): React.JSX.E
   )
 }
 
+/** `queues` holds this machine and the paired Zotz servers, never the SSH host catalog. */
 export function MemoryRows({
-  machines
+  queues
 }: {
-  machines: readonly ZotzAgentQueueMachine[]
+  queues: readonly ZotzAgentQueueMachine[]
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2">
-        {machines.map((machine) => (
+        {queues.map((machine) => (
           <MemoryRow key={machine.hostId} machine={machine} />
         ))}
       </div>
@@ -105,7 +106,7 @@ export function MemoryRows({
           {t('zotz.agentQueue.board.legendMinFree', 'Always free')}
         </span>
       </div>
-      {machines
+      {queues
         .filter((machine) => !machine.onCancel && machine.snapshot.queued.length > 0)
         .map((machine) => (
           <div key={machine.hostId} className="text-[11px] text-muted-foreground">

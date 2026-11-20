@@ -25902,7 +25902,6 @@
         "priorityAutomation": "Automation",
         "free": "{{free}} GB free of {{total}} GB",
         "keepsFree": "Always keeps {{min}} GB free",
-        "minFreeMarker": "Always free",
         "legendSystem": "System and other apps",
         "legendAgents": "Agents",
         "legendMinFree": "Always free",

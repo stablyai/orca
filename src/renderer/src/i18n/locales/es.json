@@ -24276,7 +24276,6 @@
         "priorityAutomation": "Automatización",
         "free": "{{free}} GB libres de {{total}} GB",
         "keepsFree": "Siempre deja {{min}} GB libres",
-        "minFreeMarker": "Siempre libre",
         "legendSystem": "Sistema y otras apps",
         "legendAgents": "Agentes",
         "legendMinFree": "Siempre libre",

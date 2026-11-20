@@ -210,7 +210,7 @@ export function ZotzAgentQueueBoard(props: ZotzAgentQueueBoardProps): React.JSX.
   )
   return (
     <div className="space-y-3">
-      <MemoryRows machines={machines} />
+      <MemoryRows queues={machines} />
       <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
         <Column
           title={t('zotz.agentQueue.board.backlog', 'Backlog')}
