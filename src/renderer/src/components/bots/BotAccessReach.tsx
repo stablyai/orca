@@ -43,6 +43,7 @@ import { setBotGoogle, useBotGoogleReach } from './google/google-connect-client'
 import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
 import { NewBotDialog } from './NewBotDialog'
 import { useBotAccessPlace } from './use-bot-access-place'
+import { useBotConnectorPaged } from './bot-connector-page'
 
 const copy = (t: Translate, id: BotAccessCopyId, values: Record<string, unknown> = {}): string =>
   t(`bots.access.${id}`, BOT_ACCESS_COPY[id], values)
@@ -75,12 +76,15 @@ export function BotAccessSummary({
 }): React.JSX.Element {
   const t = useTranslate()
   const place = useBotAccessPlace(bot.hostId)
+  const brief = useBotConnectorPaged()
   const { who, control } = botAccessSummary(others)
   return (
     <div className="mb-2 space-y-0.5">
       <p className="text-sm font-medium">{copy(t, who.id, { ...who.values, name: bot.name })}</p>
       <p className="text-xs leading-5 text-muted-foreground">
-        {copy(t, control.id, { ...control.values, name: bot.name, ...place })}
+        {brief
+          ? copy(t, 'controlBrief')
+          : copy(t, control.id, { ...control.values, name: bot.name, ...place })}
       </p>
     </div>
   )
@@ -98,10 +102,14 @@ export function BotAccessControlLine({
 }): React.JSX.Element {
   const t = useTranslate()
   const place = useBotAccessPlace(bot.hostId)
+  // A connector's own page says it in one line.
+  const brief = useBotConnectorPaged()
   const { control } = botAccessSummary(others)
   return (
     <p className={className}>
-      {copy(t, control.id, { ...control.values, name: bot.name, ...place })}
+      {brief
+        ? copy(t, 'controlBrief')
+        : copy(t, control.id, { ...control.values, name: bot.name, ...place })}
     </p>
   )
 }

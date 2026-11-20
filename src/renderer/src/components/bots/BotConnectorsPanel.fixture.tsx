@@ -1,4 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { openBotConnectorPage } from './bot-connector-page'
 import {
   base,
   botsChanged,
@@ -143,4 +144,72 @@ export const sameServiceRowsNarrow = defineFixture({
   width: 260,
   setup: () => stub({ linearLinked: true, composio: true, sameService: true }),
   render: () => <Panel bot={twoOfEach} />
+})
+
+// Opens a row as a click would, without the focus ring a scripted click leaves on Back.
+const openRow = async (name: string): Promise<void> => {
+  // After the connectors are read, so the row is the loaded one.
+  await settle(500)
+  await clickWhenShown(named(name))
+  await settle(250)
+  const focused = document.activeElement
+  if (focused instanceof HTMLElement) {
+    focused.blur()
+  }
+}
+
+const fresh = (options: Parameters<typeof stub>[0]): void => {
+  stub(options)
+  // The page stays warm between fixtures; each starts on the list.
+  openBotConnectorPage(null)
+}
+
+/** A connector's own page, opened from its row. */
+export const slackPage = defineFixture({
+  width: 420,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: () => openRow('Slack · Globex')
+})
+
+export const slackPageNarrow = defineFixture({
+  width: 300,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: () => openRow('Slack · Globex')
+})
+
+/** A connector that needs the owner: its fix in the list row, then in its page's header. */
+export const needsOwnerNarrow = defineFixture({
+  width: 300,
+  setup: () => fresh({ linearLinked: false, composio: false }),
+  render: () => <Panel bot={base} />
+})
+
+export const needsOwnerPageNarrow = defineFixture({
+  width: 300,
+  setup: () => fresh({ linearLinked: false, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: () => openRow('Linear · Globex')
+})
+
+/** The longest name, in the narrowest pane: the heading wraps. */
+export const longNamePageNarrow = defineFixture({
+  width: 300,
+  setup: () => fresh({ linearLinked: true, composio: false, sameService: true }),
+  render: () => <Panel bot={twoOfEach} />,
+  interact: () => openRow('Slack · Acme Design Partners')
+})
+
+export const onlyOneConnector = defineFixture({
+  width: 420,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={slackOnly} />
+})
+
+export const googlePage = defineFixture({
+  width: 420,
+  setup: () => fresh({ linearLinked: true, composio: false }),
+  render: () => <Panel bot={base} />,
+  interact: () => openRow('Google')
 })

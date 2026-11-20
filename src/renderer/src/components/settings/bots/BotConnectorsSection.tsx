@@ -21,12 +21,17 @@ import { BotSlackCard } from '@/components/bots/slack/BotSlackCard'
 import { BotWebhooksCard } from '@/components/bots/webhooks/BotWebhooksCard'
 import { BotCloudSignInNotice } from '@/components/bots/BotCloudSignInNotice'
 import { BotConnectorsHostNotice } from '@/components/bots/BotConnectorsHostNotice'
-import { BotConnectorRowKey } from '@/components/bots/bot-connector-row-open'
-import { botRefKey } from '@/lib/bot-hosts'
+import {
+  BotConnectorPageShown,
+  BotConnectorRowKey,
+  botConnectorRowKey,
+  openBotConnectorPage,
+  useBotConnectorPage
+} from '@/components/bots/bot-connector-page'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 
-/** One connector's row: closed until clicked, unless it needs the owner; then as the owner left it. */
+/** One connector's row in the list, which opens its own page in the list's place. */
 function BotConnectorEntryRow({
   bot,
   entry
@@ -34,8 +39,7 @@ function BotConnectorEntryRow({
   bot: Bot
   entry: BotConnectorEntry
 }): React.JSX.Element {
-  // The row keeps its open state for the session, here and on the bot's Connectors tab alike.
-  const rowKey = `${botRefKey(bot)}\u0000${entry.key}`
+  const rowKey = botConnectorRowKey(bot, entry.key)
   return (
     <BotConnectorRowKey.Provider value={rowKey}>
       <BotConnectorEntryCard bot={bot} entry={entry} />
@@ -137,12 +141,31 @@ export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
   const t = useTranslate()
   const entries = useBotConnectorEntries(bot, 'apps')
   const webhooks = useWebhooksConnector(bot)
+  const openPage = useBotConnectorPage(bot)
+  // A page whose connector is gone (removed, or another bot's) shows the list again.
+  const page =
+    openPage !== null && entries.some((entry) => botConnectorRowKey(bot, entry.key) === openPage)
+      ? openPage
+      : null
   // Keyed by host and bot too, so showing another bot gives each of its rows a fresh mount.
   const rows = entries.map((entry) => (
-    <BotConnectorEntryRow key={`${botRefKey(bot)}\u0000${entry.key}`} bot={bot} entry={entry} />
+    <BotConnectorEntryRow key={botConnectorRowKey(bot, entry.key)} bot={bot} entry={entry} />
   ))
   // The Webhooks row is always listed but shows only once a hook exists.
   const empty = entries.every((entry) => entry.kind === 'webhooks') && webhooks !== 'added'
+  const onKeyDown = (event: React.KeyboardEvent): void => {
+    // Esc from within the page (not a menu or dialog it opened, which take their own) goes back.
+    if (
+      event.key === 'Escape' &&
+      page !== null &&
+      !event.defaultPrevented &&
+      event.target instanceof Node &&
+      event.currentTarget.contains(event.target)
+    ) {
+      event.preventDefault()
+      openBotConnectorPage(null)
+    }
+  }
   return (
     <AddConnectorButton
       bot={bot}
@@ -153,19 +176,29 @@ export function BotConnectorsSection({ bot }: { bot: Bot }): React.JSX.Element {
             <NoConnectors bot={bot} onAdd={open} />
           </section>
         ) : (
-          <section className="flex flex-col gap-0.5">
-            <div className="flex items-center justify-between gap-2 pr-1 pb-1 pl-2">
-              <h3 className="text-sm font-semibold">
-                {t('settings.bots.connectors', 'Connectors')}
-              </h3>
-              <Button variant="ghost" size="xs" onClick={open}>
-                <Plus />
-                {t('bots.connectors.add', 'Add')}
-              </Button>
+          <section className="flex flex-col gap-0.5" onKeyDown={onKeyDown}>
+            {page === null ? (
+              <>
+                <div className="flex items-center justify-between gap-2 pr-1 pb-1 pl-1">
+                  <h3 className="text-sm font-semibold">
+                    {t('settings.bots.connectors', 'Connectors')}
+                  </h3>
+                  <Button variant="ghost" size="xs" onClick={open}>
+                    <Plus />
+                    {t('bots.connectors.add', 'Add')}
+                  </Button>
+                </div>
+                <BotCloudSignInNotice bot={bot} webhooks={webhooks === 'added'} />
+                <BotConnectorsHostNotice bot={bot} />
+              </>
+            ) : null}
+            {/* The same rows either way, so a page and its dialogs keep their state. */}
+            <div
+              data-page={page !== null}
+              className="rounded-[10px] border border-border bg-card p-1 data-[page=true]:rounded-none data-[page=true]:border-0 data-[page=true]:bg-transparent data-[page=true]:p-0"
+            >
+              <BotConnectorPageShown.Provider value={page}>{rows}</BotConnectorPageShown.Provider>
             </div>
-            <BotCloudSignInNotice bot={bot} webhooks={webhooks === 'added'} />
-            <BotConnectorsHostNotice bot={bot} />
-            {rows}
           </section>
         )
       }

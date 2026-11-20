@@ -9,6 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { openBotHome } from '@/lib/bot-catalog'
+import { botConnectorRowKey, openBotConnectorPage } from './bot-connector-page'
 import type { BotConnector } from './bot-connectors'
 import { BotAppsCatalog, type BotAppsStep } from './apps/BotAppsCatalog'
 import type { Bot } from '../../../../shared/bot-types'
@@ -52,10 +53,13 @@ export function connectorDescription(id: BotConnectorId): string {
 }
 
 /** The bot page's Connectors tab; from inside Settings, which lists them too, the dialog only closes. */
-export function manageConnectors(bot: Bot): void {
+export function manageConnectors(bot: Bot, entryKey?: string): void {
   const { activeView, setRightSidebarTab, setRightSidebarOpen } = useAppStore.getState()
   if (activeView === 'settings' || !openBotHome(bot)) {
     return
+  }
+  if (entryKey !== undefined) {
+    openBotConnectorPage(botConnectorRowKey(bot, entryKey))
   }
   setRightSidebarTab('bot-connectors')
   setRightSidebarOpen(true)
