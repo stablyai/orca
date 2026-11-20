@@ -5,7 +5,8 @@ export const OFFSCREEN_ROW_ATTRIBUTE = 'data-row-offscreen'
 
 let observer: IntersectionObserver | null = null
 let observedCount = 0
-const rowTargets = new WeakSet<Element>()
+// Entries can arrive after unobserve; only registered targets are marked.
+const attributeByTarget = new Map<Element, string>()
 
 function getObserver(): IntersectionObserver | null {
   if (typeof IntersectionObserver !== 'function') {
@@ -13,10 +14,10 @@ function getObserver(): IntersectionObserver | null {
   }
   observer ??= new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      entry.target.toggleAttribute(
-        rowTargets.has(entry.target) ? OFFSCREEN_ROW_ATTRIBUTE : OFFSCREEN_ANIMATION_ATTRIBUTE,
-        !entry.isIntersecting
-      )
+      const attribute = attributeByTarget.get(entry.target)
+      if (attribute !== undefined) {
+        entry.target.toggleAttribute(attribute, !entry.isIntersecting)
+      }
     }
   })
   return observer
@@ -27,14 +28,12 @@ function observe(element: Element | null, attribute: string): () => void {
   if (element === null || shared === null) {
     return () => {}
   }
-  if (attribute === OFFSCREEN_ROW_ATTRIBUTE) {
-    rowTargets.add(element)
-  }
+  attributeByTarget.set(element, attribute)
   shared.observe(element)
   observedCount++
   return () => {
     shared.unobserve(element)
-    rowTargets.delete(element)
+    attributeByTarget.delete(element)
     element.removeAttribute(attribute)
     observedCount--
     if (observedCount === 0) {
