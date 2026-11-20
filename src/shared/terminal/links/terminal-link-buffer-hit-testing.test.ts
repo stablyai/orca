@@ -614,6 +614,47 @@ describe('file paths wrapped inside terminal table cells', () => {
     expect(fileLinksAt(rows, 2, '__')).toEqual([])
   })
 
+  it('keeps an already-complete wrapped path when the next row could extend its extension', () => {
+    const widths = [21, 8]
+    const rows = [
+      framedRow([' src/components/LongN', ' notes '], widths),
+      framedRow([' ame-of-the-widget.ts', ' more  '], widths),
+      framedRow([' x                   ', ' tail  '], widths)
+    ]
+    const tsReading = {
+      pathText: 'src/components/LongName-of-the-widget.ts',
+      line: null,
+      column: null
+    }
+    const tsxReading = {
+      pathText: 'src/components/LongName-of-the-widget.tsx',
+      line: null,
+      column: null
+    }
+    expect(fileLinksAt(rows, 1, 'src/components')).toContainEqual(tsReading)
+    expect(fileLinksAt(rows, 1, 'src/components')).toContainEqual(tsxReading)
+    expect(fileLinksAt(rows, 2, 'ame-of-the-widget.ts')).toContainEqual(tsReading)
+  })
+
+  it('does not slice mid-token when a continuation row is shifted left inside aligned borders', () => {
+    const rows = ['│  src/long/│ notes │', '│ file.ts   │ more  │']
+    expect(
+      fileLinksAt(rows, 1, 'src/long/').some((link) => link.pathText === 'src/long/ile.ts')
+    ).toBe(false)
+    expect(fileLinksAt(rows, 2, 'file.ts')).not.toContainEqual({
+      pathText: 'src/long/ile.ts',
+      line: null,
+      column: null
+    })
+  })
+
+  it('rebuilds flush border-wrapped long extensions such as .swift', () => {
+    const rows = unpaddedRows(' src/components/ProgressView.swi', ' ft')
+    const reading = { pathText: 'src/components/ProgressView.swift', line: null, column: null }
+    expect(fileLinksAt(rows, 1, 'src/components')).toContainEqual(reading)
+    expect(fileLinksAt(rows, 2, 'ft')).toContainEqual(reading)
+  })
+
   it('still joins a hard-wrapped path that is not inside a table', () => {
     const rows = [
       'result validation-screenshots/02-after-',

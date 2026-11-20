@@ -9,16 +9,19 @@ const TABLE_PATH_FRAGMENT_CHAR = /[\p{L}\p{N}\p{M}._~@%+=:,/\\()[\]-]/u
 // A cell this full is a hard wrap. Matches framed HTTP links, and still allows one padding space.
 const MIN_TABLE_PATH_FILL_RATIO = 0.8
 const MAX_TABLE_PATH_ROWS = 20
-const BORDER_WRAPPED_LONG_EXTENSIONS = new Set(['markdown'])
-const TEST_OR_SPEC_EXTENSIONS = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts'])
+const extSet = (s: string) => new Set(s.split(' '))
+const BORDER_WRAPPED_LONG_EXTENSIONS = extSet(
+  'astro cmake csproj gradle graphql groovy jsonl markdown ndjson plist podspec prisma properties proto scala svelte swift tfvars xhtml'
+)
+const TEST_OR_SPEC_EXTENSIONS = extSet('ts tsx js jsx mjs cjs mts cts')
 // Stem -> allowed final extensions for a flush border cut (`widget.test` + `.ts`, `archive.tar` + `.gz`).
 const COMPOUND_EXTENSION_CONTINUATIONS = new Map<string, ReadonlySet<string>>([
-  ['d', new Set(['ts', 'tsx', 'mts', 'cts'])],
-  ['min', new Set(['js', 'css', 'mjs', 'cjs'])],
-  ['module', new Set(['css', 'scss', 'sass', 'less'])],
+  ['d', extSet('ts tsx mts cts')],
+  ['min', extSet('js css mjs cjs')],
+  ['module', extSet('css scss sass less')],
   ['spec', TEST_OR_SPEC_EXTENSIONS],
-  ['stories', new Set(['ts', 'tsx', 'js', 'jsx', 'mdx', 'svelte'])],
-  ['tar', new Set(['gz', 'bz2', 'xz', 'zst', 'lzma'])],
+  ['stories', extSet('ts tsx js jsx mdx svelte')],
+  ['tar', extSet('gz bz2 xz zst lzma')],
   ['test', TEST_OR_SPEC_EXTENSIONS]
 ])
 
@@ -144,20 +147,15 @@ function fillsCell(translated: TranslatedLine, span: FrameSpan, slice: PathSlice
   if (!/^\s*$/.test(translated.text.slice(slice.end, span.rightIndex))) {
     return false
   }
-  const contentStartColumn = translated.columns[span.leftIndex + 1]
-  const fragmentStartColumn = translated.columns[slice.start]
-  const fragmentEndColumn = translated.columns[slice.end]
-  if (
-    contentStartColumn === undefined ||
-    fragmentStartColumn === undefined ||
-    fragmentEndColumn === undefined
-  ) {
-    return false
-  }
-  const contentWidth = span.rightColumn - contentStartColumn
+  const contentStart = translated.columns[span.leftIndex + 1]
+  const fragmentStart = translated.columns[slice.start]
+  const fragmentEnd = translated.columns[slice.end]
+  const contentWidth = contentStart !== undefined ? span.rightColumn - contentStart : 0
   return (
     contentWidth > 0 &&
-    (fragmentEndColumn - fragmentStartColumn) / contentWidth >= MIN_TABLE_PATH_FILL_RATIO
+    fragmentStart !== undefined &&
+    fragmentEnd !== undefined &&
+    (fragmentEnd - fragmentStart) / contentWidth >= MIN_TABLE_PATH_FILL_RATIO
   )
 }
 
@@ -185,7 +183,10 @@ function leadingPathSlice(translated: TranslatedLine, span: FrameSpan, startColu
   while (start < span.rightIndex && (translated.columns[start] ?? -1) < startColumn) {
     start++
   }
-  if ((translated.columns[start] ?? -1) !== startColumn) {
+  if (
+    (translated.columns[start] ?? -1) !== startColumn ||
+    (start > span.leftIndex + 1 && !/\s/.test(translated.text[start - 1] ?? ''))
+  ) {
     return null
   }
   let end = start
@@ -241,7 +242,7 @@ function toLogicalLine(
   }
 }
 
-function candidateForCell(
+function candidatesForCell(
   buffer: TerminalLinkBuffer,
   cache: Map<number, CachedRow | null>,
   startY: number,
@@ -249,12 +250,13 @@ function candidateForCell(
   span: FrameSpan,
   startSlice: PathSlice,
   startRow: CachedRow
-): WrappedLogicalLine | null {
+): WrappedLogicalLine[] {
   const startColumn = startRow.translated.columns[startSlice.start]
   if (startColumn === undefined || !fillsCell(startRow.translated, span, startSlice)) {
-    return null
+    return []
   }
   const pieces = [{ row: startRow, y: startY, slice: startSlice }]
+  const emitted: WrappedLogicalLine[] = []
   let text = startRow.translated.text.slice(startSlice.start, startSlice.end)
   let prevHasTrailingPadding = sliceHasTrailingPadding(startRow.translated, span, startSlice)
   let lastY = startY
@@ -273,8 +275,14 @@ function candidateForCell(
     const fragment = row.translated.text.slice(nextSlice.start, nextSlice.end)
     // A padded name must not swallow the next row's own file, flag, or sibling extension.
     const ext = /\.([\p{L}\p{N}]+)$/u.exec(text)?.[1] ?? null
-    if (ext !== null && !canContinueAfterFileExtension(ext, fragment, prevHasTrailingPadding)) {
-      break
+    if (ext !== null) {
+      if (!canContinueAfterFileExtension(ext, fragment, prevHasTrailingPadding)) {
+        break
+      }
+      // Keep the already-complete path alongside any extended candidate (`foo.ts` + `x`).
+      if (pieces.length >= 2 && lastY >= currentY) {
+        emitted.push(toLogicalLine(pieces, span))
+      }
     }
     pieces.push({ row, y: rowY, slice: nextSlice })
     text += fragment
@@ -284,7 +292,10 @@ function candidateForCell(
       break
     }
   }
-  return pieces.length >= 2 && lastY >= currentY ? toLogicalLine(pieces, span) : null
+  if (pieces.length >= 2 && lastY >= currentY) {
+    emitted.push(toLogicalLine(pieces, span))
+  }
+  return emitted
 }
 
 export function buildHardWrappedTableFileLogicalLineCandidates(
@@ -309,18 +320,9 @@ export function buildHardWrappedTableFileLogicalLineCandidates(
       if (!startSlice) {
         continue
       }
-      const candidate = candidateForCell(
-        buffer,
-        cache,
-        startY,
-        currentY,
-        span,
-        startSlice,
-        startRow
+      candidates.push(
+        ...candidatesForCell(buffer, cache, startY, currentY, span, startSlice, startRow)
       )
-      if (candidate) {
-        candidates.push(candidate)
-      }
     }
   }
   return candidates.sort(
