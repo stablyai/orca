@@ -21,15 +21,19 @@ const refresher = createHostOAuthRefresher<LinearLogin>({
   read: readWorkspaceLogin,
   grantOf: (login) => login,
   save: (workspaceId, login, refreshed) =>
-    saveWorkspaceLogin(workspaceId, {
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      expiresAt: refreshed.expiresAt,
-      clientId: login.clientId
-    }),
+    saveWorkspaceLogin(
+      workspaceId,
+      {
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken,
+        expiresAt: refreshed.expiresAt,
+        clientId: login.clientId
+      },
+      login.refreshToken
+    ),
   // Revoked or expired for good: forget it, so Orca says to connect again instead of failing.
   // Offline needs nothing: the next read or wake tries again; Linear replays a refresh for 30 minutes.
-  ended: (workspaceId) => clearWorkspaceLogin(workspaceId)
+  ended: (workspaceId, login) => clearWorkspaceLogin(workspaceId, login.refreshToken)
 })
 
 /**
@@ -48,9 +52,9 @@ export async function refreshLinearLogin(
 export async function refreshDueLinearLogins(
   deps: HostOAuthRefreshDeps = defaultHostOAuthRefreshDeps
 ): Promise<void> {
-  const ids = getWorkspaceFile()
-    .workspaces.map((workspace) => workspace.id)
-    .filter(hasWorkspaceLogin)
+  const workspaces = (await getWorkspaceFile()).workspaces
+  const presence = await Promise.all(workspaces.map((workspace) => hasWorkspaceLogin(workspace.id)))
+  const ids = workspaces.filter((_, index) => presence[index]).map((workspace) => workspace.id)
   await Promise.all(ids.map((id) => refreshLinearLogin(id, deps)))
 }
 

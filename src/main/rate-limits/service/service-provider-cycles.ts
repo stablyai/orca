@@ -91,6 +91,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     if (!options?.force && this.shouldSkipAutomatedFetch('claude', this.state.claude)) {
       return
     }
+    const oauthEnabled = this.isClaudeOAuthUsageEnabled()
     const claudeTarget = this.claudeFetchTarget
     // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
@@ -100,7 +101,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     }
     this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     // After the snapshot: statusLine posts are dropped until one names the selected account.
-    if (!this.isClaudeOAuthUsageEnabled()) {
+    if (!oauthEnabled || !this.isClaudeOAuthUsageEnabled()) {
       this.updateState({ ...this.state, claude: this.claudeUsageWithoutOAuth() })
       return
     }

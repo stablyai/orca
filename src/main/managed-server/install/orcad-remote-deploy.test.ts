@@ -34,7 +34,11 @@ vi.mock('./orcad-local-build-hash', () => ({
   computeLocalOrcadBuildHash: () => 'abc123def4567890'
 }))
 
-import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
+import {
+  execCommand,
+  SSH_EXEC_TIMEOUT_CODE,
+  sshCommandExitError
+} from '../../ssh/remote-exec/remote-exec-command'
 import { isRelayInstallLockStale } from './remote-install-lock'
 import { uploadRemoteInstallDirectory } from './remote-install-transfers'
 import { writeAtomicOrcadRemoteRecord } from './orcad-remote-record-file'
@@ -109,7 +113,8 @@ type HostScript = {
   activationRecord: string
   readiness: Record<string, string>
   log: string[]
-  preflightResult?: string
+  /** An Error is thrown, as when the preflight command fails instead of answering. */
+  preflightResult?: string | Error
   snapshotResult?: string
   comparisonResult?: string
   candidateStopResult?: string
@@ -142,6 +147,9 @@ function scriptHost(script: HostScript): void {
     }
     if (text.includes('--orcad-profile-state-preflight')) {
       script.log.push('preflight')
+      if (script.preflightResult instanceof Error) {
+        throw script.preflightResult
+      }
       return (
         script.preflightResult ??
         JSON.stringify({
@@ -234,6 +242,56 @@ describe('deployOrcad', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
+
+  it.each([
+    [
+      'times out',
+      Object.assign(new Error('Command "preflight" timed out after 90s'), {
+        code: SSH_EXEC_TIMEOUT_CODE
+      }),
+      false,
+      'orcad_candidate_preflight_unanswered'
+    ],
+    [
+      'ends with OpenSSH’s own exit 255',
+      sshCommandExitError('preflight', 255, ''),
+      true,
+      'orcad_candidate_preflight_unanswered'
+    ],
+    [
+      'exits 255 over ssh2',
+      sshCommandExitError('preflight', 255, ''),
+      false,
+      'orcad_candidate_preflight_failed'
+    ],
+    [
+      'exits 1 over ssh2',
+      sshCommandExitError('preflight', 1, ''),
+      false,
+      'orcad_candidate_preflight_failed'
+    ],
+    [
+      'exits 1 over system SSH',
+      sshCommandExitError('preflight', 1, ''),
+      true,
+      'orcad_candidate_preflight_failed'
+    ]
+  ])(
+    'defers with the right code when the preflight %s',
+    async (_label, preflightResult, systemSsh, code) => {
+      scriptHost({
+        activationRecord: ACTIVE_OLD,
+        readiness: { [NEW_VERSION]: readyLine({}) },
+        log: [],
+        preflightResult
+      })
+      const conn = Object.assign(Object.create(null), { usesSystemSshTransport: () => systemSsh })
+      expect(await deployOrcad(options({ conn }))).toMatchObject({
+        outcome: 'installed-not-activated',
+        code
+      })
+    }
+  )
 
   it.each([
     ['a fresh fence with no journal', false, false, 'orcad_activation_fence_busy'],

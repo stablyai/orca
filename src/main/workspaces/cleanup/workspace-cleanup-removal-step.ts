@@ -104,7 +104,8 @@ export async function removeWorkspaceForCleanup(args: {
   const selector = selectorFor(workspace)
   try {
     // Earlier removals in this run took time: decide on what is true now, not what the scan saw.
-    // A folder member is re-read with its folder as listed now: a sibling added since holds it too.
+    // A folder member is re-read with its folder as listed now: a sibling added here since holds it
+    // too. Paired servers' members are as the scan read them; they're asked once per run.
     const [fresh, ...siblings] = await collectWorkspaceCleanupWorkspaces({
       store,
       runtime,
@@ -112,6 +113,7 @@ export async function removeWorkspaceForCleanup(args: {
       now: args.now(),
       worktreeId: workspace.ref.worktreeId,
       withFolderSiblings: workspace.folderSiblings.length > 0,
+      readPairedFolderChildren: workspace.readPairedFolderChildren,
       signal: args.signal
     })
     if (!fresh) {

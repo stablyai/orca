@@ -52,9 +52,17 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope 
   }
 
   setWorkspaceSessionForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
-    const before = crewWorkspaceNames(this.workspaceSessions.get(worktreeId))
+    // Only a mounted crew reads names, and a write changes only this worktree's partition.
+    const watched = this.crewChanges.hasListeners()
+    const scope = { worktreeId }
+    const before = watched
+      ? crewWorkspaceNames(this.workspaceSessions.get(worktreeId), scope)
+      : null
     this.workspaceSessions.setForWorktree(worktreeId, session)
-    if (!isDeepStrictEqual(before, crewWorkspaceNames(this.workspaceSessions.get(worktreeId)))) {
+    if (
+      watched &&
+      !isDeepStrictEqual(before, crewWorkspaceNames(this.workspaceSessions.get(worktreeId), scope))
+    ) {
       this.crewChanges.notify(new Set(['names']))
     }
   }

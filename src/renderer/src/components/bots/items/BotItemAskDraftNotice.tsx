@@ -162,7 +162,7 @@ export function BotItemAskDraftNotices({
                     dropBotItemAnswerDraft(key)
                   }}
                 >
-                  {t('bots.items.ask.toComment', 'Put in the comment box')}
+                  {t('bots.items.ask.toComment', 'Draft comment')}
                 </Button>
               )}
               <Button size="xs" variant="ghost" onClick={() => dropBotItemAnswerDraft(key)}>

@@ -347,9 +347,9 @@ export function GHEditSection({
         size="sm"
         onClick={() => onUse(item)}
         className="ml-auto gap-2"
-        aria-label={t('auto.components.PullRequestPage.61452f2143', 'Start workspace from issue')}
+        aria-label={t('auto.components.PullRequestPage.61452f2143', 'Start workspace')}
       >
-        {t('auto.components.PullRequestPage.61452f2143', 'Start workspace from issue')}
+        {t('auto.components.PullRequestPage.61452f2143', 'Start workspace')}
         <ArrowRight className="size-4" />
       </Button>
     </div>

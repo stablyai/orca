@@ -80,7 +80,7 @@ function openCodeLaunchSpec(
     args: () => ['acp'],
     // 1.x cannot answer ACP questions; 2.x ignores this guard and negotiates form support.
     env: { OPENCODE_CLIENT: 'acp', OPENCODE_ENABLE_QUESTION_TOOL: 'false' },
-    scrubEnvironment: scrubOpenCodeAcpEnvironment,
+    scrubEnvironment: (env, inherited) => scrubOpenCodeAcpEnvironment(env, inherited),
     dialect: OPENCODE_ACP_DIALECT,
     historyCatchUp: 'user-message-id',
     loginCommand: agentSessionSetupFor(row.agent)?.loginCommand ?? [],

@@ -28,7 +28,7 @@ export async function listIssueTypes(
   siteId?: string | null,
   strict = false
 ): Promise<JiraIssueType[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   const entry = entries[0]
   if (!entry) {
@@ -49,7 +49,7 @@ export async function listIssueTypes(
     return issueTypes.map(mapIssueType)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry.site.id)
       throw error
     }
     console.warn('[jira] listIssueTypes failed:', error)
@@ -68,7 +68,7 @@ export async function listCreateFields(
   siteId?: string | null,
   strict = false
 ): Promise<JiraCreateField[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   const entry = entries[0]
   if (!entry) {
@@ -104,7 +104,7 @@ export async function listCreateFields(
     return fields
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry.site.id)
       throw error
     }
     console.warn('[jira] listCreateFields failed:', error)
@@ -121,7 +121,7 @@ export async function listPriorities(
   siteId?: string | null,
   strict = false
 ): Promise<JiraPriority[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   const entry = entries[0]
   if (!entry) {
@@ -133,7 +133,7 @@ export async function listPriorities(
     return response.map(mapPriority).filter((priority): priority is JiraPriority => !!priority)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry.site.id)
       throw error
     }
     console.warn('[jira] listPriorities failed:', error)
@@ -148,7 +148,7 @@ export async function listPriorities(
 
 /** Create user-pickers need all users, not just assignable users; return [] if browse-users is denied. */
 export async function searchUsers(query?: string, siteId?: string | null): Promise<JiraUser[]> {
-  const entry = getClients(siteId)[0]
+  const entry = (await getClients(siteId))[0]
   if (!entry) {
     return []
   }
@@ -165,7 +165,7 @@ export async function searchUsers(query?: string, siteId?: string | null): Promi
     return response.map(mapUser).filter((user): user is JiraUser => !!user)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry.site.id)
       throw error
     }
     // Browse-users permission is optional; the dialog allows explicit known user IDs.
@@ -183,7 +183,7 @@ async function searchAssignableUsers(
   label: string,
   strict = false
 ): Promise<JiraUser[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   const entry = entries[0]
   if (!entry) {
@@ -204,7 +204,7 @@ async function searchAssignableUsers(
     return response.map(mapUser).filter((user): user is JiraUser => !!user)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry.site.id)
       throw error
     }
     console.warn(`[jira] ${label} failed:`, error)

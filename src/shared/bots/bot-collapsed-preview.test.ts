@@ -43,6 +43,10 @@ describe('collapsed bot preview', () => {
     expect(preview.shown.map((entry) => entry.id)).toEqual(['0', '1', '2', '3', '4'])
     expect(preview.hidden).toHaveLength(3)
     expect(preview.hiddenSignal).toBe('attention')
+    const withHiddenChatInFront = collapsedBotPreview(bots, 5, bots[7])
+    expect(withHiddenChatInFront.shown.map((entry) => entry.id)).toEqual(['0', '1', '2', '3', '7'])
+    expect(withHiddenChatInFront.hidden.map((entry) => entry.id)).toEqual(['4', '5', '6'])
+    expect(withHiddenChatInFront.hiddenSignal).toBe('attention')
     expect(collapsedBotPreview(bots.slice(6), 1).hiddenSignal).toBe('unread')
     expect(collapsedBotPreview([bot('monitor', { status: 'monitoring' })], 0).hiddenSignal).toBe(
       'working'
