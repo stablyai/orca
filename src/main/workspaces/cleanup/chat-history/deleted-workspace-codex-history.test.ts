@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   linkSync,
   lstatSync,
   mkdirSync,
@@ -312,37 +313,52 @@ describe('deleteCodexRolloutsPermanently with a fork archived during the sweep',
 })
 
 describe('deleteCodexRolloutsPermanently with a fork restored during the sweep', () => {
-  it('keeps the parent when its deleted fork comes back before the parent is retried', async () => {
-    root = mkdtempSync(join(tmpdir(), 'orca-codex-history-'))
-    vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
-    const home = join(root, 'codex')
-    mkdirSync(join(home, 'thread-writer-locks'), { recursive: true })
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date(2026, 10, 20, 12))
-    // An old dated folder: a refresh re-lists only today's, so the restored name itself is checked.
-    const folder = join(home, ...DATED)
-    const parent = write(join(folder, NAME('1')), rollout('/gone'))
-    const forkContents = `${JSON.stringify({
-      type: 'session_meta',
-      payload: { cwd: '/gone', history_base: { thread_id: '00000001-0000-4000-8000-000000000000' } }
-    })}\n`
-    const fork = write(join(folder, NAME('2')), forkContents)
-
-    await deleteCodexRolloutsPermanently(
-      [parent, fork].map((filePath) => ({ agent: 'codex', filePath })),
-      async ({ filePath }) => {
-        if (filePath === parent && !exists(fork)) {
-          // A backup restores the fork after it was deleted, before the parent is retried.
-          write(fork, forkContents)
+  // Restored as it was, with its old timestamp; Windows has no unreadable mode to set.
+  const modes = process.platform === 'win32' ? [0o644] : [0o644, 0o000]
+  const restores = [
+    ...modes.map((mode) => ({ mode, packed: false })),
+    { mode: 0o644, packed: true }
+  ]
+  it.each(restores)(
+    'keeps the parent when its deleted fork comes back (%o)',
+    async ({ mode, packed }) => {
+      root = mkdtempSync(join(tmpdir(), 'orca-codex-history-'))
+      vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
+      const home = join(root, 'codex')
+      mkdirSync(join(home, 'thread-writer-locks'), { recursive: true })
+      vi.useFakeTimers({ toFake: ['Date'] })
+      vi.setSystemTime(new Date(2026, 10, 20, 12))
+      // An old dated folder: a refresh re-lists only today's, so the restored name itself is checked.
+      const folder = join(home, ...DATED)
+      const parent = write(join(folder, NAME('1')), rollout('/gone'))
+      const forkContents = `${JSON.stringify({
+        type: 'session_meta',
+        payload: {
+          cwd: '/gone',
+          history_base: { thread_id: '00000001-0000-4000-8000-000000000000' }
         }
-        return true
-      },
-      async () => ({ homes: [home], protectedRoots: [] })
-    )
+      })}\n`
+      const fork = write(join(folder, NAME('2')), forkContents)
 
-    vi.useRealTimers()
-    expect([parent, fork].filter(exists)).toEqual([parent, fork])
-  })
+      await deleteCodexRolloutsPermanently(
+        [parent, fork].map((filePath) => ({ agent: 'codex', filePath })),
+        async ({ filePath }) => {
+          if (filePath === parent && !exists(fork) && !exists(`${fork}.zst`)) {
+            // A backup restores the fork after it was deleted, before the parent is retried.
+            const restored = packed
+              ? write(`${fork}.zst`, zstdCompressSync(forkContents))
+              : write(fork, forkContents)
+            chmodSync(restored, mode)
+          }
+          return true
+        },
+        async () => ({ homes: [home], protectedRoots: [] })
+      )
+
+      vi.useRealTimers()
+      expect(exists(parent)).toBe(true)
+    }
+  )
 })
 
 describe('deleteCodexRolloutsPermanently across many Codex homes', () => {

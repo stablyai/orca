@@ -34,7 +34,10 @@ export type CodexRolloutHistoryReferences = {
   refresh(homes: readonly string[]): Promise<boolean>
   /** Also reads again any deleted fork of it that came back under a name it was deleted from. */
   isReferenced(rolloutId: string): Promise<boolean>
-  /** Drops a deleted rollout (`paths`: its names); returns the parent it was the last fork of. */
+  /**
+   * Drops a deleted rollout; returns the parent it was the last fork of. `paths`: every name it
+   * could come back under (each home, plain or packed).
+   */
   forget(rolloutId: string, paths: readonly string[]): Promise<string | null>
   save(): Promise<void>
 }
@@ -305,9 +308,22 @@ export function createCodexRolloutHistoryReferences(
         if (entry === undefined) {
           return true
         }
-        if (entry !== null && !(await visitRollout(fork.path, fork.rolloutId))) {
+        if (entry === null) {
+          continue
+        }
+        // Opening a link into WSL can start a distro: a fork back as one keeps its parent.
+        if (entry.isSymbolicLink() && (await linksIntoWsl(fork.path))) {
           return true
         }
+        // Back, it needs a header read in full: unlike a scan, no age lets an unreadable one pass.
+        const header = await readHistoryBase(fork.path)
+        if (header === 'vanished') {
+          continue
+        }
+        if (typeof header !== 'object' || !header.settled) {
+          return true
+        }
+        link(fork.rolloutId, header.base)
       }
       return forks.isReferenced(rolloutId)
     },
@@ -317,8 +333,9 @@ export function createCodexRolloutHistoryReferences(
       headerless.delete(rolloutId)
       const base = forks.baseOf(rolloutId)
       if (base) {
-        const deleted = paths.map((path) => ({ rolloutId, path }))
-        deletedForks.set(base, [...(deletedForks.get(base) ?? []), ...deleted])
+        const deleted = deletedForks.get(base) ?? []
+        deleted.push(...paths.map((path) => ({ rolloutId, path })))
+        deletedForks.set(base, deleted)
       }
       return forks.forget(rolloutId)
     },

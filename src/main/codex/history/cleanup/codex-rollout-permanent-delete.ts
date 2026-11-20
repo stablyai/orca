@@ -162,7 +162,7 @@ async function deleteRollout(
     if ((await readNames(names)).length === 0) {
       const freed = await references.forget(
         rolloutId,
-        removed.map((state) => state.path)
+        names.map((name) => name.path)
       )
       if (freed) {
         released.push(freed)
