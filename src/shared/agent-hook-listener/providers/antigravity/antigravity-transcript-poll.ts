@@ -134,10 +134,12 @@ export function pollAntigravityTranscriptStatus(
     return undefined
   }
   // A hook that set the lead model while this read ran wins over the older transcript line.
+  const fence = reads.leadModelFence
   if (
     reads.leadModel &&
-    reads.leadModelFence?.leadModel === pane.leadModel &&
-    reads.leadModelFence.leadModelSince === pane.leadModelSince
+    fence &&
+    fence.leadModel === pane.leadModel &&
+    fence.leadModelSince === pane.leadModelSince
   ) {
     // An automatic turn takes only a model recorded after it started; until then the last one stays.
     const current =

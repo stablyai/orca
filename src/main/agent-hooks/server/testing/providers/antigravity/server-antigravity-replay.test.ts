@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../../agent-hook-server'
-import { PANE } from '../../server.test-fixtures'
+import { PANE, recentTs } from '../../server.test-fixtures'
 
 const dirs: string[] = []
 afterEach(() => {
@@ -39,7 +39,6 @@ it('finishes a replayed run whose subagent stopped while Orca was closed', async
   ]
   const spoolDir = join(dir, 'agent-hooks', 'spool')
   mkdirSync(spoolDir, { recursive: true })
-  const now = Date.now()
   writeFileSync(
     join(spoolDir, 'pane-replay.jsonl'),
     `\n${hooks
@@ -49,7 +48,7 @@ it('finishes a replayed run whose subagent stopped while Orca was closed', async
           tabId: 'tab-1',
           worktreeId: 'wt-1',
           source: 'antigravity',
-          receivedAt: now + index,
+          receivedAt: recentTs(index),
           payload: { ...payload, hookEventName }
         })
       )

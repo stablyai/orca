@@ -1,4 +1,5 @@
 // Antigravity lifecycle predicates shared by normalization, child tracking, and result discovery.
+import { isRecord } from '../../../agent-status/child-work/agent-status-child-work-value-guards'
 
 export function isAntigravityStopStillBusy(hookPayload: Record<string, unknown>): boolean {
   return hookPayload.fullyIdle === false || hookPayload.fully_idle === false
@@ -15,7 +16,7 @@ export function isAntigravityHelperSpawnTool(toolName: string | undefined): bool
 /** A tool call that starts subagents; `swarm` does only for `add`, not for status, kill or messages. */
 export function isAntigravityHelperSpawnCall(toolName: string | undefined, args: unknown): boolean {
   return toolName === 'swarm'
-    ? typeof args === 'object' && args !== null && (args as { action?: unknown }).action === 'add'
+    ? isRecord(args) && args.action === 'add'
     : isAntigravityHelperSpawnTool(toolName)
 }
 

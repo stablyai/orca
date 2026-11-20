@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -9,6 +9,7 @@ import type * as TranscriptPoll from '../../../../../../shared/agent-hook-listen
 
 const reads = vi.hoisted(() => ({
   count: 0,
+  finished: 0,
   released: Promise.resolve(),
   release: (): void => {}
 }))
@@ -24,7 +25,9 @@ vi.mock(
       ) => {
         reads.count++
         await reads.released
-        return actual.readAntigravityTranscriptPoll(...args)
+        const result = await actual.readAntigravityTranscriptPoll(...args)
+        reads.finished++
+        return result
       }
     }
   }
@@ -35,6 +38,7 @@ let server: AgentHookServer
 
 beforeEach(async () => {
   reads.count = 0
+  reads.finished = 0
   reads.released = new Promise((resolve) => (reads.release = resolve))
   dir = mkdtempSync(join(tmpdir(), 'orca-agy-poll-teardown-'))
   server = new AgentHookServer()
@@ -53,11 +57,14 @@ it.each([10, 100])(
     for (let i = 0; i < panes; i++) {
       const leaf = `${i.toString(16).padStart(8, '0')}-0000-4000-8000-000000000000`
       const overrides = { paneKey: makePaneKey(`tab-${i}`, leaf), tabId: `tab-${i}` }
-      const root = {
-        conversationId: `root-${i}`,
-        lastUserInput: 'Task',
-        transcriptPath: join(dir, `root-${i}`, '.system_generated', 'logs', 'transcript.jsonl')
-      }
+      const logs = join(dir, `root-${i}`, '.system_generated', 'logs')
+      mkdirSync(logs, { recursive: true })
+      const transcriptPath = join(logs, 'transcript.jsonl')
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({ source: 'USER_EXPLICIT', type: 'USER_INPUT' })}\n`
+      )
+      const root = { conversationId: `root-${i}`, lastUserInput: 'Task', transcriptPath }
       const child = { conversationId: `child-${i}`, lastUserInput: '' }
       for (const [hookEventName, payload] of [
         ['PreInvocation', root],
@@ -71,6 +78,7 @@ it.each([10, 100])(
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
     server.setStatusHooksEnabled(false)
     reads.release()
+    await vi.waitFor(() => expect(reads.finished).toBe(panes), { timeout: 10000 })
     await vi.advanceTimersByTimeAsync(30_000)
     expect(reads.count).toBe(panes)
   }

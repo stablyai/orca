@@ -219,8 +219,12 @@ it.each([100, 1000])(
     const polling = (): number => {
       let count = 0
       for (let i = 0; i < panes; i++) {
-        const event = { paneKey: `pane-${i}`, connectionId: null, payload: { state: 'working' } }
-        if (hasAntigravityPollWork(state, event as AgentHookEventPayload)) {
+        const event: AgentHookEventPayload = {
+          paneKey: `pane-${i}`,
+          connectionId: null,
+          payload: { state: 'working', agentType: 'antigravity', prompt: '' }
+        }
+        if (hasAntigravityPollWork(state, event)) {
           count++
         }
       }

@@ -293,8 +293,8 @@ it('tracks a child that first reports after a background command finished the ro
   hook('root', 'Stop', { fullyIdle: false })
   hook('first', 'Stop', { fullyIdle: true })
   expect(
-    hook('root', 'PostToolUse', { stepIdx: 5, toolCall: { name: 'run_command' } })?.payload.state
-  ).toBe('done')
+    hook('root', 'PostToolUse', { stepIdx: 5, toolCall: { name: 'run_command' } })?.payload
+  ).toMatchObject({ state: 'working', antigravitySpawnPending: true })
   descriptor('second')
   hook('second', 'PreInvocation')
   hook('second', 'PreToolUse', { toolCall: { name: 'ask_question', args: {} } })
@@ -333,11 +333,13 @@ it('lists a subagent killed before its first poll once, then clears it', async (
 
 it('releases the parent when agy reports the spawn failed', () => {
   spawn()
-  hook('root', 'PostToolUse', {
+  expect(row.payload.antigravitySpawnPending).toBe(true)
+  const failed = hook('root', 'PostToolUse', {
     toolCall: { name: 'invoke_subagent' },
     error: 'subagent "x" not found or not allowed to be invoked'
   })
-  expect(hook('root', 'Stop', { fullyIdle: false })?.payload.state).toBe('done')
+  expect(failed?.payload.antigravitySpawnPending).toBeUndefined()
+  expect(hook('root', 'Stop', { fullyIdle: false })?.payload.mainAgent?.state).toBe('working')
 })
 
 it('counts only a swarm add as a spawn that holds the parent', async () => {

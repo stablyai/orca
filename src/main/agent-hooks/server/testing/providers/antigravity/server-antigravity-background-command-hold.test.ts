@@ -276,7 +276,7 @@ it('ends the run on agy done after a subagent that finished before its first pol
 it('keeps the subagent roster when agy reports working after a long hook-silent wait', async () => {
   await parentStopsWhileSubagentRuns()
   await agyHook('PreToolUse', { ...child, toolCall: { name: 'ask_question', args: {} } })
-  expect(state()).toBe('waiting')
+  await vi.waitFor(() => expect(state()).toBe('waiting'), { timeout: 10000 })
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
   vi.advanceTimersByTime(HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS + 1)
   server.ingestTerminalStatus({

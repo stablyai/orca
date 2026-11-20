@@ -119,7 +119,7 @@ describe('RelayAgentHookServer', () => {
             tabId: 'tab-1',
             source: 'antigravity',
             payload: { ...payload, hookEventName },
-            receivedAt: Date.now() + index
+            receivedAt: 1_000 + index
           })
         )
         .join('\n')}\n`
