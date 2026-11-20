@@ -1,10 +1,15 @@
+import { randomUUID } from 'node:crypto'
 import {
   GRAB_CHORD_POLICY,
-  GRAB_CHORD_QUERY
+  GRAB_CHORD_REPORT
 } from '../../../../../shared/browser/element-grab/browser-grab-native-keys'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
+import { getEffectiveKeybindingsForAction } from '../../../../../shared/keybindings/effective'
 import type { KeybindingInput, KeybindingOverrides } from '../../../../../shared/keybindings/types'
-import { isAgentInjectingInput } from '../../../cdp/input/agent-input-injection'
+import {
+  isAgentInjectingInput,
+  registerAgentInputSuspension
+} from '../../../cdp/input/agent-input-injection'
 import type { ResolveRenderer } from '../../browser-guest-renderer-target'
 
 type GrabShortcutBinding = {
@@ -15,83 +20,162 @@ type GrabShortcutBinding = {
   getKeybindings?: () => KeybindingOverrides | undefined
   isCurrentGuest?: () => boolean
 }
-const chordBindings = new WeakMap<Electron.WebContents, { current: GrabShortcutBinding | null }>()
 
-// One synchronous private endpoint per guest; inactive registrations always answer without consuming input.
-function bindChordQuery(args: GrabShortcutBinding): () => void {
-  const guest = args.guest
-  let state = chordBindings.get(guest)
-  if (!state) {
-    state = { current: null }
-    chordBindings.set(guest, state)
-    const binding = state
-    const report = (
-      event: Electron.IpcMainEvent,
-      channel: string,
-      input: KeybindingInput
-    ): void => {
-      if (channel !== GRAB_CHORD_QUERY) {
-        return
-      }
-      let consumed = false
-      try {
-        const current = binding.current
-        if (
-          !current ||
-          event.senderFrame !== guest.mainFrame ||
-          isAgentInjectingInput(guest) ||
-          current.isCurrentGuest?.() === false
-        ) {
-          return
-        }
-        const renderer = current.resolveRenderer(current.browserTabId)
-        if (
-          !renderer ||
-          renderer.isDestroyed() ||
-          !keybindingMatchesAction(
-            'browser.grabElement',
-            input,
-            process.platform,
-            current.getKeybindings?.()
-          )
-        ) {
-          return
-        }
-        consumed = true
-        renderer.send('browser:grabModeToggle', current.browserTabId, 'copy')
-      } finally {
-        event.returnValue = consumed
-      }
-    }
-    const ready = (): void => {
-      if (!guest.isDestroyed()) {
-        guest.send(GRAB_CHORD_POLICY, Boolean(binding.current))
-      }
-    }
-    guest.on('ipc-message-sync', report)
-    guest.on('dom-ready', ready)
-    guest.once('destroyed', () => {
-      guest.off('ipc-message-sync', report)
-      guest.off('dom-ready', ready)
-      chordBindings.delete(guest)
-    })
-  }
-  state.current = args
-  guest.send(GRAB_CHORD_POLICY, true)
-  return () => {
-    if (state.current === args) {
-      state.current = null
-      if (!guest.isDestroyed()) {
-        guest.send(GRAB_CHORD_POLICY, false)
-      }
-    }
+const policies = new Set<GrabChordSession>()
+
+/** Keybinding edits publish once; input never waits for an IPC round trip. */
+export function refreshGrabShortcutPolicies(): void {
+  for (const policy of policies) {
+    policy.refresh()
   }
 }
 
-/** Guest keydown owns field/selection eligibility and cancels the chord before page/default dispatch. */
+class GrabChordSession {
+  private token = randomUUID()
+  private revision = 0
+  private enabled = false
+  private stopped = false
+  private pending: { finish: (ready: boolean) => void } | null = null
+  private readonly unregisterSuspension: () => void
+
+  constructor(private readonly args: GrabShortcutBinding) {
+    const guest = args.guest
+    guest.on('ipc-message', this.report)
+    guest.on('dom-ready', this.refresh)
+    guest.on('did-start-navigation', this.navigation)
+    guest.on('destroyed', this.stop)
+    policies.add(this)
+    this.unregisterSuspension = registerAgentInputSuspension(guest, async (suspended) => {
+      if (!(await this.publish(!suspended))) {
+        throw new Error('Could not suspend the browser grab chord safely')
+      }
+    })
+    this.refresh()
+  }
+
+  private publish(enabled: boolean): Promise<boolean> {
+    const { guest } = this.args
+    if (this.stopped || guest.isDestroyed()) {
+      return Promise.resolve(false)
+    }
+    this.pending?.finish(false)
+    this.enabled = false
+    const revision = ++this.revision
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => finish(false), 1_000)
+      const finish = (ready: boolean): void => {
+        clearTimeout(timer)
+        if (this.pending?.finish === finish) {
+          this.pending = null
+          this.enabled = ready && enabled
+        }
+        resolve(ready)
+      }
+      this.pending = { finish }
+      try {
+        guest.send(GRAB_CHORD_POLICY, {
+          token: this.token,
+          revision,
+          enabled,
+          bindings: getEffectiveKeybindingsForAction(
+            'browser.grabElement',
+            process.platform,
+            this.args.getKeybindings?.()
+          ),
+          platform: process.platform
+        })
+      } catch {
+        finish(false)
+      }
+    })
+  }
+
+  readonly refresh = (): void => {
+    void this.publish(!isAgentInjectingInput(this.args.guest))
+  }
+
+  private readonly navigation = (
+    _event: unknown,
+    _url: unknown,
+    inPlace: boolean,
+    main: boolean
+  ): void => {
+    if (main && !inPlace) {
+      this.enabled = false
+      this.pending?.finish(false)
+      this.token = randomUUID()
+    }
+  }
+
+  private readonly report = (
+    event: Electron.IpcMainEvent,
+    channel: string,
+    payload: { token?: string; revision?: number; ready?: boolean; input?: KeybindingInput }
+  ): void => {
+    const { guest, browserTabId, resolveRenderer, isCurrentGuest, getKeybindings } = this.args
+    if (
+      this.stopped ||
+      channel !== GRAB_CHORD_REPORT ||
+      !payload ||
+      event.senderFrame !== guest.mainFrame ||
+      payload.token !== this.token ||
+      payload.revision !== this.revision
+    ) {
+      return
+    }
+    if (payload.ready === true) {
+      this.pending?.finish(true)
+      return
+    }
+    const renderer = resolveRenderer(browserTabId)
+    if (
+      this.enabled &&
+      payload.input &&
+      !isAgentInjectingInput(guest) &&
+      isCurrentGuest?.() !== false &&
+      renderer &&
+      !renderer.isDestroyed() &&
+      keybindingMatchesAction(
+        'browser.grabElement',
+        payload.input,
+        process.platform,
+        getKeybindings?.()
+      )
+    ) {
+      renderer.send('browser:grabModeToggle', browserTabId, 'copy')
+    }
+  }
+
+  readonly stop = (): void => {
+    if (this.stopped) {
+      return
+    }
+    this.stopped = true
+    this.enabled = false
+    this.pending?.finish(false)
+    this.unregisterSuspension()
+    policies.delete(this)
+    const guest = this.args.guest
+    if (!guest.isDestroyed()) {
+      guest.send(GRAB_CHORD_POLICY, {
+        token: this.token,
+        revision: ++this.revision,
+        enabled: false,
+        bindings: [],
+        platform: process.platform
+      })
+    }
+    guest.off('ipc-message', this.report)
+    guest.off('dom-ready', this.refresh)
+    guest.off('did-start-navigation', this.navigation)
+    guest.off('destroyed', this.stop)
+  }
+}
+
+/** The private preload cancels an eligible chord synchronously; main fences its eventual delivery. */
 export function setupGrabShortcutForwarding(args: GrabShortcutBinding): () => void {
   const { browserTabId, guest, resolveRenderer, hasActiveGrabOp } = args
-  const unbindChord = bindChordQuery(args)
+  const chord = new GrabChordSession(args)
   const handler = (_event: Electron.Event, input: Electron.Input): void => {
     if (isAgentInjectingInput(guest)) {
       return
@@ -107,7 +191,7 @@ export function setupGrabShortcutForwarding(args: GrabShortcutBinding): () => vo
   }
   guest.on('before-input-event', handler)
   return () => {
-    unbindChord()
+    chord.stop()
     guest.off('before-input-event', handler)
   }
 }

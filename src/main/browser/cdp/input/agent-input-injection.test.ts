@@ -98,3 +98,26 @@ it('refuses input after an unacknowledged retired policy until a fresh document 
     'new document'
   )
 })
+
+it('waits for every active shortcut policy before delivering input', async () => {
+  const guest = target()
+  let release: (() => void) | undefined
+  const ready = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  registerAgentInputSuspension(guest, async (suspended) => {
+    if (suspended) {
+      await ready
+    }
+  })
+  registerAgentInputSuspension(guest, async () => {})
+  let delivered = false
+  const injection = withAgentInputInjection(guest, async () => {
+    delivered = true
+  })
+  await Promise.resolve()
+  expect(delivered).toBe(false)
+  release?.()
+  await injection
+  expect(delivered).toBe(true)
+})

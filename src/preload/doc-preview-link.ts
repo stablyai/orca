@@ -25,7 +25,6 @@ if (process.isMainFrame) {
     webFrame
   )
   installBrowserGuestNativeToolKeys({
-    sendSync: (channel, payload) => ipcRenderer.sendSync(channel, payload),
     send: (channel, payload) => ipcRenderer.send(channel, payload),
     on: (channel, listener) =>
       ipcRenderer.on(channel, (_event, payload: unknown) => listener(payload))

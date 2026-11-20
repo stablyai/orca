@@ -13,7 +13,11 @@ type InjectionTarget = Pick<WebContents, 'id' | 'isDestroyed' | 'setIgnoreMenuSh
   }
 }
 
-const suspensions = new WeakMap<InjectionTarget, (suspended: boolean) => Promise<void>>()
+const suspensions = new WeakMap<InjectionTarget, Set<(suspended: boolean) => Promise<void>>>()
+
+async function setSuspended(target: InjectionTarget, suspended: boolean): Promise<void> {
+  await Promise.all(Array.from(suspensions.get(target) ?? [], (update) => update(suspended)))
+}
 const unacknowledged = new WeakSet<InjectionTarget>()
 const recoveryListeners = new WeakSet<InjectionTarget>()
 
@@ -42,7 +46,7 @@ async function suspendBeforeInput(target: InjectionTarget): Promise<void> {
     return
   }
   try {
-    await suspend(true)
+    await setSuspended(target, true)
     unacknowledged.delete(target)
   } catch (error) {
     markUnacknowledged(target)
@@ -54,9 +58,12 @@ export function registerAgentInputSuspension(
   target: InjectionTarget,
   suspend: (suspended: boolean) => Promise<void>
 ): () => void {
-  suspensions.set(target, suspend)
+  const callbacks = suspensions.get(target) ?? new Set()
+  callbacks.add(suspend)
+  suspensions.set(target, callbacks)
   return () => {
-    if (suspensions.get(target) === suspend) {
+    callbacks.delete(suspend)
+    if (callbacks.size === 0) {
       suspensions.delete(target)
     }
   }
@@ -94,9 +101,7 @@ export async function withAgentInputInjection<T>(
       suspensionGates.delete(webContents)
       try {
         // A failed recovery cannot change an input already delivered, or hide its original error.
-        await suspensions
-          .get(webContents)?.(false)
-          .catch(() => markUnacknowledged(webContents))
+        await setSuspended(webContents, false).catch(() => markUnacknowledged(webContents))
       } finally {
         if (!webContents.isDestroyed() && !isAgentInjectingInput(webContents)) {
           webContents.setIgnoreMenuShortcuts(false)

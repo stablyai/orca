@@ -2,10 +2,12 @@ import {
   GRAB_NATIVE_KEY_POLICY,
   GRAB_NATIVE_KEY_REPORT,
   GRAB_CHORD_POLICY,
-  GRAB_CHORD_QUERY,
+  GRAB_CHORD_REPORT,
   guestFocusTakesTyping,
+  type GrabChordPolicy,
   type GrabNativeKeyPolicy
 } from '../../../shared/browser/element-grab/browser-grab-native-keys'
+import { keybindingMatchesInput } from '../../../shared/keybindings/matching'
 import {
   browserGuestToolKeyFromEvent,
   isBrowserGuestToolKey,
@@ -16,12 +18,36 @@ import {
 export function installBrowserGuestNativeToolKeys(port: {
   on: (channel: string, listener: (payload: unknown) => void) => void
   send: (channel: string, payload: unknown) => void
-  sendSync: (channel: string, payload: unknown) => unknown
 }): void {
   let policy: GrabNativeKeyPolicy | null = null
-  let chordEnabled = false
-  port.on(GRAB_CHORD_POLICY, (enabled) => {
-    chordEnabled = enabled === true
+  let chord: GrabChordPolicy | null = null
+  port.on(GRAB_CHORD_POLICY, (payload) => {
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      !('token' in payload) ||
+      typeof payload.token !== 'string' ||
+      !('revision' in payload) ||
+      typeof payload.revision !== 'number' ||
+      !('enabled' in payload) ||
+      typeof payload.enabled !== 'boolean' ||
+      !('bindings' in payload) ||
+      !Array.isArray(payload.bindings) ||
+      !payload.bindings.every((key) => typeof key === 'string') ||
+      !('platform' in payload) ||
+      !['darwin', 'linux', 'win32'].includes(String(payload.platform))
+    ) {
+      return
+    }
+    chord = {
+      token: payload.token,
+      revision: payload.revision,
+      enabled: payload.enabled,
+      bindings: payload.bindings,
+      platform:
+        payload.platform === 'darwin' ? 'darwin' : payload.platform === 'win32' ? 'win32' : 'linux'
+    }
+    port.send(GRAB_CHORD_REPORT, { token: chord.token, revision: chord.revision, ready: true })
   })
   port.on(GRAB_NATIVE_KEY_POLICY, (payload) => {
     if (
@@ -42,8 +68,9 @@ export function installBrowserGuestNativeToolKeys(port: {
   window.addEventListener(
     'keydown',
     (event) => {
+      const currentChord = chord
       if (
-        chordEnabled &&
+        currentChord?.enabled &&
         event.isTrusted &&
         !event.repeat &&
         !event.isComposing &&
@@ -52,20 +79,28 @@ export function installBrowserGuestNativeToolKeys(port: {
         !guestFocusTakesTyping() &&
         !/^(Alt|Control|Meta|Shift)$/.test(event.key)
       ) {
+        const input = {
+          key: event.key,
+          code: event.code,
+          control: event.ctrlKey,
+          meta: event.metaKey,
+          alt: event.altKey,
+          shift: event.shiftKey
+        }
         const selection = window.getSelection()
         if (
           !(selection?.type === 'Range' && selection.toString().trim()) &&
-          port.sendSync(GRAB_CHORD_QUERY, {
-            key: event.key,
-            code: event.code,
-            control: event.ctrlKey,
-            meta: event.metaKey,
-            alt: event.altKey,
-            shift: event.shiftKey
-          }) === true
+          currentChord.bindings.some((binding) =>
+            keybindingMatchesInput(binding, input, currentChord.platform)
+          )
         ) {
           event.preventDefault()
           event.stopImmediatePropagation()
+          port.send(GRAB_CHORD_REPORT, {
+            token: currentChord.token,
+            revision: currentChord.revision,
+            input
+          })
           return
         }
       }
