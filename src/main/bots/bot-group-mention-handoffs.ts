@@ -55,8 +55,10 @@ export async function handOffGroupMentions(
     for (const [operationId, context] of contexts) {
       contexts.set(operationId, withSpeakerReply(context, turn, reply))
     }
-    if (turns.length > 0) {
-      groups.store.update({ ...root, handoffs: used + turns.length })
+    // Read again: the reservation's reads may have saved replies onto the post.
+    const current = groups.store.message(rootRequestId)
+    if (turns.length > 0 && current) {
+      groups.store.update({ ...current, handoffs: used + turns.length })
     }
     const stored = turns.map((woken) =>
       groups.store.append(
@@ -99,13 +101,15 @@ export async function handOffGroupMentions(
 /** `context` (the quoted history lines) with the speaker's reply as its last line, unless it has it. */
 function withSpeakerReply(context: string, speaker: BotGroupTurn, reply: string): string {
   const lines: unknown[] = JSON.parse(context)
+  const author = { kind: 'bot', id: speaker.botId, name: speaker.botName }
   const has = lines.some(
-    (line) => typeof line === 'object' && line !== null && 'text' in line && line.text === reply
+    (line) =>
+      typeof line === 'object' &&
+      line !== null &&
+      'text' in line &&
+      line.text === reply &&
+      'author' in line &&
+      JSON.stringify(line.author) === JSON.stringify(author)
   )
-  return has
-    ? context
-    : JSON.stringify([
-        ...lines,
-        { author: { kind: 'bot', id: speaker.botId, name: speaker.botName }, text: reply }
-      ])
+  return has ? context : JSON.stringify([...lines, { author, text: reply }])
 }
