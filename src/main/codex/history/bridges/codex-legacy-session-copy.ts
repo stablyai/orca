@@ -1,7 +1,6 @@
 import type { BigIntStats } from 'node:fs'
 import { link, lstat, open, readFile, rename } from 'node:fs/promises'
 import { basename, dirname, join, normalize } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
 import {
   legacySessionCopyMarkerPath,
@@ -12,7 +11,10 @@ import {
   type LegacyCopiedSessionMarker
 } from './codex-legacy-session-copy-marker'
 import { sourceStartsWithCopy } from './codex-legacy-session-copy-prefix'
-import { isCopyIdle, keepsThreadLocks } from './codex-legacy-session-copy-writer-locks'
+import { restoreMovedCopy } from './codex-legacy-session-copy-recovery'
+import { runAloneForCopy } from './codex-legacy-session-copy-turns'
+import { isCopyIdle, keepsThreadLocks, threadIdsOf } from './codex-legacy-session-copy-writer-locks'
+import { whileThreadsUnlocked } from '../shared-store/codex-thread-writer-locks'
 import {
   linkUnlessTaken,
   lstatIfPresent,
@@ -24,7 +26,11 @@ import {
  * The legacy copy's own bytes stay under `<name>.orca-legacy-copy.<attempt>` once its source is
  * linked in; each attempt reserves a name of its own, so no step ever replaces or removes one.
  */
+export { settleLegacySessionCopyName } from './codex-legacy-session-copy-recovery'
+
 export const LEGACY_SESSION_COPY_ASIDE_SUFFIX = '.orca-legacy-copy'
+/** What one publish costs a background pass's read budget: it starts a helper process. */
+const PUBLISH_BUDGET_BYTES = 1024 * 1024
 /** Attempts that each keep an aside name; past this a copy settles as kept. */
 export const LEGACY_SESSION_COPY_MAX_ASIDES = 16
 
@@ -36,8 +42,6 @@ export type LegacySessionCopySwap = 'swapped' | 'kept' | 'deferred' | 'none'
  * a whole pass's `limit` is left to resume-time swaps and never ends the pass.
  */
 export type LegacySessionCopyReadBudget = { bytes: number; limit: number; exhausted?: boolean }
-
-const swapsInFlight = new Map<string, Promise<LegacySessionCopySwap>>()
 
 /**
  * Points a legacy copy's name at its source, which Codex kept writing, without losing a byte: the
@@ -66,78 +70,10 @@ export function protectLegacySessionCopy(args: {
   relativePath: string
 }): Promise<LegacySessionCopySwap> {
   const copyPath = join(args.managedHome, 'sessions', args.relativePath)
-  return runAloneForCopy(copyPath, async () => {
+  return runAloneForCopy(copyPath, async (): Promise<LegacySessionCopySwap> => {
     await protectLegacySessionCopyMarker(args.managedHome, args.relativePath)
     return 'none'
   })
-}
-
-/** Every write of a copy's marker or names runs one at a time per copy. */
-function runAloneForCopy(
-  copyPath: string,
-  work: () => Promise<LegacySessionCopySwap>
-): Promise<LegacySessionCopySwap> {
-  const running = swapsInFlight.get(copyPath)
-  if (running) {
-    return running
-  }
-  const task = work()
-    .catch((error: unknown) => {
-      console.warn('[codex-session-bridge] Legacy session copy left in place:', copyPath, error)
-      return 'deferred' as const
-    })
-    .finally(() => swapsInFlight.delete(copyPath))
-  swapsInFlight.set(copyPath, task)
-  return task
-}
-
-/**
- * Before a resume looks for a copy's name: waits out a swap of it, and gives a copy that a stopped
- * swap left moved aside its name back. Starts no swap.
- */
-export async function settleLegacySessionCopyName(args: {
-  managedHome: string
-  relativePath: string
-}): Promise<void> {
-  const copyPath = join(args.managedHome, 'sessions', args.relativePath)
-  await swapsInFlight.get(copyPath)
-  if (await lstatIfPresent(copyPath)) {
-    return
-  }
-  const markerPath = legacySessionCopyMarkerPath(args.managedHome, args.relativePath)
-  // Only a marker proven absent lets the caller link the source in over a copy that may be aside.
-  const marker = await readFile(markerPath, 'utf-8').then(
-    parseLegacyCopiedSessionMarker,
-    (error: unknown) => {
-      if (isDefinitiveAbsence(error)) {
-        return null
-      }
-      throw error
-    }
-  )
-  if (marker && !marker.kept) {
-    await restoreMovedCopy(marker, normalize(marker.sourcePath), copyPath)
-  }
-}
-
-/** A swap stopped after moving the copy aside: its name comes back before anything else. */
-async function restoreMovedCopy(
-  marker: LegacyCopiedSessionMarker,
-  sourcePath: string,
-  copyPath: string
-): Promise<'restored' | 'held' | 'none'> {
-  const asidePath = marker.aside ? join(dirname(copyPath), marker.aside) : null
-  const aside = asidePath ? await lstatIfPresent(asidePath) : null
-  // An empty aside is a reservation the copy never moved onto.
-  if (!asidePath || !aside?.isFile() || aside.size === 0n) {
-    return 'none'
-  }
-  // Under the deletion guard: a cleanup deleting this chat must not see its name come back.
-  return (await linkCodexRolloutUnlessHeld(sourcePath, () =>
-    linkUnlessTaken(asidePath, copyPath)
-  )) === 'held'
-    ? 'held'
-    : 'restored'
 }
 
 async function swap(
@@ -215,10 +151,44 @@ async function swap(
     }
     marker = await writeMarker(markerPath, { ...marker, verified: proof })
   }
+  // Codex writes or rewrites a rollout only under its thread's lock, taken with its home's
+  // coordination held; holding both homes' coordination keeps every Codex out until the link is in.
+  const sourceSessions = dirname(dirname(dirname(dirname(sourcePath))))
+  if (
+    basename(sourceSessions) !== 'sessions' ||
+    !(await keepsThreadLocks(dirname(sourceSessions)))
+  ) {
+    return 'deferred'
+  }
+  if (args.readBudget) {
+    // Each publish starts a helper process to hold the locks.
+    if (args.readBudget.bytes < PUBLISH_BUDGET_BYTES) {
+      args.readBudget.exhausted = true
+      return 'deferred'
+    }
+    args.readBudget.bytes -= PUBLISH_BUDGET_BYTES
+  }
   const settled = marker
-  const outcome = await linkCodexRolloutUnlessHeld(sourcePath, () =>
-    publishSourceOverCopy({ copyPath, markerPath, marker: settled, sourcePath, copy, source, args })
+  const locked = await linkCodexRolloutUnlessHeld(sourcePath, () =>
+    whileThreadsUnlocked(
+      [
+        join(dirname(sourceSessions), 'thread-writer-locks'),
+        join(args.managedHome, 'thread-writer-locks')
+      ],
+      threadIdsOf(args.relativePath),
+      () =>
+        publishSourceOverCopy({
+          copyPath,
+          markerPath,
+          marker: settled,
+          sourcePath,
+          copy,
+          source,
+          args
+        })
+    )
   )
+  const outcome = locked === 'busy' ? 'deferred' : locked
   if (outcome === 'swapped') {
     await unlinkIfPresent(markerPath)
   } else if (outcome === 'kept') {

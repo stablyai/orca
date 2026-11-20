@@ -67,6 +67,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'orca-legacy-copy-perf-'))
   vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
   mkdirSync(join(runtimeHome(), 'thread-writer-locks'), { recursive: true })
+  mkdirSync(join(root, 'real-codex-home', 'thread-writer-locks'), { recursive: true })
   markerReads.count = 0
   markerReads.transcriptStats = 0
 })

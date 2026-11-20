@@ -14,6 +14,7 @@ import {
   writeFileSync,
   writeSync
 } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type * as NodeFsPromises from 'node:fs/promises'
@@ -109,8 +110,9 @@ beforeEach(() => {
   markerPath = join(runtimeHome(), '.orca-session-copies', `${RELATIVE_PATH}.json`)
   renameHook.beforeAside = null
   renameHook.failAsideStat = false
-  // A Codex that keeps thread-writer locks ran in the copy's home, and holds none now.
+  // A Codex that keeps thread-writer locks ran in both homes, and holds none now.
   mkdirSync(join(runtimeHome(), 'thread-writer-locks'), { recursive: true })
+  mkdirSync(join(systemHome, 'thread-writer-locks'), { recursive: true })
 })
 
 afterEach(() => {
@@ -259,7 +261,8 @@ describe('legacy session copy swap', () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
     const sourceFile = lstatSync(sourcePath).ino
     renameHook.beforeAside = () => {
-      writeFileSync(sourcePath, '{"rewritten":true}\n{"turn":3}\n')
+      // Same size as before, so only its change time tells.
+      writeFileSync(sourcePath, '{"turn":9}\n{"turn":8}\n')
     }
 
     await bridgePass()
@@ -267,6 +270,28 @@ describe('legacy session copy swap', () => {
     expect(lstatSync(sourcePath).ino).toBe(sourceFile)
     expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'never links in a source while a Codex holds its thread in the source home',
+    async () => {
+      legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+      const holder = spawn('perl', [
+        '-e',
+        'use Fcntl qw(:flock); $| = 1; open(my $f, ">>", $ARGV[0]) or die; flock($f, LOCK_EX) or die; print "held\\n"; <STDIN>;',
+        join(systemHome, 'thread-writer-locks', `${THREAD_ID}.lock`)
+      ])
+      try {
+        await new Promise((resolve) => holder.stdout.once('data', resolve))
+
+        await bridgePass()
+
+        expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
+        expect(existsSync(markerPath)).toBe(true)
+      } finally {
+        holder.stdin.end()
+      }
+    }
+  )
 
   it('protects a marker only once a running swap of its copy is done', async () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)

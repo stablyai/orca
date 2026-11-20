@@ -16,8 +16,7 @@ export async function isCopyIdle(args: {
     return false
   }
   const locks = join(args.managedHome, 'thread-writer-locks')
-  // A reverted thread's name carries its thread id and its rollout id: either can be the lock's.
-  const ids = basename(args.relativePath).toLowerCase().match(UUID_PATTERN) ?? []
+  const ids = threadIdsOf(args.relativePath)
   if (ids.length === 0) {
     return false
   }
@@ -37,4 +36,9 @@ export async function isCopyIdle(args: {
 export async function keepsThreadLocks(home: string): Promise<boolean> {
   // A shared-history home links this folder into the store, so follow the link.
   return (await stat(join(home, 'thread-writer-locks')).catch(() => null))?.isDirectory() === true
+}
+
+/** A reverted thread's name carries its thread id and its rollout id: either can be the lock's. */
+export function threadIdsOf(relativePath: string): string[] {
+  return basename(relativePath).toLowerCase().match(UUID_PATTERN) ?? []
 }
