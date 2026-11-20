@@ -27,7 +27,7 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   getHandle: (paneKey: string) => string | null
   getProcessIncarnation: (handle: string) => string | null
   /** `screen: false` reads accumulated output instead of the rendered grid. */
-  readScreen: (handle: string, screen?: false) => Promise<RuntimeTerminalRead>
+  readScreen: (handle: string, screen?: boolean) => Promise<RuntimeTerminalRead>
   /** The pane's open approval Orca can answer. */
   takeOpenApproval: (paneKey: string, dispatchId: string) => Promise<WorkerApprovalPayload | null>
   /** Called only once the approval's escalation went out. */
