@@ -23,12 +23,15 @@ import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-nam
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
 import {
   BOT_ITEM_STATUSES,
-  botItemCommentImages,
   type BotItem,
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
-import { stripSentImagePromptMarkers } from '../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import {
+  mobileBotItemCommentWords as commentText,
+  MobileBotItemCommentAttachments,
+  type MobileBotItemAttachmentSource
+} from './MobileBotItemCommentAttachments'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -41,11 +44,6 @@ import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 
 const ICON = 13
-
-/** A comment's words without the [Image #N] its send wrote for its images, as desktop and chat show them. */
-function commentText(data: Record<string, unknown>): string {
-  return stripSentImagePromptMarkers(str(data.text), botItemCommentImages(data).length)
-}
 
 function str(value: unknown): string {
   return typeof value === 'string' ? value : ''
@@ -254,11 +252,13 @@ function EntryIcon({ entry }: { entry: LineEntry }) {
 function CommentCard({
   item,
   entry,
-  onReply
+  onReply,
+  attachments
 }: {
   item: BotItem
   entry: Extract<BotItemActivityEntry, { kind: 'comment' | 'answer' }>
   onReply: () => void
+  attachments: MobileBotItemAttachmentSource
 }) {
   const t = useMobileTranslation()
   const { event } = entry
@@ -301,7 +301,9 @@ function CommentCard({
         <Text style={styles.meta}>{timeOf(event.at)}</Text>
       </View>
       {replyTo ? <MobileBotItemReplyQuote text={replyTo.text} /> : null}
-      <MobileMarkdown content={text} />
+      <MobileBotItemCommentAttachments data={event.data} {...attachments}>
+        {text.trim() ? <MobileMarkdown content={text} /> : null}
+      </MobileBotItemCommentAttachments>
       {answered ? <Text style={styles.meta}>{answered}</Text> : null}
     </View>
   )
@@ -310,11 +312,13 @@ function CommentCard({
 export function MobileBotItemActivity({
   item,
   events,
-  onReply
+  onReply,
+  attachments
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
   onReply: () => void
+  attachments: MobileBotItemAttachmentSource
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -323,7 +327,7 @@ export function MobileBotItemActivity({
     <View>
       {entries.map((entry) =>
         entry.kind === 'comment' || entry.kind === 'answer' ? (
-          <CommentCard key={entry.key} item={item} entry={entry} onReply={onReply} />
+          <CommentCard key={entry.key} {...{ item, entry, onReply, attachments }} />
         ) : (
           <View key={entry.key} style={styles.event}>
             <View style={styles.eventIcon}>

@@ -245,6 +245,7 @@ export function MobileBotItemPage({
             item={item}
             events={view.events}
             onReply={() => comment.current?.focus()}
+            attachments={{ client, onOpenFile }}
           />
         </ScrollView>
         {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}

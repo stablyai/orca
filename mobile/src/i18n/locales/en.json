@@ -1613,7 +1613,8 @@
       },
       "composer": {
         "planMode": "Plan",
-        "exitPlanMode": "Exit plan mode"
+        "exitPlanMode": "Exit plan mode",
+        "pastedTextLabel": "Pasted text"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -3553,7 +3554,9 @@
       "saveFailed": "Couldn't save image",
       "shareFailed": "Couldn't share image",
       "photosAccessDenied": "Allow Orca to add photos in Settings",
-      "imageTooLarge": "This image is too large"
+      "imageTooLarge": "This image is too large",
+      "previousImage": "Previous image",
+      "nextImage": "Next image"
     },
     "nativeChatVisual": {
       "defaultTitle": "Visualization",
@@ -5491,7 +5494,8 @@
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
         "label": "Comment",
         "add": "Add a comment…",
-        "submit": "Comment"
+        "submit": "Comment",
+        "showLess": "Show less"
       },
       "link": {
         "notRead": "Not read yet",
