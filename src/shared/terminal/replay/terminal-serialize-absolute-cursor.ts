@@ -31,6 +31,7 @@ type SnapshotTerminal = SerializeCursorTerminal & {
   modes: { insertMode: boolean }
   buffer: {
     active: {
+      type: string
       cursorX: number
       cursorY: number
       baseY: number
@@ -120,7 +121,7 @@ export function serializeWithAbsoluteCursor(
   const cursorRestore = buildAbsoluteCursorRestoreSequence(
     terminal,
     savedCursor,
-    repaintPendingWrap
+    repaintPendingWrap && isFullSnapshot(opts, terminal)
       ? {
           pendingWrapRestore: (cupCursorY) =>
             buildPendingWrapRestore(serializer, terminal, cupCursorY)
@@ -128,6 +129,18 @@ export function serializeWithAbsoluteCursor(
       : {}
   )
   return `${serialized}${mouseEncodingRestore}${cursorRestore}`
+}
+
+// The repaint writes the active cursor row and toggles insert mode, so a partial snapshot must not get it.
+function isFullSnapshot(
+  opts: SnapshotSerializeOptions | undefined,
+  terminal: SnapshotTerminal
+): boolean {
+  return (
+    opts?.range === undefined &&
+    opts?.excludeModes !== true &&
+    !(opts?.excludeAltBuffer === true && terminal.buffer.active.type === 'alternate')
+  )
 }
 
 /** Live pen SGR and OSC 8 link, without cells. */
