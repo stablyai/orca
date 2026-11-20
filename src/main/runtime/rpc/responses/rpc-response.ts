@@ -47,6 +47,7 @@ import { PLUGIN_CLI_ERROR_CODES } from '../../../../shared/plugins/approval/plug
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../../shared/git/diff/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../../shared/automations/ownership/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
+import { ARCHIVE_HOOK_CHANGED_CODE } from '../../../../shared/worktree/removal/archive-hook-decision'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../../shared/orchestration/workers/nested-worker-depth'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/execution-host/project-runtime-repair-message'
 import {
@@ -86,6 +87,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE,
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
+  // The archive script changed after the desktop approved it; nothing was deleted.
+  ARCHIVE_HOOK_CHANGED_CODE,
   // A workspace selector's choices ride in data; a plain Error('selector_ambiguous') keeps the bare code.
   'selector_ambiguous',
   'run_not_found',

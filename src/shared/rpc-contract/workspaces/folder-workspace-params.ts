@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { ArchiveHookChoiceParam } from '../../worktree/removal/archive-hook-decision'
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
 import { TaskSourceContextSchema } from '../../work-items/task-source-context-schema'
@@ -115,8 +114,8 @@ export const FolderWorkspaceSelector = z.object({
 export const FolderWorkspaceDelete = FolderWorkspaceSelector.extend({
   requireUniqueId: RequireUniqueId,
   runHooks: z.boolean().optional(),
-  // Overrides runHooks on hosts that know it; older hosts strip it and follow runHooks.
-  archiveHooks: ArchiveHookChoiceParam,
+  // The archive content the desktop approved; the host refuses when what would run differs. Older hosts strip it.
+  approvedArchiveHash: z.string().max(128).optional(),
   allowFailedArchiveHook: z.boolean().optional()
 })
 

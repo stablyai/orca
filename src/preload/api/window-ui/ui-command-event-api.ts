@@ -1,4 +1,8 @@
 import type {
+  ArchiveHookApproval,
+  ArchiveHookApprovalRequest
+} from '../../../shared/worktree/removal/archive-hook-decision'
+import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../../shared/file-access/runtime-editor-file-open'
@@ -232,6 +236,10 @@ export type UiCommandEventApi = {
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
   onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void) => () => void
   replyAgentPaneActivity: (reply: AgentPaneActivityReply) => void
+  onArchiveHookApprovalRequest: (
+    callback: (data: ArchiveHookApprovalRequest & { requestId: string }) => void
+  ) => () => void
+  replyArchiveHookApproval: (reply: ArchiveHookApproval & { requestId: string }) => void
   onSplitTerminal: (callback: (data: RendererTerminalSplitRequest) => void) => () => void
   onRenameTerminal: (
     callback: (data: { tabId: string; title: string | null; recordInteraction?: false }) => void

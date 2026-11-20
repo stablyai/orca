@@ -24,9 +24,11 @@ import { UnixSocketTransport } from '../../transports/unix-socket-transport'
 import { RpcDispatcher } from '../../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
 import { STATUS_METHODS } from '../host-management/status'
-import { getDefaultUIState } from '../../../../../shared/orca-profiles/constants'
 import { hashOrcaHookContent } from '../../../../../shared/hashing/orca-hook-content-hash'
-import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type {
+  ArchiveHookApproval,
+  ArchiveHookReport
+} from '../../../../../shared/worktree/removal/archive-hook-decision'
 import type { RpcRequest } from '../../core'
 import { WorkspaceLifecycleQueue } from '../../../workspaces/lifecycle/workspace-lifecycle-queue'
 import { installRealWorkerThreadChildProcesses } from '../../../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
@@ -42,6 +44,8 @@ const cliPath = '../../../../../cli/index'
 const { main }: { main: (argv: string[], cwd: string) => Promise<void> } = await import(cliPath)
 
 const exec = promisify(execFile)
+// The marker path is fixed per run, so the script and its approved hash are known up front.
+const ARCHIVE_SCRIPT = 'echo archived > ../archived'
 let directory = ''
 let repoPath = ''
 let checkout = ''
@@ -50,7 +54,6 @@ let repo: Repo
 let folderRepo: Repo
 let repos: Repo[]
 let sshTargets: SshTarget[]
-let trustedOrcaHooks: PersistedTrustedOrcaHooks
 let meta: Record<string, WorktreeMeta>
 let socket: UnixSocketTransport
 let runtime: RemovalRuntime
@@ -104,7 +107,6 @@ beforeEach(async () => {
   folderRepo = storeRepo({ id: 'folder-repo', path: directory, kind: 'folder' })
   repos = [repo, folderRepo]
   sshTargets = []
-  trustedOrcaHooks = {}
   vi.spyOn(appEnvironment, 'getAppEnvironment').mockReturnValue({
     getPath: () => directory,
     getAppPath: () => directory,
@@ -117,7 +119,6 @@ beforeEach(async () => {
   meta = { [id]: storeWorktreeMeta({ displayName: 'task', instanceId: 'task', hostId: 'local' }) }
   const store = partialRuntimeStore({
     getRepos: () => repos,
-    getUI: () => ({ ...getDefaultUIState(), trustedOrcaHooks }),
     getSshTargets: () => sshTargets,
     getRepo: (repoId) => repos.find((r) => r.id === repoId),
     getAllWorktreeMeta: () => meta,
@@ -219,31 +220,49 @@ it('reports actual safe branch preservation when forced checkout removal cannot 
   expect(warnings()).toHaveLength(0)
 })
 
-it.each([
-  { approved: false, report: { decision: 'skip', reason: 'not-approved', ran: false } },
-  { approved: true, report: { decision: 'run', reason: 'approved', ran: true } }
-])(
-  'runs the orca.yaml archive hook by default only when Orca approved it, approved=$approved',
-  async ({ approved, report }) => {
-    const marker = join(directory, 'archived')
-    const script = `echo archived > "${marker}"`
-    await writeFile(join(repoPath, 'orca.yaml'), `scripts:\n  archive: |\n    ${script}\n`)
-    if (approved) {
-      trustedOrcaHooks = {
-        repo: { archive: { contentHash: hashOrcaHookContent(script), approvedAt: 1 } }
-      }
-    }
-    process.exitCode = undefined
-    const output: string[] = []
-    vi.spyOn(process.stdout, 'write').mockImplementation(
-      (chunk: string | Uint8Array) => (output.push(String(chunk)), true)
-    )
-    await main(['worktree', 'rm', '--worktree', `id:${id}`, '--force', '--json'], repoPath)
-    vi.mocked(process.stdout.write).mockRestore()
-    expect(process.exitCode, output.join('')).not.toBe(1)
-    expect(JSON.parse(output.join('')).result.archiveHook).toEqual(report)
-    await _settlePendingWorktreeRemovalsForTests()
-    expect(existsSync(checkout)).toBe(false)
-    expect(existsSync(marker)).toBe(approved)
+it.each<{
+  label: string
+  answer: ArchiveHookApproval | null
+  report?: ArchiveHookReport
+  refusal?: string
+}>([
+  {
+    label: 'approved version',
+    answer: { decision: 'run', approvedArchiveHash: hashOrcaHookContent(ARCHIVE_SCRIPT) },
+    report: { decision: 'run', reason: 'approved', ran: true }
+  },
+  {
+    label: 'unapproved',
+    answer: { decision: 'needs-approval' },
+    report: { decision: 'skip', reason: 'not-approved', ran: false }
+  },
+  {
+    label: 'changed since approval',
+    answer: { decision: 'run', approvedArchiveHash: hashOrcaHookContent('echo older') },
+    refusal: 'worktree_archive_hook_changed'
+  },
+  { label: 'no desktop window', answer: null, refusal: 'worktree_archive_hook_undecided' }
+])('runs the orca.yaml archive hook by default as the desktop would: $label', async (testCase) => {
+  await writeFile(join(repoPath, 'orca.yaml'), `scripts:\n  archive: |\n    ${ARCHIVE_SCRIPT}\n`)
+  const { answer } = testCase
+  if (answer) {
+    runtime.setNotifier({ requestArchiveHookApproval: async () => answer } as never)
   }
-)
+  process.exitCode = undefined
+  vi.mocked(console.log).mockClear()
+  await main(['worktree', 'rm', '--worktree', `id:${id}`, '--force', '--json'], repoPath)
+  await _settlePendingWorktreeRemovalsForTests()
+  const reply = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))
+  if (testCase.refusal) {
+    expect(reply.error.code).toBe(testCase.refusal)
+    expect(existsSync(checkout)).toBe(true)
+  } else {
+    expect(reply.result.archiveHook).toEqual(testCase.report)
+    expect(existsSync(checkout)).toBe(false)
+  }
+  expect(existsSync(archiveMarker())).toBe(testCase.report?.ran === true)
+})
+
+function archiveMarker(): string {
+  return join(directory, 'archived')
+}

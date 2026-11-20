@@ -162,7 +162,7 @@ export async function removeOrphanOrFolderWorktree({
     runtime.notifyWorktreesChanged(repo.id)
     return {
       ...(archiveHookOverride ? { archiveHookOverride } : {}),
-      ...(archiveHookRan ? { archiveHookRan: true as const } : {}),
+      archiveHookRan,
       ...(archiveSkipped
         ? {
             warning:

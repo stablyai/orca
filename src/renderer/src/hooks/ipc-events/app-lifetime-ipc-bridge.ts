@@ -47,6 +47,7 @@ import { registerTerminalRequestIpcBridge } from './terminal/terminal-request-ip
 import { registerAgentLaunchTabIpcBridge } from '../../lib/agent-session/launch/pane/agent-launch-tab-ipc-bridge'
 import { registerTerminalPaneRevealIpcBridge } from './terminal/terminal-pane-reveal-ipc-bridge'
 import { registerAgentPaneActivityIpcBridge } from '../../components/activity/paired-clients/agent-pane-activity-ipc-bridge'
+import { registerArchiveHookApprovalIpcBridge } from '../../runtime/repo-hooks/archive-hook-approval-ipc-bridge'
 import { registerTerminalUiRoutingIpcBridge } from './terminal/terminal-ui-routing-ipc-bridge'
 import { registerUpdaterStatusIpcBridge } from './native-app/updater-status-ipc-bridge'
 import { createWorktreeEventRuntime } from './workspace-catalog/worktree-event-runtime'
@@ -163,6 +164,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerTerminalUiRoutingIpcBridge(unsubs)
   registerTerminalPaneRevealIpcBridge(unsubs)
   registerAgentPaneActivityIpcBridge(unsubs)
+  registerArchiveHookApprovalIpcBridge(unsubs)
   registerSessionTabIpcBridge(unsubs)
   registerMobileAndTerminalCloseIpcBridge(unsubs, backgroundWakeDispatcher.request)
   registerUpdaterStatusIpcBridge(unsubs)

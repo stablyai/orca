@@ -1,5 +1,4 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
-import type { ArchiveHookChoice } from '../../../../shared/worktree/removal/archive-hook-decision'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
@@ -20,8 +19,6 @@ export type RemoveManagedWorktreeOptions = {
   force?: boolean
   deleteBranch?: boolean
   runHooks?: boolean
-  /** Overrides runHooks; `inherit` decides from the repo's hooks and approvals. */
-  archiveHooks?: ArchiveHookChoice
   /** Waives proof that every PTY stopped (#11960). Set by explicit Force Delete only. */
   allowUnverifiedPtyStop?: boolean
   /** Waives a FAILED archive hook (#19334). Never implied by `force`, never by `runHooks`. */
@@ -38,7 +35,6 @@ export function getRuntimeWorktreeRemovalOptionsKey(
     RemoveManagedWorktreeOptions,
     | 'force'
     | 'runHooks'
-    | 'archiveHooks'
     | 'allowUnverifiedPtyStop'
     | 'allowFailedArchiveHook'
     | 'deleteBranch'
@@ -49,11 +45,7 @@ export function getRuntimeWorktreeRemovalOptionsKey(
   const ptyKey = options.allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
   // Archive-waiver retries must not inherit an in-flight attempt's hook refusal.
   const archiveKey = options.allowFailedArchiveHook ? 'allow-failed-archive' : 'require-archive'
-  const hooksKey = options.archiveHooks
-    ? `archive-${options.archiveHooks}`
-    : options.runHooks
-      ? 'run-hooks'
-      : 'skip-hooks'
+  const hooksKey = options.runHooks ? 'run-hooks' : 'skip-hooks'
   const branchKey =
     options.deleteBranch === undefined
       ? 'legacy-branch'

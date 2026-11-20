@@ -40,6 +40,30 @@ export type HookTrustApproval = { decision: 'run' | 'skip'; approvedContentHash?
 export const SKIP: HookTrustApproval = { decision: 'skip' }
 export const RUN_ANY: HookTrustApproval = { decision: 'run' }
 
+/** What the confirmation decides without asking; no `approval` means it would prompt. */
+export async function approvalWithoutPrompt(
+  state: AppState,
+  repoId: string,
+  scriptKind: OrcaHookTrustKind,
+  scriptContent: string,
+  context: HookTrustContext = 'workspace'
+): Promise<{ approval?: HookTrustApproval; versionOnly: boolean; contentHash: string }> {
+  const versionOnly = usesVersionedHookTrust(state, repoId, context)
+  if (isDesktopHookRepoTrusted(state, repoId, context)) {
+    return { approval: RUN_ANY, versionOnly, contentHash: '' }
+  }
+  const contentHash = await hashOrcaHookScript(scriptContent)
+  const approved =
+    !scriptContent ||
+    (versionOnly &&
+      isOrcaHookContentApproved(state.trustedOrcaHooks, repoId, scriptKind, contentHash))
+  return {
+    ...(approved ? { approval: { decision: 'run', approvedContentHash: contentHash } } : {}),
+    versionOnly,
+    contentHash
+  }
+}
+
 export async function confirmScriptContent(
   state: AppState,
   repoId: string,
@@ -54,24 +78,16 @@ export async function confirmScriptContent(
   if (isCancelled() || signal?.aborted) {
     return SKIP
   }
-  if (isDesktopHookRepoTrusted(state, repoId, context)) {
-    return RUN_ANY
-  }
-
-  const versionOnly = usesVersionedHookTrust(state, repoId, context)
-  const contentHash = await hashOrcaHookScript(scriptContent)
+  const settled = await approvalWithoutPrompt(state, repoId, scriptKind, scriptContent, context)
   if (isCancelled() || signal?.aborted) {
     return SKIP
   }
+  if (settled.approval) {
+    return settled.approval
+  }
+  const { versionOnly, contentHash } = settled
   const approved: HookTrustApproval = { decision: 'run', approvedContentHash: contentHash }
   const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
-  if (
-    !scriptContent ||
-    (versionOnly &&
-      isOrcaHookContentApproved(state.trustedOrcaHooks, repoId, scriptKind, contentHash))
-  ) {
-    return approved
-  }
 
   const repo = findHookRepo(state, repoId, hostId)
   const repoName = repo?.displayName ?? 'this repository'

@@ -1,19 +1,30 @@
 import { WorktreeRemove } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
 import { splitWorktreeId } from '../../../../../shared/worktree/id'
 import {
-  requestedArchiveHookDecision,
-  withArchiveHookReport,
-  type ArchiveHookChoice,
-  type ArchiveHookDecision
+  ArchiveHookApprovalParams,
+  type ArchiveHookApproval,
+  type ArchiveHookApprovalRequest
 } from '../../../../../shared/worktree/removal/archive-hook-decision'
-import { normalizeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  isRepoOnCatalogHost,
+  normalizeExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import { scopeHooksToRepoKind } from '../../../../../shared/folder-workspaces/folder-workspace-hooks'
+import {
+  projectGroupHookOwner,
+  type WorkspaceHookOwner
+} from '../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import { getEffectiveHooks, hasHooksFile, loadHooks } from '../../../../workspace-hooks/hooks'
 import { getLocalWorktreeCatalogVersion } from '../../../../workspaces/catalog/local-worktree-scan-generation'
 import { resolveWorktreeRemovalRepoOwner } from '../../../../workspaces/removal/worktree-removal-repo-owner'
-import { decideArchiveHook } from '../../../../workspace-hooks/inherited-archive-hook-decision'
+import {
+  archiveTrust,
+  assertArchiveHookStillApproved
+} from '../../../../workspace-hooks/archive-hook-trust-content'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
 import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { defineMethod } from '../../core'
 import { waitsForWorktreeRemoval } from '../../workspace-client-views/worktree-removal-marker-projection'
 import { resolvePairedCallerHostId } from '../pairing/paired-caller-host-id'
@@ -50,20 +61,22 @@ export const WORKTREE_REMOVE_METHOD = defineMethod({
     // Parse id: selectors for repo stamping; resolving again scans and rejects ids shared by hosts. Leave other selectors unstamped.
     const explicitWorktreeId = getExplicitWorktreeIdSelector(params.worktree)
     const repoId = explicitWorktreeId ? splitWorktreeId(explicitWorktreeId)?.repoId : undefined
-    let archiveDecision: ArchiveHookDecision | undefined
     const result = await queueWorkspaceDelete(
       runtime,
       params.worktree,
       resolvedHostId,
       params,
       async (removal) => {
-        // Decided once the queue admits the delete, against the approvals current at that moment.
-        archiveDecision = params.archiveHooks
-          ? await decideWorktreeArchiveHook(runtime, params.worktree, params.archiveHooks)
-          : undefined
+        if (params.runHooks && params.approvedArchiveHash !== undefined) {
+          await assertWorktreeArchiveHookStillApproved(
+            runtime,
+            params.worktree,
+            resolvedHostId,
+            params.approvedArchiveHash
+          )
+        }
         const options = {
           ...removal,
-          ...(archiveDecision ? { runHooks: archiveDecision.decision === 'run' } : {}),
           waitForBackgroundRemoval: waitsForWorktreeRemoval(context, params)
         }
         return params.approvedNestedWorktrees
@@ -77,44 +90,81 @@ export const WORKTREE_REMOVE_METHOD = defineMethod({
     )
     return {
       removed: result.removing !== true,
-      ...withArchiveHookReport(result, archiveDecision),
+      ...result,
       ...(repoId ? { catalogVersion: getLocalWorktreeCatalogVersion(repoId) } : {})
     }
   }
 })
 
-async function decideWorktreeArchiveHook(
-  runtime: OrcaRuntimeService,
-  selector: string,
-  choice: ArchiveHookChoice
-): Promise<ArchiveHookDecision> {
-  if (choice !== 'inherit') {
-    return requestedArchiveHookDecision(choice)
+/** Asked of the desktop runtime: what its window's Delete would do with this workspace's archive hook. */
+export const WORKTREE_ARCHIVE_HOOK_APPROVAL_METHOD = defineMethod({
+  name: 'worktree.archiveHookApproval',
+  permission: 'workspace',
+  params: ArchiveHookApprovalParams,
+  handler: async (params, { runtime }) => {
+    const answer = await runtime.requestArchiveHookApproval(params)
+    return answer.decision === 'undecided' ? approvalWithoutDesktop(runtime, params) : answer
   }
-  let owner
+})
+
+/** Without the window's approvals, only a hook that needs none can be decided: absent, or from project settings. */
+async function approvalWithoutDesktop(
+  runtime: OrcaRuntimeService,
+  params: ArchiveHookApprovalRequest
+): Promise<ArchiveHookApproval> {
+  let owner: WorkspaceHookOwner | null | undefined
   try {
-    const worktree = await runtime.showManagedWorktree(selector)
-    const repos = runtime.listRepos()
-    const resolved = resolveWorktreeRemovalRepoOwner(
-      { getRepos: () => repos, getRepo: (id) => repos.find((repo) => repo.id === id) },
-      worktree.repoId,
-      normalizeExecutionHostId(worktree.hostId) ?? undefined
-    )
-    owner = resolved.kind === 'resolved' ? resolved.repo : undefined
+    if ('folderWorkspaceId' in params) {
+      const workspace = runtime
+        .listVisibleFolderWorkspaces()
+        .find((entry) => entry.id === params.folderWorkspaceId)
+      const group = runtime
+        .listVisibleProjectGroups()
+        .find((entry) => entry.id === workspace?.projectGroupId)
+      owner = group && projectGroupHookOwner(group)
+    } else {
+      owner = await resolveWorktreeHookOwner(runtime, `id:${params.worktreeId}`, params.hostId)
+    }
   } catch {
     owner = undefined
   }
-  return decideArchiveHook(choice, owner, () => ({
-    trust: readHookTrust(runtime),
-    repos: runtime.listRepos()
-  }))
+  if (!owner || getRepoDialableSshTargetId(owner) || !isRepoOnCatalogHost(owner)) {
+    return { decision: 'undecided' }
+  }
+  if (!getEffectiveHooks(owner)?.scripts.archive) {
+    return { decision: 'run' }
+  }
+  const shared = scopeHooksToRepoKind(
+    owner,
+    hasHooksFile(owner.path) ? loadHooks(owner.path) : null
+  )
+  return archiveTrust(owner, shared) === null ? { decision: 'run' } : { decision: 'undecided' }
 }
 
-// A runtime without a UI store has no approvals, so only scripts that need none run.
-function readHookTrust(runtime: OrcaRuntimeService): PersistedTrustedOrcaHooks | undefined {
-  try {
-    return runtime.getUIState().trustedOrcaHooks
-  } catch {
-    return undefined
+async function resolveWorktreeHookOwner(
+  runtime: OrcaRuntimeService,
+  selector: string,
+  hostId: string | undefined
+): Promise<WorkspaceHookOwner | undefined> {
+  const worktree = await runtime.showManagedWorktree(selector)
+  const repos = runtime.listRepos()
+  const owner = resolveWorktreeRemovalRepoOwner(
+    { getRepos: () => repos, getRepo: (id) => repos.find((repo) => repo.id === id) },
+    worktree.repoId,
+    normalizeExecutionHostId(hostId ?? worktree.hostId) ?? undefined
+  )
+  return owner.kind === 'resolved' ? owner.repo : undefined
+}
+
+// Checked once the queue admits the delete, right before the hook would run.
+async function assertWorktreeArchiveHookStillApproved(
+  runtime: OrcaRuntimeService,
+  selector: string,
+  hostId: string | undefined,
+  approvedArchiveHash: string
+): Promise<void> {
+  const owner = await resolveWorktreeHookOwner(runtime, selector, hostId)
+  if (owner) {
+    assertArchiveHookStillApproved(owner, approvedArchiveHash)
   }
 }

@@ -25,7 +25,7 @@ import { inspectSetupScriptImportCandidates } from '../../../shared/workspace-se
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { hashOrcaHookTrustContent } from '../../workspace-hooks/created-worktree-setup-trust'
-import { archiveTrust } from '../../workspace-hooks/inherited-archive-hook-decision'
+import { archiveTrust } from '../../workspace-hooks/archive-hook-trust-content'
 import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hooks-create-source'
 
 type RuntimeRepositoryHooksCommandsDeps<TRepo extends WorkspaceHookOwner> = {

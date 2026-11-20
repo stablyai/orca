@@ -1,9 +1,12 @@
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
-  archiveHookRequest,
+  archiveHookReport,
+  formatArchiveHookLine,
   getArchiveHookChoice,
-  printArchiveHookWarning
+  printArchiveHookWarning,
+  resolveArchiveHookRequest
 } from './worktree-archive-hook-choice'
+import type { ArchiveHookReport } from '../../shared/worktree/removal/archive-hook-decision'
 import type {
   RuntimeWorktreeRecord,
   RuntimeWorktreeRemoveResult,
@@ -138,13 +141,14 @@ export async function removeIfFolderWorkspace(
   if (folderId === undefined) {
     return false
   }
-  const result = await removeFolderWorkspace(client, flags, folderId)
-  printArchiveHookWarning(getArchiveHookChoice(flags), result.result.archiveHook, json)
+  const result = await removeFolderWorkspace(client, flags, selector, folderId)
+  printArchiveHookWarning(result.result.archiveHook, json)
   printHookWarning(result.result, json)
-  printResult(
-    result,
-    json,
-    () => 'removed: true\nOrca no longer lists this folder workspace; the folder stays on disk.'
+  printResult(result, json, (value) =>
+    [
+      'removed: true\nOrca no longer lists this folder workspace; the folder stays on disk.',
+      formatArchiveHookLine(value.archiveHook)
+    ].join('\n')
   )
   return true
 }
@@ -152,32 +156,49 @@ export async function removeIfFolderWorkspace(
 async function removeFolderWorkspace(
   client: RuntimeClient,
   flags: Flags,
+  selector: string,
   folderId: string
-): Promise<RuntimeRpcSuccess<RuntimeWorktreeRemoveResult>> {
+): Promise<RuntimeRpcSuccess<RuntimeWorktreeRemoveResult & { archiveHook: ArchiveHookReport }>> {
   refuseFolderFlags(flags, [['delete-branch', 'does not apply: a folder workspace has no branch.']])
   const archiveChoice = getArchiveHookChoice(flags)
-  const runsHooks = archiveChoice !== 'skip'
   const allowFailedArchiveHook = flags.get('allow-failed-archive-hook') === true
   const status = await assertUniqueIdMutationSupported(client)
-  if (archiveChoice === 'run') {
-    if (!status.capabilities?.includes(PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY)) {
-      throw new RuntimeClientError(
-        'incompatible_runtime',
-        'Update Orca on the computer that owns this folder workspace to run its Archive script. Nothing was changed.'
-      )
-    }
+  const supported = status.capabilities?.includes(PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY)
+  if (archiveChoice === 'run' && !supported) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'Update Orca on the computer that owns this folder workspace to run its Archive script. Nothing was changed.'
+    )
   }
+  // A host without folder Archive support never runs it, as the app's Delete doesn't there.
+  const archive =
+    archiveChoice === 'inherit' && !supported
+      ? { runHooks: false, report: { decision: 'skip' as const, reason: 'older-host' as const } }
+      : await resolveArchiveHookRequest(client, archiveChoice, async () => ({
+          folderWorkspaceId: folderId,
+          hostId: (await folderWorkspaceHostId(client, selector)) ?? 'local'
+        }))
   const removal = await client.call<
-    { deleted: boolean } & Pick<RuntimeWorktreeRemoveResult, 'archiveHookOverride' | 'archiveHook'>
+    { deleted: boolean } & Pick<
+      RuntimeWorktreeRemoveResult,
+      'archiveHookOverride' | 'archiveHookRan'
+    >
   >(
     'folderWorkspace.delete',
     {
       folderWorkspaceId: folderId,
       requireUniqueId: true,
-      ...archiveHookRequest(archiveChoice),
-      ...(runsHooks ? { allowFailedArchiveHook } : {})
+      ...(archive.runHooks
+        ? {
+            runHooks: true,
+            allowFailedArchiveHook,
+            ...(archive.approvedArchiveHash
+              ? { approvedArchiveHash: archive.approvedArchiveHash }
+              : {})
+          }
+        : {})
     },
-    { timeoutMs: worktreeRemovalReplyTimeoutMs(runsHooks) }
+    { timeoutMs: worktreeRemovalReplyTimeoutMs(archive.runHooks) }
   )
   if (!removal.result.deleted) {
     throw folderGone(folderId)
@@ -189,9 +210,19 @@ async function removeFolderWorkspace(
       ...(removal.result.archiveHookOverride
         ? { archiveHookOverride: removal.result.archiveHookOverride }
         : {}),
-      ...(removal.result.archiveHook ? { archiveHook: removal.result.archiveHook } : {})
+      archiveHook: archiveHookReport(archive, removal.result)
     }
   }
+}
+
+async function folderWorkspaceHostId(
+  client: RuntimeClient,
+  selector: string
+): Promise<string | undefined> {
+  const shown = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+    worktree: selector
+  })
+  return shown.result.worktree.hostId ?? undefined
 }
 
 export function refuseFolderWorkspaceActivation(folderId: string): never {

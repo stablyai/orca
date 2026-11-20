@@ -11,9 +11,11 @@ import type { CommandHandler } from '../dispatch/dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { requestWorktreeRemoval } from './worktree-removal-request'
 import {
-  archiveHookRequest,
+  archiveHookReport,
+  formatArchiveHookLine,
   getArchiveHookChoice,
-  printArchiveHookWarning
+  printArchiveHookWarning,
+  resolveArchiveHookRequest
 } from './worktree-archive-hook-choice'
 import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
 import { formatWorktreeList, formatWorktreeShow } from './workspace-format'
@@ -272,25 +274,35 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
       )
     }
-    const result = await requestWorktreeRemoval(client, {
+    const archive = await resolveArchiveHookRequest(client, archiveChoice, async () => ({
+      worktreeId: resolved.result.worktree.id,
+      hostId
+    }))
+    const removal = await requestWorktreeRemoval(client, {
       worktree,
       hostId,
       force: flags.get('force') === true,
       deleteBranch: flags.get('delete-branch') === true,
-      ...archiveHookRequest(archiveChoice),
+      runHooks: archive.runHooks,
+      ...(archive.approvedArchiveHash ? { approvedArchiveHash: archive.approvedArchiveHash } : {}),
       // Archive failure waivers protect user data separately from --force's PTY-stop waiver.
       allowFailedArchiveHook: flags.get('allow-failed-archive-hook') === true
     })
-    printArchiveHookWarning(archiveChoice, result.result.archiveHook, json)
+    const archiveHook = archiveHookReport(archive, removal.result)
+    const result = { ...removal, result: { ...removal.result, archiveHook } }
+    printArchiveHookWarning(archiveHook, json)
     printHookWarning(result.result, json)
     printPreservedBranchWarning(result.result, json)
     printResult(result, json, (value) =>
       // Hosts that predate waiting answer on acceptance.
-      value.removing
-        ? 'removed: false\nOrca is still deleting the checkout in the background.'
-        : value.removed === true
-          ? 'removed: true'
-          : 'Removal is not confirmed.'
+      [
+        value.removing
+          ? 'removed: false\nOrca is still deleting the checkout in the background.'
+          : value.removed === true
+            ? 'removed: true'
+            : 'Removal is not confirmed.',
+        formatArchiveHookLine(value.archiveHook)
+      ].join('\n')
     )
   }
 }

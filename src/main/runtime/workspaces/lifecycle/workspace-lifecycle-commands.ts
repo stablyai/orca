@@ -167,17 +167,16 @@ export function queueWorkspaceDelete<T>(
   selector: string,
   hostId: string | undefined,
   requested: Partial<Record<RemovalFlag, boolean>> &
-    Pick<RemoveManagedWorktreeOptions, 'deleteBranch' | 'archiveHooks'> & {
+    Pick<RemoveManagedWorktreeOptions, 'deleteBranch'> & {
       approvedNestedWorktrees?: readonly NestedWorktreeRemovalApproval[]
     },
   run: (
     removal: Record<RemovalFlag, boolean> &
-      Pick<RemoveManagedWorktreeOptions, 'hostId' | 'deleteBranch' | 'archiveHooks'>
+      Pick<RemoveManagedWorktreeOptions, 'hostId' | 'deleteBranch'>
   ) => Promise<T>
 ): Promise<T> {
   const removal = {
     ...(requested.deleteBranch !== undefined ? { deleteBranch: requested.deleteBranch } : {}),
-    ...(requested.archiveHooks ? { archiveHooks: requested.archiveHooks } : {}),
     force: requested.force === true,
     runHooks: requested.runHooks === true,
     allowUnverifiedPtyStop: requested.allowUnverifiedPtyStop === true,

@@ -1,3 +1,4 @@
+import { archiveHookRanFrom } from '../../../shared/worktree/removal/archive-hook-decision'
 import { isRepoOnCatalogHost } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -20,7 +21,7 @@ export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
   runArchive: boolean
   allowFailure: boolean
   runtimeTarget: () => HookRuntimeTarget | undefined
-}): Promise<{ ran: boolean; override?: ArchiveHookOverride }> {
+}): Promise<{ ran: boolean | null; override?: ArchiveHookOverride }> {
   const { repo } = args
   if (!args.runArchive || !isRepoOnCatalogHost(repo)) {
     return { ran: false }
@@ -42,7 +43,7 @@ export async function gateFolderWorkspaceRemovalOnArchiveHook(args: {
     result,
     allowFailure: args.allowFailure
   })
-  return { ran: true, ...(override ? { override } : {}) }
+  return { ran: archiveHookRanFrom(result), ...(override ? { override } : {}) }
 }
 
 /** Runner files are per launch; drop this workspace's once its processes have stopped. */

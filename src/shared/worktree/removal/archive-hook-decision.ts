@@ -1,27 +1,37 @@
 import { z } from 'zod'
 
-/** How a removal treats the archive hook; `inherit` runs it when the desktop's Delete would without asking. */
-export const ArchiveHookChoiceParam = z.enum(['run', 'skip', 'inherit']).optional()
-export type ArchiveHookChoice = NonNullable<z.infer<typeof ArchiveHookChoiceParam>>
+/** Workspace whose archive hook the desktop is asked about; `folderWorkspaceId` selects a group folder workspace. */
+export const ArchiveHookApprovalParams = z.union([
+  z.object({ worktreeId: z.string().min(1), hostId: z.string().min(1) }),
+  z.object({ folderWorkspaceId: z.string().min(1), hostId: z.string().min(1) })
+])
+export type ArchiveHookApprovalRequest = z.infer<typeof ArchiveHookApprovalParams>
 
-export type ArchiveHookDecision =
-  | { decision: 'run'; reason: 'requested' | 'approved' }
-  | { decision: 'skip'; reason: 'requested' | 'none' | 'not-approved' | 'unverifiable' }
+/**
+ * What the desktop's Delete would do without prompting. `approvedArchiveHash` pins a version-only
+ * approval; repo-wide trust and project-settings scripts carry none, as Delete sends none.
+ */
+export type ArchiveHookApproval =
+  | { decision: 'run'; approvedArchiveHash?: string }
+  | { decision: 'needs-approval' }
+  | { decision: 'undecided' }
 
-/** `ran` is the host's evidence that the hook executed, not the decision to run it. */
-export type ArchiveHookReport = ArchiveHookDecision & { ran: boolean }
+export type ArchiveHookChoice = 'run' | 'skip' | 'inherit'
 
-export function requestedArchiveHookDecision(
-  choice: Exclude<ArchiveHookChoice, 'inherit'>
-): ArchiveHookDecision {
-  return { decision: choice, reason: 'requested' }
+export type ArchiveHookReport = {
+  decision: 'run' | 'skip'
+  reason: 'requested' | 'approved' | 'not-approved' | 'older-host'
+  /** Host evidence that the hook process started; null when the host didn't say. */
+  ran: boolean | null
 }
 
-export function withArchiveHookReport<T extends { archiveHookRan?: true }>(
-  result: T,
-  decision: ArchiveHookDecision | undefined
-): T & { archiveHook?: ArchiveHookReport } {
-  return decision
-    ? { ...result, archiveHook: { ...decision, ran: result.archiveHookRan === true } }
-    : result
+/** Refused before anything is deleted: the default needs the desktop's answer and could not get one. */
+export const ARCHIVE_HOOK_UNDECIDED_CODE = 'worktree_archive_hook_undecided'
+
+/** Refused before anything is deleted: the archive script changed after it was approved. */
+export const ARCHIVE_HOOK_CHANGED_CODE = 'worktree_archive_hook_changed'
+
+/** True when the hook reported an exit; null when none was observed (spawn failure or timeout). */
+export function archiveHookRanFrom(result: { success: boolean; exitCode?: number }): true | null {
+  return result.success || typeof result.exitCode === 'number' ? true : null
 }

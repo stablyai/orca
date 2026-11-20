@@ -33,7 +33,10 @@ import {
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
-import { WORKTREE_REMOVE_METHOD } from './worktree-remove-method'
+import {
+  WORKTREE_ARCHIVE_HOOK_APPROVAL_METHOD,
+  WORKTREE_REMOVE_METHOD
+} from './worktree-remove-method'
 import { WORKSPACE_CLEANUP_SCAN_METHOD } from './workspace-cleanup-scan-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
 import { runApprovedCreatedWorktreeSetup } from '../../../workspaces/creation/created-worktree-approved-setup'
@@ -213,6 +216,7 @@ export const WORKTREE_METHODS = [
       })
   }),
   WORKTREE_REMOVE_METHOD,
+  WORKTREE_ARCHIVE_HOOK_APPROVAL_METHOD,
   defineMethod({
     name: 'worktree.previewNestedRemoval',
     permission: 'workspace',

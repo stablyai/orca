@@ -1,3 +1,7 @@
+import type {
+  ArchiveHookApproval,
+  ArchiveHookApprovalRequest
+} from '../../../shared/worktree/removal/archive-hook-decision'
 import { OrcaRuntimeWithStateFields } from '../construction/runtime-construction'
 import {
   persistClientHostedBrowserPages,
@@ -217,6 +221,16 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
       throw new Error('agent_activity_needs_desktop_window')
     }
     this.setAgentListPublication(await this.notifier.applyAgentPaneActivity(change))
+  }
+
+  /** Only the desktop window holds hook approvals and the full repo catalog; a headless host can't answer. */
+  async requestArchiveHookApproval(
+    request: ArchiveHookApprovalRequest
+  ): Promise<ArchiveHookApproval> {
+    if (!this.notifier?.requestArchiveHookApproval) {
+      return { decision: 'undecided' }
+    }
+    return this.notifier.requestArchiveHookApproval(request)
   }
 
   recordFeatureInteraction(id: FeatureInteractionId): PersistedUIState {

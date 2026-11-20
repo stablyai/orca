@@ -253,6 +253,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     replyTerminalPaneReveal: () => {},
     onApplyAgentPaneActivity: () => noopUnsubscribe,
     replyAgentPaneActivity: () => {},
+    onArchiveHookApprovalRequest: () => noopUnsubscribe,
+    replyArchiveHookApproval: () => {},
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
     onSetPaneTitle: () => noopUnsubscribe,

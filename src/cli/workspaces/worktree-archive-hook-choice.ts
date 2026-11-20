@@ -1,8 +1,12 @@
 import { getPresentStringFlag } from '../arguments/flags'
+import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
-import type {
-  ArchiveHookChoice,
-  ArchiveHookReport
+import {
+  ARCHIVE_HOOK_UNDECIDED_CODE,
+  type ArchiveHookApproval,
+  type ArchiveHookApprovalRequest,
+  type ArchiveHookChoice,
+  type ArchiveHookReport
 } from '../../shared/worktree/removal/archive-hook-decision'
 
 export function getArchiveHookChoice(flags: Map<string, string | boolean>): ArchiveHookChoice {
@@ -27,37 +31,73 @@ export function getArchiveHookChoice(flags: Map<string, string | boolean>): Arch
   return choice
 }
 
-/** Older hosts drop `archiveHooks` and follow `runHooks`, which keeps their previous behavior. */
-export function archiveHookRequest(choice: ArchiveHookChoice): {
-  archiveHooks: ArchiveHookChoice
+export type ArchiveHookRequest = {
   runHooks: boolean
-} {
-  return { archiveHooks: choice, runHooks: choice === 'run' }
+  approvedArchiveHash?: string
+  report: Omit<ArchiveHookReport, 'ran'>
 }
 
-export function printArchiveHookWarning(
+/** Inherit asks the desktop what its Delete would do without prompting, then pins an approved version. */
+export async function resolveArchiveHookRequest(
+  client: RuntimeClient,
   choice: ArchiveHookChoice,
-  report: ArchiveHookReport | undefined,
-  json: boolean
-): void {
-  if (json) {
-    return
+  target: () => Promise<ArchiveHookApprovalRequest>
+): Promise<ArchiveHookRequest> {
+  if (choice !== 'inherit') {
+    return { runHooks: choice === 'run', report: { decision: choice, reason: 'requested' } }
   }
-  if (!report) {
-    if (choice === 'inherit') {
-      console.error(
-        "warning: The host didn't report an archive hook decision (it may predate --archive); it runs the archive hook only with --archive run."
-      )
+  let approval: ArchiveHookApproval
+  try {
+    approval = (
+      await client.call<ArchiveHookApproval>('worktree.archiveHookApproval', await target())
+    ).result
+  } catch (error) {
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      return { runHooks: false, report: { decision: 'skip', reason: 'older-host' } }
     }
+    throw error
+  }
+  if (approval.decision === 'run') {
+    return {
+      runHooks: true,
+      ...(approval.approvedArchiveHash
+        ? { approvedArchiveHash: approval.approvedArchiveHash }
+        : {}),
+      report: { decision: 'run', reason: 'approved' }
+    }
+  }
+  if (approval.decision === 'needs-approval') {
+    return { runHooks: false, report: { decision: 'skip', reason: 'not-approved' } }
+  }
+  throw new RuntimeClientError(
+    ARCHIVE_HOOK_UNDECIDED_CODE,
+    "Orca couldn't tell whether this workspace's archive hook is approved: the Orca app that holds hook approvals isn't reachable from this host, or the hook couldn't be read. Nothing was deleted. Pass --archive run to run the hook, or --archive skip to delete without it."
+  )
+}
+
+export function archiveHookReport(
+  request: ArchiveHookRequest,
+  result: { archiveHookRan?: boolean | null }
+): ArchiveHookReport {
+  return { ...request.report, ran: result.archiveHookRan ?? null }
+}
+
+export function printArchiveHookWarning(report: ArchiveHookReport, json: boolean): void {
+  if (json) {
     return
   }
   if (report.reason === 'not-approved') {
     console.error(
       "warning: The archive hook did not run: this version of the repository's orca.yaml script hasn't been approved in Orca. Pass --archive run to run it."
     )
-  } else if (report.reason === 'unverifiable') {
+  } else if (report.reason === 'older-host') {
     console.error(
-      "warning: No archive hook ran: Orca can't check this workspace's hook approval on its host. Pass --archive run to run it."
+      "warning: No archive hook ran: this Orca host is older and doesn't follow the hook's approval. Update Orca there, or pass --archive run."
     )
   }
+}
+
+export function formatArchiveHookLine(report: ArchiveHookReport): string {
+  const ran = report.ran === true ? 'ran' : report.ran === false ? 'did not run' : 'outcome unknown'
+  return `archiveHook: ${ran} (${report.decision}, ${report.reason})`
 }

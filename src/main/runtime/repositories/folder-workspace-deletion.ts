@@ -1,10 +1,4 @@
-import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
-import {
-  withArchiveHookReport,
-  type ArchiveHookChoice,
-  type ArchiveHookDecision
-} from '../../../shared/worktree/removal/archive-hook-decision'
-import { decideArchiveHook } from '../../workspace-hooks/inherited-archive-hook-decision'
+import { assertArchiveHookStillApproved } from '../../workspace-hooks/archive-hook-trust-content'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { ArchiveHookOverride } from '../../../shared/worktree/removal/archive-hook-removal-gate'
@@ -21,7 +15,7 @@ import type { RuntimeProjectGroupDependencies } from './runtime-project-group-co
 
 export type FolderWorkspaceDeleteOptions = FolderWorkspaceMutationOptions & {
   runHooks?: boolean
-  archiveHooks?: ArchiveHookChoice
+  approvedArchiveHash?: string
   allowFailedArchiveHook?: boolean
 }
 
@@ -29,12 +23,11 @@ export async function deleteFolderWorkspaceRow(
   deps: RuntimeProjectGroupDependencies,
   folderWorkspaceId: string,
   options: FolderWorkspaceDeleteOptions
-): Promise<
-  { deleted: boolean; archiveHookOverride?: ArchiveHookOverride } & Pick<
-    RemoveWorktreeResult,
-    'archiveHookRan' | 'archiveHook'
-  >
-> {
+): Promise<{
+  deleted: boolean
+  archiveHookRan?: boolean | null
+  archiveHookOverride?: ArchiveHookOverride
+}> {
   const store = deps.getStore()
   if (!store?.removeFolderWorkspace) {
     throw new Error('runtime_unavailable')
@@ -52,31 +45,24 @@ export async function deleteFolderWorkspaceRow(
     | undefined
   let cleanupState: void | Promise<void> = undefined
   let archiveHookOverride: ArchiveHookOverride | undefined
-  let archiveHookRan = false
-  let archiveDecision: ArchiveHookDecision | undefined
+  let archiveHookRan: boolean | null = false
   try {
     if (workspace) {
       const worktreeId = folderWorkspaceKey(folderWorkspaceId)
       const group = store
         .getProjectGroups?.()
         .find((entry) => entry.id === workspace.projectGroupId)
-      const owner = group ? (projectGroupHookOwner(group) ?? undefined) : undefined
-      archiveDecision = options.archiveHooks
-        ? await decideArchiveHook(options.archiveHooks, owner, () => ({
-            trust: store.getUI?.().trustedOrcaHooks,
-            repos: store.getRepos(),
-            hostQualifiedId: true
-          }))
-        : undefined
+      const owner = group && projectGroupHookOwner(group)
       if (owner) {
+        if (options.runHooks && options.approvedArchiveHash !== undefined) {
+          assertArchiveHookStillApproved(owner, options.approvedArchiveHash)
+        }
         const gated = await gateFolderWorkspaceRemovalOnArchiveHook({
           repo: owner,
           worktreeId,
           displayName: workspace.name,
           workspacePath: workspace.folderPath,
-          runArchive: archiveDecision
-            ? archiveDecision.decision === 'run'
-            : options.runHooks === true,
+          runArchive: options.runHooks === true,
           allowFailure: options.allowFailedArchiveHook === true,
           runtimeTarget: () => undefined
         })
@@ -121,14 +107,7 @@ export async function deleteFolderWorkspaceRow(
       }
     }
     await cleanupState
-    return withArchiveHookReport(
-      {
-        deleted,
-        ...(archiveHookOverride ? { archiveHookOverride } : {}),
-        ...(archiveHookRan ? { archiveHookRan: true as const } : {})
-      },
-      archiveDecision
-    )
+    return { deleted, archiveHookRan, ...(archiveHookOverride ? { archiveHookOverride } : {}) }
   } finally {
     await gate?.finish(false)
   }

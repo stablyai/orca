@@ -1,3 +1,7 @@
+import type {
+  ArchiveHookApproval,
+  ArchiveHookApprovalRequest
+} from '../../../shared/worktree/removal/archive-hook-decision'
 import type { AgentSessionAttachmentClipboardTarget } from '../../../shared/agent-session/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
 import {
@@ -97,6 +101,19 @@ export const uiClipboardAndWindowControlsApi = {
   },
   replyAgentPaneActivity: (reply: AgentPaneActivityReply): void => {
     ipcRenderer.send('ui:agentPaneActivityReply', reply)
+  },
+  onArchiveHookApprovalRequest: (
+    callback: (data: ArchiveHookApprovalRequest & { requestId: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: ArchiveHookApprovalRequest & { requestId: string }
+    ) => callback(data)
+    ipcRenderer.on('ui:archiveHookApprovalRequest', listener)
+    return () => ipcRenderer.removeListener('ui:archiveHookApprovalRequest', listener)
+  },
+  replyArchiveHookApproval: (reply: ArchiveHookApproval & { requestId: string }): void => {
+    ipcRenderer.send('ui:archiveHookApprovalReply', reply)
   },
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
