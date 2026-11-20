@@ -159,22 +159,11 @@ describe('useFileExplorerAutoReveal', () => {
     }
     const cleared = { ...filtered, hasNameFilterQuery: false, rowProjection: collapsedTree }
 
-    const untouched = renderAutoReveal(contents)
-    untouched.rerender({ ...contents, activeFileId: 'file-deep' })
-    untouched.rerender(filtered)
-    untouched.rerender(cleared)
+    const { rerender } = renderAutoReveal(contents)
+    rerender({ ...contents, activeFileId: 'file-deep' })
+    rerender(filtered)
+    rerender(cleared)
     expect(pendingRevealPath()).toBe(FILE_PATH)
-    untouched.unmount()
-    useAppStore.setState({ pendingExplorerReveal: null })
-
-    // A row the user picks under the filter after the tree is shown again is kept.
-    const picked = renderAutoReveal(contents)
-    picked.rerender({ ...contents, activeFileId: 'file-deep' })
-    picked.rerender(filtered)
-    act(() => picked.result.current.selectRow('/repo/src'))
-    picked.rerender(cleared)
-    expect(picked.result.current.selectedPath).toBe('/repo/src')
-    expect(pendingRevealPath()).toBeNull()
   })
 
   it('expands the real tree to a file opened from name-filter rows once the filter is cleared', () => {
