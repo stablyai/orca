@@ -76,6 +76,10 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_messages_pending_pointer_pty
           ON messages(pointer_pty_id) WHERE pointer_enter_pending > 0;
+        CREATE INDEX IF NOT EXISTS idx_messages_reserved_pointer_pty
+          ON messages(pointer_pty_id) WHERE pointer_enter_pending = 1;
+        CREATE INDEX IF NOT EXISTS idx_messages_read_pointer_pty
+          ON messages(pointer_pty_id) WHERE read = 1 AND pointer_enter_pending > 0;
         CREATE INDEX IF NOT EXISTS idx_messages_uncertain_pointer_claims
           ON messages(pointer_pty_id, to_handle, pointer_process_incarnation)
           WHERE read = 0 AND pointer_enter_pending > 1;

@@ -230,14 +230,19 @@ export function getPendingMailboxPointerMessagesForPty(
     }))
 }
 
+/** Why two indexed updates: retained uncertain claims share the PTY, and a working-title frame must not walk them. */
 export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId: string): void {
   this.db
-    .prepare(`UPDATE messages
+    .prepare(`UPDATE messages INDEXED BY idx_messages_reserved_pointer_pty
     SET delivered_at = CASE WHEN read = 0 THEN NULL ELSE delivered_at END,
         pointer_enter_pending = 0, pointer_pty_id = NULL, pointer_process_incarnation = NULL
-    WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?
-      AND (read = 1 OR pointer_enter_pending = ?)`)
-    .run(ptyId, MAILBOX_POINTER_RESERVED)
+    WHERE pointer_pty_id = ? AND pointer_enter_pending = ${MAILBOX_POINTER_RESERVED}`)
+    .run(ptyId)
+  this.db
+    .prepare(`UPDATE messages INDEXED BY idx_messages_read_pointer_pty
+    SET pointer_enter_pending = 0, pointer_pty_id = NULL, pointer_process_incarnation = NULL
+    WHERE pointer_pty_id = ? AND read = 1 AND pointer_enter_pending > 0`)
+    .run(ptyId)
 }
 
 function mutatePointerMessages(
