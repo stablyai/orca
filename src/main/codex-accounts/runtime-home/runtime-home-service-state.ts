@@ -199,7 +199,9 @@ export abstract class CodexRuntimeHomeState {
   protected abstract isWindowsReadableLink(targetPath: string): boolean
   protected abstract migrateLegacyManagedStateIfNeeded(): void
   protected abstract getLegacyManagedHomes(): string[]
-  protected abstract migrateLegacyHistory(managedHomePath: string): void
+  protected abstract migrateLegacyHistory(
+    managedHomes: { accountId: string; homePath: string }[]
+  ): Promise<void>
   protected abstract migrateLegacySessions(managedHomePath: string, accountId: string): void
   protected abstract listFilesRecursively(rootPath: string): string[]
   protected abstract appendListedFiles(target: string[], source: readonly string[]): void

@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   utimesSync,
@@ -164,6 +165,7 @@ async function sharedHome() {
 describe('cleanUpCodexHistoryLeftBehind', () => {
   it('deletes only proven copies, and the databases only after the home has worked shared', async () => {
     const { account, aside, share, cleanUp } = await sharedHome()
+    writeFileSync(join(account, 'history.jsonl'), '{"id":"legacy"}\n')
 
     expect((await cleanUp(NOW)).rollouts.deleted).toBe(1)
     expect(existsSync(join(aside, SAME))).toBe(false)
@@ -186,6 +188,7 @@ describe('cleanUpCodexHistoryLeftBehind', () => {
     expect(existsSync(join(account, 'thread_history_1.sqlite-wal'))).toBe(false)
     // Codex can't rebuild memories from the rollouts.
     expect(existsSync(join(account, 'memories_1.sqlite'))).toBe(true)
+    expect(readFileSync(join(account, 'history.jsonl'), 'utf8')).toBe('{"id":"legacy"}\n')
   })
 
   it('in report mode deletes nothing but counts what enforce would delete', async () => {

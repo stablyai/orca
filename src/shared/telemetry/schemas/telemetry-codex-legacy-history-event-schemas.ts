@@ -1,16 +1,13 @@
 import { z } from 'zod'
 
-/** `codex_live`, `busy`, `no_helper` and `changed` are skips the next launch retries. */
+/** `skipped_existing` and `failed` keep each legacy history aside in Orca's metadata. */
 export const CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES = [
   'imported',
-  'codex_live',
-  'busy',
-  'no_helper',
-  'changed',
+  'skipped_existing',
   'failed'
 ] as const
 
-/** One row per launch that still had the one-time legacy prompt-history import pending. */
+/** Sent once per install, by the one-time migration of legacy per-account prompt history. */
 export const codexLegacyHistoryImportSchema = z
   .object({
     outcome: z.enum(CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES),
