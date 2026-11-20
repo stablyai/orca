@@ -100,7 +100,7 @@ export function useNativeChatStructuredPaneNotices({
     account: nativeChatSignInAccount({
       unavailable,
       launchDetails: details,
-      startFailures,
+      items: controller.journalItems,
       submissions: controller.submissions,
       kickoff: kickoffSignIn
     }),

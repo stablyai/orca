@@ -87,7 +87,7 @@ describe('detectAntigravityChatAuth', () => {
     [null, {}]
   ])('says agy is signed out only when the host knows (%s)', async (known, expected) => {
     const detection = await detectAntigravityChatAuth(
-      sources({ CLOUDSDK_CONFIG: folder() }, { agySignedOut: async () => known })
+      sources({ CLOUDSDK_CONFIG: folder() }, { agySignedOut: () => known })
     )
     expect(detection).toMatchObject(expected)
     expect('agySignedOut' in detection).toBe(known !== null)

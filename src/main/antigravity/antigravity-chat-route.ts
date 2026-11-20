@@ -70,6 +70,23 @@ export async function antigravityChatRoute(
   input: AcpHostBackendInput,
   server: AcpLaunchSpec
 ): Promise<AntigravityChatRoute> {
+  const route = await computeAntigravityChatRoute(input, server)
+  lastRoute = route
+  return route
+}
+
+let lastRoute: AntigravityChatRoute | null = null
+
+/** Whether new chats here run on an agy that is definitely signed out, as the latest route answer
+ *  (a chat start, an install surface, Accounts) found; null before any. Reads only that answer. */
+export function lastAntigravityAgySignedOut(): boolean | null {
+  return lastRoute === null ? null : lastRoute.agy === 'signedOut'
+}
+
+async function computeAntigravityChatRoute(
+  input: AcpHostBackendInput,
+  server: AcpLaunchSpec
+): Promise<AntigravityChatRoute> {
   const { command, env, envToDelete, homePath } = input
   // The host launch drops an API-key provider's key, so that agy can't serve chats.
   if (
