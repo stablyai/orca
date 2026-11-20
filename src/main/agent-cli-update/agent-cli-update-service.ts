@@ -31,6 +31,8 @@ const UNREAD_RETRY_MS = 10 * 60_000
 const versions = new Map<string, { stamp: string; version: string | null; at: number }>()
 const checks = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdate | null>>()
 const runs = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdateRunResult>>()
+// Calls of checkAgentCliUpdates not yet answered; an update waits for those that asked about its agent.
+const answering = new Set<{ agents: readonly AgentCliUpdateAgent[]; done: Promise<unknown> }>()
 
 /** Runs --version only when the installed file changed, or an unread one is due again. */
 async function installedVersion(
@@ -110,29 +112,48 @@ export async function checkAgentCliUpdates(
     (agent): agent is AgentCliUpdateAgent =>
       isAgentCliUpdateAgent(agent) && isTuiAgentEnabled(agent, settings.disabledTuiAgents)
   )
-  const updates = await Promise.all(
+  const done = Promise.all(
     agents.map((agent) => {
       // Clients asking at once share one read.
       let check = checks.get(agent)
       if (!check) {
-        check = readAgentCliUpdate(agent, settings)
+        // A check asked during an update reads the CLI once the update is done.
+        check = (runs.get(agent) ?? Promise.resolve())
+          .catch(() => undefined)
+          .then(() => readAgentCliUpdate(agent, settings))
           .catch((error: unknown) => {
             console.warn(`[agent-cli-update] ${agent} not checked:`, error)
             return null
           })
-          .finally(() => checks.delete(agent))
+          .finally(() => {
+            if (checks.get(agent) === check) {
+              checks.delete(agent)
+            }
+          })
         checks.set(agent, check)
       }
       return check
     })
   )
-  return updates.filter((update) => update !== null)
+  const call = { agents, done }
+  answering.add(call)
+  try {
+    return (await done).filter((update) => update !== null)
+  } finally {
+    answering.delete(call)
+  }
 }
 
 async function runUpdate(
   agent: AgentCliUpdateAgent,
   settings: AgentCliUpdateSettings
 ): Promise<AgentCliUpdateRunResult> {
+  // Checks already asked are answered first, so none can report this agent from before the update.
+  const asked = [...answering]
+    .filter((call) => call.agents.includes(agent))
+    .map((call) => call.done)
+  checks.delete(agent)
+  await Promise.all(asked)
   const cli = await findOwnAgentCli(agent, settings)
   if (!cli) {
     return { ok: false, output: `No ${agent} command of your own was found on this computer.` }
@@ -161,10 +182,13 @@ async function runUpdate(
   } catch (error) {
     return { ok: false, output: error instanceof Error ? error.message : String(error), command }
   }
-  // The update may leave the launcher file untouched, so its version is read again.
-  versions.delete(cli.program)
   // New chats and the model list read the replaced binary.
   agentModelCatalogStore.expireLaunchScopes((catalogAgent) => catalogAgent === agent)
+  // The update may move the binary or leave its launcher untouched, so the CLI a new chat finds is read anew.
+  const updated = (await findOwnAgentCli(agent, settings).catch(() => null)) ?? cli
+  versions.delete(cli.program)
+  versions.delete(updated.program)
+  const after = await installedVersion(agent, updated)
   const output = [result.stdout, result.stderr]
     .map((text) => text.trim())
     .filter(Boolean)
@@ -172,7 +196,6 @@ async function runUpdate(
   if (result.code !== 0 || result.timedOut) {
     return { ok: false, output, command }
   }
-  const after = await installedVersion(agent, cli)
   const latest = after ? await latestRelease(agent, after) : null
   // A package manager behind the release (e.g. Homebrew) exits cleanly on the old version.
   if (after && latest && compareAppVersions(after, latest) < 0) {
