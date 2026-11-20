@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import { readFile, writeFile } from 'node:fs/promises'
 import * as jsonlImport from '../../native-chat/agent-session-journal/history-import/journal-jsonl-import'
 import { chat, closeClaudeCatchUpChats, SESSION } from './claude-transcript-catch-up.test-support'
 
@@ -74,6 +75,29 @@ it.each(['tail', 'batch', 'metadata'] as const)(
     }
   }
 )
+
+it('imports an equal-length rewrite of the final answer after recovery on reopen', async () => {
+  const c = await chat('batch')
+  expect(await c.catchUp()).toBe(true)
+  const original = await readFile(c.filePath, 'utf8')
+  const rewritten = original
+    .replaceAll('newest-answer', 'edited-answer')
+    .replace('Distinctive newest outside answer', 'Distinctive edited outside answer')
+  expect(Buffer.byteLength(rewritten)).toBe(Buffer.byteLength(original))
+  await writeFile(c.filePath, rewritten)
+  await c.reopen()
+  expect(await c.catchUp()).toBe(true)
+  expect(await c.items()).toContainEqual(
+    expect.objectContaining({
+      itemId: 'claude:provider-catch-up:edited-answer',
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'Distinctive edited outside answer' }]
+      }
+    })
+  )
+})
 
 it('catches up from a newer saved leaf after growing past the recovery frontier', async () => {
   const c = await chat()

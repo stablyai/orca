@@ -19,7 +19,7 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { createClaudeTranscriptImportPlan } from './claude-transcript-import-plan'
-import { readClaudeTranscriptTail } from './claude-transcript-tail'
+import { readClaudeTranscriptFrontier, readClaudeTranscriptTail } from './claude-transcript-tail'
 import {
   claudeTranscriptItemKeys,
   createClaudeTranscriptItemReader
@@ -126,11 +126,20 @@ export async function catchUpClaudeTranscript(input: {
         const { size } = await stat(filePath)
         check()
         if (size === recovery.sourceConsumedBytes) {
-          complete = true
-          return createHistoryCatchUpBatch().finish('claude-history-unchanged', [
-            planned.physicalCursor,
-            size
-          ])
+          const newestUuid = await readClaudeTranscriptFrontier({
+            filePath,
+            consumedBytes: size,
+            maxBytes: 64 * 1024,
+            check
+          })
+          check()
+          if (newestUuid === undefined || newestUuid === sourceFrontier) {
+            complete = true
+            return createHistoryCatchUpBatch().finish('claude-history-unchanged', [
+              planned.physicalCursor,
+              size
+            ])
+          }
         }
       }
       const chainBoundaries = sourceFrontier ? [sourceFrontier, copiedLeaf] : []

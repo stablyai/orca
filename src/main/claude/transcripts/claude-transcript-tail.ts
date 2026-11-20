@@ -49,6 +49,7 @@ export async function readClaudeTranscriptTail(input: {
 export async function readClaudeTranscriptFrontier(input: {
   filePath: string
   consumedBytes: number
+  maxBytes?: number
   check: () => void
 }): Promise<string | undefined> {
   let frontier: string | undefined

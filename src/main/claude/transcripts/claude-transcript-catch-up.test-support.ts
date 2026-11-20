@@ -118,6 +118,7 @@ export async function chat(
     await rm(root, { recursive: true, force: true })
   })
   return {
+    filePath,
     config,
     cwd: root,
     get journal() {
