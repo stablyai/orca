@@ -24,16 +24,28 @@ export function journalStoredTextBytesSql(json: string): string {
   return `CASE WHEN output_blob IS NULL THEN 0 ELSE COALESCE(${field('output')},${field('patch')},0) END`
 }
 
-/** The one parse of a journal_items item column. */
+/** The one parse of a journal_items item column. A saved output stays its preview, marker kept so
+ *  a same-row rewrite keeps its blob; readers that use output text call the `WithOutput` form. */
 export function readJournalStoredItem<T extends AgentJournalRenderItem = AgentJournalRenderItem>(
+  db: Database.Database,
+  prefix: Prefix,
+  json: unknown
+): T {
+  const item: T = JSON.parse(String(json))
+  return hasJournalStoredOutput(item) ? item : hydrateJournalTextTail(db, prefix, item)
+}
+
+/** An item column with any saved output read back whole. */
+export function readJournalStoredItemWithOutput<
+  T extends AgentJournalRenderItem = AgentJournalRenderItem
+>(
   db: Database.Database,
   prefix: Prefix,
   json: unknown,
   /** The row's `output_blob` when the read already selected it, saving a lookup per row. */
   blob?: unknown
 ): T {
-  const item: T = JSON.parse(String(json))
-  return hydrateJournalStoredItem(db, prefix, item, blob)
+  return hydrateJournalStoredItem(db, prefix, JSON.parse(String(json)) as T, blob)
 }
 
 /** A row that selected `payload_json` and, to save a lookup, `output_blob`. */
@@ -43,7 +55,7 @@ export function readJournalStoredRow(
   row: { payload_json?: unknown; output_blob?: unknown }
 ): AgentJournalRenderItem {
   // A row that did not select the blob reads it by key, never as missing.
-  return readJournalStoredItem(db, prefix, row.payload_json, row.output_blob)
+  return readJournalStoredItemWithOutput(db, prefix, row.payload_json, row.output_blob)
 }
 
 /** A page row's size counts its stored text, which is read only if the row joins the page. */

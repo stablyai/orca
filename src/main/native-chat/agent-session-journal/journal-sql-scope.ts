@@ -31,8 +31,9 @@ export class JournalSqlScope {
     return row
   }
 
-  /** `blob` is the row's `output_blob` when the read selected it, saving a lookup per row. */
-  decode<T>(json: unknown, blob?: unknown): T {
+  /** For readers that use output text: a saved output is read back whole. `blob` is the row's
+   *  `output_blob` when the read selected it, saving a lookup per row. */
+  decodeWithOutput<T>(json: unknown, blob?: unknown): T {
     if (typeof json !== 'string') {
       throw new Error('Invalid journal projection value')
     }
@@ -43,8 +44,8 @@ export class JournalSqlScope {
       : value
   }
 
-  /** For readers of status and metadata only: a stored output stays as its inline preview. */
-  decodeSummary<T>(json: unknown): T {
+  /** A saved output stays its inline preview, marker kept, so a same-row rewrite keeps its blob. */
+  decode<T>(json: unknown): T {
     if (typeof json !== 'string') {
       throw new Error('Invalid journal projection value')
     }

@@ -57,15 +57,11 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
       (card) => card.messageId === clientMessageId && card.state === 'waiting'
     ) === true
   // The rows that place this send's turn, not the whole chat: the run re-reads at each change.
-  // Nothing here reads what a tool printed or a patch, so they stay unread.
+  // Nothing here reads what a tool printed, so outputs stay unread.
   const { items, submissions } = (
     await (
       await host.journalReads(sessionId)
-    ).operationWindow({
-      operationIds: [clientMessageId],
-      withoutToolOutput: true,
-      withoutPatches: true
-    })
+    ).operationWindow({ operationIds: [clientMessageId], withoutToolOutput: true })
   ).snapshot
   const sent = structuredAgentSessionSendTurn({ items, submissions }, send)
   switch (sent.kind) {

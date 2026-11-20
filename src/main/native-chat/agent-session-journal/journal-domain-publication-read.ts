@@ -75,7 +75,7 @@ export function readJournalDomainPublication(
             sequence: Number(head.last_sequence)
           },
           items: rows.map((row) => {
-            const item = scope.decode<AgentJournalRenderItem>(
+            const item = scope.decodeWithOutput<AgentJournalRenderItem>(
               boundedStoredJson(row, 'payload_json')
             )
             return resolveJournalDomainDisplay(

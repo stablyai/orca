@@ -4,6 +4,7 @@ import type { JournalOperationWindowAnchors } from './journal-domain-operation-w
 import { JOURNAL_READER_REPLY_BYTE_LIMIT } from './journal-sql-reader-reply-limit'
 import { shortenedJsonSql } from './journal-stored-json-bounds'
 import {
+  journalItemOutputPreview,
   journalShortenedHead,
   readJournalStoredText,
   shortenJournalItemHead
@@ -17,18 +18,15 @@ const DROPS_TOOL_OUTPUT = `kind='tool-call' AND json_valid(payload_json)
 const WITHOUT_TOOL_OUTPUT = `CASE WHEN ${DROPS_TOOL_OUTPUT}
   THEN ${emptied('output')}
   ELSE payload_json END`
-const DROPS_EVERY_OUTPUT = `kind IN ('tool-call','diff') AND json_valid(payload_json)`
-const WITHOUT_EVERY_OUTPUT = `CASE WHEN kind='tool-call' AND json_valid(payload_json) THEN ${emptied('output')}
-  WHEN kind='diff' AND json_valid(payload_json) THEN ${emptied('patch')}
-  ELSE payload_json END`
 
 function emptied(field: 'output' | 'patch'): string {
   return `json_remove(json_replace(payload_json,'$.body.${field}.head','',
     '$.body.${field}.truncated',json('true')),'$.body.${field}.stored')`
 }
 
-// Stored rows read back with their whole text, so they are sized at it.
-const STORED_TEXT = journalStoredTextBytesSql('payload_json')
+// Stored rows read back whole are sized at their text; otherwise they come back as their preview.
+const storedText = (json: string, restored: boolean) =>
+  restored ? journalStoredTextBytesSql(json) : '0'
 
 const TURN_SHAPE = `AND (kind IN ('message','turn','status') OR turn_scope_kind='unknown')`
 
@@ -46,16 +44,15 @@ const CUTTABLE = `kind IN ('tool-call','diff')`
 export function readOperationWindowItems(
   scope: JournalSqlScope,
   start: number,
-  anchors: Pick<JournalOperationWindowAnchors, 'withoutToolOutput' | 'withoutPatches' | 'turnShape'>
+  anchors: Pick<
+    JournalOperationWindowAnchors,
+    'withoutToolOutput' | 'withStoredOutput' | 'turnShape'
+  >
 ): AgentJournalRenderItem[] {
-  const dropsAll = anchors.withoutToolOutput && anchors.withoutPatches
-  const projected = !anchors.withoutToolOutput
-    ? 'payload_json'
-    : dropsAll
-      ? WITHOUT_EVERY_OUTPUT
-      : WITHOUT_TOOL_OUTPUT
-  const drops = dropsAll ? DROPS_EVERY_OUTPUT : DROPS_TOOL_OUTPUT
-  const projectedStoredText = journalStoredTextBytesSql(projected)
+  const restored = anchors.withStoredOutput === true
+  const projected = anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'
+  const STORED_TEXT = storedText('payload_json', restored)
+  const projectedStoredText = storedText(projected, restored)
   const rows = `FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? ${anchors.turnShape ? TURN_SHAPE : ''}`
   // Plain sizes cost no parse; only a window past the budget sizes rows as projected.
@@ -160,7 +157,9 @@ export function readOperationWindowItems(
         THEN COALESCE(${cutJson}, ${projected}) ELSE ${projected} END`
     : projected
   // Only rows that still carry a stored marker read their blob; a dropped output needs none.
-  const blob = `CASE WHEN output_blob IS NULL${anchors.withoutToolOutput ? ` OR (${drops})` : ''} THEN NULL ELSE output_blob END`
+  const blob = restored
+    ? `CASE WHEN output_blob IS NULL${anchors.withoutToolOutput ? ` OR (${DROPS_TOOL_OUTPUT})` : ''} THEN NULL ELSE output_blob END`
+    : 'NULL'
   const restoredCut = new Set(storedCut)
   return scope.db
     .prepare(
@@ -169,7 +168,14 @@ export function readOperationWindowItems(
     .all(...(cut.length ? [JSON.stringify(cut)] : []), ...scope.prefix, start)
     .map((row) => {
       const read = scope.examined(row)
-      const item = scope.decode<AgentJournalRenderItem>(read.payload_json, read.output_blob)
+      if (!restored) {
+        // Read by readers that leave the journal its saved text; the marker stays here.
+        return journalItemOutputPreview(scope.decode<AgentJournalRenderItem>(read.payload_json))
+      }
+      const item = scope.decodeWithOutput<AgentJournalRenderItem>(
+        read.payload_json,
+        read.output_blob
+      )
       return restoredCut.has(item.itemId) ? shortenJournalItemHead(item) : item
     })
 }

@@ -162,7 +162,7 @@ export function sqlJournalStatusItem(
   states?: ReturnType<typeof readJournalDomainStopStates>
 ) {
   scope.examined(row)
-  const item = scope.decodeSummary<AgentJournalRenderItem>(row.payload_json)
+  const item = scope.decode<AgentJournalRenderItem>(row.payload_json)
   const stopStates =
     row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
       ? undefined

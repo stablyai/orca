@@ -9,7 +9,10 @@ import {
 } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import type { HistoryItemForm } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { journalDomainItemWire } from './journal-domain-item-wire'
-import { hydrateJournalStoredItem, readJournalStoredItem } from './journal-stored-output-rows'
+import {
+  hydrateJournalStoredItem,
+  readJournalStoredItemWithOutput
+} from './journal-stored-output-rows'
 import {
   journalDomainDisplayTurnState,
   readJournalDomainStopStates,
@@ -68,7 +71,7 @@ export function readJournalDomainClientForm(
   states?: ReadonlyMap<string, unknown>
 ): HistoryItemForm {
   // The blob is selected only when the client form is the stored payload, never beside a saved head.
-  const item = readJournalStoredItem(
+  const item = readJournalStoredItemWithOutput(
     db,
     [target.sessionId, target.epoch],
     boundedStoredJson(row, 'client_json'),

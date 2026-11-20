@@ -35,9 +35,9 @@ export type JournalOperationWindowAnchors = {
    *  before the reader decodes a row: for readers that weigh who spoke and what ran, never what a
    *  tool printed, which is nearly all of a long chat's bytes. */
   withoutToolOutput?: boolean
-  /** With `withoutToolOutput`, Diff call outputs and diff patches go too: for readers that never ask
-   *  which files a turn edited. */
-  withoutPatches?: boolean
+  /** Saved outputs and patches come back whole; otherwise as their preview. For readers that read
+   *  what a tool printed or which files a turn edited, or that copy items out of the journal. */
+  withStoredOutput?: boolean
   /** Only the rows that say who opened and ran each turn: messages, turn and status rows, and any
    *  row of no known turn (it ends a turn's reach); never tool calls or diffs. */
   turnShape?: boolean

@@ -12,6 +12,8 @@ import {
 import { compactJournalStoredOutputPage } from './journal-stored-output-compaction'
 import { measureJournalStoredRow } from './journal-stored-output-rows'
 import { readJournalDomainContinuation } from './journal-sql-continuation-context'
+import { JournalSqlScope } from './journal-sql-scope'
+import { readOperationWindowItems } from './journal-operation-window-rows'
 import type * as StoredOutput from './journal-stored-output'
 
 const switches = vi.hoisted(() => ({ writes: true }))
@@ -183,4 +185,16 @@ it('keeps an output too long to store whole inline, so an export still sends it 
   expect(read.kind === 'continuation-context' && read.context.continued).toMatchObject([
     { itemId: 'long', field: 'output', bytes: 80_004 }
   ])
+})
+
+it('restores a saved output only for readers that ask for it', () => {
+  const db = chat()
+  write(db, toolCall('done', 'completed'))
+  const scope = new JournalSqlScope(db, target.sessionId, target.epoch)
+  const [preview] = readOperationWindowItems(scope, 0, {})
+  expect(preview!.body).toMatchObject({ output: { truncated: true, byteLength: 25_011 } })
+  expect(JSON.stringify(preview)).not.toContain('"stored"')
+  expect(JSON.stringify(preview).length).toBeLessThan(4_000)
+  const [whole] = readOperationWindowItems(scope, 0, { withStoredOutput: true })
+  expect(whole!.body).toMatchObject({ output: { head: OUTPUT, truncated: false } })
 })
