@@ -19,8 +19,8 @@ import type { useNativeChatTranscriptLifecycle } from './use-native-chat-transcr
 import { NativeChatHeldHistoryVerify } from './native-chat-held-history-verify'
 import {
   heldNativeChatHistoryDepth,
-  rereadNativeChatHeldHistory,
-  spliceHeldHistoryReread
+  heldHistoryRereadBase,
+  rereadNativeChatHeldHistory
 } from './native-chat-held-history-reread'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
@@ -150,18 +150,15 @@ export function subscribeNativeChatLiveSession({
       ),
     apply: (result, superseded) => {
       const repaired = result && 'messages' in result ? result : undefined
-      let messages = repaired?.messages ?? windowMessages
-      if (repaired && superseded) {
-        const spliced = spliceHeldHistoryReread(
-          agent,
-          repaired.messages,
-          heldRef.current,
-          windowMessages[0]
-        )
-        if (!spliced) {
-          return false
-        }
-        messages = spliced
+      const messages = repaired
+        ? heldHistoryRereadBase(agent, repaired.messages, superseded, {
+            held: heldRef.current,
+            windowFirst: windowMessages[0],
+            liveTail: appendMergerRef.current.list
+          })
+        : windowMessages
+      if (!messages) {
+        return false
       }
       if (repaired) {
         limitRef.current = Math.max(limitRef.current, messages.length)

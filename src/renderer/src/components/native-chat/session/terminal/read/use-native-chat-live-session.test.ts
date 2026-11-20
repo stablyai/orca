@@ -415,6 +415,77 @@ describe('useNativeChatLiveSession — transport routing', () => {
     }
   })
 
+  it('re-reads again when appends during a re-read leave the live tail past its end', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = Object.assign(getMockTransport('env-1'), {
+        pagesByCursor: true,
+        verifyTranscriptRanges: vi.fn().mockResolvedValue([false])
+      })
+      const rows = Array.from({ length: 500 }, (_, n) => ({
+        ...user(`row-${n}`, n === 100 ? 'stale text' : `text-${n}`),
+        transcriptOrder: n
+      }))
+      const live = Array.from({ length: 700 }, (_, n) => ({
+        ...assistant(`live-${500 + n}`, 't'),
+        transcriptOrder: 500 + n
+      }))
+      const fresh = rows.map((row) =>
+        row.id === 'row-100' ? { ...row, blocks: [{ type: 'text', text: 'fresh text' }] } : row
+      )
+      const ranges = [{ start: 200, end: 500, digest: '0000000000000300' }]
+      await render({
+        paneKey: PANE,
+        agent: AGENT,
+        sessionId: SESSION,
+        runtimeEnvironmentId: 'env-1'
+      })
+      await act(async () =>
+        transport.emit({ type: 'snapshot', messages: rows.slice(200), hasMore: true, ranges })
+      )
+      transport.readSession.mockResolvedValueOnce({
+        messages: rows.slice(0, 200),
+        hasMore: true,
+        ranges: [{ start: 0, end: 200, digest: '0000000000000200' }]
+      })
+      await act(async () => {
+        await latest?.loadEarlier()
+      })
+      let resolveReread: (result: unknown) => void = () => {}
+      transport.readSession.mockImplementationOnce(
+        () => new Promise((resolve) => (resolveReread = resolve))
+      )
+      await act(async () =>
+        transport.emit({ type: 'replacement', messages: rows.slice(200), hasMore: true, ranges })
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      await act(async () => transport.emit({ type: 'appended', messages: live }))
+      transport.readSession.mockResolvedValueOnce({
+        messages: [...fresh, ...live],
+        hasMore: false,
+        ranges: [{ start: 0, end: 1200, digest: '0000000000001200' }]
+      })
+      await act(async () => {
+        resolveReread({
+          messages: fresh,
+          hasMore: false,
+          ranges: [{ start: 0, end: 500, digest: '0000000000000501' }]
+        })
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      const ids = latest?.messages.map((row) => row.id) ?? []
+      expect(ids).toContain('live-550')
+      expect(ids).toContain('live-1199')
+      expect(latest?.messages.find((row) => row.id === 'row-100')?.blocks).toEqual([
+        { type: 'text', text: 'fresh text' }
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps all held objects when a touch-only replacement verifies', async () => {
     vi.useFakeTimers()
     try {

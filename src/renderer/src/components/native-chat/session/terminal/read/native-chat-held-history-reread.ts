@@ -2,7 +2,10 @@ import type { AgentType } from '../../../../../../../shared/agent-status/contrac
 import type { NativeChatReadSessionResult } from '../../../../../../../preload/api/native-chat/native-chat-api'
 import { mergeTranscriptRanges } from '../../../../../../../shared/native-chat/transcript/transcript-byte-range'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { nativeChatHistoryCursor } from '../../../viewport/history/native-chat-pagination'
+import {
+  nativeChatHistoryCursor,
+  nativeChatLiveTailJoinsBase
+} from '../../../viewport/history/native-chat-pagination'
 import type { ReadState } from './native-chat-live-session-contract'
 import type { NativeChatSessionTransport } from './native-chat-session-transport'
 
@@ -99,4 +102,21 @@ export function heldNativeChatHistoryDepth(
   const messages = held.phase === 'ready' ? held.messages : []
   const ids = new Set(messages.map((message) => message.id))
   return messages.length + liveTail.filter((message) => !ids.has(message.id)).length
+}
+
+/** The repaired base, or undefined when appends during the re-read left a gap only another re-read fills. */
+export function heldHistoryRereadBase(
+  agent: AgentType,
+  reread: readonly NativeChatMessage[],
+  superseded: boolean,
+  current: {
+    held: ReadState
+    windowFirst: NativeChatMessage | undefined
+    liveTail: readonly NativeChatMessage[]
+  }
+): NativeChatMessage[] | undefined {
+  const base = superseded
+    ? spliceHeldHistoryReread(agent, reread, current.held, current.windowFirst)
+    : [...reread]
+  return base && nativeChatLiveTailJoinsBase(agent, base, current.liveTail) ? base : undefined
 }

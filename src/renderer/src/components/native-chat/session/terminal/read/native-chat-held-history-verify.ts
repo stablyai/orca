@@ -108,9 +108,12 @@ export class NativeChatHeldHistoryVerify<T> {
 
   private applyResult(result: T | undefined, superseded: boolean): void {
     const ranges = this.options.apply(result, superseded)
-    if (ranges !== false) {
-      this.reread(ranges)
+    if (ranges === false) {
+      // The mismatch stays known, so the next quiet period re-reads again.
+      this.schedule()
+      return
     }
+    this.reread(ranges)
   }
 
   private schedule(): void {
