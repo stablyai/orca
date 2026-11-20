@@ -154,14 +154,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getController: () => this.ptyController,
     getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
     touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
-    finishDelayedSnapshot: (ptyId, changed) => {
-      if (this.mobileSessionTabListeners.size > 0) {
-        this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-      }
-      if (!changed) {
-        this.touchMobileSessionSnapshotsForPty(ptyId)
-      }
-    }
+    releaseComposer: (ptyId, previous) => this.releaseCommandCodeComposer(ptyId, previous),
+    finishDelayedSnapshot: (ptyId, changed) => this.finishDelayedForegroundSnapshot(ptyId, changed)
   })
 
   protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({

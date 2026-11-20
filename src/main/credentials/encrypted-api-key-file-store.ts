@@ -1,23 +1,25 @@
 import { getSecretStore } from '../../shared/secure-storage/secret-store'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { readFile, rm } from 'node:fs/promises'
+import {
+  credentialFileExists,
+  hardenCredentialFile,
+  inCredentialFileOrder,
+  stageCredentialFile
+} from './credential-file-io'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import {
-  hardenExistingSecureFile,
-  isUnreadableError,
-  writeSecureFile
-} from '../../shared/secure-storage/secure-file'
+import { isUnreadableError } from '../../shared/secure-storage/secure-file'
 import type { SecretAtRestProtection } from '../../shared/secure-storage/secret-at-rest-protection'
 import { ApiKeyFileUnreadableError } from './api-key-file-unreadable-error'
 
 type EncryptedApiKeyFileStore = {
   /** Envelope location and prefix used by orcad's plaintext migration. */
   envelopeFile: () => { path: string; envelopePrefix: string }
-  protection: () => SecretAtRestProtection | null
-  has: () => boolean
-  save: (key: string) => void
-  read: () => string | null
-  clear: () => void
+  protection: () => Promise<SecretAtRestProtection | null>
+  has: () => Promise<boolean>
+  save: (key: string) => Promise<void>
+  read: () => Promise<string | null>
+  clear: () => Promise<void>
 }
 
 export function createEncryptedApiKeyFileStore({
@@ -81,13 +83,13 @@ export function createEncryptedApiKeyFileStore({
     return getSecretStore().decryptString(envelope.payload)
   }
 
-  function has(): boolean {
+  async function has(): Promise<boolean> {
     const keyPath = getApiKeyPath()
-    if (!existsSync(keyPath)) {
+    if (!(await credentialFileExists(keyPath))) {
       return false
     }
     try {
-      hardenExistingSecureFile(keyPath)
+      await hardenCredentialFile(keyPath)
     } catch (error) {
       if (!warnedStatusHardenFailure) {
         warnedStatusHardenFailure = true
@@ -100,28 +102,29 @@ export function createEncryptedApiKeyFileStore({
     return true
   }
 
-  function protection(): SecretAtRestProtection | null {
+  async function protection(): Promise<SecretAtRestProtection | null> {
     const path = getApiKeyPath()
-    if (!existsSync(path)) {
+    if (!(await credentialFileExists(path))) {
       return null
     }
     try {
-      return decodeApiKeyEnvelope(readFileSync(path)).kind === 'plaintext' ? 'plaintext' : 'sealed'
+      const envelope = decodeApiKeyEnvelope(await readFile(path))
+      return envelope.kind === 'plaintext' ? 'plaintext' : 'sealed'
     } catch {
       return null
     }
   }
 
-  function save(key: string): void {
+  async function save(key: string): Promise<void> {
     const trimmed = key.trim()
     if (!trimmed) {
       throw new Error(`${providerLabel} API key is required`)
     }
     if (getSecretStore().isEncryptionAvailable()) {
-      writeSecureFile(
+      await stageCredentialFile(
         getApiKeyPath(),
         encodeApiKeyEnvelope('encrypted', getSecretStore().encryptString(trimmed)),
-        { durable: true }
+        { durable: true, createDirectory: true }
       )
       cachedApiKey = trimmed
       return
@@ -129,25 +132,25 @@ export function createEncryptedApiKeyFileStore({
     console.warn(
       `[${logScope}] safeStorage encryption unavailable — storing ${providerLabel} API key in plaintext`
     )
-    writeSecureFile(
+    await stageCredentialFile(
       getApiKeyPath(),
       encodeApiKeyEnvelope('plaintext', Buffer.from(trimmed, 'utf8')),
-      { durable: true }
+      { durable: true, createDirectory: true }
     )
     cachedApiKey = trimmed
   }
 
-  function read(): string | null {
+  async function read(): Promise<string | null> {
     if (cachedApiKey !== null) {
       return cachedApiKey
     }
     const keyPath = getApiKeyPath()
-    if (!existsSync(keyPath)) {
+    if (!(await credentialFileExists(keyPath))) {
       return null
     }
     // Keep permission failures distinct from decryption failures.
     try {
-      hardenExistingSecureFile(keyPath)
+      await hardenCredentialFile(keyPath)
     } catch (error) {
       console.warn(
         `[${logScope}] Failed to harden ${providerLabel} API key file while reading`,
@@ -156,11 +159,14 @@ export function createEncryptedApiKeyFileStore({
     }
     let raw: Buffer | null = null
     try {
-      raw = readFileSync(keyPath)
+      raw = await readFile(keyPath)
       const envelope = decodeApiKeyEnvelope(raw)
       cachedApiKey = readEnvelope(envelope)
       return cachedApiKey
     } catch (error) {
+      if (raw === null && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return null
+      }
       if (raw === null && isUnreadableError(error)) {
         console.warn(`[${logScope}] failed to read API key file`, error)
         throw new ApiKeyFileUnreadableError(`${providerLabel} API key file could not be read`)
@@ -170,17 +176,17 @@ export function createEncryptedApiKeyFileStore({
     }
   }
 
-  function clear(): void {
+  async function clear(): Promise<void> {
     cachedApiKey = null
-    rmSync(getApiKeyPath(), { force: true })
+    await rm(getApiKeyPath(), { force: true })
   }
 
   return {
-    has,
-    save,
-    read,
-    clear,
-    protection,
+    has: () => inCredentialFileOrder(getApiKeyPath(), has),
+    save: (key) => inCredentialFileOrder(getApiKeyPath(), () => save(key)),
+    read: () => inCredentialFileOrder(getApiKeyPath(), read),
+    clear: () => inCredentialFileOrder(getApiKeyPath(), clear),
+    protection: () => inCredentialFileOrder(getApiKeyPath(), protection),
     envelopeFile: () => ({ path: getApiKeyPath(), envelopePrefix })
   }
 }

@@ -10,12 +10,32 @@ import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentDisplayName } from '../../../repos/owner-routing'
 import { selectLineageStoreInstallationId } from './cross-store-lineage-parents'
 import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import { isHome } from '../../../../../../shared/bots/bot-homes'
+import { readBots } from '@/lib/bot-catalog-snapshot'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
+import { selectFolderWorkspaces } from '../../../workspaces/catalog/workspace-record-fields'
 
 /** Whether a parent lives in another Orca store than the child, so the link needs a cross-store ref. */
 export function isCrossStoreParent(child: Worktree, parent: Worktree): boolean {
   const childStore = lineageStoreKeyOfRow(child)
   const parentStore = lineageStoreKeyOfRow(parent)
   return childStore !== undefined && parentStore !== undefined && childStore !== parentStore
+}
+
+/** A bot's or group's home: the child's store saves it as a hand-over, which its cleanup never groups. */
+export function isBotHomeParent(state: AppState, parent: Worktree): boolean {
+  const scope = parseWorkspaceKey(parent.id)
+  const folder =
+    scope?.type === 'folder'
+      ? findFolderWorkspaceRecord(
+          selectFolderWorkspaces(state) ?? [],
+          scope.folderWorkspaceId,
+          parent.hostId ?? undefined
+        )
+      : undefined
+  return Boolean(folder && isHome(folder, [...readBots(), ...readBotGroups()]))
 }
 
 /**
