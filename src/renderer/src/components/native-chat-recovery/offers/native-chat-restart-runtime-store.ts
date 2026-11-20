@@ -49,8 +49,11 @@ export function createNativeChatRestartStore(target: RuntimeClientTarget) {
     releaseFinishedNativeChatRestartRun: () => occurrence.releaseFinishedNativeChatRestartRun(),
     refreshNativeChatRestartOffer: () => occurrence.refreshNativeChatRestartOffer(),
     reopenNativeChatRestartOffer: () => occurrence.reopenNativeChatRestartOffer(),
-    continueNativeChatRestartOffer: (ids: readonly string[], starter?: ResumeRunStarter) =>
-      occurrence.continueNativeChatRestartOffer(ids, starter),
+    continueNativeChatRestartOffer: (
+      ids: readonly string[],
+      starter?: ResumeRunStarter,
+      took?: Parameters<typeof occurrence.continueNativeChatRestartOffer>[2]
+    ) => occurrence.continueNativeChatRestartOffer(ids, starter, took),
     dismissNativeChatRestartOffer: (ids?: readonly string[]) =>
       occurrence.dismissNativeChatRestartOffer(ids),
     readNativeChatRestartOffer: () => occurrence.readNativeChatRestartOffer(),

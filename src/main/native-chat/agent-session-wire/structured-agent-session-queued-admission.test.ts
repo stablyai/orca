@@ -3,7 +3,13 @@ import type { AgentMessageSource } from '../../../shared/agent-session/journal/a
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { createQueuedMessageTestRig } from './host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from './host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
-import { hostTestMessage } from './host/testing/structured-agent-session-host-test-data.test-fixture'
+import {
+  HOST_TEST_SESSION as SESSION,
+  HOST_TEST_THREAD,
+  hostTestMessage
+} from './host/testing/structured-agent-session-host-test-data.test-fixture'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { claudeAndCodexDeclared } from './providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 it('holds a revoked queued request before handoff, including explicit Send after restart', async () => {
   let allowed = true
@@ -136,6 +142,45 @@ it('tells each message it takes once: an opener at once, a queued one only when 
       body: hostTestMessage('next turn'),
       joinsRunningTurn: false
     })
+  } finally {
+    await rig.dispose()
+  }
+})
+
+it("keeps other agents' mail out of a turn its provider can join only by cancelling, then sends it once", async () => {
+  const agents = claudeAndCodexDeclared()
+  const declared = agents.capabilities.bind(agents)
+  // ACP agents declare this: their steer cancels the running prompt, so Orca holds the input.
+  agents.capabilities = (agent) => {
+    const capabilities = declared(agent)
+    return capabilities && { ...capabilities, steering: 'queue' }
+  }
+  const from: AgentMessageSource = {
+    kind: 'agent',
+    senders: [],
+    orchestration: { message: 'mail-notice', mailbox: 'peer', dispatchId: null, messages: [] }
+  }
+  const rig = await createQueuedMessageTestRig({ hostDeps: { agents } })
+  const turn = (state: 'running' | 'completed') =>
+    rig
+      .providerEvents()
+      .appendItem(
+        { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'turn-first', ordinal: 99 },
+        { kind: 'turn', turnId: 'turn-first', state },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+  try {
+    await rig.settleAccepted(await rig.workingSend(), 'first')
+    turn('running')
+    await rig.host.flushStreamedEvents(SESSION)
+    await rig.send('status mail', 'queue-if-active', { internal: true, from }).result
+    await rig.host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)
+    expect(rig.dispatch).toHaveBeenCalledOnce()
+    expect(await rig.drafts()).toHaveLength(1)
+    turn('completed')
+    await rig.host.flushStreamedEvents(SESSION)
+    await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
+    expect(await rig.drafts()).toEqual([])
   } finally {
     await rig.dispose()
   }

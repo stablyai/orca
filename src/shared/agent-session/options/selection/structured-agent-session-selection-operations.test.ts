@@ -59,3 +59,19 @@ it('drains abandoned writes without cancelling host acceptance or remembering la
   expect(controller.isPending('model')).toBe(false)
   expect(controller.pendingId()).toBeNull()
 })
+
+it('issues and settles a pick where Promise.withResolvers is missing, as on iOS before 17.4', async () => {
+  const withResolvers = Object.getOwnPropertyDescriptor(Promise, 'withResolvers')!
+  Object.defineProperty(Promise, 'withResolvers', { value: undefined, configurable: true })
+  try {
+    const controller = createStructuredSessionSelectionController(vi.fn())
+    const operation = controller.issue('model', 'sonnet', null)
+    controller.settle(operation, { kind: 'accepted', options: { model: 'sonnet' } })
+    await expect(operation.result).resolves.toEqual({
+      kind: 'accepted',
+      options: { model: 'sonnet' }
+    })
+  } finally {
+    Object.defineProperty(Promise, 'withResolvers', withResolvers)
+  }
+})

@@ -130,7 +130,7 @@ export type ConversationEventsDeps = {
   runningTurnReported: (sessionId: string) => boolean
   /** The pull requests a bot conversation's work opened, read once per ended turn. */
   workLinks: (link: ExternalConversationLink) => Promise<ConnectorWorkLink[]>
-  workerActivity: ConversationWorkersDeps['workerActivity']
+  workerActivities: ConversationWorkersDeps['workerActivities']
   /** Whether the cloud routes a bot's prompts by who raised them (prompts.audience). */
   promptsAudience: () => boolean
   /** The ended turn's owner posts to its Slack thread, taken once; null when none posted. */

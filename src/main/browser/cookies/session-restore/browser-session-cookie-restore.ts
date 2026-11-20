@@ -84,12 +84,8 @@ export async function forgetBrowserRoutePartitionSessionCookies(partition: strin
   const filePath = routeSnapshotPath(partition)
   stopTracking(filePath)
   try {
-    // File first: any restore that starts from here on reads nothing. Both keychain modes' files go.
-    await Promise.all(
-      [false, true].map((mockKeychain) =>
-        removeSessionCookieSnapshot(routeSnapshotPath(partition, mockKeychain))
-      )
-    )
+    // File first: any restore that starts from here on reads nothing.
+    await removeSessionCookieSnapshot(filePath)
   } finally {
     // One that read it already (or ran past its page's timeout) finishes before the jar is cleared,
     // and the next restore tracks the jar again even when the file could not go.
@@ -319,28 +315,14 @@ export async function flushBrowserSessionCookiesOnQuit(): Promise<void> {
   )
 }
 
-export async function clearBrowserSessionCookieSnapshots(profileId: string): Promise<void> {
-  const paths = [snapshotPath(profileId, false), snapshotPath(profileId, true)]
-  for (const path of paths) {
-    const tracker = trackers.get(path)
-    stopTracking(path)
-    if (tracker) {
-      track(path, tracker.target)
-    }
-  }
-  await Promise.all(paths.map(removeSessionCookieSnapshot))
-}
-
 /** For a browser profile being deleted. */
 export function forgetBrowserSessionCookies(profileId: string): void {
   try {
-    for (const mockKeychain of [false, true]) {
-      const filePath = snapshotPath(profileId, mockKeychain)
-      stopTracking(filePath)
-      void removeSessionCookieSnapshot(filePath).catch((error: unknown) =>
-        warnForgetFailed(profileId, error)
-      )
-    }
+    const filePath = snapshotPath(profileId)
+    stopTracking(filePath)
+    void removeSessionCookieSnapshot(filePath).catch((error: unknown) =>
+      warnForgetFailed(profileId, error)
+    )
   } catch (error) {
     warnForgetFailed(profileId, error)
   }

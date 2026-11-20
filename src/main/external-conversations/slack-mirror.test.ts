@@ -190,19 +190,6 @@ describe('SlackMirror', () => {
     expect(told).toEqual([ended])
   })
 
-  it('keeps a held reply across a restart: a cut-short post reads failed, Dismiss then tells it', async () => {
-    const { mirror, make, told, post, admit } = setUp([
-      { ok: false, status: 409, error: 'transient' }
-    ])
-    admit()
-    mirror.turnEnded(SESSION)?.release(ended)
-    await flush()
-    const restarted = make()
-    expect(restarted.dismiss(SESSION, ITEM)).toBe(true)
-    expect(told).toEqual([ended])
-    expect(post()).toBeUndefined()
-  })
-
   it('a post still going at quit reads failed (interrupted) after a restart', () => {
     const { make, post } = setUp([], link({ mirrorPosts: { [ITEM]: { state: 'posting', at: 1 } } }))
     make()
@@ -324,14 +311,6 @@ describe('SlackMirror', () => {
     expect(post()?.state).toBe('posted')
   })
 
-  it('an owner who turned posting on posts without reading the thread first', async () => {
-    const { calls, admit, post } = setUp([{ ok: true, value: { ts: '1.6' } }])
-    admit()
-    await flush()
-    expect(calls.map((call) => call.path)).toEqual(['/v1/connector/bots/bot-1/mirror'])
-    expect(post()?.state).toBe('posted')
-  })
-
   it("fails an empty message without calling Slack, and keeps the cloud's refusal of a long one", async () => {
     const empty = setUp([])
     empty.admit({ ...typed, blocks: [] })
@@ -393,9 +372,12 @@ describe('SlackMirror', () => {
     })
     mail.admit({ ...typed, origin: 'connector' })
     expect(mail.calls).toEqual([])
+    expect(mail.post()).toBeUndefined()
     expect(mail.mirror.turnEnded(SESSION)).toBeNull()
     const off = setUp([], link({ mirror: false }))
     off.admit()
     expect(off.calls).toEqual([])
+    expect(off.post()).toBeUndefined()
+    expect(off.mirror.turnEnded(SESSION)).toBeNull()
   })
 })

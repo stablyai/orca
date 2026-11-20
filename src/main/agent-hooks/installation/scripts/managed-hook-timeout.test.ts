@@ -12,6 +12,11 @@ const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
+vi.mock('../../../codex/trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../../codex/trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('electron', () => ({
   app: {
     getPath: () => '/tmp/orca-user-data'

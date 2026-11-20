@@ -31,6 +31,26 @@ describe('skills CLI runtime closure', () => {
     }
   })
 
+  it('checks shared worker entries that are spawned by path, not required', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    try {
+      await writeSkillsCliFixture(root, '')
+      const storeDir = join(root, 'shared', 'host-store')
+      await mkdir(storeDir, { recursive: true })
+      await writeFile(
+        join(storeDir, 'store-worker-entry.js'),
+        "require('../../main/worker-threads/worker-send-ledger')\n",
+        'utf8'
+      )
+
+      expect(() => collectRuntimeClosure(root)).toThrow(
+        /missing runtime import "\.\.\/\.\.\/main\/worker-threads\/worker-send-ledger" from shared\/host-store\/store-worker-entry\.js/
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it("resolves a linked package's imports from its store slot, as Node does", async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
     try {

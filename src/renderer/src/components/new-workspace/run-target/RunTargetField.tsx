@@ -1,5 +1,5 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
-import React, { useState } from 'react'
+import React, { useId, useState } from 'react'
 import { ChevronDown, Cloud } from 'lucide-react'
 import { PopoverAnchor } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
@@ -8,9 +8,11 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { HostRowIcon } from '../../host-picker/host-row-icon'
 import { COMBOBOX_FIELD_SHELL } from '../type-ahead/type-ahead-combobox-styles'
+import { MiddleEllipsisLabel } from './MiddleEllipsisLabel'
 
 /** Overlay the committed selection while keeping the input ready to search. */
 export default function RunTargetField({
+  fieldName,
   query,
   onQueryChange,
   open,
@@ -24,8 +26,10 @@ export default function RunTargetField({
   listId,
   hasArmedRow,
   inputRef,
-  onKeyDown
+  onKeyDown,
+  truncateMiddle = false
 }: {
+  fieldName?: string
   query: string
   onQueryChange: (value: string) => void
   open: boolean
@@ -40,9 +44,14 @@ export default function RunTargetField({
   hasArmedRow: boolean
   inputRef: React.RefObject<HTMLInputElement | null>
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
+  /** A long label loses its middle rather than its end. */
+  truncateMiddle?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
+  // The visible name is drawn over the search input and hidden from assistive tech, so the committed
+  // target is its description: it holds whatever is typed or highlighted, until a row is picked.
+  const committedId = useId()
   return (
     <Tooltip open={tooltipOpen && committed && !open} onOpenChange={setTooltipOpen}>
       <PopoverAnchor asChild>
@@ -65,16 +74,24 @@ export default function RunTargetField({
               ) : null}
             </span>
             <div className="relative min-w-0 flex-1 overflow-hidden">
+              {label ? (
+                <span id={committedId} className="sr-only">
+                  {label}
+                </span>
+              ) : null}
               <ImeInput
                 ref={inputRef}
                 type="text"
                 role="combobox"
                 data-run-target-combobox-root="true"
-                aria-label={t('auto.components.new.workspace.RunTargetCombobox.label', 'Run on')}
+                aria-label={
+                  fieldName ?? t('auto.components.new.workspace.RunTargetCombobox.label', 'Run on')
+                }
                 aria-expanded={open}
                 aria-controls={listId}
                 aria-autocomplete="list"
                 aria-activedescendant={open && hasArmedRow ? `${listId}-armed` : undefined}
+                aria-describedby={label ? committedId : undefined}
                 value={query}
                 placeholder={
                   committed
@@ -94,7 +111,11 @@ export default function RunTargetField({
                   aria-hidden="true"
                   className="pointer-events-none absolute inset-0 flex items-center text-sm"
                 >
-                  <span className="min-w-0 truncate">{label}</span>
+                  {truncateMiddle ? (
+                    <MiddleEllipsisLabel text={label} />
+                  ) : (
+                    <span className="min-w-0 truncate">{label}</span>
+                  )}
                 </div>
               ) : null}
             </div>

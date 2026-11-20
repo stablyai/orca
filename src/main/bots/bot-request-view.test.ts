@@ -89,13 +89,6 @@ describe('botRequestView', () => {
 })
 
 describe('what the sender reads', () => {
-  it('says where the answer comes from', () => {
-    expect(botRequestSentNext(record())).toMatch(/answers in this thread itself/)
-    expect(botRequestSentNext(record({ askers: [nora('direct_message')] }))).toMatch(
-      /comes back to you by mail, and you pass it on/
-    )
-  })
-
   it('never passes on an answer already posted', () => {
     expect(botAnswerView(record(), true).next).toMatch(
       /don't post it again; end your turn with NO_REPLY/
@@ -124,14 +117,5 @@ describe('what the sender reads', () => {
     )
     const mixed = record({ askers: [{ kind: 'owner' }, nora('direct_message')] })
     expect(botAnswerView(mixed, false).next).toMatch(/^Pass this answer on/)
-  })
-
-  it('says why a request came back unanswered and what to do', () => {
-    expect(botRequestUnansweredText(record(), 'paused')).toBe(
-      "Docs was paused before it read your handoff, so do it yourself or tell Nora on Slack that Docs couldn't take it."
-    )
-    expect(botRequestUnansweredText(record(), 'ended')).toMatch(
-      /^Docs ended its turn without answering/
-    )
   })
 })

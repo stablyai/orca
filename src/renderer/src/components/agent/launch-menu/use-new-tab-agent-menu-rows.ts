@@ -22,7 +22,6 @@ import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/c
 import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
-  readHostManagedRuntimeAgents,
   readHostStructuredAgents,
   hostStructuredAgentsCatalogUnlearned as catalogUnlearned
 } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
@@ -255,7 +254,6 @@ export function useAgentMenuObservation(
         detection,
         defaultTuiAgent: settings?.defaultTuiAgent,
         terminalPending,
-        managedRuntimeAgents: readHostManagedRuntimeAgents(facts.executionHostId, state),
         pickerContext: {
           workspace,
           launchCwd,

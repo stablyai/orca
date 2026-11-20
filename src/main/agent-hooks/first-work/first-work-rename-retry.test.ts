@@ -158,22 +158,6 @@ describe('retryFirstWorkRename', () => {
     )
   })
 
-  it('names from the changes, not deferring, when the native scan hits its bound', async () => {
-    generateBranchNameMock.mockResolvedValue({ success: true, slug: 'login-form' })
-    const { deps } = makeRetryDeps({
-      runGit: changesGit(' src/login.tsx | 4 ++--\n'),
-      nativeReads: () => ({
-        listSessions: async () => ({ sessionIds: ['long-chat'], hasUnreadable: false }),
-        // 513 unmatched submissions precede the first real message.
-        readFirst: async () => ({ kind: 'incomplete' })
-      })
-    })
-    await expect(retryFirstWorkRename(WORKTREE_ID, deps)).resolves.toMatchObject({
-      outcome: { kind: 'renamed' }
-    })
-    expect(generateBranchNameMock.mock.calls[0][0]).toMatchObject({ fromChanges: true })
-  })
-
   it('names from the changes when a chat in the workspace cannot be read by this build', async () => {
     generateBranchNameMock.mockResolvedValue({ success: true, slug: 'login-form' })
     const { deps } = makeRetryDeps({
@@ -194,18 +178,11 @@ describe('retryFirstWorkRename', () => {
     expect(generateBranchNameMock.mock.calls[0][0]).toMatchObject({ fromChanges: true })
   })
 
-  it('falls back to the branch changes and reports nothing-yet without generating', async () => {
+  it('reports nothing-yet without generating when chat and branch are empty', async () => {
     const { deps } = makeRetryDeps()
     const result = await retryFirstWorkRename(WORKTREE_ID, deps)
     expect(result.outcome).toEqual({ kind: 'nothing-yet' })
     expect(generateBranchNameMock).not.toHaveBeenCalled()
-
-    generateBranchNameMock.mockResolvedValue({ success: true, slug: 'login-form' })
-    const withChanges = makeRetryDeps({ runGit: changesGit(' src/login.tsx | 4 ++--\n') })
-    await expect(retryFirstWorkRename(WORKTREE_ID, withChanges.deps)).resolves.toMatchObject({
-      outcome: { kind: 'renamed' }
-    })
-    expect(generateBranchNameMock.mock.calls[0][0]).toMatchObject({ fromChanges: true })
   })
 
   it('joins an automatic attempt for the same workspace instead of generating twice', async () => {

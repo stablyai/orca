@@ -4,6 +4,7 @@ import {
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from './host-stack-navigation'
+import { mobileSessionRouteTarget } from '../session/mobile-session-route'
 
 function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
@@ -148,5 +149,90 @@ describe('host stack navigation', () => {
         ]
       ])
     })
+  })
+  it.each([
+    ['ends an earlier item when it names none', {}, ''],
+    [
+      'carries its own item',
+      { botItem: '{"sessionId":"lead","itemId":"q-2"}' },
+      '{"sessionId":"lead","itemId":"q-2"}'
+    ]
+  ] as const)('a pane request reusing the session on screen %s', (_, item, botItem) => {
+    const session = (params: Record<string, string>) => ({
+      name: '[hostId]/session/[worktreeId]',
+      params: { hostId: 'host/one', worktreeId: 'wt', ...params }
+    })
+    const harness = navigationHarness({
+      index: 0,
+      routes: [
+        {
+          name: 'h',
+          state: {
+            key: '/h',
+            index: 0,
+            routes: [
+              {
+                key: 'chat',
+                ...session({ paneKey: 'pane-1', botItem: '{"sessionId":"lead","itemId":"q-1"}' })
+              }
+            ]
+          }
+        }
+      ]
+    })
+
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      session({ paneKey: 'pane-1', ...item })
+    )
+
+    expect(harness.navigation.dispatch.mock.calls[0][0].payload.params.botItem).toBe(botItem)
+  })
+
+  it('hands a pane request’s own intent to the session on screen and to its document', () => {
+    const target = mobileSessionRouteTarget({
+      hostId: 'host/one',
+      worktreeId: 'wt',
+      paneKey: 'pane-1'
+    })
+    // The session on screen still holds an earlier request's intent.
+    const shown: Record<string, string> = { ...target.params, paneIntent: 'old' }
+    const onScreen = navigationHarness({
+      index: 0,
+      routes: [
+        {
+          name: 'h',
+          state: {
+            key: '/h',
+            index: 0,
+            routes: [{ key: 'chat', ...target, params: shown }]
+          }
+        }
+      ]
+    })
+    navigateToHostStackRoute(
+      onScreen.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      target
+    )
+    expect(onScreen.navigation.dispatch.mock.calls[0][0].payload.params.paneIntent).toBe(
+      target.params.paneIntent
+    )
+
+    const hostList = navigationHarness(committedHostState('host/one'))
+    navigateToHostStackRoute(
+      hostList.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      target,
+      true
+    )
+    const open = decodeURIComponent(
+      hostList.navigation.dispatch.mock.calls[0][0].payload.params.open
+    )
+    expect(new URLSearchParams(open.split('?')[1]).get('paneIntent')).toBe(target.params.paneIntent)
   })
 })

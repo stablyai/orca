@@ -165,7 +165,7 @@ export function MobileBotWebhookCard({
             copy === 'copied'
               ? t('chat.botCards.webhook.copied', 'Copied')
               : copy === 'failed'
-                ? t('chat.botCards.webhook.copyFailed', 'Couldn’t copy. Try again')
+                ? t('chat.botCards.webhook.copyFailed', 'Retry copy')
                 : t('chat.botCards.webhook.copyUrl', 'Copy URL')
           }
           Icon={Copy}

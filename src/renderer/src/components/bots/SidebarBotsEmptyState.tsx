@@ -16,7 +16,7 @@ export function SidebarBotsEmptyState({ onNewBot }: { onNewBot: () => void }): J
   const openModal = useAppStore((s) => s.openModal)
 
   return (
-    <div className="px-2 pb-2">
+    <div className="px-2">
       <div className="rounded-lg border border-border/70 bg-muted/40 p-3">
         <div className="flex items-center gap-2.5">
           <span className="flex shrink-0 -space-x-1.5" aria-hidden="true">

@@ -16,7 +16,7 @@ export function rolloutTwinPath(path: string): string {
 
 // Codex compresses a cold rollout keeping its mtime and appends to the `.jsonl` when both exist,
 // so a `.jsonl` no newer than a non-empty `.zst` holds nothing the `.zst` lacks.
-function plainWins(plain: BigIntStats, compressed: BigIntStats): boolean {
+export function plainWins(plain: BigIntStats, compressed: BigIntStats): boolean {
   return compressed.size === 0n || plain.mtimeNs > compressed.mtimeNs
 }
 
@@ -53,7 +53,12 @@ export async function isRolloutTwinKeptFromStore(from: string, to: string): Prom
 }
 
 /** Plain-form paths of the rollouts under `folder` present in both forms, at most `limit`. */
-export async function listRolloutTwinPairs(folder: string, limit = Infinity): Promise<string[]> {
+export async function listRolloutTwinPairs(
+  folder: string,
+  limit = Infinity,
+  /** Ends the walk early, with what it found so far. */
+  shouldStop: () => boolean = () => false
+): Promise<string[]> {
   let entries: Dirent[]
   try {
     entries = await readdir(folder, { withFileTypes: true })
@@ -66,11 +71,13 @@ export async function listRolloutTwinPairs(folder: string, limit = Infinity): Pr
   const names = new Set(entries.map((entry) => entry.name))
   const pairs: string[] = []
   for (const entry of entries) {
-    if (pairs.length >= limit) {
+    if (pairs.length >= limit || shouldStop()) {
       break
     }
     if (entry.isDirectory()) {
-      pairs.push(...(await listRolloutTwinPairs(join(folder, entry.name), limit - pairs.length)))
+      pairs.push(
+        ...(await listRolloutTwinPairs(join(folder, entry.name), limit - pairs.length, shouldStop))
+      )
     } else if (
       entry.name.endsWith(COMPRESSED_ROLLOUT_SUFFIX) &&
       names.has(rolloutTwinPath(entry.name)) &&

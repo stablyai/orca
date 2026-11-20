@@ -26,6 +26,7 @@ export function getNextDefaultOnAppearanceSettingValue(current: boolean | undefi
 
 type RegisterAppMenuOptions = AppMenuQuitHandlers & {
   onOpenSettings: () => void
+  onOpenWorktreePalette: (window?: Electron.BaseWindow | null) => void
   onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
@@ -47,6 +48,7 @@ type RegisterAppMenuOptions = AppMenuQuitHandlers & {
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const {
     onOpenSettings,
+    onOpenWorktreePalette,
     onOpenSetupGuide,
     onOpenFeatureTour,
     onOpenCrashReport,
@@ -263,7 +265,8 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { type: 'separator' },
       {
         // Native accelerators would bypass the renderer's overlay mutual-exclusion handling.
-        label: `${translateMain('menu.openWorktreePalette', 'Open Worktree Palette')}\t${shortcutLabel('worktree.palette')}`
+        label: `${translateMain('menu.openWorktreePalette', 'Open Worktree Palette')}\t${shortcutLabel('worktree.palette')}`,
+        click: (_menuItem, window) => onOpenWorktreePalette(window)
       },
       { type: 'separator' },
       labeledAppMenuRole('togglefullscreen', 'menu.toggleFullScreen', 'Toggle Full Screen'),

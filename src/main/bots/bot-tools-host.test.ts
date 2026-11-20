@@ -2,7 +2,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { addBotTool, type BotToolsCli } from './bot-tools-host'
+import {
+  addBotTool,
+  botToolProblems,
+  listBotTools,
+  type BotToolsCli,
+  type BotToolsHome
+} from './bot-tools-host'
 import { forgetBotTools, removeBotTool } from './bot-tools-removal'
 import {
   botToolSignInStatus,
@@ -64,6 +70,30 @@ function recordCalls(cli: BotToolsCli): string {
 }
 
 const NOTION = { name: 'notion', url: 'https://mcp.notion.com/mcp' }
+
+describe('tools on an agent other than Claude Code and Codex', () => {
+  it('are added, listed and removed in its folder, with no CLI to check or sign them in', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'bot-tools-host-'))
+    dirs.push(root)
+    const grok: BotToolsHome = {
+      botId: 'bot-1',
+      agent: 'grok',
+      folder: join(root, 'bot'),
+      signInFolder: join(root, 'sign-in'),
+      otherBotFolders: []
+    }
+    await addBotTool(grok, NOTION)
+    expect(await listBotTools(grok)).toEqual({
+      agent: 'grok',
+      own: [{ name: 'notion', detail: NOTION.url, remote: true }],
+      inherited: []
+    })
+    expect(await botToolProblems(grok)).toEqual({})
+    await expect(connectBotTool('bot-1', 'notion', async () => grok)).rejects.toThrow()
+    await removeBotTool(grok, 'notion')
+    expect(await readBotToolServers(grok.folder)).toEqual([])
+  })
+})
 
 describe("a bot's own tools", () => {
   it("refuse a name the owner's own Claude Code or Codex server already uses, or the bot's", async () => {
@@ -135,16 +165,13 @@ describe("a bot's own tools", () => {
     expect(readFileSync(calls, 'utf8')).toContain('mcp logout notion')
   })
 
-  it('reports no sign-in for a tool this host never started one for', () => {
-    expect(botToolSignInStatus('bot-1', 'notion')).toBe('none')
-  })
-
-  it('reads pending from the moment Connect starts, never an earlier try, until this one ends', async () => {
+  it('reports no sign-in before Connect and keeps a retry pending until it ends', async () => {
     const cli = cliFor('codex')
     await writeBotToolServers(cli.folder, [NOTION])
     // Stands in for a Codex that exits before naming a page.
     cli.command = process.execPath
     cli.prefixArgs = ['-e', 'setTimeout(() => {}, 300)']
+    expect(botToolSignInStatus('bot-slow', 'notion')).toBe('none')
     await expect(connectBotTool('bot-slow', 'notion', async () => cli)).rejects.toThrow()
     expect(botToolSignInStatus('bot-slow', 'notion')).toBe('failed')
 

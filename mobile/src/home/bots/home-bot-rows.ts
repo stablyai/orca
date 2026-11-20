@@ -50,6 +50,8 @@ export type HomeBotRowsInput = {
   /** Paired computers in Home's order. */
   hosts: readonly { id: string; name: string }[]
   hostStates: Readonly<Record<string, ConnectionState>>
+  /** Paired computers that answer nothing until something changes, as their Home rows say. */
+  unreachableHosts: ReadonlySet<string>
   botsByHost: Readonly<Record<string, HomeComputerBots | undefined>>
   /** Paired computers whose read came after their latest connect. */
   freshHosts: ReadonlySet<string>
@@ -78,10 +80,6 @@ export type HomeBotsUnavailable = {
   reason: 'update' | 'off' | 'unreachable' | 'no-create'
   /** A server's paired computer, whose Settings hold its Bots switch. */
   desktopLabel?: string
-}
-
-function isOffline(state: ConnectionState | undefined): boolean {
-  return state === 'disconnected' || state === 'auth-failed'
 }
 
 const succeeded = (entry: HomeComputerEntry): boolean =>
@@ -118,31 +116,31 @@ export function homeBotRows(input: HomeBotRowsInput): HomeBots {
   }
   const groupsOf = new Map<string, readonly BotGroup[]>()
   for (const host of input.hosts) {
-    const state = input.hostStates[host.id]
+    const offline = input.unreachableHosts.has(host.id)
     const read = input.botsByHost[host.id]
     const last = input.kept[host.id]
     const hydrated = input.hydrated.has(host.id)
     const start = all.length
-    if (state === 'connected' && read && input.freshHosts.has(host.id)) {
+    if (input.hostStates[host.id] === 'connected' && read && input.freshHosts.has(host.id)) {
       const folded = foldComputerRead(host.id, last, read)
       // Until the device copy is in, a failed answer may yet have a kept one: show only good ones, and wait.
       all.push(...(hydrated ? folded.entries : folded.entries.filter(succeeded)))
       groupsOf.set(host.id, folded.groups)
       awaiting ||= !hydrated
     } else if (last) {
-      all.push(...keptComputerEntries(last, isOffline(state) ? 'offline' : 'pending'))
+      all.push(...keptComputerEntries(last, offline ? 'offline' : 'pending'))
       groupsOf.set(host.id, last.groups)
     }
     // No answer of its own to show (none yet, a failed first read, an empty kept copy): Runs on still
     // lists the computer, Offline while it is down and Checking… while it may answer.
     if (!all.slice(start).some(isOwnEntry)) {
-      const offline = isOffline(state) && hydrated
-      if (offline) {
+      const settled = offline && hydrated
+      if (settled) {
         unavailable.push({ key: host.id, label: host.name, reason: 'unreachable' })
       } else {
         awaiting = true
       }
-      holdPlace(host.id, offline ? 'offline' : 'pending')
+      holdPlace(host.id, settled ? 'offline' : 'pending')
     }
   }
   // A paired computer's Bots switch off hides its servers too, as on the desktop: in the list, Runs on and

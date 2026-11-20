@@ -12,6 +12,11 @@ const mocks = vi.hoisted(() => ({
   createPlan: vi.fn()
 }))
 
+vi.mock('../../trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('../../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   blockedWslDistroForPath: mocks.blocked

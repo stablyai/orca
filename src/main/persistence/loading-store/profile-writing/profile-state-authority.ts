@@ -70,8 +70,10 @@ export type AsyncProfileStateAuthority = Omit<
     runs: readonly AutomationRun[]
   ): Promise<void>
   writeSerializedState(payload: Buffer): Promise<void>
+  /** Patched session domains are kept and updated in place of a whole payload. */
   writeCompleteSerializedDomains(
-    replacements: readonly ProfileStateDomainReplacement[]
+    replacements: readonly ProfileStateDomainReplacement[],
+    patches?: readonly ProfileStateDomainPatch[]
   ): Promise<void>
   writeJsonExport(targetPath: string): Promise<number>
   writeLatestJsonExport(dataFile: string): Promise<number | undefined>

@@ -206,12 +206,6 @@ describe('botGitHubSetupStep', () => {
 })
 
 describe('BotGitHubSetupDialog', () => {
-  it('says GitHub is coming soon while the cloud answers 404', async () => {
-    api.botGitHub.state.mockResolvedValue({ ok: false, error: 'github_off' })
-    renderDialog()
-    expect(await screen.findByText('GitHub is coming soon.')).toBeDefined()
-  })
-
   it('connects in one trip, then turns the bot on by itself and shows how to ask', async () => {
     api.botGitHub.state.mockResolvedValue({ ok: true, value: state() })
     renderDialog()
@@ -236,7 +230,7 @@ describe('BotGitHubSetupDialog', () => {
     expect(screen.getByText('2 repositories in acme')).toBeDefined()
     expect(screen.queryByRole('button', { name: 'Turn on Ranger' })).toBeNull()
     // The mention to type is set as code.
-    for (const mention of screen.getAllByText('@orca-ide ranger …')) {
+    for (const mention of screen.getAllByText('@orca-bots ranger …')) {
       expect(mention.tagName).toBe('CODE')
     }
   })

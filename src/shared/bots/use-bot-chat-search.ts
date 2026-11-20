@@ -1,20 +1,19 @@
 // The Chats search on the desktop panel and the phone: the bot's host matches every chat and worker,
-// asked once typing pauses; a host without that search falls back to the chats read here.
+// asked once typing pauses.
 import type * as React from 'react'
 import type { BotChatTreeChat } from './bot-chat-tree'
 import type { BotChatSearchResult } from './bot-chat-search'
-import { botChatSearchHits, searchBotChats, type BotChatSearchState } from './bot-chat-tree-view'
+import { botChatSearchHits, type BotChatSearchState } from './bot-chat-tree-view'
 
 /** Typing pauses this long before the host is asked. */
 export const BOT_CHAT_SEARCH_DEBOUNCE_MS = 175
 
-/** The host's answer; 'unsupported' from a host without `bots.chats.search`. */
-export type BotChatSearchAsk = (query: string) => Promise<BotChatSearchResult | 'unsupported'>
+export type BotChatSearchAsk = (query: string) => Promise<BotChatSearchResult>
 
 type Answer = {
   query: string
   attempt: number
-  result: BotChatSearchResult | 'unsupported' | 'failed'
+  result: BotChatSearchResult | 'failed'
 }
 
 export type BotChatSearch = BotChatSearchState & {
@@ -66,15 +65,6 @@ export function createBotChatSearchHook({
         return null
       }
       const pending = answer?.query !== trimmed || answer.attempt !== attempt
-      if (answer?.result === 'unsupported') {
-        return {
-          hits: searchBotChats(chats, trimmed),
-          more: 0,
-          pending: false,
-          failed: false,
-          retry
-        }
-      }
       if (answer?.result === 'failed') {
         return { hits: [], more: 0, pending, failed: !pending, retry }
       }

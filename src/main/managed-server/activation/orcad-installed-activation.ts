@@ -136,7 +136,7 @@ export async function activateInstalledOrcad(
     asksCandidate
   )
   if ('failure' in preflight) {
-    return notActivated('orcad_candidate_preflight_failed', preflight.failure, true)
+    return notActivated(preflight.code, preflight.failure, true)
   }
   const { hostDaemonProtocols } = preflight
   plan = planFor(census, hostDaemonProtocols)

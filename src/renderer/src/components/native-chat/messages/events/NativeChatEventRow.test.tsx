@@ -29,3 +29,17 @@ it('draws folded details while find has a query, so find can reach them', () => 
     screen.getByRole('button', { name: 'Opened 3 pull requests' }).getAttribute('aria-expanded')
   ).toBe('true')
 })
+
+it('names its state for screen readers, since the badge is only drawn', () => {
+  render(
+    <NativeChatEventRow
+      icon={null}
+      badge="failed"
+      label="Update from Parser"
+      details={<p>report</p>}
+    >
+      Update from Parser
+    </NativeChatEventRow>
+  )
+  expect(screen.getByRole('button', { name: 'Update from Parser, Failed' })).toBeTruthy()
+})

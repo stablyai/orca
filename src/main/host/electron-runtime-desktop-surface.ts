@@ -1,6 +1,7 @@
 import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
 import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
+import { showDesktopNotification } from '../notifications/desktop-notification'
 import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
 import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
@@ -14,7 +15,7 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     if (!Notification.isSupported()) {
       return false
     }
-    new Notification({ title, body }).show()
+    showDesktopNotification(new Notification({ title, body }))
     return true
   },
   sendToRenderers: (channel, payload) => {

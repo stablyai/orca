@@ -226,9 +226,7 @@ export class BotGroupStore {
         .prepare('INSERT INTO bot_group_messages(id, group_id, record) VALUES (?, ?, ?)')
         .run(message.id, message.groupId, JSON.stringify(message))
       for (const { operationId } of message.turns) {
-        this.db
-          .prepare('INSERT INTO bot_group_operations(operation_id, message_id) VALUES (?, ?)')
-          .run(operationId, message.id)
+        this.link(operationId, message.id)
         const context = contexts.get(operationId)
         if (context !== undefined) {
           this.db
@@ -244,6 +242,27 @@ export class BotGroupStore {
       throw new Error('The group message was not stored.')
     }
     return stored
+  }
+
+  /** A mail line's next attempt: its one turn moves to the new id, linked to the line, and an
+   *  error the dead attempt settled to is dropped. */
+  retarget(messageId: string, operationId: string): void {
+    const message = this.message(messageId)
+    if (!message?.turns[0]) {
+      return
+    }
+    // The dead id keeps its link: it names no turn of the line, so nothing resolves through it.
+    this.transaction(() => {
+      const { error: _error, ...turn } = message.turns[0]
+      this.update({ ...message, turns: [{ ...turn, operationId }] })
+      this.link(operationId, messageId)
+    })
+  }
+
+  private link(operationId: string, messageId: string): void {
+    this.db
+      .prepare('INSERT INTO bot_group_operations(operation_id, message_id) VALUES (?, ?)')
+      .run(operationId, messageId)
   }
 
   bindWorker(dispatchId: string, operationId: string): void {

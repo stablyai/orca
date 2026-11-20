@@ -16,6 +16,7 @@ import { requireGroupBots } from './bot-group-membership'
 import { botChatReads } from './bot-chat-reads'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { BotGroupRuntime } from './bot-group-runtime'
+import { settleDeadGroupMailTurns } from './bot-group-dead-mail-turns'
 
 export async function sendBotGroupMessage(
   groups: BotGroupRuntime,
@@ -55,8 +56,18 @@ export async function sendBotGroupMessage(
       }
       const operationId = mintAgentSessionOperationId(Date.now())
       contexts.set(operationId, botGroupContext(history, completed, member))
-      const { name: botName, avatar, agent } = bot
-      return [{ operationId, botId, botName, avatar, agent, sessionId: member.sessionId }]
+      const { name: botName, avatar, avatarColor, agent } = bot
+      return [
+        {
+          operationId,
+          botId,
+          botName,
+          avatar,
+          ...(avatarColor ? { avatarColor } : {}),
+          agent,
+          sessionId: member.sessionId
+        }
+      ]
     })
     const stored = groups.store.append(
       {
@@ -284,6 +295,7 @@ export function readBotGroup(
 ) {
   const group = groups.store.room(groupId, threadId)
   const messages = groups.store.roomMessages(groupId, threadId, 40, beforeSequence)
+  settleDeadGroupMailTurns(groups, messages)
   return {
     group,
     // Saved replies feed later posts' context only; the room renders each turn from its chat.

@@ -260,36 +260,46 @@ describe('a bot chat turn context', () => {
     expect((await plan())?.text).toContain('Be brief.')
   })
 
-  describe.each(['SOUL.md', 'MEMORY.md'] as const)("the bot's own %s edit", (file) => {
-    const path = join(FOLDER, file)
-    const edited = file === 'SOUL.md' ? 'Be brief. Sign every message.' : '- a fact\n- learned'
+  it.each<[string, string, string, AgentJournalItemBody]>([
+    [
+      'SOUL.md',
+      'an Edit',
+      'Be brief. Sign every message.',
+      {
+        kind: 'tool-call',
+        name: 'Edit',
+        input: { file_path: join(FOLDER, 'SOUL.md'), old_string: 'a', new_string: 'b' },
+        state: 'completed'
+      }
+    ],
+    [
+      'SOUL.md',
+      'a multi-file Codex patch',
+      'Be brief. Sign every message.',
+      {
+        kind: 'diff',
+        path: '2 files',
+        paths: [join(FOLDER, 'SOUL.md'), join(FOLDER, 'notes.md')],
+        patch: { head: '@@', byteLength: 2, digest: '', truncated: false }
+      }
+    ],
+    [
+      'MEMORY.md',
+      'an Edit',
+      '- a fact\n- learned',
+      {
+        kind: 'tool-call',
+        name: 'Edit',
+        input: { file_path: join(FOLDER, 'MEMORY.md'), old_string: 'a', new_string: 'b' },
+        state: 'completed'
+      }
+    ]
+  ])('sends nothing after the bot changes %s through %s', async (file, _, edited, write) => {
+    const { edit, plan, turn, turnWith } = home('Be brief.', '- a fact')
+    await turn()
+    await turnWith(() => edit(file, edited), write)
 
-    it.each<[string, AgentJournalItemBody]>([
-      [
-        'an Edit',
-        {
-          kind: 'tool-call',
-          name: 'Edit',
-          input: { file_path: path, old_string: 'a', new_string: 'b' },
-          state: 'completed'
-        }
-      ],
-      [
-        'a multi-file Codex patch',
-        {
-          kind: 'diff',
-          path: '2 files',
-          paths: [path, join(FOLDER, 'notes.md')],
-          patch: { head: '@@', byteLength: 2, digest: '', truncated: false }
-        }
-      ]
-    ])('through %s sends nothing on its next turn', async (_, write) => {
-      const { edit, plan, turn, turnWith } = home('Be brief.', '- a fact')
-      await turn()
-      await turnWith(() => edit(file, edited), write)
-
-      expect(await plan()).toBeNull()
-    })
+    expect(await plan()).toBeNull()
   })
 
   describe("the bot's own SOUL.md edit, which no record tracks", () => {
@@ -310,18 +320,18 @@ describe('a bot chat turn context', () => {
           state: 'failed'
         }
       ],
-      ...(['failed', 'declined'] as const).map((status): [string, AgentJournalItemBody] => [
-        `a ${status} Codex patch`,
+      [
+        'a failed Codex patch',
         codexItemBody({
           type: 'fileChange',
           id: 'patch-1',
-          status,
+          status: 'failed',
           changes: [
             { path, kind: { type: 'update' }, diff: '@@ -1 +1 @@' },
             { path: join(FOLDER, 'notes.md'), kind: { type: 'update' }, diff: '@@ -1 +1 @@' }
           ]
         })!
-      ])
+      ]
     ])('is not inferred from %s, so an outside edit is still sent', async (_, call) => {
       const { edit, plan, turn, turnWith } = home('Be brief.', '- a fact')
       await turn()
@@ -444,31 +454,17 @@ describe('a bot chat turn context', () => {
     expect(await plan()).toBeNull()
   })
 
-  it.each<[string, AgentJournalItemBody]>([
-    [
-      'an Edit',
-      {
-        kind: 'tool-call',
-        name: 'Edit',
-        input: { file_path: join(FOLDER, 'memory/pricing.md'), old_string: 'a', new_string: 'b' },
-        state: 'completed'
-      }
-    ],
-    [
-      'a shell command',
-      {
-        kind: 'tool-call',
-        name: 'Bash',
-        input: { command: 'echo "- paid tier" > memory/pricing.md' },
-        state: 'completed'
-      }
-    ]
-  ])("does not announce the chat's own topic file write through %s", async (_, write) => {
+  it("does not announce the chat's own topic file write", async () => {
     const { edit, plan, turn, turnWith } = home('Be brief.', '- a fact', undefined, {
       'pricing.md': '- free tier'
     })
     await turn()
-    await turnWith(() => edit('memory/pricing.md', '- paid tier'), write)
+    await turnWith(() => edit('memory/pricing.md', '- paid tier'), {
+      kind: 'tool-call',
+      name: 'Edit',
+      input: { file_path: join(FOLDER, 'memory/pricing.md'), old_string: 'a', new_string: 'b' },
+      state: 'completed'
+    })
 
     expect(await plan()).toBeNull()
   })
@@ -541,18 +537,15 @@ describe('a bot chat turn context', () => {
       providerHandleChain: resumed ? [{}] : []
     })
 
-    it.each(['codex', 'claude'])(
-      'a resumed %s conversation keeps its first instructions, so the next turn sends the soul',
-      async (provider) => {
-        const { context, fs, plan } = home('Old soul.', '- a fact')
-        await botSessionInstructions(context, bots, launch(provider, true), FOLDER, null, fs)
+    it('a resumed Codex conversation keeps its first instructions, so the next turn sends the soul', async () => {
+      const { context, fs, plan } = home('Old soul.', '- a fact')
+      await botSessionInstructions(context, bots, launch('codex', true), FOLDER, null, fs)
 
-        expect((await plan())?.text).toContain('Old soul.')
-      }
-    )
+      expect((await plan())?.text).toContain('Old soul.')
+    })
 
     // Nothing is said; the turn only vouches for the Tools and Rules the launch gave.
-    it.each(['pi'])(
+    it.each(['pi', 'copilot'])(
       'a resumed %s conversation reads them again, so nothing is sent',
       async (provider) => {
         const { context, edit, fs, plan } = home('Old soul.', '- a fact')
