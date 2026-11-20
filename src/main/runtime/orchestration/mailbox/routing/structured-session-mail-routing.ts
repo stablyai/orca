@@ -91,6 +91,7 @@ export abstract class OrcaRuntimeWithStructuredSessionMail extends OrcaRuntimeWi
     reservationPtys: readonly string[] = []
   ): void {
     try {
+      const reserved = new Set(reservationPtys)
       const ptys = new Set(reservationPtys)
       for (const mailbox of mailboxes) {
         const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(mailbox)
@@ -99,7 +100,11 @@ export abstract class OrcaRuntimeWithStructuredSessionMail extends OrcaRuntimeWi
         }
       }
       for (const ptyId of ptys) {
-        this.orchestrationMailboxPointerDelivery.reconcileUncertainMail(ptyId)
+        if (reserved.has(ptyId)) {
+          this.orchestrationMailboxPointerDelivery.reconcileUncertainMail(ptyId)
+        } else {
+          this.orchestrationMailboxPointerDelivery.uncertainty.reconcileConsumed(ptyId, mailboxes)
+        }
         this.armDeliveryRecheck(ptyId, { settled: true })
       }
     } catch {

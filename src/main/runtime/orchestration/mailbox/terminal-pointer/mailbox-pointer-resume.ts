@@ -71,16 +71,17 @@ export function resumePendingOrchestrationMailboxPointer(args: {
   return retained
 }
 
+/** The mailboxes the terminal's missed-mail notice now names, or null when evidence is unavailable. */
 export function reconcileUncertainMailboxPointers<T extends OrchestrationMessageWaiter>(
   deps: PointerDeliveryDependencies<T>,
   state: OrchestrationMailboxPointerState,
   ptyId: string
-): boolean {
+): ReadonlySet<string> | null {
   try {
     const db = deps.getDb()
     const target = deps.resolveSubmitTarget(ptyId)
     if (!db || !target) {
-      return false
+      return null
     }
     const owned = new Set(state.flightForPty(ptyId)?.stagedMessageIds)
     const mailboxes = new Set(
@@ -95,10 +96,10 @@ export function reconcileUncertainMailboxPointers<T extends OrchestrationMessage
         .map((row) => row.to_handle)
     )
     deps.onDeliveryDecision(ptyId, { uncertainMailboxes: [...mailboxes].sort() })
-    return true
+    return mailboxes
   } catch {
     // Unavailable reservation evidence cannot withdraw an unread-mail explanation.
-    return false
+    return null
   }
 }
 
@@ -127,7 +128,7 @@ export function reconcilePendingOrchestrationMailboxPointer<
 export class UncertainMailboxReconciliation<T extends OrchestrationMessageWaiter> {
   private readonly initialized = new Map<
     string,
-    { incarnation: string; db: OrchestrationDb | null }
+    { incarnation: string; db: OrchestrationDb | null; mailboxes: ReadonlySet<string> }
   >()
   private readonly pending = new Set<string>()
 
@@ -159,10 +160,27 @@ export class UncertainMailboxReconciliation<T extends OrchestrationMessageWaiter
         return
       }
       const incarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
-      if (incarnation && reconcileUncertainMailboxPointers(this.deps, this.state, ptyId)) {
-        this.initialized.set(ptyId, { incarnation, db: this.deps.getDb() })
+      const mailboxes = incarnation
+        ? reconcileUncertainMailboxPointers(this.deps, this.state, ptyId)
+        : null
+      if (incarnation && mailboxes) {
+        this.initialized.set(ptyId, { incarnation, db: this.deps.getDb(), mailboxes })
       }
     })
+  }
+
+  /** A consuming read can only clear the mailboxes it read, so unrelated reads skip the recount.
+   * Why: the recount reads every claim the terminal holds, including other Runs' retained history. */
+  reconcileConsumed(ptyId: string, consumed: readonly string[]): void {
+    const known = this.initialized.get(ptyId)
+    if (
+      !known ||
+      known.db !== this.deps.getDb() ||
+      known.incarnation !== this.deps.resolveSubmitTarget(ptyId)?.processIncarnation ||
+      consumed.some((mailbox) => known.mailboxes.has(mailbox))
+    ) {
+      this.reconcile(ptyId)
+    }
   }
 
   /** Every terminal whose uncertainty was reconstructed, e.g. after a reset deleted mail under its notice. */

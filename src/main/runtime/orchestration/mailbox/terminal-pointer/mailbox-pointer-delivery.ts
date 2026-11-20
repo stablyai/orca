@@ -35,7 +35,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   })
   private readonly foregroundDelivery = new MailboxForegroundDelivery()
   private readonly coldParkedPtys = new Set<string>()
-  private readonly uncertainty: UncertainMailboxReconciliation<TWaiter>
+  /** Missed-mail notice recounts; consuming reads recount only mailboxes the notice names. */
+  readonly uncertainty: UncertainMailboxReconciliation<TWaiter>
   constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {
     this.uncertainty = new UncertainMailboxReconciliation(deps, this.state)
   }
