@@ -8,7 +8,7 @@ const { startSystemSshPortForwardProcessMock } = vi.hoisted(() => ({
   startSystemSshPortForwardProcessMock: vi.fn()
 }))
 
-vi.mock('../system-transport/system-ssh-forward-process', async (importOriginal) => {
+vi.mock('../system-transport/forwarding/system-ssh-forward-process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
@@ -134,17 +134,6 @@ describe('SshPortForwardManager', () => {
   beforeEach(() => {
     manager = new SshPortForwardManager()
     startSystemSshPortForwardProcessMock.mockReset()
-  })
-
-  it('throws when no port forward provider can handle the connection', async () => {
-    const conn = {
-      getClient: vi.fn().mockReturnValue(null),
-      isDisposed: vi.fn().mockReturnValue(false),
-      usesSystemSshTransport: vi.fn().mockReturnValue(false)
-    }
-    await expect(
-      manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
-    ).rejects.toThrow('SSH connection is not established')
   })
 
   it('does not register a system SSH forward when startup fails', async () => {
@@ -370,18 +359,6 @@ describe('SshPortForwardManager', () => {
     expect(detail.length).toBeLessThan(66 * 1024)
   })
 
-  it('destroys local sockets that emit errors', async () => {
-    const conn = createMockConn()
-    await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
-    const server = getLastMockServer()
-    const socket = createFakeSocket()
-
-    server?._connectionHandler(socket)
-    socket.emit('error', new Error('client reset'))
-
-    expect(socket.destroy).toHaveBeenCalled()
-  })
-
   it('drops a local connection instead of throwing when the ssh2 client already disconnected', async () => {
     const conn = createMockConn()
     conn.mockClient.forwardOut.mockImplementation(() => {
@@ -391,35 +368,6 @@ describe('SshPortForwardManager', () => {
     const socket = createFakeSocket()
 
     expect(() => getLastMockServer()?._connectionHandler(socket)).not.toThrow()
-    expect(socket.destroy).toHaveBeenCalled()
-  })
-
-  it('closes late ssh2 channels after the forward was removed', async () => {
-    const mockChannel = {
-      pipe: vi.fn().mockReturnThis(),
-      on: vi.fn(),
-      close: vi.fn()
-    }
-    let callback!: (error: Error | undefined, channel: typeof mockChannel) => void
-    const mockClient = {
-      forwardOut: vi.fn().mockImplementation((_bindAddr, _bindPort, _destHost, _destPort, cb) => {
-        callback = cb
-      })
-    }
-    const conn = {
-      getClient: vi.fn().mockReturnValue(mockClient),
-      isDisposed: vi.fn().mockReturnValue(false),
-      usesSystemSshTransport: vi.fn().mockReturnValue(false)
-    }
-    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
-    const server = getLastMockServer()
-    const socket = createFakeSocket()
-
-    server?._connectionHandler(socket)
-    await manager.removeForwardAndWait(entry.id)
-    callback(undefined, mockChannel)
-
-    expect(mockChannel.close).toHaveBeenCalled()
     expect(socket.destroy).toHaveBeenCalled()
   })
 

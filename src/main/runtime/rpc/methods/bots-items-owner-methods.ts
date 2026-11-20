@@ -1,0 +1,287 @@
+// `bots.items.owner.*`: the owner's panel, on the desktop or a paired phone; an agent's CLI is refused.
+// Every comment and status change mails the item's chat, one mail per action and chat; a snooze mails none.
+import {
+  BOT_ITEM_LIMITS,
+  BOT_ITEM_OPEN_STATUSES,
+  botItemEventId,
+  parseBotItemEventId
+} from '../../../../shared/bots/bot-items'
+import {
+  BotItemsOwnerComment,
+  BotItemsOwnerList,
+  BotItemsOwnerOpened,
+  BotItemsOwnerShow,
+  BotItemsOwnerSnooze,
+  BotItemsOwnerStatus
+} from '../../../../shared/rpc-contract/bots-items-params'
+import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../../../shared/agent-session/agent-session-attachments'
+import { BotItemError } from '../../../bots/bot-item-error'
+import { admitBotItemCommentAttachments } from '../../../bots/bot-item-comment-attachments'
+import {
+  getAgentSessionAttachmentClaimer,
+  getAgentSessionAttachmentStore
+} from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import { botChatTakingMail } from './bots-chats'
+import type { BotItemOwnerActor } from '../../../bots/bot-items-input'
+import type { BotItemRecord } from '../../../bots/bot-items-schema'
+import { defineMethod, type RpcContext } from '../core'
+import { ownerOnly } from './bots-caller-gates'
+import { parseCursor, resolveItem } from './bots-items-write-support'
+
+const REFUSAL = 'Only your owner changes items this way, in Orca.'
+
+function ownerActor(context: RpcContext): BotItemOwnerActor {
+  ownerOnly(context, REFUSAL)
+  context.runtime.bots.assertEnabled()
+  return context.pairedDeviceId
+    ? { kind: 'owner', device: context.pairedDeviceId }
+    : { kind: 'owner' }
+}
+
+const LIST = defineMethod({
+  name: 'bots.items.owner.list',
+  permission: 'workspace',
+  params: BotItemsOwnerList,
+  handler: async (params, context) => {
+    ownerActor(context)
+    const { botItems } = context.runtime
+    const store = botItems.store()
+    // An older client names one chat; a group's panel names its rooms' member sessions.
+    const chatIds = params.chatIds ?? (params.chatId !== undefined ? [params.chatId] : undefined)
+    const chat = chatIds ? { chatIds } : {}
+    // Every open item, however many, then closed ones a page at a time.
+    const open: BotItemRecord[] = []
+    let cursor: { at: number; number: number } | undefined
+    for (;;) {
+      const page = await store.list({
+        botId: params.botId,
+        ...chat,
+        statuses: BOT_ITEM_OPEN_STATUSES,
+        limit: BOT_ITEM_LIMITS.listPageMax + 1,
+        ...(cursor ? { cursor } : {})
+      })
+      open.push(...page.items.slice(0, BOT_ITEM_LIMITS.listPageMax))
+      const last = page.items[BOT_ITEM_LIMITS.listPageMax - 1]
+      if (page.items.length <= BOT_ITEM_LIMITS.listPageMax || !last) {
+        break
+      }
+      cursor = { at: last.lastActivityAt, number: last.number }
+    }
+    const closedCursor = parseCursor(params.closedCursor)
+    const closed = await store.list({
+      botId: params.botId,
+      ...chat,
+      statuses: ['done', 'canceled'],
+      limit: BOT_ITEM_LIMITS.listPage + 1,
+      ...(closedCursor ? { cursor: closedCursor } : {})
+    })
+    const closedRows = closed.items.slice(0, BOT_ITEM_LIMITS.listPage)
+    const lastClosed = closedRows.at(-1)
+    return {
+      items: await botItems.views([...open, ...closedRows]),
+      counts: closed.counts,
+      seenEventId: botItemEventId(
+        context.runtime.bots.list().find((bot) => bot.id === params.botId)?.itemsSeen ?? 0
+      ),
+      ...(closed.items.length > BOT_ITEM_LIMITS.listPage && lastClosed
+        ? { nextClosedCursor: `${lastClosed.lastActivityAt}:${lastClosed.number}` }
+        : {})
+    }
+  }
+})
+
+const SHOW = defineMethod({
+  name: 'bots.items.owner.show',
+  permission: 'workspace',
+  params: BotItemsOwnerShow,
+  handler: async (params, context) => {
+    ownerActor(context)
+    const { botItems } = context.runtime
+    const record = await resolveItem(botItems.store(), params.item)
+    const after = params.after !== undefined ? parseBotItemEventId(params.after) : 0
+    const before = params.before !== undefined ? parseBotItemEventId(params.before) : 0
+    if (after === null || before === null) {
+      throw new BotItemError('invalid_argument', 'after and before take an event id such as e41.')
+    }
+    const limit = BOT_ITEM_LIMITS.eventsPage
+    const [item] = await botItems.views([record])
+    if (params.newest) {
+      // The newest page; `earlierCursor` pages back from its oldest event.
+      const events = await botItems.eventsBefore(record.uid, before, limit + 1)
+      const page = events.slice(-limit)
+      const first = page[0]
+      return {
+        item: item!,
+        events: page,
+        ...(events.length > limit && first ? { earlierCursor: first.id } : {})
+      }
+    }
+    const events = await botItems.events(record.uid, after, limit + 1)
+    const page = events.slice(0, limit)
+    const last = page.at(-1)
+    return {
+      item: item!,
+      events: page,
+      ...(events.length > limit && last ? { nextCursor: last.id } : {})
+    }
+  }
+})
+
+const COMMENT = defineMethod({
+  name: 'bots.items.owner.comment',
+  permission: 'workspace',
+  params: BotItemsOwnerComment,
+  handler: async (params, context) => {
+    const actor = ownerActor(context)
+    const { botItems } = context.runtime
+    const store = botItems.store()
+    const item = await resolveItem(store, params.item)
+    if (
+      params.answering !== undefined &&
+      params.answers !== undefined &&
+      params.answerId !== undefined
+    ) {
+      // An answer to the open question: its own write, which also moves the item to In progress.
+      // The write commits first; its mail is owed in the same transaction, so a failed send here is
+      // retried by the owed-mail sweep and never by answering again.
+      const question = parseBotItemEventId(params.answering)
+      if (question === null) {
+        throw new BotItemError('invalid_argument', 'Name the question by its event.')
+      }
+      const outcome = await store.ownerAnswer(
+        item.uid,
+        question,
+        params.answers,
+        params.answerId,
+        actor
+      )
+      if (!outcome.unchanged) {
+        botItems.changed([item.ownerBotId])
+        // As with a comment: the answer is stored and its mail owed, so the reply never waits on it.
+        void botItems
+          .sendOwedMail()
+          .catch((error: unknown) => console.warn('[bots] items: mailing an answer failed', error))
+      }
+      return {
+        eventId: outcome.eventId === null ? null : botItemEventId(outcome.eventId),
+        answered: true
+      }
+    }
+    const bot = context.runtime.bots.list().find((entry) => entry.id === item.ownerBotId)
+    if (params.images?.length || params.text.includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)) {
+      // The attachment store and its claims come up with the structured chat host.
+      await context.runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+    }
+    // Admitted and claimed for the item's chat before the event: a failed write leaves only a claim
+    // that chat already prunes, and a retry re-claims the same uploads.
+    const images = await admitBotItemCommentAttachments(
+      {
+        store: getAgentSessionAttachmentStore(),
+        // This host's own window: a dropped on-disk image is copied in; a paired client sends store paths.
+        local: context.caller?.kind === 'desktop',
+        claim: getAgentSessionAttachmentClaimer(),
+        chat: async () => (bot ? botChatTakingMail(context.runtime, bot, item.chatId) : null)
+      },
+      params.text,
+      params.images ?? []
+    )
+    const outcome = await store.ownerComment(
+      item.uid,
+      params.text,
+      actor,
+      images,
+      undefined,
+      params.requestId
+    )
+    botItems.changed([item.ownerBotId])
+    // The comment is stored and its mail owed: the reply never waits on the chat taking it.
+    void botItems
+      .sendOwedMail()
+      .catch((error: unknown) => console.warn('[bots] items: mailing a comment failed', error))
+    return { eventId: outcome.eventId === null ? null : botItemEventId(outcome.eventId) }
+  }
+})
+
+const STATUS = defineMethod({
+  name: 'bots.items.owner.status',
+  permission: 'workspace',
+  params: BotItemsOwnerStatus,
+  handler: async (params, context) => {
+    const actor = ownerActor(context)
+    const { botItems } = context.runtime
+    const store = botItems.store()
+    const items = await Promise.all(params.items.map((ref) => resolveItem(store, ref)))
+    const uids = items.map((item) => item.uid)
+    const result = await store.ownerStatus(
+      {
+        uids,
+        to: params.status,
+        ...(params.reason !== undefined ? { reason: params.reason } : {}),
+        ...(params.comment !== undefined ? { comment: params.comment } : {})
+      },
+      actor
+    )
+    botItems.changed(items.map((item) => item.ownerBotId))
+    await botItems.sendOwedMail()
+    return {
+      items: result.items.map((entry) => ({
+        uid: entry.uid,
+        eventId: entry.eventId === null ? null : botItemEventId(entry.eventId),
+        woke: entry.woke
+      }))
+    }
+  }
+})
+
+const SNOOZE = defineMethod({
+  name: 'bots.items.owner.snooze',
+  permission: 'workspace',
+  params: BotItemsOwnerSnooze,
+  handler: async (params, context) => {
+    const actor = ownerActor(context)
+    const { botItems } = context.runtime
+    const store = botItems.store()
+    const items = await Promise.all(params.items.map((entry) => resolveItem(store, entry.item)))
+    const result = await store.ownerSnooze(
+      {
+        items: items.map((item, index) => ({
+          uid: item.uid,
+          othersLastEventId: parseBotItemEventId(params.items[index]!.othersLastEventId) ?? 0
+        })),
+        until: params.until
+      },
+      actor
+    )
+    botItems.changed(items.map((item) => item.ownerBotId))
+    return {
+      items: result.items.map((entry) => ({
+        uid: entry.uid,
+        eventId: entry.eventId === null ? null : botItemEventId(entry.eventId)
+      }))
+    }
+  }
+})
+
+const OPENED = defineMethod({
+  name: 'bots.items.owner.opened',
+  permission: 'workspace',
+  params: BotItemsOwnerOpened,
+  handler: async (params, context) => {
+    ownerActor(context)
+    const { runtime } = context
+    const latest = await runtime.botItems.store().latestEventId(params.botId)
+    const saved = runtime.bots.list().find((bot) => bot.id === params.botId)?.itemsSeen ?? 0
+    // One cursor per bot in its settings, so the desktop and a paired phone agree.
+    const seen =
+      latest > saved
+        ? ((
+            await runtime.bots.update(params.botId, (bot) => ({
+              itemsSeen: Math.max(bot.itemsSeen ?? 0, latest)
+            }))
+          ).itemsSeen ?? latest)
+        : saved
+    return { seenEventId: botItemEventId(seen) }
+  }
+})
+
+export const BOT_ITEMS_OWNER_METHODS = [LIST, SHOW, COMMENT, STATUS, SNOOZE, OPENED]

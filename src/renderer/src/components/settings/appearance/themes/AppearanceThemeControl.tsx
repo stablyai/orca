@@ -1,12 +1,12 @@
 import type React from 'react'
 import { Loader2, Store, Zap } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { PluginThemeRegistration } from '../../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import {
   editorThemeSlotUpdate,
   MATCH_TERMINAL_APP_THEME,
   pluginAppThemeSlotUpdate
-} from '../../../../../../shared/plugin-theme-settings'
+} from '../../../../../../shared/plugins/appearance/plugin-theme-settings'
 import { Button } from '../../../ui/button'
 import {
   SettingsSearchableSelect,
@@ -22,8 +22,8 @@ import {
   isPluginTerminalThemeSelected,
   terminalThemeUpdate
 } from '../../../plugins/state/plugin-theme-apply'
-import { findCodeEditorTheme } from '@/lib/code-editor-theme'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { findCodeEditorTheme } from '@/lib/editor/appearance/code-editor-theme'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { requestPluginBrowse } from '@/store/plugins/navigation/plugin-preview-request'
 import { useCatalogAppThemes, type CatalogAppTheme } from './use-catalog-app-themes'
 import {
@@ -222,8 +222,8 @@ export function AppearanceThemeSlotSelect({
               {
                 value: MATCH_TERMINAL_APP_THEME,
                 label: t(
-                  'auto.components.settings.AppearanceThemeControl.matchTerminal',
-                  'Match Terminal'
+                  'auto.components.settings.AppearanceThemeControl.7ad388ec82',
+                  'Match terminal'
                 ),
                 detail: (
                   <>
@@ -287,7 +287,7 @@ export function AppearanceThemeSlotSelect({
         >
           {t(
             'auto.components.settings.AppearanceThemeControl.useTerminalTheme',
-            'Use its terminal colors'
+            'Use theme colors'
           )}
         </Button>
       ) : null}

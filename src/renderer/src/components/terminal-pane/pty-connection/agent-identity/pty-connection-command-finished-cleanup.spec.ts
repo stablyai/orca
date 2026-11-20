@@ -61,124 +61,17 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('keeps Droid routing visible through command-finished foreground confirmation', async () => {
-      vi.useFakeTimers()
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const getForegroundProcess = vi.mocked(window.api.pty.confirmForegroundProcess)
-      getForegroundProcess.mockResolvedValue('droid')
-      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
-      const ptyId = 'pty-droid-confirmation-window'
-      const transport = createMockTransport(ptyId)
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          dataCallbackRef.current = callbacks.onData ?? null
-          return { id: ptyId }
-        }
-      )
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-
-      connectPanePty(
-        ...mockPanePtyArgs(
-          createPane(1),
-          createManager(1),
-          bindPaneAgentTitleMocks(
-            createDeps({ isVisibleRef: { current: false } }),
-            agentTitleMocks3
-          )
-        )
-      )
-      await vi.advanceTimersByTimeAsync(20)
-      await flushAsyncTicks()
-      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
-        launchConfig: { agentArgs: '', agentEnv: {} },
-        identity: { agentType: 'droid' }
-      }
-      mockStoreState.clearAgentLaunchConfig.mockImplementation((key: string) => {
-        delete mockStoreState.agentLaunchConfigByPaneKey[key]
-      })
-
-      const readsBeforeFinish = getForegroundProcess.mock.calls.length
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
-      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
-      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
-
-      await vi.advanceTimersByTimeAsync(350)
-      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
-      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
-
-      expect(getForegroundProcess).toHaveBeenCalledTimes(readsBeforeFinish + 1)
-      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-        agent: 'droid',
-        agentEvidence: 'process-read',
-        routingTrusted: true,
-        shellForeground: false
-      })
-      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
-    })
-
-    it('retires pane launch routing after one fresh scan confirms shell', async () => {
-      vi.useFakeTimers()
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
-      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
-      const ptyId = 'pty-droid-confirmed-shell'
-      const transport = createMockTransport(ptyId)
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          dataCallbackRef.current = callbacks.onData ?? null
-          return { id: ptyId }
-        }
-      )
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const deps = createDeps({ isVisibleRef: { current: false } })
-
-      connectPanePty(
-        ...mockPanePtyArgs(
-          createPane(1),
-          createManager(1),
-          bindPaneAgentTitleMocks(deps, agentTitleMocks4)
-        )
-      )
-      await vi.advanceTimersByTimeAsync(20)
-      await flushAsyncTicks()
-      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
-        launchConfig: { agentArgs: '', agentEnv: {} },
-        identity: { agentType: 'droid' }
-      }
-      mockStoreState.clearAgentLaunchConfig.mockImplementation((key: string) => {
-        delete mockStoreState.agentLaunchConfigByPaneKey[key]
-      })
-
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
-      await vi.advanceTimersByTimeAsync(350)
-      expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-        agent: null,
-        shellForeground: true
-      })
-      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
-      // Process-confirmed exit must reconcile caches; agentStatus:drop retains live-pane latches that would restore working status (STA-4612).
-      expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
-      // Shell-confirmed exit must leave ChatView even when the agent's OSC title survives.
-      expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
-    })
-
     it.each([
-      ['clears stale sleeping identity after a confirmed return to shell', false],
+      ['keeps recovery until main proves the owning agent ended', false],
       // Hibernation records resume before kill; the exposed shell is Orca’s own stop rather than an independent agent exit.
       ['keeps sleeping identity when the shell surfaces during an intentional stop', true]
     ])('%s', async (_label, stoppingOnPurpose) => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+      window.api.agentStatus.hasVerifiableAgentProcess = vi.fn(async () => false)
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
       const ptyId = 'pty-sleeping-confirmed-shell'
@@ -228,8 +121,10 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         })
         expect(deps.onAgentExitedRef.current).not.toHaveBeenCalled()
       } else {
-        expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(paneKey)
-        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'sess-1' }
+        })
         expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
       }
       expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
@@ -238,11 +133,68 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       })
     })
 
+    it('keeps recovery when wake-resumed Codex stops and the shell runs another command', async () => {
+      vi.useFakeTimers()
+      const agent = 'codex'
+      const finishes = [
+        [146, 'codex'],
+        [0, 'zsh']
+      ] as const
+      const { connectPanePty } = await import('../connect-pane-pty')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
+      window.api.agentStatus.hasVerifiableAgentProcess = vi.fn(async () => false)
+      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
+      const transport = createMockTransport('pty-suspended-agent')
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          dataCallbackRef.current = callbacks.onData ?? null
+          return { id: 'pty-suspended-agent' }
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      connectPanePty(
+        ...mockPanePtyArgs(
+          createPane(1),
+          createManager(1),
+          bindPaneAgentTitleMocks(createDeps({ isVisibleRef: { current: false } }), agentTitleMocks)
+        )
+      )
+      await vi.advanceTimersByTimeAsync(20)
+      await flushAsyncTicks()
+      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
+        launchConfig: { agentArgs: '', agentEnv: {} },
+        identity: { agentType: agent }
+      }
+      mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+        paneKey,
+        worktreeId: 'wt-1',
+        agent,
+        providerSession: { key: 'session_id', id: 'stopped-session' },
+        capturedAt: 1,
+        updatedAt: 1
+      }
+      for (const [status, foreground] of finishes) {
+        vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(foreground)
+        vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue(foreground)
+        dataCallbackRef.current?.(`\x1b]133;C\x07\x1b]133;D;${status}\x07`)
+        await vi.advanceTimersByTimeAsync(1_000)
+        expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+          agent,
+          providerSession: { key: 'session_id', id: 'stopped-session' }
+        })
+      }
+    })
+
     it('keeps sleeping identity when the foreground check still sees the agent', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       // Why both: the pane's process monitor reads the same foreground the confirm read sees.
       vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
@@ -296,8 +248,9 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       // Use an accepted row to exercise deferred-drop bookkeeping before reconcile; the no-row path returns early.
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       // Import dynamically to share pty-connection’s live registry; a static import can be a stale instance.
       const { createCommandFinishedStatusStore } =
         await import('./command-finished-status-store-test-fixture')
@@ -332,10 +285,14 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const realStore = createCommandFinishedStatusStore()
       const row = realStore.acceptWorkingClaudeStatus(paneKey)
       expect(row).toBeDefined()
-      mockStoreState.agentStatusByPaneKey[paneKey] = row
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [paneKey, row]
+      ])
       // Mirror both real dismissal and teardown to exercise drop-before-reconcile ordering.
       mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
-        delete mockStoreState.agentStatusByPaneKey[key]
+        mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+          [key, null]
+        ])
         realStore.dropAgentStatus(key)
       })
 
@@ -347,60 +304,12 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
     })
 
-    it('does NOT reconcile when the process check could not confirm a shell', async () => {
-      vi.useFakeTimers()
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(null)
-      vi.mocked(window.api.agentStatus.reconcileEndedProcess).mockClear()
-      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
-      const ptyId = 'pty-unconfirmed-shell'
-      const transport = createMockTransport(ptyId)
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          dataCallbackRef.current = callbacks.onData ?? null
-          return { id: ptyId }
-        }
-      )
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-
-      connectPanePty(
-        ...mockPanePtyArgs(
-          createPane(1),
-          createManager(1),
-          bindPaneAgentTitleMocks(
-            createDeps({ isVisibleRef: { current: false } }),
-            agentTitleMocks8
-          )
-        )
-      )
-      await vi.advanceTimersByTimeAsync(20)
-      await flushAsyncTicks()
-      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
-        launchConfig: { agentArgs: '', agentEnv: {} },
-        identity: { agentType: 'droid' }
-      }
-
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
-      // Run the full ladder; at 350ms the unavailable branch has not settled, so early assertions can falsely pass.
-      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-      await flushAsyncTicks()
-
-      // The unavailable branch really ran: it publishes an unproven foreground before settling.
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-        agent: null,
-        shellForeground: false
-      })
-      expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
-    })
-
     it('disarms stale TUI modes in the emulator after a confirmed return to shell', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('bash')
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
       const ptyId = 'pty-stale-mode-disarm'
@@ -449,8 +358,9 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
     it('grounds xterm and the input mirror in stream order when output is still queued', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks10 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const confirmRead = createDeferred<string>()
       vi.mocked(window.api.pty.confirmForegroundProcess).mockReturnValue(confirmRead.promise)
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
@@ -500,8 +410,9 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
     it('keeps armed modes while the agent still owns the foreground after a leaked 133;D', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       // Why both: the pane's process monitor reads the same foreground the confirm read sees.
       vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
@@ -539,11 +450,12 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       expect(deps.paneKittyKeyboardModesRef.current.get(pane.id)?.flags).toBe(5)
     })
 
-    it('retires stale routing after unavailable command-finish reads without asserting shell', async () => {
+    it('retires stale routing after unavailable command-finish reads without reconciling', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks12 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(null)
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
       const ptyId = 'pty-droid-unavailable-finish'
@@ -588,13 +500,15 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
         shellForeground: false
       })
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+      expect(window.api.agentStatus.reconcileEndedProcess).not.toHaveBeenCalled()
     })
 
     it('cancels deferred cleanup on a new command and retires identity at its later shell', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks13 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks13 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
       const ptyId = 'pty-droid-superseded-confirmation'

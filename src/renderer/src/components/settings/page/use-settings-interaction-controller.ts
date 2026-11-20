@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { isAgentSettingsRowId } from '../agents/agent-settings-navigation'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { useAppStore } from '../../../store/index'
 import { translate } from '@/i18n/i18n'
@@ -8,11 +9,20 @@ import {
   setInstalledFontsUnavailable
 } from '../appearance/fonts/installed-font-list'
 import type { SettingsStoreModel } from './use-settings-store-model'
+import { registerSettingsLeaveGuard } from './settings-leave-guard'
 import type { SettingsDeepLinkTargetWatch } from '../navigation/settings-deep-link-target-watcher'
+import {
+  applySettingsTargetHighlightBleed,
+  clearSettingsTargetHighlightBleed,
+  resolveSettingsHighlightElement,
+  SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME
+} from '../section-layout/settings-target-highlight'
 import {
   cancelPendingSettingsDeepLinkTargetWatch,
   cancelPendingSettingsSubsectionScrollFrame,
+  getSettingsScrollTarget,
   readSourceControlAiSettings,
+  scrollSubsectionIntoView,
   SETTINGS_TARGET_HIGHLIGHT_MS
 } from '../navigation/settings-navigation-foundations'
 
@@ -23,17 +33,25 @@ export type SettingsInteractionModel = Pick<
   | 'hasUnsavedBranchPromptChanges'
   | 'hasUnsavedChatPromptChanges'
   | 'hasUnsavedCommitPromptChanges'
-  | 'highlightedSettingsTargetId'
+  | 'highlightedSettingsTarget'
   | 'setFontSuggestions'
   | 'setHasUnsavedBranchPromptChanges'
   | 'setHasUnsavedChatPromptChanges'
   | 'setHasUnsavedCommitPromptChanges'
-  | 'setHighlightedSettingsTargetId'
+  | 'setHighlightedSettingsTarget'
   | 'setSettingsSearchQuery'
   | 'setSourceControlAiPromptDiscardSignal'
   | 'settings'
   | 'updateSettingsOrThrow'
 >
+
+const SETTINGS_REVEAL_SETTLE_MS = 250
+
+function isFullyVisibleIn(target: HTMLElement, container: HTMLElement): boolean {
+  const targetRect = target.getBoundingClientRect()
+  const containerRect = container.getBoundingClientRect()
+  return targetRect.top >= containerRect.top && targetRect.bottom <= containerRect.bottom
+}
 
 export function useSettingsInteractionController(model: SettingsInteractionModel) {
   const {
@@ -42,12 +60,12 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     hasUnsavedBranchPromptChanges,
     hasUnsavedChatPromptChanges,
     hasUnsavedCommitPromptChanges,
-    highlightedSettingsTargetId,
+    highlightedSettingsTarget,
     setFontSuggestions,
     setHasUnsavedBranchPromptChanges,
     setHasUnsavedChatPromptChanges,
     setHasUnsavedCommitPromptChanges,
-    setHighlightedSettingsTargetId,
+    setHighlightedSettingsTarget,
     setSettingsSearchQuery,
     setSourceControlAiPromptDiscardSignal,
     settings,
@@ -134,15 +152,47 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
   }, [])
 
   useEffect(() => {
-    if (!highlightedSettingsTargetId) {
+    if (!highlightedSettingsTarget) {
       return
     }
     const timeout = window.setTimeout(
-      () => setHighlightedSettingsTargetId(null),
+      () => setHighlightedSettingsTarget(null),
       SETTINGS_TARGET_HIGHLIGHT_MS
     )
     return () => window.clearTimeout(timeout)
-  }, [highlightedSettingsTargetId, setHighlightedSettingsTargetId])
+  }, [highlightedSettingsTarget, setHighlightedSettingsTarget])
+
+  useEffect(() => {
+    const targetId = highlightedSettingsTarget?.id
+    if (!targetId) {
+      return
+    }
+    const target = getSettingsScrollTarget(targetId, contentScrollRef.current)
+    if (!target) {
+      return
+    }
+    // The one owner of the highlight, on the element the jump scrolled to (or its card).
+    const highlighted = resolveSettingsHighlightElement(target)
+    highlighted.classList.add(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
+    applySettingsTargetHighlightBleed(highlighted)
+    // A section the jump just revealed grows over ~200ms; re-scroll once if the row is still cut off.
+    const settle = isAgentSettingsRowId(targetId)
+      ? undefined
+      : window.setTimeout(() => {
+          const container = contentScrollRef.current
+          if (container && !isFullyVisibleIn(target, container)) {
+            scrollSubsectionIntoView(targetId, container)
+          }
+          applySettingsTargetHighlightBleed(highlighted)
+        }, SETTINGS_REVEAL_SETTLE_MS)
+    return () => {
+      if (settle !== undefined) {
+        window.clearTimeout(settle)
+      }
+      clearSettingsTargetHighlightBleed(highlighted)
+      highlighted.classList.remove(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
+    }
+  }, [highlightedSettingsTarget])
 
   const requestFontSuggestions = useCallback((): void => {
     if (installedFontsLoadedRef.current || installedFontsLoadPromiseRef.current) {
@@ -168,41 +218,59 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
   }, [setFontSuggestions])
 
   // Ask without clearing drafts because a later close guard may still veto.
-  const promptDiscardSourceControlAiPromptChanges = useCallback((): Promise<boolean> => {
-    return confirm({
-      title: translate(
-        'auto.components.settings.Settings.17bdee4ff1',
-        'Discard unsaved AI settings?'
-      ),
-      description: translate(
-        'auto.components.settings.Settings.43b68e10f0',
-        'You have unsaved AI settings. Leaving will discard them.'
-      ),
-      confirmLabel: translate('auto.components.settings.Settings.65358016ea', 'Discard'),
-      confirmVariant: 'destructive'
-    })
-  }, [confirm])
+  const promptDiscardSourceControlAiPromptChanges = useCallback(
+    (signal?: AbortSignal): Promise<boolean> => {
+      return confirm({
+        signal,
+        title: translate(
+          'auto.components.settings.Settings.17bdee4ff1',
+          'Discard unsaved AI settings?'
+        ),
+        description: translate(
+          'auto.components.settings.Settings.43b68e10f0',
+          'You have unsaved AI settings. Leaving will discard them.'
+        ),
+        confirmLabel: translate('auto.components.settings.Settings.65358016ea', 'Discard'),
+        confirmVariant: 'destructive'
+      })
+    },
+    [confirm]
+  )
 
-  const confirmDiscardSourceControlAiPromptChanges = useCallback(async (): Promise<boolean> => {
-    if (!hasUnsavedSourceControlAiPromptChanges) {
-      return true
-    }
-    const shouldDiscard = await promptDiscardSourceControlAiPromptChanges()
-    if (shouldDiscard) {
-      setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
-      setHasUnsavedCommitPromptChanges(false)
-      setHasUnsavedBranchPromptChanges(false)
-      setHasUnsavedChatPromptChanges(false)
-    }
-    return shouldDiscard
-  }, [
-    promptDiscardSourceControlAiPromptChanges,
-    hasUnsavedSourceControlAiPromptChanges,
-    setSourceControlAiPromptDiscardSignal,
-    setHasUnsavedCommitPromptChanges,
-    setHasUnsavedBranchPromptChanges,
-    setHasUnsavedChatPromptChanges
-  ])
+  const confirmDiscardSourceControlAiPromptChanges = useCallback(
+    async (signal?: AbortSignal): Promise<boolean> => {
+      if (!hasUnsavedSourceControlAiPromptChanges) {
+        return true
+      }
+      const shouldDiscard = await promptDiscardSourceControlAiPromptChanges(signal)
+      if (shouldDiscard) {
+        setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
+        setHasUnsavedCommitPromptChanges(false)
+        setHasUnsavedBranchPromptChanges(false)
+        setHasUnsavedChatPromptChanges(false)
+      }
+      return shouldDiscard
+    },
+    [
+      promptDiscardSourceControlAiPromptChanges,
+      hasUnsavedSourceControlAiPromptChanges,
+      setSourceControlAiPromptDiscardSignal,
+      setHasUnsavedCommitPromptChanges,
+      setHasUnsavedBranchPromptChanges,
+      setHasUnsavedChatPromptChanges
+    ]
+  )
+
+  // Lets rail navigation outside Settings ask the same discard question before leaving: one registration per
+  // mount, always calling the latest committed check so drafts dirtied after mount are still asked about.
+  const latestConfirmLeaveRef = useRef(confirmDiscardSourceControlAiPromptChanges)
+  useLayoutEffect(() => {
+    latestConfirmLeaveRef.current = confirmDiscardSourceControlAiPromptChanges
+  })
+  useLayoutEffect(
+    () => registerSettingsLeaveGuard((signal) => latestConfirmLeaveRef.current(signal)),
+    []
+  )
 
   const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
     if (!(await confirmDiscardSourceControlAiPromptChanges())) {

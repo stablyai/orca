@@ -5,7 +5,7 @@ import {
   getExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getFileExplorerOperationOwnerFromState } from '../navigation/file-explorer-operation-owner'
 import {
   getHostBrowseSource,

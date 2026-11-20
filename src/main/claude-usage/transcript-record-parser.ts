@@ -1,5 +1,5 @@
 import { basename } from 'node:path'
-import { readJsonlFileSnapshot } from '../usage/jsonl-file-snapshot'
+import { readJsonlFileSnapshot } from '../usage/source-input/jsonl/jsonl-file-snapshot'
 import { createReadStream } from 'node:fs'
 import { createInterface } from 'node:readline'
 import type {
@@ -7,7 +7,7 @@ import type {
   ClaudeUsageParsedTurn,
   ClaudeUsageProcessedFile
 } from './types'
-import { readJsonlLinesFromOffset } from '../usage/jsonl-line-offsets'
+import { readJsonlLinesFromOffset } from '../usage/source-input/jsonl/jsonl-line-offsets'
 import {
   buildJsonlFileCheckpoint,
   jsonlPhysicalFileId,
@@ -15,7 +15,7 @@ import {
   resolveJsonlFileCheckpoint,
   validateJsonlFileReader,
   type JsonlFileCheckpoint
-} from '../usage/jsonl-file-checkpoint'
+} from '../usage/source-input/jsonl/jsonl-file-checkpoint'
 
 type ClaudeUsageSourceRecord = {
   type?: string

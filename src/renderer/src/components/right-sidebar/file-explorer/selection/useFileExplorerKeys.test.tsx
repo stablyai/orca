@@ -15,7 +15,7 @@ vi.mock('@/store/index', () => ({
       keybindings: undefined
     })
 }))
-vi.mock('@/lib/app-keyboard-router', () => ({
+vi.mock('@/lib/keyboard/app-keyboard-router', () => ({
   addAppKeyListener: (_type: string, listener: (event: KeyboardEvent) => void) => {
     h.keydown = listener
   },

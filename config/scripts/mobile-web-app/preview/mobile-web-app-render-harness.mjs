@@ -37,6 +37,58 @@ export async function readShellCsp() {
   return parseCspDirectives(source, 'listOf(', ').joinToString')
 }
 
+function readFrameDocument(source, pattern, indent) {
+  const match = pattern.exec(source)
+  if (!match) {
+    throw new Error('could not parse the chat visual frame document')
+  }
+  return match[1]
+    .split('\n')
+    .map((line) => line.replace(indent, ''))
+    .join('\n')
+}
+
+// Read the shipped chat visual frame (policy and fixed document); the iOS copy must match Kotlin's.
+export async function readChatVisualFrame() {
+  const shellDir = join(projectDir, 'mobile/modules/orca-mobile-web-shell')
+  const [kotlin, swift] = await Promise.all([
+    readFile(
+      join(
+        shellDir,
+        'android/src/main/java/expo/modules/orcamobilewebshell/MobileWebShellChatVisualFrame.kt'
+      ),
+      'utf8'
+    ),
+    readFile(join(shellDir, 'ios/MobileWebShellChatVisualFrame.swift'), 'utf8')
+  ])
+  const frame = {
+    csp: parseCspDirectives(
+      kotlin.slice(kotlin.indexOf('MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_CSP = listOf(')),
+      'listOf(',
+      ').joinToString'
+    ),
+    document: readFrameDocument(
+      kotlin,
+      /MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_DOCUMENT = """\n([\s\S]*?)\n""".trimIndent\(\)/,
+      /^ {2}/
+    )
+  }
+  const swiftCsp = parseCspDirectives(
+    swift.slice(swift.indexOf('static let csp = [')),
+    '[',
+    '].joined'
+  )
+  const swiftDocument = readFrameDocument(
+    swift,
+    /static let document = Data\("""\n([\s\S]*?)\n {4}""".utf8\)/,
+    /^ {4}/
+  )
+  if (swiftCsp !== frame.csp || swiftDocument !== frame.document) {
+    throw new Error('the iOS and Android chat visual frames differ')
+  }
+  return frame
+}
+
 // Read literal document headers from Kotlin; CSP constant stays readShellCsp’s job. Throw if none found or browser defaults could masquerade as shell guarantees.
 export async function readShellDocumentHeaders() {
   const source = await readFile(
@@ -65,7 +117,7 @@ export async function readShellDocumentHeaders() {
 export async function readBridgeProtocolVersion() {
   // Read declaring module rather than envelope reexport so source splits cannot silently change reader target.
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/protocol/bridge-frame-fields.ts'),
     'utf8'
   )
   const match = /BRIDGE_PROTOCOL_VERSION = (\d+)/.exec(source)
@@ -79,8 +131,8 @@ export async function readBridgeProtocolVersion() {
 export async function readBridgeWindowCaps() {
   const sources = await Promise.all(
     [
-      'src/shared/mobile-bridge-frame-bytes.ts',
-      'mobile/src/mobile-web-shell/bridge-host-subscriptions.ts'
+      'src/shared/mobile-bridge/mobile-bridge-frame-bytes.ts',
+      'mobile/src/mobile-web-shell/host-streams/bridge-host-subscriptions.ts'
     ].map((path) => readFile(join(projectDir, path), 'utf8'))
   )
   const source = sources.join('\n')
@@ -120,7 +172,7 @@ export async function readClipboardImageUploadChunkBase64Chars() {
 // Read shipped screencast JPEG quality; copied value would certify budget for an encoder configuration no product uses.
 export async function readBrowserFrameQuality() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/browser/browser-screencast-request-parameters.ts'),
+    join(projectDir, 'mobile/src/browser/screencast/browser-screencast-request-parameters.ts'),
     'utf8'
   )
   const match = /BROWSER_FRAME_QUALITY = (\d+)/.exec(source)
@@ -133,7 +185,10 @@ export async function readBrowserFrameQuality() {
 // Read page client-identity placeholder from declaration so rig cannot silently retain stale copy.
 export async function readBridgePageClientIdentity() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.ts'),
+    join(
+      projectDir,
+      'mobile/src/mobile-web-shell/bridge/client-state/bridge-page-client-identity.ts'
+    ),
     'utf8'
   )
   const read = (name) => {
@@ -148,7 +203,7 @@ export async function readBridgePageClientIdentity() {
 
 export async function readBridgeFaultGrant() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/protocol/bridge-frame-fields.ts'),
     'utf8'
   )
   const match = /BRIDGE_FAULT_GRANT = '([a-zA-Z]+)'/.exec(source)
@@ -160,7 +215,7 @@ export async function readBridgeFaultGrant() {
 
 export async function readBridgePagePainted() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-painted.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/page-lifecycle/bridge-page-painted.ts'),
     'utf8'
   )
   const match = /BRIDGE_PAGE_PAINTED = '([a-zA-Z]+)'/.exec(source)
@@ -173,11 +228,11 @@ export async function readBridgePagePainted() {
 // Read claim/back/pop names from source; observing pop distinguishes sheet close from whole-screen navigation.
 export async function readBridgeBackNames() {
   const lane = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-back.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/page-lifecycle/bridge-page-back.ts'),
     'utf8'
   )
   const fields = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/protocol/bridge-frame-fields.ts'),
     'utf8'
   )
   const claim = /BRIDGE_BACK_CLAIM_NOTIFY = '([a-z-]+)'/.exec(lane)
@@ -208,7 +263,8 @@ export function installShellDouble({
   streams = [],
   windowCaps = null,
   safeAreaInsets = null,
-  ownsHostArea = false
+  ownsHostArea = false,
+  colorScheme = null
 }) {
   // Capture boundary faults so blank route reports own error instead of timing out.
   globalThis.__orcaRenderCheckFaults = []
@@ -216,6 +272,7 @@ export function installShellDouble({
   globalThis.__orcaRenderCheckNotifies = []
   // Keep full request verbs/geometry to assert gesture’s actual host effect.
   globalThis.__orcaRenderCheckRequests = []
+  globalThis.__orcaRenderCheckSetReplies = (patch) => Object.assign(replies, patch)
   // Record wantsBinary on accepted subscriptions; absent request cannot be inferred from absent frames.
   globalThis.__orcaRenderCheckSubscribes = []
   // Count host-cap frame drops so page can prove stream survives rejected frame.
@@ -234,6 +291,7 @@ export function installShellDouble({
   const initFrame = (patch = {}) => ({
     v: version,
     type: 'init',
+    ...(colorScheme ? { colorScheme } : {}),
     sessionId,
     buildId,
     connection: {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
 import type { HostDirectoryListing } from '../../../../../../shared/file-listing/host-directory-browse'

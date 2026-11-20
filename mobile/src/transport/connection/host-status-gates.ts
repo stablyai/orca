@@ -3,9 +3,9 @@ import type { RpcClient } from '../rpc/rpc-client-contract'
 import type { ConnectionState } from './connection-state'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
 import { hostStatusSchema, type HostStatusReply } from '../hosts/host-status-reply-schema'
-import { normalizeHostAppVersion } from '../hosts/host-app-version'
-import { recordHostAppVersion } from '../hosts/host-app-version-store'
-import { recordHostDescriptorFromStatus } from '../hosts/host-descriptor-recorder'
+import { normalizeHostAppVersion } from '../../host-descriptors/host-app-version'
+import { recordHostAppVersion } from '../../host-descriptors/host-app-version-store'
+import { recordHostDescriptorFromStatus } from '../../host-descriptors/host-descriptor-recorder'
 import { readConnectionStatusProbe, startRuntimeStatusProbe } from './runtime-status-probe'
 
 export type HostStatusGates = {
@@ -20,7 +20,13 @@ export type HostStatusGates = {
   statusReadable: boolean
   /** The host's store identity, which cross-store parent records name; absent when unknown. */
   hostInstallationId?: string
+  /** The executing host's OS; absent when unknown. */
+  hostPlatform?: NodeJS.Platform
+  /** Whether and how the host updates itself; absent from hosts that predate it. */
+  hostUpdateSupport?: HostUpdateSupport
 }
+
+export type HostUpdateSupport = NonNullable<HostStatusReply['remoteUpdateSupport']>
 
 // statusPending is not stored: pending-ness belongs to the live connection, not to the answer.
 type LoadedHostStatusGates = Omit<HostStatusGates, 'statusPending'> & {
@@ -68,7 +74,9 @@ export function hostStatusGatesFromStatus(
     statusReadable: true,
     ...(status.hostDescriptor?.installationId
       ? { hostInstallationId: status.hostDescriptor.installationId }
-      : {})
+      : {}),
+    ...(status.hostPlatform ? { hostPlatform: status.hostPlatform } : {}),
+    ...(status.remoteUpdateSupport ? { hostUpdateSupport: status.remoteUpdateSupport } : {})
   }
 }
 
@@ -152,7 +160,9 @@ export function useHostStatusGates(args: {
     hostProtocolWindow: proven.hostProtocolWindow,
     statusReadable: proven.statusReadable,
     statusPending: connState === 'connected' && unverified,
-    ...(proven.hostInstallationId ? { hostInstallationId: proven.hostInstallationId } : {})
+    ...(proven.hostInstallationId ? { hostInstallationId: proven.hostInstallationId } : {}),
+    ...(proven.hostPlatform ? { hostPlatform: proven.hostPlatform } : {}),
+    ...(proven.hostUpdateSupport ? { hostUpdateSupport: proven.hostUpdateSupport } : {})
   }
 }
 

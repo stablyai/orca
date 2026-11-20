@@ -4,7 +4,7 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { listDetectedWorktreesForRepoCoalesced } from './detected-worktree-refresh'
 import {
@@ -13,9 +13,13 @@ import {
 } from './worktree-host-ownership'
 import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
+import { listingMetadataCoverage } from './workspace-metadata-coverage'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { mapReposForWorktreeRefresh } from './worktree-refresh-pool'
-import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
 import { purgeHydratedWorktrees } from './hydrated-worktree-purge'
 import type { WorktreeRefreshResult } from './worktree-refresh-result'
 
@@ -42,6 +46,8 @@ export function createFetchAllWorktrees(
         try {
           const requestStartedState = get()
           const requestStartedWorktrees = selectWorktreesByRepo(requestStartedState)[repo.id]
+          const requestStartedDetectedWorktrees =
+            selectDetectedWorktreesByRepo(requestStartedState)[repo.id]?.worktrees
           const setup = getProjectHostSetupForRepoHost(requestStartedState, repo.id, hostId)
           const parsedHost = parseExecutionHostId(hostId)
           const directSshAuthority =
@@ -64,15 +70,20 @@ export function createFetchAllWorktrees(
           if (refresh.status !== 'admitted') {
             return failed
           }
+          const metadata = listingMetadataCoverage(get(), repo.id, hostId, refresh)
           const outcome = mergeFetchedWorktrees(set, get, {
             repoId: repo.id,
             hostId,
             ownerWasMissingAtStart: false,
             requestStartedWorktrees,
+            requestStartedDetectedWorktrees,
             setup,
-            refresh,
+            refresh: metadata.refresh,
             purgeRemovedWorktrees
           })
+          if (outcome === 'applied') {
+            metadata.settle((id, fetchOptions) => get().fetchWorktrees(id, fetchOptions))
+          }
           return outcome === 'applied' ? { repoId: repo.id, hostId, refresh } : failed
         } catch (err) {
           if (!notifyRuntimeScopeForbiddenIfNeeded(err)) {

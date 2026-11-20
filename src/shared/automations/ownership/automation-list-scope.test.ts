@@ -31,7 +31,7 @@ function automation(overrides: Partial<Automation> = {}): Automation {
     createdAt: 0,
     updatedAt: 0,
     ...overrides
-  } as Automation
+  }
 }
 
 function context(
@@ -46,6 +46,53 @@ function context(
 }
 
 describe('projectAutomationSelector', () => {
+  it('qualifies a local record whose project resolves without a connection as self', () => {
+    expect(projectAutomationSelector(automation(), context())).toEqual({ kind: 'self' })
+  })
+
+  it('refuses to read a bare local value as self when the project is gone', () => {
+    expect(projectAutomationSelector(automation({ projectId: 'missing' }), context())).toEqual({
+      kind: 'orphan',
+      issue: AUTOMATION_ORPHAN_ISSUES.projectMissing
+    })
+  })
+
+  it('keeps a bot automation, which has no project, as self', () => {
+    const bot = automation({
+      projectId: '',
+      workspaceMode: 'existing',
+      workspaceId: 'folder:w1',
+      bot: { botId: 'bot-1', runsIn: 'new', resultsTo: 'chat' }
+    })
+    expect(projectAutomationSelector(bot, context())).toEqual({ kind: 'self' })
+    // An older host reads the same record without the bot and refuses it as projectless.
+    expect(projectAutomationSelector({ ...bot, bot: undefined }, context())).toEqual({
+      kind: 'orphan',
+      issue: AUTOMATION_ORPHAN_ISSUES.projectMissing
+    })
+  })
+
+  it('treats a local record whose project points at an SSH connection as malformed', () => {
+    expect(projectAutomationSelector(automation({ projectId: 'repo-ssh' }), context())).toEqual({
+      kind: 'orphan',
+      issue: AUTOMATION_ORPHAN_ISSUES.malformed
+    })
+  })
+
+  it('pins an SSH record to its registration generation', () => {
+    const record = automation({
+      executionTargetType: 'ssh',
+      executionTargetId: 'ssh-1',
+      executionTargetGeneration: 7,
+      projectId: 'repo-ssh'
+    })
+    expect(projectAutomationSelector(record, context())).toEqual({
+      kind: 'ssh',
+      targetId: 'ssh-1',
+      targetGeneration: 7
+    })
+  })
+
   it('orphans an SSH record whose target was removed and re-added', () => {
     const record = automation({
       executionTargetType: 'ssh',

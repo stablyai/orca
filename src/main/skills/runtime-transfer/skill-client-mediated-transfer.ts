@@ -1,13 +1,13 @@
 import { open } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { SkillPackageIdentity } from '../../../shared/skill-install-contract'
-import type { SkillBundlePackageIdentity } from '../../../shared/skill-bundle-install-contract'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { SkillPackageIdentity } from '../../../shared/skills/installation/skill-install-contract'
+import type { SkillBundlePackageIdentity } from '../../../shared/skills/installation/skill-bundle-install-contract'
 import {
   SKILL_UPLOAD_CHUNK_MAX_BYTES,
   SkillUploadBeginResultSchema
-} from '../../../shared/skill-upload-session-contract'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
+} from '../../../shared/skills/sharing/skill-upload-session-contract'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { downloadSkillPackageGrant } from '../package-download/skill-package-download'
 import { startSkillPhaseOperation } from '../observability/skill-operation-observability'
 import { retrySkillTransferRpc, throwIfSkillTransferCancelled } from './skill-transfer-rpc-retry'
@@ -15,7 +15,8 @@ import { retrySkillTransferRpc, throwIfSkillTransferCancelled } from './skill-tr
 const REMOTE_TRANSFER_TIMEOUT_MS = 5 * 60_000
 const REMOTE_TRANSFER_CLEANUP_TIMEOUT_MS = 15_000
 
-function allowedOrigins(allowConfiguredOrigins: boolean): string[] {
+/** Where a skill or bot package may be downloaded from; a dev build adds the configured test origins. */
+export function skillPackageDownloadOrigins(allowConfiguredOrigins: boolean): string[] {
   const origins = ['https://storage.googleapis.com']
   if (allowConfiguredOrigins && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
     origins.push(
@@ -68,7 +69,7 @@ async function transferSkillPackageToRuntimeUnobserved(
     expectedArchiveSha256: input.package.archiveSha256,
     expectedCompressedBytes: input.package.compressedBytes,
     temporaryRoot: join(input.userDataPath, 'skill-installs', 'client-transfers'),
-    allowedOrigins: allowedOrigins(!input.requireHttps),
+    allowedOrigins: skillPackageDownloadOrigins(!input.requireHttps),
     requireHttps: input.requireHttps,
     signal: input.signal
   })

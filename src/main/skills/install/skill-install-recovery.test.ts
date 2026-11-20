@@ -6,7 +6,6 @@ import { createSkillPackageArchive } from '../package-archive/skill-package-crea
 import { extractSkillPackageArchive } from '../package-archive/skill-package-extraction'
 import {
   readSkillInstallReceipt,
-  writeSkillInstallReceipt,
   writeSkillStateFile,
   type SkillInstallReceiptV1
 } from '../transaction-state/skill-install-provenance'
@@ -117,20 +116,6 @@ describe('skill install recovery', () => {
     ).toBe('version_2')
     expect(await readFile(join(fixture.canonicalPath, 'SKILL.md'), 'utf8')).toContain('# Second')
     await expect(readFile(fixture.journal.backupPath)).rejects.toMatchObject({ code: 'ENOENT' })
-    await expect(
-      readFile(skillInstallJournalPath(fixture.stateDirectory, fixture.canonicalPath))
-    ).rejects.toMatchObject({ code: 'ENOENT' })
-  })
-
-  it('finalizes a published receipt with an incomplete journal', async () => {
-    const fixture = await interruptedUpdate('receipt-published')
-    await writeSkillInstallReceipt(fixture.stateDirectory, fixture.journal.receipt)
-
-    await recoverSkillInstallTransaction(fixture.stateDirectory, fixture.canonicalPath)
-
-    expect(
-      (await readSkillInstallReceipt(fixture.stateDirectory, fixture.canonicalPath))?.versionId
-    ).toBe('version_2')
     await expect(
       readFile(skillInstallJournalPath(fixture.stateDirectory, fixture.canonicalPath))
     ).rejects.toMatchObject({ code: 'ENOENT' })

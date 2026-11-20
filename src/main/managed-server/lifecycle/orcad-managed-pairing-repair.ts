@@ -1,7 +1,7 @@
 // Repair over trusted host access, but accept only offers matching the desktop's pinned server key.
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
-import { errorMessage } from '../../../shared/error-message'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { errorMessage } from '../../../shared/errors/error-message'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { refreshManagedOrcadPairing } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { assertRuntimeEnvironmentNotReconciling } from '../../../shared/remote-runtime/host-catalog/runtime-environment-reconciliation-record'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
@@ -11,8 +11,8 @@ import {
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import type { OrcadHostTarget, OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
+import type { OrcadHostTarget, OrcadHostTransport } from '../install/orcad-host-transport'
+import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
 import {
   getSshConnectionManager,
   getSshTargetRegistryStore
@@ -34,12 +34,20 @@ type ManagedOrcadHostAccess = { target: OrcadHostTarget; connection: OrcadHostTr
 export type ManagedOrcadPairingRepairDeps<
   Access extends ManagedOrcadHostAccess = ManagedOrcadHostAccess
 > = {
-  resolve: (environmentId: string) => KnownRuntimeEnvironment
+  resolve: (environmentId: string) => KnownRuntimeEnvironment | Promise<KnownRuntimeEnvironment>
   connect: (environment: KnownRuntimeEnvironment) => Promise<Access>
   readReadiness: (input: Access) => Promise<ServeReadiness | null>
   /** Override ports for bridges; SSH uses deployment ports by default. */
-  ports?: (environment: KnownRuntimeEnvironment) => { localPort: number; remotePort: number } | null
-  refresh: (environmentId: string, pairingCode: string) => KnownRuntimeEnvironment
+  ports?: (
+    environment: KnownRuntimeEnvironment
+  ) =>
+    | { localPort: number; remotePort: number }
+    | null
+    | Promise<{ localPort: number; remotePort: number } | null>
+  refresh: (
+    environmentId: string,
+    pairingCode: string
+  ) => KnownRuntimeEnvironment | Promise<KnownRuntimeEnvironment>
   /** Retire transports using the refused token once per repair. */
   repaired: (environmentId: string) => void | Promise<void>
   now: () => number
@@ -49,11 +57,11 @@ export function liveManagedOrcadPairingRepairDeps(
   userDataPath: string
 ): ManagedOrcadPairingRepairDeps {
   return {
-    resolve: (environmentId) => resolveEnvironment(userDataPath, environmentId),
+    resolve: async (environmentId) => await resolveEnvironment(userDataPath, environmentId),
     connect: connectManagedOrcadHost,
     readReadiness: readActiveManagedOrcadReadiness,
-    refresh: (environmentId, pairingCode) =>
-      refreshManagedOrcadPairing(userDataPath, environmentId, pairingCode),
+    refresh: async (environmentId, pairingCode) =>
+      await refreshManagedOrcadPairing(userDataPath, environmentId, pairingCode),
     repaired: notifyManagedOrcadPairingRepaired,
     now: Date.now
   }
@@ -149,7 +157,7 @@ export class ManagedOrcadPairingRepairs<
     environmentId: string,
     refusedRevision: number
   ): Promise<KnownRuntimeEnvironment> {
-    const environment = this.deps.resolve(environmentId)
+    const environment = await this.deps.resolve(environmentId)
     if (pairingRevisionOf(environment) !== refusedRevision) {
       return environment
     }
@@ -164,14 +172,14 @@ export class ManagedOrcadPairingRepairs<
       throw fail(capSpentError(recent.length))
     }
     assertRuntimeEnvironmentNotReconciling(environment)
-    const deployment = (this.deps.ports ?? getOrcadSshDeployment)(environment)
+    const deployment = await (this.deps.ports ?? getOrcadSshDeployment)(environment)
     if (!deployment) {
       throw new OrcadManagedPairingRepairFailedError('this server has no managed deployment')
     }
     // Losing host contact proves nothing about pairing; count only completed reads.
     const readiness = await this.deps.readReadiness(await this.deps.connect(environment))
     // Updates may store new pairings during SSH reads; recheck before synchronous validation/write.
-    const current = this.deps.resolve(environmentId)
+    const current = await this.deps.resolve(environmentId)
     if (pairingRevisionOf(current) !== refusedRevision) {
       return current
     }
@@ -200,7 +208,7 @@ export class ManagedOrcadPairingRepairs<
     }
     let repaired: KnownRuntimeEnvironment
     try {
-      repaired = this.deps.refresh(environmentId, pairingCode)
+      repaired = await this.deps.refresh(environmentId, pairingCode)
     } catch (error) {
       throw fail(new OrcadManagedPairingRepairFailedError(errorMessage(error)))
     }

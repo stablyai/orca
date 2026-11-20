@@ -24,17 +24,17 @@ import {
   ContextMenuShortcut
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store/index'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { detectLanguage } from '@/lib/language-detect'
-import { openFileInBrowserTab } from '@/lib/file-preview'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
+import { openFileInBrowserTab } from '@/lib/browser/documents/file-preview'
 import { useTranslate } from '@/i18n/use-translate'
-import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
+import { LocalOnlyMenuHint } from '@/components/ui/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
   getWorkspaceFileRevealOwner,
   revealInFileManager
-} from '@/lib/reveal-in-file-manager'
-import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
+} from '@/lib/files/os-open/reveal-in-file-manager'
+import { isRevealOrEditorOpenBlocked } from '@/lib/files/os-open/local-path-open-guard'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { OpenInContextSubmenu } from '../../../file-actions/OpenInContextSubmenu'
 import type { FileExplorerRowProps } from './FileExplorerRow'
@@ -58,7 +58,6 @@ type FileExplorerRowContextMenuProps = Pick<
   | 'deleteShortcutLabel'
   | 'connectionId'
   | 'runtimeDownloadContext'
-  | 'supportsFolderDownload'
   | 'canOpenInOrcaBrowser'
   | 'canCollapseFolderSubtree'
   | 'targetDir'
@@ -83,7 +82,6 @@ export function FileExplorerRowContextMenu({
   deleteShortcutLabel,
   connectionId,
   runtimeDownloadContext,
-  supportsFolderDownload,
   canOpenInOrcaBrowser,
   canCollapseFolderSubtree,
   targetDir,
@@ -110,8 +108,7 @@ export function FileExplorerRowContextMenu({
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(
     node,
     connectionId,
-    runtimeDownloadContext,
-    supportsFolderDownload
+    runtimeDownloadContext
   )
   const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
   const revealOwner = useAppStore((s) =>
@@ -133,7 +130,8 @@ export function FileExplorerRowContextMenu({
     }
   }, [activeWorktreeId, node.path])
   const handleDownload = useCallback(() => {
-    const downloadTarget = connectionId || runtimeDownloadContext
+    // The runtime serves the bytes; a bare SSH connection id no longer has a route.
+    const downloadTarget = runtimeDownloadContext ?? connectionId
     if (!downloadTarget) {
       return
     }

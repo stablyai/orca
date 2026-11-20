@@ -11,8 +11,8 @@ import {
 } from './remote-node-runtime-store-lock'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { tryCreateInstallLockCommand } from './remote-install-lock-commands'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import { unusedSshConnection } from '../testing/managed-host-transport.test-fixture'
 
 vi.mock('../../ssh/remote-exec/remote-exec-command', async (importOriginal) => ({
   ...(await importOriginal<typeof ExecCommandModule>()),

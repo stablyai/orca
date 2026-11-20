@@ -1,3 +1,4 @@
+import { startSpan } from '../../observability/tracer'
 // Scanner-owned per-transcript rows persist changes without rewriting or capping the full working set.
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
@@ -24,7 +25,7 @@ import {
 } from '../transcripts/session-transcript-record-budget'
 
 // Bump for row-layout or cached-semantic changes; mismatched databases are discarded.
-export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 9
+export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 10
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -194,9 +195,11 @@ export class SessionParseCacheDatabase {
     if (db === null) {
       return fallback
     }
+    const span = startSpan('aiVault.parseCache.sqlite')
     try {
       return operation(db)
     } catch (error) {
+      span.fail(error instanceof Error ? error : String(error))
       console.debug('[ai-vault] session parse cache database failed', error)
       if (isSqliteCorruption(error)) {
         this.close()
@@ -211,6 +214,8 @@ export class SessionParseCacheDatabase {
         }
       }
       return fallback
+    } finally {
+      span.end()
     }
   }
 }

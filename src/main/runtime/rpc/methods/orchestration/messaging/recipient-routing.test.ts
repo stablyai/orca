@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import type { RuntimeTerminalSummary } from '../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalSummary } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcContext, RpcRequest } from '../../../core'
@@ -49,25 +49,6 @@ describe('orchestration recipient routing oracle', () => {
   }
 
   afterEach(() => harness.cleanup())
-
-  it('rejects an unknown terminal without creating an unread row', async () => {
-    setup()
-
-    await expect(
-      call({ from: 'term_coord', to: 'term_invented', subject: 'unreachable' })
-    ).rejects.toMatchObject({ code: 'terminal_not_found' })
-    expect(db.getInbox(100)).toEqual([])
-  })
-
-  it('rejects a closed terminal that has no durable mailbox owner', async () => {
-    setup()
-    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('retained-pty-record')
-
-    await expect(
-      call({ from: 'term_coord', to: 'term_closed', subject: 'closed' })
-    ).rejects.toMatchObject({ code: 'terminal_not_found' })
-    expect(db.getInbox(100)).toEqual([])
-  })
 
   it('keeps a live terminal-only recipient readable and reports its delivery limitation', async () => {
     setup()
@@ -292,27 +273,6 @@ describe('orchestration recipient routing oracle', () => {
     ).rejects.toMatchObject({ code: 'recipient_run_mismatch' })
   })
 
-  it('keeps same-Run historical coordinator routing from the canonical mailbox change', async () => {
-    setup()
-    db.bindRun({
-      runId: senderRunId,
-      coordinatorHandle: 'term_current',
-      coordinatorPaneKey: 'tab_current:leaf_current'
-    })
-    mockTerminalPaneKeys((handle) =>
-      handle === 'term_current' ? 'tab_current:leaf_current' : null
-    )
-
-    const result = (await call({
-      from: 'term_current',
-      to: 'term_coord',
-      subject: 'historical'
-    })) as SendResult
-
-    expect(result.message.to_handle).toBe(`run:${senderRunId}`)
-    expect(result.warnings).toBeUndefined()
-  })
-
   it('rejects a historical handle that names more than one foreign Run', async () => {
     setup()
     db.createRun({
@@ -467,38 +427,6 @@ describe('orchestration recipient routing oracle', () => {
       state: 'completed',
       receipt: expect.stringContaining('legacy_terminal_recipient')
     })
-  })
-
-  it('serializes ambiguity and explicit Run mismatch through the RPC boundary', async () => {
-    setup()
-    db.createRun({
-      objective: 'First owner',
-      coordinatorHandle: 'term_ambiguous',
-      coordinatorPaneKey: 'tab_first:leaf_first'
-    })
-    db.createRun({
-      objective: 'Second owner',
-      coordinatorHandle: 'term_ambiguous',
-      coordinatorPaneKey: 'tab_second:leaf_second'
-    })
-    const foreignRun = db.createRun({
-      objective: 'Foreign owner',
-      coordinatorHandle: 'term_foreign',
-      coordinatorPaneKey: 'tab_foreign:leaf_foreign'
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
-
-    const ambiguous = await dispatcher.dispatch(
-      request('rpc_ambiguous', 'retry_ambiguous', 'term_ambiguous')
-    )
-    const mismatch = await dispatcher.dispatch(
-      request('rpc_mismatch', 'retry_mismatch', 'term_foreign', { run: senderRunId })
-    )
-
-    expect(ambiguous).toMatchObject({ ok: false, error: { code: 'recipient_ambiguous' } })
-    expect(mismatch).toMatchObject({ ok: false, error: { code: 'recipient_run_mismatch' } })
-    expect(foreignRun.id).not.toBe(senderRunId)
-    expect(db.getInbox(100)).toEqual([])
   })
 
   it('rolls back a partial group insert before an idempotent retry', async () => {

@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useMemo, useRef, useState, type RefObject } 
 import { Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
+import { addViewportSizeChangeListener } from '@/lib/window-activity/viewport-size-change-listener'
 import { useTranslate } from '@/i18n/use-translate'
 
 // Why: shown at once, a double-click's action would sit under the pointer and take the third click.
@@ -143,6 +143,8 @@ export function SelectionAddToChatPopover({
           onCloseAutoFocus={(event) => event.preventDefault()}
           // Keeps the selection, and the focus, where they are until the quote is taken.
           onMouseDown={(event) => event.preventDefault()}
+          // Never takes focus itself, so it must not keep the composer from taking it.
+          data-focus-behavior="page"
         >
           <div className="p-0.5">
             <Button
@@ -150,8 +152,8 @@ export function SelectionAddToChatPopover({
               size="xs"
               onClick={(event) => {
                 // Taken or not (the composer may have locked since), the offer is spent.
-                onAdd(request.text, event.currentTarget.getBoundingClientRect())
                 setRequest(null)
+                onAdd(request.text, event.currentTarget.getBoundingClientRect())
               }}
             >
               <Quote />

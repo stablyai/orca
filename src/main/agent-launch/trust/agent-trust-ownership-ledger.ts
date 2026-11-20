@@ -1,8 +1,7 @@
 import { mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import { readAgentStateJsonFileSync } from '../../codex/configuration/agent-state-file-reader'
-import { writeFileAtomically } from '../../codex-accounts/fs-utils'
-import { getOrcaUserDataPath } from '../../codex/configuration/homes/codex-home-paths'
+import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 
 /**
  * Ownership records for the workspace trust entries Orca's preflight created in
@@ -24,8 +23,18 @@ type CreatedTrustLedger = {
   created: Record<string, CreatedTrustEntry[]>
 }
 
+export type CreatedTrustRecord = { configPath: string; projectPath: string; written: string }
+
 export type AgentTrustOwnershipLedger = {
   record: (configPath: string, projectPath: string, written: string) => void
+  /**
+   * One read and at most one publication for a whole grant. Forgets only entries with exactly the
+   * given bytes; returns the records it added, skipping paths already recorded.
+   */
+  apply: (changes: {
+    record?: readonly CreatedTrustRecord[]
+    forget?: readonly CreatedTrustRecord[]
+  }) => CreatedTrustRecord[]
   getWritten: (configPath: string, projectPath: string) => string | null
   listConfigFiles: (projectPath: string) => string[]
   forget: (configPath: string, projectPath: string) => void
@@ -52,11 +61,9 @@ function isCreatedTrustEntryMap(value: unknown): value is Record<string, Created
 }
 
 export function createAgentTrustOwnershipLedger(
-  fileName: string,
+  ledgerPath: () => string,
   normalizePath: (projectPath: string) => string
 ): AgentTrustOwnershipLedger {
-  const ledgerPath = (): string => join(getOrcaUserDataPath(), fileName)
-
   // Why: the ledger only decides what extra cleanup may happen, so any unreadable
   // state degrades to "nothing recorded", never to deleting an unrecorded entry.
   const read = (): CreatedTrustLedger => {
@@ -85,18 +92,49 @@ export function createAgentTrustOwnershipLedger(
   const find = (ledger: CreatedTrustLedger, configPath: string, projectPath: string) =>
     (ledger.created[configPath] ?? []).find((recorded) => matches(recorded, projectPath))
 
+  const apply: AgentTrustOwnershipLedger['apply'] = ({ record = [], forget = [] }) => {
+    if (record.length === 0 && forget.length === 0) {
+      return []
+    }
+    const ledger = read()
+    let changed = false
+    for (const { configPath, projectPath, written } of forget) {
+      const entries = ledger.created[configPath] ?? []
+      const remaining = entries.filter(
+        (recorded) => !(matches(recorded, projectPath) && recorded.written === written)
+      )
+      if (remaining.length !== entries.length) {
+        changed = true
+        if (remaining.length === 0) {
+          delete ledger.created[configPath]
+        } else {
+          ledger.created[configPath] = remaining
+        }
+      }
+    }
+    const added: CreatedTrustRecord[] = []
+    for (const entry of record) {
+      if (find(ledger, entry.configPath, entry.projectPath)) {
+        continue
+      }
+      ledger.created[entry.configPath] = [
+        ...(ledger.created[entry.configPath] ?? []),
+        { path: entry.projectPath, written: entry.written }
+      ]
+      added.push(entry)
+      changed = true
+    }
+    if (changed) {
+      write(ledger)
+    }
+    return added
+  }
+
   return {
     record: (configPath, projectPath, written) => {
-      const ledger = read()
-      if (find(ledger, configPath, projectPath)) {
-        return
-      }
-      ledger.created[configPath] = [
-        ...(ledger.created[configPath] ?? []),
-        { path: projectPath, written }
-      ]
-      write(ledger)
+      apply({ record: [{ configPath, projectPath, written }] })
     },
+    apply,
     getWritten: (configPath, projectPath) => find(read(), configPath, projectPath)?.written ?? null,
     listConfigFiles: (projectPath) =>
       Object.entries(read().created)

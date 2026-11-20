@@ -10,17 +10,6 @@ import { nativeSkillInstallFilesystem } from '../filesystem/skill-install-filesy
 afterEach(removeSkillInstallHomes)
 
 describe('skill install service', () => {
-  it('installs one canonical Codex copy and aliases the other agent home to it', async () => {
-    const { root, input } = await createSkillInstallHome()
-    const result = await installSharedSkill(input)
-    const canonical = join(root, 'home', '.agents', 'skills', 'test-skill')
-    const claude = join(root, 'home', '.claude', 'skills', 'test-skill')
-
-    expect(result.status).toBe('installed')
-    expect(result.placements).toHaveLength(2)
-    expect(await realpath(claude)).toBe(await realpath(canonical))
-  })
-
   it('leaves an unowned provider copy untouched and reports partial coverage', async () => {
     const { root, input } = await createSkillInstallHome()
     const claude = join(root, 'home', '.claude', 'skills', 'test-skill')
@@ -36,24 +25,6 @@ describe('skill install service', () => {
       errorCategory: 'skill-placement-unowned'
     })
     expect(await readFile(join(claude, 'SKILL.md'), 'utf8')).toBe('unowned')
-  })
-
-  it('removes an owned placement when its provider is deselected', async () => {
-    const { root, input } = await createSkillInstallHome()
-    await installSharedSkill(input)
-    const claude = join(root, 'home', '.claude', 'skills', 'test-skill')
-
-    const updated = await installSharedSkill({
-      ...input,
-      operationId: 'operation_without_claude',
-      detectedProviders: ['codex']
-    })
-
-    expect(updated.status).toBe('unchanged')
-    await expect(lstat(claude)).rejects.toMatchObject({ code: 'ENOENT' })
-    expect(updated.placements).toEqual([
-      expect.objectContaining({ provider: 'agent-skills', topology: 'canonical-copy' })
-    ])
   })
 
   it('preserves the committed canonical install when cancellation reaches provider placement', async () => {

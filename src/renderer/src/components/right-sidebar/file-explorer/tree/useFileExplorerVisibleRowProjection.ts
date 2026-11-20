@@ -6,7 +6,10 @@ import {
   createFileExplorerRowProjectionFromParts,
   type FileExplorerRowProjection
 } from './file-explorer-row-projection'
-import { buildIgnoredSet, isPathIgnored } from '../../../../lib/git-path-decoration'
+import {
+  buildIgnoredSet,
+  isPathIgnored
+} from '../../../../../../shared/git/status/git-path-decoration'
 import {
   createNameFilteredFileExplorerProjection,
   getFileExplorerNameFilterExpandedPaths,

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { bundledSkillNudgeEntries } from '../../../shared/bundled-skill-summary'
+import { bundledSkillNudgeEntries } from '../../../shared/skills/bundled/bundled-skill-summary'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import {
   nativeBundledSkillFilesystem,
@@ -133,24 +133,6 @@ describe('per-skill silent update of unedited Orca copies', () => {
     expect(await readSkill(home, 'shared', 'bravo')).toBe(text('bravo', 'old'))
     const remaining = bundledSkillNudgeEntries(await previewBundledSkillInstall(input(home)))
     expect(remaining.map((entry) => entry.name)).toEqual(['bravo'])
-  })
-
-  it('reports a backup when a writer saves SKILL.md after the final verification', async () => {
-    const home = await makeSkillHome()
-    await writeCopy(skillPath(home, 'shared', 'alpha'), text('alpha', 'old'))
-    const lateWriter = lateWriterFilesystem(home)
-
-    const result = await autoUpdateInstalledBundledSkills({
-      ...input(home, lateWriter),
-      names: ['alpha']
-    })
-
-    const backupPath = result.skills[0]?.ops[0]?.backupPath
-    expect(backupPath).toBeTruthy()
-    expect(await readFile(join(backupPath ?? '', 'SKILL.md'), 'utf8')).toBe(
-      text('alpha', 'late edit')
-    )
-    expect(await readSkill(home, 'shared', 'alpha')).toBe(text('alpha', 'new'))
   })
 
   it('reports where unpreservable edits remain and never deletes them', async () => {

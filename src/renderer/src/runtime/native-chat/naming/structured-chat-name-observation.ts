@@ -1,7 +1,7 @@
 import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import {
@@ -14,8 +14,8 @@ import {
   type StructuredChatTabName,
   type StructuredChatTabNames
 } from './structured-chat-tab-name'
-import { isUnifiedTabOwnedByWorktree } from '@/lib/unified-tab-host-ownership'
-import type { Tab } from '../../../../../shared/tab-types'
+import { isUnifiedTabOwnedByWorktree } from '@/lib/workspace/ownership/unified-tab-host-ownership'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 
 const listeners = new Set<() => void>()

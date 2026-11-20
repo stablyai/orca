@@ -3,7 +3,10 @@ import 'zod'
 
 import './core'
 import './methods/orchestration/orchestration'
-
+import { AUTOMATION_METHODS } from './methods/automations/automations'
+import { CONNECTOR_METHODS } from './methods/connectors/connector'
+import { RpcDispatcher } from './dispatcher'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   ADDRESS_X,
   createSessionCallerHarness,
@@ -14,8 +17,8 @@ import {
   SESSION_Y,
   sessionRecord,
   type SessionCallerHarness
-} from './orchestration-session-caller-test-fixture'
-import './orchestration-session-caller'
+} from './orchestration/callers/session.test-fixture'
+import './orchestration/callers/orchestration-session-caller'
 import '../orchestration/addressing/orchestration-party'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
@@ -34,6 +37,37 @@ describe('orchestration session callers at the dispatch entry', () => {
     h.close()
     vi.restoreAllMocks()
   })
+
+  it('verifies the session behind an automation write, refusing one that is not on this host', async () => {
+    const create = vi.spyOn(h.runtime, 'createAutomation')
+    const dispatcher = new RpcDispatcher({ runtime: h.runtime, methods: AUTOMATION_METHODS })
+    const response = await dispatcher.dispatch({
+      ...orchestrationRequest(
+        'automation.create',
+        { name: 'n', prompt: 'p', agentId: 'codex', rrule: 'FREQ=DAILY', dtstart: 0 },
+        { sessionId: '99999999-9999-4999-8999-999999999999' }
+      ),
+      orchestrationContractVersion: undefined
+    })
+    expect(response).toMatchObject({ ok: false, error: { code: CODES.unknown } })
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it.each(['connector.act', 'connector.reply'])(
+    'verifies the session behind %s, which posts as a bot chat',
+    async (method) => {
+      const dispatcher = new RpcDispatcher({ runtime: h.runtime, methods: CONNECTOR_METHODS })
+      const response = await dispatcher.dispatch({
+        ...orchestrationRequest(
+          method,
+          { sessionId: SESSION_X, verb: 'post', ref: 'slack:T:C', text: 'hi' },
+          { sessionId: '99999999-9999-4999-8999-999999999999' }
+        ),
+        orchestrationContractVersion: undefined
+      })
+      expect(response).toMatchObject({ ok: false, error: { code: CODES.unknown } })
+    }
+  )
 
   describe('a declared caller must name the session', () => {
     it('accepts a /clear successor naming the address it had before the clear, and no other', async () => {

@@ -3,8 +3,8 @@ import { getMarkdownDocLinkTarget } from '../../markdown/documents/markdown-doc-
 import {
   createMarkdownFenceRangeCursor,
   getMarkdownFenceRanges
-} from '../../markdown/source-scanning/markdown-fence-scanner'
-import { forEachLine } from '../../text-line-offsets'
+} from '../../../../../../shared/markdown/markdown-fence-scanner'
+import { forEachLine } from '../../model-lifetime/buffer-text/text-line-offsets'
 
 const BACKTICK = 96
 const BACKSLASH = 92

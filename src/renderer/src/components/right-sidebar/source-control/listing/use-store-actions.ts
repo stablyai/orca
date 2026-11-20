@@ -1,5 +1,5 @@
 import { basename, getRelativePathInsideRoot } from '@/lib/path'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import type { AppState } from '@/store/types'
 import {
   sourceControlScopeRuntimeEnvironmentId,

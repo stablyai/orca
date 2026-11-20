@@ -1,7 +1,7 @@
 import { Trash2 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 
@@ -40,14 +40,16 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
       {!isMultiContext && removesProject ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <div>
-              <DropdownMenuItem variant="destructive" disabled>
-                <Trash2 className="size-3.5" />
-                {t('auto.components.sidebar.WorktreeContextMenu.deleteWorktree', 'Delete Worktree')}
-              </DropdownMenuItem>
-            </div>
+            <DropdownMenuItem
+              variant="destructive"
+              disabled
+              className="data-[disabled]:pointer-events-auto"
+            >
+              <Trash2 className="size-3.5" />
+              {t('auto.components.sidebar.WorktreeContextMenu.deleteWorktree', 'Delete Worktree')}
+            </DropdownMenuItem>
           </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
+          <TooltipContent side="right" sideOffset={8} className="max-w-[200px]">
             {t(
               'auto.components.sidebar.WorktreeContextMenu.primaryDeleteDisabled',
               "Primary worktree — can't be deleted. Remove the project instead."
@@ -75,7 +77,10 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
       >
         <Trash2 className="size-3.5" />
         {label}
-        {!isMultiContext && !removesProject && deleteShortcut ? (
+        {!removesProject &&
+        !projectMissing &&
+        (!isMultiContext || batchDeleteWorktrees.length > 0) &&
+        deleteShortcut ? (
           <DropdownMenuShortcut>{deleteShortcut}</DropdownMenuShortcut>
         ) : null}
       </DropdownMenuItem>

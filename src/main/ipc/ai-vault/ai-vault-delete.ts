@@ -2,8 +2,8 @@ import { ipcMain, shell } from 'electron'
 import {
   configureRemoteAiVaultSessionDelete,
   deleteHostAiVaultSession
-} from '../../ai-vault/host-session-delete'
-import { parseRoutableExecutionHostId } from '../../../shared/execution-host'
+} from '../../ai-vault/deletion/host-session-delete'
+import { parseRoutableExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult

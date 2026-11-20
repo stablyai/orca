@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault/search/ai-vault-search-settings'
 import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {
   isSessionSearchIndexReady,
   sessionSearchStatusMessage
-} from '@/components/settings/session-history/session-history-status-copy'
-import { useSessionSearchStatus } from '@/components/settings/session-history/use-session-search-status'
+} from '@/components/session-search/session-search-status'
+import { useSessionSearchStatus } from '@/components/session-search/use-session-search-status'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'

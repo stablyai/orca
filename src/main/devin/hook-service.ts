@@ -3,23 +3,19 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import {
-  buildWindowsAgentHookPostCommand,
-  writeHooksJson,
-  writeManagedScript
-} from '../agent-hooks/installer-utils'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
-import {
-  readTextFileRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
+import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
+import { readTextFileRemote } from '../agent-hooks/installation/remote/hook-text-files-remote'
+import { writeHooksJsonRemote } from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
-} from '../agent-hooks/hook-stdin-contract'
-import { posixCurlCommand } from '../agent-hooks/hook-post-command'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
 import {
   applyDevinManagedHooks,
   DEVIN_EVENTS,

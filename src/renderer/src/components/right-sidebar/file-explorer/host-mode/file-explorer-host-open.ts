@@ -1,4 +1,4 @@
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { useAppStore } from '@/store'
 import type { HostBrowseSource, HostFileOpenPlan } from './file-explorer-host-mode'
 

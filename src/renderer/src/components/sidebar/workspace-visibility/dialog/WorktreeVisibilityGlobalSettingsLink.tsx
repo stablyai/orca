@@ -2,10 +2,12 @@ import type React from 'react'
 import { Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
-import { useAppStore } from '@/store'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
+import { useAppStore } from '@/store/index'
+import type {
+  WorktreeVisibilityDefaults,
+  Repo
+} from '../../../../../../shared/repository/repo-types'
 import {
   listInheritedWorktreeVisibilitySources,
   worktreeVisibilityValueLabel
@@ -37,10 +39,7 @@ function GlobalSettingsButton(): React.JSX.Element {
       onClick={openGlobalWorktreeVisibilitySettings}
     >
       <Settings className="size-3.5" />
-      {t(
-        'auto.components.sidebar.WorktreeVisibilityDialog.openGlobalSettings',
-        'Manage in Global Settings'
-      )}
+      {t('auto.components.sidebar.WorktreeVisibilityDialog.openGlobalSettings', 'Global settings')}
     </Button>
   )
 }

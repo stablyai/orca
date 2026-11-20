@@ -1,7 +1,7 @@
 import type { AgentJournalPlainStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../../shared/native-chat/native-chat-provider-frame-summary'
+import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../../shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import {
   boundPayload,
   PROVIDER_FRAME_PAYLOAD_LIMITS,
@@ -11,6 +11,7 @@ import {
   codexGoalRowText,
   codexThreadGoalState
 } from '../../../codex/structured/journal/codex-goal-journal-rows'
+import { readCodexAutoReviewDenial } from '../../../../shared/agent-session/requests/approvals/codex-auto-review-denial'
 import { isProviderRecord } from '../../../provider-process/provider-json-record'
 import { classifyProviderFrame } from './provider-frame-disposition'
 import { hookOutcomeRowBody } from '../../../../shared/agent-session/journal/agent-session-hook-outcome'
@@ -174,7 +175,12 @@ export function unhandledProviderFrameJournalItem(
     provider === 'codex'
       ? method === 'deprecationNotice'
         ? 'notice'
-        : ['warning', 'guardianWarning', 'configWarning'].includes(method)
+        : [
+              'warning',
+              'guardianWarning',
+              'configWarning',
+              'item/autoApprovalReview/completed'
+            ].includes(method)
           ? 'warning'
           : undefined
       : undefined
@@ -201,6 +207,13 @@ export function unhandledProviderFrameJournalItem(
         ? payload.content
         : null
     message = typeof content === 'string' && content.trim() ? content.trim() : message
+  }
+  const denial =
+    provider === 'codex' && method === 'item/autoApprovalReview/completed'
+      ? readCodexAutoReviewDenial(payload)
+      : null
+  if (denial) {
+    message = `Codex's automatic review denied: ${denial.summary}${denial.rationale ? `\n\n${denial.rationale}` : ''}`
   }
   const goalText = provider === 'codex' ? codexGoalRowText(method, payload) : null
   const threadGoal = provider === 'codex' ? codexThreadGoalState(method, payload) : null

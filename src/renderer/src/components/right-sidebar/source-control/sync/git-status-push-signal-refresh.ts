@@ -1,13 +1,13 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useEffect } from 'react'
-import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
   type TerminalCommandFinishedEventDetail
-} from '@/hooks/terminal-command-finished-event'
+} from '@/lib/terminal/output/terminal-command-finished-event'
 import type { GitStatusMetadataChangedEvent } from '../../../../../../shared/worktree/types'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import { gitStatusSignalRecipientTest } from './git-status-signal-attribution'
 
 type UseGitStatusPushSignalRefreshParams = {

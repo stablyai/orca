@@ -1,0 +1,161 @@
+{
+  "workspaceId": "lin-eval",
+  "workspaceName": "Eval",
+  "ownerId": "user-owner",
+  "teams": [
+    { "id": "team-eng", "key": "ENG", "name": "Studio" },
+    { "id": "team-plat", "key": "PLAT", "name": "Platform" }
+  ],
+  "states": [
+    { "name": "Triage", "type": "triage" },
+    { "name": "Backlog", "type": "backlog" },
+    { "name": "Todo", "type": "unstarted" },
+    { "name": "In Progress", "type": "started" },
+    { "name": "In Review", "type": "started" },
+    { "name": "Done", "type": "completed" },
+    { "name": "Canceled", "type": "canceled" }
+  ],
+  "members": [
+    { "id": "user-owner", "name": "Alice Hart", "displayName": "alice" },
+    { "id": "user-bob", "name": "Bob Lee", "displayName": "bob" },
+    { "id": "user-nora", "name": "Nora Park", "displayName": "nora" }
+  ],
+  "labels": ["bug", "exports", "feature", "ssh", "terminal"],
+  "issues": [
+    {
+      "id": "issue-eng-123",
+      "identifier": "ENG-123",
+      "title": "Terminal loses scrollback after switching workspaces",
+      "description": "Repro: open a terminal, run something with lots of output, switch to another workspace and back. Scrollback above the visible screen is gone. Started after 1.4.200. Reported by 3 users on Discord.",
+      "state": "Triage",
+      "priority": 0,
+      "labels": ["bug", "terminal"],
+      "createdAt": "2026-10-20T15:00:00.000Z",
+      "updatedAt": "2026-10-29T15:00:00.000Z"
+    },
+    {
+      "id": "issue-eng-9310",
+      "identifier": "ENG-9310",
+      "title": "Exports stall at 99% on large workspaces",
+      "description": "Exports of workspaces over 2 GB sit at 99% and never finish.",
+      "state": "In Review",
+      "assignee": "user-bob",
+      "priority": 1,
+      "labels": ["bug", "exports"],
+      "createdAt": "2026-10-27T14:00:00.000Z",
+      "updatedAt": "2026-10-31T13:00:00.000Z"
+    },
+    {
+      "id": "issue-plat-41",
+      "identifier": "PLAT-41",
+      "title": "Relay drops the first keystroke after reconnect",
+      "state": "Todo",
+      "priority": 2,
+      "labels": ["bug"],
+      "createdAt": "2026-10-21T10:00:00.000Z",
+      "updatedAt": "2026-10-30T10:00:00.000Z"
+    },
+    {
+      "id": "issue-plat-44",
+      "identifier": "PLAT-44",
+      "title": "Daemon leaks a file handle per closed pane",
+      "state": "In Progress",
+      "assignee": "user-nora",
+      "priority": 2,
+      "labels": ["bug", "terminal"],
+      "createdAt": "2026-10-22T10:00:00.000Z",
+      "updatedAt": "2026-10-31T09:00:00.000Z"
+    },
+    {
+      "id": "issue-plat-47",
+      "identifier": "PLAT-47",
+      "title": "SSH workspaces show a stale branch after checkout",
+      "state": "Triage",
+      "priority": 3,
+      "labels": ["bug", "ssh"],
+      "createdAt": "2026-10-29T10:00:00.000Z",
+      "updatedAt": "2026-10-29T11:00:00.000Z"
+    },
+    {
+      "id": "issue-plat-39",
+      "identifier": "PLAT-39",
+      "title": "Crash on resume from sleep",
+      "state": "Done",
+      "assignee": "user-nora",
+      "priority": 1,
+      "labels": ["bug"],
+      "createdAt": "2026-10-10T10:00:00.000Z",
+      "updatedAt": "2026-10-30T16:00:00.000Z"
+    },
+    {
+      "id": "issue-plat-45",
+      "identifier": "PLAT-45",
+      "title": "Pin workspaces to the top",
+      "state": "Todo",
+      "priority": 4,
+      "labels": ["feature"],
+      "createdAt": "2026-10-23T10:00:00.000Z",
+      "updatedAt": "2026-10-28T10:00:00.000Z"
+    }
+  ],
+  "searches": [
+    { "team": "PLAT", "search": { "state": "open", "label": "bug" } },
+    { "team": "PLAT", "search": { "label": "bug" } },
+    { "team": "PLAT", "search": { "state": "open" } },
+    { "team": "PLAT", "search": { "assignee": "Nora" } },
+    { "team": "PLAT", "search": { "state": "in progress" } },
+    { "team": "ENG", "search": { "state": "open", "assignee": "bob" } },
+    { "team": null, "search": { "state": "in review" } },
+    { "team": "PLAT", "search": { "label": "docs" } },
+    { "team": "PLAT", "search": { "state": "Blocked" } },
+    { "team": "PLAT", "search": { "state": "in" } },
+    { "team": "PLAT", "search": { "assignee": "zed" } },
+    { "team": null, "search": { "state": "Blocked" } }
+  ],
+  "sets": [
+    { "issue": "ENG-9310", "fields": { "state": "In Progress" } },
+    { "issue": "ENG-9310", "fields": { "state": "in prog" } },
+    { "issue": "PLAT-41", "fields": { "assignee": "Bob", "addLabels": ["terminal"] } },
+    { "issue": "PLAT-44", "fields": { "assignee": null, "removeLabels": ["terminal"] } },
+    { "issue": "PLAT-47", "fields": { "priority": "urgent", "estimate": 3 } },
+    { "issue": "PLAT-41", "fields": { "state": "Blocked" } },
+    { "issue": "PLAT-41", "fields": { "state": "in" } },
+    { "issue": "PLAT-41", "fields": { "assignee": "zed" } },
+    { "issue": "PLAT-41", "fields": { "addLabels": ["docs"] } },
+    { "issue": "PLAT-41", "fields": { "addLabels": ["bug"], "removeLabels": ["Bug"] } }
+  ],
+  "creates": [
+    {
+      "team": "PLAT",
+      "key": "eval:bot-ranger:post-1",
+      "title": "Export button does nothing on Safari",
+      "text": "Clicking Export in Safari does nothing.",
+      "fields": { "addLabels": ["bug"], "priority": "high" }
+    },
+    { "team": "ENG", "key": "eval:bot-ranger:post-2", "title": "Exports need a progress bar" },
+    {
+      "team": "ENG",
+      "key": "eval:bot-ranger:post-6",
+      "title": "Retry a dropped export chunk",
+      "parent": "ENG-9310"
+    },
+    {
+      "team": "PLAT",
+      "key": "eval:bot-ranger:post-3",
+      "title": "Relay reconnect is slow",
+      "fields": { "state": "todo", "assignee": "Nora", "estimate": 2 }
+    },
+    {
+      "team": "PLAT",
+      "key": "eval:bot-ranger:post-4",
+      "title": "x",
+      "fields": { "removeLabels": ["bug"] }
+    },
+    {
+      "team": "PLAT",
+      "key": "eval:bot-ranger:post-5",
+      "title": "x",
+      "fields": { "addLabels": ["docs"] }
+    }
+  ]
+}

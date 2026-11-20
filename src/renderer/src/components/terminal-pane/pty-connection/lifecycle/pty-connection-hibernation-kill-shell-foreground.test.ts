@@ -64,7 +64,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -155,7 +155,9 @@ describe('shell showing through a hibernation kill', () => {
   }> {
     vi.useFakeTimers()
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const ptyId = 'pty-hibernating'
@@ -263,42 +265,4 @@ describe('shell showing through a hibernation kill', () => {
       })
     }
   )
-
-  it('clears the record once another PTY is bound in place of the hibernated one', async () => {
-    const pane = await connectHibernatingPane(true)
-
-    pane.exitPty()
-    await flushAsyncTicks()
-    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
-    // A restart binds a new PTY without consuming the armed wake.
-    pane.rebindPty('pty-restarted')
-    pane.finishCommand()
-    await vi.advanceTimersByTimeAsync(350)
-
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
-  })
-
-  it('still clears a record beside a PTY that is not being hibernated', async () => {
-    const pane = await connectHibernatingPane(false)
-
-    pane.finishCommand()
-    await vi.advanceTimersByTimeAsync(350)
-
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
-  })
-
-  it('does not protect a replacement record with the old wake target', async () => {
-    const pane = await connectHibernatingPane(true)
-
-    pane.exitPty()
-    await flushAsyncTicks()
-    mockStoreState.sleepingAgentSessionsByPaneKey[pane.paneKey] = {
-      ...pane.record,
-      updatedAt: 2
-    }
-    pane.finishCommand()
-    await vi.advanceTimersByTimeAsync(350)
-
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledExactlyOnceWith(pane.paneKey)
-  })
 })

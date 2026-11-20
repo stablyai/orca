@@ -1,13 +1,16 @@
+import { agentSessionForkSourceFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
+import { sayAgentSessionFailureTranslated } from '../notices/agent-session-failure-words-text'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { newAgentLaunchRequestId } from '../../../../lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { startStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import type { StructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-record'
-import { STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL } from '@/lib/agent-session/launch/structured-agent-session-launch-create-call'
+import { STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL } from '@/lib/agent-session/launch/structured-agent-session-launch-fork-support'
 import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
-import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
+import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 import { hostPermissionRefusedText } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import {
@@ -15,19 +18,21 @@ import {
   StructuredAgentSessionCreateRefusalError
 } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { StructuredAgentSessionForkSource } from '../../../../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionForkSource } from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type NativeChatForkRequest = {
   agent: TuiAgent
   worktreeId: string
   target: RuntimeClientTarget
   forkFrom: StructuredAgentSessionForkSource
+  /** Client-only admission requirement; reacquired from the child after reload. */
+  forkRequiresInheritedOriginal?: boolean
   surfaceAddress: StructuredLaunchSurfaceAddress
 }
 
@@ -76,9 +81,10 @@ export async function launchNativeChatFork(
   let launch: ReturnType<typeof startStructuredAgentLaunch>
   try {
     launch = startStructuredAgentLaunch(request.worktreeId, request.agent, {
-      requestId: newAgentLaunchRequestId(),
+      requestId: createNonSecureContextUuid(),
       executionHostId: executionHostIdFor(request.target),
       forkFrom: request.forkFrom,
+      forkRequiresInheritedOriginal: request.forkRequiresInheritedOriginal,
       // A side chat is selected once it sits beside its source.
       activate: request.side === undefined,
       surfaceAddress: request.surfaceAddress,
@@ -199,6 +205,17 @@ function forkFailureDetail(agentLabel: string, error: unknown): string {
   }
   if (code === 'structured_agent_session_host_permission') {
     return hostPermissionRefusedText(agentLabel, 'refused')
+  }
+  const sourceFailure =
+    error instanceof StructuredAgentSessionCreateRefusalError
+      ? agentSessionForkSourceFailureWords(
+          error.message,
+          agentLabel,
+          sayAgentSessionFailureTranslated
+        )
+      : null
+  if (sourceFailure) {
+    return sourceFailure
   }
   const causeText = structuredLaunchFailure(error)?.causeText
   if (causeText) {

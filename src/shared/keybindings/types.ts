@@ -11,6 +11,7 @@ export type KeybindingScope =
   | 'composer'
   | 'chat'
   | 'settings'
+  | 'botItem'
 
 export type KeybindingContext = 'app' | 'terminal' | 'browser'
 
@@ -73,6 +74,8 @@ export type KeybindingActionId =
   | 'tab.closeAll'
   | 'tab.rename'
   | 'tab.reopenClosed'
+  | 'tab.moveLeft'
+  | 'tab.moveRight'
   | 'tab.nextSameType'
   | 'tab.previousSameType'
   | 'tab.nextAllTypes'
@@ -97,6 +100,7 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.toggleWordWrap'
+  | 'editor.toggleChangesView'
   | 'editor.copyContext'
   | 'editor.previousChange'
   | 'editor.nextChange'
@@ -119,11 +123,15 @@ export type KeybindingActionId =
   | 'terminal.expandPane'
   | 'terminal.setTitle'
   | 'terminal.clearPaneTitle'
+  | 'terminal.copySessionId'
   | 'terminal.closePane'
   | 'terminal.splitRight'
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
   | 'terminal.toggleNativeChat'
+  | 'botItem.back'
+  | 'botItem.previous'
+  | 'botItem.next'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>

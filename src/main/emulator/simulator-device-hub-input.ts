@@ -1,6 +1,6 @@
 import { runProcess } from '@orca/process-host'
 import { EmulatorError } from './emulator-errors'
-import { emulatorFailureText } from '../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../shared/emulator/emulator-failure-copy'
 
 // Xcode 27's Device Hub sets this in every booted simulator; while it is 1 the guest drops serve-sim's touch and keyboard HID.
 const DEVICE_HUB_INPUT_KEY = 'com.apple.coredevice.dtuhidd.active'

@@ -1,15 +1,15 @@
-import type { Repo } from '../../../../../shared/repo-types'
-import type { ListWorkItemsResult } from '../../../../../shared/github/work-item-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { ListWorkItemsResult } from '../../../../../shared/github/work-items/work-item-types'
 import type { WorkItemsCacheSources } from '../cache/cache-model'
-import { githubTaskBinding } from '@/lib/github-task-observation'
-import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
+import { structuralValuesEqual } from '../../../../../shared/collections/structural-value-equality'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { bindingKey } from '../task-records/task-record-model'
 import { nextProviderRequestId } from '../requests/request-coordination'
 import { withBoundedCacheEntry, evictStaleEntries } from '../cache/cache-policy'
 import { foldReportedCandidates } from './source-candidate-evidence'
 import { workItemsCacheKey } from '../cache/cache-identity'
-import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
+import { taskPageGitHubResumeCache } from '@/components/task-page/github/cache/task-page-github-resume-cache'
 import {
   GitHubSourceOwnership,
   githubCollectionScope,
@@ -233,6 +233,17 @@ export class GitHubSourceCollections extends GitHubSourceOwnership {
   }
   candidate(repo: Repo) {
     return this.owners.get(bindingKey(repo))?.candidates
+  }
+  /** A status write moves only its hosts' fences, so only these rows' owners are re-captured. */
+  syncHostRepos(repos: readonly Repo[]) {
+    const owned = new Map<string, CollectionOwner>()
+    for (const repo of repos) {
+      const owner = this.owners.get(bindingKey(repo))
+      if (owner) {
+        owned.set(bindingKey(repo), owner)
+      }
+    }
+    this.sync(repos, owned)
   }
   countKey(scopes: readonly string[], query: string, limit: number) {
     return JSON.stringify([[...scopes].sort(), query.trim(), limit])

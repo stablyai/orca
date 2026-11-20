@@ -15,15 +15,15 @@ import type {
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery
-} from '../../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type { EventProps } from '../../../../../shared/telemetry-event-classification'
+import type { EventProps } from '../../../../../shared/telemetry/telemetry-event-classification'
 import type { TerminalInputKind } from '../../../../../shared/terminal/input/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-pane-placement'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { PtyDataMeta } from './delivery/pty-dispatcher'
 import type {
   RemoteRuntimeSnapshotOutcome,
@@ -149,6 +149,7 @@ type PtyCallbacks = {
   /** `dropsReported`: the host sends onPausedOutputDropped, so a pause without one lost nothing. */
   onOutputPauseChanged?: (paused: boolean, supported: boolean, dropsReported?: boolean) => void
   onPausedOutputDropped?: () => void
+  onOutputGapRecovered?: () => void
   /** The host kept this restore asleep; no process started and the resume handle is intact. */
   onSpawnDeferred?: (reason: SpawnDeferralReason) => void
 }
@@ -225,7 +226,7 @@ export type PtyTransport = {
   abandonPreconnectInput?: () => void
   claimViewport?: (cols: number, rows: number) => boolean
   /** Capability-negotiated paired-runtime delivery gate; false preserves legacy delivery. */
-  setOutputPaused?: (paused: boolean) => boolean
+  setOutputPaused?: (paused: boolean, relayReplayNeeded?: boolean) => boolean
   /** Capability-negotiated: lets the host coalesce a visible-but-unfocused pane's output longer. */
   setOutputCadence?: (cadence: TerminalOutputCadence) => void
   resize: (
@@ -252,6 +253,8 @@ export type PtyTransport = {
   ownsRecovery?: () => boolean
   /** Typed input the host has not applied yet, which a remount would discard. */
   hasUndeliveredInput?: () => boolean
+  /** Input sent now is held and delivered to this pane's terminal once it connects. */
+  isHoldingInput?: () => boolean
   /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
   notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null
@@ -309,6 +312,8 @@ export type IpcPtyTransportOptions = {
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   resumeOrigin?: 'saved'
+  /** The pane a saved restore resumes, when it opens in another pane. */
+  resumeSourcePaneKey?: string
   agentPrompt?: string
   agentPromptDelivery?: AgentPromptDelivery
   freshAgentLaunch?: FreshWorkspaceAgentLaunch

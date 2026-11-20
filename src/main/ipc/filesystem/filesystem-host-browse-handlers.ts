@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../shared/file-access/cross-platform-path'
 import type {
   HostBrowseEntryResolution,
   HostDirectoryListing

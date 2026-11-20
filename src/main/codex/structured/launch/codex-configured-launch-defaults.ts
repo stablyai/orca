@@ -1,4 +1,4 @@
-import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 
 // Bound config reads so a slow app-server cannot hold the model listing.
@@ -17,12 +17,12 @@ function configuredText(value: unknown): string | null {
 
 export async function readCodexConfiguredLaunchDefaults(
   connection: Pick<CodexAppServerConnection, 'request'>,
-  timeoutMs = CONFIG_READ_TIMEOUT_MS,
+  timeoutMs: number | null = CONFIG_READ_TIMEOUT_MS,
   cwd?: string
 ): Promise<CodexConfiguredLaunchDefaults | null> {
   try {
     const response = await connection.request('config/read', cwd ? { cwd } : {}, {
-      timeoutMs: Math.min(timeoutMs, CONFIG_READ_TIMEOUT_MS)
+      timeoutMs: timeoutMs === null ? null : Math.min(timeoutMs, CONFIG_READ_TIMEOUT_MS)
     })
     const config =
       typeof response === 'object' && response !== null && 'config' in response

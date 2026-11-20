@@ -1,5 +1,6 @@
+import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type React from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
@@ -18,9 +19,10 @@ export function RichMarkdownSpellcheckSetting({
 
   return (
     <SearchableSetting
+      id={GENERAL_SETTING_ANCHORS.spellcheck}
       title={t(
-        'auto.components.settings.GeneralEditorSettingsSection.b82f86d7d2',
-        'Rich Markdown Spellcheck'
+        'auto.components.settings.GeneralEditorSettingsSection.a0361dfb05',
+        'Rich Markdown spellcheck'
       )}
       description={t(
         'auto.components.settings.GeneralEditorSettingsSection.5195f0b9ef',
@@ -30,8 +32,8 @@ export function RichMarkdownSpellcheckSetting({
     >
       <SettingsSwitchRow
         label={t(
-          'auto.components.settings.GeneralEditorSettingsSection.b82f86d7d2',
-          'Rich Markdown Spellcheck'
+          'auto.components.settings.GeneralEditorSettingsSection.a0361dfb05',
+          'Rich Markdown spellcheck'
         )}
         description={t(
           'auto.components.settings.GeneralEditorSettingsSection.5195f0b9ef',

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState, type ComponentType, type ReactNode, type R
 import { CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getAddRepoLocalStartActions } from './add-repo-local-start-actions'
 import { useTranslate } from '@/i18n/use-translate'
 

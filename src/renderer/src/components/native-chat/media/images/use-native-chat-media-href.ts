@@ -3,13 +3,13 @@ import type { RuntimeTerminalPathResolution } from '../../../../../../shared/ter
 import {
   createNativeChatFileHref,
   routeNativeChatHref
-} from '../../../../../../shared/native-chat/native-chat-href-routing'
+} from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { getLocalImageCacheKey } from '@/components/editor/document-images/useLocalImageSrc'
 import type { NativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { isWslUncPath } from '../../../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 
 /** Resolve session-owned media on its host before choosing either bytes or file actions. */
 export function useNativeChatMediaHref({

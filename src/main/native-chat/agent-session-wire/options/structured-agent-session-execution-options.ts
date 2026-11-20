@@ -1,13 +1,13 @@
 import {
   readAgentSessionExecutionOptions,
   type AgentSessionExecutionOptions
-} from '../../../../shared/agent-session/options/agent-session-execution-options'
+} from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import {
   refuse,
   type AgentSessionWireRefusal
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { unpickedFastModeIsOff } from '../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
-import './structured-agent-session-options-read'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
 
 /** Capture send-specific choices or saved defaults once under the acceptance lane. */
@@ -28,6 +28,7 @@ export function captureStructuredExecutionOptions(
   // A missing Fast pick has a definite baseline on hosts that offer it.
   if (
     candidate.fastMode === undefined &&
+    unpickedFastModeIsOff(ctx.agent) &&
     ctx.agents.definition(ctx.agent)?.restingOptions.acceptsKey('fastMode')
   ) {
     candidate.fastMode = 'false'

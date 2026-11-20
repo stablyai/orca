@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
 import {
   buildWorkspaceSessionPayload,
   SESSION_RELEVANT_FIELDS
@@ -10,10 +9,6 @@ import { createTestStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const actual = await importOriginal<typeof AgentStatusModule>()
-  return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
-})
 
 createStoreSessionMockApi()
 

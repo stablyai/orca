@@ -4,7 +4,7 @@ import type { Dirent } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { HostDirectoryListing } from '../../../../shared/file-listing/host-directory-browse'
 import { sortDirEntries } from '../../../../shared/file-listing/file-name-sort'
-import { probeGitAvailability } from '../../../git/git-availability'
+import { probeGitAvailability } from '../../../git/command-runner/host-routing/git-availability'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 

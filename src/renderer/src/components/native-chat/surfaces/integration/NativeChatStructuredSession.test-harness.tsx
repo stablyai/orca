@@ -6,9 +6,9 @@ import { useImperativeHandle } from 'react'
 import { vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { QueuedMessageCard } from '../../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
-import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type { AgentSessionWriteRefusal } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
-import type { AgentSessionUnavailable } from '../../../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionUnavailable } from '../../../../../../shared/agent-session/failures/agent-session-availability'
 import type { AgentSessionRefusalReference } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { NativeChatApprovalCardProps } from '../../prompts/NativeChatApprovalCard'
 
@@ -93,6 +93,7 @@ export function createStructuredSessionMocks() {
     readRefusal: absent<AgentSessionRefusalReference>(),
     messages: null as null | unknown[],
     messageListProps: initialMessageListProps,
+    messageListRenders: 0,
     composerProps: nullable<{
       launchSeed?: NativeChatLaunchSeed
       structuredTransport?: Record<string, unknown> & {
@@ -291,7 +292,8 @@ export function createStructuredSessionMocks() {
         mocks.retryLaunch(worktreeId, sessionId)
         mocks.relaunchWithMessage(worktreeId, sessionId, text)
         return new Promise(() => {})
-      }
+      },
+      sendMessageToStartingStructuredAgentSession: () => null
     }),
     useNativeChatFontSize: () => ({
       useNativeChatFontSize: () => undefined
@@ -308,12 +310,12 @@ export function createStructuredSessionMocks() {
     nativeChatMessageList: () => ({
       NativeChatMessageList: (props: typeof mocks.messageListProps) => {
         mocks.messageListProps = props
+        mocks.messageListRenders += 1
         useImperativeHandle(props?.ref, () => ({
           revealLatest: mocks.revealLatest,
           readerAtEnd: () => true,
           revealFindMatch: () => {},
-          messageCopyText: () => null,
-          revealSubagent: () => {}
+          messageCopyText: () => null
         }))
         return <DeliveryNoticesMock notices={props?.deliveryNotices} />
       }
@@ -352,6 +354,7 @@ export function createStructuredSessionMocks() {
     mocks.readRefusal = undefined
     mocks.messages = null
     mocks.messageListProps = null
+    mocks.messageListRenders = 0
     mocks.composerProps = null
     mocks.approvalCardProps = null
     mocks.questionCardProps = null

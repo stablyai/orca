@@ -2,8 +2,8 @@ import { Import, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import { Button } from '../../../ui/button'
-import { BrowserCookieImportDisclosure } from '../../../BrowserCookieImportDisclosure'
-import { BrowserCookieImportMachineNotice } from '../../../BrowserCookieImportMachineNotice'
+import { BrowserCookieImportDisclosure } from '../profiles/BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '../profiles/BrowserCookieImportMachineNotice'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -86,7 +86,7 @@ export function BrowserUseCookieImportStep({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.BrowserUsePane.2eb906706c', 'Import Browser Cookies')}
+      title={t('auto.components.settings.BrowserUsePane.b3e79d1c51', 'Import browser cookies')}
       description={t(
         'auto.components.settings.BrowserUsePane.af8c83ed61',
         'Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.'
@@ -101,7 +101,7 @@ export function BrowserUseCookieImportStep({
         />
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-medium">
-            {t('auto.components.settings.BrowserUsePane.2eb906706c', 'Import Browser Cookies')}
+            {t('auto.components.settings.BrowserUsePane.b3e79d1c51', 'Import browser cookies')}
           </p>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -124,10 +124,7 @@ export function BrowserUseCookieImportStep({
               onClick={onConfigureMoreBrowsers}
               className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
             >
-              {t(
-                'auto.components.settings.BrowserUsePane.67d9a53f47',
-                'Manage profiles for separate logins'
-              )}
+              {t('auto.components.settings.BrowserUsePane.67d9a53f47', 'Manage profiles')}
             </button>
           ) : null}
         </div>
@@ -193,7 +190,7 @@ export function BrowserUseCookieImportStep({
             )}
             {detectedBrowsers.length > 0 ? <DropdownMenuSeparator /> : null}
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-              {t('auto.components.settings.BrowserUsePane.be6df68384', 'From File…')}
+              {t('auto.components.settings.BrowserUsePane.4ab048c0b8', 'From file…')}
             </DropdownMenuItem>
             <BrowserCookieImportDisclosure />
           </DropdownMenuContent>

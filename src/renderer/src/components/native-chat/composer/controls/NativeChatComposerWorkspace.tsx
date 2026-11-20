@@ -7,11 +7,15 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { usePublishedMachineName } from '@/components/machine-identity/use-published-machine-name'
-import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   createNativeChatComposerWorkspaceSelector,
   type NativeChatComposerWorkspaceTarget
 } from './native-chat-composer-workspace'
+import { NativeChatComposerBranchPicker } from './NativeChatComposerBranchPicker'
+import { NativeChatSlackMirrorItem } from '../../slack-mirror/NativeChatSlackMirrorItem'
+import { NativeChatAntigravityAuthChip } from '../../antigravity-auth/NativeChatAntigravityAuthChip'
 
 // Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
 const FOOTER_TEXT =
@@ -19,10 +23,12 @@ const FOOTER_TEXT =
 
 export function NativeChatComposerWorkspace({
   terminalTabId,
-  structuredTransport
+  structuredTransport,
+  isWorking = false
 }: {
   terminalTabId: string
   structuredTransport?: NativeChatComposerWorkspaceTarget
+  isWorking?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const { worktreeId, runtimeEnvironmentId } = structuredTransport ?? {}
@@ -37,10 +43,31 @@ export function NativeChatComposerWorkspace({
       ),
     [terminalTabId, worktreeId, runtimeEnvironmentId, hasTransport]
   )
-  const { hostId, machine, checkout, kind, path, branch, head } = useAppStore(useShallow(selector))
+  const {
+    worktreeId: rowWorktreeId,
+    repoId,
+    hostId,
+    machine,
+    checkout,
+    kind,
+    path,
+    branch,
+    head
+  } = useAppStore(useShallow(selector))
 
   const identity = getWorktreeGitIdentityDisplay({ branch, head })
-  const label = identity?.kind === 'branch' ? identity.branchName : identity?.sourceControlLabel
+  const label =
+    identity?.kind === 'branch'
+      ? identity.branchName
+      : identity
+        ? t(
+            'components.native-chat.composerWorkspace.detachedCommit',
+            'Commit {{head}} (not a branch)',
+            {
+              head: identity.shortHead
+            }
+          )
+        : undefined
   const identityCopyValue = identity?.kind === 'branch' ? identity.branchName : head
   const copyValue = async (value: string | undefined): Promise<void> => {
     if (!value) {
@@ -59,6 +86,36 @@ export function NativeChatComposerWorkspace({
       : kind === 'main'
         ? t('components.native-chat.composerWorkspace.mainCheckout', 'Main checkout')
         : t('components.native-chat.composerWorkspace.worktree', 'Worktree')
+
+  const copyIdentityButton =
+    identity && label ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="h-5.5 min-w-0 max-w-full shrink justify-start"
+            aria-label={t(
+              'components.native-chat.composerWorkspace.copyIdentity',
+              'Copy {{value0}}',
+              { value0: label }
+            )}
+            onClick={() => void copyValue(identityCopyValue)}
+          >
+            {identity.kind === 'branch' ? (
+              <GitBranch className="size-3" aria-hidden />
+            ) : (
+              <GitCommitHorizontal className="size-3" aria-hidden />
+            )}
+            <span className={`${FOOTER_TEXT} font-mono`}>{label}</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {identity.kind === 'detached' ? identity.tooltip : label}
+        </TooltipContent>
+      </Tooltip>
+    ) : null
 
   return (
     <div className="@container mt-1 flex h-5.5 shrink-0 min-w-0 items-center gap-1.5 px-3 text-2xs text-chat-foreground-faint">
@@ -101,7 +158,9 @@ export function NativeChatComposerWorkspace({
             >
               <Folder className="size-3" aria-hidden />
               <span className={FOOTER_TEXT}>{checkout}</span>
-              <span className="shrink-0 font-normal text-2xs text-chat-foreground-faint [text-box:trim-both_cap_alphabetic]">
+              <span
+                className={`${FOOTER_TEXT} max-w-[max(0px,calc(100%_-_var(--spacing)*5))] shrink-0 font-normal text-chat-foreground-faint`}
+              >
                 · {kindLabel}
               </span>
             </Button>
@@ -111,34 +170,35 @@ export function NativeChatComposerWorkspace({
           </TooltipContent>
         </Tooltip>
       )}
-      {identity && label && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="h-5.5 min-w-0 flex-1 justify-start"
-              aria-label={t(
-                'components.native-chat.composerWorkspace.copyIdentity',
-                'Copy {{value0}}',
-                { value0: label }
-              )}
-              onClick={() => void copyValue(identityCopyValue)}
-            >
-              {identity.kind === 'branch' ? (
-                <GitBranch className="size-3" aria-hidden />
-              ) : (
-                <GitCommitHorizontal className="size-3" aria-hidden />
-              )}
-              <span className={`${FOOTER_TEXT} font-mono`}>{label}</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {identity.kind === 'detached' ? identity.tooltip : label}
-          </TooltipContent>
-        </Tooltip>
+      <NativeChatSlackMirrorItem />
+      {identity && (
+        <div className="flex min-w-[min(100%,calc(var(--spacing)*18))] flex-1 items-center">
+          {identity.kind === 'branch' &&
+          rowWorktreeId &&
+          repoId &&
+          hostId &&
+          path &&
+          // Direct SSH ids aren't served by the git switch route; those keep click-to-copy.
+          parseExecutionHostId(hostId)?.kind !== 'ssh' ? (
+            <NativeChatComposerBranchPicker
+              worktreeId={rowWorktreeId}
+              worktreePath={path}
+              hostId={hostId}
+              repoId={repoId}
+              branch={identity.branchName}
+              turnActive={isWorking}
+              textClassName={FOOTER_TEXT}
+              onCopyBranch={() => void copyValue(identity.branchName)}
+              fallback={copyIdentityButton}
+            />
+          ) : (
+            copyIdentityButton
+          )}
+        </div>
       )}
+      <span className="ml-auto flex min-w-0 shrink items-center empty:hidden">
+        <NativeChatAntigravityAuthChip textClassName={FOOTER_TEXT} />
+      </span>
     </div>
   )
 }

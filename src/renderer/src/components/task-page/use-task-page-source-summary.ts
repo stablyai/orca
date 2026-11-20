@@ -4,12 +4,12 @@ import type { TaskProvider } from '../../../../shared/work-items/task-providers'
 import type {
   TaskSourceAvailabilityNotice,
   TaskSourceHostAvailability
-} from '../task-source-context-summary'
+} from './source-selection/task-source-context-summary'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { getTaskSourceHostAvailabilityForHost } from './task-page-source-context'
-import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
-import { getRepoBackedProviderAvailability } from '@/components/task-source-provider-availability'
-import { getTaskSourceAvailabilityNotice } from '../task-source-context-summary'
+import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
+import { getRepoBackedProviderAvailability } from '@/components/task-page/source-selection/task-source-provider-availability'
+import { getTaskSourceAvailabilityNotice } from './source-selection/task-source-context-summary'
 import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPreludeModel) {
   const {

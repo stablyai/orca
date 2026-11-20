@@ -1,6 +1,9 @@
 /** Pure listing policy shared by main/SSH relay to keep pruning, exclusions and limits aligned; callers own I/O and path translation
  * (docs/design/share-quick-open-file-listing.md). */
-import { isWindowsAbsolutePathLike, relativePathInsideRoot } from '../cross-platform-path'
+import {
+  isWindowsAbsolutePathLike,
+  relativePathInsideRoot
+} from '../file-access/cross-platform-path'
 
 // Blocklist (not allowlist) keeps novel dotfiles discoverable; entries here are tool-generated
 // caches/state, never hand-edited. Do NOT add user-authored dotdirs (.config, .ssh, .github) — users open files there.

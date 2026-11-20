@@ -1,9 +1,11 @@
-import { app, BaseWindow, BrowserWindow, protocol, ipcMain, session } from 'electron'
+import { app, BaseWindow, BrowserWindow, protocol, ipcMain, session, webContents } from 'electron'
 import { renameSync, writeFileSync } from 'node:fs'
-import { ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
-import { applyBackgroundActivationPolicy } from '../../../window/foreground-activation-policy'
-import { browserManager } from '../../browser-manager'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import '../../../../shared/orca-profiles/constants'
+import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
+import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
+import { resolveNativeEditTarget } from '../../../menu/app-menu-selection-item'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'
 import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../api-runtime/browser-extension-api-scheme'
 import { attachBrowserExtensionsToProfileSession } from '../profile-sessions/browser-extension-session-loader'
@@ -93,6 +95,17 @@ async function waitFor<T>(read: () => T | null, timeoutMs = 15_000): Promise<T> 
       throw new Error('Timed out waiting for the fixture condition')
     }
     await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+}
+
+function routesEditToWindowContents(window: BrowserWindow): boolean {
+  // Pin focus to this window, as the menu handler sees it, since background windows never take OS focus.
+  const getFocusedWebContents = webContents.getFocusedWebContents
+  webContents.getFocusedWebContents = () => window.webContents
+  try {
+    return resolveNativeEditTarget(window) === window.webContents
+  } finally {
+    webContents.getFocusedWebContents = getFocusedWebContents
   }
 }
 
@@ -203,6 +216,14 @@ async function run(): Promise<void> {
     rightAligned: bounds.x + bounds.width === content.x + anchor.x + anchor.width,
     below: bounds.y >= content.y + anchor.y + anchor.height
   }
+  status.popupEditTarget = routesEditToWindowContents(popupWindow)
+  const popout = await waitFor(
+    () =>
+      BrowserWindow.getAllWindows().find((window) =>
+        window.webContents.getURL().endsWith('/page.html')
+      ) ?? null
+  )
+  status.popoutEditTarget = routesEditToWindowContents(popout)
   // A second click on the same button closes it.
   status.secondClick = activateBrowserExtensionAction({
     browserPageId: 'page-1',

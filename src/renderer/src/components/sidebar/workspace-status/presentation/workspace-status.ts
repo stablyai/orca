@@ -7,7 +7,7 @@ import type {
 import {
   DEFAULT_WORKSPACE_STATUS_COLOR_ID,
   DEFAULT_WORKSPACE_STATUS_ICON_ID
-} from '../../../../../../shared/workspace-statuses'
+} from '../../../../../../shared/workspace/status/workspace-statuses'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'

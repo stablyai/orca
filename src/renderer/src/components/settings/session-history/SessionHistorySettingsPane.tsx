@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   AiVaultSearchSettingsSchema,
   resolveAiVaultSearchSettings
@@ -8,10 +8,11 @@ import {
   getLocalExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { translateLocalExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -32,8 +33,8 @@ import {
   sessionSearchReadErrorMessage,
   sessionSearchStatusDetails,
   sessionSearchStatusMessage
-} from './session-history-status-copy'
-import { useSessionSearchStatus } from './use-session-search-status'
+} from '../../session-search/session-search-status'
+import { useSessionSearchStatus } from '../../session-search/use-session-search-status'
 import { useRuntimeEnvironmentCatalog } from '../runtime-environments/catalog/use-runtime-environment-catalog'
 
 export function SessionHistorySettingsPane({
@@ -71,7 +72,7 @@ export function SessionHistorySettingsPane({
   const servers = isWebClient ? [] : environments
   const localEntry: SessionSearchComputerEntry = {
     id: LOCAL_EXECUTION_HOST_ID,
-    name: getLocalExecutionHostLabel(),
+    name: translateLocalExecutionHostLabel(getLocalExecutionHostLabel()),
     state: policy.enabled ? 'on' : 'off'
   }
   const serverEntries = servers.map((environment) => ({
@@ -190,7 +191,7 @@ export function SessionHistorySettingsPane({
               )
             : t(
                 'sessionHistory.settings.computersConsent',
-                'Each computer keeps a searchable copy of its own agent conversations and tool output. Nothing leaves that computer.'
+                'Each computer keeps its own searchable index of agent conversations. Authenticated paired clients can receive search results.'
               )}
         </p>
       </div>
@@ -203,7 +204,7 @@ export function SessionHistorySettingsPane({
             disabled={busy}
             onClick={() => void enableOnAllComputers()}
           >
-            {t('sessionHistory.settings.enableOnAll', 'Enable on all computers')}
+            {t('sessionHistory.settings.enableOnAll', 'Enable everywhere')}
           </Button>
         </div>
       )}

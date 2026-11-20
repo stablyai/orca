@@ -9,7 +9,7 @@ import type { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech
 import type { RuntimeNativeChatDraftResolutions } from '../agent-session/launch/runtime-native-chat-draft-resolutions'
 import type { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
-import type { NotificationAttentionAcknowledgement } from '../../../shared/notification-settings-types'
+import type { NotificationAttentionAcknowledgement } from '../../../shared/notifications/notification-settings-types'
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
@@ -43,6 +43,7 @@ export type RuntimeServiceCommandSurface = {
   acknowledgeNotificationAttention(acknowledgement: NotificationAttentionAcknowledgement): void
   reconcileStructuredPromptAttention: RuntimeMobileNotificationController['reconcileStructuredPromptAttention']
   dispatchPluginNotification: RuntimeMobileNotificationController['dispatchPlugin']
+  dispatchOwnerNotice: RuntimeMobileNotificationController['dispatchOwnerNotice']
   setMobilePushRegistrar: RuntimeMobileNotificationController['setPushRegistrar']
   testMobilePushDevice: RuntimeMobileNotificationController['testPushDevice']
   registerMobilePushDevice: RuntimeMobileNotificationController['registerPushDevice']
@@ -67,6 +68,7 @@ export type RuntimeServiceCommandSurface = {
   cancelClaudeSignIn: RuntimeAccountController['cancelClaudeSignIn']
   runHostAccountSignIn: RuntimeAccountController['runHostSignIn']
   removeCodexAccount: RuntimeAccountController['removeCodex']
+  renameManagedAccount: RuntimeAccountController['renameAccount']
   addCodexAccountFromHome: RuntimeAccountController['addCodexFromHome']
   addDataAccountFromHome: RuntimeAccountController['addDataFromHome']
   selectDataAccount: RuntimeAccountController['selectData']
@@ -159,6 +161,7 @@ export function installRuntimeServiceCommandSurface(
     reconcileStructuredPromptAttention:
       notifications.reconcileStructuredPromptAttention.bind(notifications),
     dispatchPluginNotification: notifications.dispatchPlugin.bind(notifications),
+    dispatchOwnerNotice: notifications.dispatchOwnerNotice.bind(notifications),
     setMobilePushRegistrar: notifications.setPushRegistrar.bind(notifications),
     testMobilePushDevice: notifications.testPushDevice.bind(notifications),
     registerMobilePushDevice: notifications.registerPushDevice.bind(notifications),
@@ -185,6 +188,7 @@ export function installRuntimeServiceCommandSurface(
     cancelClaudeSignIn: accounts.cancelClaudeSignIn.bind(accounts),
     runHostAccountSignIn: accounts.runHostSignIn.bind(accounts),
     removeCodexAccount: accounts.removeCodex.bind(accounts),
+    renameManagedAccount: accounts.renameAccount.bind(accounts),
     addCodexAccountFromHome: accounts.addCodexFromHome.bind(accounts),
     addDataAccountFromHome: accounts.addDataFromHome.bind(accounts),
     selectDataAccount: accounts.selectData.bind(accounts),
@@ -201,7 +205,8 @@ export function installRuntimeServiceCommandSurface(
     clearOpenAiSpeechKey: speech.clearOpenAiKey.bind(speech),
     startMobileDictation: dictation.start.bind(dictation),
     feedMobileDictation: dictation.feed.bind(dictation),
-    finishMobileDictation: dictation.finish.bind(dictation),
+    finishMobileDictation: (params) =>
+      dictation.finish(params, accounts.getCommitMessageAgentEnvironment()),
     cancelMobileDictation: dictation.cancel.bind(dictation),
     getAllBrowserDrivers: browsers.getAll.bind(browsers),
     reclaimBrowserForDesktop: browsers.reclaimForDesktop.bind(browsers),

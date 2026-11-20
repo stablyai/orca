@@ -1,12 +1,12 @@
 import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AppState } from '@/store/types'
 import {
-  buildAgentLaunchRouteInput,
+  resolveAgentLaunchOwner,
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
@@ -32,9 +32,7 @@ function preferencesForWorkspace(state: AppState, workspace: ProspectiveWorkspac
       ? { agentLaunchChoices: state.settings.agentLaunchChoices }
       : {})
   }
-  const host = parseExecutionHostId(
-    buildAgentLaunchRouteInput(state, { agent: 'claude', workspace }).executionHostId
-  )
+  const host = parseExecutionHostId(resolveAgentLaunchOwner(state, workspace).executionHostId)
   const owner =
     host?.kind === 'runtime'
       ? {

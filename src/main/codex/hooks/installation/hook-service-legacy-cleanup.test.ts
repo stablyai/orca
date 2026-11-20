@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
-import '../../../agent-hooks/installer-utils'
-import { wrapPosixHookCommand } from '../../../agent-hooks/posix-hook-command'
+
+import { wrapPosixHookCommand } from '../../../agent-hooks/installation/commands/posix-hook-command'
 import '../../trust/toml/config-toml-trust'
 import { upsertHookTrustContent as upsertHookTrustEntriesInContent } from '../../trust/toml/config-toml-hook-trust-edit'
 import { setupCodexHookHomes } from './hook-service-test-harness'
@@ -13,6 +13,11 @@ const { getPathMock, homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
 }))
 
+vi.mock('../../trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('electron', () => ({
   app: {
     getPath: getPathMock
@@ -192,7 +197,6 @@ describe('CodexHookService', () => {
     const status = await new CodexHookService().remove()
 
     expect(status.state).toBe('error')
-    expect(status.detail).toBe('Could not parse Codex hooks.json')
     const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }

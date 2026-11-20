@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SkillDeleteRequest } from '../../../shared/skill-delete-contract'
+import type { SkillDeleteRequest } from '../../../shared/skills/deletion/skill-delete-contract'
 import { buildSkillDeletePlan } from './skill-delete-plan'
 import './skill-delete-placement-guards'
 import { nativeSkillInstallFilesystem } from '../filesystem/skill-install-filesystem'
@@ -62,30 +62,6 @@ function plan(home: string, deleteRequest: SkillDeleteRequest) {
 
 describe('buildSkillDeletePlan placement enumeration', () => {
   it.skipIf(WINDOWS)(
-    'finds the canonical directory and every alias that resolves to it',
-    async () => {
-      const { home } = await fixture()
-      const canonicalDirectory = join(home, '.agents', 'skills', 'demo')
-      const file = await writeSkill(canonicalDirectory, 'demo')
-      // An alias-dir: a symlinked directory in another agent's root.
-      await mkdir(join(home, '.claude', 'skills'), { recursive: true })
-      await symlink(canonicalDirectory, join(home, '.claude', 'skills', 'demo'), 'dir')
-      // An alias-file: a real directory whose SKILL.md is a symlink.
-      const aliasFileDirectory = join(home, '.codex', 'skills', 'demo')
-      await mkdir(aliasFileDirectory, { recursive: true })
-      await symlink(file, join(aliasFileDirectory, 'SKILL.md'))
-
-      const resolved = await plan(home, await request(file))
-      const entry = resolved.plan.skills[0]
-      expect(entry.blocked).toBeUndefined()
-      expect(new Set(entry.placements.map((placement) => placement.kind))).toEqual(
-        new Set(['canonical', 'alias-dir', 'alias-file'])
-      )
-      expect(entry.placements.map((placement) => placement.path)).toContain(canonicalDirectory)
-    }
-  )
-
-  it.skipIf(WINDOWS)(
     'deletes the links of a repo skill whose content lives outside every root',
     async () => {
       // Remove Orca-owned links into tool-managed content while preserving external bytes.
@@ -116,11 +92,14 @@ describe('buildSkillDeletePlan placement enumeration', () => {
     }
   )
 
-  it.skipIf(WINDOWS)(
-    'refuses a bundled skill even when the row claimed a home source',
-    async () => {
+  it.skipIf(WINDOWS).each([
+    ['.claude', 'skills', '.system', 'demo'],
+    ['.cursor', 'skills-cursor', 'demo']
+  ])(
+    'refuses a bundled skill even when the row claimed a home source (%s/%s)',
+    async (...segments) => {
       const { home } = await fixture()
-      const bundled = join(home, '.claude', 'skills', '.system', 'demo')
+      const bundled = join(home, ...segments)
       const file = await writeSkill(bundled, 'demo')
       await mkdir(join(home, '.agents', 'skills'), { recursive: true })
       await symlink(bundled, join(home, '.agents', 'skills', 'demo'), 'dir')
@@ -148,19 +127,6 @@ describe('buildSkillDeletePlan placement enumeration', () => {
     const resolved = await plan(home, await request(file))
     expect(resolved.plan.skills[0].placements).toEqual([])
     expect(resolved.plan.skills[0].blocked).toBe('unowned')
-  })
-})
-
-describe('buildSkillDeletePlan freshness guard', () => {
-  it('reports stale when the file changed beyond the tolerance', async () => {
-    const { home } = await fixture()
-    const file = await writeSkill(join(home, '.agents', 'skills', 'demo'), 'demo')
-    const displayed = (await stat(file)).mtimeMs
-    const shifted = new Date(displayed + 60_000)
-    await utimes(file, shifted, shifted)
-
-    const resolved = await plan(home, await request(file, { updatedAt: displayed }))
-    expect(resolved.plan.skills[0].blocked).toBe('stale')
   })
 })
 

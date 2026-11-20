@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { connectRuntimeHostAndReloadProjects } from '@/components/status-bar/runtime-environment-explicit-connect'
-import { useMountedRef } from '@/hooks/useMountedRef'
+import { connectRuntimeHostAndReloadProjects } from '@/components/status-bar/host-connections/runtime-environment-explicit-connect'
+import { useNativeChatPaneMountedRef } from '../pane/ownership/native-chat-pane-lifetime'
 import { useTranslate } from '@/i18n/use-translate'
-import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
+import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import type { NativeChatComposerNotice } from '../composer/controls/native-chat-composer-notice'
 import type { NativeChatHostOutage } from './use-native-chat-host-outage'
 
@@ -11,7 +11,7 @@ export function useNativeChatHostOutageNotice(
 ): NativeChatComposerNotice | null {
   const t = useTranslate()
   const [connecting, setConnecting] = useState(false)
-  const mountedRef = useMountedRef()
+  const mountedRef = useNativeChatPaneMountedRef()
   const reconnect = (environmentId: string, start: boolean): void => {
     setConnecting(true)
     void (

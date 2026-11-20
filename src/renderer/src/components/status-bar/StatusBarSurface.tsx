@@ -1,7 +1,7 @@
 import { PanelsTopLeft, RefreshCw } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -9,51 +9,58 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { UsageRosterPanel } from './UsageRosterPanel'
+import { UsageRosterPanel } from './usage/UsageRosterPanel'
 import {
   STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS,
   shouldOpenStatusBarContextMenu
-} from './status-bar-context-menu-policy'
-import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
-import { StatusBarUsageChangeNotices } from './StatusBarUsageChangeNotices'
-import { UpdateStatusSegment } from './UpdateStatusSegment'
-import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
+} from './composition/status-bar-context-menu-policy'
+import { StatusBarUsageEmptyCta } from './usage/StatusBarUsageEmptyCta'
+import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices'
+import { UpdateStatusSegment } from './updates/UpdateStatusSegment'
+import { SkillUpdateStatusSegment } from './updates/SkillUpdateStatusSegment'
+import { AgentCliUpdateStatusSegment } from './updates/AgentCliUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
-import { PluginsStatusSegment } from './PluginsStatusSegment'
-import { PluginStatusBarItems } from './PluginStatusBarItems'
-import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
-import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
-import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
-import { CodexSwitcherMenu } from './CodexSwitcherMenu'
-import { ProviderDetailsMenu } from './ProviderDetailsMenu'
-import { AntigravityUsageMenu } from './AntigravityUsageMenu'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
-import { ProviderSegment, UsageOverflowChip, getUsageTone } from './StatusBarProviderSegment'
+import { PluginsStatusSegment } from './plugins/PluginsStatusSegment'
+import { PluginStatusBarItems } from './plugins/PluginStatusBarItems'
+import { RemoteServerUpdateStatusSegment } from './updates/RemoteServerUpdateStatusSegment'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/workspace/floating-workspace-open-intent'
+import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/trigger/FloatingTerminalIconContextMenu'
+import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
+import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
+import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
+import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
+import { ProviderSegment, UsageOverflowChip, isUsageUrgent } from './usage/StatusBarProviderSegment'
 import {
   UsageUnitLabel,
   getUsageUnitLabelState,
   usageChipShowsPercentage
-} from './usage-unit-label'
-import { useStatusBarController } from './use-status-bar-controller'
-import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
-import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+} from './usage/usage-unit-label'
+import { useStatusBarController } from './composition/use-status-bar-controller'
+import { isOwnerNotSetUpPlaceholder } from './usage/owner-usage-rate-limits'
+import { getAccountOwnerKey } from './accounts/owner-account-rows'
+import { StatusBarVisibilityMenu } from './composition/StatusBarVisibilityMenu'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { GitBlameStatusSegment } from './GitBlameStatusSegment'
 
 const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
 )
 const ResourceUsageStatusSegment = lazyWithRetry(() =>
-  import('./ResourceUsageStatusSegment').then((module) => ({
+  import('./resources/ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
   }))
 )
 const PortsStatusSegment = lazyWithRetry(() =>
-  import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
+  import('./host-connections/PortsStatusSegment').then((module) => ({
+    default: module.PortsStatusSegment
+  }))
 )
 const SshStatusSegment = lazyWithRetry(() =>
-  import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
+  import('./host-connections/SshStatusSegment').then((module) => ({
+    default: module.SshStatusSegment
+  }))
 )
 
 export type StatusBarProps = {
@@ -90,6 +97,7 @@ export function StatusBarSurface({
     isEmptyUsageState,
     isRefreshing,
     overflowing,
+    ownerUsage,
     petEnabled,
     remoteOwner,
     rosterProviders,
@@ -101,6 +109,7 @@ export function StatusBarSurface({
     showEmptyUsageCta,
     showFloatingTerminalToggle,
     showFloatingWorkspaceAttentionDot,
+    showGitBlame,
     showPorts,
     showResourceUsage,
     showSsh,
@@ -171,7 +180,7 @@ export function StatusBarSurface({
                       <span
                         key={p.provider}
                         data-usage-chip={p.provider}
-                        data-usage-urgent={getUsageTone(p) === 'urgent'}
+                        data-usage-urgent={isUsageUrgent(p)}
                         data-usage-percentage={usageChipShowsPercentage(p, usageMode, t)}
                         data-usage-collapsed={collapsedUsageProviders.includes(p.provider)}
                         aria-hidden={collapsedUsageProviders.includes(p.provider)}
@@ -203,7 +212,8 @@ export function StatusBarSurface({
                   sideOffset={8}
                   // Reserve footer height so the popover and drill-in submenus stay above the status bar.
                   collisionPadding={{ top: 8, bottom: 32, left: 8, right: 8 }}
-                  className="w-[360px] p-0"
+                  variant="picker"
+                  className="w-[440px] max-w-[calc(100vw-1rem)]"
                   onPointerDownOutside={usageMenuFocusHandoff.onPointerDownOutside}
                   onCloseAutoFocus={usageMenuFocusHandoff.onCloseAutoFocus}
                 >
@@ -229,6 +239,7 @@ export function StatusBarSurface({
                         return (
                           <ClaudeSwitcherMenu
                             claude={p}
+                            ownerUsage={ownerUsage}
                             compact={compact}
                             iconOnly={false}
                             asSubmenu
@@ -250,7 +261,9 @@ export function StatusBarSurface({
                       if (p.provider === 'codex') {
                         return (
                           <CodexSwitcherMenu
+                            key={getAccountOwnerKey(ownerUsage.owner)}
                             codex={p}
+                            ownerUsage={ownerUsage}
                             compact={compact}
                             iconOnly={false}
                             asSubmenu
@@ -318,8 +331,10 @@ export function StatusBarSurface({
           ) : null}
           <RemoteServerUpdateStatusSegment iconOnly={segmentsIconOnly} />
           <SkillUpdateStatusSegment iconOnly={segmentsIconOnly} />
+          <AgentCliUpdateStatusSegment iconOnly={segmentsIconOnly} />
           <NativeChatResumeStatusSegment iconOnly={segmentsIconOnly} />
           <UpdateStatusSegment compact={compact} iconOnly={segmentsIconOnly} />
+          {showGitBlame ? <GitBlameStatusSegment iconOnly={segmentsIconOnly} /> : null}
           <React.Suspense fallback={null}>
             {petEnabled ? <PetStatusSegment /> : null}
             {showResourceUsage ? (

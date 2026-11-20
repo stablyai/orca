@@ -3,18 +3,18 @@ import { createServer, type Server } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import type { WebContents } from 'electron'
 import { CdpClientResponseWriter } from './cdp-client-response-writer'
-import { CdpSyntheticSessionRegistry } from '../commands/cdp-synthetic-session-registry'
+import { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
 import { CdpTargetDiscovery } from './cdp-target-discovery'
-import { CdpDebuggerChannel } from '../commands/cdp-debugger-channel'
+import { CdpDebuggerChannel } from '../debugger/cdp-debugger-channel'
 import { CdpPageNavigationCommands } from '../commands/cdp-page-navigation-commands'
-import { CdpDomFocusReplay } from '../commands/cdp-dom-focus-replay'
+import { CdpDomFocusReplay } from '../input/cdp-dom-focus-replay'
 import { CdpElementCapture } from '../commands/cdp-element-capture'
 import { CdpPageCaptureCommands } from '../commands/cdp-page-capture-commands'
-import type { CapturePaintHold } from '../commands/cdp-screenshot'
+import type { CapturePaintHold } from '../debugger/guest-paint-hold'
 import type { AgentInputFocusGuard } from '../input/agent-input-focus-guard'
-import { CdpPageInputCommands, type ShowAgentPointer } from '../commands/cdp-page-input-commands'
+import { CdpPageInputCommands, type ShowAgentPointer } from '../input/cdp-page-input-commands'
 import { admitCdpProxyRequest, verifyCdpProxyUpgrade } from './cdp-loopback-request-guard'
-import { parseCdpClientCommand } from '../commands/cdp-client-command'
+import { parseCdpClientCommand } from './cdp-client-command'
 import {
   assertRemoteCliPageAccess,
   runUnderRemoteCliPageAdmission
@@ -53,7 +53,8 @@ export class CdpWsProxy {
       this.responder,
       this.sessions,
       () => this.client,
-      () => this.stop()
+      () => this.stop(),
+      holdPaint
     )
     this.navigation = new CdpPageNavigationCommands(
       webContents,
@@ -196,6 +197,7 @@ export class CdpWsProxy {
 
   private clearClientState(): void {
     // Never carry session, focus, or capture state across client replacement.
+    this.debuggerChannel.releaseScreencastPaint()
     this.domFocusReplay.clear()
     this.pageCapture.clear()
     this.sessions.clear()

@@ -1,8 +1,8 @@
-import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace/activation/workspace-switch-user-act'
 import { holdPaneForStoppedWslDistro } from '../../session-restore/wsl-distro/wsl-distro-stopped-hold-state'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
-import type { WslDistroHoldState } from '../../../../../../shared/wsl-distro-stopped-hold'
+import type { WslDistroHoldState } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 
 // Clears the saved screen the hold painted so the restore below paints it once.
 const CLEAR_HELD_SCREEN = '\x1b[0m\x1b[2J\x1b[3J\x1b[H'

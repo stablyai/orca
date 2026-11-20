@@ -1,6 +1,6 @@
 import { useEffectEvent, useId, useLayoutEffect, useRef, useState } from 'react'
-import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
-import type { BitbucketAuthMode } from '../../../../../shared/bitbucket-credentials'
+import { ExternalLink } from 'lucide-react'
+import type { BitbucketAuthMode } from '../../../../../shared/bitbucket/bitbucket-credentials'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'
@@ -12,13 +12,13 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { DialogCancel, DialogDisclosure, DialogError } from '@/components/ui/dialog-parts'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { cn } from '@/lib/utils'
-import { hasRemoteProviderRuntime } from '@/lib/provider-runtime-context'
-import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
-import { bitbucketConnectErrorText } from '@/lib/bitbucket-connect-error-copy'
+import { hasRemoteProviderRuntime } from '@/runtime/hosts/observations/provider-runtime-context'
+import { preventOutsideDismissWhenDirty } from '@/lib/overlay-interaction/outside-dismiss-guard'
+import { bitbucketConnectErrorText } from '@/lib/source-control/remote/bitbucket-connect-error-copy'
 import { useTranslate } from '@/i18n/use-translate'
 import { BitbucketApiTokenScopes } from './bitbucket-api-token-scopes'
 
@@ -37,7 +37,6 @@ type BitbucketCredentialsDialogProps = {
   environmentManaged?: boolean
   onConnected?: () => void
   overlayClassName?: string
-  contentClassName?: string
 }
 
 export function BitbucketCredentialsDialog({
@@ -48,8 +47,7 @@ export function BitbucketCredentialsDialog({
   initialBaseUrl,
   environmentManaged = false,
   onConnected,
-  overlayClassName,
-  contentClassName
+  overlayClassName
 }: BitbucketCredentialsDialogProps): React.JSX.Element {
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
@@ -161,12 +159,24 @@ export function BitbucketCredentialsDialog({
     }
   }
 
+  const docsLink = (
+    <button
+      type="button"
+      className="inline-flex items-center gap-1 rounded-sm text-xs font-normal text-muted-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={() => window.api.shell.openUrl(API_TOKEN_DOCS_URL)}
+    >
+      {t('components.settings.bitbucket.credentials.dialog.createToken', 'Create one')}
+      <ExternalLink className="size-3" aria-hidden="true" />
+    </button>
+  )
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
+        size="form"
         scrollable
+        busy={connecting}
         overlayClassName={overlayClassName}
-        className={cn('sm:max-w-lg', contentClassName)}
         onPointerDownOutside={guardOutsideDismiss}
         onInteractOutside={guardOutsideDismiss}
         onKeyDown={(event) => {
@@ -180,29 +190,32 @@ export function BitbucketCredentialsDialog({
           }
         }}
       >
-        <DialogHeader className="gap-3">
-          <DialogTitle className="leading-tight">
+        <DialogHeader>
+          <DialogTitle>
             {t('auto.components.settings.bitbucket.credentials.dialog.title', 'Connect Bitbucket')}
           </DialogTitle>
-          <DialogDescription>
-            {t(
-              'auto.components.settings.bitbucket.credentials.dialog.description',
-              'Use a Bitbucket Cloud credential to browse pull requests and build statuses. Orca verifies it before saving.'
-            )}
-          </DialogDescription>
+          {locked ? (
+            <DialogDescription>
+              {t(
+                'components.settings.bitbucket.credentials.dialog.environmentManagedLine',
+                'Set by ORCA_BITBUCKET_* environment variables. Unset them to save one here.'
+              )}
+            </DialogDescription>
+          ) : remoteRuntime ? (
+            <DialogDescription>
+              {t(
+                'components.settings.bitbucket.credentials.dialog.savedLocallyOnly',
+                'Saved on this computer only.'
+              )}
+            </DialogDescription>
+          ) : null}
         </DialogHeader>
-        {locked ? (
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.bitbucket.credentials.dialog.environmentManaged',
-              'Bitbucket is already configured through ORCA_BITBUCKET_* environment variables, which take precedence. Unset them to save a credential in Orca.'
-            )}
-          </p>
-        ) : (
-          <div className="space-y-3">
+        {locked ? null : (
+          <div className="flex min-w-0 flex-col gap-3">
             <ToggleGroup
               type="single"
               variant="outline"
+              className="w-fit"
               value={authMode}
               disabled={connecting}
               onValueChange={(value) => {
@@ -234,8 +247,8 @@ export function BitbucketCredentialsDialog({
               </ToggleGroupItem>
             </ToggleGroup>
             {isTokenMode ? (
-              <div className="space-y-2">
-                <Label htmlFor={accessTokenId} className="text-xs">
+              <div className="grid gap-1.5">
+                <Label htmlFor={accessTokenId} variant="dialog-field">
                   {t(
                     'auto.components.settings.bitbucket.credentials.dialog.accessToken',
                     'Access token'
@@ -258,14 +271,20 @@ export function BitbucketCredentialsDialog({
                   aria-invalid={connectState === 'error'}
                   aria-describedby={connectState === 'error' ? errorId : undefined}
                 />
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'components.settings.bitbucket.credentials.dialog.accessTokenNeeds',
+                    'Needs read access to pull requests.'
+                  )}
+                </p>
               </div>
             ) : (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor={emailId} className="text-xs">
+                <div className="grid gap-1.5">
+                  <Label htmlFor={emailId} variant="dialog-field">
                     {t(
-                      'auto.components.settings.bitbucket.credentials.dialog.email',
-                      'Atlassian account email'
+                      'components.settings.bitbucket.credentials.dialog.atlassianEmail',
+                      'Atlassian email'
                     )}
                   </Label>
                   <Input
@@ -284,13 +303,16 @@ export function BitbucketCredentialsDialog({
                     disabled={connecting}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor={apiTokenId} className="text-xs">
-                    {t(
-                      'auto.components.settings.bitbucket.credentials.dialog.apiToken',
-                      'API token'
-                    )}
-                  </Label>
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor={apiTokenId} variant="dialog-field">
+                      {t(
+                        'auto.components.settings.bitbucket.credentials.dialog.apiToken',
+                        'API token'
+                      )}
+                    </Label>
+                    {docsLink}
+                  </div>
                   <Input
                     id={apiTokenId}
                     type="password"
@@ -307,18 +329,32 @@ export function BitbucketCredentialsDialog({
                     aria-invalid={connectState === 'error'}
                     aria-describedby={connectState === 'error' ? errorId : undefined}
                   />
+                  <DialogDisclosure
+                    label={t(
+                      'components.settings.bitbucket.credentials.dialog.requiredScopes',
+                      'Required scopes'
+                    )}
+                  >
+                    <BitbucketApiTokenScopes />
+                  </DialogDisclosure>
                 </div>
               </>
             )}
-            <div className="space-y-2">
-              <Label htmlFor={baseUrlId} className="text-xs">
-                {t(
-                  'auto.components.settings.bitbucket.credentials.dialog.baseUrl',
-                  'API base URL (optional)'
-                )}
-              </Label>
+            <DialogDisclosure
+              // Why open: a saved custom URL must stay visible, or editing it is a hidden step.
+              defaultOpen={Boolean(initialBaseUrl?.trim())}
+              variant="plain"
+              label={t(
+                'components.settings.bitbucket.credentials.dialog.apiBaseUrl',
+                'API base URL'
+              )}
+            >
               <Input
                 id={baseUrlId}
+                aria-label={t(
+                  'components.settings.bitbucket.credentials.dialog.apiBaseUrl',
+                  'API base URL'
+                )}
                 placeholder={t(
                   'auto.components.settings.bitbucket.credentials.dialog.baseUrlPlaceholder',
                   'https://api.bitbucket.org/2.0'
@@ -330,68 +366,28 @@ export function BitbucketCredentialsDialog({
                 }}
                 disabled={connecting}
               />
-            </div>
-            {connectState === 'error' && connectError ? (
-              <p id={errorId} className="text-xs text-destructive">
-                {connectError}
-              </p>
-            ) : null}
-            <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
-              <p>
-                {isTokenMode
-                  ? t(
-                      'auto.components.settings.bitbucket.credentials.dialog.tokenHint',
-                      'Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.'
-                    )
-                  : t(
-                      'auto.components.settings.bitbucket.credentials.dialog.basicHint',
-                      'Create an Atlassian API token for your account, then pair it with the email address that owns it.'
-                    )}
-              </p>
-              {!isTokenMode ? <BitbucketApiTokenScopes /> : null}
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"
-                onClick={() => window.api.shell.openUrl(API_TOKEN_DOCS_URL)}
-              >
-                <ExternalLink className="size-3" />
-                {t(
-                  'auto.components.settings.bitbucket.credentials.dialog.docsLink',
-                  'Bitbucket API token docs'
-                )}
-              </button>
-            </div>
-            <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground/70">
-              <Lock className="size-3 mt-0.5 shrink-0" />
-              {remoteRuntime
-                ? t(
-                    'auto.components.settings.bitbucket.credentials.dialog.remoteRuntime',
-                    'Stored on this machine, not on the active remote runtime — set ORCA_BITBUCKET_* there instead. Environment variables always take precedence over what you save here.'
-                  )
-                : t(
-                    'auto.components.settings.bitbucket.credentials.dialog.storageNote',
-                    'Stored on this machine with encrypted storage when the OS keychain is available. ORCA_BITBUCKET_* environment variables always take precedence over what you save here.'
-                  )}
-            </p>
+            </DialogDisclosure>
           </div>
         )}
+        {connectState === 'error' && connectError ? (
+          <DialogError id={errorId}>{connectError}</DialogError>
+        ) : null}
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={connecting}>
-            {t('auto.components.settings.bitbucket.credentials.dialog.cancel', 'Cancel')}
-          </Button>
-          <Button onClick={() => void handleConnect()} disabled={!canSubmit}>
-            {connecting ? (
-              <>
-                <LoaderCircle className="size-4 animate-spin" />
-                {t(
-                  'auto.components.settings.bitbucket.credentials.dialog.verifying',
-                  'Verifying...'
-                )}
-              </>
-            ) : (
-              t('auto.components.settings.bitbucket.credentials.dialog.connect', 'Connect')
-            )}
-          </Button>
+          <DialogCancel>
+            {locked
+              ? t('components.settings.bitbucket.credentials.dialog.close', 'Close')
+              : t('auto.components.settings.bitbucket.credentials.dialog.cancel', 'Cancel')}
+          </DialogCancel>
+          {locked ? null : (
+            <Button size="sm" onClick={() => void handleConnect()} disabled={!canSubmit}>
+              {connecting
+                ? t(
+                    'components.settings.bitbucket.credentials.dialog.verifyingEllipsis',
+                    'Verifying…'
+                  )
+                : t('auto.components.settings.bitbucket.credentials.dialog.connect', 'Connect')}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

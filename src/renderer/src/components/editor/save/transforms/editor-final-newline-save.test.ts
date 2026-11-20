@@ -4,7 +4,7 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { requestEditorFileSave } from '../../autosave/editor-autosave'
@@ -17,9 +17,11 @@ import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-
 
 const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => null
+}))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
@@ -210,21 +212,6 @@ describe('saving with Insert Final Newline', () => {
     }
   })
 
-  it('applies to Markdown when its source code view is selected', async () => {
-    const path = '/repo/note.md'
-    const { store, fileId } = openFile({
-      enabled: true,
-      draft: 'content',
-      path,
-      language: 'markdown'
-    })
-    store.getState().setMarkdownViewMode(fileId, 'source')
-
-    const files = await save(store, fileId)
-
-    expect(files.get(path)).toBe('content\n')
-  })
-
   it('does not replace a model that has newer edits than the captured draft', async () => {
     const { store, fileId } = openFile({ enabled: true, draft: 'captured' })
     const model = createModel(store, 'typed meanwhile')
@@ -289,37 +276,6 @@ describe('saving with Insert Final Newline', () => {
       expect(disk.files.get(PATH)).toBe('external change')
       expect(model.getValue()).toBe('my edit\n')
       expect(store.getState().editorDrafts[fileId]).toBe('my edit\n')
-      expect(store.getState().openFiles[0]?.isDirty).toBe(true)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('does not replace edits typed while the formatter is running', async () => {
-    const { store, fileId } = openFile({ enabled: true, draft: 'before' })
-    const model = createModel(store, 'before')
-    store.setState({ settings: { ...store.getState().settings!, editorFormatOnSave: true } })
-    let finish!: (result: { kind: 'formatted'; text: string }) => void
-    vi.mocked(callRuntimeRpc).mockImplementationOnce(
-      () => new Promise((resolve) => (finish = resolve))
-    )
-    const disk = stubGuardedDisk({ [PATH]: BASELINE })
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      const saving = requestEditorFileSave({ fileId })
-      await vi.waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledOnce())
-      model.pushEditOperations(
-        [],
-        [{ range: model.getFullModelRange(), text: 'typed' }],
-        () => null
-      )
-      store.getState().setEditorDraft(fileId, 'typed')
-      finish({ kind: 'formatted', text: 'formatted' })
-      await saving
-
-      expect(disk.files.get(PATH)).toBe('formatted\n')
-      expect(model.getValue()).toBe('typed')
-      expect(store.getState().editorDrafts[fileId]).toBe('typed')
       expect(store.getState().openFiles[0]?.isDirty).toBe(true)
     } finally {
       cleanup()

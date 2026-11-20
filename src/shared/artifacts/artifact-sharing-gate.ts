@@ -1,5 +1,5 @@
 // Public artifact URLs require a user-granted capability; main/CLI/Settings share this gate.
-import type { GlobalSettings } from '../global-settings-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
 
 export const ARTIFACT_SHARING_DISABLED_CODE = 'artifact_sharing_disabled'
 
@@ -23,7 +23,7 @@ export class ArtifactSharingDisabledError extends Error {
   }
 }
 
-/** Absent or non-`true` denies: an unmigrated profile must not inherit the capability. */
+/** Only explicit `true` grants: new profiles store it from defaults; absent or `false` denies. */
 export function isArtifactSharingEnabled(
   settings: Pick<GlobalSettings, 'artifactSharingEnabled'> | null | undefined
 ): boolean {

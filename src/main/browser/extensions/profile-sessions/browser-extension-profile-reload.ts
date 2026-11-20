@@ -1,5 +1,5 @@
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { prepareBrowserExtensionDirectory } from '../installation/browser-extension-load-directory'
 import {
   getBrowserExtensionSessionForProfile,
@@ -9,6 +9,13 @@ import {
 
 function isEnabledIn(profileId: string, extensionId: string): boolean {
   return browserSessionRegistry.getEnabledExtensionIds(profileId).includes(extensionId)
+}
+
+/** Why attached too: a profile that went idle meanwhile loads the new copy when it reopens. */
+function stillLoadsIn(profileId: string, extensionId: string): boolean {
+  return (
+    isEnabledIn(profileId, extensionId) && getBrowserExtensionSessionForProfile(profileId) !== null
+  )
 }
 
 /**
@@ -34,12 +41,12 @@ export async function reloadBrowserExtensionWhereEnabled(
   }
   for (const profileId of profileIds) {
     // Why recheck: a Disable during an earlier await had no load of ours to cancel.
-    if (!isEnabledIn(profileId, extension.id)) {
+    if (!stillLoadsIn(profileId, extension.id)) {
       continue
     }
     await loadBrowserExtensionIntoProfile(profileId, extension, 'reload').catch((error) => {
-      // A Disable that cancelled this load is not a reload failure; other profiles still reload.
-      if (isEnabledIn(profileId, extension.id)) {
+      // A Disable or idle stop that cancelled this load is not a reload failure.
+      if (stillLoadsIn(profileId, extension.id)) {
         throw error
       }
     })

@@ -1,5 +1,5 @@
 import { joinPath } from '@/lib/path'
-import { normalizeRelativePath } from '../../../../../../shared/cross-platform-path'
+import { normalizeRelativePath } from '../../../../../../shared/file-access/cross-platform-path'
 import { filterEntries } from '../../../sidebar/host-path-browser/remote-file-browser-entry-actions'
 import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
 import type {

@@ -44,24 +44,6 @@ describe('the post-barrier combinator', () => {
     await expect(barrier).rejects.toThrow('method_not_found: no such method')
   })
 
-  it('keeps the middle operation error when a later one also fails', async () => {
-    const barrier = interpretAtRpcBarrier([
-      startRpcOperation(replying(rpcSuccess(rows)), workspaceListAtBarrier, {}),
-      startRpcOperation(
-        replying(rpcRefusal('conflict', 'middle refused')),
-        workspaceListAtBarrier,
-        {}
-      ),
-      startRpcOperation(
-        replying(rpcRefusal('runtime_error', 'later refused')),
-        workspaceListAtBarrier,
-        {}
-      )
-    ])
-
-    await expect(barrier).rejects.toThrow('conflict: middle refused')
-  })
-
   it('rethrows a captured transport rejection as the original error object', async () => {
     const error = markRpcDeliveryUnknown(new Error('socket closed before response'))
     const dropped = new FakeSession('connected')

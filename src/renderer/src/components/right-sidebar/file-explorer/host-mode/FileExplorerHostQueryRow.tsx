@@ -1,6 +1,6 @@
 import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome-types'
+import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { FileExplorerNameFilter } from '../panel/FileExplorerNameFilter'
 import { useFileExplorerHostModeContext } from './file-explorer-host-mode-context-value'
 

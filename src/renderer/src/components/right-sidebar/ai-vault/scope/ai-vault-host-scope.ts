@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { onWorkspaceCleanupRunFinished } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import { useAppStore } from '@/store/index'
+import { findLastVisitedLiveWorkspaceId } from '@/store/slices/ui/workspace-navigation-history'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getExecutionHostLabel,
@@ -9,13 +11,26 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AiVaultSessionResumeTargetState } from '../session-actions/ai-vault-session-resume'
+
+import { getTranslatedExecutionHostLabel } from '../../../../runtime/hosts/display/execution-host-label'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type AiVaultHostScopeOption = {
   id: ExecutionHostScope
   label: string
+}
+
+export function aiVaultHostScopeLabel(
+  option: AiVaultHostScopeOption,
+  t: Translate = translate
+): string {
+  return option.id === LOCAL_EXECUTION_HOST_ID || option.id === ALL_EXECUTION_HOSTS_SCOPE
+    ? getTranslatedExecutionHostLabel(option.id, t)
+    : option.label
 }
 
 export function useAiVaultExecutionHostScope(args: {
@@ -93,8 +108,18 @@ export function useAiVaultPanelHostScope(
     () => runtimeHostOptions.map((option) => option.id),
     [runtimeHostOptions]
   )
+  // Why: closing the last tab leaves no workspace, which says nothing about the host; keep the last one's (#40727).
+  const navHistory = useAppStore((s) => s.worktreeNavHistory)
+  const navHistoryIndex = useAppStore((s) => s.worktreeNavHistoryIndex)
+  const lastVisitedWorkspaceId = useMemo(
+    () =>
+      workspaceId === null
+        ? findLastVisitedLiveWorkspaceId(navHistory, navHistoryIndex, resumeTargetState)
+        : null,
+    [navHistory, navHistoryIndex, resumeTargetState, workspaceId]
+  )
   const hostScope = useAiVaultExecutionHostScope({
-    activeWorktreeId: workspaceId,
+    activeWorktreeId: workspaceId ?? lastVisitedWorkspaceId,
     resumeTargetState,
     availableExecutionHostScopes
   })
@@ -201,4 +226,15 @@ export function useAiVaultSessionHostRefreshEvents(
       document.removeEventListener('visibilitychange', onRefocus)
     }
   }, [refresh])
+
+  // Workspace cleanup can delete transcripts of deleted workspaces while this list is open.
+  useEffect(
+    () =>
+      onWorkspaceCleanupRunFinished(({ run }) => {
+        if ((run.chatHistory?.deleted ?? 0) > 0) {
+          void refresh({ background: true, force: false })
+        }
+      }),
+    [refresh]
+  )
 }
