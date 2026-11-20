@@ -76,7 +76,7 @@ export async function writeOpenCodeInstructionsConfigDir(
       continue
     }
     await linkEntry(join(source, name), join(folder, name)).catch((error: unknown) => {
-      const { code } = error as NodeJS.ErrnoException
+      const code = error instanceof Error && 'code' in error ? error.code : undefined
       if (code !== 'EEXIST' && code !== 'ERR_FS_CP_EEXIST') {
         throw error
       }
