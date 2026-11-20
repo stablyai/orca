@@ -24576,14 +24576,14 @@
     "sendReport": "Отправить отчёт"
   },
   "openOnHost": {
-    "projectMenu": "Открыть на {{host}}…",
-    "workspaceMenu": "Открыть на {{host}}…",
+    "menuItem": "Открыть на {{host}}…",
+    "checking": "Проверка {{host}}…",
     "title": "Открыть {{name}} на {{host}}",
     "existingLocation": "Откроется в {{path}}",
     "cloneLocation": "Клонировать из {{url}} в {{path}}",
     "branch": "Ветка {{branch}}",
     "pushFirst": "Сначала отправить {{branch}}",
-    "publishFirst": "Сначала опубликовать {{branch}} в origin",
+    "publishFirst": "Сначала опубликовать {{branch}}",
     "unpublishedBlocked": "Ветки {{branch}} ещё нет на удалённом репозитории, поэтому {{host}} не может её получить. Сначала опубликуйте её",
     "detached": "Переключитесь на ветку, чтобы открыть это рабочее пространство на {{host}}",
     "primary": "Открыть на {{host}}",

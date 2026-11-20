@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getRuntimeGitUpstreamStatus } from '@/runtime/source-control/git/runtime-git-sync-client'
@@ -106,8 +107,11 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
   }
   const source = opened.worktree
   const branch = source ? branchDisplayName(source.branch) : ''
-  const offer = upstream ? getWorkspaceSyncOffer(upstream) : 'none'
-  const plan = source && upstream ? planWorkspaceOnHost({ branch, upstream, syncFirst }) : null
+  const offer = upstream ? getWorkspaceSyncOffer(upstream, branch, source?.pushTarget) : 'none'
+  const plan =
+    source && upstream
+      ? planWorkspaceOnHost({ branch, upstream, pushTarget: source.pushTarget, syncFirst })
+      : null
   const host = target.label
   const locationLine =
     location?.kind === 'existing'
@@ -121,7 +125,7 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
           })
         : location?.kind === 'unavailable'
           ? location.reason
-          : null
+          : t('openOnHost.checking', 'Checking {{host}}…', { host })
   const blockedLine =
     plan?.kind === 'blocked'
       ? plan.reason === 'detached'
@@ -161,11 +165,12 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
       return
     }
     // Only close our own modal; another may have replaced it meanwhile.
+    // After a post-clone failure the menu reopens on the new clone instead of cloning again.
     if (useAppStore.getState().activeModal === 'open-on-host') {
       closeModal()
     }
-    if (result.notice) {
-      toast(result.notice)
+    if (result !== 'failed-after-clone' && result.notice) {
+      toast.warning(result.notice)
     }
   }
 
@@ -195,9 +200,7 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
                 <Label htmlFor={syncCheckboxId}>
                   {offer === 'push'
                     ? t('openOnHost.pushFirst', 'Push {{branch}} first', { branch })
-                    : t('openOnHost.publishFirst', 'Publish {{branch}} to origin first', {
-                        branch
-                      })}
+                    : t('openOnHost.publishFirst', 'Publish {{branch}} first', { branch })}
                 </Label>
               </div>
             ) : null}
@@ -209,10 +212,25 @@ const OpenOnHostDialog = React.memo(function OpenOnHostDialog() {
             {t('openOnHost.cancel', 'Cancel')}
           </Button>
           <Button disabled={!canOpen} onClick={() => void handleOpen()}>
-            {opening ? <Loader2 className="size-3.5 animate-spin" /> : null}
-            {opening
-              ? t('openOnHost.opening', 'Opening…')
-              : t('openOnHost.primary', 'Open on {{host}}', { host })}
+            {/* Both labels share one grid cell so the swap doesn't resize the button. */}
+            <span className="inline-grid">
+              <span
+                aria-hidden={!opening}
+                className={cn(
+                  'col-start-1 row-start-1 inline-flex items-center justify-center gap-2',
+                  !opening && 'invisible'
+                )}
+              >
+                <Loader2 className="size-4 animate-spin" />
+                {t('openOnHost.opening', 'Opening…')}
+              </span>
+              <span
+                aria-hidden={opening}
+                className={cn('col-start-1 row-start-1', opening && 'invisible')}
+              >
+                {t('openOnHost.primary', 'Open on {{host}}', { host })}
+              </span>
+            </span>
           </Button>
         </DialogFooter>
       </DialogContent>

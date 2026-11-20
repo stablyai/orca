@@ -25195,14 +25195,14 @@
     "sendReport": "レポートを送信"
   },
   "openOnHost": {
-    "projectMenu": "{{host}} で開く…",
-    "workspaceMenu": "{{host}} で開く…",
+    "menuItem": "{{host}} で開く…",
+    "checking": "{{host}} を確認しています…",
     "title": "{{name}} を {{host}} で開く",
     "existingLocation": "{{path}} で開きます",
     "cloneLocation": "{{url}} から {{path}} にクローン",
     "branch": "ブランチ {{branch}}",
     "pushFirst": "先に {{branch}} をプッシュ",
-    "publishFirst": "先に {{branch}} を origin に公開",
+    "publishFirst": "先に {{branch}} を公開",
     "unpublishedBlocked": "{{branch}} はまだリモートにないため、{{host}} から取得できません。先に公開してください",
     "detached": "{{host}} でこのワークスペースを開くには、ブランチをチェックアウトしてください",
     "primary": "{{host}} で開く",

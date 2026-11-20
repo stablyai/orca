@@ -24277,14 +24277,14 @@
     "sendReport": "Enviar informe"
   },
   "openOnHost": {
-    "projectMenu": "Abrir en {{host}}…",
-    "workspaceMenu": "Abrir en {{host}}…",
+    "menuItem": "Abrir en {{host}}…",
+    "checking": "Comprobando {{host}}…",
     "title": "Abrir {{name}} en {{host}}",
     "existingLocation": "Se abre en {{path}}",
     "cloneLocation": "Clonar desde {{url}} en {{path}}",
     "branch": "Rama {{branch}}",
     "pushFirst": "Hacer push de {{branch}} primero",
-    "publishFirst": "Publicar {{branch}} en origin primero",
+    "publishFirst": "Publicar {{branch}} primero",
     "unpublishedBlocked": "{{branch}} aún no está en un remoto, así que {{host}} no puede obtenerla. Publícala primero",
     "detached": "Cambia a una rama para abrir este espacio de trabajo en {{host}}",
     "primary": "Abrir en {{host}}",

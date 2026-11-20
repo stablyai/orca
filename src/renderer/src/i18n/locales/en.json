@@ -29674,14 +29674,14 @@
     "more": "More"
   },
   "openOnHost": {
-    "projectMenu": "Open on {{host}}…",
-    "workspaceMenu": "Open on {{host}}…",
+    "menuItem": "Open on {{host}}…",
+    "checking": "Checking {{host}}…",
     "title": "Open {{name}} on {{host}}",
     "existingLocation": "Opens in {{path}}",
     "cloneLocation": "Clone from {{url}} into {{path}}",
     "branch": "Branch {{branch}}",
     "pushFirst": "Push {{branch}} first",
-    "publishFirst": "Publish {{branch}} to origin first",
+    "publishFirst": "Publish {{branch}} first",
     "unpublishedBlocked": "{{branch}} is not on a remote yet, so {{host}} can't fetch it. Publish it first",
     "detached": "Check out a branch to open this workspace on {{host}}",
     "primary": "Open on {{host}}",

@@ -23822,14 +23822,14 @@
     "sendReport": "Bericht senden"
   },
   "openOnHost": {
-    "projectMenu": "Auf {{host}} öffnen…",
-    "workspaceMenu": "Auf {{host}} öffnen…",
+    "menuItem": "Auf {{host}} öffnen…",
+    "checking": "{{host}} wird geprüft…",
     "title": "{{name}} auf {{host}} öffnen",
     "existingLocation": "Öffnet sich in {{path}}",
     "cloneLocation": "Von {{url}} nach {{path}} klonen",
     "branch": "Branch {{branch}}",
     "pushFirst": "Zuerst {{branch}} pushen",
-    "publishFirst": "Zuerst {{branch}} auf origin veröffentlichen",
+    "publishFirst": "Zuerst {{branch}} veröffentlichen",
     "unpublishedBlocked": "{{branch}} ist noch auf keinem Remote, daher kann {{host}} ihn nicht abrufen. Veröffentliche ihn zuerst",
     "detached": "Checke einen Branch aus, um diesen Workspace auf {{host}} zu öffnen",
     "primary": "Auf {{host}} öffnen",

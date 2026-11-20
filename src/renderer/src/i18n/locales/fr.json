@@ -24292,14 +24292,14 @@
     "sendReport": "Envoyer le rapport"
   },
   "openOnHost": {
-    "projectMenu": "Ouvrir sur {{host}}…",
-    "workspaceMenu": "Ouvrir sur {{host}}…",
+    "menuItem": "Ouvrir sur {{host}}…",
+    "checking": "Vérification de {{host}}…",
     "title": "Ouvrir {{name}} sur {{host}}",
     "existingLocation": "S'ouvre dans {{path}}",
     "cloneLocation": "Cloner depuis {{url}} dans {{path}}",
     "branch": "Branche {{branch}}",
     "pushFirst": "Pousser {{branch}} d'abord",
-    "publishFirst": "Publier {{branch}} sur origin d'abord",
+    "publishFirst": "Publier {{branch}} d'abord",
     "unpublishedBlocked": "{{branch}} n'est pas encore sur un dépôt distant, {{host}} ne peut donc pas la récupérer. Publiez-la d'abord",
     "detached": "Passez sur une branche pour ouvrir cet espace de travail sur {{host}}",
     "primary": "Ouvrir sur {{host}}",
