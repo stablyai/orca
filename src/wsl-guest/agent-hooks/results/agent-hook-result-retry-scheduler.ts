@@ -118,8 +118,12 @@ export class AgentHookResultRetryScheduler {
     this.claudeHelperKills.schedule(row, receivedAt)
   }
 
-  activateClaudeHelperObservations(): void {
+  /** Starts work that needs the bound listener; replayed agy panes re-arm their transcript polls. */
+  activateListening(replayedAntigravity: ReadonlyMap<string, unknown>): void {
     this.claudeHelperKills.activate()
+    for (const body of replayedAntigravity.values()) {
+      this.rearmIgnoredHook('antigravity', body)
+    }
   }
 
   scheduleTranscriptPoll(

@@ -94,12 +94,14 @@ export function discardAntigravityDone(
   state: HookListenerState,
   rechecks: PaneTimers,
   incoming: AgentHookEventPayload,
+  previous: AgentHookEventPayload | undefined,
   applied: AgentHookEventPayload | undefined
 ): void {
+  // A rejected event returns the unchanged row, so its parked agy done stays.
   if (
+    applied !== previous &&
     applied?.payload.agentType === 'antigravity' &&
-    // A prompt the apply rejected leaves the old row (and prompt), so its parked done stays.
-    ((incoming.hasExplicitPrompt && applied.payload.prompt === incoming.payload.prompt) ||
+    (incoming.hasExplicitPrompt ||
       applied.payload.state === 'done' ||
       applied.payload.mainAgent?.state !== 'done')
   ) {

@@ -35,7 +35,8 @@ export type AntigravityPaneChildState = {
   rootBrainDir?: string
   rootTranscriptPath?: string
   discoversChildren?: boolean
-  awaitingInitialHelperDiscovery?: true
+  /** Helper spawns the root started whose child no poll has proven yet. */
+  pendingHelperSpawns?: number
   helpersIdleAt?: number
   rootStoppedIdle?: true
   leadState?: AgentStatusState
@@ -154,12 +155,25 @@ export function recordAntigravityChildHook(
     pane.dirty = true
   }
   if (!pane.rootBrainDir) {
-    pane.verifiedChildren.add(id)
+    verifyAntigravityChild(pane, id)
   }
   if (pane.verifiedChildren.has(id)) {
     pane.helpersIdleAt = undefined
-    pane.awaitingInitialHelperDiscovery = undefined
   }
+}
+/** Proof of ownership settles one pending spawn, so each spawn holds the parent until its child is proven. */
+export function verifyAntigravityChild(pane: AntigravityPaneChildState, id: string): void {
+  if (pane.verifiedChildren.has(id)) {
+    return
+  }
+  pane.verifiedChildren.add(id)
+  pane.helpersIdleAt = undefined
+  settleAntigravityHelperSpawn(pane)
+}
+/** A spawn settles when its child is proven or when agy reports the spawn failed. */
+export function settleAntigravityHelperSpawn(pane: AntigravityPaneChildState): void {
+  const pending = (pane.pendingHelperSpawns ?? 0) - 1
+  pane.pendingHelperSpawns = pending > 0 ? pending : undefined
 }
 export function trackAntigravityBackgroundCommand(
   pane: AntigravityPaneChildState,

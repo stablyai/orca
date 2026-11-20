@@ -317,3 +317,22 @@ it('ignores a child that wakes after the root finished', async () => {
   hook('child', 'PreInvocation')
   expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['child'])
 })
+
+it('lists a subagent killed before its first poll once, then clears it', async () => {
+  transcript('child')
+  descriptor('child', true)
+  spawn()
+  hook('child', 'PreInvocation')
+  hook('root', 'Stop', { fullyIdle: false })
+  expect((await poll())?.payload.subagents?.map((child) => child.id)).toEqual(['child'])
+  expect((await poll())?.payload.subagents).toBeUndefined()
+})
+
+it('releases the parent when agy reports the spawn failed', () => {
+  spawn()
+  hook('root', 'PostToolUse', {
+    toolCall: { name: 'invoke_subagent' },
+    error: 'subagent "x" not found or not allowed to be invoked'
+  })
+  expect(hook('root', 'Stop', { fullyIdle: false })?.payload.state).toBe('done')
+})

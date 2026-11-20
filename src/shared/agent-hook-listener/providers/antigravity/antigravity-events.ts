@@ -2,7 +2,11 @@ import {
   isAntigravityInSessionChildHook,
   type AntigravityTranscriptOrigin
 } from './antigravity-hook-identity'
-import { retireAntigravityChild, trackAntigravityBackgroundCommand } from './antigravity-pane-state'
+import {
+  retireAntigravityChild,
+  settleAntigravityHelperSpawn,
+  trackAntigravityBackgroundCommand
+} from './antigravity-pane-state'
 import { buildAntigravityFoldedStatusPayload } from './antigravity-parent-status'
 import {
   normalizeAgentStatusPayload,
@@ -173,7 +177,7 @@ export function normalizeAntigravityEvent(
   }
   const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
   if (resetsTurn || (eventName === 'Stop' && !stopStillBusy)) {
-    paneState.awaitingInitialHelperDiscovery = undefined
+    paneState.pendingHelperSpawns = undefined
   }
   if (
     (eventName === 'PreToolUse' || eventName === 'PostToolUse') &&
@@ -182,7 +186,13 @@ export function normalizeAntigravityEvent(
     paneState.discoversChildren = true
   }
   if (eventName === 'PreToolUse' && isAntigravityHelperSpawnTool(toolName)) {
-    paneState.awaitingInitialHelperDiscovery = true
+    paneState.pendingHelperSpawns = (paneState.pendingHelperSpawns ?? 0) + 1
+  } else if (
+    eventName === 'PostToolUse' &&
+    isAntigravityHelperSpawnTool(toolName) &&
+    readFirstString(hookPayload, ['error'])
+  ) {
+    settleAntigravityHelperSpawn(paneState)
   }
   const finishedBackgroundCommand = trackAntigravityBackgroundCommand(
     paneState,
@@ -223,7 +233,7 @@ export function normalizeAntigravityEvent(
   const subagents = reconcileAntigravityActiveSubagents(paneState, now)
   const hasBackgroundHold =
     subagents.length > 0 ||
-    paneState.awaitingInitialHelperDiscovery !== undefined ||
+    paneState.pendingHelperSpawns !== undefined ||
     (paneState.commands?.size ?? 0) > 0 ||
     paneState.helpersIdleAt !== undefined
   const preservesDoneLead =

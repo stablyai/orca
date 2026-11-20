@@ -96,9 +96,10 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   protected override applyNormalizedStatus(
     ...args: Parameters<AgentHookServerTmuxStatus['applyNormalizedStatus']>
   ): EnrichedAgentHookEventPayload | undefined {
+    const previous = this.state.lastStatusByPaneKey.get(args[0].paneKey)
     const applied = super.applyNormalizedStatus(...args)
     const [incoming, , origin = 'hook'] = args
-    discardAntigravityDone(this.state, this.hookSilenceRechecks, incoming, applied)
+    discardAntigravityDone(this.state, this.hookSilenceRechecks, incoming, previous, applied)
     // Claude can still block the prompt after this hook, and its idle may already have landed.
     if (
       applied?.payload.agentType === 'claude' &&
@@ -291,6 +292,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       return
     }
     const normalized = this.normalizeLocalHookPayload(record.source, body, true)
+    this.requestReplayTranscriptPoll(record.source, record.paneKey, body)
     if (!normalized.event) {
       return
     }
@@ -317,9 +319,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     this.recordCurrentAuthorityObservation(event)
     const enriched = this.applyReplayedHookAndReply(event, normalized, record.receivedAt)
     // Replay defers children whose rollout path is unresolved; only the poll finds and reads them.
-    if (enriched && record.source === 'codex') {
-      this.requestReplayTranscriptPoll(body, enriched)
-    }
+    this.requestReplayTranscriptPoll(record.source, record.paneKey, body, enriched)
     if (event.payload.state !== 'done') {
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }

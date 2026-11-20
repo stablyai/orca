@@ -229,7 +229,7 @@ it('ends the run on agy done when the finished subagent leaves the row during th
   expect(state()).toBe('done')
 })
 
-it('ends the run on agy done after a subagent that finished before its first poll is proven', async () => {
+function brainWithChildDescriptor(): string {
   const brain = join(dir, 'brain', 'parent', '.system_generated')
   mkdirSync(join(brain, 'logs'), { recursive: true })
   mkdirSync(join(brain, 'subagents'), { recursive: true })
@@ -242,6 +242,28 @@ it('ends the run on agy done after a subagent that finished before its first pol
     join(brain, 'subagents', 'child.json'),
     JSON.stringify({ conversationId: 'child', state: 'SUBAGENT_STATE_ALIVE' })
   )
+  return transcriptPath
+}
+
+it('keeps the run working while a second spawn has not produced its subagent', async () => {
+  const transcriptPath = brainWithChildDescriptor()
+  await agyHook('PreInvocation', { transcriptPath })
+  await agyHook('PreToolUse', { ...subagentCall, transcriptPath })
+  await agyHook('PreToolUse', { ...subagentCall, stepIdx: 3, transcriptPath })
+  await agyHook('PreInvocation', child)
+  await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL', transcriptPath })
+  await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1), {
+    timeout: 10000
+  })
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  await subagentIdleStop()
+  programDone()
+  await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
+  expect(state()).toBe('working')
+})
+
+it('ends the run on agy done after a subagent that finished before its first poll is proven', async () => {
+  const transcriptPath = brainWithChildDescriptor()
   await agyHook('PreInvocation', { transcriptPath })
   await agyHook('PreToolUse', { ...subagentCall, transcriptPath })
   await agyHook('PreInvocation', child)

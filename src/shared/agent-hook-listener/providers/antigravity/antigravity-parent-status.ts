@@ -28,7 +28,7 @@ export function buildAntigravityFoldedStatusPayload(
     ? 'waiting'
     : subagents.length > 0 ||
         childrenEnded ||
-        (leadState === 'done' && paneState.awaitingInitialHelperDiscovery !== undefined)
+        (leadState === 'done' && paneState.pendingHelperSpawns !== undefined)
       ? 'working'
       : hasCommands
         ? 'monitoring'

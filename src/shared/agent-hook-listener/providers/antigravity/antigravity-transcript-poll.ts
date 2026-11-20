@@ -12,6 +12,7 @@ import {
   readAntigravityChildTranscriptTail
 } from './antigravity-child-transcript'
 import {
+  verifyAntigravityChild,
   retireAntigravityChild,
   type AntigravityPaneChildState,
   type TrackedAntigravityChild
@@ -128,17 +129,16 @@ export function pollAntigravityTranscriptStatus(
     if (pane.children.get(child.id) !== child || child.revision !== revision) {
       continue
     }
-    if (metadata?.killed) {
+    if (metadata?.killed && pane.verifiedChildren.has(child.id)) {
       retireAntigravityChild(pane, child.id)
     } else if (metadata) {
-      pane.verifiedChildren.add(child.id)
-      pane.helpersIdleAt = undefined
-      pane.awaitingInitialHelperDiscovery = undefined
+      verifyAntigravityChild(pane, child.id)
       child.description = metadata.description
       child.agentType = metadata.agentType
       child.model =
         metadata.model ?? (child.modelAuto ? (model ?? child.model) : (child.model ?? model))
-      if (child.stopped) {
+      // A killed descriptor still proves ownership; list the child once so its end is visible.
+      if (child.stopped || metadata.killed) {
         proven.push(child.id)
       }
     } else if (child.stopped) {
