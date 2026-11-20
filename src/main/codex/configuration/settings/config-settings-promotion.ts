@@ -208,7 +208,8 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     observeFilePublication(writeTarget.path, nextContent)
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
-  if (!writeTomlConfigAtomically(writeTarget.path, nextContent, computedFrom)) {
+  // Promotion never rotated the user's config.toml.bak; keep it that way.
+  if (!writeTomlConfigAtomically(writeTarget.path, nextContent, computedFrom, { backup: false })) {
     return null
   }
   return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }

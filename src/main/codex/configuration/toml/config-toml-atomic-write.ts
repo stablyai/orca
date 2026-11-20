@@ -40,7 +40,8 @@ export function readRawTomlConfig(configPath: string): string | null {
 export function writeTomlConfigAtomically(
   configPath: string,
   contents: string,
-  computedFrom: string | null
+  computedFrom: string | null,
+  options: { backup: boolean } = { backup: true }
 ): boolean {
   const writePath = resolveTomlWritePath(configPath)
   const directory = dirname(writePath)
@@ -57,7 +58,7 @@ export function writeTomlConfigAtomically(
     if (readRawTomlConfig(writePath) !== computedFrom) {
       return false
     }
-    if (existsSync(writePath)) {
+    if (options.backup && existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
     // Checked before every rename attempt, so only the re-read is left between check and rename.
