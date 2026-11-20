@@ -1,14 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
-import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
-import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
-import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { defineMethod, defineStreamingMethod } from '../../core'
-import {
-  CreateTerminalTab,
-  WorktreeTabSelector
-} from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
+import { WorktreeTabSelector } from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 import {
   listSessionTabsInventory,
@@ -18,11 +12,14 @@ import {
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { SESSION_TAB_SHELL_CHOICE_METHODS } from './session-tab-shell-choice-methods'
+import { SESSION_TAB_CREATE_TERMINAL_METHOD } from './session-tab-create-terminal-method'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
+import {
+  projectSessionTabUnreadForClient,
+  sessionTabUnreadMarks
+} from './session-tab-unread-projection'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
-import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
-import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/remote-runtime/session-graph/session-tabs-tab-delta'
 import {
   SESSION_TABS_UNSUBSCRIBE_METHOD,
@@ -37,13 +34,17 @@ export const SESSION_TAB_METHODS = [
     params: WorktreeTabSelector,
     handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
       await prepareStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
-      const result = projectSessionTabsForClient(
-        await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
-          includeInitialSurfaceLaunch: true,
-          includeAgentSenders: clientKind !== 'mobile'
-        }),
-        clientKind,
-        clientCapabilities
+      const result = projectSessionTabUnreadForClient(
+        runtime,
+        projectSessionTabsForClient(
+          await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId, {
+            includeInitialSurfaceLaunch: true,
+            includeAgentSenders: clientKind !== 'mobile'
+          }),
+          clientKind,
+          clientCapabilities
+        ),
+        clientKind
       )
       runtime.observeClientHostedPageSnapshots?.([result], pairedDeviceId)
       return result
@@ -61,60 +62,7 @@ export const SESSION_TAB_METHODS = [
   ...SESSION_TAB_MUTATION_METHODS,
   ...SESSION_TAB_CLOSE_METHODS,
   ...SESSION_TAB_SHELL_CHOICE_METHODS,
-  defineMethod({
-    name: 'session.tabs.createTerminal',
-    requires: terminalCreateFeatureRequirement,
-    permission: 'workspace',
-    params: CreateTerminalTab,
-    handler: async (params, context) => {
-      const { runtime, signal, clientKind, pairedDeviceId, clientCapabilities } = context
-      if (params.command) {
-        await assertLegacyAiVaultResumeCommandAllowed(params.command, () =>
-          runtime.ensureStructuredAgentSessionHost()
-        )
-      }
-      return runtime.createMobileSessionTerminal(params.worktree, {
-        ...(params.sourceChatFork ? { sourceChatFork: params.sourceChatFork } : {}),
-        terminalImageViewerSupported: terminalImageViewerSupported(context),
-        afterTabId: params.afterTabId,
-        targetGroupId: params.targetGroupId,
-        command: params.command,
-        ...(params.shell ? { shellOverride: params.shell } : {}),
-        cwd: params.cwd,
-        ...(params.env ? { env: params.env } : {}),
-        ...(params.envToDelete ? { envToDelete: params.envToDelete } : {}),
-        startupCommandDelivery: params.startupCommandDelivery,
-        agent: params.agent,
-        ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),
-        ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
-        ...(params.launchToken ? { launchToken: params.launchToken } : {}),
-        ...(params.resumeProviderSession
-          ? { resumeProviderSession: params.resumeProviderSession }
-          : {}),
-        ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
-        ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
-        ...(params.viewMode ? { viewMode: params.viewMode } : {}),
-        activate: params.activate,
-        select: params.select,
-        clientNavigationId: pairedDeviceId,
-        navigation: resolveRuntimeNavigationTarget({
-          navigation: params.navigation,
-          clientKind
-        }),
-        clientMutationId: params.clientMutationId,
-        ...(pairedDeviceId
-          ? {
-              supportsSplitGroupPlacement:
-                clientCapabilities?.includes(
-                  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
-                ) === true
-            }
-          : {}),
-        // Cancel surface waits on disconnect rather than timing out and rolling back a live tab (#7718).
-        signal
-      })
-    }
-  }),
+  SESSION_TAB_CREATE_TERMINAL_METHOD,
   defineStreamingMethod({
     name: 'session.tabs.subscribe',
     permission: 'workspace',
@@ -138,14 +86,14 @@ export const SESSION_TAB_METHODS = [
       let released = false
       let endOnRelease = true
       let stopListening = (): void => {}
-      let stopCapabilities = (): void => {}
+      let stopReprojecting = (): void => {}
       // Safe without a version check: any other release of this key runs our cleanup first, which latches `released`.
       const release = (): void => {
         if (!released && subscriptionId) {
           runtime.cleanupSubscription(subscriptionId)
         } else {
           released = true
-          stopCapabilities()
+          stopReprojecting()
           signal?.removeEventListener('abort', release)
         }
       }
@@ -170,7 +118,7 @@ export const SESSION_TAB_METHODS = [
             signal?.removeEventListener('abort', release)
             stopListening()
             runtime.forgetClientHostedPageObservation?.(pairedDeviceId, observation)
-            stopCapabilities()
+            stopReprojecting()
             if (endOnRelease) {
               emit({ type: 'end' })
             }
@@ -189,7 +137,13 @@ export const SESSION_TAB_METHODS = [
       const project = (
         snapshot: NonNullable<typeof currentSnapshot>,
         capabilities = capabilitySource?.current ?? clientCapabilities
-      ) => projectSessionTabsForClient(snapshot, clientKind, capabilities)
+      ) =>
+        projectSessionTabUnreadForClient(
+          runtime,
+          projectSessionTabsForClient(snapshot, clientKind, capabilities),
+          clientKind
+        )
+      let sentUnreadMarks = ''
       const emitSnapshot = (
         projected: NonNullable<typeof currentSnapshot>,
         type: 'snapshot' | 'updated'
@@ -197,6 +151,9 @@ export const SESSION_TAB_METHODS = [
         if (released) {
           return
         }
+        sentUnreadMarks = currentSnapshot
+          ? sessionTabUnreadMarks(runtime, currentSnapshot, clientKind)
+          : ''
         emit({
           type,
           ...(type === 'snapshot'
@@ -207,7 +164,7 @@ export const SESSION_TAB_METHODS = [
           runtime.observeClientHostedPageSnapshots?.([projected], pairedDeviceId, observation)
         }
       }
-      stopCapabilities =
+      const stopObservingCapabilities =
         capabilitySource?.observe((previous) => {
           if (!released && currentSnapshot) {
             const projected = project(currentSnapshot)
@@ -217,6 +174,27 @@ export const SESSION_TAB_METHODS = [
             }
           }
         }) ?? (() => {})
+      // Verdicts move on every agent step; project and re-send only when this workspace's unread tabs change.
+      const stopObservingVerdicts =
+        clientKind === 'mobile'
+          ? runtime.onClientEvent(
+              (event) => {
+                if (
+                  event.type === 'agentListChanged' &&
+                  !released &&
+                  currentSnapshot &&
+                  sessionTabUnreadMarks(runtime, currentSnapshot, clientKind) !== sentUnreadMarks
+                ) {
+                  emitSnapshot(project(currentSnapshot), 'updated')
+                }
+              },
+              { consumesTerminalSideEffects: false }
+            )
+          : () => {}
+      stopReprojecting = () => {
+        stopObservingCapabilities()
+        stopObservingVerdicts()
+      }
       signal?.addEventListener('abort', release, { once: true })
       if (signal?.aborted) {
         release()

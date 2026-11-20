@@ -21,7 +21,7 @@ import {
   installLegacyRelayBridge,
   legacyRelayBridgedPanes,
   resizeLegacyRelayPane,
-  setLegacyRelayPaneOutputPaused,
+  setLegacyRelayOutputPaused,
   writeLegacyRelayPane
 } from './legacy-relay-bridge-registry'
 import { terminalsBucket } from './legacy-relay-daily-activity'
@@ -32,7 +32,11 @@ const PaneArgsSchema = z.object({ ptyId: PtyIdSchema })
 const DetachArgsSchema = z.object({ ptyId: PtyIdSchema, acquisitionId: z.number().int() })
 const AttachArgsSchema = z.object({ ptyId: PtyIdSchema, replayInStream: z.boolean().optional() })
 const WriteArgsSchema = z.object({ ptyId: PtyIdSchema, data: z.string() })
-const PausedArgsSchema = z.object({ ptyId: PtyIdSchema, paused: z.boolean() })
+const PausedArgsSchema = z.object({
+  ptyId: PtyIdSchema,
+  paused: z.boolean(),
+  replayNeeded: z.boolean().optional()
+})
 const ResizeArgsSchema = z.object({ ptyId: PtyIdSchema, cols: SizeSchema, rows: SizeSchema })
 
 export function registerLegacyRelayBridgeIpc(args: {
@@ -155,7 +159,7 @@ export function registerLegacyRelayBridgeIpc(args: {
   ipcMain.on(CHANNELS.setOutputPaused, (_event, payload: unknown) => {
     const args = PausedArgsSchema.safeParse(payload)
     if (args.success) {
-      setLegacyRelayPaneOutputPaused(args.data.ptyId, args.data.paused)
+      setLegacyRelayOutputPaused(args.data.ptyId, args.data.paused, args.data.replayNeeded)
     }
   })
   ipcMain.on(CHANNELS.detach, (_event, payload: unknown) => {

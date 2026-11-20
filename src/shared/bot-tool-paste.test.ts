@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { parseBotToolPaste } from './bot-tool-paste'
 
 describe('bot tool paste data', () => {
-  it('extracts leading assignments and preserves exact argv, including empty and spaced values', () => {
+  it('accepts a remote URL or a start command with exact arguments and environment', () => {
+    expect(parseBotToolPaste('https://mcp.notion.com/mcp', 'darwin')).toEqual({
+      name: 'notion',
+      url: 'https://mcp.notion.com/mcp'
+    })
     expect(
       parseBotToolPaste('TOKEN="a b" npx -y server "two words" "" " edge "', 'darwin')
     ).toMatchObject({

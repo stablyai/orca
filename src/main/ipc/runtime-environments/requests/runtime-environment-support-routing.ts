@@ -75,7 +75,9 @@ export function shouldRouteSubscriptionBySupport(method: string): boolean {
     method === 'session.tabs.subscribeAll' ||
     method === 'accounts.subscribe' ||
     method === 'notifications.subscribe' ||
-    method === 'files.watch'
+    method === 'files.watch' ||
+    // Every remote chat holds one; share the control socket rather than open a socket per pane.
+    method === 'orchestration.workerApprovalsSubscribe'
   )
 }
 

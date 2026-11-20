@@ -297,8 +297,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     ...this.paneFactSources()
   })
 
-  protected markPaneLiveTitlesDirty(): void {
-    this.workspaceLayoutStream.markLiveTitlesDirty()
+  protected markPaneLiveTitlesDirty(ref: string): void {
+    this.workspaceLayoutStream.markLiveTitlesDirty(ref)
   }
 
   protected continueRestoredWorkerMail(db: OrchestrationDb): void {

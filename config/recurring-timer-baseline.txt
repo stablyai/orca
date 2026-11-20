@@ -9,6 +9,7 @@
 1 src/main/agent-hooks/server/server-opencode-binder.ts
 1 src/main/automations/observation/retained-run-reconciliation.ts
 1 src/main/automations/automation-service.ts
+1 src/main/backend/backend-desktop-owner-watch.ts # why: Linux backend polls main's pid every 2 s and stops once main is gone; Node exposes no exit event for a non-child pid
 1 src/main/bots/bot-access-request-watch.ts
 1 src/main/browser/extensions/native-messaging/browser-extension-native-ports.ts
 1 src/main/browser/extensions/web-store/browser-extension-webstore-updater.ts
@@ -50,6 +51,7 @@
 1 src/main/plugins/installation/plugin-git-repository.ts
 1 src/main/plugins/development/plugin-service-housekeeping.ts
 1 src/main/rate-limits/service/service-polling.ts
+1 src/main/remote-policies/release-asset-policy-live-update.ts
 1 src/main/runtime/agent-state-rules/agent-state-rules-live-update.ts
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts
 3 src/main/runtime/mobile-cloud-relay/control-channel/relay-control-liveness.ts
@@ -71,7 +73,6 @@
 1 src/main/startup/main-window/synthetic-title-runtime.ts
 1 src/main/telemetry/wsl-usage-reporter.ts
 1 src/main/webhooks/webhook-recovery-sweep.ts
-1 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
 1 src/main/wsl/orcad/wsl-orcad-connect-stop-fence.ts
 1 src/renderer/src/app-shell/storage/use-app-session-persistence.ts
 1 src/renderer/src/components/bots/google/GoogleAccountReadiness.tsx

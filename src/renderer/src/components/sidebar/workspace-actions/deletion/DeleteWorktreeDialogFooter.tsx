@@ -1,5 +1,5 @@
 // @protected-copy: delete-workspace confirmation buttons.
-import { useId, useState, type JSX } from 'react'
+import { useId, useState, type JSX, type Ref } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -32,7 +32,7 @@ export function DeleteWorktreeDialogFooter({
   isDetachingChildren = false,
   deleteDisabled = false,
   canForceDelete,
-  deleteLabel,
+  deleteButtonRef,
   onForceDelete,
   onSavingChange,
   onDelete,
@@ -43,8 +43,7 @@ export function DeleteWorktreeDialogFooter({
   isDetachingChildren?: boolean
   deleteDisabled?: boolean
   canForceDelete: boolean
-  /** The verb for this delete: "Delete workspace", "Delete 3 workspaces", "Delete all". */
-  deleteLabel: string
+  deleteButtonRef: Ref<HTMLButtonElement>
   onForceDelete: () => void
   onSavingChange: (saving: boolean) => void
   onDelete: () => void
@@ -69,7 +68,7 @@ export function DeleteWorktreeDialogFooter({
         : t('worktree.delete.deletingEllipsis', 'Deleting…')
       : canForceDelete
         ? t('worktree.delete.forceDelete', 'Force delete')
-        : deleteLabel
+        : t('common.delete', 'Delete')
 
   // Why save first: the preference only counts when the user goes through with the delete.
   const confirm = async (): Promise<void> => {
@@ -97,6 +96,7 @@ export function DeleteWorktreeDialogFooter({
 
   return (
     <DialogFooter
+      className="mt-0"
       start={
         !isMainWorktree && saveRemembered ? (
           <>
@@ -122,6 +122,7 @@ export function DeleteWorktreeDialogFooter({
       </DialogCancel>
       {isMainWorktree ? null : (
         <Button
+          ref={deleteButtonRef}
           size="sm"
           variant="destructive"
           onClick={() => void confirm()}

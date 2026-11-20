@@ -109,33 +109,26 @@ function resetHosts(agents: { desktop: string[]; server: string[] }) {
 
 describe('New bot on the phone', () => {
   it('creates the bot on the computer Runs on picks, with an agent that computer has', async () => {
-    resetHosts({ desktop: ['claude', 'codex'], server: ['claude', 'opencode'] })
+    resetHosts({ desktop: ['claude', 'codex'], server: ['opencode', 'claude'] })
     const onCreated = vi.fn()
     const sheet = await mount(props({ onCreated }))
+    await sheet.pick('Agent', 'codex')
     await sheet.pick('Computer', 'runtime:linux-1')
-    expect(
-      sheet.actionSheet('Agent').props.actions.map((entry: { id: string }) => entry.id)
-    ).toEqual(['claude', 'opencode'])
-    await sheet.pick('Agent', 'opencode')
+    expect(sheet.actionSheet('Agent').props.actions).toMatchObject([
+      { id: 'opencode', checked: true },
+      { id: 'claude', checked: false }
+    ])
+    await sheet.pick('Agent', 'claude')
     await sheet.submit('  Juno ')
     expect(ops.request).toHaveBeenCalledWith(
       server,
       expect.objectContaining({
         name: 'Juno',
-        agent: 'opencode',
+        agent: 'claude',
         avatar: expect.stringMatching(/^mascot:/)
       })
     )
     expect(onCreated).toHaveBeenCalledWith({ id: 'b9', name: 'Juno' }, COMPUTERS[1])
-  })
-
-  it('moves a kept agent the new computer lacks to the first one it has', async () => {
-    resetHosts({ desktop: ['claude', 'codex'], server: ['opencode', 'claude'] })
-    const sheet = await mount(props())
-    await sheet.pick('Agent', 'codex')
-    await sheet.pick('Computer', 'runtime:linux-1')
-    await sheet.submit('Juno')
-    expect(ops.request).toHaveBeenCalledWith(server, expect.objectContaining({ agent: 'opencode' }))
   })
 
   it('keeps Create off on a computer with none of the agents, or one it can no longer reach', async () => {

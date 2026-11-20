@@ -1,5 +1,7 @@
 import { useClaudeSwitcherState } from './use-claude-switcher-state'
 import type { ClaudeSwitcherMenuProps } from './ClaudeSwitcherMenu'
+import type { ChatAccountAction } from './ProviderAccountChatButton'
+import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 import { useProviderAccountList } from './use-provider-account-list'
 import { providerChatAccountControl } from './ProviderAccountChatButton'
 import React, { useCallback, useRef, useState } from 'react'
@@ -58,7 +60,12 @@ export function ClaudeSwitcherForOwner({
   chatAction,
   ownerUsage,
   owner
-}: ClaudeSwitcherMenuProps & { owner: AccountOwner }): React.JSX.Element | null {
+}: Omit<ClaudeSwitcherMenuProps, 'chatAction' | 'ownerUsage'> & {
+  chatAction?: ChatAccountAction
+  /** Rows, roster and readings all come from this owner's observation. */
+  ownerUsage: OwnerUsageRateLimits
+  owner: AccountOwner
+}): React.JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
@@ -74,13 +81,10 @@ export function ClaudeSwitcherForOwner({
   const wslHostDistro = chatAction ? null : owner.wslHostDistro
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
-  const {
-    chatInactiveClaudeAccounts,
-    settings,
-    ownHostName,
-    accountSettings,
-    claudeAccountSyncKey
-  } = useClaudeSwitcherState(chatAction, activeRuntimeEnvironmentId)
+  const { settings, ownHostName, accountSettings, claudeAccountSyncKey } = useClaudeSwitcherState(
+    chatAction,
+    activeRuntimeEnvironmentId
+  )
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
     ? (ownHostName ?? t('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
     : undefined
@@ -96,15 +100,16 @@ export function ClaudeSwitcherForOwner({
       runtimeTarget,
       claudeAccountSyncKey,
       EMPTY_CLAUDE_ACCOUNTS,
-      !!chatAction,
-      !ownerUsage?.remoteOwner
+      !ownerUsage.remoteOwner
     )
-  const ownerRows = ownerUsage
-    ? getOwnerAccountRows('claude', ownerUsage, accounts, EMPTY_CLAUDE_ACCOUNTS)
-    : null
-  const roster = ownerRows?.roster ?? accounts
-  const inactiveClaudeAccounts = ownerRows?.inactiveAccounts ?? chatInactiveClaudeAccounts
-  const claudeTarget = ownerRows?.usageTarget
+  const {
+    roster,
+    rosterKnown,
+    inactiveAccounts: inactiveClaudeAccounts,
+    usageTarget: claudeTarget
+  } = getOwnerAccountRows('claude', ownerUsage, accounts, EMPTY_CLAUDE_ACCOUNTS)
+  // Why: a chat's local list loads on its own; a remote roster rides the owner's stream.
+  const rosterLoaded = ownerUsage.remoteOwner ? rosterKnown : accountsLoaded
   const accountState = resolveClaudeStatusAccountState(
     accountSettings,
     roster,
@@ -241,7 +246,7 @@ export function ClaudeSwitcherForOwner({
   const accountControl = providerChatAccountControl(
     'claude',
     chatAction,
-    accountsLoaded,
+    rosterLoaded,
     signedInClaudeAccountCount(roster),
     isSwitching
   )
@@ -267,7 +272,7 @@ export function ClaudeSwitcherForOwner({
   )
   // Why: `claude` and the rows come from the same owner snapshot, so its active row is the reading's account.
   const liveActiveUsage = chatAction ? null : claude
-  const panelShowsActiveAccount = ownerUsage !== undefined || !hasActiveRuntimeEnvironment
+  const panelShowsActiveAccount = !chatAction || !hasActiveRuntimeEnvironment
   const rowUsage = (
     target: (typeof rows)[number]['target'],
     inactiveUsage: (typeof rows)[number]['inactiveUsage']

@@ -8,7 +8,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { colors } from '../theme/mobile-theme'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { isBotAgent } from '../../../src/shared/bot-types'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
 import { botGroupReplyDraft } from '../../../src/shared/bots/bot-group-mentions'
@@ -29,18 +30,25 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { MobileNativeChatMessage } from '../session/native-chat/transcript/messages/MobileNativeChatMessage'
 import { MobileNativeChatPermission } from '../session/native-chat/input/prompts/MobileNativeChatPermission'
 import { MobileNativeChatQuestion } from '../session/native-chat/input/prompts/MobileNativeChatQuestion'
+import { MobileNativeChatSendErrorBanner } from '../session/native-chat/status/MobileNativeChatSendErrorBanner'
 import { useMobileBotGroupDraft } from './use-mobile-bot-group-draft'
+import { MobileNativeChatInputLockStatus } from '../session/native-chat/composer/field/MobileNativeChatInputLockStatus'
+import type { MobileNativeChatHostOutage } from '../session/native-chat/status/mobile-native-chat-host-outage'
 
 export function MobileBotGroupRoom({
   client,
   groupId,
   hostId,
-  visible = true
+  visible = true,
+  connected = true,
+  outage = null
 }: {
   client: RpcClient
   groupId: string
   hostId: string
   visible?: boolean
+  connected?: boolean
+  outage?: MobileNativeChatHostOutage | null
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -75,7 +83,7 @@ export function MobileBotGroupRoom({
     client,
     groupId,
     hostId,
-    visible,
+    visible && connected,
     setError
   )
   const group = data?.group
@@ -149,28 +157,27 @@ export function MobileBotGroupRoom({
           report={report}
           onError={onError}
           visible={visible}
+          connected={connected}
         />
       ))}
-      <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('bots.groups.back', 'Back')}
-          onPress={() => router.back()}
-        >
-          <ChevronLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.title} numberOfLines={1}>
-          {group?.name ?? t('bots.groups.group', 'Group')}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('bots.groups.groupActions', 'Group actions')}
-          onPress={() => setMenu('actions')}
-        >
-          <Ellipsis size={22} color={colors.textPrimary} />
-        </Pressable>
-      </View>
-      <MobileBotGroupTranscript groupId={groupId} hasItems={Boolean(data?.messages.length)}>
+      <NavBar
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            accessibilityLabel={t('bots.groups.back', 'Back')}
+            onPress={() => router.back()}
+          />
+        }
+        title={group?.name ?? t('bots.groups.group', 'Group')}
+        trailing={
+          <NavBarButton
+            icon={Ellipsis}
+            accessibilityLabel={t('bots.groups.groupActions', 'Group actions')}
+            onPress={() => setMenu('actions')}
+          />
+        }
+      />
+      <MobileBotGroupTranscript groupId={groupId} data={data}>
         {data?.hasEarlier ? (
           <Pressable accessibilityRole="button" onPress={() => void loadEarlier()}>
             <Text style={styles.notice}>
@@ -241,11 +248,12 @@ export function MobileBotGroupRoom({
           ) : null}
         </View>
       ) : null}
-      {error ? (
-        <Text accessibilityRole="alert" style={styles.notice}>
-          {error}
-        </Text>
-      ) : null}
+      <MobileNativeChatInputLockStatus
+        lockReason="disconnected"
+        waitingText=""
+        hostOutage={outage}
+      />
+      <MobileNativeChatSendErrorBanner message={error} onDismiss={() => setError(null)} />
       <MobileNativeChatComposer
         value={draft}
         onChangeText={setDraft}
@@ -255,6 +263,7 @@ export function MobileBotGroupRoom({
         getComposerEditGeneration={composerDraft.getEditGeneration}
         agent={readers.find((turn) => turn.sessionId === selectedMember?.sessionId)?.agent}
         placeholder={t('bots.groups.composerPlaceholder', 'Message the group, @ to mention a bot')}
+        disabled={!connected}
         roomMentions={roomMentions}
         roomReplies={
           <ModelPill
@@ -264,7 +273,7 @@ export function MobileBotGroupRoom({
             accessibleName={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
               value0: audience
             })}
-            disabled={!group}
+            disabled={!group || !connected}
             onPress={() => setMenu('replies')}
           />
         }

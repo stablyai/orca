@@ -10,7 +10,7 @@ import {
   type ComposioKeyState,
   type ComposioStatus
 } from '../../shared/composio/composio-apps'
-import type { BotToolsCli } from '../bots/bot-tools-host'
+import type { BotToolsHome } from '../bots/bot-tools-host'
 import { removeBotTool } from '../bots/bot-tools-removal'
 import { readBotToolServers } from '../bots/bot-tools-file'
 import { ComposioApi } from './composio-api'
@@ -36,7 +36,7 @@ export type ComposioKeyStore = {
 export type ComposioBotsDeps = {
   keys: ComposioKeyStore
   /** The agent CLI the bot's tools are kept for; throws for a bot without tools. */
-  cliOf: (botId: string) => Promise<BotToolsCli>
+  cliOf: (botId: string) => Promise<BotToolsHome>
   /** This host's bots that can have tools. */
   botIds: () => readonly string[]
   /** Something a client shows changed: the key, a bot's tool or a sign-in. */

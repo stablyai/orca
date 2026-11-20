@@ -25,7 +25,7 @@ it('discards partially emitted messages from a malformed Cline sidecar', async (
   })
   try {
     const path = join(root, 'session.json')
-    await writeFile(path, '{"session_id":"session"}')
+    await writeFile(path, '{"session_id":"session","prompt":"fallback"}')
     await writeFile(
       join(root, 'session.messages.json'),
       '{"messages":[{"role":"assistant","content":"incomplete"}],'
@@ -38,7 +38,7 @@ it('discards partially emitted messages from a malformed Cline sidecar', async (
       },
       platform: 'linux'
     })
-    expect(session?.messageCount).toBe(0)
+    expect(session).toMatchObject({ title: 'fallback', messageCount: 0 })
     expect(published).toEqual([])
   } finally {
     unregister()
