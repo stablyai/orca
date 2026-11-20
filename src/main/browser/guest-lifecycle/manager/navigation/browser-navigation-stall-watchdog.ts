@@ -15,6 +15,7 @@ export const BROWSER_LOAD_STALL_AFTER_MS = 5_000
 
 type PendingLoad = {
   origin: string
+  startUrl: string
   url: URL
   startedAt: number
   phase: BrowserLoadStallPhase
@@ -29,6 +30,14 @@ function webOrigin(rawUrl: string): URL | null {
     return url.protocol === 'http:' || url.protocol === 'https:' ? url : null
   } catch {
     return null
+  }
+}
+
+function normalizedHref(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).href
+  } catch {
+    return rawUrl
   }
 }
 
@@ -164,6 +173,7 @@ export function installBrowserNavigationStallWatchdog(
     }
     const load: PendingLoad = {
       origin: url.origin,
+      startUrl: url.href,
       url,
       startedAt: performance.now(),
       phase: 'no-request-seen',
@@ -207,14 +217,17 @@ export function installBrowserNavigationStallWatchdog(
     recordCommit()
     finish('committed')
   }
+  // A replaced navigation can fail late (e.g. a delayed extension block); only its own load ends.
   const failed = (
     _event: Electron.Event,
     _code: number,
     _description: string,
-    _url: string,
+    failedUrl: string,
     isMainFrame: boolean
   ): void => {
-    if (isMainFrame) {
+    const load = pending
+    const href = failedUrl ? normalizedHref(failedUrl) : null
+    if (isMainFrame && load && (!href || href === load.startUrl || href === load.url.href)) {
       finish('failed')
     }
   }

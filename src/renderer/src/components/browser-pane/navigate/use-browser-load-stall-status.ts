@@ -8,7 +8,16 @@ import { useTranslate } from '@/i18n/use-translate'
 // One subscription for the app, so a pane that remounts mid-stall still knows its load is stuck.
 const stalls = new Map<string, { webContentsId: number; stall: BrowserLoadStall }>()
 const listenersByPage = new Map<string, Set<() => void>>()
-let listening = false
+let stopListening: (() => void) | null = null
+
+/** Started at app launch: retained pages can stall before any browser pane mounts. */
+export function listenForBrowserLoadStalls(): () => void {
+  stopListening ??= window.api?.browser?.onLoadStall?.(applyLoadStallEvent) ?? (() => {})
+  return () => {
+    stopListening?.()
+    stopListening = null
+  }
+}
 
 function applyLoadStallEvent(event: BrowserLoadStallEvent): void {
   if (event.stall) {
@@ -31,10 +40,7 @@ function subscribe(browserPageId: string, listener: () => void): () => void {
     listenersByPage.set(browserPageId, listeners)
   }
   listeners.add(listener)
-  if (!listening) {
-    listening = true
-    window.api?.browser?.onLoadStall?.(applyLoadStallEvent)
-  }
+  listenForBrowserLoadStalls()
   return () => {
     const current = listenersByPage.get(browserPageId)
     current?.delete(listener)
