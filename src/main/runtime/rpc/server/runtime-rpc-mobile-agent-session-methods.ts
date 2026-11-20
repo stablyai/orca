@@ -50,6 +50,7 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.restartContinue',
   // A paired window waits on the host's own launch continuation before offering the rest.
   'agentSession.restartLaunchSettled',
+  'agentSession.restartResumableDismiss',
   // "Don't continue" on a usage-limit row the host will continue at its reset.
   'agentSession.cancelUsageLimitContinue',
   // Skip on a Codex async question card; phones offer it where the host advertises it.

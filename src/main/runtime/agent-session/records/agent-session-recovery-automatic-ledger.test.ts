@@ -131,6 +131,6 @@ it('keeps the passed-over list small enough for its own reader', () => {
     10
   )
 
-  expect(next.passed).toHaveLength(2000)
+  expect(next.passed).toHaveLength(1000)
   expect(Buffer.byteLength(JSON.stringify(next))).toBeLessThan(512 * 1024)
 })

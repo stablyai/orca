@@ -18,7 +18,7 @@ export const AUTOMATIC_CONTINUATION_WINDOW_MS = 5 * 60_000
 const TAKEN_RETENTION_MS = 24 * 60 * 60_000
 const DISMISSED_LIMIT = 500
 /** Bounds the file below its read limit; an unreadable ledger would stop every automatic continuation. */
-const PASSED_LIMIT = 2000
+const PASSED_LIMIT = 1000
 
 const ledgerSchema = z.object({
   taken: z.record(z.string(), z.array(z.object({ at: z.number(), work: z.string() }))),
