@@ -1,3 +1,4 @@
+import { probeRender } from '@/diagnostics/bot-home/bot-home-render-probe'
 import React, { useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import { botRefKey } from '@/lib/bot-hosts'
@@ -95,6 +96,7 @@ function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {
 }
 
 function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
+  probeRender('BotActivityTab')
   const t = useTranslate()
   const activity = useBotActivity(bot)
   const now = useBotNow(bot)

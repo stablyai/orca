@@ -1,3 +1,4 @@
+import { probeRender } from '@/diagnostics/bot-home/bot-home-render-probe'
 import { useEffect, useId, useRef, useState } from 'react'
 import { LoaderCircle, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -268,6 +269,7 @@ export function BotUpNextSection({
   bot: Bot
   upNext: BotUpNext
 }): React.JSX.Element | null {
+  probeRender('BotUpNextSection')
   const t = useTranslate()
   const { state, items } = upNext
   const { looking, lookNowClicked } = useLooking(bot, state)

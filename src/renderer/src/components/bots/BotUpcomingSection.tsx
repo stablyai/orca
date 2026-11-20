@@ -1,3 +1,4 @@
+import { probeRender } from '@/diagnostics/bot-home/bot-home-render-probe'
 // Automations in a bot's Activity panel: Tidy memory, Look around, automations and waits, failed first,
 // then running, then soonest; paused ones last. Five show, then "All N automations". Folded, the rows
 // in trouble stay listed under the header.
@@ -37,6 +38,7 @@ export function BotUpcomingSection({
   signInStops: ReadonlySet<string>
   now: number
 }): React.JSX.Element {
+  probeRender('BotUpcomingSection')
   const t = useTranslate()
   const { shown, listed, listedPaused } = botAutomationCardView(useAutomationCardOrder(rows))
   const newLabel = t('bots.automations.new', 'New automation')
