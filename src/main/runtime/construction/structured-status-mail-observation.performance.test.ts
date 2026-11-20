@@ -3,11 +3,25 @@ import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { EnrichedAgentHookEventPayload } from '../../agent-hooks/server/server-types'
+import type * as PtyPaneRecord from '../terminal/query/pty-pane-record'
+import { OrchestrationMailboxPointerDelivery } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-delivery'
 import {
   createDatabase,
   createRuntime,
   temporaryDirectories
 } from '../orchestration/mailbox/terminal-pointer/orchestration-mailbox-notification-test-harness'
+
+const lookups = vi.hoisted(() => ({ count: 0 }))
+vi.mock('../terminal/query/pty-pane-record', async (load) => {
+  const actual = await load<typeof PtyPaneRecord>()
+  return {
+    ...actual,
+    ptyRecordForPaneKey: (...args: Parameters<typeof actual.ptyRecordForPaneKey>) => {
+      lookups.count++
+      return actual.ptyRecordForPaneKey(...args)
+    }
+  }
+})
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => tmpdir()), isPackaged: false },
@@ -40,11 +54,8 @@ it.each([300, 3000])(
         return () => {}
       }
     })
-    const observe = vi.spyOn(
-      Reflect.get(runtime, 'orchestrationMailboxPointerDelivery'),
-      'observeTerminal'
-    )
-    const lookups = vi.spyOn(runtime, 'getPtyRecordForPaneKey' as never)
+    const observe = vi.spyOn(OrchestrationMailboxPointerDelivery.prototype, 'observeTerminal')
+    lookups.count = 0
     try {
       for (let i = 0; i < rows; i++) {
         const row: EnrichedAgentHookEventPayload = {
@@ -61,7 +72,7 @@ it.each([300, 3000])(
           listener(row)
         }
       }
-      expect(lookups).toHaveBeenCalledTimes(0)
+      expect(lookups.count).toBe(0)
       expect(observe).toHaveBeenCalledTimes(0)
     } finally {
       db.close()
