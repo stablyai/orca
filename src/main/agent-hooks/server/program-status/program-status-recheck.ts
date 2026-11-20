@@ -91,6 +91,7 @@ export function wakeAntigravityDone(
 }
 
 export function discardAntigravityDone(
+  state: HookListenerState,
   rechecks: PaneTimers,
   incoming: AgentHookEventPayload,
   applied: AgentHookEventPayload | undefined
@@ -102,6 +103,9 @@ export function discardAntigravityDone(
       applied.payload.mainAgent?.state !== 'done')
   ) {
     rechecks.cancel(applied.paneKey)
+    if (applied.connectionId && applied.payload.state === 'done') {
+      state.antigravityChildWorkByPaneKey.delete(applied.paneKey)
+    }
   }
 }
 
@@ -127,6 +131,7 @@ export function reconcileRelayedAntigravityDone(
     previous?.connectionId === applied.connectionId &&
     previous.providerSession?.id === applied.providerSession?.id &&
     previous.launchToken === applied.launchToken &&
+    previous.payload.mainAgent?.stateStartedAt === applied.payload.mainAgent?.stateStartedAt &&
     previous.hostTurn?.owner === applied.hostTurn?.owner &&
     previous.hostTurn?.currentTurnKey === applied.hostTurn?.currentTurnKey
   if (!sameTurn || applied.hasExplicitPrompt || applied.payload.mainAgent?.state !== 'done') {

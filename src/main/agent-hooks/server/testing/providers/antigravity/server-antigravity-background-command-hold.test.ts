@@ -215,4 +215,5 @@ it('reoffers one relayed done after the final verified child disappears', async 
   expect(state()).toBe('working')
   await vi.advanceTimersByTimeAsync(1001)
   expect(state()).toBe('done')
+  expect(server._getStateForTests().antigravityChildWorkByPaneKey.has(PANE)).toBe(false)
 })
