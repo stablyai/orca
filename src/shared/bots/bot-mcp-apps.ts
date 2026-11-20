@@ -40,6 +40,35 @@ export function botMcpAppUrl(app: Pick<BotMcpApp, 'url' | 'variable'>, value?: s
   return variable ? app.url.replace(`{${variable.key}}`, value || variable.default) : app.url
 }
 
+/**
+ * What filled the app's blank in a URL it was added at, as its row tags it: the site's name or the
+ * typed host. Null at the default, or for a URL the app's template doesn't match.
+ */
+export function botMcpAppUrlTag(
+  app: Pick<BotMcpApp, 'url' | 'variable'>,
+  url: string
+): string | null {
+  const variable = app.variable
+  if (!variable) {
+    return null
+  }
+  const [before, after = ''] = app.url.split(`{${variable.key}}`)
+  if (
+    url.length <= before.length + after.length ||
+    !url.startsWith(before) ||
+    !url.endsWith(after)
+  ) {
+    return null
+  }
+  const value = url.slice(before.length, url.length - after.length)
+  if (value === variable.default) {
+    return null
+  }
+  return 'choices' in variable
+    ? (variable.choices.find((choice) => choice.value === value)?.name ?? null)
+    : value
+}
+
 const HOST_LABEL = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
 const HOST_WITH_PORT = new RegExp(`^${HOST_LABEL}(?:\\.${HOST_LABEL})*(?::(\\d{1,5}))?$`)
 

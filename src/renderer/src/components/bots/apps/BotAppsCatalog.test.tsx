@@ -284,4 +284,24 @@ describe('Add to <bot>', () => {
     // Which apps it has comes from its tools alone: no check starts its servers.
     expect(calls('bots.tools.problems')).toHaveLength(0)
   })
+  it('tags an app added at another site or host, and not one at its default', async () => {
+    retryBotToolCheck()
+    answer({
+      ...tools,
+      'bots.tools.list': () => ({
+        own: [
+          { name: 'datadog', detail: 'https://mcp.datadoghq.eu/v1/mcp', remote: true },
+          { name: 'gitlab', detail: 'https://gitlab.acme.dev/api/v4/mcp', remote: true },
+          { name: 'sentry', detail: 'https://mcp.sentry.dev/mcp', remote: true }
+        ],
+        inherited: []
+      })
+    })
+    open()
+    const row = async (name: string) =>
+      (await screen.findByRole('button', { name: `Manage ${name}` })).closest('li')?.textContent
+    expect(await row('Datadog')).toContain('DatadogEU')
+    expect(await row('GitLab')).toContain('GitLabgitlab.acme.dev')
+    expect(await row('Sentry')).toMatch(/^SentryLook/)
+  })
 })

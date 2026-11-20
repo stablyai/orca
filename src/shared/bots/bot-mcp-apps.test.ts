@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { botMcpAppHost, botMcpAppUrl } from './bot-mcp-apps'
+import { botMcpAppHost, botMcpAppUrl, botMcpAppUrlTag } from './bot-mcp-apps'
 
 const gitlab = {
   url: 'https://{host}/api/v4/mcp',
@@ -57,5 +57,35 @@ describe('botMcpAppHost', () => {
     ]) {
       expect(botMcpAppHost(input), input).toBeNull()
     }
+  })
+})
+
+describe('botMcpAppUrlTag', () => {
+  const datadog = {
+    url: 'https://mcp.{site}/v1/mcp',
+    variable: {
+      key: 'site',
+      label: 'Site',
+      default: 'datadoghq.com',
+      choices: [
+        { name: 'US1', place: 'US East', value: 'datadoghq.com' },
+        { name: 'EU', place: 'Europe', value: 'datadoghq.eu' }
+      ]
+    }
+  }
+
+  it('names a picked site and a typed host, and nothing at the default', () => {
+    expect(botMcpAppUrlTag(datadog, 'https://mcp.datadoghq.eu/v1/mcp')).toBe('EU')
+    expect(botMcpAppUrlTag(datadog, 'https://mcp.datadoghq.com/v1/mcp')).toBeNull()
+    expect(botMcpAppUrlTag(gitlab, 'https://git.acme.dev:8443/api/v4/mcp')).toBe(
+      'git.acme.dev:8443'
+    )
+    expect(botMcpAppUrlTag(gitlab, 'https://gitlab.com/api/v4/mcp')).toBeNull()
+  })
+
+  it('names nothing for a URL the template does not match', () => {
+    expect(botMcpAppUrlTag(datadog, 'https://mcp.example.com/v1/mcp')).toBeNull()
+    expect(botMcpAppUrlTag(gitlab, 'https://gitlab.acme.dev/mcp')).toBeNull()
+    expect(botMcpAppUrlTag({ url: 'https://mcp.sentry.dev/mcp' }, 'https://x/mcp')).toBeNull()
   })
 })
