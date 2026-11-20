@@ -19,7 +19,11 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { createClaudeTranscriptImportPlan } from './claude-transcript-import-plan'
-import { readClaudeTranscriptFrontier, readClaudeTranscriptTail } from './claude-transcript-tail'
+import {
+  CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES,
+  readClaudeTranscriptFrontier,
+  readClaudeTranscriptTail
+} from './claude-transcript-tail'
 import {
   claudeTranscriptItemKeys,
   createClaudeTranscriptItemReader
@@ -129,11 +133,11 @@ export async function catchUpClaudeTranscript(input: {
           const newestUuid = await readClaudeTranscriptFrontier({
             filePath,
             consumedBytes: size,
-            maxBytes: 64 * 1024,
+            maxBytes: CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES,
             check
           })
           check()
-          if (newestUuid === undefined || newestUuid === sourceFrontier) {
+          if (newestUuid !== undefined && newestUuid === sourceFrontier) {
             complete = true
             return createHistoryCatchUpBatch().finish('claude-history-unchanged', [
               planned.physicalCursor,

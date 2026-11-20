@@ -8,7 +8,7 @@ afterEach(async () => {
   await closeClaudeCatchUpChats()
 })
 
-it.each(['tail', 'batch', 'metadata'] as const)(
+it.each<'tail' | 'batch' | 'metadata'>(['tail', 'batch', 'metadata'])(
   'shows newest outside history and discloses its retained window after exceeding the %s capacity',
   async (mode) => {
     const c = await chat(mode)
@@ -76,28 +76,41 @@ it.each(['tail', 'batch', 'metadata'] as const)(
   }
 )
 
-it('imports an equal-length rewrite of the final answer after recovery on reopen', async () => {
-  const c = await chat('batch')
-  expect(await c.catchUp()).toBe(true)
-  const original = await readFile(c.filePath, 'utf8')
-  const rewritten = original
-    .replaceAll('newest-answer', 'edited-answer')
-    .replace('Distinctive newest outside answer', 'Distinctive edited outside answer')
-  expect(Buffer.byteLength(rewritten)).toBe(Buffer.byteLength(original))
-  await writeFile(c.filePath, rewritten)
-  await c.reopen()
-  expect(await c.catchUp()).toBe(true)
-  expect(await c.items()).toContainEqual(
-    expect.objectContaining({
-      itemId: 'claude:provider-catch-up:edited-answer',
-      body: {
-        kind: 'message',
-        role: 'assistant',
-        blocks: [{ type: 'text', text: 'Distinctive edited outside answer' }]
-      }
-    })
-  )
-})
+it.each(['', 'x'.repeat(100 * 1024)])(
+  'imports an equal-length final answer rewrite beyond a short frontier scan (%#)',
+  async (padding) => {
+    const c = await chat('batch')
+    const transcript = await readFile(c.filePath, 'utf8')
+    await writeFile(
+      c.filePath,
+      transcript.replace(
+        'Distinctive newest outside answer',
+        `Distinctive newest outside answer${padding}`
+      )
+    )
+    expect(await c.catchUp()).toBe(true)
+    const original = await readFile(c.filePath, 'utf8')
+    const rewritten = original
+      .replaceAll('newest-answer', 'edited-answer')
+      .replace('Distinctive newest outside answer', 'Distinctive edited outside answer')
+    expect(Buffer.byteLength(rewritten)).toBe(Buffer.byteLength(original))
+    await writeFile(c.filePath, rewritten)
+    await c.reopen()
+    expect(await c.catchUp()).toBe(true)
+    expect(await c.items()).toContainEqual(
+      expect.objectContaining({
+        itemId: 'claude:provider-catch-up:edited-answer',
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [
+            { type: 'text', text: expect.stringContaining('Distinctive edited outside answer') }
+          ]
+        }
+      })
+    )
+  }
+)
 
 it('catches up from a newer saved leaf after growing past the recovery frontier', async () => {
   const c = await chat()
@@ -159,44 +172,49 @@ it('continues a system frontier without reporting a rewind', async () => {
   ).not.toContain('continued-outside-rewound')
 })
 
-it('drops a replacement when provider output wins after the captured view', async () => {
-  const c = await chat()
-  const replace = c.deferred.sink.tryReplaceHistory?.bind(c.deferred.sink)
-  if (!replace) {
-    throw new Error('missing production history replacement')
-  }
-  const replaced = vi.fn()
-  c.journal.epochReplacements.observe(replaced)
-  vi.spyOn(c.deferred.sink, 'tryReplaceHistory').mockImplementationOnce((replacement) => {
-    c.deferred.sink.appendItem(
-      { provider: 'claude', sessionId: 'provider-catch-up', uuid: 'concurrent' },
-      {
-        kind: 'message',
-        role: 'assistant',
-        blocks: [{ type: 'text', text: 'Concurrent journal answer survives' }]
-      },
-      { turnScope: { kind: 'thread' } }
+it.each(['claude', 'orca'])(
+  'drops a replacement when %s output wins after the captured view',
+  async (provider) => {
+    const c = await chat()
+    const replace = c.deferred.sink.tryReplaceHistory?.bind(c.deferred.sink)
+    if (!replace) {
+      throw new Error('missing production history replacement')
+    }
+    const replaced = vi.fn()
+    c.journal.epochReplacements.observe(replaced)
+    vi.spyOn(c.deferred.sink, 'tryReplaceHistory').mockImplementationOnce((replacement) => {
+      c.deferred.sink.appendItem(
+        provider === 'orca'
+          ? { provider: 'orca', clientMessageId: 'concurrent' }
+          : { provider: 'claude', sessionId: 'provider-catch-up', uuid: 'concurrent' },
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Concurrent journal answer survives' }]
+        },
+        { turnScope: { kind: 'thread' } }
+      )
+      return replace(replacement)
+    })
+    expect(await c.catchUp()).toBe(false)
+    const items = await c.items()
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Concurrent journal answer survives' }]
+        }
+      })
     )
-    return replace(replacement)
-  })
-  expect(await c.catchUp()).toBe(false)
-  const items = await c.items()
-  expect(items).toContainEqual(
-    expect.objectContaining({
-      body: {
-        kind: 'message',
-        role: 'assistant',
-        blocks: [{ type: 'text', text: 'Concurrent journal answer survives' }]
-      }
-    })
-  )
-  expect(items).not.toContainEqual(
-    expect.objectContaining({
-      body: expect.objectContaining({ presentation: 'continued-outside-recent' })
-    })
-  )
-  expect(replaced).toHaveBeenCalledWith(expect.any(Promise))
-})
+    expect(items).not.toContainEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({ presentation: 'continued-outside-recent' })
+      })
+    )
+    expect(replaced).toHaveBeenCalledWith(expect.any(Promise))
+  }
+)
 
 it('leaves history and publication untouched when the replacement permit is revoked', async () => {
   const c = await chat()
