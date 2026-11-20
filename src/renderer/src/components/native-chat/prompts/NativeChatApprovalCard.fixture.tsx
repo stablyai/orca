@@ -92,3 +92,32 @@ export const sixChoices = choices(6, 720)
 export const narrowTwoChoices = choices(2, 360)
 export const narrowFourChoices = choices(4, 360)
 export const narrowSixChoices = choices(6, 360)
+
+// A short split pane: the answers that do not fit stay reachable by scrolling the card.
+export const shortPane = defineFixture({
+  width: 288,
+  render: () => (
+    <div
+      className="native-chat-appearance flex h-[135px] flex-col bg-chat-canvas"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatApprovalCard
+        approval={{
+          title: 'Run git commit -m "Update the greeting"?',
+          detail: 'git commit -m "Update the greeting"',
+          options: LONG_OPTIONS.slice(0, 4)
+        }}
+        onChoose={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  )
+})
+
+export const shortPaneScrolled = defineFixture({
+  ...shortPane,
+  interact: (frame) => {
+    const card = frame.querySelector<HTMLElement>('[data-native-chat-approval-card]')
+    card?.scrollTo({ top: card.scrollHeight })
+  }
+})

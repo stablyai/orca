@@ -47,7 +47,8 @@ export type NativeChatApprovalCardProps = {
 }
 
 // Answers keep the small button's height and body text, growing to wrap a long label rather than spill out.
-const QUIET_ANSWER_SIZE = 'min-h-8 px-3 py-1 text-left text-sm font-medium'
+const QUIET_ANSWER_SIZE =
+  'min-h-8 max-w-full px-3 py-1 text-left text-sm font-medium [overflow-wrap:anywhere]'
 
 /** PTY options are literal replies; structured options are journal ids. The first option is primary unless the options are neutral. */
 export function NativeChatApprovalCard({
@@ -156,8 +157,9 @@ export function NativeChatApprovalCard({
                   escape()
                 }
               }}
+              // Scrolls as a last resort, so a short pane never hides an answer.
               className={cn(
-                'flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-lg border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'scrollbar-sleek flex min-h-0 w-full flex-1 flex-col overflow-x-hidden overflow-y-auto rounded-lg border bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 quiet
                   ? 'gap-1.5 border-border px-2.5 pt-1.5 pb-2'
                   : 'gap-2 border-input px-4 py-3 shadow-xs'
