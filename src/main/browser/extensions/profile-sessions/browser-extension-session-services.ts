@@ -21,8 +21,7 @@ import {
 import { setBrowserExtensionSessionHooks } from './browser-extension-session-loader'
 import {
   isBrowserExtensionStateKeptWhileIdle,
-  onBrowserExtensionIdleStateDropped,
-  settleBrowserExtensionIdleState
+  onBrowserExtensionIdleStateDropped
 } from './browser-extension-idle-kept-state'
 import { closeBrowserExtensionSidePanelsForExtension } from '../side-panel/browser-extension-side-panel-host'
 import { forgetSidePanelExtensionOptions } from '../side-panel/browser-extension-side-panel-options'
@@ -107,7 +106,6 @@ export function installBrowserExtensionSessionServices(): void {
     },
     detached: stopObservingBrowserExtensionWebRequests,
     loaded: async (sess, profileId, extension) => {
-      settleBrowserExtensionIdleState(profileId, extension)
       await Promise.all([
         restoreBrowserExtensionContentScripts(
           sess,

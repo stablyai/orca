@@ -1,6 +1,7 @@
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { prepareBrowserExtensionDirectory } from '../installation/browser-extension-load-directory'
+import { dropBrowserExtensionIdleState } from './browser-extension-idle-kept-state'
 import {
   getBrowserExtensionSessionForProfile,
   loadBrowserExtensionIntoProfile,
@@ -36,6 +37,8 @@ export async function reloadBrowserExtensionWhereEnabled(
   for (const profileId of profileIds) {
     unloadBrowserExtensionFromProfile(profileId, extension.id)
   }
+  // Profiles idle now load the new copy when they reopen; a reload resets session state there too.
+  dropBrowserExtensionIdleState({ extensionId: extension.id })
   if (options.refresh) {
     await prepareBrowserExtensionDirectory(extension, { refresh: true })
   }

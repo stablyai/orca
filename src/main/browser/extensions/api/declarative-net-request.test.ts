@@ -131,7 +131,7 @@ describe('chrome.declarativeNetRequest', () => {
     await next.call('updateDynamicRules', { removeRuleIds: [1, 3] })
   })
 
-  it('keeps session rules across an unload until the extension is uninstalled', async () => {
+  it('keeps session rules across an unload until a new version or an uninstall', async () => {
     const { call, blocks, session } = await launch()
     await call('updateSessionRules', { addRules: [block(7, '||session.example^')] })
     const runtime = getDnrSessionRuntime(session)
@@ -140,6 +140,10 @@ describe('chrome.declarativeNetRequest', () => {
     await runtime?.addExtension(extension())
     expect(blocks('https://session.example/1.js')).toBe(true)
     await expect(call('getSessionRules')).resolves.toMatchObject([{ id: 7 }])
+    runtime?.removeExtension(ID)
+    await runtime?.addExtension(extension('2'))
+    expect(blocks('https://session.example/1.js')).toBe(false)
+    await call('updateSessionRules', { addRules: [block(7, '||session.example^')] })
     runtime?.removeExtension(ID)
     await getBrowserExtensionDnrStore().forgetExtension(ID)
     await runtime?.addExtension(extension())

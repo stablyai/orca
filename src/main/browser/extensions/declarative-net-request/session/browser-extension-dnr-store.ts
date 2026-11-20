@@ -22,27 +22,35 @@ const dnrStateSchema = z.object({
 
 export type BrowserExtensionDnrState = z.infer<typeof dnrStateSchema>
 
+type SessionRules = { version: string; rules: DnrRule[] }
+
 /**
- * Session rules stay in memory across the extension's unloads (idle profile, disable, reload,
- * update) until it is uninstalled or the profile deleted, as Chrome keeps them per profile.
+ * Session rules stay in memory across the extension's unloads (idle profile, disable, reload)
+ * until a new version is installed, it is uninstalled or the profile deleted, as Chrome keeps them.
  */
 class BrowserExtensionDnrStore extends BrowserExtensionProfileDocumentStore {
-  private readonly sessionRules = new Map<string, Map<string, DnrRule[]>>()
+  private readonly sessionRules = new Map<string, Map<string, SessionRules>>()
 
-  readSessionRules(profileId: string, extensionId: string): DnrRule[] {
-    return this.sessionRules.get(profileId)?.get(extensionId) ?? []
+  readSessionRules(profileId: string, extension: Pick<Electron.Extension, 'id' | 'version'>) {
+    const saved = this.sessionRules.get(profileId)?.get(extension.id)
+    return saved?.version === extension.version ? saved.rules : []
   }
 
-  writeSessionRules(profileId: string, extensionId: string, rules: DnrRule[]): void {
-    let byExtension = this.sessionRules.get(profileId)
-    if (!byExtension) {
-      byExtension = new Map()
-      this.sessionRules.set(profileId, byExtension)
-    }
+  writeSessionRules(
+    profileId: string,
+    extension: Pick<Electron.Extension, 'id' | 'version'>,
+    rules: DnrRule[]
+  ): void {
+    const byExtension = this.sessionRules.get(profileId) ?? new Map<string, SessionRules>()
     if (rules.length > 0) {
-      byExtension.set(extensionId, rules)
+      byExtension.set(extension.id, { version: extension.version, rules })
     } else {
-      byExtension.delete(extensionId)
+      byExtension.delete(extension.id)
+    }
+    if (byExtension.size > 0) {
+      this.sessionRules.set(profileId, byExtension)
+    } else {
+      this.sessionRules.delete(profileId)
     }
   }
 

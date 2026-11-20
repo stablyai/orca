@@ -95,7 +95,7 @@ export class DnrExtensionRules {
       await this.restoreScoped('dynamic', readableRules(state.dynamicRules))
       await this.restoreScoped(
         'session',
-        getBrowserExtensionDnrStore().readSessionRules(this.host.profileId, this.extension.id)
+        getBrowserExtensionDnrStore().readSessionRules(this.host.profileId, this.extension)
       )
     })
   }
@@ -323,7 +323,7 @@ export class DnrExtensionRules {
     this.scoped[scope] = { rules, built: attached }
     this.host.engine.setRuleset(this.extension.id, { kind: scope }, attached?.index ?? null)
     if (scope === 'session') {
-      getBrowserExtensionDnrStore().writeSessionRules(this.host.profileId, this.extension.id, rules)
+      getBrowserExtensionDnrStore().writeSessionRules(this.host.profileId, this.extension, rules)
     }
   }
 

@@ -105,7 +105,7 @@ export function forgetBrowserExtensionSessionContentScripts(
   profileId: string,
   extensionId: string
 ): void {
-  sessionScripts.get(profileId)?.delete(extensionId)
+  keepSessionContentScripts(profileId, extensionId, [])
 }
 
 function keepSessionContentScripts(
@@ -113,15 +113,16 @@ function keepSessionContentScripts(
   extensionId: string,
   scripts: Record<string, unknown>[]
 ): void {
-  let byExtension = sessionScripts.get(profileId)
-  if (!byExtension) {
-    byExtension = new Map()
-    sessionScripts.set(profileId, byExtension)
-  }
+  const byExtension = sessionScripts.get(profileId) ?? new Map<string, Record<string, unknown>[]>()
   if (scripts.length > 0) {
     byExtension.set(extensionId, scripts)
   } else {
     byExtension.delete(extensionId)
+  }
+  if (byExtension.size > 0) {
+    sessionScripts.set(profileId, byExtension)
+  } else {
+    sessionScripts.delete(profileId)
   }
 }
 

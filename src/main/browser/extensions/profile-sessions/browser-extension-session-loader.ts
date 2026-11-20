@@ -28,10 +28,7 @@ import {
   throwIfBrowserExtensionLoadCancelled
 } from './browser-extension-profile-loads'
 import { removeBrowserExtensionFromSession } from './browser-extension-worker-registration'
-import {
-  dropBrowserExtensionIdleState,
-  keepBrowserExtensionStateWhileIdle
-} from './browser-extension-idle-kept-state'
+import * as idleKeptState from './browser-extension-idle-kept-state'
 import {
   loadBrowserExtensionIntoSession,
   loadInstalledBrowserExtensionIntoSession
@@ -102,6 +99,7 @@ export function attachBrowserExtensionsToProfileSession(
   registerExtensionPreload(sess)
   attachBrowserExtensionApiHostToSession(sess, profile.id)
   sessionHooks?.attached(sess, profile.id, enabledExtensionIds)
+  const kind = idleKeptState.settleKeptStateOnAttach(profile.id, enabledExtensionIds)
   const store = getBrowserExtensionInstallStore()
   const loads = new BrowserExtensionProfileLoads()
   const swept = removeUninstalledBrowserExtensionData(
@@ -123,7 +121,7 @@ export function attachBrowserExtensionsToProfileSession(
           sess,
           profile.id,
           installed,
-          'startup',
+          kind,
           load
         )
         await sessionHooks?.loaded(sess, profile.id, loaded)
@@ -149,7 +147,6 @@ export function attachBrowserExtensionsToProfileSession(
     .catch(() => {})
     .finally(() => {
       state.loadingExtensions = false
-      dropBrowserExtensionIdleState({ profileId: profile.id })
     })
   stateByProfileId.set(profile.id, state)
   profileIdByPartition.set(profile.partition, profile.id)
@@ -160,7 +157,9 @@ async function unloadProfileSession(state: ProfileSessionState, idle = false): P
   forgetBrowserExtensionLoadFailures({ profileId: state.profile.id })
   await Promise.all([state.loading.catch(() => {}), state.loads.close()])
   const extensions = state.session.extensions.getAllExtensions()
-  keepBrowserExtensionStateWhileIdle(state.profile.id, idle ? extensions : [])
+  if (idle) {
+    idleKeptState.keepBrowserExtensionStateWhileIdle(state.profile.id, extensions)
+  }
   for (const extension of extensions) {
     removeBrowserExtensionFromSession(state.session, extension.id)
   }
@@ -191,7 +190,7 @@ export async function detachBrowserExtensionsFromProfileSession(
       await unloadProfileSession(state)
     }
   } finally {
-    dropBrowserExtensionIdleState({ profileId: profile.id })
+    idleKeptState.dropBrowserExtensionIdleState({ profileId: profile.id, deleted: true })
     forgetBrowserExtensionActionProfile(profile.id)
     getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
     await Promise.all([
@@ -208,7 +207,7 @@ export async function detachBrowserExtensionsFromAllProfileSessions(): Promise<v
   stateByProfileId.clear()
   profileIdByPartition.clear()
   await Promise.all([...states.map((state) => unloadProfileSession(state)), ...idleUnloads])
-  dropBrowserExtensionIdleState({})
+  idleKeptState.dropBrowserExtensionIdleState({})
 }
 
 /**

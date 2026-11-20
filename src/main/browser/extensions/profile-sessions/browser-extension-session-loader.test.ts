@@ -304,6 +304,36 @@ describe('a profile whose last page closed', () => {
     await unloading
     await loader.detachBrowserExtensionsFromAllProfileSessions()
   })
+
+  it('resumes its extensions on reopen without firing runtime.onStartup again', async () => {
+    const resumed = { ...profile, id: 'resumed-profile', partition: 'persist:orca-browser-resumed' }
+    setBrowserExtensionSupportEnabled(true)
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+    getBrowserExtensionInstallStore().save(installed)
+    mocks.prepared.hasWorker = true
+    const attach = async (): Promise<void> => {
+      loader.attachBrowserExtensionsToProfileSession(resumed, [ID])
+      await vi.waitFor(() => expect(mocks.registrationListeners.size).toBeGreaterThan(0))
+      for (const listener of mocks.registrationListeners) {
+        listener({}, { scope: `chrome-extension://${ID}/` })
+      }
+      await loader.whenBrowserExtensionProfileLoaded(resumed.id)
+    }
+    await attach()
+    await loader.unloadBrowserExtensionsFromIdleProfile(resumed.id, () => {})
+    mocks.emitWorkerStart.mockClear()
+    await attach()
+    expect(mocks.session.extensions.getExtension(ID)).not.toBeNull()
+    expect(mocks.emitWorkerStart).not.toHaveBeenCalledWith(
+      expect.anything(),
+      ID,
+      'runtime',
+      'onStartup',
+      []
+    )
+    mocks.prepared.hasWorker = false
+    await loader.detachBrowserExtensionsFromAllProfileSessions()
+  })
 })
 
 it('does not restore stale enablement after uninstall and reinstall in another Orca profile', async () => {
