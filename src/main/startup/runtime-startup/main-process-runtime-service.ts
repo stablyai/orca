@@ -71,7 +71,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   if (!store || !stats) {
     throw new Error('Store and stats must be initialized before runtime')
   }
-  installJournalRetirementHost(store)
+  // Only the desktop app may delete the old journal; headless serve stays report-only.
+  if (!state.isServeMode) {
+    installJournalRetirementHost(store)
+  }
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {

@@ -5,8 +5,9 @@ import type {
   LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS,
   legacyJournalRetirementSchema
 } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
-import type { LegacyProofCounts } from './journal-legacy-retirement-state'
+import { LEGACY_PROOF_LAYOUT, type LegacyProofCounts } from './journal-legacy-retirement-state'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
+import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 
 export type LegacyJournalRetirementEvent = z.infer<typeof legacyJournalRetirementSchema>
 export type LegacyJournalRetirementMode = { mode: 'off' | 'report' | 'enforce'; revision: number }
@@ -64,16 +65,13 @@ export type LegacyJournalRetirementOutcome = Pick<
   elapsedMs: number | null
 }
 
-/** Bump when the checks that admit a file change, so reports before and after can be told apart. */
-export const LEGACY_JOURNAL_INVENTORY_REVISION = 1
-
 export function legacyJournalRetirementEvent(
   outcome: LegacyJournalRetirementOutcome
 ): LegacyJournalRetirementEvent {
   const { counts, sourceBytes, activeMs, elapsedMs, ...fields } = outcome
   return {
     ...fields,
-    inventory_revision: LEGACY_JOURNAL_INVENTORY_REVISION,
+    inventory_revision: LEGACY_PROOF_LAYOUT,
     chats_bucket: countBucket(counts?.chats ?? 0),
     already_converted_bucket: countBucket(counts?.alreadyConverted ?? 0),
     newly_converted_bucket: countBucket(counts?.newlyConverted ?? 0),
@@ -220,8 +218,25 @@ export class LegacyJournalRetirementReporter {
   }
 }
 
-/** A proof error by kind only: its text can name paths or chats. */
-export function legacyProofErrorKind(error: unknown): LegacyJournalRetirementEvent['error'] {
+/**
+ * What a failed attempt reports, by kind only: an error's text can name paths or chats. A refusal
+ * reports at once; anything else is tried again, and a check still waiting to settle (a compare,
+ * an older Orca's writes) reads as pending.
+ */
+export function legacyProofFailureOutcome(
+  error: unknown,
+  counts: LegacyProofCounts
+): Partial<LegacyJournalRetirementOutcome> {
+  const walked = { completeness: 'partial', counts } as const
+  if (error instanceof JournalLegacyRetentionError) {
+    return error.reason
+      ? { outcome: 'refused', reason: error.reason, artifact: error.artifact ?? 'none', ...walked }
+      : { outcome: 'proving', error: 'pending', ...walked }
+  }
+  return { outcome: 'proving', error: legacyProofErrorKind(error), ...walked }
+}
+
+function legacyProofErrorKind(error: unknown): LegacyJournalRetirementEvent['error'] {
   if (!(error instanceof Error)) {
     return 'other'
   }

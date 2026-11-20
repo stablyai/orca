@@ -880,3 +880,21 @@ it('reports a refusal an older build saved, and full counts for a walk that resu
     expect(legacyJournalRetirementSchema.safeParse(event).success).toBe(true)
   }
 })
+
+it('rechecks a held proof when enforcement arrives later in the same launch', async () => {
+  let mode: Mode = { mode: 'report', revision: 0 }
+  const held = await profile()
+  const retirement = held.launch('1.0.1', true, undefined, undefined, async () => mode)
+  await retirement.run()
+  expect(companions(held.filename)).toContain(held.filename)
+  // A failure the reconcile records after the hold refuses it, as it would on the next launch.
+  held.db.exec(`INSERT INTO agent_session_store_meta VALUES('journal.legacy-failed:unopened',
+    '{"revision":null,"error":"original chat unreadable"}')`)
+  mode = { mode: 'enforce', revision: 1 }
+  const now = performance.now()
+  const clock = vi.spyOn(performance, 'now').mockImplementation(() => now + 2 * 3_600_000)
+  cleanup.push(() => clock.mockRestore())
+  await retirement.run()
+  expect(companions(held.filename)).toContain(held.filename)
+  expect(String(held.errors.at(-1))).toContain('could not be kept')
+})

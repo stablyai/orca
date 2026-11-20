@@ -1,7 +1,4 @@
-import {
-  JournalLegacyIneligibleError,
-  JournalLegacyRetentionError
-} from './journal-legacy-retention-error'
+import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
 import { ownsOrcadProfileDirectory } from '../../orcad/instance-lock/orcad-instance-lock-hold'
 import {
   journalDatabasePath,
@@ -12,6 +9,7 @@ import {
   legacyDestinationIdentity,
   legacyDestinationMain,
   legacyFilePresent,
+  legacyCompanionsPresent,
   removeLeftoverLegacyCompanions
 } from './journal-legacy-retirement-files'
 import {
@@ -27,7 +25,7 @@ import {
 import type { JournalSqlOwner } from './journal-sql-owner'
 import {
   LegacyJournalRetirementReporter,
-  legacyProofErrorKind,
+  legacyProofFailureOutcome,
   legacyJournalRetirementMode,
   type LegacyJournalRetirementMode,
   type LegacyJournalRetirementOutcome
@@ -108,15 +106,11 @@ export class JournalLegacyRetirement {
       // Unsupported storage or file identity doesn't change while this process runs.
       if (error instanceof JournalLegacyIneligibleError && !this.done) {
         this.done = true
-        await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' })
-      } else if (!(error instanceof JournalLegacyRetentionError) || !error.reason) {
-        // Tried again later; reported once per kind of error, never with its text. A check that
-        // waits on something to settle (a compare, an older Orca's writes) reads as pending.
-        await this.outcome({
-          outcome: 'proving',
-          error:
-            error instanceof JournalLegacyRetentionError ? 'pending' : legacyProofErrorKind(error)
-        }).catch(() => {})
+        await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }).catch(() => {})
+      } else {
+        await this.outcome(legacyProofFailureOutcome(error, this.proof.walked.counts)).catch(
+          () => {}
+        )
       }
       this.later()
       const reason = error instanceof Error ? error.message : String(error)
@@ -134,7 +128,10 @@ export class JournalLegacyRetirement {
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
     if (!(await legacyFilePresent(this.filename))) {
       // Finishing a removal cut short deletes too, so it needs the same permission.
-      if (this.ownsProfile() && (await this.enforced())) {
+      if (this.ownsProfile() && (await legacyCompanionsPresent(this.filename))) {
+        if (!(await this.enforced())) {
+          return this.later()
+        }
         await removeLeftoverLegacyCompanions(
           this.filename,
           absorbedWal((await this.savedState()).retirement)
@@ -287,6 +284,9 @@ export class JournalLegacyRetirement {
       value: JSON.stringify(proven),
       durable: false
     })
+    // A permission arriving later this launch resumes from the saved record, rechecking what can
+    // change meanwhile (compares due, failures), exactly as the next launch would.
+    this.proof.forget()
     this.later()
     await this.outcome(
       provenOutcome('proof_complete', proven, observation, this.activeMs, this.proof.walked.resumed)

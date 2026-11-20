@@ -45,6 +45,16 @@ async function legacyFileStat(filename: string): Promise<BigIntStats | undefined
  * one the retirement proved absorbed (`absorbedWal`, its size, inode and mtime). Anything else
  * stays.
  */
+/** A WAL or SHM file is still beside the original's name. */
+export async function legacyCompanionsPresent(filename: string): Promise<boolean> {
+  for (const suffix of ['-wal', '-shm'] as const) {
+    if ((await legacyFileStat(filename + suffix))?.isFile()) {
+      return true
+    }
+  }
+  return false
+}
+
 export async function removeLeftoverLegacyCompanions(
   filename: string,
   absorbedWal?: { size: string; ino?: string; mtimeNs?: string }

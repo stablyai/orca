@@ -76,6 +76,9 @@ export type LegacySourceRefusal = {
  * 2: progress and completion this build saves while deletion is held for a remote policy. Builds
  * before it resume only layout 1, so none of them carries this build's progress past the checks
  * it made; each proves from the start under its own rules.
+ *
+ * Bump it whenever the checks that admit a file change, above all when they accept more: saved
+ * progress and held proofs then never carry across builds with different rules. Reports carry it.
  */
 export const LEGACY_PROOF_LAYOUT = 2
 /** The proof's last phases, the reconcile's copies, start at this table (after content and claims). */

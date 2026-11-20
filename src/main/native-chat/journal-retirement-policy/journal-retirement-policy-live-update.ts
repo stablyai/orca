@@ -27,7 +27,6 @@ const JOURNAL_RETIREMENT_POLICY: ReleaseAssetPolicySpec<JournalRetirementPolicy>
   parse: parseJournalRetirementPolicy
 }
 // Asked before each destructive step: a download this recent, or a failure, is reused.
-const REFRESH_REUSE_MS = 5 * 60_000
 const REFRESH_FAILURE_BACKOFF_MS = 10 * 60_000
 
 let updater: ReleaseAssetPolicyLiveUpdater<JournalRetirementPolicy> | null = null
@@ -74,7 +73,7 @@ export async function journalRetirementMode(): Promise<{
   if (
     updater &&
     !starting &&
-    (fetchedAt === undefined || now - fetchedAt > REFRESH_REUSE_MS) &&
+    fetchedAt === undefined &&
     (refreshFailedAt === null || now - refreshFailedAt > REFRESH_FAILURE_BACKOFF_MS)
   ) {
     const running = updater

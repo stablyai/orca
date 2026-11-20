@@ -52,6 +52,11 @@ export class JournalLegacyProof {
     }
   }
 
+  /** Drops a finished walk: the next attempt resumes from what was saved and checks it again. */
+  forget(): void {
+    this.descriptor = undefined
+  }
+
   /**
    * Picks up where an earlier launch's proof of this same original into this same store stopped,
    * or, after a deletion that didn't go through, at the copies it ends with. Pages already proven
