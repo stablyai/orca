@@ -134,3 +134,22 @@ it('refuses preview grants resumed after retirement and revokes successor previe
   renderer.emit('destroyed')
   expect(previewGrantForSender(current.mediaUrl, 3)).toBeNull()
 })
+
+it('keeps skill operations restricted to the registered main document', async () => {
+  const { handleMainWindowSkillIpc } = await import('../skills/skill-ipc-main-window')
+  const renderer = new Renderer(4)
+  let registered = false
+  installElectronAppIpc(
+    () => 'main',
+    () => registered
+  )
+  const list = vi.fn(() => ['Ubuntu'])
+  handleMainWindowSkillIpc('skills:listWslDistros', list)
+  const request = handlers.get('skills:listWslDistros')!
+  expect(() => request({ sender: renderer, senderFrame: renderer.mainFrame })).toThrow(
+    'Unauthorized skill IPC sender'
+  )
+  expect(list).not.toHaveBeenCalled()
+  registered = true
+  expect(request({ sender: renderer, senderFrame: renderer.mainFrame })).toEqual(['Ubuntu'])
+})

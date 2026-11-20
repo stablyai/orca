@@ -83,7 +83,7 @@ export function registerWslDriveUncConversionHandlers(
             (await gitExecFileAsync(gitArgs, { cwd, hostGit: true })).stdout,
           readWorktreeLinks,
           restart: () => {
-            if (!appDocumentFor(event).isDestroyed()) {
+            if (!appWindowFor(event).isDestroyed()) {
               publishToDocuments('app:restart-committed', undefined, {
                 sourceId: appDocumentFor(event).id
               })

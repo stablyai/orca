@@ -1,6 +1,7 @@
 import {
   publishToDocuments,
   registerAppHandler,
+  type AppWindow,
   appWindowFor
 } from '../app-registry/app-handler-registry'
 
