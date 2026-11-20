@@ -498,6 +498,7 @@
 2 src/main/startup/configure-process.ts
 1 src/main/startup/diagnostics/startup-diagnostics.ts
 4 src/main/startup/gpu-recovery/gpu-fallback-marker.ts
+1 src/main/startup/linux-display/ensure-virtual-display.ts
 6 src/main/startup/linux-display/x-display-artifacts.ts
 1 src/main/startup/linux-runtime/linux-dev-shm-policy.ts
 4 src/main/startup/linux-runtime/linux-realtime-scheduling-guard.ts

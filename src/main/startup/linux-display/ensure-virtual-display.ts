@@ -1,5 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import { spawnWithoutInheritedFds } from '@orca/process-host/fd-closing-exec-launch'
+import { readFileSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { app } from 'electron'
 import {
@@ -52,11 +53,22 @@ function sleepSync(ms: number): void {
 // Require our live lock PID plus socket: stale foreign sockets and bind-race winners must not count as our ready Xvfb.
 type DisplayStart = 'ready' | 'taken' | 'timeout'
 
+// Our unreaped child: its pid can't be reused, and a failed exec leaves it a zombie while main waits.
+function hasExited(pid: number): boolean {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    const state = stat.charAt(stat.lastIndexOf(')') + 2)
+    return state === 'Z' || state === 'X'
+  } catch {
+    return true
+  }
+}
+
 function waitForDisplayReady(
   displayNumber: number,
   xvfbPid: number,
   deadline: number
-): DisplayStart {
+): DisplayStart | 'unavailable' {
   const probe = (): DisplayStart | null => {
     const lockPid = readDisplayLockPid(displayNumber)
     if (lockPid === null) {
@@ -74,6 +86,10 @@ function waitForDisplayReady(
     const state = probe()
     if (state) {
       return state
+    }
+    // The fd-closing exec reports a missing Xvfb only after spawn returns a pid.
+    if (hasExited(xvfbPid)) {
+      return probe() ?? 'unavailable'
     }
     sleepSync(XVFB_POLL_INTERVAL_MS)
   }
