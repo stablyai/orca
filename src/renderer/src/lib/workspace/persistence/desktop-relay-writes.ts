@@ -14,6 +14,7 @@ import { nonLocalHostSessionEntries, type HostSessionSlices } from './workspace-
 import type { SessionRelevantField } from './workspace-session'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { AcknowledgedDesktopRelays } from './desktop-relay-acknowledged-hosts'
+import type { CarriedRelayStatus } from './workspace-session-host-entries-write'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 export type DesktopRelayApi = {
@@ -179,6 +180,104 @@ export function sendDesktopRelayWrite(
       throw error
     }
   )
+}
+
+/** One save's relay write, narrowed once: hosts that ride with their entries patch, and the rest
+ *  sent separately; main's answers for both are acknowledged together. */
+export type DesktopRelayPlan = {
+  carried: ReadonlyMap<ExecutionHostId, DesktopRelayWrite['hosts'][number]>
+  sendRest: () => Promise<DesktopRelayWriteResult> | null
+  /** The combined answer, from the settled entries writes and the separate write. */
+  settle: (values: readonly unknown[]) => DesktopRelayWriteResult
+  forget: () => void
+}
+
+export function planDesktopRelayWrite(
+  api: DesktopRelayApi,
+  full: DesktopRelayWrite,
+  // The save's slices when its partition writes can carry relay ids (entries writes); else null.
+  entrySlices: HostSessionSlices | null
+): DesktopRelayPlan | null {
+  const { write, acknowledge } = acknowledgedRelays.narrow(full)
+  if (write.hosts.length === 0 || !api.applyDesktopRelays) {
+    return null
+  }
+  const applyDesktopRelays = api.applyDesktopRelays
+  // Local is always written; other hosts only when the save has their slice.
+  const carriable = new Set<ExecutionHostId>(
+    entrySlices
+      ? [
+          LOCAL_EXECUTION_HOST_ID,
+          ...nonLocalHostSessionEntries(entrySlices).map(([hostId]) => hostId)
+        ]
+      : []
+  )
+  const carried = new Map<ExecutionHostId, DesktopRelayWrite['hosts'][number]>()
+  const rest: DesktopRelayWrite['hosts'] = []
+  for (const host of write.hosts) {
+    if (carriable.has(host.hostId)) {
+      carried.set(host.hostId, host)
+    } else {
+      rest.push(host)
+    }
+  }
+  return {
+    carried,
+    sendRest: () =>
+      rest.length > 0 ? applyDesktopRelays({ version: write.version, hosts: rest }) : null,
+    settle: (values) => {
+      const result: DesktopRelayWriteResult = {
+        applied: [],
+        unchanged: [],
+        skipped: [],
+        refused: []
+      }
+      for (const value of values) {
+        if (isCarriedRelayStatus(value)) {
+          const { hostId, relays } = value
+          result[relays === 'refused' ? 'applied' : relays].push(hostId)
+          if (relays === 'refused') {
+            result.refused.push(hostId)
+          }
+        } else if (isDesktopRelayWriteResult(value)) {
+          for (const key of ['applied', 'unchanged', 'skipped', 'refused'] as const) {
+            result[key].push(...value[key])
+          }
+        }
+      }
+      acknowledge(result)
+      return result
+    },
+    forget: () => acknowledgedRelays.forget()
+  }
+}
+
+/** Every partition write finishes before a retry rewrites the same fields; a failure rejects (and
+ *  drops what main accepted of the relay ids), else skipped or refused relay hosts stay pending. */
+export function settleSessionWrites(
+  writes: readonly (Promise<unknown> | null | undefined)[],
+  relayPlan: DesktopRelayPlan | null | undefined
+): Promise<SessionWriteOutcome | void> {
+  return Promise.allSettled(writes).then((results) => {
+    const failure = results.find((result) => result.status === 'rejected')
+    if (failure) {
+      relayPlan?.forget()
+      throw failure.reason
+    }
+    return relayWriteOutcome(
+      relayPlan?.settle(
+        results.map((result) => (result.status === 'fulfilled' ? result.value : null))
+      )
+    )
+  })
+}
+
+function isCarriedRelayStatus(value: unknown): value is CarriedRelayStatus {
+  return typeof value === 'object' && value !== null && 'relays' in value && 'hostId' in value
+}
+
+function isDesktopRelayWriteResult(value: unknown): value is DesktopRelayWriteResult {
+  return typeof value === 'object' && value !== null && 'applied' in value && 'refused' in value
 }
 
 /** A full replacement (quit, unload) may not keep what main last accepted, so it sends every host's

@@ -53,9 +53,10 @@ import {
   afterDesktopRelayProbe,
   probeDesktopRelays,
   desktopRelayWriteFor,
-  relayWriteOutcome,
   replaceDesktopRelays,
   sendDesktopRelayWrite,
+  planDesktopRelayWrite,
+  settleSessionWrites,
   type SessionWriteOutcome,
   type DesktopRelayApi
 } from './desktop-relay-writes'
@@ -86,7 +87,8 @@ export type SessionApi = DesktopRelayApi & {
   /** Absent on clients whose session store takes whole fields only (the paired web client). */
   patchEntries?: (
     args: WorkspaceSessionEntriesPatch,
-    hostId?: ExecutionHostId
+    hostId?: ExecutionHostId,
+    relays?: DesktopRelayWrite['hosts'][number]
   ) => Promise<WorkspaceSessionEntriesPatchResult>
 }
 
@@ -279,26 +281,24 @@ export function patchWorkspaceSessionByHost(
   const slices = splitWorkspaceSessionForWrite(patch as WorkspaceSessionState, state, 'patch')
   const relays = desktopRelayWriteFor(api, patch, slices, state)
   acknowledged?.retainHosts(routedSessionHostIds(state, slices))
+  // A host's relay ids ride with its entries patch, so main publishes them together once.
+  const relayPlan =
+    relays && planDesktopRelayWrite(api, relays, acknowledged && api.patchEntries ? slices : null)
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
-  const localWrite = patchHostSlice(api, local, LOCAL_EXECUTION_HOST_ID, acknowledged)
+  const carriedLocal = relayPlan?.carried.get(LOCAL_EXECUTION_HOST_ID)
+  const localSlice = patchHostSlice(api, local, LOCAL_EXECUTION_HOST_ID, acknowledged, carriedLocal)
+  const localWrite = localSlice.then(() => {})
   const hostWrites = nonLocalHostSessionEntries(slices).map(([hostId, slice]) =>
-    patchHostSlice(api, slice, hostId, acknowledged).catch((err: unknown) => {
-      console.warn(`[session] host partition patch failed for ${hostId}:`, err)
-      throw err
-    })
+    patchHostSlice(api, slice, hostId, acknowledged, relayPlan?.carried.get(hostId)).catch(
+      (err: unknown) => {
+        console.warn(`[session] host partition patch failed for ${hostId}:`, err)
+        throw err
+      }
+    )
   )
   // After the partition patches, so main applies relay ids to the rows they just wrote.
-  const relayWrite = relays && sendDesktopRelayWrite(api, relays)
-  // Why allSettled: every partition finishes before a retry rewrites the same fields.
-  const written = Promise.allSettled([localWrite, ...hostWrites, relayWrite]).then(
-    async (results): Promise<SessionWriteOutcome | void> => {
-      const failure = results.find((result) => result.status === 'rejected')
-      if (failure) {
-        throw failure.reason
-      }
-      return relayWriteOutcome(await relayWrite)
-    }
-  )
+  const separate = relayPlan?.sendRest()
+  const written = settleSessionWrites([localSlice, ...hostWrites, separate], relayPlan)
   // Why: a host failure must not surface as an unhandled rejection on the upload chain's promise.
   localWrite.catch(() => {})
   return { localWrite, written }

@@ -7,7 +7,11 @@ import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { applyWorkspaceSessionEntriesPatch } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
 import { applyDesktopRelayWrite } from '../../../../../shared/workspace-session/desktop-relay-ownership'
-import { DESKTOP_RELAY_WRITE_VERSION } from '../../../../../shared/workspace-session/desktop-relay-write'
+import {
+  DESKTOP_RELAY_WRITE_VERSION,
+  type DesktopRelayWrite,
+  type DesktopRelayWriteResult
+} from '../../../../../shared/workspace-session/desktop-relay-write'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
@@ -27,18 +31,36 @@ export function inMemoryMain() {
   const partitions = new Map<string, WorkspaceSessionState>()
   const fenced = new Set<string>()
   // Each relay write main received: per host, the ids it carried.
+  // Each relay host main received, and whether it rode with that host's entries patch.
   const sentHosts: {
     hostId: string
     relayIdsByTabId: Record<string, string>
     removedTabIds?: string[]
+    via: 'entries' | 'separate'
   }[][] = []
   const stored = (hostId: string) => partitions.get(hostId) ?? EMPTY_PARTITION
+  const record = (via: 'entries' | 'separate', hosts: DesktopRelayWrite['hosts']) =>
+    sentHosts.push(
+      hosts.map(({ hostId, relayIdsByTabId, removedTabIds }) => ({
+        hostId,
+        relayIdsByTabId,
+        ...(removedTabIds?.length ? { removedTabIds } : {}),
+        via
+      }))
+    )
+  const applyRelays = (hostId: string, write: DesktopRelayWrite['hosts'][number]) => {
+    const { patch, refused } = applyDesktopRelayWrite(stored(hostId), write, null)
+    if (patch) {
+      partitions.set(hostId, { ...stored(hostId), ...patch })
+    }
+    return refused ? 'refused' : patch ? 'applied' : 'unchanged'
+  }
   const api: SessionApi = {
     get: async (hostId) => stored(hostId ?? 'local'),
     patch: async () => {
       throw new Error('this window sends entries')
     },
-    patchEntries: async (args, hostId) => {
+    patchEntries: async (args, hostId, relays) => {
       const key = hostId ?? 'local'
       if (fenced.has(key)) {
         return { status: 'skipped' }
@@ -47,37 +69,33 @@ export function inMemoryMain() {
         ...stored(key),
         ...applyWorkspaceSessionEntriesPatch(stored(key), args)
       })
-      return { status: 'applied' }
+      if (!relays) {
+        return { status: 'applied' }
+      }
+      record('entries', [relays])
+      return { status: 'applied', relays: applyRelays(key, relays) }
     },
     desktopRelaysVersion: async () => DESKTOP_RELAY_WRITE_VERSION,
     applyDesktopRelays: async ({ hosts }) => {
-      sentHosts.push(
-        hosts.map(({ hostId, relayIdsByTabId, removedTabIds }) => ({
-          hostId,
-          relayIdsByTabId,
-          ...(removedTabIds?.length ? { removedTabIds } : {})
-        }))
-      )
-      const result = { applied: [], unchanged: [], skipped: [], refused: [] } as Record<
-        'applied' | 'unchanged' | 'skipped' | 'refused',
-        string[]
-      >
-      for (const { hostId, ...write } of hosts) {
-        if (fenced.has(hostId)) {
-          result.skipped.push(hostId)
+      record('separate', hosts)
+      const result: DesktopRelayWriteResult = {
+        applied: [],
+        unchanged: [],
+        skipped: [],
+        refused: []
+      }
+      for (const host of hosts) {
+        if (fenced.has(host.hostId)) {
+          result.skipped.push(host.hostId)
           continue
         }
-        const { patch, refused } = applyDesktopRelayWrite(stored(hostId), write, null)
-        if (refused) {
-          result.refused.push(hostId)
+        const status = applyRelays(host.hostId, host)
+        result[status === 'refused' ? 'applied' : status].push(host.hostId)
+        if (status === 'refused') {
+          result.refused.push(host.hostId)
         }
-        if (patch) {
-          partitions.set(hostId, { ...stored(hostId), ...patch })
-        }
-        result.applied.push(hostId)
       }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: host ids came from the window's own write.
-      return result as Awaited<ReturnType<NonNullable<SessionApi['applyDesktopRelays']>>>
+      return result
     }
   }
   return { api, partitions, fenced, stored, sentHosts }

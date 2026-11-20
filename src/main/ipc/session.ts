@@ -14,10 +14,15 @@ import {
   windowSaveKeepingRelayOwnership,
   type WindowSessionSetOptions
 } from '../persistence/window-save-relay-ownership'
-import { registerDesktopRelayHandlers } from './session-desktop-relays'
+import { parseCarriedDesktopRelays, registerDesktopRelayHandlers } from './session-desktop-relays'
+import type { DesktopRelayHostWrite } from '../../shared/workspace-session/desktop-relay-ownership'
 import { isNoopWindowSessionPatch } from '../persistence/window-session-patch-noop'
 import { noteWindowSessionSaveUnchanged } from '../browser/extensions/tabs-and-windows/browser-extension-discarded-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId
+} from '../../shared/execution-host/execution-host'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
@@ -92,28 +97,44 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
   )
 
+  const relayApplier = registerDesktopRelayHandlers(store, isFenced)
+
+  /** `relays`: the window's relay ids for this partition, applied by ownership in the same publish. */
   const patchWindowSession = (
     toPatch: (stored: WorkspaceSessionState) => WorkspaceSessionPatch,
     hostId: string | null | undefined,
-    entries?: WorkspaceSessionEntriesPatch
-  ): WorkspaceSessionEntriesPatchResult['status'] => {
+    entries?: WorkspaceSessionEntriesPatch,
+    relays?: DesktopRelayHostWrite | null
+  ): Omit<WorkspaceSessionEntriesPatchResult, 'normalizedFields'> => {
     if (isFenced(hostId)) {
-      return 'skipped'
+      return { status: 'skipped' }
     }
     const stored = store.getWorkspaceSession(hostId)
     const args = windowSaveKeepingRelayOwnership(stored, toPatch(stored), 'patch')
     const { save, written } = ORCA_LAYOUT_OWNER_IS_MAIN
       ? patchForMain(args, hostId, entries)
       : { save: windowSaveKeepingMainSleepRecords(stored, args, 'patch'), written: undefined }
+    // Main-owned layout recomputes relay ids itself; the window never sends them separately there.
+    const relayHostId = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+    const applied =
+      relays && !ORCA_LAYOUT_OWNER_IS_MAIN
+        ? relayApplier()(relayHostId, relays, { ...stored, ...save })
+        : null
+    const relayStatus =
+      applied && (applied.refused ? 'refused' : applied.patch ? 'applied' : 'unchanged')
+    const withRelays = relayStatus ? { relays: relayStatus } : {}
     if (!ORCA_LAYOUT_OWNER_IS_MAIN && isNoopWindowSessionPatch(stored, save)) {
+      if (applied?.patch) {
+        store.patchWorkspaceSessionRelays(applied.patch, hostId, applied.changedTabIds)
+        return { status: 'applied', ...withRelays }
+      }
       noteWindowSessionSaveUnchanged(hostId)
-      return 'unchanged'
+      return { status: 'unchanged', ...withRelays }
     }
-    store.patchWorkspaceSession(save, hostId, written)
-    return 'applied'
+    // One publish for the entries and the relay ids that ride with them.
+    store.patchWorkspaceSession({ ...save, ...applied?.patch }, hostId, written)
+    return { status: 'applied', ...withRelays }
   }
-
-  registerDesktopRelayHandlers(store, isFenced)
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
     patchWindowSession(() => args, hostId)
@@ -125,19 +146,21 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     (
       _event,
       args: WorkspaceSessionEntriesPatch,
-      hostId?: string | null
+      hostId?: string | null,
+      relays?: unknown
     ): WorkspaceSessionEntriesPatchResult => {
-      const status = patchWindowSession(
+      const result = patchWindowSession(
         (stored) => applyWorkspaceSessionEntriesPatch(stored, args),
         hostId,
-        args
+        args,
+        parseCarriedDesktopRelays(relays, hostId)
       )
-      if (status === 'skipped') {
-        return { status }
+      if (result.status === 'skipped') {
+        return result
       }
       // Normalization, fences and main's sleep records can store something else, saved or not.
       const normalizedFields = fieldsStoredDifferently(store.getWorkspaceSession(hostId), args)
-      return normalizedFields.length > 0 ? { status, normalizedFields } : { status }
+      return normalizedFields.length > 0 ? { ...result, normalizedFields } : result
     }
   )
 

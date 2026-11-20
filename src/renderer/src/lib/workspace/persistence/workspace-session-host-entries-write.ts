@@ -1,5 +1,7 @@
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import type { WorkspaceSessionEntriesPatchResult } from '../../../../../shared/workspace-session/workspace-session-entries-patch'
+import type { DesktopRelayWrite } from '../../../../../shared/workspace-session/desktop-relay-write'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -38,30 +40,39 @@ export function routedSessionHostIds(
   return hostIds
 }
 
+/** How main took relay ids sent with a partition's entries; absent when none were sent. */
+export type CarriedRelayStatus = {
+  hostId: ExecutionHostId
+  relays: NonNullable<WorkspaceSessionEntriesPatchResult['relays']> | 'skipped'
+}
+
 /** One partition's write: only the entries main hasn't acknowledged when it supports that, else
- *  the whole fields. A failed or fenced write forgets main's copy so the next one goes whole. */
+ *  the whole fields. A failed or fenced write forgets main's copy so the next one goes whole.
+ *  `relays` (entries writes only): this partition's relay ids, applied in the same write. */
 export function patchHostSlice(
   api: SessionApi,
   slice: WorkspaceSessionPatch,
   hostId: ExecutionHostId,
-  acknowledged: AcknowledgedWorkspaceSessionEntries | undefined
-): Promise<void> {
+  acknowledged: AcknowledgedWorkspaceSessionEntries | undefined,
+  relays?: DesktopRelayWrite['hosts'][number]
+): Promise<CarriedRelayStatus | void> {
   const target = hostId === LOCAL_EXECUTION_HOST_ID ? undefined : hostId
   if (!acknowledged || !api.patchEntries) {
     return api.patch(slice, target)
   }
   const { patch, acknowledge } = acknowledged.diff(hostId, slice)
   // Sent even when empty: main's unchanged-save handling still has to see this partition's save.
-  return api.patchEntries(patch, target).then(
-    (result) => {
+  return api.patchEntries(patch, target, relays).then(
+    (result): CarriedRelayStatus | void => {
       if (result.status === 'skipped') {
         acknowledged.forget(hostId)
-        return
+        return relays ? { hostId, relays: 'skipped' } : undefined
       }
       acknowledge()
       if (result.normalizedFields?.length) {
         acknowledged.forget(hostId, result.normalizedFields)
       }
+      return relays ? { hostId, relays: result.relays ?? 'unchanged' } : undefined
     },
     (error: unknown) => {
       acknowledged.forget(hostId)

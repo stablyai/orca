@@ -6,7 +6,8 @@ export const sessionApi = {
   listHostIds: () => ipcRenderer.invoke('session:list-host-ids'),
   set: (args, hostId, options) => ipcRenderer.invoke('session:set', args, hostId, options),
   patch: (args, hostId) => ipcRenderer.invoke('session:patch', args, hostId),
-  patchEntries: (args, hostId) => ipcRenderer.invoke('session:patch-entries', args, hostId),
+  patchEntries: (args, hostId, relays) =>
+    ipcRenderer.invoke('session:patch-entries', args, hostId, relays),
   desktopRelaysVersion: () => ipcRenderer.invoke('session:desktop-relays-version'),
   applyDesktopRelays: (args) => ipcRenderer.invoke('session:apply-desktop-relays', args),
   closeTerminalSurface: (args) => ipcRenderer.invoke('session:close-terminal-surface', args),

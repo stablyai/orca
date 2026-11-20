@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { inMemoryMain, SSH_HOST, windowSavingTo } from './desktop-relay-writes.test-fixture'
 
 // Perf contract: a terminal save rebuilds every host's relay ids, but the window sends main only the
-// hosts and ids that changed since main last accepted them.
+// hosts and ids that changed since main last accepted them, with the host's entries patch so main
+// publishes the save once.
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -11,7 +12,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('sends no relay host for a title change and one id for one relay change', async () => {
+it('sends no relay host for a title change and one id, with its entries, for one relay change', async () => {
   const main = inMemoryMain()
   const { stop, endRelay, renameTab } = await windowSavingTo(main)
   try {
@@ -22,7 +23,7 @@ it('sends no relay host for a title change and one id for one relay change', asy
 
     await endRelay()
     expect(main.sentHosts).toEqual([
-      [{ hostId: SSH_HOST, relayIdsByTabId: {}, removedTabIds: ['tab-a'] }]
+      [{ hostId: SSH_HOST, relayIdsByTabId: {}, removedTabIds: ['tab-a'], via: 'entries' }]
     ])
   } finally {
     stop()

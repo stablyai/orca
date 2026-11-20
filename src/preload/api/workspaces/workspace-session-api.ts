@@ -30,7 +30,9 @@ export type WorkspaceSessionApi = {
     /** Changed keys only; absent where the session store takes whole fields (paired web client). */
     patchEntries?: (
       args: WorkspaceSessionEntriesPatch,
-      hostId?: ExecutionHostId
+      hostId?: ExecutionHostId,
+      /** This partition's relay ids, applied by ownership in the same write (see applyDesktopRelays). */
+      relays?: DesktopRelayWrite['hosts'][number]
     ) => Promise<WorkspaceSessionEntriesPatchResult>
     /** The relay-write version main supports; rejects on a main without it (and absent on the paired
      *  web client), which keep relay ids in ordinary saves. */

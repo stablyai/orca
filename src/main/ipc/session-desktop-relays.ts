@@ -5,23 +5,35 @@ import {
   captureLegacyRelayBaseline,
   legacyRelayAdoptionBatch
 } from '../persistence/desktop-relay-legacy-adoption'
-import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
-import { applyDesktopRelayWrite } from '../../shared/workspace-session/desktop-relay-ownership'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host/execution-host'
+import {
+  applyDesktopRelayWrite,
+  type DesktopRelayHostWrite
+} from '../../shared/workspace-session/desktop-relay-ownership'
+import type {
+  WorkspaceSessionPatch,
+  WorkspaceSessionState
+} from '../../shared/workspace-session/workspace-session-state-types'
 import {
   DESKTOP_RELAY_WRITE_VERSION,
   type DesktopRelayWriteResult
 } from '../../shared/workspace-session/desktop-relay-write'
 
+const desktopRelayHostSchema = z.object({
+  hostId: z.string(),
+  relayIdsByTabId: z.record(z.string(), z.string()),
+  complete: z.boolean(),
+  removedTabIds: z.array(z.string()).optional()
+})
+
 const desktopRelayWriteSchema = z.object({
   version: z.literal(DESKTOP_RELAY_WRITE_VERSION),
-  hosts: z.array(
-    z.object({
-      hostId: z.string(),
-      relayIdsByTabId: z.record(z.string(), z.string()),
-      complete: z.boolean(),
-      removedTabIds: z.array(z.string()).optional()
-    })
-  )
+  hosts: z.array(desktopRelayHostSchema)
 })
 
 type RelayStore = Pick<
@@ -29,12 +41,63 @@ type RelayStore = Pick<
   'getRepos' | 'getWorkspaceSession' | 'getWorkspaceSessionHostIds' | 'patchWorkspaceSessionRelays'
 >
 
-/** The desktop window's relay ids go through main, which changes only the keys the window owns. */
+export type DesktopRelayHostApplied = {
+  /** The relay fields to store, or null when nothing changes or the partition would hold nothing. */
+  patch: Pick<
+    WorkspaceSessionPatch,
+    'remoteSessionIdsByTabId' | 'desktopRelayOwnerByTabId' | 'desktopRelayAdoptionVersion'
+  > | null
+  changedTabIds: string[]
+  refused: boolean
+}
+
+/** One partition's relay write from the window, applied by ownership against `base` (the stored
+ *  partition, or the stored partition with the same save's entries applied). */
+export type DesktopRelayHostApply = (
+  hostId: ExecutionHostId,
+  host: DesktopRelayHostWrite,
+  base: WorkspaceSessionState
+) => DesktopRelayHostApplied
+
+/** A relay write that rides with a partition's entries patch: null when absent or for another host. */
+export function parseCarriedDesktopRelays(
+  relays: unknown,
+  hostId: string | null | undefined
+): DesktopRelayHostWrite | null {
+  if (relays === undefined) {
+    return null
+  }
+  const { hostId: relayHostId, ...host } = desktopRelayHostSchema.parse(relays)
+  const target = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+  if (parseExecutionHostId(relayHostId)?.id !== target) {
+    throw new Error(`relay_host_mismatch:${relayHostId}`)
+  }
+  return host
+}
+
+/** The desktop window's relay ids go through main, which changes only the keys the window owns.
+ *  Returns the per-call applier the entries patch uses for relay ids that ride with it. */
 export function registerDesktopRelayHandlers(
   store: RelayStore,
   isFenced: (hostId: string) => boolean
-): void {
+): () => DesktopRelayHostApply {
   const legacyBaseline = captureLegacyRelayBaseline(store)
+  // One apply batch: legacy adoption indexes rows at most once and partitions are listed at most once.
+  const relayApplier = (): DesktopRelayHostApply => {
+    const adoptionFor = legacyRelayAdoptionBatch(store, legacyBaseline)
+    let existing: Set<string> | null = null
+    return (hostId, host, base) => {
+      const { patch, refused, changedTabIds } = applyDesktopRelayWrite(
+        base,
+        host,
+        adoptionFor(hostId)
+      )
+      existing ??= new Set(store.getWorkspaceSessionHostIds())
+      // Never materialize a partition just to record that it holds nothing.
+      const kept = patch && (existing.has(hostId) || patch.remoteSessionIdsByTabId) ? patch : null
+      return { patch: kept, changedTabIds, refused }
+    }
+  }
   // Answering proves this main registered the apply handler; older mains reject the probe.
   ipcMain.handle('session:desktop-relays-version', () => DESKTOP_RELAY_WRITE_VERSION)
 
@@ -48,28 +111,25 @@ export function registerDesktopRelayHandlers(
         skipped: [],
         refused: []
       }
-      const adoptionFor = legacyRelayAdoptionBatch(store, legacyBaseline)
-      let existing: Set<string> | null = null
-      for (const host of hosts) {
-        const hostId = parseExecutionHostId(host.hostId)?.id
+      const apply = relayApplier()
+      for (const { hostId: rawHostId, ...host } of hosts) {
+        const hostId = parseExecutionHostId(rawHostId)?.id
         if (!hostId) {
-          throw new Error(`invalid_relay_host:${host.hostId}`)
+          throw new Error(`invalid_relay_host:${rawHostId}`)
         }
         if (isFenced(hostId)) {
           result.skipped.push(hostId)
           continue
         }
-        const { patch, refused, changedTabIds } = applyDesktopRelayWrite(
-          store.getWorkspaceSession(hostId),
+        const { patch, refused, changedTabIds } = apply(
+          hostId,
           host,
-          adoptionFor(hostId)
+          store.getWorkspaceSession(hostId)
         )
         if (refused) {
           result.refused.push(hostId)
         }
-        existing ??= new Set(store.getWorkspaceSessionHostIds())
-        // Never materialize a partition just to record that it holds nothing.
-        if (patch && (existing.has(hostId) || patch.remoteSessionIdsByTabId)) {
+        if (patch) {
           store.patchWorkspaceSessionRelays(patch, hostId, changedTabIds)
           result.applied.push(hostId)
         } else {
@@ -79,4 +139,5 @@ export function registerDesktopRelayHandlers(
       return result
     }
   )
+  return relayApplier
 }
