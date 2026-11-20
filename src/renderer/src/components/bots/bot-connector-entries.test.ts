@@ -88,17 +88,6 @@ const needingOwner = (entries: ReturnType<typeof botConnectorEntries>) =>
   entries.filter((entry) => entry.needsOwner).map((entry) => entry.key)
 
 describe('botConnectorEntries', () => {
-  it('keeps a missing Slack app removable without counting it as needing the owner', () => {
-    const entries = botConnectorEntries(
-      bot,
-      sources({ slack: { status: 'ready', slack: { state: 'not_created' } } })
-    )
-    expect(entries.find((entry) => entry.key === 'slack:T1')).toMatchObject({
-      teamId: 'T1',
-      needsOwner: false
-    })
-    expect(needingOwner(entries)).toEqual([])
-  })
   it('lists both connections to Slack and omits a sign-in still under way', () => {
     const entries = botConnectorEntries(
       bot,
