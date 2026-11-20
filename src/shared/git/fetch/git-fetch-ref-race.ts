@@ -64,6 +64,10 @@ export async function retryGitFetchRefRace<T>(
       throw error
     }
     throwIfSignalAborted(signal)
+    // A caller that can't start again shouldn't wait on the previous child first.
+    if (canStart?.() === false) {
+      throw error
+    }
     if (retry === 2) {
       const detail = stripCredentialsFromMessage(
         stderr

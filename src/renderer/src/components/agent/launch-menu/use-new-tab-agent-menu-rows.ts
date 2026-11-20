@@ -14,10 +14,7 @@ import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
-} from '../../../../../shared/execution-host/execution-host'
+import * as ExecutionHost from '../../../../../shared/execution-host/execution-host'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
@@ -38,7 +35,8 @@ import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { readDetectedAgentsForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/agent-session/launch/inventory/host-chat-program'
@@ -138,7 +136,7 @@ export function useAgentMenuObservation(
     ])
   )
   const plain = hostChatAnswer(input) === 'no-chats'
-  const local = facts.executionHostId === LOCAL_EXECUTION_HOST_ID
+  const local = facts.executionHostId === ExecutionHost.LOCAL_EXECUTION_HOST_ID
   // Use published host-wide availability when supported; older hosts defer final admission to the launch request.
   const published =
     input.hostCapabilities?.includes(AVAILABILITY) === true &&
@@ -158,9 +156,10 @@ export function useAgentMenuObservation(
   const localCatalog =
     local && roster
       ? roster
-      : readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, state.runtimeStatusByEnvironmentId)?.map(
-          ({ agent }) => agent
-        )
+      : readHostStructuredAgents(
+          ExecutionHost.LOCAL_EXECUTION_HOST_ID,
+          state.runtimeStatusByEnvironmentId
+        )?.map(({ agent }) => agent)
   const hostCatalog =
     roster ??
     readHostStructuredAgents(facts.executionHostId, state.runtimeStatusByEnvironmentId)?.map(
@@ -189,7 +188,7 @@ export function useAgentMenuObservation(
   const localCatalogPending =
     !local &&
     catalogUnlearned(
-      LOCAL_EXECUTION_HOST_ID,
+      ExecutionHost.LOCAL_EXECUTION_HOST_ID,
       null,
       localCapabilities.state === 'known' ? localCapabilities.capabilities : null
     )
@@ -233,7 +232,7 @@ export function useAgentMenuObservation(
   }
   const executionHostId = unresolvedTarget
     ? undefined
-    : parseExecutionHostId(facts.executionHostId)?.id
+    : ExecutionHost.parseExecutionHostId(facts.executionHostId)?.id
   const rows = buildNewTabAgentMenuRows({
     settings,
     detectedOnHost: detection.detectedIds,

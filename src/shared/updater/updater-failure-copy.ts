@@ -1,5 +1,10 @@
 // One English table for updater failures: main builds the English `message`, the renderer translates by code.
 export const UPDATER_FAILURE_COPY = {
+  automaticInstallTerminalBusy:
+    'Some terminals would end on restart. Orca will try again on a later update check.',
+  macStagingTimeout: 'macOS is still preparing the update. If this persists, quit and reopen Orca.',
+  automaticInstallCheckpointFailed:
+    'Orca could not save the current window before restarting. Try installing the update again.',
   releaseNotReady: "A newer release isn't available for this device yet. Check again later.",
   updateServerUnreachable: "Couldn't reach the update server. Try again in a few minutes.",
   channelUnsupportedPlatform: '{{channel}} builds are produced only for macOS and Windows.',

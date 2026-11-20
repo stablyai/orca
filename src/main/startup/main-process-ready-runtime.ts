@@ -27,7 +27,8 @@ import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/m
 import { shouldInstallManagedHooks } from './configure-process'
 import { mainProcessState as state } from './main-process-state'
 import { initializeMainProcessObservers } from './main-process-observers'
-import { installFirstWorkRenameHookSubscription } from './workspace-startup/branch-rename-hook'
+import { installFirstWorkRenameHookSubscription } from '../agent-hooks/first-work/first-work-rename-hook-subscription'
+import { firstWorkRenameDeps } from '../agent-hooks/first-work/first-work-rename-runtime'
 import { initializeMainProcessAccountServices } from './agent-accounts/main-process-account-services'
 import {
   initializeMainProcessRuntime,
@@ -68,12 +69,12 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // Load interrupted deletion records before listings so first paint shows Deleting.
   await prepareWorktreeRemovalsForStore(store)
   initializeMainProcessObservers()
-  initializeMainProcessAccountServices()
+  await initializeMainProcessAccountServices()
   const runtime = initializeMainProcessRuntime()
   initializeMainProcessAutomations()
   startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(runtime)
-  installFirstWorkRenameHookSubscription()
+  installFirstWorkRenameHookSubscription(firstWorkRenameDeps(store, runtime))
   await initializeMainProcessPlugins(runtime)
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()

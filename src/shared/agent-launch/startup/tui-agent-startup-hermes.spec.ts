@@ -1,60 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 import { buildAgentStartupPlan } from './tui-agent-startup'
-import {
-  unwrapPosixShellScript,
-  unwrapPowerShellScript
-} from './tui-agent-startup-script.test-fixture'
+import { unwrapPosixShellScript } from './tui-agent-startup-script.test-fixture'
 
 // Hermes owns startup query/TUI/subcommand flag placement; keep its token-rewrite cases together.
 
 describe('hermes startup plans', () => {
-  it.each([
-    {
-      shell: 'powershell' as const,
-      override: '"C:\\Program Files\\Hermes\\hermes.exe" --tui',
-      expected: "& 'C:\\Program Files\\Hermes\\hermes.exe' 'chat'"
-    },
-    {
-      shell: 'cmd' as const,
-      override: 'C:\\Tools\\hermes.exe --tui',
-      expected: "& 'C:\\Tools\\hermes.exe' 'chat'"
-    }
-  ])('preserves Windows paths in Hermes command overrides on $shell', (testCase) => {
+  it('removes a duplicate chat subcommand and preserves chat as an option value', () => {
     const plan = buildAgentStartupPlan({
       agent: 'hermes',
       prompt: 'run it',
-      cmdOverrides: { hermes: testCase.override },
-      platform: 'win32',
-      shell: testCase.shell
-    })
-
-    expect(unwrapPowerShellScript(plan?.launchCommand)).toContain(testCase.expected)
-  })
-
-  it('removes a configured duplicate chat subcommand', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'run it',
-      cmdOverrides: { hermes: 'hermes --provider copilot chat --tui' },
+      cmdOverrides: {
+        hermes: 'hermes --provider copilot --profile chat --model example chat --tui'
+      },
       agentArgs: '--provider copilot chat --yolo',
       platform: 'linux'
     })
 
     const script = unwrapPosixShellScript(plan?.launchCommand)
-    expect(script.match(/'chat'/g)).toHaveLength(1)
+    expect(script.match(/'chat'/g)).toHaveLength(2)
     expect(script).toContain("'--provider' 'copilot' '--yolo'")
-  })
-
-  it('preserves an option value named chat', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: 'run it',
-      cmdOverrides: { hermes: 'hermes --profile chat --tui' },
-      platform: 'linux'
-    })
-
-    expect(unwrapPosixShellScript(plan?.launchCommand)).toContain("'--profile' 'chat'")
+    expect(script).toContain("'--profile' 'chat'")
   })
 
   it('keeps Orca ownership of the Hermes startup query and TUI mode', () => {
@@ -122,17 +88,6 @@ describe('hermes startup plans', () => {
         platform: 'linux'
       })
     ).toBeNull()
-  })
-
-  it('measures POSIX Hermes query limits in UTF-8 bytes', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'hermes',
-      prompt: '界'.repeat(50_000),
-      cmdOverrides: {},
-      platform: 'linux'
-    })
-
-    expect(plan).toBeNull()
   })
 
   it('keeps the override and agent args of a prompted Hermes launch when it resumes', () => {

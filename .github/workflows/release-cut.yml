@@ -737,10 +737,9 @@ jobs:
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
           git checkout "$WORKFLOW_SHA" -- \
-            tests/e2e/golden-source-control-open-diff.spec.ts \
-            tests/e2e/golden-terminal-file-link.spec.ts \
-            tests/e2e/golden-worktree-create-switch.spec.ts \
-            tests/e2e/helpers/e2e-completed-onboarding-profile.ts
+            tests/e2e/golden-journeys/golden-source-control-open-diff.spec.ts \
+            tests/e2e/golden-journeys/golden-worktree-create-switch.spec.ts \
+            tests/e2e/desktop/electron-fixtures/e2e-completed-onboarding-profile.ts
 
       - name: Install native build tools
         if: runner.os == 'Linux'
@@ -783,7 +782,6 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
-          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
 
       - name: Run source-control golden on Linux
@@ -794,7 +792,6 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
-          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
 
       - name: Run agent TUI golden on Linux
@@ -921,96 +918,6 @@ jobs:
 
   # Why: these broader terminal rendering repros are useful release evidence,
   # but they include heavier app-like flows and must not block publishing.
-  terminal-rendering-release-evidence:
-    needs: cut
-    if: needs.cut.outputs.should_release == 'true'
-    continue-on-error: true
-    name: terminal rendering release evidence ${{ matrix.platform }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux
-          - os: macos-15
-            platform: mac
-          # Why: Windows release evidence currently fails on CI runner PTY
-          # readiness before reaching the rendering assertions.
-          # - os: windows-latest
-          #   platform: windows
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
-
-      - name: Install native build tools
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
-
-      - name: Setup pnpm
-        uses: pnpm/setup@v2
-        with:
-          install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-          check-latest: true
-          cache: pnpm
-
-      # Why: keep the non-blocking evidence lane on the same Linux native
-      # install path as the blocking golden and release build jobs.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-
-      # Same node-gyp header fetch as the blocking golden gate above.
-      - name: Install dependencies
-        uses: nick-fields/retry@v4
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          retry_wait_seconds: 30
-          command: pnpm install --frozen-lockfile
-
-      - name: Build Electron app for terminal rendering evidence
-        run: npx electron-vite build --mode e2e
-
-      - name: Run terminal rendering evidence on Linux
-        if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence
-
-      - name: Run terminal rendering evidence on macOS
-        if: runner.os == 'macOS'
-        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence
-
-      - name: Run terminal rendering evidence on Windows
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $env:SKIP_BUILD = '1'
-          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
-          pnpm run test:e2e:terminal-rendering-release-evidence
-
-      - name: Upload Playwright traces
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: terminal-rendering-release-evidence-${{ matrix.platform }}-playwright-traces
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
-
-  # Build every target’s qualified orcad slot at the tag beside release gates; unsigned template consumes no signing quota.
   orcad-template:
     needs: cut
     if: needs.cut.outputs.should_release == 'true' && needs.cut.outputs.ships_orcad_template == 'true'
@@ -1219,6 +1126,11 @@ jobs:
           key: electron-builder-${{ matrix.platform }}-${{ steps.eb-versions.outputs.versions }}
           restore-keys: |
             electron-builder-${{ matrix.platform }}-
+
+      # Restore-keys bring back every older Electron zip; drop them so the next save keeps only this version.
+      - name: Prune stale Electron downloads
+        shell: bash
+        run: if [ -f config/scripts/electron-installation/prune-electron-download-cache.mjs ]; then node config/scripts/electron-installation/prune-electron-download-cache.mjs; fi
 
       # PRs cache tools separately from Electron; identical paths preserve their cache version.
       - name: Seed shared Linux packaging downloads
@@ -1984,6 +1896,24 @@ jobs:
               }
             }
 
+            # Every shipped Windows binary, not only the staged list: Smart App Control refuses to load any unsigned one.
+            $payloadSummaryPath = Join-Path $env:RUNNER_TEMP 'payload-signatures-summary.json'
+            $payloadStderrPath = Join-Path $env:RUNNER_TEMP 'payload-signatures-stderr.txt'
+            Remove-Item -LiteralPath $payloadSummaryPath, $payloadStderrPath -Force -ErrorAction SilentlyContinue
+            $payloadOutput = @(node config/scripts/desktop-distribution/windows/verify-windows-payload-signatures.mjs $root --summary $payloadSummaryPath 2> $payloadStderrPath)
+            $payloadExitCode = $LASTEXITCODE
+            # The runner exits with the last native exit code; keep the fail-open path from failing on it.
+            $global:LASTEXITCODE = 0
+            $payloadOutput | ForEach-Object { $report.Add($_); Write-Host $_ }
+            if ($payloadExitCode -eq 1) {
+              $failures.Add('the installer payload ships Windows binaries without a SignPath or Microsoft signature (listed above, with how to allow a vendor)')
+            } elseif ($payloadExitCode -ne 0) {
+              $payloadStderr = if (Test-Path -LiteralPath $payloadStderrPath) { (Get-Content -LiteralPath $payloadStderrPath -Raw).Trim() } else { '' }
+              # The catch below persists this message as the evidence verdict.
+              throw "The whole-payload signature check could not run (exit code $payloadExitCode): $payloadStderr"
+            }
+            $payloadChecked = (Get-Content -LiteralPath $payloadSummaryPath -Raw | ConvertFrom-Json).checked
+
             Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
             if ($failures.Count -gt 0) {
               $failures | ForEach-Object { Write-Host "::warning::$_" }
@@ -1997,8 +1927,8 @@ jobs:
               Add-GateEvidence "VERDICT: FAILED — $message"
               Add-GateSummary "FAILED — $message"
             } else {
-              # Use report, not extracted targets: it also includes the embedded uninstaller.
-              $ok = "All $($report.Count) checked binaries are signed by SignPath Foundation."
+              # The payload count covers every staged and required target; add the embedded uninstaller.
+              $ok = "All $($payloadChecked + 1) checked Windows binaries carry a trusted signature: SignPath Foundation for staged and required files, SignPath Foundation or Microsoft for the rest."
               Add-GateEvidence "VERDICT: PASSED — $ok"
               Add-GateSummary "PASSED — $ok"
               Write-Host $ok

@@ -15,7 +15,7 @@ export type CrewReadDependencies = {
   paneForHandle: (handle: string) => string | null
   name: (
     party: AgentMessageSender['party'],
-    taskName: string | null,
+    dispatchId: string | undefined,
     records: AgentSessionRecordReader | null
   ) => string | null
   callerPaneForHandle?: (handle: string) => string | null

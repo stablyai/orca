@@ -8,13 +8,13 @@ import { getPublishedHostDescriptor } from '../../hosts/platform-probe/host-desc
 import { existsSync } from 'node:fs'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import { CrewChanges } from '../../orchestration/crew/crew-changes'
-import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
+import { OrcaRuntimeWithWebhookOperations } from './webhook-operations'
 import { subscribeWorkerApprovals } from '../../orchestration/crew/worker-approval-stream'
 import { readCrewApprovals } from '../../orchestration/crew/crew-query'
 import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationWorkerApprovalsFrame } from '../../../../shared/orchestration/orchestration-crew'
 
-export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {
+export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebhookOperations {
   abstract readonly agentTransitions: Pick<AgentTransitionDetector, 'subscribe'>
 
   private unwatchCrewDb: (() => void) | undefined
@@ -40,11 +40,12 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
       readCrewRuntimeInputs(
         this.crewRuntimeReaders(),
         this._orchestrationDb,
-        existsSync(this.orchestrationDbPath()),
+        // Read only while no database is bound: a status wake must not stat the disk.
+        !this._orchestrationDb && existsSync(this.orchestrationDbPath()),
         getPublishedHostDescriptor(this.runtimeId)?.installationId ?? this.runtimeId,
         previous
       ),
-    (wake) =>
+    (wake, relevance) =>
       watchCrewRuntimeSources(
         {
           store: this.store,
@@ -52,7 +53,8 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
           watchTransitions: (listener) => this.agentTransitions.subscribe(listener),
           watchClient: (listener) => this.onClientEvent(listener)
         },
-        wake
+        wake,
+        relevance
       )
   )
 
@@ -60,7 +62,9 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrche
     return this.crewReadModel.read(party)
   }
 
-  watchOrchestrationCrew = (wake: () => void) => this.crewReadModel.subscribe(wake)
+  /** Wakes for changes `party`'s rows can show. */
+  watchOrchestrationCrew = (party: string) => (wake: () => void) =>
+    this.crewReadModel.subscribe(wake, party)
 
   /** A chat coordinator's worker approvals: its own mailbox and its Runs', read only on their changes. */
   subscribeOrchestrationWorkerApprovals(

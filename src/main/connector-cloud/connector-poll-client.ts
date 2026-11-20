@@ -4,101 +4,113 @@ import { delayUnlessAborted } from '../../shared/concurrency/abort-aware-delay'
 import {
   CONNECTOR_CLIENT_LIMITS,
   CONNECTOR_PATHS,
-  ConnectorDeliveryId,
-  ConnectorHelloResponse,
-  ConnectorPollControl,
   ConnectorPollResponse,
+  type ConnectorCloudFeature,
   type ConnectorReplyResponse,
-  type ConnectorAck,
-  type ConnectorConversation,
-  type ConnectorDeliveryResult,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
-import type {
-  ExternalConversationHost,
-  ExternalConversationSeam
-} from '../external-conversations/external-conversation-seam'
+import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
+import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import {
   UNREADABLE_ANSWER,
+  connectorStop,
   type ConnectorFailure,
   type ConnectorResult
 } from './connector-cloud-request'
-import { dispatchDelivery } from './connector-deliveries'
-import { connectorHello, type ConnectorHelloSaid } from './connector-hello'
-import type { ConnectorMachine, ConnectorTransport } from './connector-machine'
-import { postConnectorReply, type ConnectorReplyBody } from './connector-replies'
-import { connectorRetryDelayMs, ConnectorOutbox, ConnectorOutboxSender } from './connector-outbox'
-import type { ConnectorTurnEvents } from './connector-turn-events'
+import { ConnectorActiveConversations } from './connector-active-conversations'
+import { ConnectorDeliveryAcks } from './connector-delivery-acks'
+import { connectorHelloSaid, sayConnectorHello } from './connector-hello'
+import type { ConnectorPollClientOptions, ConnectorTransport } from './connector-machine'
+import {
+  foldConnectorReview,
+  postConnectorBotMessage,
+  postConnectorReply,
+  type ConnectorBotPostBody,
+  type ConnectorReplyBody
+} from './connector-replies'
+import { connectorPollRetryMs, obeyConnectorPollControl } from './connector-poll-control'
+import { ConnectorOutboxSender } from './connector-outbox'
+import { ConnectorEventRequests } from './connector-event-requests'
+import { ConnectorClientSnapshots, type ConnectorClientHello } from './connector-snapshot-trace'
 
-const RECONNECT_SPREAD_MS = 2_000
-const MAX_ACKS_PER_REQUEST = 100
+// The cloud forgets a machine's running workers once it has been silent 15 minutes (its last-seen is
+// a minute coarse); back from a silence near that, a fresh hello's snapshot restates them.
+const HELLO_AFTER_SILENCE_MS = 10 * 60_000
+// How often a wait on this client's state checks it again.
+const UNTIL_CHECK_MS = 250
 
-export type ConnectorPollClientOptions = {
-  transport: ConnectorTransport
-  /** Owned by the caller across clients; this client only sends through it while running. */
-  events: ConnectorTurnEvents
-  seam: ExternalConversationSeam
-  machine: ConnectorMachine
-  random?: () => number
-}
-
-/** Why the cloud stopped this client, e.g. `client_too_old`; it stays stopped until replaced. */
-type Stop = string
-
-/** A refusal no retry can fix; any other failure, a lapsed sign-in included, is retried after a backoff. */
-function stopFor(failure: ConnectorFailure): Stop | null {
-  return failure.status === 426 ? 'client_too_old' : null
-}
+export type { ConnectorPollClientOptions } from './connector-machine'
 
 export class ConnectorPollClient {
   readonly seam: ExternalConversationSeam
   private readonly host: ExternalConversationHost
   private readonly transport: ConnectorTransport
   private readonly stopped = new AbortController()
-  private readonly acks: ConnectorOutbox<ConnectorAck>
-  private readonly ackSender: ConnectorOutboxSender<ConnectorAck>
+  private readonly deliveries: ConnectorDeliveryAcks
   private readonly eventSender: ConnectorOutboxSender<ConnectorEvent>
-  // Received in this process and not yet confirmed done.
-  private readonly active = new Set<string>()
   private readonly random: () => number
-  private releaseWatch: (() => void) | null = null
+  private readonly eventRequests: ConnectorEventRequests
   // The hello the cloud took, which scopes the poll and everything sent; null until then, once the cloud
   // says it is no longer current, and once stopped. A new hello only replaces it. The cloud refuses
   // anything under another hello with 409, so a 204 always means applied.
   private helloRev: number | null = null
+  // From the last hello answer; null until one arrives.
+  private features: ReadonlySet<string> | null = null
   // What that hello said.
   private helloSaid = ''
+  // Whether it listed the bots; one sent before the cloud said it takes pages leaves them out.
+  private botsSaid = false
+  // Hellos go one at a time, so a late answer never replaces a newer revision.
+  private saying: Promise<ConnectorFailure | null> = Promise.resolve(null)
   private failures = 0
+  // When the last answered poll went out; failed ones don't count.
+  private heardAt: number | null = null
   private warnedTrimmed = false
-  private stopReason: Stop | null = null
+  private stopReason: string | null = null
+  // Replies and bot posts still in flight.
+  private posting = 0
+  private readonly active = new ConnectorActiveConversations()
+  // Why each snapshot this client takes was taken, for its trace.
+  private readonly snapshots = new ConnectorClientSnapshots(() => this.options.events)
+
+  get cloudFeatures(): ReadonlySet<string> | null {
+    return this.features
+  }
 
   constructor(private readonly options: ConnectorPollClientOptions) {
     this.seam = options.seam
     this.transport = options.transport
     this.random = options.random ?? Math.random
     this.host = options.machine.conversationHost()
-    this.acks = new ConnectorOutbox<ConnectorAck>({
-      headSize: () => MAX_ACKS_PER_REQUEST,
-      onAccepted: (sent) => {
-        for (const ack of sent) {
-          if (ack.step === 'done') {
-            this.active.delete(ack.deliveryId)
-          }
+    const helloRev = (): number | null => this.helloRev
+    this.deliveries = new ConnectorDeliveryAcks({
+      seam: this.seam,
+      host: this.host,
+      machine: options.machine,
+      send: (acks, rev) => this.post(CONNECTOR_PATHS.acks, rev, { v: 1, helloRev: rev, acks }),
+      helloRev,
+      random: this.random,
+      signal: this.stopped.signal,
+      outbox: () => options.events.replyAccount()
+    })
+    this.eventRequests = new ConnectorEventRequests({
+      events: options.events,
+      watch: (listener) => this.seam.watch(this.host, listener),
+      observe: (event) => this.active.observe(event),
+      flush: () => this.eventSender.flush(),
+      post: (body, rev, batch) => this.post(CONNECTOR_PATHS.events, rev, body, batch),
+      rejected: (rev, failure) => {
+        if (this.helloRev !== rev) {
+          return null
         }
+        this.helloRev = null
+        return this.backoff(failure)
       }
     })
-    const helloRev = (): number | null => this.helloRev
-    this.ackSender = new ConnectorOutboxSender(
-      this.acks,
-      (acks, rev) => this.post(CONNECTOR_PATHS.acks, rev, { v: 1, helloRev: rev, acks }),
-      helloRev,
-      this.random
-    )
     // Every hello restarts the numbering with a snapshot.
     this.eventSender = new ConnectorOutboxSender(
       options.events,
-      (events, rev, seq) =>
-        this.post(CONNECTOR_PATHS.events, rev, { v: 1, helloRev: rev, seq, events }),
+      (events, rev, seq) => this.eventRequests.post(events, rev, seq),
       helloRev,
       this.random
     )
@@ -115,30 +127,84 @@ export class ConnectorPollClient {
     void this.run()
   }
 
+  /**
+   * Says a changed hello now rather than after the held poll, so the cloud sees a new or edited bot at once.
+   * The poll stays held: the cloud refuses it under the old hello without handing it anything.
+   */
+  sayChanged(): void {
+    // Checked once the hello in flight lands: a change during the first one is not left to the next cycle.
+    const say = (): Promise<ConnectorFailure | null> =>
+      this.helloRev !== null ? this.helloIfOwed() : Promise.resolve(null)
+    this.saying = this.saying.then(say, say)
+  }
+
   /** Posts an agent's reply to its conversation's thread while this client runs. */
   reply(body: ConnectorReplyBody): Promise<ConnectorResult<ConnectorReplyResponse>> {
-    return postConnectorReply(this.transport, body, this.stopped.signal, this.random)
+    const review = this.features?.has('review' satisfies ConnectorCloudFeature)
+    const sent = review ? body : foldConnectorReview(body)
+    return this.posted(postConnectorReply(this.transport, sent, this.stopped.signal, this.random))
+  }
+
+  /** Posts as a bot in one of its app's channels while this client runs. */
+  postAsBot(botId: string, body: ConnectorBotPostBody) {
+    return this.posted(
+      postConnectorBotMessage(this.transport, botId, body, this.stopped.signal, this.random)
+    )
+  }
+
+  /** Resolves once the cloud took a hello from this client, once it stops, or once `signal` aborts. */
+  helloTaken(signal: AbortSignal): Promise<void> {
+    const taken = (): boolean => this.helloRev !== null && this.botsSaid
+    return this.until(taken, AbortSignal.any([this.stopped.signal, signal]))
+  }
+
+  /** Resolves once the cloud took the current hello, no linked turn or worker runs, and nothing is owed; or once stopped. */
+  settled(): Promise<void> {
+    return this.until(() => this.nothingOwed(), this.stopped.signal)
+  }
+
+  private async until(done: () => boolean, signal: AbortSignal): Promise<void> {
+    while (!signal.aborted) {
+      await this.saying.catch(() => null)
+      if (done()) {
+        return
+      }
+      await delayUnlessAborted(UNTIL_CHECK_MS, signal)
+    }
+  }
+
+  private nothingOwed(): boolean {
+    return (
+      this.helloRev !== null &&
+      JSON.stringify(connectorHelloSaid(this.options.machine, this.features)) === this.helloSaid &&
+      this.deliveries.settled &&
+      this.options.events.owed === 0 &&
+      this.posting === 0 &&
+      this.active.idle
+    )
+  }
+
+  private posted<T>(post: Promise<T>): Promise<T> {
+    this.posting++
+    return post.finally(() => this.posting--)
   }
 
   stop(): void {
     this.stopped.abort()
     // Confirmations still owed are listed as unsettled after the next hello and settled from receipts.
     this.helloRev = null
-    this.ackSender.stop()
+    this.deliveries.stop()
     this.eventSender.stop()
-    this.releaseWatch?.()
-    this.releaseWatch = null
+    this.eventRequests.stop()
   }
 
   private async run(): Promise<void> {
+    await this.options.machine.beforeFirstHello?.()
     while (!this.stopped.signal.aborted) {
-      let stop: Stop | null
-      try {
-        stop = await this.cycle()
-      } catch (error) {
+      const stop = await this.cycle().catch((error: unknown) => {
         console.error('[connector] poll cycle failed', error)
-        stop = await this.backoff(UNREADABLE_ANSWER)
-      }
+        return this.backoff(UNREADABLE_ANSWER)
+      })
       if (stop) {
         this.halt(stop)
       }
@@ -149,153 +215,117 @@ export class ConnectorPollClient {
   }
 
   /** One hello-if-needed and one held poll; returns why to stop, or null to go on. */
-  private async cycle(): Promise<Stop | null> {
-    const { machine } = this.options
-    const said = { agents: machine.agents(), projects: machine.projects() }
-    // A hello restarts the numbered events with a snapshot, which also restates anything the caps dropped.
-    if (
-      this.helloRev === null ||
-      JSON.stringify(said) !== this.helloSaid ||
-      this.options.events.needsSnapshot
-    ) {
-      const refused = await this.hello(said)
-      if (refused) {
-        return stopFor(refused) ?? this.backoff(refused)
-      }
+  private async cycle(): Promise<string | null> {
+    const refused = await this.sayHello()
+    if (refused) {
+      return connectorStop(refused) ?? this.backoff(refused)
     }
     const { helloRev } = this
     // Stopped during the hello.
     if (helloRev === null) {
       return null
     }
-    const sentAt = performance.now()
+    const polledAt = Date.now()
+    // The capability of the hello this poll runs under, whatever a newer one says by its answer.
+    const outbox = this.options.events.replyAccount()
     const polled = await this.transport.call(
       CONNECTOR_PATHS.poll,
       { v: 1, helloRev },
       ConnectorPollResponse,
-      { timeoutMs: CONNECTOR_CLIENT_LIMITS.pollTimeoutMs, signal: this.stopped.signal }
+      {
+        timeoutMs: CONNECTOR_CLIENT_LIMITS.pollTimeoutMs,
+        signal: this.stopped.signal
+      }
     )
     // A stopped client admits nothing, even from an answer that arrived anyway.
     if (this.stopped.signal.aborted) {
       return null
     }
     if (!polled.ok) {
-      // A lost answer may have carried this hello's one list of unsettled deliveries; a new hello lists
-      // them again. A 409 means the cloud wants one anyway.
-      this.helloRev = null
-      return polled.status === 409 ? null : (stopFor(polled) ?? this.backoff(polled))
+      // A lost answer (null) may have carried this hello's one list of unsettled deliveries; a new hello
+      // lists them again. A 409 asks for one. A 5xx rolled back, so it keeps the hello. Either way only
+      // if one said meanwhile did not already replace it.
+      if (this.helloRev === helloRev && (polled.status === 409 || polled.status === null)) {
+        this.helloRev = this.snapshots.drop(polled.status === 409 ? 'poll-409' : 'poll-failed')
+      }
+      return polled.status === 409 ? null : (connectorStop(polled) ?? this.backoff(polled))
     }
+    const answeredAt = performance.now()
+    // After a long sleep or outage, a fresh snapshot restates workers the cloud may have forgotten.
+    const silentMs = Date.now() - (this.heardAt ?? Date.now())
+    if (silentMs > HELLO_AFTER_SILENCE_MS && this.helloRev === helloRev) {
+      this.helloRev = this.snapshots.drop('silence')
+    }
+    this.heardAt = polledAt
     this.failures = 0
     const response = polled.value
-    for (const unsettled of response.unsettled ?? []) {
-      void this.reconcile(unsettled.deliveryId, unsettled.conversation)
-    }
-    // Network delay only shortens the deadline: it runs from when this poll was sent.
+    this.deliveries.reconcileAll(response.unsettled ?? [])
+    // serverNow is stamped when the cloud answers, after the hold, so the deadline runs from the answer.
     const msLeft = (expiresAt: number): number =>
-      expiresAt - response.serverNow - (performance.now() - sentAt)
-    for (const raw of response.deliveries) {
-      this.deliver(raw, msLeft)
-    }
-    return this.obey(response.control)
+      expiresAt - response.serverNow - (performance.now() - answeredAt)
+    this.deliveries.deliverAll(response.deliveries, msLeft, outbox)
+    return obeyConnectorPollControl(response.control, this.random, this.stopped.signal)
   }
 
-  /** Null once the cloud took it; otherwise why not. Each hello also gets a fresh watch and snapshot. */
-  private async hello(said: ConnectorHelloSaid): Promise<ConnectorFailure | null> {
-    const { body, trimmed } = connectorHello(this.options.machine, said)
+  private sayHello(): Promise<ConnectorFailure | null> {
+    const say = (): Promise<ConnectorFailure | null> => this.helloIfOwed()
+    // A failed one does not hold up the next.
+    this.saying = this.saying.then(say, say)
+    return this.saying
+  }
+
+  /** Null once the cloud took what this machine says now; otherwise why not. Each hello gets a fresh watch and snapshot. */
+  private async helloIfOwed(again = true): Promise<ConnectorFailure | null> {
+    await this.eventRequests.waitForRetry()
+    const { machine } = this.options
+    const said = connectorHelloSaid(machine, this.features)
+    // A hello restarts the numbered events with a snapshot, which also restates anything the caps dropped.
+    if (
+      this.helloRev !== null &&
+      JSON.stringify(said) === this.helloSaid &&
+      !this.options.events.needsSnapshot
+    ) {
+      return null
+    }
+    const sent = await sayConnectorHello(machine, said, this.transport, this.stopped.signal)
+    if (!sent.ok) {
+      // A cloud rolled back to one without pages: ask again what it takes.
+      this.features = said.paged && sent.status === 404 ? null : this.features
+      return sent
+    }
+    const { answer, trimmed } = sent.value
     if (trimmed && !this.warnedTrimmed) {
       this.warnedTrimmed = true
-      console.warn('[connector] the hello left out the least recently used projects to fit its cap')
-    }
-    const answer = await this.transport.call(CONNECTOR_PATHS.hello, body, ConnectorHelloResponse, {
-      method: 'PUT',
-      signal: this.stopped.signal
-    })
-    if (!answer.ok) {
-      return answer
+      console.warn('[connector] the hello left out bots or triggers to fit what the cloud takes')
     }
     if (this.stopped.signal.aborted) {
       return null
     }
     this.helloSaid = JSON.stringify(said)
+    this.botsSaid = said.bots !== null
+    this.features = new Set(answer.features)
+    const current = this.helloRev !== null
+    this.helloRev = null
+    this.options.events.useCloudFeatures(this.features, answer.helloRev)
+    machine.helloAnswered?.(answer)
     // A fresh watch's first event is the snapshot, which opens this hello's numbered events.
-    this.watch()
-    this.helloRev = answer.value.helloRev
+    this.watch({ rev: answer.helloRev, again, current })
+    this.helloRev = answer.helloRev
     this.eventSender.resume()
-    this.ackSender.resume()
-    return null
+    this.deliveries.resume()
+    // The answer's features can change what to say, e.g. bots left out until it said it takes pages.
+    const changed = JSON.stringify(connectorHelloSaid(machine, this.features)) !== this.helloSaid
+    return again && changed ? this.helloIfOwed(false) : null
   }
 
-  private watch(): void {
-    const { events } = this.options
-    const previous = this.releaseWatch
-    this.releaseWatch = this.seam.watch(this.host, (event) => {
-      events.observe(event)
-      this.eventSender.flush()
-    })
-    previous?.()
-  }
-
-  private deliver(raw: unknown, msLeft: (expiresAt: number) => number): void {
-    const id = ConnectorDeliveryId.safeParse(raw)
-    // A lost `received` resends the delivery; this process already holds it.
-    if (id.success && this.active.has(id.data.deliveryId)) {
-      this.pushAck({ deliveryId: id.data.deliveryId, step: 'received' })
-      return
-    }
-    const dispatched = dispatchDelivery(this.seam, this.host, raw, msLeft)
-    if (!dispatched) {
-      return
-    }
-    const { deliveryId, received, done } = dispatched
-    this.active.add(deliveryId)
-    if (received) {
-      this.pushAck({ deliveryId, step: 'received' })
-    }
-    void done.then((result) => this.pushAck({ deliveryId, step: 'done', result }))
-  }
-
-  /** A delivery an earlier process received: replay its receipt, never run it again. */
-  private async reconcile(deliveryId: string, conversation: ConnectorConversation): Promise<void> {
-    if (this.active.has(deliveryId)) {
-      return
-    }
-    this.active.add(deliveryId)
-    // A receipt still running can fail; its outcome is then unknown, and it is still never run again.
-    const result: ConnectorDeliveryResult = await this.seam.recorded(conversation, deliveryId).then(
-      (recorded) => recorded ?? { outcome: 'unknown', reason: 'no_local_record' },
-      (error: unknown) => ({
-        outcome: 'unknown',
-        reason: error instanceof Error && error.message ? error.message : 'failed'
-      })
-    )
-    if (this.stopped.signal.aborted) {
-      return
-    }
-    this.pushAck({ deliveryId, step: 'done', result })
-  }
-
-  private pushAck(ack: ConnectorAck): void {
-    this.acks.push(ack)
-    this.ackSender.flush()
-  }
-
-  private async obey(raw: unknown): Promise<Stop | null> {
-    const control = ConnectorPollControl.safeParse(raw)
-    if (!control.success) {
-      return null
-    }
-    if ('stop' in control.data) {
-      return control.data.stop
-    }
-    const waitMs =
-      'pausedForMs' in control.data ? control.data.pausedForMs : this.random() * RECONNECT_SPREAD_MS
-    await delayUnlessAborted(waitMs, this.stopped.signal)
-    return null
+  private watch(hello?: ConnectorClientHello): void {
+    this.snapshots.expect(hello)
+    this.eventRequests.watch()
   }
 
   private async backoff(failure: ConnectorFailure): Promise<null> {
     await delayUnlessAborted(
-      connectorRetryDelayMs(this.failures++, failure, this.random),
+      connectorPollRetryMs(this.failures++, failure, this.random),
       this.stopped.signal
     )
     return null
@@ -304,19 +334,22 @@ export class ConnectorPollClient {
   private async post(
     path: string,
     helloRev: number,
-    body: unknown
+    body: unknown,
+    // An events batch: the request is watched for its snapshot's trace, if it carries one.
+    batch?: readonly ConnectorEvent[]
   ): Promise<ConnectorFailure | null> {
     const sent = await this.transport.call(path, body, z.undefined(), {
-      signal: this.stopped.signal
+      signal: this.stopped.signal,
+      requests: batch && this.options.events.requestsFor(batch)
     })
     if (sent.ok) {
       return null
     }
     // That hello is no longer current, e.g. a retired client's late one landed after it: say hello again.
     if (sent.status === 409 && this.helloRev === helloRev) {
-      this.helloRev = null
+      this.helloRev = this.snapshots.drop('post-409')
     }
-    const stop = stopFor(sent)
+    const stop = connectorStop(sent)
     if (stop) {
       this.halt(stop)
     }
@@ -324,10 +357,11 @@ export class ConnectorPollClient {
   }
 
   /** Only a running client may stop for a reason; a retired one's late answers mean nothing. */
-  private halt(reason: Stop): void {
+  private halt(reason: string): void {
     if (!this.stopped.signal.aborted) {
       this.stopReason = reason
       this.stop()
+      this.options.onHalt?.(reason)
     }
   }
 }

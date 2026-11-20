@@ -70,6 +70,10 @@ export const mobileNativeChatAskStyles = themedStyleSheet(() => ({
   other: {
     marginBottom: spacing.xs
   },
+  // The last choice row keeps the card's edge where the footer would sit.
+  choiceOnlyEnd: {
+    height: ASK_CARD_PADDING - 6
+  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',

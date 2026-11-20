@@ -1,7 +1,7 @@
 import React from 'react'
 import { MacFolderAccessFixDialog } from '@/components/shared/MacFolderAccessFixDialog'
-import { useMacosTccPromptNotice } from './useMacosTccPromptNotice'
-import { useMacTccAttributionSeveredNotice } from './useMacTccAttributionSeveredNotice'
+import { useMacosTccPromptNotice } from '../components/macos-permissions/useMacosTccPromptNotice'
+import { useMacTccAttributionSeveredNotice } from '../components/macos-permissions/useMacTccAttributionSeveredNotice'
 
 export function MacosTccPromptNoticeHost(): React.JSX.Element {
   useMacosTccPromptNotice()

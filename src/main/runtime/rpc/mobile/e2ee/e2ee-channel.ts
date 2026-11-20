@@ -20,9 +20,9 @@ import {
   type DeviceKeyResolution
 } from './mobile-e2ee-auth-validation'
 import {
-  isMobileE2EEOutboundItemWithinLimit,
+  mobileE2EEReplyMethod,
   trackMobileE2EEOutboundBudgetClose,
-  type MobileE2EEOutboundBudgetEmitter
+  type MobileE2EEOutboundBudgetClose
 } from './mobile-e2ee-outbound-admission'
 import { parseRemoteRuntimeJsonText } from '../../../../../shared/remote-runtime/requests/remote-runtime-request-frames'
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
@@ -93,7 +93,7 @@ export class E2EEChannel {
     this.outbound = new MobileE2EEDesktopOutboundOwner(
       ws,
       () => Boolean(this.sharedKey),
-      () => this.closeForOutboundBudget('queue'),
+      (close) => this.closeForOutboundBudget(close),
       this.capabilitySource,
       options.outboundMemoryBudget
     )
@@ -166,8 +166,9 @@ export class E2EEChannel {
     const reply = createLegacyReplySenders({
       ws: this.ws,
       outbound: this.outbound,
+      request: plaintext,
       getSharedKey: () => this.sharedKey,
-      onOversize: () => this.closeForOutboundBudget('size')
+      onOversize: (close) => this.closeForOutboundBudget(close)
     })
     this.messageHandler?.(plaintext, reply.text, reply.binary)
   }
@@ -283,39 +284,39 @@ export class E2EEChannel {
       onDecryptSuccess: () => (this.consecutiveFailures = 0),
       onAuth: (plaintext) => this.handleAuth(plaintext),
       onBinary: (plaintext) => this.binaryMessageHandler?.(plaintext),
-      onText: (plaintext) =>
+      onText: (plaintext) => {
+        const method = mobileE2EEReplyMethod(plaintext)
         this.messageHandler?.(
           plaintext,
-          (response) => this.enqueueV2({ kind: 'text', plaintext: response }),
-          (response, options) => this.enqueueV2({ kind: 'binary', plaintext: response }, options)
-        ),
+          (response) => this.enqueueV2({ kind: 'text', plaintext: response }, method),
+          (response, options) =>
+            this.enqueueV2({ kind: 'binary', plaintext: response }, method, options)
+        )
+      },
       onProtocolError: () => this.onError(4001, 'Invalid binary message before authentication')
     })
   }
 
   private enqueueV2(
     item: V2OutboundItem,
+    method: string,
     options?: RpcBinary.RpcBinarySendOptions
   ): RpcBinary.RpcBinarySendResult {
     if (!this.v2Session || this.ws.readyState !== this.ws.OPEN) {
       return false
     }
-    if (!isMobileE2EEOutboundItemWithinLimit(item)) {
-      this.closeForOutboundBudget('size')
-      return false
-    }
-    return this.outbound.enqueueV2(item, this.v2Session, options)
+    return this.outbound.enqueueV2(item, this.v2Session, method, options)
   }
 
   // Both budget closes kill the remote session: size identifies an oversized producer, queue a backed-up link.
-  private closeForOutboundBudget(emitter: MobileE2EEOutboundBudgetEmitter): void {
-    trackMobileE2EEOutboundBudgetClose(emitter)
+  private closeForOutboundBudget(close: MobileE2EEOutboundBudgetClose): void {
+    trackMobileE2EEOutboundBudgetClose(close)
     this.onError(1013, 'Outbound reply buffer overflow')
   }
 
   private sendEncryptedControl(message: unknown): void {
     if (this.v2Session) {
-      this.enqueueV2({ kind: 'text', plaintext: JSON.stringify(message) })
+      this.enqueueV2({ kind: 'text', plaintext: JSON.stringify(message) }, 'control')
     } else if (this.ws.readyState === this.ws.OPEN && this.sharedKey) {
       const frame = encrypt(JSON.stringify(message), this.sharedKey)
       this.outbound.sendLegacyFrame(frame)

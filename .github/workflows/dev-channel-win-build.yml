@@ -212,6 +212,11 @@ jobs:
           restore-keys: |
             electron-builder-win-
 
+      # Restore-keys bring back every older Electron zip; drop them so the next save keeps only this version.
+      - name: Prune stale Electron downloads
+        shell: bash
+        run: if [ -f config/scripts/electron-installation/prune-electron-download-cache.mjs ]; then node config/scripts/electron-installation/prune-electron-download-cache.mjs; fi
+
       # Retry transient Electron CDN 504s during install; keep host-scoped natives for this runner’s only target.
       - name: Install dependencies
         uses: nick-fields/retry@v4
@@ -372,6 +377,17 @@ jobs:
               exit 1
             fi
           done
+
+      # Dev-channel builds are unsigned by design; list what Smart App Control machines will refuse to load, never fail.
+      - name: Report unsigned Windows binaries (advisory)
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $script = 'config/scripts/desktop-distribution/windows/verify-windows-payload-signatures.mjs'
+          if ((Test-Path $script) -and (Test-Path 'dist/win-unpacked')) {
+            node $script dist/win-unpacked --mode advisory
+          }
+          exit 0
 
       - name: Stage Windows artifacts for gated publishing
         if: inputs.stage_only

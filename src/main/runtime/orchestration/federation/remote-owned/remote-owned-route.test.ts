@@ -8,7 +8,7 @@ import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
 } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-
+import { RemoteRuntimeClientError } from '../../../../../shared/remote-runtime/remote-runtime-client-error'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import type { RpcResponse } from '../../../rpc/core'
@@ -40,6 +40,13 @@ type Sent = {
 }
 type Answer = { result: unknown } | { error: string; data?: unknown } | 'unreachable'
 
+const unreachable = (pairingStage: 'connect' | 'runtime') =>
+  new RemoteRuntimeClientError(
+    'remote_runtime_unavailable',
+    'Could not connect to the remote Orca runtime.',
+    { pairingStage }
+  )
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? { ...value } : {}
 }
@@ -51,6 +58,8 @@ describe('commands about a worker a paired server owns', () => {
   let sent: Sent[]
   let answers: Record<string, Answer[]>
   let capabilities: string[]
+  let statusAnswers: ('unreachable' | undefined)[]
+  let dialFailure: Error | undefined
   let whileSending: () => Promise<void>
   let pulls: unknown[][]
   let sequence = 0
@@ -74,7 +83,13 @@ describe('commands about a worker a paired server owns', () => {
         _meta: { runtimeId: 'runtime_b' }
       })
       if (method === 'status.get') {
-        return ok({ runtimeId: 'runtime_b', capabilities })
+        return statusAnswers.shift() === 'unreachable'
+          ? {
+              id: method,
+              ok: false,
+              error: { code: 'remote_runtime_unavailable', message: 'unreachable' }
+            }
+          : ok({ runtimeId: 'runtime_b', capabilities })
       }
       if (method === 'orchestration.peerMailPull') {
         const items = pulls.shift()
@@ -89,6 +104,9 @@ describe('commands about a worker a paired server owns', () => {
       }
       const guard = await send?.prepareGuard?.(sendingConnection)
       guard?.()
+      if (dialFailure) {
+        throw dialFailure
+      }
       const prepared = send?.prepareRequest?.({ params, envelope, measure: () => 0 })
       sent.push({
         method,
@@ -98,9 +116,7 @@ describe('commands about a worker a paired server owns', () => {
       await whileSending()
       const answer = answers[method]?.shift() ?? 'unreachable'
       if (answer === 'unreachable') {
-        throw Object.assign(new Error('Could not connect to the remote Orca runtime.'), {
-          code: 'remote_runtime_unavailable'
-        })
+        throw unreachable('runtime')
       }
       return 'result' in answer
         ? ok(answer.result)
@@ -116,6 +132,8 @@ describe('commands about a worker a paired server owns', () => {
     server = { ...DEV_B }
     sent = []
     answers = {}
+    statusAnswers = []
+    dialFailure = undefined
     whileSending = async () => undefined
     pulls = []
     capabilities = [
@@ -182,6 +200,36 @@ describe('commands about a worker a paired server owns', () => {
     }
   }
 
+  it("sends a new-child there with this caller's workspace as its parent", async () => {
+    const parent = {
+      installationId: 'install_a',
+      workspaceKey: 'worktree:repo_a::/a/home',
+      instanceId: 'instance_a'
+    } as const
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start reads only the caller terminal's workspace.
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({ worktreeId: 'repo_a::/a/home' } as never)
+    const resolveParent = vi
+      .spyOn(runtime, 'resolveCallerParentForAnotherStore')
+      .mockResolvedValue({ parent, source: 'env-workspace' })
+    answers['orchestration.workerStart'] = [started()]
+
+    const response = await call('orchestration.workerStart', {
+      from: 'term_coord',
+      on: 'devB',
+      spec: 'build it',
+      worktree: 'new-child',
+      repo: 'id:repo_b'
+    })
+
+    expect(response.ok).toBe(true)
+    expect(resolveParent.mock.calls[0]?.[0]).toEqual({ envParentWorkspace: 'id:repo_a::/a/home' })
+    expect(sent.find((s) => s.method === 'orchestration.workerStart')?.params).toMatchObject({
+      worktree: 'new-child',
+      repo: 'id:repo_b',
+      crossStoreParent: parent
+    })
+  })
+
   it('fails the Task when the server refuses the start, and keeps it fenced when the answer is lost', async () => {
     answers['orchestration.workerStart'] = [
       { error: 'invalid_argument', data: { effectsApplied: false } }
@@ -216,6 +264,113 @@ describe('commands about a worker a paired server owns', () => {
     expect(lost.ok ? undefined : lost.error.code).toBe('remote_runtime_unavailable')
     const lostTask = String(sent[1].params.adoptTaskId)
     expect(getRemotePlacement(db, lostTask)).toMatchObject({ state: 'reserved' })
+  })
+
+  const startNeverSent = () =>
+    call(
+      'orchestration.workerStart',
+      { from: 'term_coord', on: 'devB', spec: 'never sent', worktree: 'new-top-level' },
+      { requestId: REQUEST }
+    )
+  const onlyTaskId = () => String(record(db.db.prepare('SELECT id FROM tasks').get()).id)
+  const cancel = (id: string) =>
+    call('orchestration.taskUpdate', { id, status: 'failed', callerTerminalHandle: 'term_coord' })
+
+  it.each([
+    ['the dial failed', () => (dialFailure = unreachable('connect'))],
+    [
+      'the server refused its access grant',
+      () =>
+        (dialFailure = new RemoteRuntimeClientError('unauthorized', 'Pairing was revoked.', {
+          pairingStage: 'access-grant'
+        }))
+    ],
+    // The capability probe answers; the contract check the start waits on does not.
+    ['its contract check went unanswered', () => (statusAnswers = [undefined, 'unreachable'])]
+  ])(
+    'keeps a start that never left this Orca reserved, marked as never sent, because %s',
+    async (_why, failSend) => {
+      failSend()
+      const response = await startNeverSent()
+
+      expect(response.ok).toBe(false)
+      expect(sent.map((s) => s.method)).not.toContain('orchestration.workerStart')
+      const taskId = onlyTaskId()
+      expect(getRemotePlacement(db, taskId)).toMatchObject({ state: 'reserved' })
+      expect(getRemotePlacement(db, taskId)?.never_sent_at).not.toBeNull()
+      expect(db.getTask(taskId)?.status).toBe('dispatched')
+
+      dialFailure = undefined
+      answers['orchestration.workerStart'] = [started()]
+      const retried = await startNeverSent()
+
+      expect(record(retried.ok ? retried.result : undefined)).toMatchObject({
+        taskId,
+        dispatchId: 'ctx_b1'
+      })
+      expect(getRemotePlacement(db, taskId)).toMatchObject({
+        state: 'accepted',
+        dispatch_id: 'ctx_b1',
+        never_sent_at: null
+      })
+    }
+  )
+
+  it('lets task-update fail a Task whose every start failed before leaving this Orca', async () => {
+    dialFailure = unreachable('connect')
+    await startNeverSent()
+    await startNeverSent()
+    const taskId = onlyTaskId()
+
+    const response = await cancel(taskId)
+
+    expect(response.ok).toBe(true)
+    expect(getRemotePlacement(db, taskId)).toBeUndefined()
+    expect(db.getTask(taskId)?.status).toBe('failed')
+  })
+
+  it('still refuses task-update for a start whose answer was lost after sending', async () => {
+    const lost = await startNeverSent()
+    expect(lost.ok ? undefined : lost.error.code).toBe('remote_runtime_unavailable')
+    const taskId = onlyTaskId()
+    expect(getRemotePlacement(db, taskId)).toMatchObject({ state: 'reserved', never_sent_at: null })
+
+    const response = await cancel(taskId)
+
+    expect(response.ok ? undefined : response.error.code).toBe('task_not_startable')
+    expect(getRemotePlacement(db, taskId)).toMatchObject({ state: 'reserved' })
+    expect(db.getTask(taskId)?.status).toBe('dispatched')
+  })
+
+  it('clears the never-sent mark before a retry sends, so a loss after that send stays fenced', async () => {
+    dialFailure = unreachable('connect')
+    await startNeverSent()
+    const taskId = onlyTaskId()
+    dialFailure = undefined
+    let markWhileSending: string | null | undefined
+    whileSending = async () => {
+      markWhileSending = getRemotePlacement(db, taskId)?.never_sent_at
+    }
+
+    const retried = await startNeverSent()
+
+    expect(retried.ok ? undefined : retried.error.code).toBe('remote_runtime_unavailable')
+    expect(markWhileSending).toBeNull()
+    expect(getRemotePlacement(db, taskId)).toMatchObject({ state: 'reserved', never_sent_at: null })
+    expect((await cancel(taskId)).ok).toBe(false)
+  })
+
+  it('keeps the reservation unmarked when a retry fails before sending, since the first send may have landed', async () => {
+    const lost = await startNeverSent()
+    expect(lost.ok ? undefined : lost.error.code).toBe('remote_runtime_unavailable')
+    const taskId = onlyTaskId()
+
+    dialFailure = unreachable('connect')
+    const retried = await startNeverSent()
+
+    expect(retried.ok ? undefined : retried.error.code).toBe('remote_runtime_unavailable')
+    expect(getRemotePlacement(db, taskId)).toMatchObject({ state: 'reserved', never_sent_at: null })
+    expect(db.getTask(taskId)?.status).toBe('dispatched')
   })
 
   it("adopts a start whose answer was lost from the server's queue item alone", async () => {
@@ -278,6 +433,27 @@ describe('commands about a worker a paired server owns', () => {
 
     expect(response.ok ? undefined : response.error.code).toBe('run_not_found')
     expect(getRemoteDispatch(db, 'ctx_b1')).toBeUndefined()
+  })
+
+  it("records the agent the server's start receipt names in its launch", async () => {
+    answers['orchestration.workerStart'] = [
+      {
+        result: {
+          dispatchId: 'ctx_b1',
+          run: { id: 'run_on_b' },
+          state: 'ready',
+          launch: { requested: { agent: null }, effective: { agent: 'codex' } }
+        }
+      }
+    ]
+    const response = await call(
+      'orchestration.workerStart',
+      { from: 'term_coord', on: 'devB', spec: 'build it', worktree: 'new-top-level' },
+      { requestId: REQUEST }
+    )
+
+    expect(response.ok).toBe(true)
+    expect(getRemoteDispatch(db, 'ctx_b1')).toMatchObject({ agent: 'codex' })
   })
 
   it("answers a remote worker's question only from its Run's coordinator, as a local one is", async () => {

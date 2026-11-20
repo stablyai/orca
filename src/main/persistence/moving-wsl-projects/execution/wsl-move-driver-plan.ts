@@ -5,6 +5,7 @@
  */
 import {
   WSL_MOVE_FINISH_PENDING_DETAIL,
+  type WslMoveDroppedProject,
   type WslMoveRefusal,
   type WslMoveRequest
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
@@ -13,6 +14,13 @@ import {
   wslMoveJournalKey
 } from '../../../../shared/wsl-move/wsl-move-cutover'
 import { wslHostsAcceptNewWork } from '../../../wsl/host-lifecycle/wsl-host-gate'
+import type { WslMappedDrive } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
+import {
+  journaledWslMoveDrives,
+  readWslMoveSourceDrives,
+  wslMoveStartDriveRefusal,
+  wslMoveStartDroppedProjects
+} from './wsl-move-driver-source-drives'
 import { listWslMoveCutoverChain } from '../cutover-recovery/wsl-move-cutover-journal'
 
 import { type WslMovePlan, planWslMove } from '../manifest-scope/wsl-move-delta-plan'
@@ -44,6 +52,8 @@ export type WslMovePrepared = {
   exported: WslMoveManifestExport
   scope: WslMoveTerminalScope
   blockers: WslMoveGateBlocker[]
+  /** A whole-distro start's previewed projects left because their drive now points elsewhere. */
+  droppedForDrives?: WslMoveDroppedProject[]
 }
 
 export function refusal(
@@ -185,7 +195,8 @@ export function exportRequestOf(
     destinationEnvironmentId: host.environmentId,
     generation: plan.generation,
     repoIds: plan.repoIds,
-    folderWorkspaceIds: plan.folderWorkspaceIds
+    folderWorkspaceIds: plan.folderWorkspaceIds,
+    ...(plan.mappedDrives?.length ? { mappedDrives: plan.mappedDrives } : {})
   }
 }
 
@@ -195,7 +206,9 @@ export async function prepareWslMove(
   migrationId: string,
   startedAt: Date,
   /** Settle an earlier move of the distro an interruption left short of commit; false leaves it. */
-  settleInterrupted: WslMoveInterruptedSettle | false = false
+  settleInterrupted: WslMoveInterruptedSettle | false = false,
+  /** At start: the mapped drives the preview showed, which must still hold. Null for a preview. */
+  expectedMappedDrives: readonly WslMappedDrive[] | null = null
 ): Promise<WslMovePrepared | WslMoveRefusal> {
   // Every new move, dialog or automatic, stops once a block is learned, even mid-run.
   if (!wslHostsAcceptNewWork()) {
@@ -232,17 +245,26 @@ export async function prepareWslMove(
     request.repoIds || request.folderWorkspaceIds
       ? { repoIds: request.repoIds ?? [], folderWorkspaceIds: request.folderWorkspaceIds ?? [] }
       : undefined
+  const catalog = deps.readCatalog()
+  const drives = await readWslMoveSourceDrives(deps, catalog, request)
   const planned = planWslMove(
     deps.userDataPath,
-    deps.readCatalog(),
+    catalog,
     request.distro,
     await host.readHolding(),
-    selection
+    selection,
+    drives
   )
   if (planned.outcome === 'refused') {
-    return refusal(planned.code)
+    // A picked project whose drive moved since the preview is a changed scope, not "nothing new".
+    const changed =
+      expectedMappedDrives &&
+      wslMoveStartDriveRefusal(catalog, request, drives, [], expectedMappedDrives)
+    return (
+      changed || refusal(planned.code, planned.refused?.length ? { refused: planned.refused } : {})
+    )
   }
-  const { plan } = planned
+  let { plan } = planned
   // A delta goes to the host its chain already moved into; another host would split the projects.
   if (plan.destinationEnvironmentId && plan.destinationEnvironmentId !== host.environmentId) {
     return refusal('wsl_move_host_unavailable', { detail: 'destination_changed' })
@@ -254,6 +276,10 @@ export async function prepareWslMove(
       return refusal('wsl_move_export_incomplete', { reasons: [...exported.blockers] })
     }
     assertWslMoveManifestFits(exported.manifest)
+    plan = {
+      ...plan,
+      mappedDrives: journaledWslMoveDrives(drives.mappedDrives, exported.mappedDriveLetters)
+    }
   } catch (error) {
     const tooLarge = manifestTooLargeRefusal(error)
     if (tooLarge) {
@@ -264,6 +290,21 @@ export async function prepareWslMove(
     }
     throw error
   }
+  const changedDrives =
+    expectedMappedDrives &&
+    wslMoveStartDriveRefusal(
+      catalog,
+      request,
+      drives,
+      plan.mappedDrives ?? [],
+      expectedMappedDrives
+    )
+  if (changedDrives) {
+    return changedDrives
+  }
+  const droppedForDrives = expectedMappedDrives
+    ? wslMoveStartDroppedProjects(catalog, request, drives.mappedDrives, expectedMappedDrives, plan)
+    : []
   const scope: WslMoveTerminalScope = {
     workspaceIds: exported.workspaceIds,
     workspaceKeys: new Set(exported.workspaceKeys)
@@ -274,6 +315,7 @@ export async function prepareWslMove(
     plan,
     exported,
     scope,
-    blockers: gate.verdict === 'blocked' ? gate.blockers : []
+    blockers: gate.verdict === 'blocked' ? gate.blockers : [],
+    ...(droppedForDrives.length > 0 ? { droppedForDrives } : {})
   }
 }

@@ -31,6 +31,7 @@ import type { ClaudeNamingInputs } from '../conversation-naming/claude-naming-in
 import type { ClaudeInitializeFacts } from './startup/claude-structured-session-startup'
 
 import type { ClaudeStructuredSessionEvent } from './lifecycle/claude-structured-session-event'
+import type { ClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
 
 export type ClaudeStartedSend = { clientMessageId: string; requestedAt?: number }
 
@@ -50,6 +51,8 @@ export type ClaudeStructuredSessionAdapterDeps = {
   atRestCommands?: ClaudeAtRestCommandCatalog
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
+  /** The user renamed the session with Claude's own command; delivered after the frame's journaling. */
+  onUserRenamed?: (sessionId: string, name: string) => void
   /** Direct settlement path for provider-proven late dispatch outcomes. */
   onDispatchSettledLate?: (input: { sessionId: string } & ClaudeLateDispatchOutcome) => void
   /** Delivered after journaling; producer writes corrections to the reporting child's rows. */
@@ -99,6 +102,8 @@ export type ClaudeDispatchWaiter = {
   retired?: boolean
   /** The CLI's last non-terminal `command_lifecycle` state for this send; in memory only. */
   commandLifecycle?: 'queued' | 'started'
+  /** Sent as Claude's rename command; only its started window carries the user's new title. */
+  renamesSession?: true
   /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */
   replayContentKey: string
 }
@@ -151,6 +156,7 @@ export type ClaudeSession = {
   cliFlag?: ClaudeCliFlagCheck
   /** Whether the CLI answers live effort and Fast changes; `unknown` ones are rechecked, then tried. */
   flagSettingsControl?: ClaudeCliFlagFact
+  promptSuggestionPause?: ClaudePromptSuggestionPause
   /** CLI-advertised protocol capabilities from init; gates interrupt-receipt handling. */
   capabilities: readonly string[]
   backgroundTasks: ClaudeBackgroundTaskTracker

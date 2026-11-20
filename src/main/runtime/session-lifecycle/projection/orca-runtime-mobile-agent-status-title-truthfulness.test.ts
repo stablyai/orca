@@ -2,8 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { AgentHookServer, _internals } from '../../../agent-hooks/server/agent-hook-server'
-import { agentHookRuntimeDeps } from '../../../agent-hooks/runtime/agent-hook-runtime-deps'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { projectSessionTabAgentStatus } from '../../rpc/methods/session-tabs/session-tab-agent-status-projection'
@@ -27,7 +25,10 @@ const PROVIDER_SESSION = {
   transcriptPath: '/transcripts/ac1f6b90.jsonl'
 }
 
-async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRuntimeService> {
+async function createRuntime(
+  rows: AgentStatusIpcPayload[] = [],
+  launchAgent: 'claude' | 'pi' = 'claude'
+): Promise<OrcaRuntimeService> {
   const runtime = new OrcaRuntimeService(null, undefined, {
     getAgentStatusSnapshot: () => rows,
     getPublicAgentStatusSnapshotForPane: (paneKey) => rows.filter((row) => row.paneKey === paneKey)
@@ -51,7 +52,7 @@ async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRu
   await runtime.createTerminal(`id:${WORKTREE_ID}`, {
     tabId: TAB_ID,
     leafId: LEAF_ID,
-    launchAgent: 'claude',
+    launchAgent,
     title: 'Terminal'
   })
   return runtime
@@ -61,7 +62,8 @@ async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRu
 async function publishRendererWorkingPane(
   runtime: OrcaRuntimeService,
   paneTitle: string,
-  status?: AgentStatusEntry
+  status?: AgentStatusEntry,
+  launchAgent: 'claude' | 'pi' = 'claude'
 ): Promise<void> {
   runtime.attachWindow(1)
   await runtime.syncWindowGraph(1, {
@@ -99,7 +101,7 @@ async function publishRendererWorkingPane(
             parentTabId: TAB_ID,
             leafId: LEAF_ID,
             title: paneTitle,
-            launchAgent: 'claude',
+            launchAgent,
             agentStatus: status ?? {
               state: 'working',
               prompt: 'Configurar y entender los comprobantes',
@@ -350,117 +352,79 @@ describe('mobile session tabs: a process started after its pane last reported', 
   )
 })
 
-// A title repaint and physical Sleep must not make the same finished turn newly unread.
-describe('mobile session tabs: accepted completion identity through Sleep', () => {
+// #39120: Pi ends its reply (OSC 7501 root done) while async pi-subagents children keep the row working.
+describe('mobile session tabs: a Pi turn held open by background subagents', () => {
+  const subagents = [
+    { id: 'child-a', state: 'working' as const, startedAt: T0 + 100, agentType: 'worker' },
+    { id: 'child-b', state: 'working' as const, startedAt: T0 + 200, agentType: 'worker' }
+  ]
+  const heldRow: AgentStatusIpcPayload = {
+    paneKey: PANE_KEY,
+    state: 'working',
+    prompt: 'start two background workers',
+    agentType: 'pi',
+    connectionId: null,
+    receivedAt: T0 + 1_000,
+    stateStartedAt: T0,
+    tabId: TAB_ID,
+    worktreeId: WORKTREE_ID,
+    lastAssistantMessage: 'Started the background workers.',
+    subagents
+  }
+
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers()
     vi.setSystemTime(T0)
-    _internals.resetCachesForTests()
   })
+
   afterEach(() => {
-    _internals.resetCachesForTests()
     vi.useRealTimers()
   })
 
-  it.each([
-    { route: 'headless', stopTitle: 'root@host: ~/repo' },
-    { route: 'published', stopTitle: 'root@host: ~/repo' },
-    { route: 'headless', stopTitle: 'zsh' },
-    { route: 'published', stopTitle: 'zsh' }
-  ])(
-    'preserves the accepted end on $route output through $stopTitle and settlement',
-    async ({ route, stopTitle }) => {
+  it.each(['headless', 'published'] as const)(
+    'keeps the %s row working with its children after the lead reports done',
+    async (route) => {
       const rows: AgentStatusIpcPayload[] = []
-      const server = new AgentHookServer()
-      server.setListener(() =>
-        rows.splice(0, rows.length, ...server.getStatusSnapshotForPane(PANE_KEY))
+      const runtime = await createRuntime(rows, 'pi')
+      // Bytes captured from Pi 1.5.2 with pi-subagents 0.89.0.
+      runtime.onPtyData(
+        PTY_ID,
+        '\x1b]0;\u280b \u03c0 - work\x07\x1b]7501;state=working:app=pi\x1b\\' +
+          '\x1b]7501;state=working:id=subagents/child-a:app=pi-subagents:title=d29ya2Vy\x1b\\' +
+          '\x1b]7501;state=working:id=subagents/child-b:app=pi-subagents:title=d29ya2Vy\x1b\\',
+        T0
       )
-      server.ingestRemote(
-        {
-          paneKey: PANE_KEY,
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          providerSession: PROVIDER_SESSION,
-          turnEndedAt: T0,
-          turnEndDisposition: 'identified',
-          payload: { state: 'done', agentType: 'claude', prompt: 'Finished work' }
-        },
-        'ssh-test'
+      vi.setSystemTime(T0 + 1_000)
+      rows.push(heldRow)
+      // The hook can land just before the lead's done reaches the PTY.
+      vi.setSystemTime(T0 + 1_001)
+      runtime.onPtyData(
+        PTY_ID,
+        '\x1b]0;\u03c0 - work\x07\x1b]7501;state=done:app=pi\x1b\\',
+        T0 + 1_001
       )
-      const runtime = await createRuntime(rows)
-      const deps = agentHookRuntimeDeps(
-        server,
-        { read: () => ({ kind: 'unobserved' }) },
-        () => ({})
-      )
-      Reflect.set(
-        runtime,
-        'reconcileAgentStatusForEndedProcessFn',
-        deps.reconcileAgentStatusForEndedProcess
-      )
-      server.setTerminalPaneLifecycle({
-        ownsProcess: (key, id) => key === PANE_KEY && id === PTY_ID,
-        isStopping: () =>
-          runtime.intentionalPtyStops.claimExit(PTY_ID, null).includes('reversible'),
-        isReversibleStop: (id, incarnation) =>
-          runtime.intentionalPtyStops.claimExit(id, incarnation).includes('reversible'),
-        isPlaced: () => true
-      })
-      const frames: (AgentStatusEntry | null | undefined)[] = []
-      const unsubscribe = runtime.onMobileSessionTabsChanged((frame) => {
-        for (const tab of frame.tabs) {
-          if (tab.type === 'terminal') {
-            frames.push(tab.agentStatus)
-          }
-        }
-      })
-      const observe = async () => {
-        const frame = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-        const tab = frame.tabs.find((tab) => tab.type === 'terminal')
-        expect(tab?.type).toBe('terminal')
-        if (tab?.type === 'terminal') {
-          frames.push(tab.agentStatus)
-        }
-      }
-      let finishStop: ((stopped: boolean) => void) | undefined
-      try {
-        vi.setSystemTime(T0 + 20)
-        runtime.onPtyData(PTY_ID, '\x1b]0;Claude Code\x07', T0 + 20)
-        if (route === 'published') {
-          await publishRendererWorkingPane(runtime, 'Claude Code', {
-            state: 'done',
-            prompt: '',
+      if (route === 'published') {
+        await publishRendererWorkingPane(
+          runtime,
+          '\u03c0 - work',
+          {
+            state: 'working',
+            prompt: heldRow.prompt,
             paneKey: PANE_KEY,
-            agentType: 'claude',
+            agentType: 'pi',
             updatedAt: T0 + 1_000,
-            stateStartedAt: T0 + 20,
-            stateHistory: []
-          })
-          expect((await projectAgentStatus(runtime))?.updatedAt).toBeGreaterThanOrEqual(T0 + 1_000)
-        }
-        await observe()
-        finishStop = runtime.intentionalPtyStops.mark(PTY_ID, 'reversible', null)
-        vi.setSystemTime(T0 + 60_000)
-        runtime.onPtyData(PTY_ID, `\x1b]0;${stopTitle}\x07`, T0 + 60_000)
-        await observe()
-        await runtime.onPtyExit(PTY_ID, 0, undefined, { providerExitObserved: true })
-        finishStop(true)
-        expect(server.getStatusSnapshotForPane(PANE_KEY)[0].paneSleep).toEqual({ ptyId: PTY_ID })
-        await observe()
-        for (const status of frames) {
-          expect(status).toMatchObject({
-            state: 'done',
             stateStartedAt: T0,
-            evidenceObservedAt: T0,
-            turnEndedAt: T0,
-            turnEndDisposition: 'identified'
-          })
-        }
-      } finally {
-        unsubscribe()
-        finishStop?.(false)
-        server.setListener(null)
+            stateHistory: [],
+            subagents
+          },
+          'pi'
+        )
       }
+
+      vi.setSystemTime(T0 + 60_000)
+      expect(await projectAgentStatus(runtime)).toEqual(
+        expect.objectContaining({ state: 'working', subagents })
+      )
     }
   )
 })

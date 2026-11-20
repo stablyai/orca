@@ -4,7 +4,7 @@ import type {
   RuntimeStatusStoreSetState,
   RuntimeStatusStoreState
 } from './runtime-status-types'
-import { replaceMapEntries } from '@/store/keyed-record-transitions'
+import { replaceMapEntries } from '@/store/record-transitions/keyed-record-transitions'
 
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
@@ -264,10 +264,11 @@ export const createRuntimeStatusSlice: (
 
   ...createRuntimeEnvironmentStatusRetention(set, get),
 
-  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
+  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000, options) =>
     refreshRuntimeEnvironmentStatus(
       environmentId,
       timeoutMs,
+      options?.force === true,
       (entry) => {
         get().setRuntimeEnvironmentStatus(environmentId, entry)
         if (entry.status) {

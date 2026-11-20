@@ -31,6 +31,8 @@ export class RuntimeBrowserCommands {
   readonly browserGoto: RuntimeBrowserNavigation['browserGoto']
   readonly browserBack: RuntimeBrowserNavigation['browserBack']
   readonly browserReload: RuntimeBrowserNavigation['browserReload']
+  readonly browserZoom: RuntimeBrowserNavigation['browserZoom']
+  readonly browserStop: RuntimeBrowserNavigation['browserStop']
   readonly browserFill: RuntimeBrowserElementActions['browserFill']
   readonly browserType: RuntimeBrowserElementActions['browserType']
   readonly browserSelect: RuntimeBrowserElementActions['browserSelect']
@@ -124,7 +126,7 @@ export class RuntimeBrowserCommands {
     const queries = new RuntimeBrowserTabQueries(host, targets, catalog)
     const creation = new RuntimeBrowserTabCreation(host, targets)
     const close = new RuntimeBrowserTabClose(queries, host, targets)
-    const profiles = new RuntimeBrowserProfiles(host, targets, catalog)
+    const profiles = new RuntimeBrowserProfiles(host, targets, catalog, creation)
     const screencasts = new RuntimeBrowserScreencasts(host, targets, catalog)
     const dialogs = new RuntimeBrowserDialogs(targets)
     this.browserProfileDetectBrowsers = profiles.browserProfileDetectBrowsers.bind(profiles)
@@ -138,6 +140,8 @@ export class RuntimeBrowserCommands {
     this.browserGoto = navigation.browserGoto.bind(navigation)
     this.browserBack = navigation.browserBack.bind(navigation)
     this.browserReload = navigation.browserReload.bind(navigation)
+    this.browserZoom = navigation.browserZoom.bind(navigation)
+    this.browserStop = navigation.browserStop.bind(navigation)
     this.browserFill = elements.browserFill.bind(elements)
     this.browserType = elements.browserType.bind(elements)
     this.browserSelect = elements.browserSelect.bind(elements)
@@ -214,6 +218,10 @@ export class RuntimeBrowserCommands {
     this.browserDialogAccept = dialogs.browserDialogAccept.bind(dialogs)
     this.browserDialogDismiss = dialogs.browserDialogDismiss.bind(dialogs)
     const passive = new Set([
+      // Page admission waits for the load; zoom must apply while the page is still loading.
+      'browserZoom',
+      // Page admission waits for the main-frame load, the very load a stop ends.
+      'browserStop',
       'browserTabList',
       'browserTabCurrent',
       'browserTabAnnotations',

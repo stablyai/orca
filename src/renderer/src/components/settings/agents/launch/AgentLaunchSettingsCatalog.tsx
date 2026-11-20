@@ -1,4 +1,6 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
+
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -48,7 +50,10 @@ import {
   resolveChatProgramContext
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
-import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import {
+  useDetectedAgents,
+  type AgentDetectionTarget
+} from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { AgentLaunchDefaultsGroup } from '@/components/settings/agents/launch/AgentLaunchDefaultsGroup'
 import { AgentDetectionCatalog } from '@/components/settings/agents/launch/AgentDetectionCatalog'
 import type { AgentCatalogRowProps } from '@/components/settings/agents/launch/AgentCatalogRow'
@@ -231,6 +236,9 @@ export function AgentLaunchSettingsCatalog({
     agent: (typeof catalog)[number],
     isDetected: boolean
   ): AgentCatalogRowProps => ({
+    cliUpdate: isDetected ? (
+      <AgentCliUpdateButton detectionTarget={detectionTarget} agent={agent.id} />
+    ) : undefined,
     agentId: agent.id,
     label: agent.label,
     homepageUrl: agent.homepageUrl,

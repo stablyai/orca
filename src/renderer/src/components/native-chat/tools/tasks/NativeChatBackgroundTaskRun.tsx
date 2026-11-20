@@ -1,11 +1,11 @@
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { recomputeOn } from '@/lib/recompute-on'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import type { NativeChatBackgroundTaskBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatBackgroundTaskRun } from '../../../../../../shared/native-chat/transcript/turns/native-chat-background-task-run'
 import { sayBackgroundTaskTranslated } from './background-task-words-text'
-import { KIND_ICONS } from './NativeChatBackgroundTasksStatus'
+import { KIND_ICONS } from './background-task-kind-icons'
 
 export function NativeChatBackgroundTaskRun({
   block

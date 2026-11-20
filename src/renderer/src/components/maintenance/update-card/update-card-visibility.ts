@@ -1,3 +1,4 @@
+// @protected-copy scope=file
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
@@ -25,11 +26,11 @@ export function isUpdateCardVisible({
   if (status.state === 'not-available' && (!isUserInitiated || autoDismissed)) {
     return false
   }
-  if (status.state === 'idle') {
+  if (status.state === 'idle' || (status.state === 'available' && status.automaticDownload)) {
     return false
   }
   if (cachedVersion && dismissedVersion === cachedVersion && !updateUserInitiatedCycle) {
-    if (status.state !== 'downloading' && status.state !== 'error') {
+    if (status.state === 'available') {
       return false
     }
   }

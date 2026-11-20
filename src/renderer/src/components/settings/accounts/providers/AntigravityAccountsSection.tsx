@@ -20,7 +20,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
 import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { AntigravityChatSignInRow } from '../../../provider-accounts/AntigravityChatSignInRow'
-import { AntigravityInfoTooltip } from '../../../provider-accounts/AntigravityInfoTooltip'
 import {
   antigravityChatSignInBlocked,
   antigravityProviderSignInShown
@@ -177,15 +176,12 @@ export function AntigravityAccountsSection({
     }
   }
 
-  const terminalInfo = windowsHost
-    ? t(
-        'accounts.antigravity.terminalInfoWindows',
-        'Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Selecting applies to the host default agy credential.'
-      )
-    : t(
-        'accounts.antigravity.terminalInfo',
-        'Run agy to sign in, then save the login here. To add another account, run /logout in agy and sign in again. Applies to new agy sessions.'
-      )
+  const logoTitle = (title: string) => (
+    <span className="flex items-center gap-2">
+      <AgentIcon agent="antigravity" size={16} />
+      {title}
+    </span>
+  )
   const runtimeRow =
     chats && chatRuntime.kind === 'active' ? (
       <ManagedRuntimeInstallRow
@@ -196,9 +192,7 @@ export function AntigravityAccountsSection({
         {(line, actions) => (
           <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">
-                {t('settings.agents.chatRuntime', 'Chat runtime')}
-              </p>
+              <p className="text-sm font-medium">{t('accounts.antigravity.runtime', 'Runtime')}</p>
               <div className="mt-0.5">{line}</div>
             </div>
             <div className="flex shrink-0 items-center gap-1">{actions}</div>
@@ -207,15 +201,62 @@ export function AntigravityAccountsSection({
       </ManagedRuntimeInstallRow>
     ) : null
 
+  const chatRows =
+    chats && chatRuntime.kind === 'active' ? (
+      antigravityProviderSignInShown(chatRuntime) ? (
+        <AntigravityChatSignInRow
+          owner={owner}
+          label={label}
+          disabled={antigravityChatSignInBlocked(chatRuntime)}
+          runtime={runtimeRow}
+        />
+      ) : (
+        runtimeRow
+      )
+    ) : null
+
   return (
-    <div id={ACCOUNTS_SECTION_IDS.antigravity} className="scroll-mt-6 space-y-3">
+    <div id={ACCOUNTS_SECTION_IDS.antigravity} className="scroll-mt-6 space-y-6">
+      {chatRows ? (
+        <SettingsGroup
+          title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
+          description={
+            state?.chatUsesAgy
+              ? t(
+                  'accounts.antigravity.chatDescriptionAgy',
+                  "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't."
+                )
+              : t(
+                  'accounts.antigravity.chatDescription',
+                  'Signs in through your browser, so Chat works without agy installed.'
+                )
+          }
+        >
+          {chatRows}
+        </SettingsGroup>
+      ) : null}
       <SettingsGroup
-        title={
-          <span className="flex items-center gap-2">
-            <AgentIcon agent="antigravity" size={16} />
-            {t('accounts.antigravity.title', 'Antigravity')}
-            <AntigravityInfoTooltip info={terminalInfo} />
-          </span>
+        title={logoTitle(t('accounts.antigravity.terminalTitle', 'agy in the terminal'))}
+        description={
+          windowsHost
+            ? t(
+                'accounts.antigravity.terminalDescriptionWindows',
+                "Uses agy's own saved accounts. Switching applies to the host default agy credential."
+              )
+            : state?.chatUsesAgy === undefined
+              ? t(
+                  'accounts.antigravity.terminalDescription',
+                  "Uses agy's own saved accounts. Switching applies to new agy sessions."
+                )
+              : state.chatUsesAgy
+                ? t(
+                    'accounts.antigravity.terminalDescriptionChats',
+                    "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats."
+                  )
+                : t(
+                    'accounts.antigravity.terminalDescriptionNoChats',
+                    "Uses agy's own saved accounts. Switching applies to new agy sessions, not to Antigravity chats."
+                  )
         }
         action={
           <Tooltip>
@@ -248,18 +289,6 @@ export function AntigravityAccountsSection({
           windowsHost={windowsHost}
           run={(action, accountId) => void run(action, accountId)}
         />
-        {chats && chatRuntime.kind === 'active' ? (
-          antigravityProviderSignInShown(chatRuntime) ? (
-            <AntigravityChatSignInRow
-              owner={owner}
-              label={label}
-              disabled={antigravityChatSignInBlocked(chatRuntime)}
-              runtime={runtimeRow}
-            />
-          ) : (
-            runtimeRow
-          )
-        ) : null}
       </SettingsGroup>
       {chats &&
       chatRuntime.kind !== 'active' &&

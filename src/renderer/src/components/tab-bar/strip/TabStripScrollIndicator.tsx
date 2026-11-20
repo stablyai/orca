@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { computeTabStripThumbLayout } from './tab-strip-scroll-metrics'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 export type TabStripScrollIndicatorProps = {
   hasOverflow: boolean

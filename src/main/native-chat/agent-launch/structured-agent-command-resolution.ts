@@ -1,9 +1,10 @@
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
-import { homedir } from 'node:os'
 import { delimiter, isAbsolute, resolve as resolvePath } from 'node:path'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
+  expandHomeArgs,
+  isSpawnableCommand,
   resolveCliCommand,
   resolveExecutableCommand
 } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -20,6 +21,10 @@ import {
   guestNativePathEnv,
   resolveGuestNativeProgram
 } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
+import {
+  isManagedAgentCli,
+  managedAgentCommand
+} from '../../managed-agent-cli/managed-agent-cli-registry'
 
 export type StructuredAgentResolutionOperation = {
   deadline?: number
@@ -64,18 +69,9 @@ function resolveOverride(
   return command && plan
     ? {
         command,
-        prefixArgs: plan.prefixArgs.map((token) =>
-          token.startsWith('~/')
-            ? resolvePath(options.homePath ?? homedir(), token.slice(2))
-            : token
-        )
+        prefixArgs: expandHomeArgs(plan.prefixArgs, options.homePath)
       }
     : null
-}
-
-// Extensionless commands cannot spawn on Windows; .cmd/.bat use Orca’s shim handling.
-function spawnableOn(platform: NodeJS.Platform, command: string): boolean {
-  return platform !== 'win32' || /\.(exe|com|cmd|bat)$/i.test(command)
 }
 
 export type StructuredAgentCommand = { command: string; prefixArgs: string[] }
@@ -91,6 +87,14 @@ export function resolveStructuredAgentCommand(
     // WSL PATH may contain drive-mounted Windows shims after native entries.
     const command = stock.command ?? agent
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
+    // The user's own install wins; Orca's copy serves hosts that have none.
+    const managed =
+      isManagedAgentCli(agent) && (resolved === null || !isAbsolute(resolved))
+        ? managedAgentCommand(agent)
+        : null
+    if (managed) {
+      return { command: managed, prefixArgs: [] }
+    }
     if (resolved === null) {
       throw new AgentSessionPreSpawnError(
         `${command} is installed only on Windows, not in WSL ${process.env.WSL_DISTRO_NAME ?? 'distro'}`,
@@ -100,7 +104,10 @@ export function resolveStructuredAgentCommand(
     return { command: resolved, prefixArgs: [] }
   }
   const invocation = resolveOverride(agent, settings, options)
-  if (!invocation || !spawnableOn(options.platform ?? process.platform, invocation.command)) {
+  if (
+    !invocation ||
+    !isSpawnableCommand(options.platform ?? process.platform, invocation.command)
+  ) {
     throw new AgentSessionPreSpawnError(`the ${agent} Command setting is not a runnable program`, {
       reason: 'agentCommandNotRunnable'
     })

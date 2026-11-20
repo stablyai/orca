@@ -21,7 +21,7 @@ import { groupHookYamlPresentation } from './repository-hook-settings-draft'
 import type {
   ProjectGroupHookSupport,
   ProjectGroupSettingsEntry
-} from '@/hooks/use-supported-group-hook-settings'
+} from '@/components/settings/repository/hooks/use-supported-group-hook-settings'
 
 export function ProjectGroupHooksSection({
   group

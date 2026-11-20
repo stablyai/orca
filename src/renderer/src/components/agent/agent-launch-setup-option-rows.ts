@@ -6,6 +6,7 @@ import {
   TEXT_ACTION_DEFAULT_MODEL,
   textActionArgumentsOwnEffort
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
+import { withLaunchEffortDefault } from './agent-launch-setup-default-effort'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type {
@@ -187,7 +188,7 @@ export function agentLaunchSetupOptionRows(
           }
     )
   }
-  return rows
+  return withLaunchEffortDefault(rows, entry, draft, t)
 }
 
 export function agentLaunchSetupCatalogState(
@@ -200,54 +201,52 @@ export function agentLaunchSetupCatalogState(
   const hasUsableModels =
     hasModels || Boolean(currentModel && !models.some((model) => model.id === currentModel))
   const catalogPending = !hasUsableModels && entry.catalogRead === 'pending'
-  const catalogMessage =
-    hasUsableModels || catalogPending
+  const settled = !hasUsableModels && !catalogPending
+  const unsupported =
+    settled &&
+    (entry.catalogRead === 'unsupported' ||
+      (!hasModels && entry.catalog.origin === 'unknown' && entry.catalogRead === undefined))
+  const missing =
+    !settled || unsupported
       ? null
-      : entry.catalogRead === 'unsupported' ||
-          (!hasModels && entry.catalog.origin === 'unknown' && entry.catalogRead === undefined)
-        ? t(
-            'agentPicker.catalogUnsupportedLaunch',
-            '{{agent}} models are unavailable on this host. Your current choices still apply.',
-            { agent: entry.label }
-          )
-        : entry.catalogRead === 'failed'
-          ? t(
-              'agentPicker.catalogFailed',
-              'Could not load {{agent}} models. Close and reopen the agent picker to try again.',
-              { agent: entry.label }
-            )
-          : entry.catalog.unavailable?.reason === 'notSignedIn'
+      : entry.catalogRead === 'failed'
+        ? t('agentPicker.catalogLoadFailed', 'Could not load {{agent}} models.', {
+            agent: entry.label
+          })
+        : entry.catalog.unavailable?.reason === 'notSignedIn'
+          ? t('agentPicker.catalogSignInToLoad', 'Sign in to {{agent}} to load its models.', {
+              agent: entry.label
+            })
+          : entry.catalog.unavailable?.reason === 'cliMissing'
             ? t(
-                'agentPicker.catalogSignIn',
-                'Sign in to {{agent}} to load its models, then close and reopen the agent picker.',
+                'agentPicker.catalogInstallToLoad',
+                'Install {{agent}} on this host to load its models.',
                 { agent: entry.label }
               )
-            : entry.catalog.unavailable?.reason === 'cliMissing'
-              ? t(
-                  'agentPicker.catalogInstall',
-                  'Install {{agent}} on this host to load its models, then close and reopen the agent picker.',
-                  { agent: entry.label }
-                )
-              : entry.catalog.unavailable
-                ? t(
-                    'agentPicker.catalogUnresolved',
-                    '{{agent}} models have not loaded. Close and reopen the agent picker to try again.',
-                    { agent: entry.label }
-                  )
-                : entry.catalog.origin === 'unknown' || entry.catalog.listingInProgress
-                  ? !hasModels
-                    ? t(
-                        'agentPicker.catalogUnresolved',
-                        '{{agent}} models have not loaded. Close and reopen the agent picker to try again.',
-                        { agent: entry.label }
-                      )
-                    : null
-                  : !hasModels
-                    ? t('agentPicker.catalogEmpty', '{{agent}} has no available models.', {
-                        agent: entry.label
-                      })
-                    : null
-  return { hasModels, catalogPending, catalogMessage }
+            : entry.catalog.unavailable ||
+                ((entry.catalog.origin === 'unknown' || entry.catalog.listingInProgress) &&
+                  !hasModels)
+              ? t('agentPicker.catalogNotLoaded', '{{agent}} models have not loaded.', {
+                  agent: entry.label
+                })
+              : null
+  const catalogMessage = catalogPending
+    ? t('agentPicker.catalogLoading', 'Loading models…')
+    : unsupported
+      ? t(
+          'agentPicker.catalogUnsupportedLaunch',
+          '{{agent}} models are unavailable on this host. Your current choices still apply.',
+          { agent: entry.label }
+        )
+      : (missing ??
+        (settled && !hasModels
+          ? t('agentPicker.catalogEmpty', '{{agent}} has no available models.', {
+              agent: entry.label
+            })
+          : null))
+  // Retry reads the models again in place; an empty or unsupported answer would just repeat.
+  const catalogRetryable = missing !== null
+  return { hasModels, catalogPending, catalogMessage, catalogRetryable }
 }
 
 /** Visible model rows, the expanded legacy rows below their toggle, and the model the list starts on. */

@@ -10,7 +10,7 @@ import {
   setVisibleWorktreeIds,
   setVisibleWorktreeShortcutTargets
 } from '../listing/visible-worktrees'
-import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
+import { useListMultiSelection } from '@/lib/list-interaction/use-list-multi-selection'
 import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
 import { useAppStore } from '@/store'
 import { focusActiveWorkspaceSurfaceFromSidebar } from './focus-workspace-surface'

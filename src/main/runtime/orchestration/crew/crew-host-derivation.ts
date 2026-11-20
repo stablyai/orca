@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util'
 import { createCrewRecipientInputs } from './crew-recipient-inputs'
 import { captureCrewIdentityInputs } from './crew-identity-inputs'
 import type { FleetDurableWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-projection'
@@ -164,6 +165,7 @@ export function createCrewHostDerivation(deps: CrewReadDependencies, capacity?: 
       now,
       expiresAt,
       relations,
+      assignmentsById,
       workersById: new Map(workers.map((worker) => [worker.dispatchId, worker]))
     },
     statuses
@@ -176,7 +178,8 @@ export function refreshCrewStatuses<
     workersById: Map<string, FleetDurableWorker>
   }
 >(host: T, statuses: CrewReadDependencies['statuses']) {
-  return indexCrewStatuses(host, structuredClone(statuses))
+  // Each status read builds fresh evidence objects, so the host can keep them without a copy.
+  return indexCrewStatuses(host, statuses)
 }
 
 function indexCrewStatuses<
@@ -191,6 +194,71 @@ function indexCrewStatuses<
     }
   }
   return { ...host, deps: { ...host.deps, statuses }, statusIndex, statusesByPane }
+}
+
+/** Replaces assignment rows whose only change is their stage; null when any changed more, which needs a rebuild. */
+export function patchCrewAssignmentStages(
+  host: CrewHostDerivation,
+  rows: readonly CrewAssignmentRow[],
+  ids: ReadonlySet<string>
+): CrewHostDerivation | null {
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const changed = new Map<string, CrewAssignmentRow>()
+  for (const id of ids) {
+    const before = host.assignmentsById.get(id)
+    const after = byId.get(id)
+    if (!before) {
+      // Not among the host's assignments: shown nowhere unless it now qualifies, which only a rebuild knows.
+      if (after) {
+        return null
+      }
+      continue
+    }
+    if (!after || !sameExceptStage(before, after)) {
+      return null
+    }
+    if (after.stage !== before.stage) {
+      changed.set(id, after)
+    }
+  }
+  if (changed.size === 0) {
+    return host
+  }
+  const swap = (row: CrewAssignmentRow | undefined) => (row && changed.get(row.id)) ?? row
+  const relations = new Map(
+    [...host.relations].map(([address, edges]) => [
+      address,
+      edges.map((edge) =>
+        changed.has(edge.assignment.id) ||
+        (edge.parentAssignment && changed.has(edge.parentAssignment.id))
+          ? {
+              ...edge,
+              assignment: swap(edge.assignment)!,
+              parentAssignment: swap(edge.parentAssignment)
+            }
+          : edge
+      )
+    ])
+  )
+  const workersById = new Map(host.workersById)
+  for (const [id, row] of changed) {
+    const worker = workersById.get(id)
+    if (worker) {
+      workersById.set(id, { ...worker, workerStage: row.stage })
+    }
+  }
+  const assignmentsById = new Map(host.assignmentsById)
+  for (const [id, row] of changed) {
+    assignmentsById.set(id, row)
+  }
+  host.sourceInputs.replaceAssignments(changed.values())
+  return indexCrewStatuses({ ...host, relations, workersById, assignmentsById }, host.deps.statuses)
+}
+
+function sameExceptStage(a: CrewAssignmentRow, b: CrewAssignmentRow): boolean {
+  const { stage: _aStage, ...aRest } = a
+  const { stage: _bStage, ...bRest } = b
+  return isDeepStrictEqual(aRest, bRest)
 }
 
 export type CrewHostDerivation = ReturnType<typeof createCrewHostDerivation>

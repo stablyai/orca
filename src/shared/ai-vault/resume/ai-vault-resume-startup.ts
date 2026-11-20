@@ -31,8 +31,8 @@ import {
 import { assertOpenCodeCopyUsesLocalStore } from '../../agent-launch/startup/opencode-launch-command'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../agent-session/view/structured-agent-cli-conversation-adoption'
 import type { GlobalSettings } from '../../settings/global-settings-types'
-import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { managedDataAccountResumeEnv } from '../../agent-launch/environment/managed-data-account-resume'
+import { buildAntigravityReferenceStartup } from './ai-vault-antigravity-reference-startup'
 
 export type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
@@ -71,17 +71,6 @@ type AiVaultResumeStartupArgs = {
   commandOverride?: string | null
 }
 
-export function getAiVaultResumeCodexHome(
-  codexHome: string | null,
-  platform: NodeJS.Platform
-): string | null {
-  // Translate WSL UNC Codex homes to POSIX only for Linux targets.
-  if (!codexHome || platform !== 'linux') {
-    return codexHome
-  }
-  return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
-}
-
 export function getAiVaultAgentProviderSession(
   session: Pick<AiVaultSession, 'agent' | 'sessionId'> & { filePath?: string }
 ): AgentProviderSessionMetadata | null {
@@ -99,6 +88,10 @@ export function getAiVaultAgentProviderSession(
       ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
       : null
   }
+  // A Hermes row's `<store>#<id>` names the profile every resume, restore and host rebuild must pin.
+  if (session.agent === 'hermes' && session.filePath?.includes('#')) {
+    return { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
+  }
   return { key: 'session_id', id: session.sessionId }
 }
 
@@ -111,7 +104,7 @@ function resumeCommandOverrides(
   }
 }
 
-/** A resume run on the host itself: no prebuilt remote command and no Antigravity reference. */
+/** A resume run on the host itself: no prebuilt remote command. */
 export function buildAiVaultLocalResumeStartup(
   args: AiVaultResumeStartupArgs & {
     agentArgs?: string
@@ -131,6 +124,19 @@ export function buildAiVaultLocalResumeStartup(
   })
   const cwd = embedCwd ? session.cwd : null
   const startupCwd = !embedCwd && session.cwd ? { cwd: session.cwd } : {}
+  if (isAntigravityReferenceSession(session)) {
+    const reference = buildAntigravityReferenceStartup({
+      session: { sessionId: session.sessionId, filePath: resumeFilePath },
+      cwd,
+      platform,
+      shell: liveShell,
+      commandOverride: args.commandOverride,
+      settings
+    })
+    if (reference) {
+      return { ...reference, ...startupCwd }
+    }
+  }
   if (localProviderSession && isResumableTuiAgent(session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: session.agent,

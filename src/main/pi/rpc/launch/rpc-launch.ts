@@ -6,9 +6,13 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
-
+import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
+import { compareAppVersions } from '../../../../shared/app-lifecycle/identity/app-version'
+import type { AgentCliVersionCheck } from '../../../agent-launch/preflight/agent-cli-version-probe'
+import { AgentCliInstallationError } from '../../../native-chat/agent-launch/agent-cli-installation-error'
 import type { PiBackgroundWorkLaunch } from '../background-work/rpc-background-work-bridge'
 import { PI_BACKGROUND_WORK_DIR_ENV } from '../background-work/rpc-background-work-bridge-source'
+import { PI_BOT_TOOLS_ENV } from '../../../bots/bot-tools-pi'
 
 export type PiRpcLaunchOptions = {
   command: string
@@ -20,8 +24,16 @@ export type PiRpcLaunchOptions = {
   envToDelete?: readonly string[]
   sessionFile?: string
   forkFile?: string
+  /** Appended to Pi's own system prompt; a path keeps the text clear of argument-length limits. */
+  instructionsFile?: string
+  /** Skill folders loaded beside Pi's own. */
+  skillDirs?: readonly string[]
+  /** Absent: every tool Pi has. */
+  tools?: PiToolLimit
   /** Orca's background-work bridge for this launch; absent when it could not be prepared. */
   backgroundWork?: PiBackgroundWorkLaunch
+  /** The extension that registers a bot's own tools, and the servers it reads; absent: none. */
+  botTools?: { extension: string; servers: string }
 }
 
 const CALLER_ENV_TO_DELETE = [
@@ -56,6 +68,44 @@ export function piRpcSessionlessEnvironment(env: Readonly<Record<string, string>
   }
 }
 
+const PI_READ_TOOLS = ['read', 'grep', 'find', 'ls'] as const
+// A limited run is refused any other tool selection, which could widen it.
+const PI_TOOL_SELECTION_FLAGS = [
+  '--tools',
+  '-t',
+  '--no-tools',
+  '-nt',
+  '--no-builtin-tools',
+  '-nbt',
+  '--exclude-tools',
+  '-xt',
+  '--no-mcp'
+]
+
+export type PiToolLimit = 'read' | 'none'
+
+// A run limited to some tools also turns MCP off, which --no-mcp does from Pi 1.0.4.
+const PI_LIMITED_TOOLS_MINIMUM_VERSION = '1.0.4'
+
+/** A look reads only; a reply-only run has no tools. Null runs every tool Pi has. */
+export function piToolLimit(
+  readOnly: ReadOnlySessionMode | null,
+  launchVersion: AgentCliVersionCheck
+): PiToolLimit | null {
+  const tools = readOnly === 'reply-only' ? 'none' : readOnly ? 'read' : null
+  if (
+    tools &&
+    launchVersion.status === 'ready' &&
+    compareAppVersions(launchVersion.version, PI_LIMITED_TOOLS_MINIMUM_VERSION) < 0
+  ) {
+    throw AgentCliInstallationError.tooOld('pi', {
+      version: launchVersion.version,
+      minimumVersion: PI_LIMITED_TOOLS_MINIMUM_VERSION
+    })
+  }
+  return tools
+}
+
 /** Pi stores its own sessions; an explicit session file is shared with terminal resumes. */
 export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLaunch {
   if (!options.fullAccess) {
@@ -71,6 +121,14 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
     throw new Error('Pi fork requires one source session file')
   }
   const args = [...(options.extraArgs ?? [])]
+  const selection =
+    options.tools &&
+    [...(options.prefixArgs ?? []), ...args].find((arg) =>
+      PI_TOOL_SELECTION_FLAGS.includes(arg.split('=')[0])
+    )
+  if (selection) {
+    throw new Error(`Pi ${selection.split('=')[0]} conflicts with a limited tool launch`)
+  }
   let provider = false
   let model = false
   for (let index = 0; index < args.length; index++) {
@@ -114,7 +172,13 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
       '--mode',
       'rpc',
       ...args,
+      ...(options.instructionsFile ? ['--append-system-prompt', options.instructionsFile] : []),
+      ...(options.skillDirs ?? []).flatMap((dir) => ['--skill', dir]),
+      // Plain names replace the whole selection, a resumed session's included, and leave MCP tools undeclared.
+      ...(options.tools === 'read' ? ['--tools', PI_READ_TOOLS.join(','), '--no-mcp'] : []),
+      ...(options.tools === 'none' ? ['--no-tools', '--no-mcp'] : []),
       ...(options.backgroundWork ? ['--extension', options.backgroundWork.extension] : []),
+      ...(options.botTools ? ['--extension', options.botTools.extension] : []),
       ...(options.sessionFile ? ['--session', options.sessionFile] : []),
       ...(options.forkFile ? ['--fork', options.forkFile] : [])
     ],
@@ -122,7 +186,8 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
       ...options.env,
       ...(options.backgroundWork
         ? { [PI_BACKGROUND_WORK_DIR_ENV]: options.backgroundWork.directory }
-        : {})
+        : {}),
+      ...(options.botTools ? { [PI_BOT_TOOLS_ENV]: options.botTools.servers } : {})
     },
     envToDelete: [...(options.envToDelete ?? [])]
   }
