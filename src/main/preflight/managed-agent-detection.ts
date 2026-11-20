@@ -27,6 +27,8 @@ export async function readInstalledManagedAgents(): Promise<readonly string[]> {
       })
     ])
     clearTimeout(timer)
+    // Once waited out, later reads don't wait again.
+    held = null
   }
   return installedManagedAgents()
 }

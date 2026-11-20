@@ -152,10 +152,13 @@ export function useManagedRuntimeInstall(
     }
     reDetectedAfter.add(settled)
     const store = useAppStore.getState()
+    // Readers outside a hook (Settings, the status bar) read the host's own list, so ask for it.
     if (environmentId === null) {
       store.clearLocalDetectedAgents()
+      void store.ensureNativeDetectedAgents().catch(() => {})
     } else {
       store.clearRuntimeDetectedAgents(environmentId)
+      void store.ensureRuntimeDetectedAgents(environmentId).catch(() => {})
     }
   }, [settled, environmentId])
   const observation = useMemo((): ManagedRuntimeInstallObservation => {
