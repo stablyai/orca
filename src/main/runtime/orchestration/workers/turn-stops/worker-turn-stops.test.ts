@@ -247,6 +247,61 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail()).toHaveLength(2)
   })
 
+  it('waits once more for mail that lands as the turn ends, and reports a worker it did not wake', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ state: 'working', stateStartedAt: 100 }) }
+    const quiet: (() => void)[] = []
+    const stops = terminal(ctx, current, {
+      setTimer: (run) => {
+        quiet.push(run)
+        return { cancel: () => {} }
+      }
+    })
+    const elapse = async () => {
+      for (const run of quiet.splice(0)) {
+        run()
+      }
+      await settle()
+    }
+    const turnEndsAsAnswerLands = async (stateStartedAt: number) => {
+      current.row = hookRow({ state: 'working', stateStartedAt: stateStartedAt - 1 })
+      stops.observe({
+        kind: 'observed',
+        paneKey: PANE,
+        workspace: { worktreeId: 'repo::/tmp/wt', sshHostId: null },
+        phase: 'working',
+        at: 1
+      })
+      const asked = ctx.db.createQuestion({
+        runId: ctx.run.id,
+        dispatchId: ctx.dispatch.id,
+        askerHandle: HANDLE,
+        question: 'Red or blue?'
+      })
+      current.row = hookRow({ stateStartedAt, lastAssistantMessage: 'Waiting for the answer.' })
+      stops.observe(moved('working', 'done'))
+      ctx.db.answerQuestion({
+        messageId: asked.message.id,
+        runId: ctx.run.id,
+        consumerGeneration: ctx.run.consumer_generation,
+        body: 'Blue.'
+      })
+      await elapse()
+    }
+
+    await turnEndsAsAnswerLands(200)
+    expect(ctx.mail()).toHaveLength(0)
+    // The answer woke the worker.
+    current.row = hookRow({ state: 'working', stateStartedAt: 250 })
+    await elapse()
+    expect(ctx.mail()).toHaveLength(0)
+
+    await turnEndsAsAnswerLands(300)
+    // Nothing woke it: still resting on untaken mail.
+    await elapse()
+    expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+  })
+
   it('reports every idle stop after a write, though the write landed before the last report', async () => {
     const ctx = setup()
     const current = { row: hookRow({ state: 'working', stateStartedAt: 100 }) }

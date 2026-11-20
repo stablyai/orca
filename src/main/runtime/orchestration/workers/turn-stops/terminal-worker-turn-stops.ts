@@ -2,6 +2,7 @@ import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
+  AGENT_DONE_QUIET_MS,
   hookRowAgentPhase,
   hookRowTransition
 } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
@@ -36,7 +37,12 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
 }
 
 /** Report a terminal worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
-type PreparedStop = TerminalAgentTurnNewsItem & { dispatchId: string | null; mailTaken?: number }
+type PreparedStop = TerminalAgentTurnNewsItem & {
+  dispatchId: string | null
+  mailTaken?: number
+  /** Already waited one more quiet window for mail that had not reached the worker. */
+  heldForMail?: true
+}
 
 export class TerminalWorkerTurnStops {
   private readonly news: TerminalAgentTurnNews<PreparedStop>
@@ -114,6 +120,23 @@ export class TerminalWorkerTurnStops {
         : agentVerdictDisplayMark(stop.row) === 'failed'
           ? 'errored'
           : 'finished'
+    // Mail that lands as the turn ends is about to wake the worker; a worker still resting after it is news.
+    if (
+      reason === 'finished' &&
+      !stop.heldForMail &&
+      stopped.db.getUnreadMessages(`dispatch:${workerTurnStopDispatchId(stopped.target)}`).length >
+        0
+    ) {
+      this.deps.setTimer(
+        () =>
+          void this.report(
+            { ...stop, heldForMail: true },
+            this.deps.readHookRow(stop.paneKey) ?? latest
+          ),
+        AGENT_DONE_QUIET_MS
+      )
+      return
+    }
     // A clean finish has the agent's own last words; an error or prompt is on the screen.
     const lastOutput =
       (reason === 'finished' && (latest.lastAssistantMessage || stop.row.lastAssistantMessage)) ||
