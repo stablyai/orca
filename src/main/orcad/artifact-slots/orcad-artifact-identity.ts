@@ -16,10 +16,13 @@ import {
 } from '../../../shared/node-runtime/node-runtime-pin'
 import { orcadAgentBrowserNativeName } from '../../../shared/remote-runtime/orcad-distribution/orcad-agent-browser-name'
 
-/** Hash installed bytes in the build's order; a version marker is not proof of delivery. */
+/** Hash installed bytes in the build's order; a version marker is not proof of delivery.
+ * The optional agent-browser is listed for startup qualification but not hashed, so a client that
+ * bundles it and one that does not still share one install id (#45450). */
 export async function readOrcadArtifactIdentity(directory: string): Promise<string> {
   const hash = createHash('sha256')
-  for (const filename of await listOrcadArtifactFilenames(directory)) {
+  const { filenames } = await readSlotArtifacts(directory)
+  for (const filename of filenames) {
     for await (const chunk of createReadStream(join(directory, filename))) {
       hash.update(chunk)
     }
@@ -27,11 +30,9 @@ export async function readOrcadArtifactIdentity(directory: string): Promise<stri
   return `${ORCAD_VERSION}+${hash.digest('hex').slice(0, 12)}`
 }
 
-/** The installed files the artifact identity covers, in the build's order. */
+/** The installed files startup qualification stats, in the build's order. */
 export async function listOrcadArtifactFilenames(directory: string): Promise<string[]> {
-  const target = z
-    .enum([...SERVER_TARGETS, ...COMPAT_SERVER_TARGETS])
-    .parse((await readFile(join(directory, ORCAD_SERVER_TARGET_FILENAME), 'utf8')).trim())
+  const { target, filenames } = await readSlotArtifacts(directory)
   const platform = target.startsWith('win32-')
     ? 'win32'
     : target.startsWith('darwin-')
@@ -42,12 +43,26 @@ export async function listOrcadArtifactFilenames(directory: string): Promise<str
     target.split('-')[1] ?? '',
     target.endsWith('-musl') ? 'musl' : 'glibc'
   )
-  const filenames = orcadArtifactFilenames(
-    target,
-    orcadMobileWebAssetFilenames(await readFile(join(directory, ORCAD_MOBILE_WEB_MANIFEST), 'utf8'))
-  )
   if (existsSync(join(directory, browser))) {
     filenames.push(browser)
   }
   return filenames
+}
+
+/** Required slot files. The browser binary is added only by the qualification listing. */
+async function readSlotArtifacts(
+  directory: string
+): Promise<{ target: string; filenames: string[] }> {
+  const target = z
+    .enum([...SERVER_TARGETS, ...COMPAT_SERVER_TARGETS])
+    .parse((await readFile(join(directory, ORCAD_SERVER_TARGET_FILENAME), 'utf8')).trim())
+  return {
+    target,
+    filenames: orcadArtifactFilenames(
+      target,
+      orcadMobileWebAssetFilenames(
+        await readFile(join(directory, ORCAD_MOBILE_WEB_MANIFEST), 'utf8')
+      )
+    )
+  }
 }
