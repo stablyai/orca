@@ -12,6 +12,7 @@ export type BotConnectorService = {
   /** Who what the tool does shows as: the bot's owner, or the bot itself. */
   actsAs: 'owner' | 'bot'
   signedIn: boolean
+  connectionUnknown?: true
   /** The one line to tell the owner when it isn't signed in. */
   gap?: string
   /** Connected to Orca Cloud, which wakes the bot there. */
@@ -156,6 +157,7 @@ export function botConnectorServices(
       tool: 'orca slack',
       actsAs: 'bot',
       signedIn: slack,
+      ...(hasApp && cloud === undefined ? { connectionUnknown: true as const } : {}),
       ...(slack
         ? {}
         : {
@@ -178,11 +180,13 @@ export function botConnectorServices(
 function serviceLines(service: BotConnectorService, botName: string): string[] {
   const name = CONNECTOR_OFFER_NAMES[service.source]
   const as = service.actsAs === 'owner' ? 'as your owner' : `as ${botName}`
-  const state = service.signedIn
-    ? service.actsAs === 'bot'
-      ? 'Connected.'
-      : 'Signed in.'
-    : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
+  const state = service.connectionUnknown
+    ? `Couldn’t check connection. ${service.gap ?? ''}`.trim()
+    : service.signedIn
+      ? service.actsAs === 'bot'
+        ? 'Connected.'
+        : 'Signed in.'
+      : `${service.actsAs === 'bot' ? 'Not connected.' : 'Not signed in.'} ${service.gap ?? ''}`.trim()
   const wakes =
     service.source === 'slack' || service.source === 'google'
       ? null
