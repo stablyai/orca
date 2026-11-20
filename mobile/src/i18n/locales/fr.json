@@ -979,12 +979,10 @@
       "dismissDrawer": "Fermer le panneau"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Script de setup",
-      "run": "Exécuter",
-      "runSetupCommand": "Exécuter la commande de setup",
+      "runSetup": "Exécuter le setup",
       "skip": "Ignorer",
-      "waitForSetup": "Attendre la fin du setup avant de démarrer l'agent",
+      "startAgentAfterSetup": "Démarrer l'agent après le setup",
       "waitForSetupSaveFailed": "Échec de l'enregistrement du comportement de démarrage de la configuration."
     },
     "newWorkspaceSshConnectionField": {
@@ -1646,10 +1644,8 @@
   "host": {
     "edit": {
       "address": "Adresse",
-      "addressHint": "Accepte une adresse IP, host:port ou ws:// / wss://. Une URL wss:// sans port utilise le port 443. Une adresse seule conserve le port actuel (ou 6768).",
       "connectionPreview": "Connexion à {{endpoint}}",
       "goBack": "Précédent",
-      "help": "Modifiez le nom affiché ou l'adresse de connexion. Laissez le nom vide pour utiliser celui indiqué par l'hôte. Modifier l'adresse change uniquement l'adresse à laquelle ce téléphone se connecte, sans nouvel appairage. Utilisez cette option si le même hôte est accessible à une autre adresse IP (par exemple, via le LAN domestique ou Tailscale).",
       "hostNamePlaceholder": "Nom de l'hôte",
       "hostRemoved": "Cet hôte a été supprimé de ce téléphone.",
       "loadFailed": "Impossible de charger l'hôte.",

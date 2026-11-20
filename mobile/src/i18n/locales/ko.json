@@ -937,12 +937,10 @@
       "dismissDrawer": "하단 패널 닫기"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "훅",
       "label": "설정 스크립트",
-      "run": "실행",
-      "runSetupCommand": "설정 명령 실행",
+      "runSetup": "설정 실행",
       "skip": "건너뛰기",
-      "waitForSetup": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
+      "startAgentAfterSetup": "설정 후 agent 시작",
       "waitForSetupSaveFailed": "시작 동작 저장 실패"
     },
     "newWorkspaceSshConnectionField": {
@@ -1601,10 +1599,8 @@
   "host": {
     "edit": {
       "address": "주소",
-      "addressHint": "IP, host:port 또는 ws:// / wss:// 형식을 사용할 수 있습니다. 포트가 없는 wss:// URL은 443을 사용합니다. 스킴과 포트 없이 주소만 입력하면 현재 포트(또는 6768)를 유지합니다.",
       "connectionPreview": "{{endpoint}}에 연결",
       "goBack": "돌아가기",
-      "help": "표시 이름이나 연결 주소를 변경하세요. 이름을 비워 두면 호스트에서 보내는 이름을 사용합니다. 주소를 수정하면 이 휴대폰이 연결하는 주소만 바뀌며 다시 페어링하지 않습니다. 같은 호스트에 다른 IP로 연결할 때 사용하세요(예: 홈 LAN과 Tailscale 간 전환).",
       "hostNamePlaceholder": "호스트 이름",
       "hostRemoved": "이 호스트는 이 휴대폰에서 제거되었습니다.",
       "loadFailed": "호스트 정보를 불러오지 못했습니다.",

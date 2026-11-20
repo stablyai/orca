@@ -102,7 +102,7 @@ export class ComposioSetup {
     step?: ComposioSetupCardRef['step']
   ): Promise<{ card: ComposioSetupCardRef | null; message: string }> {
     const sessionId = this.chat.chatOf(botId)
-    const key = this.composio.keyState()
+    const key = await this.composio.keyState()
     if (key !== 'ok') {
       const card: ComposioSetupCardRef = {
         botId,

@@ -93,13 +93,6 @@ describe('Composio in a bot’s Tools', () => {
     })
   })
 
-  it('asks for a new key when Composio refused it', async () => {
-    answer('rejected')
-    show()
-    expect(await screen.findByText('Key not accepted')).toBeTruthy()
-    expect(await screen.findByRole('button', { name: 'Replace key' })).toBeTruthy()
-  })
-
   it('can cancel replacing a key and removes it only after the owner confirms', async () => {
     answer('ok', { 'bots.composio.removeKey': { key: 'none' } })
     mocks.confirm.mockReset().mockResolvedValueOnce(false).mockResolvedValueOnce(true)

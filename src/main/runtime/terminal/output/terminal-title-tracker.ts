@@ -167,6 +167,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
         onCommandFinished: (exitCode: number | null) => {
           void this.recheckHookAgentPresenceForPty(ptyId)
           this.retirePtyAgentLaunchAuthority(ptyId, true)
+          this.setCommandCodeComposer(ptyId, 'exited')
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
           this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
         },
@@ -196,6 +197,7 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
       pendingFacts: [],
       afterFacts: [],
       commandCodeDetector: this.createTerminalSideEffectCommandCodeDetector(ptyId),
+      commandCodeComposer: null,
       programActivity: null,
       // The persisted title is already normalized, so it stands for both forms.
       lastTitle: initialTitle !== null ? { raw: initialTitle, normalized: initialTitle } : null
