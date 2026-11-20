@@ -1,7 +1,14 @@
-import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
+import {
+  acpCategorySelect,
+  acpEffortOption,
+  acpFastSelectOption,
+  acpInteractionModeValue,
+  acpSelectChoices
+} from './acp-select-choices'
 import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import { acpSessionSlashCommand } from './acp-session-slash-command'
+import { acpThinkingVariantEffortWrite, type AcpOptionWrite } from './acp-option-write'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
@@ -22,14 +29,6 @@ import type {
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 
-export type AcpOptionWrite =
-  | { method: 'config'; configId: string; value: string }
-  | { method: 'model'; modelId: string }
-
-function isSelect(option: SessionConfigOption): option is SelectOption {
-  return option.type === 'select'
-}
-
 export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
@@ -38,8 +37,10 @@ export class AcpStructuredOptions {
       | 'familyEfforts'
       | 'withheldCommands'
       | 'effortChangesModel'
+      | 'effortSelectsThinkingVariant'
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
+      | 'normalizeConfigOptions'
       | 'skillDescription'
       | 'fastConfigId'
       | 'interactionModes'
@@ -113,7 +114,8 @@ export class AcpStructuredOptions {
     },
     origin: 'new' | 'loaded' = 'loaded'
   ): void {
-    this.configOptions = response.configOptions ?? []
+    const rawOptions = response.configOptions ?? []
+    this.configOptions = this.dialect.normalizeConfigOptions?.(rawOptions) ?? rawOptions
     this.models = response.models ?? null
     this.resolvesConfig = origin === 'new'
     this.appliedInput.clear()
@@ -151,11 +153,12 @@ export class AcpStructuredOptions {
     this.picked.add(key)
   }
 
+  /** Adopts an agent-pushed menu, retiring selector proof when the agent moved model or effort itself. */
   adoptConfigOptions(configOptions: SessionConfigOption[] | null | undefined): void {
     if (!configOptions) {
       return
     }
-    this.configOptions = configOptions
+    this.configOptions = this.dialect.normalizeConfigOptions?.(configOptions) ?? configOptions
     if (this.writing === 0 && this.unsettled.size === 0) {
       if (this.select('model')) {
         this.unobservedCurrent.delete('model')
@@ -206,15 +209,16 @@ export class AcpStructuredOptions {
     return this.commands
   }
 
+  /** Whether the session's effort menu accepts this value; a clamping dialect accepts any. */
   offersEffort(value: string): boolean {
     const option = this.effortOption()
     return !!(
       option &&
-      (this.dialect.clampsUnlistedEffort ||
-        acpSelectChoices(option).some((choice) => choice.value === value))
+      (this.dialect.clampsUnlistedEffort || acpSelectChoices(option).some((c) => c.value === value))
     )
   }
 
+  /** The agent write for a picker change; mcode's on/off effort rewrites the model's thinking variant. */
   write(key: string, value: string): AcpOptionWrite | null {
     if (key === 'fastMode') {
       const fast = this.fastOption()
@@ -222,12 +226,19 @@ export class AcpStructuredOptions {
     }
     if (key === 'model') {
       const option = this.select('model')
-      if (option) {
-        return { method: 'config', configId: option.id, value }
-      }
-      return this.models ? { method: 'model', modelId: value } : null
+      return option
+        ? { method: 'config', configId: option.id, value }
+        : this.models
+          ? { method: 'model', modelId: value }
+          : null
     }
     if (key === 'effort') {
+      if (this.dialect.effortSelectsThinkingVariant) {
+        const variant = acpThinkingVariantEffortWrite(this.select('model'), value)
+        if (variant) {
+          return variant
+        }
+      }
       const option = this.effortOption()
       return option ? { method: 'config', configId: option.id, value } : null
     }
@@ -268,8 +279,8 @@ export class AcpStructuredOptions {
       models,
       forkSupport: this.forkSupport,
       current: {
-        ...(currentModel ? { model: currentModel } : {}),
-        ...(effortOption ? { effort: effortOption.currentValue } : {}),
+        ...(currentModel && { model: currentModel }),
+        ...(effortOption && { effort: effortOption.currentValue }),
         confirmed
       }
     }
@@ -291,11 +302,12 @@ export class AcpStructuredOptions {
     return withLiveCatalogListing(this.read(), this.configuredDefault()).catalogListing
   }
 
+  /** The running model/effort values as a flat record. */
   reported(): Readonly<Record<string, string>> {
     const { current } = this.read()
     return {
-      ...(current.model ? { model: current.model } : {}),
-      ...(current.effort ? { effort: current.effort } : {})
+      ...(current.model && { model: current.model }),
+      ...(current.effort && { effort: current.effort })
     }
   }
 
@@ -333,18 +345,11 @@ export class AcpStructuredOptions {
   }
 
   private fastOption(): SelectOption | null {
-    const id = this.dialect.fastConfigId
-    if (!id) {
-      return null
-    }
-    const option = this.configOptions.find((entry) => entry.id === id)
-    return option && isSelect(option) ? option : null
+    return acpFastSelectOption(this.configOptions, this.dialect.fastConfigId)
   }
 
+  /** The select row for a category; model also matches the legacy id-only row. */
   private select(category: string): SelectOption | null {
-    const option = this.configOptions.find(
-      (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
-    )
-    return option && isSelect(option) ? option : null
+    return acpCategorySelect(this.configOptions, category)
   }
 }

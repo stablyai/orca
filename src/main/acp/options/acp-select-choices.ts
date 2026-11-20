@@ -72,3 +72,23 @@ export function acpInteractionModeValue(
     ? native
     : null
 }
+
+/** The select row for a category; model also matches the legacy id-only row. */
+export function acpCategorySelect(
+  options: readonly SessionConfigOption[],
+  category: string
+): SelectOption | null {
+  const option = options.find(
+    (entry) => entry.category === category || (category === 'model' && entry.id === 'model')
+  )
+  return option?.type === 'select' ? option : null
+}
+
+/** The fast-mode select when the dialect names its config id. */
+export function acpFastSelectOption(
+  options: readonly SessionConfigOption[],
+  fastConfigId: string | undefined
+): SelectOption | null {
+  const option = fastConfigId ? options.find((entry) => entry.id === fastConfigId) : undefined
+  return option?.type === 'select' ? option : null
+}

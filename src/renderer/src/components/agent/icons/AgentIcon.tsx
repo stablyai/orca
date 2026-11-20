@@ -7,12 +7,14 @@ import {
   AiderIcon,
   CopilotIcon,
   KiloIcon,
+  MiniMaxIcon,
   OmpIcon,
   OpenCodeIcon,
   PiIcon
 } from './agent-icon-glyphs'
 import { AGENT_FAVICON_ASSETS } from './agent-favicon-assets'
 
+/** An agent's branded glyph, falling back to its catalog favicon and then a letter mark. */
 export function AgentIcon({
   agent,
   size = 14,
@@ -52,6 +54,9 @@ export function AgentIcon({
   }
   if (agent === 'opencode' || agent === 'opencode2') {
     return <OpenCodeIcon size={size} className={className} />
+  }
+  if (agent === 'mcode') {
+    return <MiniMaxIcon size={size} className={className} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
   // Prefer bundled favicons for offline use and regions where Google’s service is unreachable (#8451).

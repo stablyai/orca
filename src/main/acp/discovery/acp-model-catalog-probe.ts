@@ -12,7 +12,6 @@ import type {
   AgentModelCatalogProbe,
   AgentModelCatalogLookup
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
-import { agentModelCatalogInputStamp } from '../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import {
   runAgentModelCatalogListing,
   runAgentModelCatalogSession
@@ -29,6 +28,7 @@ import { acpRunFolder } from '../launch/acp-private-temp'
 import {
   acpListingDependsOnRelease,
   acpListingNeedsChatFolder,
+  acpModelCatalogStampInput,
   acpModelListingForRelease
 } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
@@ -98,18 +98,18 @@ export function createAcpModelCatalogProbe(
       }
     )
     assertStructuredAgentResolutionCurrent(operation)
+    const inputStamp = await acpModelCatalogStampInput(discovery, {
+      command,
+      prefixArgs,
+      cwd,
+      workspace,
+      env,
+      home: agentSessionAccountHomePath(accountHome)
+    })
     return {
       answerSignIn: spec.signIn?.answered,
       identity: { command, prefixArgs, cwd, workspace },
-      inputStamp: JSON.stringify(
-        await Promise.all(
-          [
-            ...new Set([cwd, ...(discovery.kind === 'command' && workspace ? [workspace] : [])])
-          ].map((directory) =>
-            agentModelCatalogInputStamp({ command, prefixArgs, cwd: directory, env })
-          )
-        )
-      ),
+      inputStamp,
       run: async (
         signal?: AbortSignal,
         runOperation = operation,
@@ -264,7 +264,7 @@ export function createAcpModelCatalogProbe(
               const initialized = await connection.initialize()
               assertStructuredAgentResolutionCurrent(operation)
               observeAcpForkSupport(spec.agent, initialized)
-              return listing.read(initialized, connection)
+              return listing.read(initialized, connection, agentSessionAccountHomePath(accountHome))
             },
             run
           )

@@ -24,13 +24,23 @@ export function acpModelMenuModels(input: {
       }))
     : []
   return acpListedModels(modelOption, state).map((model) => {
-    const info = state?.availableModels.find((entry) => entry.modelId === model.id)
+    const found = state?.availableModels.find((entry) => entry.modelId === model.id)
+    // A model the state never listed still gets efforts a dialect knows from its id alone.
+    const synthesized = found
+      ? undefined
+      : dialect.modelEfforts?.({
+          modelId: model.id,
+          name: model.label,
+          ...(model.description ? { description: model.description } : {})
+        })
     // The running model's live menu outranks variants advertised for its family.
-    const advertised = info
-      ? dialect.modelEfforts?.(info)
-      : model.id === currentModel
-        ? undefined
-        : dialect.familyEfforts?.(model.id, state?.availableModels ?? [])
+    const advertised = found
+      ? dialect.modelEfforts?.(found)
+      : synthesized?.efforts.length
+        ? synthesized
+        : model.id === currentModel
+          ? undefined
+          : dialect.familyEfforts?.(model.id, state?.availableModels ?? [])
     // A current-session menu supplies no negative evidence about an unobserved model.
     const sessionMenu =
       model.id === currentModel
