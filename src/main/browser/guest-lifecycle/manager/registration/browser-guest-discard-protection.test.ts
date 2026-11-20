@@ -365,3 +365,56 @@ it('lets the page a form POST redirects to (Post/Redirect/Get) be discarded', ()
     stop()
   }
 })
+
+it('keeps protecting a POST result reached again with Back', () => {
+  let url = 'https://example.test/form'
+  const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
+  const guest = Object.assign(new EventEmitter(), {
+    id: 10,
+    mainFrame,
+    session: {},
+    getURL: () => url,
+    isDestroyed: () => false,
+    isCrashed: () => false,
+    isCurrentlyAudible: () => false
+  }) as unknown as Electron.WebContents
+  const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
+  const load = (next: string): void => {
+    guest.emit('did-start-navigation', { url: next, isMainFrame: true, isSameDocument: false })
+    url = next
+    guest.emit('did-navigate', {}, next, 200, 'OK')
+    guest.emit('dom-ready')
+    guest.emit(
+      'ipc-message',
+      { sender: guest, senderFrame: mainFrame },
+      BROWSER_GUEST_PROTECTION_REPORT,
+      {
+        generation: mainFrame.send.mock.lastCall?.[1],
+        dirty: false,
+        pictureInPicture: false,
+        contentType: 'text/html'
+      }
+    )
+  }
+  try {
+    load('https://example.test/form')
+    guest.emit(
+      'ipc-message',
+      { sender: guest, senderFrame: mainFrame },
+      BROWSER_GUEST_PROTECTION_REPORT,
+      {
+        formPost: 'https://example.test/result'
+      }
+    )
+    load('https://example.test/result')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
+    load('https://example.test/other')
+    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
+    // Back restores the POST entry without a new submission.
+    load('https://example.test/result')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
+  } finally {
+    stop()
+  }
+})

@@ -1,4 +1,5 @@
-const FORM_POST_NAVIGATION_MS = 1_000
+// A tab's history rarely holds more POST results than this; the oldest is forgotten first.
+const MAX_POST_RESULT_URLS = 50
 
 function withoutHash(rawUrl: string): string {
   try {
@@ -12,28 +13,26 @@ function withoutHash(rawUrl: string): string {
 
 /**
  * Whether the current main-frame navigation is a form POST, from the preload's report of a
- * submitted form. Only a navigation that starts at that form's action URL right after it counts,
- * so a submission a page handles without navigating can't mark a later page.
+ * submitted form: the next navigation to that form's action URL counts. A page that loaded as a
+ * POST result stays one for reloads and Back/Forward, which repeat or restore the POST.
  */
 export function createFormPostNavigationTracker(): {
   submitted: (actionUrl: string) => void
-  started: (url: string, current: { url: string; post: boolean }) => void
+  started: (url: string) => void
   redirected: () => void
-  isPost: () => boolean
+  /** `method` is the request's own method when a request listener saw it. */
+  committed: (url: string, method: string | null) => boolean
 } {
-  let submitted: { url: string; at: number } | null = null
+  let submitted: string | null = null
   let post = false
+  const postResultUrls = new Set<string>()
   return {
     submitted: (actionUrl) => {
-      submitted = { url: withoutHash(actionUrl), at: performance.now() }
+      submitted = withoutHash(actionUrl)
     },
-    // Reloading a POST result posts again without a new submission.
-    started: (url, current) => {
-      post =
-        (submitted !== null &&
-          performance.now() - submitted.at < FORM_POST_NAVIGATION_MS &&
-          withoutHash(url) === submitted.url) ||
-        (current.post && withoutHash(url) === withoutHash(current.url))
+    started: (url) => {
+      const target = withoutHash(url)
+      post = target === submitted || postResultUrls.has(target)
       submitted = null
     },
     // A POST's redirect (Post/Redirect/Get) loads its target with GET; Electron doesn't report the
@@ -41,6 +40,17 @@ export function createFormPostNavigationTracker(): {
     redirected: () => {
       post = false
     },
-    isPost: () => post
+    committed: (url, method) => {
+      const isPost = method !== null ? method !== 'GET' : post
+      const target = withoutHash(url)
+      if (isPost) {
+        postResultUrls.delete(target)
+        postResultUrls.add(target)
+        if (postResultUrls.size > MAX_POST_RESULT_URLS) {
+          postResultUrls.delete(postResultUrls.values().next().value ?? target)
+        }
+      }
+      return isPost
+    }
   }
 }

@@ -226,7 +226,7 @@ export function installBrowserGuestDiscardProtection(
   ): void => {
     if (details.isMainFrame && !details.isSameDocument) {
       pendingMethod = null
-      formPost.started(details.url, { url: guest.getURL(), post: owner.currentPost })
+      formPost.started(details.url)
       owner.navigating = true
       invalidate()
     } else if (!details.isMainFrame) {
@@ -242,7 +242,7 @@ export function installBrowserGuestDiscardProtection(
   }
   const committed = (): void => {
     owner.currentEdited = false
-    owner.currentPost = pendingMethod !== null ? pendingMethod !== 'GET' : formPost.isPost()
+    owner.currentPost = formPost.committed(guest.getURL(), pendingMethod)
     owner.mediaGranted = false
     publish()
   }
