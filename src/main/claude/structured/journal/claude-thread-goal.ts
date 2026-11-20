@@ -123,18 +123,25 @@ export class ClaudeThreadGoal {
     return goalRow(text, next)
   }
 
-  isGoalCheck(envelope: ClaudeMessageEnvelope): boolean {
+  goalCheckText(envelope: ClaudeMessageEnvelope): string | null {
     const goal = this.current
     const text = claudeText(claudeRecord(envelope.content[0])?.text)
     if (!goal || goal.status !== 'active' || !text) {
-      return false
+      return null
     }
     const shortened = sliceAtCodeUnitLimit(goal.objective, 500)
     const labels = [goal.objective]
     if (shortened.length < goal.objective.length) {
       labels.push(`${shortened}… [+${goal.objective.length - shortened.length} chars]`)
     }
-    return labels.some((label) => text.startsWith(`Stop hook feedback:\n[${label}]: `))
+    const prefix = labels
+      .map((label) => `Stop hook feedback:\n[${label}]: `)
+      .find((value) => text.startsWith(value))
+    if (!prefix) {
+      return null
+    }
+    const reason = text.slice(prefix.length).trim()
+    return /\n\[[^\n]+\]: /u.test(reason) ? null : reason
   }
 
   observe(message: Record<string, unknown>): void {

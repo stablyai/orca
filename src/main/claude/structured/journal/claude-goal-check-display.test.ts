@@ -2,6 +2,8 @@ import { expect, it } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionThreadGoalReport } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-report'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { omitNativeChatThreadGoalRows } from '../../../../shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 it.each(['Finish the task', 'a'.repeat(510)])(
   'groups checks for %s without changing provider completion or other hooks',
@@ -61,6 +63,7 @@ it.each(['Finish the task', 'a'.repeat(510)])(
       const label = objective.length > 500 ? `${'a'.repeat(500)}… [+10 chars]` : objective
       feedback(label, 'First check')
       feedback('user-stop-command', 'Keep this warning')
+      feedback(label, 'Goal check\n[lint-command]: Keep this mixed warning')
       feedback(label, 'Latest check')
       const report = agentSessionThreadGoalReport({
         journalItems: items,
@@ -74,7 +77,10 @@ it.each(['Finish the task', 'a'.repeat(510)])(
             (item) => item.body.kind === 'status' && item.body.presentation === 'hook-sent-back'
           )
           .map((item) => item.body)
-      ).toMatchObject([{ text: 'Stop hook feedback: Keep this warning' }])
+      ).toMatchObject([
+        { text: 'Stop hook feedback: Keep this warning' },
+        { text: expect.stringContaining('Keep this mixed warning') }
+      ])
       expect(
         items
           .filter((item) => item.body.kind === 'status' && item.body.threadGoal)
@@ -94,6 +100,34 @@ it.each(['Finish the task', 'a'.repeat(510)])(
           reported: { current: null }
         })?.goal?.status
       ).toBe('complete')
+      const messages: NativeChatMessage[] = items.flatMap((item) =>
+        item.body.kind === 'status'
+          ? [
+              {
+                id: item.itemId,
+                role: 'system',
+                source: 'transcript',
+                timestamp: 1_000,
+                blocks: [
+                  {
+                    type: 'text',
+                    text: item.body.text,
+                    presentation: item.body.threadGoal ? 'thread-goal' : item.body.presentation
+                  }
+                ]
+              }
+            ]
+          : []
+      )
+      expect(
+        omitNativeChatThreadGoalRows(messages)
+          .filter((message) =>
+            message.blocks.some(
+              (block) => block.type === 'text' && block.presentation === 'goal-check-summary'
+            )
+          )
+          .map((message) => message.blocks[0])
+      ).toMatchObject([{ text: '2\nLatest check' }])
     } finally {
       translator.dispose()
     }
