@@ -108,7 +108,7 @@ export async function inspectTerminalHostProcess(args: {
     process.platform === 'darwin' &&
     !session.processNameIsSpawnFile
   ) {
-    const shell = readProvenIdleShell(session, Date.now())
+    const shell = readProvenIdleShell(session)
     if (shell !== null) {
       args.onTier?.('cheap')
       return { foregroundProcess: shell, hasChildProcesses: false }
@@ -150,7 +150,7 @@ export async function inspectTerminalHostProcess(args: {
     try {
       const snapshot = await getStrictProcessTableSnapshotWithAge()
       if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
-        rememberIdleShellProof(session, snapshot.rows, Date.now())
+        rememberIdleShellProof(session, snapshot.rows, snapshot.capturedAgeMs)
       }
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
