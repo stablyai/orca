@@ -10,18 +10,13 @@ import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 
 export type LegacyJournalRetirementEvent = z.infer<typeof legacyJournalRetirementSchema>
-export type LegacyJournalRetirementMode = { mode: 'off' | 'report' | 'enforce'; revision: number }
 
 /**
- * What the process running the cleanup can ask of the desktop: report an outcome, and read the
- * cleanup policy. The desktop's backend registers both; a host without a desktop (headless orcad)
- * reports to its log only and never deletes.
+ * Where the process running the cleanup reports an outcome. The desktop's main process registers
+ * it; a host without one (headless orcad) reports to its log only.
  */
 type Host = {
   report: (event: LegacyJournalRetirementEvent) => Promise<unknown>
-  mode: () => Promise<unknown>
-  /** The cleanup is over for this launch: nothing will ask the policy again. */
-  release?: () => void
 }
 let host: Host | undefined
 
@@ -29,43 +24,9 @@ export function setLegacyJournalRetirementHost(next: Host | undefined): void {
   host = next
 }
 
-export function releaseLegacyJournalRetirementHost(): void {
-  try {
-    host?.release?.()
-  } catch {}
-}
-
-/** No answer, or anything but a valid one, reads as `report`: deletion needs fresh permission. */
-export async function legacyJournalRetirementMode(): Promise<LegacyJournalRetirementMode> {
-  try {
-    const answer: unknown = await host?.mode()
-    if (
-      typeof answer === 'object' &&
-      answer !== null &&
-      'mode' in answer &&
-      'revision' in answer &&
-      (answer.mode === 'off' || answer.mode === 'report' || answer.mode === 'enforce') &&
-      typeof answer.revision === 'number' &&
-      Number.isInteger(answer.revision) &&
-      answer.revision >= 0
-    ) {
-      return { mode: answer.mode, revision: Math.min(answer.revision, 1_000_000) }
-    }
-  } catch {}
-  return { mode: 'report', revision: 0 }
-}
-
 export type LegacyJournalRetirementOutcome = Pick<
   LegacyJournalRetirementEvent,
-  | 'outcome'
-  | 'reason'
-  | 'defer'
-  | 'artifact'
-  | 'error'
-  | 'mode'
-  | 'policy_revision'
-  | 'completeness'
-  | 'resumed'
+  'outcome' | 'reason' | 'defer' | 'artifact' | 'error' | 'deletes' | 'completeness' | 'resumed'
 > & {
   counts: LegacyProofCounts | null
   sourceBytes: number | null
@@ -80,13 +41,13 @@ export function legacyJournalRetirementEvent(
   return {
     ...fields,
     inventory_revision: LEGACY_PROOF_LAYOUT,
-    chats_bucket: countBucket(counts?.chats ?? 0),
-    already_converted_bucket: countBucket(counts?.alreadyConverted ?? 0),
-    newly_converted_bucket: countBucket(counts?.newlyConverted ?? 0),
-    deleted_here_bucket: countBucket(counts?.deletedHere ?? 0),
-    drafts_bucket: countBucket(counts?.drafts ?? 0),
-    originals_bucket: countBucket(counts?.originals ?? 0),
-    copies_bucket: countBucket(counts?.copies ?? 0),
+    chats_bucket: countBucket(counts?.chats),
+    already_converted_bucket: countBucket(counts?.alreadyConverted),
+    newly_converted_bucket: countBucket(counts?.newlyConverted),
+    deleted_here_bucket: countBucket(counts?.deletedHere),
+    drafts_bucket: countBucket(counts?.drafts),
+    originals_bucket: countBucket(counts?.originals),
+    copies_bucket: countBucket(counts?.copies),
     source_bytes_bucket: bytesBucket(sourceBytes),
     active_ms_bucket: durationBucket(activeMs),
     elapsed_ms_bucket: durationBucket(elapsedMs)
@@ -97,7 +58,8 @@ export function legacyJournalRetirementEvent(
 function logLegacyJournalRetirement(event: LegacyJournalRetirementEvent): void {
   console.warn(
     `[agent-session-journal] old chat journal: ${event.outcome}` +
-      ` (reason ${event.reason}, defer ${event.defer}, error ${event.error}, mode ${event.mode} r${event.policy_revision},` +
+      ` (reason ${event.reason}, defer ${event.defer}, error ${event.error}, artifact ${event.artifact},` +
+      ` ${event.deletes ? 'deletes' : 'keeps'},` +
       ` ${event.completeness}${event.resumed ? ', resumed' : ''}, chats ${event.chats_bucket},` +
       ` size ${event.source_bytes_bucket}, took ${event.active_ms_bucket})`
   )
@@ -115,18 +77,22 @@ export async function sendLegacyJournalRetirement(
   }
 }
 
-function countBucket(count: number): (typeof LEGACY_JOURNAL_RETIREMENT_COUNT_BUCKETS)[number] {
-  return count === 0
-    ? '0'
-    : count <= 10
-      ? '1_10'
-      : count <= 100
-        ? '11_100'
-        : count <= 1000
-          ? '101_1000'
-          : count <= 10_000
-            ? '1001_10000'
-            : 'gt_10000'
+function countBucket(
+  count: number | undefined
+): (typeof LEGACY_JOURNAL_RETIREMENT_COUNT_BUCKETS)[number] {
+  return count === undefined
+    ? 'unknown'
+    : count === 0
+      ? '0'
+      : count <= 10
+        ? '1_10'
+        : count <= 100
+          ? '11_100'
+          : count <= 1000
+            ? '101_1000'
+            : count <= 10_000
+              ? '1001_10000'
+              : 'gt_10000'
 }
 
 const MB = 1024 * 1024
@@ -166,7 +132,7 @@ function durationBucket(
 
 /**
  * Logs every launch's outcome; reports it when it differs from what this store last reported, or
- * the app version or policy revision changed, so a saved state yields one report per version.
+ * the app version changed, so a saved state yields one report per version.
  */
 export class LegacyJournalRetirementReporter {
   private last: string | null | undefined
@@ -176,7 +142,8 @@ export class LegacyJournalRetirementReporter {
     private readonly writer: {
       maintain(operation: { kind: 'legacy-retirement-reported'; value: string }): Promise<unknown>
     },
-    private readonly version: string | null
+    private readonly version: string | null,
+    private readonly deletes: boolean
   ) {}
 
   /** What the store last recorded; read once per launch, before the first report. */
@@ -184,15 +151,12 @@ export class LegacyJournalRetirementReporter {
     this.last ??= reported
   }
 
-  async report(
-    fields: Partial<LegacyJournalRetirementOutcome>,
-    policy: LegacyJournalRetirementMode
-  ): Promise<void> {
+  async report(fields: Partial<LegacyJournalRetirementOutcome>): Promise<void> {
     const event = legacyJournalRetirementEvent({
       outcome: 'deferred',
       reason: 'none',
       defer: 'none',
-      artifact: 'none',
+      artifact: 'unknown',
       completeness: 'unknown',
       resumed: false,
       counts: null,
@@ -202,8 +166,7 @@ export class LegacyJournalRetirementReporter {
       error: 'none',
       // A field passed as undefined keeps its default rather than leaving the event invalid.
       ...Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)),
-      mode: policy.mode,
-      policy_revision: policy.revision
+      deletes: this.deletes
     })
     const signature = JSON.stringify([
       event.outcome,
@@ -211,8 +174,7 @@ export class LegacyJournalRetirementReporter {
       event.defer,
       event.artifact,
       event.error,
-      event.mode,
-      event.policy_revision,
+      event.deletes,
       this.version
     ])
     // Logged once per launch for each distinct outcome, however often a retry repeats it.
@@ -244,7 +206,12 @@ export function legacyProofFailureOutcome(
   const walked = { completeness: 'partial', counts, resumed } as const
   if (error instanceof JournalLegacyRetentionError) {
     return error.reason
-      ? { outcome: 'refused', reason: error.reason, artifact: error.artifact ?? 'none', ...walked }
+      ? {
+          outcome: 'refused',
+          reason: error.reason,
+          artifact: error.artifact ?? 'unknown',
+          ...walked
+        }
       : { outcome: 'proving', error: 'pending', ...walked }
   }
   // After a finished proof, only the removal itself (its commit or lock) can fail.

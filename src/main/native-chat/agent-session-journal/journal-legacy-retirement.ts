@@ -26,16 +26,15 @@ import type { JournalSqlOwner } from './journal-sql-owner'
 import {
   LegacyJournalRetirementReporter,
   legacyProofFailureOutcome,
-  releaseLegacyJournalRetirementHost,
-  legacyJournalRetirementMode,
-  type LegacyJournalRetirementMode,
   type LegacyJournalRetirementOutcome
 } from './journal-legacy-retirement-outcome'
+import { LEGACY_JOURNAL_RETIREMENT_DELETES } from './journal-legacy-retirement-deletion'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import { JournalLegacyProof, type LegacyProofObservation } from './journal-legacy-proof'
 import {
   absorbedWal,
+  deletedBefore,
   observeLegacySource,
   heldFor,
   laterVersion,
@@ -61,7 +60,6 @@ export class JournalLegacyRetirement {
   private retryAt = 0
   private retryDelay = 60_000
   private done = false
-  private policy: LegacyJournalRetirementMode = { mode: 'report', revision: 0 }
   private readonly reporter: LegacyJournalRetirementReporter
   private activeMs = 0
   private readonly waits = legacyProofWaits()
@@ -82,10 +80,10 @@ export class JournalLegacyRetirement {
     rest: (started: number) => Promise<void> = async () => {},
     private readonly eligibility = createJournalLegacyFileEligibility(),
     private readonly version = journalRunningOrcaVersion(),
-    private readonly mode = legacyJournalRetirementMode
+    private readonly deletes = LEGACY_JOURNAL_RETIREMENT_DELETES
   ) {
     this.filename = journalDatabasePath(directory)
-    this.reporter = new LegacyJournalRetirementReporter(writer, version)
+    this.reporter = new LegacyJournalRetirementReporter(writer, version, deletes)
     this.proof = new JournalLegacyProof(
       writer,
       readers,
@@ -98,7 +96,6 @@ export class JournalLegacyRetirement {
 
   stop(): void {
     this.stopped.abort()
-    releaseLegacyJournalRetirementHost()
   }
 
   async run(): Promise<void> {
@@ -110,7 +107,7 @@ export class JournalLegacyRetirement {
         this.done = true
         await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }).catch(() => {})
       } else {
-        const removing = this.proof.finished && this.policy.mode === 'enforce'
+        const removing = this.proof.finished && this.deletes
         const failed = legacyProofFailureOutcome(error, this.proof.walked, removing)
         await this.outcome({ ...failed, activeMs: this.activeMs }).catch(() => {})
       }
@@ -121,10 +118,6 @@ export class JournalLegacyRetirement {
         this.report(error)
       }
     }
-    // Over for this launch (removed, refused, off, never there, or stopped): downloads stop.
-    if (this.done || this.stopped.signal.aborted) {
-      releaseLegacyJournalRetirementHost()
-    }
   }
 
   private async attempt(): Promise<void> {
@@ -133,22 +126,25 @@ export class JournalLegacyRetirement {
     }
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
     if (!(await legacyFilePresent(this.filename))) {
-      // Finishing a removal cut short deletes too, so it needs the same permission.
-      if (this.ownsProfile() && (await legacyCompanionsPresent(this.filename))) {
-        // Asked last, right before the unlink: the saved-state read can take a while.
-        const saved = await readRetirementState(this.writer)
-        const absorbed = absorbedWal(saved.retirement)
-        if (!(await this.enforced())) {
-          this.reporter.saved(saved.reported)
-          // Off keeps them for this launch; report may still be allowed later.
-          this.done = this.policy.mode === 'off'
-          this.later()
+      // Only the profile's owner reads its store, and reports for it.
+      if (!this.ownsProfile()) {
+        this.done = true
+        return
+      }
+      const saved = await readRetirementState(this.writer)
+      this.reporter.saved(saved.reported)
+      if (await legacyCompanionsPresent(this.filename)) {
+        // Finishing a removal cut short deletes too, so a build that keeps the file keeps these.
+        if (!this.deletes) {
+          this.done = true
           return this.outcome({ outcome: 'deferred', defer: 'leftover_files' })
         }
-        await removeLeftoverLegacyCompanions(this.filename, absorbed)
+        await removeLeftoverLegacyCompanions(this.filename, absorbedWal(saved.retirement))
       }
       this.done = true
-      return
+      return this.outcome({
+        outcome: deletedBefore(saved.retirement) ? 'deleted_before' : 'absent'
+      })
     }
     // None of these change while this process runs, so a refusal here waits for the next launch.
     if (this.version === null || !this.ownsProfile()) {
@@ -158,12 +154,6 @@ export class JournalLegacyRetirement {
     this.firstAttemptAt ??= performance.now()
     const saved = await readRetirementState(this.writer)
     this.reporter.saved(saved.reported)
-    this.policy = await this.mode()
-    // Off: no proof and no deletion; chats still convert as they are opened or idle.
-    if (this.policy.mode === 'off') {
-      this.done = true
-      return this.outcome({ outcome: 'off' })
-    }
     // Retirement runs on an update: the version that copied the profile, or an older one, keeps it.
     const later = laterVersion(this.version, saved.convertedBy)
     const observation = later
@@ -177,18 +167,17 @@ export class JournalLegacyRetirement {
           ? {
               outcome: 'refused',
               reason,
-              artifact: this.proof.refusalArtifact ?? 'none',
+              artifact: this.proof.refusalArtifact ?? 'unknown',
               completeness: 'partial',
               sourceBytes: observation ? sourceBytes(observation) : null
             }
           : { outcome: 'deferred', defer: later ? 'not_reconciled' : 'same_version' }
       )
     }
-    // Proven before and held: report mode reads that instead of walking every chat again.
+    // Proven before and held: a build that keeps the file reads that instead of walking again.
     const held = heldFor(saved.retirement, observation)
-    if (held && this.policy.mode !== 'enforce') {
-      // Asked again on the backoff: a policy downloaded later this launch can still allow it.
-      this.later()
+    if (held && !this.deletes) {
+      this.done = true
       return this.outcome(provenOutcome('proof_complete', held, observation, null, true))
     }
     await this.eligibility.present()
@@ -216,8 +205,7 @@ export class JournalLegacyRetirement {
       counts: held && walked.fromCopies ? held.counts : walked.counts,
       whole: held && walked.fromCopies ? held.whole : walked.whole
     }
-    // Deletion needs a fresh permission, asked again before each step that can't be undone.
-    if (!(await this.enforced())) {
+    if (!this.deletes) {
       return this.hold(proven, observation)
     }
     const recycled = await this.readers.recycleSourceReaders()
@@ -231,9 +219,6 @@ export class JournalLegacyRetirement {
       const destination = await legacyDestinationIdentity(journalDomainDatabasePath(this.directory))
       if (destination.main !== observation.store) {
         return this.later()
-      }
-      if (!(await this.enforced())) {
-        return await this.hold(proven, observation)
       }
       const retiring: LegacySourceRetiring = {
         version: 2,
@@ -256,9 +241,6 @@ export class JournalLegacyRetirement {
       // Checked again while held: from here no SQLite connection can open or write the original.
       if (!lease.held() || !this.ownsProfile() || !(await this.matches(observation))) {
         return this.later()
-      }
-      if (!(await this.enforced())) {
-        return await this.hold(proven, observation)
       }
       this.done = await lease.retire(observation.walBytes)
       if (!this.done) {
@@ -283,12 +265,7 @@ export class JournalLegacyRetirement {
     }
   }
 
-  private async enforced(): Promise<boolean> {
-    this.policy = await this.mode()
-    return this.policy.mode === 'enforce'
-  }
-
-  /** The proof finished and the policy keeps the file: saved, so later launches don't walk again. */
+  /** The proof finished and this build keeps the file: saved, so later launches don't walk again. */
   private async hold(
     proven: LegacySourceHeld,
     observation: LegacyProofObservation & { walBytes: string }
@@ -298,7 +275,7 @@ export class JournalLegacyRetirement {
       value: JSON.stringify(proven),
       durable: false
     })
-    this.later()
+    this.done = true
     await this.outcome(
       provenOutcome('proof_complete', proven, observation, this.activeMs, this.proof.walked.resumed)
     )
@@ -307,7 +284,7 @@ export class JournalLegacyRetirement {
   private outcome(fields: Partial<LegacyJournalRetirementOutcome>): Promise<void> {
     const elapsedMs =
       this.firstAttemptAt === undefined ? null : performance.now() - this.firstAttemptAt
-    return this.reporter.report({ elapsedMs, ...fields }, this.policy)
+    return this.reporter.report({ elapsedMs, ...fields })
   }
 
   /** Tried again after the backoff; a finished proof is never reused without its checks. */

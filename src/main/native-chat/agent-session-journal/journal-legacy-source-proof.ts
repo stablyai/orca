@@ -4,6 +4,7 @@ import {
   legacyInventoryRefusal,
   legacyRecoveryRefusal,
   readJournalLegacySource,
+  legacySourceArtifacts,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
@@ -103,6 +104,7 @@ function readSourcePage(
         'source-inventory'
       )
     }
+    const artifact = legacySourceArtifacts(db, tables)
     for (const table of tables) {
       const columns =
         PROFILE_COLUMNS.get(table) ??
@@ -114,7 +116,7 @@ function readSourcePage(
           .map((column) => String(column.name))
           .filter((name) => !columns.has(name))
         if (extra.length > 0) {
-          throw legacyInventoryRefusal(table, extra)
+          throw legacyInventoryRefusal(extra, artifact)
         }
       }
 
@@ -138,11 +140,11 @@ function readSourcePage(
                 WHERE r.session_id=i.session_id AND r.epoch=i.epoch AND r.seq>=i.tip) LIMIT 1`
           : `SELECT 1 FROM ${quoted} LIMIT 1`
       if (db.prepare(unaccounted).get()) {
-        throw legacyRecoveryRefusal(table)
+        throw legacyRecoveryRefusal(artifact)
       }
       if (!RECOVERY_TABLES.includes(table)) {
         // Empty too: an older build's table left behind still marks which builds wrote this file.
-        throw legacyInventoryRefusal(table, [])
+        throw legacyInventoryRefusal([], artifact)
       }
     }
   }

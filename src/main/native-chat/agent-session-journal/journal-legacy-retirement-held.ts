@@ -37,7 +37,7 @@ export async function readRetirementState(
 }
 
 // The saved records the cleanup reads back: when it may run, a WAL a cut-short removal left, the
-// held record a report-mode proof leaves, and what an outcome says about a finished proof.
+// held record a proof leaves in a build that keeps the file, and what an outcome says about a finished proof.
 
 /**
  * Absent means a release before this record copied the profile, which is always earlier; a copy
@@ -92,6 +92,16 @@ export function absorbedWal(
       : undefined
   } catch {
     return undefined
+  }
+}
+
+/** This store saved that it was deleting the original: written durably before the unlink. */
+export function deletedBefore(saved: string | null): boolean {
+  try {
+    const record: unknown = saved ? JSON.parse(saved) : null
+    return isRecord(record) && record.phase === 'retiring'
+  } catch {
+    return false
   }
 }
 

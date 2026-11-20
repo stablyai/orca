@@ -1,5 +1,6 @@
 import { LEGACY_JOURNAL_RETIREMENT_REASONS } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
+import type Database from '../../sqlite/sync-database'
 
 /** Shared with telemetry, which reports a refusal by this reason alone. */
 export const LEGACY_SOURCE_REFUSALS = LEGACY_JOURNAL_RETIREMENT_REASONS
@@ -10,32 +11,40 @@ export class JournalLegacyRetentionError extends Error {
   constructor(
     message: string,
     readonly reason?: LegacySourceRefusalReason,
-    /** A shape builds left behind that this refusal saw, reported by name only. */
+    /** Which shapes builds left behind the inventory saw; set only by inventory refusals. */
     readonly artifact?: LegacySourceArtifact
   ) {
     super(message)
   }
 }
 
-export type LegacySourceArtifact = 'source_json' | 'pause_table'
-
 /**
- * Shapes builds left behind, named so a refusal can be counted by them: an hourly build of
- * 2026-10-05/06 added queued_messages.source_json, and builds of 2026-09-29 to 10-01 (v1.4.219)
- * kept Stop pauses in queued_message_pauses.
+ * Shapes builds left behind that the inventory saw, named so a refusal can be counted by them: an
+ * hourly build of 2026-10-05/06 added queued_messages.source_json, and v1.4.219 kept Stop pauses in
+ * queued_message_pauses.
  */
-function legacySourceArtifact(
-  table: string,
-  extraColumns: readonly string[]
-): LegacySourceArtifact | undefined {
-  if (table === 'queued_message_pauses') {
-    return 'pause_table'
-  }
-  return table === 'queued_messages' &&
-    extraColumns.length > 0 &&
-    extraColumns.every((name) => name === 'source_json')
-    ? 'source_json'
-    : undefined
+export const LEGACY_SOURCE_ARTIFACTS = ['none', 'source_json', 'pause_table', 'both'] as const
+export type LegacySourceArtifact = (typeof LEGACY_SOURCE_ARTIFACTS)[number]
+
+/** Both shapes, not only the one that refused: a journal can carry both. */
+export function legacySourceArtifacts(
+  db: Database.Database,
+  tables: ReadonlySet<string>
+): LegacySourceArtifact {
+  const pauses = tables.has('queued_message_pauses')
+  const sourceJson =
+    tables.has('queued_messages') &&
+    db
+      .prepare('PRAGMA table_info(queued_messages)')
+      .all()
+      .some((column) => column.name === 'source_json')
+  return pauses && sourceJson
+    ? 'both'
+    : pauses
+      ? 'pause_table'
+      : sourceJson
+        ? 'source_json'
+        : 'none'
 }
 
 /** Unsupported storage is stable for this owner/descriptor, not across opens. */
@@ -54,23 +63,23 @@ export function readJournalLegacySource<T>(read: () => T): T {
 
 /** The original has columns no shipped reader accounts for. */
 export function legacyInventoryRefusal(
-  table: string,
-  extraColumns: readonly string[]
+  extraColumns: readonly string[],
+  artifact: LegacySourceArtifact
 ): JournalLegacyRetentionError {
   return new JournalLegacyRetentionError(
     extraColumns.length > 0
       ? 'legacy source has unaccounted columns'
       : 'legacy source has an unknown table',
     'source-inventory',
-    legacySourceArtifact(table, extraColumns)
+    artifact
   )
 }
 
 /** The original holds rows in a table no shipped reader accounts for. */
-export function legacyRecoveryRefusal(table: string): JournalLegacyRetentionError {
+export function legacyRecoveryRefusal(artifact: LegacySourceArtifact): JournalLegacyRetentionError {
   return new JournalLegacyRetentionError(
     'legacy source has unaccounted recovery data',
     'source-recovery',
-    legacySourceArtifact(table, [])
+    artifact
   )
 }

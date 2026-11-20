@@ -19,17 +19,20 @@ export const LEGACY_JOURNAL_RETIREMENT_REASONS = [
 ] as const
 
 export const LEGACY_JOURNAL_RETIREMENT_OUTCOMES = [
-  // The policy turned the cleanup off: no proof ran and nothing was deleted.
-  'off',
+  // No old file, and nothing saved says this store deleted one.
+  'absent',
   // Kept for now, for the reason in `defer`.
   'deferred',
   // A check refused the file, for the reason in `reason`; it stays until the file changes.
   'refused',
-  // The proof finished: the chat store holds everything in the file. The policy kept it.
+  // The proof finished: the chat store holds everything in the file. This build keeps it.
   'proof_complete',
-  // The proof finished and deletion was allowed, but the file couldn't be removed yet.
+  // The proof finished and this build deletes, but the file couldn't be removed yet.
   'delete_failed',
+  // Deleted on this launch.
   'deleted',
+  // Gone, and this store saved that it was deleting it on an earlier launch.
+  'deleted_before',
   // The proof stopped for the reason in `error` and is tried again later.
   'proving'
 ] as const
@@ -58,10 +61,28 @@ export const LEGACY_JOURNAL_RETIREMENT_DEFERS = [
   'leftover_files'
 ] as const
 
-/** Shapes builds left behind that the refusal saw; `none` when it saw neither. */
-export const LEGACY_JOURNAL_RETIREMENT_ARTIFACTS = ['none', 'source_json', 'pause_table'] as const
+/**
+ * Shapes builds left behind that an inventory refusal saw (`none`: neither); `unknown` for any other
+ * outcome, and for refusals saved before this was recorded.
+ */
+export const LEGACY_JOURNAL_RETIREMENT_ARTIFACTS = [
+  'unknown',
+  'none',
+  'source_json',
+  'pause_table',
+  'both'
+] as const
 
-const COUNT_BUCKETS = ['0', '1_10', '11_100', '101_1000', '1001_10000', 'gt_10000'] as const
+// `unknown`: not measured (no walk this launch, or older progress); never reported as 0.
+const COUNT_BUCKETS = [
+  'unknown',
+  '0',
+  '1_10',
+  '11_100',
+  '101_1000',
+  '1001_10000',
+  'gt_10000'
+] as const
 export type LegacyJournalRetirementCountBucket = (typeof COUNT_BUCKETS)[number]
 
 export const LEGACY_JOURNAL_RETIREMENT_BYTES_BUCKETS = [
@@ -94,8 +115,8 @@ export const legacyJournalRetirementSchema = z
     defer: z.enum(LEGACY_JOURNAL_RETIREMENT_DEFERS),
     artifact: z.enum(LEGACY_JOURNAL_RETIREMENT_ARTIFACTS),
     error: z.enum(LEGACY_JOURNAL_RETIREMENT_ERRORS),
-    mode: z.enum(['off', 'report', 'enforce']),
-    policy_revision: z.number().int().min(0).max(1_000_000),
+    // Whether this build deletes a proven file; fixed per build.
+    deletes: z.boolean(),
     inventory_revision: z.number().int().min(0).max(1000),
     completeness: z.enum(['unknown', 'partial', 'complete']),
     resumed: z.boolean(),

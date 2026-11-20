@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  LEGACY_SOURCE_ARTIFACTS,
   LEGACY_SOURCE_REFUSALS,
   type LegacySourceArtifact,
   type LegacySourceRefusalReason
@@ -35,7 +36,7 @@ export type LegacyProofCounts = {
   chats: number
   /** Converted here before the proof reached them. */
   alreadyConverted: number
-  /** Converted by the proof itself: what report mode adds to the store. */
+  /** Converted by the proof itself: what the proof adds to the store. */
   newlyConverted: number
   /** Deleted here, so kept only as the original's version. */
   deletedHere: number
@@ -46,8 +47,8 @@ export type LegacyProofCounts = {
 }
 
 /**
- * The proof of this original into this store finished, and the policy held deletion. A later
- * launch reads this instead of walking again; deletion, once allowed, resumes at the copies.
+ * The proof of this original into this store finished, and this build keeps the file. A later
+ * launch reads this instead of walking again; a build that deletes resumes at the copies.
  */
 export type LegacySourceHeld = {
   version: 2
@@ -68,19 +69,12 @@ export type LegacySourceRefusal = {
   proof: string
   store: string
   reason: LegacySourceRefusalReason
-  /** A shape builds left behind that the refusal saw; for reporting only. */
+  /** Which shapes builds left behind an inventory refusal saw; for reporting only. */
   artifact?: LegacySourceArtifact
 }
 
-/**
- * 2: progress and completion this build saves while deletion is held for a remote policy. Builds
- * before it resume only layout 1, so none of them carries this build's progress past the checks
- * it made; each proves from the start under its own rules.
- *
- * Bump it whenever the checks that admit a file change, above all when they accept more: saved
- * progress and held proofs then never carry across builds with different rules. Reports carry it.
- */
-export const LEGACY_PROOF_LAYOUT = 2
+/** The proof's page layout; progress saved under another is walked again from the start. */
+export const LEGACY_PROOF_LAYOUT = 1
 /** The proof's last phases, the reconcile's copies, start at this table (after content and claims). */
 export const LEGACY_PROOF_COPIES_TABLE = 7
 
@@ -188,6 +182,9 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
     return null
   }
   const reason = LEGACY_SOURCE_REFUSALS.find((known) => known === data.reason)
+  const artifact = LEGACY_SOURCE_ARTIFACTS.find(
+    (known) => 'artifact' in data && known === data.artifact
+  )
   return reason
     ? {
         version: 2,
@@ -196,10 +193,7 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
         proof: data.proof,
         store: data.store,
         reason,
-        ...('artifact' in data &&
-        (data.artifact === 'source_json' || data.artifact === 'pause_table')
-          ? { artifact: data.artifact }
-          : {})
+        ...(artifact ? { artifact } : {})
       }
     : null
 }

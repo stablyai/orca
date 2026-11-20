@@ -103,7 +103,7 @@ export class JournalLegacyProof {
     return this.refusal?.reason
   }
 
-  /** A shape builds left behind that the refusal saw. */
+  /** Which shapes builds left behind an inventory refusal saw. */
   get refusalArtifact(): LegacySourceRefusal['artifact'] {
     return this.refusal?.artifact
   }

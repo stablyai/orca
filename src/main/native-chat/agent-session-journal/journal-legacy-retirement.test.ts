@@ -55,11 +55,6 @@ const originals = (db: Database.Database, sessionId: string) =>
 
 const original = (db: Database.Database, sessionId: string) => originals(db, sessionId)[0] ?? null
 
-type Mode = { mode: 'off' | 'report' | 'enforce'; revision: number }
-const policy =
-  (mode: Mode['mode'], revision = 1) =>
-  async (): Promise<Mode> => ({ mode, revision })
-
 const companions = (filename: string) =>
   [filename, `${filename}-wal`, `${filename}-shm`].filter((name) => existsSync(name))
 
@@ -353,19 +348,13 @@ it('finishes removing the absorbed WAL a removal left behind its main file, and 
   await launch().run()
   expect(existsSync(`${filename}-wal`)).toBe(true)
   save(retiring(wal.ino))
-  // Finishing the removal deletes too, so it waits for permission like the first step.
+  // Finishing the removal deletes too, so a build that keeps the file keeps these, and says so.
   const deferred: string[] = []
-  setLegacyJournalRetirementHost({
-    report: async (event) => deferred.push(`${event.defer} ${event.mode}`) > 0,
-    mode: async () => ({ mode: 'report', revision: 0 })
-  })
+  setLegacyJournalRetirementHost({ report: async (event) => deferred.push(event.defer) > 0 })
   cleanup.push(() => setLegacyJournalRetirementHost(undefined))
-  await launch('1.0.1', true, undefined, undefined, policy('off')).run()
-  await launch('1.0.1', true, undefined, undefined, policy('report')).run()
-  await launch('1.0.1', true, undefined, undefined, policy('report')).run()
+  await launch('1.0.1', true, undefined, undefined, false).run()
   expect(existsSync(`${filename}-wal`)).toBe(true)
-  // Waiting for permission is reported, once per mode.
-  expect(deferred).toEqual(['leftover_files off', 'leftover_files report'])
+  expect(deferred).toEqual(['leftover_files'])
   await launch().run()
   expect(existsSync(`${filename}-wal`)).toBe(false)
 })
