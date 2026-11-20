@@ -17821,7 +17821,7 @@
           "db56fcd6d2": "{{value0}} of {{value1}}"
         },
         "PdfViewer": {
-          "3e98d500d2": "PDF preview",
+          "3e98d500d2": "PDF preview · Read-only",
           "069ff59932": "Find in PDF ({{value0}})",
           "2b6eb1ccd6": "Zoom in",
           "c0119616d6": "Fit to width",

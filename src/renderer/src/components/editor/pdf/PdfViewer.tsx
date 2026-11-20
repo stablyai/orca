@@ -266,7 +266,7 @@ function PdfDocumentViewer({
         <span className="min-w-0 truncate" title={filename}>
           {filename}
         </span>
-        <span>{t('auto.components.editor.PdfViewer.3e98d500d2', 'PDF preview')}</span>
+        <span>{t('auto.components.editor.PdfViewer.3e98d500d2', 'PDF preview · Read-only')}</span>
       </div>
     </div>
   )

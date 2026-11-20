@@ -1,3 +1,4 @@
+import { AnnotationMode } from 'pdfjs-dist'
 import type * as pdfjsLib from 'pdfjs-dist'
 import {
   EventBus,
@@ -74,6 +75,8 @@ export function createPdfViewerSession({
     linkService,
     findController,
     textLayerMode: 1,
+    // Why: form edits stay in pdf.js memory; this preview never writes them back to the file.
+    annotationMode: AnnotationMode.ENABLE,
     removePageBorders: true,
     abortSignal: abortController.signal
   }
