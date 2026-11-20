@@ -27961,8 +27961,7 @@
       "read": "Getting to know your setup"
     },
     "header": {
-      "runs": "runs your {{agent}}",
-      "newBot": "Your new bot"
+      "open": "Open {{name}} settings"
     },
     "lookSteps": {
       "slackThread": "a Slack thread",
