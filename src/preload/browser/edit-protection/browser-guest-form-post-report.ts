@@ -34,8 +34,10 @@ export function installBrowserGuestFormPostReport(port: {
         return
       }
       port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost })
-      // A navigate event follows at once; without one (the page removed the form, say) no POST loads.
-      if (navigation) {
+      // Withdraw it unless a form navigate event is pending: a real submission reports again from
+      // its navigate event; without one (the page removed the form, say) no POST loads. An
+      // opaque-origin document (a sandboxed page) fires no navigate events, so its report stays.
+      if (navigation && navigation.currentEntry !== null) {
         setTimeout(() => {
           if (pendingForm === null) {
             retract(formPost)
@@ -68,8 +70,8 @@ export function installBrowserGuestFormPostReport(port: {
   })
   // Only a navigation handled in this document settles here: intercepted by the page, or aborted
   // (stopped, or "Stay" at a leave prompt). A cross-document POST unloads this document instead.
-  const settled = (): void => {
-    if (pendingForm !== null) {
+  const settled = (event: Event): void => {
+    if (event.isTrusted && pendingForm !== null) {
       retract(pendingForm)
       pendingForm = null
     }
