@@ -104,6 +104,7 @@ describe('a paired Orca coordinating its Run on this server', () => {
       instanceId: 'instance_a'
     }
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
+    vi.spyOn(runtime, 'validateOrchestrationAgentLauncherForRepo').mockResolvedValue()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: placement reads only the repo's kind and hooks.
     vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'repo_b', kind: 'git' } as never)
     const create = vi
