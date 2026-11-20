@@ -4255,6 +4255,7 @@
             "terminalListNeedsServerUpdate": "更新此伺服器上的 Orca，以列出終端機代理程式",
             "terminalListFailed": "無法列出此工作區的終端機代理程式",
             "chatNotInstalled": "未安裝",
+            "chatInstallRequired": "需要安裝",
             "chatNotOverSsh": "SSH 連線不支援聊天",
             "chatNotInWsl": "WSL 不支援聊天",
             "chatNotInSubfolder": "子資料夾不支援聊天",
@@ -15831,7 +15832,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "模擬器鍵盤輸入的貼上內容過大。",
-            "unsupportedPasteText": "模擬器鍵盤貼上僅支援美式鍵盤文字。",
             "pasteTargetUnavailable": "模擬器鍵盤貼上失敗，因為裝置尚未就緒。"
           }
         }

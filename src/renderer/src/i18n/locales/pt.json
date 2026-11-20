@@ -17595,6 +17595,7 @@
             "e518f544b1": "Nenhum agente detectado",
             "8dea9b5cdf": "Nenhum agente habilitado",
             "chatNotInstalled": "Não instalado",
+            "chatInstallRequired": "Instalação necessária",
             "chatNotOverSsh": "Chat indisponível via SSH",
             "chatNotInWsl": "Chat indisponível no WSL",
             "chatNotInSubfolder": "Chat indisponível em subpasta",
@@ -18641,7 +18642,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "A colagem é muito grande para a entrada de teclado do emulador.",
-            "unsupportedPasteText": "A colagem do teclado do emulador só suporta texto de teclado americano (US).",
             "pasteTargetUnavailable": "A colagem do teclado do emulador falhou porque o dispositivo não está pronto."
           }
         }

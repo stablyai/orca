@@ -30,7 +30,7 @@ beforeEach(() => {
 
 afterEach(cleanup)
 
-it("opens an answer's file link and navigates between its answer and question", () => {
+it("opens a reply's file link and leads from its quote to the question", () => {
   const path = '/Users/x/orca-lanes/lead/report.md'
   const opened = vi.fn<CommentMarkdownLinkClickHandler>((event) => event.preventDefault())
   const existence = {
@@ -64,7 +64,7 @@ it("opens an answer's file link and navigates between its answer and question", 
   render(
     <NativeChatFileLinkExistenceContext value={existence}>
       <NativeChatLinkClickContext value={opened}>
-        <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} askShown={false} />
+        <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />
       </NativeChatLinkClickContext>
     </NativeChatFileLinkExistenceContext>
   )
@@ -76,9 +76,6 @@ it("opens an answer's file link and navigates between its answer and question", 
 
   fireEvent.click(screen.getByRole('button', { name: /^Replying to: Retry it here\?/ }))
   expect(document.activeElement?.getAttribute('data-bot-item-comment-id')).toBe('e2')
-
-  fireEvent.click(screen.getByRole('button', { name: /^Answered at .+\. Go to the answer$/ }))
-  expect(document.activeElement?.getAttribute('data-bot-item-comment-id')).toBe('e4')
 })
 
 it('renders linked references without their stored prefixes', () => {
@@ -96,9 +93,7 @@ it('renders linked references without their stored prefixes', () => {
       at: 200
     }
   ]
-  render(
-    <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} askShown={false} />
-  )
+  render(<BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />)
 
   const row = screen.getByText(/linked/).closest('div')!
   expect(row.textContent).toContain(
@@ -107,53 +102,73 @@ it('renders linked references without their stored prefixes', () => {
   expect(row.textContent).not.toMatch(/url:|file:/)
 })
 
-it("replies to an open question the page can't answer in its own card, from the card itself", () => {
-  const reply = vi.fn()
+const ASK = {
+  context: 'The review is stuck until Monday.',
+  questions: [
+    {
+      prompt: 'Go ahead without the design review?',
+      options: [{ label: 'Go ahead' }, { label: 'Wait' }],
+      recommended: 0
+    }
+  ]
+}
+
+const WAITING: BotItemEvent[] = [
+  { id: 'e2', kind: 'commented', actor: ASKER, data: { text: 'readable copy', ask: ASK }, at: 200 },
+  { id: 'e3', kind: 'status', actor: ASKER, data: { from: 'working', to: 'needs_you' }, at: 200 }
+]
+
+it("posts a quick reply as the owner's comment, and Alt-click puts it in the box instead", () => {
+  const actions = { send: vi.fn(), edit: vi.fn(), type: vi.fn() }
   const item = makeTestBotItem(6, {
     status: 'needs_you',
-    question: { eventId: 'e2', text: 'Retry it here?\n\nOr write it by hand.' }
+    question: { eventId: 'e2', text: 'readable copy' }
   })
+  render(<BotItemActivityList bot={BOT} item={item} events={WAITING} quickReplies={actions} />)
+
+  fireEvent.click(screen.getByRole('button', { name: /^Go ahead/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Wait' }), { altKey: true })
+  fireEvent.click(screen.getByRole('button', { name: 'Type your answer' }))
+
+  expect(actions.send).toHaveBeenCalledExactlyOnceWith('Go ahead')
+  expect(actions.edit).toHaveBeenCalledExactlyOnceWith('Wait')
+  expect(actions.type).toHaveBeenCalledOnce()
+})
+
+it('shows an answer an older host recorded as a quoted comment, the question keeping only its pick', () => {
+  const events: BotItemEvent[] = [
+    ...WAITING,
+    {
+      id: 'e4',
+      kind: 'commented',
+      actor: OWNER,
+      data: { text: 'Wait', answers: 'e2', decisions: [{ picks: [1] }] },
+      at: 250
+    },
+    {
+      id: 'e5',
+      kind: 'status',
+      actor: OWNER,
+      data: { from: 'needs_you', to: 'working', cause: 'answer' },
+      at: 250
+    }
+  ]
   render(
     <BotItemActivityList
       bot={BOT}
-      item={item}
-      events={ASKED}
-      askShown={false}
-      onReplyToQuestion={reply}
+      item={makeTestBotItem(6)}
+      events={events}
+      quickReplies={{ send: vi.fn(), edit: vi.fn(), type: vi.fn() }}
     />
   )
 
-  fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
-  const box = screen.getByRole('textbox', { name: 'Reply' })
-  expect(document.activeElement).toBe(box)
-  fireEvent.keyDown(box, { key: 'Enter' })
-  expect(reply).not.toHaveBeenCalled()
-
-  fireEvent.change(box, { target: { value: '  b, by hand  ' } })
-  fireEvent.keyDown(box, { key: 'Enter' })
-
-  expect(reply).toHaveBeenCalledExactlyOnceWith('b, by hand')
-  expect(screen.queryByRole('textbox', { name: 'Reply' })).toBeNull()
-})
-
-it('offers no Reply where the card below takes the answer, or where the item takes no comment', () => {
-  const item = makeTestBotItem(6, {
-    status: 'needs_you',
-    question: { eventId: 'e2', text: 'Retry it here?', answerable: true }
-  })
-  const view = render(
-    <BotItemActivityList
-      bot={BOT}
-      item={item}
-      events={ASKED}
-      askShown
-      onReplyToQuestion={vi.fn()}
-    />
-  )
-  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
-
-  view.rerender(<BotItemActivityList bot={BOT} item={item} events={ASKED} askShown={false} />)
-  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^Go ahead/ })).toBeNull()
+  expect(screen.queryByText('Needs you')).toBeNull()
+  const question = document.querySelector('[data-bot-item-question="closed"]')!
+  expect(question.textContent).toBe('Go ahead without the design review?Wait')
+  expect(
+    screen.getByRole('button', { name: /^Replying to: Go ahead without the design review\?/ })
+  ).toBeTruthy()
 })
 
 it("shows an agent's comment files as file buttons that open as file links, and folds images past six", () => {
@@ -180,7 +195,7 @@ it("shows an agent's comment files as file buttons that open as file links, and 
   ]
   render(
     <NativeChatLinkClickContext value={opened}>
-      <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} askShown={false} />
+      <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />
     </NativeChatLinkClickContext>
   )
 

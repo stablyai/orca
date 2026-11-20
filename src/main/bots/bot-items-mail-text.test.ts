@@ -67,6 +67,8 @@ it('names the question an answer is for, and tells the bot to carry on with it',
 
   expect(mail?.body).toContain('answered your question e5 (event e7)')
   expect(mail?.body).toContain('1. Ship it? → Yes')
-  expect(mail?.body).toContain('Your owner answered your question: carry on with that answer')
+  expect(mail?.body).toContain(
+    'Your owner answered your question, and the item is In progress again'
+  )
   expect(mail?.body).not.toContain('is not a recorded answer')
 })

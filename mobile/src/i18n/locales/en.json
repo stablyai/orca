@@ -5479,11 +5479,6 @@
         "workerStarted": "Worker started:",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
-        "waitingOnYou": "Waiting on you",
-        "reply": "Reply",
-        "asksYou": "asks you",
-        "askedYou": "asked you",
-        "answered": "Answered",
         "noComments": "No comments yet.",
         "snoozed": "snoozed this until {{when}}",
         "snoozedBare": "snoozed this",
@@ -5495,6 +5490,8 @@
         "label": "Comment",
         "add": "Add a comment…",
         "submit": "Comment",
+        "reply": "Reply in your own words",
+        "replyTo": "Reply to {{name}}…",
         "showLess": "Show less",
         "fileOnComputer": "Open {{name}} on your computer."
       },
@@ -5618,7 +5615,8 @@
       },
       "readFailedTitle": "Couldn’t load items",
       "ask": {
-        "youAnswered": "You answered:"
+        "recommended": "Recommended",
+        "typeAnswer": "Type your answer"
       }
     },
     "needs": {

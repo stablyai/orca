@@ -4432,6 +4432,7 @@
             "terminalListNeedsServerUpdate": "Terminal ajanlarını listelemek için bu sunucudaki Orca'yı güncelleyin",
             "terminalListFailed": "Bu çalışma alanındaki terminal ajanları listelenemedi",
             "chatNotInstalled": "Yüklü değil",
+            "chatInstallRequired": "Yükleme gerekli",
             "chatNotOverSsh": "SSH üzerinden sohbet kullanılamıyor",
             "chatNotInWsl": "WSL'de sohbet kullanılamıyor",
             "chatNotInSubfolder": "Alt klasörde sohbet yok",
@@ -16191,7 +16192,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Yapıştırılan içerik emülatör klavye girişi için çok büyük.",
-            "unsupportedPasteText": "Emülatör klavye yapıştırma yalnızca ABD klavye metnini destekler.",
             "pasteTargetUnavailable": "Cihaz hazır olmadığı için emülatör klavye yapıştırma başarısız oldu."
           }
         }

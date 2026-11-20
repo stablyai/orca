@@ -596,6 +596,9 @@
       "resetViewport": "Reset viewport size",
       "findOnPage": "Find on page",
       "profile": "Profile"
+    },
+    "loadStall": {
+      "waitingForHost": "Waiting for {{host}}…"
     }
   },
   "editor": {
@@ -1554,7 +1557,6 @@
       "connectorRequests_other": "{{count}} requests",
       "connectorOnlyYou": "Only you",
       "memorySource": "From {{source}}",
-      "memorySourceLink": "link",
       "lookAround": {
         "firstLook": "First look: {{time}}",
         "notArmed": "The first look comes a few hours after your first conversation.",
@@ -1721,7 +1723,19 @@
       "composioKeyOnHost": "One key for every bot on {{host}}, for the apps you connect at Composio. Your app sign-ins are held by Composio.",
       "serverEnableFailed": "Couldn’t change bots on {{host}}.",
       "composioEventsElsewhere": "Composio events for this key go to {{holder}}. Use a separate key on {{host}}.",
-      "composioEventsAnotherComputer": "another computer"
+      "composioEventsAnotherComputer": "another computer",
+      "editMemory": "Edit",
+      "addMemoryPlaceholder": "Remember something new…",
+      "memoryEmpty": "No facts saved yet.",
+      "saving": "Saving…",
+      "unsaved": "Unsaved",
+      "saved": "Saved",
+      "soulView": "Soul view",
+      "soulRead": "Read",
+      "soulEdit": "Edit",
+      "soulStats": "{{lines}} lines · {{words}} words",
+      "soulDoubleClickHint": "Double-click to edit",
+      "soulEmpty": "No instructions yet. Double-click or select Edit to write."
     },
     "windowMaterial": {
       "description": "What shows behind translucent terminals. Requires restart.",
@@ -5378,6 +5392,7 @@
             "terminalListNeedsServerUpdate": "Update Orca on this server to list terminal agents",
             "terminalListFailed": "Couldn’t list terminal agents for this workspace",
             "chatNotInstalled": "Not installed",
+            "chatInstallRequired": "Install required",
             "chatNotOverSsh": "No chat over SSH",
             "chatNotInWsl": "No chat in WSL",
             "chatNotInSubfolder": "No chat in a subfolder",
@@ -9178,6 +9193,12 @@
             "ariaLabel": "Card style",
             "classic": "Classic",
             "experimental": "Experimental"
+          },
+          "appRail": {
+            "title": "App rail",
+            "description": "Icon bar on the left edge for switching between workspaces and other pages.",
+            "copy": "Adds an icon bar to the left of the workspace list. Workspaces, Settings, and Help move onto it, and it stays visible when the list is collapsed.",
+            "toggleLabel": "Toggle app rail"
           }
         },
         "FloatingWorkspacePane": {
@@ -11392,6 +11413,14 @@
             "worktreeCardStyle": {
               "title": "Card style",
               "description": "Choose how workspace cards look in the sidebar."
+            },
+            "appRail": {
+              "title": "App rail",
+              "description": "Icon bar on the left edge for switching between workspaces and other pages.",
+              "rail": "rail",
+              "navigation": "navigation",
+              "sidebar": "sidebar",
+              "icons": "icons"
             }
           }
         },
@@ -17450,7 +17479,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Paste is too large for emulator keyboard input.",
-            "unsupportedPasteText": "Emulator keyboard paste supports US keyboard text only.",
             "pasteTargetUnavailable": "Emulator keyboard paste failed because the device is not ready."
           }
         }
@@ -27101,7 +27129,8 @@
         "step2": "Select the workspace for your bot.",
         "step3": "Copy the Refresh Token and paste it below.",
         "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.",
-        "label": "Configuration refresh token"
+        "label": "Configuration refresh token",
+        "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it."
       },
       "workspaces": {
         "otherTeam": "That token is for another workspace. Orca keeps it for that workspace.",
@@ -27315,6 +27344,24 @@
         "saved": "Picture updated",
         "undo": "Undo",
         "drop": "Drop to use"
+      },
+      "generate": {
+        "placeholder": "Describe a picture…",
+        "describe": "Picture description",
+        "button": "Generate",
+        "generating": "Generating…",
+        "cancel": "Cancel",
+        "cancelRunning": "Cancel generating",
+        "edit": "Edit description",
+        "realPerson": "Avatars can't show real people. Describe a character instead.",
+        "signedOut": "{{agent}} isn't signed in. Sign in to it, then try again.",
+        "usageLimit": "{{agent}} hit its usage limit. Try again later.",
+        "noImage": "{{agent}} didn't make an image. Try rewording your description.",
+        "timedOut": "{{agent}} took too long. Try again.",
+        "unavailable": "No installed agent can make images.",
+        "failed": "{{agent}} couldn't make an image. Try again.",
+        "face": "Generate a picture",
+        "agent": "Generate with {{agent}}"
       }
     },
     "linear": {
@@ -29010,7 +29057,6 @@
         "changed": "changed {{field}}",
         "closed": "marked this done",
         "commentLabel": "{{name}}, {{time}}",
-        "goToAnswer": "Answered at {{time}}. Go to the answer",
         "replyingTo": "Replying to: {{question}}. Go to the question",
         "linked": "linked {{links}}",
         "made": "added this item",
@@ -29021,7 +29067,6 @@
         "retry": "Retry",
         "discard": "Discard",
         "reopened": "reopened this",
-        "waitingOnYou": "Waiting on you",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
         "workerStarted": "Worker started:",
@@ -29087,7 +29132,11 @@
         "label": "Comment",
         "showLess": "Show less",
         "submit": "Comment",
-        "thisServer": "This server"
+        "thisServer": "This server",
+        "replyOrPick": "Reply in your own words, or pick an option",
+        "replyingTo": "Replying to:",
+        "hideReplyingTo": "Hide",
+        "replyTo": "Reply to {{name}}…"
       },
       "empty": {
         "allClear": "Nothing needs you and nothing is running.",
@@ -29205,29 +29254,8 @@
         "pickCustom": "Custom time"
       },
       "ask": {
-        "closed": "That question closed before your answer went. Your answer is kept on the item.",
-        "asks": "{{name}} asks",
-        "asksAt": "{{name}} asks · {{time}}",
-        "answeredInComment": "Answered in a comment",
-        "notAnswered": "Not answered",
-        "youAnswered": "You answered:",
-        "skipped": "Skipped",
-        "answeredEarlier": "You answered an earlier question",
-        "hostCannotRecord": "This Orca host can’t record answers yet, so nothing was sent. Update Orca on the bot’s computer; your answer is kept here.",
-        "answeredElsewhere": "Answered elsewhere before yours went. Your answer is kept here.",
-        "changed": "This question changed before your answer went. Your answer is kept here.",
-        "withdrawn": "This question closed before your answer went. Your answer is kept here.",
-        "copied": "Copied",
-        "copy": "Copy",
-        "toComment": "Draft comment",
-        "dismiss": "Dismiss",
-        "commentNotAnswer": "A comment, with any files, goes to the bot and moves this item to In progress, but isn’t recorded as your answer. Expand the question to answer it.",
-        "uncertain": "This question closed while your answer was being sent, and no reply came, so it may not have gone. Check Activity; your answer is kept here.",
-        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here.",
-        "reply": "Reply",
-        "replyPlaceholder": "Reply to {{name}}…",
-        "cancelReply": "Cancel",
-        "sendReply": "Send"
+        "recommended": "Recommended",
+        "typeAnswer": "Type your answer"
       }
     },
     "search": {
@@ -29592,5 +29620,11 @@
       "previous": "Previous month",
       "next": "Next month"
     }
+  },
+  "appRail": {
+    "navigationLabel": "App navigation",
+    "toolsLabel": "App tools",
+    "workspaces": "Workspaces",
+    "more": "More"
   }
 }

@@ -101,18 +101,19 @@ export class BotItemsEdits extends BotItemsReads {
         fields[field] = { from: item[field], to }
       }
     }
-    // Asking again while already Needs you is a new question.
-    const status =
-      changes.status !== undefined &&
-      (changes.status !== item.status || changes.status === 'needs_you')
-        ? changes.status
-        : undefined
     const edited = Object.keys(fields).length > 0
     const commentText = changes.comment?.trim() ? changes.comment : undefined
     const images = changes.images?.length ? { images: changes.images } : {}
     const commentData =
       commentText !== undefined || changes.ask
-        ? { ...botItemCommentData(commentText, changes.ask, status === 'needs_you'), ...images }
+        ? { ...botItemCommentData(commentText, changes.ask), ...images }
+        : undefined
+    // Asking again while already Needs you is a new question; Needs you again with nothing to say is no change.
+    const status =
+      changes.status !== undefined &&
+      (changes.status !== item.status ||
+        (changes.status === 'needs_you' && commentData !== undefined))
+        ? changes.status
         : undefined
     if (!edited && status === undefined && commentData === undefined) {
       return { uid, eventId: null, unchanged: true }
@@ -171,12 +172,6 @@ export function assertBotItemSetInput(changes: BotItemSetInput): void {
   }
   if (changes.ask !== undefined && changes.status !== 'needs_you') {
     throw new BotItemError('invalid_argument', '--ask goes with --status needs-you.')
-  }
-  if (changes.status === 'needs_you' && !changes.comment?.trim() && !changes.ask) {
-    throw new BotItemError(
-      'invalid_argument',
-      'Needs you comes with the question for your owner: `orca bot item set <n> --status needs-you --ask "..." --option "..." --option "..."`, or `--comment "..."` for an open question.'
-    )
   }
   if (changes.comment !== undefined && changes.status === undefined) {
     throw new BotItemError(

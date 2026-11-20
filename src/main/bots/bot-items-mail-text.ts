@@ -1,7 +1,6 @@
 // What item mail tells the bot (Orca's voice, workflow only). The owner's and other chats' words are
 // fenced, so a comment can't pose as Orca's instructions; each mail names its event for `show --after`.
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
-import { botItemAnswerOf } from '../../shared/bots/bot-item-ask'
 import {
   botItemCommentImages,
   botItemEventId,
@@ -73,7 +72,7 @@ export function botItemChangeMail(
     )
   const repliedOn = commentedOn(false)
   const answeredOn = commentedOn(true)
-  // The owner's reply or recorded answer on a Needs you item moves it to In progress with it.
+  // The owner's answer or other comment on a Needs you item moves it to In progress with it.
   const movedWith = (on: Set<string>, event: BotItemEventRecord, item: BotItemRecord) =>
     actor?.kind === 'owner' &&
     on.has(item.uid) &&
@@ -89,7 +88,7 @@ export function botItemChangeMail(
   const answered = lines.some(({ event }) => isAnswer(event))
   const next = [
     answered
-      ? 'Your owner answered your question: carry on with that answer; the item is In progress again.'
+      ? "Your owner answered your question, and the item is In progress again: carry on with that answer. If your question still stands, set it to Needs you again with only what's left."
       : null,
     replied
       ? "Your owner replied to your question, so the item moved to In progress. If your question still stands, set it to Needs you again with only what's left."
@@ -176,8 +175,9 @@ export function botItemRequestMail(item: {
   }
 }
 
+/** The owner's comment naming the question it replies to: written while the bot asked. */
 function isAnswer(event: BotItemEventRecord): boolean {
-  return event.kind === 'commented' && botItemAnswerOf(event.data) !== null
+  return event.kind === 'commented' && typeof event.data.answers === 'string'
 }
 
 function str(value: unknown): string | null {

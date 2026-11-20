@@ -4104,6 +4104,7 @@
             "e518f544b1": "Aucun agent détecté",
             "8dea9b5cdf": "Aucun agent activé",
             "chatNotInstalled": "Non installé",
+            "chatInstallRequired": "Installation requise",
             "startChat": "Démarrer un chat avec {{value0}}",
             "chatNotOverSsh": "Chat indisponible via SSH",
             "chatCheckFailed": "Impossible de vérifier la disponibilité du chat",
@@ -16004,7 +16005,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Le collage est trop volumineux pour la saisie clavier de l'émulateur.",
-            "unsupportedPasteText": "Le collage via le clavier de l'émulateur prend uniquement en charge le texte de clavier US.",
             "pasteTargetUnavailable": "Le collage via le clavier de l'émulateur a échoué car l'appareil n'est pas prêt."
           }
         }

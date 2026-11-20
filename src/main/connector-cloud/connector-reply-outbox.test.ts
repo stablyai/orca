@@ -340,16 +340,6 @@ describe('the sender across hellos, accounts and refusals', () => {
     expect(calls).toBe(2)
     expect(store.rows.map((r) => r.deliveryId)).toEqual(['d1'])
   })
-
-  it('posts every filled row through /replies after a restart with the switch off', async () => {
-    const store = journal([row('d1', answered('d1'))])
-    // An earlier process pushed it as an event and quit before the cloud's answer.
-    await outbox(store).via(client().sender, true)
-    const { sender: c, posted } = client()
-    await outbox(store).via(c, false)
-    expect(posted).toHaveLength(1)
-    expect(store.rows).toEqual([])
-  })
 })
 
 describe('an outcome the cloud can’t stand up yet', () => {

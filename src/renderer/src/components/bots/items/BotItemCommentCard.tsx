@@ -1,6 +1,6 @@
 // A comment in an item's Activity: one quiet surface for every author, with avatar, name and time, then
-// the text as Markdown, its images and its file links. An agent's Needs you question is not drawn here: its row and card are chat's
-// question's. A reply to a question quotes it, and leads back to it.
+// the text as Markdown, its images and its file links. An agent's Needs you question is a comment too:
+// its body and attachments, then its question footer (BotItemQuestionLines). A reply to a question quotes it, and leads back to it.
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
@@ -21,6 +21,8 @@ import { BotOwnerAvatar } from '../bot-connector-people'
 import { BotItemClampedText } from './BotItemClampedText'
 import type { BotItemActivityEntry } from '../../../../../shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
+import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
+import { BotItemQuestionLines, type BotItemQuickReplyActions } from './BotItemQuestionLines'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 
@@ -49,9 +51,12 @@ function Avatar({
   )
 }
 
-type CommentEntry = Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo'>
+type CommentEntry = Pick<
+  Extract<BotItemActivityEntry, { kind: 'comment' }>,
+  'event' | 'replyTo' | 'answers'
+> & { waiting?: boolean }
 
-/** Marks a card (or a question's card) so a jump can find and focus it. */
+/** Marks a card so a jump can find and focus it. */
 export const BOT_ITEM_COMMENT_ATTRIBUTE = 'data-bot-item-comment-id'
 
 export function BotItemCommentCard({
@@ -60,8 +65,7 @@ export function BotItemCommentCard({
   entry,
   onJump,
   failed,
-  textOverride,
-  jumpTarget = true
+  quickReplies
 }: {
   bot: Bot
   item: BotItem
@@ -70,22 +74,18 @@ export function BotItemCommentCard({
   onJump?: (eventId: string) => void
   /** A comment sent from the box that the host refused. */
   failed?: { retry: () => void; discard: () => void }
-  /** Words to show instead of the event's text (a question's context, without its decisions); its
-   *  images and files show either way. */
-  textOverride?: string
-  /** False when another card (its question's) is where a jump to this event lands. */
-  jumpTarget?: boolean
+  /** On the question the item waits on, until the owner replies. */
+  quickReplies?: BotItemQuickReplyActions
 }): React.JSX.Element {
   const t = useTranslate()
   const { event, replyTo } = entry
+  const waiting = entry.waiting === true
   const images = botItemCommentImages(event.data)
+  const shape = botItemQuestionShape(event.data)
   // Its images show after the words, so the [Image #N] its send wrote go, as in chat's sent messages.
-  const eventText = typeof event.data.text === 'string' ? event.data.text : ''
-  // Its files show as buttons under the words, so their `@path`s go from the words.
-  const { files } = botItemCommentFiles(eventText)
-  const { words } = botItemCommentFiles(
-    stripSentImagePromptMarkers(textOverride ?? eventText, images.length)
-  )
+  // Its files show as links after them, so their `@path`s go from the words.
+  const { words } = botItemCommentFiles(stripSentImagePromptMarkers(shape.body, images.length))
+  const { files } = botItemCommentFiles(typeof event.data.text === 'string' ? event.data.text : '')
   const name = botItemActorName(event, item, t)
   const format = uiDateTimeFormat(TIME)
   const jump =
@@ -95,14 +95,18 @@ export function BotItemCommentCard({
     // column so the avatar and time sit on the event rows' glyph and time edges.
     <div className="relative -mx-2 my-1 rounded-[10px] bg-sidebar">
       <div
-        {...(jumpTarget ? { [BOT_ITEM_COMMENT_ATTRIBUTE]: event.id } : {})}
+        {...{ [BOT_ITEM_COMMENT_ATTRIBUTE]: event.id }}
         tabIndex={-1}
         role="article"
         aria-label={t('bots.items.activity.commentLabel', '{{name}}, {{time}}', {
           name,
           time: format.format(event.at)
         })}
-        className="rounded-[10px] bg-foreground/[0.035] px-2 pb-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]"
+        className={cn(
+          'rounded-[10px] bg-foreground/[0.035] px-2 pt-1.5 outline-none focus:ring-2 focus:ring-ring/50 dark:bg-foreground/[0.045]',
+          // A question's chips end the card: more room under them.
+          shape.decisions.length > 0 ? 'pb-3.5' : 'pb-2'
+        )}
       >
         <div className="mb-1 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
           <Avatar bot={bot} event={event} name={name} />
@@ -132,11 +136,24 @@ export function BotItemCommentCard({
         ) : null}
         <div className="pl-7">
           {words.trim() ? (
-            // 8 lines of 19 px.
-            <BotItemClampedText text={words} clampClassName="max-h-[152px]" fade />
+            // 8 lines of 19 px; a question's footer follows, so its Show more reads as the body's.
+            <BotItemClampedText
+              text={words}
+              clampClassName="max-h-[152px]"
+              fade
+              quietToggle={waiting || shape.decisions.length > 0}
+            />
           ) : null}
           <BotItemCommentImages images={images} />
           <BotItemCommentFiles paths={files} />
+          {shape.decisions.length > 0 ? (
+            <BotItemQuestionLines
+              shape={shape}
+              waiting={waiting}
+              answers={entry.answers}
+              actions={quickReplies}
+            />
+          ) : null}
           {failed ? (
             <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
               <span>{t('bots.items.activity.notSent', 'Not sent.')}</span>

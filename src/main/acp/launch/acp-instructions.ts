@@ -9,6 +9,8 @@ import { withOpenCodeInstructionsFile } from '../../opencode/opencode-inline-con
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
+import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
+import { writeHermesContextFile } from '../../hermes/hermes-context-file'
 
 /** What a launch adds so the agent's own system prompt carries the instructions. */
 export type AcpInstructionsLaunch = {
@@ -21,6 +23,8 @@ export type AcpInstructionsLaunch = {
   sessionMetaOnReopen?: true
   /** Whether the agent's `initialize` says it takes `sessionMeta`; a session it doesn't never opens. */
   takesSessionMeta?: (initialized: InitializeResponse) => boolean
+  /** Runs around `session/new` (never a reopen) in the session's folder; returns what undoes it. */
+  aroundNewSession?: (cwd: string) => Promise<() => Promise<void>>
 }
 
 export type AcpInstructionsDelivery = (input: {
@@ -29,6 +33,8 @@ export type AcpInstructionsDelivery = (input: {
   file: () => Promise<string>
   /** What the child will see, inherited values included. */
   env: Readonly<Record<string, string>>
+  /** The folder the agent runs in, on this host. */
+  cwd: string
 }) => Promise<AcpInstructionsLaunch | null>
 
 // Grok keeps them with the session, so a reopened conversation keeps the preamble it began with.
@@ -63,6 +69,18 @@ export const deliverOmpInstructions: AcpInstructionsDelivery = async ({ file }) 
   args: [`--append-system-prompt=${await file()}`]
 })
 
+// Cursor reads its folder's rules once, when a session opens, and keeps them across reopens.
+export const deliverCursorInstructions: AcpInstructionsDelivery = async ({ text }) => ({
+  aroundNewSession: (cwd) => placeCursorOpeningRule(cwd, text)
+})
+
+// Hermes builds its system prompt from the folder's `.hermes.md` at the first turn and again at
+// each compaction, so the file stays; every launch rewrites it with the current text.
+export const deliverHermesInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+  await writeHermesContextFile(cwd, text)
+  return {}
+}
+
 const cleared = new Map<string, Promise<void>>()
 
 /** One file per chat, rewritten at each launch. Stdio children never outlive the host, and one host
@@ -93,7 +111,12 @@ export async function writeAcpInstructionsFile(
 export async function acpLaunchInstructions(
   spec: Pick<AcpLaunchSpec, 'agent' | 'instructions'>,
   dataDirectory: string,
-  input: { sessionId: string; text: string | null; env: Readonly<Record<string, string>> }
+  input: {
+    sessionId: string
+    text: string | null
+    env: Readonly<Record<string, string>>
+    cwd: string
+  }
 ): Promise<AcpInstructionsLaunch | null> {
   const { text } = input
   if (!text) {
@@ -102,6 +125,7 @@ export async function acpLaunchInstructions(
   const delivered = await spec.instructions?.({
     text,
     env: input.env,
+    cwd: input.cwd,
     file: () => writeAcpInstructionsFile(dataDirectory, input.sessionId, text)
   })
   if (!delivered) {

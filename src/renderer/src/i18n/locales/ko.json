@@ -3765,6 +3765,7 @@
             "e518f544b1": "감지된 agents가 없습니다.",
             "8dea9b5cdf": "활성화된 agents가 없습니다.",
             "chatNotInstalled": "설치되지 않음",
+            "chatInstallRequired": "설치 필요",
             "startChat": "{{value0}} 채팅 시작",
             "chatNotOverSsh": "SSH에서는 채팅을 사용할 수 없음",
             "chatNotOnHost": "이 호스트에서는 채팅을 사용할 수 없음",
@@ -15362,7 +15363,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "붙여넣을 내용이 에뮬레이터 키보드 입력에 비해 너무 큽니다.",
-            "unsupportedPasteText": "에뮬레이터 키보드 붙여넣기는 US 키보드 텍스트만 지원합니다.",
             "pasteTargetUnavailable": "기기가 준비되지 않아 에뮬레이터 키보드 붙여넣기에 실패했습니다."
           }
         }

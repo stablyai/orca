@@ -306,43 +306,6 @@ describe('bot items over RPC', () => {
     ])
   })
 
-  it("records the owner's answer to the open question as answered, moved and mailed once, even sent twice", async () => {
-    const { dispatcher } = itemsRuntime()
-    await dispatcher.dispatch(
-      request('bots.items.add', { callerSessionId: RANGER_CHAT, title: 'Merge 880' })
-    )
-    await dispatcher.dispatch(
-      request('bots.items.set', {
-        callerSessionId: RANGER_CHAT,
-        item: '1',
-        status: 'needs_you',
-        ask: {
-          questions: [{ prompt: 'Merge now?', options: [{ label: 'Merge' }, { label: 'Wait' }] }]
-        }
-      })
-    )
-    await host!.sendOwedMail()
-    mailed.length = 0
-    const desktop = { caller: DESKTOP_RPC_CALLER }
-    const answer = request('bots.items.owner.comment', {
-      item: '1',
-      text: '',
-      answering: 'e2',
-      answers: [{ picks: [0] }],
-      answerId: 'answer-1'
-    })
-
-    const first = await dispatcher.dispatch(answer, desktop)
-    const again = await dispatcher.dispatch(answer, desktop)
-
-    expect(first).toMatchObject({ ok: true, result: { eventId: 'e4', answered: true } })
-    expect(again).toMatchObject({ ok: true, result: { eventId: 'e4', answered: true } })
-    expect(mailed).toEqual([
-      { chatId: RANGER_CHAT, eventId: 4, kind: 'commented' },
-      { chatId: RANGER_CHAT, eventId: 5, kind: 'status' }
-    ])
-  })
-
   it('posts a hard-to-read ask as written and tips the bot; a clean ask gets no tip', async () => {
     const { dispatcher } = itemsRuntime()
     for (const title of ['Go ahead', 'Go ahead too']) {
@@ -378,7 +341,7 @@ describe('bot items over RPC', () => {
         item: { status: 'needs_you', question: { text: prose } },
         advice: {
           codes: ['prose_choices'],
-          tip: 'Posted. Tip: Give the choices as buttons with --ask and --option, not in the text. Set Needs you again if you rewrite it.'
+          tip: 'Posted. Tip: Give the choices as --option values after --ask, so they show as quick replies. Set Needs you again if you rewrite it.'
         }
       }
     })
@@ -388,7 +351,7 @@ describe('bot items over RPC', () => {
       ok: true,
       result: {
         events: expect.arrayContaining([
-          expect.objectContaining({ kind: 'commented', data: { text: prose, answerable: true } })
+          expect.objectContaining({ kind: 'commented', data: { text: prose } })
         ])
       }
     })

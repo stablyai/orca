@@ -4312,6 +4312,7 @@
             "e518f544b1": "Agent が検出されませんでした",
             "8dea9b5cdf": "有効な Agent がありません",
             "chatNotInstalled": "未インストール",
+            "chatInstallRequired": "インストールが必要",
             "startChat": "{{value0}} とチャットを開始する",
             "chatNotOverSsh": "SSH 接続ではチャットを利用できません",
             "chatNotInWsl": "WSL ではチャットを利用できません",
@@ -16203,7 +16204,6 @@
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "貼り付ける内容が大きすぎて、エミュレータのキーボード入力では扱えません。",
-            "unsupportedPasteText": "エミュレータのキーボード貼り付けは、US キーボードの文字にのみ対応しています。",
             "pasteTargetUnavailable": "デバイスの準備ができていないため、エミュレータへのキーボード貼り付けに失敗しました。"
           }
         }
