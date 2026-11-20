@@ -64,6 +64,15 @@ describe('botSetupSteps', () => {
       start: { state: 'failed', detail: 'Claude Code is not signed in.' },
       reply: { state: 'pending' }
     })
+    // A host that gave no sentence still shows the agent's own words.
+    expect(
+      botSetupSteps({
+        turn: [],
+        ended: true,
+        agentReady: false,
+        refused: { reason: '', providerDetail: 'Error: CLAUDE_CODE_PLUGIN_DIRS is disabled' }
+      }).start
+    ).toEqual({ state: 'failed', providerDetail: 'Error: CLAUDE_CODE_PLUGIN_DIRS is disabled' })
   })
 
   it('keeps the agent’s own words on why it stopped starting, beside the sentence', () => {

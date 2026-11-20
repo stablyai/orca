@@ -13,7 +13,7 @@ export type BotSetupStep = { state: BotSetupStepState; detail?: string; provider
 /** Why the host refused the kickoff before any turn opened, with the agent's own words when it has them. */
 export type BotSetupRefusal = { reason: string; providerDetail?: string }
 
-type Problem = { detail: string; providerDetail?: string }
+type Problem = { detail?: string; providerDetail?: string }
 
 export type BotSetupSteps = { start: BotSetupStep; reply: BotSetupStep }
 
@@ -38,7 +38,10 @@ function problemOf(message: NativeChatMessage): Problem | null {
 function withProviderDetail(text: string, providerDetail: string | undefined): Problem {
   const detail = text.trim()
   const words = providerDetail?.trim()
-  return words && words !== detail ? { detail, providerDetail: words } : { detail }
+  return {
+    ...(detail ? { detail } : {}),
+    ...(words && words !== detail ? { providerDetail: words } : {})
+  }
 }
 
 /** `turn`: the kickoff turn's rows so far. `ended`: it ended without the bot's words. `agentReady`:
@@ -54,7 +57,7 @@ export function botSetupSteps(input: {
     return {
       start: {
         state: 'failed',
-        ...(refused.reason.trim() ? withProviderDetail(refused.reason, refused.providerDetail) : {})
+        ...withProviderDetail(refused.reason, refused.providerDetail)
       },
       reply: { state: 'pending' }
     }
