@@ -27,29 +27,20 @@ export async function scanWorkspacePortsForTarget(
     return existing.promise
   }
 
-  // A manual Refresh outranks a background scan already running: that scan settles with the Refresh outcome.
-  let supersededBy: Promise<WorkspacePortScanResult> | undefined
-  const promise = runWorkspacePortScanForTarget(target, repoId, freshOwners)
-    .then(
-      (result) => supersededBy ?? result,
-      (error: unknown) => {
-        if (supersededBy) {
-          return supersededBy
-        }
-        throw error
-      }
-    )
-    .finally(() => {
-      if (inFlightWorkspacePortScans.get(key) === entry) {
-        inFlightWorkspacePortScans.delete(key)
-      }
-    })
+  // A manual Refresh outranks a background scan already running: that scan settles with the Refresh, when it does.
+  let supersede: ((refresh: Promise<WorkspacePortScanResult>) => void) | undefined
+  const promise = new Promise<WorkspacePortScanResult>((resolve, reject) => {
+    supersede = resolve
+    runWorkspacePortScanForTarget(target, repoId, freshOwners).then(resolve, reject)
+  }).finally(() => {
+    if (inFlightWorkspacePortScans.get(key) === entry) {
+      inFlightWorkspacePortScans.delete(key)
+    }
+  })
   const entry: InFlightWorkspacePortScan = {
     promise,
     freshOwners,
-    supersede: (refresh) => {
-      supersededBy = refresh
-    }
+    supersede: (refresh) => supersede?.(refresh)
   }
   existing?.supersede(promise)
   inFlightWorkspacePortScans.set(key, entry)
