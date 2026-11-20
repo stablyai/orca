@@ -3,6 +3,10 @@ import type { AppState } from '@/store/types'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { registerAgentStatusListeners } from './agent-status-listeners'
 import { buildSleepingAgentSessionData } from '@/lib/workspace/persistence/workspace-session-sleeping-agents'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload
@@ -195,4 +199,72 @@ it('removes a done status row on clear when its terminal tab is already closed, 
 
   expect(store.getState().agentStatusByPaneKey.get(openPaneKey)?.state).toBe('done')
   expect(store.getState().agentStatusByPaneKey.get(closedPaneKey)).toBeUndefined()
+})
+
+it('preserves activity clear and read cutoffs when clearing a closed structured done entry, while cleaning up closed terminal panes', () => {
+  store = createTestStore()
+  const structuredTabId = structuredAgentSessionTabId('bot-session-1')
+  const closedStructuredPaneKey = structuredAgentSessionPaneKey(structuredTabId, 'bot-session-1')
+  const closedTerminalPaneKey = 'tab-released:33333333-3333-4333-8333-333333333333'
+
+  store
+    .getState()
+    .setAgentStatus(
+      closedStructuredPaneKey,
+      { state: 'done', prompt: 'closed bot chat', agentType: 'omp' },
+      undefined,
+      { updatedAt: 200, stateStartedAt: 150 },
+      { tabId: structuredTabId, worktreeId: 'wt-1' }
+    )
+  store
+    .getState()
+    .setAgentStatus(
+      closedTerminalPaneKey,
+      { state: 'done', prompt: 'released worker', agentType: 'codex' },
+      undefined,
+      { updatedAt: 200, stateStartedAt: 150 },
+      { tabId: 'tab-released', worktreeId: 'wt-1' }
+    )
+  store.getState().applyActivityClearedAt({
+    [closedStructuredPaneKey]: 150,
+    [closedTerminalPaneKey]: 150
+  })
+  store.getState().acknowledgeAgents([closedStructuredPaneKey, closedTerminalPaneKey])
+  const structuredAckAt = store.getState().acknowledgedAgentsByPaneKey[closedStructuredPaneKey]
+
+  let clear: (data: AgentStatusClearIpcPayload) => void = () => {
+    throw new Error('No clear listener')
+  }
+  vi.stubGlobal('window', {
+    api: {
+      agentStatus: {
+        onSet: () => () => {},
+        onClear: (listener: typeof clear) => {
+          clear = listener
+          return () => {}
+        }
+      }
+    }
+  })
+  registerAgentStatusListeners({
+    unsubs: [],
+    enqueueLiveAgentStatus: () => {},
+    drainQueuedLiveAgentStatusesForPane: () => {},
+    pendingAgentStatusEvents: [],
+    liveAgentStatusBurstQueue: [],
+    transientClearWatermarkByConnectionId: new Map()
+  })
+
+  clear({ paneKey: closedStructuredPaneKey })
+  clear({ paneKey: closedTerminalPaneKey })
+
+  expect(store.getState().agentStatusByPaneKey.get(closedStructuredPaneKey)).toBeUndefined()
+  expect(store.getState().activityClearedAtByPaneKey[closedStructuredPaneKey]).toBe(150)
+  expect(store.getState().acknowledgedAgentsByPaneKey[closedStructuredPaneKey]).toBe(
+    structuredAckAt
+  )
+
+  expect(store.getState().agentStatusByPaneKey.get(closedTerminalPaneKey)).toBeUndefined()
+  expect(store.getState().activityClearedAtByPaneKey[closedTerminalPaneKey]).toBeUndefined()
+  expect(store.getState().acknowledgedAgentsByPaneKey[closedTerminalPaneKey]).toBeUndefined()
 })

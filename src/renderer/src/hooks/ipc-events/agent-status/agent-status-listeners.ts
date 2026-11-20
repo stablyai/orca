@@ -10,12 +10,32 @@ import {
 } from '@/lib/agent-session/resume/forget-refused-pane-resume'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/pane-authority/agent-pane-authority'
 import { resolvePaneKey } from '../../../lib/agent-status/ownership/agent-status-pane-ownership'
+import { isAgentSessionSlotTabId } from '../../../../../shared/agent-session/view/agent-session-slot-tab-id'
+import { isReopenedChatTabId } from '../../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { structuredAgentSessionIdOfTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   RefusedPaneResume
 } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
+
+function isStructuredSessionPane(paneKey: string, existing: AgentStatusEntry | undefined): boolean {
+  if (existing?.terminalResumeEligible === false || existing?.structuredHostOwned === true) {
+    return true
+  }
+  const parsed = parsePaneKey(paneKey)
+  if (!parsed) {
+    return false
+  }
+  return (
+    structuredAgentSessionIdOfTab(parsed.tabId) !== null ||
+    isReopenedChatTabId(parsed.tabId) ||
+    isAgentSessionSlotTabId(parsed.tabId)
+  )
+}
 
 /** An already delivered event for the pane naming a refused conversation would restore it. */
 function dropEventsRestoringRefused(
@@ -141,7 +161,12 @@ export function registerAgentStatusListeners(args: {
       ) {
         return
       }
-      store.removeAgentStatus(data.paneKey)
+      store.removeAgentStatus(
+        data.paneKey,
+        isStructuredSessionPane(data.paneKey, existing)
+          ? { preserveActivityState: true }
+          : undefined
+      )
     }
   )
   if (unsubscribeAgentStatusClear) {
