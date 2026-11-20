@@ -27,6 +27,7 @@ import {
   aiVaultResumeRefusalText,
   prepareMobileAiVaultSessionResume
 } from './ai-vault-resume-preparation'
+import { hostViewModeForNewAgentTab } from '../storage/session-view-preferences'
 import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
 import * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
@@ -246,7 +247,8 @@ function MobileAgentSessionHistoryPanelContent({
           {
             ...launch,
             hostCapabilities: resumeHost.capabilities,
-            clientMutationId: resumeMutationRegistryRef.current.claim(session.id)
+            clientMutationId: resumeMutationRegistryRef.current.claim(session.id),
+            viewMode: await hostViewModeForNewAgentTab(launch.launchAgent)
           },
           assertCurrentOwner
         )
