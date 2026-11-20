@@ -3,7 +3,7 @@ import { replaceTabBuckets } from '@/store/record-transitions/keyed-record-trans
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { getWorktreeIdsWithStructuredChat } from './visible-worktree-activity-inputs'
 
-// Perf contract (tracked in #PR_NUMBER): every terminal title write rescanned every structured chat
+// Perf contract (tracked in #45759): every terminal title write rescanned every structured chat
 // for the sidebar's chat workspaces and re-hashed each session id once the pane-key memo overflowed.
 
 const hashes = vi.hoisted(() => ({ count: 0 }))

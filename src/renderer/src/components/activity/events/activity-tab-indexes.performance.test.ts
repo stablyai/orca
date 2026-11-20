@@ -9,7 +9,7 @@ import {
   resolveActivityTabIndexes
 } from './activity-event-build-cache'
 
-// Perf contract (tracked in #PR_NUMBER): a terminal title write replaced every workspace's tab
+// Perf contract (tracked in #45759): a terminal title write replaced every workspace's tab
 // buckets in the Activity projection and rebuilt its tab context and host indexes over the fleet.
 
 let reads = 0
