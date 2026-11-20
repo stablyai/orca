@@ -98,6 +98,12 @@ export class ManagedRuntimeInstallation {
     return this.state.subscribe(onChange)
   }
 
+  /** Subscribers read the facts again, e.g. once a slower check behind `findExternal` lands. */
+  factsChanged(): void {
+    this.facts = null
+    this.state.set(this.state.get().value)
+  }
+
   private async readInstalledFacts(): Promise<InstalledFacts> {
     const pin = this.runtime.pin()
     const { release, broken, unreadable } = resolveInstalledRuntimeRelease(this.root, pin)

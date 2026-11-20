@@ -14,7 +14,7 @@ import {
   copyAntigravityUserRules,
   linkAntigravityUserSkills
 } from './antigravity-chat-user-skills'
-import { linkAgyLoginIntoChatHome } from './antigravity-chat-agy-login'
+import { copyAgyLoginIntoChatHome } from './antigravity-chat-agy-login-copy'
 import {
   agentPlatformCredentialsFile,
   resolveAgentPlatformProject
@@ -102,7 +102,7 @@ export const antigravityChatAccount = {
     const userHome = antigravityUserHome(env)
     await linkAntigravityUserSkills(home, userHome)
     await copyAntigravityUserRules(home, userHome)
-    await linkAgyLoginIntoChatHome(home, userHome, auth.method === 'oauth-personal')
+    await copyAgyLoginIntoChatHome(home, userHome, auth.method === 'oauth-personal')
     const path = join(home, ANTIGRAVITY_ACP_HOME, 'settings.json')
     const projection = await settingsProjection(auth, env)
     try {

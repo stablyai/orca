@@ -86,7 +86,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     params: AntigravityAccountMutationParams,
     handler: async ({ target, accountId }, ctx) => {
       const state = await (await getAntigravityAccountService(target)).selectAccount(accountId)
-      restartIdleAgyChats(target)
+      restartIdleAgyChats(target, ctx.runtime)
       return withAntigravityChatBackend(ctx.runtime, target, state)
     }
   }),
@@ -94,12 +94,12 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     name: 'accounts.antigravityRemove',
     permission: 'accounts-admin',
     params: AntigravityAccountMutationParams,
-    handler: async ({ target, accountId }, ctx) =>
-      withAntigravityChatBackend(
-        ctx.runtime,
-        target,
-        await (await getAntigravityAccountService(target)).removeAccount(accountId)
-      )
+    handler: async ({ target, accountId }, ctx) => {
+      const state = await (await getAntigravityAccountService(target)).removeAccount(accountId)
+      // Removing the signed-in account signs agy out; chats holding it start again without it.
+      restartIdleAgyChats(target, ctx.runtime)
+      return withAntigravityChatBackend(ctx.runtime, target, state)
+    }
   }),
   defineMethod({
     name: 'accounts.antigravityChatAuthGet',

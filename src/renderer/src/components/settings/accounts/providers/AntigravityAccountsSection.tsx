@@ -125,7 +125,7 @@ export function AntigravityAccountsSection({
     if (pending.current) {
       return false
     }
-    void run('List')
+    void run('List', undefined, true)
     return true
   })
   // A method change moves new chats between agy's home and Orca's, which the rows' status follows.
@@ -138,14 +138,17 @@ export function AntigravityAccountsSection({
     }
   })
 
-  async function run(action: AntigravityAccountAction, accountId?: string) {
+  /** `keepShown`: a background re-read, which leaves a Usage reading or error on screen. */
+  async function run(action: AntigravityAccountAction, accountId?: string, keepShown = false) {
     if (pending.current) {
       return
     }
     pending.current = true
     setBusy(true)
-    setError(null)
-    setUsage(null)
+    if (!keepShown) {
+      setError(null)
+      setUsage(null)
+    }
     try {
       if (action === 'Usage') {
         const before = await callAntigravityAccounts(owner, target, 'List')

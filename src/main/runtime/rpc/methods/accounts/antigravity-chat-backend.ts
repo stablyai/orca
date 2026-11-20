@@ -17,6 +17,7 @@ import {
 } from '../../../../antigravity/antigravity-chat-route'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 
 const CHAT_BACKEND_WAIT_MS = 1_500
@@ -69,9 +70,14 @@ export async function withAntigravityChatBackend(
   }
 }
 
-/** A running `agy acp` may keep the login it started with, so idle chats on agy stop and resume on
- *  the newly selected account at their next send; busy ones keep their turn (#43375). */
-export function restartIdleAgyChats(target: AntigravityAccountTarget): void {
+/** A running `agy acp` may keep the login it started with, so idle chats signed in with agy's
+ *  login stop and resume on the newly selected account (or none) at their next send: chats on
+ *  agy's home, and with the Google method also those on Orca's chat home, whose copy of agy's login
+ *  the next start refreshes. Busy ones keep their turn (#43375). */
+export function restartIdleAgyChats(
+  target: AntigravityAccountTarget,
+  runtime: { requireStore(): { getSettings(): Pick<GlobalSettings, 'antigravityChatAuth'> } }
+): void {
   if (target.runtime !== 'host') {
     return
   }
@@ -81,10 +87,13 @@ export function restartIdleAgyChats(target: AntigravityAccountTarget): void {
   if (!host) {
     return
   }
+  const google = !antigravityChatUsesOrcaHome(
+    runtime.requireStore().getSettings().antigravityChatAuth
+  )
   for (const id of host.loadedSessionIds()) {
     const home =
       host.sessionAgent(id) === 'antigravity' ? host.childAccountHome(id, true) : undefined
-    if (home && isAntigravityHostAccountHome(home)) {
+    if (home && (google || isAntigravityHostAccountHome(home))) {
       void host.releaseIdleSession(id, true).catch((error: unknown) => {
         console.warn('[antigravity] an idle chat kept the previous account:', error)
       })

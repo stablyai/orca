@@ -79,17 +79,27 @@ export async function checkAcpLaunchVersionOrCopy(
     : { command: launch.command, prefixArgs: launch.prefixArgs, check }
 }
 
-// Keyed by path; the binary's size and mtime tell an upgrade apart.
-const ownVersions = new Map<string, { identity: string; tooOld: Promise<boolean> }>()
+// Keyed by path; the binary's size and mtime tell an upgrade apart. A read that settled nothing
+// (timed out, blocked, missing) is asked again after a minute instead of standing for good.
+type OwnVersionRead = {
+  identity: string
+  tooOld: Promise<boolean | null>
+  settled?: boolean
+  retryAt?: number
+}
+const ownVersions = new Map<string, OwnVersionRead>()
+const UNSETTLED_RETRY_MS = 60_000
 
 /** Whether a person's own `program` is older than the spec's floor, so Orca's copy serves in its
  *  place; read once per binary. Without `probe` it answers only from an earlier read, starting
- *  nothing. */
+ *  nothing. With `onLateAnswer` it doesn't wait for a first read: it answers false now and calls
+ *  back once that read finds the program too old. */
 export async function acpOwnProgramTooOld(
   spec: Pick<AcpLaunchSpec, 'minimumVersions' | 'versionArgs'>,
   program: string,
   env: Record<string, string>,
-  { probe }: { probe: boolean }
+  { probe, onLateAnswer }: { probe: boolean; onLateAnswer?: () => void },
+  now: () => number = Date.now
 ): Promise<boolean> {
   if (!spec.minimumVersions) {
     return false
@@ -100,21 +110,38 @@ export async function acpOwnProgramTooOld(
   }
   const identity = `${stats.size}:${stats.mtimeMs}`
   const known = ownVersions.get(program)
-  if (known?.identity === identity) {
-    return known.tooOld
-  }
-  if (!probe) {
+  const current =
+    known?.identity === identity && (known.retryAt === undefined || now() < known.retryAt)
+  if (!current && !probe) {
     return false
   }
-  const tooOld = checkAgentCliVersion(
-    {
-      program,
-      prefixArgs: [...(spec.versionArgs ?? [])],
-      cwd: env.HOME ?? env.USERPROFILE ?? homedir(),
-      env
-    },
-    spec.minimumVersions
-  ).then((check) => check.status === 'tooOld')
-  ownVersions.set(program, { identity, tooOld })
-  return tooOld
+  const read: OwnVersionRead = current
+    ? known
+    : {
+        identity,
+        tooOld: checkAgentCliVersion(
+          {
+            program,
+            prefixArgs: [...(spec.versionArgs ?? [])],
+            cwd: env.HOME ?? env.USERPROFILE ?? homedir(),
+            env
+          },
+          spec.minimumVersions
+        ).then(
+          (check) => (check.status === 'tooOld' ? true : check.status === 'ready' ? false : null),
+          () => null
+        )
+      }
+  if (!current) {
+    ownVersions.set(program, read)
+    void read.tooOld.then((tooOld) => {
+      read.settled = true
+      read.retryAt = tooOld === null ? now() + UNSETTLED_RETRY_MS : undefined
+    })
+  }
+  if (onLateAnswer && !read.settled) {
+    void read.tooOld.then((tooOld) => tooOld && onLateAnswer())
+    return false
+  }
+  return (await read.tooOld) === true
 }

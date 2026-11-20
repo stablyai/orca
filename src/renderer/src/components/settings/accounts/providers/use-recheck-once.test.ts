@@ -33,3 +33,32 @@ it('tries again a second later when the recheck could not run yet', () => {
   vi.advanceTimersByTime(10_000)
   expect(recheck).toHaveBeenCalledTimes(2)
 })
+
+it('cancels when the wait ends first, and arms again for the next wait', () => {
+  vi.useFakeTimers()
+  const recheck = vi.fn(() => true)
+  const { rerender } = renderHook(({ waiting }) => useRecheckOnce(waiting, 8_000, recheck), {
+    initialProps: { waiting: true }
+  })
+  vi.advanceTimersByTime(4_000)
+  rerender({ waiting: false })
+  vi.advanceTimersByTime(10_000)
+  expect(recheck).not.toHaveBeenCalled()
+
+  rerender({ waiting: true })
+  vi.advanceTimersByTime(8_000)
+  expect(recheck).toHaveBeenCalledTimes(1)
+  rerender({ waiting: false })
+  rerender({ waiting: true })
+  vi.advanceTimersByTime(8_000)
+  expect(recheck).toHaveBeenCalledTimes(2)
+})
+
+it('stops on unmount', () => {
+  vi.useFakeTimers()
+  const recheck = vi.fn(() => true)
+  const { unmount } = renderHook(() => useRecheckOnce(true, 8_000, recheck))
+  unmount()
+  vi.advanceTimersByTime(10_000)
+  expect(recheck).not.toHaveBeenCalled()
+})

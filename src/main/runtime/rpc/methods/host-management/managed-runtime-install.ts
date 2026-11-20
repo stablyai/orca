@@ -15,7 +15,6 @@ import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-pla
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { homedir } from 'node:os'
 import {
-  installedManagedAgentCommand,
   isManagedAgentCli,
   MANAGED_AGENT_CLI_IDS,
   managedAgentCli,
@@ -69,24 +68,31 @@ function agentCliInstallation(
     if (found === null || isPathInsideOrEqual(managedRuntime.root(dataDirectory), found)) {
       return false
     }
-    // An own program below the floor runs no chat while Orca's copy may stand in, so the copy is
-    // what chats run and what Settings and the chip name.
+    // An own program below the floor runs no chat while Orca's copy may stand in: Settings and
+    // the chip name the copy, or offer to install it. The first read doesn't hold the status.
     return !(
       spec &&
       managedCopyMayRun(agent, runtime) &&
-      installedManagedAgentCommand(agent) !== null &&
-      (await acpOwnProgramTooOld(spec, found, env, { probe: true }))
+      (await acpOwnProgramTooOld(spec, found, env, {
+        probe: true,
+        onLateAnswer: () => installation.factsChanged()
+      }))
     )
   }
-  return new ManagedRuntimeInstallation(agent, managedRuntime, {
-    dataDirectory,
-    program: 'cli',
-    findExternal,
-    updatesEnabled: () => managedCopyMayRun(agent, runtime),
-    onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
-    // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.
-    fence: (work) => stopStructuredAgentChats(agent, managedRuntime.label).then(work)
-  })
+  const installation: ManagedRuntimeInstallation = new ManagedRuntimeInstallation(
+    agent,
+    managedRuntime,
+    {
+      dataDirectory,
+      program: 'cli',
+      findExternal,
+      updatesEnabled: () => managedCopyMayRun(agent, runtime),
+      onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
+      // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.
+      fence: (work) => stopStructuredAgentChats(agent, managedRuntime.label).then(work)
+    }
+  )
+  return installation
 }
 
 /** Each installation reclaims stale releases when created, so create them every launch, not only when a client asks. */

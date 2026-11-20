@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -62,3 +62,25 @@ it("reads an own program's version once per binary, and never starts it without 
     expect(await acpOwnProgramTooOld(spec, own, env, { probe: false })).toBe(true)
   }
 })
+
+it.skipIf(process.platform === 'win32')(
+  'asks again after a minute when a version read settled nothing, instead of keeping "not too old"',
+  async () => {
+    folder = mkdtempSync(join(tmpdir(), 'own-agy-'))
+    const own = join(folder, 'agy')
+    const count = join(folder, 'count')
+    writeFileSync(own, `#!/bin/sh\necho x >> '${count}'\nexit 1\n`, { mode: 0o755 })
+    const env: Record<string, string> = { PATH: process.env.PATH ?? '' }
+    const spec = { minimumVersions: ['1.5.5'] }
+    let now = 1_000
+    const ask = () => acpOwnProgramTooOld(spec, own, env, { probe: true }, () => now)
+    const reads = () => readFileSync(count, 'utf8').split('\n').filter(Boolean).length
+
+    expect(await ask()).toBe(false)
+    expect(await ask()).toBe(false)
+    expect(reads()).toBe(1)
+    now += 61_000
+    expect(await ask()).toBe(false)
+    expect(reads()).toBe(2)
+  }
+)
