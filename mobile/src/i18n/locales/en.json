@@ -5660,6 +5660,12 @@
     },
     "chat": {
       "nothingToReport": "Nothing to report"
+    },
+    "waits": {
+      "cancel": "Cancel",
+      "cancelNamed": "Cancel waiting for {{name}}",
+      "noDeadline": "No deadline",
+      "until": "Until {{time}}"
     }
   },
   "mobileWebShell": {

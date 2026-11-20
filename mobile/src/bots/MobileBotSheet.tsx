@@ -122,6 +122,7 @@ export function MobileBotSheet(props: {
           client={props.client}
           bot={bot}
           rows={props.routeBot.activity?.automations ?? null}
+          waits={props.routeBot.activity?.waits}
           showToast={props.showToast}
           onNewAutomation={props.onNewAutomation}
           online={props.online}
