@@ -45,6 +45,7 @@ async function listedTabs(client: RuntimeClient, worktree: string) {
 }
 
 test('restored serve browser tabs start only when a client opens them', async () => {
+  // Two serve restarts and lazy Chromium startup run in this lifecycle.
   test.setTimeout(300_000)
   const page = await startPage()
   const host = await startHeadlessOracleHost('electron')
