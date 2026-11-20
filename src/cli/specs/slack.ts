@@ -45,14 +45,15 @@ export const SLACK_COMMAND_SPECS: CommandSpec[] = [
     path: ['slack', 'read'],
     summary: 'Read recent messages in a Slack channel or thread, oldest first',
     usage:
-      'orca slack read <place> [--limit <n>] [--before <ref>] [--download <file id> [--out <path>]] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'ref', 'limit', 'before', 'download', 'out'],
+      'orca slack read <place> [--limit <n>] [--before <ref>] [--only] [--download <file id> [--out <path>]] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'ref', 'limit', 'before', 'only', 'download', 'out'],
     positionalArgs: ['ref'],
     notes: [
       AS_BOT,
       PLACE,
       '--limit is 1 to 100 (default 20). When older messages remain, the output ends with the --before ref that reads them.',
-      'A message lists its files by id; `read <message> --download <id>` saves one (up to 640 KB) to --out, or under its own name here.'
+      'A message lists its files by id; `read <message> --download <id>` saves one (up to 640 KB) to --out, or under its own name here.',
+      '--only reads just the message a ref names, with the messages shared in it and its link previews.'
     ]
   },
   {

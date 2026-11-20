@@ -15,6 +15,7 @@ export const CONNECTOR_PROMPT_KINDS = ['approval', 'question'] as const
 // send may come in the same poll, and the machine runs them with it as one turn. ownDmChats: a bot
 // start for a DM that ran in the bot's Chat opens the DM a chat of its own. askerNote: Orca's lines on
 // where a bot was asked come as asker.note, apart from the asker's words.
+// messageParts: askers, context items and read messages may carry files, shared messages and links.
 export const CONNECTOR_FEATURES = [
   'answer',
   'cancel',
@@ -27,7 +28,8 @@ export const CONNECTOR_FEATURES = [
   'threadCatchUp',
   'batchedSends',
   'ownDmChats',
-  'askerNote'
+  'askerNote',
+  'messageParts'
 ] as const
 
 // The cloud uses only what a machine lists; an entry it does not know is ignored, not refused.
@@ -178,6 +180,8 @@ export const CONNECTOR_CLOUD_FEATURES = [
   // upload URL, attach takes staged `files`, and read's `stream` answers a link to the bytes.
   'files.direct'
 ] as const
+// Only a cloud that reads the named message and its parts advertises this capability.
+export const CONNECTOR_CLOUD_MESSAGE_PARTS_FEATURE = 'messageParts'
 // Hooks can be made. Listed only while webhooks are switched on and the cloud's sealing keys are valid.
 export const CONNECTOR_CLOUD_WEBHOOKS_FEATURE = 'webhooks'
 // The cloud reads a prompt's raisedBy and routes or masks it by it, so a bot link's prompts from turns

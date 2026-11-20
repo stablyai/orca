@@ -1,9 +1,8 @@
-import { ConnectorAnswerFields } from '../connector-prompt-contract'
+import { ConnectorAnswerFields, type ConnectorPrompt } from '../connector-prompt-contract'
 import type { ConnectorTurnActivity } from './connector-turn-activity-contract'
 // Mirror of cloud/packages/connector-contract/src for the machine side of the Orca Cloud connector.
 // Copies, not imports: the CLI compiles src/shared with rootDir src, so it can't reach cloud files.
 import * as z from 'zod'
-import type { ConnectorPrompt } from '../connector-prompt-contract'
 export * from '../connector-prompt-contract'
 export * from './connector-failure-contract'
 import type { ConnectorFailure } from './connector-failure-contract'
@@ -39,7 +38,8 @@ export const CONNECTOR_FEATURES = [
   'threadCatchUp',
   'batchedSends',
   'ownDmChats',
-  'askerNote'
+  'askerNote',
+  'messageParts'
 ] as const
 
 export const CONNECTOR_CLIENT_LIMITS = {

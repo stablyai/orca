@@ -35,7 +35,9 @@ const FEATURES = [
   'batchedSends',
   'ownDmChats',
   'askerNote',
-  CONNECTOR_REPLIES_OUTBOX_FEATURE
+  CONNECTOR_REPLIES_OUTBOX_FEATURE,
+  // An asker, its context and read messages may carry files, shared messages and link previews.
+  'messageParts'
 ]
 const PROMPT_KINDS = ['approval', 'question']
 // Listed by hand: a source joins only once this build's seam handles its conversations.

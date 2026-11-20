@@ -37,7 +37,9 @@ export const CONNECTOR_CLOUD_FEATURES = [
   // and post its `files`; read's `stream` answers a link to the bytes. No Orca size cap.
   'files.direct',
   // The owner's Orca-typed messages post into the chat's Slack thread (connector-slack-mirror-contract.ts).
-  'slack.mirror'
+  'slack.mirror',
+  // read's `only`: one message by its ref, with the files, shared messages and link previews it holds.
+  'messageParts'
 ] as const
 export type ConnectorCloudFeature = (typeof CONNECTOR_CLOUD_FEATURES)[number]
 

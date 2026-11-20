@@ -1,6 +1,7 @@
 // Who asked a bot, as Orca Cloud resolved them: the machine side's mirror of
 // cloud/packages/connector-contract's asker (see connector-cloud-contract.ts).
 import * as z from 'zod'
+import { MessagePartsFields } from './connector-message-parts'
 
 export const CONNECTOR_ASKER_PLACE_KINDS = [
   'direct_message',
@@ -20,15 +21,21 @@ const PersonFields = {
 
 /** What a bot reads before the request, each part under its own label. `bot` (a bot's post in the
  *  thread) and `more` (more was posted than fits) come only to a machine that lists threadCatchUp. */
+// From a cloud this machine lists messageParts to: a message's own ref and what it holds beyond its words.
+const MessageFields = {
+  messageRef: z.string().max(2048).optional().catch(undefined),
+  ...MessagePartsFields
+}
 export const ConnectorContextItem = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('earlier'), ...PersonFields, text: z.string() }),
-  z.object({ kind: z.literal('no_access'), ...PersonFields, text: z.string() }),
+  z.object({ kind: z.literal('earlier'), ...PersonFields, text: z.string(), ...MessageFields }),
+  z.object({ kind: z.literal('no_access'), ...PersonFields, text: z.string(), ...MessageFields }),
   z.object({ kind: z.literal('issue'), text: z.string() }),
   z.object({ kind: z.literal('unreadable') }),
   z.object({
     kind: z.literal('bot'),
     name: z.string().min(1).max(200).optional(),
-    text: z.string()
+    text: z.string(),
+    ...MessageFields
   }),
   z.object({ kind: z.literal('more') })
 ])
@@ -99,6 +106,8 @@ export const ConnectorAsker = z.object({
   via: ConnectorAskerVia,
   // Orca's own lines on where it was asked (GitHub: the branch, how to post there): the agent reads
   // them after the message, and the chat doesn't show them.
-  note: z.string().min(1).max(4000).optional().catch(undefined)
+  note: z.string().min(1).max(4000).optional().catch(undefined),
+  // What the message holds beyond its words: files, shared messages, link previews.
+  ...MessagePartsFields
 })
 export type ConnectorAsker = z.infer<typeof ConnectorAsker>
