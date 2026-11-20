@@ -132,6 +132,18 @@ describe('OrchestrationDbCompaction', () => {
     expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok', tasks: 1 })
   })
 
+  it('leaves no WAL behind when the runtime closes the file it is watching', async () => {
+    const file = legacyDatabase()
+    const orchestration = new OrchestrationDb(file)
+    orchestration.createTask({ runId: 'run_legacy_local', spec: 'written this session' })
+    const compaction = new OrchestrationDbCompaction(orchestration, file, () => true)
+    await compaction.tick()
+
+    orchestration.close()
+
+    expect(existsSync(`${file}-wal`)).toBe(false)
+  })
+
   it('converts a legacy file with little free space', async () => {
     const file = legacyDatabase(1)
     const { compaction } = await copiedWhileQuiet(file)

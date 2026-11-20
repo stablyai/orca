@@ -1,12 +1,9 @@
-import type { ChildProcess } from 'node:child_process'
-import { watch, type FSWatcher } from 'node:fs'
 import { link, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { spawnProcess } from '@orca/process-host'
 import Database from '../../../../sqlite/sync-database'
 import type { OrchestrationDb } from '../orchestration-db'
 import { refuseOrchestrationDbWritesForReplacement } from '../orchestration-db-file'
-import { compactionChildSource } from './orchestration-db-compaction-child-source'
+import { runCompactionChild, type CompactionChild } from './orchestration-db-compaction-child'
 import { renameFileWithWindowsRetryAsync } from '../../../../../shared/file-write/windows-retry-file-operations'
 import { syncDirectory } from '../../../../filesystem/durable-file-write'
 import { settleWithinMs } from '../../../../startup/quit/quit-teardown-deadline'
@@ -59,6 +56,7 @@ function attemptSpacingMs(attempts: number): number {
  */
 export class OrchestrationDbCompaction {
   private finished = false
+  private swapping = false
   private stopped = false
   private started = false
   private lastActivity: string | null = null
@@ -67,7 +65,7 @@ export class OrchestrationDbCompaction {
   private attempts = 0
   private lastAttemptAt = Number.NEGATIVE_INFINITY
   private diskShortAt = Number.NEGATIVE_INFINITY
-  private copying: ChildProcess | undefined
+  private copying: CompactionChild | undefined
   private ready: { stamp: string; at: number } | undefined
   // Read-only, opened on the first legacy minute and kept until the swap: its data_version moves with every
   // commit to the file, the runtime's included, and nothing else (the runtime's TEMP tables write, for one).
@@ -78,7 +76,15 @@ export class OrchestrationDbCompaction {
     private readonly filename: string,
     private readonly isEnabled: () => boolean,
     private readonly quietTicksNeeded = QUIET_TICKS
-  ) {}
+  ) {
+    // Before the runtime's connection closes: as the last one, it checkpoints and removes the WAL, which a
+    // read-only observer left open would stop. Only the swap keeps the observer past it.
+    orchestrationDb.onClose(() => {
+      if (!this.swapping) {
+        this.closeObserver()
+      }
+    })
+  }
 
   private get copyPath(): string {
     return `${this.filename}-compacted`
@@ -196,68 +202,26 @@ export class OrchestrationDbCompaction {
   }
 
   /** With a stamp, writes the copy and stops once a commit moves it; without, only truncates the WAL. */
-  private runChild(stamp: string | undefined, budgetMs: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      let child: ChildProcess
-      try {
-        child = spawnProcess({
-          program: process.execPath,
-          args: ['-e', compactionChildSource],
-          env: {
-            ...process.env,
-            ELECTRON_RUN_AS_NODE: '1',
-            ORCA_ORCHESTRATION_COMPACTION: JSON.stringify({
-              filename: this.filename,
-              target: stamp === undefined ? undefined : this.copyPath,
-              budgetMs
-            })
-          },
-          // Never written: the child stops itself when this end closes, so it can't outlive a killed app.
-          stdio: ['pipe', 'ignore', 'ignore']
-        })
-      } catch {
-        resolve(false)
-        return
+  private async runChild(stamp: string | undefined, budgetMs: number): Promise<boolean> {
+    const run = runCompactionChild({
+      filename: this.filename,
+      target: stamp === undefined ? undefined : this.copyPath,
+      budgetMs,
+      isStale: () => {
+        try {
+          return this.stamp() !== stamp
+        } catch {
+          // A closed database: nothing left to copy for.
+          return true
+        }
       }
-      this.copying = child
-      const budget = setTimeout(() => child.kill('SIGKILL'), budgetMs)
-      // A write makes the copy stale, so stop it then: its disk traffic can slow the runtime's later
-      // commits (seen on a busy Linux disk). Every commit touches the WAL; the stamp stays the judge.
-      let walWatch: FSWatcher | undefined
-      try {
-        walWatch =
-          stamp === undefined
-            ? undefined
-            : watch(`${this.filename}-wal`, () => {
-                let stale = true
-                try {
-                  stale = this.stamp() !== stamp
-                } catch {
-                  // A closed database: nothing left to copy for.
-                }
-                if (stale) {
-                  child.kill('SIGKILL')
-                }
-              })
-        walWatch?.on('error', () => walWatch?.close())
-      } catch {
-        // No events on this file system: the check after the copy still drops a stale one.
-      }
-      // Any exit, update installs included: a child left running would hold the app's executable open.
-      const killOnExit = (): void => {
-        child.kill('SIGKILL')
-      }
-      process.once('exit', killOnExit)
-      const done = (copied: boolean): void => {
-        clearTimeout(budget)
-        walWatch?.close()
-        process.off('exit', killOnExit)
-        this.copying = undefined
-        resolve(copied)
-      }
-      child.once('error', () => done(false))
-      child.once('close', (code) => done(code === 0))
     })
+    this.copying = run.child
+    try {
+      return await run.done
+    } finally {
+      this.copying = undefined
+    }
   }
 
   /** Stops a copy in progress; a finished copy stays for the quit swap. */
@@ -311,6 +275,7 @@ export class OrchestrationDbCompaction {
       }
       // From here on nothing else in this process can reach the file.
       refuseOrchestrationDbWritesForReplacement(this.filename)
+      this.swapping = true
       const detached = detach()
       this.orchestrationDb.close()
       // No connection of this process but the observer is left, so the lock below needs no wait.
