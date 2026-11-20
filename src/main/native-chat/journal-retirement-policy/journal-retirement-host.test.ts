@@ -12,7 +12,7 @@ it('reports the cleanup outcome through the usage-event client, and refuses anyt
   const { installJournalRetirementHost } = await import('./journal-retirement-policy-live-update')
   const {
     legacyJournalRetirementEvent,
-    reportLegacyJournalRetirement,
+    sendLegacyJournalRetirement,
     setLegacyJournalRetirementHost
   } = await import('../agent-session-journal/journal-legacy-retirement-outcome')
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -34,14 +34,12 @@ it('reports the cleanup outcome through the usage-event client, and refuses anyt
     activeMs: null,
     elapsedMs: null
   })
-  reportLegacyJournalRetirement(event, true)
-  await vi.waitFor(() => expect(track).toHaveBeenCalledWith('legacy_journal_retirement', event))
-  // A path, or any field the schema doesn't name, never reaches the client. The valid event sent
-  // after it arrives second, so waiting for it covers the malformed one too.
+  await sendLegacyJournalRetirement(event)
+  expect(track).toHaveBeenCalledWith('legacy_journal_retirement', event)
+  // A path, or any field the schema doesn't name, never reaches the client.
   const malformed = { ...event, path: '/Users/someone/journal.db' }
-  reportLegacyJournalRetirement(malformed, true)
-  reportLegacyJournalRetirement(event, true)
-  await vi.waitFor(() => expect(track).toHaveBeenCalledTimes(2))
+  expect(await sendLegacyJournalRetirement(malformed)).toBe(false)
+  expect(track).toHaveBeenCalledTimes(1)
   expect(track).not.toHaveBeenCalledWith(
     'legacy_journal_retirement',
     expect.objectContaining({ path: expect.anything() })

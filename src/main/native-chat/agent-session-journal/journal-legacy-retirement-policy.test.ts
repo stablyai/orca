@@ -22,7 +22,7 @@ const companions = (filename: string) =>
 it('in report mode proves once, keeps the original, and deletes only once enforcement is allowed', async () => {
   const events: { outcome: string }[] = []
   setLegacyJournalRetirementHost({
-    report: async (event) => events.push(event),
+    report: async (event) => events.push(event) > 0,
     mode: async () => ({ mode: 'report', revision: 0 })
   })
   cleanup.push(() => setLegacyJournalRetirementHost(undefined))
@@ -137,7 +137,7 @@ it('never resumes progress an older build saved, or saves progress an older buil
 it('reports a refusal an older build saved, and full counts for a walk that resumed', async () => {
   const events: Record<string, unknown>[] = []
   setLegacyJournalRetirementHost({
-    report: async (event) => events.push(event),
+    report: async (event) => events.push(event) > 0,
     mode: async () => ({ mode: 'report', revision: 0 })
   })
   cleanup.push(() => setLegacyJournalRetirementHost(undefined))
@@ -250,4 +250,24 @@ it('keeps the original when permission is withdrawn before the commit or right b
     await withdrawn.launch('1.0.1', true, undefined, undefined, mode).run()
     expect(companions(withdrawn.filename).includes(withdrawn.filename)).toBe(kept)
   }
+})
+
+it('sends an outcome the usage client dropped again on a later launch, then never again', async () => {
+  const sent: string[] = []
+  let accepts = false
+  setLegacyJournalRetirementHost({
+    report: async (event) => {
+      sent.push(event.outcome)
+      return accepts
+    },
+    mode: async () => ({ mode: 'report', revision: 0 })
+  })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const held = await profile()
+  await held.launch('1.0.1', true, undefined, undefined, legacyJournalRetirementMode).run()
+  accepts = true
+  await held.launch('1.0.1', true, undefined, undefined, legacyJournalRetirementMode).run()
+  await held.launch('1.0.1', true, undefined, undefined, legacyJournalRetirementMode).run()
+  expect(sent).toEqual(['proof_complete', 'proof_complete'])
 })

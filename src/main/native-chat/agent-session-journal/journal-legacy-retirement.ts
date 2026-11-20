@@ -109,7 +109,11 @@ export class JournalLegacyRetirement {
         await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }).catch(() => {})
       } else {
         await this.outcome(
-          legacyProofFailureOutcome(error, this.proof.walked.counts, this.proof.finished)
+          legacyProofFailureOutcome(
+            error,
+            this.proof.walked.counts,
+            this.proof.finished && this.policy.mode === 'enforce'
+          )
         ).catch(() => {})
       }
       this.later()
@@ -185,8 +189,11 @@ export class JournalLegacyRetirement {
     this.proof.observe(observation)
     this.proof.resume(saved.retirement, observation)
     const started = performance.now()
-    await this.proof.run(observation)
-    this.activeMs += performance.now() - started
+    try {
+      await this.proof.run(observation)
+    } finally {
+      this.activeMs += performance.now() - started
+    }
     // Every early return below waits out the backoff: no helper or full-sync commit each minute.
     if (!(await this.matches(observation))) {
       return this.later()

@@ -85,24 +85,26 @@ export function legacyJournalRetirementEvent(
   }
 }
 
-/** The local log line, every launch; `send` also reports it to the desktop. */
-export function reportLegacyJournalRetirement(
-  event: LegacyJournalRetirementEvent,
-  send: boolean
-): void {
+/** The local log line: no content, paths or ids, like the event. */
+function logLegacyJournalRetirement(event: LegacyJournalRetirementEvent): void {
   console.warn(
     `[agent-session-journal] old chat journal: ${event.outcome}` +
       ` (reason ${event.reason}, defer ${event.defer}, error ${event.error}, mode ${event.mode} r${event.policy_revision},` +
       ` ${event.completeness}${event.resumed ? ', resumed' : ''}, chats ${event.chats_bucket},` +
       ` size ${event.source_bytes_bucket}, took ${event.active_ms_bucket})`
   )
-  if (!send) {
-    return
-  }
-  // Reporting never holds up or fails the cleanup.
+}
+
+/** True only when the usage client took the event (consent given, under its limits). */
+export async function sendLegacyJournalRetirement(
+  event: LegacyJournalRetirementEvent
+): Promise<boolean> {
+  // Reporting never fails the cleanup.
   try {
-    void host?.report(event).catch(() => {})
-  } catch {}
+    return (await host?.report(event)) === true
+  } catch {
+    return false
+  }
 }
 
 function countBucket(count: number): (typeof LEGACY_JOURNAL_RETIREMENT_COUNT_BUCKETS)[number] {
@@ -205,14 +207,13 @@ export class LegacyJournalRetirementReporter {
       event.policy_revision,
       this.version
     ])
-    // Without a host nothing goes out, so nothing is marked reported for the desktop to skip.
-    const send = host !== undefined && signature !== this.last
     // Logged once per launch for each distinct outcome, however often a retry repeats it.
-    if (send || !this.logged.has(signature)) {
+    if (!this.logged.has(signature)) {
       this.logged.add(signature)
-      reportLegacyJournalRetirement(event, send)
+      logLegacyJournalRetirement(event)
     }
-    if (send) {
+    // Marked reported only once the usage client took it, so a dropped event is sent again later.
+    if (signature !== this.last && (await sendLegacyJournalRetirement(event))) {
       this.last = signature
       await this.writer.maintain({ kind: 'legacy-retirement-reported', value: signature })
     }
