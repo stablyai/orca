@@ -11,6 +11,7 @@ import type {
 import type { MainHttpClient } from '../network/http-client'
 import { RevisionedState } from '../runtime/events/revisioned-state'
 import {
+  linkedRuntimeRelease,
   linkRuntimeRelease,
   reclaimRuntimeReleases,
   resolveInstalledRuntimeRelease,
@@ -20,6 +21,7 @@ import {
   type ReportedRuntimeRelease
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
+import { refreshRuntimePin } from './managed-runtime-latest-release'
 
 const DEADLINE_MS = 45 * 60_000
 const AUTO_UPDATE_RETRY_MS = 60 * 60_000
@@ -54,6 +56,7 @@ export class ManagedRuntimeInstallation {
   private facts: { phase: string; read: Promise<InstalledFacts> } | null = null
   /** One attempt per release per hour, so a failing update isn't redownloaded on every use. */
   private lastAutoUpdate: { version: string; at: number } | null = null
+  private reported: ReportedRuntimeRelease | null = null
 
   constructor(
     private readonly agent: string,
@@ -93,7 +96,7 @@ export class ManagedRuntimeInstallation {
     const pin = this.runtime.pin()
     const { release, broken, unreadable } = resolveInstalledRuntimeRelease(this.root, pin)
     if (!unreadable) {
-      await this.report(release?.folder ?? null)
+      void this.report(release?.folder ?? null)
     }
     // Unreadable is not absent; preserve clients’ last known installation state.
     if (unreadable && !release?.current) {
@@ -231,7 +234,7 @@ export class ManagedRuntimeInstallation {
       ? ((await this.facts?.read.catch(() => null))?.installedVersion ?? null)
       : null
     try {
-      await this.runtime.refreshPin?.(signal)
+      await refreshRuntimePin(this.runtime, signal)
       const pin = this.runtime.pin()
       if (!pin) {
         throw new Error(unavailableText(this.runtime.label))
@@ -290,20 +293,28 @@ export class ManagedRuntimeInstallation {
       console.warn(`[managed-runtime] ${this.agent} releases unreadable; not reclaiming this run`)
       return
     }
-    // Launches find the release now; terminals get the link once it follows the release.
-    this.deps.onRelease?.(release && { folder: release.folder, link: null })
+    void this.report(release?.folder ?? null)
     if (release) {
       await this.link(release.folder)
+      await this.report(release.folder)
     }
-    await this.report(release?.folder ?? null)
     await this.reclaimOlderThan(release?.version ?? null, null)
   }
 
+  /** Launches learn the release before any await; the terminal link follows once it is confirmed. */
   private async report(folder: string | null): Promise<void> {
-    if (this.deps.onRelease) {
-      this.deps.onRelease(
-        folder === null ? null : { folder, link: await runtimeReleaseLink(this.root, folder) }
-      )
+    const { onRelease } = this.deps
+    if (!onRelease) {
+      return
+    }
+    const known = this.reported?.folder === folder ? this.reported.link : null
+    this.reported = folder === null ? null : { folder, link: known }
+    onRelease(this.reported)
+    const link = folder === null ? null : await runtimeReleaseLink(this.root, folder)
+    // A newer read may have reported another release meanwhile.
+    if (folder !== null && this.reported?.folder === folder && this.reported.link !== link) {
+      this.reported = { folder, link }
+      onRelease(this.reported)
     }
   }
 
@@ -314,9 +325,10 @@ export class ManagedRuntimeInstallation {
     })
   }
 
-  /** Keep the release launches resolve to and the one running chats may still use. */
+  /** Keep the release launches resolve to, the one running chats may still use, and the one terminals' link reaches. */
   private async reclaimOlderThan(current: string | null, previous: string | null): Promise<void> {
-    const keep = [current, previous, RUNTIME_RELEASE_LINK].filter((name) => name !== null)
+    const linked = await linkedRuntimeRelease(this.root)
+    const keep = [current, previous, RUNTIME_RELEASE_LINK, linked].filter((name) => name !== null)
     const failed = await reclaimRuntimeReleases(this.root, keep).catch((error: unknown) => [
       String(error)
     ])

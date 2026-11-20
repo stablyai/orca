@@ -133,14 +133,20 @@ export function resolveInstalledRuntimeRelease(
   }
 }
 
+/** The release folder name the link points to; null when there is no link into `root`. */
+export async function linkedRuntimeRelease(root: string): Promise<string | null> {
+  const [linked, real] = await Promise.all([
+    realpath(join(root, RUNTIME_RELEASE_LINK)).catch(() => null),
+    realpath(root).catch(() => null)
+  ])
+  return linked !== null && dirname(linked) === real ? basename(linked) : null
+}
+
 /** The release link when it follows `folder`; a shell holding it outlives the release it started with. */
 export async function runtimeReleaseLink(root: string, folder: string): Promise<string | null> {
-  const link = join(root, RUNTIME_RELEASE_LINK)
-  const [linked, real] = await Promise.all([
-    realpath(link).catch(() => null),
-    realpath(folder).catch(() => null)
-  ])
-  return linked !== null && linked === real ? link : null
+  return (await linkedRuntimeRelease(root)) === basename(folder)
+    ? join(root, RUNTIME_RELEASE_LINK)
+    : null
 }
 
 /** Exclusive writer only: point the release link at `folder`, replacing it in one rename where the OS allows. */

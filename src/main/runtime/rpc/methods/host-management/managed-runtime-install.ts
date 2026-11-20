@@ -31,6 +31,7 @@ import {
 import { resolveCliCommandAsync } from '../../../../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import { hasExplicitTuiLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import {
+  isUnderWindowsDriveMount,
   readGuestWindowsDriveMountsAsync,
   withoutWindowsDriveMountDirs
 } from '../../../../wsl/filesystem/wsl-guest-windows-drive-path'
@@ -118,13 +119,16 @@ function agentCliInstallation(
       (dirs.length > 0 ? [path, ...dirs].filter(Boolean).join(delimiter) : path) ??
       process.env.PATH ??
       ''
+    // A WSL host can't run a Windows-drive copy, so launches never find one and neither does this.
+    const mounts = await readGuestWindowsDriveMountsAsync()
     const resolved = await resolveCliCommandAsync(spec?.command ?? agent, {
-      // A WSL host can't run a Windows-drive copy, so launches never find one and neither does this.
-      pathEnv: withoutWindowsDriveMountDirs(searchPath, await readGuestWindowsDriveMountsAsync()),
+      pathEnv: withoutWindowsDriveMountDirs(searchPath, mounts),
       ...(homePath ? { homePath } : {})
     })
     return (
-      isAbsolute(resolved) && !isPathInsideOrEqual(managedRuntime.root(dataDirectory), resolved)
+      isAbsolute(resolved) &&
+      !isUnderWindowsDriveMount(resolved, mounts) &&
+      !isPathInsideOrEqual(managedRuntime.root(dataDirectory), resolved)
     )
   }
   return new ManagedRuntimeInstallation(agent, managedRuntime, {
