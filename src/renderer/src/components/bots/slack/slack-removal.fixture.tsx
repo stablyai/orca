@@ -60,3 +60,17 @@ export const missingApp = defineFixture({
     </ConfirmationDialogProvider>
   )
 })
+
+export const missingAppActions = defineFixture({
+  ...missingApp,
+  interact: (frame) => {
+    frame.querySelector('button[aria-label="Slack actions"]')?.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        button: 0,
+        bubbles: true,
+        ctrlKey: false,
+        pointerType: 'mouse'
+      })
+    )
+  }
+})
