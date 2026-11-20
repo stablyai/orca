@@ -191,7 +191,7 @@ export class RelayOriginPool {
     if (!this.retirement.adopt(origin, message)) {
       return
     }
-    this.options.onStatus('draining')
+    this.options.onStatus(origin.hasLiveControl() ? 'draining' : 'offline')
     if (!this.rotationPromise && !this.drainRetry.pending) {
       this.recovery.begin()
       this.rotationPromise = this.resolveDrainTarget(origin, message).finally(() => {
