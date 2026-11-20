@@ -63,28 +63,26 @@ function conversationActions(worktree: Worktree, t: Translate): MenuAction[] {
         })
     })
   }
-  // The project's own checkout can't be archived or deleted; only its worktrees can.
+  actions.push({
+    key: 'archive',
+    label: t('zotz.sidebar.archive', 'Archive'),
+    icon: Archive,
+    separatorBefore: true,
+    run: () => void archiveZotzConversation(worktree, 'user')
+  })
+  // The project's own checkout can be archived but never deleted; only its worktrees can.
   if (!worktree.isMainWorktree) {
-    actions.push(
-      {
-        key: 'archive',
-        label: t('zotz.sidebar.archive', 'Archive'),
-        icon: Archive,
-        separatorBefore: true,
-        run: () => archiveZotzConversation(worktree, 'user')
-      },
-      {
-        key: 'delete',
-        label: t('zotz.sidebar.delete', 'Delete'),
-        icon: Trash2,
-        destructive: true,
-        run: () =>
-          runWorktreeDelete(worktree.id, {
-            expectedInstanceId: worktree.instanceId,
-            ...(worktree.hostId ? { expectedHostId: worktree.hostId } : {})
-          })
-      }
-    )
+    actions.push({
+      key: 'delete',
+      label: t('zotz.sidebar.delete', 'Delete'),
+      icon: Trash2,
+      destructive: true,
+      run: () =>
+        runWorktreeDelete(worktree.id, {
+          expectedInstanceId: worktree.instanceId,
+          ...(worktree.hostId ? { expectedHostId: worktree.hostId } : {})
+        })
+    })
   }
   return actions
 }

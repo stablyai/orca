@@ -11,18 +11,32 @@ export function onZotzShowArchived(listener: () => void): () => void {
 }
 
 export function setZotzConversationArchived(
-  worktree: Pick<Worktree, 'id'>,
+  worktree: Pick<Worktree, 'id' | 'hostId'>,
   archived: boolean
-): void {
-  void useAppStore.getState().updateWorktreeMeta(worktree.id, { isArchived: archived })
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return useAppStore
+    .getState()
+    .updateWorktreeMeta(
+      worktree.id,
+      { isArchived: archived },
+      worktree.hostId ? { executionHostId: worktree.hostId } : undefined
+    )
 }
 
 /** Archives with an Undo and a way to the archived list, like Conductor after a merge. */
-export function archiveZotzConversation(
-  worktree: Pick<Worktree, 'id' | 'displayName'>,
+export async function archiveZotzConversation(
+  worktree: Pick<Worktree, 'id' | 'hostId' | 'displayName'>,
   reason: 'user' | 'merged'
-): void {
-  setZotzConversationArchived(worktree, true)
+): Promise<void> {
+  const result = await setZotzConversationArchived(worktree, true)
+  if (!result.ok) {
+    toast.error(
+      translate('zotz.sidebar.archiveFailed', 'Could not archive: {{error}}', {
+        error: result.error
+      })
+    )
+    return
+  }
   const title =
     reason === 'merged'
       ? translate('zotz.sidebar.archivedMerged', 'Merged and archived: {{name}}', {
@@ -32,7 +46,7 @@ export function archiveZotzConversation(
   toast.success(title, {
     action: {
       label: translate('zotz.sidebar.undo', 'Undo'),
-      onClick: () => setZotzConversationArchived(worktree, false)
+      onClick: () => void setZotzConversationArchived(worktree, false)
     },
     cancel: {
       label: translate('zotz.sidebar.viewArchived', 'View archived'),

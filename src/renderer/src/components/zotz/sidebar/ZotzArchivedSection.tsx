@@ -21,7 +21,7 @@ export function ZotzArchivedSection(): React.JSX.Element | null {
         .filter((repo) => !isRepoHidden(repo))
         .flatMap((repo) =>
           (worktreesByRepo[repo.id] ?? [])
-            .filter((worktree) => worktree.isArchived && !worktree.isMainWorktree)
+            .filter((worktree) => worktree.isArchived)
             .map((worktree) => ({ worktree, repo }))
         )
         .sort((a, b) => b.worktree.lastActivityAt - a.worktree.lastActivityAt),
@@ -62,7 +62,7 @@ export function ZotzArchivedSection(): React.JSX.Element | null {
                 aria-label={t('zotz.sidebar.restore', 'Restore {{name}}', {
                   name: worktree.displayName
                 })}
-                onClick={() => setZotzConversationArchived(worktree, false)}
+                onClick={() => void setZotzConversationArchived(worktree, false)}
               >
                 <ArchiveRestore className="size-3.5" />
               </Button>

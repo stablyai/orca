@@ -83,7 +83,7 @@ function useArchiveOnMerge(worktree: Worktree | null, status: ZotzPrStatusKind |
       !worktree.isMainWorktree &&
       !worktree.isArchived
     ) {
-      archiveZotzConversation(worktree, 'merged')
+      void archiveZotzConversation(worktree, 'merged')
     }
   }, [worktree, status])
 }

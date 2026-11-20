@@ -636,3 +636,11 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - **Por qué esperó con RAM de sobra:** el tope de agentes simultáneos (4 con 32 GB, 2 con 16 GB) contaba a todos los agentes con sesión abierta, también los que esperaban respuesta. Con 4 chats abiertos, el quinto se quedaba en cola por `concurrency` aunque sobrara memoria.
 - **Decisión (Hugo, 2026-11-19): solo decide la RAM.** Se quitaron el tope por cantidad (`maxConcurrentAgents`) y el presupuesto del 70 % para agentes (`agentBudgetBytes`). Un agente entra si, después de su costo estimado, quedan libres `minFreeGb` (max(2 GB, 15 %)) y la presión es `ok`; si no, espera y arranca solo cuando se libera memoria (muestra cada 15 s mientras haya cola). La memoria disponible la reporta el sistema, así que incluye los procesos en segundo plano de los agentes.
 - Para que una ráfaga no llene la RAM: un agente admitido aparta durante 90 s lo que le falta de su estimación (estimación − lo medido), porque al arrancar mide poco. Antes la reserva se soltaba con la primera medición y el tope por cantidad tapaba el hueco.
+
+### 2026-11-19 — Archivar conversaciones principales y cola de memoria por servidor (`zotz/servidores-cola-y-archivar`)
+
+- Spec: [`SPEC-servidores-cola-y-archivar.md`](./SPEC-servidores-cola-y-archivar.md). Parte A en este PR; Parte B (cola de memoria de los servidores visible y controlable desde la laptop) en PRs siguientes.
+- **Archivar la conversación principal de un proyecto** (por ejemplo `uni` en la MSI): el menú ofrecía Archive y Delete solo fuera del checkout principal, así que para esa fila no existían. Ahora Archive también aparece en principales; Delete sigue bloqueado. La sección Archivadas ya lista las principales, y se restauran desde ahí.
+- `archiveZotzConversation` ignoraba el resultado de `updateWorktreeMeta` y avisaba "Conversation archived" aunque fallara. Ahora manda el host de la conversación y, si falla, muestra el error sin "Deshacer".
+- Sin cambio en `useArchiveOnMerge`: una principal nunca se archiva sola al hacer merge.
+- Sin verificar con la MSI real; se comprobó con la fixture `ZotzProjectSidebar:archivedMain`.
