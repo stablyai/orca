@@ -5,10 +5,12 @@ import { useTranslate } from '@/i18n/use-translate'
 
 export function SlackSetupPrepare({
   update,
+  workspace,
   onContinue,
   onClose
 }: {
   update: boolean
+  workspace: string
   onContinue: () => void
   onClose: () => void
 }): React.JSX.Element {
@@ -18,7 +20,8 @@ export function SlackSetupPrepare({
       <p className="text-sm">
         {t(
           'bots.slack.setup.prepare',
-          'Continue to create or update this bot’s Slack app, then approve it in Slack.'
+          'Continue to create or update this bot’s Slack app for {{workspace}}, then approve it in Slack.',
+          { workspace }
         )}
       </p>
       <DialogFooter>

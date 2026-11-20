@@ -30,7 +30,7 @@ const VERBS = [
 
 // As Orca Cloud answers: one entry per connected source, whatever its workspaces; Linear's find
 // searches a team's or workspace's issues.
-function capabilities(state: EvalHostState) {
+export function capabilities(state: EvalHostState) {
   const bot = state.bots[0]
   const verbs = Object.fromEntries(VERBS.map((verb) => [verb, { status: 'yes', actor: 'bot' }]))
   const linearVerbs = {
