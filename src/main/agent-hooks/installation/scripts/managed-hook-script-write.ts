@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto'
 import { grantDirAcl } from '../../../windows/windows-directory-acl'
 import { isPermissionError } from '../../../filesystem/permission-errors'
 import { renameOverLockedTarget } from './locked-executable-rename'
+import { isFromNewerManagedHookForm, withManagedHookForm } from './managed-hook-form'
 
 // Atomic replacement protects scripts being read by in-flight hooks.
 export function writeManagedScript(
@@ -20,10 +21,15 @@ export function writeManagedScript(
 ): void {
   const dir = dirname(scriptPath)
   mkdirSync(dir, { recursive: true })
+  content = withManagedHookForm(scriptPath, content)
 
   if (existsSync(scriptPath)) {
     try {
-      if (readFileSync(scriptPath).equals(Buffer.from(content))) {
+      const existing = readFileSync(scriptPath)
+      if (isFromNewerManagedHookForm(existing)) {
+        return
+      }
+      if (existing.equals(Buffer.from(content))) {
         if (process.platform !== 'win32') {
           chmodSync(scriptPath, 0o755)
         }

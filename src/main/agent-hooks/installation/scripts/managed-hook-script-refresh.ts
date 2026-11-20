@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { grantDirAclAsync } from '../../../windows/windows-directory-acl'
 import { isPermissionError } from '../../../filesystem/permission-errors'
 import { renameOverLockedTargetAsync } from './locked-executable-rename'
+import { isFromNewerManagedHookForm, withManagedHookForm } from './managed-hook-form'
 
 type ExistingScript = { exists: false } | { exists: true; content: Buffer | null }
 
@@ -97,9 +98,13 @@ async function writeManagedScriptAtomically(
   allowMissing: boolean,
   moveLockedTargetAside = false
 ): Promise<boolean> {
+  content = withManagedHookForm(scriptPath, content)
   const existing = await readExistingScript(scriptPath)
   if (!existing.exists && !allowMissing) {
     return false
+  }
+  if (existing.exists && existing.content && isFromNewerManagedHookForm(existing.content)) {
+    return true
   }
   if (existing.exists && existing.content?.equals(Buffer.from(content))) {
     if (process.platform !== 'win32') {

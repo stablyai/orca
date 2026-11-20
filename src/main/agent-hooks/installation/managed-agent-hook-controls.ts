@@ -23,6 +23,7 @@ import {
   type ManagedAgentHookInstaller,
   type ManagedAgentHookInstallOptions
 } from './managed-agent-hook-registry'
+import { isAgentHookOwnedByNewerBuild } from './scripts/managed-hook-form'
 
 type ManagedHookSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
@@ -123,6 +124,9 @@ async function refreshExistingManagedScripts(options: InstallOptions): Promise<v
       continue
     }
     try {
+      if (await isAgentHookOwnedByNewerBuild(agent)) {
+        continue
+      }
       await refresh()
     } catch (error) {
       console.error(`[agent-hooks] Failed to refresh ${agent} managed script:`, error)
@@ -171,6 +175,10 @@ export async function installManagedAgentHooks(
           'Agent status hooks were disabled before install completed.'
         )
       )
+      continue
+    }
+    if (await isAgentHookOwnedByNewerBuild(agent)) {
+      results.push(readStatus(agent))
       continue
     }
     const presence = presenceByAgent[agent]
@@ -234,13 +242,17 @@ export async function removeManagedAgentHooksAsync(
 }
 
 export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {
-  return MANAGED_AGENT_HOOK_STATUS_READERS.map(([agent, getStatus]) => {
-    try {
-      return getStatus()
-    } catch (error) {
-      return errorStatus(agent, error)
-    }
-  })
+  return MANAGED_AGENT_HOOK_STATUS_READERS.map(([agent]) => readStatus(agent))
+}
+
+// A newer build owns these hooks; report what it installed instead of rewriting it.
+function readStatus(agent: AgentHookTarget): AgentHookInstallStatus {
+  const reader = MANAGED_AGENT_HOOK_STATUS_READERS.find(([candidate]) => candidate === agent)
+  try {
+    return reader ? reader[1]() : errorStatus(agent, 'No status reader.')
+  } catch (error) {
+    return errorStatus(agent, error)
+  }
 }
 
 export async function applyAgentStatusHooksEnabled(

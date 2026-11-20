@@ -9,6 +9,7 @@ import {
   mkdirpRemote,
   dirnamePosix
 } from '../remote/hook-sftp-operations'
+import { isFromNewerManagedHookForm, withManagedHookForm } from './managed-hook-form'
 
 /** POSIX SSH targets only: paths and script payloads follow POSIX conventions. */
 export async function writeManagedScriptRemote(
@@ -18,8 +19,12 @@ export async function writeManagedScriptRemote(
 ): Promise<void> {
   const dir = dirnamePosix(remotePath)
   await mkdirpRemote(sftp, dir)
+  content = withManagedHookForm(remotePath, content)
   try {
     const existing = await readFile(sftp, remotePath)
+    if (isFromNewerManagedHookForm(existing)) {
+      return
+    }
     if (existing === content) {
       await chmod(sftp, remotePath, 0o755)
       return
