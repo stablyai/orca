@@ -20768,6 +20768,7 @@
       },
       "workspaceCleanup": {
         "enable": {
+          "title": "{{rule}} aktivieren?",
           "summary_one": "1 wird gelöscht",
           "summary_other": "{{count}} werden gelöscht",
           "keep": "Behalten",
@@ -20805,7 +20806,8 @@
           "cancelCurrent": "Abbrechen verhindert nicht, dass aktuelle Regeln einige dieser Arbeitsbereiche löschen.",
           "apply": "Anwenden",
           "keepTooLate": "{{name}} konnte nicht behalten werden, da das Löschen bereits begonnen hat. Regel nicht geändert.",
-          "proposalChanged": "Die Bereinigungsregeln wurden an anderer Stelle geändert. Prüfe die aktualisierten Regeln: {{rules}}"
+          "proposalChanged": "Die Bereinigungsregeln wurden an anderer Stelle geändert. Prüfe die aktualisierten Regeln: {{rules}}",
+          "title": "{{rule}} ändern?"
         },
         "rules": {
           "merged": "Zusammengeführte Arbeitsbereiche löschen",
