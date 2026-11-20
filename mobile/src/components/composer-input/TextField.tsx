@@ -76,6 +76,7 @@ export function TextField({
         <Pressable
           accessible={false}
           focusable={false}
+          tabIndex={-1}
           onPress={() => ownInputRef.current?.focus()}
           style={StyleSheet.absoluteFill}
         />
