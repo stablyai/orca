@@ -43,7 +43,8 @@ async function moveAndClick(
   locator: Locator,
   button: 'left' | 'right' = 'left',
   beforeClick?: () => Promise<void>,
-  offsetX?: number
+  offsetX?: number,
+  click = true
 ): Promise<void> {
   const box = await locator.boundingBox()
   if (!box) {
@@ -70,7 +71,9 @@ async function moveAndClick(
     await page.waitForTimeout(450)
   }
   await beforeClick?.()
-  await page.mouse.click(x, y, { button, delay: RECORDING ? 650 : 0 })
+  if (click) {
+    await page.mouse.click(x, y, { button, delay: RECORDING ? 650 : 0 })
+  }
   if (RECORDING) {
     // ast-grep-ignore: test-no-real-time-wait -- recording-only pause keeps the click result visible.
     await page.waitForTimeout(500)
@@ -82,19 +85,32 @@ async function rightClickPaste(
   target: Locator,
   preview?: Locator,
   screenshot?: string,
-  offsetX?: number
+  offsetX?: number,
+  beforeSelect?: () => Promise<void>,
+  selectPaste = true
 ): Promise<void> {
   await moveAndClick(page, target, 'right', undefined, offsetX)
   const paste = page.getByRole('menuitem', { name: /^Paste(?:\s|$)/ })
   await expect(paste).toBeVisible()
-  await moveAndClick(page, paste, 'left', async () => {
-    if (preview) {
-      await expect(preview).toBeVisible()
-    }
-    if (screenshot) {
-      await page.screenshot({ path: screenshot, animations: 'disabled' })
-    }
-  })
+  await moveAndClick(
+    page,
+    paste,
+    'left',
+    async () => {
+      if (preview) {
+        await expect(preview).toBeVisible()
+      }
+      await beforeSelect?.()
+      if (screenshot) {
+        await page.screenshot({ path: screenshot, animations: 'disabled' })
+      }
+    },
+    undefined,
+    selectPaste
+  )
+  if (!selectPaste) {
+    await page.keyboard.press('Escape')
+  }
 }
 
 test('pastes clipboard files and images through the explorer context menus', async ({
@@ -121,6 +137,29 @@ test('pastes clipboard files and images through the explorer context menus', asy
   const destinationRow = shell.getByRole('button', { name: 'destination', exact: true })
   await expect(destinationRow).toBeVisible()
   await destinationRow.click()
+
+  const openAppearanceSettings = async (): Promise<Locator> => {
+    await page.evaluate(() => {
+      const state = window.__store!.getState()
+      state.openSettingsTarget({ pane: 'appearance', repoId: null })
+      state.openSettingsPage()
+    })
+    const settings = page.locator('section[data-settings-section="appearance"]')
+    await expect(settings).toBeVisible()
+    await settings.getByRole('button', { name: 'Advanced', exact: true }).last().click()
+    return settings
+  }
+  const settings = await openAppearanceSettings()
+  const thumbnailToggle = settings.getByRole('switch', {
+    name: 'Show clipboard image previews'
+  })
+  await expect(thumbnailToggle).toBeChecked()
+  await thumbnailToggle.scrollIntoViewIfNeeded()
+  await page.screenshot({ path: testInfo.outputPath('appearance-setting.png') })
+  await thumbnailToggle.click()
+  await expect(thumbnailToggle).not.toBeChecked()
+  await page.evaluate(() => window.__store!.getState().closeSettingsPage())
+
   await page.screenshot({ path: testInfo.outputPath('before.png') })
   if (RECORDING) {
     await showVideoCursor(page)
@@ -132,6 +171,27 @@ test('pastes clipboard files and images through the explorer context menus', asy
   await expect.poll(() => page.evaluate(() => window.api.ui.clipboardHasImage())).toBe(true)
 
   const card = page.locator('[data-slot="hover-card-content"]')
+  await rightClickPaste(
+    page,
+    destinationRow,
+    undefined,
+    undefined,
+    undefined,
+    async () => {
+      await expect(card).toBeVisible()
+      await expect(card.getByRole('img')).toHaveCount(0)
+      await page.screenshot({ path: testInfo.outputPath('image-preview-disabled.png') })
+    },
+    false
+  )
+  const imageSetting = await openAppearanceSettings()
+  const imageThumbnailToggle = imageSetting.getByRole('switch', {
+    name: 'Show clipboard image previews'
+  })
+  await expect(imageThumbnailToggle).not.toBeChecked()
+  await imageThumbnailToggle.click()
+  await expect(imageThumbnailToggle).toBeChecked()
+  await page.evaluate(() => window.__store!.getState().closeSettingsPage())
   await rightClickPaste(
     page,
     destinationRow,

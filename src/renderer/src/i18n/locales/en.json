@@ -882,6 +882,10 @@
       "uiZoom": {
         "zoomOut": "Zoom out",
         "zoomIn": "Zoom in"
+      },
+      "pasteThumbnail": {
+        "title": "Show clipboard image previews",
+        "description": "Sample a small image preview when you hover over Paste in the file explorer."
       }
     },
     "browser": {
@@ -16399,7 +16403,8 @@
             "clipboardText": "Text",
             "selectAll": "Select All",
             "clipboardImage": "Image",
-            "clipboardImageTitle": "Clipboard image"
+            "clipboardImageTitle": "Clipboard image",
+            "clipboardThumbnailSettingHint": "You can disable the thumbnail in Appearance settings."
           },
           "FileExplorerKeyboardPaste": {
             "preferenceSaveFailed": "Could not save the confirmation preference.",

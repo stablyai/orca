@@ -70,6 +70,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   theme: 'system' | 'dark' | 'light'
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
+  /** Controls whether clipboard image previews are sampled for Explorer Paste hover cards. */
+  fileExplorerPasteThumbnailEnabled?: boolean
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
   appIcon: AppIconId

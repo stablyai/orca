@@ -5,14 +5,19 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { basename } from '@/lib/path'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import type { ClipboardPastePreview } from '../mutations/file-explorer-clipboard-import'
 
 type PastePreview = ClipboardPastePreview | { kind: 'text'; text: string }
 
 function ClipboardImagePreview(): React.JSX.Element {
   const t = useTranslate()
+  const enabled = useAppStore((s) => s.settings?.fileExplorerPasteThumbnailEnabled !== false)
   const [src, setSrc] = useState<string>()
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     let current = true
     void window.api.ui
       .readClipboardImageThumbnail()
@@ -25,13 +30,21 @@ function ClipboardImagePreview(): React.JSX.Element {
     return () => {
       current = false
     }
-  }, [])
+  }, [enabled])
   const alt = t(
     'auto.components.right.sidebar.FileExplorerPaste.clipboardImageTitle',
     'Clipboard image'
   )
-  return src ? (
-    <img src={src} alt={alt} className="mx-auto max-h-32 max-w-full object-contain" />
+  return enabled && src ? (
+    <div className="space-y-2">
+      <img src={src} alt={alt} className="mx-auto max-h-32 max-w-full object-contain" />
+      <p className="text-center text-muted-foreground">
+        {t(
+          'auto.components.right.sidebar.FileExplorerPaste.clipboardThumbnailSettingHint',
+          'You can disable the thumbnail in Appearance settings.'
+        )}
+      </p>
+    </div>
   ) : (
     <span className="flex items-center gap-2">
       <ImageIcon className="size-4" />
