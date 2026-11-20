@@ -21432,15 +21432,11 @@
       "copyAddress": "アドレスをコピー",
       "showDetails": "{{name}} のタスクと最新のメッセージを表示",
       "task": "タスク",
-      "asksYou": "あなたへの質問",
       "openFailed": "{{name}}: {{detail}}",
       "chatUnavailable": "このホストではチャットを開けません。もう一度お試しください。",
       "terminalExited": "このターミナルは終了しています。",
       "openOnHost": "{{host}} でこの Agent を開いてください。",
-      "cannotLocate": "このホストではこの Agent が見つかりません。もう一度お試しください。",
-      "latest": "最新",
-      "to": "宛先",
-      "from": "送信元"
+      "cannotLocate": "このホストではこの Agent が見つかりません。もう一度お試しください。"
     },
     "linearWorkspacePicker": {
       "search": "Linear ワークスペースを検索",

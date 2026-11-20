@@ -245,15 +245,13 @@
       "removeHost": "Remove host",
       "saveHost": "Save host",
       "goBack": "Go back",
-      "help": "Change the display name or connection address. Leave the name empty to use the name the host reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same host is reachable at a different IP (for example home LAN vs Tailscale).",
       "name": "Name",
       "hostNamePlaceholder": "Host name",
       "address": "Address",
-      "addressHint": "Accepts IP, host:port, or ws:// / wss://. A wss:// URL without a port uses 443. Bare addresses keep the current port (or 6768).",
       "connectionPreview": "Connects to {{endpoint}}",
-      "updateStepsServiceManager": "This server can't update itself. Update Orca on it with its package manager if it came from a .deb or .rpm, otherwise through the service manager that starts it.",
-      "updateStepsSourceCheckout": "This is a development build. Update it from its source checkout.",
-      "updateStepsServer": "This server can't update itself. Update Orca on the server computer, then restart the server.",
+      "updateStepsServiceManager": "Update it with its package manager or service manager.",
+      "updateStepsSourceCheckout": "Update it from its source checkout.",
+      "updateStepsServer": "Update Orca on the server, then restart it.",
       "orcaVersion": "Orca version"
     }
   },
@@ -432,8 +430,8 @@
       "emptyScope": "No past agent sessions in this scope.",
       "hideDetails": "Hide details",
       "showDetails": "Show details",
-      "dismissNotice": "Dismiss",
-      "loading": "Loading agent sessions…"
+      "loading": "Loading agent sessions…",
+      "showAllAgents": "Show all agents"
     },
     "resumeTarget": {
       "runtimeUnavailable": "Resume from history is not available in runtime-hosted workspaces.",
@@ -465,14 +463,16 @@
     },
     "viewControls": {
       "allAgents": "All agents",
-      "agentCount": "{{count}} agents",
       "lastUpdated": "Last updated",
       "created": "Created",
-      "agentsLabel": "Agents: {{agents}}",
-      "sortLabel": "Sort sessions: {{sort}}",
-      "agents": "Agents",
-      "sort": "Sort",
-      "noAgents": "No agents"
+      "agents": "Agents"
+    },
+    "filterSheet": {
+      "title": "Filter & sort",
+      "activeLabel": "Filter & sort, {{count}} active",
+      "reset": "Reset",
+      "done": "Done",
+      "sortBy": "Sort by"
     }
   },
   "diagnostics": {
@@ -1352,11 +1352,9 @@
     },
     "newWorkspaceSetupScriptField": {
       "label": "Setup script",
-      "hooks": "HOOKS",
-      "run": "Run",
       "skip": "Skip",
-      "runSetupCommand": "Run setup command",
-      "waitForSetup": "Wait for setup to complete before starting agent",
+      "runSetup": "Run setup",
+      "startAgentAfterSetup": "Start agent after setup",
       "waitForSetupSaveFailed": "Failed to save setup startup behavior."
     },
     "newWorkspaceSshConnectionField": {

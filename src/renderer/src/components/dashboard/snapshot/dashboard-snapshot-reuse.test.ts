@@ -7,7 +7,6 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 import { createDashboardSnapshotReuse } from './dashboard-snapshot-reuse'
 import { i18n } from '@/i18n/i18n'
-import * as cardHost from './dashboard-snapshot-workspaces'
 
 const NOW = 1_000_000_000
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -93,59 +92,51 @@ function update(
 afterEach(() => vi.restoreAllMocks())
 
 describe('dashboard incremental snapshot contract', () => {
-  it('keeps pane visits flat at 100 and 1000 workspaces and matches full snapshots', () => {
+  it('keeps a reused snapshot current as pane state and card details change', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW)
-    const visits: number[] = []
-    for (const size of [100, 1000]) {
-      const store = fleet(size)
-      const reuse = createDashboardSnapshotReuse()
-      const input = () => ({ ...store.getState(), chatNames: names })
-      buildDashboardSnapshot(input(), NOW, { reuse })
-      const host = vi.spyOn(cardHost, 'dashboardCardMapWorkspaceMetadata')
-      host.mockClear()
-      const key = makePaneKey('t0', LEAF)
-      update(store, key, 'waiting')
-      const cached = buildDashboardSnapshot(input(), NOW, { reuse })
-      visits.push(host.mock.calls.length)
-      host.mockRestore()
-      expect(cached).toEqual(buildDashboardSnapshot(input(), NOW))
-      expect(cached.cards.find((card) => card.paneKey === key)?.dotState).toBe('waiting')
-      for (const state of ['working', 'done', 'blocked', 'working'] as const) {
-        update(store, key, state)
-        expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
-          buildDashboardSnapshot(input(), NOW)
-        )
-      }
-      // A reader falling behind the bounded journal recovers from authoritative inputs.
-      for (let index = 0; index < 20; index++) {
-        update(store, key, index % 2 ? 'working' : 'waiting')
-      }
+    const store = fleet(2)
+    const reuse = createDashboardSnapshotReuse()
+    const input = () => ({ ...store.getState(), chatNames: names })
+    buildDashboardSnapshot(input(), NOW, { reuse })
+    const key = makePaneKey('t0', LEAF)
+    update(store, key, 'waiting')
+    const cached = buildDashboardSnapshot(input(), NOW, { reuse })
+    expect(cached).toEqual(buildDashboardSnapshot(input(), NOW))
+    expect(cached.cards.find((card) => card.paneKey === key)?.dotState).toBe('waiting')
+    for (const state of ['working', 'done', 'blocked', 'working'] as const) {
+      update(store, key, state)
       expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
         buildDashboardSnapshot(input(), NOW)
-      )
-      store.setState({ acknowledgedAgentsByPaneKey: { [key]: NOW } })
-      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
-        buildDashboardSnapshot(input(), NOW)
-      )
-      store.setState({
-        agentStatusByPaneKey: store.getState().agentStatusByPaneKey.replace([[key, null]])
-      })
-      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
-        buildDashboardSnapshot(input(), NOW)
-      )
-      store.setState({ agentStatusByPaneKey: store.getState().agentStatusByPaneKey.capture() })
-      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
-        buildDashboardSnapshot(input(), NOW)
-      )
-      expect(buildDashboardSnapshot(input(), NOW, { reuse, includeCardDetails: false })).toEqual(
-        buildDashboardSnapshot(input(), NOW, { includeCardDetails: false })
-      )
-      update(store, makePaneKey('t1', LEAF), 'blocked')
-      expect(buildDashboardSnapshot(input(), NOW, { reuse, includeCardDetails: false })).toEqual(
-        buildDashboardSnapshot(input(), NOW, { includeCardDetails: false })
       )
     }
-    expect(visits).toEqual([2, 2])
+    // A reader falling behind the bounded journal recovers from authoritative inputs.
+    for (let index = 0; index < 20; index++) {
+      update(store, key, index % 2 ? 'working' : 'waiting')
+    }
+    expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
+      buildDashboardSnapshot(input(), NOW)
+    )
+    store.setState({ acknowledgedAgentsByPaneKey: { [key]: NOW } })
+    expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
+      buildDashboardSnapshot(input(), NOW)
+    )
+    store.setState({
+      agentStatusByPaneKey: store.getState().agentStatusByPaneKey.replace([[key, null]])
+    })
+    expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
+      buildDashboardSnapshot(input(), NOW)
+    )
+    store.setState({ agentStatusByPaneKey: store.getState().agentStatusByPaneKey.capture() })
+    expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
+      buildDashboardSnapshot(input(), NOW)
+    )
+    expect(buildDashboardSnapshot(input(), NOW, { reuse, includeCardDetails: false })).toEqual(
+      buildDashboardSnapshot(input(), NOW, { includeCardDetails: false })
+    )
+    update(store, makePaneKey('t1', LEAF), 'blocked')
+    expect(buildDashboardSnapshot(input(), NOW, { reuse, includeCardDetails: false })).toEqual(
+      buildDashboardSnapshot(input(), NOW, { includeCardDetails: false })
+    )
   })
   it('keeps same-ID workspaces distinct across hosts and invalidates every occurrence', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW)

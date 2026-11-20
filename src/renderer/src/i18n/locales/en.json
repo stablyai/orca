@@ -21214,6 +21214,7 @@
         },
         "imageUnavailable": "Preview unavailable",
         "botFor": "For: {{detail}}",
+        "agents": "Agents",
         "bots": "Bots",
         "files": "Files",
         "skillPillLabel": "Skill: {{name}}",
@@ -21407,7 +21408,12 @@
         "stateUnverifiableCount": "{{value0}} with status unavailable",
         "stateWaitingCount": "{{value0}} waiting",
         "stateWorkingCount": "{{value0}} working",
-        "openAgent": "Open {{value0}}"
+        "openAgent": "Open {{value0}}",
+        "needsAttention_one": "{{count}} needs attention",
+        "needsAttention_other": "{{count}} need attention",
+        "workerBadge": "Worker",
+        "subagentBadge": "Subagent",
+        "nameInMessage": "Add {{name}} to message"
       },
       "jumpToLatest": "Jump to latest",
       "newRowsAnnouncement": "New messages arrived while you were away",
@@ -23601,17 +23607,19 @@
       "openChat": "Open its chat",
       "copiedAddress": "Copied {{name}}'s address",
       "copyAddress": "Copy address",
-      "showDetails": "Show {{name}}'s task and latest message",
+      "showDetails": "Show {{name}}'s task and reply",
       "task": "Task",
-      "asksYou": "Asks you",
       "openFailed": "{{name}}: {{detail}}",
       "chatUnavailable": "This host cannot open the chat. Try again.",
       "terminalExited": "This terminal has exited.",
       "openOnHost": "Open this agent on {{host}}.",
       "cannotLocate": "This host cannot locate this agent. Try again.",
-      "latest": "Latest",
-      "to": "To",
-      "from": "From"
+      "reply": "Reply",
+      "noReply": "No reply yet",
+      "taskFailed": "Failed",
+      "youPreview": "You: {{preview}}",
+      "composerUnavailable": "The message box can't take a mention now",
+      "mentionTip": "Mention {{name}}"
     },
     "orchestration": {
       "workerAutoClose": {
@@ -24589,6 +24597,13 @@
     "delete": "Delete"
   },
   "terminal": {
+    "recentImages": {
+      "pasted": "Pasted image",
+      "open": "Open preview",
+      "copyPath": "Copy path",
+      "setting": "Pasted and dropped image previews",
+      "settingDescription": "Show recent local images in the pane header after you paste or drop them."
+    },
     "sessionSaveFailure": {
       "title": "Could not save terminal session",
       "capacity": "The device saving this terminal reported full storage or an exceeded storage quota. Free space on that device, then try again.",
