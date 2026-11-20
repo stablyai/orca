@@ -125,4 +125,51 @@ describe('agent completion coordinator stamped turn boundary', () => {
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(2)
   })
+
+  it('announces a background-task wakeup the person joined while work held it open', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+    const row = { prompt: 'watch', agentType: 'claude' } as const
+    coordinator.observeHookStatus({ ...row, state: 'working', stateStartedAt: 1_000 })
+    coordinator.observeHookStatus({
+      ...row,
+      state: 'working',
+      stateStartedAt: 1_000,
+      turnCompletedAt: 2_000
+    })
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    const wakeup = { state: 'working', taskWakeup: true, stateStartedAt: 3_000 } as const
+    coordinator.observeHookStatus({
+      ...row,
+      state: 'working',
+      stateStartedAt: 1_000,
+      mainAgent: wakeup
+    })
+    coordinator.observeHookStatus({
+      ...row,
+      state: 'working',
+      stateStartedAt: 1_000,
+      mainAgent: { ...wakeup, state: 'done', stateStartedAt: 4_000 }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+
+    coordinator.observeHookStatus({
+      ...row,
+      prompt: 'also this',
+      state: 'working',
+      stateStartedAt: 1_000,
+      turnCompletedAt: 4_000,
+      mainAgent: { state: 'done', stateStartedAt: 4_000 }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+  })
 })

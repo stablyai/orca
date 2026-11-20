@@ -9,6 +9,7 @@ import {
   type ClaudePaneStatusResolution
 } from './claude-pane-hold-evidence'
 import { isClaudeTurnStartUnclassified } from './claude-prompt-turn-order'
+import { AGENT_DONE_QUIET_MS } from '../../../../agent-status/lifecycle/agent-transitions'
 
 /**
  * Stamp (announce now, pair the later all-clear) only a held lead turn end that already counts as finished; cancelled
@@ -20,10 +21,8 @@ export function claudeHeldTurnEnd(
   end: {
     resolvedStatus: ClaudePaneStatusResolution
     outcome: ClaudeLeadTurnState['outcome']
-    /** The ending turn was a task wakeup, by its prompt event. */
-    selfStarted: boolean
-    /** Whether the ending turn may be the person's; an end left unannounced is then still theirs to hear. */
-    maybePersonTurn: boolean
+    /** The lead record of the turn that is ending. */
+    endingTurn: Pick<ClaudeLeadTurnState, 'taskWakeupTurn' | 'turnOrigin'> | undefined
   }
 ): Pick<ClaudeLeadTurnState, 'turnCompletedAt' | 'unclassifiedTurnCompletedAt' | 'untoldEnd'> {
   const { resolvedStatus, outcome } = end
@@ -37,12 +36,18 @@ export function claudeHeldTurnEnd(
     return {}
   }
   const unclassified = outcome !== 'failure' && isClaudeTurnStartUnclassified(state, paneKey)
+  // A wakeup the person joined finishes as theirs.
+  const selfStarted =
+    !unclassified &&
+    end.endingTurn?.taskWakeupTurn === true &&
+    end.endingTurn.turnOrigin !== 'person'
   if (
-    !heldTurnCountsAsFinished(resolvedStatus, outcome, !unclassified && end.selfStarted) ||
+    !heldTurnCountsAsFinished(resolvedStatus, outcome, selfStarted) ||
     // Owed notifications wake the lead within ~100ms; announcing first would duplicate completion.
     !claudePaneHasRunningChildWork(state, paneKey)
   ) {
-    return end.maybePersonTurn ? { untoldEnd: true } : {}
+    // An end left unannounced on a turn that may be the person's is still theirs to hear.
+    return end.endingTurn?.turnOrigin !== 'task-wakeup' ? { untoldEnd: true } : {}
   }
   return unclassified
     ? { unclassifiedTurnCompletedAt: Date.now() }
@@ -98,6 +103,16 @@ export function claudeLeadTurnStart(
   if (event.eventAgentId !== undefined) {
     return {}
   }
+  const own =
+    previousLead?.waitingAgentId !== undefined ? previousLead.stateBeforeWait : previousLead
+  // An unclassified start this soon retracts the person's queued finish everywhere, so it carries that news.
+  const retractsPersonFinish =
+    event.opensTurn &&
+    event.eventName !== 'UserPromptSubmit' &&
+    own?.turnOrigin === 'person' &&
+    own.state === 'done' &&
+    own.turnCompletedAt === undefined &&
+    Date.now() - own.stateStartedAt < AGENT_DONE_QUIET_MS
   if (event.isWaitingInducing) {
     return { turnOrigin: 'person' }
   }
@@ -106,13 +121,14 @@ export function claudeLeadTurnStart(
     return {}
   }
   return {
-    turnOrigin: previousLead?.untoldEnd
-      ? 'person'
-      : !isPrompt
-        ? undefined
-        : event.isTaskWakeup
-          ? 'task-wakeup'
-          : 'person',
+    turnOrigin:
+      previousLead?.untoldEnd || retractsPersonFinish
+        ? 'person'
+        : !isPrompt
+          ? undefined
+          : event.isTaskWakeup
+            ? 'task-wakeup'
+            : 'person',
     ...(previousLead?.unclassifiedTurnCompletedAt !== undefined &&
     previousLead.state === 'done' &&
     claudePaneHasRunningChildWork(state, paneKey)

@@ -332,6 +332,17 @@ describe('Claude prompt event arriving after its turn', () => {
       expect(joined?.mainAgent?.taskWakeup).toBeUndefined()
     })
 
+    it('announces a monitoring wakeup the person joined before it ended', () => {
+      personTurnHeldByShell()
+      const tick = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<event>tick</event>`
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: tick })
+      claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: 'also this' })
+      expect(
+        claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [SHELL] })
+          ?.turnCompletedAt
+      ).toEqual(expect.any(Number))
+    })
+
     it('keeps the person’s claim on a wakeup through the wait it was made in', () => {
       personTurnHeldByShell()
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
@@ -376,6 +387,23 @@ describe('Claude prompt event arriving after its turn', () => {
     const wakeupEnd = claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })
     expect(wakeupEnd?.state).toBe('done')
     expect(wakeupEnd?.mainAgent?.taskWakeup).toBeUndefined()
+  })
+
+  // Builds without background_tasks never hold the person's end; an unclassified start right after it retracts it.
+  it('keeps the person’s news in a wakeup that starts within their quiet window', () => {
+    const done = `<task-notification>\n<task-id>${SHELL.id}</task-id>\n<status>completed</status>`
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'test it' })
+    expect(claude({ hook_event_name: 'Stop', prompt_id: FIRST })?.state).toBe('done')
+    claude({
+      hook_event_name: 'PreToolUse',
+      prompt_id: SECOND,
+      tool_name: 'Bash',
+      tool_use_id: 'w'
+    })
+    claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+    expect(
+      claude({ hook_event_name: 'Stop', prompt_id: SECOND })?.mainAgent?.taskWakeup
+    ).toBeUndefined()
   })
 
   describe('a turn whose Stop beats its prompt event while a shell runs', () => {

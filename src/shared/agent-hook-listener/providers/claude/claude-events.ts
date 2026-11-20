@@ -287,8 +287,7 @@ export function normalizeClaudeEvent(
       ? claudeHeldTurnEnd(state, paneKey, {
           resolvedStatus,
           outcome,
-          selfStarted: ownPreviousLead?.taskWakeupTurn === true,
-          maybePersonTurn: ownPreviousLead?.turnOrigin !== 'task-wakeup'
+          endingTurn: ownPreviousLead
         })
       : {}
   setClaudeMainAgentTurnState(state, paneKey, {

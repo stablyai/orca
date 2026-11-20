@@ -119,6 +119,11 @@ export class TerminalAgentTurnNews<Prepared> {
     if (!row || isQuietTaskWakeup(row) || !worktreeId) {
       return
     }
+    // A new session, not the person joining the wakeup.
+    if (row.sessionBoundary === true) {
+      this.quietWakeupEnds.delete(paneKey)
+      return
+    }
     this.quietWakeupEnds.delete(paneKey)
     if (row.state === 'done') {
       this.announce(paneKey, worktreeId, row, false)

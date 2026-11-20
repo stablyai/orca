@@ -120,6 +120,11 @@ export function createAgentCompletionHookObserver({
       }
       // The agent waking itself for a finished background task is not a turn the person started.
       if (isQuietTaskWakeup(payload)) {
+        // Still live work: an end the person later joins arrives as a stamp on a working row and is its own turn.
+        state.workingStatusObserved = true
+        if (state.lastCompletedTurn === state.currentTurn) {
+          state.currentTurn += 1
+        }
         options.dispatchHookLifecycle?.(payload)
         return
       }
