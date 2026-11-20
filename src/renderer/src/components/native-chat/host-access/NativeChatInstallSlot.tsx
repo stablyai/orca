@@ -85,7 +85,14 @@ export function useNativeChatInstallSlot(
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
     unavailableHint,
     antigravityAuth: signsIn
-      ? { host: props.target, backend: 'managed' }
+      ? {
+          host: props.target,
+          backend: 'managed',
+          managedVersion:
+            observation.snapshot.kind === 'known'
+              ? observation.snapshot.state.installedVersion
+              : null
+        }
       : props.agent === 'antigravity' && props.isVisible && hostProgram
         ? { host: props.target, backend: 'agy' }
         : null
