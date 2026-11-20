@@ -13,6 +13,7 @@ import bundled from './agent-cli-model-requirements.json'
 const LIST_URL =
   'https://raw.githubusercontent.com/stablyai/orca/main/src/main/agent-cli-update/agent-cli-model-requirements.json'
 const REFRESH_MS = 60 * 60_000
+const LIST_TIMEOUT_MS = 10_000
 
 // Agents an older app doesn't know are kept here and skipped on lookup, so the file can grow.
 const listSchema = z.object({
@@ -33,7 +34,9 @@ let fetched: { list: AgentCliModelRequirementList | null; at: number } | null = 
 let lookup: Promise<void> | null = null
 
 async function fetchList(): Promise<AgentCliModelRequirementList> {
-  const response = await getMainHttpClient().fetch(LIST_URL)
+  const response = await getMainHttpClient().fetch(LIST_URL, {
+    signal: AbortSignal.timeout(LIST_TIMEOUT_MS)
+  })
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined)
     throw new Error(`model list lookup failed (${response.status})`)

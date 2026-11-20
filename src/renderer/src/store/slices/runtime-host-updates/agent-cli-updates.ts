@@ -3,6 +3,7 @@ import type { AppState } from '../../types'
 import {
   AGENT_CLI_UPDATE_AGENTS,
   AGENT_CLI_UPDATE_RUNTIME_CAPABILITY,
+  AGENT_CLI_UPDATE_SUBSCRIBE_RUNTIME_CAPABILITY,
   type AgentCliUpdate,
   type AgentCliUpdateAgent,
   type AgentCliUpdateRunResult
@@ -10,9 +11,10 @@ import {
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 
-// Above the host's own ten-minute limit, so its answer always arrives.
-const RUN_TIMEOUT_MS = 11 * 60_000
+// Above the host's ten-minute updater limit plus its waits before and after, so its answer always arrives.
+const RUN_TIMEOUT_MS = 12 * 60_000
 // Chat starts come in bursts; one ask per host in this window is enough.
 const CHECK_INTERVAL_MS = 10 * 60_000
 
@@ -45,6 +47,8 @@ export function agentCliUpdateHostTarget(key: string): RuntimeClientTarget {
 const EMPTY_HOST: AgentCliUpdateHost = { updates: [], runs: {} }
 const checks = new Map<string, Promise<void>>()
 const checkedAt = new Map<string, number>()
+// Hosts this window hears finished updates from; a lost stream is opened again by the next check.
+const follows = new Set<string>()
 
 function sameUpdates(a: readonly AgentCliUpdate[], b: readonly AgentCliUpdate[]): boolean {
   return (
@@ -83,11 +87,44 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     })
   const writeRun = (key: string, agent: AgentCliUpdateAgent, run: AgentCliUpdateRun) =>
     writeHost(key, (host) => ({ ...host, runs: { ...host.runs, [agent]: run } }))
-  const hostAnswers = (target: RuntimeClientTarget): boolean =>
+  const hostHas = (target: RuntimeClientTarget, capability: string): boolean =>
     target.kind === 'local' ||
     lastVerifiedRuntimeStatus(
       get().runtimeStatusByEnvironmentId.get(target.environmentId)
-    )?.capabilities?.includes(AGENT_CLI_UPDATE_RUNTIME_CAPABILITY) === true
+    )?.capabilities?.includes(capability) === true
+  const hostAnswers = (target: RuntimeClientTarget): boolean =>
+    hostHas(target, AGENT_CLI_UPDATE_RUNTIME_CAPABILITY)
+  // An update run from any client re-checks here at once, so this window drops its older answer.
+  const follow = (key: string, target: RuntimeClientTarget): void => {
+    if (follows.has(key) || !hostHas(target, AGENT_CLI_UPDATE_SUBSCRIBE_RUNTIME_CAPABILITY)) {
+      return
+    }
+    follows.add(key)
+    let subscription: { unsubscribe: () => void } | null = null
+    let lost = false
+    const lose = (): void => {
+      lost = true
+      follows.delete(key)
+      subscription?.unsubscribe()
+    }
+    subscribeRuntimeRpc(target, 'agentCliUpdate.subscribe', null, {
+      onEvent: (result) => {
+        if ((result as { agent?: unknown } | null)?.agent) {
+          checkedAt.delete(key)
+          void get().checkAgentCliUpdates(target)
+        }
+      },
+      onError: lose,
+      onClose: lose
+    })
+      .then((opened) => {
+        subscription = opened
+        if (lost) {
+          opened.unsubscribe()
+        }
+      })
+      .catch(lose)
+  }
 
   return {
     agentCliUpdates: new Map(),
@@ -95,7 +132,11 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     checkAgentCliUpdates: (target) => {
       const key = agentCliUpdateHostKey(target)
       const last = checkedAt.get(key)
-      if (!hostAnswers(target) || (last !== undefined && Date.now() - last < CHECK_INTERVAL_MS)) {
+      if (!hostAnswers(target)) {
+        return checks.get(key) ?? Promise.resolve()
+      }
+      follow(key, target)
+      if (last !== undefined && Date.now() - last < CHECK_INTERVAL_MS) {
         return checks.get(key) ?? Promise.resolve()
       }
       let check = checks.get(key)

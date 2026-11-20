@@ -22,19 +22,22 @@ import {
 import { latestAgentCliRelease } from './agent-cli-latest-release'
 import { readModelsNeedingCliUpdate } from './agent-cli-model-requirements'
 import { agentCliUpdateDefinition, type AgentCliUpdatePlan } from './agent-cli-update-agents'
+import { checkThroughGate, updateThroughGate } from './agent-cli-update-gate'
 
 const UPDATE_TIMEOUT_MS = 10 * 60_000
 const UPDATE_OUTPUT_BYTES = 64 * 1024
 // An unread version (e.g. a slow first start) is asked again after this, not on every check.
 const UNREAD_RETRY_MS = 10 * 60_000
-// Checks asked before an update get this long to answer; one stuck on the network doesn't hold it.
-const ASKED_CHECKS_WAIT_MS = 10_000
 
 const versions = new Map<string, { stamp: string; version: string | null; at: number }>()
 const checks = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdate | null>>()
 const runs = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdateRunResult>>()
-// Calls of checkAgentCliUpdates not yet answered; an update waits for those that asked about its agent.
-const answering = new Set<{ agents: readonly AgentCliUpdateAgent[]; done: Promise<unknown> }>()
+const finishedListeners = new Set<(agent: AgentCliUpdateAgent) => void>()
+// Calls of checkAgentCliUpdates not yet answered, with the agents updated while they were out.
+const answering = new Set<{
+  agents: readonly AgentCliUpdateAgent[]
+  updated: Set<AgentCliUpdateAgent>
+}>()
 
 /** Runs --version only when the installed file changed, or an unread one is due again. */
 async function installedVersion(
@@ -114,55 +117,65 @@ export async function checkAgentCliUpdates(
     (agent): agent is AgentCliUpdateAgent =>
       isAgentCliUpdateAgent(agent) && isTuiAgentEnabled(agent, settings.disabledTuiAgents)
   )
-  const done = Promise.all(
-    agents.map((agent) => {
-      // Clients asking at once share one read.
-      let check = checks.get(agent)
-      if (!check) {
-        // A check asked during an update reads the CLI once the update is done.
-        check = (runs.get(agent) ?? Promise.resolve())
-          .catch(() => undefined)
-          .then(() => readAgentCliUpdate(agent, settings))
-          .catch((error: unknown) => {
-            console.warn(`[agent-cli-update] ${agent} not checked:`, error)
-            return null
-          })
-          .finally(() => {
-            if (checks.get(agent) === check) {
-              checks.delete(agent)
-            }
-          })
-        checks.set(agent, check)
-      }
-      return check
-    })
-  )
-  const call = { agents, done }
+  const call = { agents, updated: new Set<AgentCliUpdateAgent>() }
   answering.add(call)
   try {
-    return (await done).filter((update) => update !== null)
+    const updates = await Promise.all(agents.map((agent) => sharedCheck(agent, settings)))
+    // An agent updated while this was out is read again, after its update.
+    while (call.updated.size > 0) {
+      const again = [...call.updated]
+      call.updated.clear()
+      const fresh = await Promise.all(again.map((agent) => sharedCheck(agent, settings)))
+      again.forEach((agent, index) => {
+        updates[agents.indexOf(agent)] = fresh[index]
+      })
+    }
+    return updates.filter((update) => update !== null)
   } finally {
     answering.delete(call)
   }
 }
 
-async function runUpdate(
+/** Clients asking at once share one read of each agent. */
+function sharedCheck(
+  agent: AgentCliUpdateAgent,
+  settings: AgentCliUpdateSettings
+): Promise<AgentCliUpdate | null> {
+  let check = checks.get(agent)
+  if (!check) {
+    check = checkThroughGate(agent, () => readAgentCliUpdate(agent, settings))
+      .catch((error: unknown) => {
+        console.warn(`[agent-cli-update] ${agent} not checked:`, error)
+        return null
+      })
+      .finally(() => {
+        if (checks.get(agent) === check) {
+          checks.delete(agent)
+        }
+      })
+    checks.set(agent, check)
+  }
+  return check
+}
+
+function runUpdate(
   agent: AgentCliUpdateAgent,
   settings: AgentCliUpdateSettings
 ): Promise<AgentCliUpdateRunResult> {
-  // Checks already asked are answered first, so none can report this agent from before the update.
-  const asked = [...answering]
-    .filter((call) => call.agents.includes(agent))
-    .map((call) => call.done)
+  // Later checks start their own read behind the update, and calls already out read this agent again.
   checks.delete(agent)
-  let waited: ReturnType<typeof setTimeout> | undefined
-  await Promise.race([
-    Promise.all(asked),
-    new Promise((resolve) => {
-      waited = setTimeout(resolve, ASKED_CHECKS_WAIT_MS)
-    })
-  ])
-  clearTimeout(waited)
+  for (const call of answering) {
+    if (call.agents.includes(agent)) {
+      call.updated.add(agent)
+    }
+  }
+  return updateThroughGate(agent, () => updateAgentCli(agent, settings))
+}
+
+async function updateAgentCli(
+  agent: AgentCliUpdateAgent,
+  settings: AgentCliUpdateSettings
+): Promise<AgentCliUpdateRunResult> {
   const cli = await findOwnAgentCli(agent, settings)
   if (!cli) {
     return { ok: false, output: `No ${agent} command of your own was found on this computer.` }
@@ -220,8 +233,22 @@ export function runAgentCliUpdate(
 ): Promise<AgentCliUpdateRunResult> {
   let run = runs.get(agent)
   if (!run) {
-    run = runUpdate(agent, settings).finally(() => runs.delete(agent))
+    run = runUpdate(agent, settings).finally(() => {
+      runs.delete(agent)
+      // Every client re-checks, so none keeps an answer from before the update.
+      for (const listener of finishedListeners) {
+        listener(agent)
+      }
+    })
     runs.set(agent, run)
   }
   return run
+}
+
+/** Calls `listener` with each agent whose update on this host finished, succeeded or not. */
+export function onAgentCliUpdateFinished(
+  listener: (agent: AgentCliUpdateAgent) => void
+): () => void {
+  finishedListeners.add(listener)
+  return () => finishedListeners.delete(listener)
 }

@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { findOwnAgentCli, readAgentCliVersion, runProcess } = vi.hoisted(() => ({
-  findOwnAgentCli: vi.fn(),
-  readAgentCliVersion: vi.fn(),
-  runProcess: vi.fn()
-}))
+const { findOwnAgentCli, latestAgentCliRelease, readAgentCliVersion, runProcess } = vi.hoisted(
+  () => ({
+    findOwnAgentCli: vi.fn(),
+    latestAgentCliRelease: vi.fn(),
+    readAgentCliVersion: vi.fn(),
+    runProcess: vi.fn()
+  })
+)
 
 vi.mock('@orca/process-host', () => ({ runProcess }))
 vi.mock('./agent-cli-own-install', () => ({ findOwnAgentCli }))
@@ -16,7 +19,7 @@ vi.mock('../native-chat/agent-model-catalog/agent-model-catalog-input-stamp', ()
 vi.mock('../native-chat/agent-model-catalog/agent-model-catalog-store', () => ({
   agentModelCatalogStore: { expireLaunchScopes: () => {} }
 }))
-vi.mock('./agent-cli-latest-release', () => ({ latestAgentCliRelease: async () => '2.0.0' }))
+vi.mock('./agent-cli-latest-release', () => ({ latestAgentCliRelease }))
 vi.mock('./agent-cli-model-requirements', () => ({ readModelsNeedingCliUpdate: async () => [] }))
 
 import { checkAgentCliUpdates, runAgentCliUpdate } from './agent-cli-update-service'
@@ -32,6 +35,7 @@ const cliAt = (program: string) => ({
 beforeEach(() => {
   vi.resetAllMocks()
   runProcess.mockResolvedValue({ code: 0, stdout: '', stderr: '', timedOut: false })
+  latestAgentCliRelease.mockResolvedValue('2.0.0')
 })
 
 describe('runAgentCliUpdate', () => {
@@ -67,5 +71,28 @@ describe('runAgentCliUpdate', () => {
 
     expect(await run).toEqual({ ok: true })
     expect(await check).toEqual([])
+  })
+
+  it('answers a check that was still running when an update began with the updated version', async () => {
+    findOwnAgentCli.mockResolvedValue(cliAt('/slow/bin/claude'))
+    readAgentCliVersion
+      .mockResolvedValueOnce({ version: '1.0.0' })
+      .mockResolvedValueOnce({ version: '2.0.0' })
+    let answerLookup = () => {}
+    latestAgentCliRelease.mockReturnValueOnce(
+      new Promise((resolve) => {
+        answerLookup = () => resolve('2.0.0')
+      })
+    )
+
+    const check = checkAgentCliUpdates({}, ['claude'])
+    await vi.waitFor(() => expect(latestAgentCliRelease).toHaveBeenCalled())
+    const run = runAgentCliUpdate('claude', {})
+    const later = checkAgentCliUpdates({}, ['claude'])
+    answerLookup()
+
+    expect(await run).toEqual({ ok: true })
+    expect(await check).toEqual([])
+    expect(await later).toEqual([])
   })
 })
