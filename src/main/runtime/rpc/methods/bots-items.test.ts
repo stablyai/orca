@@ -507,6 +507,25 @@ describe('bot items over RPC', () => {
         )
       ).toMatchObject({ ok: true })
       expect(claimed).toEqual(['ranger-live', 'ranger-live'])
+      // What the write would refuse is refused before a file is copied or claimed.
+      expect(await comment({ text: 'x'.repeat(7_990), files: [log] })).toMatchObject({
+        ok: false,
+        error: {
+          message: expect.stringMatching(/^The comment and its files' paths come to \d+ characters/)
+        }
+      })
+      expect(
+        await dispatcher.dispatch(
+          request('bots.items.set', {
+            callerSessionId: RANGER_CHAT,
+            item: '1',
+            status: 'canceled',
+            comment: 'Dropping it.',
+            files: [shot]
+          })
+        )
+      ).toMatchObject({ ok: false, error: { message: 'Canceling needs a reason: --reason "..."' } })
+      expect(claimed).toEqual(['ranger-live', 'ranger-live'])
       const shown = await dispatcher.dispatch(
         request('bots.items.show', { callerSessionId: RANGER_CHAT, item: '1' })
       )

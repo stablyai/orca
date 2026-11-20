@@ -22,6 +22,8 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 const SHOWN = 5
 const GAP = 6
 const ONE_MAX_HEIGHT = 220
+const BLANK_IMAGE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 
 type Reads = {
   uris: Record<string, string | null>
@@ -148,7 +150,8 @@ function Viewer({
   if (fresh && fresh !== shown) {
     setShown(fresh)
   }
-  const uri = fresh ?? shown
+  // A failed read shows an empty stage under its name, never the last image.
+  const uri = fresh === null ? BLANK_IMAGE : (fresh ?? shown)
   if (!uri) {
     return null
   }
