@@ -4,6 +4,7 @@ import Database from '../../sqlite/sync-database'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import {
+  cleanup,
   continueInOlderOrca,
   fakeLease,
   olderOrcaChat,
@@ -11,6 +12,8 @@ import {
 } from './journal-legacy-retirement.test-fixture'
 import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
 import { readLegacyProofSessions } from './journal-legacy-content-proof'
+import { setLegacyJournalRetirementSink } from './journal-legacy-retirement-outcome'
+import { legacyJournalRetirementSchema } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
 
 function rename(filename: string, sessionId: string, name: string) {
   const db = new Database(filename)
@@ -685,4 +688,48 @@ it('keeps a chat deleted here from a journal written before some queue columns e
   expect(JSON.stringify(original(older.db, 'unopened').queued)).toContain(
     'queued in an older journal'
   )
+})
+
+it('reports one outcome per launch where the cleanup stops, with no path, id or content', async () => {
+  const events: unknown[] = []
+  setLegacyJournalRetirementSink(async (event) => events.push(event))
+  cleanup.push(() => setLegacyJournalRetirementSink(undefined))
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+  // Deleted: what it freed, bucketed.
+  const retired = await profile()
+  await retired.launch().run()
+  expect(companions(retired.filename)).toEqual([])
+
+  // The version that copied the chats waits for an update.
+  const same = await profile({ copiedBy: '1.0.1' })
+  await same.launch('1.0.1').run()
+
+  // An older Orca wrote the journal since this store took it in.
+  const unread = await profile()
+  olderOrcaChat(unread.filename, 'written-since')
+  await unread.launch().run()
+
+  // A saved refusal, reported by its reason alone, once however often the launch retries.
+  const orphan = await profile({
+    seed: (legacy) =>
+      legacy.exec("INSERT INTO journal_rows VALUES('','',1,1,'unaccounted user text')")
+  })
+  vi.useFakeTimers({ toFake: ['performance'] })
+  const orphanRetirement = orphan.launch()
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await orphanRetirement.run()
+    vi.advanceTimersByTime(60 * 60_000)
+  }
+  vi.useRealTimers()
+
+  expect(events).toEqual([
+    { outcome: 'retired', bytes_bucket: 'lt_100mb' },
+    { outcome: 'waiting', stage: 'same_version' },
+    { outcome: 'waiting', stage: 'not_reconciled' },
+    { outcome: 'refused', reason: 'source-orphan' }
+  ])
+  for (const event of events) {
+    expect(legacyJournalRetirementSchema.safeParse(event).success).toBe(true)
+  }
 })

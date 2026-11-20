@@ -70,6 +70,11 @@ export class JournalLegacyProof {
     }
   }
 
+  /** Why this original was refused, once `refused` said so. */
+  get refusalReason(): LegacySourceRefusal['reason'] | undefined {
+    return this.refusal?.reason
+  }
+
   /** True when this exact original was refused before; the proof isn't run again for it. */
   refused(saved: string | null, observation: LegacyProofObservation): boolean {
     // An unsaved refusal proves again, which saves it; only a saved one ends this process's attempts.

@@ -1,17 +1,8 @@
+import { LEGACY_JOURNAL_RETIREMENT_REASONS } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
 
-export const LEGACY_SOURCE_REFUSALS = [
-  'source-inventory',
-  'source-recovery',
-  'source-orphan',
-  'source-queue',
-  'source-queued-only-v1',
-  'source-corrupt',
-  'source-newer',
-  'source-history',
-  'source-failed',
-  'source-oversize'
-] as const
+/** Shared with telemetry, which reports a refusal by this reason alone. */
+export const LEGACY_SOURCE_REFUSALS = LEGACY_JOURNAL_RETIREMENT_REASONS
 export type LegacySourceRefusalReason = (typeof LEGACY_SOURCE_REFUSALS)[number]
 
 /** Only proven frozen-source facts can survive a database owner. */

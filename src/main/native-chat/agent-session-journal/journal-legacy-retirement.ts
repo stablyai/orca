@@ -28,6 +28,10 @@ import {
   createJournalLegacyFileEligibility
 } from './journal-legacy-file-lock'
 import type { JournalSqlOwner } from './journal-sql-owner'
+import {
+  reportLegacyJournalRetirement,
+  type LegacyJournalRetirementOutcome
+} from './journal-legacy-retirement-outcome'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import { JournalLegacyProof, type LegacyProofObservation } from './journal-legacy-proof'
@@ -70,6 +74,17 @@ function absorbedWal(
   }
 }
 
+/** The original and its WAL as the proof read them: what deleting it frees. */
+function retiredBytes(observation: { proof: string; walBytes: string }): number {
+  try {
+    const receipt: unknown = JSON.parse(observation.proof)
+    const main = isRecord(receipt) && isRecord(receipt.main) ? Number(receipt.main.size) : 0
+    return (Number.isFinite(main) ? main : 0) + (Number(observation.walBytes) || 0)
+  } catch {
+    return Number(observation.walBytes) || 0
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -90,6 +105,7 @@ export class JournalLegacyRetirement {
   private retryAt = 0
   private retryDelay = 60_000
   private done = false
+  private reported = false
 
   constructor(
     private readonly directory: string,
@@ -127,7 +143,10 @@ export class JournalLegacyRetirement {
       await this.attempt()
     } catch (error) {
       // Unsupported storage or file identity doesn't change while this process runs.
-      this.done ||= error instanceof JournalLegacyIneligibleError
+      if (error instanceof JournalLegacyIneligibleError && !this.done) {
+        this.done = true
+        this.outcome({ kind: 'waiting', stage: 'unsupported_storage' })
+      }
       this.later()
       const reason = error instanceof Error ? error.message : String(error)
       if (this.diagnosed !== reason) {
@@ -164,6 +183,17 @@ export class JournalLegacyRetirement {
       : null
     if (!observation || this.proof.refused(saved.retirement, observation)) {
       this.done = true
+      const reason = observation ? this.proof.refusalReason : undefined
+      this.outcome(
+        reason
+          ? { kind: 'refused', reason }
+          : {
+              kind: 'waiting',
+              stage: laterVersion(this.version, saved.convertedBy)
+                ? 'not_reconciled'
+                : 'same_version'
+            }
+      )
       return
     }
     await this.eligibility.present()
@@ -212,6 +242,8 @@ export class JournalLegacyRetirement {
       this.done = await lease.retire(observation.walBytes)
       if (!this.done) {
         this.later()
+      } else {
+        this.outcome({ kind: 'retired', bytes: retiredBytes(observation) })
       }
     } finally {
       try {
@@ -220,6 +252,14 @@ export class JournalLegacyRetirement {
         // Conversions wait on this gate; a failed helper must never keep it closed.
         this.readers.releaseSourceReaders(recycled)
       }
+    }
+  }
+
+  /** One outcome per launch, reported where the cleanup stops for this launch. */
+  private outcome(outcome: LegacyJournalRetirementOutcome): void {
+    if (!this.reported) {
+      this.reported = true
+      reportLegacyJournalRetirement(outcome)
     }
   }
 
