@@ -1,5 +1,5 @@
 import type { Ref } from 'react'
-import { LayoutTemplate, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -21,10 +21,9 @@ export function BotCollapsedAction({
         type="button"
         size="xs"
         variant="ghost"
-        className="max-w-24"
+        className="max-w-20"
         onClick={() => openBotTemplates()}
       >
-        <LayoutTemplate />
         <span className="truncate">{t('bots.section.emptyTemplates', 'Templates')}</span>
       </Button>
     )
