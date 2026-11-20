@@ -33,3 +33,16 @@ export async function syncDirectory(dir: string): Promise<void> {
     // Some file systems refuse to sync a directory; the rename itself already happened.
   }
 }
+
+/** The work's result, or 'late' when it hasn't settled within `ms`. */
+export async function settlesWithin<T>(work: Promise<T>, ms: number): Promise<T | 'late'> {
+  let timer: NodeJS.Timeout | undefined
+  const late = new Promise<'late'>((resolve) => {
+    timer = setTimeout(() => resolve('late'), ms)
+  })
+  try {
+    return await Promise.race([work, late])
+  } finally {
+    clearTimeout(timer)
+  }
+}

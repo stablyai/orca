@@ -86,7 +86,7 @@
 6 src/main/runtime/orchestration/db/dispatch-row-writer.ts
 1 src/main/runtime/orchestration/db/federation/federated-stub-home-run-backfill.ts
 9 src/main/runtime/orchestration/db/lifecycle-transition.ts
-2 src/main/runtime/orchestration/db/maintenance/orchestration-db-compaction.ts # the same cached page-1 statement and isTransaction; total_changes() and data_version are per-connection, so they can't move to a worker
+3 src/main/runtime/orchestration/db/maintenance/orchestration-db-compaction.ts # the cached page-1 statement and isTransaction (total_changes() and data_version are per-connection, so they can't move to a worker), plus one exclusive lock and WAL checkpoint at the end of a clean quit, after every window closed
 7 src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity.ts
 11 src/main/runtime/orchestration/db/orchestration-db.ts
 4 src/main/runtime/orchestration/db/peer-runs/peer-run-queue-sql.ts

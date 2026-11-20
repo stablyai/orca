@@ -71,9 +71,9 @@ describe('OrchestrationDbCompaction', () => {
   it('swaps in a copy taken while the file sat unwritten, switched to incremental', async () => {
     const file = legacyDatabase()
     const before = statSync(file).size
-    const { orchestration, compaction } = await copiedWhileQuiet(file)
+    const { compaction } = await copiedWhileQuiet(file)
 
-    const result = await compaction.swapAtQuit(() => orchestration.close())
+    const result = await compaction.swapAtQuit(() => {})
 
     expect(result.kind).toBe('compacted')
     expect(statSync(file).size).toBeLessThan(before / 4)
@@ -86,8 +86,7 @@ describe('OrchestrationDbCompaction', () => {
     const { orchestration, compaction } = await copiedWhileQuiet(file)
     orchestration.createTask({ runId: 'run_legacy_local', spec: 'written after the copy' })
 
-    expect(await compaction.swapAtQuit(() => orchestration.close())).toEqual({ kind: 'stale' })
-    orchestration.close()
+    expect(await compaction.swapAtQuit(() => {})).toEqual({ kind: 'stale' })
 
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok', tasks: 2 })
     expect(existsSync(`${file}-compacted`)).toBe(false)
@@ -104,5 +103,17 @@ describe('OrchestrationDbCompaction', () => {
     orchestration.close()
 
     expect(existsSync(`${file}-compacted`)).toBe(false)
+  })
+
+  it('leaves the file alone while another connection has it open', async () => {
+    const file = legacyDatabase()
+    const { compaction } = await copiedWhileQuiet(file)
+    const other = new DatabaseSync(file)
+    other.prepare('SELECT count(*) FROM tasks').get()
+
+    expect(await compaction.swapAtQuit(() => {})).toEqual({ kind: 'busy' })
+    other.close()
+
+    expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok', tasks: 1 })
   })
 })

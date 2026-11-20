@@ -99,15 +99,14 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
     }
     // Its idle connection would hold the file open and make every swap busy.
     await closeOrchestrationReader()
-    return compaction.swapAtQuit(() => this.closeOrchestrationDbForQuit())
+    return compaction.swapAtQuit(() => this.detachOrchestrationDbForQuit())
   }
 
-  /** At the end of a clean quit, before swapping in a compacted copy: closes the database for good. */
-  closeOrchestrationDbForQuit(): void {
+  /** At the end of a clean quit: hands the open database to the swap, which closes it; never reopened. */
+  private detachOrchestrationDbForQuit(): void {
     this.orchestrationDbClosedForQuit = true
     this.orchestrationDbMaintenance?.stop()
     this.orchestrationDbMaintenance = undefined
-    this._orchestrationDb?.close()
     this._orchestrationDb = null
   }
 
