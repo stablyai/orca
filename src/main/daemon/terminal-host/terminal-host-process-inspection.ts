@@ -18,7 +18,7 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import { runPsInProcess } from '../../../shared/process-observation/darwin/libproc-process-table'
+import { readProvenIdleShell, rememberIdleShellProof } from './terminal-host-idle-shell-proof'
 import {
   steadyPollJudgesByJobMembership,
   type PtyProcessInspectionOptions
@@ -31,8 +31,6 @@ export type TerminalHostProcessInspection = {
   childProcessEvidence?: PtyChildProcessVerdict
   foregroundProcessEvidence?: RemoteForegroundEvidence
 }
-
-const IDLE_SHELL_READ_TIMEOUT_MS = 1_000
 
 type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
 
@@ -102,7 +100,7 @@ export async function inspectTerminalHostProcess(args: {
       }
     }
   }
-  // Idle shell panes poll forever; prove the shell owns the terminal without a whole-machine capture.
+  // Idle shell panes poll forever; a recent full capture plus the PTY's foreground group answers them in O(1).
   if (
     args.steadyState === true &&
     args.jobMembershipOnly === true &&
@@ -110,12 +108,8 @@ export async function inspectTerminalHostProcess(args: {
     process.platform === 'darwin' &&
     !session.processNameIsSpawnFile
   ) {
-    const shell = await readIdleShellForeground(session)
-    if (
-      shell !== null &&
-      session.isAlive &&
-      (!args.currentSession || args.currentSession() === session)
-    ) {
+    const shell = readProvenIdleShell(session, Date.now())
+    if (shell !== null) {
       args.onTier?.('cheap')
       return { foregroundProcess: shell, hasChildProcesses: false }
     }
@@ -155,6 +149,9 @@ export async function inspectTerminalHostProcess(args: {
   } else {
     try {
       const snapshot = await getStrictProcessTableSnapshotWithAge()
+      if (process.platform === 'darwin' && !session.processNameIsSpawnFile) {
+        rememberIdleShellProof(session, snapshot.rows, Date.now())
+      }
       if (session.processNameIsSpawnFile) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
@@ -205,30 +202,6 @@ export async function inspectTerminalHostProcess(args: {
     ...(childProcessEvidence === undefined ? {} : { childProcessEvidence }),
     foregroundProcessEvidence: evidence
   }
-}
-
-/** A job-control shell gives every job its own process group, so the shell's own group in front means no job is.
- * Returns the shell's name, or null when anything else may own the terminal. */
-async function readIdleShellForeground(session: Session): Promise<string | null> {
-  const name = session.getForegroundProcess({ rawFallback: true })
-  const group = session.readForegroundGroup()
-  if (!name || !isShellProcess(name) || !group || group <= 0) {
-    return null
-  }
-  if (!session.shellIsRootChild) {
-    return group === session.pid ? name : null
-  }
-  // login(1) wraps the shell: one in-process read of the group leader; never a per-pane ps when the reader is down.
-  const read = await runPsInProcess(['-o', 'pid=,ppid=,pgid=', '-p', String(group)], {
-    timeoutMs: IDLE_SHELL_READ_TIMEOUT_MS,
-    background: true,
-    callerRunsPs: true
-  })
-  const row =
-    read?.code === 0 && !read.timedOut ? read.stdout.trim().split(/\s+/).map(Number) : null
-  return row?.length === 3 && row[0] === group && row[1] === session.pid && row[2] === group
-    ? name
-    : null
 }
 
 /** Reuse identity only while the pane fingerprint and raw foreground name still match the full capture. */
