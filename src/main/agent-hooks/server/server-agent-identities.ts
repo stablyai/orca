@@ -1,5 +1,5 @@
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
+import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-legacy-agent-status'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { agentIdentityDatabasePath, sameProviderKey } from '../identity/agent-provider-key'
 import {

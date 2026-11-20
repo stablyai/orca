@@ -1,8 +1,6 @@
 import { deriveCliWriterTopology } from './cli-writer-observation'
-import {
-  admitLegacyAgentStatus,
-  movePaneCacheState
-} from '../../../shared/agent-hook-listener/listener-state'
+import { movePaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
+import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-legacy-agent-status'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import {
   canRegisterPaneKeyAlias,

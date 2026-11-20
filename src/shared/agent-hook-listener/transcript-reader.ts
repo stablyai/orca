@@ -70,10 +70,10 @@ export function readLastAssistantFromTranscriptAsync(
   )
 }
 
-export function findLastExtractedTranscriptLineText(
+export function findLastExtractedTranscriptLineText<T = string>(
   text: string,
-  extractLineText: (line: string) => string | undefined
-): string | undefined {
+  extractLineText: (line: string) => T | undefined
+): T | undefined {
   let lineEnd = text.length
 
   while (lineEnd > 0) {

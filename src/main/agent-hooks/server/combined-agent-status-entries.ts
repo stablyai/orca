@@ -1,8 +1,6 @@
 import { isTmuxInnerSubject } from '../../../shared/agent-hook-listener/presence/tmux-selected-status'
-import {
-  getLegacyStatusListingOrder,
-  type HookListenerState
-} from '../../../shared/agent-hook-listener/listener-state'
+import type { HookListenerState } from '../../../shared/agent-hook-listener/listener-state'
+import { getLegacyStatusListingOrder } from '../../../shared/agent-hook-listener/listener-legacy-agent-status'
 import {
   serializeAgentStatusSubject,
   type AgentStatusSubject

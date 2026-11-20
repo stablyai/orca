@@ -1,6 +1,7 @@
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../agent-status/transport/agent-status-legacy-adapter'
 import type { AgentHookEventPayload } from './listener-event'
-import { admitLegacyAgentStatus, type HookListenerState } from './listener-state'
+import type { HookListenerState } from './listener-state'
+import { admitLegacyAgentStatus } from './listener-legacy-agent-status'
 
 /** Test harnesses seed the same compatibility region without exposing a mutable Map. */
 export function seedLegacyAgentStatusForTests(

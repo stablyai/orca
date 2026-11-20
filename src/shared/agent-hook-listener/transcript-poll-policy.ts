@@ -3,6 +3,7 @@ import type { AgentHookEventPayload } from './listener-event'
 import type { HookListenerState } from './listener-state'
 import { hasCodexTranscriptSubagents } from './providers/codex/codex-state'
 import { hasMuseSessionLog } from './providers/muse/muse-events'
+import { isDroidTurnOutcomePending } from './providers/droid/droid-turn-outcome'
 import { hasPendingCodexSubagentIdentity } from './providers/codex/codex-subagent-roster'
 import { parseHookEnvelope } from './hook-envelope'
 
@@ -22,6 +23,12 @@ export function shouldPollHookTranscript(
   if (source === 'muse') {
     // Muse question waits/answers exist only in the session log.
     return event.payload.state !== 'done' && hasMuseSessionLog(state, event.paneKey)
+  }
+  if (source === 'droid') {
+    return (
+      event.payload.state === 'done' &&
+      isDroidTurnOutcomePending(state.droidTurnByPaneKey.get(event.paneKey), Date.now())
+    )
   }
   return false
 }
@@ -67,6 +74,9 @@ export function hookTranscriptWatchPath(
   source: AgentHookSource,
   paneKey: string
 ): string | undefined {
+  if (source === 'droid') {
+    return state.droidTurnByPaneKey.get(paneKey)?.transcriptPath
+  }
   return source === 'codex' && !hasCodexTranscriptSubagents(state, paneKey)
     ? state.codexSubagentTranscriptByPaneKey.get(paneKey)?.parent.filePath
     : undefined
@@ -79,6 +89,12 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
 ): T | undefined {
   if (original === polled) {
     return undefined
+  }
+  if (source === 'droid') {
+    // The hook already ended the turn; the poll only adds its verdict.
+    return polled.payload.mainAgent?.outcome !== original.payload.mainAgent?.outcome
+      ? { ...polled, hasExplicitPrompt: undefined, hookEventName: undefined }
+      : undefined
   }
   if (source === 'muse') {
     const changed =
