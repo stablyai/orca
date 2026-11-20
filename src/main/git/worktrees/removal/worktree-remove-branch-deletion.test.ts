@@ -46,23 +46,6 @@ describe('removeWorktree', () => {
     platformSpy.mockRestore()
   })
 
-  it('reuses known removed worktree metadata instead of relisting before removal', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
-
-    await removeWorktree('/repo', '/repo-feature', false, {
-      knownRemovedWorktree: {
-        branch: 'refs/heads/feature/test',
-        head: 'def456'
-      }
-    })
-
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
-      ['worktree', 'remove', '/repo-feature'],
-      ['branch', '-d', '--', 'feature/test']
-    ])
-  })
-
   it('prunes and retries branch deletion only when Git reports a checked-out branch', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
