@@ -3,6 +3,7 @@ import { Maximize2 } from 'lucide-react'
 import type mermaidNamespace from 'mermaid'
 import { readableMermaidFlowchartSvg } from '../../../../../shared/document-preview/mermaid-flowchart-contrast'
 import { getMermaidConfig } from './mermaid-config'
+import { withMermaidLabelMeasure } from './mermaid-label-measure'
 import { sanitizeMermaidSvg } from './mermaid-sanitize'
 import { readMermaidThemeColors } from './mermaid-theme-colors'
 import { translate } from '@/i18n/i18n'
@@ -91,7 +92,7 @@ export default function MermaidBlock({
         // Initialize inside the serialized task because global Mermaid config can otherwise change between initialization and render.
         const colors = readMermaidThemeColors()
         mermaid.initialize(getMermaidConfig(isDark, isDark ? colors : undefined))
-        const { svg } = await mermaid.render(renderId, content)
+        const { svg } = await withMermaidLabelMeasure(() => mermaid.render(renderId, content))
         if (!cancelled) {
           // Sanitize explicitly against XSS even if Mermaid’s internal sanitization changes.
           const sanitized = sanitizeMermaidSvg(svg)
