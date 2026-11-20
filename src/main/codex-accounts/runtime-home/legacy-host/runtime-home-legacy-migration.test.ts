@@ -310,6 +310,29 @@ describe('CodexRuntimeHomeService', () => {
     )
   })
 
+  it('retries an import it gave up on a day later when nothing changed', async () => {
+    writeHistory('account-1', '{"id":"legacy-1"}\n')
+    const { legacyHistoryInputsKey } = await import('./legacy-prompt-history-import')
+    mkdirSync(join(sessionsMigratedStatePath(), '..'), { recursive: true })
+    writeFileSync(
+      sessionsMigratedStatePath(),
+      JSON.stringify({
+        historyImportAttempts: 3,
+        historyImportInputs: await legacyHistoryInputsKey(
+          join(testState.userDataDir, 'codex-accounts')
+        ),
+        historyImportGaveUpAt: Date.now() - 25 * 60 * 60 * 1000
+      }),
+      'utf-8'
+    )
+
+    await startService()
+
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
+      '{"id":"legacy-1"}\n'
+    )
+  })
+
   it('does not re-run migration when marker already exists', async () => {
     const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
     const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')

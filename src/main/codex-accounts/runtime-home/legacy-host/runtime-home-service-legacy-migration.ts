@@ -18,6 +18,7 @@ import { CodexRuntimeHomePaths } from '../runtime-home-service-paths'
 import {
   importLegacyHistoriesIfSharedAbsent,
   legacyHistoryInputsKey,
+  HISTORY_IMPORT_RETRY_INTERVAL_MS,
   MAX_HISTORY_IMPORT_ATTEMPTS,
   parseLegacyMigrationState,
   type LegacyMigrationState
@@ -97,14 +98,21 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
     void historyImported.then((imported) => this.recordHistoryImport(state, imported))
   }
 
-  // After a few failed launches, only a change to the account histories earns another attempt.
+  // After a few failed launches, a change to the account histories or a day's wait earns another
+  // attempt, so a failure that clears (permissions, a mount) still imports.
   protected async retryLegacyHistoryImport(state: LegacyMigrationState): Promise<void> {
     if ((state.historyImportAttempts ?? 0) >= MAX_HISTORY_IMPORT_ATTEMPTS) {
       const inputs = await legacyHistoryInputsKey(this.getManagedAccountsRoot()).catch(() => null)
-      if (inputs === null || inputs === state.historyImportInputs) {
+      if (inputs !== null && inputs !== state.historyImportInputs) {
+        state = { ...state, historyImportAttempts: 0 }
+      } else if (
+        Date.now() - (state.historyImportGaveUpAt ?? 0) <
+        HISTORY_IMPORT_RETRY_INTERVAL_MS
+      ) {
         return
+      } else {
+        state = { ...state, historyImportAttempts: MAX_HISTORY_IMPORT_ATTEMPTS - 1 }
       }
-      state = { ...state, historyImportAttempts: 0 }
     }
     await this.recordHistoryImport(state, await this.importLegacyHistory())
   }
@@ -136,14 +144,15 @@ export abstract class CodexRuntimeHomeLegacyMigration extends CodexRuntimeHomePa
         return
       }
       const attempts = (state.historyImportAttempts ?? 0) + 1
-      const historyImportInputs =
-        attempts >= MAX_HISTORY_IMPORT_ATTEMPTS
-          ? await legacyHistoryInputsKey(this.getManagedAccountsRoot()).catch(() => undefined)
-          : undefined
+      const gaveUp = attempts >= MAX_HISTORY_IMPORT_ATTEMPTS
+      const historyImportInputs = gaveUp
+        ? await legacyHistoryInputsKey(this.getManagedAccountsRoot()).catch(() => undefined)
+        : undefined
       this.writeSessionsMigratedState({
         ...state,
         historyImportAttempts: attempts,
-        historyImportInputs
+        historyImportInputs,
+        historyImportGaveUpAt: gaveUp ? Date.now() : undefined
       })
     } catch (error) {
       console.warn('[codex-runtime-home] Failed to record legacy Codex history import:', error)

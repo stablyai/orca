@@ -9,6 +9,8 @@ type LegacyHistoryImportOutcome = (typeof CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES)[
 
 /** Failed launches before the import waits for the account histories to change. */
 export const MAX_HISTORY_IMPORT_ATTEMPTS = 3
+/** How long a given-up import waits before trying again with unchanged account histories. */
+export const HISTORY_IMPORT_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export type LegacyMigrationState = {
   completedAt?: number
@@ -16,6 +18,7 @@ export type LegacyMigrationState = {
   historyImportAttempts?: number
   /** The account histories' sizes and times when the import last gave up. */
   historyImportInputs?: string
+  historyImportGaveUpAt?: number
 }
 
 export function parseLegacyMigrationState(text: string): LegacyMigrationState {
@@ -35,6 +38,9 @@ export function parseLegacyMigrationState(text: string): LegacyMigrationState {
   }
   if ('historyImportInputs' in parsed && typeof parsed.historyImportInputs === 'string') {
     state.historyImportInputs = parsed.historyImportInputs
+  }
+  if ('historyImportGaveUpAt' in parsed && typeof parsed.historyImportGaveUpAt === 'number') {
+    state.historyImportGaveUpAt = parsed.historyImportGaveUpAt
   }
   return state
 }
