@@ -16,7 +16,7 @@ import {
 
 /** The plan credentials runtime-header asks are answered with; null declines them. */
 type ZcodeForkDeps = {
-  resolveChatCredentials: () => ZcodeChatCredentials | null
+  resolveChatCredentials: () => Promise<ZcodeChatCredentials | null>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
 }
@@ -28,7 +28,7 @@ export async function zcodeCopyConversation(
   return copyZcodeConversation({
     environment: (await deps.resolveEnvironment?.()) ?? process.env,
     commandSettings: deps.resolveCommandSettings?.(),
-    credentials: deps.resolveChatCredentials(),
+    credentials: await deps.resolveChatCredentials(),
     providerSessionId: input.providerSessionId,
     throughMessageId:
       input.checkpoint?.rootMessage?.uuid ?? input.checkpoint?.throughMessage?.uuid ?? null,
@@ -51,7 +51,7 @@ export async function zcodeForkForRewind(
   return forkZcodeForRewind({
     environment: (await deps.resolveEnvironment?.()) ?? process.env,
     commandSettings: deps.resolveCommandSettings?.(),
-    credentials: deps.resolveChatCredentials(),
+    credentials: await deps.resolveChatCredentials(),
     providerSessionId: input.beforeMessage.sessionId,
     cutMessageId: input.beforeMessage.uuid,
     // The fork replaces the session the chat holds — the chain head, even when the cut rides a

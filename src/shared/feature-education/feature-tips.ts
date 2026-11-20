@@ -121,7 +121,7 @@ export const FEATURE_TIPS = [
     description:
       'Find any past conversation by what was said in it, then pick up where the agent left off.',
     action: 'enable-session-search',
-    ctaLabel: 'Turn on session search',
+    ctaLabel: 'Enable session search',
     completedByFeatureInteractions: []
   },
   {
@@ -150,7 +150,7 @@ export const FEATURE_TIPS = [
     title: 'Dictate into any pane',
     description: 'Start voice dictation in any focused pane, then use the shortcut again to stop.',
     action: 'enable-voice',
-    ctaLabel: 'Set up voice dictation',
+    ctaLabel: 'Set up dictation',
     completedByFeatureInteractions: ['voice-dictation']
   }
 ] as const satisfies readonly FeatureTip[]

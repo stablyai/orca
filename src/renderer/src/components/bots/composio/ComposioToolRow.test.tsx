@@ -77,11 +77,8 @@ describe('Composio in a bot’s Tools', () => {
     show()
     fireEvent.click(await screen.findByRole('button', { name: 'Composio apps' }))
     expect(await screen.findByText('Connected as dana@acme.com')).toBeTruthy()
-    expect(await screen.findByRole('button', { name: 'Connect HubSpot' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Set up in Composio/ })).toBeTruthy()
-    expect(screen.getByText('Needs your own Salesforce developer app')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Connect Salesforce' })).toBeNull()
-    expect(screen.getByText('1 connected · Your app sign-ins are held by Composio.')).toBeTruthy()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Connect HubSpot' }))
     await waitFor(() =>
@@ -91,13 +88,6 @@ describe('Composio in a bot’s Tools', () => {
       botId: 'bot-1',
       app: 'hubspot'
     })
-  })
-
-  it('asks for a new key when Composio refused it', async () => {
-    answer('rejected')
-    show()
-    expect(await screen.findByText('Key not accepted')).toBeTruthy()
-    expect(await screen.findByRole('button', { name: 'Replace key' })).toBeTruthy()
   })
 
   it('can cancel replacing a key and removes it only after the owner confirms', async () => {

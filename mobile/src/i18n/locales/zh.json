@@ -31,7 +31,6 @@
       "emptyScope": "此范围内暂无历史智能体会话",
       "hideDetails": "隐藏详情",
       "showDetails": "显示详情",
-      "dismissNotice": "关闭",
       "loading": "正在加载智能体会话…",
       "missingResumeId": "此会话缺少恢复 ID",
       "noSearchResults": "没有符合搜索条件的会话",
@@ -123,7 +122,7 @@
       "pasteCodePlaceholder": "orca://pair?code=... 或粘贴配对码",
       "pasteCodeTitle": "粘贴配对码",
       "pasteInstead": "改为粘贴配对码",
-      "pastePairingCode": "或粘贴配对码",
+      "pastePairingCode": "粘贴配对码",
       "scanCodeStep": "扫描二维码",
       "title": "与桌面配对",
       "tryAgain": "重试",
@@ -157,7 +156,7 @@
       "installTitle": "下载新应用",
       "installDescription": "如果手机询问，请允许浏览器安装应用。",
       "download": "下载",
-      "keepThisVersion": "继续使用此版本",
+      "keepThisVersion": "保留此版本",
       "keepThisVersionNote": "你将收不到安全修复。我们会在一周后再提醒你。"
     },
     "pairTitle": "与电脑配对",
@@ -346,7 +345,7 @@
       "triedSearchWeb": "尝试搜索网页"
     },
     "nativeChatUserMessageFold": {
-      "loadFailed": "显示完整消息——加载失败，点按重试",
+      "loadFailed": "重试加载完整消息",
       "showFullMessage": "显示完整消息",
       "showLess": "收起"
     },
@@ -418,8 +417,7 @@
       "submitSelectedOptions": "提交所选选项"
     },
     "queuedMessages": {
-      "clearAll": "全部清除",
-      "deleteAll": "删除所有排队的消息",
+      "deleteAll": "全部删除",
       "editMessage": "编辑消息",
       "showLess": "收起",
       "moreCount_one": "另外 {{count}} 条",
@@ -897,7 +895,7 @@
       "manageShortcuts": "管理快捷键",
       "manageShortcutsHint": "显示、隐藏快捷键或调整其顺序",
       "modifiers": "修饰键",
-      "moreKeys": "更多按键：Tab、方向键、F1–F12…",
+      "moreKeys": "更多按键",
       "navigation": "导航键",
       "pickKey": "选择按键",
       "pressEnter": "按下 Enter",
@@ -1078,12 +1076,10 @@
       "dismissDrawer": "关闭抽屉"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "钩子",
       "label": "设置脚本",
-      "run": "执行",
-      "runSetupCommand": "执行设置命令",
+      "runSetup": "执行设置",
       "skip": "跳过",
-      "waitForSetup": "等待设置完成后再启动代理",
+      "startAgentAfterSetup": "设置完成后再启动代理",
       "waitForSetupSaveFailed": "保存设置启动行为失败"
     },
     "newWorkspaceSshConnectionField": {
@@ -1420,7 +1416,7 @@
       "privacyHint": "发送一份经过脱敏且大小受限的报告，包含主机名、端点、版本、连接状态和事件，绝不包含终端内容或凭据",
       "reconnecting": "重新连接中",
       "retrySending": "重试发送",
-      "sendDiagnostics": "向 Orca 发送诊断信息",
+      "sendDiagnostics": "发送诊断信息",
       "sending": "正在发送…",
       "sent": "诊断信息已发送",
       "stateWithAttempt": "{{state}} · 第 {{attempts}} 次尝试",
@@ -1829,10 +1825,8 @@
   "host": {
     "edit": {
       "address": "地址",
-      "addressHint": "支持 IP、host:port 或 ws:// / wss://。wss:// URL 未指定端口时使用 443。仅输入地址时保留当前端口（或使用 6768）",
       "connectionPreview": "连接到 {{endpoint}}",
       "goBack": "返回",
-      "help": "更改显示名称或连接地址。名称留空时，将使用主机提供的名称。更改地址只会切换此手机的连接地址，不会重新配对。当同一主机可通过不同 IP 访问时（例如家庭局域网与 Tailscale），可使用此功能",
       "hostNamePlaceholder": "主机名",
       "hostRemoved": "此主机已从这部手机上移除",
       "loadFailed": "加载主机失败",
@@ -2373,7 +2367,7 @@
       "branchNotLinked": "{{branch}} 未关联到开放的 PR",
       "branchRequired": "创建 PR 前，请先检出分支",
       "currentBranchNotLinked": "当前分支未关联到开放的 PR",
-      "linkExistingPullRequest": "关联现有 PR",
+      "linkExistingPullRequest": "关联 PR",
       "linkedPrUnavailable": "关联的 PR #{{number}} 不可用",
       "refreshOrCreate": "刷新以重新检查，或为此分支创建新的 PR"
     },
@@ -2778,8 +2772,8 @@
       "scrollToLatest": "滚动到最新消息"
     },
     "nativeChatFullContent": {
-      "loadMessageFailed": "显示完整消息：加载失败，点按重试",
-      "loadOutputFailed": "显示完整输出：加载失败，点按重试",
+      "loadMessageFailed": "重试加载完整消息",
+      "loadOutputFailed": "重试加载完整输出",
       "partialMessage": "仅显示此消息的部分内容",
       "partialOutput": "正在显示 {{total}} 中的 {{shown}}",
       "showFullMessage": "显示完整消息",
@@ -2795,8 +2789,8 @@
       "notFoundTitle": "暂未找到此对话"
     },
     "nativeChatToggleAction": {
-      "switchToChatView": "切换到聊天视图",
-      "switchToTerminalView": "切换到终端视图"
+      "switchToChatView": "切换到聊天",
+      "switchToTerminalView": "切换到终端"
     },
     "newTabAgentHostLaunch": {
       "notesNotSent": "智能体已启动，但笔记未发送",
@@ -4016,7 +4010,7 @@
       "updateBranch": "更新分支",
       "back": "返回源代码管理",
       "title": "提交记录",
-      "loadMoreFailed": "无法加载更多提交，重试",
+      "loadMoreFailed": "重试加载提交",
       "notPushed": "未推送 {{count}}",
       "onOrigin": "origin 上 {{count}}"
     },
@@ -4580,7 +4574,7 @@
       "issueSource": "议题来源",
       "keySecurityHint": "密钥通过主机操作系统的钥匙串加密，并存储在本地",
       "linearConnectSubtitle": "粘贴个人 API 密钥，即可浏览该工作区的议题",
-      "linearSettingsLink": "Linear 设置 / 安全 / 新建 API 密钥",
+      "linearSettingsLink": "打开 Linear 设置",
       "linearTeam": "Linear 团队",
       "linearTeamSubtitle": "在所选 Linear 团队中创建议题",
       "newIssueTitle": "新建 {{providerLabel}} 议题",
@@ -4655,7 +4649,7 @@
       "runSetupAndCreate": "运行设置脚本并创建",
       "setupSubtitle": "创建此工作区前，请选择是否运行 {{name}} 的设置脚本",
       "setupTitle": "运行设置脚本？",
-      "skipSetupAndCreate": "跳过设置脚本并创建",
+      "skipSetupAndCreate": "跳过设置并创建",
       "trustFailed": "无法将设置脚本设为可信"
     },
     "worktreeCreateRetry": {

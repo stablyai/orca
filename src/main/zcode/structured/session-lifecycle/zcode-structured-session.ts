@@ -158,7 +158,7 @@ export class ZcodeStructuredSession {
         connection: this.connection,
         params,
         id,
-        credentials: this.deps.resolveChatCredentials(),
+        credentials: this.deps.credentials,
         options: this.options,
         lane: this.lane,
         providerSessionId: this.providerSessionId,

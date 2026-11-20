@@ -36,7 +36,7 @@ export async function openZcodeSession(
     const firstPush = await pushZcodeAccountConfig(
       session.connection,
       table,
-      session.deps.resolveChatCredentials()
+      session.deps.credentials
     )
     session.accountPushed = firstPush.pushed
     session.declareModels(firstPush.declaredModels)

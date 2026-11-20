@@ -245,15 +245,13 @@
       "removeHost": "Remove host",
       "saveHost": "Save host",
       "goBack": "Go back",
-      "help": "Change the display name or connection address. Leave the name empty to use the name the host reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same host is reachable at a different IP (for example home LAN vs Tailscale).",
       "name": "Name",
       "hostNamePlaceholder": "Host name",
       "address": "Address",
-      "addressHint": "Accepts IP, host:port, or ws:// / wss://. A wss:// URL without a port uses 443. Bare addresses keep the current port (or 6768).",
       "connectionPreview": "Connects to {{endpoint}}",
-      "updateStepsServiceManager": "This server can't update itself. Update Orca on it with its package manager if it came from a .deb or .rpm, otherwise through the service manager that starts it.",
-      "updateStepsSourceCheckout": "This is a development build. Update it from its source checkout.",
-      "updateStepsServer": "This server can't update itself. Update Orca on the server computer, then restart the server.",
+      "updateStepsServiceManager": "Update it with its package manager or service manager.",
+      "updateStepsSourceCheckout": "Update it from its source checkout.",
+      "updateStepsServer": "Update Orca on the server, then restart it.",
       "orcaVersion": "Orca version"
     }
   },
@@ -295,7 +293,7 @@
       "openDesktopStep": "Open Orca on your computer",
       "openMobileSettingsStep": "Go to Settings → Mobile",
       "scanCodeStep": "Scan the QR code",
-      "pastePairingCode": "Or paste pairing code",
+      "pastePairingCode": "Paste pairing code",
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
       "tryAgain": "Try Again",
@@ -359,7 +357,7 @@
       "installTitle": "Download the new app",
       "installDescription": "If your phone asks, allow your browser to install apps.",
       "download": "Download",
-      "keepThisVersion": "Keep using this version",
+      "keepThisVersion": "Keep this version",
       "keepThisVersionNote": "You'll miss security fixes. We'll remind you in a week."
     },
     "pairTitle": "Pair it with your computer",
@@ -432,8 +430,8 @@
       "emptyScope": "No past agent sessions in this scope.",
       "hideDetails": "Hide details",
       "showDetails": "Show details",
-      "dismissNotice": "Dismiss",
-      "loading": "Loading agent sessions…"
+      "loading": "Loading agent sessions…",
+      "showAllAgents": "Show all agents"
     },
     "resumeTarget": {
       "runtimeUnavailable": "Resume from history is not available in runtime-hosted workspaces.",
@@ -465,14 +463,16 @@
     },
     "viewControls": {
       "allAgents": "All agents",
-      "agentCount": "{{count}} agents",
       "lastUpdated": "Last updated",
       "created": "Created",
-      "agentsLabel": "Agents: {{agents}}",
-      "sortLabel": "Sort sessions: {{sort}}",
-      "agents": "Agents",
-      "sort": "Sort",
-      "noAgents": "No agents"
+      "agents": "Agents"
+    },
+    "filterSheet": {
+      "title": "Filter & sort",
+      "activeLabel": "Filter & sort, {{count}} active",
+      "reset": "Reset",
+      "done": "Done",
+      "sortBy": "Sort by"
     }
   },
   "diagnostics": {
@@ -491,7 +491,7 @@
       "sending": "Sending…",
       "sent": "Diagnostics sent",
       "retrySending": "Retry sending",
-      "sendDiagnostics": "Send diagnostics to Orca",
+      "sendDiagnostics": "Send diagnostics",
       "noEvents": "No connection events yet. Events appear as the app dials this host.",
       "noHosts": "No paired hosts."
     },
@@ -1147,7 +1147,7 @@
       "manageShortcutsHint": "Show, hide, or reorder shortcut keys",
       "modifiers": "Modifiers",
       "key": "Key",
-      "moreKeys": "More keys — Tab, arrows, F1–F12…",
+      "moreKeys": "More keys",
       "add": "Add",
       "label": "Label",
       "labelPlaceholder": "e.g. Build",
@@ -1352,11 +1352,9 @@
     },
     "newWorkspaceSetupScriptField": {
       "label": "Setup script",
-      "hooks": "HOOKS",
-      "run": "Run",
       "skip": "Skip",
-      "runSetupCommand": "Run setup command",
-      "waitForSetup": "Wait for setup to complete before starting agent",
+      "runSetup": "Run setup",
+      "startAgentAfterSetup": "Start agent after setup",
       "waitForSetupSaveFailed": "Failed to save setup startup behavior."
     },
     "newWorkspaceSshConnectionField": {
@@ -1785,7 +1783,7 @@
       "refreshOrCreate": "Refresh to check again, or create a new PR for this branch.",
       "branchNotLinked": "{{branch}} is not linked to an open PR.",
       "currentBranchNotLinked": "The current branch is not linked to an open PR.",
-      "linkExistingPullRequest": "Link an existing pull request"
+      "linkExistingPullRequest": "Link pull request"
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Failed to load people",
@@ -2239,10 +2237,10 @@
     "nativeChatFullContent": {
       "partialOutput": "Showing {{shown}} of {{total}}.",
       "showFullOutput": "Show full output",
-      "loadOutputFailed": "Show full output — couldn't load, tap to retry",
+      "loadOutputFailed": "Retry full output",
       "partialMessage": "Showing part of this message.",
       "showFullMessage": "Show full message",
-      "loadMessageFailed": "Show full message — couldn't load, tap to retry"
+      "loadMessageFailed": "Retry full message"
     },
     "queuedCardText": {
       "showLessHint": "Shows less of the message",
@@ -2594,8 +2592,8 @@
       "defaultAgentLabel": "the agent"
     },
     "nativeChatToggleAction": {
-      "switchToTerminalView": "Switch to terminal view",
-      "switchToChatView": "Switch to chat view"
+      "switchToTerminalView": "Switch to terminal",
+      "switchToChatView": "Switch to chat"
     },
     "prSidebarState": {
       "loadFailed": "Unable to load pull request"
@@ -3229,8 +3227,7 @@
       "sendReply": "Send reply"
     },
     "queuedMessages": {
-      "deleteAll": "Delete every queued message",
-      "clearAll": "Clear all",
+      "deleteAll": "Delete all",
       "resumeSending": "Resume sending the queued messages",
       "resume": "Resume",
       "pausedState": "Paused",
@@ -3424,7 +3421,7 @@
     },
     "nativeChatUserMessageFold": {
       "showLess": "Show less",
-      "loadFailed": "Show full message — couldn't load, tap to retry",
+      "loadFailed": "Retry full message",
       "showFullMessage": "Show full message"
     },
     "askRow": {
@@ -3807,7 +3804,7 @@
         "lastCall": "Last call {{ago}}",
         "copied": "Copied",
         "copyUrl": "Copy URL",
-        "copyFailed": "Couldn’t copy. Try again"
+        "copyFailed": "Retry copy"
       },
       "memory": {
         "added": "Added",
@@ -3819,6 +3816,11 @@
     "eventRow": {
       "running": "Running",
       "failed": "Failed"
+    },
+    "workerApproval": {
+      "title": "{{worker}} · {{title}}",
+      "allow": "Allow",
+      "deny": "Deny"
     }
   },
   "sourceControl": {
@@ -4330,7 +4332,7 @@
       "updateBranch": "Update branch",
       "back": "Back to source control",
       "title": "Commits",
-      "loadMoreFailed": "Couldn’t load more commits. Retry",
+      "loadMoreFailed": "Retry loading commits",
       "notPushed": "Not pushed {{count}}",
       "onOrigin": "On origin {{count}}"
     },
@@ -4460,7 +4462,7 @@
       "connectLinearWorkspace": "Connect Linear workspace",
       "linearConnectSubtitle": "Paste a Personal API key to browse issues from that workspace.",
       "personalApiKey": "Personal API key",
-      "linearSettingsLink": "Linear Settings / Security / New API key",
+      "linearSettingsLink": "Open Linear settings",
       "keySecurityHint": "Your key is encrypted via the host OS keychain and stored locally.",
       "connect": "Connect",
       "createWorkspaceIn": "Create Workspace In"
@@ -4855,7 +4857,7 @@
       "setupSubtitle": "{{name}} requires a setup choice before creating this workspace.",
       "creating": "Creating...",
       "runSetupAndCreate": "Run setup and create",
-      "skipSetupAndCreate": "Skip setup and create",
+      "skipSetupAndCreate": "Create without setup",
       "trustFailed": "Failed to trust setup script."
     },
     "sparsePresetDraft": {
@@ -5186,7 +5188,7 @@
       "shuffle": "Another picture",
       "namePlaceholder": "Name your bot",
       "create": "Create",
-      "fromTemplate": "Start from a template",
+      "fromTemplate": "Use template",
       "takesOverList": "Takes over {{names}}. Their agents keep running.",
       "runsOn": "Runs on",
       "cantReach": "Can’t reach {{host}}. Pick another computer.",

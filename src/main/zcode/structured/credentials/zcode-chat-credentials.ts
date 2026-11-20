@@ -32,10 +32,10 @@ export function zcodePlanProviderId(site: ZcodePlanSite): string {
 }
 
 /** The credentials a zcode chat can present, Orca's own plan key first. */
-export function resolveZcodeChatCredentials(
+export async function resolveZcodeChatCredentials(
   source: ZcodeChatAccountSource = {}
-): ZcodeChatCredentials | null {
-  const apiKey = readZcodePlanApiKeyOrNull()
+): Promise<ZcodeChatCredentials | null> {
+  const apiKey = await readZcodePlanApiKeyOrNull()
   if (apiKey && source.site) {
     return { site: source.site, apiKey, providerId: zcodePlanProviderId(source.site) }
   }
@@ -57,9 +57,9 @@ export function resolveZcodeChatCredentials(
   return null
 }
 
-function readZcodePlanApiKeyOrNull(): string | null {
+async function readZcodePlanApiKeyOrNull(): Promise<string | null> {
   try {
-    return readZcodePlanApiKey()
+    return await readZcodePlanApiKey()
   } catch {
     // Undecryptable or absent; the v2 store decides.
     return null

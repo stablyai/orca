@@ -67,8 +67,8 @@ export type ZcodeStructuredSessionDeps = {
   onEvent: (event: ZcodeStructuredSessionEvent) => void
   /** The provider session id a resume continues; null creates a new session. */
   resumeSessionId: string | null
-  /** Orca's plan credentials for the account push and runtime-header asks. */
-  resolveChatCredentials: () => ZcodeChatCredentials | null
+  /** Orca's plan credentials for the account push and runtime-header asks, read at start. */
+  credentials: ZcodeChatCredentials | null
   forceClose: (sessionId: string, reason: string) => void
   onSettled: (settlement: ZcodeSendSettlement) => void
 }
@@ -86,7 +86,7 @@ export type ZcodeStructuredSessionAdapterDeps = {
   onEvent?: (event: ZcodeStructuredSessionEvent) => void
   logger?: StructuredAgentSessionLogger
   /** The plan credentials runtime-header asks are answered with; null declines them. */
-  resolveChatCredentials: () => ZcodeChatCredentials | null
+  resolveChatCredentials: () => Promise<ZcodeChatCredentials | null>
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
   mintAcquisitionGeneration?: () => string

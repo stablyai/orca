@@ -261,7 +261,7 @@ export function NativeChatAutomationCardDetails({
           className="mt-3"
           onClick={() => openBotAutomation(automationId, null)}
         >
-          {t('components.native-chat.automationSaved.openFullPage', 'Open full page')}
+          {t('components.native-chat.automationSaved.openFullPage', 'Open page')}
         </Button>
       )}
     </div>

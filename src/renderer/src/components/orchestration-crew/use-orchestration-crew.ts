@@ -1,16 +1,20 @@
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
-import { observeCrew } from './orchestration-crew-follow'
-import { UNKNOWN_CREW } from './orchestration-crew-subscription'
+import {
+  emptyCrew,
+  type OrchestrationCrewSnapshot
+} from '../../../../shared/orchestration/orchestration-crew'
+import { observeCrew, type CrewObservation } from './orchestration-crew-follow'
+import { UNKNOWN_CREW, UNKNOWN_CREW_STATE, type CrewState } from './orchestration-crew-subscription'
 
-export function useOrchestrationCrew(
+/** One crew subscription for this party, or none while `party` is null (hidden or unfocused). */
+export function useOrchestrationCrewState(
   target: RuntimeClientTarget | null,
   party: string | null
-): OrchestrationCrewSnapshot {
+): { state: CrewState; observation: CrewObservation | null } {
   const kind = target?.kind
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
-  const entry = useMemo(() => {
+  const observation = useMemo(() => {
     if (!party) {
       return null
     }
@@ -22,8 +26,21 @@ export function useOrchestrationCrew(
       : null
   }, [kind, environmentId, party])
   const subscribe = useCallback(
-    (listener: () => void) => entry?.subscribe(listener) ?? (() => {}),
-    [entry]
+    (listener: () => void) => observation?.subscribe(listener) ?? (() => {}),
+    [observation]
   )
-  return useSyncExternalStore(subscribe, entry?.read ?? (() => UNKNOWN_CREW))
+  const state = useSyncExternalStore(subscribe, observation?.read ?? (() => UNKNOWN_CREW_STATE))
+  return { state, observation }
+}
+
+const NO_CREW = emptyCrew('ok')
+
+/** Rows for every reader: the suspended terminal panel always lists them. */
+export function useOrchestrationCrew(
+  target: RuntimeClientTarget | null,
+  party: string | null
+): OrchestrationCrewSnapshot {
+  const { state, observation } = useOrchestrationCrewState(target, party)
+  useEffect(() => observation?.wantRows(), [observation])
+  return state.rows ?? (state.summary.status === 'ok' ? NO_CREW : UNKNOWN_CREW)
 }

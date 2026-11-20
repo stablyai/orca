@@ -23,7 +23,7 @@ const NAMING_RUN_TIMEOUT_MS = 90_000
 export type ZcodeNamingRunDeps = {
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
-  resolveChatCredentials: () => ZcodeChatCredentials | null
+  resolveChatCredentials: () => Promise<ZcodeChatCredentials | null>
 }
 
 export class ZcodeNamingRuns {
@@ -53,14 +53,15 @@ export class ZcodeNamingRuns {
     this.inFlight.add(attempt)
     let home: string | null = null
     try {
-      if (!this.deps.resolveChatCredentials()) {
+      const chatCredentials = await this.deps.resolveChatCredentials()
+      if (!chatCredentials) {
         return null
       }
       if (attempt.signal.aborted || input.shouldExecute?.() === false) {
         return null
       }
       home = await mkdtemp(join(tmpdir(), 'orca-zcode-naming-'))
-      return await this.run({ ...input, attempt, home })
+      return await this.run({ ...input, attempt, home, chatCredentials })
     } catch {
       return null
     } finally {
@@ -79,8 +80,9 @@ export class ZcodeNamingRuns {
     shouldExecute?: () => boolean
     attempt: AbortController
     home: string
+    chatCredentials: ZcodeChatCredentials | null
   }): Promise<string | null> {
-    const { attempt, home } = input
+    const { attempt, home, chatCredentials } = input
     const environment = await this.deps.resolveEnvironment()
     if (attempt.signal.aborted) {
       return null
@@ -106,7 +108,7 @@ export class ZcodeNamingRuns {
         envToDelete: zcodeDesktopEnvKeys(environment, launch.env)
       },
       {
-        onServerRequest: (request) => this.answerAsk(connection, request),
+        onServerRequest: (request) => this.answerAsk(connection, request, chatCredentials),
         onNotification: (method, params) => {
           if (method !== 'session/event') {
             return
@@ -135,11 +137,7 @@ export class ZcodeNamingRuns {
         onReply: () => attempt.signal.throwIfAborted()
       })
       const table = readZcodeBuiltinTable(launch.env.ZCODE_BUILTIN_PROVIDER_CONFIG_FILE ?? null)
-      const push = await pushZcodeAccountConfig(
-        connection,
-        table,
-        this.deps.resolveChatCredentials()
-      )
+      const push = await pushZcodeAccountConfig(connection, table, chatCredentials)
       if (!push.pushed) {
         return null
       }
@@ -198,7 +196,8 @@ export class ZcodeNamingRuns {
   /** The asks a booting backend sends before it can answer a prompt. */
   private answerAsk(
     connection: ZcodeAppServerConnection,
-    request: { method: string; id: number | string }
+    request: { method: string; id: number | string },
+    chatCredentials: ZcodeChatCredentials | null
   ): void {
     if (request.method === 'session/requestRuntimePreferences') {
       connection.respond(request.id, {
@@ -209,7 +208,7 @@ export class ZcodeNamingRuns {
       return
     }
     if (request.method === 'interaction/requestProviderRuntimeHeaders') {
-      const credentials = this.deps.resolveChatCredentials()
+      const credentials = chatCredentials
       if (credentials) {
         connection.respond(request.id, {
           headersApplied: true,

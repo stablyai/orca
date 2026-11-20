@@ -23,6 +23,7 @@ import {
 } from '../credentials/zcode-account-config-push'
 import { ZcodeStructuredSession } from './zcode-structured-session'
 import type { ZcodeSendSettlement } from '../turns/zcode-structured-turns'
+import type { ZcodeChatCredentials } from '../credentials/zcode-chat-credentials'
 import type {
   ZcodeStructuredLaunch,
   ZcodeStructuredSessionAdapterDeps
@@ -56,12 +57,13 @@ export async function startZcodeStructuredSession(input: {
   recordStartFailure: (failure: AgentSessionStartFailure) => void
 }): Promise<ZcodeStartedChild> {
   const { acquire, deps, events } = input
+  const chatCredentials = await deps.resolveChatCredentials()
   const logger = deps.logger ?? createStructuredAgentSessionLogger()
   const sink = events ? providerTimelineSink(events) : null
   if (!sink) {
     throw new AgentSessionPreSpawnError(new Error('zcode chats need a journal sink'))
   }
-  const child = await spawnWiredChild(input, logger, input.launch)
+  const child = await spawnWiredChild(input, logger, input.launch, chatCredentials)
   // Whether this runtime accepts the host's account push decides its model inventory, so probe
   // it here while the start can still switch to the desktop runtime.
   const table = readZcodeBuiltinTable(
@@ -76,7 +78,7 @@ export async function startZcodeStructuredSession(input: {
       pushZcodeAccountConfig(
         child.connection,
         table,
-        deps.resolveChatCredentials(),
+        chatCredentials,
         STORAGE_READY_ATTEMPT_TIMEOUT_MS
       ),
     acquire.signal
@@ -131,7 +133,8 @@ async function spawnWiredChild(
     recordStartFailure: (failure: AgentSessionStartFailure) => void
   },
   logger: StructuredAgentSessionLogger,
-  launch: ZcodeStructuredLaunch
+  launch: ZcodeStructuredLaunch,
+  chatCredentials: ZcodeChatCredentials | null
 ): Promise<WiredChild> {
   const { acquire, deps, events } = input
   const identity = providerSpawnedProcessIdentity(
@@ -214,7 +217,7 @@ async function spawnWiredChild(
       requestTimeoutMs: deps.requestTimeoutMs ?? null,
       onEvent: (event) => deps.onEvent?.(event),
       resumeSessionId: launch.resumeSessionId,
-      resolveChatCredentials: deps.resolveChatCredentials,
+      credentials: chatCredentials,
       forceClose: input.forceClose,
       onSettled: input.onSettled
     },

@@ -37,7 +37,7 @@ export type ZcodeModelCatalogProbeDeps = {
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
   resolveCommandSettings?: () => StructuredAgentCommandSettings
   resolveLaunchArgs?: () => Promise<string[]> | string[]
-  resolveChatCredentials: () => ZcodeChatCredentials | null
+  resolveChatCredentials: () => Promise<ZcodeChatCredentials | null>
 }
 
 /** The zcode launch a catalog probe runs: the same bundled-first composition a chat session uses. */
@@ -101,7 +101,8 @@ export function createZcodeModelCatalogProbe(
             onServerRequest: (request) => asks?.(request)
           }
         )
-        asks = (request) => answerProbeAsk(connection, request, deps)
+        const chatCredentials = await deps.resolveChatCredentials()
+        asks = (request) => answerProbeAsk(connection, request, chatCredentials)
         try {
           signal?.throwIfAborted()
           // The backend accepts nothing until its storage boots, which it announces no other way
@@ -125,7 +126,7 @@ export function createZcodeModelCatalogProbe(
               const push = await pushZcodeAccountConfig(
                 connection,
                 table,
-                deps.resolveChatCredentials(),
+                chatCredentials,
                 Math.max(1, deadline - Date.now())
               )
               // A refused push leaves only third-party models; advertising account ids the
@@ -137,7 +138,7 @@ export function createZcodeModelCatalogProbe(
                 push.refusedStandaloneAccount ||
                 push.refusedUnsupported ||
                 table === null ||
-                deps.resolveChatCredentials() === null
+                chatCredentials === null
               if (!pushSettled) {
                 throw new Error('zcode account push did not land yet')
               }
@@ -234,7 +235,7 @@ export function createZcodeModelCatalogProbe(
 function answerProbeAsk(
   connection: ZcodeAppServerConnection,
   request: ZcodeAppServerServerRequest,
-  deps: ZcodeModelCatalogProbeDeps
+  chatCredentials: ZcodeChatCredentials | null
 ): void {
   if (request.method === 'session/requestRuntimePreferences') {
     connection.respond(request.id, {
@@ -245,7 +246,7 @@ function answerProbeAsk(
     return
   }
   if (request.method === 'interaction/requestProviderRuntimeHeaders') {
-    const credentials = deps.resolveChatCredentials()
+    const credentials = chatCredentials
     if (credentials) {
       connection.respond(request.id, {
         headersApplied: true,
