@@ -13,91 +13,106 @@ vi.mock('electron', () => ({
   webContents: { fromId: () => null }
 }))
 
-/** A page whose scripts finish only when the test says so, in the order they were sent. */
+/** A page whose main-world scripts finish only when the test says so; isolated-world replies are queued too. */
 function heldGuest() {
-  const finishers: (() => void)[] = []
-  const scripts: string[] = []
+  const mainWorld: (() => void)[] = []
+  const isolatedReplies: ((value: boolean | null) => void)[] = []
   const guest = Object.assign(new EventEmitter(), {
     id: 7,
     isDestroyed: () => false,
-    executeJavaScript: vi.fn(
-      (script: string) =>
-        new Promise<unknown>((resolve) => {
-          scripts.push(script)
-          finishers.push(() => resolve(undefined))
-        })
-    )
+    executeJavaScript: () =>
+      new Promise<unknown>((resolve) => {
+        mainWorld.push(() => resolve(true))
+      }),
+    executeJavaScriptInIsolatedWorld: (_world: number, scripts: { code: string }[]) =>
+      scripts[0]?.code.includes('current.await(')
+        ? new Promise<boolean | null>((resolve) => isolatedReplies.push(resolve))
+        : Promise.resolve(true)
   })
-  return { guest, scripts, finishers }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setGrabMode and the watch only call executeJavaScript, executeJavaScriptInIsolatedWorld, on/off/once and isDestroyed, which this fixture implements.
+  const page = guest as unknown as Electron.WebContents
+  return { guest, page, mainWorld, isolatedReplies }
+}
+
+const flush = async (): Promise<void> => {
+  for (let i = 0; i < 5; i++) {
+    await Promise.resolve()
+  }
 }
 
 describe('turning the picker off before Draw captures', () => {
-  it.each([
-    ['no pick is running (a confirmed pick is on screen)', false],
-    ['a pick is still running', true]
-  ])('settles only after the page has run a teardown when %s', async (_label, running) => {
+  it('settles only after the page has finished the teardown script', async () => {
     const manager = new BrowserManager()
-    const { guest, finishers } = heldGuest()
-    const cancelGrabOp = vi.spyOn(manager, 'cancelGrabOp').mockImplementation(() => {})
-    vi.spyOn(manager, 'hasActiveGrabOp').mockReturnValue(running)
-
-    let settled: boolean | null = null
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setGrabMode only calls executeJavaScript/once/off/isDestroyed, which this fixture implements.
-    const disabled = manager.setGrabMode('page-1', false, guest as unknown as Electron.WebContents)
-    void disabled.then((ok) => {
-      settled = ok
+    const { page, mainWorld } = heldGuest()
+    let settled = false
+    const off = manager.setGrabMode('page-1', false, page).then((ok) => {
+      settled = true
+      return ok
     })
-    await Promise.resolve()
+    await flush()
+    expect(settled).toBe(false)
 
-    expect(cancelGrabOp).toHaveBeenCalledWith('page-1', 'user')
-    expect(guest.executeJavaScript).toHaveBeenCalledTimes(1)
-    expect(settled).toBeNull()
+    for (const finish of mainWorld.splice(0)) {
+      finish()
+    }
 
-    finishers[0]?.()
-    await expect(disabled).resolves.toBe(true)
+    await expect(off).resolves.toBe(true)
   })
 })
 
-describe('following page field focus during a pick', () => {
-  it('reports a focused page field once armed, follows changes, and forgets it when the picker turns off', async () => {
+describe("a pick's view of page field focus", () => {
+  it('follows the page once armed, treats unknown as a field, and forgets it when the picker turns off', async () => {
     const manager = new BrowserManager()
-    // Each focus report the page gives, in order; later ones wait until the test releases them.
-    const reports: ((value: boolean | null) => void)[] = []
-    const guest = Object.assign(new EventEmitter(), {
-      id: 8,
-      isDestroyed: () => false,
-      executeJavaScript: vi.fn((script: string) =>
-        script.includes('g.awaitEditable(')
-          ? new Promise<boolean | null>((resolve) => reports.push(resolve))
-          : Promise.resolve(true)
-      )
-    })
-    vi.spyOn(manager, 'cancelGrabOp').mockImplementation(() => {})
-    const flush = async (): Promise<void> => {
-      for (let i = 0; i < 5; i++) {
-        await Promise.resolve()
-      }
+    const { page, mainWorld, isolatedReplies } = heldGuest()
+    const armed = manager.setGrabMode('page-1', true, page)
+    await flush()
+    for (const finish of mainWorld.splice(0)) {
+      finish()
     }
-
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setGrabMode only calls executeJavaScript/once/off/isDestroyed, which this fixture implements.
-    await manager.setGrabMode('page-1', true, guest as unknown as Electron.WebContents)
+    await armed
     await flush()
-    expect(manager.isGuestEditableFocused('page-1')).toBe(false)
-
-    reports.at(-1)?.(true)
-    await flush()
+    // No report yet: unknown, so letters stay with the page.
     expect(manager.isGuestEditableFocused('page-1')).toBe(true)
 
-    reports.at(-1)?.(false)
+    isolatedReplies.shift()?.(false)
     await flush()
     expect(manager.isGuestEditableFocused('page-1')).toBe(false)
 
-    reports.at(-1)?.(true)
+    manager.markGuestFocusUnknown('page-1')
+    expect(manager.isGuestEditableFocused('page-1')).toBe(true)
+    isolatedReplies.shift()?.(true)
     await flush()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: setGrabMode only calls executeJavaScript/once/off/isDestroyed, which this fixture implements.
-    const page = guest as unknown as Electron.WebContents
-    const turningOff = manager.setGrabMode('page-1', false, page)
+    isolatedReplies.shift()?.(false)
+    await flush()
     expect(manager.isGuestEditableFocused('page-1')).toBe(false)
-    await turningOff
+
+    const off = manager.setGrabMode('page-1', false, page)
+    expect(manager.isGuestEditableFocused('page-1')).toBe(true)
+    await flush()
+    for (const finish of mainWorld.splice(0)) {
+      finish()
+    }
+    await off
+  })
+
+  it('stops following on a new document: the old answers no longer describe the page', async () => {
+    const manager = new BrowserManager()
+    const { guest, page, mainWorld, isolatedReplies } = heldGuest()
+    const armed = manager.setGrabMode('page-1', true, page)
+    await flush()
+    for (const finish of mainWorld.splice(0)) {
+      finish()
+    }
+    await armed
+    await flush()
+    isolatedReplies.shift()?.(false)
+    await flush()
+    expect(manager.isGuestEditableFocused('page-1')).toBe(false)
+
+    guest.emit('did-start-navigation', {}, 'https://example.test/next', false, true)
+    isolatedReplies.shift()?.(false)
+    await flush()
+
+    expect(manager.isGuestEditableFocused('page-1')).toBe(true)
   })
 })

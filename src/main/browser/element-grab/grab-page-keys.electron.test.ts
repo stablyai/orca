@@ -15,12 +15,16 @@ describe('tool letters from a real page during a pick', () => {
       editableAtArm: true,
       searchValue: 'cd',
       forwardedWhileInField: [],
+      trackerVisibleToPage: false,
+      tabThenLetter: { focused: 'host', forwarded: [] },
+      scriptFocusThenLetter: { value: 'sa', forwarded: [] },
       noteValue: 'g',
       editableOnButton: false,
       forwardedOnButton: ['a'],
       pageSawToolKey: false,
       altEdges: ['alt-down', 'alt-up'],
-      editableAfterOff: false
+      // With the picker off nothing is known about the page: unknown counts as a field.
+      editableAfterOff: true
     })
   }, 60_000)
 })

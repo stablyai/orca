@@ -40,6 +40,7 @@ import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webvi
 import { useBrowserPageZoomFeedback } from '../host-guest/viewport/use-browser-page-zoom-feedback'
 import { useBrowserPageViewportScrollReporting } from '../host-guest/viewport/use-browser-page-viewport-scroll-reporting'
 import { BrowserPageDevToolsDock } from '../devtools-dock/BrowserDevToolsDock'
+import { browserPageDocumentIdentity } from '../annotate/palette/browser-page-document-identity'
 import { useBrowserAnnotateToolSwitch } from '../annotate/palette/use-browser-annotate-tool-switch'
 import { useWebviewInputLock } from '../host-guest/input/use-webview-input-lock'
 import { useBrowserPageViewportSizeFeedback } from '../host-guest/viewport/use-browser-page-viewport-size-feedback'
@@ -269,9 +270,8 @@ export function BrowserPagePane({
     markup,
     canPickElements: !isBlankTab && !browserTab.loadError,
     toolTargetId: browserTab.id,
-    documentKey: browserTab.url,
-    // A load (including a reload of the same URL) means a new document under the tools.
-    documentReady: !browserTab.loading
+    // A load (navigation or reload) means a new document; a same-document URL change does not.
+    ...browserPageDocumentIdentity(browserTab)
   })
   useBrowserPageKeyboardShortcuts({
     browserTabId: browserTab.id,
@@ -286,7 +286,9 @@ export function BrowserPagePane({
     startGrabIntent: toolSwitch.toggleTool,
     handleGrabActionShortcut: grabAnnotations.handleGrabActionShortcut,
     handleAnnotateToolKey: toolSwitch.selectToolByKey,
-    grabIsInteractive: grab.state !== 'idle' && grab.state !== 'error'
+    grabIsInteractive: grab.state !== 'idle' && grab.state !== 'error',
+    // Also while Draw waits for the picker's teardown, so A/G/D still switch then.
+    annotateToolOn: toolSwitch.activeTool !== null
   })
 
   // Why: synchronous webview URL access blocks render; navigation handlers update this cache before their store writes can re-render the pane.
@@ -398,7 +400,7 @@ export function BrowserPagePane({
               annotationSend={annotationSend}
               grabAnnotations={grabAnnotations}
               toolSwitch={toolSwitch}
-              canPickElements={!isBlankTab}
+              canPickElements={!isBlankTab && !browserTab.loadError}
             />,
             pageViewport.container
           )

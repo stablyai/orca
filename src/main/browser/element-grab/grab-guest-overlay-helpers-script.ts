@@ -62,39 +62,3 @@ export const GRAB_GUEST_LABEL_PLACEMENT_SCRIPT = `  // Where Orca's annotate pal
     return { left: left, top: fallbackTop };
   }
 `
-
-/** Tracks whether a page field has focus for the whole pick; pasted into the overlay script's scope. */
-export const GRAB_GUEST_EDITABLE_FOCUS_SCRIPT = `  // Whether keys typed now belong to a page field, for the whole pick (focus can move by Tab or page script, into
-  // shadow roots or frames). Orca reads this before taking a bare tool letter, so a field keeps its typing.
-  var NON_TEXT_INPUTS = ['button', 'checkbox', 'radio', 'submit', 'reset', 'image', 'file', 'color', 'range', 'hidden'];
-  function deepActiveElement() {
-    var el = document.activeElement;
-    try {
-      while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
-    } catch (err) {}
-    return el;
-  }
-  function takesTyping(el) {
-    if (!el) return false;
-    var tag = el.tagName;
-    // A focused frame's own field can't be seen from here; let the frame keep its keys.
-    if (tag === 'IFRAME' || tag === 'FRAME' || tag === 'OBJECT' || tag === 'EMBED') return true;
-    if (el.isContentEditable || tag === 'TEXTAREA' || tag === 'SELECT') return true;
-    if (tag === 'INPUT') return NON_TEXT_INPUTS.indexOf(String(el.type || 'text').toLowerCase()) === -1;
-    return false;
-  }
-  var editableFocused = takesTyping(deepActiveElement());
-  var editableWaiters = [];
-  function publishEditable() {
-    var next = takesTyping(deepActiveElement());
-    if (next === editableFocused) return;
-    editableFocused = next;
-    var waiters = editableWaiters;
-    editableWaiters = [];
-    waiters.forEach(function(resolve) { resolve(next); });
-  }
-  // On focusout the next element isn't focused yet; read once focus has settled.
-  function publishEditableSoon() { setTimeout(publishEditable, 0); }
-  window.addEventListener('focusin', publishEditable, true);
-  window.addEventListener('focusout', publishEditableSoon, true);
-`

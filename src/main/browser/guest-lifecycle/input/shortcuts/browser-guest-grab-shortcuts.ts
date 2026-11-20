@@ -7,6 +7,7 @@ import {
   isBrowserGuestToolKey
 } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type { ResolveRenderer } from '../../browser-guest-renderer-target'
+import { GuestKeyHold, type HeldKeyInput } from './guest-key-hold'
 
 // Guests swallow renderer shortcuts; keep normal copy when editing or text is selected.
 export function setupGrabShortcutForwarding(args: {
@@ -16,15 +17,82 @@ export function setupGrabShortcutForwarding(args: {
   hasActiveGrabOp: (browserTabId: string) => boolean
   /** True while a page field (input, editor, frame) has focus during a pick: its typing stays with the page. */
   isGuestEditableFocused?: (browserTabId: string) => boolean
+  /** Tab moved focus in the page; the field state is unknown (treated as a field) until the page reports. */
+  markGuestFocusUnknown?: (browserTabId: string) => void
+  /** Asks the page directly whether a field has focus now (its last report may lag a focus move). */
+  askPageHasField?: (browserTabId: string) => Promise<boolean>
   getKeybindings?: () => KeybindingOverrides | undefined
 }): () => void {
   const { browserTabId, guest, resolveRenderer, hasActiveGrabOp, getKeybindings } = args
   const isGuestEditableFocused = args.isGuestEditableFocused ?? (() => false)
   // Electron's input carries no AltGraph flag; the AltGr key reports itself, so its own edges say when it is held.
+  // Its release can happen elsewhere (another window, the app), so it is forgotten when the page loses focus and
+  // whenever a pick starts or ends; a stale flag would only leave letters to the page.
   let altGraphHeld = false
+  let pickWasActive = false
+  const forgetAltGraph = (): void => {
+    altGraphHeld = false
+  }
+  const isToolKeyDown = (input: HeldKeyInput): boolean =>
+    input.type === 'keyDown' &&
+    !input.meta &&
+    !input.control &&
+    !input.alt &&
+    !input.shift &&
+    // An IME composition owns its keys, and so does AltGr's layer of characters.
+    !input.isComposing &&
+    !altGraphHeld &&
+    isBrowserGuestToolKey(browserGuestToolKeyFromEvent(input)) &&
+    hasActiveGrabOp(browserTabId)
+  // During a grab, bare C/S copy or screenshot and A/G/D switch tools instead of typing into the page.
+  const takeAsTool = (
+    input: Pick<
+      Electron.Input,
+      'key' | 'isAutoRepeat' | 'type' | 'shift' | 'control' | 'alt' | 'meta'
+    > & { code?: string }
+  ): void => {
+    const bareKey = browserGuestToolKeyFromEvent(input)
+    // A held tool key would switch on every repeat; swallowing it is enough.
+    if (
+      !isBrowserGuestToolKey(bareKey) ||
+      (input.isAutoRepeat && !isBrowserGrabActionKey(bareKey))
+    ) {
+      return
+    }
+    resolveRenderer(browserTabId)?.send('browser:grabActionShortcut', {
+      browserPageId: browserTabId,
+      key: bareKey
+    })
+  }
+  const askPageHasField = args.askPageHasField ?? (async () => true)
+  const hold = new GuestKeyHold(
+    guest,
+    () => askPageHasField(browserTabId),
+    isToolKeyDown,
+    takeAsTool
+  )
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     // Agent-injected keys must not trigger Orca actions (#20595).
     if (isAgentInjectingInput(guest)) {
+      return
+    }
+    // A key the hold sent back into the page: it was already decided.
+    if (hold.consumeReplay()) {
+      return
+    }
+    const pickActive = hasActiveGrabOp(browserTabId)
+    if (pickActive !== pickWasActive) {
+      pickWasActive = pickActive
+      altGraphHeld = false
+      // The pick ended while keys waited: they were typed for the page.
+      if (!pickActive) {
+        hold.release()
+      }
+    }
+    // Keys typed while a letter waits for the page's answer queue behind it, so nothing is reordered.
+    if (hold.holding) {
+      event.preventDefault()
+      hold.add(input)
       return
     }
     // Alt alone, held over the page while picking, fades the palette so what's under it can be picked. The page
@@ -48,30 +116,18 @@ export function setupGrabShortcutForwarding(args: {
     if (input.type !== 'keyDown') {
       return
     }
-    const bareKey = browserGuestToolKeyFromEvent(input)
-    if (
-      !input.meta &&
-      !input.control &&
-      !input.alt &&
-      !input.shift &&
-      // An IME composition owns its keys, and so does AltGr's layer of characters.
-      !input.isComposing &&
-      !altGraphHeld &&
-      isBrowserGuestToolKey(bareKey) &&
-      hasActiveGrabOp(browserTabId) &&
-      !isGuestEditableFocused(browserTabId)
-    ) {
-      const renderer = resolveRenderer(browserTabId)
-      if (!renderer) {
+    if (input.key === 'Tab' && pickActive) {
+      args.markGuestFocusUnknown?.(browserTabId)
+      return
+    }
+    if (isToolKeyDown(input)) {
+      // A field has (or may have) focus: the letter types there.
+      if (isGuestEditableFocused(browserTabId) || !resolveRenderer(browserTabId)) {
         return
       }
-      // During a grab, bare C/S copy or screenshot and A/G/D switch tools instead of typing into the page.
+      // Last report says no field, but focus may have just moved: ask the page before taking the letter.
       event.preventDefault()
-      // A held tool key would switch on every repeat; swallowing it is enough.
-      if (input.isAutoRepeat && !isBrowserGrabActionKey(bareKey)) {
-        return
-      }
-      renderer.send('browser:grabActionShortcut', { browserPageId: browserTabId, key: bareKey })
+      hold.start(input)
       return
     }
 
@@ -118,9 +174,11 @@ export function setupGrabShortcutForwarding(args: {
   }
 
   guest.on('before-input-event', handler)
+  guest.on('blur', forgetAltGraph)
   return () => {
     try {
       guest.off('before-input-event', handler)
+      guest.off('blur', forgetAltGraph)
     } catch {
       // The guest may already be destroyed.
     }

@@ -8,19 +8,31 @@ import { setupGrabShortcutForwarding } from './browser-guest-grab-shortcuts'
 
 type Handler = (event: { preventDefault: () => void }, input: Partial<Electron.Input>) => void
 
+/** Lets a held letter get the page's answer (main asks the page before taking a letter). */
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
 function setup(
   activeGrab: boolean | (() => boolean),
-  editableFocused: () => boolean = () => false
+  editableFocused: () => boolean = () => false,
+  pageHasField: () => boolean = () => false
 ): {
   press: (input: Partial<Electron.Input>) => boolean
   send: ReturnType<typeof vi.fn>
+  blur: () => void
 } {
   let handler: Handler | null = null
+  let onBlur: (() => void) | null = null
   const guestFixture = {
-    on: (_event: string, fn: Handler) => {
-      handler = fn
+    on: (event: string, fn: Handler & (() => void)) => {
+      if (event === 'blur') {
+        onBlur = fn
+      } else {
+        handler = fn
+      }
     },
     off: vi.fn(),
+    isDestroyed: () => false,
+    sendInputEvent: vi.fn(),
     executeJavaScript: vi.fn(async () => false)
   }
   const send = vi.fn()
@@ -32,10 +44,12 @@ function setup(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the forwarder only calls send on the renderer, which this fixture implements.
     resolveRenderer: () => rendererFixture as unknown as Electron.WebContents,
     hasActiveGrabOp: typeof activeGrab === 'function' ? activeGrab : () => activeGrab,
-    isGuestEditableFocused: editableFocused
+    isGuestEditableFocused: editableFocused,
+    askPageHasField: async () => pageHasField()
   })
   return {
     send,
+    blur: () => onBlur?.(),
     press: (input) => {
       const preventDefault = vi.fn()
       handler?.(
@@ -55,7 +69,7 @@ function setup(
 }
 
 describe('grab shortcut forwarding from a focused page', () => {
-  it('forwards the A/G/D tool keys while a pick is running, so the page never types them', () => {
+  it('forwards the A/G/D tool keys while a pick is running, so the page never types them', async () => {
     const { press, send } = setup(true)
     for (const [key, code] of [
       ['a', 'KeyA'],
@@ -63,6 +77,7 @@ describe('grab shortcut forwarding from a focused page', () => {
       ['d', 'KeyD']
     ]) {
       expect(press({ key, code })).toBe(true)
+      await settle()
       expect(send).toHaveBeenLastCalledWith('browser:grabActionShortcut', {
         browserPageId: 'page-1',
         key
@@ -70,7 +85,7 @@ describe('grab shortcut forwarding from a focused page', () => {
     }
   })
 
-  it('lets a page field keep its typing while it has focus during a pick, and takes letters again once it loses it', () => {
+  it('lets a page field keep its typing while it has focus during a pick, and takes letters again once it loses it', async () => {
     let fieldFocused = true
     const { press, send } = setup(true, () => fieldFocused)
 
@@ -85,13 +100,14 @@ describe('grab shortcut forwarding from a focused page', () => {
 
     fieldFocused = false
     expect(press({ key: 'g', code: 'KeyG' })).toBe(true)
+    await settle()
     expect(send).toHaveBeenLastCalledWith('browser:grabActionShortcut', {
       browserPageId: 'page-1',
       key: 'g'
     })
   })
 
-  it("leaves AltGr's characters to the page while AltGr is held, even letters that map to a tool key", () => {
+  it("leaves AltGr's characters to the page while AltGr is held, even letters that map to a tool key", async () => {
     const { press, send } = setup(true)
     press({ key: 'AltGraph', code: 'AltRight' })
     // A layout whose AltGr level types Greek: γ sits on the G key.
@@ -100,7 +116,36 @@ describe('grab shortcut forwarding from a focused page', () => {
 
     press({ type: 'keyUp', key: 'AltGraph', code: 'AltRight' })
     expect(press({ key: 'g', code: 'KeyG' })).toBe(true)
+    await settle()
   })
+
+  it.each([
+    ['the page loses focus', 'blur'],
+    ['the pick ends and a new one starts', 'new pick']
+  ] as const)(
+    'forgets a held AltGr when %s (its release may happen elsewhere)',
+    async (_label, reset) => {
+      let picking = true
+      const { press, send, blur } = setup(() => picking)
+      press({ key: 'AltGraph', code: 'AltRight' })
+      expect(press({ key: 'g', code: 'KeyG' })).toBe(false)
+
+      if (reset === 'blur') {
+        blur()
+      } else {
+        picking = false
+        press({ key: 'Shift', code: 'ShiftLeft' })
+        picking = true
+      }
+
+      expect(press({ key: 'g', code: 'KeyG' })).toBe(true)
+      await settle()
+      expect(send).toHaveBeenLastCalledWith('browser:grabActionShortcut', {
+        browserPageId: 'page-1',
+        key: 'g'
+      })
+    }
+  )
 
   it('swallows a held tool key without switching again', () => {
     const { press, send } = setup(true)
@@ -122,9 +167,10 @@ describe('grab shortcut forwarding from a focused page', () => {
     })
   })
 
-  it('matches the physical key on non-Latin layouts', () => {
+  it('matches the physical key on non-Latin layouts', async () => {
     const { press, send } = setup(true)
     expect(press({ key: 'п', code: 'KeyG' })).toBe(true)
+    await settle()
     expect(send).toHaveBeenCalledWith('browser:grabActionShortcut', {
       browserPageId: 'page-1',
       key: 'g'
@@ -175,10 +221,11 @@ describe('grab shortcut forwarding from a focused page', () => {
     })
   })
 
-  it('follows the letter on the key for Latin layouts, not its physical position', () => {
+  it('follows the letter on the key for Latin layouts, not its physical position', async () => {
     const { press, send } = setup(true)
     // AZERTY: the key labelled A sits where QWERTY has Q.
     press({ key: 'a', code: 'KeyQ' })
+    await settle()
     expect(send).toHaveBeenLastCalledWith('browser:grabActionShortcut', {
       browserPageId: 'page-1',
       key: 'a'

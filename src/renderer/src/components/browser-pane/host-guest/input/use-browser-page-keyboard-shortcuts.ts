@@ -35,7 +35,8 @@ export function useBrowserPageKeyboardShortcuts({
   startGrabIntent,
   handleGrabActionShortcut,
   handleAnnotateToolKey,
-  grabIsInteractive
+  grabIsInteractive,
+  annotateToolOn = false
 }: {
   browserTabId: string
   workspaceId: string
@@ -51,6 +52,8 @@ export function useBrowserPageKeyboardShortcuts({
   /** A/G/D switch the annotate palette's tool while picking or drawing. */
   handleAnnotateToolKey: (key: BrowserAnnotateToolKey) => void
   grabIsInteractive: boolean
+  /** Any annotate tool is on, including Draw while it waits for the picker's teardown. */
+  annotateToolOn?: boolean
 }): void {
   const keybindings = useAppStore((state) => state.keybindings)
 
@@ -115,7 +118,7 @@ export function useBrowserPageKeyboardShortcuts({
     })
   }, [browserTabId, markupIsActive, startGrabIntent])
 
-  const annotateModeIsOn = grabIsInteractive || markupIsActive
+  const annotateModeIsOn = grabIsInteractive || markupIsActive || annotateToolOn
   useEffect(() => {
     if (!annotateModeIsOn || !isActive) {
       return

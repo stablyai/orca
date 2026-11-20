@@ -18,7 +18,10 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
-/** The mode as the overlays wire it: an open notes list registers to take Esc first; the card asks it. */
+/**
+ * The real card with the real interceptor registry and focus helper; the notes list itself is a stand-in (this does not
+ * render the production overlays; that path is proven in the isolated build).
+ */
 function Harness(): React.JSX.Element {
   const [notesOpen, setNotesOpen] = useState(true)
   const [cardOpen, setCardOpen] = useState(true)
@@ -58,8 +61,8 @@ function Harness(): React.JSX.Element {
   )
 }
 
-describe('Esc in the comment card with the notes list open', () => {
-  it('returns focus to the note count when the list closes from anywhere else', () => {
+describe('the comment card handles one Esc once', () => {
+  it('focus helper: returns focus to the note count unless a text field has it', () => {
     render(
       <div>
         <button type="button" data-browser-annotate-notes-chip="">
@@ -75,7 +78,7 @@ describe('Esc in the comment card with the notes list open', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: '3 notes' }))
   })
 
-  it('closes only the notes list on the first Esc, and the card on the next', async () => {
+  it('one Esc seen by both the card layer and its text field acts once: it is taken by the registered interceptor, and the field keeps focus', async () => {
     render(<Harness />)
     const textarea = await screen.findByRole('textbox')
 

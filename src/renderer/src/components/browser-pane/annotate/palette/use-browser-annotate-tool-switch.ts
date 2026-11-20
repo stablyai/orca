@@ -15,48 +15,18 @@ import { annotateEscOwner } from './annotate-esc-ownership'
 
 const DISCARDED_DRAWING_UNDO_MS = 5000
 
-/** The palette's three tools: the picker's two intents plus screenshot markup. */
-export type BrowserAnnotateTool = GrabIntent | 'draw'
+import {
+  TOOL_BY_KEY,
+  getBrowserAnnotateActiveTool,
+  type BrowserAnnotateTool,
+  type BrowserAnnotateToolSwitch
+} from './browser-annotate-tool-types'
 
-export type BrowserAnnotateToolSwitch = {
-  /** Null while no tool is on, which hides the palette. */
-  activeTool: BrowserAnnotateTool | null
-  /** Switch to a tool; the tool that is already on stays on (only exit or toggle turns the mode off). */
-  selectTool: (tool: BrowserAnnotateTool) => void
-  /** Toolbar, chords and page keys: the tool that is on turns the mode off, any other switches to it. */
-  toggleTool: (tool: BrowserAnnotateTool) => void
-  selectToolByKey: (key: BrowserAnnotateToolKey) => void
-  /** Leave the mode; saved notes stay in the notes list, an unsaved comment card is dropped. */
-  exit: () => void
-  /** The page the picker runs in. */
-  toolTargetId: string
-  /** Draw reports its strokes here, so leaving Draw with a drawing can offer Undo. */
-  reportShapes: (shapes: readonly MarkupShape[]) => void
-  /** Strokes to reopen Draw with after Undo; undefined for a fresh drawing. */
-  restoredShapes: readonly MarkupShape[] | undefined
-  /** Key for Draw's editor: a new one per drawing session. */
-  drawSession: number
-  /** The page and document the tools act on; held state for another document is stale. */
-  drawOwner: string
-}
-
-const TOOL_BY_KEY: Record<BrowserAnnotateToolKey, BrowserAnnotateTool> = {
-  a: 'annotate',
-  g: 'copy',
-  d: 'draw'
-}
-
-export function getBrowserAnnotateActiveTool(
-  grabState: GrabModeHook['state'],
-  grabIntent: GrabIntent,
-  markupIsActive: boolean,
-  drawStarting = false
-): BrowserAnnotateTool | null {
-  if (markupIsActive || drawStarting) {
-    return 'draw'
-  }
-  return grabState === 'idle' ? null : grabIntent
-}
+export {
+  getBrowserAnnotateActiveTool,
+  type BrowserAnnotateTool,
+  type BrowserAnnotateToolSwitch
+} from './browser-annotate-tool-types'
 
 /**
  * The one owner of Annotate / Grab / Draw transitions for a page. Every entry (palette, toolbar, chords, page keys)
@@ -128,11 +98,15 @@ export function useBrowserAnnotateToolSwitch({
   // Live owner and capability, read when the overlay teardown resolves, a few frames after Draw was asked for.
   const liveOwnerRef = useRef(drawOwner)
   const canPickRef = useRef(canPickElements)
+  const documentReadyRef = useRef(documentReady)
+  // A Draw start whose teardown finished while the page was still loading: it captures once the load ends.
+  const captureWhenReadyRef = useRef<{ owner: string; transition: number } | null>(null)
   useLayoutEffect(() => {
     markupActiveRef.current = markup.isActive
     liveOwnerRef.current = drawOwner
     canPickRef.current = canPickElements
-  }, [canPickElements, drawOwner, markup.isActive])
+    documentReadyRef.current = documentReady
+  }, [canPickElements, documentReady, drawOwner, markup.isActive])
   const [restoredShapes, setRestoredShapes] = useState<readonly MarkupShape[] | undefined>()
   const undoToastRef = useRef<string | number | null>(null)
   // The discarded drawing while its Undo is on offer: entering Draw again in that window restores it.
@@ -248,6 +222,14 @@ export function useBrowserAnnotateToolSwitch({
           ) {
             return
           }
+          // Still loading: capture the finished page, not a half-painted one. A new load before then is a new
+          // document generation, which drops this start.
+          if (tornDown && !documentReadyRef.current) {
+            setRestoredShapes(undefined)
+            setDrawSession((session) => session + 1)
+            captureWhenReadyRef.current = { owner, transition }
+            return
+          }
           setDrawStartingFor(null)
           setRestoredShapes(undefined)
           setDrawSession((session) => session + 1)
@@ -266,6 +248,25 @@ export function useBrowserAnnotateToolSwitch({
     },
     [cancelPendingBrowserCapture, dismissUndo, drawOwner, markup, reopenDrawing, toolTargetId]
   )
+
+  // The load ended for a Draw that waited on it: capture now, unless anything since superseded that start. The
+  // palette shows Draw until the capture settles (the drawing then owns it, or a failed capture leaves the mode).
+  useEffect(() => {
+    const waiting = captureWhenReadyRef.current
+    if (!waiting || !usable) {
+      return
+    }
+    captureWhenReadyRef.current = null
+    if (waiting.owner !== drawOwner || waiting.transition !== transitionRef.current) {
+      return
+    }
+    const settle = (): void => {
+      if (transitionRef.current === waiting.transition) {
+        setDrawStartingFor(null)
+      }
+    }
+    void markup.start().then(settle, settle)
+  }, [drawOwner, markup, usable])
 
   const selectTool = useCallback(
     (tool: BrowserAnnotateTool): void => {

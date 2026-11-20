@@ -1,6 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { BrowserGrabLabelAvoidArea } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 
+// Until the page is registered with main (a fresh page), the area is refused; try again for a few seconds.
+const RETRY_MS = 300
+const MAX_RETRIES = 10
+
 /** The palette and hint's footprint relative to the page frame, in this window's pixels; null if unmeasurable. */
 export function measureGrabLabelAvoidArea(
   frame: HTMLElement,
@@ -70,8 +74,11 @@ export function useGrabLabelAvoidArea({
   /** Changes whenever the palette's place or shape does (position, top, fit, hint shown). */
   layoutKey: string
 }): void {
+  // What main has accepted for which page. Only a successful send counts: before the page is registered main refuses
+  // the area, and an unchanged palette would otherwise never send it again.
   const sentRef = useRef<BrowserGrabLabelAvoidArea | null>(null)
   const sentPageRef = useRef<string | null>(null)
+  const reportedPageRef = useRef<string | null>(null)
 
   useLayoutEffect(() => {
     const frame = frameRef?.current
@@ -79,31 +86,56 @@ export function useGrabLabelAvoidArea({
     if (!enabled || !frame || !palette) {
       return
     }
+    let disposed = false
+    let retryTimer: number | undefined
+    let retries = 0
+    let latest: BrowserGrabLabelAvoidArea | null = null
     const report = (): void => {
+      window.clearTimeout(retryTimer)
       const area = measureGrabLabelAvoidArea(frame, [palette, hintRef.current])
       if (area === null || (sentPageRef.current === pageId && sameArea(area, sentRef.current))) {
         return
       }
-      sentRef.current = area
-      sentPageRef.current = pageId
-      void window.api.browser.setGrabLabelAvoidArea({ browserPageId: pageId, area })
+      latest = area
+      reportedPageRef.current = pageId
+      void window.api.browser.setGrabLabelAvoidArea({ browserPageId: pageId, area }).then(
+        (accepted) => {
+          // A newer measurement, a closed palette or another page supersedes this reply.
+          if (disposed || latest !== area) {
+            return
+          }
+          if (accepted) {
+            sentRef.current = area
+            sentPageRef.current = pageId
+            retries = 0
+            return
+          }
+          if (retries < MAX_RETRIES) {
+            retries += 1
+            retryTimer = window.setTimeout(report, RETRY_MS)
+          }
+        },
+        () => {}
+      )
     }
     report()
-    if (typeof ResizeObserver === 'undefined') {
-      return
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(report)
+    observer?.observe(frame)
+    observer?.observe(palette)
+    return () => {
+      disposed = true
+      window.clearTimeout(retryTimer)
+      observer?.disconnect()
     }
-    const observer = new ResizeObserver(report)
-    observer.observe(frame)
-    observer.observe(palette)
-    return () => observer.disconnect()
   }, [enabled, frameRef, hintRef, layoutKey, pageId, paletteRef])
 
   // The palette closed or moved to another page: the old page's picker no longer needs to step around it.
   useEffect(
     () => () => {
-      if (sentPageRef.current === pageId) {
+      if (reportedPageRef.current === pageId) {
         sentRef.current = null
         sentPageRef.current = null
+        reportedPageRef.current = null
         void window.api.browser.setGrabLabelAvoidArea({ browserPageId: pageId, area: null })
       }
     },

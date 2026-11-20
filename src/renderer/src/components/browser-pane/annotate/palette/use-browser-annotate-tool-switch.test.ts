@@ -309,6 +309,20 @@ describe('switching annotate tools', () => {
     expect(result.current.tools.activeTool).toBeNull()
   })
 
+  it('a Draw asked for while the page is still loading captures only once the load ends', async () => {
+    const markup = makeMarkup()
+    const { result, rerender } = renderBrowserTools(markup)
+    rerender({ ...FIRST_PAGE, documentReady: false })
+    const release = await startDrawWithTeardownHeld(result)
+
+    await act(async () => release({ ok: true }))
+    expect(markup.start).not.toHaveBeenCalled()
+    expect(result.current.tools.activeTool).toBe('draw')
+
+    rerender(FIRST_PAGE)
+    await waitFor(() => expect(markup.start).toHaveBeenCalledTimes(1))
+  })
+
   it('drops a pending Draw when the page stops being drawable, and does not come back on Draw later', async () => {
     const markup = makeMarkup()
     const { result, rerender } = renderBrowserTools(markup)

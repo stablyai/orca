@@ -1,9 +1,6 @@
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 
-import {
-  GRAB_GUEST_EDITABLE_FOCUS_SCRIPT,
-  GRAB_GUEST_LABEL_PLACEMENT_SCRIPT
-} from './grab-guest-overlay-helpers-script'
+import { GRAB_GUEST_LABEL_PLACEMENT_SCRIPT } from './grab-guest-overlay-helpers-script'
 
 export { buildGrabLabelAvoidScript } from './grab-guest-overlay-helpers-script'
 
@@ -12,7 +9,7 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
   host.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;pointer-events:all;cursor:crosshair;';
   document.documentElement.appendChild(host);
 
-${GRAB_GUEST_EDITABLE_FOCUS_SCRIPT}
+
   var shadow = host.attachShadow({ mode: 'closed' });
 
   // The top layer paints the outline above modal dialogs, popovers and fullscreen elements.
@@ -197,17 +194,7 @@ ${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
     },
     // Set by awaitClick to receive the next pick.
     onPick: null,
-    // Resolves with whether a page field has focus, as soon as that differs from what the caller last saw.
-    awaitEditable: function(lastSeen) {
-      if (lastSeen !== editableFocused) return Promise.resolve(editableFocused);
-      return new Promise(function(resolve) { editableWaiters.push(resolve); });
-    },
     cleanup: function() {
-      window.removeEventListener('focusin', publishEditable, true);
-      window.removeEventListener('focusout', publishEditableSoon, true);
-      var waiters = editableWaiters;
-      editableWaiters = [];
-      waiters.forEach(function(resolve) { resolve(null); });
       stopPointerInput();
       window.removeEventListener('toggle', raiseOverlay, true);
       window.removeEventListener('fullscreenchange', raiseOverlay, true);

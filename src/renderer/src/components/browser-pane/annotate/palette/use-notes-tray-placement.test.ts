@@ -21,22 +21,22 @@ function pageWithChipAt(chipLeft: number): { current: HTMLElement } {
   return { current: container }
 }
 
-describe('where the notes list opens', () => {
-  it('opens just under the note count, aligned with it', () => {
+describe('notes list placement computed from the chip and page rects it is given', () => {
+  it('returns a place 6px under the chip rect, left-aligned with it', () => {
     const ref = pageWithChipAt(200)
     const { result } = renderHook(() => useNotesTrayPlacement(ref, true))
 
     expect(result.current).toMatchObject({ top: 42, left: 200, width: 320, bottom: 'auto' })
   })
 
-  it('stays inside the page area when the palette sits at the right edge', () => {
+  it('clamps the returned left edge inside the page rect for a chip at the right edge', () => {
     const ref = pageWithChipAt(760)
     const { result } = renderHook(() => useNotesTrayPlacement(ref, true))
 
-    expect(result.current).toMatchObject({ left: 800 - 320 - 12 })
+    expect(result.current).toMatchObject({ left: 468 })
   })
 
-  it('keeps the default corner while the list is closed', () => {
+  it('returns no placement while the list is closed', () => {
     const ref = pageWithChipAt(200)
     const { result } = renderHook(() => useNotesTrayPlacement(ref, false))
 

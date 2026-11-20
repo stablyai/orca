@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron'
 import { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { setupGrabShortcutForwarding } from '../../guest-lifecycle/input/shortcuts/browser-guest-grab-shortcuts'
+import { askGuestHasField } from '../grab-guest-editable-watch'
 
 const PAGE = `<!doctype html><meta charset="utf-8"><title>Keys</title>
 <input id="search"><button id="buy">Buy</button><div id="host"></div>
@@ -37,7 +38,9 @@ async function run(): Promise<void> {
     guest: page,
     resolveRenderer: () => renderer,
     hasActiveGrabOp: () => true,
-    isGuestEditableFocused: (tabId) => manager.isGuestEditableFocused(tabId)
+    isGuestEditableFocused: (tabId) => manager.isGuestEditableFocused(tabId),
+    markGuestFocusUnknown: (tabId) => manager.markGuestFocusUnknown(tabId),
+    askPageHasField: () => askGuestHasField(page)
   })
   const evalPage = (code: string): Promise<unknown> => page.executeJavaScript(code)
   const press = async (key: string): Promise<void> => {
@@ -70,12 +73,47 @@ async function run(): Promise<void> {
     `document.getElementById('host').shadowRoot.getElementById('note').value`
   )
 
+  // Page script can't see or replace the tracker (it lives in an isolated world).
+  const trackerVisibleToPage = await evalPage(`typeof window.__orcaEditableWatch !== 'undefined'`)
+
+  // Tab into a field, then a letter at once: Tab makes the state unknown, so the letter types into the field.
+  await evalPage(`document.getElementById('buy').focus()`)
+  await settleEditable(false)
+  const beforeTab = forwarded.length
+  page.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' })
+  page.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' })
+  await press('g')
+  const tabThenLetter = {
+    focused: await evalPage(`document.activeElement && document.activeElement.id`),
+    forwarded: forwarded.slice(beforeTab)
+  }
+
+  // Script refocus into a field, then a letter right away.
+  await evalPage(`document.getElementById('buy').focus()`)
+  await settleEditable(false)
+  const beforeScript = forwarded.length
+  await evalPage(
+    `document.getElementById('search').value = ''; document.getElementById('search').focus()`
+  )
+  // Two keys back to back: the first is held for the page's answer, the second must not overtake it.
+  for (const key of ['s', 'a']) {
+    page.sendInputEvent({ type: 'keyDown', keyCode: key })
+    page.sendInputEvent({ type: 'char', keyCode: key })
+    page.sendInputEvent({ type: 'keyUp', keyCode: key })
+  }
+  await wait(200)
+  const scriptFocusThenLetter = {
+    value: await evalPage(`document.getElementById('search').value`),
+    forwarded: forwarded.slice(beforeScript)
+  }
+
   // Focus leaves the fields (Tab or script to a button): letters are tools again and the page never sees them.
   await evalPage(`document.getElementById('buy').focus(); window.__pageKeys = []`)
   const editableOnButton = await settleEditable(false)
+  const beforeButton = forwarded.length
   await press('a')
   const pageSawToolKey = await evalPage(`window.__pageKeys.includes('a')`)
-  const forwardedOnButton = forwarded.slice(forwardedWhileInField.length)
+  const forwardedOnButton = forwarded.slice(beforeButton)
 
   // Alt pressed and released in the page during a pick: both edges reach the palette. (A key-up whose key-down
   // the page never saw is dropped before any handler, so the palette also releases when focus enters the page.)
@@ -94,6 +132,9 @@ async function run(): Promise<void> {
       editableAtArm,
       searchValue,
       forwardedWhileInField,
+      trackerVisibleToPage,
+      tabThenLetter,
+      scriptFocusThenLetter,
       noteValue,
       editableOnButton,
       forwardedOnButton,

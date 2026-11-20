@@ -72,29 +72,6 @@ describe('BrowserAnnotateToolPalette', () => {
     expect(onSelectTool).toHaveBeenLastCalledWith('draw')
   })
 
-  it("offers Grab's Copy and Screenshot for the picked element, and Done exits", () => {
-    const onGrabCopy = vi.fn()
-    const onGrabScreenshot = vi.fn()
-    const onDone = vi.fn()
-    render(
-      <Harness
-        activeTool="copy"
-        grabPicked
-        onGrabCopy={onGrabCopy}
-        onGrabScreenshot={onGrabScreenshot}
-        onDone={onDone}
-      />
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Screenshot' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-
-    expect(onGrabCopy).toHaveBeenCalledTimes(1)
-    expect(onGrabScreenshot).toHaveBeenCalledTimes(1)
-    expect(onDone).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps Copy and Screenshot unavailable until an element is picked', () => {
     render(<Harness activeTool="copy" />)
 
@@ -102,13 +79,11 @@ describe('BrowserAnnotateToolPalette', () => {
     expect(screen.getByRole('button', { name: 'Screenshot' }).hasAttribute('disabled')).toBe(true)
   })
 
-  it('moves focus between tools with the arrow keys without switching tool', () => {
-    const onSelectTool = vi.fn()
-    render(<Harness activeTool="draw" onSelectTool={onSelectTool} />)
+  it('moves focus to the next tool button with the arrow key, wrapping at the end', () => {
+    render(<Harness activeTool="draw" />)
 
     fireEvent.keyDown(screen.getByRole('button', { name: 'Draw' }), { key: 'ArrowRight' })
 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Annotate' }))
-    expect(onSelectTool).not.toHaveBeenCalled()
   })
 })

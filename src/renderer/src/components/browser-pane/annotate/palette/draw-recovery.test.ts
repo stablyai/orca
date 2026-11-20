@@ -6,6 +6,7 @@ import { useBrowserPageGrabAnnotations } from '../grab/use-browser-page-grab-ann
 import { useMarkupMode, type MarkupCaptureContext } from '../capture/useMarkupMode'
 import type { MarkupShape } from '../drawing/markup-drawing-model'
 import { useBrowserAnnotateToolSwitch } from './use-browser-annotate-tool-switch'
+import { browserPageDocumentIdentity } from './browser-page-document-identity'
 
 // The page capture is the only stub: each capture is a new, numbered frozen page.
 const capture = vi.hoisted(() => ({ count: 0 }))
@@ -65,11 +66,13 @@ beforeEach(() => {
   })
 })
 
-type Page = { documentReady: boolean }
+// The browser tab as the pane sees it; the tools get its document identity the way the pane passes it.
+type Tab = { url: string; loading: boolean }
+const LOADED: Tab = { url: 'http://acme.test/', loading: false }
 
 function renderTools() {
   return renderHook(
-    ({ documentReady }: Page) => {
+    (tab: Tab) => {
       const grab = useGrabMode(PAGE_ID)
       const markup = useMarkupMode({
         getCaptureContext: () => CAPTURE_CONTEXT,
@@ -92,12 +95,11 @@ function renderTools() {
         markup,
         canPickElements: true,
         toolTargetId: PAGE_ID,
-        documentKey: 'http://acme.test/',
-        documentReady
+        ...browserPageDocumentIdentity({ id: PAGE_ID, loading: tab.loading })
       })
       return { markup, tools }
     },
-    { initialProps: { documentReady: true } }
+    { initialProps: LOADED }
   )
 }
 
@@ -115,7 +117,7 @@ function shownPage({ result }: Rendered): string | undefined {
 function drawAndLeave(rendered: Rendered, shapes: MarkupShape[]): void {
   act(() => rendered.result.current.tools.reportShapes(shapes))
   act(() => rendered.result.current.tools.exit())
-  rendered.rerender({ documentReady: true })
+  rendered.rerender(LOADED)
 }
 
 describe('getting a discarded drawing back', () => {
@@ -219,12 +221,25 @@ describe('getting a discarded drawing back', () => {
     await enterDraw(rendered)
     drawAndLeave(rendered, [strokeA])
 
-    rendered.rerender({ documentReady: false })
-    rendered.rerender({ documentReady: true })
+    rendered.rerender({ ...LOADED, loading: true })
+    rendered.rerender(LOADED)
     await enterDraw(rendered)
 
     expect(shownPage(rendered)).toContain('capture-2')
     expect(rendered.result.current.tools.restoredShapes).toBeUndefined()
+  })
+
+  it('a same-document URL change (pushState, hash) keeps the offer: Draw still restores', async () => {
+    const rendered = renderTools()
+    await enterDraw(rendered)
+    drawAndLeave(rendered, [strokeA])
+
+    rendered.rerender({ url: 'http://acme.test/#pricing', loading: false })
+    rendered.rerender({ url: 'http://acme.test/plans', loading: false })
+    await enterDraw(rendered)
+
+    expect(shownPage(rendered)).toContain('capture-1')
+    expect(rendered.result.current.tools.restoredShapes).toEqual([strokeA])
   })
 
   it('leaving Draw with nothing drawn offers nothing back', async () => {
