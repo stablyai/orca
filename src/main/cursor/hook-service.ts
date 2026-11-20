@@ -55,10 +55,12 @@ function scanManagedEntries(configPath: string, scriptPath: string): ManagedEntr
       continue
     }
     const event = CURSOR_EVENTS.find((candidate) => candidate === eventName)
-    if (event) {
-      scan.events.push(event)
+    if (!event) {
+      scan.outdated = true
+      continue
     }
-    const current = event ? getManagedCommand(scriptPath, event) : undefined
+    scan.events.push(event)
+    const current = getManagedCommand(scriptPath, event)
     if (managed.some((definition) => definition.command !== current)) {
       scan.outdated = true
     }
