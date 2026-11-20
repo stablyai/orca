@@ -44,16 +44,13 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
       env: process.env
     })
     try {
-      const leaked = child.stdio[8]
+      const leaked = child.stdio.at(8)
       if (!(leaked instanceof Readable)) {
         throw new Error('Missing stand-in descriptor')
       }
       leaked.resume()
-      const released = await Promise.race([
-        once(leaked, 'end').then(() => true),
-        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5_000))
-      ])
-      expect(released).toBe(true)
+      // EOF arrives only once no helper pid holds the descriptor; the CLI sleeps far longer.
+      await once(leaked, 'end')
     } finally {
       // Closing the owner and gate pipes ends the watcher and the gated leader.
       for (const stream of child.stdio) {
