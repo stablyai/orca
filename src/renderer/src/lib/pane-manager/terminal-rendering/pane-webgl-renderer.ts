@@ -123,7 +123,7 @@ export function disposeWebgl(
 ): void {
   cancelPendingWebglRefresh(pane)
   panesAwaitingWebglAddon.delete(pane)
-  releaseTerminalWebglAtlasWatcher(pane.terminal)
+  releaseTerminalWebglAtlasWatcher(pane)
   if (!pane.webglAddon) {
     return
   }
@@ -282,10 +282,10 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       pane.webglDisabledAfterContextLoss = true
       disposeWebgl(pane, { refreshDimensions: true })
     })
-    addon.onAddTextureAtlasCanvas(handleTerminalWebglAtlasPage)
+    addon.onAddTextureAtlasCanvas((page) => handleTerminalWebglAtlasPage(page, pane))
     pane.terminal.loadAddon(addon)
     pane.webglAddon = addon
-    watchTerminalWebglAtlasOutput(pane.terminal)
+    watchTerminalWebglAtlasOutput(pane)
     const canvas = getXtermWebglCanvas(addon)
     if (canvas) {
       // Why: panes of a hidden worktree surface keep their backing so switching worktrees never pays a reallocation.
@@ -303,7 +303,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     }
     pane.webglAttachFailedSinceRecovery = true
     console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
-    releaseTerminalWebglAtlasWatcher(pane.terminal)
+    releaseTerminalWebglAtlasWatcher(pane)
     try {
       webglAddon?.dispose()
     } catch {}
