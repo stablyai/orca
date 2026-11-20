@@ -1,4 +1,4 @@
-import { recognizeAgentProcessFromCommandLine } from '../../../../shared/agent-status/process/agent-process-recognition'
+import { agentOf } from '../../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { findStoppedAgents } from '../../../../shared/agent-status/process/stopped-agent-process'
@@ -29,11 +29,12 @@ export async function judgeLegacyMailboxRows(
   onAgent?: (agent: TuiAgent, process?: MailboxAgentProcess) => void
 ): Promise<MailboxForeground> {
   const group = rows.find((row) => row.pid === rootPid)?.tpgid
+  // Why agentOf: native installs exec a versioned binary (`…/claude/versions/2.1.0`) the bare recognizer misses.
   const agentRow = rows.find((row) => {
-    const candidate = recognizeAgentProcessFromCommandLine(row.command)?.agent
+    const candidate = agentOf(row.command, false)
     return row.pgid === group && isTuiAgent(candidate) && (!agent || candidate === agent)
   })
-  const found = agentRow && recognizeAgentProcessFromCommandLine(agentRow.command)?.agent
+  const found = agentRow && agentOf(agentRow.command, false)
   if (agentRow && isTuiAgent(found)) {
     const startedAtMs = await readProcessStartTimeMs(agentRow.pid)
     onAgent?.(agent ?? found, startedAtMs === null ? undefined : { pid: agentRow.pid, startedAtMs })

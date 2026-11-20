@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { readMailboxForeground } from './launched-agent-foreground'
+import { judgeLegacyMailboxRows } from './mailbox-foreground-judgment'
 
 const confirmations = { count: 0 }
 const read = (
@@ -72,4 +73,20 @@ it('an unrecognized name with the expected agent not stopped is still confirmed,
     foreground: 'agent'
   })
   expect(confirmations.count).toBe(1)
+})
+
+it("an older daemon's rows name a resumed native install of the agent by its versioned binary", async () => {
+  const rows = [
+    { pid: 100, ppid: 1, pgid: 100, tpgid: 300, tty: 'pts/1', stat: 'S', command: 'zsh' },
+    {
+      pid: 300,
+      ppid: 100,
+      pgid: 300,
+      tpgid: 300,
+      tty: 'pts/1',
+      stat: 'S+',
+      command: '/Users/me/.local/share/claude/versions/2.1.316'
+    }
+  ]
+  await expect(judgeLegacyMailboxRows(rows, 100, 'agent', 'claude')).resolves.toBe('agent')
 })

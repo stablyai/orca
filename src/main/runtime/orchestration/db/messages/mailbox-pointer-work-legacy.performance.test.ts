@@ -49,12 +49,12 @@ function probedCandidates(db: OrchestrationDb): number {
       db.db.prepare(`SELECT sql FROM sqlite_master WHERE name = ?`).get(name)?.sql
     )
     const partial = /\bWHERE\b([\s\S]*)$/i.exec(definition)?.[1] ?? '1'
-    const row = db.db
+    const candidates = db.db
       .prepare(
         `SELECT count(*) AS n FROM messages INDEXED BY ${name} WHERE to_handle = ? AND ${partial}`
       )
-      .get(HANDLE) as { n: number }
-    return total + row.n
+      .get(HANDLE)?.n
+    return total + Number(candidates)
   }, 0)
 }
 
