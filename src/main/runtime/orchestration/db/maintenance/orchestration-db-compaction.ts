@@ -239,7 +239,7 @@ export class OrchestrationDbCompaction {
                   child.kill('SIGKILL')
                 }
               })
-        walWatch.on('error', () => walWatch?.close())
+        walWatch?.on('error', () => walWatch?.close())
       } catch {
         // No events on this file system: the check after the copy still drops a stale one.
       }
