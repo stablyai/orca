@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -184,4 +184,29 @@ it('keeps unverified child commands and Stops from reopening a finished root', a
   expect((await poll())?.payload.state).toBe('done')
   hook('unrelated', 'Stop', { fullyIdle: true })
   expect((await poll())?.payload.state).toBe('done')
+})
+
+it('resolves automatic models from transcripts and preserves them across automatic hooks', async () => {
+  transcript('child')
+  descriptor('child')
+  spawn()
+  hook('child', 'PreInvocation', { modelName: 'auto' })
+  appendFileSync(
+    join(dir, 'child', '.system_generated', 'logs', 'transcript.jsonl'),
+    '{"type":"PLANNER_RESPONSE","model":"model-b"}\n'
+  )
+  expect((await poll())?.payload.subagents?.[0]?.model).toBe('model-b')
+  hook('child', 'PreToolUse', {
+    modelName: 'auto',
+    toolCall: { name: 'read_file', args: { path: 'src/current.ts' } }
+  })
+  const next = await poll()
+  expect(next?.payload.subagents?.[0]).toMatchObject({
+    model: 'model-b',
+    toolInput: 'src/current.ts'
+  })
+  expect(
+    hook('root', 'PreToolUse', { modelName: 'auto', toolCall: { name: 'read_file' } })?.payload
+      .model
+  ).toBe('model-a')
 })

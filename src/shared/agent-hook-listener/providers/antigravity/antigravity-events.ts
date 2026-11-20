@@ -182,7 +182,7 @@ export function normalizeAntigravityEvent(
 
   const rawModel = readFirstString(hookPayload, ['modelName', 'model'])
   if (rawModel) {
-    paneState.leadModel = normalizeAntigravityModel(rawModel) ?? ''
+    paneState.leadModel = normalizeAntigravityModel(rawModel) ?? paneState.leadModel
   }
 
   if (eventName === 'Stop' && !stopStillBusy) {

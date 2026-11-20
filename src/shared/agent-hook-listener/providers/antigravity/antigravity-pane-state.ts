@@ -115,7 +115,7 @@ export function recordAntigravityChildHook(
   const toolName = tool?.toolName
   const toolInput = normalizeOptionalField(tool?.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
   const rawModel = readFirstString(payload, ['modelName', 'model'])
-  const model = rawModel ? (normalizeAntigravityModel(rawModel) ?? '') : child.model
+  const model = normalizeAntigravityModel(rawModel) ?? child.model
   const state = isAntigravityFeedbackTool(toolName) ? 'waiting' : 'working'
   if (
     !existing ||

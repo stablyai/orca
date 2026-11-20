@@ -65,6 +65,7 @@ it.each([100, 1000])(
       expect(fsp.readdir).toHaveBeenCalledTimes(0)
       expect(fsp.open).toHaveBeenCalledTimes(1)
       vi.mocked(fsp.open).mockClear()
+      vi.mocked(fsp.stat).mockClear()
       for (let i = 0; i < 10; i++) {
         await readAntigravityTranscriptPoll(state, 'pane')
       }
