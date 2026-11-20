@@ -41,11 +41,8 @@ export function createWorkspaceAsleepCheck(
 }
 
 /** Whether "Hide sleeping" drops a row: asleep and not the exempt default-branch checkout. */
-export function createSleepingSweepHiddenCheck(
-  state: AppState,
-  exemptWorktreeIds?: ReadonlySet<string>
-): (worktree: Worktree) => boolean {
-  const isAsleep = createWorkspaceAsleepCheck(state, exemptWorktreeIds)
+export function createSleepingSweepHiddenCheck(state: AppState): (worktree: Worktree) => boolean {
+  const isAsleep = createWorkspaceAsleepCheck(state)
   return (worktree) =>
     !isSleepingSweepExempt(worktree.isMainWorktree, state.alwaysShowDefaultBranchWorkspace) &&
     isAsleep(worktree)
