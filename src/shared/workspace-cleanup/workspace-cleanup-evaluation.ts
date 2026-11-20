@@ -38,6 +38,8 @@ export type WorkspaceCleanupKeepCause =
   | 'archive-script'
   | 'removing'
   | 'folder-workspace-sibling'
+  /** Removal only: this route can't check the checkout's identity right before deleting it. */
+  | 'identity-unverified'
 
 export type WorkspaceCleanupWaiting = { elapsedDays: number; afterDays: number }
 

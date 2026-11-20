@@ -23377,7 +23377,8 @@
           "notRemovable": "Main workspace or folder project",
           "projectOff": "Cleanup off for this project",
           "rulesOff": "No rule on",
-          "withDetail": "{{cause}} · {{detail}}"
+          "withDetail": "{{cause}} · {{detail}}",
+          "identityUnverified": "Couldn't verify it right before deleting, so it was kept"
         },
         "trigger": {
           "startup": "On startup",

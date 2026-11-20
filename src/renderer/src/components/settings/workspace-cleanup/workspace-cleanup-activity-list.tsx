@@ -50,6 +50,7 @@ const KEEP_CAUSE_ICONS: Partial<Record<WorkspaceCleanupKeepCause, LucideIcon>> =
   'unpushed-commits': ArrowUpFromLine,
   'ignored-files': FileLock,
   'git-unknown': CircleHelp,
+  'identity-unverified': CircleHelp,
   'archive-unavailable': Archive,
   'archive-script': Archive,
   removing: Loader

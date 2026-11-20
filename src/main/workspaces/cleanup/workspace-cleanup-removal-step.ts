@@ -6,6 +6,7 @@ import {
 } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import { getEffectiveHooksAsync } from '../../workspace-hooks/effective-hooks-reader'
 import { errorMessage } from '../../../shared/errors/error-message'
+import { isWorktreeIdentityUnverifiable } from '../../../shared/worktree/removal/worktree-checkout-identity'
 import {
   evaluateWorkspaceCleanup,
   keepFolderWorkspaceSiblings,
@@ -193,6 +194,10 @@ export async function removeWorkspaceForCleanup(args: {
       ...(result.preservedBranch ? { branchKept: result.preservedBranch.branchName } : {})
     }
   } catch (error) {
+    // Where Orca can't check the checkout's identity right before Git deletes it (WSL), it keeps it.
+    if (isWorktreeIdentityUnverifiable(error)) {
+      return { outcome: 'kept', keepCause: 'identity-unverified', keptOnRecheck: true }
+    }
     return { outcome: 'failed', error: describeRemovalError(error) }
   }
 }

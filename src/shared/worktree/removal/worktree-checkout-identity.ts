@@ -31,6 +31,27 @@ export function isWorktreeIncarnationChanged(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ERR_ORCA_WORKTREE_CHANGED'
 }
 
+/** A route that can't check the checkout's identity where it deletes (WSL, say) keeps it instead. */
+export class WorktreeRemovalIdentityUnverifiableError extends Error {
+  readonly code = 'ERR_ORCA_WORKTREE_IDENTITY_UNVERIFIABLE'
+  constructor() {
+    super("Orca couldn't verify this workspace right before deleting it, so it kept it.")
+  }
+}
+
+export function isWorktreeIdentityUnverifiable(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    error.code === 'ERR_ORCA_WORKTREE_IDENTITY_UNVERIFIABLE'
+  )
+}
+
+/** Refused before anything was deleted: the checkout changed, or its identity couldn't be checked. */
+export function isWorktreeRemovalRefused(error: unknown): boolean {
+  return isWorktreeIncarnationChanged(error) || isWorktreeIdentityUnverifiable(error)
+}
+
 export function checkoutDirectoryKey(stats: BigIntStats): string {
   if (!stats.isDirectory() || stats.isSymbolicLink() || stats.ino === 0n) {
     throw new WorktreeRemovalIncarnationChangedError()

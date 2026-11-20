@@ -1,4 +1,4 @@
-import { WorktreeRemovalIncarnationChangedError } from '../../../../shared/worktree/removal/worktree-checkout-identity'
+import { WorktreeRemovalIdentityUnverifiableError } from '../../../../shared/worktree/removal/worktree-checkout-identity'
 import { execFile, type ChildProcess } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
 import { endSubprocessStdin } from '../../../../shared/process-streams/subprocess-stdin-write'
@@ -48,9 +48,10 @@ export function execFileCapture(
         ? options.spawnOnWorkerThread !== false && canSpawnOnWorkerThread()
         : options.spawnOnWorkerThread === true
     const callerOwnsDeadline = useWorker && process.platform === 'win32'
+    // Only the worker checks the checkout's identity right before Git starts; without it, keep it.
     if (options.worktreeCheckoutGuard && !useWorker) {
       options.onChildTerminated?.()
-      reject(new WorktreeRemovalIncarnationChangedError())
+      reject(new WorktreeRemovalIdentityUnverifiableError())
       return
     }
     const deadline =

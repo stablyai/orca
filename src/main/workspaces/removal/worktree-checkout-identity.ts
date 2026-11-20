@@ -4,10 +4,12 @@ import { lstat, open, realpath } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { fileStatSignature } from '../../filesystem/file-stat-signature'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
   WORKTREE_CHECKOUT_NONCE,
   WORKTREE_IDENTITY_FILE_LIMIT,
   WorktreeRemovalIncarnationChangedError,
+  WorktreeRemovalIdentityUnverifiableError,
   checkoutDirectoryKey,
   checkoutGitDirectory,
   assertCheckoutMetadata,
@@ -87,7 +89,10 @@ export async function captureWorktreeCheckoutIdentity(
   try {
     return Object.freeze(await readIdentity(root, instanceId, repoPath))
   } catch {
-    throw new WorktreeRemovalIncarnationChangedError()
+    // Windows can't read a WSL checkout's identity reliably, so a WSL workspace is kept, not judged changed.
+    throw isWslUncPath(root)
+      ? new WorktreeRemovalIdentityUnverifiableError()
+      : new WorktreeRemovalIncarnationChangedError()
   }
 }
 
