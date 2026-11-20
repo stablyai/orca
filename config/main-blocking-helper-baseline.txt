@@ -583,7 +583,7 @@
 3 src/main/ipc/accounts/zcode-plan-credentials.ts
 1 src/main/ipc/ai-vault/ai-vault-search.ts
 1 src/main/ipc/ai-vault/ai-vault-subagent-list.ts
-5 src/main/ipc/app.ts
+4 src/main/ipc/app.ts
 1 src/main/ipc/automations.ts
 3 src/main/ipc/browser/browser-client-host-cookie-import-ipc.ts
 1 src/main/ipc/browser/browser-extensions.ts
