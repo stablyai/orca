@@ -52,14 +52,16 @@ export async function sweepOrphanedAgentBrowserSessions(options: {
       continue
     }
     try {
-      await runProcess({
+      const result = await runProcess({
         program: options.binaryPath,
         args: ['--session', sessionName, 'close'],
         env: options.env,
         timeoutMs: SWEEP_TIMEOUT_MS,
         maxOutputBytes: SWEEP_MAX_OUTPUT_BYTES
       })
-      closed.push(sessionName)
+      if (result.code === 0 && !result.timedOut) {
+        closed.push(sessionName)
+      }
     } catch {}
   }
   return closed
