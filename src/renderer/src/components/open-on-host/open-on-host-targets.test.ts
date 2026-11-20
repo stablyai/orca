@@ -1,0 +1,125 @@
+import { describe, expect, it } from 'vitest'
+import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host/execution-host-registry-entry'
+import type { ProjectHostSetup } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import {
+  listOpenOnHostTargets,
+  type OpenOnHostTarget,
+  type OpenOnHostTargetsInput
+} from './open-on-host-targets'
+
+const t = ((_key: string, fallback: string) => fallback) as Parameters<
+  typeof listOpenOnHostTargets
+>[1]
+
+function runtimeHost(id: `runtime:${string}`, capabilities: string[]): ExecutionHostRegistryEntry {
+  return {
+    id,
+    kind: 'runtime',
+    label: id.slice('runtime:'.length),
+    detail: '',
+    health: 'available',
+    capabilities
+  }
+}
+
+const baseCapabilities = ['project-host-setup.v1', 'workspace-run-context.v1']
+
+const setup: ProjectHostSetup = {
+  id: 'setup-devdesk',
+  projectId: 'project-1',
+  hostId: 'runtime:devdesk',
+  repoId: 'repo-1',
+  path: '/home/me/orca',
+  displayName: 'orca',
+  setupState: 'ready',
+  setupMethod: 'cloned',
+  createdAt: 1,
+  updatedAt: 1
+}
+
+const input: OpenOnHostTargetsInput = {
+  projectId: 'project-1',
+  sourceHostId: 'local',
+  projectHostSetups: [setup],
+  eligibleRepos: [{ id: 'repo-1' } as Repo],
+  hosts: [
+    runtimeHost('runtime:devdesk', [
+      ...baseCapabilities,
+      'worktree.open-existing-branch.v2-request.v1'
+    ]),
+    runtimeHost('runtime:old', baseCapabilities),
+    { id: 'ssh:box', kind: 'ssh', label: 'box', detail: '', health: 'available' },
+    { id: 'local', kind: 'local', label: 'This Mac', detail: '', health: 'local' }
+  ],
+  cloneUrl: 'https://github.com/o/orca.git',
+  requireBranchReuse: false
+}
+
+function byHost(
+  hostId: string,
+  targets: OpenOnHostTarget[] = listOpenOnHostTargets(input, t)
+): OpenOnHostTarget {
+  const target = targets.find((candidate) => candidate.hostId === hostId)
+  if (!target) {
+    throw new Error(`no target for ${hostId}`)
+  }
+  return target
+}
+
+describe('listOpenOnHostTargets', () => {
+  it('lists runtime hosts only, without the source host', () => {
+    expect(listOpenOnHostTargets(input, t).map((target) => target.hostId)).toEqual([
+      'runtime:devdesk',
+      'runtime:old'
+    ])
+    const fromDevdesk = listOpenOnHostTargets({ ...input, sourceHostId: 'runtime:devdesk' }, t)
+    expect(fromDevdesk.map((target) => target.hostId)).toEqual(['runtime:old'])
+  })
+
+  it('carries the existing location on a host that has one', () => {
+    expect(byHost('runtime:devdesk').existingSetup?.path).toBe('/home/me/orca')
+    expect(byHost('runtime:old').existingSetup).toBeNull()
+    expect(byHost('runtime:devdesk').disabledReason).toBeNull()
+    expect(byHost('runtime:old').disabledReason).toBeNull()
+  })
+
+  it('disables a workspace item on a host without branch reuse', () => {
+    const targets = listOpenOnHostTargets({ ...input, requireBranchReuse: true }, t)
+    expect(byHost('runtime:old', targets).disabledReason).not.toBeNull()
+    expect(byHost('runtime:devdesk', targets).disabledReason).toBeNull()
+  })
+
+  it('disables cloning hosts when the project has no remote', () => {
+    const targets = listOpenOnHostTargets({ ...input, cloneUrl: '' }, t)
+    expect(byHost('runtime:old', targets).disabledReason).not.toBeNull()
+  })
+
+  it('disables a host that cannot take a new location', () => {
+    const targets = listOpenOnHostTargets(
+      {
+        ...input,
+        hosts: [
+          ...input.hosts,
+          { ...runtimeHost('runtime:asleep', baseCapabilities), health: 'disconnected' }
+        ]
+      },
+      t
+    )
+    expect(byHost('runtime:asleep', targets).disabledReason).not.toBeNull()
+  })
+
+  it('skips a host that is an alias of the source host', () => {
+    const targets = listOpenOnHostTargets(
+      {
+        ...input,
+        hosts: [
+          ...input.hosts,
+          { ...runtimeHost('runtime:self', baseCapabilities), aliasHostIds: ['local'] }
+        ]
+      },
+      t
+    )
+    expect(targets.map((target) => target.hostId)).not.toContain('runtime:self')
+  })
+})
