@@ -19,15 +19,10 @@ import {
 } from '../../drafts/native-chat-composer-draft-memory'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { mountedEditorView } from './native-chat-mounted-editor-view'
-
-vi.mock('@/store', async () => {
-  const { create } = await import('zustand')
-  return {
-    useAppStore: create(() => ({ unifiedTabsByWorktree: { 'wt-released': [{ id: 'released-tab' }] } }))
-  }
-})
+import { openNativeChatViewTabs } from '../../pane/ownership/native-chat-view-memory'
 
 const RELEASED_TAB = { tabId: 'released-tab', worktreeId: 'wt-released' }
+openNativeChatViewTabs([RELEASED_TAB.tabId])
 
 afterEach(() => {
   cleanup()

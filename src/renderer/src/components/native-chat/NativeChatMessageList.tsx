@@ -385,6 +385,7 @@ export function NativeChatMessageList({
             showJump={showJump}
             onJump={jumpToLatest}
             label={scope.regionLabel}
+            memoryKey={`${session.agent}:${session.sessionId ?? ''}:${subagentId ?? ''}`}
             overlays={
               <>
                 <NativeChatMessageRail

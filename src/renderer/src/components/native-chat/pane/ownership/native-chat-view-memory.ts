@@ -1,20 +1,41 @@
-import { createContext, useCallback, useContext, useState, type SetStateAction } from 'react'
-import { useAppStore } from '@/store'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  useSyncExternalStore,
+  type SetStateAction
+} from 'react'
 
-/** The chat tab a released-able view belongs to; null on surfaces that never release their view. */
+/** The chat tab a releasable view belongs to; null on surfaces that never release their view. */
 export type NativeChatViewTab = { tabId: string; worktreeId: string }
 export const NativeChatViewTabContext = createContext<NativeChatViewTab | null>(null)
 
-// Why: chat views are released while hidden to bound memory. Small view choices (expanded turns, goal entry,
-// a half-answered question, the reading position) live here per tab and end exactly when the tab closes.
+// Why: chat views are released while hidden to bound memory. Their small view state (expanded turns and
+// details, goal entry, a half-made answer, the reading position) lives here per tab, like an editor's view-state
+// memento, and ends exactly when the tab closes. Layers report which tabs are open, so writes check in O(1).
+const openTabs = new Set<string>()
 const records = new Map<string, Map<string, unknown>>()
+const listeners = new Map<string, Set<() => void>>()
+
+/** Layers report the chat tabs they own; a tab stays open here until it is released. */
+export function openNativeChatViewTabs(tabIds: Iterable<string>): void {
+  for (const tabId of tabIds) {
+    openTabs.add(tabId)
+  }
+}
+
+/** A closed tab's view state ends with it. */
+export function releaseNativeChatViewTabs(tabIds: Iterable<string>): void {
+  for (const tabId of tabIds) {
+    openTabs.delete(tabId)
+    records.delete(tabId)
+    listeners.get(tabId)?.forEach((listener) => listener())
+  }
+}
 
 export function isNativeChatViewTabOpen(tab: NativeChatViewTab): boolean {
-  return (
-    useAppStore
-      .getState()
-      .unifiedTabsByWorktree[tab.worktreeId]?.some((entry) => entry.id === tab.tabId) === true
-  )
+  return openTabs.has(tab.tabId)
 }
 
 export function readNativeChatViewMemory<T>(tab: NativeChatViewTab, key: string): T | undefined {
@@ -27,61 +48,70 @@ export function writeNativeChatViewMemory(
   key: string,
   value: unknown
 ): void {
+  const record = records.get(tab.tabId)
   if (value === undefined) {
-    records.get(tab.tabId)?.delete(key)
+    if (!record?.delete(key)) {
+      return
+    }
+  } else if (!openTabs.has(tab.tabId) || record?.get(key) === value) {
     return
+  } else if (record) {
+    record.set(key, value)
+  } else {
+    records.set(tab.tabId, new Map([[key, value]]))
   }
-  if (!isNativeChatViewTabOpen(tab)) {
-    return
-  }
-  let record = records.get(tab.tabId)
-  if (!record) {
-    record = new Map()
-    records.set(tab.tabId, record)
-  }
-  record.set(key, value)
+  listeners.get(tab.tabId)?.forEach((listener) => listener())
 }
 
-export function releaseNativeChatViewMemory(tabIds: Iterable<string>): void {
-  for (const tabId of tabIds) {
-    records.delete(tabId)
+function subscribeToTab(tabId: string, listener: () => void): () => void {
+  let set = listeners.get(tabId)
+  if (!set) {
+    set = new Set()
+    listeners.set(tabId, set)
+  }
+  const own = set
+  own.add(listener)
+  return () => {
+    own.delete(listener)
+    if (own.size === 0 && listeners.get(tabId) === own) {
+      listeners.delete(tabId)
+    }
   }
 }
+
+const NO_SUBSCRIPTION = (): (() => void) => () => {}
 
 /**
- * `useState` whose value outlives a released view of the same tab. The setter is bound to the key it was
- * created with and writes through at once, so a request settling after the view is gone still lands.
- * `initial` must be stable (a constant), like a default.
+ * `useState` whose value lives with the tab, so a released view returns with it and a request settling after
+ * the view is gone still updates the view that replaced it. `initial` must be stable, like a default.
  */
 export function useNativeChatViewState<T>(
   key: string,
   initial: T
 ): [T, (action: SetStateAction<T>) => void] {
   const tab = useContext(NativeChatViewTabContext)
-  const read = useCallback(
-    (): T => (tab ? (readNativeChatViewMemory<T>(tab, key) ?? initial) : initial),
-    [tab, key, initial]
+  const [local, setLocal] = useState(initial)
+  const subscribe = useCallback(
+    (listener: () => void) => (tab ? subscribeToTab(tab.tabId, listener) : NO_SUBSCRIPTION()),
+    [tab]
   )
-  const [state, setState] = useState(() => ({ key, value: read() }))
-  const current = state.key === key ? state : { key, value: read() }
-  if (current !== state) {
-    setState(current)
-  }
+  const kept = useSyncExternalStore(subscribe, () =>
+    tab ? (readNativeChatViewMemory<T>(tab, key) ?? initial) : initial
+  )
   const setValue = useCallback(
     (action: SetStateAction<T>) => {
       const apply = (value: T): T =>
         typeof action === 'function' ? (action as (previous: T) => T)(value) : action
       if (!tab) {
-        setState((local) => (local.key === key ? { key, value: apply(local.value) } : local))
+        setLocal(apply)
         return
       }
-      const next = apply(read())
-      writeNativeChatViewMemory(tab, key, next)
-      setState((local) => (local.key === key ? { key, value: next } : local))
+      const next = apply(readNativeChatViewMemory<T>(tab, key) ?? initial)
+      writeNativeChatViewMemory(tab, key, next === initial ? undefined : next)
     },
-    [tab, key, read]
+    [tab, key, initial]
   )
-  return [current.value, setValue]
+  return [tab ? kept : local, setValue]
 }
 
 /** A tab-kept value read once when the view mounts; without a key or a tab, nothing is kept. */

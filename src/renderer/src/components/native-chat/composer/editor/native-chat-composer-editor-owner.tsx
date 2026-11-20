@@ -152,24 +152,36 @@ export function NativeChatComposerEditorView({ editor }: { editor: Editor }): nu
 // Why: a chat view released to bound memory keeps only editors with a draft or undo history, so undo and
 // selection survive. Drafts are the user's text and stay; editors left with only undo history are capped.
 const keptEditorsByTab = new Map<string, ComposerEditors>()
+// Tabs whose kept editors hold no text, oldest first; drafts are the user's text and are never capped.
+const undoOnlyTabs = new Set<string>()
 const MAX_KEPT_UNDO_ONLY = 8
 
 const keepsEditor = (editor: Editor): boolean => !editor.isEmpty || undoDepth(editor.state) > 0
 
 function keepEditors(tabId: string, editors: ComposerEditors): void {
   keptEditorsByTab.set(tabId, editors)
-  const undoOnly = [...keptEditorsByTab].filter(([, kept]) => kept.holdsNoText())
-  for (const [oldest, kept] of undoOnly.slice(0, Math.max(0, undoOnly.length - MAX_KEPT_UNDO_ONLY))) {
-    kept.destroyAll()
+  if (!editors.holdsNoText()) {
+    return
+  }
+  undoOnlyTabs.add(tabId)
+  if (undoOnlyTabs.size > MAX_KEPT_UNDO_ONLY) {
+    const oldest = undoOnlyTabs.values().next().value as string
+    undoOnlyTabs.delete(oldest)
+    keptEditorsByTab.get(oldest)?.destroyAll()
     keptEditorsByTab.delete(oldest)
   }
+}
+
+function takeKeptEditors(tabId: string): void {
+  keptEditorsByTab.delete(tabId)
+  undoOnlyTabs.delete(tabId)
 }
 
 /** Closing a chat tab ends the editors its released view kept. */
 export function releaseNativeChatComposerEditors(tabIds: Iterable<string>): void {
   for (const tabId of tabIds) {
     keptEditorsByTab.get(tabId)?.destroyAll()
-    keptEditorsByTab.delete(tabId)
+    takeKeptEditors(tabId)
   }
 }
 
@@ -187,7 +199,7 @@ export function NativeChatComposerEditorOwner({
   )
   useEffect(() => {
     if (viewTab && keptEditorsByTab.get(viewTab.tabId) === owner) {
-      keptEditorsByTab.delete(viewTab.tabId)
+      takeKeptEditors(viewTab.tabId)
     }
     return owner.retain(
       viewTab

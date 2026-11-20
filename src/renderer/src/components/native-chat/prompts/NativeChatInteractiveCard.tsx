@@ -85,7 +85,6 @@ export function NativeChatInteractiveCard({
       <NativeChatQuestionCard
         key={nativeChatAskDismissKey(card.prompt)}
         prompt={card.prompt}
-        memoryKey={`interactive-question:${nativeChatAskDismissKey(card.prompt)}`}
         isSubmitting={submitting}
         isCancelling={cancelling}
         answerInputRef={answerInputRef}

@@ -20,7 +20,8 @@ import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import {
   NativeChatViewTabContext,
-  releaseNativeChatViewMemory
+  openNativeChatViewTabs,
+  releaseNativeChatViewTabs
 } from '../ownership/native-chat-view-memory'
 import {
   chatViewRetention,
@@ -191,10 +192,11 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     useLayoutEffect(() => {
       const closed = new Set([...ownedTabIdsRef.current].filter((id) => !ownedTabIds.has(id)))
       ownedTabIdsRef.current = ownedTabIds
+      openNativeChatViewTabs(ownedTabIds)
       if (closed.size > 0) {
         chatViewRetention.forget(closed)
         releaseNativeChatComposerEditors(closed)
-        releaseNativeChatViewMemory(closed)
+        releaseNativeChatViewTabs(closed)
       }
     }, [ownedTabIds])
     // A removed workspace unmounts this layer without a tab close; tabs gone from the store are closed.
@@ -207,7 +209,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
         if (closed.size > 0) {
           chatViewRetention.forget(closed)
           releaseNativeChatComposerEditors(closed)
-          releaseNativeChatViewMemory(closed)
+          releaseNativeChatViewTabs(closed)
         }
       },
       [worktreeId]
