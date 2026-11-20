@@ -34,7 +34,7 @@ import { trackClaudeTaskNotificationDelivery } from './background-tasks/claude-t
 import { recordClaudeTeammateSpawn } from './lifecycle/claude-teammate-spawn'
 import { settleLateClaudePromptSubmit } from './lifecycle/claude-late-prompt-submit'
 import { CLAUDE_LATE_PROMPT_SUBMIT_EVENT } from './lifecycle/claude-prompt-turn-order'
-import { claudeHeldTurnEnd } from './lifecycle/claude-held-turn-end'
+import { claudeHeldTurnEnd, claudeLeadTurnStart } from './lifecycle/claude-held-turn-end'
 import { normalizeClaudeSessionStart } from './lifecycle/claude-session-start-event'
 import { isClaudeToolEvent, restatePluginToolCall } from './lifecycle/claude-tool-events'
 
@@ -248,6 +248,7 @@ export function normalizeClaudeEvent(
               ...(previousLead.outcome ? { outcome: previousLead.outcome } : {}),
               stateStartedAt: previousLead.stateStartedAt,
               ...(previousLead.taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
+              ...(previousLead.turnOrigin ? { turnOrigin: previousLead.turnOrigin } : {}),
               // Keep the displaced lead end time so later child drain belongs to the same turn.
               ...(previousLead.turnCompletedAt !== undefined
                 ? { turnCompletedAt: previousLead.turnCompletedAt }
@@ -286,10 +287,9 @@ export function normalizeClaudeEvent(
       ? claudeHeldTurnEnd(state, paneKey, {
           resolvedStatus,
           outcome,
-          selfStarted: ownPreviousLead?.taskWakeupTurn === true
+          endingTurn: ownPreviousLead
         })
       : {}
-
   setClaudeMainAgentTurnState(state, paneKey, {
     state: reportedStateName,
     ...(taskWakeupTurn ? { taskWakeupTurn: true as const } : {}),
@@ -297,6 +297,12 @@ export function normalizeClaudeEvent(
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...claudeWaitRequest(eventName, isAskUserQuestionWait, eventToolUseId, previousLead),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),
+    ...claudeLeadTurnStart(
+      state,
+      paneKey,
+      { eventName, eventAgentId, isTaskWakeup, opensTurn, isWaitingInducing },
+      previousLead
+    ),
     ...heldEnd,
     model: leadModel
   })

@@ -19,6 +19,8 @@ import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/list
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
 import { AgentHookServerStatusDisposition } from './server-status-disposition'
+import { isDuplicatePromptSent } from './server-prompt-sent-dedupe'
+import { CLAUDE_LATE_PROMPT_SUBMIT_EVENT } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-prompt-turn-order'
 
 // Evicting remembered evidence makes later replay fall back to its arrival time.
 const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
@@ -234,7 +236,11 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     payload: AgentHookEventPayload,
     previousStatus: EnrichedAgentHookEventPayload | undefined
   ): void {
-    if (payload.isReplay === true || payload.hasExplicitPrompt !== true) {
+    // Restated rows keep the flag but never the prompt event's name.
+    const latePrompt =
+      payload.lateExplicitPrompt === true &&
+      payload.hookEventName === CLAUDE_LATE_PROMPT_SUBMIT_EVENT
+    if (payload.isReplay === true || (payload.hasExplicitPrompt !== true && !latePrompt)) {
       return
     }
     const prompt = payload.payload.prompt?.trim() ?? ''
@@ -248,36 +254,24 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       payload.promptInteractionKey.trim().length > 0
         ? payload.promptInteractionKey.trim()
         : undefined
-    const previousDedupe = this.promptSentDedupeByPaneKey.get(payload.paneKey)
-    const isCompletedTurnBoundary =
-      previousStatus?.payload.state === 'done' && payload.payload.state === 'working'
-    if (
-      previousDedupe?.agentKind === agentKind &&
-      previousDedupe.promptInteractionKey !== undefined &&
-      previousDedupe.promptInteractionKey === promptInteractionKey &&
-      (agentKind === 'opencode' || previousDedupe.promptHash === promptHash)
-    ) {
-      return
-    }
-    if (
-      previousDedupe?.agentKind === agentKind &&
-      previousDedupe.promptHash === promptHash &&
-      !(
-        previousStatus?.payload.state === 'done' &&
-        payload.payload.state === 'done' &&
-        previousDedupe.promptInteractionKey !== undefined &&
-        promptInteractionKey !== undefined &&
-        previousDedupe.promptInteractionKey !== promptInteractionKey
-      ) &&
-      !isCompletedTurnBoundary
-    ) {
-      return
-    }
-    this.promptSentDedupeByPaneKey.set(payload.paneKey, {
+    const entry = {
       agentKind,
       promptHash,
-      promptInteractionKey
-    })
+      promptInteractionKey,
+      providerPromptId: payload.providerPromptId
+    }
+    const previousDedupe = this.promptSentDedupeByPaneKey.get(payload.paneKey)
+    if (
+      isDuplicatePromptSent(previousDedupe, {
+        ...entry,
+        late: latePrompt,
+        previousState: previousStatus?.payload.state,
+        state: payload.payload.state
+      })
+    ) {
+      return
+    }
+    this.promptSentDedupeByPaneKey.set(payload.paneKey, entry)
     try {
       // Hooks prove prompt submission but cannot identify the launching UI.
       track('agent_prompt_sent', {

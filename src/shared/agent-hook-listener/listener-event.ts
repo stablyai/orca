@@ -33,6 +33,8 @@ export type AgentHookEventPayload = {
   connectionId: string | null
   /** Direct prompt evidence; excludes cached text inherited from earlier events. */
   hasExplicitPrompt?: boolean
+  /** A person's Claude prompt whose turn was already open: sent, but never a turn start. */
+  lateExplicitPrompt?: true
   /** The emitted nonterminal state is backed only by child state restored from disk. */
   restoredUnconfirmed?: true
   /** Distinguish duplicate delivery from same-text reruns when provider evidence permits. */

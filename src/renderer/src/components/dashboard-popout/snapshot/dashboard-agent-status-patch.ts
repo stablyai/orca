@@ -17,6 +17,65 @@ export type DashboardAgentStatusPatchResult = {
   snapshot: DashboardSnapshot
 }
 
+/** Live states whose `statusUpdatedAt` drives the stale-status refresh. */
+export function dashboardCardTracksFreshness(card: Pick<DashboardCard, 'dotState'>): boolean {
+  return card.dotState === 'working' || card.dotState === 'blocked' || card.dotState === 'waiting'
+}
+
+// Why: a patch replaces one slot, so the next cards array reuses the same pane index.
+const paneIndexByCards = new WeakMap<readonly DashboardCard[], Map<string, number>>()
+
+function paneIndex(cards: readonly DashboardCard[]): Map<string, number> {
+  let index = paneIndexByCards.get(cards)
+  if (!index) {
+    index = new Map()
+    for (let i = 0; i < cards.length; i++) {
+      if (!index.has(cards[i].paneKey)) {
+        index.set(cards[i].paneKey, i)
+      }
+    }
+    paneIndexByCards.set(cards, index)
+  }
+  return index
+}
+
+function sameSubagents(
+  a: DashboardCardSubagent[] | undefined,
+  b: DashboardCardSubagent[] | undefined
+): boolean {
+  if (a === b) {
+    return true
+  }
+  if (!a || !b || a.length !== b.length) {
+    return false
+  }
+  return a.every(
+    (subagent, i) =>
+      subagent.id === b[i].id && subagent.name === b[i].name && subagent.dotState === b[i].dotState
+  )
+}
+
+/** A restatement of a card off the freshness clock changes nothing the pop-out shows. */
+function restatesCard(card: DashboardCard, next: DashboardCard): boolean {
+  return (
+    !dashboardCardTracksFreshness(next) &&
+    next.agentType === card.agentType &&
+    next.task === card.task &&
+    next.lastUserMessage === card.lastUserMessage &&
+    next.lastAgentMessage === card.lastAgentMessage &&
+    next.parentPaneKey === card.parentPaneKey &&
+    next.bucket === card.bucket &&
+    next.dotState === card.dotState &&
+    next.verdict === card.verdict &&
+    next.workingMode === card.workingMode &&
+    next.unseen === card.unseen &&
+    next.stateChangedAt === card.stateChangedAt &&
+    next.finishedAt === card.finishedAt &&
+    next.askSummary === card.askSummary &&
+    sameSubagents(next.subagents, card.subagents)
+  )
+}
+
 function patchedSubagents(
   card: DashboardCard,
   event: AgentStatusIpcPayload
@@ -38,8 +97,9 @@ export function patchDashboardSnapshotFromAgentStatus(
   if (event.providerSessionOnly || event.programStatusOnly) {
     return { matched: true, snapshot }
   }
-  const index = snapshot.cards.findIndex((card) => card.paneKey === event.paneKey)
-  if (index === -1) {
+  const panes = paneIndex(snapshot.cards)
+  const index = panes.get(event.paneKey)
+  if (index === undefined) {
     return { matched: false, snapshot }
   }
   const card = snapshot.cards[index]
@@ -93,8 +153,12 @@ export function patchDashboardSnapshotFromAgentStatus(
         : undefined,
     subagents: patchedSubagents(card, event)
   }
+  if (restatesCard(card, nextCard)) {
+    return { matched: true, snapshot }
+  }
   const cards = snapshot.cards.slice()
   cards[index] = nextCard
+  paneIndexByCards.set(cards, panes)
   return {
     matched: true,
     snapshot: { ...snapshot, generatedAt: Math.max(snapshot.generatedAt, event.receivedAt), cards }

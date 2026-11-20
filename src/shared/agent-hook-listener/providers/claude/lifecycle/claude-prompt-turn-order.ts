@@ -6,9 +6,24 @@ import { readString } from '../../../tool-input-preview'
 import { readFirstString } from '../../../interactive-tool'
 import { withClaudeToolRequestId } from '../../../claude-tool-request-identity'
 import { isClaudePluginToolCall } from './claude-tool-events'
+import type { ExtractedPromptText } from '../../../prompt-fields'
+import { hasExplicitUserPrompt } from '../../../provider-event-routing'
 
 /** A UserPromptSubmit whose turn already began: it landed late, or was typed into the running turn. */
 export const CLAUDE_LATE_PROMPT_SUBMIT_EVENT = 'UserPromptSubmit:late'
+
+/** A person's live prompt that joined an open turn still counts as sent; a task wakeup's never does. */
+export function isLateClaudePromptSent(
+  eventName: unknown,
+  extractedPrompt: ExtractedPromptText,
+  isReplay: boolean | undefined
+): boolean {
+  return (
+    eventName === CLAUDE_LATE_PROMPT_SUBMIT_EVENT &&
+    isReplay !== true &&
+    hasExplicitUserPrompt('claude', 'UserPromptSubmit', extractedPrompt, '')
+  )
+}
 
 // Why 16: a late prompt trails its own turn by milliseconds; this only has to outlast a burst of short wakeup turns.
 const TURN_IDS_PER_SESSION = 16
@@ -41,7 +56,8 @@ export type ClaudeTurnOrder = {
  * Claude does not wait for Orca's UserPromptSubmit hook, so its post can land after later events of its turn.
  * The turn is Claude's prompt_id instead: the first admitted main-agent event with an unseen one opens the turn, and
  * that turn's prompt event, late or typed mid-turn, is renamed so nothing treats it as a turn start. Returns null for a
- * prompt event from a session the pane already left. Call only for admitted events.
+ * prompt event from a session the pane already left, or another session's replayed after live delivery. Call only for
+ * admitted events.
  */
 function orderClaudeTurn(
   state: HookListenerState,
@@ -72,9 +88,10 @@ function orderClaudeTurn(
     if (isPrompt && known.retiredSessionIds.includes(sessionId)) {
       return null
     }
-    // Before live delivery, replays restate the recorded session changes in order.
+    // Before live delivery, replays restate the recorded session changes in order; after it, another session's
+    // replayed prompt is older than the live one and must not restart it.
     if (isReplay && known.live) {
-      return passThrough
+      return isPrompt ? null : passThrough
     }
     turns = {
       sessionId,

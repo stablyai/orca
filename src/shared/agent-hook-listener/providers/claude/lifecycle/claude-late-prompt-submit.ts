@@ -4,6 +4,7 @@ import { resolvePrompt } from '../../../prompt-fields'
 import { readClaudeBackgroundAgentTasks } from '../background-tasks/claude-background-task-inventory'
 import { trackClaudeTaskNotificationDelivery } from '../background-tasks/claude-task-notification-delivery'
 import { buildClaudeCachedLeadStatusPayload } from './claude-lifecycle-events'
+import { releaseClaudeUnclassifiedTurnEnd } from './claude-held-turn-end'
 import { claudePaneHasRunningChildWork } from './claude-pane-hold-evidence'
 import { CLAUDE_LATE_PROMPT_SUBMIT_EVENT, isCurrentClaudeTurn } from './claude-prompt-turn-order'
 
@@ -30,16 +31,31 @@ export function settleLateClaudePromptSubmit(
   if (isTaskWakeup && own && own.state !== 'done') {
     own.taskWakeupTurn = true
   }
-  const heldEnd = lead.unclassifiedTurnCompletedAt
-  lead.unclassifiedTurnCompletedAt = undefined
-  // A person's turn that Stop already ended earns the completion it held; a wakeup's never does.
+  // A person's prompt in the turn makes it theirs, whatever started it, on the record a wait restores too.
+  const joinedWakeup = !isTaskWakeup && own?.turnOrigin === 'task-wakeup'
+  if (own) {
+    own.turnOrigin = isTaskWakeup && own.turnOrigin !== 'person' ? 'task-wakeup' : 'person'
+    lead.turnOrigin = own.turnOrigin
+  }
+  // A wakeup the person joins while running work keeps its end from showing: they hear that end now.
   if (
-    heldEnd !== undefined &&
-    !isTaskWakeup &&
-    lead.state === 'done' &&
+    joinedWakeup &&
+    own?.state === 'done' &&
+    own.outcome !== 'cancellation' &&
+    (lead.turnCompletedAt ?? -Infinity) < own.stateStartedAt &&
     claudePaneHasRunningChildWork(state, paneKey)
   ) {
-    lead.turnCompletedAt = heldEnd
+    lead.turnCompletedAt = own.stateStartedAt
+  }
+  // A wakeup's own end is no one's news.
+  if (own?.turnOrigin === 'task-wakeup') {
+    lead.untoldEnd = undefined
+  }
+  // A person's turn that Stop already ended earns the completion it held; a wakeup's never does.
+  if (isTaskWakeup) {
+    lead.unclassifiedTurnCompletedAt = undefined
+  } else {
+    releaseClaudeUnclassifiedTurnEnd(state, paneKey, lead)
   }
   resolvePrompt(state, paneKey, promptText)
   return buildClaudeCachedLeadStatusPayload(

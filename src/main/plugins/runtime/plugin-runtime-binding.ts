@@ -2,6 +2,12 @@ import type { PluginEventName } from '../../../shared/plugins/contributions/plug
 import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status/contracts/agent-status-types'
 import { savedWorkspaceCatalog } from '../../persistence/profile-save-domains'
 import type { PluginAgentStatusChangedPayload } from '../../../shared/plugins/events/plugin-events'
+import type { EnrichedAgentHookEventPayload } from '../../agent-hooks/server/server-types'
+import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import {
+  pluginAgentStatusRestates,
+  type ForwardedPluginAgentStatus
+} from '../events/plugin-agent-status-event'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../shared/plugins/workers/plugin-host-api-workspace-context'
 import type { PluginRuntimeDelegate } from '../workers/host-api/plugin-host-service-bindings'
 import type { PluginService } from '../plugin-service'
@@ -21,6 +27,11 @@ import {
   type PluginWorkspaceContext,
   type PluginWorkspaceTerminal
 } from '../workers/host-api/plugin-workspace-projection'
+
+type PluginAgentStatusRows = {
+  subscribeStatusDrop(listener: (paneKey: string) => void): () => void
+  subscribePaneStatusClear(listener: (clear: AgentStatusClearIpcPayload) => void): () => void
+}
 
 type PluginEvents = {
   emitEvent(event: PluginEventName, payload: unknown): void
@@ -126,14 +137,25 @@ async function listWorkspaceTerminals(
 /**
  * `agent.status.changed` with the pane's `terminalId` and title, in arrival order. The lookup runs
  * only while some plugin listens: events queued behind a slow lookup share one terminal listing per
- * workspace, and are dropped once the last listener goes away.
+ * workspace, and are dropped once the last listener goes away. A restatement of the pane's last
+ * forwarded status is not a change, so it lists no terminals and emits nothing.
  */
 export function createPluginAgentStatusForwarder(
   delegate: PluginRuntimeDelegate,
-  events: PluginEvents
+  events: PluginEvents,
+  statusRows: PluginAgentStatusRows
 ): (payload: PluginAgentStatusChangedPayload, terminalHandle?: string) => void {
-  type Pending = { payload: PluginAgentStatusChangedPayload; terminalHandle?: string }
+  type Pending = ForwardedPluginAgentStatus
   const pending: Pending[] = []
+  const lastForwardedByPane = new Map<string, ForwardedPluginAgentStatus>()
+  statusRows.subscribeStatusDrop((paneKey) => lastForwardedByPane.delete(paneKey))
+  statusRows.subscribePaneStatusClear((clear) => {
+    if ('paneKey' in clear) {
+      lastForwardedByPane.delete(clear.paneKey)
+    } else {
+      lastForwardedByPane.clear()
+    }
+  })
   let draining = false
   const drain = async (): Promise<void> => {
     // Why: start a microtask later so a synchronous burst lands in one batch.
@@ -175,14 +197,39 @@ export function createPluginAgentStatusForwarder(
   }
   return (payload, terminalHandle) => {
     if (!events.wantsEvent('agent.status.changed')) {
+      // Why: a listener that returns must hear the pane's current status, not have it deduped away.
+      lastForwardedByPane.clear()
       return
     }
-    pending.push({ payload, terminalHandle })
+    const forwarded = { payload, terminalHandle }
+    if (pluginAgentStatusRestates(lastForwardedByPane.get(payload.paneKey), forwarded)) {
+      return
+    }
+    lastForwardedByPane.set(payload.paneKey, forwarded)
+    pending.push(forwarded)
     if (!draining) {
       draining = true
       void drain()
     }
   }
+}
+
+/** Forward each enriched status the projection admits to interested plugins. */
+export function installPluginAgentStatusForwarding(
+  delegate: PluginRuntimeDelegate,
+  events: PluginEvents,
+  hookServer: PluginAgentStatusRows & {
+    subscribeEnrichedStatus(listener: (enriched: EnrichedAgentHookEventPayload) => void): () => void
+  },
+  project: (enriched: EnrichedAgentHookEventPayload) => PluginAgentStatusChangedPayload | null
+): void {
+  const forward = createPluginAgentStatusForwarder(delegate, events, hookServer)
+  hookServer.subscribeEnrichedStatus((enriched) => {
+    const payload = project(enriched)
+    if (payload) {
+      forward(payload, enriched.terminalHandle)
+    }
+  })
 }
 
 /**

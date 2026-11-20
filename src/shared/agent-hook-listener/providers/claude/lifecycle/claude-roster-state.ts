@@ -126,10 +126,23 @@ export function setClaudeMainAgentTurnState(
   const { state: nextState, outcome, stateStartedAt, model, ...rest } = next
   // Lead events that omit the model keep the last reported one.
   const retainedModel = model || previous?.model
+  // A turn keeps its origin through every state change; only an event that starts a turn names a new one.
+  // Restoring the turn a wait displaced keeps a person's claim made during the wait.
+  const turnOrigin =
+    previous?.turnOrigin === 'person' && next === previous.stateBeforeWait
+      ? 'person'
+      : 'turnOrigin' in next
+        ? next.turnOrigin
+        : previous?.turnOrigin
+  // An untold end lasts until the lead works again; child waits and restatements keep it.
+  const untoldEnd =
+    'untoldEnd' in next ? next.untoldEnd : nextState === 'working' ? undefined : previous?.untoldEnd
   const record: ClaudeLeadTurnState = {
     ...rest,
     ...continueMainAgentStatus(previous, { state: nextState, outcome, stateStartedAt }, now),
-    ...(retainedModel ? { model: retainedModel } : {})
+    ...(retainedModel ? { model: retainedModel } : {}),
+    ...(turnOrigin ? { turnOrigin } : {}),
+    ...(untoldEnd ? { untoldEnd } : {})
   }
   state.claudeLeadStateByPaneKey.set(paneKey, record)
   return record
@@ -146,6 +159,7 @@ export function claudeMainAgentStatusForPayload(
   return {
     state: own.state,
     ...(own.state === 'done' && own.outcome ? { outcome: own.outcome } : {}),
+    ...(own.turnOrigin === 'task-wakeup' ? { taskWakeup: true as const } : {}),
     stateStartedAt: own.stateStartedAt
   }
 }
@@ -225,6 +239,7 @@ export function seedClaudeLeadTurnFromPersistedStatus(
       state: 'done',
       ...(mainAgent.outcome ? { outcome: mainAgent.outcome } : {}),
       stateStartedAt: mainAgent.stateStartedAt,
+      ...(mainAgent.taskWakeup ? { turnOrigin: 'task-wakeup' as const } : {}),
       ...(status.payload.turnCompletedAt !== undefined
         ? { turnCompletedAt: status.payload.turnCompletedAt }
         : {})

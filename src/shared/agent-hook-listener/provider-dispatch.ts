@@ -16,6 +16,7 @@ import { readJcodeTurnPrompt } from './providers/jcode/jcode-turn-prompt'
 import { normalizeAntigravityEvent } from './providers/antigravity/antigravity-events'
 import { normalizeAmpEvent } from './providers/amp/amp-events'
 import { normalizeClaudeEvent } from './providers/claude/claude-events'
+import { isLateClaudePromptSent } from './providers/claude/lifecycle/claude-prompt-turn-order'
 import { normalizeCodexEvent } from './providers/codex/codex-events'
 import { codexHookEventForEndedTurn } from './providers/codex/codex-ended-turn-event'
 import { codexHookEventForEphemeralThread } from './providers/codex/codex-ephemeral-threads'
@@ -43,7 +44,10 @@ export type ProviderDispatchResult = {
   hasTranscriptPromptEvidence: boolean
   /** The event the payload was normalized as, which a provider may restate (Codex ended turns). */
   eventName: unknown
-  hostTurnSignals: Pick<AgentHookEventPayload, 'stopHookActive' | 'nativeTurnKey'>
+  hostTurnSignals: Pick<
+    AgentHookEventPayload,
+    'stopHookActive' | 'nativeTurnKey' | 'lateExplicitPrompt'
+  >
   /** Full reply text this hook carried, outside the cached tool snapshot; refreshes carry none. */
   replyCandidate: string | undefined
 }
@@ -61,6 +65,7 @@ export function normalizeProviderEvent(input: {
   previousOpenCodeMainAgent?: AgentMainAgentStatus
   /** A new Claude prompt_id opened the turn on this event. */
   opensTurn?: boolean
+  isReplay?: boolean
 }): ProviderDispatchResult {
   const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
   // Ephemeral side chats share the pane but must not replace its recorded main turn.
@@ -265,7 +270,12 @@ export function normalizeProviderEvent(input: {
     promptInteractionKey,
     hasTranscriptPromptEvidence,
     eventName,
-    hostTurnSignals: readHostTurnSignals(source, hookPayload, promptInteractionKey),
+    hostTurnSignals: {
+      ...readHostTurnSignals(source, hookPayload, promptInteractionKey),
+      ...(source === 'claude' && isLateClaudePromptSent(eventName, extractedPrompt, input.isReplay)
+        ? { lateExplicitPrompt: true as const }
+        : {})
+    },
     replyCandidate
   }
 }

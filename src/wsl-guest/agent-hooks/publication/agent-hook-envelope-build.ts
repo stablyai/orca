@@ -36,6 +36,7 @@ export function buildRelayHookEnvelope(
     worktreeId: event.worktreeId,
     connectionId: null,
     hasExplicitPrompt: event.hasExplicitPrompt,
+    ...(event.lateExplicitPrompt ? { lateExplicitPrompt: true } : {}),
     promptInteractionKey: event.promptInteractionKey,
     hookEventName: event.hookEventName,
     providerPromptId: event.providerPromptId,

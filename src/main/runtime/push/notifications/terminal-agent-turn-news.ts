@@ -1,6 +1,7 @@
 // Share desktop completion/input timing and hook rows; phone/connector listeners choose wording and transport.
 import type { AgentPaneChange } from '../../../agent-hooks/observations/agent-transition-detector'
 import { mainAgentTurnInterrupted } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
+import { isQuietTaskWakeup } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 import { agentTurnEndedOnPurpose } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-status/lifecycle/agent-transitions'
@@ -28,6 +29,8 @@ export type TerminalAgentTurnNewsDeps<Prepared> = {
   allClearOnly?: true
   /** Opt-in: every turn the lead agent ends is news, even one the host holds back from notifications while children run. */
   everyLeadTurn?: true
+  /** Opt-in: a turn the agent started for its own finished background task is no news unless the person joins it. */
+  quietTaskWakeups?: true
 }
 
 type PendingFinish = {
@@ -43,6 +46,8 @@ export class TerminalAgentTurnNews<Prepared> {
   // Panes that reported live work since their last finish: as the window's, only those wait out
   // the quiet window.
   private readonly workingSeen = new Set<string>()
+  // Panes whose last finish was a quiet wakeup; a person's prompt reaching that turn later makes it news.
+  private readonly quietWakeupEnds = new Set<string>()
 
   constructor(private readonly deps: TerminalAgentTurnNewsDeps<Prepared>) {}
 
@@ -57,13 +62,21 @@ export class TerminalAgentTurnNews<Prepared> {
     if (change.kind === 'observed') {
       if (change.phase === 'working') {
         this.observeWorking(paneKey, change.workspace?.worktreeId)
+      } else if (change.phase === 'done' && this.quietWakeupEnds.has(paneKey)) {
+        this.observeQuietWakeupEnd(paneKey, change.workspace?.worktreeId)
       }
       return
     }
+    this.quietWakeupEnds.delete(paneKey)
     const { transition } = change
     this.tellOptIn(change)
     const finished = transition === 'turn-finished' || transition === 'errored'
     const row = finished || transition === 'needs-input' ? this.deps.readHookRow(paneKey) : null
+    // A wakeup that is no news neither retracts the person's queued finish nor queues its own.
+    const quietWakeup =
+      this.deps.quietTaskWakeups === true &&
+      (finished || transition === 'prompt-submitted') &&
+      isQuietTaskWakeup(row ?? this.deps.readHookRow(paneKey) ?? {})
     // The all-clear of a turn announced when its lead agent finished: that finish still stands.
     const leadTurnEndedAt = row ? this.leadTurnEndedAt(row) : undefined
     if (
@@ -74,7 +87,7 @@ export class TerminalAgentTurnNews<Prepared> {
       return
     }
     // Departure retracts occupancy; an accepted finish still owns its queued delivery.
-    if (change.to !== 'rest') {
+    if (change.to !== 'rest' && !quietWakeup) {
       this.cancelPending(paneKey)
     }
     if (transition === 'prompt-submitted' || change.to === 'rest') {
@@ -90,10 +103,31 @@ export class TerminalAgentTurnNews<Prepared> {
       this.announce(paneKey, change.workspace.worktreeId, row, false)
       return
     }
+    if (finished && quietWakeup) {
+      this.workingSeen.delete(paneKey)
+      this.quietWakeupEnds.add(paneKey)
+      return
+    }
     // Goal and Pi agents report a milestone done mid-run; work resuming within the window cancels it.
     const waitOutQuiet = this.workingSeen.has(paneKey) || isPiCompatibleAgentType(row.agentType)
     this.workingSeen.delete(paneKey)
     this.announce(paneKey, change.workspace.worktreeId, row, waitOutQuiet)
+  }
+
+  private observeQuietWakeupEnd(paneKey: string, worktreeId: string | undefined): void {
+    const row = this.deps.readHookRow(paneKey)
+    if (!row || isQuietTaskWakeup(row) || !worktreeId) {
+      return
+    }
+    // A new session, not the person joining the wakeup.
+    if (row.sessionBoundary === true) {
+      this.quietWakeupEnds.delete(paneKey)
+      return
+    }
+    this.quietWakeupEnds.delete(paneKey)
+    if (row.state === 'done') {
+      this.announce(paneKey, worktreeId, row, false)
+    }
   }
 
   /** A finish decided for this pane and still waiting out its quiet window. */
@@ -107,6 +141,7 @@ export class TerminalAgentTurnNews<Prepared> {
     }
     this.finishedTurnByPane.clear()
     this.workingSeen.clear()
+    this.quietWakeupEnds.clear()
   }
 
   private tellOptIn(change: Extract<AgentPaneChange, { kind: 'moved' }>): void {
@@ -137,6 +172,10 @@ export class TerminalAgentTurnNews<Prepared> {
     }
     // Announce the lead agent's turnCompletedAt once even while background work keeps the pane working.
     if (this.finishedTurnByPane.get(paneKey) === turnCompletedAt) {
+      // A wakeup carrying that announced end is still live work the person may join.
+      if (this.deps.quietTaskWakeups === true && isQuietTaskWakeup(row)) {
+        this.workingSeen.add(paneKey)
+      }
       return
     }
     this.finishedTurnByPane.set(paneKey, turnCompletedAt)

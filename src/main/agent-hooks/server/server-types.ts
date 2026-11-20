@@ -176,6 +176,7 @@ export type AgentPromptSentDedupeEntry = {
   agentKind: AgentKind
   promptHash: string
   promptInteractionKey?: string
+  providerPromptId?: string
 }
 
 export type NormalizedLocalHook = {

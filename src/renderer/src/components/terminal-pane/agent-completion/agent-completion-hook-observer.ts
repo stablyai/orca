@@ -1,4 +1,5 @@
 import { isRecognizedAgentType } from '../../../../../shared/agent-status/process/agent-process-recognition'
+import { isQuietTaskWakeup } from '../../../../../shared/agent-status/lifecycle/main-agent-status'
 import type {
   AgentCompletionCoordinatorOptions,
   AgentCompletionStatusSnapshot
@@ -16,6 +17,7 @@ type HookObserverState = {
   lastCompletedTurn: number | null
   lastCompletionAt: number
   pendingHookDoneTimer: ReturnType<typeof setTimeout> | null
+  pendingHookDonePayload: AgentCompletionStatusSnapshot | null
 }
 
 type HookObserverOptions = {
@@ -73,6 +75,14 @@ export function createAgentCompletionHookObserver({
   recordWorkingBoundary,
   dropPendingTitle
 }: HookObserverOptions) {
+  // Still live work: an end the person later joins arrives as a stamp on a working row and is its own turn.
+  function openQuietWakeupTurn(): void {
+    state.workingStatusObserved = true
+    if (state.lastCompletedTurn === state.currentTurn) {
+      state.currentTurn += 1
+    }
+  }
+
   function observeHookStatus(payload: AgentCompletionStatusSnapshot): void {
     recordPaneActivity()
     if (isRecognizedAgentType(payload.agentType)) {
@@ -113,6 +123,15 @@ export function createAgentCompletionHookObserver({
         } else if (!state.workingStatusObserved) {
           rememberHandledTurnCompletedAt(turnCompletedAt)
         }
+        if (isQuietTaskWakeup(payload)) {
+          openQuietWakeupTurn()
+        }
+        options.dispatchHookLifecycle?.(payload)
+        return
+      }
+      // The agent waking itself for a finished background task is not a turn the person started.
+      if (isQuietTaskWakeup(payload)) {
+        openQuietWakeupTurn()
         options.dispatchHookLifecycle?.(payload)
         return
       }
@@ -145,6 +164,18 @@ export function createAgentCompletionHookObserver({
     const turnCompletedAt = isFiniteTurnCompletedAt(payload.turnCompletedAt)
       ? payload.turnCompletedAt
       : undefined
+    // Nor is its end; a person's prompt reaching that turn later restates the row and announces it then.
+    if (turnCompletedAt === undefined && isQuietTaskWakeup(payload)) {
+      // Only this wakeup's own end, queued before its prompt event said what it was; the person's stays queued.
+      if (
+        state.pendingHookDonePayload?.mainAgent?.stateStartedAt ===
+        payload.mainAgent?.stateStartedAt
+      ) {
+        clearPendingHookDone()
+      }
+      options.dispatchHookLifecycle?.(payload)
+      return
+    }
     if (
       turnCompletedAt === undefined &&
       consumePendingStampedTailForAgent(hookCompletionAgentIdentity(payload), identity)

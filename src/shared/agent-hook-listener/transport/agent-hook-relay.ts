@@ -69,6 +69,8 @@ export type AgentHookRelayEnvelope = {
   connectionId: null
   /** Distinguish same-prompt retries from cached-prompt tool events. */
   hasExplicitPrompt?: boolean
+  /** A person's Claude prompt whose turn was already open: sent, but never a turn start. */
+  lateExplicitPrompt?: true
   /** In-memory turn dedupe key; excluded from telemetry. */
   promptInteractionKey?: string
   /** Hook discriminator preserved for main-process transition rules. */
