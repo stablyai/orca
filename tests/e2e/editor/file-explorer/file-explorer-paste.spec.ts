@@ -78,7 +78,7 @@ async function moveAndClick(
 
 async function rightClickPaste(page: Page, target: Locator): Promise<void> {
   await moveAndClick(page, target, 'right')
-  const paste = page.getByRole('menuitem', { name: 'Paste', exact: true })
+  const paste = page.getByRole('menuitem', { name: /^Paste(?:\s|$)/ })
   await expect(paste).toBeVisible()
   await moveAndClick(page, paste)
 }
