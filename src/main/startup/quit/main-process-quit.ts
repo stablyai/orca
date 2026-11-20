@@ -161,7 +161,7 @@ function installWillQuitHandler(): void {
       .then(() =>
         // Update installs included: the swap is a rename, and they are most quits for an app left open.
         mayCompact && !isDevParentShutdownRequested()
-          ? swapCompactedOrchestrationDbAtQuit(state.runtime)
+          ? swapCompactedOrchestrationDbAtQuit(state.core.runtime)
           : undefined
       )
       .then(() => {
