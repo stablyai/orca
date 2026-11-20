@@ -17,29 +17,33 @@ export type MailboxPointerReservationTarget = {
   processIncarnation: string
 }
 
-const PENDING_POINTER_SQL = `SELECT * FROM messages
-       WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'`
+const RESERVED_POINTER_SQL = `SELECT * FROM messages INDEXED BY idx_messages_reserved_pointer_enter
+       WHERE to_handle = ? AND read = 0 AND pointer_enter_pending = ${MAILBOX_POINTER_RESERVED}
+         AND delivery_contract = 'current_delivery'
+       ORDER BY sequence LIMIT ?`
+const PENDING_POINTER_SQL = `SELECT * FROM messages INDEXED BY idx_messages_pending_pointer_enter
+       WHERE to_handle = ? AND read = 0 AND pointer_enter_pending > 0
+         AND delivery_contract = 'current_delivery'
+       ORDER BY sequence LIMIT ?`
 
-/** Reservations first, then uncertain rows, so a crash-left reservation is never starved behind a
- * full batch of uncertain ones; each read visits at most one batch through its partial index. */
+/** Reservations first, then the oldest other pending rows, so a crash-left reservation is never
+ * starved behind a full batch of uncertain ones. Each read walks only its partial index, not the inbox. */
 export function getPendingMailboxPointerMessages(
   this: OrchestrationDb,
   mailboxHandle: string
 ): MessageRow[] {
-  const read = (phase: string, limit: number): MessageRow[] => {
-    const sql = `${PENDING_POINTER_SQL} AND ${phase} ORDER BY sequence LIMIT ?`
-    const rows = this.db.prepare(sql).all(mailboxHandle, limit)
+  const read = (sql: string): MessageRow[] => {
+    const rows = this.db.prepare(sql).all(mailboxHandle, ORCHESTRATION_DELIVERY_BATCH_LIMIT)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * FROM messages yields MessageRow columns.
     return rows as MessageRow[]
   }
-  const reserved = read(
-    `pointer_enter_pending = ${MAILBOX_POINTER_RESERVED}`,
-    ORCHESTRATION_DELIVERY_BATCH_LIMIT
-  )
-  const room = ORCHESTRATION_DELIVERY_BATCH_LIMIT - reserved.length
-  const uncertain =
-    room > 0 ? read(`pointer_enter_pending > ${MAILBOX_POINTER_RESERVED}`, room) : []
-  return [...reserved, ...uncertain].sort((a, b) => a.sequence - b.sequence)
+  const reserved = read(RESERVED_POINTER_SQL)
+  const ids = new Set(reserved.map((row) => row.id))
+  const others = read(PENDING_POINTER_SQL).filter((row) => !ids.has(row.id))
+  return [
+    ...reserved,
+    ...others.slice(0, ORCHESTRATION_DELIVERY_BATCH_LIMIT - reserved.length)
+  ].sort((a, b) => a.sequence - b.sequence)
 }
 
 export function getPendingMailboxPointerHandles(this: OrchestrationDb): string[] {
