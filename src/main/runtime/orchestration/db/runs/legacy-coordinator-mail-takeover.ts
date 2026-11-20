@@ -51,10 +51,9 @@ export function promoteLegacyCoordinatorMailForTakeover(
 /** Whether `handle` addresses a legacy Dispatch of `runId`, by its assignee or as `dispatch:<id>`.
  *  Each arm is an index probe; one ORed join condition would scan every Dispatch in the Run per message. */
 function legacyDispatchAddressSql(handle: string, runId: string, extra = ''): string {
-  // `+`: probe by assignee (idx_dispatch_assignee_handle); the run_id index scans a whole Run.
   return `(EXISTS(
       SELECT 1 FROM dispatch_contexts d
-      WHERE d.assignee_handle = ${handle} AND +d.run_id = ${runId}
+      WHERE d.assignee_handle = ${handle} AND d.run_id = ${runId}
         AND d.contract_version = ${LEGACY_CONTRACT_VERSION} ${extra}
     ) OR (substr(${handle}, 1, 9) = 'dispatch:' AND EXISTS(
       SELECT 1 FROM dispatch_contexts d
@@ -77,18 +76,17 @@ export const LEGACY_COORDINATOR_DURABLE_HANDLES_SQL = `SELECT coordinator_handle
            WHERE d.task_id = t.id AND +d.run_id = t.run_id
          )`
 
-// The other end of each legacy mail a legacy Dispatch sent or received before adoption.
-export const LEGACY_COORDINATOR_MAIL_HANDLES_SQL = `SELECT m.to_handle AS handle
-       FROM messages m
-       WHERE m.run_id = ? AND m.delivery_contract = 'legacy_direct'
-         AND m.created_at <= ?
-         AND ${legacyDispatchAddressSql('m.from_handle', 'm.run_id')}
+// The other end of legacy mail a legacy Dispatch sent or received before adoption; each distinct pair is probed once.
+export const LEGACY_COORDINATOR_MAIL_HANDLES_SQL = `WITH pairs AS (
+         SELECT DISTINCT run_id, from_handle, to_handle
+         FROM messages
+         WHERE run_id = ? AND delivery_contract = 'legacy_direct' AND created_at <= ?
+       )
+       SELECT p.to_handle AS handle FROM pairs p
+       WHERE ${legacyDispatchAddressSql('p.from_handle', 'p.run_id')}
        UNION
-       SELECT m.from_handle AS handle
-       FROM messages m
-       WHERE m.run_id = ? AND m.delivery_contract = 'legacy_direct'
-         AND m.created_at <= ?
-         AND ${legacyDispatchAddressSql('m.to_handle', 'm.run_id')}`
+       SELECT p.from_handle AS handle FROM pairs p
+       WHERE ${legacyDispatchAddressSql('p.to_handle', 'p.run_id')}`
 
 export function getUniqueLegacyCoordinatorHandle(
   this: OrchestrationDb,
@@ -127,7 +125,7 @@ export function getUniqueLegacyCoordinatorHandle(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both UNION branches select one non-null TEXT column aliased handle.
   const mailRows = this.db
     .prepare(LEGACY_COORDINATOR_MAIL_HANDLES_SQL)
-    .all(runId, adoption.adopted_at, runId, adoption.adopted_at) as { handle: string }[]
+    .all(runId, adoption.adopted_at) as { handle: string }[]
   for (const row of mailRows) {
     if (
       !workerHandles.has(row.handle) &&

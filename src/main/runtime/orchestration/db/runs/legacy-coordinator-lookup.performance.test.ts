@@ -61,13 +61,24 @@ function seedLargeRun(): OrchestrationDb {
   send('dispatch:ctx_cross_run', 'term_cross_run_mail')
   send('DISPATCH:ctx_0_0', 'term_wrong_case')
   send('term_worker_0_0', 'term_other_run_mail', 'run_other')
+  // A handle reused by many Dispatches in other Runs; with these statistics an assignee-only index loses to a scan.
+  for (let i = 0; i < 2000; i++) {
+    dispatch.run(`ctx_reused_${i}`, `run_reused_${i}`, 'task_cross_run', 'term_worker_0_0')
+  }
   db.db
     .prepare(
       `INSERT INTO coordinator_runs (id, spec, coordinator_handle, scheduler_lost_at)
        VALUES ('crun_lost', 'spec', 'term_coord_a', ?)`
     )
     .run(ADOPTED_AT)
+  const coordinatorRun = db.db.prepare(
+    `INSERT INTO coordinator_runs (id, spec, coordinator_handle) VALUES (?, 'spec', 'term_coord_c')`
+  )
+  for (let i = 0; i < 500; i++) {
+    coordinatorRun.run(`crun_${i}`)
+  }
   db.db.exec('COMMIT')
+  db.db.exec('ANALYZE')
   return db
 }
 
@@ -96,7 +107,7 @@ describe('legacy coordinator lookup', () => {
 
   it('probes dispatch_contexts by address for each legacy mail, not by run', () => {
     const db = seedLargeRun()
-    const params = [RUN, ADOPTED_AT, RUN, ADOPTED_AT]
+    const params = [RUN, ADOPTED_AT]
     const plan = db.db
       .prepare(`EXPLAIN QUERY PLAN ${LEGACY_COORDINATOR_MAIL_HANDLES_SQL}`)
       .all(...params)
@@ -105,12 +116,11 @@ describe('legacy coordinator lookup', () => {
     expect(dispatchProbes).toHaveLength(4)
     for (const probe of dispatchProbes) {
       expect(probe).toMatch(
-        /SEARCH d USING INDEX (idx_dispatch_assignee_handle \(assignee_handle=\?\)|sqlite_autoindex_dispatch_contexts_1 \(id=\?\))/
+        /SEARCH d USING (COVERING )?INDEX (idx_dispatch_assignee_run_contract \(assignee_handle=\? AND run_id=\? AND contract_version=\?\)|sqlite_autoindex_dispatch_contexts_1 \(id=\?\))/
       )
     }
-    expect(plan.filter((detail) => detail.includes(' m '))).toEqual([
-      expect.stringContaining('SEARCH m USING INDEX idx_messages_delivery_contract'),
-      expect.stringContaining('SEARCH m USING INDEX idx_messages_delivery_contract')
+    expect(plan.filter((detail) => detail.includes('messages'))).toEqual([
+      'SEARCH messages USING INDEX idx_messages_delivery_contract (run_id=? AND delivery_contract=?)'
     ])
 
     const handles = db.db
