@@ -45,6 +45,7 @@ export type AntigravityTranscriptPollReads = {
   }[]
   leadModel?: string
   leadModelAt?: number
+  leadModelFence?: Pick<AntigravityPaneChildState, 'leadModel' | 'leadModelSince'>
 }
 export async function readAntigravityTranscriptPoll(
   state: HookListenerState,
@@ -105,6 +106,7 @@ export async function readAntigravityTranscriptPoll(
     }
   }
   if (readsLeadModel(pane) && pane.leadState === 'working' && pane.rootConversationId && wanted()) {
+    const fence = { leadModel: pane.leadModel, leadModelSince: pane.leadModelSince }
     const batch = new RolloutReadBatch(wanted)
     try {
       const tail = await readAntigravityChildTranscriptTail(
@@ -115,6 +117,7 @@ export async function readAntigravityTranscriptPoll(
       )
       result.leadModel = tail?.model
       result.leadModelAt = tail?.modelAt
+      result.leadModelFence = fence
     } finally {
       batch.release()
     }
@@ -130,7 +133,12 @@ export function pollAntigravityTranscriptStatus(
   if (!reads || pane !== reads.pane || pane.brainCache !== reads.cache) {
     return undefined
   }
-  if (reads.leadModel) {
+  // A hook that set the lead model while this read ran wins over the older transcript line.
+  if (
+    reads.leadModel &&
+    reads.leadModelFence?.leadModel === pane.leadModel &&
+    reads.leadModelFence.leadModelSince === pane.leadModelSince
+  ) {
     // An automatic turn takes only a model recorded after it started; until then the last one stays.
     const current =
       pane.leadModelSince === undefined ||

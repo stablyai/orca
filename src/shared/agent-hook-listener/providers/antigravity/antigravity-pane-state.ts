@@ -40,7 +40,8 @@ export type AntigravityPaneChildState = {
   /** Helper spawns the root started whose child no poll has proven yet. */
   pendingHelperSpawns?: number
   helpersIdleAt?: number
-  rootStoppedIdle?: true
+  /** How the root's last hook stopped: busy while background work runs, idle at the run's end. */
+  rootStop?: 'busy' | 'idle'
   leadState?: AgentStatusState
   leadStateStartedAt?: number
   leadObservedAt?: number
@@ -182,6 +183,11 @@ export function verifyAntigravityChild(pane: AntigravityPaneChildState, id: stri
   }
   pane.verifiedChildren.add(id)
   pane.helpersIdleAt = undefined
+  // A subagent proven after the root's busy Stop is the work that Stop waited on, so the lead is done.
+  if (pane.rootStop === 'busy' && pane.leadState === 'working') {
+    pane.leadState = 'done'
+    pane.leadStateStartedAt = Date.now()
+  }
   if (!pane.children.get(id)?.wokeAgain) {
     settleAntigravityHelperSpawn(pane)
   }

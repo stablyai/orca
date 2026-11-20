@@ -117,7 +117,7 @@ export function normalizeAntigravityEvent(
     isAntigravityInSessionChildHook(state, paneKey, hookPayload, origin)
   ) {
     // After the root's final idle Stop nothing would end a reopened row, so late child hooks stay ignored.
-    if (existingPaneState.rootStoppedIdle) {
+    if (existingPaneState.rootStop === 'idle') {
       return null
     }
     recordAntigravityChildHook(existingPaneState, conversationId, eventName, hookPayload, now)
@@ -153,7 +153,6 @@ export function normalizeAntigravityEvent(
 
   const paneState = getOrCreateAntigravityPaneState(state, paneKey)
   paneState.leadObservedAt = now
-  paneState.rootStoppedIdle = undefined
   const { toolName, toolInputSource } = readAntigravityToolCall(hookPayload)
   const spawnsHelpers = isAntigravityHelperSpawnCall(toolName, toolInputSource)
   const brainDir = resolveAntigravityBrainDirectory(hookPayload, transcriptPath)
@@ -177,6 +176,7 @@ export function normalizeAntigravityEvent(
     paneState.helpersIdleAt = undefined
   }
   const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
+  paneState.rootStop = eventName === 'Stop' ? (stopStillBusy ? 'busy' : 'idle') : undefined
   if (resetsTurn || (eventName === 'Stop' && !stopStillBusy)) {
     paneState.pendingHelperSpawns = undefined
   }
@@ -233,7 +233,6 @@ export function normalizeAntigravityEvent(
     paneState.discoversChildren = false
     paneState.dirty = false
     paneState.helpersIdleAt = undefined
-    paneState.rootStoppedIdle = true
   }
   const subagents = reconcileAntigravityActiveSubagents(paneState, now)
   const hasBackgroundHold =

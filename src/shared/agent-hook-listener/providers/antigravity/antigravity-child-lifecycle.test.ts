@@ -376,3 +376,26 @@ it('holds the parent for a proven subagent woken again by a message', async () =
     hook('root', 'Stop', { fullyIdle: false })?.payload.subagents?.map((child) => child.id)
   ).toEqual(['child'])
 })
+
+it('finishes the lead once a subagent woken after its busy Stop is proven', async () => {
+  transcript('child')
+  descriptor('child')
+  hook('root', 'PreToolUse', { toolCall: { name: 'send_message', args: {} } })
+  expect(hook('root', 'Stop', { fullyIdle: false })?.payload.mainAgent?.state).toBe('working')
+  hook('child', 'PreInvocation')
+  const polled = await poll()
+  expect(polled?.payload.subagents?.map((child) => child.id)).toEqual(['child'])
+  expect(polled?.payload.mainAgent?.state).toBe('done')
+})
+
+it('keeps a lead model a hook reports while an older transcript read runs', async () => {
+  hook('root', 'Stop', { fullyIdle: true })
+  hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto' })
+  appendFileSync(
+    join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'),
+    `${JSON.stringify({ type: 'PLANNER_RESPONSE', model: 'model-c', created_at: '2999-01-01T00:00:00Z' })}\n`
+  )
+  const reads = readAntigravityTranscriptPoll(state, paneKey)
+  hook('root', 'PreToolUse', { modelName: 'model-d', toolCall: { name: 'read_file' } })
+  expect(pollAntigravityTranscriptStatus(state, row, await reads)?.payload.model).toBe('model-d')
+})
