@@ -15,6 +15,8 @@ export const phoneBotSchema = z.looseObject({
   name: z.string(),
   folderWorkspaceId: z.string().min(1),
   avatar: z.string().nullable(),
+  // A newer host's outfit this phone doesn't draw reads as none.
+  avatarOutfit: BotSchema.shape.avatarOutfit,
   paused: z.boolean(),
   agent: z.string(),
   permissionMode: salvagedOptional('permissionMode', z.enum(AGENT_CHAT_PERMISSION_MODES)),

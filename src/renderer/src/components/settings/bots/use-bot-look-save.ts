@@ -3,11 +3,48 @@ import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-pa
 
 export type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'avatarOutfit'>
 
+// Per bot: the save on its way to the host and the latest picks waiting behind it, merged. Every editor of a
+// bot shares it, so a pick made after closing and reopening settings still lands last.
+type LookSaves = {
+  waiting: BotLookUpdate | null
+  update: (look: BotLookUpdate) => Promise<unknown>
+  drained: Promise<void>
+}
+
+const lookSaves = new Map<string, LookSaves>()
+
+/** Saves `look` after any save already on its way; resolves once nothing for this bot is left to send. */
+export function saveBotLook(
+  key: string,
+  look: BotLookUpdate,
+  update: (look: BotLookUpdate) => Promise<unknown>
+): Promise<void> {
+  const running = lookSaves.get(key)
+  if (running) {
+    running.waiting = { ...running.waiting, ...look }
+    running.update = update
+    return running.drained
+  }
+  const saves: LookSaves = { waiting: look, update, drained: Promise.resolve() }
+  saves.drained = (async () => {
+    while (saves.waiting) {
+      const next = saves.waiting
+      saves.waiting = null
+      // A failed save is reported by `update`; the picks after it still go.
+      await saves.update(next).catch(() => undefined)
+    }
+    lookSaves.delete(key)
+  })()
+  lookSaves.set(key, saves)
+  return saves.drained
+}
+
 /**
  * The tile color and outfit save on their own, the latest picks after a pause, one save at a time so the host
  * gets them in the order they were made; until they land they show as picked.
  */
 export function useBotLookSave(
+  key: string,
   update: (look: BotLookUpdate) => Promise<unknown>,
   delayMs: number
 ): { picked: BotLookUpdate | null; pick: (change: BotLookUpdate) => void; flush: () => void } {
@@ -18,7 +55,6 @@ export function useBotLookSave(
     look: BotLookUpdate
   } | null>(null)
   const latestPick = useRef(0)
-  const saves = useRef<Promise<unknown>>(Promise.resolve())
   const pick = (change: BotLookUpdate): void => {
     const look = { ...timer.current?.look, ...change }
     const thisPick = (latestPick.current += 1)
@@ -28,8 +64,7 @@ export function useBotLookSave(
     }
     const save = (): void => {
       timer.current = null
-      saves.current = saves.current.then(() => update(look)).catch(() => undefined)
-      void saves.current.then(() => {
+      void saveBotLook(key, look, update).then(() => {
         // Shown as saved once it lands, unless something newer was picked meanwhile.
         if (latestPick.current === thisPick) {
           setPicked(null)

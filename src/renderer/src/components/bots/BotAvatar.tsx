@@ -5,6 +5,7 @@ import type { BotOnHost } from '@/lib/bot-hosts'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import { BOT_MASCOT_URLS } from './bot-mascots'
+import type { BotOutfitArt } from './bot-mascot-look'
 
 /** The bot's picture, else its emoji, else its initial. */
 export function BotAvatar({
@@ -47,15 +48,17 @@ export function CarriedBotAvatar({
   )
 }
 
-/** The tile itself, for a picture not yet saved to a bot (the New bot dialog). */
+/** The tile itself, for a picture not yet saved to a bot (the New bot dialog); `outfit` draws over it. */
 export function BotAvatarTile({
   src,
   fallback,
+  outfit,
   className,
   style
 }: {
   src: string | null
   fallback: string
+  outfit?: BotOutfitArt | null
   className?: string
   style?: React.CSSProperties
 }): React.JSX.Element {
@@ -64,7 +67,7 @@ export function BotAvatarTile({
       aria-hidden
       style={style}
       className={cn(
-        'flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted text-xs font-semibold text-foreground',
+        'relative flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted text-xs font-semibold text-foreground',
         src && 'border-0 bg-transparent',
         className
       )}
@@ -74,6 +77,21 @@ export function BotAvatarTile({
       ) : (
         fallback
       )}
+      {src && outfit ? <OutfitArt art={outfit} /> : null}
     </span>
+  )
+}
+
+// The art's place on the 128 px tile, as a share of the tile, so it fits any tile size.
+function OutfitArt({ art }: { art: BotOutfitArt }): React.JSX.Element {
+  const [x, y, width, height] = art.at.map((v) => `${(v / 128) * 100}%`)
+  return (
+    <img
+      src={art.src}
+      alt=""
+      draggable={false}
+      style={{ left: x, top: y, width, height }}
+      className="pointer-events-none absolute max-w-none"
+    />
   )
 }

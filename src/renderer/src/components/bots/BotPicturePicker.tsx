@@ -9,7 +9,7 @@ import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { PICKABLE_BOT_MASCOT_IDS } from '../../../../shared/bot-avatar'
 import type { BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
-import { useBotMascotSrcs } from './bot-mascot-look'
+import { useBotMascotLooks } from './bot-mascot-look'
 import { BotPictureColors, BotPictureOutfits } from './BotPictureLook'
 import { BotPictureIntakeLine, LineAction } from './BotPictureIntakeLine'
 import {
@@ -141,7 +141,7 @@ export function BotPicturePicker({
         ? CUSTOM_FACE
         : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
   const generating = currentKey === GENERATE_FACE
-  const srcs = useBotMascotSrcs(PICKABLE_BOT_MASCOT_IDS, color, outfit)
+  const looks = useBotMascotLooks(PICKABLE_BOT_MASCOT_IDS, color, outfit)
   const faces: BotPictureFace[] = order.map((key) =>
     key === GENERATE_FACE
       ? {
@@ -152,7 +152,7 @@ export function BotPicturePicker({
         }
       : key === CUSTOM_FACE
         ? { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
-        : { key, src: srcs[key], fallback: '' }
+        : { key, src: looks[key].src, outfit: looks[key].outfit, fallback: '' }
   )
   // Every picture an intake takes, shared or not and even the same image again, leaves Generate.
   const [seenTaken, setSeenTaken] = useState(intake.taken)

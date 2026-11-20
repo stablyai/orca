@@ -16,6 +16,7 @@ import {
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import type { BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
+import { botRefKey } from '@/lib/bot-hosts'
 import { useBotLookSave } from './use-bot-look-save'
 import { useSaveOnClose } from './use-save-on-close'
 
@@ -268,7 +269,7 @@ export function useBotPictureSetting(
     })
   }
 
-  const look = useBotLookSave(update, BOT_PICTURE_SAVE_DELAY_MS)
+  const look = useBotLookSave(botRefKey(bot), update, BOT_PICTURE_SAVE_DELAY_MS)
 
   useSaveOnClose(() => {
     commit()

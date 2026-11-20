@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/bots/bot-avatar-color'
 import { BOT_AVATAR_OUTFITS, type BotAvatarOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { BotAvatarTile } from './BotAvatar'
-import { useBotMascotSrc } from './bot-mascot-look'
+import { useBotMascotLook } from './bot-mascot-look'
 
 /** The mascot's tile color: the swatches, then any color. */
 export function BotPictureColors({
@@ -110,7 +110,7 @@ function OutfitTile({
   side: 'top' | 'bottom'
   onPick: () => void
 }): React.JSX.Element {
-  const src = useBotMascotSrc(id, color, outfit)
+  const look = useBotMascotLook(id, color, outfit)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -124,7 +124,12 @@ function OutfitTile({
             selected && 'ring-2 ring-foreground ring-offset-2 ring-offset-popover'
           )}
         >
-          <BotAvatarTile src={src} fallback="" className="size-9 rounded-md" />
+          <BotAvatarTile
+            src={look.src}
+            outfit={look.outfit}
+            fallback=""
+            className="size-9 rounded-md"
+          />
         </button>
       </TooltipTrigger>
       <TooltipContent side={side} sideOffset={4}>

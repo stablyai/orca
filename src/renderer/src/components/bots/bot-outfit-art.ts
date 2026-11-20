@@ -17,58 +17,58 @@ export type BotOutfitLayer = {
   redraw?: readonly (readonly [string, string])[]
 }
 
-type OutfitLayers = Partial<Record<BotMascotId, BotOutfitLayer>>
+export type BotOutfitLayers = Partial<Record<BotMascotId, BotOutfitLayer>>
 
-const READERS = import.meta.glob<OutfitLayers>('../../../../shared/bot-mascots/outfits/*.json', {
+const READERS = import.meta.glob<BotOutfitLayers>('../../../../shared/bot-mascots/outfits/*.json', {
   import: 'default'
 })
 
-/** `id`'s layer of `outfit`; undefined while the outfit is being read, which this starts. */
-export type BotOutfitLayerOf = (
-  outfit: BotAvatarOutfit,
-  id: BotMascotId
-) => BotOutfitLayer | null | undefined
-
-const outfits = new Map<BotAvatarOutfit, OutfitLayers>()
+const outfits = new Map<BotAvatarOutfit, BotOutfitLayers>()
 const reading = new Set<BotAvatarOutfit>()
-const listeners = new Set<() => void>()
-let layerOf: BotOutfitLayerOf = (outfit, id) => lookUp(outfit, id)
+const listeners = new Map<BotAvatarOutfit, Set<() => void>>()
+const subscribers = new Map<BotAvatarOutfit, (listener: () => void) => () => void>()
 
 function read(outfit: BotAvatarOutfit): void {
   const reader = READERS[`../../../../shared/bot-mascots/outfits/${outfit}.json`]
-  if (!reader || reading.has(outfit)) {
+  if (!reader || outfits.has(outfit) || reading.has(outfit)) {
     return
   }
   reading.add(outfit)
   reader().then(
     (layers) => {
       outfits.set(outfit, layers)
-      // A new lookup on each arrival, so a memoized look built with the last one is built again.
-      layerOf = (worn, id) => lookUp(worn, id)
-      for (const listener of listeners) {
+      for (const listener of listeners.get(outfit) ?? []) {
         listener()
       }
     },
-    // A failed read is tried again the next time the outfit is asked for.
+    // A failed read is tried again by the next picture that wears the outfit.
     () => reading.delete(outfit)
   )
 }
 
-function lookUp(outfit: BotAvatarOutfit, id: BotMascotId): BotOutfitLayer | null | undefined {
-  const layers = outfits.get(outfit)
-  if (!layers) {
-    read(outfit)
-    return undefined
+// One stable subscribe per outfit, so a picture listens only for the outfit it wears.
+function subscriberOf(outfit: BotAvatarOutfit): (listener: () => void) => () => void {
+  let subscribe = subscribers.get(outfit)
+  if (!subscribe) {
+    subscribe = (listener) => {
+      const own = listeners.get(outfit) ?? new Set()
+      listeners.set(outfit, own)
+      own.add(listener)
+      read(outfit)
+      return () => own.delete(listener)
+    }
+    subscribers.set(outfit, subscribe)
   }
-  return layers[id] ?? null
+  return subscribe
 }
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
+const NO_OUTFIT = (): (() => void) => () => {}
 
-/** The outfit layers read so far; a new lookup each time another outfit's art arrives. */
-export function useBotOutfitLayerOf(): BotOutfitLayerOf {
-  return useSyncExternalStore(subscribe, () => layerOf)
+/** `outfit`'s layers, read when first worn: undefined until they arrive, null for no outfit. */
+export function useBotOutfitLayers(
+  outfit: BotAvatarOutfit | null
+): BotOutfitLayers | null | undefined {
+  return useSyncExternalStore(outfit ? subscriberOf(outfit) : NO_OUTFIT, () =>
+    outfit ? outfits.get(outfit) : null
+  )
 }

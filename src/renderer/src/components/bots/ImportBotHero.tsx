@@ -70,7 +70,12 @@ export function ImportBotHero({
                 aria-label={t('bots.import.changePicture', 'Change picture')}
                 className="rounded-2xl outline-none hover:opacity-90 focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
-                <BotAvatarTile src={picture.src} fallback="" className="size-24 rounded-2xl" />
+                <BotAvatarTile
+                  src={picture.src}
+                  outfit={picture.outfitArt}
+                  fallback=""
+                  className="size-24 rounded-2xl"
+                />
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-96">

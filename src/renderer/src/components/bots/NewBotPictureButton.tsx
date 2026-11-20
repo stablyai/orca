@@ -44,6 +44,7 @@ export function NewBotPictureButton({
           >
             <BotAvatarTile
               src={picture.src}
+              outfit={picture.outfitArt}
               fallback=""
               className="size-16 rounded-[inherit] shadow-[0_0_0_3px_var(--dialog-surface)] transition-[filter] group-hover/picture:brightness-95"
             />
