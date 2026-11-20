@@ -242,6 +242,8 @@ export class ConnectorPollClient {
       return null
     }
     if (!polled.ok) {
+      // A hello in flight (sayChanged) may already replace this one: let it land before deciding.
+      await this.saying.catch(() => null)
       // A lost answer (null) may have carried this hello's one list of unsettled deliveries; a new hello
       // lists them again. A 409 asks for one. A 5xx rolled back, so it keeps the hello. Either way only
       // if one said meanwhile did not already replace it.

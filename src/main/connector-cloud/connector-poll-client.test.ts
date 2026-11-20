@@ -383,7 +383,6 @@ describe('ConnectorPollClient', () => {
     h.fake.answerPoll({ status: 409, body: { error: 'hello_required' } })
     await settle(CONNECTOR_REHELLO_SPREAD_MS / 2 - 1_000)
     expect(h.fake.hellos).toHaveLength(1)
-    expect(h.fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(1)
     await settle(2_000)
     expect(h.fake.hellos).toHaveLength(2)
     expect(h.fake.requestsTo(CONNECTOR_PATHS.poll).at(-1)?.body).toMatchObject({ helloRev: 2 })
@@ -500,6 +499,23 @@ describe('ConnectorPollClient', () => {
     // The cloud refuses the held poll under the old hello; the next poll uses the new one, no third hello.
     h.fake.answerPoll({ status: 409, body: { error: 'hello_required' } })
     await settle()
+    expect(h.fake.hellos).toHaveLength(2)
+    expect(h.fake.requestsTo(CONNECTOR_PATHS.poll).at(-1)?.body).toMatchObject({ helloRev: 2 })
+    client.stop()
+  })
+
+  it('polls on a hello said during the held poll, without waiting a spread, when the 409 beats it', async () => {
+    const { client, machine } = startClient()
+    await settle()
+    h.fake.holdAfter.add(CONNECTOR_PATHS.hello)
+    machine.botList = [FAKE_BOT]
+    client.sayChanged()
+    await settle()
+    // The cloud refuses the held poll before the new hello's answer arrives.
+    h.fake.answerPoll({ status: 409, body: { error: 'hello_required' } })
+    await settle()
+    h.fake.release(CONNECTOR_PATHS.hello)
+    await settle(1_000)
     expect(h.fake.hellos).toHaveLength(2)
     expect(h.fake.requestsTo(CONNECTOR_PATHS.poll).at(-1)?.body).toMatchObject({ helloRev: 2 })
     client.stop()
