@@ -28360,5 +28360,8 @@
     "includeRecentLogsRedacted": "包含近期日志（已脱敏）",
     "details": "详情",
     "sending": "正在发送…"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "此计算机"
   }
 }
