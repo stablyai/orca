@@ -29,6 +29,20 @@ export function nativeChatSlotIndexOf(
       )
 }
 
+/** The message shown at a row, or the next message below it for rows that show none. */
+export function nativeChatSlotMessageIdFrom(
+  slots: readonly NativeChatTranscriptSlot[],
+  index: number
+): string | null {
+  for (let i = Math.max(0, index); i < slots.length; i++) {
+    const slot = slots[i]!
+    if (slot.kind === 'message') {
+      return slot.message.id
+    }
+  }
+  return null
+}
+
 /** Place queued and unjournaled not-sent messages after live activity, outside its turn. */
 export function splitNativeChatSlotsWaitingBehindLiveTurn(
   slots: readonly NativeChatTranscriptSlot[],

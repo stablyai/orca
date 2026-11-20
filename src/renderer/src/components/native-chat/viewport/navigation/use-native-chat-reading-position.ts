@@ -2,41 +2,29 @@ import { useLayoutEffect, useRef } from 'react'
 
 // Why: a chat view released while hidden comes back where its reader left off, not at the end.
 const MAX_REMEMBERED = 256
+// A newer read generation can supersede the first page while the chat's read owner reactivates.
+const MAX_RESTORE_ATTEMPTS = 5
 
 export type NativeChatReadingPosition = { messageId: string; offset: number }
+type RestoreResult = 'landed' | 'missing' | 'aborted' | 'superseded'
 
 const remembered = new Map<string, NativeChatReadingPosition>()
 
-/** The first row reaching below the viewport's top, and how far the reader is into it. */
-function readingPositionOf(container: HTMLElement): NativeChatReadingPosition | null {
+/** The first row reaching below the viewport's top, by its message, and how far the reader is into it. */
+function readingPositionOf(
+  container: HTMLElement,
+  messageIdAt: (index: number) => string | null
+): NativeChatReadingPosition | null {
   const top = container.getBoundingClientRect().top
-  for (const slot of container.querySelectorAll<HTMLElement>('[data-index]')) {
-    const rect = slot.getBoundingClientRect()
+  for (const row of container.querySelectorAll<HTMLElement>('[data-index]')) {
+    const rect = row.getBoundingClientRect()
     if (rect.bottom <= top) {
       continue
     }
-    const messageId = slot.querySelector<HTMLElement>('[data-native-chat-message-id]')?.dataset
-      .nativeChatMessageId
+    const messageId = messageIdAt(Number.parseInt(row.dataset.index ?? '', 10))
     return messageId ? { messageId, offset: Math.max(0, top - rect.top) } : null
   }
   return null
-}
-
-/** The element at a remembered offset into a row, so a long message reopens at the paragraph being read. */
-export function nativeChatElementAtOffset(row: HTMLElement, offset: number): HTMLElement {
-  if (offset <= 0) {
-    return row
-  }
-  const top = row.getBoundingClientRect().top + offset
-  let best: HTMLElement = row
-  for (const element of row.querySelectorAll<HTMLElement>('p, li, pre, table, h1, h2, h3, h4, blockquote')) {
-    const elementTop = element.getBoundingClientRect().top
-    if (elementTop > top) {
-      break
-    }
-    best = element
-  }
-  return best
 }
 
 /** Remembers the reading position when a reader away from the end leaves; a later fresh mount jumps back to it. */
@@ -46,6 +34,7 @@ export function useNativeChatReadingPosition({
   ready,
   scrollRef,
   readerAtEnd,
+  messageIdAt,
   jumpTo
 }: {
   /** One per transcript: a session's main list and each subagent's list read separately. */
@@ -54,30 +43,56 @@ export function useNativeChatReadingPosition({
   ready: boolean
   scrollRef: React.RefObject<HTMLDivElement | null>
   readerAtEnd: () => boolean
-  jumpTo: (position: NativeChatReadingPosition) => void
+  /** The message a transcript row shows, for rows of any kind. */
+  messageIdAt: (index: number) => string | null
+  jumpTo: (position: NativeChatReadingPosition, settled: (result: RestoreResult) => void) => void
 }): void {
   // A reveal of a view that stayed mounted already holds its offset; only a fresh mount restores.
   const freshMountRef = useRef(true)
-  const latest = useRef({ readerAtEnd, jumpTo })
-  latest.current = { readerAtEnd, jumpTo }
+  const latest = useRef({ readerAtEnd, jumpTo, messageIdAt })
+  latest.current = { readerAtEnd, jumpTo, messageIdAt }
   useLayoutEffect(() => {
     if (!isVisible || !ready) {
       return
     }
-    const position = remembered.get(positionKey)
-    remembered.delete(positionKey)
-    if (freshMountRef.current && position !== undefined) {
-      latest.current.jumpTo(position)
-    }
+    let cancelled = false
+    let frame = 0
+    const position = freshMountRef.current ? remembered.get(positionKey) : undefined
     freshMountRef.current = false
+    if (position === undefined) {
+      remembered.delete(positionKey)
+    } else {
+      const attempt = (tries: number): void => {
+        latest.current.jumpTo(position, (result) => {
+          if (cancelled) {
+            return
+          }
+          if (result === 'superseded' && tries < MAX_RESTORE_ATTEMPTS) {
+            frame = requestAnimationFrame(() => attempt(tries + 1))
+            return
+          }
+          // Landed, gone, or the reader moved on: the bookmark has done its job.
+          if (remembered.get(positionKey) === position) {
+            remembered.delete(positionKey)
+          }
+        })
+      }
+      attempt(1)
+    }
     return () => {
+      cancelled = true
+      cancelAnimationFrame(frame)
       const container = scrollRef.current
-      const position =
-        container && !latest.current.readerAtEnd() ? readingPositionOf(container) : null
-      if (position === null) {
+      const next =
+        container && !latest.current.readerAtEnd()
+          ? readingPositionOf(container, latest.current.messageIdAt)
+          : null
+      if (next === null) {
+        remembered.delete(positionKey)
         return
       }
-      remembered.set(positionKey, position)
+      remembered.delete(positionKey)
+      remembered.set(positionKey, next)
       if (remembered.size > MAX_REMEMBERED) {
         remembered.delete(remembered.keys().next().value as string)
       }

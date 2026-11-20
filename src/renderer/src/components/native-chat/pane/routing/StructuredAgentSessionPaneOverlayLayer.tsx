@@ -11,7 +11,10 @@ import { ActivityPortalContainer } from '@/components/ui/activity-portal-contain
 import { RetainedPaneHost } from '../../../tab-group/retained-pane/RetainedPaneHost'
 import NativeChatView from '../../NativeChatView'
 import { BotGroupChat } from '../../../bots/BotGroupChat'
-import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat-composer-editor-owner'
+import {
+  NativeChatComposerEditorOwner,
+  releaseNativeChatComposerEditors
+} from '../../composer/editor/native-chat-composer-editor-owner'
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
@@ -66,7 +69,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       <ChatViewTabContext value={tab.id}>
       <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
         <NativeChatHostOutageOwner target={target}>
-          <NativeChatComposerEditorOwner>
+          <NativeChatComposerEditorOwner tabId={tab.id}>
             <ActivityPortalContainer visible={isActive}>
               <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
                 <NativeChatView
@@ -183,6 +186,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       ownedTabIdsRef.current = ownedTabIds
       if (closed.size > 0) {
         chatViewRetention.forget(closed)
+        releaseNativeChatComposerEditors(closed)
       }
     }, [ownedTabIds])
     // Why: only shown chats and a few recently shown ones stay mounted, so memory doesn't grow with chats visited.

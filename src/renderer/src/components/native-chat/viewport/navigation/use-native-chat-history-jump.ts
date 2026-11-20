@@ -14,7 +14,7 @@ export type NativeChatHistoryJumpTarget =
   | { kind: 'subagent'; agentId: string }
 
 /** What the committed transcript can do for a target now: it landed, it needs older history, or it cannot be reached. */
-type HistoryJumpResult = 'landed' | 'missing' | 'aborted'
+type HistoryJumpResult = 'landed' | 'missing' | 'aborted' | 'superseded'
 
 export type NativeChatHistoryJumpStep = (
   target: NativeChatHistoryJumpTarget
@@ -104,8 +104,11 @@ export function useNativeChatHistoryJump({
           return 'missing'
         }
         const result = await committedRef.current.loadEarlier()
-        if (signal.aborted || result === 'superseded') {
+        if (signal.aborted) {
           return 'aborted'
+        }
+        if (result === 'superseded') {
+          return 'superseded'
         }
         if (result !== 'applied') {
           return 'missing'
