@@ -53,7 +53,7 @@ export async function removeHostCheckout(
         } else {
           markerGone = !(await authorize(true))
           if (!markerGone) {
-            const names = (await readdir(root)).filter((name) => !isCheckoutMarkerName(name))
+            const names = await namesExceptCheckoutMarker(root)
             const results = await Promise.allSettled(
               names.map((name) => rm(join(root, name), { recursive: true, force: true }))
             )
@@ -90,9 +90,21 @@ export async function removeHostCheckout(
   }
 }
 
-// Linux is case-sensitive, so `.GIT` there is ordinary content; Windows and macOS volumes usually fold case.
-function isCheckoutMarkerName(name: string): boolean {
-  return process.platform === 'linux' ? name === '.git' : name.toLowerCase() === '.git'
+// The volume decides case folding: `.GIT` is the marker only if it is the same file `.git` resolves to.
+async function namesExceptCheckoutMarker(root: string): Promise<string[]> {
+  const names = await readdir(root)
+  const marker = await lstat(join(root, '.git')).catch(() => null)
+  const kept: string[] = []
+  for (const name of names) {
+    if (name.toLowerCase() === '.git' && marker) {
+      const entry = await lstat(join(root, name)).catch(() => null)
+      if (entry && entry.ino === marker.ino && entry.dev === marker.dev) {
+        continue
+      }
+    }
+    kept.push(name)
+  }
+  return kept
 }
 
 export async function removeHostEmptyDirectory(targetPath: string): Promise<void> {
