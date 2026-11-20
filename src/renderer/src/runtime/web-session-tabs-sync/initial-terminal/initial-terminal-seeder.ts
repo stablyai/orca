@@ -8,6 +8,7 @@ import { shouldBootstrapInitialWebRuntimeTerminal } from '../tracking/tracking-d
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { SessionTabsStreamEvent } from '../state'
 import { hasSplitLandingGroup } from '../../../store/slices/tabs/split-landing-groups'
+import { hasRecordIndependentRenderableTab } from '../../../store/slices/tabs/tabs-reconciliation'
 import { findPendingWorktreeCreationId } from '@/lib/workspace/creation/pending-worktree-creation'
 import { hasStructuredAgentLaunchInWorktree } from '@/lib/agent-session/launch/structured-agent-session-launch-status'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
@@ -67,6 +68,7 @@ export function createInitialTerminalSeeder(
       state.tabsByWorktree[worktreeId]?.length ||
       isEmptyWorkspaceDefaultSurfacePending(worktreeId) ||
       hasSplitLandingGroup(state, worktreeId) ||
+      hasRecordIndependentRenderableTab(state, worktreeId) ||
       findPendingWorktreeCreationId(state.pendingWorktreeCreations, worktreeId) !== null ||
       hasStructuredAgentLaunchInWorktree(worktreeId)
     ) {

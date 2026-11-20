@@ -19,6 +19,7 @@ import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pa
 import { findPendingWorktreeCreationId } from '@/lib/workspace/creation/pending-worktree-creation'
 import { hasStructuredAgentLaunchInWorktree } from '@/lib/agent-session/launch/structured-agent-session-launch-status'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
+import { hasRecordIndependentRenderableTab } from '../../../slices/tabs/tabs-reconciliation'
 import {
   clearWindowTabMark,
   markWindowTabStarting,
@@ -148,6 +149,7 @@ export function createInitialTerminalThroughLayoutOwner(
       state.activeWorktreeId !== worktreeId ||
       state.tabsByWorktree[worktreeId]?.length ||
       isEmptyWorkspaceDefaultSurfacePending(worktreeId) ||
+      hasRecordIndependentRenderableTab(state, worktreeId) ||
       findPendingWorktreeCreationId(state.pendingWorktreeCreations, worktreeId) !== null ||
       hasStructuredAgentLaunchInWorktree(worktreeId)
     ) {

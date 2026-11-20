@@ -26,6 +26,15 @@ export type WorktreeTabModelReconciliation = {
   activeRenderableTabId: string | null
 }
 
+export function hasRecordIndependentRenderableTab(
+  state: Pick<AppState, 'unifiedTabsByWorktree'>,
+  worktreeId: string
+): boolean {
+  return (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+    (tab) => TAB_CONTENT_TRAITS[tab.contentType].renderableWithoutRecord
+  )
+}
+
 /** Pure single-workspace patch; optional batch reuses map drafts/openFiles index without changing projected values. */
 export function projectWorktreeTabModelReconciliation(
   state: AppState,
