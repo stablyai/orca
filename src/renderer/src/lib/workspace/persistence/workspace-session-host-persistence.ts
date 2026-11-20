@@ -145,6 +145,10 @@ export function patchWorkspaceSessionByHost(
   acknowledged?.retainHosts(routedSessionHostIds(state, slices))
   // After dropping unrouted hosts: that forget must not cancel this write's own settling.
   const settleMark = acknowledged?.settleMark()
+  const outputs = Object.keys(patch)
+  if (hostIds) {
+    acknowledged?.supersede(outputs, hostIds)
+  }
   // A host's relay ids ride with its entries patch, so main publishes them together once.
   const relayPlan = relays && planDesktopRelayWrite(api, relays, hostIds ?? new Set())
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
@@ -163,7 +167,6 @@ export function patchWorkspaceSessionByHost(
   const separate = relayPlan?.sendRest()
   const written = settleSessionWrites([localSlice, ...hostWrites, separate], relayPlan)
   if (acknowledged && hostIds && settleMark !== undefined) {
-    const outputs = Object.keys(patch)
     written.then(
       (outcome) => {
         if (outcome?.pendingFields?.length) {

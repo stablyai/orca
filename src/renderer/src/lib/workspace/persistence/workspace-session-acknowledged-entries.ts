@@ -172,6 +172,19 @@ export class AcknowledgedWorkspaceSessionEntries {
     }
   }
 
+  /** A whole-path write is being sent: a settled input that also outputs one of its fields, to hosts
+   *  this write skips, no longer matches main there (a global only reaches hosts given a slice). */
+  supersede(outputs: readonly string[], hostIds: ReadonlySet<ExecutionHostId>): void {
+    for (const [input, settled] of this.settled) {
+      if (
+        outputs.some((field) => settled.outputs.has(field)) &&
+        [...settled.hostIds].some((hostId) => !hostIds.has(hostId))
+      ) {
+        this.settled.delete(input)
+      }
+    }
+  }
+
   /** A write main may have taken only in part (a failed host, refused relay ids): keyed writes wait
    *  for the whole path to resend what it owes. */
   unsettle(): void {
