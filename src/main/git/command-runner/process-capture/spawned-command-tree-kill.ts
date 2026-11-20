@@ -124,7 +124,7 @@ export function endAbandonedWorkerChild(
   reportWhenAbandonedRootEnds(child.pid, killed, onTerminated)
 }
 
-const ABANDONED_GROUP_RETRY_MAX_MS = 30_000
+const ABANDONED_GROUP_ATTEMPTS = 5
 
 /** A dead worker can't stop or reap its owned POSIX group, so main ends it; the unreaped root keeps the group id reserved until its exit was reported. */
 function endAbandonedWorkerGroup(
@@ -142,23 +142,21 @@ function endAbandonedWorkerGroup(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the group kill reads only pid, exitCode, signalCode and kill, which the stand-in carries.
   const group = child as unknown as ChildProcess
-  const attempt = (retryMs: number): void => {
+  const attempt = (retryMs: number, left: number): void => {
     void forceTerminateProcessTree(group)
       .catch(() => false)
       .then((ended) => {
-        if (ended) {
+        // Bounded: every member already got SIGKILL, so a survivor is inside a syscall and runs no more user code.
+        if (ended || left === 1) {
           if (!lifetimeEndsOnLoss) {
             onTerminated()
           }
           return
         }
-        setTimeout(
-          () => attempt(Math.min(retryMs * 2, ABANDONED_GROUP_RETRY_MAX_MS)),
-          retryMs
-        ).unref?.()
+        setTimeout(() => attempt(retryMs * 2, left - 1), retryMs).unref?.()
       })
   }
-  attempt(ABANDONED_ROOT_FIRST_CHECK_MS)
+  attempt(ABANDONED_ROOT_FIRST_CHECK_MS, ABANDONED_GROUP_ATTEMPTS)
   if (lifetimeEndsOnLoss) {
     onTerminated()
   }
