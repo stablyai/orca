@@ -49,6 +49,8 @@ export type DesktopRelayHostApplied = {
   > | null
   changedTabIds: string[]
   refused: boolean
+  /** Call once `patch` is stored: a partition whose adoption it records leaves the baseline. */
+  stored: () => void
 }
 
 /** One partition's relay write from the window, applied by ownership against `base` (the stored
@@ -95,7 +97,12 @@ export function registerDesktopRelayHandlers(
       existing ??= new Set(store.getWorkspaceSessionHostIds())
       // Never materialize a partition just to record that it holds nothing.
       const kept = patch && (existing.has(hostId) || patch.remoteSessionIdsByTabId) ? patch : null
-      return { patch: kept, changedTabIds, refused }
+      const stored = () => {
+        if (kept?.desktopRelayAdoptionVersion !== undefined) {
+          legacyBaseline.delete(hostId)
+        }
+      }
+      return { patch: kept, changedTabIds, refused, stored }
     }
   }
   // Answering proves this main registered the apply handler; older mains reject the probe.
@@ -125,7 +132,7 @@ export function registerDesktopRelayHandlers(
           result.skipped.push(hostId)
           continue
         }
-        const { patch, refused, changedTabIds } = apply(
+        const { patch, refused, changedTabIds, stored } = apply(
           hostId,
           host,
           store.getWorkspaceSession(hostId)
@@ -135,6 +142,7 @@ export function registerDesktopRelayHandlers(
         }
         if (patch) {
           store.patchWorkspaceSessionRelays(patch, hostId, changedTabIds)
+          stored()
           result.applied.push(hostId)
         } else {
           result.unchanged.push(hostId)

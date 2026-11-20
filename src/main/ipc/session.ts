@@ -131,6 +131,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     if (!ORCA_LAYOUT_OWNER_IS_MAIN && isNoopWindowSessionPatch(stored, save)) {
       if (applied?.patch) {
         store.patchWorkspaceSessionRelays(applied.patch, hostId, applied.changedTabIds)
+        applied.stored()
         return { status: 'applied', ...withRelays }
       }
       noteWindowSessionSaveUnchanged(hostId)
@@ -138,6 +139,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
     // One publish for the entries and the relay ids that ride with them.
     store.patchWorkspaceSession({ ...save, ...applied?.patch }, hostId, written)
+    applied?.stored()
     return { status: 'applied', ...withRelays }
   }
 
