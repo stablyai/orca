@@ -1,3 +1,4 @@
+import { extractLeadingEnvAssignments } from '../../../shared/shell/launch/command-environment'
 import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   resolveSetupAgentSequenceLaunchCommand
@@ -75,16 +76,13 @@ function launchContext(input: TerminalLaunch, requireDirectCommand = true): Clau
         env[key] = inherited[key]!
       }
     }
-    if (inherited.CLAUDE_CONFIG_DIR) {
+    const configDirection = inherited.WSLENV?.split(':')
+      .find((token) => token.split('/')[0] === 'CLAUDE_CONFIG_DIR')
+      ?.split('/')[1]
+    if (inherited.CLAUDE_CONFIG_DIR && !configDirection?.includes('w')) {
       env.CLAUDE_CONFIG_DIR = inherited.CLAUDE_CONFIG_DIR
     }
-    env.WSLENV = (inherited.WSLENV ?? '')
-      .split(':')
-      .filter((token) => {
-        const [key, flags = ''] = token.split('/')
-        return !flags.includes('w') && env[key] !== undefined
-      })
-      .join(':')
+    env.WSLENV = inherited.WSLENV ?? ''
   }
   const startupCommand = resolveSetupAgentSequenceLaunchCommand(input.env, input.command)
   if (startupCommand) {
@@ -94,14 +92,23 @@ function launchContext(input: TerminalLaunch, requireDirectCommand = true): Clau
       return null
     }
     const parsed = tokenizeStartupCommand(startupCommand, input.shell)
-    if (direct && parsed.ok) {
-      const index = findClaudeExecutableIndex(parsed.tokens, input.shell)
-      command = parsed.tokens[index]
-      for (const token of parsed.tokens.slice(0, index)) {
-        const at = token.indexOf('=')
-        if (at > 0) {
-          env[token.slice(0, at)] = token.slice(at + 1)
-        }
+    if (parsed.ok) {
+      if (input.shell === 'posix') {
+        const literalPrefix = parsed.tokens.slice(
+          0,
+          parsed.spans.findIndex((span) => span.divergesFromShell) < 0
+            ? undefined
+            : parsed.spans.findIndex((span) => span.divergesFromShell)
+        )
+        const outer = extractLeadingEnvAssignments(literalPrefix)
+        const inner =
+          outer.rest[0]?.split('/').at(-1) === 'env'
+            ? extractLeadingEnvAssignments(outer.rest.slice(1))
+            : undefined
+        Object.assign(env, outer.env, inner?.env)
+      }
+      if (direct) {
+        command = parsed.tokens[findClaudeExecutableIndex(parsed.tokens, input.shell)]
       }
     }
   }

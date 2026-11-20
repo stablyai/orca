@@ -212,3 +212,46 @@ it('keys inherited WSL config passthrough after path translation', async () => {
     vi.unstubAllEnvs()
   }
 })
+
+it('uses literal account prefixes even when the command cannot accept flag insertion', () => {
+  const { support } = fixture()
+  support.observeExit(
+    { command: '/bin/claude', cwd: '/project', env: input().env },
+    new Error(refusal)
+  )
+  for (const command of [
+    'CLAUDE_CONFIG_DIR=/account/locked claude; echo done',
+    'env CLAUDE_CONFIG_DIR=/account/locked claude'
+  ]) {
+    const launch = { ...input('/account/open'), command }
+    prepareClaudeTerminalSideload(launch, support)
+    expect(launch.env.CLAUDE_CODE_PLUGIN_DIRS).toBe('')
+  }
+})
+
+it('keeps a Windows-only config passthrough out of the guest account check', async () => {
+  vi.stubEnv('CLAUDE_CONFIG_DIR', String.raw`C:\accounts\personal`)
+  vi.stubEnv('WSLENV', 'CLAUDE_CONFIG_DIR/w')
+  try {
+    const { deps, support, run } = fixture()
+    const launch = {
+      command: 'claude',
+      cwd: '/project',
+      shell: 'posix' as const,
+      wsl: { distro: 'work' },
+      env: {
+        ORCA_CLAUDE_CONFIG_DIR: '/home/guest/.claude',
+        ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR: '/orca/plugin'
+      }
+    }
+    await prewarmClaudeTerminalSideload(launch, deps)
+    expect(run.mock.calls[0][0]).toMatchObject({ env: { WSLENV: 'CLAUDE_CONFIG_DIR/w' } })
+    expect(run.mock.calls[0][0]).not.toMatchObject({
+      env: { CLAUDE_CONFIG_DIR: String.raw`C:\accounts\personal` }
+    })
+    prepareClaudeTerminalSideload(launch, support)
+    expect(launch.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBeUndefined()
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
