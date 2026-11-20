@@ -89,6 +89,8 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
           )
         }
       }
+      // resizeItem invalidates offsets, but getOffsetForIndex reads the cached values.
+      virtualizer.getTotalSize()
       const offset = virtualizer.getOffsetForIndex(index, 'start')?.[0]
       if (offset === undefined) {
         return false

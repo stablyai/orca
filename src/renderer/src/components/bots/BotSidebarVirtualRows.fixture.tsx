@@ -23,14 +23,13 @@ function Rows({
   const [hidden, setHidden] = useState(false)
   // Rows mount once the list has, as when the sidebar's bots load after it.
   const [listMounted, setListMounted] = useState(false)
-  const last = entries.at(-1)!
   const setHeight = (id: string, height: number): void =>
     setHeights((current) => ({ ...current, [id]: height }))
   // Like the sidebar search: show the list in one commit, then reveal at once.
-  const showAndRevealLast = (): void => {
+  const showAndReveal = (sidebarKey: string): void => {
     flushSync(() => setHidden(false))
     revealBotSidebarRow({
-      sidebarKey: last.id,
+      sidebarKey,
       isCurrent: () => true,
       focusName: true,
       defer: false,
@@ -46,12 +45,19 @@ function Rows({
         <button type="button" onClick={() => setHeight('bot-0', ROW_HEIGHT)}>
           Shrink Bot 0
         </button>
+        <button type="button" onClick={() => setHeight('bot-0', ROW_HEIGHT + 1600)}>
+          Grow Bot 0
+        </button>
         <button type="button" onClick={() => setHeight('bot-1', ROW_HEIGHT + 32)}>
           Add a chat line to Bot 1
         </button>
-        <button type="button" onClick={showAndRevealLast}>
-          Show list and reveal {last.name}
-        </button>
+        {[entries[400], entries.at(-1)].map((entry) =>
+          entry ? (
+            <button key={entry.id} type="button" onClick={() => showAndReveal(entry.id)}>
+              Show list and reveal {entry.name}
+            </button>
+          ) : null
+        )}
       </div>
       <div className={cn(hidden && 'hidden')}>
         <div
