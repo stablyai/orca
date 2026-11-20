@@ -14,7 +14,6 @@ import type {
 import { BrowserError } from '../../../browser/browser-error'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
-import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import {
@@ -122,16 +121,13 @@ export class RuntimeBrowserProfiles {
     }
 
     const windowId = this.host.getAuthoritativeWindowId()
-    const requestId = randomUUID()
     const reply = await getRuntimeDesktopSurface().requestRenderer<{
       requestId: string
       error?: string
     }>(windowId, {
-      requestId,
       channel: 'browser:requestTabSetProfile',
       replyChannel: 'browser:tabSetProfileReply',
       payload: {
-        requestId,
         browserPageId,
         profileId: profile.id,
         sessionPartition: profile.partition

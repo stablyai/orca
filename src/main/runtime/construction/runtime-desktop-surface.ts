@@ -1,12 +1,11 @@
 /** Optional desktop facilities for runtime hosts, addressed by window id with plain data so a host outside Electron main can supply them.
  * Node hosts legitimately lack these; terminal creation uses background spawn without a window (#10333), and notifications route to paired clients. */
 
-/** A renderer request answered on `replyChannel` by a reply carrying the same `requestId`. */
+/** A renderer request answered on `replyChannel`; the host adds the `requestId` the reply must echo. */
 export type RendererRequest = {
-  requestId: string
   channel: string
   replyChannel: string
-  payload: unknown
+  payload: object
   timeoutMs: number
   timeoutMessage: string
   signal?: AbortSignal
@@ -30,7 +29,7 @@ export type RuntimeDesktopSurface = {
   hasLiveRenderer(windowId: number): boolean
   /** False when the window or its renderer is gone. */
   sendToWindow(windowId: number, channel: string, payload: unknown): boolean
-  /** Only a reply from the window's current renderer settles it; rejects on timeout, abort or a gone window. */
+  /** Only a reply from the window's own renderer settles it; rejects on timeout, abort, or when the window or renderer goes away. */
   requestRenderer<T extends RendererReply>(windowId: number, request: RendererRequest): Promise<T>
   /** Keeps the window's renderer publishing while hidden until the returned release runs. */
   holdRendererPublication?(windowId: number): () => void

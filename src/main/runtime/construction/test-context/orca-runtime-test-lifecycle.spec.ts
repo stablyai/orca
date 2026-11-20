@@ -120,7 +120,7 @@ import {
   setRuntimeBrowserUnavailableCause
 } from '../../browser/installation/runtime-browser-commands-factory'
 import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
-import { electronRendererWindows } from '../../../host/electron-renderer-windows'
+import { rendererWindowSurfaceForTest } from '../renderer-window-surface-test-double'
 import { setRuntimeTerminalUnavailableCause } from '../../terminal/launch/native-terminal-availability'
 import { OrcaRuntimeService as runtimeMockOrcaRuntimeService } from '../../orca-runtime'
 
@@ -148,7 +148,14 @@ function resetRuntimeTestMocks(): void {
   setRuntimeBrowserUnavailableCause(null)
   setRuntimeTerminalUnavailableCause(null)
   // Runtime uses the injected desktop surface; Electron mocks alone cannot drive these assertions.
-  setRuntimeDesktopSurface({ showNotification: () => true, ...electronRendererWindows })
+  setRuntimeDesktopSurface({
+    ...rendererWindowSurfaceForTest(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each case stubs fromId with the window shape its path reads.
+      (windowId) => electronMocks.BrowserWindow.fromId(windowId) as never,
+      electronMocks.ipcMain
+    ),
+    showNotification: () => true
+  })
   resetPlatform()
   electronMocks.app.isPackaged = false
   // AppEnvironment owns runtime paths/package flag; delegate to Electron mocks to retain per-test toggles.

@@ -4,7 +4,6 @@ import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import {
   MOBILE_TERMINAL_READY_FALLBACK_MS,
@@ -172,7 +171,6 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       ? (desktop.holdRendererPublication?.(windowId) ?? (() => {}))
       : () => {}
     try {
-      const requestId = randomUUID()
       // Disconnect cancels only this wait; preserve the renderer tab/shell for host use and reconnect mirrors (#7718).
       const response = await desktop.requestRenderer<{
         requestId: string
@@ -180,7 +178,6 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         title?: string
         error?: string
       }>(windowId, {
-        requestId,
         channel: 'terminal:requestTabCreate',
         replyChannel: 'terminal:tabCreateReply',
         timeoutMs: 10_000,
@@ -188,7 +185,6 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         signal: opts.signal,
         abortMessage: 'client_disconnected',
         payload: {
-          requestId,
           worktreeId,
           afterTabId: afterDesktopTabId,
           targetGroupId: opts.targetGroupId,

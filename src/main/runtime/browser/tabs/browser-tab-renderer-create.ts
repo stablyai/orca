@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { captureActiveRpcCall } from '../../rpc/callers/active-call'
 import { retainBrowserMemoryPageForAgent } from '../../../browser/guest-lifecycle/browser-page-memory'
@@ -20,10 +19,8 @@ export async function createBrowserTabInRenderer(
 ): Promise<{ browserPageId: string }> {
   const windowId = host.getAuthoritativeWindowId()
   const desktop = getRuntimeDesktopSurface()
-  const requestId = randomUUID()
   const withCaller = captureActiveRpcCall()
-  const request: BrowserTabCreateRequest = {
-    requestId,
+  const request: Omit<BrowserTabCreateRequest, 'requestId'> = {
     url,
     worktreeId,
     ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
@@ -39,7 +36,6 @@ export async function createBrowserTabInRenderer(
     browserPageId?: string
     error?: string
   }>(windowId, {
-    requestId,
     channel: 'browser:requestTabCreate',
     replyChannel: 'browser:tabCreateReply',
     payload: request,

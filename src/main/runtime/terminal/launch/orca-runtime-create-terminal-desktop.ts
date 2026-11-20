@@ -1,7 +1,6 @@
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
-import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 import { ownerSurfacing } from './terminal-presentation'
 import type { OrcaRuntimeWithCreateTerminal } from './terminal-create'
@@ -26,20 +25,17 @@ export async function createDesktopTerminal(
   opts = applyRemoteViewerLaunchEnv(opts, opts.terminalImageViewerSupported)
   runtime.assertGraphReady()
   const windowId = runtime.getAuthoritativeWindowId(NO_WORKSPACE_OR_WINDOW_MESSAGE)
-  const requestId = randomUUID()
   const response = await getRuntimeDesktopSurface().requestRenderer<{
     requestId: string
     tabId?: string
     title?: string
     error?: string
   }>(windowId, {
-    requestId,
     channel: 'terminal:requestTabCreate',
     replyChannel: 'terminal:tabCreateReply',
     timeoutMs: 10000,
     timeoutMessage: 'Terminal creation timed out',
     payload: {
-      requestId,
       command: opts.command,
       cwd: opts.cwd,
       ...(opts.env ? { env: opts.env } : {}),

@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain, type IpcMainEvent } from 'electron'
+import { BrowserWindow } from 'electron'
+import { requestRendererReply } from '../window/renderer-relays/renderer-reply-request'
 import type {
   RendererReply,
   RendererRequest,
@@ -16,41 +17,20 @@ function liveRenderer(windowId: number): Electron.WebContents | null {
 const requestRenderer = <T extends RendererReply>(
   windowId: number,
   request: RendererRequest
-): Promise<T> =>
-  new Promise<T>((resolve, reject) => {
-    const renderer = liveRenderer(windowId)
-    if (!renderer) {
-      reject(new Error('runtime_unavailable'))
-      return
-    }
-    if (request.signal?.aborted) {
-      reject(new Error(request.abortMessage ?? 'Renderer request was cancelled'))
-      return
-    }
-    const settle = (): void => {
-      clearTimeout(timer)
-      ipcMain.removeListener(request.replyChannel, onReply)
-      request.signal?.removeEventListener('abort', onAbort)
-    }
-    const timer = setTimeout(() => {
-      settle()
-      reject(new Error(request.timeoutMessage))
-    }, request.timeoutMs)
-    const onAbort = (): void => {
-      settle()
-      reject(new Error(request.abortMessage ?? 'Renderer request was cancelled'))
-    }
-    const onReply = (event: IpcMainEvent, reply: T | undefined): void => {
-      if (event.sender !== renderer || reply?.requestId !== request.requestId) {
-        return
-      }
-      settle()
-      resolve(reply)
-    }
-    request.signal?.addEventListener('abort', onAbort, { once: true })
-    ipcMain.on(request.replyChannel, onReply)
-    renderer.send(request.channel, request.payload)
-  })
+): Promise<T> => {
+  const window = BrowserWindow.fromId(windowId)
+  return window
+    ? requestRendererReply<T>(window, {
+        requestChannel: request.channel,
+        replyChannel: request.replyChannel,
+        payload: request.payload,
+        timeoutMs: request.timeoutMs,
+        timeoutError: request.timeoutMessage,
+        signal: request.signal,
+        abortError: request.abortMessage
+      })
+    : Promise.reject(new Error('renderer_unavailable'))
+}
 
 /** Window-addressed renderer access the runtime reaches through RuntimeDesktopSurface. */
 export const electronRendererWindows: Pick<

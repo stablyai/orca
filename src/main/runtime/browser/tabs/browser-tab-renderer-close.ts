@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../../../browser/browser-error'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
 
@@ -8,17 +7,15 @@ export async function closeBrowserTabInRenderer(
   tabId: string | null,
   worktreeId: string | undefined
 ): Promise<void> {
-  const requestId = randomUUID()
   const reply = await getRuntimeDesktopSurface().requestRenderer<{
     requestId: string
     error?: string
     code?: 'browser_tab_not_found'
   }>(windowId, {
-    requestId,
     channel: 'browser:requestTabClose',
     replyChannel: 'browser:tabCloseReply',
     // Why: pass worktreeId so the renderer scopes the close correctly instead of falling back to the globally active tab in the wrong worktree.
-    payload: { requestId, tabId, worktreeId },
+    payload: { tabId, worktreeId },
     timeoutMs: 10_000,
     timeoutMessage: 'Tab close timed out'
   })
