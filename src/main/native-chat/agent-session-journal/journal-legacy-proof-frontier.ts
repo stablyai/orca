@@ -2,6 +2,7 @@ import { journalSqlSourceContent } from './journal-sql-failure'
 import { isJournalReaderReplyLimitFailure } from './journal-sql-reader-reply-limit'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import type { LegacyProofCursor, LegacyProofPage } from './journal-legacy-source-proof'
+import type { LegacyProofCounts } from './journal-legacy-retirement-state'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import type { JournalSqlOwner } from './journal-sql-owner'
@@ -13,12 +14,23 @@ export type LegacyProofFrontier = {
   pending: boolean
   /** Pages finished this run, for pacing progress saves. */
   pages: number
+  /** What this run's pages held, for reporting only. */
+  counts: LegacyProofCounts
+  /** This run picked up saved progress instead of starting at the first page. */
+  resumed: boolean
 }
 
 export function createLegacyProofFrontier(
   cursor: LegacyProofCursor = { table: 0, after: null }
 ): LegacyProofFrontier {
-  return { cursor, session: 0, pending: false, pages: 0 }
+  return {
+    cursor,
+    session: 0,
+    pending: false,
+    pages: 0,
+    counts: { chats: 0, converted: 0, notConverted: 0, originals: 0, copies: 0 },
+    resumed: cursor.table !== 0 || cursor.after !== null
+  }
 }
 
 /** Progress is saved every this many pages, so a later launch repeats at most these. */
@@ -52,7 +64,7 @@ export async function completeJournalLegacyProof(
     if (page.retained) {
       // A refusal is read again on the next attempt: what it waited on may have settled since.
       frontier.page = undefined
-      throw new JournalLegacyRetentionError(page.retained, page.reason)
+      throw new JournalLegacyRetentionError(page.retained, page.reason, page.artifact)
     }
     const originals = page.sessions.flatMap(({ sessionId, original }) =>
       original === undefined ? [] : [{ sessionId, ...original }]
@@ -144,6 +156,15 @@ export async function completeJournalLegacyProof(
       await rest(started)
       frontier.session++
       frontier.pending = false
+    }
+    // Counted once the page is done, so a page read again after a failure isn't counted twice.
+    if (page.copies) {
+      frontier.counts.copies += page.copies.length
+    } else {
+      frontier.counts.chats += page.sessions.length
+      frontier.counts.converted += page.sessions.filter((chat) => chat.convert).length
+      frontier.counts.notConverted += page.sessions.filter((chat) => !chat.convert).length
+      frontier.counts.originals += originals.length
     }
     frontier.cursor = page.next
     frontier.page = undefined

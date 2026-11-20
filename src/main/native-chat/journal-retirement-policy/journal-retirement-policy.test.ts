@@ -1,0 +1,60 @@
+import { expect, it } from 'vitest'
+import {
+  effectiveJournalRetirementMode,
+  journalRetirementBucket,
+  parseJournalRetirementPolicy,
+  type JournalRetirementPolicy
+} from './journal-retirement-policy'
+
+const policy = (fields: Partial<JournalRetirementPolicy>): JournalRetirementPolicy => ({
+  version: 1,
+  revision: 2,
+  mode: 'enforce',
+  enforcePermille: 1000,
+  ...fields
+})
+const DAY = 24 * 60 * 60 * 1000
+
+it('deletes only with a fresh download that enforces for this install, and never past a known off', () => {
+  const now = 10 * DAY
+  const base = { newestKnown: null, now, platform: 'darwin' as const, installId: 'install' }
+  const fetched = (p: JournalRetirementPolicy, at = now) => ({ policy: p, downloaded: p, at })
+
+  // Nothing downloaded, or a download over a day old: report, never delete.
+  expect(effectiveJournalRetirementMode({ ...base, fetched: null }).mode).toBe('report')
+  expect(
+    effectiveJournalRetirementMode({ ...base, fetched: fetched(policy({}), now - DAY - 1) }).mode
+  ).toBe('report')
+  expect(effectiveJournalRetirementMode({ ...base, fetched: fetched(policy({})) })).toEqual({
+    mode: 'enforce',
+    revision: 2
+  })
+  // The newest known off holds over an older enforce downloaded since.
+  expect(
+    effectiveJournalRetirementMode({
+      ...base,
+      fetched: fetched(policy({ revision: 1 })),
+      newestKnown: policy({ revision: 3, mode: 'off' })
+    }).mode
+  ).toBe('off')
+  // Only the cohort and the platforms it names.
+  const bucket = journalRetirementBucket('install')
+  expect(
+    effectiveJournalRetirementMode({
+      ...base,
+      fetched: fetched(policy({ enforcePermille: bucket }))
+    }).mode
+  ).toBe('report')
+  expect(
+    effectiveJournalRetirementMode({ ...base, fetched: fetched(policy({ platforms: ['win32'] })) })
+      .mode
+  ).toBe('report')
+  expect(
+    effectiveJournalRetirementMode({ ...base, installId: undefined, fetched: fetched(policy({})) })
+      .mode
+  ).toBe('report')
+  // A malformed mode reads as report, and an oversized file is rejected.
+  const parsed = parseJournalRetirementPolicy('{"version":1,"revision":4,"mode":"delete"}')
+  expect(parsed.ok && parsed.policy.mode).toBe('report')
+  expect(parseJournalRetirementPolicy(' '.repeat(17 * 1024)).ok).toBe(false)
+})

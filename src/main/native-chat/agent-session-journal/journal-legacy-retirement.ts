@@ -15,10 +15,10 @@ import {
   removeLeftoverLegacyCompanions
 } from './journal-legacy-retirement-files'
 import {
-  compareAppVersions,
-  isValidAppVersion
-} from '../../../shared/app-lifecycle/identity/app-version'
-import { LEGACY_PROOF_LAYOUT, type LegacySourceRetiring } from './journal-legacy-retirement-state'
+  LEGACY_PROOF_LAYOUT,
+  type LegacySourceHeld,
+  type LegacySourceRetiring
+} from './journal-legacy-retirement-state'
 import {
   readJournalLegacySourceReceipt,
   sameJournalLegacySource
@@ -29,65 +29,24 @@ import {
 } from './journal-legacy-file-lock'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import {
-  reportLegacyJournalRetirement,
+  LegacyJournalRetirementReporter,
+  legacyJournalRetirementMode,
+  type LegacyJournalRetirementMode,
   type LegacyJournalRetirementOutcome
 } from './journal-legacy-retirement-outcome'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import { JournalLegacyProof, type LegacyProofObservation } from './journal-legacy-proof'
+import {
+  absorbedWal,
+  heldFor,
+  laterVersion,
+  provenOutcome,
+  sourceBytes
+} from './journal-legacy-retirement-held'
 import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 
 type RetirementState = Extract<JournalSqlMaintenanceResult, { kind: 'legacy-retirement-state' }>
-
-/**
- * Absent means a release before this record copied the profile, which is always earlier; a copy
- * made without a known version waits only for the first launch that knows its own.
- */
-function laterVersion(running: string, convertedBy: string | null): boolean {
-  return (
-    isValidAppVersion(running) &&
-    (convertedBy === null ||
-      !isValidAppVersion(convertedBy) ||
-      compareAppVersions(running, convertedBy) > 0)
-  )
-}
-
-/** The WAL a saved retirement proved absorbed, so a removal cut short after the main file can finish. */
-function absorbedWal(
-  saved: string | null
-): { size: string; ino?: string; mtimeNs?: string } | undefined {
-  try {
-    const record: unknown = saved ? JSON.parse(saved) : null
-    if (!isRecord(record) || record.phase !== 'retiring' || typeof record.proof !== 'string') {
-      return undefined
-    }
-    const proof: unknown = JSON.parse(record.proof)
-    const wal = isRecord(proof) && isRecord(proof.wal) ? proof.wal : undefined
-    return wal?.kind === 'nonempty' &&
-      typeof wal.size === 'string' &&
-      typeof wal.ino === 'string' &&
-      typeof wal.mtimeNs === 'string'
-      ? { size: wal.size, ino: wal.ino, mtimeNs: wal.mtimeNs }
-      : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/** The original and its WAL as the proof read them: what deleting it frees. */
-function retiredBytes(observation: { proof: string; walBytes: string }): number {
-  try {
-    const receipt: unknown = JSON.parse(observation.proof)
-    const main = isRecord(receipt) && isRecord(receipt.main) ? Number(receipt.main.size) : 0
-    return (Number.isFinite(main) ? main : 0) + (Number(observation.walBytes) || 0)
-  } catch {
-    return Number(observation.walBytes) || 0
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 /**
  * Deletes the original journal once this store provably holds all of it, read from content: on a
@@ -105,7 +64,9 @@ export class JournalLegacyRetirement {
   private retryAt = 0
   private retryDelay = 60_000
   private done = false
-  private reported = false
+  private policy: LegacyJournalRetirementMode = { mode: 'report', revision: 0 }
+  private readonly reporter: LegacyJournalRetirementReporter
+  private activeMs = 0
 
   constructor(
     private readonly directory: string,
@@ -121,9 +82,11 @@ export class JournalLegacyRetirement {
     private readonly lock = acquireJournalLegacyFileLock,
     rest: (started: number) => Promise<void> = async () => {},
     private readonly eligibility = createJournalLegacyFileEligibility(),
-    private readonly version = journalRunningOrcaVersion()
+    private readonly version = journalRunningOrcaVersion(),
+    private readonly mode = legacyJournalRetirementMode
   ) {
     this.filename = journalDatabasePath(directory)
+    this.reporter = new LegacyJournalRetirementReporter(writer, version)
     this.proof = new JournalLegacyProof(
       writer,
       readers,
@@ -145,7 +108,7 @@ export class JournalLegacyRetirement {
       // Unsupported storage or file identity doesn't change while this process runs.
       if (error instanceof JournalLegacyIneligibleError && !this.done) {
         this.done = true
-        this.outcome({ kind: 'waiting', stage: 'unsupported_storage' })
+        await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' })
       }
       this.later()
       const reason = error instanceof Error ? error.message : String(error)
@@ -177,33 +140,61 @@ export class JournalLegacyRetirement {
       return
     }
     const saved = await this.savedState()
+    this.reporter.saved(saved.reported)
+    this.policy = await this.mode()
+    // Off: no proof and no deletion; chats still convert as they are opened or idle.
+    if (this.policy.mode === 'off') {
+      this.done = true
+      return this.outcome({ outcome: 'off' })
+    }
     // Retirement runs on an update: the version that copied the profile, or an older one, keeps it.
-    const observation = laterVersion(this.version, saved.convertedBy)
-      ? await this.observe(saved)
-      : null
+    const later = laterVersion(this.version, saved.convertedBy)
+    const observation = later ? await this.observe(saved) : null
     if (!observation || this.proof.refused(saved.retirement, observation)) {
       this.done = true
       const reason = observation ? this.proof.refusalReason : undefined
-      this.outcome(
+      return this.outcome(
         reason
-          ? { kind: 'refused', reason }
-          : {
-              kind: 'waiting',
-              stage: laterVersion(this.version, saved.convertedBy)
-                ? 'not_reconciled'
-                : 'same_version'
+          ? {
+              outcome: 'refused',
+              reason,
+              artifact: this.proof.refusalArtifact,
+              completeness: 'partial',
+              sourceBytes: observation ? sourceBytes(observation) : null
             }
+          : { outcome: 'deferred', defer: later ? 'not_reconciled' : 'same_version' }
       )
-      return
+    }
+    // Proven before and held: report mode reads that instead of walking every chat again.
+    const held = heldFor(saved.retirement, observation)
+    if (held && this.policy.mode !== 'enforce') {
+      this.done = true
+      return this.outcome(provenOutcome('proof_complete', held, observation, null))
     }
     await this.eligibility.present()
     await this.eligibility.check(this.filename, this.stopped.signal)
     this.proof.observe(observation)
     this.proof.resume(saved.retirement, observation)
+    const started = performance.now()
     await this.proof.run(observation)
+    this.activeMs += performance.now() - started
     // Every early return below waits out the backoff: no helper or full-sync commit each minute.
     if (!(await this.matches(observation))) {
       return this.later()
+    }
+    const walked = this.proof.walked
+    const proven: LegacySourceHeld = {
+      version: 2,
+      phase: 'held',
+      layout: LEGACY_PROOF_LAYOUT,
+      proof: observation.proof,
+      store: observation.store,
+      counts: held && walked.resumed ? held.counts : walked.counts,
+      whole: held ? held.whole : !walked.resumed
+    }
+    // Deletion needs a fresh permission, asked again before each step that can't be undone.
+    if (!(await this.enforced())) {
+      return this.hold(proven, observation)
     }
     const recycled = await this.readers.recycleSourceReaders()
     if (!recycled) {
@@ -216,6 +207,9 @@ export class JournalLegacyRetirement {
       const destination = await legacyDestinationIdentity(journalDomainDatabasePath(this.directory))
       if (destination.main !== observation.store) {
         return this.later()
+      }
+      if (!(await this.enforced())) {
+        return await this.hold(proven, observation)
       }
       const retiring: LegacySourceRetiring = {
         version: 2,
@@ -239,12 +233,16 @@ export class JournalLegacyRetirement {
       if (!lease.held() || !this.ownsProfile() || !(await this.matches(observation))) {
         return this.later()
       }
+      if (!(await this.enforced())) {
+        return await this.hold(proven, observation)
+      }
       this.done = await lease.retire(observation.walBytes)
       if (!this.done) {
         this.later()
-      } else {
-        this.outcome({ kind: 'retired', bytes: retiredBytes(observation) })
       }
+      await this.outcome(
+        provenOutcome(this.done ? 'deleted' : 'delete_failed', proven, observation, this.activeMs)
+      )
     } finally {
       try {
         await lease?.close()
@@ -255,12 +253,27 @@ export class JournalLegacyRetirement {
     }
   }
 
-  /** One outcome per launch, reported where the cleanup stops for this launch. */
-  private outcome(outcome: LegacyJournalRetirementOutcome): void {
-    if (!this.reported) {
-      this.reported = true
-      reportLegacyJournalRetirement(outcome)
-    }
+  private async enforced(): Promise<boolean> {
+    this.policy = await this.mode()
+    return this.policy.mode === 'enforce'
+  }
+
+  /** The proof finished and the policy keeps the file: saved, so later launches don't walk again. */
+  private async hold(
+    proven: LegacySourceHeld,
+    observation: LegacyProofObservation & { walBytes: string }
+  ): Promise<void> {
+    await this.writer.maintain({
+      kind: 'legacy-retirement-save',
+      value: JSON.stringify(proven),
+      durable: false
+    })
+    this.done = true
+    await this.outcome(provenOutcome('proof_complete', proven, observation, this.activeMs))
+  }
+
+  private outcome(fields: Partial<LegacyJournalRetirementOutcome>): Promise<void> {
+    return this.reporter.report(fields, this.policy)
   }
 
   private later(): void {

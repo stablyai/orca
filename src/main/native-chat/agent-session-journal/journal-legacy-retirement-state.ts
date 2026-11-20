@@ -1,5 +1,6 @@
 import {
   LEGACY_SOURCE_REFUSALS,
+  type LegacySourceArtifact,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
 
@@ -21,6 +22,35 @@ export type JournalLegacyRetirementState = {
   kept: boolean
   convertedBy: string | null
   retirement: string | null
+  /** What this store last reported about the cleanup, so a repeat isn't sent again. */
+  reported: string | null
+}
+
+/** Where to note what was last reported; nothing else reads it. */
+export const JOURNAL_LEGACY_RETIREMENT_REPORTED = 'journal.legacy-retirement-reported.v1'
+
+/** What one walk of the proof saw, for reporting only: it decides nothing. */
+export type LegacyProofCounts = {
+  chats: number
+  converted: number
+  notConverted: number
+  originals: number
+  copies: number
+}
+
+/**
+ * The proof of this original into this store finished, and the policy held deletion. A later
+ * launch reads this instead of walking again; deletion, once allowed, resumes at the copies.
+ */
+export type LegacySourceHeld = {
+  version: 2
+  phase: 'held'
+  layout: typeof LEGACY_PROOF_LAYOUT
+  proof: string
+  store: string
+  counts: LegacyProofCounts
+  /** The proof walked every page in one run rather than resuming saved progress. */
+  whole: boolean
 }
 
 /** A proof that failed for a reason the frozen original can't outgrow, keyed to that original. */
@@ -31,10 +61,16 @@ export type LegacySourceRefusal = {
   proof: string
   store: string
   reason: LegacySourceRefusalReason
+  /** A shape builds left behind that the refusal saw; for reporting only. */
+  artifact?: LegacySourceArtifact
 }
 
-/** The proof's page layout; progress saved under another is walked again from the start. */
-export const LEGACY_PROOF_LAYOUT = 1
+/**
+ * 2: progress and completion this build saves while deletion is held for a remote policy. Builds
+ * before it resume only layout 1, so none of them carries this build's progress past the checks
+ * it made; each proves from the start under its own rules.
+ */
+export const LEGACY_PROOF_LAYOUT = 2
 /** The proof's last phases, the reconcile's copies, start at this table (after content and claims). */
 export const LEGACY_PROOF_COPIES_TABLE = 7
 
@@ -146,7 +182,11 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
         policy: LEGACY_SOURCE_REFUSAL_POLICY,
         proof: data.proof,
         store: data.store,
-        reason
+        reason,
+        ...('artifact' in data &&
+        (data.artifact === 'source_json' || data.artifact === 'pause_table')
+          ? { artifact: data.artifact }
+          : {})
       }
     : null
 }

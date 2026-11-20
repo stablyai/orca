@@ -9,10 +9,33 @@ export type LegacySourceRefusalReason = (typeof LEGACY_SOURCE_REFUSALS)[number]
 export class JournalLegacyRetentionError extends Error {
   constructor(
     message: string,
-    readonly reason?: LegacySourceRefusalReason
+    readonly reason?: LegacySourceRefusalReason,
+    /** A shape builds left behind that this refusal saw, reported by name only. */
+    readonly artifact?: LegacySourceArtifact
   ) {
     super(message)
   }
+}
+
+export type LegacySourceArtifact = 'source_json' | 'pause_table'
+
+/**
+ * Shapes builds left behind, named so a refusal can be counted by them: an hourly build of
+ * 2026-10-05/06 added queued_messages.source_json, and builds of 2026-09-29 to 10-01 (v1.4.219)
+ * kept Stop pauses in queued_message_pauses.
+ */
+function legacySourceArtifact(
+  table: string,
+  extraColumns: readonly string[]
+): LegacySourceArtifact | undefined {
+  if (table === 'queued_message_pauses') {
+    return 'pause_table'
+  }
+  return table === 'queued_messages' &&
+    extraColumns.length > 0 &&
+    extraColumns.every((name) => name === 'source_json')
+    ? 'source_json'
+    : undefined
 }
 
 /** Unsupported storage is stable for this owner/descriptor, not across opens. */
@@ -27,4 +50,25 @@ export function readJournalLegacySource<T>(read: () => T): T {
     }
     throw error
   }
+}
+
+/** The original has columns no shipped reader accounts for. */
+export function legacyInventoryRefusal(
+  table: string,
+  extraColumns: readonly string[]
+): JournalLegacyRetentionError {
+  return new JournalLegacyRetentionError(
+    'legacy source has unaccounted columns',
+    'source-inventory',
+    legacySourceArtifact(table, extraColumns)
+  )
+}
+
+/** The original holds rows in a table no shipped reader accounts for. */
+export function legacyRecoveryRefusal(table: string): JournalLegacyRetentionError {
+  return new JournalLegacyRetentionError(
+    'legacy source has unaccounted recovery data',
+    'source-recovery',
+    legacySourceArtifact(table, [])
+  )
 }

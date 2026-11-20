@@ -1,0 +1,118 @@
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../../shared/app-lifecycle/identity/app-version'
+import { LEGACY_PROOF_LAYOUT, type LegacySourceHeld } from './journal-legacy-retirement-state'
+import type { LegacyProofObservation } from './journal-legacy-proof'
+import type { LegacyJournalRetirementOutcome } from './journal-legacy-retirement-outcome'
+
+// The saved records the cleanup reads back: when it may run, a WAL a cut-short removal left, the
+// held record a report-mode proof leaves, and what an outcome says about a finished proof.
+
+/**
+ * Absent means a release before this record copied the profile, which is always earlier; a copy
+ * made without a known version waits only for the first launch that knows its own.
+ */
+export function laterVersion(running: string, convertedBy: string | null): boolean {
+  return (
+    isValidAppVersion(running) &&
+    (convertedBy === null ||
+      !isValidAppVersion(convertedBy) ||
+      compareAppVersions(running, convertedBy) > 0)
+  )
+}
+
+/** The WAL a saved retirement proved absorbed, so a removal cut short after the main file can finish. */
+export function absorbedWal(
+  saved: string | null
+): { size: string; ino?: string; mtimeNs?: string } | undefined {
+  try {
+    const record: unknown = saved ? JSON.parse(saved) : null
+    if (!isRecord(record) || record.phase !== 'retiring' || typeof record.proof !== 'string') {
+      return undefined
+    }
+    const proof: unknown = JSON.parse(record.proof)
+    const wal = isRecord(proof) && isRecord(proof.wal) ? proof.wal : undefined
+    return wal?.kind === 'nonempty' &&
+      typeof wal.size === 'string' &&
+      typeof wal.ino === 'string' &&
+      typeof wal.mtimeNs === 'string'
+      ? { size: wal.size, ino: wal.ino, mtimeNs: wal.mtimeNs }
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The original and its WAL as the proof read them: what deleting it frees. */
+export function sourceBytes(observation: { proof: string; walBytes: string }): number | null {
+  try {
+    const receipt: unknown = JSON.parse(observation.proof)
+    const main =
+      isRecord(receipt) && isRecord(receipt.main) ? Number(receipt.main.size) : Number.NaN
+    return Number.isFinite(main) ? main + (Number(observation.walBytes) || 0) : null
+  } catch {
+    return null
+  }
+}
+
+/** A held record of the proof of this original into this store, under this build's layout. */
+export function heldFor(
+  saved: string | null,
+  observation: LegacyProofObservation
+): LegacySourceHeld | null {
+  try {
+    const record: unknown = saved ? JSON.parse(saved) : null
+    if (
+      !isRecord(record) ||
+      record.phase !== 'held' ||
+      record.layout !== LEGACY_PROOF_LAYOUT ||
+      record.proof !== observation.proof ||
+      record.store !== observation.store ||
+      !isRecord(record.counts)
+    ) {
+      return null
+    }
+    const count = (name: string) => {
+      const value = isRecord(record.counts) ? record.counts[name] : undefined
+      return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : 0
+    }
+    return {
+      version: 2,
+      phase: 'held',
+      layout: LEGACY_PROOF_LAYOUT,
+      proof: observation.proof,
+      store: observation.store,
+      counts: {
+        chats: count('chats'),
+        converted: count('converted'),
+        notConverted: count('notConverted'),
+        originals: count('originals'),
+        copies: count('copies')
+      },
+      whole: record.whole === true
+    }
+  } catch {
+    return null
+  }
+}
+
+export function provenOutcome(
+  outcome: 'proof_complete' | 'deleted' | 'delete_failed',
+  proven: LegacySourceHeld,
+  observation: { proof: string; walBytes: string },
+  activeMs: number | null
+): Partial<LegacyJournalRetirementOutcome> {
+  return {
+    outcome,
+    completeness: 'complete',
+    resumed: !proven.whole,
+    counts: proven.counts,
+    sourceBytes: sourceBytes(observation),
+    activeMs
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}

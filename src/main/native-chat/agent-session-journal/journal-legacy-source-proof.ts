@@ -1,6 +1,8 @@
 import { JOURNAL_DOMAIN_PROFILE_TABLES } from './database/journal-domain-profile-columns'
 import {
   JournalLegacyRetentionError,
+  legacyInventoryRefusal,
+  legacyRecoveryRefusal,
   readJournalLegacySource,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
@@ -62,6 +64,7 @@ export type LegacyProofPage = {
   sessions: LegacySourceSession[]
   retained?: string
   reason?: LegacySourceRefusalReason
+  artifact?: JournalLegacyRetentionError['artifact']
   /** Claims only the original holds, for chats kept here, taken in before it retires. */
   claims?: LegacyClaim[]
   /** Copies of chats an older Orca continued, converted from the original before it retires. */
@@ -105,16 +108,13 @@ function readSourcePage(
         PROFILE_COLUMNS.get(table) ??
         (SOURCE_COLUMNS[table] ? new Set(SOURCE_COLUMNS[table]!.split(' ')) : undefined)
       if (columns) {
-        if (
-          db
-            .prepare(`PRAGMA table_info(${table})`)
-            .all()
-            .some((column) => !columns.has(column.name))
-        ) {
-          throw new JournalLegacyRetentionError(
-            'legacy source has unaccounted columns',
-            'source-inventory'
-          )
+        const extra = db
+          .prepare(`PRAGMA table_info(${table})`)
+          .all()
+          .map((column) => String(column.name))
+          .filter((name) => !columns.has(name))
+        if (extra.length > 0) {
+          throw legacyInventoryRefusal(table, extra)
         }
       }
 
@@ -138,10 +138,7 @@ function readSourcePage(
                 WHERE r.session_id=i.session_id AND r.epoch=i.epoch AND r.seq>=i.tip) LIMIT 1`
           : `SELECT 1 FROM ${quoted} LIMIT 1`
       if (db.prepare(unaccounted).get()) {
-        throw new JournalLegacyRetentionError(
-          'legacy source has unaccounted recovery data',
-          'source-recovery'
-        )
+        throw legacyRecoveryRefusal(table)
       }
       if (!RECOVERY_TABLES.includes(table)) {
         throw new JournalLegacyRetentionError(

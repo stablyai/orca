@@ -24,7 +24,7 @@ import type { createUsageService } from './usage-service'
 import type { UsageWorktreeCatalog } from '../usage/usage-store-host'
 import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
 import { DESKTOP_OWNER_POLL_MS, watchDesktopOwner } from './backend-desktop-owner-watch'
-import { setLegacyJournalRetirementSink } from '../native-chat/agent-session-journal/journal-legacy-retirement-outcome'
+import { setLegacyJournalRetirementHost } from '../native-chat/agent-session-journal/journal-legacy-retirement-outcome'
 
 // A fatal V8 trap must crash, never spin on a JS fault-signal listener.
 installFatalSignalListenerGuard()
@@ -157,10 +157,12 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
       void stop()
     }
   )
-  // The old chat journal's retirement runs in this process; main reports its outcome.
-  setLegacyJournalRetirementSink((event) =>
-    control!.call('journal.legacyRetirement.capture', event, abort.signal)
-  )
+  // The old chat journal's cleanup runs in this process; main reports its outcome and reads the
+  // policy that allows deleting it.
+  setLegacyJournalRetirementHost({
+    report: (event) => control!.call('journal.legacyRetirement.capture', event, abort.signal),
+    mode: () => control!.call('journal.legacyRetirement.mode', undefined, abort.signal)
+  })
   const lock = await acquireServiceLock(config.paths.userData)
   // Release only after services and their worker writers have retired.
   lifetime.add(({ failed }) => {

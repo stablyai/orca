@@ -9,6 +9,7 @@ import {
   LEGACY_PROOF_COPIES_TABLE,
   LEGACY_PROOF_LAYOUT,
   LEGACY_SOURCE_REFUSAL_POLICY,
+  type LegacyProofCounts,
   type LegacySourceProving,
   type LegacySourceRefusal
 } from './journal-legacy-retirement-state'
@@ -70,9 +71,19 @@ export class JournalLegacyProof {
     }
   }
 
+  /** What this run of the proof walked, and whether it picked up saved progress. */
+  get walked(): { counts: LegacyProofCounts; resumed: boolean } {
+    return { counts: { ...this.frontier.counts }, resumed: this.frontier.resumed }
+  }
+
   /** Why this original was refused, once `refused` said so. */
   get refusalReason(): LegacySourceRefusal['reason'] | undefined {
     return this.refusal?.reason
+  }
+
+  /** A shape builds left behind that the refusal saw. */
+  get refusalArtifact(): LegacySourceRefusal['artifact'] {
+    return this.refusal?.artifact
   }
 
   /** True when this exact original was refused before; the proof isn't run again for it. */
@@ -113,7 +124,8 @@ export class JournalLegacyProof {
           policy: LEGACY_SOURCE_REFUSAL_POLICY,
           proof: observation.proof,
           store: observation.store,
-          reason: error.reason
+          reason: error.reason,
+          ...(error.artifact ? { artifact: error.artifact } : {})
         }
         await this.saveRefusal()
       }
@@ -183,7 +195,7 @@ function savedCursor(
     typeof retiring === 'object' &&
     retiring !== null &&
     'phase' in retiring &&
-    retiring.phase === 'retiring' &&
+    (retiring.phase === 'retiring' || retiring.phase === 'held') &&
     'layout' in retiring &&
     retiring.layout === LEGACY_PROOF_LAYOUT &&
     'proof' in retiring &&

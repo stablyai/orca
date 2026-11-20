@@ -213,11 +213,15 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
       this.fetched = null
       return
     }
-    const cached = readCachedReleaseAssetPolicy(
+    // Read off the main thread's file reads: a refresh runs in the background, so it never blocks.
+    const cached = await readCachedReleaseAssetPolicyAsync(
       this.spec,
       this.deps.userDataPath,
       this.deps.appVersion
     )
+    if (this.channel !== channel) {
+      return
+    }
     const known = newerPolicy(cached, this.newest)
     const stale = known !== null && parsed.policy.revision <= known.revision
     const policy = stale ? known : parsed.policy

@@ -178,7 +178,12 @@ export async function profile(
     version = '1.0.1',
     owns = true,
     lock = native ? acquireJournalLegacyFileLock : fakeLease,
-    eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9]
+    eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9],
+    // Deletion allowed unless a test says otherwise: most of these test what the proof requires.
+    mode: ConstructorParameters<typeof JournalLegacyRetirement>[11] = async () => ({
+      mode: 'enforce',
+      revision: 1
+    })
   ) =>
     new JournalLegacyRetirement(
       root,
@@ -191,7 +196,8 @@ export async function profile(
       lock,
       undefined,
       eligibility ?? (native ? undefined : { check: async () => {}, present: () => {} }),
-      version
+      version,
+      mode
     )
   return {
     root,
