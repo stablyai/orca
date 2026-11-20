@@ -224,7 +224,7 @@ it('keeps `@` open past spaces while the words still name a bot, so a later one 
     7
   )
 
-  for (const draft of ['notify @eng - reviewer please', 'notify @eng ', 'a@eng - rev', '@- x']) {
+  for (const draft of ['notify @eng - reviewer please', 'a@eng - rev', '@- x']) {
     rerender({ draft })
     expect(result.current.autocomplete).toEqual({ mode: 'none' })
   }
@@ -251,6 +251,12 @@ it('keeps a dismissal for the same trigger, then opens a newly typed spaced ment
 
 it('closes after a completed multi-word name and a space while keeping partial names open', () => {
   const { result, rerender } = mountSpaced()
+  rerender({ draft: 'notify @eng ' })
+  expect(result.current.autocomplete).toEqual({
+    mode: 'mention',
+    query: 'eng ',
+    triggerKey: '@:7'
+  })
   rerender({ draft: 'notify @eng - ' })
   expect(result.current.autocomplete).toEqual({
     mode: 'mention',
@@ -259,6 +265,7 @@ it('closes after a completed multi-word name and a space while keeping partial n
   })
   rerender({ draft: 'notify @Eng - Reviewer ' })
   expect(result.current.autocomplete).toEqual({ mode: 'none' })
+  expect(result.current.handleKey(key('Enter'), 0)).toBe(false)
 })
 
 it('returns from a spaced mention chat list on Escape and closes the bots on the next Escape', () => {

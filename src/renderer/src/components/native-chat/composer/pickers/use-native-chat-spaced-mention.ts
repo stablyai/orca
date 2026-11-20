@@ -21,11 +21,11 @@ export function useSpacedMemberQuery(
   if (dismissed !== null && dismissed !== key) {
     setDismissed(null)
   }
-  // A word after the space, so a finished `@name ` still sends; letters, so `@- x` matches nothing.
+  // A finished name plus space is message text; partial names still need the picker.
   const named = useMemo(
     () =>
       query !== undefined &&
-      /\s\S/.test(query) &&
+      /\s/.test(query) &&
       /[\p{L}\p{N}]/u.test(query) &&
       !(
         /\s$/.test(query) &&
