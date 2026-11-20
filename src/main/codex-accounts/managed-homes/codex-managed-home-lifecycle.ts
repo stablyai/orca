@@ -43,8 +43,6 @@ const KEPT_HISTORY = [
 const KEEP_ON_REMOVAL_SCRIPT = [
   'set -u',
   'home=$1',
-  // What a linked history reaches can't be told apart from private state, so nothing is removed.
-  'if [ -L "$home/history.jsonl" ]; then exit 0; fi',
   'kept() {',
   '  case "${1##*/}" in',
   '    *.orca-profile-merge) return 0 ;;',
@@ -75,11 +73,6 @@ const KEEP_ON_REMOVAL_SCRIPT = [
 async function removeManagedHomeKeepingSharedHistory(home: string): Promise<boolean> {
   const entries = await readdir(home, { withFileTypes: true })
   const sharedOnce = entries.some((entry) => entry.name === HISTORY_CLEANUP_MANIFEST)
-  // A hand-made link Orca never creates: what it reaches can't be told apart from private state, so
-  // the whole home stays, sign-in included, rather than risk the history.
-  if (entries.some((entry) => entry.name === 'history.jsonl' && entry.isSymbolicLink())) {
-    return true
-  }
   const kept = (entry: Dirent): boolean =>
     KEPT_HISTORY.includes(entry.name) ||
     entry.name.endsWith(MERGE_PENDING_SUFFIX) ||

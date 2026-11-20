@@ -11,14 +11,31 @@ export const MAX_HISTORY_IMPORT_ATTEMPTS = 3
 export const HISTORY_IMPORT_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 export type LegacyHistoryState = {
-  /** A session copy failed; later launches run the session pass again. */
-  sessionsPending?: boolean
+  /** Failed session passes; after a few, the pass waits a day between tries. */
+  sessionPassAttempts?: number
+  sessionPassFailedAt?: number
   /** The shared history was created, or already existed, so nothing is owed. */
   historyImportSettled?: boolean
   historyImportAttempts?: number
   /** The account histories' sizes and times when the import last gave up. */
   historyImportInputs?: string
   historyImportGaveUpAt?: number
+}
+
+/** Like the import: a few tries, then once a day, so a lasting failure isn't redone every launch. */
+export function legacySessionPassDue(state: LegacyHistoryState): boolean {
+  return (
+    (state.sessionPassAttempts ?? 0) < MAX_HISTORY_IMPORT_ATTEMPTS ||
+    Date.now() - (state.sessionPassFailedAt ?? 0) >= HISTORY_IMPORT_RETRY_INTERVAL_MS
+  )
+}
+
+export function recordLegacySessionPassFailure(state: LegacyHistoryState): LegacyHistoryState {
+  return {
+    ...state,
+    sessionPassAttempts: (state.sessionPassAttempts ?? 0) + 1,
+    sessionPassFailedAt: Date.now()
+  }
 }
 
 /** Where the shared history import reads and records its attempts. */
@@ -34,8 +51,11 @@ export function parseLegacyHistoryState(text: string): LegacyHistoryState {
   if (!parsed || typeof parsed !== 'object') {
     return state
   }
-  if ('sessionsPending' in parsed && parsed.sessionsPending === true) {
-    state.sessionsPending = true
+  if ('sessionPassAttempts' in parsed && typeof parsed.sessionPassAttempts === 'number') {
+    state.sessionPassAttempts = parsed.sessionPassAttempts
+  }
+  if ('sessionPassFailedAt' in parsed && typeof parsed.sessionPassFailedAt === 'number') {
+    state.sessionPassFailedAt = parsed.sessionPassFailedAt
   }
   if ('historyImportSettled' in parsed && parsed.historyImportSettled === true) {
     state.historyImportSettled = true

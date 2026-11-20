@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import { link, lstat, open, readFile, readdir, rm, stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { track } from '../../../telemetry/client'
+import { isHardLinkUnsupportedError } from '../../../codex/history/rollouts/codex-rollout-copy'
 import type { CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES } from '../../../../shared/telemetry/schemas/telemetry-codex-legacy-history-event-schemas'
 
 type LegacyHistoryImportOutcome = (typeof CODEX_LEGACY_HISTORY_IMPORT_OUTCOMES)[number]
@@ -55,22 +57,6 @@ async function listAccountHistories(accountsRoot: string): Promise<string[]> {
   return paths.sort()
 }
 
-const PRESERVED_HISTORY_NAME = /^history\.orca-legacy-.+\.jsonl$/
-
-// The account histories the migration preserved in the runtime home, which outlive the accounts.
-async function listPreservedHistories(runtimeHome: string): Promise<string[]> {
-  const entries = await readdir(runtimeHome, { withFileTypes: true }).catch((error: unknown) => {
-    if (errnoCodeOrUnknown(error) === 'ENOENT') {
-      return []
-    }
-    throw error
-  })
-  return entries
-    .filter((entry) => entry.isFile() && PRESERVED_HISTORY_NAME.test(entry.name))
-    .map((entry) => join(runtimeHome, entry.name))
-    .sort()
-}
-
 /**
  * Codex may be appending to or trimming a shared history.jsonl that exists, so only a missing one
  * is created from the account histories, which are only read, and never over one Codex creates
@@ -80,10 +66,7 @@ export async function importLegacyHistoriesIfSharedAbsent(
   accountsRoot: string,
   runtimeHistoryPath: string
 ): Promise<void> {
-  const accountHistoryPaths = [
-    ...(await listAccountHistories(accountsRoot)),
-    ...(await listPreservedHistories(dirname(runtimeHistoryPath)))
-  ]
+  const accountHistoryPaths = await listAccountHistories(accountsRoot)
   if (accountHistoryPaths.length === 0) {
     return
   }
@@ -116,16 +99,12 @@ async function publishLegacyHistoriesIfAbsent(
   return publishWithoutOverwrite(`${[...seenLines].join('\n')}\n`, runtimeHistoryPath)
 }
 
-// exFAT, FAT32 and some network or FUSE mounts refuse hard links.
-const HARD_LINK_UNSUPPORTED = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EXDEV'])
-
 async function publishWithoutOverwrite(
   contents: string,
   targetPath: string
 ): Promise<LegacyHistoryImportOutcome> {
-  // One fixed name, cleared first: an attempt a quit cut short never leaves a copy behind for good.
-  const tmpPath = `${targetPath}.orca-import.tmp`
-  await rm(tmpPath, { force: true })
+  await removeStaleImportCopies(targetPath)
+  const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}${IMPORT_COPY_SUFFIX}`
   try {
     const handle = await open(tmpPath, 'wx', 0o600)
     try {
@@ -137,6 +116,23 @@ async function publishWithoutOverwrite(
     return await linkIntoFreeName(tmpPath, targetPath)
   } finally {
     await rm(tmpPath, { force: true })
+  }
+}
+
+const IMPORT_COPY_SUFFIX = '.orca-import.tmp'
+
+// Copies an attempt a quit cut short left behind. Only regular files: removing one only drops that
+// name, even when it is a hard link to the published history.
+async function removeStaleImportCopies(targetPath: string): Promise<void> {
+  const prefix = `${basename(targetPath)}.`
+  for (const entry of await readdir(dirname(targetPath), { withFileTypes: true })) {
+    if (
+      entry.isFile() &&
+      entry.name.startsWith(prefix) &&
+      entry.name.endsWith(IMPORT_COPY_SUFFIX)
+    ) {
+      await rm(join(dirname(targetPath), entry.name), { force: true })
+    }
   }
 }
 
@@ -154,8 +150,9 @@ async function linkIntoFreeName(
       return 'skipped_existing'
     }
     // No safe way to publish without replacing: every other way leaves a name Codex can append
-    // into mid-write. The account histories stay in their homes, so nothing is lost.
-    if (HARD_LINK_UNSUPPORTED.has(code)) {
+    // into mid-write. The account histories stay in their homes, so nothing is lost, and the import
+    // settles rather than retry on a filesystem that won't change.
+    if (isHardLinkUnsupportedError(error)) {
       return 'skipped_no_hard_links'
     }
     throw error

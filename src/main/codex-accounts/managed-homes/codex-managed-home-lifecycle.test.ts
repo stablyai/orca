@@ -69,25 +69,6 @@ describe('CodexManagedHomeLifecycle.safeRemove', () => {
     expect(readFileSync(join(f.home, 'sessions', 'rollout.jsonl'), 'utf8')).toBe('only copy\n')
   })
 
-  it('removes nothing from a home whose prompt history is a link', async () => {
-    const f = fixture()
-    mkdirSync(join(f.home, 'secrets'))
-    writeFileSync(join(f.home, 'secrets', 'codex_auth.age'), '{"text":"only prompt"}\n')
-    symlinkSync(join('secrets', 'codex_auth.age'), join(f.home, 'auth.json'))
-    symlinkSync('auth.json', join(f.home, 'history.jsonl'))
-    writeFileSync(join(f.home, 'config.toml'), '')
-
-    await f.lifecycle.safeRemove(f.home, 'a')
-
-    expect(readdirSync(f.home).sort()).toEqual([
-      'auth.json',
-      'config.toml',
-      'history.jsonl',
-      'secrets'
-    ])
-    expect(readFileSync(join(f.home, 'history.jsonl'), 'utf8')).toBe('{"text":"only prompt"}\n')
-  })
-
   it('removes a home that never shared history entirely', async () => {
     const f = fixture()
     writeFileSync(join(f.home, 'auth.json'), '{}')

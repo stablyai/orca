@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
-  chmodSync,
   existsSync,
-  lstatSync,
   mkdirSync,
   readlinkSync,
   readFileSync,
+  readdirSync,
   rmSync,
   symlinkSync,
   writeFileSync
@@ -87,10 +86,6 @@ async function waitForHistorySettled(): Promise<void> {
       expect(readFileSync(historyStatePath(), 'utf-8')).toContain('"historyImportSettled":true'),
     { timeout: WAIT_MS }
   )
-}
-
-function preservedHistoryPath(accountId: string): string {
-  return join(getRuntimeCodexHomePath(), `history.orca-legacy-${accountId}.jsonl`)
 }
 
 function historyStatePath(): string {
@@ -234,121 +229,7 @@ describe('CodexRuntimeHomeService', () => {
     )
   })
 
-  it('preserves each account history in the runtime home before marking the migration done', async () => {
-    const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
-    writeFileSync(runtimeHistoryPath, '{"id":"shared-1"}\n', 'utf-8')
-    writeFileSync(preservedHistoryPath('account-1'), '{"id":"older-copy"}\n', 'utf-8')
-    writeHistory('account-1', '{"id":"legacy-1"}\n')
-
-    await startService()
-
-    // An older build sees only this marker: it must not rerun its overwriting migration, and its
-    // account removal must not take the only copy of these prompts.
-    expect(existsSync(migrationMarkerPath())).toBe(true)
-    expect(readFileSync(preservedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"older-copy"}\n')
-    expect(
-      readFileSync(
-        join(getRuntimeCodexHomePath(), 'history.orca-legacy-account-1-1.jsonl'),
-        'utf-8'
-      )
-    ).toBe('{"id":"legacy-1"}\n')
-    expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"shared-1"}\n')
-  })
-
-  it('copies the history, the sessions and the marker before the service is constructed', async () => {
-    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
-    mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
-    writeFileSync(join(managedHomePath, 'sessions', 'rollout.jsonl'), '{}', 'utf-8')
-
-    await constructService()
-
-    // Nothing can remove or share the account before this: it all happened in the constructor.
-    expect(readFileSync(preservedHistoryPath('account-1'), 'utf-8')).toBe('{"id":"legacy-1"}\n')
-    expect(
-      readFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'rollout.jsonl'), 'utf-8')
-    ).toBe('{}')
-    expect(existsSync(migrationMarkerPath())).toBe(true)
-    await waitForHistorySettled()
-  })
-
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'copies a history again on retry when it changed after an earlier attempt',
-    async () => {
-      const firstHome = writeHistory('account-1', '{"id":"a-1"}\n')
-      const blockedHistory = join(writeHistory('account-2', '{"id":"b-1"}\n'), 'history.jsonl')
-      chmodSync(blockedHistory, 0o000)
-      try {
-        await constructService()
-        await waitForImportOutcomes(['failed'])
-      } finally {
-        chmodSync(blockedHistory, 0o644)
-      }
-      expect(existsSync(migrationMarkerPath())).toBe(false)
-      writeFileSync(join(firstHome, 'history.jsonl'), '{"id":"a-1"}\n{"id":"a-2"}\n', 'utf-8')
-
-      vi.resetModules()
-      await startService()
-
-      expect(
-        readFileSync(
-          join(getRuntimeCodexHomePath(), 'history.orca-legacy-account-1-1.jsonl'),
-          'utf-8'
-        )
-      ).toBe('{"id":"a-1"}\n{"id":"a-2"}\n')
-      expect(existsSync(migrationMarkerPath())).toBe(true)
-    }
-  )
-
-  it('makes a real copy when the shared history and the preserved name only link to the account history', async () => {
-    const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
-    mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
-    symlinkSync(join(managedHomePath, 'history.jsonl'), preservedHistoryPath('account-1'))
-    symlinkSync(
-      join(managedHomePath, 'history.jsonl'),
-      join(getRuntimeCodexHomePath(), 'history.jsonl')
-    )
-
-    await startService()
-
-    const copyPath = join(getRuntimeCodexHomePath(), 'history.orca-legacy-account-1-1.jsonl')
-    expect(lstatSync(copyPath).isFile()).toBe(true)
-    expect(readFileSync(copyPath, 'utf-8')).toBe('{"id":"legacy-1"}\n')
-  })
-
-  it('imports from the preserved history once the account folder is gone', async () => {
-    mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
-    writeFileSync(preservedHistoryPath('account-1'), '{"id":"legacy-1"}\n', 'utf-8')
-    mkdirSync(join(historyStatePath(), '..'), { recursive: true })
-    writeFileSync(migrationMarkerPath(), '{}', 'utf-8')
-    writeFileSync(historyStatePath(), JSON.stringify({ historyImportAttempts: 1 }), 'utf-8')
-
-    await startService()
-
-    expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
-      '{"id":"legacy-1"}\n'
-    )
-  })
-
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'copies no sessions and leaves the migration unmarked until every account history has its copy',
-    async () => {
-      const managedHomePath = writeHistory('account-1', '{"id":"legacy-1"}\n')
-      mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
-      writeFileSync(join(managedHomePath, 'sessions', 'rollout.jsonl'), '{}', 'utf-8')
-      chmodSync(join(managedHomePath, 'history.jsonl'), 0o000)
-      try {
-        await constructService()
-        await waitForImportOutcomes(['failed'])
-      } finally {
-        chmodSync(join(managedHomePath, 'history.jsonl'), 0o644)
-      }
-
-      expect(existsSync(join(getRuntimeCodexHomePath(), 'sessions', 'rollout.jsonl'))).toBe(false)
-      expect(existsSync(migrationMarkerPath())).toBe(false)
-    }
-  )
-
-  it('imports history and marks the migration done when a session copy fails, then retries the sessions', async () => {
+  it('imports history even when a session copy fails, and retries the sessions next launch', async () => {
     const managedHomePath = writeHistory('account-1', '{"id":"a-1"}\n')
     blockSessionCopies(managedHomePath)
 
@@ -358,46 +239,70 @@ describe('CodexRuntimeHomeService', () => {
     expect(readFileSync(join(getRuntimeCodexHomePath(), 'history.jsonl'), 'utf-8')).toBe(
       '{"id":"a-1"}\n'
     )
-    // The uncopied session stays in the account home, which every build's removal keeps.
-    expect(existsSync(migrationMarkerPath())).toBe(true)
-    expect(readFileSync(historyStatePath(), 'utf-8')).toContain('"sessionsPending":true')
+    expect(existsSync(migrationMarkerPath())).toBe(false)
+    expect(readFileSync(historyStatePath(), 'utf-8')).toContain('"sessionPassAttempts":1')
 
     rmSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested'))
     vi.resetModules()
-    await constructService()
+    await startService()
 
     expect(
       readFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'nested', 'rollout.jsonl'), 'utf-8')
     ).toBe('{}')
-    expect(readFileSync(historyStatePath(), 'utf-8')).toContain('"sessionsPending":false')
-  })
-
-  it('migrates owned accounts past a folder it does not own whose history is a link loop', async () => {
-    const managedHomePath = writeHistory('account-1', '{"id":"a-1"}\n')
-    mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
-    writeFileSync(join(managedHomePath, 'sessions', 'rollout.jsonl'), '{}', 'utf-8')
-    const orphanHome = join(testState.userDataDir, 'codex-accounts', 'orphan', 'home')
-    mkdirSync(orphanHome, { recursive: true })
-    symlinkSync('history.jsonl', join(orphanHome, 'history.jsonl'))
-
-    await startService()
-
-    expect(
-      readFileSync(join(getRuntimeCodexHomePath(), 'sessions', 'rollout.jsonl'), 'utf-8')
-    ).toBe('{}')
     expect(existsSync(migrationMarkerPath())).toBe(true)
   })
 
-  it('clears the temp copy an interrupted import left behind', async () => {
+  it('waits a day before another session pass after three failed ones', async () => {
+    const managedHomePath = writeHistory('account-1', '{"id":"a-1"}\n')
+    mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
+    writeFileSync(join(managedHomePath, 'sessions', 'rollout.jsonl'), '{}', 'utf-8')
+    mkdirSync(join(historyStatePath(), '..'), { recursive: true })
+    writeFileSync(
+      historyStatePath(),
+      // Failed later than any test clock: the day hasn't passed.
+      JSON.stringify({ sessionPassAttempts: 3, sessionPassFailedAt: Number.MAX_SAFE_INTEGER }),
+      'utf-8'
+    )
+
+    await startService()
+
+    expect(existsSync(join(getRuntimeCodexHomePath(), 'sessions', 'rollout.jsonl'))).toBe(false)
+    expect(existsSync(migrationMarkerPath())).toBe(false)
+  })
+
+  it('adds no second preserved copy when a retried session pass meets a changed session', async () => {
+    const runtimeSessionsDir = join(getRuntimeCodexHomePath(), 'sessions')
+    mkdirSync(runtimeSessionsDir, { recursive: true })
+    writeFileSync(join(runtimeSessionsDir, 'session.json'), '{"runtime":1}', 'utf-8')
+    const managedHomePath = writeHistory('account-1', '{"id":"a-1"}\n')
+    mkdirSync(join(managedHomePath, 'sessions'), { recursive: true })
+    writeFileSync(join(managedHomePath, 'sessions', 'session.json'), '{"legacy":1}', 'utf-8')
+    blockSessionCopies(writeHistory('account-2', '{"id":"b-1"}\n'))
+    await constructService()
+    await waitForImportOutcomes(['imported'])
+    writeFileSync(join(managedHomePath, 'sessions', 'session.json'), '{"legacy":2}', 'utf-8')
+
+    vi.resetModules()
+    await constructService()
+
+    expect(readdirSync(runtimeSessionsDir).sort()).toEqual([
+      'nested',
+      'session.json',
+      'session.orca-legacy-account-1.json'
+    ])
+  })
+
+  it('removes the copy an interrupted import left behind', async () => {
     const runtimeHistoryPath = join(getRuntimeCodexHomePath(), 'history.jsonl')
+    const leftover = `${runtimeHistoryPath}.4242.0b6f3c1e-2d4a-4b8e-9f10-7a6c5d4e3f21.orca-import.tmp`
     mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
-    writeFileSync(`${runtimeHistoryPath}.orca-import.tmp`, '{"id":"half', 'utf-8')
+    writeFileSync(leftover, '{"id":"half', 'utf-8')
     writeHistory('account-1', '{"id":"legacy-1"}\n')
 
     await startService()
 
     expect(readFileSync(runtimeHistoryPath, 'utf-8')).toBe('{"id":"legacy-1"}\n')
-    expect(existsSync(`${runtimeHistoryPath}.orca-import.tmp`)).toBe(false)
+    expect(existsSync(leftover)).toBe(false)
   })
 
   it('leaves a shared history Codex creates during the import as it is', async () => {
