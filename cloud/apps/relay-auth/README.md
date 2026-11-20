@@ -1,12 +1,12 @@
 # Self-hosted relay authentication
 
-This single-tenant service issues host-control tokens for Orca's relay. It has one administrator and no external identity provider. Serve it behind HTTPS with a trusted reverse proxy; packaged desktop builds reject HTTP, even on loopback. Keep the auth service and relay reachable by the desktop. Configure the desktop with `ORCA_CLOUD_API_URL=https://auth.example`, `ORCA_CLOUD_CLIENT_ID=orca-desktop` and `ORCA_RELAY_URL=https://relay.example`.
+This single-tenant service issues host-control tokens for Orca's relay. It supports an administrator secret or an upstream OIDC identity provider. Serve it behind HTTPS with a trusted reverse proxy; packaged desktop builds reject HTTP, even on loopback. Keep the auth service and relay reachable by the desktop. Configure the desktop with `ORCA_CLOUD_API_URL=https://auth.example`, `ORCA_CLOUD_CLIENT_ID=orca-desktop` and `ORCA_RELAY_URL=https://relay.example`.
 
 From `cloud/`, build with `pnpm --filter @orca-cloud/relay-auth build` and start with `pnpm --filter @orca-cloud/relay-auth start`. Node 24 or newer is required. Configure:
 
 - `ORCA_AUTH_ISSUER`: canonical public HTTPS origin, or loopback HTTP for development; must equal relay `ORCA_RELAY_AUTH_ISSUER`.
-- `ORCA_AUTH_ADMIN_SECRET`: randomly generated secret of at least 32 characters.
-- `ORCA_AUTH_EMAIL`: administrator email; `ORCA_AUTH_USER_ID` defaults to `admin` and must remain stable.
+- `ORCA_AUTH_ADMIN_SECRET`: randomly generated secret of at least 32 characters; required for secret login.
+- `ORCA_AUTH_EMAIL`: administrator email, required for secret login; `ORCA_AUTH_USER_ID` defaults to `admin` and must remain stable.
 - `ORCA_AUTH_CLIENT_ID`: desktop client ID, default `orca-desktop`.
 - `ORCA_AUTH_DATA_DIR`: persistent directory, default `./data/relay-auth`; contains the SQLite database and generated private key. Restrict access and back it up securely.
 - `ORCA_AUTH_SIGNING_KEY_FILE`: optional PEM PKCS#8 P-256 private key. Otherwise the service generates `signing-key.pem` in the data directory on first start.
@@ -16,13 +16,21 @@ From `cloud/`, build with `pnpm --filter @orca-cloud/relay-auth build` and start
 
 For rotation, preserve the old public key (`openssl pkey -in signing-key.pem -pubout -out previous.pem`), configure its path in `ORCA_AUTH_PREVIOUS_PUBLIC_KEY_FILE`, replace the private key with a fresh PKCS#8 P-256 key, and restart. Keep the old public key available until all issued relay tokens have expired and relay JWKS caches have refreshed. Avoid overlapping rotations before that point. Do not delete the SQLite database or signing key on restart.
 
-Login failures are limited to ten per IP and 100 globally per minute. Run one auth instance only; the limiter and key initialization are not coordinated across instances. The service limits request bodies to 8 KiB; also apply limits at the reverse proxy. Refresh tokens rotate, with a 60-second replay grace for ambiguous network failures; later reuse revokes the session and its access tokens. Successor tokens are encrypted using a key derived from the admin secret during the grace period; changing the secret can disrupt a pending retry.
+Secret login failures are limited to ten per IP and 100 globally per minute; upstream callback failures are limited to ten per IP per minute, and upstream authorization starts to 30 per IP per minute. Up to 10,000 pending upstream authorizations are retained for five minutes. Audit logs contain reason codes only. Run one auth instance only; the limiter and key initialization are not coordinated across instances. The service limits request bodies to 8 KiB; also apply limits at the reverse proxy. Refresh tokens rotate, with a 60-second replay grace for ambiguous network failures; later reuse revokes the session and its access tokens. Successor tokens are encrypted using a key derived from the admin secret, or the signing key when no admin secret is configured; changing that key can disrupt a pending retry.
+
+## Upstream OIDC (Zitadel)
+
+Set `ORCA_AUTH_UPSTREAM_ISSUER` to the provider's exact HTTPS origin (for example `https://id.example.com`) and `ORCA_AUTH_UPSTREAM_CLIENT_ID` to the provider application ID. Optionally set `ORCA_AUTH_UPSTREAM_CLIENT_SECRET` for a confidential client, `ORCA_AUTH_UPSTREAM_ALLOWED_EMAILS` and `ORCA_AUTH_UPSTREAM_ALLOWED_DOMAINS` to comma-separated lists, and `ORCA_AUTH_UPSTREAM_KEEP_SECRET_LOGIN=true` to retain admin-secret login. If either allowlist is nonempty, an email must match an address or a domain in those lists; matching is case-insensitive. When both lists are empty, startup fails unless `ORCA_AUTH_UPSTREAM_ALLOW_ANY=true` explicitly allows any authenticated provider user with a verified ASCII email. Secret login also requires `ORCA_AUTH_ADMIN_SECRET` and `ORCA_AUTH_EMAIL`; access its form by adding `secret_login=true` to the desktop authorization URL.
+
+In Zitadel, create a Web application with authorization code flow and PKCE, allow the `email` scope, and register `${ORCA_AUTH_ISSUER}/v1/desktop/auth/upstream/callback` as its redirect URI (for example `https://orca.example.com/v1/desktop/auth/upstream/callback`). Configure client authentication to match whether a client secret is supplied. The service discovers the provider and caches discovery for five minutes. Provider endpoints must use HTTPS and must not redirect; they must use the issuer origin unless `ORCA_AUTH_UPSTREAM_ALLOW_CROSS_ORIGIN=true` is set.
+
+A user's stable relay subject is base64url(SHA-256(UTF-8 issuer)) followed by `:` and the provider's `sub`. Changing the issuer changes identities. Email and display name are taken from the ID token or, when missing, userinfo; the source of the email must assert `email_verified=true`. Refresh and profile creation recheck the current allowlist, and profile creation cannot extend the original session expiry. When upstream-only mode is enabled, legacy admin sessions cannot refresh or create profiles. Sessions created before verified-email tracking was added must sign in again before refresh or profile creation. SQLite adds nullable identity fields to existing codes and sessions; existing admin sessions retain their configured identity. Each new profile has its own profile ID while retaining the same user identity.
 
 ## Client contract
 
-All JSON POST responses are JSON, and errors have `{ "error": "code" }`. The service returns 400 for malformed input, 401 for invalid credentials or tokens, 403 for an unknown organization, 429 for login throttling, and 501 for disabled connectors. Access credentials and refresh credentials are opaque. Access credentials last 15 minutes; sessions and refresh credentials last 30 days from sign-in or profile creation.
+All JSON POST responses are JSON, and errors have `{ "error": "code" }`. The service returns 400 for malformed input, 401 for invalid credentials or tokens, 403 for an unknown organization, 429 for login throttling, and 501 for disabled connectors. Access credentials and refresh credentials are opaque. Access credentials last 15 minutes; sessions and refresh credentials last at most 30 days from sign-in; creating a profile does not extend that expiry.
 
-- `GET /v1/desktop/auth/authorize`: query `client_id`, `response_type=code`, `redirect_uri`, `scope`, `nonce`, `state`, `code_challenge`, `code_challenge_method=S256`, `local_profile_id`. The loopback redirect must be `http://127.0.0.1:<port>/auth/callback`. The browser submits the admin secret to the same URL as form field `secret`; success redirects to the loopback URI with `code` and `state`. Codes expire after five minutes and are single-use.
+- `GET /v1/desktop/auth/authorize`: query `client_id`, `response_type=code`, `redirect_uri`, `scope`, `nonce`, `state`, `code_challenge`, `code_challenge_method=S256`, `local_profile_id`. The loopback redirect must be `http://127.0.0.1:<port>/auth/callback`. In secret mode the browser submits the admin secret to the same URL as form field `secret`; upstream mode redirects to the provider. Success redirects to the loopback URI with `code` and `state`. Codes expire after five minutes and are single-use.
 - `POST /v1/desktop/auth/session`: `{code, codeVerifier, nonce, redirectUri, state, localProfileId}`; validates all bindings and S256 PKCE. Returns the session object below.
 - `POST /v1/desktop/auth/refresh`: `{refreshToken}`; rotates the refresh token and returns the session object. Replay within 60 seconds returns the current successor; later reuse returns `refresh_token_reuse` and revokes the family.
 - `POST /v1/desktop/auth/capabilities`: bearer access token, `{}`; returns `{cloud, organizations, capabilities}`.
@@ -33,7 +41,7 @@ All JSON POST responses are JSON, and errors have `{ "error": "code" }`. The ser
 - `POST /v1/desktop/auth/connector-token`: bearer access token; returns `connector_disabled` (501).
 - `GET /.well-known/jwks.json`: ES256 public JWKS with `kid`. `GET /healthz`: `{ok:true}`.
 
-A session object is `{accessToken, refreshToken, expiresAt, cloud, organizations, capabilities}`. `cloud` has `cloudProfileId`, `userId`, `email`, and `linkedAt`; organizations is an empty array; capabilities includes `flags` and millisecond `refreshedAt`. Relay JWTs have `sub`, `prof`, `relayHostId`, `purpose=host-control`, `iss`, `aud=orca-relay`, `iat`, and `exp` (seconds); they last five minutes. No `org` is issued.
+A session object is `{accessToken, refreshToken, expiresAt, cloud, organizations, capabilities}`. `cloud` has `cloudProfileId`, `userId`, `email`, optional `displayName`, and `linkedAt`; organizations is an empty array; capabilities includes `flags` and millisecond `refreshedAt`. Relay JWTs have `sub`, `prof`, `relayHostId`, `purpose=host-control`, `iss`, `aud=orca-relay`, `iat`, and `exp` (seconds); they last five minutes. No `org` is issued.
 
 ## Relay configuration
 
