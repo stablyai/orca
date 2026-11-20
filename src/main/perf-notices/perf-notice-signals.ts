@@ -1,5 +1,6 @@
 import { webContents } from 'electron'
 import { getBrowserPageIdleDiscard } from '../browser/guest-lifecycle/browser-page-idle-discard'
+import { canReserveBrowserPageDiscard } from '../browser/guest-lifecycle/browser-page-memory'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { readBrowserGuestDiscardAdmission } from '../browser/guest-lifecycle/manager/registration/browser-guest-discard-protection'
 
@@ -10,7 +11,11 @@ function canMemorySaverFree(pageId: string): boolean {
   }
   const guestId = browserManager.getGuestWebContentsId(pageId)
   const guest = guestId === null ? undefined : webContents.fromId(guestId)
-  return !!guest && readBrowserGuestDiscardAdmission(guest, true).protection === 'discardable'
+  return (
+    !!guest &&
+    readBrowserGuestDiscardAdmission(guest, true).protection === 'discardable' &&
+    canReserveBrowserPageDiscard(pageId, guest)
+  )
 }
 
 /** Asked only when the hidden-tabs notice could show, so idle reads never touch browser state. */
