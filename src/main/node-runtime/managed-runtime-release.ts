@@ -1,7 +1,8 @@
 // Launch reads use receipts and member sizes; full hashing belongs to installation.
 
+import { randomUUID } from 'node:crypto'
 import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
-import { lstat, readdir, rm, writeFile } from 'node:fs/promises'
+import { lstat, readdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
@@ -33,7 +34,9 @@ export type ManagedRuntime = {
   root(dataDirectory: string): string
   pin(): ManagedRuntimePin | null
   /** Runtimes that follow a published latest release look it up here; pin() answers from it. */
-  refreshPin?(signal?: AbortSignal): Promise<void>
+  refreshPin?(signal?: AbortSignal, retryFailed?: boolean): Promise<void>
+  /** True while the latest release couldn't be looked up and none is known: not a host without a build. */
+  pinUnknown?(): boolean
   /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
   /** Add files the unpacked release needs before it is checked and published, e.g. a second command name. */
@@ -88,6 +91,12 @@ export type InstalledRuntimeRelease = {
   current: boolean
 }
 
+/** A release launches use and, when the release link follows it, the link terminals put on PATH. */
+export type ReportedRuntimeRelease = { folder: string; link: string | null }
+
+/** Follows the release launches resolve to; release reads skip dot names. */
+export const RUNTIME_RELEASE_LINK = '.current'
+
 type ReleaseRead = { releaseId: string } | 'broken' | 'unreadable'
 
 export type InstalledRuntimeReleases = {
@@ -123,6 +132,42 @@ export function resolveInstalledRuntimeRelease(
       : null,
     broken: reads.filter(({ read }) => read === 'broken').map(({ name }) => name),
     unreadable: reads.some(({ read }) => read === 'unreadable')
+  }
+}
+
+/** The release folder name the link points to; null when there is no link into `root`. */
+export async function linkedRuntimeRelease(root: string): Promise<string | null> {
+  const [linked, real] = await Promise.all([
+    realpath(join(root, RUNTIME_RELEASE_LINK)).catch(() => null),
+    realpath(root).catch(() => null)
+  ])
+  return linked !== null && dirname(linked) === real ? basename(linked) : null
+}
+
+/** The release link when it follows `folder`; a shell holding it outlives the release it started with. */
+export async function runtimeReleaseLink(root: string, folder: string): Promise<string | null> {
+  return (await linkedRuntimeRelease(root)) === basename(folder)
+    ? join(root, RUNTIME_RELEASE_LINK)
+    : null
+}
+
+/** Exclusive writer only: point the release link at `folder`, replacing it in one rename where the OS allows. */
+export async function linkRuntimeRelease(root: string, folder: string): Promise<void> {
+  if (await runtimeReleaseLink(root, folder)) {
+    return
+  }
+  const link = join(root, RUNTIME_RELEASE_LINK)
+  // A junction needs no privilege on Windows, unlike a symlink.
+  const staged = join(root, `.link-${randomUUID()}`)
+  await symlink(folder, staged, process.platform === 'win32' ? 'junction' : 'dir')
+  try {
+    // Windows can't rename over an existing junction, so it is replaced in two steps.
+    await rename(staged, link).catch(async () => {
+      await rm(link, { force: true })
+      await rename(staged, link)
+    })
+  } finally {
+    await rm(staged, { force: true })
   }
 }
 
@@ -175,7 +220,10 @@ async function receiptMembers(
   )
 }
 
-/** Exclusive writer only: keep must match launch resolution so reclamation cannot remove a running release. */
+/**
+ * Exclusive writer only: keep must match launch resolution so reclamation cannot remove a running release.
+ * The release link and the release it reaches stay too, so open terminals keep their PATH.
+ */
 export async function reclaimRuntimeReleases(
   root: string,
   keep: readonly string[]
@@ -183,7 +231,8 @@ export async function reclaimRuntimeReleases(
   const names = await readdir(root).catch((error: NodeJS.ErrnoException) =>
     error.code === 'ENOENT' ? [] : Promise.reject(error)
   )
-  const stale = names.filter((name) => !keep.includes(name))
+  const kept = [...keep, RUNTIME_RELEASE_LINK, await linkedRuntimeRelease(root)]
+  const stale = names.filter((name) => !kept.includes(name))
   const results = await Promise.allSettled(
     stale.map((name) => rm(join(root, name), { recursive: true, force: true }))
   )

@@ -1,5 +1,6 @@
 // WSL-host orcad must ignore Windows CLI shims; identify mounts by type because the automount root is configurable.
 import { existsSync, readFileSync } from 'node:fs'
+import { access, readFile } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 
@@ -8,6 +9,7 @@ const WINDOWS_DRIVE_MOUNT_TYPES = new Set(['drvfs', '9p', 'virtiofs'])
 import { ORCAD_WSL_HOST_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 
 let cachedGuestMounts: readonly string[] | null = null
+let guestMountsRead: Promise<readonly string[]> | null = null
 
 // The Windows-copy check stats every drive-mounted PATH entry (~50 ms cold); reuse a recent verdict.
 const WINDOWS_COPY_VERDICT_TTL_MS = 30_000
@@ -16,15 +18,20 @@ const WINDOWS_COPY_VERDICT_LIMIT = 32
 type WindowsCopyVerdict = { windowsOnly: boolean; checkedAt: number }
 let windowsCopyVerdicts = new WeakMap<typeof resolveCliCommand, Map<string, WindowsCopyVerdict>>()
 
+const WSL_INTEROP_FILE = '/proc/sys/fs/binfmt_misc/WSLInterop'
+
+const hasWslEnv = (env: NodeJS.ProcessEnv): boolean =>
+  Boolean(env.WSL_DISTRO_NAME?.trim() || env.WSL_INTEROP?.trim())
+
 export function isWslGuestProcess(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
-  interopRegistered: () => boolean = () => existsSync('/proc/sys/fs/binfmt_misc/WSLInterop')
+  interopRegistered: () => boolean = () => existsSync(WSL_INTEROP_FILE)
 ): boolean {
   if (platform !== 'linux') {
     return false
   }
-  return Boolean(env.WSL_DISTRO_NAME?.trim() || env.WSL_INTEROP?.trim()) || interopRegistered()
+  return hasWslEnv(env) || interopRegistered()
 }
 
 export function isWslHostOrcadProcess(
@@ -85,9 +92,39 @@ export function readGuestWindowsDriveMounts(): readonly string[] {
   return mounts
 }
 
+/** The Windows drive mounts a reader already found, without reading; empty until one has. */
+export function knownGuestWindowsDriveMounts(): readonly string[] {
+  return cachedGuestMounts ?? []
+}
+
+/** readGuestWindowsDriveMounts for callers that must not block the event loop; all fill one cache and share one read. */
+export function readGuestWindowsDriveMountsAsync(): Promise<readonly string[]> {
+  if (cachedGuestMounts) {
+    return Promise.resolve(cachedGuestMounts)
+  }
+  guestMountsRead ??= (async () => {
+    const { env, platform } = process
+    const guest =
+      platform === 'linux' &&
+      env[ORCAD_WSL_HOST_ENV] === '1' &&
+      (hasWslEnv(env) ||
+        (await access(WSL_INTEROP_FILE).then(
+          () => true,
+          () => false
+        )))
+    const mounts = guest
+      ? parseWindowsDriveMountPoints(await readFile('/proc/mounts', 'utf8').catch(() => ''))
+      : []
+    cachedGuestMounts ??= mounts
+    return cachedGuestMounts
+  })()
+  return guestMountsRead
+}
+
 /** Stand in for /proc/mounts so call-site tests can model a Windows drive; null re-reads. */
 export function _setGuestWindowsDriveMountsForTests(mounts: readonly string[] | null): void {
   cachedGuestMounts = mounts
+  guestMountsRead = null
 }
 
 /** Keep CLI launches consistent with detection by removing Windows drive PATH entries only in WSL-host orcad. */

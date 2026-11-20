@@ -21,6 +21,7 @@ import {
 import type { StructuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from '../environment/structured-agent-shell-environment'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { normalizePathEntry } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 
@@ -82,6 +83,10 @@ async function observeHostAgent(
     : { agent, state: 'unknown' }
 }
 
+/** A WSL host whose only copy is on a Windows drive can't run it, so this host has none. */
+const isWindowsOnlyCopy = (error: unknown): boolean =>
+  isAgentSessionPreSpawnError(error) && error.reason === 'cliMissing'
+
 /** Resolve chat program without spawn; bare names miss unless relative PATH entries require workspace resolution. */
 async function observeChatProgram(
   { definition: { agent }, chatProgram, supportsLocation }: StructuredAgentRuntimeMetadata,
@@ -95,6 +100,10 @@ async function observeChatProgram(
   try {
     settings = runtime.requireStore().getSettings()
     shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+  } catch {
+    return 'unknown'
+  }
+  try {
     const { command, env } = chatProgram.resolve(shellEnv, settings)
     const { delimiter, isAbsolute } = process.platform === 'win32' ? win32 : posix
     if (isAbsolute(command)) {
@@ -112,13 +121,20 @@ async function observeChatProgram(
     ) {
       return 'unknown'
     }
-  } catch {
+  } catch (error) {
+    if (!isWindowsOnlyCopy(error)) {
+      return 'unknown'
+    }
+  }
+  const alternative = supportsLocation(HOST_LOCATION)
+    ? await chatProgram
+        .hostAlternative?.(shellEnv, settings)
+        .catch((error: unknown) => (isWindowsOnlyCopy(error) ? false : null))
+    : false
+  if (alternative === null) {
     return 'unknown'
   }
-  if (
-    supportsLocation(HOST_LOCATION) &&
-    (await chatProgram.hostAlternative?.(shellEnv, settings))
-  ) {
+  if (alternative) {
     return 'available'
   }
   return chatProgram.installable?.() ? 'installable' : 'missing'

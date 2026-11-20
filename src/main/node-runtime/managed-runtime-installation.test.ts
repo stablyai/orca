@@ -14,6 +14,7 @@ import {
   type ManagedRuntimePin
 } from './managed-runtime-release'
 import { ManagedRuntimeInstallation } from './managed-runtime-installation'
+import { followLatestRelease } from './managed-runtime-latest-release'
 import { getTarProgram } from '../../shared/archives/zip-extractor-command'
 
 vi.mock('./managed-runtime-release', async (importOriginal) => {
@@ -84,7 +85,7 @@ it('installs only when asked, with progress, cancel, retry, and a status read fr
     source: 'managed',
     operation: null
   })
-  expect(await readdir(root)).toEqual(['1.0'])
+  expect((await readdir(root)).sort()).toEqual(['.current', '1.0'])
 
   await rm(join(root, '1.0', RUNTIME_RELEASE_RECEIPT))
   expect(await installation.status()).toMatchObject({ damaged: true })
@@ -115,7 +116,7 @@ it('repairs a damaged copy when Install is clicked again', async () => {
   const repaired = await installation.status()
   expect(repaired).toMatchObject({ installedVersion: '1.0', installedCurrent: true })
   expect(repaired.damaged).toBeUndefined()
-  expect(await readdir(root)).toEqual(['1.0'])
+  expect((await readdir(root)).sort()).toEqual(['.current', '1.0'])
 })
 
 it.each([
@@ -222,12 +223,14 @@ it('updates only an installed copy that is behind, keeping the release running c
     installedCurrent: true,
     updatesAutomatically: true
   })
-  expect((await readdir(root)).sort()).toEqual(['1.0', '2.0'])
+  expect((await readdir(root)).sort()).toEqual(['.current', '1.0', '2.0'])
 
   version = '3.0'
   await installation.updateIfBehind()
   await settled()
-  expect((await readdir(root)).sort()).toEqual(['2.0', '3.0'])
+  expect((await readdir(root)).sort()).toEqual(['.current', '2.0', '3.0'])
+  // A shell opened before both updates still reaches the newest release.
+  expect(await readFile(join(root, '.current', 'agent'), 'utf8')).toBe('binary 3.0')
 })
 
 it.each([
@@ -340,3 +343,68 @@ it.each([
     }
   }
 )
+
+it('installs the last known release when a later lookup of the latest fails', async () => {
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+  roots.push(dataDirectory)
+  const binary = 'binary bytes'
+  let latest: ManagedRuntimePin | null = null
+  const runtime: ManagedRuntime = {
+    label: 'Agent',
+    root: () => join(dataDirectory, 'agent-runtimes', 'agent'),
+    pin: () => latest,
+    refreshPin: async () => {
+      if (latest) {
+        throw new Error('API rate limit exceeded')
+      }
+      latest = {
+        version: '2.0',
+        url: 'https://example.test/2.0/agent',
+        archiveSha256: sha256(binary),
+        archiveBytes: 12,
+        format: 'file',
+        members: [{ path: 'agent', sha256: sha256(binary), bytes: 12 }]
+      }
+    }
+  }
+  const installation = new ManagedRuntimeInstallation('agent', runtime, {
+    dataDirectory,
+    findExternal: async () => false,
+    fence: (work) => work(),
+    fetcher: async () => new Response(binary)
+  })
+  await installation.status()
+  installation.install()
+  await vi.waitFor(async () =>
+    expect(['succeeded', 'failed']).toContain((await installation.status()).operation?.phase)
+  )
+  expect(await installation.status()).toMatchObject({
+    installedVersion: '2.0',
+    operation: { phase: 'succeeded' }
+  })
+})
+
+it('offers Install after a failed lookup, and says why when looking again fails too', async () => {
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+  roots.push(dataDirectory)
+  const runtime: ManagedRuntime = {
+    label: 'Agent',
+    root: () => join(dataDirectory, 'agent-runtimes', 'agent'),
+    ...followLatestRelease(async () => {
+      throw new Error('API rate limit exceeded')
+    })
+  }
+  const installation = new ManagedRuntimeInstallation('agent', runtime, {
+    dataDirectory,
+    findExternal: async () => false,
+    fence: (work) => work()
+  })
+  expect(await installation.status()).toMatchObject({ available: true, version: null })
+  installation.install()
+  await vi.waitFor(async () =>
+    expect((await installation.status(false)).operation).toMatchObject({
+      phase: 'failed',
+      error: "Couldn't look up the latest Agent release. Check your connection and try again."
+    })
+  )
+})

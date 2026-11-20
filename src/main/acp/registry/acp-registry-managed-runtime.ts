@@ -69,10 +69,11 @@ async function archiveSha256(
 
 async function fetchRegistryPin(
   managed: AcpRegistryManagedAgent,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  retryFailed?: boolean
 ): Promise<ManagedRuntimePin | null> {
   const key = acpRegistryTarget()
-  const listing = key ? await acpRegistryAgent(managed.registryId, signal) : null
+  const listing = key ? await acpRegistryAgent(managed.registryId, signal, retryFailed) : null
   const target = key ? listing?.distribution.binary?.[key] : undefined
   if (!listing || !target) {
     return null
@@ -124,7 +125,9 @@ export function acpRegistryManagedRuntime(managed: AcpRegistryManagedAgent): Man
     runtime: {
       label: managed.label,
       root: (dataDirectory) => join(dataDirectory, 'agent-runtimes', managed.agent),
-      ...followLatestRelease((signal) => fetchRegistryPin(managed, signal)),
+      ...followLatestRelease((signal, retryFailed) =>
+        fetchRegistryPin(managed, signal, retryFailed)
+      ),
       validate: (folder, pin, signal) =>
         requireRuntimeAnswersVersion(
           executable(folder),

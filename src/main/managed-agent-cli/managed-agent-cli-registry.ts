@@ -1,7 +1,10 @@
 // Orca's own copies of agent CLIs, for hosts without the user's own; the user's install always wins.
 
 import { delimiter, dirname } from 'node:path'
-import type { ManagedAgentCli } from '../node-runtime/managed-runtime-release'
+import type {
+  ManagedAgentCli,
+  ReportedRuntimeRelease
+} from '../node-runtime/managed-runtime-release'
 import {
   CLAUDE_MANAGED_RUNTIME,
   claudeManagedExecutable,
@@ -24,6 +27,11 @@ import {
 } from '../acp/launch/acp-minimum-versions'
 import { readInheritedPath } from '../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
+import {
+  isUnderWindowsDriveMount,
+  knownGuestWindowsDriveMounts,
+  readGuestWindowsDriveMountsAsync
+} from '../wsl/filesystem/wsl-guest-windows-drive-path'
 
 // Hermes ships only as a git checkout its installer builds with uv, so it stays the user's own install.
 export const MANAGED_AGENT_CLI_IDS = [
@@ -91,25 +99,30 @@ export function managedAgentCli(agent: ManagedAgentCliId): ManagedAgentCli {
   return MANAGED_AGENT_CLIS[agent]
 }
 
-const installedFolders = new Map<ManagedAgentCliId, string>()
+const installedReleases = new Map<ManagedAgentCliId, ReportedRuntimeRelease>()
 
 /** The installation reports each release it reads from disk, so lookups here never touch the disk. */
-export function rememberManagedAgentRelease(agent: ManagedAgentCliId, folder: string | null): void {
-  if (folder) {
-    installedFolders.set(agent, folder)
+export function rememberManagedAgentRelease(
+  agent: ManagedAgentCliId,
+  release: ReportedRuntimeRelease | null
+): void {
+  if (release) {
+    installedReleases.set(agent, release)
+    // Terminal PATH assembly places Orca's copies by these and can't read the disk itself.
+    void readGuestWindowsDriveMountsAsync()
   } else {
-    installedFolders.delete(agent)
+    installedReleases.delete(agent)
   }
 }
 
 /** Orca's installed copy of `agent` on this host, used only when the user has none of their own. */
 export function managedAgentCommand(agent: ManagedAgentCliId): string | null {
-  const folder = installedFolders.get(agent)
-  if (!folder) {
+  const release = installedReleases.get(agent)
+  if (!release) {
     return null
   }
   managedUseListener?.(agent)
-  return MANAGED_AGENT_CLIS[agent].executable(folder)
+  return MANAGED_AGENT_CLIS[agent].executable(release.folder)
 }
 
 let managedUseListener: ((agent: ManagedAgentCliId) => void) | null = null
@@ -119,15 +132,18 @@ export function onManagedAgentUse(listener: (agent: ManagedAgentCliId) => void):
   managedUseListener = listener
 }
 
-/** Last on PATH, so sign-in commands and CLI tabs reach Orca's copies and never shadow the user's own. */
+/** After the user's own PATH entries, so sign-in commands and CLI tabs reach Orca's copies and never shadow the user's own. */
 export function appendManagedAgentDirsToChildPath(
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform
 ): void {
   delete env.ORCA_MANAGED_AGENT_PATH
+  delete env.ORCA_WINDOWS_DRIVE_MOUNTS
   // Opening a terminal isn't use of an agent, so this reads the folders without the use hook.
   const folders = MANAGED_AGENT_CLI_IDS.flatMap((agent) => {
-    const folder = installedFolders.get(agent)
+    const release = installedReleases.get(agent)
+    // A shell outlives updates, so it gets the link that follows the newest release.
+    const folder = release && (release.link ?? release.folder)
     return folder ? [dirname(MANAGED_AGENT_CLIS[agent].executable(folder))] : []
   })
   if (folders.length === 0) {
@@ -135,11 +151,23 @@ export function appendManagedAgentDirsToChildPath(
   }
   const key = resolvePathEnvKey(env, platform)
   const separator = platform === 'win32' ? ';' : delimiter
-  const entries = readInheritedPath(env, platform).split(separator).filter(Boolean)
+  const inherited = readInheritedPath(env, platform).split(separator).filter(Boolean)
+  // On a WSL host, Windows-drive entries hold shims it can't run: Orca's copies go after the user's
+  // own entries but ahead of the Windows ones that follow them.
+  const mounts = knownGuestWindowsDriveMounts()
+  const entries =
+    mounts.length > 0 ? inherited.filter((entry) => !folders.includes(entry)) : inherited
   const missing = folders.filter((folder) => !entries.includes(folder))
   if (missing.length > 0) {
-    env[key] = [...entries, ...missing].join(separator)
+    let at = entries.length
+    while (at > 0 && isUnderWindowsDriveMount(entries[at - 1].replace(/\/+$/, ''), mounts)) {
+      at--
+    }
+    env[key] = [...entries.slice(0, at), ...missing, ...entries.slice(at)].join(separator)
   }
-  // Startup files re-add them after a login profile rebuilds PATH.
+  // Startup files re-add them, in the same place, after a login profile rebuilds PATH.
   env.ORCA_MANAGED_AGENT_PATH = folders.join(separator)
+  if (mounts.length > 0) {
+    env.ORCA_WINDOWS_DRIVE_MOUNTS = mounts.join(':')
+  }
 }

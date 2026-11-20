@@ -3,6 +3,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import type {
   ManagedRuntimeInstallState,
   ManagedRuntimeOperation
@@ -10,11 +11,16 @@ import type {
 import type { MainHttpClient } from '../network/http-client'
 import { RevisionedState } from '../runtime/events/revisioned-state'
 import {
+  linkRuntimeRelease,
   reclaimRuntimeReleases,
   resolveInstalledRuntimeRelease,
-  type ManagedRuntime
+  runtimeReleaseLink,
+  type ManagedRuntime,
+  type ManagedRuntimePin,
+  type ReportedRuntimeRelease
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
+import { refreshPinForStatus, refreshRuntimePin } from './managed-runtime-latest-release'
 
 const DEADLINE_MS = 45 * 60_000
 const AUTO_UPDATE_RETRY_MS = 60 * 60_000
@@ -23,7 +29,7 @@ export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
   findExternal: () => Promise<boolean>
   /** Told the release launches resolve to each time this reads the disk; null when none is whole. */
-  onRelease?: (folder: string | null) => void
+  onRelease?: (release: ReportedRuntimeRelease | null) => void
   /** Reject unless no host workload uses this runtime. */
   fence: (work: () => Promise<void>) => Promise<void>
   fetcher?: MainHttpClient['fetch']
@@ -49,6 +55,8 @@ export class ManagedRuntimeInstallation {
   private facts: { phase: string; read: Promise<InstalledFacts> } | null = null
   /** One attempt per release per hour, so a failing update isn't redownloaded on every use. */
   private lastAutoUpdate: { version: string; at: number } | null = null
+  private reported: ReportedRuntimeRelease | null = null
+  private reports = 0
 
   constructor(
     private readonly agent: string,
@@ -64,10 +72,8 @@ export class ManagedRuntimeInstallation {
     const { value: operation, revision } = this.state.get()
     const phase = `${operation?.id}:${operation?.phase}`
     let facts = this.facts
-    if (fresh && this.runtime.refreshPin) {
-      await this.runtime.refreshPin().catch((error: unknown) => {
-        console.warn(`[managed-runtime] ${this.agent} latest release unknown:`, error)
-      })
+    if (fresh) {
+      await refreshPinForStatus(this.runtime, this.agent)
     }
     if (fresh || facts?.phase !== phase) {
       const read = this.readInstalledFacts()
@@ -88,7 +94,7 @@ export class ManagedRuntimeInstallation {
     const pin = this.runtime.pin()
     const { release, broken, unreadable } = resolveInstalledRuntimeRelease(this.root, pin)
     if (!unreadable) {
-      this.deps.onRelease?.(release?.folder ?? null)
+      void this.report(release?.folder ?? null)
     }
     // Unreadable is not absent; preserve clients’ last known installation state.
     if (unreadable && !release?.current) {
@@ -96,7 +102,8 @@ export class ManagedRuntimeInstallation {
     }
     const source = (await this.deps.findExternal()) ? 'external' : release ? 'managed' : null
     return {
-      available: pin !== null,
+      // An Install after a failed lookup looks again and says why it failed.
+      available: pin !== null || this.runtime.pinUnknown?.() === true,
       version: pin?.version ?? null,
       ...(pin && { downloadBytes: pin.archiveBytes }),
       installedVersion: release?.version ?? null,
@@ -225,9 +232,10 @@ export class ManagedRuntimeInstallation {
     const previous = this.runtime.refreshPin
       ? ((await this.facts?.read.catch(() => null))?.installedVersion ?? null)
       : null
+    let pin: ManagedRuntimePin | null = null
     try {
-      await this.runtime.refreshPin?.(signal)
-      const pin = this.runtime.pin()
+      await refreshRuntimePin(this.runtime, signal)
+      pin = this.runtime.pin()
       if (!pin) {
         throw new Error(unavailableText(this.runtime.label))
       }
@@ -244,13 +252,15 @@ export class ManagedRuntimeInstallation {
           run.committed = true
         }
       })
+      await this.link(join(this.root, pin.version))
       if (this.runtime.refreshPin) {
         await this.reclaimOlderThan(pin.version, previous)
       }
       this.publish(run, { phase: 'succeeded' })
     } catch (error) {
-      if (run.committed) {
+      if (run.committed && pin) {
         console.warn(`[managed-runtime] ${this.agent} installed; staging not removed:`, error)
+        await this.link(join(this.root, pin.version))
         this.publish(run, { phase: 'succeeded' })
       } else if (run.controller.signal.aborted) {
         this.publish(run, { phase: 'cancelled' })
@@ -279,15 +289,42 @@ export class ManagedRuntimeInstallation {
 
   private async reclaim(): Promise<void> {
     const { release, unreadable } = resolveInstalledRuntimeRelease(this.root, this.runtime.pin())
-    if (!unreadable) {
-      this.deps.onRelease?.(release?.folder ?? null)
-    }
     if (unreadable) {
       // Unknown active release means no release is provably stale.
       console.warn(`[managed-runtime] ${this.agent} releases unreadable; not reclaiming this run`)
       return
     }
+    void this.report(release?.folder ?? null)
+    if (release) {
+      await this.link(release.folder)
+      await this.report(release.folder)
+    }
     await this.reclaimOlderThan(release?.version ?? null, null)
+  }
+
+  /** Launches learn the release before any await; the terminal link follows once it is confirmed. */
+  private async report(folder: string | null): Promise<void> {
+    const { onRelease } = this.deps
+    if (!onRelease) {
+      return
+    }
+    const report = ++this.reports
+    const known = this.reported?.folder === folder ? this.reported.link : null
+    this.reported = folder === null ? null : { folder, link: known }
+    onRelease(this.reported)
+    const link = folder === null ? null : await runtimeReleaseLink(this.root, folder)
+    // Only the newest report may set the link; an older one may have read the disk before it changed.
+    if (folder !== null && report === this.reports && this.reported?.link !== link) {
+      this.reported = { folder, link }
+      onRelease(this.reported)
+    }
+  }
+
+  /** Terminals reach releases through the link; without it they keep the versioned folder. */
+  private async link(folder: string): Promise<void> {
+    await linkRuntimeRelease(this.root, folder).catch((error: unknown) => {
+      console.warn(`[managed-runtime] ${this.agent} release link not updated:`, error)
+    })
   }
 
   /** Keep the release launches resolve to and the one running chats may still use. */
