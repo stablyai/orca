@@ -278,42 +278,20 @@ describePosix('daemon shell-ready launch config', () => {
     15_000
   )
 
-  it('sets no ORCA_ORIG_ZDOTDIR when the inherited ZDOTDIR points at a wrapper dir', async () => {
-    // Inherited wrapper ZDOTDIR would make the wrapper source itself recursively.
-    const previousZdotdir = process.env.ZDOTDIR
-    const previousHome = process.env.HOME
-    process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
-    process.env.HOME = '/Users/alice'
-    try {
-      const { getShellReadyLaunchConfig } = await importFreshShellReady()
-      const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
-    } finally {
-      if (previousZdotdir === undefined) {
-        delete process.env.ZDOTDIR
-      } else {
-        process.env.ZDOTDIR = previousZdotdir
-      }
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
-    }
-  })
-
-  it('uses inherited ORCA_ORIG_ZDOTDIR when ZDOTDIR is an Orca wrapper dir', async () => {
+  it('uses the original ZDOTDIR only when it is known for an inherited wrapper', async () => {
     const previousZdotdir = process.env.ZDOTDIR
     const previousOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
     const previousHome = process.env.HOME
     const userZdotdir = makeUserZdotdir(userDataPath, '.config', 'zsh')
     process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
-    process.env.ORCA_ORIG_ZDOTDIR = userZdotdir
+    delete process.env.ORCA_ORIG_ZDOTDIR
     process.env.HOME = userDataPath
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
-      const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
+      expect(getShellReadyLaunchConfig('/bin/zsh').env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
+
+      process.env.ORCA_ORIG_ZDOTDIR = userZdotdir
+      expect(getShellReadyLaunchConfig('/bin/zsh').env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR

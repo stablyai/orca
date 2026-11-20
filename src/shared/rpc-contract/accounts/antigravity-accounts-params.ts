@@ -49,4 +49,6 @@ export type AntigravityChatAuthDetection = {
   liveChats: number
   /** The version of the host's agy that last passed Orca's check, else null. Absent from older hosts. */
   agyVersion?: string | null
+  /** New chats here run on agy, which is definitely not signed in. Absent from older hosts. */
+  agySignedOut?: boolean
 }

@@ -3745,13 +3745,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Working set somado (WS): páginas residentes na RAM agora. Páginas compartilhadas podem aparecer em mais de um processo, e a memória que o Windows paginou para o disco não é contada aqui.",
-                "privateBytesDescription": "Bytes privados somados: memória que esses processos comprometeram, contada esteja ela residente ou paginada para o disco. É isso que o host cobra contra seu limite de comprometimento, então continua subindo enquanto o working set acima diminui sob paginação.",
-                "footprintDescription": "Pegada de memória somada, o mesmo valor que o Monitor de Atividade mostra: a memória de cada processo, incluindo memória gráfica. Páginas compartilhadas entre processos não são contadas duas vezes.",
-                "rssDescription": "Tamanho do conjunto residente somado (RSS). Páginas compartilhadas ou com alias podem aparecer em mais de um processo.",
                 "memColumn": "Mem.",
-                "memorySummary": "Σ Memória",
-                "privateSummary": "Σ Privada"
+                "memorySummary": "Σ Memória"
               }
             },
             "manager": {
@@ -17734,8 +17729,6 @@
             "27d863542c": "Anotações do navegador",
             "e48569ac6d": "Não foi possível alcançar este site.",
             "bbe8f15e83": "Este painel é renderizado a partir do servidor de runtime ativo.",
-            "8b7e6d1f5a": "As anotações do navegador só estão disponíveis em abas de navegador locais.",
-            "deb5293610": "Anotações do navegador indisponíveis em runtime remoto",
             "90d021f2ad": "Adicionar",
             "0cb3bd6221": "Intenção da anotação",
             "532bac48c5": "Descreva o que o agente deve alterar aqui...",
@@ -23561,8 +23554,7 @@
     "openToObserve": "Abra Recursos para observar as sessões de terminal.",
     "killAllLocal": "Encerrar todas as sessões locais",
     "ptys": "PTYs",
-    "restartLocal": "Reiniciar daemon local",
-    "metricDetails": "Detalhes das métricas"
+    "restartLocal": "Reiniciar daemon local"
   },
   "browserTab": {
     "agentDriving": "Um agente está usando esta página",

@@ -25,6 +25,7 @@ it("keeps a failed turn's reason on its state-only end, which the cloud stores f
     },
     agent: 'claude',
     emit,
+    turnFor: () => ({}),
     workersChecked: async () => undefined,
     current: () => true
   }
@@ -81,7 +82,8 @@ it('fills an answered turn with how long it ran, by its own start and end', asyn
     agent: 'claude',
     emit: vi.fn(),
     workersChecked: async () => undefined,
-    current: () => true
+    current: () => true,
+    turnFor: () => ({})
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a replied end reads only externalId and bot.
   const link = { externalId: 'slack:T1:C1:1.2' } as ExternalConversationLink

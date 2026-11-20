@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { isRunningActivityState } from '../events/activity-event-state'
 import {
   useAgentPaneThreadsDefaultHostId,
@@ -88,15 +89,15 @@ export function useAgentPaneThreads(args: {
   const runtimeEnvironments = useAppStore((s) =>
     s.agentsHideWorkspacesFromOtherDevices ? s.runtimeEnvironments : null
   )
-  const runtimeStatusByEnvironmentId = useAppStore((s) =>
-    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeStatusByEnvironmentId : null
+  const pairedHostStatuses = useAppStoreWithHostStatuses((s, statuses) =>
+    s.agentsHideWorkspacesFromOtherDevices ? statuses : null
   )
   const pairedDeviceIdsByEnvironment = useMemo(
     () =>
-      runtimeEnvironments && runtimeStatusByEnvironmentId
-        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
+      runtimeEnvironments && pairedHostStatuses
+        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, pairedHostStatuses)
         : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-    [runtimeEnvironments, runtimeStatusByEnvironmentId]
+    [runtimeEnvironments, pairedHostStatuses]
   )
   const { storeData: unscopedStoreData, allThreads } = useAllAgentPaneThreads({ badgeOnly })
   const defaultHostId = useAgentPaneThreadsDefaultHostId()

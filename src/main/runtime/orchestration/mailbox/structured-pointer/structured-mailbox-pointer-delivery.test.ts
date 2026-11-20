@@ -315,8 +315,12 @@ describe("structured mailbox delivery: a finished item worker's report", () => {
     doneMeans: 'Image paste merged'
   }
 
-  it('ends the chat message with the item line, outside the recorded content', async () => {
-    const h = harness({ reportItem: async () => item })
+  it('adds item context outside the recorded content and still delivers when lookup fails', async () => {
+    const reportItem = vi
+      .fn()
+      .mockResolvedValueOnce(item)
+      .mockRejectedValueOnce(new Error('items DB worker gone'))
+    const h = harness({ reportItem })
     h.receive('m1')
     await h.deliver()
     const body = vi.mocked(h.host.send).mock.calls[0]![0].body
@@ -327,19 +331,12 @@ describe("structured mailbox delivery: a finished item worker's report", () => {
     const range = mail?.messages[0]?.content?.body
     expect(range && h.sent[0]!.text.slice(...range)).toBe('body of m1')
     await vi.waitFor(() => expect(h.mail.get('m1')?.read).toBe(1))
-  })
 
-  it('delivers and settles the report as before when the item read fails', async () => {
-    const h = harness({
-      reportItem: async () => {
-        throw new Error('items DB worker gone')
-      }
-    })
-    h.receive('m1')
+    h.receive('m2')
     await h.deliver()
-    expect(h.sent).toHaveLength(1)
-    expect(h.sent[0]!.text).not.toContain('This worker was started for item')
-    await vi.waitFor(() => expect(h.mail.get('m1')?.read).toBe(1))
+    expect(h.sent).toHaveLength(2)
+    expect(h.sent[1]!.text).not.toContain('This worker was started for item')
+    await vi.waitFor(() => expect(h.mail.get('m2')?.read).toBe(1))
     expect(h.records.size).toBe(0)
   })
 })

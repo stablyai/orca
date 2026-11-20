@@ -11,7 +11,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { isBotAgent } from '../../../src/shared/bot-types'
-import type { BotGroup } from '../../../src/shared/bots/bot-group'
+import { botGroupOwnerMessageBlocks, type BotGroup } from '../../../src/shared/bots/bot-group'
 import { botGroupReplyDraft } from '../../../src/shared/bots/bot-group-mentions'
 import { useMobileBotGroupComposer } from './use-mobile-bot-group-composer'
 import { confirmMobileBotGroupDelete } from './mobile-bot-group-delete'
@@ -177,7 +177,7 @@ export function MobileBotGroupRoom({
           />
         }
       />
-      <MobileBotGroupTranscript groupId={groupId} data={data}>
+      <MobileBotGroupTranscript client={client} groupId={groupId} data={data}>
         {data?.hasEarlier ? (
           <Pressable accessibilityRole="button" onPress={() => void loadEarlier()}>
             <Text style={styles.notice}>
@@ -192,7 +192,7 @@ export function MobileBotGroupRoom({
                 message={{
                   id: message.id,
                   role: 'user',
-                  blocks: [{ type: 'text', text: message.text }],
+                  blocks: botGroupOwnerMessageBlocks(message),
                   timestamp: message.createdAt,
                   source: 'transcript'
                 }}

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Readable } from 'node:stream'
+import { quoteStartupArg } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resetSessionParseCacheForTests } from '../../parse-cache/session-parse-cache-store'
 import { sessionCandidatesFromDiscoveries } from '../../discovery/session-scanner-candidates'
 import { scanAiVaultSessions } from '../../session-scanner'
@@ -145,7 +146,7 @@ describe('scanAiVaultSessions codex dual-root dedup', () => {
     )
     expect(managedOnly).toMatchObject({
       codexHome: managedHome,
-      resumeCommand: `cd '/repo/app' && CODEX_HOME='${managedHome}' codex resume '029f0000-1111-7222-8333-555555555555'`
+      resumeCommand: `cd '/repo/app' && CODEX_HOME=${quoteStartupArg(managedHome, 'posix')} codex resume '029f0000-1111-7222-8333-555555555555'`
     })
   })
 
@@ -356,7 +357,9 @@ it('falls back to a readable canonical copy with its own resume ownership, then 
     codexHome: fixture.managedHome,
     title: 'readablealiasneedle'
   })
-  expect(first.sessions[0].resumeCommand).toContain(`CODEX_HOME='${fixture.managedHome}'`)
+  expect(first.sessions[0].resumeCommand).toContain(
+    `CODEX_HOME=${quoteStartupArg(fixture.managedHome, 'posix')}`
+  )
   reads.failed = ''
   const recovered = await scanAiVaultSessions(fixture.options)
   expect(recovered.sessions).toHaveLength(1)

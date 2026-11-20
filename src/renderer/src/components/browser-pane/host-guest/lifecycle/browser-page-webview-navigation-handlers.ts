@@ -7,10 +7,13 @@ import {
 import type { BrowserLoadError } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../recovery/browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../../describe-page/live-browser-url-registry'
-import type { BrowserOverlayViewport } from '../../describe-page/browser-annotation-geometry'
+import {
+  INITIAL_BROWSER_OVERLAY_VIEWPORT,
+  type BrowserOverlayViewport
+} from '../../describe-page/browser-annotation-geometry'
 import { consumeBrowserAnnotationViewportMessage } from '../../annotate/viewport/browser-annotation-viewport-message'
-import { isChromiumErrorPage, toDisplayUrl } from '../../describe-page/browser-page-url-display'
 import { getBrowserDisplayTitle } from '../../../../../../shared/browser/browser-display-title'
+import { isChromiumErrorPage, toDisplayUrl } from '../../describe-page/browser-page-url-display'
 import {
   browserNavigationLeavesFaviconOrigin,
   pickDisplayableFaviconUrl
@@ -103,7 +106,7 @@ export function createBrowserPageWebviewNavigationHandlers({
     }
     // Same-URL reloads replace the document too; in-place updates are judged once they commit.
     invalidateBrowserAnnotationDocumentRef.current()
-    setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
+    setBrowserOverlayViewport(INITIAL_BROWSER_OVERLAY_VIEWPORT)
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl

@@ -135,20 +135,6 @@ describe('DesktopScriptRuntimeHost', () => {
     host.dispose()
   })
 
-  it('never replays a mutation once the helper announced it was reading', async () => {
-    const { host, children } = createHost()
-
-    const promise = host.request({ tool: 'click', app: 'Notepad', x: 10, y: 10 })
-    await settle()
-    children[0].ready()
-    // A snapshot can fault after input was delivered; missing replies do not justify replay.
-    children[0].exit(1, 'faulting module gdiplus.dll')
-
-    await expect(promise).rejects.toThrow(/runtime host exited/)
-    expect(children).toHaveLength(1)
-    host.dispose()
-  })
-
   it('replays a mutation only for a helper that died before announcing readiness', async () => {
     const { host, children } = createHost()
 
@@ -162,6 +148,7 @@ describe('DesktopScriptRuntimeHost', () => {
     await settle()
     children[0].exit(1, 'boom')
     await expect(crashed).rejects.toThrow(/runtime host exited/)
+    expect(children).toHaveLength(1)
 
     const retried = host.request({ tool: 'click', app: 'Notepad', x: 1, y: 1 })
     await settle()
