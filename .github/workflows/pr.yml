@@ -1103,6 +1103,15 @@ jobs:
         with:
           persist-credentials: false
 
+      # beforePack compiles provider-exec and journal-file-lock in this image; an uncached build cost ~75s inside packaging.
+      - name: Build Linux native toolchain image
+        id: native-toolchain-image
+        background: true
+        run: >-
+          node --input-type=module -e "import { spawnSync } from 'node:child_process';
+          import { linuxNativeToolchainImage } from './config/scripts/native-build/linux/build-wayland-clipboard.mjs';
+          linuxNativeToolchainImage(process.cwd(), (args) => { if (spawnSync('docker', args, { stdio: 'inherit' }).status !== 0) process.exit(1) })"
+
       # Electron and builder releases fix what this downloads; the lockfile churns far more often.
       - name: Resolve electron-builder download versions
         id: eb-versions
@@ -1250,7 +1259,8 @@ jobs:
           status=0
           pnpm run build:cli || status=1
 
-          scripts=(build:wsl-guest build:electron-vite:parallel)
+          # beforePack requires the real mobile page; it writes only out/mobile-web, so it overlaps the Vite targets.
+          scripts=(build:wsl-guest build:electron-vite:parallel build:mobile-web)
           pids=()
           for script in "${scripts[@]}"; do
             pnpm run "$script" &
@@ -1267,11 +1277,7 @@ jobs:
         background: true
         run: pnpm run build:web-from-renderer
 
-      # Build the real ~8MB mobile page because stepwise package assembly bypasses build:release and beforePack refuses its absence.
-      - name: Build mobile web bundle
-        run: pnpm run build:mobile-web
-
-      - wait: [linux-native, linux-package-tools, web-client]
+      - wait: [linux-native, linux-package-tools, web-client, native-toolchain-image]
 
       - name: Package unpacked app
         env:
@@ -1281,6 +1287,21 @@ jobs:
         run: |
           pnpm exec electron-builder --config config/electron-builder.config.cjs --linux dir --x64 --publish never
           node config/scripts/desktop-distribution/linux/package-linux-formats.mjs
+
+      - wait: shutdown-fixture-cache
+
+      # The ~60s container gate overlaps the remaining package checks.
+      - name: Verify headless serve signal shutdown
+        if: '!cancelled()'
+        id: headless-serve-shutdown
+        background: true
+        env:
+          ORCA_SHUTDOWN_FIXTURE_CACHE_IMAGE: ${{ steps.shutdown-fixture-cache.outputs.image }}
+          PACKAGE_PRIOR_SUCCESS: ${{ job.status == 'success' }}
+        run: |
+          if [ "$PACKAGE_PRIOR_SUCCESS" != true ]; then exit 0; fi
+          node config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs \
+            --appimage dist/orca-linux.AppImage --all-entrypoints
 
       - name: Verify root-package marker payloads
         run: |
@@ -1316,15 +1337,6 @@ jobs:
           retention-days: 3
           compression-level: 0
 
-      - wait: shutdown-fixture-cache
-
-      - name: Verify headless serve signal shutdown
-        env:
-          ORCA_SHUTDOWN_FIXTURE_CACHE_IMAGE: ${{ steps.shutdown-fixture-cache.outputs.image }}
-        run: >-
-          node config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve-shutdown-docker.mjs
-          --appimage dist/orca-linux.AppImage --all-entrypoints
-
       # A default container reproduces the hostile AppImage launch environment.
       - wait: cli-fixture-cache
 
@@ -1338,6 +1350,8 @@ jobs:
 
       - name: Smoke packaged hang watchdog worker
         run: xvfb-run --auto-servernum node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-hang-watchdog-worker.mjs --app-dir=dist/linux-unpacked
+
+      - wait: headless-serve-shutdown
 
   package_windows:
     name: package (windows)
