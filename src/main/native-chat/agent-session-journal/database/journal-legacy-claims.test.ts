@@ -21,6 +21,46 @@ afterEach(() => {
   }
 })
 
+it('keeps claims whose original record is gone and isolates a refusal among their owners', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: source } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => source.close())
+  const record = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+  record.run('kept-failed', '{}')
+  record.run('kept-healthy', '{}')
+  const filename = await initializeJournalDomainDatabase(root)
+  const { db } = openJournalDomainDatabase(filename)
+  cleanup.push(() => db.close())
+  for (const id of ['kept-failed', 'kept-healthy']) {
+    db.prepare('INSERT INTO journal_chat_state(session_id,workspace_id,epoch) VALUES(?,?,?)').run(
+      id,
+      'workspace',
+      'converted'
+    )
+  }
+  source.exec('DELETE FROM agent_session_records')
+  const claim = source.prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+  claim.run('refused', 'kept-failed', 100)
+  claim.run('claimed', 'kept-healthy', 100)
+  db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_attachment_claims
+    WHEN NEW.upload_id='refused' BEGIN SELECT RAISE(ABORT,'upload unavailable'); END`)
+  reconcileJournalLegacySource(root, db)
+  expect(
+    db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
+  ).toEqual([{ upload_id: 'claimed', session_id: 'kept-healthy' }])
+  const failure = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+  expect(JSON.parse(String(failure.get('journal.legacy-failed:kept-failed')?.value)).error).toBe(
+    'upload unavailable'
+  )
+  expect(failure.get('journal.legacy-failed:kept-healthy')).toBeUndefined()
+  db.exec('DROP TRIGGER refused')
+  reconcileJournalLegacySource(root, db)
+  expect(
+    db.prepare('SELECT upload_id,session_id FROM agent_session_attachment_claims').all()
+  ).toEqual([{ upload_id: 'claimed', session_id: 'kept-healthy' }])
+})
+
 it.each([11, 10])(
   'keeps every enumerated claim after a source record page fails with SQLite code %i',
   async (errcode) => {

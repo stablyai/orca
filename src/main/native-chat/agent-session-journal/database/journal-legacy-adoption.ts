@@ -8,6 +8,21 @@ import { readMeta } from './journal-legacy-reconcile-marks'
 
 export type Claim = SqliteRow
 
+/** Adoption takes chats in the original's saved order; in any order, the id index alone answers. */
+export function journalLegacyOriginalChatIds(
+  source: Database.Database,
+  order: 'saved' | 'any'
+): string[] {
+  return source
+    .prepare(
+      order === 'saved'
+        ? 'SELECT session_id FROM agent_session_records ORDER BY rowid'
+        : 'SELECT session_id FROM agent_session_records'
+    )
+    .all()
+    .map((row) => String(row.session_id))
+}
+
 /** A Set over a walk's rows, or point reads over this file's own. */
 type Lookup = {
   has(value: string): boolean

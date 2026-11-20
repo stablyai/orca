@@ -1,7 +1,12 @@
 import type Database from '../../../sqlite/sync-database'
 import { runJournalTransaction } from './journal-database'
 import { isSqliteCorruption, isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
-import { readAdoption, adoptJournalLegacyChat, type Adoption } from './journal-legacy-adoption'
+import {
+  readAdoption,
+  adoptJournalLegacyChat,
+  journalLegacyOriginalChatIds,
+  type Adoption
+} from './journal-legacy-adoption'
 import {
   missingJournalLegacyClaims,
   insertJournalLegacyClaims,
@@ -141,21 +146,9 @@ type Pass = {
  * for good, so while it still matches the saved receipt, no write followed any baseline here.
  */
 function missingBaselines(source: Database.Database, db: Database.Database): [string, string][] {
-  return originalChatIds(source, 'any')
+  return journalLegacyOriginalChatIds(source, 'any')
     .filter((id) => readMeta(db, journalLegacyChatRevisionKey(id)) === undefined)
     .map((id): [string, string] => [id, journalLegacyChatRevision(source, id) ?? 'null'])
-}
-
-/** Adoption takes chats in the original's saved order; in any order, the id index alone answers. */
-function originalChatIds(source: Database.Database, order: 'saved' | 'any'): string[] {
-  return source
-    .prepare(
-      order === 'saved'
-        ? 'SELECT session_id FROM agent_session_records ORDER BY rowid'
-        : 'SELECT session_id FROM agent_session_records'
-    )
-    .all()
-    .map((row) => String(row.session_id))
 }
 
 /**
@@ -172,20 +165,31 @@ function absorbChats(
   const adoption = readAdoption(source, db, walk ? null : [...pass.forced.keys()])
   let chats: string[]
   try {
-    chats = walk ? originalChatIds(source, 'saved') : [...pass.forced.keys()]
+    chats = walk ? journalLegacyOriginalChatIds(source, 'saved') : [...pass.forced.keys()]
   } catch (error) {
     retainEnumeratedClaims(db, adoption)
     throw error
+  }
+  const claimOnlyChats = new Set(adoption.claims.keys())
+  if (claimOnlyChats.size > 0) {
+    for (const id of chats) {
+      claimOnlyChats.delete(id)
+    }
+    for (const id of claimOnlyChats) {
+      chats.push(id)
+    }
   }
   for (const id of chats) {
     let revision: string | undefined
     const added = adoption.added.length
     const { nextPosition, tabsRecorded } = adoption
-    const attempt = { claimsOnly: false, adopting: false }
+    const attempt = { claimsOnly: claimOnlyChats.has(id), adopting: false }
     try {
       // A chat with no history still has a value, so one deleted here stays deleted.
-      revision = journalLegacyChatRevision(source, id) ?? 'null'
-      absorbChat(source, db, id, revision, adoption, pass, attempt)
+      if (!attempt.claimsOnly) {
+        revision = journalLegacyChatRevision(source, id) ?? 'null'
+      }
+      absorbChat(source, db, id, revision ?? 'null', adoption, pass, attempt)
     } catch (error) {
       // Corruption past the original's own revision read may be this file's: never absorb it. A
       // rollback that failed leaves this connection mid-transaction for every later chat.
@@ -282,6 +286,10 @@ function absorbChat(
     }
   }
   const adopt = (copy: string) => adoptJournalLegacyChat(source, db, id, copy, adoption)
+  if (attempt.claimsOnly) {
+    claimsOnly()
+    return
+  }
   const forced = pass.forced.get(id)
   if (forced) {
     attempt.adopting = true
