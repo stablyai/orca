@@ -72,4 +72,46 @@ describe('UpdateCard release history', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View on GitHub' }))
     expect(openUrl).toHaveBeenCalledWith('https://github.com/stablyai/orca/releases/tag/v1.4.259')
   })
+
+  it('renders note headings as blocks and drops inline HTML images', () => {
+    const mascot =
+      '<img src="https://raw.githubusercontent.com/stablyai/orca/main/src/shared/bot-mascots/A1.webp" alt="Orca" width="36" height="36" valign="middle" />'
+    useAppStore.setState({
+      updateStatus: {
+        state: 'available',
+        version: '1.4.266',
+        changelog: null,
+        releaseHistory: {
+          installedVersion: '1.4.265',
+          newerReleaseCount: 1,
+          releases: [
+            {
+              version: '1.4.266',
+              publishedAt: '2026-11-19T10:00:00Z',
+              notes: `## Introducing Orca Bots ${mascot}\n\nOrca Bots work like teammates.\n\n- ${mascot} **Every bot session** gets its tools`,
+              releaseUrl: 'https://github.com/stablyai/orca/releases/tag/v1.4.266'
+            }
+          ]
+        }
+      },
+      updateReassuranceSeen: true
+    })
+    render(
+      <NotificationCardStack>
+        <UpdateCard />
+      </NotificationCardStack>
+    )
+
+    const heading = screen.getByRole('heading', { level: 2 })
+    expect(heading.textContent?.trim()).toBe('Introducing Orca Bots')
+    const paragraph = screen.getByText('Orca Bots work like teammates.')
+    expect(heading.contains(paragraph)).toBe(false)
+    const notes = heading.parentElement
+    expect(notes?.className).toContain('[&_.comment-md-h]:block')
+    expect(notes?.className).toContain('[&_.comment-md-p]:block')
+    expect(screen.getByText('Every bot session')).toBeTruthy()
+    expect(screen.queryByRole('link', { name: 'Orca' })).toBeNull()
+    expect(screen.queryByRole('img')).toBeNull()
+    expect(notes?.textContent).not.toContain('Orca Orca')
+  })
 })

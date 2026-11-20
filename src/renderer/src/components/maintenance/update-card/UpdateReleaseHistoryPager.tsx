@@ -6,10 +6,25 @@ import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markd
 import { Button } from '../../ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
+import { cn } from '@/lib/class-names'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 // Intl formatter caches key on option identity, so this must be a module constant.
 const RELEASE_DATE_FORMAT: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }
+
+// Compact markdown renders paragraphs and headings inline; give release notes block flow here only.
+const NOTES_CLASS_NAME = cn(
+  'scrollbar-sleek max-h-40 overflow-y-auto text-xs leading-relaxed text-muted-foreground',
+  '[&_.comment-md-p]:block [&_.comment-md-h]:block [&>*+*]:mt-1.5',
+  '[&_.comment-md-h]:mt-3 [&_.comment-md-h]:leading-snug [&_.comment-md-h]:text-foreground [&_.comment-md-h:first-child]:mt-0',
+  '[&_.comment-md-h1]:text-[13px] [&_.comment-md-h2]:text-[13px]'
+)
+
+// Release notes decorate headings and bullets with raw-HTML mascot images, which compact
+// markdown would show as alt-text links; they carry no content, so drop them.
+function stripInlineHtmlImages(notes: string): string {
+  return notes.replace(/<img\b[^>]*>/gi, '')
+}
 
 const openNotesLink: CommentMarkdownLinkClickHandler = (event, href) => {
   event.preventDefault()
@@ -90,9 +105,9 @@ export function UpdateReleaseHistoryPager({
         {release.notes ? (
           <CommentMarkdown
             key={release.version}
-            content={release.notes}
+            content={stripInlineHtmlImages(release.notes)}
             onLinkClick={openNotesLink}
-            className="scrollbar-sleek max-h-40 overflow-y-auto text-xs leading-relaxed text-muted-foreground"
+            className={NOTES_CLASS_NAME}
           />
         ) : null}
         <button
