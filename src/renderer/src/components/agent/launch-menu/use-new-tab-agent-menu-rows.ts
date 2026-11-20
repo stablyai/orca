@@ -8,14 +8,12 @@ import {
   useAppStateViewActive,
   useAppStateValue
 } from '@/store/retained-views/app-state-view'
-import { nativeChatPreferenceFor } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import * as ExecutionHost from '../../../../../shared/execution-host/execution-host'
-import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../shared/agent-launch/contracts/workspace-launch-kind'
@@ -27,7 +25,9 @@ import {
 } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { useHostStructuredAgentAvailability } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent-availability'
 import {
+  agentMenuChatAgents,
   buildNewTabAgentMenuRows,
+  publishedHostChatAnswer,
   type HostChatAnswer
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { hostChatAnswer } from '@/lib/agent-session/launch/routing/new-tab-agent-menu-rows'
@@ -165,17 +165,7 @@ export function useAgentMenuObservation(
     readHostStructuredAgents(facts.executionHostId, state.runtimeStatusByEnvironmentId)?.map(
       ({ agent }) => agent
     )
-  const chatAgents = [
-    ...new Set([
-      'claude',
-      'codex',
-      ...(localCatalog ?? []),
-      ...(hostCatalog ?? []),
-      ...Object.keys(settings?.nativeChatProviders ?? {})
-        .filter(isTuiAgent)
-        .filter((agent) => nativeChatPreferenceFor(settings, agent))
-    ])
-  ].filter(isTuiAgent)
+  const chatAgents = agentMenuChatAgents(settings, [localCatalog, hostCatalog])
   const inventoryFailed =
     detection.detectedIds === null && (detection.detectionFailed || detection.needsServerUpdate)
   const localAcquiring = ['unlearned', 'pending'].includes(localCapabilities.state)
@@ -219,16 +209,11 @@ export function useAgentMenuObservation(
     })
     const route = { ...answerContext, agent }
     const preliminary = hostChatAnswer(roster ? { ...route, hostStructuredAgents: roster } : route)
-    if (!roster || !['yes', 'not-yet-known', 'not-on-host'].includes(preliminary)) {
-      return preliminary
-    }
-    const published =
-      availability?.state === 'received' ? availability.byAgent.get(agent) : undefined
-    if (published?.state === 'refused' && published.reason === 'windows') {
-      return 'windows'
-    }
-    // Missing/refused published availability overrides a preliminary route that would otherwise allow launch.
-    return !published || published.state === 'refused' ? 'not-on-host' : preliminary
+    return publishedHostChatAnswer(
+      preliminary,
+      availability?.state === 'received' ? availability.byAgent : null,
+      agent
+    )
   }
   const executionHostId = unresolvedTarget
     ? undefined

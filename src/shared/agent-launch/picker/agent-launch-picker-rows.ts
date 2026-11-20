@@ -7,7 +7,11 @@ import {
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { filterEnabledTuiAgents, TUI_AGENT_AUTO_PICK_ORDER } from '../catalog/tui-agent-selection'
-import type { AgentSessionChatProgram } from '../../agent-session/agent-discovery/agent-session-agent-availability'
+import type {
+  AgentSessionAgentAvailability,
+  AgentSessionChatProgram
+} from '../../agent-session/agent-discovery/agent-session-agent-availability'
+import { isTuiAgent } from '../catalog/tui-agent-config'
 import { agentSessionInstallCommand } from '../../agent-session/lifecycle/launch/agent-session-setup-commands'
 
 export type HostChatAnswer =
@@ -20,6 +24,41 @@ export type HostChatAnswer =
   /** The host is Windows, where this agent has no chat. */
   | 'windows'
   | 'no-chats'
+/** The agents a host's menu may offer chats for: Claude and Codex, each catalog the host published,
+ *  and any the user set to open in chat. The desktop's menu and a host's answer to a phone share it. */
+export function agentMenuChatAgents(
+  settings: NativeChatDefaultSettings | null | undefined,
+  catalogs: readonly (Iterable<string> | null | undefined)[]
+): TuiAgent[] {
+  return [
+    ...new Set([
+      'claude',
+      'codex',
+      ...catalogs.flatMap((catalog) => [...(catalog ?? [])]),
+      ...Object.keys(settings?.nativeChatProviders ?? {}).filter((agent) =>
+        nativeChatPreferenceFor(settings, agent)
+      )
+    ])
+  ].filter(isTuiAgent)
+}
+
+/** A route's answer with the host's published health laid over it: an agent the host doesn't list,
+ *  or refuses, has no chat there. Null health (an older host, or not read yet) leaves the answer. */
+export function publishedHostChatAnswer(
+  answer: HostChatAnswer,
+  published: ReadonlyMap<string, AgentSessionAgentAvailability> | null,
+  agent: string
+): HostChatAnswer {
+  if (!published || !['yes', 'not-yet-known', 'not-on-host'].includes(answer)) {
+    return answer
+  }
+  const entry = published.get(agent)
+  if (entry?.state === 'refused' && entry.reason === 'windows') {
+    return 'windows'
+  }
+  return !entry || entry.state === 'refused' ? 'not-on-host' : answer
+}
+
 export type ChatProgramObservation = AgentSessionChatProgram | 'unlearned'
 const chatProgramOffered = (program: ChatProgramObservation) =>
   program === 'available' || program === 'installable'

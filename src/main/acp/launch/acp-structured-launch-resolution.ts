@@ -1,8 +1,9 @@
 import { antigravityChatAuthEnvironment } from '../../antigravity/antigravity-chat-auth-environment'
 import { checkAcpLaunchVersion } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
-import { withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
-import { acpBotMcpServers } from '../../bots/bot-tools-acp'
+import { withBotLaunchToolsEnv, withBotToolsOffNote } from '../../bots/bot-launch-tools'
+import { acpBotMcpServers, acpLaunchBotTools } from '../../bots/bot-tools-acp'
+import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
 import {
@@ -72,6 +73,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
   /** The bot's own tools, opened with each session; absent: none. */
   mcpServers?: McpServer[]
+  /** The agent's `initialize` turned the bot's tools at a URL down; their Tools rows say why. */
+  httpToolsOff?: (reason: string) => void
   /** The saved model the launch line carries. */
   launchModel?: string
   /** The launched program's version, when its check or managed release names it. */
@@ -227,21 +230,29 @@ export function acpStructuredLaunchPart(
     })
     const loaded = skill?.loaded ?? []
     const visualsLoaded = visuals && loaded.includes(visuals.skill) ? visuals : null
+    // A managed release's receipt names its version; other programs answer the check.
+    const launchedVersion = version ?? launchVersion.version
+    const botTools = acpLaunchBotTools(await basis.toolServers(), {
+      id: spec.agent,
+      name: acpAgentName(spec.agent),
+      version: launchedVersion
+    })
+    const tools = botTools.tools
     const instructions = await acpLaunchInstructions(spec, deps.dataDirectory, {
       sessionId: identity.sessionId,
-      text: await basis.instructions(
-        linkedSkillsSection(
-          linked.projects,
-          linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
-        )
+      text: withBotToolsOffNote(
+        await basis.instructions(
+          linkedSkillsSection(
+            linked.projects,
+            linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
+          )
+        ),
+        botTools.note
       ),
       env: childEnvironmentView({ ...env, ...skill?.env }, inherited, envToDelete)
     })
     const fullAccess = basis.permissionMode === 'full-access'
-    const tools = await basis.toolServers()
     const mcpServers = acpBotMcpServers(tools)
-    // A managed release's receipt names its version; other programs answer the check.
-    const launchedVersion = version ?? launchVersion.version
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
@@ -266,6 +277,7 @@ export function acpStructuredLaunchPart(
             }
           : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
+        ...(botTools.httpToolsOff ? { httpToolsOff: botTools.httpToolsOff } : {}),
         ...(model ? { launchModel: model } : {}),
         ...(launchedVersion ? { version: launchedVersion } : {}),
         resume: head

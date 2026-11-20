@@ -1,4 +1,4 @@
-import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
+import { observeAcpInitialize } from '../capabilities/acp-initialize-capabilities'
 import { join } from 'node:path'
 import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import {
@@ -193,7 +193,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               readAcpSessionCommands({
                 connection,
                 dialect: spec.dialect,
-                onInitialize: (initialized) => observeAcpForkSupport(spec.agent, initialized),
+                onInitialize: (initialized) => observeAcpInitialize(spec.agent, initialized),
                 cwd,
                 signal,
                 check: () => {

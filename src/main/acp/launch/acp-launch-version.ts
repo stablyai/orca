@@ -6,7 +6,7 @@ import {
 } from '../../agent-launch/preflight/agent-cli-version-probe'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
-import { noteAcpForkVersion } from '../capabilities/acp-fork-support'
+import { noteAcpLaunchVersion } from '../capabilities/acp-initialize-capabilities'
 
 export async function checkAcpLaunchVersion(
   spec: AcpLaunchSpec,
@@ -17,7 +17,7 @@ export async function checkAcpLaunchVersion(
   read?: AgentCliVersionReader
 ): Promise<AgentCliVersionCheck> {
   if (!spec.minimumVersions && !wantVersion) {
-    noteAcpForkVersion(spec.agent, null)
+    noteAcpLaunchVersion(spec.agent, null)
     return { status: 'unknown', version: null }
   }
   const result = await checkAgentCliVersion(
@@ -31,6 +31,6 @@ export async function checkAcpLaunchVersion(
     spec.minimumVersions ?? [],
     read
   )
-  noteAcpForkVersion(spec.agent, result.version)
+  noteAcpLaunchVersion(spec.agent, result.version)
   return result
 }

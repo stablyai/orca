@@ -1,6 +1,7 @@
 // What New bot asks the chosen computer: its agent choices, and its Orca account.
 import * as z from 'zod'
-import { BOT_AGENTS, type BotAgent } from '../../../src/shared/bot-types'
+import { BOT_AGENTS } from '../../../src/shared/bot-types'
+import type { BotNewChatAgent } from '../../../src/shared/bots/bot-agent-choices'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
@@ -21,13 +22,14 @@ const botAgentChoicesRead = bindDeferredRpcOperation(
   })
 )
 
-/** The agents the host's own New bot offers there. A host that can't say (an older build, a failed
- *  read) keeps every agent, as the desktop keeps a failed check choosable. */
-export async function readBotAgentChoices(client: RpcClient): Promise<BotAgent[]> {
+/** The agents the host's own New bot offers there. A host that can't say lists every agent as a
+ *  failed check, as the desktop's menu does, and offers none. */
+export async function readBotAgentChoices(client: RpcClient): Promise<BotNewChatAgent[]> {
   try {
-    return botAgentChoicesRead.interpret(await botAgentChoicesRead.request(client))
+    const agents = botAgentChoicesRead.interpret(await botAgentChoicesRead.request(client))
+    return agents.map((agent) => ({ agent }))
   } catch {
-    return [...BOT_AGENTS]
+    return BOT_AGENTS.map((agent) => ({ agent, unavailable: 'check-failed' }))
   }
 }
 

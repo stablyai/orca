@@ -35,7 +35,12 @@ import {
 import { resolveBotToolInput } from './bot-tool-details'
 import { claudeBotToolProblems } from './bot-tools-claude-check'
 import { redactBotToolProblems } from './bot-tool-redaction'
-import { cliWithLaunchTools, withRelayProblems, type BotLaunchTools } from './bot-launch-tools'
+import {
+  botToolsOffProblems,
+  cliWithLaunchTools,
+  withRelayProblems,
+  type BotLaunchTools
+} from './bot-launch-tools'
 import type { BotAgent } from '../../shared/bot-types'
 import { readBotToolOAuth, withSavedBotToolHeaders } from './bot-tool-credentials'
 
@@ -196,14 +201,17 @@ export async function botToolProblems(
   cli: BotToolsHome,
   { remote = false, signal }: { remote?: boolean; signal?: AbortSignal } = {}
 ): Promise<Record<string, BotToolProblem>> {
+  // Another agent has no CLI check: its rows show only what its last launch could not take.
+  if (!hasBotToolsCli(cli)) {
+    return botToolsOffProblems(cli)
+  }
   // A tool Orca signs in to has its state from Orca's own store; checking it would start it.
   const servers = (await readBotToolServers(cli.folder)).filter(
     (server) =>
       (!remote || 'url' in server) &&
       !('url' in server && server.credential && readBotToolOAuth(cli.folder, server.credential))
   )
-  // Another agent has no CLI check, so its rows show no problem, as a Claude or Codex row it confirmed.
-  if (servers.length === 0 || !hasBotToolsCli(cli)) {
+  if (servers.length === 0) {
     return {}
   }
   signal?.throwIfAborted()

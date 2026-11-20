@@ -1,6 +1,6 @@
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import { retryAcpRequest } from '../../protocol/acp-request-retry'
-import { observeAcpForkSupport } from '../../capabilities/acp-fork-support'
+import { observeAcpInitialize } from '../../capabilities/acp-initialize-capabilities'
 import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
 // session or start a new one, then return its protocol facts to the host. A saved session the agent
@@ -29,6 +29,7 @@ import type { AcpStructuredLaunch } from '../../launch/acp-structured-launch-res
 import type { AcpStructuredOptions } from '../../options/acp-structured-options'
 import type { AcpStructuredPrompts } from '../../requests/acp-structured-prompts'
 import { acpSessionStartMeta } from '../../launch/acp-session-meta'
+import { acpSessionMcpServers } from '../../../bots/bot-tools-acp'
 import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
 import { AcpStructuredTurns } from '../../turns/acp-structured-turns'
 import type { AcpStructuredTurnsDeps } from '../../turns/acp-turn-dispatch-contract'
@@ -72,7 +73,7 @@ export async function initializeAcpStructuredSession(
   assertStarting()
   const initialized = await connection.initialize()
   assertStarting()
-  observeAcpForkSupport(spec.agent, initialized)
+  observeAcpInitialize(spec.agent, initialized)
   if (launch.sessionMeta && launch.takesSessionMeta && !launch.takesSessionMeta(initialized)) {
     const version = initialized.agentInfo?.version
     throw new Error(
@@ -80,6 +81,7 @@ export async function initializeAcpStructuredSession(
     )
   }
   options.adoptInitialize(initialized)
+  const mcpServers = acpSessionMcpServers(launch, initialized, agentName)
   const meta = await spec.resolveSessionMeta?.({
     initialized,
     cwd: launch.cwd,
@@ -123,7 +125,7 @@ export async function initializeAcpStructuredSession(
           const opened = await connection.start(
             {
               cwd,
-              mcpServers: launch.mcpServers ?? [],
+              mcpServers,
               sessionId: resume.sessionId,
               ...(launch.sessionMeta && launch.sessionMetaOnReopen
                 ? { _meta: launch.sessionMeta }
@@ -190,7 +192,7 @@ export async function initializeAcpStructuredSession(
     started = await connection.start(
       {
         cwd: launch.cwd,
-        mcpServers: launch.mcpServers ?? [],
+        mcpServers,
         ...(launch.sessionMeta ? { _meta: launch.sessionMeta } : {}),
         ...setup
       },

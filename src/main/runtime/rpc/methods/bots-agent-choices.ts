@@ -2,12 +2,12 @@
 // agent menu itself (a phone). Same rows and filter as the desktop's New bot, from this host's own facts.
 import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import {
+  agentMenuChatAgents,
   buildNewTabAgentMenuRows,
-  type HostChatAnswer
+  publishedHostChatAnswer
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { botAgentChoices } from '../../../../shared/bots/bot-agent-choices'
-import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   detectAgentsOnHost,
@@ -54,27 +54,10 @@ export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
     availabilitySnapshot(runtime)
   ])
   const detectedIds = detected?.filter(isTuiAgent) ?? null
-  // As the desktop's menu reads a host's published health: absent or refused can't chat there.
-  const hostChatAnswer = (agent: string): HostChatAnswer => {
-    if (!roster) {
-      return 'not-yet-known'
-    }
-    const published = roster.get(agent)
-    if (published?.state === 'refused' && published.reason === 'windows') {
-      return 'windows'
-    }
-    return !published || published.state === 'refused' ? 'not-on-host' : 'yes'
-  }
-  const chatAgents = [
-    ...new Set([
-      'claude',
-      'codex',
-      ...(roster?.keys() ?? []),
-      ...Object.keys(settings.nativeChatProviders ?? {}).filter((agent) =>
-        nativeChatPreferenceFor(settings, agent)
-      )
-    ])
-  ].filter(isTuiAgent)
+  // The host's own folder and runtime pass every route check; its published health decides the rest.
+  const hostChatAnswer = (agent: string) =>
+    publishedHostChatAnswer(roster ? 'yes' : 'not-yet-known', roster, agent)
+  const chatAgents = agentMenuChatAgents(settings, [roster?.keys()])
   const rows = buildNewTabAgentMenuRows({
     settings,
     detectedOnHost: detectedIds,

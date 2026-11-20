@@ -42,11 +42,12 @@ import { piTitlebarExtensionService } from '../../managed-extensions/titlebar-ex
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { linkedSkillsSection } from '../../../native-chat/native-chat-skill-roots'
 import { writeAcpInstructionsFile } from '../../../acp/launch/acp-instructions'
-import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import { withBotLaunchToolsEnv, withBotToolsOffNote } from '../../../bots/bot-launch-tools'
 import {
   PI_BOT_TOOLS_EXTENSION_FILE,
   PI_BOT_TOOLS_EXTENSION_SOURCE,
-  piBotToolsConfig
+  piBotToolsConfig,
+  piLaunchBotTools
 } from '../../../bots/bot-tools-pi'
 import { writePiExtensionFile } from './pi-extension-file'
 
@@ -201,14 +202,18 @@ export function piRpcLaunchPart(
     const linked = await basis.linkedSkills()
     // Only a folder with skills; Pi loads every SKILL.md under it, links included.
     const linkedRoot = linked.projects.length > 0 ? linked.root : null
-    const instructions = await basis.instructions(
-      linkedSkillsSection(linked.projects, linkedRoot ? [] : linked.projects)
+    const offered = piLaunchBotTools(await basis.toolServers(), launchVersion)
+    const botTools = offered.tools
+    const instructions = withBotToolsOffNote(
+      await basis.instructions(
+        linkedSkillsSection(linked.projects, linkedRoot ? [] : linked.projects)
+      ),
+      offered.note
     )
     const instructionsFile = instructions
       ? await writeAcpInstructionsFile(deps.dataDirectory, identity.sessionId, instructions)
       : undefined
     const tools = piToolLimit(basis.readOnly, launchVersion)
-    const botTools = await basis.toolServers()
     const botServers = piBotToolsConfig(botTools)
     // Chat loads extensions from its agent dir, so subagent rows need the current status extension there.
     if (deps.managedExtensionsEnabled?.()) {

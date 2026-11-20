@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Text, View } from 'react-native'
 import type { BotAgent } from '../../../src/shared/bot-types'
+import type { BotNewChatAgent } from '../../../src/shared/bots/bot-agent-choices'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { HostKindIcon } from '../components/icons/HostKindIcon'
 import { ListGroup, ListRow } from '../components/list/ListGroup'
@@ -14,9 +15,11 @@ import { botAgentLabel } from './mobile-bot-sheet-copy'
 import type { NewBotComputer } from './new-bot-computers'
 import { readBotAgentChoices, readSignedInEmail } from './new-bot-host-reads'
 
-/** The chosen computer's agent choices; null until it answers. */
-export function useNewBotAgentChoices(client: RpcClient | null): BotAgent[] | null {
-  const [answer, setAnswer] = useState<{ client: RpcClient; agents: BotAgent[] } | null>(null)
+/** The chosen computer's agent rows, each unavailable one with why; null until it answers. */
+export function useNewBotAgentChoices(client: RpcClient | null): BotNewChatAgent[] | null {
+  const [answer, setAnswer] = useState<{ client: RpcClient; agents: BotNewChatAgent[] } | null>(
+    null
+  )
   useEffect(() => {
     if (!client) {
       return
@@ -175,7 +178,7 @@ export function NewBotComputerSheet(props: {
 export function NewBotAgentSheet(props: {
   visible: boolean
   hostLabel: string
-  agents: readonly BotAgent[]
+  agents: readonly BotNewChatAgent[]
   chosen: BotAgent
   onPick: (agent: BotAgent) => void
   onClose: () => void
@@ -187,11 +190,18 @@ export function NewBotAgentSheet(props: {
       title={t('bots.new.agent', 'Agent')}
       message={t('bots.new.agentOn', 'On {{host}}.', { host: props.hostLabel })}
       onClose={props.onClose}
-      actions={props.agents.map((agent) => ({
+      actions={props.agents.map(({ agent, unavailable }) => ({
         id: agent,
         label: botAgentLabel(agent),
         renderIcon: () => <MobileAgentIcon agentId={agent} size={16} />,
         checked: agent === props.chosen,
+        // The phone hears of one reason only: the computer couldn't be asked.
+        ...(unavailable
+          ? {
+              disabled: true,
+              hint: t('bots.new.agentCheckFailed', 'Couldn’t check chat availability')
+            }
+          : {}),
         onPress: () => props.onPick(agent)
       }))}
     />

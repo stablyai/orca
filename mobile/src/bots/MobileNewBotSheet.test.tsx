@@ -102,7 +102,7 @@ function resetHosts(agents: { desktop: string[]; server: string[] }) {
   ops.request.mockResolvedValue({})
   ops.interpret.mockReturnValue({ bot: { id: 'b9', name: 'Juno' } })
   reads.readBotAgentChoices.mockImplementation(async (client: unknown) =>
-    client === desktop ? agents.desktop : agents.server
+    (client === desktop ? agents.desktop : agents.server).map((agent) => ({ agent }))
   )
   reads.readSignedInEmail.mockResolvedValue(null)
 }
@@ -142,6 +142,21 @@ describe('New bot on the phone', () => {
     expect(ops.request).not.toHaveBeenCalled()
   })
 
+  it('shows a computer whose check failed as such, and makes no bot there', async () => {
+    resetHosts({ desktop: [], server: [] })
+    reads.readBotAgentChoices.mockResolvedValue([
+      { agent: 'claude', unavailable: 'check-failed' },
+      { agent: 'codex', unavailable: 'check-failed' }
+    ])
+    const sheet = await mount(props())
+    expect(sheet.actionSheet('Agent').props.actions).toMatchObject([
+      { id: 'claude', disabled: true, hint: expect.any(String) },
+      { id: 'codex', disabled: true, hint: expect.any(String) }
+    ])
+    await sheet.submit('Juno')
+    expect(ops.request).not.toHaveBeenCalled()
+  })
+
   it('says when the server runs on another Orca account than the paired computer', async () => {
     resetHosts({ desktop: ['claude'], server: ['claude'] })
     reads.readSignedInEmail.mockImplementation(async (client: unknown) =>
@@ -174,14 +189,14 @@ describe('New bot on the phone', () => {
 
   it('keeps Create off until the computer says which agents it has', async () => {
     resetHosts({ desktop: ['claude'], server: ['claude'] })
-    let answer: (agents: string[]) => void = () => {}
+    let answer: (agents: { agent: string }[]) => void = () => {}
     reads.readBotAgentChoices.mockImplementation(
-      () => new Promise<string[]>((resolve) => (answer = resolve))
+      () => new Promise<{ agent: string }[]>((resolve) => (answer = resolve))
     )
     const sheet = await mount(props())
     await sheet.submit('Juno')
     expect(ops.request).not.toHaveBeenCalled()
-    await act(async () => answer(['claude']))
+    await act(async () => answer([{ agent: 'claude' }]))
     await sheet.submit('Juno')
     expect(ops.request).toHaveBeenCalledTimes(1)
   })

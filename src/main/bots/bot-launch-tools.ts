@@ -5,11 +5,16 @@ import type { BotToolProblem, BotToolServer } from '../../shared/bot-tools'
 import type { BotToolsCli } from './bot-tools-host'
 import { botToolRelay, type BotToolRelay } from './tool-relay/bot-tool-relay'
 import { BOT_TOOLS_TOKEN_ENV } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import { resolve } from 'node:path'
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '::1']
+
+type BotToolsOwner = { folder: string; agent: string }
+// By bot folder: the tools its agent's last launch could not take, and why, for its Tools rows.
+const toolsOff = new Map<string, { agent: string; names: readonly string[]; reason: string }>()
 
 /** A bot's servers ready for its CLI; only `BotLaunchTools.for` makes one, so no saved value slips through. */
 export class BotLaunchTools {
-  static readonly none = new BotLaunchTools([], {}, {}, false)
+  static readonly none = new BotLaunchTools([], {}, {}, false, null)
   // A private member makes the type nominal: a plain object with the same fields isn't one.
   declare private readonly nominal: true
 
@@ -20,8 +25,34 @@ export class BotLaunchTools {
     /** Added to the environment of the commands the CLI runs, not the CLI's own. */
     readonly commandEnv: Readonly<Record<string, string>>,
     /** Some tool goes through the relay, so the CLI must reach loopback directly. */
-    readonly relayed: boolean
+    readonly relayed: boolean,
+    private readonly owner: BotToolsOwner | null
   ) {}
+
+  /**
+   * These tools without the ones `drop` picks, which the agent can't take: their Tools rows show
+   * `reason` until a launch delivers them, and `note` tells the session.
+   */
+  without(
+    drop: (server: BotToolServer) => boolean,
+    reason: string
+  ): { tools: BotLaunchTools; note: string | null } {
+    const names = this.servers.filter(drop).map((server) => server.name)
+    if (names.length === 0 || !this.owner) {
+      return { tools: this, note: null }
+    }
+    toolsOff.set(resolve(this.owner.folder), { agent: this.owner.agent, names, reason })
+    return {
+      tools: new BotLaunchTools(
+        this.servers.filter((server) => !drop(server)),
+        this.env,
+        this.commandEnv,
+        this.relayed,
+        this.owner
+      ),
+      note: `Your tools ${names.join(', ')} are off in this chat: ${reason} If a task needs one, tell the user.`
+    }
+  }
 
   /**
    * Every bot launch gets the bot's token, whichever agent runs it: tools present it to the relay,
@@ -36,6 +67,7 @@ export class BotLaunchTools {
       // Header values live in the credential store; one here was never migrated, so it never launches.
       throw new Error('A tool still holds its saved values. Reopen the bot’s tools to move them.')
     }
+    toolsOff.delete(resolve(bot.folder))
     const { origin, token } = await relay.grant(bot.botId, bot.folder)
     const tokenEnv = { [BOT_TOOLS_TOKEN_ENV]: token }
     // Claude and Pi expand `${VAR}` in a server's headers, so their config names only the variable.
@@ -58,9 +90,26 @@ export class BotLaunchTools {
       }),
       commandsOnly ? {} : tokenEnv,
       commandsOnly ? tokenEnv : {},
-      servers.some((server) => 'url' in server && server.credential)
+      servers.some((server) => 'url' in server && server.credential),
+      { folder: bot.folder, agent: bot.agent }
     )
   }
+}
+
+/** The bot's tools its agent's last launch could not take, each with why. */
+export function botToolsOffProblems(owner: BotToolsOwner): Record<string, BotToolProblem> {
+  const off = toolsOff.get(resolve(owner.folder))
+  if (off?.agent !== owner.agent) {
+    return {}
+  }
+  return Object.fromEntries(
+    off.names.map((name) => [name, { kind: 'failed' as const, detail: off.reason }])
+  )
+}
+
+/** The session's instructions with the note on tools it was started without. */
+export function withBotToolsOffNote(instructions: string | null, note: string | null) {
+  return note ? (instructions ? `${instructions}\n\n${note}` : note) : instructions
 }
 
 const ENV_REFERENCING_AGENTS: ReadonlySet<string> = new Set(['claude', 'pi'])

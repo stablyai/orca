@@ -1,6 +1,6 @@
 import { acpEffortOption, acpInteractionModeValue, acpSelectChoices } from './acp-select-choices'
 import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
-import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
+import { acpInitializeForkSupport } from '../capabilities/acp-initialize-capabilities'
 import { acpSessionSlashCommand } from './acp-session-slash-command'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 

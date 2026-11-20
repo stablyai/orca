@@ -87,3 +87,26 @@ describe('ACP standing instructions on the session', () => {
     expect(refuses.sent('session/new')).toEqual([])
   })
 })
+
+describe('ACP tools at a URL', () => {
+  const docs = { type: 'http' as const, name: 'docs', url: 'https://docs.example/mcp', headers: [] }
+  const files = { name: 'files', command: 'files-mcp', args: [], env: [] }
+
+  it('sends them only to an agent that advertises taking them, and says why the rest are off', async () => {
+    const takes = await openAcpAdapterRig({
+      launch: { mcpServers: [docs, files] },
+      initialize: { agentCapabilities: { mcpCapabilities: { http: true } } }
+    })
+    await takes.acquire()
+    expect(takes.sent('session/new')[0]?.params).toMatchObject({ mcpServers: [docs, files] })
+
+    const off: string[] = []
+    const refuses = await openAcpAdapterRig({
+      launch: { mcpServers: [docs, files], httpToolsOff: (reason) => off.push(reason) }
+    })
+    await refuses.acquire()
+    expect(refuses.sent('session/new')[0]?.params).toMatchObject({ mcpServers: [files] })
+    expect(off).toHaveLength(1)
+    expect(off[0]).toMatch(/doesn't take tools at a URL/)
+  })
+})

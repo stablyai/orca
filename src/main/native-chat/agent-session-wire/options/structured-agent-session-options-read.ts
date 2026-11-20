@@ -1,4 +1,4 @@
-import { readAcpForkSupport } from '../../../acp/capabilities/acp-fork-support'
+import { readAcpForkSupport } from '../../../acp/capabilities/acp-initialize-capabilities'
 import { supportsSessionAccountUsage } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-usage'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../../agent-model-catalog/agent-model-catalog-operation'

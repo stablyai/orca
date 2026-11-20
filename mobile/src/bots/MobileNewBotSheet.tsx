@@ -101,7 +101,8 @@ function NewBotForm(props: NewBotSheetProps) {
   }
   const computer = listed ?? (computerId === lastChosen?.id ? lastChosen : undefined)
   const client = listed && listed.refusal === undefined ? props.clientFor(listed.id) : null
-  const choices = useNewBotAgentChoices(client)
+  const rows = useNewBotAgentChoices(client)
+  const choices = rows?.flatMap((row) => (row.unavailable ? [] : [row.agent])) ?? null
   // The kept agent moves to the computer's first when it lacks it; until it answers, the kept one shows.
   const agent = choices?.length && !choices.includes(picked) ? choices[0] : picked
   const otherAccount = useOtherOrcaAccount(
@@ -181,7 +182,7 @@ function NewBotForm(props: NewBotSheetProps) {
       <NewBotAgentSheet
         visible={props.visible && picking === 'agent'}
         hostLabel={computer?.label ?? ''}
-        agents={choices?.length ? choices : [agent]}
+        agents={rows?.length ? rows : [{ agent }]}
         chosen={agent}
         onPick={setPicked}
         onClose={() => setPicking(null)}

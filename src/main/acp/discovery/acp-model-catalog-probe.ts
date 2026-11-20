@@ -1,5 +1,5 @@
 import { readAgentCliVersion } from '../../agent-launch/preflight/agent-cli-version-probe'
-import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
+import { observeAcpInitialize } from '../capabilities/acp-initialize-capabilities'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
@@ -263,7 +263,7 @@ export function createAcpModelCatalogProbe(
             async (connection) => {
               const initialized = await connection.initialize()
               assertStructuredAgentResolutionCurrent(operation)
-              observeAcpForkSupport(spec.agent, initialized)
+              observeAcpInitialize(spec.agent, initialized)
               return listing.read(initialized, connection)
             },
             run

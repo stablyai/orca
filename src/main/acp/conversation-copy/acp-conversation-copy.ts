@@ -2,7 +2,7 @@ import { agentConversationCopyRefusal } from '../../native-chat/conversation-ado
 import type { StructuredAgentSessionConversationCopyInput } from '../../native-chat/agent-session-wire/providers/structured-agent-session-conversation-copy-input'
 import { readOpenCodeForkCoverageViaWorker } from '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import type { NativeCopyCoverage } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
-import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
+import { observeAcpInitialize } from '../capabilities/acp-initialize-capabilities'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { OpenCodeCopyServerRouteError } from '../../../shared/agent-launch/startup/opencode-launch-command'
 import {
@@ -166,7 +166,7 @@ async function forkAdvertised(
   agent: string
 ): Promise<string> {
   const initialized = await connection.initialize()
-  observeAcpForkSupport(agent, initialized)
+  observeAcpInitialize(agent, initialized)
   const { agentCapabilities } = initialized
   if (agentCapabilities?.sessionCapabilities?.fork == null) {
     throw new AcpRpcError(-32601, 'session/fork is not advertised')
