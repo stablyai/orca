@@ -29447,7 +29447,10 @@
   "perfNotices": {
     "hiddenTabs": {
       "title": "Save memory from inactive tabs",
-      "description": "Turn on Orca's browser memory saver to free up memory from inactive tabs.",
+      "description_one": "You have {{count}} tab you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up its memory.",
+      "description_other": "You have {{count}} tabs you haven't viewed in over {{hours}} hours. Turn on Memory Saver to free up their memory.",
+      "descriptionOneHour_one": "You have {{count}} tab you haven't viewed in over an hour. Turn on Memory Saver to free up its memory.",
+      "descriptionOneHour_other": "You have {{count}} tabs you haven't viewed in over an hour. Turn on Memory Saver to free up their memory.",
       "turnOnMemorySaver": "Turn on Memory Saver"
     },
     "dontShowAgain": "Don't show again"
