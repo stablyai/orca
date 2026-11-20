@@ -95,8 +95,9 @@ export class AcknowledgedWorkspaceSessionEntries {
     const acknowledged = this.byHost.get(hostId)
     const forgets = this.forgets
     const patch: WorkspaceSessionEntriesPatch = { fields: {}, entries: {} }
-    const fields = Object.entries(fieldEntries)
-    for (const [field, values] of fields) {
+    // Only changed keys are acknowledged: an unchanged field's baseline already matches main.
+    const sent: [string, Record<string, unknown>][] = []
+    for (const [field, values] of Object.entries(fieldEntries)) {
       const previous = acknowledged?.get(field)
       if (!isWorkspaceSessionRecord(previous)) {
         return null
@@ -111,6 +112,7 @@ export class AcknowledgedWorkspaceSessionEntries {
       }
       if (changed) {
         Reflect.set(patch.entries, field, { set, remove: [] })
+        sent.push([field, set])
       }
     }
     return {
@@ -123,12 +125,12 @@ export class AcknowledgedWorkspaceSessionEntries {
         if (forgets !== this.forgets) {
           // A forget landed meanwhile (maybe another host's): main took these keys, but merging them
           // into a copy that may be stale is unsafe, so these fields go whole next time.
-          for (const [field] of fields) {
+          for (const [field] of sent) {
             host.delete(field)
           }
           return
         }
-        for (const [field, values] of fields) {
+        for (const [field, values] of sent) {
           const record = host.get(field)
           if (!isWorkspaceSessionRecord(record)) {
             continue
