@@ -28,7 +28,7 @@ afterEach(async () => {
   }
 })
 
-async function chat(mode: 'tail' | 'batch' | 'metadata' = 'tail') {
+async function chat(mode: 'tail' | 'batch' | 'metadata' | 'uuidless-metadata' | 'system' = 'tail') {
   const root = await mkdtemp(join(tmpdir(), 'orca-claude-catch-up-'))
   const config = join(root, 'claude')
   const project = join(config, 'projects', 'project')
@@ -46,7 +46,7 @@ async function chat(mode: 'tail' | 'batch' | 'metadata' = 'tail') {
   try {
     await file.write(`${JSON.stringify(row('old-leaf', null, 'old answer'))}\n`)
     let parent = 'old-leaf'
-    if (mode === 'tail') {
+    if (mode === 'tail' || mode === 'system') {
       for (let i = 0; i < 27; i++) {
         const boundary = `compact-${i}`
         await file.write(
@@ -66,12 +66,17 @@ async function chat(mode: 'tail' | 'batch' | 'metadata' = 'tail') {
     await file.write(
       `${JSON.stringify(row('newest-answer', parent, 'Distinctive newest outside answer'))}\n`
     )
-    if (mode === 'metadata') {
+    if (mode === 'metadata' || mode === 'uuidless-metadata') {
       for (let i = 0; i < 27; i++) {
         await file.write(
-          `${JSON.stringify({ type: 'progress', uuid: `progress-${i}`, data: 'x'.repeat(640 * 1024) })}\n`
+          `${JSON.stringify({ type: mode === 'metadata' ? 'progress' : 'file-history-snapshot', ...(mode === 'metadata' ? { uuid: `progress-${i}` } : {}), data: 'x'.repeat(640 * 1024) })}\n`
         )
       }
+    }
+    if (mode === 'system') {
+      await file.write(
+        `${JSON.stringify({ type: 'system', subtype: 'turn_duration', uuid: 'system-frontier', parentUuid: 'newest-answer' })}\n`
+      )
     }
   } finally {
     await file.close()
@@ -116,12 +121,40 @@ async function chat(mode: 'tail' | 'batch' | 'metadata' = 'tail') {
     get journal() {
       return journal
     },
-    appendOutsideAnswer: async () => {
+    appendGrowth: async () => {
       const file = await open(filePath, 'a')
       try {
+        for (let i = 0; i < 27; i++) {
+          await file.write(
+            `${JSON.stringify({ type: 'file-history-snapshot', data: 'x'.repeat(640 * 1024) })}\n`
+          )
+        }
         await file.write(
-          `${JSON.stringify(row('later-answer', 'newest-answer', 'Later outside answer'))}\n`
+          `${JSON.stringify(row('saved-later-leaf', 'newest-answer', 'Saved later answer'))}\n`
         )
+      } finally {
+        await file.close()
+      }
+      await journal.appendItem(
+        { provider: 'claude', sessionId: PROVIDER, uuid: 'saved-later-leaf' },
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Rich saved later answer' }]
+        },
+        { fence: 1, turnScope: { kind: 'thread' } }
+      )
+    },
+    appendOutsideAnswer: async (parent = 'newest-answer') => {
+      const file = await open(filePath, 'a')
+      try {
+        if (mode === 'system') {
+          await file.write(
+            `${JSON.stringify({ type: 'system', subtype: 'turn_duration', uuid: 'later-system', parentUuid: parent })}\n`
+          )
+          parent = 'later-system'
+        }
+        await file.write(`${JSON.stringify(row('later-answer', parent, 'Later outside answer'))}\n`)
       } finally {
         await file.close()
       }
@@ -136,11 +169,11 @@ async function chat(mode: 'tail' | 'batch' | 'metadata' = 'tail') {
       journal = await journals.open({ ...options, recover: { fence: 1 } })
       deferred.bind({ journal, fence: 1, publish })
     },
-    catchUp: () =>
+    catchUp: (leafUuid = 'old-leaf') =>
       catchUpClaudeTranscript({
         sessionId: SESSION,
         providerSessionId: PROVIDER,
-        leafUuid: 'old-leaf',
+        leafUuid,
         claudeConfigDir: config,
         cwd: root,
         sink: deferred.sink,
@@ -217,6 +250,66 @@ it.each(['tail', 'batch', 'metadata'] as const)(
     }
   }
 )
+
+it('catches up from a newer saved leaf after growing past the recovery frontier', async () => {
+  const c = await chat()
+  expect(await c.catchUp()).toBe(true)
+  await c.appendGrowth()
+  await c.appendOutsideAnswer('saved-later-leaf')
+  const cursor = await c.journal.reads.physicalCursor()
+  await c.reopen()
+  expect(await c.catchUp('saved-later-leaf')).toBe(true)
+  expect((await c.journal.reads.physicalCursor()).epoch).toBe(cursor.epoch)
+  const items = await c.items()
+  expect(
+    items.find(({ itemId }) => itemId === 'claude:provider-catch-up:saved-later-leaf')?.body
+  ).toEqual({
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text: 'Rich saved later answer' }]
+  })
+  expect(items).toContainEqual(
+    expect.objectContaining({
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'Later outside answer' }]
+      }
+    })
+  )
+})
+
+it('leaves an unchanged import with a UUID-less metadata suffix alone on reopen', async () => {
+  const c = await chat('uuidless-metadata')
+  expect(await c.catchUp()).toBe(true)
+  const cursor = await c.journal.reads.physicalCursor()
+  await c.reopen()
+  expect(await c.catchUp()).toBe(true)
+  expect(await c.journal.reads.physicalCursor()).toEqual(cursor)
+})
+
+it('continues a system frontier without reporting a rewind', async () => {
+  const c = await chat('system')
+  expect(await c.catchUp()).toBe(true)
+  const cursor = await c.journal.reads.physicalCursor()
+  await c.appendOutsideAnswer('system-frontier')
+  await c.reopen()
+  expect(await c.catchUp()).toBe(true)
+  expect((await c.journal.reads.physicalCursor()).epoch).toBe(cursor.epoch)
+  const items = await c.items()
+  expect(items).toContainEqual(
+    expect.objectContaining({
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'Later outside answer' }]
+      }
+    })
+  )
+  expect(
+    items.flatMap(({ body }) => (body.kind === 'status' ? [body.presentation] : []))
+  ).not.toContain('continued-outside-rewound')
+})
 
 it('drops a replacement when another write at the same fence wins after the captured view', async () => {
   const c = await chat()

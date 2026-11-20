@@ -7,6 +7,7 @@ import {
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { recoverClaudeTranscript } from './claude-transcript-recovery'
 import { join } from 'node:path'
+import { stat } from 'node:fs/promises'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -174,7 +175,8 @@ export async function catchUpClaudeTranscript(input: {
               unit: 'claude-entry',
               providerHandle,
               ids,
-              sourceFrontier: prepared.sourceFrontier
+              sourceFrontier: prepared.sourceFrontier,
+              sourceConsumedBytes: prepared.sourceConsumedBytes
             },
             items: [
               {
@@ -189,30 +191,51 @@ export async function catchUpClaudeTranscript(input: {
         }
       }
       const copy = usableJournalHistoryOrigin(planned.origin)
-      const copiedLeaf =
-        planned.covered && copy?.kind === 'native_copy'
-          ? (copy.ids.at(-1) ?? input.leafUuid)
-          : input.leafUuid
-      const sourceFrontier =
-        planned.covered && copy?.kind === 'native_copy' ? copy.sourceFrontier : undefined
-      const leafUuid = sourceFrontier ? copiedLeaf : input.leafUuid
-      let leafAbsent = leafUuid === '' && !!planned.covered
+      const recovery = planned.covered && copy?.kind === 'native_copy' ? copy : null
+      const copiedLeaf = recovery?.ids.at(-1) ?? input.leafUuid
+      const sourceFrontier = recovery?.sourceFrontier
+      const chainBoundaries = sourceFrontier ? [sourceFrontier, copiedLeaf] : []
+      let leafAbsent = input.leafUuid === '' && !!planned.covered
       let tail = leafAbsent
         ? null
         : await readClaudeTranscriptTail({
             filePath,
-            leafUuid,
-            sourceFrontier,
+            leafUuid: input.leafUuid,
+            chainBoundaries,
             check,
             onLeafAbsent: () => {
               leafAbsent = true
             }
           })
       check()
-      // Covered history can outgrow the tail budget even while its saved leaf remains in the copy.
-      if (!tail && !leafAbsent && copiedLeaf !== leafUuid) {
+      if (!tail && sourceFrontier) {
+        leafAbsent = false
+        tail = await readClaudeTranscriptTail({
+          filePath,
+          leafUuid: sourceFrontier,
+          chainBoundaries,
+          check,
+          onLeafAbsent: () => {
+            leafAbsent = true
+          }
+        })
+        check()
+      }
+      // Ordinary copy receipts can still bridge from their last imported leaf.
+      if (!tail && !leafAbsent && !sourceFrontier && copiedLeaf !== input.leafUuid) {
         tail = await readClaudeTranscriptTail({ filePath, leafUuid: copiedLeaf, check })
         check()
+      }
+      if (!tail && recovery?.sourceConsumedBytes !== undefined) {
+        const { size } = await stat(filePath)
+        check()
+        if (size === recovery.sourceConsumedBytes) {
+          complete = true
+          return createHistoryCatchUpBatch().finish('claude-history-unchanged', [
+            planned.physicalCursor,
+            size
+          ])
+        }
       }
       if (!tail && !(leafAbsent && planned.covered)) {
         warn('leaf-not-in-tail')

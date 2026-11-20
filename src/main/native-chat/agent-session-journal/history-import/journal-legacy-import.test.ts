@@ -238,3 +238,20 @@ it.each([
     expect(prepared.ok).toBe(ok)
   }
 )
+
+it('keeps an unterminated record outside the imported source frontier', async () => {
+  const filePath = join(root, 'claude-growing.jsonl')
+  await writeFile(
+    filePath,
+    [
+      '{"type":"assistant","uuid":"answer","message":{"role":"assistant","content":"Saved answer"}}',
+      '{"type":"progress","uuid":"still-writing"}'
+    ].join('\n')
+  )
+  const prepared = await prepareLegacyTranscriptImport({
+    agent: 'claude',
+    sessionId: 'claude-growing',
+    options: { filePath }
+  })
+  expect(prepared).toMatchObject({ ok: true, sourceFrontier: 'answer' })
+})

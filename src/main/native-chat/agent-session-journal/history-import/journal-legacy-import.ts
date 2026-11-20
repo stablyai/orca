@@ -1,3 +1,4 @@
+import { readClaudeTranscriptFrontier } from '../../../claude/transcripts/claude-transcript-tail'
 import { createImportedForkTip, observeOmpForkTip } from './imported-fork-tip'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
@@ -64,6 +65,7 @@ type PreparedLegacyImport =
       sourceEmpty: boolean
       forkTipItemIds?: string[]
       sourceFrontier?: string
+      sourceConsumedBytes?: number
     }
   // cause keeps a typed adoption refusal for the caller.
   | { ok: false; error: string; cause?: unknown }
@@ -126,20 +128,21 @@ export async function prepareLegacyTranscriptImport(input: {
   }
 
   try {
-    const { items, sourceEmpty, forkTipItemIds, sourceFrontier } = await decodeReplacementItems({
-      filePath,
-      transcriptAgent,
-      agent: input.agent,
-      sessionId: input.sessionId,
-      source: options.source,
-      codexSessionsDirs: options.source?.conversationStore
-        ? [options.source.conversationStore]
-        : options.codexSessionsDirs,
-      signal: options.signal,
-      decodedMessageIdentities: options.decodedMessageIdentities,
-      limits
-    })
-    return { ok: true, items, sourceEmpty, forkTipItemIds, sourceFrontier }
+    const { items, sourceEmpty, forkTipItemIds, sourceFrontier, sourceConsumedBytes } =
+      await decodeReplacementItems({
+        filePath,
+        transcriptAgent,
+        agent: input.agent,
+        sessionId: input.sessionId,
+        source: options.source,
+        codexSessionsDirs: options.source?.conversationStore
+          ? [options.source.conversationStore]
+          : options.codexSessionsDirs,
+        signal: options.signal,
+        decodedMessageIdentities: options.decodedMessageIdentities,
+        limits
+      })
+    return { ok: true, items, sourceEmpty, forkTipItemIds, sourceFrontier, sourceConsumedBytes }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err), cause: err }
   }
@@ -208,6 +211,7 @@ async function decodeReplacementItems(input: {
   sourceEmpty: boolean
   forkTipItemIds: string[]
   sourceFrontier?: string
+  sourceConsumedBytes?: number
 }> {
   const source = input.source
     ? adoptedTranscriptSourceObserver({
@@ -236,7 +240,6 @@ async function decodeReplacementItems(input: {
       : null
   const forkTip = createImportedForkTip()
   let lineIndex = 0
-  let sourceFrontier: string | undefined
   // A Claude file of metadata alone is one nothing was sent in; an undecodable turn still counts.
   let conversation = input.transcriptAgent !== 'claude'
   try {
@@ -259,11 +262,6 @@ async function decodeReplacementItems(input: {
           pi.record(line, fallbackId, currentLineIndex)
           return null
         }
-        const claudeIdentity =
-          input.transcriptAgent === 'claude' ? tracker.identify(line, currentLineIndex) : null
-        if (claudeIdentity?.provider === 'claude') {
-          sourceFrontier = claudeIdentity.uuid
-        }
         const message = TRANSCRIPT_DECODERS[input.transcriptAgent](line, fallbackId)
         conversation ||= !!message || mayBeClaudeConversationRecord(line)
         if (message) {
@@ -275,7 +273,7 @@ async function decodeReplacementItems(input: {
                   sessionId: input.sessionId,
                   recordId: recordId ?? message.id
                 }
-              : (claudeIdentity ?? tracker.identify(line, currentLineIndex))
+              : tracker.identify(line, currentLineIndex)
           retained.push(toItem(message, identity))
         }
         if (input.transcriptAgent === 'omp') {
@@ -302,7 +300,16 @@ async function decodeReplacementItems(input: {
       items: retained.items(),
       sourceEmpty,
       forkTipItemIds: forkTip.settledItems(),
-      sourceFrontier
+      ...(input.transcriptAgent === 'claude'
+        ? {
+            sourceFrontier: await readClaudeTranscriptFrontier({
+              filePath: input.filePath,
+              consumedBytes,
+              check: () => input.signal?.throwIfAborted()
+            }),
+            sourceConsumedBytes: consumedBytes
+          }
+        : {})
     }
   } finally {
     pi?.close()

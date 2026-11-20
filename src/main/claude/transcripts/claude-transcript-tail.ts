@@ -19,36 +19,78 @@ export type ClaudeTranscriptTail = {
 export async function readClaudeTranscriptTail(input: {
   filePath: string
   leafUuid: string
-  sourceFrontier?: string
+  chainBoundaries?: readonly string[]
   maxBytes?: number
   check: () => void
   onLeafAbsent?: () => void
 }): Promise<ClaudeTranscriptTail | null> {
+  const newestFirst: Record<string, unknown>[] = []
+  let covered = false
+  const result = await visitClaudeTranscriptTail(input, (row) => {
+    covered ||= input.chainBoundaries?.includes(String(row.uuid)) === true
+    if (row.uuid === input.leafUuid) {
+      return true
+    }
+    if (!covered) {
+      newestFirst.push(row)
+    }
+    return false
+  })
+  if (result === 'found') {
+    return mainChain(newestFirst.toReversed(), input.leafUuid, covered ? input.chainBoundaries : [])
+  }
+  if (result === 'absent') {
+    input.onLeafAbsent?.()
+  }
+  return null
+}
+
+/** Only complete records in the consumed range can anchor the next catch-up. */
+export async function readClaudeTranscriptFrontier(input: {
+  filePath: string
+  consumedBytes: number
+  check: () => void
+}): Promise<string | undefined> {
+  let frontier: string | undefined
+  await visitClaudeTranscriptTail({ ...input, endBytes: input.consumedBytes }, (row) => {
+    if (typeof row.uuid !== 'string' || !row.uuid) {
+      return false
+    }
+    frontier = row.uuid
+    return true
+  })
+  return frontier
+}
+
+async function visitClaudeTranscriptTail(
+  input: { filePath: string; endBytes?: number; maxBytes?: number; check: () => void },
+  visit: (row: Record<string, unknown>) => boolean
+): Promise<'found' | 'absent' | 'capacity'> {
   const maxBytes = input.maxBytes ?? CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
   const handle = await open(input.filePath, 'r')
   try {
     input.check()
     const { size } = await handle.stat()
+    const endBytes = Math.min(size, input.endBytes ?? size)
     input.check()
-    const newestFirst: Record<string, unknown>[] = []
     // Retain split-line chunks newest first while reading backward.
     let pieces: Buffer[] = []
     // A last line without its newline is a write still landing; it is left for the next read.
     let complete = false
-    const endLine = (): Record<string, unknown> | null => {
+    const endLine = (): boolean => {
       const row = complete ? parseRow(Buffer.concat(pieces.toReversed())) : null
       pieces = []
       complete = true
-      return row
+      return row !== null && visit(row)
     }
-    const found = () => mainChain(newestFirst.toReversed(), input.leafUuid)
-    let position = size
+    let position = endBytes
     while (position > 0) {
       input.check()
-      if (size - position >= maxBytes) {
-        return null
+      const remaining = maxBytes - (endBytes - position)
+      if (remaining <= 0) {
+        return 'capacity'
       }
-      const length = Math.min(CHUNK_BYTES, position)
+      const length = Math.min(CHUNK_BYTES, position, remaining)
       position -= length
       const chunk = Buffer.alloc(length)
       await handle.read(chunk, 0, length, position)
@@ -60,21 +102,13 @@ export async function readClaudeTranscriptTail(input: {
         }
         pieces.push(chunk.subarray(index + 1, end))
         end = index
-        const row = endLine()
-        if (row?.uuid === (input.sourceFrontier ?? input.leafUuid)) {
-          return found()
-        }
-        if (row) {
-          newestFirst.push(row)
+        if (endLine()) {
+          return 'found'
         }
       }
       pieces.push(chunk.subarray(0, end))
     }
-    if (endLine()?.uuid === (input.sourceFrontier ?? input.leafUuid)) {
-      return found()
-    }
-    input.onLeafAbsent?.()
-    return null
+    return endLine() ? 'found' : 'absent'
   } finally {
     await handle.close()
   }
@@ -93,7 +127,11 @@ function parseRow(bytes: Buffer): Record<string, unknown> | null {
 }
 
 /** Walk parent links back from the newest row; rows on other branches and sidechains drop out. */
-export function mainChain(rows: Record<string, unknown>[], leafUuid: string): ClaudeTranscriptTail {
+export function mainChain(
+  rows: Record<string, unknown>[],
+  leafUuid: string,
+  chainBoundaries: readonly string[] = []
+): ClaudeTranscriptTail {
   const byUuid = new Map<string, Record<string, unknown>>()
   let newest: Record<string, unknown> | null = null
   for (const row of rows) {
@@ -116,7 +154,7 @@ export function mainChain(rows: Record<string, unknown>[], leafUuid: string): Cl
     byUuid.delete(String(row.uuid))
     // A compaction boundary starts a fresh chain and names the one it continues.
     const parent = typeof row.parentUuid === 'string' ? row.parentUuid : row.logicalParentUuid
-    if (parent === leafUuid) {
+    if (parent === leafUuid || (typeof parent === 'string' && chainBoundaries.includes(parent))) {
       break
     }
     const next = typeof parent === 'string' ? byUuid.get(parent) : undefined
