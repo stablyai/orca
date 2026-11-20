@@ -95,7 +95,9 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
       if (hasLegacyCopies && existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))) {
         // Past the read budget a copy waits for a later pass; only its marker is hidden from older builds.
         await (readBudget.exhausted
-          ? protectLegacySessionCopyMarker(managedHome, relativePath)
+          ? protectLegacySessionCopyMarker(managedHome, relativePath).catch((error: unknown) => {
+              console.warn('[codex-session-bridge] Could not protect a legacy copy marker:', error)
+            })
           : swapLegacySessionCopy({
               managedHome,
               relativePath,

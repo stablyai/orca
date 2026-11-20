@@ -22,11 +22,8 @@ import {
 import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-backfill'
 import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
-import {
-  LEGACY_SESSION_COPY_ASIDE_SUFFIX,
-  LEGACY_SESSION_COPY_MAX_ASIDES,
-  swapLegacySessionCopy
-} from '../bridges/codex-legacy-session-copy'
+import { swapLegacySessionCopy } from '../bridges/codex-legacy-session-copy'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
@@ -41,6 +38,8 @@ export async function prepareLegacySharedCodexSessionResume(
     getSelectedHostAccountCodexHomePath?: () => string | null
     legacyCodexHomePath?: string
     systemCodexHomePath?: string
+    /** An account restart follows, which swaps only when the account doesn't hold the rollout. */
+    leaveSwapToAccountRestart?: boolean
   }
 ): Promise<AiVaultPrepareSessionResumeResult> {
   const substituteCodexHome = await resolveSelectedAccountCodexHomeForResume(args, options)
@@ -61,7 +60,7 @@ export async function prepareLegacySharedCodexSessionResume(
   const sourcePath = resolve(args.filePath)
   // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
   const relativePath = codexDatedRolloutRelativePath(managedSessionsRoot, sourcePath)
-  if (relativePath) {
+  if (relativePath && !options.leaveSwapToAccountRestart) {
     // Before Codex starts, so this resume can't be writing the copy as it's swapped.
     await swapLegacySessionCopy({ managedHome: legacyCodexHomePath, relativePath })
   }
@@ -119,18 +118,18 @@ export async function prepareCodexAccountRestartResume(args: {
   }
   const paths = resolveCodexSessionBackfillPaths(args.systemCodexHomePath)
   const legacyCodexHomePath = dirname(paths.managedSessionsRoot)
-  const isLegacyHome = sameRuntimePath(args.sourceHome, legacyCodexHomePath)
-  if (isLegacyHome) {
-    // A native chat moving accounts reaches here without a resume preparation swapping first.
+  const targetPath = join(args.targetHome, 'sessions', relativePath)
+  // An account already holding this rollout is compared with the copy as it is, so the swap waits.
+  if (
+    sameRuntimePath(args.sourceHome, legacyCodexHomePath) &&
+    !(await lstat(targetPath).then(
+      () => true,
+      (error: unknown) => !isDefinitiveAbsence(error)
+    ))
+  ) {
     await swapLegacySessionCopy({ managedHome: legacyCodexHomePath, relativePath })
   }
-  await materializeLegacyRollout(
-    args.transcriptPath,
-    join(args.targetHome, 'sessions', relativePath),
-    paths.auditLogPath,
-    // An account holding the copy as it was before the swap matches, as it did before the swap.
-    { alsoMatching: isLegacyHome ? await legacySessionCopyAsides(args.transcriptPath) : [] }
-  )
+  await materializeLegacyRollout(args.transcriptPath, targetPath, paths.auditLogPath)
   return args.targetHome
 }
 
@@ -180,8 +179,7 @@ async function resolveSelectedAccountCodexHomeForResume(
 async function materializeLegacyRollout(
   sourcePath: string,
   targetPath: string,
-  auditLogPath: string,
-  options: { alsoMatching?: readonly string[] } = {}
+  auditLogPath: string
 ): Promise<void> {
   const sourceStat = await lstat(sourcePath)
   if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
@@ -189,9 +187,8 @@ async function materializeLegacyRollout(
   }
   // A cleanup deleting every name of this rollout would miss one installed meanwhile.
   if (
-    (await linkCodexRolloutUnlessHeld(sourcePath, () =>
-      installRollout(sourcePath, targetPath, options)
-    )) === 'held'
+    (await linkCodexRolloutUnlessHeld(sourcePath, () => installRollout(sourcePath, targetPath))) ===
+    'held'
   ) {
     throw new Error('This rollout is being deleted with its workspace.')
   }
@@ -216,22 +213,18 @@ async function materializeLegacyRollout(
   )
 }
 
-async function installRollout(
-  sourcePath: string,
-  targetPath: string,
-  options: { alsoMatching?: readonly string[] }
-): Promise<void> {
+async function installRollout(sourcePath: string, targetPath: string): Promise<void> {
   await mkdir(dirname(targetPath), { recursive: true })
   try {
     await link(sourcePath, targetPath)
   } catch (linkError) {
     if (isExistsError(linkError)) {
-      await assertMatchingExistingTarget(sourcePath, targetPath, options)
+      await assertMatchingExistingTarget(sourcePath, targetPath)
     } else {
       try {
         const outcome = await copyCodexRolloutWithoutOverwrite(sourcePath, targetPath)
         if (outcome === 'existing') {
-          await assertMatchingExistingTarget(sourcePath, targetPath, options)
+          await assertMatchingExistingTarget(sourcePath, targetPath)
         }
       } catch (copyError) {
         if (copyError instanceof AtomicNoReplaceUnsupportedError) {
@@ -245,47 +238,17 @@ async function installRollout(
   }
 }
 
-async function assertMatchingExistingTarget(
-  sourcePath: string,
-  targetPath: string,
-  options: { alsoMatching?: readonly string[] }
-): Promise<void> {
-  for (const candidate of [sourcePath, ...(options.alsoMatching ?? [])]) {
-    if (await holdsSameRollout(candidate, targetPath)) {
-      return
-    }
-  }
-  throw new Error('A different rollout already occupies the real-home target path.')
-}
-
-async function holdsSameRollout(sourcePath: string, targetPath: string): Promise<boolean> {
+async function assertMatchingExistingTarget(sourcePath: string, targetPath: string): Promise<void> {
   const [sourceStat, targetStat] = await Promise.all([lstat(sourcePath), lstat(targetPath)])
-  return (
-    targetStat.isFile() &&
-    !targetStat.isSymbolicLink() &&
-    sourceStat.size === targetStat.size &&
-    ((sourceStat.dev === targetStat.dev && sourceStat.ino === targetStat.ino) ||
-      (await fileDigest(sourcePath)) === (await fileDigest(targetPath)))
-  )
-}
-
-/** The copy's own bytes, set aside when its name was pointed at its grown source. */
-async function legacySessionCopyAsides(copyPath: string): Promise<string[]> {
-  const asides: string[] = []
-  for (let attempt = 1; attempt <= LEGACY_SESSION_COPY_MAX_ASIDES; attempt += 1) {
-    const aside = `${copyPath}${LEGACY_SESSION_COPY_ASIDE_SUFFIX}.${attempt}`
-    const present = await lstat(aside).then(
-      (entry) => entry.isFile() && entry.size > 0,
-      () => null
-    )
-    if (present === null) {
-      break
-    }
-    if (present) {
-      asides.push(aside)
-    }
+  if (
+    !targetStat.isFile() ||
+    targetStat.isSymbolicLink() ||
+    sourceStat.size !== targetStat.size ||
+    ((sourceStat.dev !== targetStat.dev || sourceStat.ino !== targetStat.ino) &&
+      (await fileDigest(sourcePath)) !== (await fileDigest(targetPath)))
+  ) {
+    throw new Error('A different rollout already occupies the real-home target path.')
   }
-  return asides
 }
 
 async function fileDigest(filePath: string): Promise<string> {

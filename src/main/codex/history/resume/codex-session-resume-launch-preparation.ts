@@ -88,7 +88,8 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
             {
               isHostSystemDefaultRealHomeSelected: () =>
                 runtimeHome.isHostSystemDefaultRealHomeSelected(),
-              systemCodexHomePath: systemHomePath
+              systemCodexHomePath: systemHomePath,
+              leaveSwapToAccountRestart: args.useSelectedAccount === true
             }
           )
         } catch (error) {

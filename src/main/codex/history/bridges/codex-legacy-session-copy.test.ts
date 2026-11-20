@@ -270,7 +270,7 @@ describe('legacy session copy swap', () => {
     expect(readFileSync(copyPath, 'utf-8')).toBe(`${OLD_TURNS}{"resumed":true}\n`)
   })
 
-  it('restarts in an account that already holds the copy from before its source grew', async () => {
+  it('restarts in an account holding the copy as it is, leaving the copy unswapped', async () => {
     legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
     const accountHome = join(root, 'account-home')
     writeFile(join(accountHome, 'sessions', RELATIVE_PATH), OLD_TURNS)
@@ -283,7 +283,25 @@ describe('legacy session copy swap', () => {
         systemCodexHomePath: systemHome
       })
     ).resolves.toBe(accountHome)
-    expect(lstatSync(copyPath).ino).toBe(lstatSync(sourcePath).ino)
+    // The account was compared with the copy as it is, so the copy keeps its own bytes.
+    expect(readFileSync(copyPath, 'utf-8')).toBe(OLD_TURNS)
+  })
+
+  it('refuses an account restart onto the old copy once the chat continued past a swap', async () => {
+    legacyCopy(OLD_TURNS + NEW_TURNS, OLD_TURNS)
+    await bridgePass()
+    writeFileSync(copyPath, `${OLD_TURNS}${NEW_TURNS}{"turn":3}\n`)
+    const accountHome = join(root, 'account-home')
+    writeFile(join(accountHome, 'sessions', RELATIVE_PATH), OLD_TURNS)
+
+    await expect(
+      prepareCodexAccountRestartResume({
+        sourceHome: runtimeHome(),
+        transcriptPath: copyPath,
+        targetHome: accountHome,
+        systemCodexHomePath: systemHome
+      })
+    ).rejects.toThrow()
   })
 
   it('still refuses an account restart onto an older state of a rollout that was never a copy', async () => {
