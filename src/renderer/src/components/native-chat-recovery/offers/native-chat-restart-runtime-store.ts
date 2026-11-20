@@ -3,14 +3,9 @@ import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runt
 import { remoteRestartRuntimeId } from './native-chat-remote-restart-offer'
 import { createNativeChatRestartOccurrence } from './native-chat-restart-occurrence'
 import { EMPTY } from './native-chat-restart-host-offer'
-import {
-  resumeRunPendingIds,
-  type ResumeRun,
-  type ResumeRunStarter
-} from '../runs/native-chat-resume-run'
 import * as dialog from '../dialogs/native-chat-resume-on-restart-dialog'
 
-const NO_RESUMING = resumeRunPendingIds(null)
+const NO_RESUMING: readonly string[] = []
 
 /** Subscriptions survive server replacement; all recovery state and work belongs to its occurrence. */
 export function createNativeChatRestartStore(target: RuntimeClientTarget) {
@@ -43,17 +38,12 @@ export function createNativeChatRestartStore(target: RuntimeClientTarget) {
     getNativeChatRestartOffer: () => (disposed ? EMPTY : occurrence.getNativeChatRestartOffer()),
     getNativeChatRestartResuming: () =>
       disposed ? NO_RESUMING : occurrence.getNativeChatRestartResuming(),
-    getNativeChatRestartRun: () => (disposed ? null : occurrence.getNativeChatRestartRun()),
-    markFinishedNativeChatRestartRunShown: (run: ResumeRun) =>
-      occurrence.markFinishedNativeChatRestartRunShown(run),
-    releaseFinishedNativeChatRestartRun: () => occurrence.releaseFinishedNativeChatRestartRun(),
     refreshNativeChatRestartOffer: () => occurrence.refreshNativeChatRestartOffer(),
     reopenNativeChatRestartOffer: () => occurrence.reopenNativeChatRestartOffer(),
     continueNativeChatRestartOffer: (
       ids: readonly string[],
-      starter?: ResumeRunStarter,
-      took?: Parameters<typeof occurrence.continueNativeChatRestartOffer>[2]
-    ) => occurrence.continueNativeChatRestartOffer(ids, starter, took),
+      took?: Parameters<typeof occurrence.continueNativeChatRestartOffer>[1]
+    ) => occurrence.continueNativeChatRestartOffer(ids, took),
     dismissNativeChatRestartOffer: (ids?: readonly string[]) =>
       occurrence.dismissNativeChatRestartOffer(ids),
     readNativeChatRestartOffer: () => occurrence.readNativeChatRestartOffer(),

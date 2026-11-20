@@ -12,16 +12,12 @@ import {
 import {
   _resetNativeChatRestartOffer,
   getNativeChatRestartResuming,
-  getNativeChatRestartRun,
   loadNativeChatLaunchOffer,
   localNativeChatRestartStore
 } from './native-chat-resume-on-restart-store'
 
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: vi.fn()
-}))
-vi.mock('../runs/native-chat-resume-run-status-watch', () => ({
-  watchResumeRunStatus: () => () => {}
 }))
 
 const row = (sessionId: string, activity?: ResumeCandidate['activity']): ResumeCandidate => ({
@@ -41,7 +37,7 @@ afterEach(() => {
 })
 
 describe('a host that continues at launch', () => {
-  it('shows what it took as this launch run, then offers what it left', async () => {
+  it('follows what it took without reporting progress, then offers what it left', async () => {
     useAppStore.setState({
       settings: { ...getDefaultSettings(''), nativeChatResumeWorkOnRestart: true }
     })
@@ -64,13 +60,9 @@ describe('a host that continues at launch', () => {
     })
 
     const launch = loadNativeChatLaunchOffer(localNativeChatRestartStore)
-    await vi.waitFor(() => expect(getNativeChatRestartRun()?.inFlight).toBe(true))
+    await vi.waitFor(() => expect(getNativeChatRestartResuming()).toEqual(['working']))
 
-    expect(getNativeChatRestartRun()).toMatchObject({
-      startedBy: 'launch',
-      entries: [{ candidate: { sessionId: 'working' } }]
-    })
-    expect(getNativeChatRestartResuming()).toEqual(['working'])
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(false)
     expect(vi.mocked(callStructuredAgentSession).mock.calls.map((call) => call[1])).not.toContain(
       'agentSession.restartContinue'
     )
@@ -83,10 +75,6 @@ describe('a host that continues at launch', () => {
     })
     await launch
 
-    expect(getNativeChatRestartRun()).toMatchObject({
-      inFlight: false,
-      continued: [{ sessionId: 'working', outcome: 'continued' }]
-    })
     expect(getNativeChatRestartResuming()).toEqual([])
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
   })
