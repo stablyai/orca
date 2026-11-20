@@ -95,8 +95,9 @@ function makeHost(
   recorded: {
     lineage?: Record<string, unknown>
     parents?: Record<string, unknown>
+    crossStore?: Record<string, unknown>
     botHomes?: string[]
-    /** Each paired server's `worktree ps` rows, or null for one that doesn't answer. */
+    /** Each paired server's workspaces with a parent elsewhere, or null for one that doesn't answer. */
     paired?: Record<string, RuntimeWorktreePsSummary[] | null>
   } = {}
 ): {
@@ -118,6 +119,7 @@ function makeHost(
     getWorktreeMeta: () => undefined,
     getAllWorkspaceLineage: () => recorded.lineage ?? {},
     getAllWorktreeLineage: () => recorded.parents ?? {},
+    getAllCrossStoreWorkspaceLineage: () => recorded.crossStore ?? {},
     getBots: () => (recorded.botHomes ?? []).map((folderWorkspaceId) => ({ folderWorkspaceId }))
   } as unknown as RuntimeStore
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the evidence read uses only these runtime members.
@@ -138,11 +140,19 @@ function makeHost(
       if (!answer) {
         throw new Error('timed out')
       }
-      return {
-        worktrees: answer,
-        truncated: false,
-        hostScope: { hostIds: ['local'], omittedHostIds: [] }
-      }
+      // Its saved cross-store links, as `worktree.lineageList` answers.
+      const crossStoreLineage = Object.fromEntries(
+        answer.map((child) => [
+          `worktree:${child.worktreeId}`,
+          {
+            childWorkspaceKey: `worktree:${child.worktreeId}`,
+            childInstanceId: 'child-instance',
+            createdAt: 0,
+            ...child.crossStoreParent
+          }
+        ])
+      )
+      return { crossStoreLineage }
     })
   } as unknown as OrcaRuntimeService
   return { runtime, store }
@@ -265,9 +275,20 @@ describe('folder workspace cleanup group', () => {
         row('repo-c::/w2', { parent: 'repo-a::/r1' }),
         row('repo-a::/h1', {
           elsewhere: { store: 'desktop', key: 'folder:Bot', capture: 'bot-hand-over' }
-        })
+        }),
+        // Its parent p1, missing from the listing, is attached to a folder there.
+        row('repo-b::/r4', { parent: 'repo-e::/p1' })
       ],
-      { parents: { 'repo-c::/w2': { parentWorktreeId: 'repo-a::/r1', origin: 'orchestration' } } }
+      {
+        parents: { 'repo-c::/w2': { parentWorktreeId: 'repo-a::/r1', origin: 'orchestration' } },
+        crossStore: {
+          'worktree:repo-e::/p1': {
+            parent: { installationId: 'desktop', workspaceKey: 'folder:F' },
+            origin: 'manual',
+            capture: { source: 'manual-action' }
+          }
+        }
+      }
     )
     expect(await verdicts(runner)).toEqual({
       'repo-a::/r1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
@@ -275,7 +296,8 @@ describe('folder workspace cleanup group', () => {
       'repo-a::/r3': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
       'repo-a::/w1': { action: 'delete', reason: 'merged' },
       'repo-c::/w2': { action: 'delete', reason: 'merged' },
-      'repo-a::/h1': { action: 'delete', reason: 'merged' }
+      'repo-a::/h1': { action: 'delete', reason: 'merged' },
+      'repo-b::/r4': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' }
     })
   })
 
@@ -290,6 +312,10 @@ describe('folder workspace cleanup group', () => {
         paired: {
           'env-r': [
             row('repo-x::/x1', { elsewhere: { store: 'this-store', key: 'folder:F' } }),
+            // A worker's checkout there doesn't hold K.
+            row('repo-x::/x3', {
+              elsewhere: { store: 'this-store', key: 'folder:K', origin: 'orchestration' }
+            }),
             // Its parent g1 was renamed after the link was saved.
             row('repo-x::/x2', {
               elsewhere: {

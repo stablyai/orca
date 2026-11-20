@@ -13,8 +13,11 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
-import type { CrossStoreWorkspaceLineage } from '../../../shared/worktree/lineage-types'
-import type { PairedFolderChildren } from './workspace-cleanup-paired-folder-children'
+import {
+  isOrchestrationLineage,
+  isUngroupedCrossStoreLineage,
+  type PairedFolderChildren
+} from './workspace-cleanup-paired-folder-children'
 
 export function summaryHostId(summary: RuntimeWorktreePsSummary): ExecutionHostId | null {
   return summary.hostId ? normalizeExecutionHostId(summary.hostId) : LOCAL_EXECUTION_HOST_ID
@@ -23,19 +26,6 @@ export function summaryHostId(summary: RuntimeWorktreePsSummary): ExecutionHostI
 /** A same-id row on another host is a different checkout. */
 export function summaryIdentity(summary: RuntimeWorktreePsSummary): string {
   return composeWorktreeHostIdentity(summaryHostId(summary) ?? undefined, summary.worktreeId)
-}
-
-// A worker's lineage: a folder's other members don't hold a disposable checkout.
-function isOrchestrationLineage(
-  lineage: Pick<
-    CrossStoreWorkspaceLineage,
-    'origin' | 'orchestrationRunId' | 'taskId' | 'coordinatorHandle'
-  >
-): boolean {
-  return (
-    lineage.origin === 'orchestration' ||
-    Boolean(lineage.orchestrationRunId || lineage.taskId || lineage.coordinatorHandle)
-  )
 }
 
 /** Each listed worktree's folder siblings by host identity: the others its folder workspace's Source
@@ -57,6 +47,7 @@ export async function folderSiblingsByWorktree(
   )
   const folderEdges = store.getAllWorkspaceLineage?.() ?? {}
   const parentEdges = store.getAllWorktreeLineage?.() ?? {}
+  const crossStoreEdges = store.getAllCrossStoreWorkspaceLineage?.() ?? {}
   const rows = summaries.filter((summary) => summary.workspaceKind !== 'folder-workspace')
   const byIdentity = new Map(rows.map((row) => [summaryIdentity(row), row]))
   // A listed row speaks for itself; one the listing lacks (its repo's scan failed) is read from its stored lineage.
@@ -78,11 +69,9 @@ export async function folderSiblingsByWorktree(
       if (folderKey) {
         return botHomes.has(folderKey) ? null : folderKey
       }
-      const elsewhere = row?.crossStoreParent
+      const elsewhere = row ? row.crossStoreParent : crossStoreEdges[worktreeWorkspaceKey(id)]
       if (elsewhere) {
-        return worker ||
-          isOrchestrationLineage(elsewhere) ||
-          elsewhere.capture.source === 'bot-hand-over'
+        return worker || isUngroupedCrossStoreLineage(elsewhere)
           ? null
           : `${elsewhere.parent.installationId}|${elsewhere.parent.workspaceKey}`
       }
