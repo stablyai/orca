@@ -147,7 +147,7 @@ export function antigravityHookPollRow(
     body !== null &&
     'paneKey' in body &&
     typeof body.paneKey === 'string'
-      ? body.paneKey
+      ? body.paneKey.trim()
       : undefined
   const row = paneKey ? state.lastStatusByPaneKey.get(paneKey) : undefined
   return row?.payload.agentType === 'antigravity' && hasAntigravityPollWork(state, row)

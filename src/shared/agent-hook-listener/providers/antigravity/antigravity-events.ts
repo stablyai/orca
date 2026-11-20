@@ -101,6 +101,10 @@ export function normalizeAntigravityEvent(
     )
   }
 
+  // A child Stop without its conversation id must not run the root's idle-Stop cleanup.
+  if (existingPaneState?.rootConversationId && !conversationId && origin === 'child') {
+    return null
+  }
   if (
     existingPaneState?.rootConversationId &&
     conversationId &&
