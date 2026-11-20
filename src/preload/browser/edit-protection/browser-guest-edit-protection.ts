@@ -89,5 +89,8 @@ function loadType(restoredFromCache: boolean): string | null {
     return 'back_forward'
   }
   const entry = performance.getEntriesByType('navigation')[0]
-  return entry instanceof PerformanceNavigationTiming ? entry.type : null
+  return typeof PerformanceNavigationTiming === 'function' &&
+    entry instanceof PerformanceNavigationTiming
+    ? entry.type
+    : null
 }

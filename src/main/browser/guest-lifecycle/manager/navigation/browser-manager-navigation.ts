@@ -1,3 +1,5 @@
+import { webContents } from 'electron'
+import type { BrowserViewportOverride } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   getBrowserProcessUserAgentIdentity,
   isBrowserProcessUserAgentInitialized
@@ -110,7 +112,20 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     )
   }
 
-  /** At commit, and after CDP detach drops a mobile identity: the committed page's own demand. */
+  // Applying or clearing a mobile preset (CDP detach clears it) changes the page's header demand.
+  protected override recordAppliedViewportOverride(
+    browserTabId: string,
+    guestWebContentsId: number,
+    applied: BrowserViewportOverride | null
+  ): void {
+    super.recordAppliedViewportOverride(browserTabId, guestWebContentsId, applied)
+    const guest = webContents.fromId(guestWebContentsId)
+    if (guest && !guest.isDestroyed()) {
+      this.settleUserAgentDemand(guest, 'keep')
+    }
+  }
+
+  /** At commit, and when a mobile preset changes: the committed page's own demand. */
   protected settleUserAgentDemand(guest: Electron.WebContents, frames: 'keep' | 'clear'): void {
     // Commit and CDP detach can fire before startup sets the identity; nothing rewrites yet.
     if (!isBrowserProcessUserAgentInitialized()) {

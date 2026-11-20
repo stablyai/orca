@@ -42,10 +42,6 @@ export type OffscreenBrowserTabOpenRequest = {
 
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {
   abstract invalidateGuestMemoryProtection(guest: Electron.WebContents): void
-  protected abstract settleUserAgentDemand(
-    guest: Electron.WebContents,
-    frames: 'keep' | 'clear'
-  ): void
 
   protected abstract attachGuestPolicies(
     guest: Electron.WebContents,
@@ -264,9 +260,6 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
       const browserTabId = this.tabIdByWebContentsId.get(guest.id)
       if (browserTabId) {
         this.recordAppliedViewportOverride(browserTabId, guest.id, null)
-      }
-      if (!guest.isDestroyed()) {
-        this.settleUserAgentDemand(guest, 'keep')
       }
       this.invalidateGuestMemoryProtection(guest)
     }

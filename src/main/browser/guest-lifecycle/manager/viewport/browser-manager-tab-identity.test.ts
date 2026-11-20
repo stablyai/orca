@@ -298,14 +298,15 @@ describe('tab identity ownership', () => {
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
     const { handle } = openTab(ORDINARY_URL)
     const teamsUrl = 'https://teams.microsoft.com/v2/'
-    const frame = (frameTreeNodeId: number, url: string, origin: string) => ({
+    type FakeFrame = { frameTreeNodeId: number; url: string; origin: string }
+    const frame = (frameTreeNodeId: number, url: string, origin: string): FakeFrame => ({
       frameTreeNodeId,
       url,
       origin
     })
-    const mainFrame = {
+    const mainFrame: FakeFrame & { framesInSubtree: FakeFrame[] } = {
       ...frame(1, ORDINARY_URL, 'https://example.com'),
-      framesInSubtree: [] as object[]
+      framesInSubtree: []
     }
     const blocked = frame(2, teamsUrl, 'https://teams.microsoft.com')
     const loading = frame(3, '', 'https://example.com')
@@ -314,9 +315,7 @@ describe('tab identity ownership', () => {
     Object.assign(handle.guest, { mainFrame })
     // Process and routing ids map to frames the way Electron's frame registry does.
     mocks.webFrameFromIdMock.mockImplementation((_processId: number, routingId: number) =>
-      mainFrame.framesInSubtree.find(
-        (candidate) => Reflect.get(candidate, 'frameTreeNodeId') === routingId
-      )
+      mainFrame.framesInSubtree.find((candidate) => candidate.frameTreeNodeId === routingId)
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: demand keys on session identity only.
     const session = handle.guest.session as Electron.Session
@@ -327,7 +326,7 @@ describe('tab identity ownership', () => {
         }
       }
     }
-    const unloaded = (sender: object): void => {
+    const unloaded = (sender: FakeFrame): void => {
       fire(
         'ipc-message',
         { sender: handle.guest, senderFrame: sender },

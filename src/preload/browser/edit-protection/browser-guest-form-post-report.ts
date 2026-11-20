@@ -8,12 +8,12 @@ import { BROWSER_GUEST_PROTECTION_REPORT } from '../../../shared/browser/guest-l
 export function installBrowserGuestFormPostReport(port: {
   send: (channel: string, payload: unknown) => void
 }): void {
-  const lastSubmitterByForm = new WeakMap<HTMLFormElement, HTMLElement | null>()
+  const lastSubmitByForm = new WeakMap<HTMLFormElement, SubmitEvent>()
   window.addEventListener(
     'submit',
     (event) => {
       if (event.isTrusted && event.target instanceof HTMLFormElement) {
-        lastSubmitterByForm.set(event.target, event.submitter)
+        lastSubmitByForm.set(event.target, event)
       }
     },
     true
@@ -22,7 +22,7 @@ export function installBrowserGuestFormPostReport(port: {
   window.addEventListener(
     'formdata',
     (event) => {
-      const formPost = event.isTrusted ? postedFormAction(event.target, lastSubmitterByForm) : null
+      const formPost = event.isTrusted ? postedFormAction(event.target, lastSubmitByForm) : null
       if (formPost) {
         port.send(BROWSER_GUEST_PROTECTION_REPORT, { formPost })
       }
@@ -44,15 +44,22 @@ export function installBrowserGuestFormPostReport(port: {
 /** The action URL of a POST that replaces the top page; null for GET or another target. */
 function postedFormAction(
   target: EventTarget | null,
-  lastSubmitterByForm: WeakMap<HTMLFormElement, HTMLElement | null>
+  lastSubmitByForm: WeakMap<HTMLFormElement, SubmitEvent>
 ): string | null {
-  // `new FormData(form)` fires formdata too; only a submission's own entry list follows a submit.
+  // `new FormData(form)` fires formdata too. A submission builds its entry list only after its
+  // submit event finished dispatching uncancelled; a page handler's FormData runs during it.
   // (`form.submit()` fires no submit event; in the top frame the Navigation API still sees it.)
-  if (!(target instanceof HTMLFormElement) || !lastSubmitterByForm.has(target)) {
+  const submit = target instanceof HTMLFormElement ? lastSubmitByForm.get(target) : undefined
+  if (
+    !(target instanceof HTMLFormElement) ||
+    !submit ||
+    submit.eventPhase !== Event.NONE ||
+    submit.defaultPrevented
+  ) {
     return null
   }
-  const submitter = lastSubmitterByForm.get(target)
-  lastSubmitterByForm.delete(target)
+  lastSubmitByForm.delete(target)
+  const submitter = submit.submitter
   const button =
     submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
       ? submitter

@@ -2,8 +2,7 @@ import type { Session } from 'electron'
 
 // Whether a guest's requests need a header rewrite, from its page and from site iframes in it
 // (keyed by frame tree node, which survives the frame's own navigations).
-type GuestDemand = { session: Session; page: boolean; frames: ReadonlySet<number> }
-const NO_FRAMES: ReadonlySet<number> = new Set()
+type GuestDemand = { session: Session; page: boolean; frames: Set<number> }
 const guests = new Map<number, GuestDemand>()
 const demandingGuestsBySession = new Map<Session, number>()
 const watchers = new Map<Session, Set<() => void>>()
@@ -53,7 +52,8 @@ export function setBrowserGuestPageUserAgentDemand(
   frames: 'keep' | 'clear' = 'keep'
 ): void {
   const previous = guests.get(guestId)
-  const kept = frames === 'keep' && previous?.session === session ? previous.frames : NO_FRAMES
+  const kept =
+    frames === 'keep' && previous?.session === session ? previous.frames : new Set<number>()
   write(guestId, { session, page, frames: kept })
 }
 
@@ -65,17 +65,23 @@ export function setBrowserGuestFrameUserAgentDemand(
   demanding: boolean
 ): void {
   const previous = guests.get(guestId)
-  const current = previous?.session === session ? previous.frames : NO_FRAMES
-  if (current.has(frameTreeNodeId) === demanding) {
+  if (previous?.session !== session) {
+    if (demanding) {
+      write(guestId, { session, page: false, frames: new Set([frameTreeNodeId]) })
+    }
     return
   }
-  const frames = new Set(current)
+  // In place: a page with many site iframes changes one entry, not a copy of the set.
+  const before = previous.page || previous.frames.size > 0
   if (demanding) {
-    frames.add(frameTreeNodeId)
+    previous.frames.add(frameTreeNodeId)
   } else {
-    frames.delete(frameTreeNodeId)
+    previous.frames.delete(frameTreeNodeId)
   }
-  write(guestId, { session, page: previous?.session === session && previous.page, frames })
+  const after = previous.page || previous.frames.size > 0
+  if (before !== after) {
+    count(session, after ? 1 : -1)
+  }
 }
 
 export function hasBrowserGuestFrameUserAgentDemand(

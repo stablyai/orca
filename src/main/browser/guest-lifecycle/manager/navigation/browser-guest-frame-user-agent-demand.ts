@@ -9,7 +9,9 @@ import { rewritesRequestHeaders } from './browser-manager-navigation'
 
 // An unloading frame leaves the frame tree just after its pagehide.
 const REMOVAL_CHECK_DELAY_MS = 250
-const removalChecks = new Map<string, ReturnType<typeof setTimeout>>()
+// One check per guest covers every site iframe that unloaded in a burst.
+type RemovalCheck = { timer?: ReturnType<typeof setTimeout>; frames: Set<number> }
+const removalChecks = new Map<number, RemovalCheck>()
 
 function subframeRewritesRequestHeaders(url: string): boolean {
   return rewritesRequestHeaders(
@@ -65,24 +67,25 @@ export function noteBrowserGuestSubframeUnloaded(
   ) {
     return
   }
-  const key = `${guest.id}:${frameTreeNodeId}`
-  clearTimeout(removalChecks.get(key))
-  const timer = setTimeout(() => {
-    removalChecks.delete(key)
+  const pending: RemovalCheck = removalChecks.get(guest.id) ?? { frames: new Set<number>() }
+  clearTimeout(pending.timer)
+  pending.frames.add(frameTreeNodeId)
+  pending.timer = setTimeout(() => {
+    removalChecks.delete(guest.id)
     if (guest.isDestroyed()) {
       return
     }
     try {
-      const present = guest.mainFrame.framesInSubtree.some(
-        (candidate) => candidate.frameTreeNodeId === frameTreeNodeId
-      )
-      if (!present) {
-        setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, frameTreeNodeId, false)
+      const present = new Set(guest.mainFrame.framesInSubtree.map((frame) => frame.frameTreeNodeId))
+      for (const id of pending.frames) {
+        if (!present.has(id)) {
+          setBrowserGuestFrameUserAgentDemand(guest.session, guest.id, id, false)
+        }
       }
     } catch {
-      // A disposed frame tree can't prove the site iframe gone; keep the policy on.
+      // A disposed frame tree can't prove the site iframes gone; keep the policy on.
     }
   }, REMOVAL_CHECK_DELAY_MS)
-  timer.unref?.()
-  removalChecks.set(key, timer)
+  pending.timer.unref?.()
+  removalChecks.set(guest.id, pending)
 }

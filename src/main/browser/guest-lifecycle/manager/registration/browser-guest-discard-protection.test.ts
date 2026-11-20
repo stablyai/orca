@@ -433,7 +433,7 @@ it('lets a plain link to an earlier POST result be discarded', () => {
     isCurrentlyAudible: () => false
   }) as unknown as Electron.WebContents
   const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
-  const report = (payload: object): void => {
+  const report = (payload: Record<string, unknown>): void => {
     guest.emit(
       'ipc-message',
       { sender: guest, senderFrame: mainFrame },
