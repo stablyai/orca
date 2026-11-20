@@ -360,16 +360,7 @@ describe('a timed-out agy', () => {
 })
 
 describe('before anyone uses Antigravity', () => {
-  it.each<[HostAcp.AntigravityHostAcpAnswer, boolean]>([
-    ['ready', true],
-    ['signedOut', false]
-  ])('names agy that answered %s only when it is signed in, as main did', async (answer, named) => {
-    agy.answer = answer
-
-    expect((await select({ ...host(), startsProgram: false })) !== null).toBe(named)
-  })
-
-  it('reads what agy runs without starting it', async () => {
+  it('reads what agy runs without starting it, as a chat start would pin it', async () => {
     const { acpHostProgramTakesNewChats } = await import('../acp/launch/acp-launch-command')
     const { homePath, stateDirectory } = host()
     const bin = join(homePath, 'bin')
@@ -378,18 +369,48 @@ describe('before anyone uses Antigravity', () => {
     agy.login = 'absent'
     compatibility.mockClear()
 
-    await acpHostProgramTakesNewChats(
+    const takes = await acpHostProgramTakesNewChats(
       ANTIGRAVITY_LAUNCH_SPEC,
       { PATH: bin, HOME: homePath, USERPROFILE: homePath },
       stateDirectory,
       {}
     )
 
+    expect(takes).toBe(true)
     expect(compatibility).toHaveBeenCalledWith(
       expect.any(String),
       expect.anything(),
       expect.anything(),
       { start: false }
     )
+  })
+})
+
+describe("Orca's agy on a PATH an Orca terminal passed on", () => {
+  it('is never the user’s own while switched off, for new chats or launches', async () => {
+    const { rememberManagedAgentRelease } =
+      await import('../managed-agent-cli/managed-agent-cli-registry')
+    const { acpHostBackendInput, resolveAcpLaunchCommand } =
+      await import('../acp/launch/acp-launch-command')
+    const { homePath, stateDirectory } = host()
+    const release = join(stateDirectory, 'agent-runtimes', 'agy', '1.5.13')
+    mkdirSync(release, { recursive: true })
+    writeFileSync(join(release, process.platform === 'win32' ? 'agy.exe' : 'agy'), '', {
+      mode: 0o755
+    })
+    rememberManagedAgentRelease('antigravity', release)
+    const shell = { PATH: release, HOME: homePath, USERPROFILE: homePath }
+    const off = { antigravityManagedAgyEnabled: false }
+
+    const input = await acpHostBackendInput(ANTIGRAVITY_LAUNCH_SPEC, shell, stateDirectory, off)
+    const launch = () =>
+      resolveAcpLaunchCommand(ANTIGRAVITY_LAUNCH_SPEC.hostBackend.spec, shell, {
+        dataDirectory: null,
+        commandSettings: off
+      })
+
+    expect(input?.command).toBe('agy')
+    expect(launch).toThrow('not installed')
+    rememberManagedAgentRelease('antigravity', null)
   })
 })

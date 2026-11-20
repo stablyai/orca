@@ -25,6 +25,7 @@ import {
 } from '../acp/launch/acp-minimum-versions'
 import { readInheritedPath } from '../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
+import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 
 // Hermes ships only as a git checkout its installer builds with uv, so it stays the user's own install.
 export const MANAGED_AGENT_CLI_IDS = [
@@ -110,6 +111,13 @@ export function rememberManagedAgentRelease(agent: ManagedAgentCliId, folder: st
 export function managedAgentStandsInFor(agent: ManagedAgentCliId, command: string): boolean {
   const only = MANAGED_AGENT_CLIS[agent].standsInFor
   return only === undefined || only === command
+}
+
+/** Whether `path` is inside Orca's own copies of `agent`, e.g. found on a PATH an Orca terminal
+ *  passed on; such a path is never the user's own install. */
+export function isManagedAgentCopyPath(agent: string, path: string): boolean {
+  const folder = isManagedAgentCli(agent) ? installedFolders.get(agent) : undefined
+  return folder !== undefined && isPathInsideOrEqual(dirname(folder), path)
 }
 
 /** Orca's copy standing in for `command` when the user has none; null without one. Only a launch

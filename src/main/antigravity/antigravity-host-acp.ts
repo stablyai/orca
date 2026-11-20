@@ -213,14 +213,13 @@ async function askAntigravityHostAcp(
   if (sessions) {
     latestAsked = check
   }
-  const previous = cached?.answer
-  if (previous) {
-    void Promise.all([previous, check.answer]).then(([before, after]) => {
-      if (before !== after) {
-        answersChanged()
-      }
-    })
-  }
+  // A first answer or a changed one retires choices made without it.
+  const previous = cached?.answer ?? Promise.resolve(null)
+  void Promise.all([previous, check.answer]).then(([before, after]) => {
+    if (before !== after) {
+      answersChanged()
+    }
+  })
   return check.answer
 }
 

@@ -200,14 +200,11 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   hostBackend: {
     spec: ANTIGRAVITY_HOST_LAUNCH_SPEC,
     pins: isAntigravityHostAccountHome,
-    // Unasked (menus, model catalogs before anyone uses Antigravity), only a signed-in agy is named,
-    // as before Orca installed one, so nothing starts agy for a person who never opens it.
-    select: async (input) => {
-      const { agy } = await antigravityHostChatRoute(input)
-      return agy === 'signedIn' || (input.startsProgram && agy)
+    // Unasked readers (menus, catalogs) get what a chat start would pin, from earlier answers.
+    select: async (input) =>
+      (await antigravityHostChatRoute(input)).agy
         ? antigravityHostAccountHome(input.homePath)
-        : null
-    },
+        : null,
     installsManagedRuntime: async (input) =>
       (await antigravityHostChatRoute(input)).installs === 'server',
     // Installing Orca's agy, a new agy login or a changed agy answer changes the route.

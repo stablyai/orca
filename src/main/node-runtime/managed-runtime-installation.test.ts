@@ -421,4 +421,6 @@ it("doesn't keep a copy current while Orca is told not to", async () => {
 
   expect(refreshPin).not.toHaveBeenCalled()
   expect(fetcher).not.toHaveBeenCalled()
+  // So the copy offers its own Update instead.
+  expect((await installation.status(false)).updatesAutomatically).toBeUndefined()
 })

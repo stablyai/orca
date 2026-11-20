@@ -25,7 +25,10 @@ import {
   guestNativePathEnv,
   resolveGuestNativeProgram
 } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
-import { managedAgentCommandFor } from '../../managed-agent-cli/managed-agent-cli-registry'
+import {
+  isManagedAgentCopyPath,
+  managedAgentCommandFor
+} from '../../managed-agent-cli/managed-agent-cli-registry'
 
 export type StructuredAgentResolutionOperation = {
   deadline?: number
@@ -100,6 +103,16 @@ export function resolveStructuredAgentCommand(
         : null
     if (managed) {
       return { command: managed, prefixArgs: [] }
+    }
+    // Orca's copy, reached through a PATH an Orca terminal passed on, may not run either.
+    if (
+      stock.managedCopy === false &&
+      resolved !== null &&
+      isManagedAgentCopyPath(agent, resolved)
+    ) {
+      throw new AgentSessionPreSpawnError(`${command} is not installed on this host`, {
+        reason: 'cliMissing'
+      })
     }
     if (resolved === null) {
       throw new AgentSessionPreSpawnError(

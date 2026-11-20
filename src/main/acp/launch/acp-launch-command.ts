@@ -2,7 +2,10 @@
 
 import { delimiter, isAbsolute } from 'node:path'
 import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
-import { managedAgentCommandFor } from '../../managed-agent-cli/managed-agent-cli-registry'
+import {
+  isManagedAgentCopyPath,
+  managedAgentCommandFor
+} from '../../managed-agent-cli/managed-agent-cli-registry'
 import { homedir } from 'node:os'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -158,7 +161,7 @@ export async function acpHostBackendInput(
   // found on PATH (inherited from an Orca terminal) is Orca's, never the user's own.
   const managedCopy = managedAgentCommandFor(spec.agent, command, { use: false })
   const allowed = backend.spec.managedCopyAllowed?.(settings) !== false
-  const own = found !== null && found !== managedCopy ? found : null
+  const own = found !== null && !isManagedAgentCopyPath(spec.agent, found) ? found : null
   const program = own ?? (allowed ? managedCopy : null) ?? command
   return { command: program, env, envToDelete, homePath, stateDirectory, settings, startsProgram }
 }
