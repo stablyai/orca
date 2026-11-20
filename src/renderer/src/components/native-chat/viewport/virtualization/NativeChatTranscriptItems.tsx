@@ -111,8 +111,19 @@ export function NativeChatWaitingTranscriptItems({
 }): React.JSX.Element {
   return (
     <>
-      {slots.map((slot) => (
-        <NativeChatTranscriptRow key={nativeChatSlotKey(slot)} slot={slot} context={context} />
+      {slots.map((slot, index) => (
+        <NativeChatTranscriptRow
+          key={nativeChatSlotKey(slot)}
+          slot={slot}
+          context={context}
+          joinsNotesAbove={nativeChatSlotJoinsNotesAbove({
+            slot,
+            previous: slots[index - 1],
+            timedRowsAfter: context.timedRows,
+            markerKey: undefined,
+            leavesWhole: nativeChatSlotLeavesWhole(slot)
+          })}
+        />
       ))}
     </>
   )

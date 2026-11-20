@@ -23,6 +23,18 @@ export function nativeChatScrollOffsetWithin(
   return node === container ? top : null
 }
 
+/**
+ * How far a row draws above its own top: a slot that carries on a run of notes pulls up into the
+ * row gap, so the window places it a gap below the row before while its first note sits higher.
+ */
+export function nativeChatRowDrawnAbove(element: HTMLElement): number {
+  const content = element.firstElementChild
+  if (!(content instanceof HTMLElement)) {
+    return 0
+  }
+  return Math.max(0, element.getBoundingClientRect().top - content.getBoundingClientRect().top)
+}
+
 export type NativeChatAlignEdge = 'start' | 'end'
 
 /** Fallback when layout provides no offset-parent chain. */
@@ -80,8 +92,10 @@ export function useNativeChatViewportAlign({
       }
       finishReaderTakeover()
       const index = Number.parseInt(element.dataset.index ?? '', 10)
+      // A row drawn above its own top lands by what it draws, so its first line stays in view.
+      const drawnAbove = edge === 'start' ? nativeChatRowDrawnAbove(element) : 0
       // Use the virtualizer to replace its pending jump reconciliation instead of racing it.
-      if (virtualizer.scrollElement && !Number.isNaN(index)) {
+      if (virtualizer.scrollElement && !Number.isNaN(index) && drawnAbove === 0) {
         // Target the row's index so measurements can correct its landing offset.
         alignRef.current = {
           index,
@@ -93,7 +107,8 @@ export function useNativeChatViewportAlign({
         return
       }
       const start =
-        nativeChatScrollOffsetWithin(element, container) ?? rectOffsetWithin(element, container)
+        (nativeChatScrollOffsetWithin(element, container) ?? rectOffsetWithin(element, container)) -
+        drawnAbove
       const top =
         edge === 'end' ? Math.max(0, start + element.offsetHeight - container.clientHeight) : start
       alignRef.current = { offset: top, arrived: false }
