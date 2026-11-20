@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserGrabPayload } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 
 /** Revalidate the original pick before acting, including the gap before a route-removal report arrives. */
@@ -8,6 +8,7 @@ export function useHeldGrabAction(
   payload: BrowserGrabPayload | null,
   pageId: string
 ): (action: () => void) => void {
+  const t = useTranslate()
   const livePayloadRef = useRef(payload)
   useLayoutEffect(() => {
     livePayloadRef.current = payload
@@ -29,7 +30,7 @@ export function useHeldGrabAction(
           }
           if (present !== true) {
             if (present === null) {
-              toast.error(translate('components.ui.dialog.tryAgain', 'Try again'))
+              toast.error(t('components.ui.dialog.tryAgain', 'Try again'))
             }
             return
           }
@@ -37,7 +38,7 @@ export function useHeldGrabAction(
         },
         () => {
           if (livePayloadRef.current === payload) {
-            toast.error(translate('components.ui.dialog.tryAgain', 'Try again'))
+            toast.error(t('components.ui.dialog.tryAgain', 'Try again'))
           }
         }
       )

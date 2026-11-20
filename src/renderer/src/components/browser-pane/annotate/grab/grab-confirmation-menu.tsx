@@ -1,4 +1,4 @@
-import type { MutableRefObject, RefObject } from 'react'
+import { useLayoutEffect, useState, type MutableRefObject, type RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
 import {
   DropdownMenu,
@@ -30,6 +30,19 @@ export function GrabConfirmationMenu({
   onScreenshot: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const [position, setPosition] = useState({ left: 0, top: 0 })
+  useLayoutEffect(() => {
+    if (!payload) {
+      return
+    }
+    const rect = payload.target.rectViewport
+    const webviewRect = webviewRef.current?.getBoundingClientRect()
+    const containerRect = containerRef.current?.getBoundingClientRect()
+    setPosition({
+      left: (webviewRect?.left ?? 0) - (containerRect?.left ?? 0) + rect.x + rect.width / 2,
+      top: (webviewRect?.top ?? 0) - (containerRect?.top ?? 0) + rect.y + rect.height / 2
+    })
+  }, [payload, webviewRef, containerRef])
   return (
     <DropdownMenu
       open={grab.state === 'confirming' && grab.contextMenu && payload !== null}
@@ -49,21 +62,7 @@ export function GrabConfirmationMenu({
           aria-hidden
           tabIndex={-1}
           className="pointer-events-none absolute size-px opacity-0"
-          style={(() => {
-            if (!payload) {
-              return { left: 0, top: 0 }
-            }
-            const rect = payload.target.rectViewport
-            const webview = webviewRef.current
-            const webviewRect = webview?.getBoundingClientRect()
-            const cRect = containerRef.current?.getBoundingClientRect()
-            const offsetX = (webviewRect?.left ?? 0) - (cRect?.left ?? 0)
-            const offsetY = (webviewRect?.top ?? 0) - (cRect?.top ?? 0)
-            return {
-              left: offsetX + rect.x + rect.width / 2,
-              top: offsetY + rect.y + rect.height / 2
-            }
-          })()}
+          style={position}
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" sideOffset={4}>

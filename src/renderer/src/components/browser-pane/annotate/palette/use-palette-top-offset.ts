@@ -1,3 +1,4 @@
+import { widestPaletteWidth } from './palette-focus-and-fit'
 import { useLayoutEffect, useState, type RefObject } from 'react'
 
 export const BROWSER_FIND_BAR_ATTRIBUTE = 'data-browser-find-bar'
@@ -6,6 +7,7 @@ const PALETTE_TOP_PX = 8
 function observePaletteFindGeometry(
   bounds: HTMLElement,
   palette: HTMLElement,
+  labelProbe: HTMLElement,
   updateTop: (top: number) => void
 ): () => void {
   const measure = (): void => {
@@ -17,12 +19,14 @@ function observePaletteFindGeometry(
     const boundsRect = bounds.getBoundingClientRect()
     const findRect = findBar.getBoundingClientRect()
     const paletteRect = palette.getBoundingClientRect()
-    const overlaps = paletteRect.left < findRect.right && paletteRect.right > findRect.left
+    const overlaps =
+      paletteRect.left < findRect.right &&
+      paletteRect.left + widestPaletteWidth(bounds, labelProbe) > findRect.left
     updateTop(overlaps ? findRect.bottom - boundsRect.top + PALETTE_TOP_PX : PALETTE_TOP_PX)
   }
   const resize = new ResizeObserver(measure)
   resize.observe(bounds)
-  resize.observe(palette)
+  resize.observe(labelProbe)
   const styles = new MutationObserver(measure)
   let observedFind: HTMLElement | null | undefined
   const refresh = (): void => {
@@ -55,15 +59,17 @@ function observePaletteFindGeometry(
 export function usePaletteTopOffset(
   bounds: HTMLElement | null,
   paletteRef: RefObject<HTMLElement | null>,
+  labelProbeRef: RefObject<HTMLElement | null>,
   left: number | null
 ): number {
   const [top, setTop] = useState(PALETTE_TOP_PX)
   useLayoutEffect(() => {
     const palette = paletteRef.current
-    if (!bounds || !palette) {
+    const labelProbe = labelProbeRef.current
+    if (!bounds || !palette || !labelProbe) {
       return
     }
-    return observePaletteFindGeometry(bounds, palette, setTop)
-  }, [bounds, left, paletteRef])
+    return observePaletteFindGeometry(bounds, palette, labelProbe, setTop)
+  }, [bounds, left, paletteRef, labelProbeRef])
   return top
 }

@@ -130,7 +130,7 @@ export function BrowserAnnotateToolPalette({
     onRatioChange: setAnnotatePaletteRatio
   })
   const seeThrough = useHoldAltSeeThrough(pageId)
-  const top = usePaletteTopOffset(bounds, paletteRef, left)
+  const top = usePaletteTopOffset(bounds, paletteRef, labelProbeRef, left)
 
   const options: ToolOption[] = [
     {

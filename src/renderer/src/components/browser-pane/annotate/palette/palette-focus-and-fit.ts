@@ -11,6 +11,13 @@ export const BROWSER_ANNOTATE_BUTTON_ATTRIBUTE = 'data-browser-annotate-button'
  */
 const WIDEST_TOOL_RESERVE_PX = 360
 
+export function widestPaletteWidth(bounds: HTMLElement, labelProbe: HTMLElement): number {
+  return Math.min(
+    bounds.clientWidth - PALETTE_EDGE_INSET_PX * 2,
+    labelProbe.offsetWidth + WIDEST_TOOL_RESERVE_PX
+  )
+}
+
 export function isEditableFocus(element: HTMLElement): boolean {
   return (
     element instanceof HTMLInputElement ||
