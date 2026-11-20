@@ -70,7 +70,9 @@ export function createServerSession({
     } else if (method === 'workspace/didChangeConfiguration') {
       configuration = message
     } else if (method === 'workspace/didChangeWorkspaceFolders') {
-      folders ??= new Map()
+      folders ??= new Map(
+        (initialize?.params?.workspaceFolders ?? []).map((folder) => [folder.uri, folder])
+      )
       for (const { uri } of params?.event?.removed ?? []) {
         folders.delete(uri)
       }
