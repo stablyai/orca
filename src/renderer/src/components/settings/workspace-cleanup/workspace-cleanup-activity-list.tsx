@@ -18,7 +18,7 @@ import {
   TriangleAlert,
   type LucideIcon
 } from 'lucide-react'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
 import type {
@@ -100,6 +100,7 @@ function ActivityRun({
   onToggle: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const removed = run.rows.filter((row) => row.outcome === 'removed' || row.outcome === 'archived')
   const kept = run.rows.filter((row) => row.outcome === 'kept')
   const failed = run.rows.filter((row) => row.outcome === 'failed')
@@ -122,12 +123,15 @@ function ActivityRun({
         )
       : null
   ].filter((part): part is string => part !== null)
-  const when = uiDateTimeFormat({
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(run.startedAt)
+  const when = uiDateTimeFormat(
+    {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    },
+    intlLocale
+  ).format(run.startedAt)
   const Chevron = open ? ChevronDown : ChevronRight
 
   return (
