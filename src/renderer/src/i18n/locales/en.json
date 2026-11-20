@@ -27548,9 +27548,9 @@
         "resultsComing": "Results appear when they load.",
         "readEarlier": "Repo list from {{time}}. Restart Orca to refresh.",
         "notInEarlierList": "Not in the earlier list",
-        "unavailableRemote": "Couldn’t read repos. Check gh sign-in, then restart the bot’s Orca.",
-        "unavailable": "Couldn’t read repos. Check gh sign-in, then restart Orca.",
-        "readEarlierRemote": "Repo list from {{time}}. Restart the bot’s Orca to refresh.",
+        "unavailableRemote": "Couldn’t read repos. Check the bot’s computer.",
+        "unavailable": "Couldn’t read repos. Check gh, restart Orca.",
+        "readEarlierRemote": "Repo list from {{time}}. Restart the bot’s Orca.",
         "fromEarlierList": "From an earlier repo list"
       },
       "connection": {
