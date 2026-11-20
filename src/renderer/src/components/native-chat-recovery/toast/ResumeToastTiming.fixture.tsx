@@ -53,8 +53,11 @@ function Report(): React.JSX.Element {
 
 function Timing(): React.JSX.Element {
   useEffect(() => {
-    toast.custom(() => <Report />, { id, duration: Infinity, unstyled: true })
+    const timer = setTimeout(() => {
+      toast.custom(() => <Report />, { id, duration: Infinity, unstyled: true })
+    }, 50)
     return () => {
+      clearTimeout(timer)
       toast.dismiss(id)
     }
   }, [])
