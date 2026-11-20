@@ -15,7 +15,7 @@ when requesting a child of the current workspace.
 
 ```text
 # Child of the current worktree.
-ORCA orchestration worker-start --task <task_id> --worktree new-child --agent <agent> --setup run
+ORCA orchestration worker-start --environment local --task <task_id> --worktree new-child --agent <agent> --setup run
 
 # On a connected server, nested under your workspace; the Run stays on yours.
 ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-child --repo id:<repoId> --name <name> --agent <agent> --setup run
@@ -95,8 +95,8 @@ worker, do not pass `--on`: ask your coordinator to place it.
    - Your Run already placed this project, that machine and repo are still
      usable, and this machine has not become usable since: use the same
      machine and repo.
-   - Usable on this machine: stay here, with no `--on`. Add
-     `--environment local` to the start.
+   - Usable on this machine: stay here, with `--environment local` and no
+     `--on`.
    - Registered on this machine but not usable: stop and tell the user. Do not
      move it to a server.
    - Usable on exactly one paired server: start there with `--on`; do not wait
@@ -121,7 +121,9 @@ worker, do not pass `--on`: ask your coordinator to place it.
    with several usable rows there, use the one whose `path` or `displayName`
    the user named, else ask. To work in an existing workspace instead, pass
    its exact worktree selector, or `current` for your own on this machine, and
-   omit `--repo`: creation flags are refused there.
+   omit `--repo`: creation flags are refused there. Every start here carries
+   `--environment local`, whichever line chose this machine; every start on a
+   server carries `--on`.
 
 5. Record it. For a new Task (`--spec`), write the task first, because the
    spec's first line becomes its title, then end the spec with a line of its

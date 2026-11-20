@@ -32,8 +32,13 @@ argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 sca
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent <agent>
+ORCA orchestration worker-start --environment local --spec "<task>" --worktree current --agent <agent>
 ```
+
+`--environment local` keeps the start on this machine whatever
+`ORCA_ENVIRONMENT` or a pairing code in your shell selects. Put it on every
+start you mean to run here; a start on a paired server takes `--on <server>`
+instead.
 
 `<agent>` is an Orca agent id: one the user named, else the agent you are
 running as when the worker shares your execution host. Otherwise, such as a
