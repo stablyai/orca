@@ -18,7 +18,7 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import { readTerminalPs } from '../../pty/process-retirement/terminal-process-rows'
+import { runPsInProcess } from '../../../shared/process-observation/darwin/libproc-process-table'
 import {
   steadyPollJudgesByJobMembership,
   type PtyProcessInspectionOptions
@@ -31,6 +31,8 @@ export type TerminalHostProcessInspection = {
   childProcessEvidence?: PtyChildProcessVerdict
   foregroundProcessEvidence?: RemoteForegroundEvidence
 }
+
+const IDLE_SHELL_READ_TIMEOUT_MS = 1_000
 
 type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
 
@@ -216,11 +218,14 @@ async function readIdleShellForeground(session: Session): Promise<string | null>
   if (!session.shellIsRootChild) {
     return group === session.pid ? name : null
   }
-  // login(1) wraps the shell: the group leader must be the root's own shell child, read by its pid alone.
-  const row = (await readTerminalPs(['-o', 'pid=,ppid=,pgid=', '-p', String(group)]))
-    ?.trim()
-    .split(/\s+/)
-    .map(Number)
+  // login(1) wraps the shell: one in-process read of the group leader; never a per-pane ps when the reader is down.
+  const read = await runPsInProcess(['-o', 'pid=,ppid=,pgid=', '-p', String(group)], {
+    timeoutMs: IDLE_SHELL_READ_TIMEOUT_MS,
+    background: true,
+    callerRunsPs: true
+  })
+  const row =
+    read?.code === 0 && !read.timedOut ? read.stdout.trim().split(/\s+/).map(Number) : null
   return row?.length === 3 && row[0] === group && row[1] === session.pid && row[2] === group
     ? name
     : null
