@@ -56,6 +56,8 @@ export function selectOrchestrationPointerBatch(input: {
   reservedTypes: ReadonlySet<string> | undefined
   /** A terminal's own mailbox leaves rows a Run owns undelivered for routing to move. */
   excludeRunOwnedDirect?: boolean
+  /** A Run's coordinator reaches only direct rows its Runs own; routing never moves the rest. */
+  onlyRunOwnedDirect?: boolean
 }): OrchestrationPointerBatch {
   if (hasUnfilteredOrchestrationWaiter(input.waiters)) {
     return { messages: [], heldDeliveryId: undefined }
@@ -72,6 +74,7 @@ export function selectOrchestrationPointerBatch(input: {
       excludeTypes: [...excludedTypes],
       excludeIds: held?.messageIds,
       excludeRunOwnedDirect: input.excludeRunOwnedDirect,
+      onlyRunOwnedDirect: input.onlyRunOwnedDirect,
       limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
     }),
     heldDeliveryId: held?.id

@@ -29,12 +29,9 @@ export type MailboxForegroundInspection = {
   foreground: MailboxForeground
   agent?: TuiAgent
   process?: MailboxAgentProcess
-  /** This host can never name an agent in front, so an agent's return can only show on screen. */
+  /** This host can never name an agent in front, so an agent's return can only show on screen and in status. */
   agentUnprovable?: boolean
 }
-
-/** Set when a completed read showed something other than a shell on a host that can never name an agent. */
-type MailboxRead = { agentUnprovable?: boolean }
 
 /** Set when the read's own fresh, fenced observation named exactly the agent asked about. */
 export type ExactAgentName = { named: boolean }
@@ -109,7 +106,7 @@ async function inspectLaunchedAgentForeground(
   agent?: TuiAgent,
   expectedIncarnationId?: string,
   exact?: ExactAgentName,
-  mailboxEvidence: false | MailboxRead = false,
+  mailboxEvidence = false,
   onAgent?: (agent: TuiAgent, process?: MailboxAgentProcess) => void,
   adoptedRootPid?: number | null
 ): Promise<MailboxForeground> {
@@ -132,11 +129,7 @@ async function inspectLaunchedAgentForeground(
   try {
     if (host.windows) {
       // Windows SSH relays lack even the shell-alone check.
-      const alone = await controller.confirmShellForeground?.(ptyId)
-      if (mailboxEvidence && alone === false) {
-        mailboxEvidence.agentUnprovable = true
-      }
-      return alone ? 'shell' : 'unknown'
+      return (await controller.confirmShellForeground?.(ptyId)) ? 'shell' : 'unknown'
     }
     if (controller.supportsForegroundObservation?.(ptyId)) {
       const result = await controller.inspectProcess?.(ptyId, {
@@ -269,9 +262,6 @@ async function inspectLaunchedAgentForeground(
     }
     // Legacy: relays that send no evidence (older versions) keep the possibly cached name.
     if (!evidence) {
-      if (mailboxEvidence) {
-        mailboxEvidence.agentUnprovable = true
-      }
       return mailboxEvidence ? 'unknown' : 'agent'
     }
     if (!completable) {
@@ -317,7 +307,6 @@ export async function readMailboxForeground(
 ): Promise<MailboxForegroundInspection> {
   let agent: TuiAgent | undefined
   let process: MailboxAgentProcess | undefined
-  const read: MailboxRead = {}
   const foreground = await inspectLaunchedAgentForeground(
     controller,
     host,
@@ -325,7 +314,7 @@ export async function readMailboxForeground(
     expected,
     expectedIncarnationId,
     undefined,
-    read,
+    true,
     (value, row) => {
       agent = value
       process = row
@@ -335,7 +324,6 @@ export async function readMailboxForeground(
   if (foreground === 'agent') {
     return { foreground, agent: agent ?? expected, ...(process ? { process } : {}) }
   }
-  return foreground === 'unknown' && read.agentUnprovable
-    ? { foreground, agentUnprovable: true }
-    : { foreground }
+  // Why: Windows can neither name an agent nor suspend one behind another program, so it never holds mail.
+  return host.windows ? { foreground, agentUnprovable: true } : { foreground }
 }

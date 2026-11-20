@@ -139,9 +139,7 @@ export function submitOrchestrationMailboxPointer(
       // Why: a host that can never name an agent leaves recovery to live status, readiness and the composer.
       const agentInFront =
         foreground.foreground === 'agent' ||
-        (foreground.foreground === 'unknown' &&
-          !!foreground.agentUnprovable &&
-          deps.state.foreground.agentReportedSinceHold(input.ptyId))
+        (foreground.foreground === 'unknown' && !!foreground.agentUnprovable)
       const target = deps.resolveSubmitTarget(
         input.ptyId,
         isRecovering() && !agentInFront ? undefined : foreground.foreground,

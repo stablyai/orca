@@ -18,8 +18,6 @@ type ForegroundObservation = {
   status?: string
   /** The admitted agent's process; while held, only that process returning releases the hold. */
   agentProcess?: MailboxAgentProcess
-  /** The agent's own hook reported after the hold began, which a shell or failed read cannot fake. */
-  agentReportedSinceHold?: boolean
 }
 
 export type OrchestrationMailboxForegroundObservation = {
@@ -118,8 +116,7 @@ export class MailboxForegroundEvidence {
     // Why non-shell too: a known other program in front would read the pointer as its own input.
     if (foreground === 'shell' || foreground === 'non-shell') {
       // TODO(STA-16313): record the suspended agent's process here when no earlier probe named it.
-      observation.held = true
-      observation.agentReportedSinceHold = false
+      observation.held = !proof.agentUnprovable
       observation.screenRequired = true
       observation.contradiction++
     } else if (foreground === 'agent' && admitted) {
@@ -131,13 +128,6 @@ export class MailboxForegroundEvidence {
       }
       observation.held = false
       observation.agentProcess = proof.heldAgentGone ? proof.process : (proof.process ?? known)
-    } else if (
-      foreground === 'unknown' &&
-      proof.agentUnprovable &&
-      observation.agentReportedSinceHold
-    ) {
-      // Why: a host that can never name the agent back hands the hold to the screen check completeDelivery awaits.
-      observation.held = false
     }
     if (wasHeld && !observation.held) {
       this.onRecovery(ptyId)
@@ -165,14 +155,10 @@ export class MailboxForegroundEvidence {
     }
   }
 
-  observeTerminal(ptyId: string, status?: string, fromAgentHook = false): boolean {
+  observeTerminal(ptyId: string, status?: string): boolean {
     const observation = this.foregroundObservations.get(ptyId)
     if (!observation) {
       return false
-    }
-    const reported = fromAgentHook && observation.held && !observation.agentReportedSinceHold
-    if (reported) {
-      observation.agentReportedSinceHold = true
     }
     observation.generation++
     if (status === 'done') {
@@ -182,12 +168,7 @@ export class MailboxForegroundEvidence {
     if (status !== undefined) {
       observation.status = status
     }
-    return observation.held && (changed || reported)
-  }
-
-  /** Whether a host that cannot name an agent has heard from the agent itself since mail was held. */
-  agentReportedSinceHold(ptyId: string): boolean {
-    return this.foregroundObservations.get(ptyId)?.agentReportedSinceHold === true
+    return observation.held && changed
   }
 
   private async heldAgentGone(ptyId: string, found?: MailboxAgentProcess): Promise<boolean> {

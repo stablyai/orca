@@ -59,8 +59,7 @@ export class OrchestrationMailboxNotificationCoordinator<
         return true
       }
       const owned = this.deps.mailboxOwner.resolveAll(terminal, { routeDirectMail: false })
-      // Why only what delivery visits: mail it never reaches (e.g. pre-Run direct mail) must not arm retries.
-      const handles = [...new Set([...owned, ...this.deps.mailboxOwner.resolveAll(terminal)])]
+      const handles = [...new Set([...owned, terminal.handle])]
       const owed = handles.some((mailboxHandle) => {
         const waiters = this.deps.getMessageWaiters(mailboxHandle)
         return (
@@ -74,7 +73,9 @@ export class OrchestrationMailboxNotificationCoordinator<
               mailboxHandle,
               waiters,
               reservedTypes: undefined,
-              excludeRunOwnedDirect: owned[0] === terminal.handle
+              excludeRunOwnedDirect: owned[0] === terminal.handle,
+              // Why: a Run's coordinator never routes pre-Run direct mail, so it must not arm retries.
+              onlyRunOwnedDirect: mailboxHandle === terminal.handle && owned[0] !== terminal.handle
             }).messages.length > 0)
         )
       })

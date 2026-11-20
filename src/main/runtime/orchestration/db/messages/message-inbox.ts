@@ -69,6 +69,7 @@ export function getUndeliveredUnreadMessages(
     excludeTypes?: readonly string[]
     excludeIds?: readonly string[]
     excludeRunOwnedDirect?: boolean
+    onlyRunOwnedDirect?: boolean
     limit?: number
   }
 ): MessageRow[] {
@@ -78,7 +79,8 @@ export function getUndeliveredUnreadMessages(
     'delivered_at IS NULL',
     'pointer_enter_pending = 0',
     "delivery_contract = 'current_delivery'",
-    ...(options?.excludeRunOwnedDirect ? [`NOT ${runOwnsDirectMessageSql('messages')}`] : [])
+    ...(options?.excludeRunOwnedDirect ? [`NOT ${runOwnsDirectMessageSql('messages')}`] : []),
+    ...(options?.onlyRunOwnedDirect ? [runOwnsDirectMessageSql('messages')] : [])
   ]
   const params: (string | number)[] = [toHandle]
   if (types?.length) {

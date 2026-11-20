@@ -35,100 +35,86 @@ describe('owed mailbox foreground revalidation', () => {
     }
   })
 
-  it.each(['posix', 'windows'] as const)(
-    'keeps a proven shell held through unavailable %s reads, then recovers on affirmative evidence',
-    async (host) => {
-      vi.useFakeTimers()
-      const platform = process.platform
-      if (host === 'windows') {
-        Object.defineProperty(process, 'platform', { value: 'win32' })
+  // Windows never holds: it can neither name an agent nor suspend one behind another program.
+  it('keeps a proven shell held through unavailable reads, then recovers on affirmative evidence', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-mail-unknown-')
+    const { runtime } = await createRuntime(db)
+    const write = vi.fn((_ptyId: string, data: string) => {
+      if (data !== '\r') {
+        runtime.onPtyData(PTY_ID, `\x1b[37;3H\x1b[0m\x1b[K${data.trim()}\x1b[37;3H`, Date.now())
       }
-      const db = createDatabase('orca-mail-unknown-')
-      const { runtime } = await createRuntime(db)
-      const write = vi.fn((_ptyId: string, data: string) => {
-        if (data !== '\r') {
-          runtime.onPtyData(PTY_ID, `\x1b[37;3H\x1b[0m\x1b[K${data.trim()}\x1b[37;3H`, Date.now())
+      return true
+    })
+    let mode: 'shell' | 'failed' | 'agent' = 'shell'
+    let inspections = 0
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: vi.fn(),
+      // Wide enough that the echoed pointer stays on the composer row.
+      getSize: () => ({ cols: 200, rows: 40 }),
+      getForegroundProcess: async () => 'codex',
+      supportsForegroundObservation: () => true,
+      inspectProcess: async () => {
+        inspections++
+        if (mode === 'failed') {
+          throw new Error('inspection unavailable')
         }
-        return true
-      })
-      let mode: 'shell' | 'failed' | 'agent' = 'shell'
-      let inspections = 0
-      runtime.setPtyController({
-        write,
-        writeWithSettlement: settledWriteStub(write),
-        kill: vi.fn(),
-        // Wide enough that the echoed pointer stays on the composer row.
-        getSize: () => ({ cols: 200, rows: 40 }),
-        getForegroundProcess: async () => 'codex',
-        confirmShellForeground: async () => {
-          inspections++
-          return mode === 'shell'
-        },
-        supportsForegroundObservation: () => true,
-        inspectProcess: async () => {
-          inspections++
-          if (mode === 'failed') {
-            throw new Error('inspection unavailable')
-          }
-          return {
-            foregroundProcess: mode === 'shell' ? 'zsh' : 'codex',
-            hasChildProcesses: mode !== 'shell',
-            foregroundObservation: {
-              ptyId: PTY_ID,
-              ptyIncarnationId: 'mailbox-incarnation',
-              authorityGeneration: 'test',
-              observationEpoch: 1,
-              capturedAgeMs: 0,
-              verdict: 'observed',
-              source: 'pty-master',
-              foregroundKind: mode === 'shell' ? 'shell' : 'non-shell',
-              processName: mode === 'shell' ? 'zsh' : 'codex'
-            }
+        return {
+          foregroundProcess: mode === 'shell' ? 'zsh' : 'codex',
+          hasChildProcesses: mode !== 'shell',
+          foregroundObservation: {
+            ptyId: PTY_ID,
+            ptyIncarnationId: 'mailbox-incarnation',
+            authorityGeneration: 'test',
+            observationEpoch: 1,
+            capturedAgeMs: 0,
+            verdict: 'observed',
+            source: 'pty-master',
+            foregroundKind: mode === 'shell' ? 'shell' : 'non-shell',
+            processName: mode === 'shell' ? 'zsh' : 'codex'
           }
         }
-      })
-      try {
-        const run = createBoundRun(db, 'Unknown is not a return')
-        await driveToLiveIdle(runtime)
-        runtime.onPtyData(
-          PTY_ID,
-          `${readRuntimeFixture('codex-0157-plain-ready')}\x1b]0;Codex done\x07`,
-          Date.now()
-        )
-        const message = insertDirectRunMessage(db, run.id, 'Waiting mail')
-        runtime.notifyMessageArrived(`run:${run.id}`, 'status')
-        await vi.advanceTimersByTimeAsync(1000)
-        expect(write).not.toHaveBeenCalled()
-        mode = 'failed'
-        await vi.advanceTimersByTimeAsync(20000)
-        expect(inspections).toBeGreaterThan(1)
-        expect(write).not.toHaveBeenCalled()
-        expect(db.getMessageById(message.id)).toMatchObject({ read: 0, delivered_at: null })
-        expect(await runtime.readTerminalMailHold(`run:${run.id}`)).toMatchObject({
-          kind: 'not-live'
-        })
-        if (host === 'windows') {
-          Object.defineProperty(process, 'platform', { value: platform })
-        }
-        mode = 'agent'
-        await vi.advanceTimersByTimeAsync(65000)
-        expect(write.mock.calls.map(([, data]) => data)).toEqual([
-          expect.stringContaining('You have 1 orchestration message'),
-          '\r'
-        ])
-        expect(db.getMessageById(message.id)).toMatchObject({
-          read: 0,
-          delivered_at: expect.any(String),
-          pointer_enter_pending: 0
-        })
-        await vi.advanceTimersByTimeAsync(65000)
-        expect(write).toHaveBeenCalledTimes(2)
-      } finally {
-        Object.defineProperty(process, 'platform', { value: platform })
-        db.close()
       }
+    })
+    try {
+      const run = createBoundRun(db, 'Unknown is not a return')
+      await driveToLiveIdle(runtime)
+      runtime.onPtyData(
+        PTY_ID,
+        `${readRuntimeFixture('codex-0157-plain-ready')}\x1b]0;Codex done\x07`,
+        Date.now()
+      )
+      const message = insertDirectRunMessage(db, run.id, 'Waiting mail')
+      runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(write).not.toHaveBeenCalled()
+      mode = 'failed'
+      await vi.advanceTimersByTimeAsync(20000)
+      expect(inspections).toBeGreaterThan(1)
+      expect(write).not.toHaveBeenCalled()
+      expect(db.getMessageById(message.id)).toMatchObject({ read: 0, delivered_at: null })
+      expect(await runtime.readTerminalMailHold(`run:${run.id}`)).toMatchObject({
+        kind: 'not-live'
+      })
+      mode = 'agent'
+      await vi.advanceTimersByTimeAsync(65000)
+      expect(write.mock.calls.map(([, data]) => data)).toEqual([
+        expect.stringContaining('You have 1 orchestration message'),
+        '\r'
+      ])
+      expect(db.getMessageById(message.id)).toMatchObject({
+        read: 0,
+        delivered_at: expect.any(String),
+        pointer_enter_pending: 0
+      })
+      await vi.advanceTimersByTimeAsync(65000)
+      expect(write).toHaveBeenCalledTimes(2)
+    } finally {
+      db.close()
     }
-  )
+  })
 
   it('converges delivery, receipt and Enter while compatible observations overlap slow inspections', async () => {
     vi.useFakeTimers()
