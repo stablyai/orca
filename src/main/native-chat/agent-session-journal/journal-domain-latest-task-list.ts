@@ -11,15 +11,21 @@ const NEWEST_TOOL_CALLS = 300
  *  from that turn's newest task-list call, never an earlier turn's. Read it when that newest call is
  *  the running turn's; a turn that has run no tool yet still answers with the turn before it. */
 export function readJournalDomainLatestTaskList(scope: JournalSqlScope): NativeChatTaskList | null {
-  // Only the call's name and input are read, never its output (which may be stored apart from the row).
+  // Only the call's name and input are read, never its output (which may be stored apart from the
+  // row); rows are stepped one at a time, so the search stops at the newest plan or turn boundary.
   const rows = scope.db
     .prepare(`SELECT payload_json->>'$.body.name' AS name, payload_json->'$.body.input' AS input,
       turn_item_id FROM journal_items
     WHERE session_id=? AND epoch=? AND hidden=0 AND root=1 AND kind='tool-call'
     ORDER BY sequence DESC,sequence_index DESC,ordinal DESC LIMIT ?`)
-    .all(...scope.prefix, NEWEST_TOOL_CALLS)
-  const turn = rows[0]?.turn_item_id
+    .iterate(...scope.prefix, NEWEST_TOOL_CALLS)
+  let turn: unknown
+  let first = true
   for (const row of rows) {
+    if (first) {
+      turn = row.turn_item_id
+      first = false
+    }
     if (row.turn_item_id !== turn) {
       return null
     }

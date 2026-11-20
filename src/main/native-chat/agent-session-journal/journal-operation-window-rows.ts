@@ -7,8 +7,9 @@ import { journalStoredTextBytesSql } from './journal-stored-output-rows'
 
 // A Diff call's patch, and so the files it edited, is its output: that one is kept. The stored
 // marker goes too, or decoding would read the saved output back in.
-const WITHOUT_TOOL_OUTPUT = `CASE WHEN kind='tool-call' AND json_valid(payload_json)
-  AND json_extract(payload_json,'$.body.name') IS NOT 'Diff'
+const DROPS_TOOL_OUTPUT = `kind='tool-call' AND json_valid(payload_json)
+  AND json_extract(payload_json,'$.body.name') IS NOT 'Diff'`
+const WITHOUT_TOOL_OUTPUT = `CASE WHEN ${DROPS_TOOL_OUTPUT}
   THEN json_remove(json_replace(payload_json,'$.body.output.head','','$.body.output.truncated',json('true')),
     '$.body.output.stored')
   ELSE payload_json END`
@@ -111,11 +112,16 @@ export function readOperationWindowItems(
     ? `CASE WHEN item_id IN (SELECT value FROM json_each(?))
         THEN COALESCE(${shortened}, ${projected}) ELSE ${projected} END`
     : projected
+  // Only rows that still carry a stored marker read their blob; a dropped or cut output needs none.
+  const blob = `CASE WHEN output_blob IS NULL${anchors.withoutToolOutput ? ` OR (${DROPS_TOOL_OUTPUT})` : ''}${
+    cut.length ? ' OR item_id IN (SELECT value FROM json_each(?))' : ''
+  } THEN NULL ELSE output_blob END`
+  const cutIds = cut.length ? [JSON.stringify(cut)] : []
   return scope.db
     .prepare(
-      `SELECT ${value} AS payload_json, output_blob ${rows} ORDER BY sequence,sequence_index,ordinal`
+      `SELECT ${value} AS payload_json, ${blob} AS output_blob ${rows} ORDER BY sequence,sequence_index,ordinal`
     )
-    .all(...(cut.length ? [JSON.stringify(cut)] : []), ...scope.prefix, start)
+    .all(...cutIds, ...cutIds, ...scope.prefix, start)
     .map((row) => {
       const read = scope.examined(row)
       return scope.decode<AgentJournalRenderItem>(read.payload_json, read.output_blob)
