@@ -6,7 +6,8 @@ import {
   type AgentPaneThreadsStoreData
 } from './use-agent-pane-thread-store-data'
 import {
-  getActivityThreadSnapshot,
+  getActivityThreadInputs,
+  readActivityThreadSnapshot,
   subscribeActivityThreads,
   type ActivityThreadSnapshot
 } from './activity-thread-projection'
@@ -43,8 +44,9 @@ export function useAllAgentPaneThreads({
     (listener: () => void) => subscribeActivityThreads(mode, listener),
     [mode]
   )
-  const getSnapshot = useCallback(() => getActivityThreadSnapshot(mode), [mode])
-  return useSyncExternalStore(subscribe, getSnapshot)
+  const getInputs = useCallback(() => getActivityThreadInputs(mode), [mode])
+  const inputs = useSyncExternalStore(subscribe, getInputs)
+  return readActivityThreadSnapshot(mode, inputs)
 }
 
 /** Shared Activity/sidebar pipeline: store data to events, threads, filters and groups. */

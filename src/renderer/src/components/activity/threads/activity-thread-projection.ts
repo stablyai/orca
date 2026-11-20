@@ -35,8 +35,8 @@ export type ActivityThreadSnapshot = {
   allThreads: AgentPaneThread[]
 }
 
-type ProjectionInputs = {
-  state: AppState
+/** What a build reads; its identity changes only when one of these does, so React compares it cheaply. */
+export type ActivityThreadInputs = {
   storeData: AllAgentPaneThreadsStoreData
   /** Freshness expiry changes output without a store write. */
   agentStatusEpoch: number
@@ -75,11 +75,15 @@ const threadProjections: Record<ActivityThreadMode, ThreadProjection> = {
 }
 const snapshots: Record<
   ActivityThreadMode,
-  { inputs: ProjectionInputs; snapshot: ActivityThreadSnapshot } | null
+  { inputs: ActivityThreadInputs; snapshot: ActivityThreadSnapshot } | null
 > = { all: null, live: null }
 const eventBuildCache = createActivityEventBuildCache()
-let eventsProjection: { inputs: ProjectionInputs; build: ActivityEventsBuild } | null = null
-let currentInputs: ProjectionInputs | null = null
+let eventsProjection: { inputs: ActivityThreadInputs; build: ActivityEventsBuild } | null = null
+let currentInputs: ActivityThreadInputs | null = null
+// Kept apart from the inputs so a cached build never holds the whole store (drafts, buffers) alive.
+let currentState: AppState | null = null
+let currentNames: StructuredChatTabNames | null = null
+let currentScope: string | null = null
 let chatNames: StructuredChatTabNames | null = null
 let detach: (() => void) | null = null
 const releaseTimers: Record<ActivityThreadMode, ReturnType<typeof setTimeout> | null> = {
@@ -112,6 +116,9 @@ function releaseAll(): void {
     snapshots[mode] = null
   }
   currentInputs = null
+  currentState = null
+  currentNames = null
+  currentScope = null
   chatNames = null
 }
 
@@ -163,27 +170,30 @@ function cancelRelease(mode: ActivityThreadMode): void {
 }
 
 /** Current inputs; storeData keeps its identity until a field the projection reads changes. */
-function readInputs(): ProjectionInputs {
+function readInputs(): ActivityThreadInputs {
   const state = useAppStore.getState()
   // Subscribed reads use the observed names; a render before the first subscribe reads them directly.
   const names = chatNames ?? getStructuredChatTabNames()
   const scope = standaloneActivityWorktreeScope()
   const previous = currentInputs
-  if (previous?.state === state && previous.chatNames === names && previous.scope === scope) {
+  if (previous && currentState === state && currentNames === names && currentScope === scope) {
     return previous
   }
+  currentState = state
+  currentNames = names
+  currentScope = scope
   const selected = selectAllAgentPaneThreadStoreData(state)
-  currentInputs = {
-    state,
+  const next: ActivityThreadInputs = {
     storeData: previous && shallow(previous.storeData, selected) ? previous.storeData : selected,
     agentStatusEpoch: state.agentStatusEpoch,
     chatNames: names,
     scope
   }
+  currentInputs = previous && sameBuildInputs(previous, next) ? previous : next
   return currentInputs
 }
 
-function sameBuildInputs(a: ProjectionInputs, b: ProjectionInputs): boolean {
+function sameBuildInputs(a: ActivityThreadInputs, b: ActivityThreadInputs): boolean {
   return (
     a.storeData === b.storeData &&
     a.agentStatusEpoch === b.agentStatusEpoch &&
@@ -192,7 +202,7 @@ function sameBuildInputs(a: ProjectionInputs, b: ProjectionInputs): boolean {
   )
 }
 
-function projectActivityEvents(inputs: ProjectionInputs): ActivityEventsBuild {
+function projectActivityEvents(inputs: ActivityThreadInputs): ActivityEventsBuild {
   if (eventsProjection && sameBuildInputs(eventsProjection.inputs, inputs)) {
     return eventsProjection.build
   }
@@ -231,7 +241,7 @@ function projectActivityEvents(inputs: ProjectionInputs): ActivityEventsBuild {
   return build
 }
 
-function hasLiveActivity({ storeData }: ProjectionInputs): boolean {
+function hasLiveActivity({ storeData }: ActivityThreadInputs): boolean {
   if (Object.keys(storeData.migrationUnsupportedByPtyId).length > 0) {
     return true
   }
@@ -244,7 +254,7 @@ function hasLiveActivity({ storeData }: ProjectionInputs): boolean {
   return false
 }
 
-function projectThreads(inputs: ProjectionInputs, mode: ActivityThreadMode): AgentPaneThread[] {
+function projectThreads(inputs: ActivityThreadInputs, mode: ActivityThreadMode): AgentPaneThread[] {
   if (mode === 'live' && !hasLiveActivity(inputs)) {
     if (threadProjections.live.build !== null) {
       threadProjections.live = createThreadProjection()
@@ -278,9 +288,21 @@ function projectThreads(inputs: ProjectionInputs, mode: ActivityThreadMode): Age
   return projection.threads
 }
 
-/** The window's Activity threads for `mode`; the same reference until an input changes. */
-export function getActivityThreadSnapshot(mode: ActivityThreadMode): ActivityThreadSnapshot {
+/** useSyncExternalStore's snapshot: only selects inputs, so a burst of store writes in one task costs
+ *  no builds; the build runs once when a reader renders. */
+export function getActivityThreadInputs(mode: ActivityThreadMode): ActivityThreadInputs {
   const inputs = readInputs()
+  if (listeners[mode].size === 0) {
+    scheduleRelease(mode)
+  }
+  return inputs
+}
+
+/** The window's Activity threads for `mode` from `inputs`; built once per input set and shared. */
+export function readActivityThreadSnapshot(
+  mode: ActivityThreadMode,
+  inputs: ActivityThreadInputs
+): ActivityThreadSnapshot {
   let current = snapshots[mode]
   if (!current || !sameBuildInputs(current.inputs, inputs)) {
     const allThreads = projectThreads(inputs, mode)
@@ -290,9 +312,6 @@ export function getActivityThreadSnapshot(mode: ActivityThreadMode): ActivityThr
         : { storeData: inputs.storeData, allThreads }
     current = { inputs, snapshot }
     snapshots[mode] = current
-  }
-  if (listeners[mode].size === 0) {
-    scheduleRelease(mode)
   }
   return current.snapshot
 }
