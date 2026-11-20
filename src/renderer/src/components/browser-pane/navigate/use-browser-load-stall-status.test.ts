@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import type { BrowserLoadStallEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { registerBrowserStateIpcBridge } from '../../../hooks/ipc-events/browser/browser-state-ipc-bridge'
@@ -36,7 +36,11 @@ it('shows a stall reported after app launch but before any status bubble mounted
   })
   const { result } = renderHook(() => useBrowserLoadStallStatus('page-1'))
   expect(result.current).toContain('localhost:3000')
-  for (const unsubscribe of unsubs) {
-    unsubscribe()
-  }
+  // Tearing the app down (e.g. its error fallback) can miss the clear, so the cached stall goes.
+  act(() => {
+    for (const unsubscribe of unsubs) {
+      unsubscribe()
+    }
+  })
+  expect(result.current).toBeNull()
 })

@@ -12,11 +12,9 @@ import {
 
 /** Long enough that a slow server or a cold dev-server compile isn't called stuck. */
 export const BROWSER_LOAD_STALL_AFTER_MS = 5_000
-const MAX_REPLACED_LOADS = 8
 
 type PendingLoad = {
   origin: string
-  startUrl: string
   url: URL
   startedAt: number
   phase: BrowserLoadStallPhase
@@ -31,14 +29,6 @@ function webOrigin(rawUrl: string): URL | null {
     return url.protocol === 'http:' || url.protocol === 'https:' ? url : null
   } catch {
     return null
-  }
-}
-
-function normalizedHref(rawUrl: string): string {
-  try {
-    return new URL(rawUrl).href
-  } catch {
-    return rawUrl
   }
 }
 
@@ -108,16 +98,13 @@ export function installBrowserNavigationStallWatchdog(
   // Read once: a destroyed guest throws on .session, and dispose can run after destruction.
   const session = guest.session
   let pending: PendingLoad | null = null
-  // Loads replaced before they failed; one may still fail late (e.g. a delayed extension block),
-  // even at the same URL as its successor, and must not end the successor's watch.
-  let replaced: { startUrl: string; url: string }[] = []
   indexedGuests.set(guest, { session, origin: null, hidden: false })
   const recordCommit = (): void => {
     reindex(guest, guest.isDestroyed() ? null : (webOrigin(guest.getURL())?.origin ?? null))
   }
   recordCommit()
 
-  const finish = (outcome: 'committed' | 'failed' | 'stopped' | 'replaced' | 'closed'): void => {
+  const finish = (outcome: 'committed' | 'stopped' | 'replaced' | 'closed'): void => {
     const load = pending
     if (!load) {
       return
@@ -170,15 +157,6 @@ export function installBrowserNavigationStallWatchdog(
     if (!details.isMainFrame || details.isSameDocument) {
       return
     }
-    if (pending) {
-      replaced = [
-        ...replaced.slice(1 - MAX_REPLACED_LOADS),
-        {
-          startUrl: pending.startUrl,
-          url: pending.url.href
-        }
-      ]
-    }
     finish('replaced')
     const url = webOrigin(details.url)
     if (!url) {
@@ -186,7 +164,6 @@ export function installBrowserNavigationStallWatchdog(
     }
     const load: PendingLoad = {
       origin: url.origin,
-      startUrl: url.href,
       url,
       startedAt: performance.now(),
       phase: 'no-request-seen',
@@ -227,35 +204,11 @@ export function installBrowserNavigationStallWatchdog(
   })
 
   const committed = (): void => {
-    replaced = []
     recordCommit()
     finish('committed')
   }
-  // A replaced navigation can fail late (e.g. a delayed extension block); only its own load ends.
-  const failed = (
-    _event: Electron.Event,
-    _code: number,
-    _description: string,
-    failedUrl: string,
-    isMainFrame: boolean
-  ): void => {
-    if (!isMainFrame) {
-      return
-    }
-    const href = failedUrl ? normalizedHref(failedUrl) : null
-    const earlier = href
-      ? replaced.findIndex((load) => load.startUrl === href || load.url === href)
-      : -1
-    if (earlier >= 0) {
-      replaced.splice(earlier, 1)
-      return
-    }
-    const load = pending
-    if (load && (!href || href === load.startUrl || href === load.url.href)) {
-      finish('failed')
-    }
-  }
-  // A 204 or a download ends the navigation without a commit or a failure.
+  // Ends a failed load, a 204 or a download. Not did-fail-load: a navigation this one replaced
+  // can still fail late (e.g. a delayed extension block), and only stopping proves this one ended.
   const stopped = (): void => {
     if (!guest.isLoadingMainFrame()) {
       finish('stopped')
@@ -266,7 +219,6 @@ export function installBrowserNavigationStallWatchdog(
   guest.on('did-start-navigation', started)
   guest.on('did-redirect-navigation', redirected)
   guest.on('did-navigate', committed)
-  guest.on('did-fail-load', failed)
   guest.on('did-stop-loading', stopped)
   guest.on('destroyed', closed)
   return () => {
@@ -281,7 +233,6 @@ export function installBrowserNavigationStallWatchdog(
       guest.off('did-start-navigation', started)
       guest.off('did-redirect-navigation', redirected)
       guest.off('did-navigate', committed)
-      guest.off('did-fail-load', failed)
       guest.off('did-stop-loading', stopped)
       guest.off('destroyed', closed)
     }

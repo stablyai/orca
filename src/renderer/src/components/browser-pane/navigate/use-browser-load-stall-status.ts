@@ -16,6 +16,14 @@ export function listenForBrowserLoadStalls(): () => void {
   return () => {
     stopListening?.()
     stopListening = null
+    // Clears sent while unsubscribed would be missed; drop every cached stall rather than keep it.
+    const pages = [...stalls.keys()]
+    stalls.clear()
+    for (const browserPageId of pages) {
+      for (const notify of listenersByPage.get(browserPageId) ?? []) {
+        notify()
+      }
+    }
   }
 }
 
