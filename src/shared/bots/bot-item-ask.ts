@@ -163,26 +163,32 @@ function multiPicks(
   const head = `${botItemQuestionLine(decision.question)} →`
   const line = shape.decisions.length > 1 ? lines.find((at) => at.startsWith(head)) : lines[0]
   const words = (line?.startsWith(head) ? line.slice(head.length).trim() : line) ?? ''
-  const picks = words ? labelRun(words, decision.replies) : null
+  const picks = words ? labelRun(words, 0, decision.replies, new Set()) : null
   return picks ? decision.replies.filter((option) => picks.includes(option)) : []
 }
 
-/** `words` as whole option labels joined by ", ", or null: a label may hold ", " itself. */
+/** `words` from `at` as whole option labels joined by ", ", or null: a label may hold ", " itself.
+ *  `dead` holds the offsets already known not to read, so labels sharing prefixes stay linear. */
 function labelRun(
   words: string,
-  options: readonly BotItemQuickReply[]
+  at: number,
+  options: readonly BotItemQuickReply[],
+  dead: Set<number>
 ): BotItemQuickReply[] | null {
   for (const option of options) {
-    if (words === option.label) {
+    if (words.length - at === option.label.length && words.startsWith(option.label, at)) {
       return [option]
     }
-    const rest = words.startsWith(`${option.label}, `)
-      ? labelRun(words.slice(option.label.length + 2), options)
-      : null
+    const next = at + option.label.length + 2
+    const rest =
+      words.startsWith(`${option.label}, `, at) && !dead.has(next)
+        ? labelRun(words, next, options, dead)
+        : null
     if (rest) {
       return [option, ...rest]
     }
   }
+  dead.add(at)
   return null
 }
 
