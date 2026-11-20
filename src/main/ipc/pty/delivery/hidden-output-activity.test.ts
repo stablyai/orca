@@ -42,7 +42,7 @@ describe('hidden PTY output activity', () => {
     expect(send).not.toHaveBeenCalledWith('pty:data', expect.anything())
   })
 
-  it('keeps the ordered byte stream for a hidden pane retaining graphics', () => {
+  it('delivers hidden output while retaining graphics and only the queued query after release', () => {
     vi.useFakeTimers()
     const send = vi.fn()
     const session = createPtyIpcSession({ mainWindow: rendererWindow(send) })
@@ -58,20 +58,11 @@ describe('hidden PTY output activity', () => {
       'pty:data',
       expect.objectContaining({ id: PTY_ID, data: 'hidden output\r\n', seq: 15, background: true })
     )
-  })
+    send.mockClear()
 
-  it('delivers an already-queued renderer query when a hidden claim stops retaining graphics', () => {
-    vi.useFakeTimers()
-    const send = vi.fn()
-    const session = createPtyIpcSession({ mainWindow: rendererWindow(send) })
-    wirePtyIpcSession(session)
-    session.rendererPtyDispatcherReady = true
-    rendererVisibilityKnownPtys.add(PTY_ID)
-    updateHiddenRendererPtyClaim(session, { id: PTY_ID, hidden: true, retainGraphics: true })
-
-    acceptPtyDataForRenderer(session, { id: PTY_ID, data: 'queued\x1b[6n' }, 10)
+    acceptPtyDataForRenderer(session, { id: PTY_ID, data: 'queued\x1b[6n' }, 25)
     updateHiddenRendererPtyClaim(session, { id: PTY_ID, hidden: true })
-    acceptPtyDataForRenderer(session, { id: PTY_ID, data: 'dropped\x1b[c' }, 20)
+    acceptPtyDataForRenderer(session, { id: PTY_ID, data: 'dropped\x1b[c' }, 35)
     vi.runOnlyPendingTimers()
 
     expect(send.mock.calls.filter(([channel]) => channel === 'pty:data')).toEqual([

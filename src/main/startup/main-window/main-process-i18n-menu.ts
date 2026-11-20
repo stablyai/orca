@@ -15,7 +15,8 @@ import {
   runUserInitiatedUpdateCheck,
   sendOpenCrashReport,
   sendOpenFeatureTour,
-  sendOpenSetupGuide
+  sendOpenSetupGuide,
+  sendOpenWorktreePalette
 } from './main-window-actions'
 import { ensureAutoUpdaterConfigured } from '../../updater/lifecycle/main-window-updater'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
@@ -42,6 +43,8 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
     onOpenSettings: openSettingsFromSystemMenu,
+    onOpenWorktreePalette: (targetWindow) =>
+      sendOpenWorktreePalette(targetWindow instanceof BrowserWindow ? targetWindow : null),
     toggleFocusedPageDevTools: (focused) => browserManager.toggleDevToolsOfFocusedPage(focused),
     onOpenSetupGuide: (targetWindow) => {
       recordCrashBreadcrumb('setup_guide_opened')

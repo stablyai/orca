@@ -1,5 +1,4 @@
 import { registerAppHandler } from '../app-registry/app-handler-registry'
-
 import {
   connect,
   disconnect,
@@ -27,7 +26,7 @@ export function registerLinearHandlers(): void {
   })
 
   registerAppHandler('linear:disconnect', async (_event, args?: { workspaceId?: string }) => {
-    disconnect(normalizeWorkspaceId(args?.workspaceId))
+    await disconnect(normalizeWorkspaceId(args?.workspaceId))
     _resetPreflightCache()
   })
 

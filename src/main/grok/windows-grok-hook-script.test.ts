@@ -27,6 +27,7 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
   type HookRun = {
     status: number | null
     stderr: string
+    path: string | null
     grokHome: string | null
     paneKey: string | null
     worktreeId: string | null
@@ -46,12 +47,14 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
   ): Promise<HookRun> {
     return new Promise((resolve, reject) => {
       let posted: URLSearchParams | undefined
+      let path: string | null = null
       const server = createServer((req, res) => {
         let body = ''
         req.on('data', (chunk: Buffer) => {
           body += chunk.toString()
         })
         req.on('end', () => {
+          path = req.url ?? null
           posted = new URLSearchParams(body)
           res.writeHead(200).end()
         })
@@ -85,6 +88,7 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
             resolve({
               status,
               stderr,
+              path,
               grokHome: posted?.get('grokHome') ?? null,
               paneKey: posted?.get('paneKey') ?? null,
               worktreeId: posted?.get('worktreeId') ?? null,
@@ -102,6 +106,8 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
     expect(result.stderr).not.toContain('syntax')
     expect(result.status).toBe(0)
     expect(result.grokHome).toBe('')
+    expect(result.path).toBe('/hook/grok')
+    expect(result.payload).toBe('{"session_id":"s"}')
   })
 
   // Why: an unescaped trailing backslash would escape curl's closing argv quote and
@@ -111,6 +117,8 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
 
     expect(result.status).toBe(0)
     expect(result.grokHome).toBe('C:\\Users\\test\\.grok\\.')
+    expect(result.path).toBe('/hook/grok')
+    expect(result.payload).toBe('{"session_id":"s"}')
   })
 
   // Why (#14221): `setx GROK_HOME "C:\path\"` stores `C:\path"` — the CRT turns the
@@ -140,6 +148,8 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
 
     expect(result.status).toBe(0)
     expect(result.grokHome).toBe('')
+    expect(result.path).toBe('/hook/grok')
+    expect(result.payload).toBe('{"session_id":"s"}')
   })
 
   // Why: the sentinel pushes a 4096-char value to 4097, which the listener rejects
@@ -149,6 +159,8 @@ describe.skipIf(process.platform !== 'win32')('buildWindowsGrokHookScript (win32
 
     expect(result.status).toBe(0)
     expect(result.grokHome).toBe('')
+    expect(result.path).toBe('/hook/grok')
+    expect(result.payload).toBe('{"session_id":"s"}')
   })
 
   // Why: a caller with delayed expansion on would otherwise consume `!` in every

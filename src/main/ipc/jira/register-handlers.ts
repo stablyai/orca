@@ -1,8 +1,7 @@
-import { registerAppHandler } from '../app-registry/app-handler-registry'
 import { taskProviderFailure } from '../../../shared/work-items/task-provider-failure'
 import { JiraIssueListFiltersParam } from '../../../shared/rpc-contract/jira/jira-quick-filter-params'
 import { JiraFavouriteFilterParams } from '../../../shared/rpc-contract/jira/jira-favourite-filter-params'
-
+import { registerAppHandler } from '../app-registry/app-handler-registry'
 import type { JiraMediaFormat } from '../../../shared/jira/jira-attachment-image'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../../jira/client'
 import { listFavouriteFilters } from '../../jira/favourite-filters'
@@ -59,7 +58,7 @@ export function registerJiraHandlers(): void {
   })
 
   registerAppHandler('jira:disconnect', async (_event, args?: { siteId?: string }) => {
-    disconnect(normalizeJiraSiteId(args?.siteId))
+    await disconnect(normalizeJiraSiteId(args?.siteId))
     _resetPreflightCache()
   })
 
@@ -71,9 +70,9 @@ export function registerJiraHandlers(): void {
     return selectSite(siteId)
   })
 
-  registerAppHandler('jira:status', async () => getStatus())
+  registerAppHandler('jira:status', () => getStatus())
 
-  registerAppHandler('jira:readStatus', async () => getStatus())
+  registerAppHandler('jira:readStatus', () => getStatus())
 
   registerAppHandler('jira:testConnection', async (_event, args?: { siteId?: string }) => {
     return testConnection(normalizeJiraSiteId(args?.siteId))

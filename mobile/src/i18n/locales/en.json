@@ -3817,6 +3817,11 @@
     "eventRow": {
       "running": "Running",
       "failed": "Failed"
+    },
+    "workerApproval": {
+      "title": "{{worker}} · {{title}}",
+      "allow": "Allow",
+      "deny": "Deny"
     }
   },
   "sourceControl": {

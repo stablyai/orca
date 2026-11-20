@@ -245,6 +245,7 @@ export function useFileExplorerTreePaneState({
     rootCache,
     loadDir,
     loadMoreDir,
+    selectedPath: selection.selectedPath,
     setSelectedPath: setSingleSelectedPath,
     activeFileId,
     openFiles,

@@ -1,5 +1,4 @@
 import { registerAppHandler } from '../app-registry/app-handler-registry'
-
 import {
   connectBitbucket,
   disconnectBitbucket,
@@ -53,7 +52,7 @@ export function registerBitbucketHandlers(): void {
   )
 
   registerAppHandler('bitbucket:disconnect', async (): Promise<void> => {
-    disconnectBitbucket()
+    await disconnectBitbucket()
     _resetPreflightCache()
   })
 

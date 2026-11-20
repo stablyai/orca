@@ -25,7 +25,7 @@ function setupWith(
   const told: string[] = []
   const setup = new ComposioSetup(
     {
-      keyState: () => key,
+      keyState: async () => key,
       connections: async () => ({ connections, pending: [] }),
       app: async (slug) => ({ slug, name: slug, description: '', logo: null, signIn }),
       ensureTool: async () => 'trs_a'

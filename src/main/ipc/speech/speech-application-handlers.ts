@@ -80,22 +80,25 @@ export function registerSpeechApplicationHandlers(
   })
 
   registerAppHandler('speech:getOpenAiApiKeyStatus', async () => {
-    return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
+    return {
+      configured: await hasOpenAiSpeechApiKey(),
+      protection: await getOpenAiSpeechApiKeyProtection()
+    }
   })
 
   registerAppHandler('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
     await saveVerifiedOpenAiSpeechApiKey(apiKey)
-    return { configured: true, protection: getOpenAiSpeechApiKeyProtection() }
+    return { configured: true, protection: await getOpenAiSpeechApiKeyProtection() }
   })
 
   registerAppHandler('speech:clearOpenAiApiKey', async () => {
-    clearOpenAiSpeechApiKey()
+    await clearOpenAiSpeechApiKey()
     return { configured: false, protection: null }
   })
 
-  registerAppHandler('speech:getOpenAiCompatibleProvider', () => {
+  registerAppHandler('speech:getOpenAiCompatibleProvider', async () => {
     try {
-      return summarizeOpenAiCompatibleSpeechProvider()
+      return await summarizeOpenAiCompatibleSpeechProvider()
     } catch {
       return null
     }
@@ -108,8 +111,8 @@ export function registerSpeechApplicationHandlers(
     }
   )
 
-  registerAppHandler('speech:clearOpenAiCompatibleProvider', () => {
-    clearOpenAiCompatibleSpeechProvider()
+  registerAppHandler('speech:clearOpenAiCompatibleProvider', async () => {
+    await clearOpenAiCompatibleSpeechProvider()
   })
 
   registerAppHandler('speech:downloadModel', async (event, modelId: string) => {
