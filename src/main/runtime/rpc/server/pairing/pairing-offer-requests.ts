@@ -17,6 +17,7 @@ import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import type { RuntimeRpcPairing } from '../runtime-rpc-pairing'
 import {
   pairingUnavailable,
+  WS_BIND_HOST_ALL_INTERFACES,
   type MobilePairingOffer,
   type MobilePairingOfferAvailable,
   type PairingOfferUnavailable
@@ -47,6 +48,20 @@ function servesThisComputerOnly(reach: RuntimePairingReach | undefined, address:
   }
   const hostname = resolveAdvertisedPairingHostname(address)
   return hostname !== null && classifyRemotePairingHostname(hostname) === 'loopback'
+}
+
+// A --bind pin that is already the address the client will dial does not need widening.
+// Widening would replace that pin with every interface (#45329).
+function pinnedBindAlreadyServesRequestedAddress(bindHost: string, address: string): boolean {
+  if (bindHost === WS_BIND_HOST_ALL_INTERFACES) {
+    return false
+  }
+  const pinned = resolveAdvertisedPairingHostname(bindHost)
+  const requested = resolveAdvertisedPairingHostname(address)
+  if (!pinned || !requested || pinned.toLowerCase() !== requested.toLowerCase()) {
+    return false
+  }
+  return classifyRemotePairingHostname(pinned) !== 'loopback'
 }
 
 async function pairingAddress(
@@ -112,7 +127,11 @@ export async function requestRuntimePairingOffer(
   }
   // Widen before advertising remote reach; this-computer intent must not trigger the irreversible widening (STA-2370).
   const thisComputerOnly = servesThisComputerOnly(args.reach, ip)
-  if (!thisComputerOnly) {
+  const pinnedAddressAlreadyServed = pinnedBindAlreadyServesRequestedAddress(
+    server.getNetworkExposureBindHost(),
+    ip
+  )
+  if (!thisComputerOnly && !pinnedAddressAlreadyServed) {
     try {
       await server.ensureNetworkExposure()
     } catch (error) {
