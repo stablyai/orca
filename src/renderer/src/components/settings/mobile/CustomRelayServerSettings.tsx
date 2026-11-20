@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { refreshPairedMobileDevices } from '../../mobile/paired-mobile-devices'
 import {
   DEFAULT_CLOUD_SERVER,
   validateCustomCloudServer,
@@ -83,6 +84,8 @@ export function CustomRelayServerSettings(): React.JSX.Element {
     try {
       const saved = await window.api.orcaProfiles.switchCloudServer(pending)
       setState({ ...state, settings: saved })
+      // Switching revokes relay pairings in main; the cached device list would still show them.
+      void refreshPairedMobileDevices({ force: true })
       setDraft(saved)
       setPending(null)
       setResult(null)
