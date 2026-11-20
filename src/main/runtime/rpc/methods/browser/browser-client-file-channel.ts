@@ -8,6 +8,8 @@ import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/br
 import { getBrowserClientDownloadTransferStore } from '../../../browser/downloads/browser-client-download-transfer-store'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../../browser/client-pages/runtime-browser-page-registry'
+import { clientPageKnownUrls } from '../../../browser/client-pages/client-page-known-urls'
+import { offerCommittedBrowserDownload } from '../../../browser/downloads/browser-client-download-claim'
 import { defineMethod, type RpcContext } from '../../core'
 
 type FileChannelAuthorityParams = {
@@ -105,9 +107,17 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
         final: params.final,
         platform: process.platform
       })
-      return commit
-        ? { accepted: true as const, workspaceRelativePath: commit.workspaceRelativePath }
-        : { accepted: true as const }
+      if (!commit) {
+        return { accepted: true as const }
+      }
+      // Not awaited: a slow import must not hold the client's transfer open.
+      void offerCommittedBrowserDownload(
+        context.runtime,
+        page,
+        clientPageKnownUrls(getRuntimeBrowserPageRegistry(context.runtime), page.browserPageId),
+        commit.workspaceRelativePath
+      )
+      return { accepted: true as const, workspaceRelativePath: commit.workspaceRelativePath }
     }
   }),
   defineMethod({

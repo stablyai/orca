@@ -29,7 +29,11 @@ import {
   googleSetupChoiceChangeable
 } from './GoogleSetupCardParts'
 import { googleSetupStepTitle } from './google-setup-card-copy'
-import { answerGoogleSetup, useGoogleSetupBlocker } from './google-setup-run-store'
+import {
+  answerGoogleSetup,
+  importGoogleSetupKeyOnHost,
+  useGoogleSetupBlocker
+} from './google-setup-run-store'
 
 function keySource(run: GoogleSetupRun, armed: boolean): KeySource {
   // Orca's browser hands the key to main as it downloads; only the person's own browser needs a watch.
@@ -61,7 +65,10 @@ function useSetupKeyCapture(
 /** For a key Orca didn't pick up (saved elsewhere, or the download went missed): import it by hand. */
 function KeyImport({ bot }: { bot: BotRef }): React.JSX.Element {
   const t = useTranslate()
-  const file = useGoogleClientFile((text) => saveKey(bot, text))
+  const file = useGoogleClientFile((text) => saveKey(bot, text), {
+    // A bot on another host: its browser's download is there, so that host looks first.
+    tryHost: () => importGoogleSetupKeyOnHost(bot)
+  })
   return (
     <div className="mt-2 text-xs text-muted-foreground">
       {t('bots.googleSetup.keyMissed', 'Downloaded the key and Orca didn’t pick it up?')}{' '}

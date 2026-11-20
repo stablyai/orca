@@ -4,7 +4,11 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { Bot } from '../../../../../../shared/bot-types'
 import type { GOOGLE_SETUP_STARTED_FROM } from '../../../../../../shared/rpc-contract/google-setup-params'
 import type {
@@ -71,13 +75,15 @@ type SetupCall =
       method: 'bots.googleSetup.answer'
       params: { botId: string; card: GoogleSetupCard; values: string[] }
     }
+  | { method: 'bots.googleSetup.importHostKey'; params: { botId: string } }
 
-async function call(bot: BotRef, { method, params }: SetupCall): Promise<void> {
+async function call<T extends Snapshot>(bot: BotRef, { method, params }: SetupCall): Promise<T> {
   const key = botRefKey(bot)
   const entry = entries.get(key)
   const ticket = entry ? ++entry.asked : 0
-  const snapshot = await callBotRpc<Snapshot>(bot, method, params)
+  const snapshot = await callBotRpc<T>(bot, method, params)
   store(key, ticket, snapshot)
+  return snapshot
 }
 
 async function read(bot: BotRef): Promise<void> {
@@ -171,6 +177,26 @@ export async function answerGoogleSetup(
     method: 'bots.googleSetup.answer',
     params: { botId: bot.id, card, values }
   })
+}
+
+/** Import file for a bot on another host: that host imports a key its Orca browser saved in the bot's
+ *  home and no claim took. False when it has none, or predates the lookup, so this computer picks. */
+export async function importGoogleSetupKeyOnHost(bot: BotRef): Promise<boolean> {
+  if (bot.hostId === LOCAL_EXECUTION_HOST_ID) {
+    return false
+  }
+  try {
+    const reply = await call<Snapshot & { found: boolean }>(bot, {
+      method: 'bots.googleSetup.importHostKey',
+      params: { botId: bot.id }
+    })
+    return reply.found
+  } catch (error) {
+    if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
+      return false
+    }
+    throw error
+  }
 }
 
 /** Opens the bot's chat and starts its Google setup there, with no message in the person's name. */

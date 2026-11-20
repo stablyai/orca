@@ -1,4 +1,5 @@
 import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
+import { getBrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -93,6 +94,7 @@ const request = (method: string, params: unknown): RpcRequest => ({
 let dispatcher: RpcDispatcher
 let bot: Bot
 let headless = false
+let service: OrcaRuntimeService
 beforeEach(() => {
   headless = false
   offers.length = 0
@@ -112,7 +114,7 @@ beforeEach(() => {
     lookAround: { botOfLook: () => null, botOfTidyUp: () => null }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only runtime.bots, runtime.lookAround, servesWithoutWindow and the runtime id, which the stub provides.
-  const service = runtime as unknown as OrcaRuntimeService
+  service = runtime as unknown as OrcaRuntimeService
   dispatcher = new RpcDispatcher({ runtime: service, methods: GOOGLE_SETUP_METHODS })
 })
 
@@ -423,5 +425,14 @@ describe("a bot's Google setup start when Google's app is already here", () => {
     google.accounts = [{ ...signedIn, status: 'connected' }]
     expect(await start()).toMatchObject({ ok: true, result: { routed: 'server' } })
     expect(offers).toEqual([])
+  })
+
+  it('on a server with a paired desktop that can open the sign-in page, posts the card', async () => {
+    headless = true
+    getBrowserHostRequestRegistry(service).register({ pairedDeviceId: 'desk', emit: () => {} })
+    google.client = { clientId: 'c1' }
+    google.accounts = [{ ...signedIn, status: 'reconnect' }]
+    expect(await start()).toMatchObject({ ok: true, result: { routed: 'offer' } })
+    expect(offered()).toEqual([['ivy-chat', { botId: 'ivy', source: 'google' }]])
   })
 })

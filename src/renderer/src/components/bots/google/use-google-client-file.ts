@@ -21,7 +21,13 @@ function ownsDrag(event: React.DragEvent): boolean {
 }
 
 /** Reads a Google app file the person picks (the picker opens at Downloads), drops or types in. */
-export function useGoogleClientFile(onFile: (text: string) => Promise<void>): {
+export function useGoogleClientFile(
+  onFile: (text: string) => Promise<void>,
+  options?: {
+    /** Asked before the picker opens; true when the key's host imported one itself. */
+    tryHost?: () => Promise<boolean>
+  }
+): {
   busy: boolean
   error: string | null
   pick: () => Promise<void>
@@ -50,6 +56,9 @@ export function useGoogleClientFile(onFile: (text: string) => Promise<void>): {
 
   const pick = (): Promise<void> =>
     take(async () => {
+      if (await options?.tryHost?.()) {
+        return null
+      }
       const picked = await window.api.googleSetup.pickClientFile()
       if (picked && !picked.ok) {
         throw new Error(picked.message)

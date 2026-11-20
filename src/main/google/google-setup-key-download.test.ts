@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { StandingDownloadClaim } from '../browser/guest-lifecycle/manager/downloads/browser-manager-download-creation'
 import type { GoogleSetupRun } from '../../shared/google/google-setup-run'
 import {
+  googleSetupCommittedKeyClaim,
   googleSetupKeyDownloadClaim,
   googleSetupWithholdsPageText
 } from './google-setup-key-download'
@@ -139,5 +140,44 @@ describe('the Google key downloaded on a setup page', () => {
     expect(deps.importKey).not.toHaveBeenCalled()
     expect(deps.keyArrived).not.toHaveBeenCalled()
     expect(deps.keyRefused).not.toHaveBeenCalled()
+  })
+})
+
+describe("the Google key a paired client's browser saved on this host", () => {
+  it('imports it once any known address is the client page, and always removes the file', async () => {
+    const deps = {
+      runs: () => [run()],
+      importKey: vi.fn(),
+      keyArrived: vi.fn(async () => {}),
+      keyRefused: vi.fn(async () => {})
+    }
+    const claim = googleSetupCommittedKeyClaim(deps)
+    const file = (text: string) => ({
+      read: vi.fn(async () => text),
+      remove: vi.fn(async () => {})
+    })
+    // The page record lags while the pane is unwatched; the agent's last reported address counts.
+    const saved = {
+      browserPageId: 'setup-page',
+      filename: 'client_secret_123 (1).json',
+      urls: ['http://127.0.0.1:3000/start', KEY.documentUrl]
+    }
+    const key = file(desktopKey())
+    expect(await claim({ ...saved, ...key })).toBe(true)
+    expect(deps.importKey).toHaveBeenCalledExactlyOnceWith(desktopKey())
+    expect(deps.keyArrived).toHaveBeenCalledWith('ivy')
+    expect(key.remove).toHaveBeenCalledOnce()
+
+    const wrong = file(desktopKey('someone-else'))
+    expect(await claim({ ...saved, ...wrong })).toBe(true)
+    expect(deps.keyRefused).toHaveBeenCalledOnce()
+    expect(wrong.remove).toHaveBeenCalledOnce()
+
+    const elsewhere = file(desktopKey())
+    expect(await claim({ ...saved, urls: ['http://127.0.0.1:3000/start'], ...elsewhere })).toBe(
+      false
+    )
+    expect(elsewhere.read).not.toHaveBeenCalled()
+    expect(elsewhere.remove).not.toHaveBeenCalled()
   })
 })

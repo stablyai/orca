@@ -509,6 +509,7 @@ import {
 } from './google-read-params'
 import {
   GoogleSetupAnswer,
+  GoogleSetupImportHostKey,
   GoogleSetupRead,
   GoogleSetupStart,
   GoogleSetupWrite
@@ -1231,6 +1232,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.github.unlink': null,
   'bots.github.users': BotGitHubUsers,
   'bots.googleSetup.answer': GoogleSetupAnswer,
+  'bots.googleSetup.importHostKey': GoogleSetupImportHostKey,
   'bots.googleSetup.read': GoogleSetupRead,
   'bots.googleSetup.start': GoogleSetupStart,
   'bots.googleSetup.write': GoogleSetupWrite,
