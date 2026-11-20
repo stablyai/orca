@@ -1193,6 +1193,10 @@
       "soulStats": "{{lines}} 行 · {{words}} 个词",
       "soulDoubleClickHint": "双击编辑",
       "soulEmpty": "尚未添加指令。双击或选择“编辑”即可编写。"
+    },
+    "sharedLinks": {
+      "bots": "机器人",
+      "skills": "技能"
     }
   },
   "menu": {
@@ -20038,7 +20042,11 @@
         "sessionAttachmentsFailed": "{{agent}} 聊天无法打开，请在聊天中点击重试，然后重新附加文件",
         "sessionAttachmentsStarting": "{{agent}} 聊天仍在打开中，请等待其打开后再重新附加文件",
         "moreControls": "更多聊天控件",
-        "exitPlanMode": "退出计划模式"
+        "exitPlanMode": "退出计划模式",
+        "botChats": "聊天",
+        "botChatsCount": "{{name}} 的聊天，{{chatCount}}",
+        "changeChat": "更换聊天",
+        "chooseChat": "选择聊天"
       },
       "tool": {
         "result": "结果",
@@ -20907,8 +20915,64 @@
         "finishedWith": "登录已完成 · {{message}}"
       },
       "automationSaved": {
-        "openFullPage": "打开页面"
-      }
+        "openFullPage": "打开页面",
+        "gettingUrl": "正在获取 URL…"
+      },
+      "botContext": {
+        "soul": "已应用更新的灵魂",
+        "memory": "记忆已在此聊天之外被编辑"
+      },
+      "botCreated": {
+        "unnamed": "机器人已创建",
+        "again": "{{name}} 重新开始了设置"
+      },
+      "botRequest": {
+        "notSentTo": "未发送给",
+        "asked": "已询问",
+        "handedTo": "已移交给",
+        "paused": "{{bot}} 已暂停。",
+        "botsOff": "机器人已关闭。",
+        "couldNotTake": "{{bot}} 无法接手。"
+      },
+      "botCreateOffer": {
+        "takesOverOne": "接手 1 个工作区",
+        "takesOverMany": "接手 {{count}} 个工作区",
+        "created": "创建时间",
+        "createdTookOverOne": "已创建 · 已接手 1 个工作区",
+        "createdTookOverMany": "已创建 · 已接手 {{count}} 个工作区",
+        "watches": "关注",
+        "reports": "汇报",
+        "takesOver": "接手",
+        "template": "模板",
+        "nameTaken": "你已有名为 {{name}} 的机器人。",
+        "open": "开放",
+        "edit": "编辑",
+        "rename": "重命名",
+        "create": "创建机器人",
+        "originTemplate": "来自 {{template}}，由 {{bot}} 提议",
+        "origin": "由 {{bot}} 提议",
+        "createdAskedOne": "已创建 · 已请求接手 1 个工作区",
+        "createdAskedMany": "已创建 · 已请求接手 {{count}} 个工作区",
+        "createdTookOverSome": "已创建 · 已接手 {{count}} 个工作区中的 {{taken}} 个",
+        "deleted": "已创建，随后被删除",
+        "does": "做什么",
+        "willPropose": "将提议",
+        "askedMany": "请求接手 {{count}} 个工作区",
+        "askedOne": "请求接手 1 个工作区",
+        "details": "{{name}} 的详情",
+        "heading": "新机器人",
+        "tookOverMany": "已接手 {{count}} 个工作区",
+        "tookOverOne": "已接手 1 个工作区",
+        "tookOverSome": "已接手 {{count}} 个工作区中的 {{taken}} 个"
+      },
+      "tidyUp": {
+        "tidiedMemory": "已整理记忆",
+        "changes_one": "{{count}} 处更改",
+        "changes_other": "{{count}} 处更改",
+        "reviewChanges_one": "审查 {{count}} 处更改",
+        "reviewChanges_other": "审查 {{count}} 处更改"
+      },
+      "tookOver": "已接手 {{workspace}}"
     },
     "tab": {
       "bar": {
@@ -22822,7 +22886,8 @@
         "idle_other": "{{count}} 个空闲",
         "notReporting_other": "{{count}} 个未报告状态",
         "unconfirmed_other": "{{count}} 个未确认",
-        "needsAttention_other": "{{count}} 个需要处理"
+        "needsAttention_other": "{{count}} 个需要处理",
+        "working_one": "{{count}} 个处理中"
       },
       "allInState": {
         "waiting_other": "全部 {{count}} 个智能体等待中",
@@ -22893,6 +22958,9 @@
       "detailsRow": "详情行",
       "workspaceUnread": "此工作区中有未读内容",
       "unreadTab": "未读标签页"
+    },
+    "botsSplit": {
+      "resize": "调整机器人和项目的大小"
     }
   },
   "editor": {
@@ -24793,7 +24861,8 @@
       "1524825c2c": "切换工作区看板",
       "d286d1ab85": "清除窗格标题",
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
-      "5468defe61": "折叠/展开所有项目"
+      "5468defe61": "折叠/展开所有项目",
+      "botItemBack": "返回事项"
     },
     "group": {
       "global": "全局",
@@ -25429,7 +25498,9 @@
       "agent": "智能体",
       "agentInChat": "此聊天的智能体",
       "agentInChatHelp": "在聊天中运行时，会继续使用该聊天的智能体。",
-      "agentSameAsBot": "与 {{name}} 相同"
+      "agentSameAsBot": "与 {{name}} 相同",
+      "search": "搜索机器人和项目...",
+      "searchEmpty": "没有与搜索匹配的机器人或项目。"
     },
     "botEvents": {
       "label": "事件",
@@ -26090,7 +26161,22 @@
       "purposePlaceholder": "它是谁，负责什么",
       "uploadPasteOrDrop": "或上传、粘贴或拖放你自己的图片",
       "pasteHint": "使用 {{shortcut}} 粘贴图片",
-      "changePicture": "更换图片"
+      "changePicture": "更换图片",
+      "parts": {
+        "automations_one": "{{count}} 个自动化",
+        "automations_other": "{{count}} 个自动化",
+        "needsApp": "需要 {{app}}",
+        "needsApps_one": "需要 {{count}} 个应用",
+        "needsApps_other": "需要 {{count}} 个应用",
+        "olderHost": "{{host}} 需要更新 Orca 才能添加技能和计划",
+        "schedules_one": "{{count}} 个计划",
+        "schedules_other": "{{count}} 个计划",
+        "setUpInFirstChat": "在首次聊天中设置",
+        "skillsKept_one": "技能 {{kept}}/{{count}}",
+        "skillsKept_other": "技能 {{kept}}/{{count}}",
+        "skills_one": "{{count}} 个技能",
+        "skills_other": "{{count}} 个技能"
+      }
     },
     "googleSetup": {
       "otherAccount": "切换账号",
@@ -26583,7 +26669,10 @@
       },
       "ask": {
         "recommended": "推荐",
-        "typeAnswer": "输入你的回答"
+        "typeAnswer": "输入你的回答",
+        "next": "下一个问题",
+        "previous": "上一个问题",
+        "step": "第 {{n}} 个，共 {{total}} 个"
       }
     },
     "usageLimit": {
@@ -27284,7 +27373,8 @@
         "members": "成员",
         "membersCount": "成员 {{count}}",
         "noMembers": "此分组中没有机器人"
-      }
+      },
+      "attachmentsHostTooOld": "{{host}} 需要更新才能在群聊中附加文件。"
     },
     "settingsView": {
       "pathCopied": "路径已复制",
@@ -28222,6 +28312,9 @@
       "copyHowToAsk": "复制 {{text}}",
       "forOnHost": "用于 {{host}} 上的 {{name}}",
       "for": "用于 {{name}}"
+    },
+    "header": {
+      "open": "打开 {{name}} 设置"
     }
   },
   "speechModelUpdate": {
