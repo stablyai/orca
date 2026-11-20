@@ -1554,7 +1554,6 @@
       "connectorRequests_other": "{{count}} requests",
       "connectorOnlyYou": "Only you",
       "memorySource": "From {{source}}",
-      "memorySourceLink": "link",
       "lookAround": {
         "firstLook": "First look: {{time}}",
         "notArmed": "The first look comes a few hours after your first conversation.",
@@ -1721,7 +1720,19 @@
       "composioKeyOnHost": "One key for every bot on {{host}}, for the apps you connect at Composio. Your app sign-ins are held by Composio.",
       "serverEnableFailed": "Couldn’t change bots on {{host}}.",
       "composioEventsElsewhere": "Composio events for this key go to {{holder}}. Use a separate key on {{host}}.",
-      "composioEventsAnotherComputer": "another computer"
+      "composioEventsAnotherComputer": "another computer",
+      "editMemory": "Edit",
+      "addMemoryPlaceholder": "Remember something new…",
+      "memoryEmpty": "No facts saved yet.",
+      "saving": "Saving…",
+      "unsaved": "Unsaved",
+      "saved": "Saved",
+      "soulView": "Soul view",
+      "soulRead": "Read",
+      "soulEdit": "Edit",
+      "soulStats": "{{lines}} lines · {{words}} words",
+      "soulDoubleClickHint": "Double-click to edit",
+      "soulEmpty": "No instructions yet. Double-click or select Edit to write."
     },
     "windowMaterial": {
       "description": "What shows behind translucent terminals. Requires restart.",
