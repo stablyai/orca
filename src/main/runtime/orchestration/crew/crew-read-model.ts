@@ -240,7 +240,8 @@ export class CrewReadModel {
     if (this.identityDeferred) {
       this.identityDeferred = false
       if (this.identityMoved()) {
-        this.dirty.add('topology')
+        // The deferred notices' record ids were not kept: capture records fresh.
+        this.dirty.add('topology').add('records')
       }
     }
     const now = Date.now()
