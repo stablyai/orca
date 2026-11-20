@@ -248,24 +248,24 @@ export function botGroupCompletedText(items: readonly AgentJournalRenderItem[]):
   return botGroupCompletedReply(items)?.text ?? null
 }
 
-/** A turn's finished reply and when it finished; null until it completes with text. */
+/** A turn's finished reply (`text` cut for room history, `full` whole) and when it finished; null
+ *  until it completes with text. */
 export function botGroupCompletedReply(
   items: readonly AgentJournalRenderItem[]
-): { text: string; completedAt: number | undefined } | null {
+): { text: string; full: string; completedAt: number | undefined } | null {
   const turn = items.find((item) => item.body.kind === 'turn')
   if (turn?.body.kind !== 'turn' || turn.body.state !== 'completed') {
     return null
   }
   const completedAt = turn.body.completedAt
-  const text = items
+  const full = items
     .flatMap((item) =>
       item.body.kind === 'message' && item.body.role === 'assistant'
         ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
         : []
     )
     .join('\n')
-    .slice(-16_000)
-  return text ? { text, completedAt } : null
+  return full ? { text: full.slice(-16_000), full, completedAt } : null
 }
 
 /** What a member's own session has not seen: room posts and peer replies since its last delivered

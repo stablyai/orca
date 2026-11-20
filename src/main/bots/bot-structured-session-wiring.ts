@@ -56,7 +56,7 @@ export function botStructuredSessionWiring(deps: {
   work: Pick<BotWorkRecord, 'turnNote' | 'handedOver' | 'turnEnded'>
   lookAround: Pick<BotLookAroundStore, 'botOfLook' | 'botOfTidyUp' | 'lookTurnIsQuiet'>
   /** A turn ended: one that worked on another bot's request and left it unanswered tells that bot. */
-  requestTurnEnded?: (sessionId: string, ended?: TurnEndedVerdict) => void
+  requestTurnEnded?: (sessionId: string, turnId: string, ended?: TurnEndedVerdict) => void
   /** The bots the host holds when this is installed; none when it has no store yet. */
   botsAtInstall?: readonly Bot[]
   /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
@@ -296,7 +296,7 @@ export function botStructuredSessionWiring(deps: {
       },
       turnEnded: (sessionId, turnId, readItems, writeNote, ended) => {
         deps.work.turnEnded(sessionId)
-        deps.requestTurnEnded?.(sessionId, ended)
+        deps.requestTurnEnded?.(sessionId, turnId, ended)
         turnContext.turnEnded?.(sessionId, turnId, readItems, writeNote)
       }
     },

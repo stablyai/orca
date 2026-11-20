@@ -199,4 +199,14 @@ describe("a member's reply hand-offs", () => {
       'scout'
     ])
   })
+
+  it('never lets an unknown name swallow the mention right after it', () => {
+    expect(wakes('cc @Former,@Sage please review')).toEqual(['sage'])
+  })
+
+  it('reads @everyone with the same end as a name, so a member named Everyone stays ambiguous', () => {
+    const everyone = [...members, { id: 'everyone', name: 'Everyone' }]
+    const room = { members: everyone.map((bot) => ({ botId: bot.id, sessionId: bot.id })) }
+    expect(botGroupReplyMentions('[@everyone] and @everyone', room, everyone, 'x')).toEqual([])
+  })
 })

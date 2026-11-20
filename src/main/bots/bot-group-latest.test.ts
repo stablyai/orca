@@ -35,7 +35,11 @@ describe('a group as the sidebar lists it', () => {
         { operationId: asked.turns[0]!.operationId, text: 'Found it', at: asked.createdAt }
       ])
     )
-    await noteBotGroupMemberReply(runtime, group.members[0]!.sessionId)
+    await noteBotGroupMemberReply(
+      runtime,
+      group.members[0]!.sessionId,
+      `t-${asked.turns[0]!.operationId}`
+    )
     expect(groups.store.listing()[0]?.latest).toMatchObject({
       authorName: 'Scout',
       text: 'Found it',
@@ -91,7 +95,11 @@ describe('a group as the sidebar lists it', () => {
         { operationId: first.turns[0]!.operationId, text: 'First done', at: second.createdAt + 1 }
       ])
     )
-    await noteBotGroupMemberReply(runtime, group.members[0]!.sessionId)
+    await noteBotGroupMemberReply(
+      runtime,
+      group.members[0]!.sessionId,
+      `t-${first.turns[0]!.operationId}`
+    )
     expect(groups.store.listing()[0]?.latest).toMatchObject({
       authorName: 'Scout',
       text: 'First done'
@@ -120,7 +128,11 @@ describe('a group as the sidebar lists it', () => {
         { operationId: asked.turns[0]!.operationId, text: 'Finished reply', at: last.createdAt }
       ])
     )
-    await noteBotGroupMemberReply(runtime, created.members[0]!.sessionId)
+    await noteBotGroupMemberReply(
+      runtime,
+      created.members[0]!.sessionId,
+      `t-${asked.turns[0]!.operationId}`
+    )
     expect(groups.store.listing()[0]?.latest).toMatchObject({
       authorName: 'Scout',
       text: 'Finished reply'
@@ -148,7 +160,11 @@ describe('a group as the sidebar lists it', () => {
             )
           })
       )
-      const noting = noteBotGroupMemberReply(runtime, group.members[0]!.sessionId)
+      const noting = noteBotGroupMemberReply(
+        runtime,
+        group.members[0]!.sessionId,
+        `t-${asked.turns[0]!.operationId}`
+      )
       await vi.waitFor(() => expect(pending).toHaveLength(1))
       await send('Newer owner post')
       for (const resolve of pending) {
@@ -186,7 +202,7 @@ describe('a group as the sidebar lists it', () => {
           { operationId: scout.operationId, text: 'Scout reply', at: 1_000 }
         ])
       })
-      const olderRead = noteBotGroupMemberReply(runtime, scout.sessionId)
+      const olderRead = noteBotGroupMemberReply(runtime, scout.sessionId, `t-${scout.operationId}`)
       await started.promise
 
       try {
@@ -197,7 +213,7 @@ describe('a group as the sidebar lists it', () => {
           mocks.snapshot.mockImplementationOnce(async (sessionId) =>
             journal(sessionId, [{ operationId: turn.operationId, text: reply, at: 1_000 }])
           )
-          await noteBotGroupMemberReply(runtime, turn.sessionId)
+          await noteBotGroupMemberReply(runtime, turn.sessionId, `t-${turn.operationId}`)
           expect(groups.store.listing()[0]?.latest).toMatchObject({ text: reply })
         }
       } finally {

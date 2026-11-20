@@ -56,7 +56,7 @@ export function botGroupMentions(
     )
     const longest = Math.max(0, ...named.map((bot) => bot.name.length))
     const best = named.filter((bot) => bot.name.length === longest)
-    const broadcast = /^@everyone/iu.test(rest) && MENTION_END.test(rest.slice(EVERYONE.length))
+    const broadcast = /^@everyone/iu.test(rest) && nameEnd.test(rest.slice(EVERYONE.length))
     // A member name spelled here (`Everyone Helper`) wins; one named exactly `Everyone` is ambiguous.
     const clash = broadcast && longest === EVERYONE.length - 1
     const mention: BotGroupMention =
@@ -72,7 +72,8 @@ export function botGroupMentions(
             }
           : {
               start,
-              end: start + (/^@\S*/u.exec(rest)?.[0].length ?? 1),
+              // Up to the next `@`, so an unknown name never swallows a mention right after it.
+              end: start + (/^@[^\s@]*/u.exec(rest)?.[0].length ?? 1),
               leading,
               match: 'none',
               ids: []

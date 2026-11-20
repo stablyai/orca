@@ -23,19 +23,27 @@ async function room() {
       messageId: randomUUID(),
       text
     })
-  /** The turn's member finishes it with `text`, as its chat reports the turn ended. */
-  const reply = async (message: BotGroupMessage, text: string) => {
+  /** The turn's member finishes it with `text` in its chat. */
+  const finish = async (message: BotGroupMessage, text: string) => {
     await vi.waitFor(() => expect(groups.store.pending()).toEqual([]))
     const turn = message.turns[0]!
     replies.set(turn.sessionId, [
       ...(replies.get(turn.sessionId) ?? []),
       { operationId: turn.operationId, text, at: at++ }
     ])
-    await noteBotGroupMemberReply(runtime, turn.sessionId)
+  }
+  /** The chat reports the message's turn ended. */
+  const ended = (message: BotGroupMessage) => {
+    const turn = message.turns[0]!
+    return noteBotGroupMemberReply(runtime, turn.sessionId, `t-${turn.operationId}`)
+  }
+  const reply = async (message: BotGroupMessage, text: string) => {
+    await finish(message, text)
+    await ended(message)
   }
   const lines = () => groups.store.messages(created.id, 100)
   const newest = () => lines().at(-1)!
-  return { groups, runtime, group: created, post, reply, lines, newest }
+  return { groups, runtime, group: created, post, finish, ended, reply, lines, newest }
 }
 
 describe('group @Name hand-offs', () => {
@@ -58,7 +66,11 @@ describe('group @Name hand-offs', () => {
     expect(prompt).toContain('@Scout plan the release')
     expect(prompt).toContain('Plan ready.')
     // The same turn end reported again wakes no one twice.
-    await noteBotGroupMemberReply(runtime, asked.turns[0]!.sessionId)
+    await noteBotGroupMemberReply(
+      runtime,
+      asked.turns[0]!.sessionId,
+      `t-${asked.turns[0]!.operationId}`
+    )
     expect(lines()).toHaveLength(2)
   })
 
@@ -118,5 +130,58 @@ describe('group @Name hand-offs', () => {
     })
     await reply(groups.store.message('mail-line')!, '@Forge answered')
     expect(lines().map((line) => line.id)).toEqual([asked.id, next.id, 'mail-line'])
+  })
+
+  it('reads the turn the end names, though a later turn of the same member ended first', async () => {
+    const { post, finish, ended, newest } = await room()
+    const first = await post('@Scout plan')
+    const second = await post('@Scout tidy up')
+    await finish(first, '@Forge review the plan')
+    await finish(second, 'Tidied.')
+    await ended(first)
+    expect(newest()).toMatchObject({ mentioned: true, rootRequestId: first.id })
+  })
+
+  it('reads mentions in the whole reply, past the room history cut', async () => {
+    const { post, reply, newest } = await room()
+    const asked = await post('@Scout write it up')
+    await reply(asked, `@Forge review this.\n\n${'detail '.repeat(4_000)}`)
+    expect(newest().turns.map((turn) => turn.botId)).toEqual(['bot-1'])
+  })
+
+  it('reserves nothing when the hand-off cannot all be saved', async () => {
+    const { groups, post, reply, lines } = await room()
+    const asked = await post('@Scout plan')
+    // A line already under the woken line's id makes its save fail midway.
+    groups.store.append({
+      id: `handoff:${asked.turns[0]!.operationId}:bot-1`,
+      groupId: 'elsewhere',
+      author: { kind: 'owner' },
+      text: '',
+      createdAt: asked.createdAt,
+      turns: []
+    })
+    await expect(reply(asked, '@Forge review')).rejects.toThrow()
+    const saved = groups.store.message(asked.id)
+    expect(saved?.handoffs).toBeUndefined()
+    expect(saved?.turns[0]?.handedOff).toBeUndefined()
+    expect(groups.store.pending()).toEqual([])
+    expect(lines()).toHaveLength(1)
+  })
+
+  it('wakes no one again when the same end replays after the named member is replaced', async () => {
+    const { groups, group, post, ended, reply, lines } = await room()
+    const asked = await post('@Scout plan')
+    await reply(asked, '@Forge review')
+    expect(lines()).toHaveLength(2)
+    const sage = groups.runtime.bots.list().find((bot) => bot.id === 'bot-2')!
+    await groups.update({
+      groupId: group.id,
+      revision: groups.store.get(group.id).revision,
+      botIds: ['bot-0', 'bot-2']
+    })
+    sage.name = 'Forge'
+    await ended(asked)
+    expect(lines()).toHaveLength(2)
   })
 })
