@@ -123,7 +123,7 @@
 6 src/main/codex-accounts/managed-homes/codex-managed-home-path.ts
 1 src/main/codex-accounts/managed-homes/guest-codex-account-homes.ts
 6 src/main/codex-accounts/managed-homes/host-codex-managed-home-ownership.ts
-8 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts # +1 lstat only before deleting a mirror login on a system logout, so an unreadable auth.json is not taken for one (#45264)
+8 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts # +1 stat only before deleting a mirror login on a system logout, so an unreadable auth.json is not taken for one (#45264)
 5 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-provenance.ts
 23 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 2 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-wsl-core.ts

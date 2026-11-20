@@ -1,4 +1,4 @@
-import { existsSync, chmodSync, lstatSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, chmodSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
@@ -14,10 +14,10 @@ import type {
 import { CodexRuntimeHomeLegacyMigration } from '../legacy-host/runtime-home-service-legacy-migration'
 
 export abstract class CodexRuntimeHomeAuthCore extends CodexRuntimeHomeLegacyMigration {
-  /** True only when ~/.codex/auth.json is definitely gone: an unreadable one is no logout. */
+  /** True only when ~/.codex/auth.json, or its link's target, is surely gone: unreadable is no logout. */
   protected systemDefaultAuthIsGone(): boolean {
     try {
-      lstatSync(join(getSystemCodexHomePath(), 'auth.json'))
+      statSync(join(getSystemCodexHomePath(), 'auth.json'))
       return false
     } catch (error) {
       return isDefinitiveAbsence(error)

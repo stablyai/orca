@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
-import { chmodSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from '../runtime-home-settings-test-fixtures'
 import {
@@ -232,27 +240,42 @@ describe('CodexRuntimeHomeService', () => {
     expect(existsSync(runtimeAuthPath)).toBe(false)
   })
 
-  it('clears refreshed runtime auth after an external system-default logout', async () => {
-    const runtimeAuthPath = getRuntimeCodexAuthPath()
-    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
-    const refreshedAuth = createCodexAuthJson('system@example.com', 'acct-system', 'refreshed')
-    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const store = createStore(createSettings())
+  // Creating symlinks on Windows needs Developer Mode or admin rights.
+  it.each(
+    [
+      { logout: 'auth.json removed', linked: false },
+      { logout: "the linked auth.json's target removed", linked: true }
+    ].filter(({ linked }) => !linked || process.platform !== 'win32')
+  )(
+    'clears refreshed runtime auth after an external system-default logout: $logout',
+    async ({ linked }) => {
+      const runtimeAuthPath = getRuntimeCodexAuthPath()
+      const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
+      const refreshedAuth = createCodexAuthJson('system@example.com', 'acct-system', 'refreshed')
+      const credential = join(testState.fakeHomeDir, 'credential.json')
+      if (linked) {
+        writeFileSync(credential, systemAuth, 'utf-8')
+        symlinkSync(credential, getSystemCodexAuthPath())
+      } else {
+        writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+      }
+      const store = createStore(createSettings())
 
-    const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
+      const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
+      const service = new CodexRuntimeHomeService(store as never)
 
-    writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
-    rmSync(getSystemCodexAuthPath(), { force: true })
-    service.syncForCurrentSelection()
+      writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
+      rmSync(linked ? credential : getSystemCodexAuthPath(), { force: true })
+      service.syncForCurrentSelection()
 
-    expect(existsSync(runtimeAuthPath)).toBe(false)
-    expect(
-      existsSync(
-        join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json')
-      )
-    ).toBe(true)
-  })
+      expect(existsSync(runtimeAuthPath)).toBe(false)
+      expect(
+        existsSync(
+          join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json')
+        )
+      ).toBe(true)
+    }
+  )
 
   it('does not write stale managed runtime auth back to system default', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
