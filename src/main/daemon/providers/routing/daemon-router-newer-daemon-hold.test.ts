@@ -55,4 +55,11 @@ describe('a spawn while a newer daemon may still run saved sessions', () => {
     expect(ownerAnswers({ sessionId: SAVED, attachOnly: true })).toBeUndefined()
     await expect(routeSpawnOrHold({ sessionId: SAVED }, dispatch(owner))).resolves.toBe(current)
   })
+
+  it('reattaches a session the current daemon runs even when its inventory answer is unknown', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold only probes the current daemon.
+    const running = { probePtyLiveness: async () => true } as unknown as DaemonPtyAdapter
+    const router = { ...dispatch(resolver({ kind: 'unknown' })), current: running }
+    await expect(routeSpawnOrHold({ sessionId: SAVED }, router)).resolves.toBe(running)
+  })
 })
