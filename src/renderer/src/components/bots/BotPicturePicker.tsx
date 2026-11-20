@@ -208,6 +208,12 @@ export function BotPicturePicker({
         ? CUSTOM_FACE
         : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
   const generating = currentKey === GENERATE_FACE
+  // The description field mounts the first time Generate is current, not with every open, and stays
+  // for the fold back.
+  const [seenGenerate, setSeenGenerate] = useState(generating)
+  if (generating && !seenGenerate) {
+    setSeenGenerate(true)
+  }
   // The intake turn a generated picture holds: one taken after it was asked for wins, in any order and
   // even within one render, since the turn is checked when the picture arrives, not from React state.
   const generateTurn = useRef<(() => boolean) | null>(null)
@@ -357,12 +363,16 @@ export function BotPicturePicker({
       </BotPictureRowFold>
       {withGenerate ? (
         <BotPictureRowFold open={generating}>
-          <GenerateField face={face} />
-          {/* While the slot holds a picture, Upload stays in reach under its description, as do a
-              new picture's Undo and errors. */}
-          <BotPictureRowFold open={face.folded || line.kind !== 'hint'}>
-            {uploadLine}
-          </BotPictureRowFold>
+          {seenGenerate ? (
+            <>
+              <GenerateField face={face} />
+              {/* While the slot holds a picture, Upload stays in reach under its description, as
+                  do a new picture's Undo and errors. */}
+              <BotPictureRowFold open={face.folded || line.kind !== 'hint'}>
+                {uploadLine}
+              </BotPictureRowFold>
+            </>
+          ) : null}
         </BotPictureRowFold>
       ) : null}
       <input
