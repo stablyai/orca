@@ -258,14 +258,19 @@ export async function writeToDiskAsync(
   }
   const gen = runtime.writeGeneration
   if (runtime.profileStateAuthority?.asynchronous) {
-    if (!(await sealProtectedSecretsBeforeCapture(owner))) {
-      return false
+    try {
+      if (!(await sealProtectedSecretsBeforeCapture(owner))) {
+        return false
+      }
+      return await writeProfileStateInWorker(
+        owner[primaryStateWriteOperationsContext],
+        runtime.profileStateAuthority,
+        wholeSessions
+      )
+    } finally {
+      // A failure belongs to this save only; exports and later saves seal it afresh.
+      runtime.protectedSecrets.forgetFailedSeals()
     }
-    return writeProfileStateInWorker(
-      owner[primaryStateWriteOperationsContext],
-      runtime.profileStateAuthority,
-      wholeSessions
-    )
   }
   return writeToDiskSync(owner[primaryStateWriteOperationsContext], { expectedGeneration: gen })
 }
@@ -278,7 +283,6 @@ async function sealProtectedSecretsBeforeCapture(
   owner: PrimaryStateWriteOperations
 ): Promise<boolean> {
   const { runtime, serialization } = owner[primaryStateWriteOperationsContext]
-  runtime.protectedSecrets.forgetFailedSeals()
   for (let round = 0; round < SEAL_AHEAD_ROUNDS; round++) {
     const sealing = runtime.protectedSecrets.sealAhead(
       serialization.protectedPlaintexts(runtime.dirtyProfileStateDomains)

@@ -224,7 +224,7 @@ export class ProtectedSecretPersistence {
     return pending.length > 0 ? Promise.all(pending).then(() => {}) : null
   }
 
-  /** Each save tries a failed value once more, as a synchronous save always has. */
+  /** Ends a save's failures, so the next save or export tries a failed value again. */
   forgetFailedSeals(): void {
     this.failedSeals.clear()
   }
