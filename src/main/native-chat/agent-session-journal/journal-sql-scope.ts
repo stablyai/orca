@@ -2,6 +2,7 @@ import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { hydrateJournalStoredItem } from './journal-stored-output-rows'
+import { hasJournalStoredOutput } from './journal-stored-output'
 
 export type JournalSqlReadWork = { rows: number; decodedBytes: number }
 export type JournalSqlIndexValues = {
@@ -39,6 +40,18 @@ export class JournalSqlScope {
     const value: T = this.indexValues ? this.indexValues.decode<T>(json) : JSON.parse(json)
     return isJournalItemShape(value)
       ? hydrateJournalStoredItem(this.db, this.prefix, value, blob)
+      : value
+  }
+
+  /** For readers of status and metadata only: a stored output stays as its inline preview. */
+  decodeSummary<T>(json: unknown): T {
+    if (typeof json !== 'string') {
+      throw new Error('Invalid journal projection value')
+    }
+    this.work.decodedBytes += Buffer.byteLength(json)
+    const value: T = this.indexValues ? this.indexValues.decode<T>(json) : JSON.parse(json)
+    return isJournalItemShape(value) && !hasJournalStoredOutput(value)
+      ? hydrateJournalStoredItem(this.db, this.prefix, value)
       : value
   }
 
