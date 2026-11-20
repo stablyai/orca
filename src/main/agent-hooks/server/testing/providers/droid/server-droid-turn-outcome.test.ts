@@ -165,6 +165,7 @@ describe('Droid turn outcome', () => {
     await hook(server, { hook_event_name: 'Stop' })
     await vi.waitFor(() => expect(row(server)?.lastAssistantMessage).toBe('Running mkdir.'))
     // A slower sibling Stop hook holds Droid's outcome past the reply's 5 x 50 ms retries.
+    // ast-grep-ignore: test-no-real-time-wait -- the late write must land after the real reply retry window; no hook to await
     await new Promise((resolve) => setTimeout(resolve, 400))
     appendFileSync(transcriptPath, stopHookRecord + outcome('turn-1', 'cancelled'))
 
