@@ -21,6 +21,8 @@ export type GitHubRosterState =
   | { status: 'loading' }
   | { status: 'none' }
   | { status: 'skipped' }
+  /** The host didn't answer the request (unreachable, or the call failed); a new open asks again. */
+  | { status: 'unreached' }
 
 type Answer = {
   roster: GitHubRosterState
@@ -147,16 +149,21 @@ export function gitHubWhoCanAskAnswer(
   const rosterLine =
     roster.status === 'loading'
       ? t('bots.github.whoCanAsk.loading', 'Still loading your repos.')
-      : roster.status === 'unavailable'
-        ? remote
-          ? t(
-              'bots.github.whoCanAsk.unavailableRemote',
-              'Couldn’t read repos. Check the bot’s computer.'
-            )
-          : t('bots.github.whoCanAsk.unavailable', 'Couldn’t read repos. Check gh, restart Orca.')
-        : roster.status === 'none'
-          ? t('bots.github.whoCanAsk.localNone', 'No repos connected.')
-          : null
+      : roster.status === 'unavailable' && !roster.spent
+        ? // Nothing readable was asked for: no gh ran and nothing was used up.
+          t('bots.github.whoCanAsk.noReadable', 'No readable repos to search.')
+        : roster.status === 'unavailable'
+          ? remote
+            ? t(
+                'bots.github.whoCanAsk.unavailableRemote',
+                'Couldn’t read repos. Check the bot’s computer.'
+              )
+            : t('bots.github.whoCanAsk.unavailable', 'Couldn’t read repos. Check gh, restart Orca.')
+          : roster.status === 'unreached'
+            ? t('bots.github.whoCanAsk.unreached', 'Couldn’t get the repo list. Reopen to retry.')
+            : roster.status === 'none'
+              ? t('bots.github.whoCanAsk.localNone', 'No repos connected.')
+              : null
   // The unavailable line already explains the missing list, and a third sentence would wrap.
   const exactOnly =
     (roster.status === 'none' || roster.status === 'skipped') && exact?.ok
@@ -203,23 +210,13 @@ export function gitHubWhoCanAskAnswer(
   const note = [rosterLine, exactOnly, ...limits].filter(Boolean).join(' ') || undefined
 
   const exactSearched = exact?.ok === true
+  // An absence refers to the dated list in the heading, never to the repos as they are now.
   const searchedLine =
     !read || historical
       ? null
       : exactSearched
-        ? place === 'both'
-          ? t('bots.github.whoCanAsk.searchedBothExact', 'Searched your repos, orgs and usernames.')
-          : place === 'orgs'
-            ? t(
-                'bots.github.whoCanAsk.searchedOrgsExact',
-                'Searched your orgs and exact usernames.'
-              )
-            : t('bots.github.whoCanAsk.checkedWhere', 'Searched your repos and exact usernames.')
-        : place === 'both'
-          ? t('bots.github.whoCanAsk.searchedReposOrgs', 'Searched your repos and orgs.')
-          : place === 'orgs'
-            ? t('bots.github.whoCanAsk.searchedOrgs', 'Searched your orgs.')
-            : t('bots.github.whoCanAsk.searchedRepos', 'Searched your repos.')
+        ? t('bots.github.whoCanAsk.searchedListExact', 'Searched that list and exact usernames.')
+        : t('bots.github.whoCanAsk.searchedList', 'Searched that list.')
   // A roster still on its way: nothing definitive yet, whatever the exact lookup said.
   const empty =
     roster.status === 'loading'
@@ -236,7 +233,7 @@ export function gitHubWhoCanAskAnswer(
             }),
             // The unavailable line already says what to do; the exact-username hint would wrap it.
             detail:
-              roster.status === 'unavailable' && rosterLine
+              (roster.status === 'unavailable' || roster.status === 'unreached') && rosterLine
                 ? rosterLine
                 : [rosterLine, t('bots.github.whoCanAsk.tryExact', 'Try an exact username.')]
                     .filter(Boolean)
@@ -253,20 +250,19 @@ export function gitHubWhoCanAskAnswer(
       members,
       // The note says what was left out, so the picker's generic "not everyone" line stays away.
       complete: true,
+      // Every list is a dated read: from the first search on, the heading says when, and an
+      // absence refers to that list.
       labels: {
         scoped: historical
           ? t('bots.github.whoCanAsk.fromEarlierList', 'From an earlier repo list')
           : place === 'both'
-            ? t('bots.github.whoCanAsk.foundInReposAndOrgs', 'Found in your repos and orgs')
+            ? t('bots.github.whoCanAsk.reposOrgsAsOf', 'Your repos and orgs as of {{time}}', {
+                time
+              })
             : place === 'orgs'
-              ? t('bots.github.whoCanAsk.foundInOrgs', 'Found in your orgs')
-              : t('bots.github.whoCanAsk.foundInRepos', 'Found in your repos'),
-        outsideTag:
-          place === 'both'
-            ? t('bots.github.whoCanAsk.notFoundInReposOrOrgs', 'Not found in your repos or orgs')
-            : place === 'orgs'
-              ? t('bots.github.whoCanAsk.notFoundInOrgs', 'Not found in your orgs')
-              : t('bots.github.whoCanAsk.notFoundInRepos', 'Not found in your repos')
+              ? t('bots.github.whoCanAsk.orgsAsOf', 'Your orgs as of {{time}}', { time })
+              : t('bots.github.whoCanAsk.reposAsOf', 'Your repos as of {{time}}', { time }),
+        outsideTag: t('bots.github.whoCanAsk.notInList', 'Not in that list')
       },
       ...(note ? { note } : {}),
       empty,

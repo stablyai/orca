@@ -65,7 +65,7 @@ export class GitHubPeopleRosters {
     const { target, dropped } = targetOf(scope)
     if (target.repositories.length + target.owners.length === 0) {
       // Nothing readable to ask for: no gh runs, so no read is spent.
-      return Promise.resolve({ status: 'unavailable' })
+      return Promise.resolve({ status: 'unavailable', spent: false })
     }
     this.once = this.readNow(target, dropped || scope.more, { scope, owner })
     return this.once
@@ -81,11 +81,12 @@ export class GitHubPeopleRosters {
     for (const [key, value] of Object.entries(built.vars)) {
       args.push('-f', `${key}=${value}`)
     }
+    // When the read started, on this host's clock.
     const readAt = this.now()
     const stdout = await this.run(args).catch(() => '')
     const read = readRoster(stdout, target)
     if (!read || read.sourcesRead === 0) {
-      return { status: 'unavailable' }
+      return { status: 'unavailable', spent: true }
     }
     const byId = new Map<string, GitHubPerson>()
     for (const person of read.people) {

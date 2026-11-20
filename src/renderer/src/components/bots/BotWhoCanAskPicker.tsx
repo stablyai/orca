@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -44,7 +44,11 @@ function useMemberSearch(
       session >= 0 && service.begin ? service.begin() : { search: service.search },
     [service, session]
   )
+  // Bumped whenever the query or session changes, or the picker closes: an in-place retry paints
+  // only if nothing changed since it was asked for (it never repaints an old query).
+  const generation = useRef(0)
   useEffect(() => {
+    generation.current += 1
     let current = true
     const show = (result: BotSlackResult<BotWhoCanAskFound>): void => {
       if (current) {
@@ -70,38 +74,28 @@ function useMemberSearch(
     }, SEARCH_DEBOUNCE_MS)
     return () => {
       current = false
+      generation.current += 1
       clearTimeout(timer)
       stopWatching()
     }
   }, [active, errorMessage, query])
-  // Try again for a part that failed: the same query asked again in place, rows and picks kept.
-  const [nudge, setNudge] = useState(0)
-  useEffect(() => {
-    if (nudge === 0) {
-      return
-    }
-    let current = true
-    void active.search(query.trim()).then((result) => {
-      if (current) {
-        setSearch(
-          result.ok
-            ? { status: 'ready', found: result.value }
-            : { status: 'failed', error: errorMessage(result.error) }
-        )
-      }
-    })
-    return () => {
-      current = false
-    }
-    // Only an asked-for retry runs this; the query's own search runs in the effect above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nudge])
   return {
     search,
     retry: () => setSession((count) => count + 1),
+    // Try again for a part that failed: the same query asked once more, in place (no
+    // "Searching…"), so the rows, picks and count stay until its answer replaces the rows.
     retryInPlace: () => {
+      const asked = generation.current
       active.retry?.()
-      setNudge((count) => count + 1)
+      void active.search(query.trim()).then((result) => {
+        if (generation.current === asked) {
+          setSearch(
+            result.ok
+              ? { status: 'ready', found: result.value }
+              : { status: 'failed', error: errorMessage(result.error) }
+          )
+        }
+      })
     }
   }
 }

@@ -68,13 +68,16 @@ describe('the GitHub picker’s reading of a search', () => {
 
   it('names only the kinds of source that were read', () => {
     const labels = (from: Read['from']) => value(answer(read({ from }), found)).labels
-    expect(labels({ repositories: true, organizations: false })?.scoped).toBe('Found in your repos')
+    // Each list is dated from the first search on, and an absence refers to that list.
+    expect(labels({ repositories: true, organizations: false })?.scoped).toMatch(
+      /^Your repos as of (2:05\s?PM|Nov 19)$/
+    )
     expect(labels({ repositories: false, organizations: true })).toEqual({
-      scoped: 'Found in your orgs',
-      outsideTag: 'Not found in your orgs'
+      scoped: expect.stringMatching(/^Your orgs as of /),
+      outsideTag: 'Not in that list'
     })
-    expect(labels({ repositories: true, organizations: true })?.scoped).toBe(
-      'Found in your repos and orgs'
+    expect(labels({ repositories: true, organizations: true })?.scoped).toMatch(
+      /^Your repos and orgs as of /
     )
   })
 
@@ -124,7 +127,7 @@ describe('the GitHub picker’s reading of a search', () => {
   })
 
   it('fails only when nothing could look, and always when GitHub is off', () => {
-    expect(answer({ status: 'unavailable' }, failed)).toEqual(failed)
+    expect(answer({ status: 'unavailable', spent: true }, failed)).toEqual(failed)
     expect(answer(read(), off)).toEqual(off)
     expect(answer(loading, off)).toEqual(off)
     // The failed lookup can be asked again in place (the picker's Try again).
@@ -140,13 +143,21 @@ describe('the GitHub picker’s reading of a search', () => {
       value(answer(roster, exact, query)).empty
     expect(empty(read(), none)).toEqual({
       title: 'No one found for “zed”',
-      detail: 'Searched your repos and exact usernames.'
+      detail: 'Searched that list and exact usernames.'
     })
-    expect(empty(read(), null, 'neil par')?.detail).toBe('Searched your repos.')
-    expect(empty({ status: 'unavailable' }, none)?.detail).toBe(
+    expect(empty(read(), null, 'neil par')?.detail).toBe('Searched that list.')
+    // Nothing readable asked for: nothing spent, and no gh advice.
+    expect(empty({ status: 'unavailable', spent: false }, null, 'neil par')?.detail).toBe(
+      'No readable repos to search.'
+    )
+    // The host never answered: a new open asks again.
+    expect(empty({ status: 'unreached' }, null, 'neil par')?.detail).toBe(
+      'Couldn’t get the repo list. Reopen to retry.'
+    )
+    expect(empty({ status: 'unavailable', spent: true }, none)?.detail).toBe(
       'Couldn’t read repos. Check gh, restart Orca.'
     )
-    expect(empty({ status: 'unavailable' }, null, 'neil par')).toEqual({
+    expect(empty({ status: 'unavailable', spent: true }, null, 'neil par')).toEqual({
       title: 'Couldn’t search for “neil par”',
       detail: 'Couldn’t read repos. Check gh, restart Orca.'
     })
@@ -232,7 +243,7 @@ describe('the GitHub picker’s reading of a search', () => {
     }
     // The same scope and account, read this run: current.
     const same = at({ scope, owner: 'owner' }, found)
-    expect(same.ok && same.value.labels?.scoped).toBe('Found in your repos')
+    expect(same.ok && same.value.labels?.scoped).toMatch(/^Your repos as of /)
   })
 
   it('keeps a live exact match visible however the list holds that person', () => {
@@ -260,7 +271,7 @@ describe('the GitHub picker’s reading of a search', () => {
   })
 
   it('points restart advice at the computer that read the list', () => {
-    expect(value(answer({ status: 'unavailable' }, none, 'zed', 'remote')).note).toBe(
+    expect(value(answer({ status: 'unavailable', spent: true }, none, 'zed', 'remote')).note).toBe(
       'Couldn’t read repos. Check the bot’s computer.'
     )
     const old = read({ reused: true, readAt: new Date(2026, 10, 1).getTime() })

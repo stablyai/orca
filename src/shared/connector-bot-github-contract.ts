@@ -71,7 +71,7 @@ export type BotGitHubRoster =
        *  GITHUB_PEOPLE_PER_SOURCE people, an organization's first GITHUB_PEOPLE_PER_SOURCE
        *  members, a person's first GITHUB_PERSONAL_REPOSITORIES repositories. */
       cut: { people: boolean; members: boolean; repositories: boolean }
-      /** When the read ran (epoch ms). */
+      /** When the read started (epoch ms, the host's clock). */
       readAt: number
       /** This answer is an earlier read reused: a host reads once per app run. */
       reused: boolean
@@ -79,12 +79,14 @@ export type BotGitHubRoster =
        *  picker had then (null when it had none). A picker whose own differs treats the list as
        *  historical: its sources and absences say nothing about the current repos or account. */
       readFor: { scope: GitHubPeopleScope; owner: string | null }
-      /** The GitHub account gh read every source as, from the same call; absent when unknown. */
+      /** The GitHub account gh read every source as, from that same call; absent when unknown.
+       *  Which gh binary or runtime ran it (native, or a fallback) isn't recorded. */
       searchedAs?: string
     }
-  /** No source could be read. No later read runs in this app run of the host (a gh process may
-   *  have started, and a second must never start behind it). */
-  | { status: 'unavailable' }
+  /** No source could be read. `spent`: a read ran (or may have started a gh process) and no
+   *  later read runs in this app run of the host; false when the scope held nothing readable, so
+   *  no gh ran and nothing was used up. */
+  | { status: 'unavailable'; spent: boolean }
 
 /** People per repository or organization a roster read returns. */
 export const GITHUB_PEOPLE_PER_SOURCE = 100

@@ -117,7 +117,7 @@ describe('the Add picker on a GitHub session', () => {
     })
     observer.disconnect()
     expect(screen.getByText('brennanb2025')).toBeTruthy()
-    expect(screen.getByText('Not found in your repos')).toBeTruthy()
+    expect(screen.getByText('Not in that list')).toBeTruthy()
     // The rows never blanked to "Searching…", and the exact lookup ran once for this query.
     expect(searching).not.toHaveBeenCalled()
     expect(users).toHaveBeenCalledOnce()
@@ -202,4 +202,66 @@ describe('the Add picker on a GitHub session', () => {
     expect(searching).not.toHaveBeenCalled()
     expect(screen.queryByText('Username check failed.')).toBeNull()
   })
+
+  it.each([
+    ['before', 0],
+    ['after', 300]
+  ])(
+    'drops a retry still on its way when the query changes %s the next search runs',
+    async (_when, wait) => {
+      const team: BotGitHubRoster = {
+        ...roster,
+        people: [
+          { id: '2', login: 'brennanb2025', name: 'Brennan Benson' },
+          { id: '4', login: 'jinwoo-h', name: 'Jinwoo Hong' }
+        ]
+      }
+      let resolveRetry = (_value: Users): void => {}
+      const users = vi
+        .fn<(args: { query: string }) => Promise<Users>>()
+        .mockResolvedValueOnce({ ok: false, error: 'network' })
+        .mockImplementationOnce(
+          () =>
+            new Promise<Users>((resolve) => {
+              resolveRetry = resolve
+            })
+        )
+        .mockResolvedValue({ ok: true, value: { members: [], complete: true } })
+      const scope = { repositories: ['acme/web'], owners: [], more: false }
+      const begin = () =>
+        gitHubWhoCanAskSession(
+          { people: async () => ({ ok: true, value: team }), users },
+          { scope, ownerLogin: 'o', producer: 'local', t }
+        )
+      const { service } = setUp()
+      render(
+        <BotWhoCanAskPicker
+          bot={bot}
+          service={{ ...service, begin, search: (query) => begin().search(query) }}
+          owner="You"
+          onPicked={vi.fn()}
+        />
+      )
+      const box = screen.getByPlaceholderText('Search by name or username')
+      fireEvent.change(box, { target: { value: 'bren' } })
+      await act(() => vi.advanceTimersByTimeAsync(300))
+      fireEvent.click(screen.getByText('brennanb2025'))
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      // The owner moves on before the retry answers.
+      fireEvent.change(box, { target: { value: 'jin' } })
+      await act(() => vi.advanceTimersByTimeAsync(wait))
+      await act(async () => {
+        resolveRetry({ ok: true, value: { members: [{ id: '9', name: 'bren' }], complete: true } })
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      await act(() => vi.advanceTimersByTimeAsync(300))
+      // The old query's answer never painted, and the new query asked once for itself.
+      expect(screen.queryByText('bren')).toBeNull()
+      expect(screen.getByText('jinwoo-h')).toBeTruthy()
+      expect(users.mock.calls.map(([args]) => args.query)).toEqual(['bren', 'bren', 'jin'])
+      expect(box).toHaveProperty('value', 'jin')
+      // The pick made before the change is still counted.
+      expect(screen.getByText('1 selected')).toBeTruthy()
+    }
+  )
 })
