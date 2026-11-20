@@ -93,6 +93,8 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         span.addEvent('pre_quit_cleanup_done')
         if (
           this.updateInstallMode === 'supervised-headless-serve' &&
+          // Linux supervisors watch the AppImage file instead of a handoff record.
+          process.platform === 'darwin' &&
           !requestServeUpdateHandoff(pendingVersion)
         ) {
           recordUpdaterLifecycle(

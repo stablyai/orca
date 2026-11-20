@@ -266,6 +266,10 @@ export async function superviseServeService(options: SupervisedServeOptions): Pr
         // Desktop update parks do not count against the crash brake.
         continue
       }
+      if ((appImageUpdate?.inspect() ?? 'current') !== 'current') {
+        // The child exited so the replaced AppImage can serve; the loop restarts from it.
+        continue
+      }
       let failure: string
       if (attempt.settled.status === 'fulfilled') {
         const code = attempt.settled.value

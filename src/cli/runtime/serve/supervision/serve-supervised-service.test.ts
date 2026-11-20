@@ -56,4 +56,34 @@ describe('superviseServeService', () => {
     })
     await expect(superviseServeService(again.options)).resolves.toBe(0)
   })
+
+  it('restarts from a replaced AppImage without counting the exit as a crash', async () => {
+    let replaced = false
+    let stop = (): void => undefined
+    const restarts: string[] = []
+    const h = harness({
+      userDataPath,
+      runOnce: async () => {
+        replaced = true
+        return 0
+      },
+      appImageUpdate: {
+        inspect: () => (replaced ? 'superseded' : 'current'),
+        restart: async () => {
+          restarts.push('restart')
+          stop()
+          return 'stopped for the test'
+        }
+      },
+      onStopSignal: (listener) => {
+        stop = listener
+        return () => undefined
+      }
+    })
+
+    await superviseServeService(h.options)
+
+    expect(restarts).toEqual(['restart'])
+    expect(readServeSupervisorBrake(userDataPath)?.failures ?? []).toEqual([])
+  })
 })

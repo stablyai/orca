@@ -4,6 +4,7 @@ import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser/runtime/browser-
 import { app } from 'electron'
 import { quitProcess } from '../startup/quit/process-quit-request'
 import {
+  SERVE_APPIMAGE_RELAUNCH_ENV,
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath,
   parseServeUpdateHandoffState,
@@ -25,7 +26,17 @@ function getConfiguredHandoffPath(): string | null {
     : null
 }
 
+// Read once and cleared so agents and nested `orca serve` launches do not inherit the claim.
+const isAppImageRelaunchSupervised =
+  process.platform === 'linux' &&
+  process.env[SERVE_APPIMAGE_RELAUNCH_ENV] === '1' &&
+  Boolean(process.env.APPIMAGE)
+delete process.env[SERVE_APPIMAGE_RELAUNCH_ENV]
+
 export function hasServeUpdateSupervisor(): boolean {
+  if (process.platform === 'linux') {
+    return isAppImageRelaunchSupervised
+  }
   return process.platform === 'darwin' && getConfiguredHandoffPath() !== null
 }
 

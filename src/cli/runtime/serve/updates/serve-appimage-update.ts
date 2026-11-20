@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import type { SupervisedAppImageUpdate } from '../supervision/serve-supervised-service'
 import { SERVE_SUPERVISOR_APP_ROOT_ENV } from '../supervision/serve-supervisor-relocation'
+import { SERVE_APPIMAGE_RELAUNCH_ENV } from '../../../../shared/remote-runtime/serve-supervisor/serve-update-handoff'
 
 /** A file this recently written may still be mid-copy; executing half an AppImage fails. */
 export const APPIMAGE_SETTLE_MS = 2_000
@@ -45,6 +46,17 @@ export function resolveAppImageBuildWatch(
     resolve(env.APPDIR) === dirname(resolve(executable))
   const runningKey = mounted ? resolveAppImageCacheKey(appImagePath) : null
   return appImagePath && runningKey ? { appImagePath, runningKey } : null
+}
+
+/** Tells a supervised serve child that its supervisor restarts from the AppImage once it is replaced. */
+export function withServeAppImageRelaunch(
+  env: NodeJS.ProcessEnv,
+  executable: string,
+  supervise: boolean
+): NodeJS.ProcessEnv {
+  return supervise && resolveAppImageBuildWatch(executable)
+    ? { ...env, [SERVE_APPIMAGE_RELAUNCH_ENV]: '1' }
+    : env
 }
 
 /** A missing or unreadable file keeps the running build: only a present, settled new file counts. */

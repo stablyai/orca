@@ -50,7 +50,8 @@ import { superviseServeService } from './serve/supervision/serve-supervised-serv
 import { reexecThisServeUnderInitReaper } from './serve/startup/serve-pid1-init-reaper'
 import {
   resolveAppImageBuildWatch,
-  supervisedAppImageUpdate
+  supervisedAppImageUpdate,
+  withServeAppImageRelaunch
 } from './serve/updates/serve-appimage-update'
 import { relocateThisServeSupervisor } from './serve/supervision/serve-supervisor-relocation'
 import {
@@ -262,7 +263,7 @@ function spawnElectronServe(
     args.recipeJson !== true && getMacAppBundlePath(executable)
       ? getServeUpdateHandoffPath(userDataPath)
       : null
-  const childEnv = pinned.env
+  const childEnv = withServeAppImageRelaunch(pinned.env, executable, args.supervise === true)
   if (handoffPath) {
     childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath
   }
