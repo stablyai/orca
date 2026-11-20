@@ -148,9 +148,18 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     const waiting = queued.get(request.id)
     // Any stop of a launch that has not started withdraws it; nothing is created only to be killed.
-    if (waiting && (request.type === 'cancel-spawn' || request.type === 'kill')) {
+    if (
+      waiting &&
+      (request.type === 'cancel-spawn' ||
+        request.type === 'kill' ||
+        request.type === 'stop-owned-group')
+    ) {
       queued.delete(request.id)
       const signal = (request.type === 'kill' && request.signal) || 'SIGTERM'
+      // A group that was never created has ended, which an owned-group stop waits to hear.
+      if (waiting.request.spec.terminationBarrier) {
+        port.postMessage({ type: 'group-terminated', id: request.id })
+      }
       port.postMessage({ type: 'exit', id: request.id, code: null, signal })
       port.postMessage({ type: 'close', id: request.id, code: null, signal })
       return

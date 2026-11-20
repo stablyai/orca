@@ -1,6 +1,7 @@
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import type { ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import {
   isWorkerChildStdinWriteError,
   spawnProcessOnWorkerThread,
@@ -31,6 +32,10 @@ export async function capturesOnWorker(canStart: (() => boolean) | undefined): P
   return (process.platform === 'win32' || !canStart) && whenSpawnWorkerReady()
 }
 
+function workerCwd(cwd: string | URL | undefined): string | undefined {
+  return cwd instanceof URL ? fileURLToPath(cwd) : cwd
+}
+
 /** Capture a worker-owned child; the caller still owns deadlines and aborts. */
 export function workerExecFile(
   command: string,
@@ -40,9 +45,13 @@ export function workerExecFile(
 ): WorkerThreadChildProcess {
   return spawnedExecFile(command, options, callback, () =>
     spawnProcessOnWorkerThread({
-      program: command,
+      // As main's launch does: a probed CLI selection (gh/glab) wins over PATH order; Windows main has none.
+      program:
+        process.platform === 'win32'
+          ? command
+          : resolveSelectedLocalCommand(command, { env: options.env, cwd: workerCwd(options.cwd) }),
       args,
-      cwd: options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd,
+      cwd: workerCwd(options.cwd),
       // The worker's env is a copy from its start; send main's current one (PATH refreshes after launch).
       env: options.env ?? process.env,
       ...(options.ownedPosixGroup ? { terminationBarrier: true as const } : {})

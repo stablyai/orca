@@ -15,7 +15,10 @@ import { setImmediate as nextTurn } from 'node:timers/promises'
 import { Worker } from 'node:worker_threads'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type * as WorkerChildModule from '../../../worker-thread-child-process/worker-thread-child-process'
-import type { WorkerThreadChildProcessHost } from '../../../worker-thread-child-process/worker-thread-child-process'
+import type {
+  WorkerThreadChildProcess,
+  WorkerThreadChildProcessHost
+} from '../../../worker-thread-child-process/worker-thread-child-process'
 import { createWorkerThreadChildProcessTestEntry } from '../../../worker-thread-child-process/worker-thread-child-process-worker.test-fixtures'
 import { workerExecFile } from './worker-exec-file'
 import { execFileCapture } from './exec-file-capture'
@@ -66,13 +69,14 @@ async function createHost(gate?: SharedArrayBuffer) {
 }
 
 // A launch reaches the worker after its ready check; watch for it before starting one, then wait before stopping.
-function nextWorkerLaunch(): Promise<void> {
+function nextWorkerLaunch(): Promise<WorkerThreadChildProcess> {
   const host = state.host!
   const spawn = host.spawn.bind(host)
-  const launched = Promise.withResolvers<void>()
+  const launched = Promise.withResolvers<WorkerThreadChildProcess>()
   vi.spyOn(host, 'spawn').mockImplementationOnce((spec) => {
-    launched.resolve()
-    return spawn(spec)
+    const child = spawn(spec)
+    launched.resolve(child)
+    return child
   })
   return launched.promise
 }
@@ -315,7 +319,7 @@ describe.skipIf(process.platform === 'win32')('POSIX worker capture cancellation
     }
   })
 
-  it('does not report a queued child terminated until the worker processes its kill', async () => {
+  it('withdraws a queued launch it stops, reporting it terminated only once the worker drops it', async () => {
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
     const launched = nextWorkerLaunch()
@@ -327,13 +331,15 @@ describe.skipIf(process.platform === 'win32')('POSIX worker capture cancellation
       onChildTerminated: terminated
     })
     const outcome = pending.catch((error: unknown) => error)
-    await launched
+    const child = await launched
     controller.abort()
     await expect(outcome).resolves.toMatchObject({ name: 'AbortError' })
     expect(terminated).not.toHaveBeenCalled()
     Atomics.store(new Int32Array(gate), 0, 1)
     Atomics.notify(new Int32Array(gate), 0)
     await vi.waitFor(() => expect(terminated).toHaveBeenCalledOnce())
+    // Never created: no process existed to start the aborted command.
+    expect(child.pid).toBeUndefined()
   })
 
   it('keeps removal ownership and durable intent until an aborted worker child is actually terminated', async () => {
