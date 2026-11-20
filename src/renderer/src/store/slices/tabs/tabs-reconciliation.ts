@@ -115,8 +115,7 @@ export function projectWorktreeTabModelReconciliation(
   const liveTerminalIds = new Set(
     runtimeTerminalTabs.filter((tab) => !orphanTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
-  // Batch index avoids O(workspaces × openFiles) rescanning.
-  const liveEditorIds = batch?.liveEditorIds ?? new Set(state.openFiles.map((file) => file.id))
+  let liveEditorIds = batch?.liveEditorIds
   const liveBrowserIds = new Set(
     (state.browserTabsByWorktree[worktreeId] ?? []).map((browserTab) => browserTab.id)
   )
@@ -129,7 +128,8 @@ export function projectWorktreeTabModelReconciliation(
       return liveBrowserIds.has(tab.entityId)
     }
     return (
-      TAB_CONTENT_TRAITS[tab.contentType].renderableWithoutRecord || liveEditorIds.has(tab.entityId)
+      TAB_CONTENT_TRAITS[tab.contentType].renderableWithoutRecord ||
+      (liveEditorIds ??= new Set(state.openFiles.map((file) => file.id))).has(tab.entityId)
     )
   }
 

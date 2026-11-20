@@ -65,10 +65,10 @@ export function createInitialTerminalSeeder(
     const state = useAppStore.getState()
     if (
       state.tabsByWorktree[worktreeId]?.length ||
-      findPendingWorktreeCreationId(state.pendingWorktreeCreations, worktreeId) !== null ||
-      hasStructuredAgentLaunchInWorktree(worktreeId) ||
       isEmptyWorkspaceDefaultSurfacePending(worktreeId) ||
-      hasSplitLandingGroup(state, worktreeId)
+      hasSplitLandingGroup(state, worktreeId) ||
+      findPendingWorktreeCreationId(state.pendingWorktreeCreations, worktreeId) !== null ||
+      hasStructuredAgentLaunchInWorktree(worktreeId)
     ) {
       return
     }

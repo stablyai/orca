@@ -147,9 +147,9 @@ export function createInitialTerminalThroughLayoutOwner(
     if (
       state.activeWorktreeId !== worktreeId ||
       state.tabsByWorktree[worktreeId]?.length ||
+      isEmptyWorkspaceDefaultSurfacePending(worktreeId) ||
       findPendingWorktreeCreationId(state.pendingWorktreeCreations, worktreeId) !== null ||
-      hasStructuredAgentLaunchInWorktree(worktreeId) ||
-      isEmptyWorkspaceDefaultSurfacePending(worktreeId)
+      hasStructuredAgentLaunchInWorktree(worktreeId)
     ) {
       return
     }
