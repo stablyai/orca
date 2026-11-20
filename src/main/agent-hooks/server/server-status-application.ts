@@ -20,6 +20,7 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
 import { AgentHookServerStatusDisposition } from './server-status-disposition'
 import { isDuplicatePromptSent } from './server-prompt-sent-dedupe'
+import { CLAUDE_LATE_PROMPT_SUBMIT_EVENT } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-prompt-turn-order'
 
 // Evicting remembered evidence makes later replay fall back to its arrival time.
 const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
@@ -235,7 +236,10 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     payload: AgentHookEventPayload,
     previousStatus: EnrichedAgentHookEventPayload | undefined
   ): void {
-    const latePrompt = payload.lateExplicitPrompt === true
+    // Restated rows keep the flag but never the prompt event's name.
+    const latePrompt =
+      payload.lateExplicitPrompt === true &&
+      payload.hookEventName === CLAUDE_LATE_PROMPT_SUBMIT_EVENT
     if (payload.isReplay === true || (payload.hasExplicitPrompt !== true && !latePrompt)) {
       return
     }

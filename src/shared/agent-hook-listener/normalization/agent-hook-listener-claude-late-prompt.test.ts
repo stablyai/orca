@@ -279,6 +279,15 @@ describe('Claude prompt event arriving after its turn', () => {
       ).toMatchObject({ state: 'done', turnCompletedAt: personEnd })
     })
 
+    it('repeats the person’s end when the wakeup’s Stop beats its prompt event', () => {
+      const personEnd = personTurnHeldByShell()
+      claude({ hook_event_name: 'Stop', prompt_id: SECOND, background_tasks: [] })
+
+      expect(
+        claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })
+      ).toMatchObject({ state: 'done', turnCompletedAt: personEnd })
+    })
+
     it('never gives the person’s next turn the end it already announced', () => {
       const personEnd = personTurnHeldByShell()
       claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: done })

@@ -33,6 +33,10 @@ export function settleLateClaudePromptSubmit(
   // A person's turn that Stop already ended earns the completion it held; a wakeup's never does.
   if (isTaskWakeup) {
     lead.unclassifiedTurnCompletedAt = undefined
+    // A wakeup that Stop already ended repeats the person's announced end instead of announcing its own.
+    if (own?.state === 'done') {
+      lead.turnCompletedAt ??= lead.announcedTurnCompletedAt
+    }
   } else {
     lead.announcedTurnCompletedAt = undefined
     releaseClaudeUnclassifiedTurnEnd(state, paneKey, lead)
