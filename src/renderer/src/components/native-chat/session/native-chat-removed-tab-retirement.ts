@@ -11,6 +11,7 @@ export function retireRemovedNativeChatTabs(before: readonly Tab[], after: reado
     return
   }
   const remaining = new Map(after.map((tab) => [tab.id, tab]))
+  let shownSessions: Set<string> | undefined
   for (const tab of before) {
     const next = remaining.get(tab.id)
     if (
@@ -24,11 +25,10 @@ export function retireRemovedNativeChatTabs(before: readonly Tab[], after: reado
         tab.id
       )
       // Views follow the conversation; another tab still showing it keeps them.
-      if (
-        !after.some(
-          (other) => other.contentType === 'agent-session' && other.entityId === tab.entityId
-        )
-      ) {
+      shownSessions ??= new Set(
+        after.flatMap((other) => (other.contentType === 'agent-session' ? [other.entityId] : []))
+      )
+      if (!shownSessions.has(tab.entityId)) {
         retireNativeChatSubagentViews(chatPaneAddressTabId(tab.entityId))
       }
     }
