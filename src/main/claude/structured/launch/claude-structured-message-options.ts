@@ -195,16 +195,16 @@ export async function dispatchClaudeMessage(
       }
       // Input joining a running turn, and Orca mail notices, run on the choices Claude already has;
       // new choices apply at the next new turn.
-      const messageOptions =
+      const joinsTurn = Boolean(
         session.translator?.openTurnHasInputWork ||
         session.translator?.commandTurnId ||
-        claudeStartedUnechoedSend(session) ||
-        input.body.from?.orchestration?.message === 'mail-notice'
-          ? undefined
-          : input.executionOptions
+        claudeStartedUnechoedSend(session)
+      )
+      const mailNotice = input.body.from?.orchestration?.message === 'mail-notice'
+      const messageOptions = joinsTurn || mailNotice ? undefined : input.executionOptions
       if (messageOptions !== undefined) {
         await applyClaudeMessageOptions(session, messageOptions, timeoutMs, input.signal)
-      } else if (input.body.from?.orchestration?.message === 'mail-notice' && !steers) {
+      } else if (mailNotice && !joinsTurn) {
         // A mail notice that opens a turn keeps the chat's choices, but not Claude's refusal mode.
         await applyClaudeFullAccessFallback(session, timeoutMs, input.signal)
       }

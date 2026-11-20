@@ -55,13 +55,16 @@ export function claudeBypassRefused(session: ClaudeBypassFacts): boolean {
   )
 }
 
-/** Where Claude refuses bypass, Approve for me, or Ask where its settings turn that off too. */
+/** Where Claude refuses Full access, Approve for me, or Ask where its settings turn that off too.
+ *  Any other mode is asked for as chosen, so Claude's refusal of it fails the send. */
 function claudeAllowedPermissionMode(
   session: ClaudeBypassFacts,
   mode: PermissionMode
 ): PermissionMode {
-  const wanted = mode === 'bypassPermissions' && claudeBypassRefused(session) ? 'auto' : mode
-  return wanted === 'auto' && session.autoDisabled === true ? 'default' : wanted
+  if (mode !== 'bypassPermissions' || !claudeBypassRefused(session)) {
+    return mode
+  }
+  return session.autoDisabled === true ? 'default' : 'auto'
 }
 
 // Claude's answer to `set_permission_mode bypassPermissions` once its settings turn bypass off.
@@ -99,7 +102,7 @@ function claudePermissionModeLadder(
   mode: PermissionMode
 ): PermissionMode[] {
   if (mode !== 'bypassPermissions') {
-    return [claudeAllowedPermissionMode(session, mode)]
+    return [mode]
   }
   const bypassKnown =
     session.bypassDisabled !== undefined ||
@@ -151,7 +154,10 @@ export async function setClaudeAllowedPermissionMode(
       }
       continue
     }
-    const refusal = claudeRefusal(write.reason)
+    // The fallback's auto that times out or gets an unknown answer is tried again on a later send.
+    const refusal =
+      claudeRefusal(write.reason) ??
+      (step === 'auto' && mode === 'bypassPermissions' ? 'auto-for-now' : null)
     if (refusal === null || (refusal === 'bypass') !== (step === 'bypassPermissions')) {
       unexpected ??= { error: write.reason }
       continue
@@ -213,16 +219,12 @@ export function claudeOwesFullAccessFallback(
   )
 }
 
-/** The warning waits for a fallback Claude settled on, Plan exit included, so it names the mode
- *  the chat keeps rather than Ask while auto is refused only for now. */
+/** The warning waits for a first fallback attempt, Plan exit included, so it names a mode
+ *  Claude accepted. */
 export function claudeFullAccessRefusalNoticeDue(
   session: ClaudeBypassFacts & Pick<ClaudeSession, 'appliedInputOptions'>
 ): boolean {
-  return (
-    claudeBypassRefused(session) &&
-    session.appliedInputOptions.has('buildPermissionMode') &&
-    session.autoUnsettled !== true
-  )
+  return claudeBypassRefused(session) && session.appliedInputOptions.has('buildPermissionMode')
 }
 
 const MAX_ANNOUNCED = 1_000
@@ -275,11 +277,13 @@ export function claudeFullAccessRefusalRow(
     text:
       choice === 'ask' && session.autoDisabled === true
         ? `Claude's settings turn off Full access and Approve for me (permissions.disableBypassPermissionsMode, disableAutoMode), so Claude uses ${running} instead.`
-        : `Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses ${running} instead.`
+        : choice === 'ask' && session.autoUnsettled === true
+          ? `Claude's settings turn off Full access (permissions.disableBypassPermissionsMode) and Approve for me isn't available right now, so Claude uses ${running} instead.`
+          : `Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses ${running} instead.`
   }
 }
 
-/** One warning row on the first root frame after Claude's fallback is settled. */
+/** One warning row on the first root frame after Claude's fallback is applied. */
 export function journalClaudeFullAccessRefusal(
   deps: Pick<ClaudeJournalTranslatorDeps, 'sink' | 'fullAccessRefusalNotice'>,
   idPrefix: string,

@@ -176,6 +176,22 @@ describe('leaving Plan mode after an approved plan', () => {
     expect(await send(session)).toBe('auto')
   })
 
+  it('fails the send when Claude settings turn off the Approve for me the chat chose', async () => {
+    for (const autoDisabled of [undefined, true]) {
+      const setPermissionMode = claude(['auto'])
+      const session = {
+        launchIntent: { permissionMode: 'auto' },
+        firstRootInit: { permissionMode: 'auto' },
+        ...(autoDisabled === undefined ? {} : { autoDisabled }),
+        appliedInputOptions: new Map<string, string>(),
+        connection: { setPermissionMode }
+      }
+      await expect(send(session)).rejects.toThrow(AUTO_REFUSAL)
+      await expect(send(session)).rejects.toThrow(AUTO_REFUSAL)
+      expect(setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual(['auto', 'auto'])
+    }
+  })
+
   it('keeps asking for Approve for me when the chat chose it and Claude refused it only for now', async () => {
     const auto = autoForNow()
     const session = {

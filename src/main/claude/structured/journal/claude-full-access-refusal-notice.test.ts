@@ -107,7 +107,7 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     expect(planStart.warnings()).toHaveLength(1)
   })
 
-  it('waits while Claude refuses auto only for now', () => {
+  it('names Ask as for now while Claude refuses auto only for now', () => {
     const unsettled = launch('unsettled-chat', {
       launchIntent: FULL_ACCESS,
       firstRootInit: { permissionMode: 'default' },
@@ -115,13 +115,9 @@ describe('a Full access chat whose Claude refuses bypass', () => {
     })
     unsettled.session.appliedInputOptions.set('buildPermissionMode', 'default')
     unsettled.init('default')
-    expect(unsettled.warnings()).toHaveLength(0)
-    unsettled.session.autoUnsettled = false
-    unsettled.session.appliedInputOptions.set('buildPermissionMode', 'auto')
-    unsettled.status()
     expect(unsettled.warnings()).toEqual([
       expect.objectContaining({
-        text: "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses Approve for me instead."
+        text: "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode) and Approve for me isn't available right now, so Claude uses Ask for approval instead."
       })
     ])
   })
