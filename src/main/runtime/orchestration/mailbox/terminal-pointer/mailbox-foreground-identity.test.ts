@@ -329,3 +329,14 @@ it.each([
   // Why remote too: this relay sends no process evidence, so it can never name the agent for mail.
   expect(result).toEqual({ foreground: 'unknown', agentUnprovable: true })
 })
+
+it('a title-only agent on a host that cannot name agents is both unprovable and exempt', async () => {
+  const result = await readMailboxForeground(
+    { getForegroundProcess: async () => 'zsh', confirmShellForeground: async () => true },
+    { remote: false, windows: true },
+    PTY_ID,
+    'pi',
+    'mailbox-incarnation'
+  )
+  expect(result).toEqual({ foreground: 'shell', agentUnprovable: true, holdExempt: true })
+})

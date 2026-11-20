@@ -17,10 +17,11 @@ export function unheldForeground(
   agentUnprovable: boolean,
   expected: TuiAgent | undefined
 ): MailboxForegroundInspection {
-  if (agentUnprovable) {
-    return { foreground, agentUnprovable: true }
+  return {
+    foreground,
+    ...(agentUnprovable ? { agentUnprovable } : {}),
+    ...(isHoldExemptAgent(expected) ? { holdExempt: true } : {})
   }
-  return isHoldExemptAgent(expected) ? { foreground, holdExempt: true } : { foreground }
 }
 
 export function isHoldExemptAgent(agent: string | null | undefined): boolean {
