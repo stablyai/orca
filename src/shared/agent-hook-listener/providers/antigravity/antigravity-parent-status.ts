@@ -24,15 +24,17 @@ export function buildAntigravityFoldedStatusPayload(
   const hasWaitingSubagent = subagents.some((subagent) => subagent.state === 'waiting')
   const hasCommands = (paneState.commands?.size ?? 0) > 0
   const childrenEnded = paneState.helpersIdleAt !== undefined
+  // A background command outranks a spawn no subagent has proven: a workflow that starts none
+  // would otherwise hold the run past the command's hook-silence bound.
   const liveness: AgentChildWorkLiveness = hasWaitingSubagent
     ? 'waiting'
-    : subagents.length > 0 ||
-        childrenEnded ||
-        (leadState === 'done' && paneState.pendingHelperSpawns !== undefined)
+    : subagents.length > 0 || childrenEnded
       ? 'working'
       : hasCommands
         ? 'monitoring'
-        : null
+        : leadState === 'done' && paneState.pendingHelperSpawns !== undefined
+          ? 'working'
+          : null
   const folded = foldAgentLeadStatus({ leadState, childWorkLiveness: liveness })
   const snapshot = state.lastToolByPaneKey.get(paneKey)
   const prompt = state.lastPromptByPaneKey.get(paneKey) ?? ''

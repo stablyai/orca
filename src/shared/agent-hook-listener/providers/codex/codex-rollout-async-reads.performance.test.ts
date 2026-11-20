@@ -3,7 +3,10 @@ import type * as FsPromises from 'node:fs/promises'
 import { RolloutReadBatch, rolloutFileSizeAsync } from './codex-rollout-async-reads'
 import { AgentTranscriptPollScheduler } from '../../transcripts/agent-transcript-poll-scheduler'
 
-const fs = vi.hoisted(() => ({ stats: 0, stalled: [] as (() => void)[] }))
+const fs = vi.hoisted(() => {
+  const stalled: (() => void)[] = []
+  return { stats: 0, stalled }
+})
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
