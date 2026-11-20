@@ -37,6 +37,7 @@ export function CheckRow({
   return (
     <div key={key} className="min-w-0">
       <button
+        ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
         type="button"
         onClick={() => onToggle(check)}
         aria-expanded={expanded}
@@ -52,7 +53,6 @@ export function CheckRow({
           )}
         />
         <Icon
-          ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
           className={cn(
             'size-3.5 shrink-0',
             color,

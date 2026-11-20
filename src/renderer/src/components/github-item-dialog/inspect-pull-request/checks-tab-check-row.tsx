@@ -65,6 +65,7 @@ export function ChecksTabCheckRow({
   return (
     <div className="min-w-0">
       <button
+        ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
         type="button"
         onClick={() => onToggle(check)}
         aria-expanded={expanded}
@@ -80,7 +81,6 @@ export function ChecksTabCheckRow({
           )}
         />
         <Icon
-          ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
           className={cn(
             'size-3.5 shrink-0',
             color,

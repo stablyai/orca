@@ -2242,8 +2242,11 @@ html.native-shell .app-layout {
   animation: none;
 }
 
+/* Generic spinners and pulses hold still under reduced motion even where a caller forgot motion-reduce:. */
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-spinner {
+  .agent-working-spinner,
+  .animate-spin,
+  .animate-pulse {
     animation: none;
   }
 }
