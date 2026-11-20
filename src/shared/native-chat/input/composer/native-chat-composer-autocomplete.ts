@@ -65,7 +65,8 @@ export function deriveComposerAutocomplete(
   discovery: NativeChatSkillDiscoverySnapshot = { ...EMPTY_DISCOVERY, skills },
   dismissedTriggerKey: string | null = null,
   sessionSkills?: readonly NativeChatSessionSkill[],
-  commandAvailable?: (name: string) => boolean
+  commandAvailable?: (name: string) => boolean,
+  mentionNameMatches?: (query: string) => boolean
 ): ComposerAutocomplete {
   const before = draft.slice(0, caret)
   const leadingMatch = before.match(LEADING_SLASH_TRIGGER)
@@ -82,12 +83,12 @@ export function deriveComposerAutocomplete(
       commandAvailable
     )
   }
-  const mentionMatch = before.match(/(?:^|\s)@(\S*)$/)
-  if (mentionMatch) {
-    const triggerKey = `@:${before.length - mentionMatch[1].length - 1}`
+  const mention = matchMentionTrigger(before, mentionNameMatches)
+  if (mention) {
+    const triggerKey = `@:${mention.start}`
     return dismissedTriggerKey === triggerKey
       ? { mode: 'none' }
-      : { mode: 'mention', query: mentionMatch[1], triggerKey }
+      : { mode: 'mention', query: mention.query, triggerKey }
   }
   // Mid-prompt slash tokens use the command menu without dispatch; dollar tokens open the agent’s skills-only menu.
   const sigilQuery = profile?.skillPrefix === '$' ? matchSkillSigil(before) : null
@@ -218,19 +219,50 @@ export function editReplacesTriggerToken(
   return commonPrefix < tokenEnd && previous.length - commonSuffix > triggerPosition
 }
 
+// Room member names are short; a longer run after `@` is prose.
+const MAX_SPACED_MENTION = 64
+
+/** The `@` token before the caret: one word, or several while `nameMatches` says a pickable room
+ *  member's name still matches them (`@eng n`). A space after a completed name ends the suggestion. */
+export function matchMentionTrigger(
+  before: string,
+  nameMatches?: (query: string) => boolean
+): { query: string; start: number } | null {
+  const single = before.match(/(?:^|\s)@(\S*)$/)
+  if (single) {
+    return { query: single[1], start: before.length - single[1].length - 1 }
+  }
+  if (!nameMatches) {
+    return null
+  }
+  const start = before.lastIndexOf('@')
+  const query = before.slice(start + 1)
+  if (
+    start === -1 ||
+    query.length > MAX_SPACED_MENTION ||
+    (start > 0 && !/\s/.test(before[start - 1])) ||
+    !/^[^\s][^\n]*$/.test(query) ||
+    !nameMatches(query)
+  ) {
+    return null
+  }
+  return { query, start }
+}
+
 export function applyMentionSuggestion(
   draft: string,
   caret: number,
   path: string,
-  token = formatNativeChatFileReference(path)
+  token = formatNativeChatFileReference(path),
+  mentionNameMatches?: (query: string) => boolean
 ): { draft: string; caret: number } {
   const before = draft.slice(0, caret)
   const after = draft.slice(caret)
-  const match = before.match(/(^|\s)@(\S*)$/)
+  const match = matchMentionTrigger(before, mentionNameMatches)
   if (!match) {
     return { draft, caret }
   }
-  const tokenStart = before.length - match[2].length - 1
+  const tokenStart = match.start
   const nextBefore = `${before.slice(0, tokenStart)}${token} `
   return { draft: nextBefore + after.replace(/^ /, ''), caret: nextBefore.length }
 }

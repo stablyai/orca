@@ -18,6 +18,8 @@ export type NativeChatComposerInput = Pick<
   | 'select'
   | 'setSelectionRange'
 > & {
+  /** Follows a surviving character through edits; null means it was replaced or deleted. */
+  trackTextPosition?: (offset: number, onChange: (offset: number | null) => void) => () => void
   insertAgentReferences?: (references: OrchestrationAgentReference[]) => void
   contains?: (node: Node | null) => boolean
   insertText?: (text: string) => void
@@ -103,7 +105,8 @@ export function applyNativeChatMention(
   mention?: NativeChatMentionToken,
   /** Where the replaced text starts when it isn't the `@query` before the caret: a bot's chat,
    *  picked one level under it, whose filter may hold spaces the `@query` can't. */
-  from?: number
+  from?: number,
+  mentionNameMatches?: (query: string) => boolean
 ): { draft: string; caret: number } {
   const agent = typeof mention === 'object' ? mention : undefined
   const token = typeof mention === 'object' ? agentReferenceToken(mention) : mention
@@ -116,7 +119,7 @@ export function applyNativeChatMention(
     }
     return { draft: before + text.slice(at).replace(/^ /, ''), caret: before.length }
   }
-  const result = applyMentionSuggestion(text, at, path, token)
+  const result = applyMentionSuggestion(text, at, path, token, mentionNameMatches)
   if (token && result.draft !== text) {
     insertMentionToken(input, text, result.caret - token.length - 1, at, token, agent)
   }

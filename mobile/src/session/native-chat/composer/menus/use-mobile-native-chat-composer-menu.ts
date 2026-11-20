@@ -26,7 +26,7 @@ import {
   type MobileComposerStructuredCatalog
 } from './mobile-native-chat-composer-menu'
 import type { ComposerMenuRow, ComposerRoomMention } from './MobileNativeChatComposerMenu'
-import { rankNativeChatRoomMentions } from '../../../../../../src/shared/native-chat/input/native-chat-room-mentions'
+import { rankNativeChatRoomMembers } from '../../../../../../src/shared/native-chat/input/native-chat-room-mentions'
 
 type Selection = { start: number; end: number }
 /** Opening the menu from the + sheet narrows it to what that row named. */
@@ -136,14 +136,14 @@ export function useMobileNativeChatComposerMenu(input: {
   )
   const rows = useMemo<ComposerMenuRow[]>(() => {
     if (autocomplete.mode === 'mention' && roomMentions) {
-      const icons = new Map(roomMentions.map((mention) => [mention.name, mention.icon]))
-      return rankNativeChatRoomMentions([...icons.keys()], autocomplete.query)
-        .slice(0, MENU_ROWS_PER_GROUP)
-        .map((name) => ({
+      const members = new Map(roomMentions.map((mention) => [mention.name, mention]))
+      return rankNativeChatRoomMembers([...members.values()], autocomplete.query)
+        .matches.slice(0, MENU_ROWS_PER_GROUP)
+        .map(({ name }) => ({
           kind: 'member' as const,
           id: `member:${name}`,
           name,
-          icon: icons.get(name)
+          icon: members.get(name)?.icon
         }))
     }
     if (autocomplete.mode === 'mention') {

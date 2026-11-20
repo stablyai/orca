@@ -173,6 +173,7 @@ function Frame({
             activeIndex={0}
             listboxId={listboxId}
             onChoose={() => {}}
+            onHover={() => {}}
           />
           <div className="rounded-xl border border-chat-composer-border bg-chat-composer-surface px-3 py-3 text-sm">
             {typed}

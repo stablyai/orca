@@ -32,6 +32,7 @@ vi.mock('../native-chat/composer/pickers/use-native-chat-mention-files', () => (
 }))
 
 beforeEach(() => {
+  localStorage.removeItem('orca.nativeChat.recentMentions')
   self.bot = null
   roster.mockReset()
   roster.mockResolvedValue({
@@ -65,13 +66,16 @@ function chat(hostId: 'local' | `runtime:${string}` | null = 'local') {
       ),
     { wrapper: Room, initialProps: CLOSED }
   )
+  act(() =>
+    window.dispatchEvent(new StorageEvent('storage', { key: 'orca.nativeChat.recentMentions' }))
+  )
   return { result, completeMention, openAt: () => rerender({ query: '' }) }
 }
 
 it("lists the owner's bots above files in a workspace chat, paused ones unpickable", async () => {
   const { result, completeMention, openAt } = chat()
   openAt()
-  expect(result.current.mentionFiles.files).toEqual([PERF, BUILD, PERF_M4, 'src/perf.ts'])
+  expect(result.current.mentionFiles.files).toEqual([BUILD, PERF, PERF_M4, 'src/perf.ts'])
   expect(result.current.roomContext?.unavailable).toEqual([DOCS])
   await waitFor(() =>
     expect(result.current.roomContext?.mentions[0]?.detail).toBe(

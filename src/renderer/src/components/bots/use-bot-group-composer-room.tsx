@@ -2,6 +2,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { Users } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLatestHandler } from '@/lib/use-latest-handler'
+import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import { botGroupSingleRecipient } from '../../../../shared/bots/bot-group-mentions'
@@ -52,6 +53,7 @@ export function useBotGroupComposerRoom(
         mentions: [
           ...memberBots.map((bot) => ({
             name: bot.name,
+            recentKey: botRefKey(bot),
             icon: <BotAvatar bot={bot} className="size-5 shrink-0" />
           })),
           {

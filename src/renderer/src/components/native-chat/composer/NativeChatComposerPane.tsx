@@ -118,6 +118,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       recalledFromHistory: recall.active,
       disabled,
       isComposing: imeEnterGesture.isComposing,
+      room,
       structuredTransport,
       editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
       setNotice
