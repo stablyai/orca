@@ -35,7 +35,7 @@ import {
 import {
   assertUnregisteredCheckoutGone,
   assertUnregisteredLeftoverRemovable,
-  isLeftoverStillRemovable,
+  provenLeftoverIdentity,
   isRecordedCheckout,
   differentCheckoutAtPathError
 } from '../../../workspaces/removal/worktree-removal-leftover'
@@ -207,7 +207,12 @@ async function finishInterruptedLocalWorktreeRemoval(
   const leftover =
     !native &&
     !deletable &&
-    (await assertUnregisteredLeftoverRemovable(repo.path, record.worktreePath, worktrees))
+    (await assertUnregisteredLeftoverRemovable(
+      repo.path,
+      record.worktreePath,
+      worktrees,
+      record.checkoutIdentity
+    ))
   if (leftover && !record.force) {
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }
@@ -251,11 +256,11 @@ async function finishInterruptedLocalWorktreeRemoval(
       )
     } else {
       // Teardown awaited: re-read Git so a checkout registered at or inside the folder since survives.
-      if (
-        leftover &&
-        (await isLeftoverStillRemovable(repo.path, record, localOptions, args.stopSignal))
-      ) {
-        await removeUnregisteredHostCheckout(record.worktreePath, args.stopSignal)
+      const proven = leftover
+        ? await provenLeftoverIdentity(repo.path, record, localOptions, args.stopSignal)
+        : undefined
+      if (proven) {
+        await removeUnregisteredHostCheckout(record.worktreePath, args.stopSignal, proven)
       }
       result = await finishUnregisteredWorktreeRemoval(
         repo.path,

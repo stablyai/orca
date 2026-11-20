@@ -12,6 +12,11 @@ import {
   normalizeLocalBranchRef
 } from '../../git/worktrees/worktree-operation-options'
 import type { WorktreeRemovalRecord } from './worktree-removal-records'
+import {
+  isSameCheckoutIdentity,
+  readCheckoutIdentity,
+  type CheckoutIdentity
+} from '../../filesystem/host-tree-removal'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
 import { listWorktreesStrict as listUncachedWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
@@ -20,7 +25,8 @@ import { waitForWorktreeRemovalAcceptance } from './worktree-removal-settlement'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canSafelyRemoveOrphanedWorktreeDirectory,
-  isDangerousWorktreeRemovalPath
+  isDangerousWorktreeRemovalPath,
+  ORPHANED_WORKTREE_DIRECTORY_MESSAGE
 } from './worktree-removal-safety'
 
 /** Absent .git or a proven orphan marker can identify a leftover; live or foreign registrations cannot. */
@@ -85,10 +91,11 @@ export async function assertUnregisteredCheckoutGone(
   }
 }
 
-/** A leftover folder whose `.git` still names this repo's removed worktree entry, so a retry may delete it. */
+/** A leftover folder whose `.git` still names this repo's removed worktree entry, or that is the very folder the delete began on. */
 export async function isProvenOrphanLeftover(
   repoPath: string,
-  worktreePath: string
+  worktreePath: string,
+  checkoutIdentity?: CheckoutIdentity
 ): Promise<boolean> {
   // Recorded (retryable) removals are host-only; WSL deletes never run in the background.
   if (isDangerousWorktreeRemovalPath(worktreePath, repoPath, CLIENT_REMOVAL_HOME)) {
@@ -98,7 +105,26 @@ export async function isProvenOrphanLeftover(
   if (!isRealDirectory(await lstat(worktreePath).catch(() => null))) {
     return false
   }
+  if (checkoutIdentity) {
+    // A restored or replaced folder can carry a copied `.git`; only the folder the delete began on counts.
+    if (!isSameCheckoutIdentity(await readCheckoutIdentity(worktreePath), checkoutIdentity)) {
+      return false
+    }
+    // Git may delete `.git` before failing on a held file; the folder's own identity still proves it.
+    if (!(await hasCheckoutMarker(worktreePath))) {
+      return true
+    }
+  }
   return canSafelyRemoveOrphanedWorktreeDirectory(worktreePath, repoPath, CLIENT_REMOVAL_HOME)
+}
+
+async function hasCheckoutMarker(worktreePath: string): Promise<boolean> {
+  try {
+    await lstat(join(worktreePath, '.git'))
+    return true
+  } catch (error) {
+    return getErrorCode(error) !== 'ENOENT'
+  }
 }
 
 /** lstat-style entry: a symlink never reads as a directory. */
@@ -120,25 +146,26 @@ function isRealDirectory(entry: unknown): boolean {
 export async function assertUnregisteredLeftoverRemovable(
   repoPath: string,
   worktreePath: string,
-  registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[]
+  registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[],
+  checkoutIdentity?: CheckoutIdentity
 ): Promise<boolean> {
   if (!(await worktreeCheckoutExists(worktreePath))) {
     return false
   }
   assertWorktreeDoesNotContainRegisteredWorktree(worktreePath, registeredWorktrees)
-  if (!(await isProvenOrphanLeftover(repoPath, worktreePath))) {
+  if (!(await isProvenOrphanLeftover(repoPath, worktreePath, checkoutIdentity))) {
     throw unregisteredFolderRefusal(worktreePath)
   }
   return true
 }
 
-/** Deletion-time check: Git still doesn't register the path or anything inside it, and `.git` still proves it. */
-export async function isLeftoverStillRemovable(
+/** Deletion-time check: Git still doesn't register the path or anything inside it, and the folder is still proven; returns its identity for the deleter to re-check. */
+export async function provenLeftoverIdentity(
   repoPath: string,
   record: WorktreeRemovalRecord,
   localOptions: LocalProjectWorktreeGitOptions,
   signal: AbortSignal
-): Promise<boolean> {
+): Promise<CheckoutIdentity | undefined> {
   // Worktrees still being created count too: they hold files deletion must not touch.
   const current = await listUncachedWorktreesStrict(repoPath, {
     ...localOptions,
@@ -148,7 +175,25 @@ export async function isLeftoverStillRemovable(
   if (current.some((worktree) => areWorktreePathsEqual(worktree.path, record.worktreePath))) {
     throw differentCheckoutAtPathError(record.worktreePath)
   }
-  return assertUnregisteredLeftoverRemovable(repoPath, record.worktreePath, current)
+  const identity = await readCheckoutIdentity(record.worktreePath)
+  if (
+    !(await assertUnregisteredLeftoverRemovable(
+      repoPath,
+      record.worktreePath,
+      current,
+      record.checkoutIdentity
+    ))
+  ) {
+    return undefined
+  }
+  // Read before the proof so a folder swapped in during it fails the deleter's identity check.
+  if (
+    !identity ||
+    (record.checkoutIdentity && !isSameCheckoutIdentity(identity, record.checkoutIdentity))
+  ) {
+    throw unregisteredFolderRefusal(record.worktreePath)
+  }
+  return identity
 }
 
 /** Registered paths use normal deletion; otherwise the folder must be gone or provably this repo's leftover. */
@@ -157,18 +202,26 @@ export async function retryFailedRemovalUnlessRegistered(
   worktreePath: string,
   registeredWorktrees: readonly Pick<GitWorktreeInfo, 'path'>[],
   localOptions: LocalProjectWorktreeGitOptions,
+  force: boolean,
   retry: () => Promise<RemoveWorktreeResult> | undefined
 ): Promise<boolean> {
   if (registeredWorktrees.some((worktree) => areWorktreePathsEqual(worktree.path, worktreePath))) {
     return false
   }
   const failed = failedWorktreeRemovals.get(worktreeId)
-  if (failed && !usesNativeWindowsRemoval(worktreePath, localOptions)) {
-    await assertUnregisteredLeftoverRemovable(
+  if (
+    failed &&
+    !usesNativeWindowsRemoval(worktreePath, localOptions) &&
+    (await assertUnregisteredLeftoverRemovable(
       failed.repoPath,
       failed.worktreePath,
-      registeredWorktrees
-    )
+      registeredWorktrees,
+      failed.checkoutIdentity
+    )) &&
+    !force
+  ) {
+    // Ask for Force Delete before retrying, so the row keeps the reason the last delete failed.
+    throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }
   if (retry() === undefined) {
     return false

@@ -9,6 +9,7 @@ import {
 } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { isRecordedCheckout, isUnregisteredRemovalLeftover } from './worktree-removal-leftover'
 import type { WorktreeRemovalRecord } from './worktree-removal-records'
+import { deleteBranchOfReplacedRemoval } from './worktree-removal-failure'
 import {
   failedWorktreeRemovals,
   finishedWorktreeRemovals,
@@ -45,6 +46,7 @@ export async function withUnregisteredRemovalCheckouts(
         return { ...row, removalError: record.failure?.message }
       }
       failedWorktreeRemovals.delete(record.worktreeId)
+      void deleteBranchOfReplacedRemoval(record)
       droppedFailure = true
       return row
     })
@@ -73,6 +75,7 @@ export async function withUnregisteredRemovalCheckouts(
       })
     } else if (failed) {
       failedWorktreeRemovals.delete(record.worktreeId)
+      void deleteBranchOfReplacedRemoval(record)
       droppedFailure = true
     }
   }

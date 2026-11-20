@@ -3,7 +3,7 @@
 import { getErrorCode } from '../git/worktrees/worktree-operation-options'
 import { unregisteredFolderRefusal } from '../../shared/worktree/removal/removal'
 import { join, win32 } from 'node:path'
-import { lstat, readdir, rm, rmdir, unlink } from './asar-transparent-fs'
+import { lstat, lstatBigInt, readdir, rm, rmdir, unlink } from './asar-transparent-fs'
 import { isWindowsAbsolutePathLike } from '../../shared/file-access/cross-platform-path'
 import { isWslUncPath } from '../../shared/file-access/wsl-paths'
 import { stripWin32LongPathPrefix } from '../../shared/file-access/windows-path-access'
@@ -114,7 +114,8 @@ async function namesExceptCheckoutMarker(root: string): Promise<string[]> {
 /** Delete a checkout Git no longer registers, `.git` last, so a failure keeps the link that proves whose folder it is. */
 export async function removeUnregisteredHostCheckout(
   targetPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  expected?: CheckoutIdentity
 ): Promise<void> {
   let entry
   try {
@@ -130,7 +131,41 @@ export async function removeUnregisteredHostCheckout(
   if (!entry.isDirectory()) {
     throw new Error(`Refusing to delete unregistered worktree path: ${targetPath}`)
   }
-  await removeHostCheckout(targetPath, async () => true, signal)
+  // Re-check before every pass: the folder proven Orca's must still be the one at the path.
+  const authorize = async (): Promise<boolean> => {
+    if (expected && !isSameCheckoutIdentity(await readCheckoutIdentity(targetPath), expected)) {
+      throw unregisteredFolderRefusal(targetPath)
+    }
+    return true
+  }
+  await removeHostCheckout(targetPath, authorize, signal)
+}
+
+/** A folder's identity; a replaced or restored folder at the same path reads differently. */
+export type CheckoutIdentity = { dev: string; ino: string; birthtimeNs: string }
+
+export async function readCheckoutIdentity(
+  targetPath: string
+): Promise<CheckoutIdentity | undefined> {
+  const entry = await lstatBigInt(toHostRemovalPath(targetPath)).catch(() => null)
+  return entry?.isDirectory()
+    ? {
+        dev: entry.dev.toString(),
+        ino: entry.ino.toString(),
+        birthtimeNs: entry.birthtimeNs.toString()
+      }
+    : undefined
+}
+
+export function isSameCheckoutIdentity(
+  current: CheckoutIdentity | undefined,
+  expected: CheckoutIdentity
+): boolean {
+  return (
+    current?.dev === expected.dev &&
+    current.ino === expected.ino &&
+    current.birthtimeNs === expected.birthtimeNs
+  )
 }
 
 export async function removeHostEmptyDirectory(targetPath: string): Promise<void> {

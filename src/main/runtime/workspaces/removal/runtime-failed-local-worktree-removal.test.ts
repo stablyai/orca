@@ -22,7 +22,10 @@ import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import type { Store } from '../../../persistence/loading-store/store'
 import type * as HostTreeRemoval from '../../../filesystem/host-tree-removal'
-import { removeHostCheckout } from '../../../filesystem/host-tree-removal'
+import {
+  removeHostCheckout,
+  removeUnregisteredHostCheckout
+} from '../../../filesystem/host-tree-removal'
 import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
@@ -55,7 +58,11 @@ vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => 
 }))
 vi.mock('../../../filesystem/host-tree-removal', async (importOriginal) => {
   const actual = await importOriginal<typeof HostTreeRemoval>()
-  return { ...actual, removeHostCheckout: vi.fn(actual.removeHostCheckout) }
+  return {
+    ...actual,
+    removeHostCheckout: vi.fn(actual.removeHostCheckout),
+    removeUnregisteredHostCheckout: vi.fn(actual.removeUnregisteredHostCheckout)
+  }
 })
 
 const execFileAsync = promisify(execFile)
@@ -89,6 +96,14 @@ async function listedRows(): Promise<{ path: string; removalError?: string }[]> 
   return (await withUnregisteredRemovalCheckouts(repo.id, await listWorktreesStrict(repoPath)))
     .filter((row) => !row.isMainWorktree)
     .map(({ path, removalError }) => ({ path, ...(removalError ? { removalError } : {}) }))
+}
+
+/** Git may delete `.git` before failing; put back the link a leftover proves itself with. */
+async function keepCheckoutMarker(): Promise<void> {
+  await writeFile(
+    join(worktreePath, '.git'),
+    `gitdir: ${join(repoPath, '.git', 'worktrees', 'feature')}\n`
+  )
 }
 
 /** Reads only repos and worktree metadata, as the finish and the push-target cleanup do. */
@@ -138,7 +153,8 @@ function jobHost(purged: string[], stopPtys = vi.fn(async () => {}), pushTarget?
 async function deleteRow(
   purged: string[],
   stopPtys = vi.fn(async () => {}),
-  pushTarget?: GitPushTarget
+  pushTarget?: GitPushTarget,
+  force = true
 ): Promise<unknown> {
   const listed = await listWorktreesStrict(repoPath)
   const retried = await retryFailedRemovalUnlessRegistered(
@@ -146,6 +162,7 @@ async function deleteRow(
     worktreePath,
     listed,
     {},
+    force,
     () =>
       retryFailedWorktreeRemoval(worktreeId, 'local', (record) =>
         interruptedLocalWorktreeRemovalJob(record, jobHost(purged, stopPtys, pushTarget))
@@ -535,7 +552,7 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
 
   it('at startup, unregisters a checkout whose .git is gone, keeping its files, until the user removes it', async () => {
     await setImmutable(false)
-    await rm(join(worktreePath, '.git'))
+    await rm(join(worktreePath, '.git'), { force: true })
     const purged: string[] = []
 
     expect(await finishAtStartup(purged)).toBeInstanceOf(Error)
@@ -557,6 +574,82 @@ describe.skipIf(process.platform !== 'darwin')('a worktree delete Git fails part
     expect(purged).toEqual([worktreeId])
     expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([])
     expect(await listedRows()).toEqual([])
+  })
+
+  it('Delete finishes a leftover whose .git Git deleted before failing', async () => {
+    await failInSession()
+    await setImmutable(false)
+    await rm(join(worktreePath, '.git'), { force: true })
+    const purged: string[] = []
+
+    expect(await deleteRow(purged)).toBeUndefined()
+
+    expect(existsSync(worktreePath)).toBe(false)
+    expect(await git(['branch', '--list', 'feature'])).toBe('')
+    expect(purged).toEqual([worktreeId])
+  })
+
+  it('never deletes a copy restored at the leftover path, even with its .git', async () => {
+    await failInSession()
+    await setImmutable(false)
+    await keepCheckoutMarker()
+    const moved = join(scratchDir, 'moved')
+    await rename(worktreePath, moved)
+    await execFileAsync('cp', ['-R', moved, worktreePath])
+    await writeFile(join(worktreePath, 'restored.txt'), 'mine\n')
+
+    expect(await deleteRow([])).toBeInstanceOf(Error)
+
+    expect(await readFile(join(worktreePath, 'restored.txt'), 'utf8')).toBe('mine\n')
+    expect(existsSync(join(worktreePath, '.git'))).toBe(true)
+    expect(existsSync(join(moved, '.git'))).toBe(true)
+  })
+
+  it('stops deleting when the proven folder is swapped out after the last check', async () => {
+    await failInSession()
+    await setImmutable(false)
+    await keepCheckoutMarker()
+    const moved = join(scratchDir, 'moved')
+    const actual = await vi.importActual<typeof HostTreeRemoval>(
+      '../../../filesystem/host-tree-removal'
+    )
+    vi.mocked(removeUnregisteredHostCheckout).mockImplementationOnce(
+      async (path, signal, expected) => {
+        await rename(path, moved)
+        await execFileAsync('cp', ['-R', moved, path])
+        await writeFile(join(path, 'restored.txt'), 'mine\n')
+        return actual.removeUnregisteredHostCheckout(path, signal, expected)
+      }
+    )
+
+    expect(await deleteRow([])).toBeInstanceOf(Error)
+
+    expect(await readFile(join(worktreePath, 'restored.txt'), 'utf8')).toBe('mine\n')
+    expect(existsSync(join(moved, '.git'))).toBe(true)
+  })
+
+  it('an unforced Delete asks for Force Delete and keeps the row’s failure reason', async () => {
+    await failInSession()
+
+    expect(String(await deleteRow([], undefined, undefined, false))).toContain(
+      'no longer registered with Git but its directory remains'
+    )
+
+    expect(await listedRows()).toEqual([
+      { path: worktreePath, removalError: expect.stringMatching(/Operation not permitted/) }
+    ])
+  })
+
+  it('deletes the merged branch once a different checkout takes the leftover path', async () => {
+    await failInSession()
+    await setImmutable(false)
+    await rm(worktreePath, { recursive: true })
+    await git(['worktree', 'add', '-q', worktreePath, '-b', 'other'])
+
+    expect(await listedRows()).toEqual([{ path: worktreePath }])
+
+    await vi.waitFor(async () => expect(await git(['branch', '--list', 'feature'])).toBe(''))
+    expect(await git(['branch', '--list', 'other'])).not.toBe('')
   })
 })
 

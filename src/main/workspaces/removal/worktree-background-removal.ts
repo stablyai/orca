@@ -23,6 +23,7 @@ import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { readWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
 import { failureLeftByGit } from './worktree-removal-failure'
 import { differentCheckoutAtPathError, isCheckoutRegistered } from './worktree-removal-leftover'
+import { readCheckoutIdentity } from '../../filesystem/host-tree-removal'
 import {
   closeWorktreeRemovalRecords,
   failedWorktreeRemovals,
@@ -125,7 +126,15 @@ export function startBackgroundWorktreeRemoval(
     requestedAt: Date.now()
   }
   const settlement = addPendingRemoval(record)
-  runBackgroundWorktreeRemoval(record, args, recordWorktreeRemoval(record))
+  const job: BackgroundWorktreeRemovalJob = {
+    ...args,
+    run: async (stopSignal) => {
+      // Read before Git deletes anything: if Git deletes `.git` and then fails, only this proves the leftover.
+      record.checkoutIdentity = await readCheckoutIdentity(worktree.path)
+      return args.run(stopSignal)
+    }
+  }
+  runBackgroundWorktreeRemoval(record, job, recordWorktreeRemoval(record))
   return settlement.result
 }
 
