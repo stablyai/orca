@@ -55,8 +55,8 @@ export async function confirmFreshPtyForeground(args: {
       ...(process.platform === 'win32'
         ? {
             forceProcessScan: true,
-            readWindowsConsoleAttachedProcessIds: () =>
-              readWindowsConsoleAttachedProcessIds(proc.pid)
+            readWindowsConsoleAttachedProcessIds: (memberPid?: number) =>
+              readWindowsConsoleAttachedProcessIds(memberPid ?? proc.pid)
           }
         : {})
     })

@@ -22,8 +22,9 @@ export type AgentForegroundResolutionOptions = {
   fresh?: boolean
   /** Force confirmation scans even when node-pty reports a recognized name. */
   forceProcessScan?: boolean
-  /** Lazily proves which global descendants still belong to this ConPTY. */
-  readWindowsConsoleAttachedProcessIds?: () => Promise<ReadonlySet<number> | null>
+  /** Lazily proves which global descendants still belong to this ConPTY. `memberPid` names a live
+   * console member to attach through when the pane root has exited; it defaults to the root. */
+  readWindowsConsoleAttachedProcessIds?: (memberPid?: number) => Promise<ReadonlySet<number> | null>
   /** A contradictory full-table command line proves cached anchor PID reuse. */
   anchorProcessId?: number
   /** The cached agent name the anchor pid is supposed to prove. */
@@ -59,7 +60,7 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
   options: AgentForegroundResolutionOptions
 ): Promise<WindowsAgentForegroundResolution> {
   const inventory = await queryWindowsPaneProcessInventory(shellPid, {
-    ...(options.fresh === true ? { fresh: true } : {}),
+    ...(options.fresh === true ? { fresh: true, includeOrphansOfExitedRoot: true } : {}),
     ...(options.anchorProcessId !== undefined ? { anchorPid: options.anchorProcessId } : {})
   })
   if (!inventory) {
@@ -72,10 +73,17 @@ export async function resolveWindowsAgentForegroundProcessWithAvailability(
     fallbackProcess,
     options.contextPaths
   )
+  // Orphans of an exited root may only prove an agent; without one the scan proves nothing.
+  if (inventory.rootExited && !hasRecognizedCandidate) {
+    return { available: false, processName: null }
+  }
   let filteredCandidates = candidates
   if (hasRecognizedCandidate && options.readWindowsConsoleAttachedProcessIds) {
     // Job membership retains detached descendants; only console attachment can exclude their byte authority.
-    const consoleProcessIds = await options.readWindowsConsoleAttachedProcessIds()
+    // With the root gone, attach through a direct orphan: it is still a member of this console.
+    const consoleProcessIds = await options.readWindowsConsoleAttachedProcessIds(
+      inventory.rootExited ? candidates.find((candidate) => candidate.depth === 1)?.pid : undefined
+    )
     if (!consoleProcessIds) {
       return { available: false, processName: null }
     }

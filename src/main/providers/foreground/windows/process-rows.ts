@@ -59,11 +59,13 @@ export type WindowsPaneProcessInventory = {
   candidates: WindowsProcessCandidate[]
   /** Full-table anchor catches recycled job-member PIDs orphaned outside the descendant walk. */
   anchorRow: WindowsProcessRow | null
+  /** The root was absent from a fresh table; candidates are its surviving orphans and can only prove presence. */
+  rootExited?: true
 }
 
 export async function queryWindowsPaneProcessInventory(
   rootPid: number,
-  options: { fresh?: boolean; anchorPid?: number } = {}
+  options: { fresh?: boolean; anchorPid?: number; includeOrphansOfExitedRoot?: boolean } = {}
 ): Promise<WindowsPaneProcessInventory | null> {
   let rows: WindowsProcessRow[]
   try {
@@ -77,13 +79,25 @@ export async function queryWindowsPaneProcessInventory(
   }
   // Snapshot-shared index avoids per-pane whole-table map builds and linear PID lookups.
   const index = getProcessTableIndex(rows)
+  const anchorRow =
+    options.anchorPid !== undefined ? (index.byPid.get(options.anchorPid) ?? null) : null
   // Missing roots may indicate stale/filtered snapshots, never observed absence of children.
   if (!index.byPid.has(rootPid)) {
-    return null
+    // A pane root can exit while the agent it started keeps the console alive (Windows keeps the
+    // dead parent's pid on the orphans). A fresh table still shows those orphans, which callers may
+    // use as evidence of presence; an empty or stale read stays unavailable.
+    if (options.fresh !== true || options.includeOrphansOfExitedRoot !== true) {
+      return null
+    }
+    const orphans = collectDescendantsFromIndex(index, rootPid)
+    if (orphans.length === 0) {
+      return null
+    }
+    return { candidates: orphans.sort((a, b) => b.depth - a.depth), anchorRow, rootExited: true }
   }
   return {
     candidates: collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth),
-    anchorRow: options.anchorPid !== undefined ? (index.byPid.get(options.anchorPid) ?? null) : null
+    anchorRow
   }
 }
 
