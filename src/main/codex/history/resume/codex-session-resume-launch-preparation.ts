@@ -74,21 +74,21 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
     const savedTranscriptPath = args.providerSession.transcriptPath
     const sharedRuntimeCodexHomePath = getOrcaManagedCodexHomePath()
     // Old copies are never linked any more: an untouched one whose source grew resumes the source.
-    // An account restart moves the resumed rollout, so it keeps the copy.
-    const newerSource =
-      savedTranscriptPath && !args.useSelectedAccount
-        ? await getNewerLegacyCopiedCodexSessionSource(
-            savedTranscriptPath,
-            sharedRuntimeCodexHomePath
-          )
-        : null
+    const newerSource = savedTranscriptPath
+      ? await getNewerLegacyCopiedCodexSessionSource(
+          savedTranscriptPath,
+          sharedRuntimeCodexHomePath
+        )
+      : null
     const redirected =
       newerSource !== null &&
       codexDatedRolloutRelativePath(join(systemHomePath, 'sessions'), newerSource) !== null
     const transcriptPath = redirected ? newerSource : savedTranscriptPath
     // Off the real-home route the copy resumed under the shared runtime home's account check; the
     // source keeps it.
-    const keepSharedRuntimeCheck = redirected && !runtimeHome.isHostSystemDefaultRealHomeSelected()
+    // An account restart links the source into the selected home, as it linked the linked copy.
+    const keepSharedRuntimeCheck =
+      redirected && !args.useSelectedAccount && !runtimeHome.isHostSystemDefaultRealHomeSelected()
     const preparation = await prepareCodexSessionResume({
       sessionId: args.providerSession.id,
       transcriptPath,

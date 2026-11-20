@@ -222,5 +222,11 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     expect(
       await getNewerLegacyCopiedCodexSessionSource(runtimeSessionPath, getRuntimeCodexHomePath())
     ).toBe(systemSessionPath)
+
+    // A rewritten source that grew but lost the copy's lines does not win.
+    writeFileSync(systemSessionPath, '{"turn":"rewritten"}\n{"turn":2}\n', 'utf-8')
+    expect(
+      await getNewerLegacyCopiedCodexSessionSource(runtimeSessionPath, getRuntimeCodexHomePath())
+    ).toBeNull()
   })
 })

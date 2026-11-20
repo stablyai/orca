@@ -85,6 +85,15 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     expect(readFileSync(targetRolloutPath(), 'utf-8')).toBe('{"different":true}\n')
   })
 
+  it('resumes the real-home rollout that grew from a kept legacy copy', async () => {
+    mkdirSync(join(targetRolloutPath(), '..'), { recursive: true })
+    writeFileSync(targetRolloutPath(), '{"type":"session_meta"}\n{"turn":2}\n', 'utf-8')
+
+    await expect(prepare()).resolves.toEqual({ useRealCodexHome: true })
+    expect(readFileSync(rolloutPath, 'utf-8')).toBe('{"type":"session_meta"}\n')
+    expect(readFileSync(targetRolloutPath(), 'utf-8')).toBe('{"type":"session_meta"}\n{"turn":2}\n')
+  })
+
   function prepare() {
     return prepareLegacySharedCodexSessionResume(legacyArgs(), options())
   }

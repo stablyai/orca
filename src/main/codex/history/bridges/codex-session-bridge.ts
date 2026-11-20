@@ -20,6 +20,7 @@ import {
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
 import { codexDatedRolloutRelativePath } from '../resume/codex-session-resume-home'
+import { isRolloutBytePrefix } from '../rollouts/codex-rollout-byte-prefix'
 
 type LegacyCopiedSessionMarker = {
   sourcePath: string
@@ -246,8 +247,10 @@ export async function getNewerLegacyCopiedCodexSessionSource(
       return null
     }
     const [target, source] = await Promise.all([lstat(sessionFilePath), lstat(marker.sourcePath)])
-    // A shorter or rewritten source may lack lines the copy holds.
-    return fileStatsMatchMarker(target, marker, 'target') && source.size > marker.sourceSize
+    // The source must hold every byte of the copy: a rewritten one may lack lines it holds.
+    return fileStatsMatchMarker(target, marker, 'target') &&
+      source.size > target.size &&
+      (await isRolloutBytePrefix(sessionFilePath, marker.sourcePath))
       ? marker.sourcePath
       : null
   } catch {
