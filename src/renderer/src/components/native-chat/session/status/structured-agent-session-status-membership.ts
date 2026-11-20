@@ -126,15 +126,18 @@ export function createStructuredSessionMembership() {
       }
     }
   }
-  const detach = (member: Member): void => {
-    if (members.get(member.paneKey) === member) {
-      members.delete(member.paneKey)
-    }
+  const unindexTab = (member: Member): void => {
     const tabMembers = membersByTabId.get(member.tab.id)
     tabMembers?.delete(member)
     if (tabMembers && !tabMembers.size) {
       membersByTabId.delete(member.tab.id)
     }
+  }
+  const detach = (member: Member): void => {
+    if (members.get(member.paneKey) === member) {
+      members.delete(member.paneKey)
+    }
+    unindexTab(member)
     legacy.delete(member)
     ungroupedOwed.delete(member)
     const group = member.group
@@ -171,7 +174,15 @@ export function createStructuredSessionMembership() {
       member = { paneKey, tab, hostKey, group }
       attach(member)
     }
+    // A conversation's pane key outlives its tab: re-file a reused member under its new tab id.
+    const retabbed = member.tab.id !== tab.id
+    if (retabbed) {
+      unindexTab(member)
+    }
     member.tab = tab
+    if (retabbed) {
+      indexTab(member)
+    }
     if (tab.executionHostId) {
       legacy.delete(member)
     } else {

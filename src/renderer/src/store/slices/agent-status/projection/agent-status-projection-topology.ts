@@ -94,6 +94,9 @@ export function stageProjectionTopology(
           nextTabOwners.set(tab.id, null)
         }
       }
+    }
+    // Insert after every removal: a chat moved between workspaces keeps its one conversation key.
+    for (const owner of owners) {
       for (const tab of state.unifiedTabsByWorktree[owner] ?? []) {
         if (
           tab.contentType === 'agent-session' &&
