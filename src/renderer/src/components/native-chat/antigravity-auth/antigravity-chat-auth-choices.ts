@@ -120,3 +120,24 @@ export function antigravityAuthFailureReason(input: {
   }
   return REFUSED.test(text) ? 'refused' : null
 }
+
+// These failures belong to one method's credentials; once the chat uses another they're history.
+const GOOGLE_ONLY: ReadonlySet<AntigravityAuthFailureReason> = new Set([
+  'noSubscription',
+  'ineligible',
+  'signedOut'
+])
+const KEY_REJECTED = /API key not valid/i
+
+/** The failure came from a method the chat no longer uses, so offering a switch would undo a fix. */
+export function antigravityAuthFailureOutlived(
+  reason: AntigravityAuthFailureReason,
+  text: string,
+  current: Method | null
+): boolean {
+  const onGoogle = current === 'oauth-personal' || current === 'oauth-business'
+  return (
+    (GOOGLE_ONLY.has(reason) && !onGoogle) ||
+    (reason === 'refused' && KEY_REJECTED.test(text) && current !== 'gemini-api-key')
+  )
+}

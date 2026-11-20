@@ -7,6 +7,7 @@ import type { NativeChatTextBlock } from '../../../../../shared/native-chat/nati
 import { nativeChatNoticeLook } from '../../../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { useNativeChatAntigravityAuth } from './native-chat-antigravity-auth'
 import {
+  antigravityAuthFailureOutlived,
   antigravityAuthFailureReason,
   antigravityChatAuthAlternatives,
   type AntigravityAuthFailureReason
@@ -17,12 +18,6 @@ import {
   antigravityAuthFailureLead
 } from './antigravity-auth-words'
 
-// These failures belong to a Google sign-in; once the chat uses another method they're history.
-const GOOGLE_ONLY: ReadonlySet<AntigravityAuthFailureReason> = new Set([
-  'noSubscription',
-  'ineligible',
-  'signedOut'
-])
 // The row already says these in its own words.
 const ROW_SAYS_IT: ReadonlySet<AntigravityAuthFailureReason> = new Set(['signedOut', 'usageLimit'])
 
@@ -77,9 +72,7 @@ export function NativeChatAntigravityAuthRecovery({
     return null
   }
   const reason = antigravityAuthFailureReason({ failureKind, account, text })
-  const current = auth.detection.method
-  const onGoogle = current === 'oauth-personal' || current === 'oauth-business'
-  if (!reason || (GOOGLE_ONLY.has(reason) && !onGoogle)) {
+  if (!reason || antigravityAuthFailureOutlived(reason, text, auth.detection.method)) {
     return null
   }
   const [option] = antigravityChatAuthAlternatives(auth.detection)

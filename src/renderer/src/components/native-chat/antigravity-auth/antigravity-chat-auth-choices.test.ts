@@ -5,6 +5,7 @@ import {
   ANTIGRAVITY_SUBSCRIPTION_REQUIRED
 } from '../../../../../shared/agent-accounts/antigravity/antigravity-sign-in-sentences'
 import {
+  antigravityAuthFailureOutlived,
   antigravityAuthFailureReason,
   antigravityChatAuthAlternatives,
   antigravityChatAuthMenuItems
@@ -96,5 +97,18 @@ describe('antigravityAuthFailureReason', () => {
     [{ failureKind: 'notSignedIn', account: 'system', text: '403' }, null]
   ] as const)('%o is %s', (input, reason) => {
     expect(antigravityAuthFailureReason(input)).toBe(reason)
+  })
+})
+
+describe('antigravityAuthFailureOutlived', () => {
+  it('drops an offer once the chat left the method that failed', () => {
+    const rejected = 'API key not valid. Please pass a valid API key.'
+    expect(antigravityAuthFailureOutlived('refused', rejected, 'agent-platform')).toBe(true)
+    expect(antigravityAuthFailureOutlived('refused', rejected, 'gemini-api-key')).toBe(false)
+    expect(antigravityAuthFailureOutlived('noSubscription', '', 'gemini-api-key')).toBe(true)
+    expect(antigravityAuthFailureOutlived('noSubscription', '', 'oauth-personal')).toBe(false)
+    expect(antigravityAuthFailureOutlived('refused', 'PERMISSION_DENIED', 'agent-platform')).toBe(
+      false
+    )
   })
 })
