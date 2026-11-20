@@ -9,6 +9,7 @@ const WINDOWS_DRIVE_MOUNT_TYPES = new Set(['drvfs', '9p', 'virtiofs'])
 import { ORCAD_WSL_HOST_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 
 let cachedGuestMounts: readonly string[] | null = null
+let guestMountsRead: Promise<readonly string[]> | null = null
 
 // The Windows-copy check stats every drive-mounted PATH entry (~50 ms cold); reuse a recent verdict.
 const WINDOWS_COPY_VERDICT_TTL_MS = 30_000
@@ -96,30 +97,34 @@ export function knownGuestWindowsDriveMounts(): readonly string[] {
   return cachedGuestMounts ?? []
 }
 
-/** readGuestWindowsDriveMounts for callers that must not block the event loop; both fill one cache. */
-export async function readGuestWindowsDriveMountsAsync(): Promise<readonly string[]> {
+/** readGuestWindowsDriveMounts for callers that must not block the event loop; all fill one cache and share one read. */
+export function readGuestWindowsDriveMountsAsync(): Promise<readonly string[]> {
   if (cachedGuestMounts) {
-    return cachedGuestMounts
+    return Promise.resolve(cachedGuestMounts)
   }
-  const { env, platform } = process
-  const guest =
-    platform === 'linux' &&
-    env[ORCAD_WSL_HOST_ENV] === '1' &&
-    (hasWslEnv(env) ||
-      (await access(WSL_INTEROP_FILE).then(
-        () => true,
-        () => false
-      )))
-  const mounts = guest
-    ? parseWindowsDriveMountPoints(await readFile('/proc/mounts', 'utf8').catch(() => ''))
-    : []
-  cachedGuestMounts ??= mounts
-  return cachedGuestMounts
+  guestMountsRead ??= (async () => {
+    const { env, platform } = process
+    const guest =
+      platform === 'linux' &&
+      env[ORCAD_WSL_HOST_ENV] === '1' &&
+      (hasWslEnv(env) ||
+        (await access(WSL_INTEROP_FILE).then(
+          () => true,
+          () => false
+        )))
+    const mounts = guest
+      ? parseWindowsDriveMountPoints(await readFile('/proc/mounts', 'utf8').catch(() => ''))
+      : []
+    cachedGuestMounts ??= mounts
+    return cachedGuestMounts
+  })()
+  return guestMountsRead
 }
 
 /** Stand in for /proc/mounts so call-site tests can model a Windows drive; null re-reads. */
 export function _setGuestWindowsDriveMountsForTests(mounts: readonly string[] | null): void {
   cachedGuestMounts = mounts
+  guestMountsRead = null
 }
 
 /** Keep CLI launches consistent with detection by removing Windows drive PATH entries only in WSL-host orcad. */

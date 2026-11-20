@@ -17,20 +17,26 @@ export type HourlyLookup<T> = {
   refresh: (signal?: AbortSignal, retryFailed?: boolean) => Promise<void>
 }
 
-/** A failed lookup counts as a check too: it keeps the last known value and waits the hour like a success. */
+/**
+ * A failed lookup counts as a check too: it keeps the last known value and waits the hour like a success.
+ * While nothing is known, refreshes in that hour answer with its error, so no one reads silence as "no release".
+ */
 export function hourlyLookup<T>(
   fetchLatest: (signal?: AbortSignal, retryFailed?: boolean) => Promise<T>
 ): HourlyLookup<T> {
   let latest: { value: T } | null = null
   let checkedAt: number | null = null
-  let failed = false
+  let failure: { error: unknown } | null = null
   let lookup: Promise<void> | null = null
   return {
     latest: () => latest?.value,
-    failed: () => failed && !latest,
+    failed: () => failure !== null && !latest,
     refresh: async (signal, retryFailed = false) => {
       const recent = checkedAt !== null && Date.now() - checkedAt < REFRESH_MS
       if (recent && !(retryFailed && !latest) && !lookup) {
+        if (failure && !latest) {
+          throw failure.error
+        }
         return
       }
       if (!lookup) {
@@ -39,10 +45,10 @@ export function hourlyLookup<T>(
           .then(
             (value) => {
               latest = { value }
-              failed = false
+              failure = null
             },
             (error: unknown) => {
-              failed = true
+              failure = { error }
               throw error
             }
           )

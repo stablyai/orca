@@ -138,6 +138,7 @@ export function appendManagedAgentDirsToChildPath(
   platform: NodeJS.Platform = process.platform
 ): void {
   delete env.ORCA_MANAGED_AGENT_PATH
+  delete env.ORCA_WINDOWS_DRIVE_MOUNTS
   // Opening a terminal isn't use of an agent, so this reads the folders without the use hook.
   const folders = MANAGED_AGENT_CLI_IDS.flatMap((agent) => {
     const release = installedReleases.get(agent)
@@ -152,15 +153,18 @@ export function appendManagedAgentDirsToChildPath(
   const separator = platform === 'win32' ? ';' : delimiter
   const entries = readInheritedPath(env, platform).split(separator).filter(Boolean)
   const missing = folders.filter((folder) => !entries.includes(folder))
+  // On a WSL host, Windows-drive entries hold shims it can't run, so Orca's copies go before them.
+  const mounts = knownGuestWindowsDriveMounts()
   if (missing.length > 0) {
-    // On a WSL host, Windows-drive entries hold shims it can't run, so Orca's copies go before them.
-    const mounts = knownGuestWindowsDriveMounts()
     const drive = entries.findIndex((entry) =>
       isUnderWindowsDriveMount(entry.replace(/\/+$/, ''), mounts)
     )
     const at = drive === -1 ? entries.length : drive
     env[key] = [...entries.slice(0, at), ...missing, ...entries.slice(at)].join(separator)
   }
-  // Startup files re-add them after a login profile rebuilds PATH.
+  // Startup files re-add them, in the same place, after a login profile rebuilds PATH.
   env.ORCA_MANAGED_AGENT_PATH = folders.join(separator)
+  if (mounts.length > 0) {
+    env.ORCA_WINDOWS_DRIVE_MOUNTS = mounts.join(':')
+  }
 }

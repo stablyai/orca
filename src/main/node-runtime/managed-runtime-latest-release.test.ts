@@ -10,11 +10,12 @@ it('lets a caller with a signal leave a stalled lookup another caller started wi
   await expect(joined).rejects.toThrow('install cancelled')
 })
 
-it('waits out the hour after a failed lookup, unless an install asks while nothing is known', async () => {
+it('answers a failed lookup for the rest of the hour, unless an install asks while nothing is known', async () => {
+  const errors = ['rate limited', 'still rate limited']
   const lookup = hourlyLookup<string>(async () => {
-    throw new Error('rate limited')
+    throw new Error(errors.shift())
   })
   await expect(lookup.refresh()).rejects.toThrow('rate limited')
-  await expect(lookup.refresh()).resolves.toBeUndefined()
-  await expect(lookup.refresh(undefined, true)).rejects.toThrow('rate limited')
+  await expect(lookup.refresh()).rejects.toThrow(/^rate limited$/)
+  await expect(lookup.refresh(undefined, true)).rejects.toThrow('still rate limited')
 })
