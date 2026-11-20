@@ -29,7 +29,20 @@ export const LEGACY_JOURNAL_RETIREMENT_OUTCOMES = [
   'proof_complete',
   // The proof finished and deletion was allowed, but the file couldn't be removed yet.
   'delete_failed',
-  'deleted'
+  'deleted',
+  // The proof stopped for the reason in `error` and is tried again later.
+  'proving'
+] as const
+
+export const LEGACY_JOURNAL_RETIREMENT_ERRORS = [
+  'none',
+  // Paused for activity, or stopped by quitting.
+  'interrupted',
+  // A chat's conversion failed.
+  'conversion',
+  // The store or the file could not be read or written.
+  'storage',
+  'other'
 ] as const
 
 export const LEGACY_JOURNAL_RETIREMENT_DEFERS = [
@@ -77,6 +90,7 @@ export const legacyJournalRetirementSchema = z
     reason: z.enum([...LEGACY_JOURNAL_RETIREMENT_REASONS, 'none']),
     defer: z.enum(LEGACY_JOURNAL_RETIREMENT_DEFERS),
     artifact: z.enum(LEGACY_JOURNAL_RETIREMENT_ARTIFACTS),
+    error: z.enum(LEGACY_JOURNAL_RETIREMENT_ERRORS),
     mode: z.enum(['off', 'report', 'enforce']),
     policy_revision: z.number().int().min(0).max(1_000_000),
     inventory_revision: z.number().int().min(0).max(1000),
@@ -88,6 +102,8 @@ export const legacyJournalRetirementSchema = z
     originals_bucket: count,
     copies_bucket: count,
     source_bytes_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_BYTES_BUCKETS),
-    active_ms_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS)
+    active_ms_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS),
+    // From this launch's first attempt to this outcome, pauses for activity included.
+    elapsed_ms_bucket: z.enum(LEGACY_JOURNAL_RETIREMENT_DURATION_BUCKETS)
   })
   .strict()

@@ -67,13 +67,19 @@ export class JournalLegacyProof {
       this.frontier.cursor.after === null
     const at = fresh ? savedCursor(saved, observation) : null
     if (at) {
-      this.frontier = createLegacyProofFrontier({ ...at, check: true })
+      this.frontier = createLegacyProofFrontier({ ...at.cursor, check: true }, at)
     }
   }
 
   /** What this run of the proof walked, and whether it picked up saved progress. */
-  get walked(): { counts: LegacyProofCounts; resumed: boolean } {
-    return { counts: { ...this.frontier.counts }, resumed: this.frontier.resumed }
+  get walked(): {
+    counts: LegacyProofCounts
+    resumed: boolean
+    whole: boolean
+    fromCopies: boolean
+  } {
+    const { counts, resumed, whole, fromCopies } = this.frontier
+    return { counts: { ...counts }, resumed, whole, fromCopies }
   }
 
   /** Why this original was refused, once `refused` said so. */
@@ -144,7 +150,9 @@ export class JournalLegacyProof {
       layout: LEGACY_PROOF_LAYOUT,
       proof: observation.proof,
       store: observation.store,
-      cursor
+      cursor,
+      // Only counts that began at the first page are carried, so a resumed walk can say so.
+      ...(this.frontier.whole ? { counts: { ...this.frontier.counts } } : {})
     }
     await this.writer.maintain({
       kind: 'legacy-retirement-save',
@@ -174,7 +182,7 @@ export class JournalLegacyProof {
 function savedCursor(
   saved: string | null,
   observation: LegacyProofObservation
-): LegacyProofCursor | null {
+): { cursor: LegacyProofCursor; counts?: LegacyProofCounts; fromCopies?: boolean } | null {
   const proving = decodeLegacySourceProving(saved)
   if (proving) {
     if (proving.proof !== observation.proof || proving.store !== observation.store) {
@@ -182,8 +190,8 @@ function savedCursor(
     }
     // Copies the reconcile keeps can sort anywhere, so their pages are always walked whole.
     return proving.cursor.table >= LEGACY_PROOF_COPIES_TABLE
-      ? { table: LEGACY_PROOF_COPIES_TABLE, after: null }
-      : proving.cursor
+      ? { cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null }, counts: proving.counts }
+      : { cursor: proving.cursor, counts: proving.counts }
   }
   let retiring: unknown
   try {
@@ -202,5 +210,7 @@ function savedCursor(
     retiring.proof === observation.proof &&
     'store' in retiring &&
     retiring.store === observation.store
-  return proven ? { table: LEGACY_PROOF_COPIES_TABLE, after: null } : null
+  return proven
+    ? { cursor: { table: LEGACY_PROOF_COPIES_TABLE, after: null }, fromCopies: true }
+    : null
 }

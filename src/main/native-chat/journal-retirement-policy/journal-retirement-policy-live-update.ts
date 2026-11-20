@@ -2,8 +2,12 @@ import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment
 import { getMainHttpClient } from '../../network/http-client'
 import type { Store } from '../../persistence/loading-store/store'
 import { readInstallId as readStoredInstallId } from '../../telemetry/install-id'
+import { track } from '../../telemetry/client'
+import { legacyJournalRetirementSchema } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
+import { setLegacyJournalRetirementHost } from '../agent-session-journal/journal-legacy-retirement-outcome'
 import {
   ReleaseAssetPolicyLiveUpdater,
+  readCachedReleaseAssetPolicyAsync,
   type ReleaseAssetPolicySpec
 } from '../../remote-policies/release-asset-policy-live-update'
 import {
@@ -34,7 +38,10 @@ let starting: Promise<void> | null = null
 // The newest policy seen this run: only its `off` counts, so a later failed read can't undo it.
 let newestKnown: JournalRetirementPolicy | null = null
 
-/** Unpackaged runs never fetch, so they stay in report mode. */
+/**
+ * Unpackaged runs never fetch, so they stay in report mode. The cleanup runs in this process's
+ * runtime: it reads the policy and reports its outcome here, through the usage-event client.
+ */
 export function startJournalRetirementPolicyLiveUpdates(store: Store): void {
   const environment = getAppEnvironment()
   readInstallId = () => readStoredInstallId(store)
@@ -45,35 +52,39 @@ export function startJournalRetirementPolicyLiveUpdates(store: Store): void {
     fetch: (url, init) => getMainHttpClient().fetch(url, init)
   })
   const started = updater
-  starting = started.start()
+  starting = started.start().finally(() => {
+    starting = null
+    refreshFailedAt = started.lastFetched() ? null : Date.now()
+  })
   void starting.catch(() => {})
   environment.onWillQuit(() => started.stop())
 }
 
-/** Refreshes at most once per few minutes, reading the cache asynchronously, then decides. */
+/**
+ * Decides from what is known now and never waits on the network: the cleanup runs during startup
+ * maintenance. A stale download is refreshed in the background for the next ask. Before updates
+ * start, the cached policy alone decides, so a cached `off` holds from the first ask.
+ */
 export async function journalRetirementMode(): Promise<{
   mode: JournalRetirementMode
   revision: number
 }> {
-  if (starting) {
-    await starting.catch(() => {})
-    starting = null
-    refreshFailedAt = updater?.lastFetched() ? null : Date.now()
-  }
   const fetchedAt = updater?.lastFetched()?.at
   const now = Date.now()
   if (
     updater &&
+    !starting &&
     (fetchedAt === undefined || now - fetchedAt > REFRESH_REUSE_MS) &&
     (refreshFailedAt === null || now - refreshFailedAt > REFRESH_FAILURE_BACKOFF_MS)
   ) {
-    refreshing ??= updater.refresh().finally(() => {
+    const running = updater
+    refreshing ??= running.refresh().finally(() => {
       refreshing = null
+      refreshFailedAt = running.lastFetched() ? null : Date.now()
     })
-    await refreshing.catch(() => {})
-    refreshFailedAt = updater.lastFetched() ? null : Date.now()
+    void refreshing.catch(() => {})
   }
-  const read = (await updater?.newestKnown()) ?? null
+  const read = updater ? await updater.newestKnown() : await readCachedPolicy()
   newestKnown = newestJournalRetirementPolicy(read ? { policy: read } : null, newestKnown)
   return effectiveJournalRetirementMode({
     fetched: updater?.lastFetched() ?? null,
@@ -81,5 +92,32 @@ export async function journalRetirementMode(): Promise<{
     now: Date.now(),
     platform: process.platform,
     installId: readInstallId()
+  })
+}
+
+async function readCachedPolicy(): Promise<JournalRetirementPolicy | null> {
+  try {
+    const environment = getAppEnvironment()
+    return await readCachedReleaseAssetPolicyAsync(
+      JOURNAL_RETIREMENT_POLICY,
+      environment.getPath('userData'),
+      environment.getVersion()
+    )
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The desktop runs the cleanup in this process's runtime: it asks this policy before deleting and
+ * reports where it stopped through the usage-event client, which validates every field. Installed
+ * before the runtime starts, so the first ask already honors a cached `off`.
+ */
+export function installJournalRetirementHost(store: Store): void {
+  readInstallId = () => readStoredInstallId(store)
+  setLegacyJournalRetirementHost({
+    report: async (event) =>
+      track('legacy_journal_retirement', legacyJournalRetirementSchema.parse(event)),
+    mode: journalRetirementMode
   })
 }

@@ -1,4 +1,11 @@
 import {
+  readJournalLegacySourceReceipt,
+  sameJournalLegacySource
+} from './database/journal-legacy-source-receipt'
+import { journalDomainDatabasePath } from './database/journal-host-database'
+import { legacyDestinationMain, legacyFilePresent } from './journal-legacy-retirement-files'
+import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import {
   compareAppVersions,
   isValidAppVersion
 } from '../../../shared/app-lifecycle/identity/app-version'
@@ -101,12 +108,14 @@ export function provenOutcome(
   outcome: 'proof_complete' | 'deleted' | 'delete_failed',
   proven: LegacySourceHeld,
   observation: { proof: string; walBytes: string },
-  activeMs: number | null
+  activeMs: number | null,
+  resumed: boolean
 ): Partial<LegacyJournalRetirementOutcome> {
   return {
     outcome,
-    completeness: 'complete',
-    resumed: !proven.whole,
+    // Counts that cover every page; a walk resumed from progress without them covers fewer.
+    completeness: proven.whole ? 'complete' : 'partial',
+    resumed,
     counts: proven.counts,
     sourceBytes: sourceBytes(observation),
     activeMs
@@ -115,4 +124,32 @@ export function provenOutcome(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * The original as the last older-Orca reconcile absorbed it, so the content proof reads what this
+ * store has already taken in; null keeps the original for this attempt.
+ */
+export async function observeLegacySource(
+  filename: string,
+  directory: string,
+  saved: { kept: boolean; receipt: string | null }
+): Promise<(LegacyProofObservation & { walBytes: string }) | null> {
+  const current = await readJournalLegacySourceReceipt(filename)
+  if (
+    !saved.kept ||
+    current.disposition !== 'copied-source' ||
+    !sameJournalLegacySource(saved.receipt ?? undefined, current)
+  ) {
+    return null
+  }
+  if (await legacyFilePresent(`${filename}-journal`)) {
+    throw new JournalLegacyRetentionError('legacy rollback journal retained')
+  }
+  return {
+    proof: JSON.stringify(current),
+    // The store file alone: its WAL is recreated on every open, which no refusal should outlive.
+    store: await legacyDestinationMain(journalDomainDatabasePath(directory)),
+    walBytes: current.wal.kind === 'empty' ? '0' : current.wal.size
+  }
 }

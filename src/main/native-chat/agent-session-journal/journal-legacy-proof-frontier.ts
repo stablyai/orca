@@ -18,18 +18,28 @@ export type LegacyProofFrontier = {
   counts: LegacyProofCounts
   /** This run picked up saved progress instead of starting at the first page. */
   resumed: boolean
+  /** `counts` cover every page from the first, across launches when progress carried them. */
+  whole: boolean
+  /** Resumed at the copies from a finished proof, whose own record holds the counts. */
+  fromCopies: boolean
 }
 
 export function createLegacyProofFrontier(
-  cursor: LegacyProofCursor = { table: 0, after: null }
+  cursor: LegacyProofCursor = { table: 0, after: null },
+  carried?: { counts?: LegacyProofCounts; fromCopies?: boolean }
 ): LegacyProofFrontier {
+  const resumed = cursor.table !== 0 || cursor.after !== null
   return {
     cursor,
     session: 0,
     pending: false,
     pages: 0,
-    counts: { chats: 0, converted: 0, notConverted: 0, originals: 0, copies: 0 },
-    resumed: cursor.table !== 0 || cursor.after !== null
+    counts: carried?.counts
+      ? { ...carried.counts }
+      : { chats: 0, converted: 0, notConverted: 0, originals: 0, copies: 0 },
+    resumed,
+    whole: !resumed || carried?.counts !== undefined,
+    fromCopies: carried?.fromCopies === true
   }
 }
 

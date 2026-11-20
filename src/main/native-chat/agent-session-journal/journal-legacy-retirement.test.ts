@@ -62,6 +62,11 @@ const originals = (db: Database.Database, sessionId: string) =>
 
 const original = (db: Database.Database, sessionId: string) => originals(db, sessionId)[0] ?? null
 
+type Mode = { mode: 'off' | 'report' | 'enforce'; revision: number }
+const policy =
+  (mode: Mode['mode'], revision = 1) =>
+  async (): Promise<Mode> => ({ mode, revision })
+
 const companions = (filename: string) =>
   [filename, `${filename}-wal`, `${filename}-shm`].filter((name) => existsSync(name))
 
@@ -355,6 +360,10 @@ it('finishes removing the absorbed WAL a removal left behind its main file, and 
   await launch().run()
   expect(existsSync(`${filename}-wal`)).toBe(true)
   save(retiring(wal.ino))
+  // Finishing the removal deletes too, so it waits for permission like the first step.
+  await launch('1.0.1', true, undefined, undefined, policy('off')).run()
+  await launch('1.0.1', true, undefined, undefined, policy('report')).run()
+  expect(existsSync(`${filename}-wal`)).toBe(true)
   await launch().run()
   expect(existsSync(`${filename}-wal`)).toBe(false)
 })
@@ -696,11 +705,6 @@ it('keeps a chat deleted here from a journal written before some queue columns e
   )
 })
 
-type Mode = { mode: 'off' | 'report' | 'enforce'; revision: number }
-const policy =
-  (mode: Mode['mode'], revision = 1) =>
-  async (): Promise<Mode> => ({ mode, revision })
-
 it('in report mode proves once, keeps the original, and deletes only once enforcement is allowed', async () => {
   const events: { outcome: string }[] = []
   setLegacyJournalRetirementHost({
@@ -814,4 +818,65 @@ it('never resumes progress an older build saved, or saves progress an older buil
     )
   )
   expect(saved.layout).not.toBe(1)
+})
+
+it('reports a refusal an older build saved, and full counts for a walk that resumed', async () => {
+  const events: Record<string, unknown>[] = []
+  setLegacyJournalRetirementHost({
+    report: async (event) => events.push(event),
+    mode: async () => ({ mode: 'report', revision: 0 })
+  })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  // A 265/266 refusal: policy 3 and no artifact field.
+  const refused = await profile()
+  const proof = JSON.stringify(await readJournalLegacySourceReceipt(refused.filename))
+  const store = await legacyDestinationMain(journalDomainDatabasePath(refused.root))
+  refused.db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
+    'journal.legacy-retirement.v2',
+    JSON.stringify({
+      version: 2,
+      phase: 'refused',
+      policy: 3,
+      proof,
+      store,
+      reason: 'source-orphan'
+    })
+  )
+  await refused.launch('1.0.1', true, undefined, undefined, legacyJournalRetirementMode).run()
+  expect(events).toMatchObject([{ outcome: 'refused', reason: 'source-orphan', artifact: 'none' }])
+  expect(legacyJournalRetirementSchema.safeParse(events[0]).success).toBe(true)
+
+  // 600 drafts over more than 16 pages; the first launch stops partway, the next resumes.
+  events.length = 0
+  const many = await profile({
+    seed: (legacy) => {
+      const insert = legacy.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+      for (let draft = 0; draft < 600; draft++) {
+        const id = `draft-${String(draft).padStart(3, '0')}`
+        insert.run(id, JSON.stringify({ sessionId: id }))
+      }
+    }
+  })
+  const read = many.readers.legacyProof
+  let calls = 0
+  many.readers.legacyProof = async (cursor) => {
+    if (++calls > 17) {
+      throw new Error('legacy proof was interrupted')
+    }
+    return read(cursor)
+  }
+  await many.launch('1.0.1', true, undefined, undefined, policy('report', 0)).run()
+  expect(events).toMatchObject([{ outcome: 'proving', error: 'interrupted' }])
+  many.readers.legacyProof = read
+  await many.launch('1.0.1', true, undefined, undefined, policy('report', 0)).run()
+  expect(events.at(-1)).toMatchObject({
+    outcome: 'proof_complete',
+    completeness: 'complete',
+    resumed: true,
+    chats_bucket: '101_1000'
+  })
+  for (const event of events) {
+    expect(legacyJournalRetirementSchema.safeParse(event).success).toBe(true)
+  }
 })

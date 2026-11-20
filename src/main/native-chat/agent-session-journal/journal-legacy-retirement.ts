@@ -19,10 +19,7 @@ import {
   type LegacySourceHeld,
   type LegacySourceRetiring
 } from './journal-legacy-retirement-state'
-import {
-  readJournalLegacySourceReceipt,
-  sameJournalLegacySource
-} from './database/journal-legacy-source-receipt'
+import { readJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
 import {
   acquireJournalLegacyFileLock,
   createJournalLegacyFileEligibility
@@ -30,6 +27,7 @@ import {
 import type { JournalSqlOwner } from './journal-sql-owner'
 import {
   LegacyJournalRetirementReporter,
+  legacyProofErrorKind,
   legacyJournalRetirementMode,
   type LegacyJournalRetirementMode,
   type LegacyJournalRetirementOutcome
@@ -39,6 +37,7 @@ import type { JournalSqlConversions } from './journal-sql-conversions'
 import { JournalLegacyProof, type LegacyProofObservation } from './journal-legacy-proof'
 import {
   absorbedWal,
+  observeLegacySource,
   heldFor,
   laterVersion,
   provenOutcome,
@@ -67,6 +66,7 @@ export class JournalLegacyRetirement {
   private policy: LegacyJournalRetirementMode = { mode: 'report', revision: 0 }
   private readonly reporter: LegacyJournalRetirementReporter
   private activeMs = 0
+  private firstAttemptAt: number | undefined
 
   constructor(
     private readonly directory: string,
@@ -109,6 +109,11 @@ export class JournalLegacyRetirement {
       if (error instanceof JournalLegacyIneligibleError && !this.done) {
         this.done = true
         await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' })
+      } else if (!(error instanceof JournalLegacyRetentionError)) {
+        // Tried again later; reported once per kind of error, never with its text.
+        await this.outcome({ outcome: 'proving', error: legacyProofErrorKind(error) }).catch(
+          () => {}
+        )
       }
       this.later()
       const reason = error instanceof Error ? error.message : String(error)
@@ -126,9 +131,12 @@ export class JournalLegacyRetirement {
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
     if (!(await legacyFilePresent(this.filename))) {
       if (this.ownsProfile()) {
+        // An empty WAL and the SHM hold nothing. A nonempty WAL a cut-short removal left is
+        // deleted only with the same permission the removal had.
+        const absorbed = absorbedWal((await this.savedState()).retirement)
         await removeLeftoverLegacyCompanions(
           this.filename,
-          absorbedWal((await this.savedState()).retirement)
+          absorbed && (await this.enforced()) ? absorbed : undefined
         )
       }
       this.done = true
@@ -139,6 +147,7 @@ export class JournalLegacyRetirement {
       this.done = true
       return
     }
+    this.firstAttemptAt ??= performance.now()
     const saved = await this.savedState()
     this.reporter.saved(saved.reported)
     this.policy = await this.mode()
@@ -149,7 +158,9 @@ export class JournalLegacyRetirement {
     }
     // Retirement runs on an update: the version that copied the profile, or an older one, keeps it.
     const later = laterVersion(this.version, saved.convertedBy)
-    const observation = later ? await this.observe(saved) : null
+    const observation = later
+      ? await observeLegacySource(this.filename, this.directory, saved)
+      : null
     if (!observation || this.proof.refused(saved.retirement, observation)) {
       this.done = true
       const reason = observation ? this.proof.refusalReason : undefined
@@ -158,7 +169,7 @@ export class JournalLegacyRetirement {
           ? {
               outcome: 'refused',
               reason,
-              artifact: this.proof.refusalArtifact,
+              artifact: this.proof.refusalArtifact ?? 'none',
               completeness: 'partial',
               sourceBytes: observation ? sourceBytes(observation) : null
             }
@@ -169,7 +180,7 @@ export class JournalLegacyRetirement {
     const held = heldFor(saved.retirement, observation)
     if (held && this.policy.mode !== 'enforce') {
       this.done = true
-      return this.outcome(provenOutcome('proof_complete', held, observation, null))
+      return this.outcome(provenOutcome('proof_complete', held, observation, null, true))
     }
     await this.eligibility.present()
     await this.eligibility.check(this.filename, this.stopped.signal)
@@ -189,8 +200,8 @@ export class JournalLegacyRetirement {
       layout: LEGACY_PROOF_LAYOUT,
       proof: observation.proof,
       store: observation.store,
-      counts: held && walked.resumed ? held.counts : walked.counts,
-      whole: held ? held.whole : !walked.resumed
+      counts: held && walked.fromCopies ? held.counts : walked.counts,
+      whole: held && walked.fromCopies ? held.whole : walked.whole
     }
     // Deletion needs a fresh permission, asked again before each step that can't be undone.
     if (!(await this.enforced())) {
@@ -241,7 +252,13 @@ export class JournalLegacyRetirement {
         this.later()
       }
       await this.outcome(
-        provenOutcome(this.done ? 'deleted' : 'delete_failed', proven, observation, this.activeMs)
+        provenOutcome(
+          this.done ? 'deleted' : 'delete_failed',
+          proven,
+          observation,
+          this.activeMs,
+          this.proof.walked.resumed
+        )
       )
     } finally {
       try {
@@ -269,11 +286,15 @@ export class JournalLegacyRetirement {
       durable: false
     })
     this.done = true
-    await this.outcome(provenOutcome('proof_complete', proven, observation, this.activeMs))
+    await this.outcome(
+      provenOutcome('proof_complete', proven, observation, this.activeMs, this.proof.walked.resumed)
+    )
   }
 
   private outcome(fields: Partial<LegacyJournalRetirementOutcome>): Promise<void> {
-    return this.reporter.report(fields, this.policy)
+    const elapsedMs =
+      this.firstAttemptAt === undefined ? null : performance.now() - this.firstAttemptAt
+    return this.reporter.report({ elapsedMs, ...fields }, this.policy)
   }
 
   private later(): void {
@@ -292,33 +313,6 @@ export class JournalLegacyRetirement {
       throw new Error('legacy retirement state is unavailable')
     }
     return saved
-  }
-
-  /**
-   * The original as the last older-Orca reconcile absorbed it, so the content proof reads what
-   * this store has already taken in; null keeps the original for this attempt.
-   */
-  private async observe(
-    saved: RetirementState
-  ): Promise<(LegacyProofObservation & { walBytes: string }) | null> {
-    const current = await readJournalLegacySourceReceipt(this.filename)
-    if (
-      !saved.kept ||
-      current.disposition !== 'copied-source' ||
-      !sameJournalLegacySource(saved.receipt ?? undefined, current)
-    ) {
-      return null
-    }
-    const domain = journalDomainDatabasePath(this.directory)
-    if (await legacyFilePresent(`${this.filename}-journal`)) {
-      throw new JournalLegacyRetentionError('legacy rollback journal retained')
-    }
-    return {
-      proof: JSON.stringify(current),
-      // The store file alone: its WAL is recreated on every open, which no refusal should outlive.
-      store: await legacyDestinationMain(domain),
-      walBytes: current.wal.kind === 'empty' ? '0' : current.wal.size
-    }
   }
 
   private async matches(observation: LegacyProofObservation): Promise<boolean> {

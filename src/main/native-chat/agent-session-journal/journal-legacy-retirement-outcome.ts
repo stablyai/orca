@@ -6,6 +6,7 @@ import type {
   legacyJournalRetirementSchema
 } from '../../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
 import type { LegacyProofCounts } from './journal-legacy-retirement-state'
+import { isSqliteCorruption, isSqliteStorageFailure } from '../../sqlite/sqlite-read-failure'
 
 export type LegacyJournalRetirementEvent = z.infer<typeof legacyJournalRetirementSchema>
 export type LegacyJournalRetirementMode = { mode: 'off' | 'report' | 'enforce'; revision: number }
@@ -51,6 +52,7 @@ export type LegacyJournalRetirementOutcome = Pick<
   | 'reason'
   | 'defer'
   | 'artifact'
+  | 'error'
   | 'mode'
   | 'policy_revision'
   | 'completeness'
@@ -59,6 +61,7 @@ export type LegacyJournalRetirementOutcome = Pick<
   counts: LegacyProofCounts | null
   sourceBytes: number | null
   activeMs: number | null
+  elapsedMs: number | null
 }
 
 /** Bump when the checks that admit a file change, so reports before and after can be told apart. */
@@ -67,7 +70,7 @@ export const LEGACY_JOURNAL_INVENTORY_REVISION = 1
 export function legacyJournalRetirementEvent(
   outcome: LegacyJournalRetirementOutcome
 ): LegacyJournalRetirementEvent {
-  const { counts, sourceBytes, activeMs, ...fields } = outcome
+  const { counts, sourceBytes, activeMs, elapsedMs, ...fields } = outcome
   return {
     ...fields,
     inventory_revision: LEGACY_JOURNAL_INVENTORY_REVISION,
@@ -77,7 +80,8 @@ export function legacyJournalRetirementEvent(
     originals_bucket: countBucket(counts?.originals ?? 0),
     copies_bucket: countBucket(counts?.copies ?? 0),
     source_bytes_bucket: bytesBucket(sourceBytes),
-    active_ms_bucket: durationBucket(activeMs)
+    active_ms_bucket: durationBucket(activeMs),
+    elapsed_ms_bucket: durationBucket(elapsedMs)
   }
 }
 
@@ -88,7 +92,7 @@ export function reportLegacyJournalRetirement(
 ): void {
   console.warn(
     `[agent-session-journal] old chat journal: ${event.outcome}` +
-      ` (reason ${event.reason}, defer ${event.defer}, mode ${event.mode} r${event.policy_revision},` +
+      ` (reason ${event.reason}, defer ${event.defer}, error ${event.error}, mode ${event.mode} r${event.policy_revision},` +
       ` ${event.completeness}${event.resumed ? ', resumed' : ''}, chats ${event.chats_bucket},` +
       ` size ${event.source_bytes_bucket}, took ${event.active_ms_bucket})`
   )
@@ -183,7 +187,10 @@ export class LegacyJournalRetirementReporter {
       counts: null,
       sourceBytes: null,
       activeMs: null,
-      ...fields,
+      elapsedMs: null,
+      error: 'none',
+      // A field passed as undefined keeps its default rather than leaving the event invalid.
+      ...Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)),
       mode: policy.mode,
       policy_revision: policy.revision
     })
@@ -192,6 +199,7 @@ export class LegacyJournalRetirementReporter {
       event.reason,
       event.defer,
       event.artifact,
+      event.error,
       event.mode,
       event.policy_revision,
       this.version
@@ -203,4 +211,18 @@ export class LegacyJournalRetirementReporter {
       await this.writer.maintain({ kind: 'legacy-retirement-reported', value: signature })
     }
   }
+}
+
+/** A proof error by kind only: its text can name paths or chats. */
+export function legacyProofErrorKind(error: unknown): LegacyJournalRetirementEvent['error'] {
+  if (!(error instanceof Error)) {
+    return 'other'
+  }
+  if (error.name === 'AbortError' || error.message === 'legacy proof was interrupted') {
+    return 'interrupted'
+  }
+  if (error.message.includes('conversion')) {
+    return 'conversion'
+  }
+  return isSqliteStorageFailure(error) || isSqliteCorruption(error) ? 'storage' : 'other'
 }

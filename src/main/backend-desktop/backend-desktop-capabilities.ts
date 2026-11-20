@@ -9,12 +9,10 @@ import {
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { legacyJournalRetirementSchema } from '../../shared/telemetry/schemas/telemetry-legacy-journal-retirement-schema'
 import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
 import { readUsageWorktreeCatalog } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { isTelemetryEnabled, track } from '../telemetry/client'
-import { journalRetirementMode } from '../native-chat/journal-retirement-policy/journal-retirement-policy-live-update'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
 import { isRendererDocumentNavigation } from '../window/security/renderer-document-navigation'
@@ -64,12 +62,6 @@ export function createBackendDesktopCapabilities(
     }
     if (method === 'usage.telemetry.capture') {
       return track('agent_token_usage', agentTokenUsageSchema.parse(params))
-    }
-    if (method === 'journal.legacyRetirement.mode') {
-      return journalRetirementMode()
-    }
-    if (method === 'journal.legacyRetirement.capture') {
-      return track('legacy_journal_retirement', legacyJournalRetirementSchema.parse(params))
     }
     throw new Error('This desktop capability is not supported.')
   }

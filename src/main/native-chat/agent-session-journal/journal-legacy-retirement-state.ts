@@ -98,6 +98,8 @@ export type LegacySourceProving = {
   proof: string
   store: string
   cursor: { table: number; after: string | null; epoch?: string }
+  /** What the walk counted from its first page; absent when it began from older progress. */
+  counts?: LegacyProofCounts
 }
 
 export function decodeLegacySourceProving(value: string | null): LegacySourceProving | null {
@@ -145,7 +147,8 @@ export function decodeLegacySourceProving(value: string | null): LegacySourcePro
     layout: LEGACY_PROOF_LAYOUT,
     proof: data.proof,
     store: data.store,
-    cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) }
+    cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) },
+    ...decodeCounts('counts' in data ? data.counts : undefined)
   }
 }
 
@@ -189,4 +192,24 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
           : {})
       }
     : null
+}
+
+function decodeCounts(value: unknown): { counts?: LegacyProofCounts } {
+  if (!value || typeof value !== 'object') {
+    return {}
+  }
+  const read = (name: keyof LegacyProofCounts): number | null => {
+    const count: unknown = name in value ? Reflect.get(value, name) : undefined
+    return typeof count === 'number' && Number.isInteger(count) && count >= 0 ? count : null
+  }
+  const counts = {
+    chats: read('chats'),
+    converted: read('converted'),
+    notConverted: read('notConverted'),
+    originals: read('originals'),
+    copies: read('copies')
+  }
+  return Object.values(counts).every((count) => count !== null)
+    ? { counts: counts as LegacyProofCounts }
+    : {}
 }

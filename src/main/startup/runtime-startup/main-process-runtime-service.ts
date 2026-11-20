@@ -54,6 +54,7 @@ import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { openOffscreenBrowserPageLink } from '../../runtime/browser/commands/offscreen-browser-page-link'
 import { providePairedDesktopComputerName } from '../../ipc/runtime-environments/connections/paired-desktop-account-declaration'
+import { installJournalRetirementHost } from '../../native-chat/journal-retirement-policy/journal-retirement-policy-live-update'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -70,6 +71,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   if (!store || !stats) {
     throw new Error('Store and stats must be initialized before runtime')
   }
+  installJournalRetirementHost(store)
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
