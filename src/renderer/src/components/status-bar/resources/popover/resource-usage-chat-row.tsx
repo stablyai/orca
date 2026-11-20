@@ -3,6 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { ChatAgentMemory } from '../../../../../../shared/diagnostics/process-stats-types'
 import { MetricPair, ROW_TRAILING_GUTTER_CLS } from './resource-usage-metrics'
@@ -14,26 +15,34 @@ export function ChatRow({
   onOpen
 }: {
   chat: ChatAgentMemory
-  onOpen: (agentSessionId: string) => void
+  /** Absent when this window can't reach the chat's workspace, so the row is read-only. */
+  onOpen?: (agentSessionId: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const agent = isTuiAgent(chat.agent) ? chat.agent : null
   const agentLabel = agent ? getAgentLabel(agent) : chat.agent
-  const open = (): void => onOpen(chat.agentSessionId)
+  const open = onOpen ? (): void => onOpen(chat.agentSessionId) : undefined
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className="flex cursor-pointer items-center gap-2 pl-10 pr-3 py-1.5 hover:bg-accent/40"
+          className={cn(
+            'flex items-center gap-2 pl-10 pr-3 py-1.5',
+            open && 'cursor-pointer hover:bg-accent/40'
+          )}
           onClick={open}
-          role="button"
+          role={open ? 'button' : undefined}
           tabIndex={0}
-          onKeyDown={(e) => {
-            if (isResourceSessionActivationKey(e.key)) {
-              e.preventDefault()
-              open()
-            }
-          }}
+          onKeyDown={
+            open
+              ? (e) => {
+                  if (isResourceSessionActivationKey(e.key)) {
+                    e.preventDefault()
+                    open()
+                  }
+                }
+              : undefined
+          }
         >
           <AgentIcon agent={agent} size={12} className="shrink-0" />
           <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
