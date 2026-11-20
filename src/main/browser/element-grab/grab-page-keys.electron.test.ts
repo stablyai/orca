@@ -46,7 +46,8 @@ describe('tool letters from a real page during a pick', () => {
         scriptFocusThenLetter: { value: 'sa', forwarded: [] },
         noteValue: 'g',
         closedField: { value: 'd', forwarded: [] },
-        forwardedOnButton: ['a'],
+        forwardedOnButton: ['a', 'g', 'd'],
+        offFieldBody: ['d'],
         pageSawToolKey: false,
         altEdges: ['alt-down', 'alt-up'],
         agentForwarded: []

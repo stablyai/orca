@@ -169,6 +169,8 @@ async function run(): Promise<void> {
   await evalPage(`document.getElementById('buy').focus(); window.__pageKeys = []`)
   const beforeButton = forwarded.length
   await press('a')
+  await press('g')
+  await press('d')
   const pageSawToolKey = await evalPage(`window.__pageKeys.includes('a')`)
   const forwardedOnButton = forwarded.slice(beforeButton)
 
@@ -176,6 +178,11 @@ async function run(): Promise<void> {
   const beforeAgent = forwarded.length
   await withAgentInputInjection(page, () => press('g'))
   const agentForwarded = forwarded.slice(beforeAgent)
+
+  await evalPage('document.activeElement.blur()')
+  const beforeBody = forwarded.length
+  await press('d')
+  const offFieldBody = forwarded.slice(beforeBody)
 
   // Alt pressed and released in the page during a pick: both edges reach the palette. (A key-up whose key-down
   // the page never saw is dropped before any handler, so the palette also releases when focus enters the page.)
@@ -198,6 +205,7 @@ async function run(): Promise<void> {
       noteValue,
       closedField,
       forwardedOnButton,
+      offFieldBody,
       pageSawToolKey,
       altEdges,
       agentForwarded
