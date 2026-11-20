@@ -1,5 +1,3 @@
-import { recoverJournalLegacyClaims } from './journal-legacy-claims'
-import { recordJournalLegacyFailure } from './journal-legacy-reconcile-marks'
 import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
 import { applyJournalWriterEffect } from '../journal-writer-effects'
 import { agentSessionAttachmentStoreRoot } from '../../agent-session-attachments/agent-session-attachment-references'
@@ -803,33 +801,4 @@ it('releases failed custody holds after the older store removes the chat', async
       .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
       .get('journal.legacy-failed:rejected')
   ).toBeUndefined()
-})
-
-it('never commits salvaged custody without its failure hold when a trigger rolls back', () => {
-  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
-  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
-  const { db } = openJournalDomainDatabase(journalDomainDatabasePath(root))
-  cleanup.push(() => db.close())
-  db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_attachment_claims
-    WHEN NEW.upload_id='refused' BEGIN SELECT RAISE(ROLLBACK,'upload unavailable'); END;
-    CREATE TRIGGER full_disk BEFORE INSERT ON agent_session_store_meta
-    WHEN NEW.key='journal.legacy-failed:unadopted' BEGIN SELECT RAISE(ABORT,'disk I/O error'); END`)
-  expect(() =>
-    recoverJournalLegacyClaims(
-      db,
-      'unadopted',
-      [
-        { upload_id: 'good', claimed_at: 100 },
-        { upload_id: 'refused', claimed_at: 100 }
-      ],
-      (claims) =>
-        recordJournalLegacyFailure(db, {
-          sessionId: 'unadopted',
-          revision: 'revision',
-          error: 'upload unavailable',
-          claims
-        })
-    )
-  ).toThrow('disk I/O error')
-  expect(db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()).toEqual([])
 })

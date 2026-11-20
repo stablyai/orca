@@ -111,7 +111,7 @@ export function recoverJournalLegacyClaims(
       try {
         runJournalTransaction(db, () => {
           insertJournalLegacyClaims(db, sessionId, [claim])
-          finish()
+          record('pending')
         })
       } catch (claimError) {
         if (
