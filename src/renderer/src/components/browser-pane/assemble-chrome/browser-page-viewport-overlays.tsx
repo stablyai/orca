@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   useCallback,
   type Dispatch,
@@ -91,6 +91,7 @@ export function BrowserPageViewportOverlays({
   toolSwitch: BrowserAnnotateToolSwitch
   canPickElements: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const getAgentCursorHost = useCallback(() => containerRef.current, [containerRef])
   useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
   return (
@@ -111,7 +112,7 @@ export function BrowserPageViewportOverlays({
         canPickElements={canPickElements}
         toolsUnavailableReason={
           browserTab.loadError
-            ? translate('browser.annotatePalette.pageDidNotLoad', "Page didn't load")
+            ? t('browser.annotatePalette.pageDidNotLoad', "Page didn't load")
             : undefined
         }
         showPaletteKeyHints
