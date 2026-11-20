@@ -3,7 +3,11 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { useBotGitHubRead } from '@/lib/bot-github-state'
 import { botGitHubCalls } from '@/lib/bot-connector-host-calls'
-import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { botMembersFrom, gitHubMembersOf } from '../../../../../shared/bot-types'
 import { CONNECTOR_CLIENT_LIMITS } from '../../../../../shared/connectors/connector-cloud-contract'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
@@ -46,6 +50,10 @@ export function useGitHubWhoCanAsk(
       gitHubWhoCanAskSession(botGitHubCalls(hostId), {
         scope,
         ownerLogin: ownerName,
+        // Routing, not a friendly name, decides whose Orca holds the list: this window's own
+        // computer only for a local bot outside a paired web window.
+        producer:
+          hostId === LOCAL_EXECUTION_HOST_ID && !isPairedWebClientWindow() ? 'local' : 'remote',
         t
       })
     return {

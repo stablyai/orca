@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { gitHubPeopleScope } from '../../shared/bots/github-people-scope'
 import { BotGitHubPeople } from '../../shared/rpc-contract/bots-connector-setup-params'
 import { readRoster, rosterQuery, targetOf } from './github-people-query'
-import { GitHubPeopleRosters, failedBeforeSpawn, type RosterRun } from './github-people-roster'
+import { GitHubPeopleRosters, type RosterRun } from './github-people-roster'
 
 const repos = (...names: string[]) => ({ repositories: names, owners: [], more: false })
 const person = (databaseId: number, login: string, name: string | null = null) => ({
@@ -14,9 +14,7 @@ const users = (...nodes: unknown[]) => ({ assignableUsers: { totalCount: nodes.l
 const json = (data: unknown, errors?: unknown[]) =>
   JSON.stringify({ data, ...(errors ? { errors } : {}) })
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
-const ran = (stdout: string, childStarted = true) =>
-  vi.fn<RosterRun>(async () => ({ stdout, childStarted }))
+const ran = (stdout: string) => vi.fn<RosterRun>(async () => stdout)
 
 describe('reading the people of the connected repositories', () => {
   it('reads people, where they came from and who gh read as, in one call', async () => {
@@ -30,7 +28,7 @@ describe('reading the people of the connected repositories', () => {
       ),
       () => 1_000
     )
-    expect(await rosters.read(repos('stablyai/orca', 'stablyai/orca-cloud'))).toEqual({
+    expect(await rosters.read(repos('stablyai/orca', 'stablyai/orca-cloud'), 'owner')).toEqual({
       status: 'read',
       people: [
         { id: '2', login: 'brennanb2025', name: 'Brennan Benson' },
@@ -42,6 +40,7 @@ describe('reading the people of the connected repositories', () => {
       cut: { people: false, members: false, repositories: false },
       readAt: 1_000,
       reused: false,
+      readFor: { scope: repos('stablyai/orca', 'stablyai/orca-cloud'), owner: 'owner' },
       searchedAs: 'owner'
     })
   })
@@ -49,13 +48,12 @@ describe('reading the people of the connected repositories', () => {
   it('is unavailable when no source was read, the viewer alone included', async () => {
     for (const stdout of ['', 'not json', json({ viewer: { login: 'o' } }), json({ r0: null })]) {
       const rosters = new GitHubPeopleRosters(ran(stdout))
-      expect(await rosters.read(repos('a/b'))).toEqual({ status: 'unavailable', retry: 'restart' })
+      expect(await rosters.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable' })
     }
     // Nothing readable in the scope: no gh call at all.
     const run = vi.fn<RosterRun>()
-    expect(await new GitHubPeopleRosters(run).read(repos('not a repo'))).toEqual({
-      status: 'unavailable',
-      retry: 'reopen'
+    expect(await new GitHubPeopleRosters(run).read(repos('not a repo'), 'owner')).toEqual({
+      status: 'unavailable'
     })
     expect(run).not.toHaveBeenCalled()
   })
@@ -97,7 +95,7 @@ describe('what a read covered', () => {
 
   it('reports scope left out on purpose as omitted, not as a failed read', async () => {
     const rosters = new GitHubPeopleRosters(ran(json({ r0: users() })))
-    const roster = await rosters.read({ repositories: ['a/b'], owners: [], more: true })
+    const roster = await rosters.read({ repositories: ['a/b'], owners: [], more: true }, 'owner')
     expect(roster).toMatchObject({ status: 'read', complete: true, omitted: true })
   })
 
@@ -145,13 +143,13 @@ describe('one roster read per app run', () => {
     const run = ran(json({ r0: users(person(2, 'x')) }))
     const rosters = new GitHubPeopleRosters(run, () => 5_000)
     const [first, joined] = await Promise.all([
-      rosters.read(repos('a/b')),
-      rosters.read(repos('a/b'))
+      rosters.read(repos('a/b'), 'owner'),
+      rosters.read(repos('a/b'), 'owner')
     ])
     expect(first).toMatchObject({ status: 'read', reused: false, readAt: 5_000 })
     // A request while the read was running shares it; after, a different scope gets it too.
     expect(joined).toMatchObject({ status: 'read', reused: true })
-    expect(await rosters.read(repos('c/d'))).toMatchObject({
+    expect(await rosters.read(repos('c/d'), 'owner')).toMatchObject({
       status: 'read',
       reused: true,
       readAt: 5_000
@@ -159,45 +157,29 @@ describe('one roster read per app run', () => {
     expect(run).toHaveBeenCalledOnce()
   })
 
-  it('never runs gh again after a read whose child started, even when it failed', async () => {
-    const run = ran('', true)
+  it('never runs gh again after a failed read, whatever the failure', async () => {
+    const run = ran('')
     const rosters = new GitHubPeopleRosters(run)
-    expect(await rosters.read(repos('a/b'))).toEqual({ status: 'unavailable', retry: 'restart' })
-    expect(await rosters.read(repos('a/b'))).toEqual({ status: 'unavailable', retry: 'restart' })
+    expect(await rosters.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable' })
+    expect(await rosters.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable' })
     expect(run).toHaveBeenCalledOnce()
-    // A run that throws can't say a child never started: the same.
+    // A run that throws (gh missing included) proves no more than one that answered empty.
     const throwing = vi.fn<RosterRun>(async () => {
-      throw new Error('boom')
+      throw Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT', syscall: 'spawn gh' })
     })
     const other = new GitHubPeopleRosters(throwing)
-    expect(await other.read(repos('a/b'))).toEqual({ status: 'unavailable', retry: 'restart' })
-    await other.read(repos('a/b'))
+    expect(await other.read(repos('a/b'), 'owner')).toEqual({ status: 'unavailable' })
+    await other.read(repos('c/d'), 'other')
     expect(throwing).toHaveBeenCalledOnce()
   })
 
-  it('tries again on the next request when no gh child was ever started', async () => {
-    const run = vi
-      .fn<RosterRun>()
-      .mockResolvedValueOnce({ stdout: '', childStarted: false })
-      .mockResolvedValueOnce({ stdout: json({ r0: users(person(2, 'x')) }), childStarted: true })
-    const rosters = new GitHubPeopleRosters(run)
-    expect(await rosters.read(repos('a/b'))).toEqual({ status: 'unavailable', retry: 'reopen' })
-    await flush()
-    expect((await rosters.read(repos('a/b'))).status).toBe('read')
-    expect(run).toHaveBeenCalledTimes(2)
-  })
-
-  it('tells a failure before any process existed from one after', () => {
-    const missing = Object.assign(new Error('spawn gh ENOENT'), {
-      code: 'ENOENT',
-      syscall: 'spawn gh'
+  it('records what the read was made for, and hands that to every later request', async () => {
+    const rosters = new GitHubPeopleRosters(ran(json({ r0: users(person(2, 'x')) })))
+    await rosters.read(repos('a/b'), 'alice')
+    expect(await rosters.read(repos('c/d'), 'bob')).toMatchObject({
+      reused: true,
+      readFor: { scope: repos('a/b'), owner: 'alice' }
     })
-    const denied = Object.assign(new Error('spawn EACCES'), { code: 'EACCES', syscall: 'spawn' })
-    const exited = Object.assign(new Error('gh exited 1'), { code: 1, stderr: 'not logged in' })
-    expect(failedBeforeSpawn(missing)).toBe(true)
-    expect(failedBeforeSpawn(denied)).toBe(true)
-    expect(failedBeforeSpawn(exited)).toBe(false)
-    expect(failedBeforeSpawn(new Error('timed out'))).toBe(false)
   })
 })
 
@@ -214,6 +196,6 @@ describe('the scope the renderer sends', () => {
     expect(one.repositories).toHaveLength(10)
     expect(one.repositories).toEqual(reordered.repositories)
     expect(one.more).toBe(true)
-    expect(BotGitHubPeople.safeParse({ scope: one }).success).toBe(true)
+    expect(BotGitHubPeople.safeParse({ scope: one, owner: 'owner' }).success).toBe(true)
   })
 })

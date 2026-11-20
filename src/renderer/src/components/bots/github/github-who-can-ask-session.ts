@@ -14,13 +14,18 @@ import { gitHubWhoCanAskAnswer, type GitHubRosterState } from './github-who-can-
 export const ROSTER_WAIT_MS = 1_500
 
 type Calls = {
-  people: (args: { scope: GitHubPeopleScope }) => Promise<BotSlackResult<BotGitHubRoster>>
+  people: (args: {
+    scope: GitHubPeopleScope
+    owner: string | null
+  }) => Promise<BotSlackResult<BotGitHubRoster>>
   users: (args: { query: string }) => Promise<BotSlackResult<ConnectorGitHubUsersResponse>>
 }
 
 type Context = {
   scope: GitHubPeopleScope | undefined
   ownerLogin: string | null
+  /** Where the bot runs: this computer's Orca, or another's (restart advice names it). */
+  producer: 'local' | 'remote'
   t: Translate
 }
 
@@ -42,7 +47,7 @@ type Exact = BotSlackResult<ConnectorGitHubUsersResponse>
  *    answer once the query changes or the picker closes. */
 export function gitHubWhoCanAskSession(
   calls: Calls,
-  { scope, ownerLogin, t }: Context
+  { scope, ownerLogin, producer, t }: Context
 ): BotWhoCanAskSession & { readonly waiters: number } {
   let roster: Promise<GitHubRosterState> | null = null
   let settled: GitHubRosterState | null = null
@@ -60,7 +65,8 @@ export function gitHubWhoCanAskSession(
       const timer = setTimeout(() => done(null), ms)
       waiting.add(done)
     })
-  // The last query's exact lookup: one entry, so asking again never repeats it.
+  // The last valid query's exact lookup: one entry, so asking again for that same query never
+  // repeats it (a failure included) unless the owner asks to retry; a different query is its own.
   let lastExact: { login: string; answer: Promise<Exact> } | null = null
 
   const load = (): Promise<GitHubRosterState> => {
@@ -69,12 +75,11 @@ export function gitHubWhoCanAskSession(
         ? Promise.resolve<GitHubRosterState>({ status: 'skipped' })
         : scope.repositories.length + scope.owners.length === 0
           ? Promise.resolve<GitHubRosterState>({ status: 'none' })
-          : // The call itself failing (the host unreachable) says nothing about a gh child; the
-            // next open asks the host again, which still keeps to its one read per app run.
-            calls.people({ scope }).then(
-              (result): GitHubRosterState =>
-                result.ok ? result.value : { status: 'unavailable', retry: 'reopen' },
-              (): GitHubRosterState => ({ status: 'unavailable', retry: 'reopen' })
+          : // The call itself failing (the host unreachable) leaves this session without a list;
+            // the next open asks the host again, which keeps to its one read per app run.
+            calls.people({ scope, owner: ownerLogin }).then(
+              (result): GitHubRosterState => (result.ok ? result.value : { status: 'unavailable' }),
+              (): GitHubRosterState => ({ status: 'unavailable' })
             )
     ).then((state) => {
       settled = state
@@ -111,9 +116,19 @@ export function gitHubWhoCanAskSession(
       // The roster may have landed while the exact lookup was still on its way.
       const now = settled ?? early
       return gitHubWhoCanAskAnswer(
-        { roster: now ?? { status: 'loading' }, exact: exactAnswer, query, ownerLogin },
+        {
+          roster: now ?? { status: 'loading' },
+          exact: exactAnswer,
+          query,
+          ownerLogin,
+          scope,
+          producer
+        },
         t
       )
+    },
+    retry: () => {
+      lastExact = null
     },
     onUpdate: (next) => {
       if (settled) {

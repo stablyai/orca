@@ -27477,7 +27477,7 @@
         "noPerson": "No one found for “{{query}}”",
         "found": "People on GitHub",
         "localNone": "No repos connected.",
-        "exactFailed": "Username check failed. Reopen to retry.",
+        "exactFailed": "Username check failed.",
         "searchedAs": "Repos read as @{{login}}.",
         "reposNotChecked": "Repos not checked",
         "checkedWhere": "Searched your repos and exact usernames.",
@@ -27510,9 +27510,12 @@
         "loadingTitle": "Still loading your repos",
         "noExactYet": "No exact username match. Repos still coming.",
         "resultsComing": "Results appear when they load.",
-        "unavailableReopen": "Couldn’t read repos. Reopen to retry.",
-        "unavailableRestart": "Couldn’t read repos. Restart Orca to retry.",
-        "readEarlier": "Repo list from {{time}}. Restart Orca to refresh."
+        "readEarlier": "Repo list from {{time}}. Restart Orca to refresh.",
+        "notInEarlierList": "Not in the earlier list",
+        "unavailableRemote": "Couldn’t read repos. Check gh sign-in, then restart the bot’s Orca.",
+        "unavailable": "Couldn’t read repos. Check gh sign-in, then restart Orca.",
+        "readEarlierRemote": "Repo list from {{time}}. Restart the bot’s Orca to refresh.",
+        "fromEarlierList": "From an earlier repo list"
       },
       "connection": {
         "description": "{{repos}} · signed in as @{{login}}",

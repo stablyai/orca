@@ -94,7 +94,7 @@ export function botGitHubCalls(hostId: ExecutionHostId) {
     state: () => call<ConnectorGitHubState>(hostId, 'bots.github.state'),
     users: (args: { query: string }) =>
       call<ConnectorGitHubUsersResponse>(hostId, 'bots.github.users', args),
-    people: (args: { scope: GitHubPeopleScope }) =>
+    people: (args: { scope: GitHubPeopleScope; owner: string | null }) =>
       call<BotGitHubRoster>(hostId, 'bots.github.people', args),
     unlink: () => call<undefined>(hostId, 'bots.github.unlink'),
     setDefaultBot: (args: { botId: string | null }) =>
