@@ -86,13 +86,21 @@ export function showDesktopNotification(
       notification.emit('failed', undefined, 'Linux notification service did not respond')
       return false
     }
+    // Why: a daemon that rejects Notify makes Electron emit `failed` from inside show().
+    let rejected = false
+    const markRejected = (): void => {
+      rejected = true
+    }
+    notification.once('failed', markRejected)
     try {
       beforeShow?.()
       notification.show()
-      return true
+      return !rejected
     } catch (error) {
       notification.emit('failed', undefined, String(error))
       return false
+    } finally {
+      notification.removeListener('failed', markRejected)
     }
   })
 }

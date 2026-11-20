@@ -57,9 +57,14 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
     ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
-          hostAlternative: async (shellEnv, settings) =>
-            (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath(), settings)) !==
-            null,
+          hostAlternative: async (shellEnv, settings, needsStandingInstructions = false) =>
+            (await selectAcpHostAccountHome(
+              spec,
+              shellEnv,
+              getProfileUserDataPath(),
+              settings,
+              needsStandingInstructions
+            )) !== null,
           ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
       : {})
