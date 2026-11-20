@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { runElectronFixture } from '../../electron-fixtures/electron-fixture-run'
 
 describe('browser guest page visibility in real Electron webviews', () => {
+  // Builds a fixture bundle and launches real Electron, which is slow on CI runners.
   it('reports a tab that is not shown as hidden, and the shown tab as visible', async () => {
     const result = await runElectronFixture(
       join(import.meta.dirname, 'browser-guest-page-visibility-electron-fixture.ts')
