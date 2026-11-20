@@ -10,7 +10,10 @@ import {
   removeTrustConfigFixture
 } from './config-toml-trust-test-fixtures'
 
-const beforePublish = vi.hoisted(() => ({ run: null as ((path: string) => void) | null }))
+const beforePublish = vi.hoisted(() => {
+  const state: { run: ((path: string) => void) | null } = { run: null }
+  return state
+})
 
 vi.mock('../../configuration/toml/config-toml-atomic-write', async (importOriginal) => {
   const actual = await importOriginal<typeof TomlAtomicWrite>()

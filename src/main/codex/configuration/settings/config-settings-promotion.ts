@@ -7,7 +7,7 @@ import {
   assertGuardedFileCurrent,
   ConcurrentFileEditError
 } from '../../../filesystem/concurrent-file-edit-guard'
-import { readRawTomlConfig, writeTomlConfigAtomically } from '../toml/config-toml-atomic-write'
+import { writeTomlConfigAtomically } from '../toml/config-toml-atomic-write'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
@@ -201,7 +201,11 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   if (targetExists && parseWslUncPath(writeTarget.path)) {
     // WSL 9P symlink metadata is unreliable; write through to preserve the guest inode.
     assertGuardedFileCurrent(writeTarget.path)
-    if (readRawTomlConfig(writeTarget.path) !== computedFrom) {
+    const current = observeAgentStateFile(writeTarget.path)
+    if (current.kind === 'indeterminate') {
+      throw current.error
+    }
+    if (current.kind !== 'present' || current.value !== computedFrom) {
       return null
     }
     writeFileSync(writeTarget.path, nextContent, 'utf-8')

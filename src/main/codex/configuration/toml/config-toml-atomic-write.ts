@@ -53,18 +53,17 @@ export function writeTomlConfigAtomically(
       encoding: 'utf-8',
       mode: resolveCodexConfigTomlFileMode(writePath)
     })
-    // A rejected update must not rotate the backup first.
-    assertGuardedFileCurrent(writePath)
-    if (readRawTomlConfig(writePath) !== computedFrom) {
+    // Checked before the backup (a rejected update must not rotate it) and before every rename
+    // attempt, so only the re-read is left between check and rename.
+    const stillCurrent = (): boolean => {
+      assertGuardedFileCurrent(writePath)
+      return readRawTomlConfig(writePath) === computedFrom
+    }
+    if (!stillCurrent()) {
       return false
     }
     if (options.backup && existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
-    }
-    // Checked before every rename attempt, so only the re-read is left between check and rename.
-    const stillCurrent = (): boolean => {
-      assertGuardedFileCurrent(writePath)
-      return readRawTomlConfig(writePath) === computedFrom
     }
     if (!renameFileWithWindowsRetry(temporaryPath, writePath, stillCurrent)) {
       return false

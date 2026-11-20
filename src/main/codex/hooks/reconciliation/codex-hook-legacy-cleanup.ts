@@ -14,10 +14,7 @@ import { resolveHooksJsonWritePath } from '../../../agent-hooks/installation/con
 import { findManagedTomlBlocks } from '../../../agent-hooks/installation/configuration/managed-toml-ownership'
 import type { CodexTrustEntry } from '../../trust/toml/config-toml-trust'
 import { unlinkSync } from 'node:fs'
-import {
-  readRawTomlConfig,
-  writeTomlConfigAtomically
-} from '../../configuration/toml/config-toml-atomic-write'
+import { writeTomlConfigAtomically as writeConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'
 import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
 import {
   getConfigPath,
@@ -158,12 +155,12 @@ function cleanupLegacyCodexProfileHooks(): void {
   }
   // Both refuse when a save landed after the read; the next cleanup pass retries.
   if (next.trim().length > 0) {
-    if (!writeTomlConfigAtomically(profilePath, next, existing)) {
+    if (!writeConfigAtomically(profilePath, next, existing)) {
       throw new ConcurrentFileEditError(profilePath)
     }
     return
   }
-  if (readRawTomlConfig(profilePath) !== existing) {
+  if (readFileSync(profilePath, 'utf-8') !== existing) {
     throw new ConcurrentFileEditError(profilePath)
   }
   unlinkSync(profilePath)
