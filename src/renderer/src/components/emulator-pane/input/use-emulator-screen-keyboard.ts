@@ -8,14 +8,16 @@ import {
 } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
+  buildServeSimKeyboardFramesForCode,
   buildServeSimKeyboardFramesForKey,
   type ServeSimKeyboardFrame
 } from '../../../../../shared/emulator/emulator-keyboard-frame'
 import type { ScrcpyKeyboard } from '../streaming/use-emulator-control-stream'
 import {
   pasteTextIntoAndroidEmulator,
-  pasteTextIntoEmulatorKeyboard,
+  pasteTextIntoSimulator,
   type EmulatorKeyboardPasteResult
 } from './emulator-keyboard-paste'
 
@@ -41,18 +43,43 @@ type UseEmulatorScreenKeyboardArgs = {
   /** Set for Android panes, which have no serve-sim socket for HID frames. */
   scrcpyKeyboard: ScrcpyKeyboard | null
   sendKeyboardFrames: (frames: ServeSimKeyboardFrame[]) => boolean
+  worktreeId: string
 }
 
 export function useEmulatorScreenKeyboard({
   cancelKeyboardFrames,
   canInteract,
   scrcpyKeyboard,
-  sendKeyboardFrames
+  sendKeyboardFrames,
+  worktreeId
 }: UseEmulatorScreenKeyboardArgs) {
   const captureActiveRef = useRef(false)
-  const canInteractRef = useRef(canInteract)
   const pasteRequestIdRef = useRef(0)
+  // True once main has put the simulator's hardware layout on the Mac's, so physical keys type what the Mac key shows.
+  const physicalKeysRef = useRef(false)
+  const layoutSyncIdRef = useRef(0)
   const [keyboardCaptureActive, setKeyboardCaptureActive] = useState(false)
+
+  const syncKeyboardLayout = useCallback((): void => {
+    if (scrcpyKeyboard) {
+      return
+    }
+    const syncId = ++layoutSyncIdRef.current
+    void callRuntimeRpc<{ physicalKeys: boolean }>(
+      { kind: 'local' },
+      'emulator.syncKeyboardLayout',
+      {
+        worktree: worktreeId
+      }
+    )
+      .then((result) => result.physicalKeys === true)
+      .catch(() => false)
+      .then((physicalKeys) => {
+        if (syncId === layoutSyncIdRef.current) {
+          physicalKeysRef.current = physicalKeys
+        }
+      })
+  }, [scrcpyKeyboard, worktreeId])
 
   const cancelActivePaste = useCallback((): void => {
     pasteRequestIdRef.current += 1
@@ -63,15 +90,27 @@ export function useEmulatorScreenKeyboard({
     (active: boolean): void => {
       if (!active) {
         cancelActivePaste()
+      } else if (!captureActiveRef.current) {
+        syncKeyboardLayout()
       }
       captureActiveRef.current = active
       setKeyboardCaptureActive(active)
     },
-    [cancelActivePaste]
+    [cancelActivePaste, syncKeyboardLayout]
+  )
+
+  // A Mac input source switch while typing into the simulator moves its layout too.
+  useEffect(
+    () =>
+      window.api.app.onKeyboardLayoutChanged((event) => {
+        if (event.phase === 'refresh' && captureActiveRef.current) {
+          syncKeyboardLayout()
+        }
+      }),
+    [syncKeyboardLayout]
   )
 
   useEffect(() => {
-    canInteractRef.current = canInteract
     if (!canInteract) {
       setCaptureActive(false)
     }
@@ -89,12 +128,14 @@ export function useEmulatorScreenKeyboard({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
+      const physicalKeys = !scrcpyKeyboard && physicalKeysRef.current
       if (
         !canInteract ||
         event.nativeEvent.isComposing ||
         event.metaKey ||
         event.ctrlKey ||
-        event.altKey
+        // Option composes characters only through the guest's own layout.
+        (event.altKey && !physicalKeys)
       ) {
         return
       }
@@ -118,7 +159,20 @@ export function useEmulatorScreenKeyboard({
         return
       }
 
-      // The HID table also decides which keys an Android pane accepts.
+      if (physicalKeys) {
+        const frames = buildServeSimKeyboardFramesForCode(event.code, {
+          alt: event.altKey,
+          shift: event.shiftKey
+        })
+        if (!frames || !sendKeyboardFrames(frames)) {
+          return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+
+      // Unsynced simulators keep a US layout, so the character picks its US key; the table also gates Android.
       const frames = buildServeSimKeyboardFramesForKey(event.key, { shift: event.shiftKey })
       if (!frames) {
         return
@@ -155,22 +209,23 @@ export function useEmulatorScreenKeyboard({
       const pasteRequestId = pasteRequestIdRef.current
       const paste = scrcpyKeyboard
         ? pasteTextIntoAndroidEmulator({ sendText: scrcpyKeyboard.sendText, text })
-        : pasteTextIntoEmulatorKeyboard({
-            isCancelled: () =>
-              pasteRequestIdRef.current !== pasteRequestId ||
-              !captureActiveRef.current ||
-              !canInteractRef.current,
-            sendKeyboardFrames,
+        : pasteTextIntoSimulator({
+            insertText: (value) =>
+              callRuntimeRpc({ kind: 'local' }, 'emulator.type', {
+                text: value,
+                worktree: worktreeId
+              })
+                .then(() => true)
+                .catch(() => false),
             text
           })
       void paste.then((result) => {
-        if (pasteRequestIdRef.current !== pasteRequestId && result.status !== 'cancelled') {
-          return
+        if (pasteRequestIdRef.current === pasteRequestId) {
+          showEmulatorKeyboardPasteResult(result)
         }
-        showEmulatorKeyboardPasteResult(result)
       })
     },
-    [canInteract, cancelActivePaste, scrcpyKeyboard, sendKeyboardFrames]
+    [canInteract, cancelActivePaste, scrcpyKeyboard, worktreeId]
   )
 
   return {

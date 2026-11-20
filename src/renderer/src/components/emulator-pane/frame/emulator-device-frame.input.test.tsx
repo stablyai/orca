@@ -12,6 +12,9 @@ vi.mock('sonner', () => ({
   }
 }))
 
+const callRuntimeRpc = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc }))
+
 class FakeWebSocket {
   static CONNECTING = 0
   static OPEN = 1
@@ -65,6 +68,8 @@ beforeEach(() => {
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true
   vi.stubGlobal('WebSocket', FakeWebSocket as unknown as typeof WebSocket)
+  vi.stubGlobal('api', { app: { onKeyboardLayoutChanged: () => () => undefined } })
+  callRuntimeRpc.mockReset().mockResolvedValue({ physicalKeys: false })
   FakeWebSocket.instances = []
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -84,6 +89,7 @@ function renderFrame(): void {
   act(() => {
     root.render(
       <EmulatorDeviceFrame
+        worktreeId="wt-1"
         previewUrl="http://127.0.0.1:3100/stream.mjpeg"
         wsUrl="ws://127.0.0.1:3100/ws"
         loading={false}
@@ -109,11 +115,19 @@ function getScreen(): HTMLDivElement {
 
 function keyEvent(
   type: string,
-  init: { altKey?: boolean; ctrlKey?: boolean; key: string; metaKey?: boolean; shiftKey?: boolean }
+  init: {
+    altKey?: boolean
+    code?: string
+    ctrlKey?: boolean
+    key: string
+    metaKey?: boolean
+    shiftKey?: boolean
+  }
 ): Event {
   const event = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperties(event, {
     altKey: { value: init.altKey ?? false },
+    code: { value: init.code ?? '' },
     ctrlKey: { value: init.ctrlKey ?? false },
     isComposing: { value: false },
     key: { value: init.key },
@@ -196,6 +210,39 @@ describe('EmulatorDeviceFrame input', () => {
     expect(decodedSentKeyboardFrames()).toEqual([
       { type: 'down', usage: 225 },
       { type: 'up', usage: 225 }
+    ])
+  })
+
+  it('sends the physical key once the simulator follows the Mac keyboard layout', async () => {
+    vi.useFakeTimers()
+    callRuntimeRpc.mockResolvedValue({ physicalKeys: true })
+    renderFrame()
+    act(() => {
+      FakeWebSocket.instances[0]?.open()
+    })
+    const screen = getScreen()
+    await act(async () => {
+      screen.dispatchEvent(keyEvent('keydown', { key: 'Enter' }))
+    })
+
+    // Turkish Q: the key right of L types "ş", Option+Q types "@".
+    act(() => {
+      screen.dispatchEvent(keyEvent('keydown', { code: 'Semicolon', key: 'ş' }))
+      vi.runAllTimers()
+      screen.dispatchEvent(keyEvent('keydown', { altKey: true, code: 'KeyQ', key: '@' }))
+      vi.runAllTimers()
+    })
+
+    expect(callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'emulator.syncKeyboardLayout', {
+      worktree: 'wt-1'
+    })
+    expect(decodedSentKeyboardFrames()).toEqual([
+      { type: 'down', usage: 0x33 },
+      { type: 'up', usage: 0x33 },
+      { type: 'down', usage: 0xe2 },
+      { type: 'down', usage: 0x14 },
+      { type: 'up', usage: 0x14 },
+      { type: 'up', usage: 0xe2 }
     ])
   })
 })

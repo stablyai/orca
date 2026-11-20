@@ -28,6 +28,8 @@ import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
 import { assertSimulatorInputNotShadowedByDeviceHub } from '../simulator-device-hub-input'
+import { SimulatorHardwareKeyboardSync } from '../simulator-hardware-keyboard-layout'
+import { typeSimulatorText } from '../simulator-text-input'
 import type {
   BackendAvailability,
   EmulatorBackend,
@@ -47,6 +49,7 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   private cachedServeSimExecutable: ServeSimExecutable | undefined
+  private readonly hardwareKeyboardSync = new SimulatorHardwareKeyboardSync()
   private readonly waitForEndpointReady: (endpoint: string) => Promise<boolean>
 
   constructor(options: EmulatorBridgeOptions = {}) {
@@ -147,10 +150,14 @@ export class IosEmulatorBackend implements EmulatorBackend {
     await sendEmulatorGestureSequence(wsUrl, points)
   }
 
-  async type(deviceId: string, text: string): Promise<void> {
+  async type(deviceId: string, text: string, wsUrl: string | null): Promise<void> {
     const udid = await this.resolveDeviceId(deviceId)
     await assertSimulatorInputNotShadowedByDeviceHub(udid)
-    await this.execServeSim(['type', text, '-d', udid])
+    await typeSimulatorText(udid, text, wsUrl, () => this.execServeSim(['type', text, '-d', udid]))
+  }
+
+  async syncHardwareKeyboardLayout(deviceId: string): Promise<boolean> {
+    return this.hardwareKeyboardSync.sync(await this.resolveDeviceId(deviceId))
   }
 
   async button(deviceId: string, name: string): Promise<void> {
@@ -253,6 +260,8 @@ export class IosEmulatorBackend implements EmulatorBackend {
     deviceId: string,
     options: { helperPid?: number; includeOrphaned?: boolean } = {}
   ): Promise<void> {
+    // The pane is detaching, so the simulator gets back the keyboard layout it had before Orca.
+    await this.hardwareKeyboardSync.restore(deviceId)
     await this.execServeSim(serveSimKillArgs(deviceId)).catch(() => {})
     // Stale helpers can outlive the state file that serve-sim --kill relies on.
     await killServeSimHelperProcessesForDevice(deviceId, options).catch(() => {})

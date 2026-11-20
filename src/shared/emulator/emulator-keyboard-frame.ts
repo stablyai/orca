@@ -11,12 +11,14 @@ type KeyUsage = {
 }
 
 type ServeSimKeyboardModifiers = {
+  alt?: boolean
   shift?: boolean
 }
 
 export const SERVE_SIM_KEYBOARD_MESSAGE_TAG = 0x06
 
 const SHIFT_USAGE = 225
+const ALT_USAGE = 226
 const ASCII_KEY_USAGES: Record<string, KeyUsage> = buildAsciiKeyUsages()
 
 const NAMED_KEY_USAGES: Record<string, number> = {
@@ -31,6 +33,59 @@ const NAMED_KEY_USAGES: Record<string, number> = {
   ArrowLeft: 80,
   ArrowDown: 81,
   ArrowUp: 82
+}
+
+// KeyboardEvent.code names a physical key; the guest's hardware layout decides its character.
+const PHYSICAL_KEY_USAGES: ReadonlyMap<string, number> = buildPhysicalKeyUsages()
+
+function buildPhysicalKeyUsages(): Map<string, number> {
+  const usages: Record<string, number> = {
+    Enter: 40,
+    Escape: 41,
+    Backspace: 42,
+    Tab: 43,
+    Space: 44,
+    Minus: 45,
+    Equal: 46,
+    BracketLeft: 47,
+    BracketRight: 48,
+    Backslash: 49,
+    Semicolon: 51,
+    Quote: 52,
+    Backquote: 53,
+    Comma: 54,
+    Period: 55,
+    Slash: 56,
+    Home: 74,
+    PageUp: 75,
+    Delete: 76,
+    End: 77,
+    PageDown: 78,
+    ArrowRight: 79,
+    ArrowLeft: 80,
+    ArrowDown: 81,
+    ArrowUp: 82,
+    NumpadDivide: 84,
+    NumpadMultiply: 85,
+    NumpadSubtract: 86,
+    NumpadAdd: 87,
+    NumpadEnter: 88,
+    Numpad0: 98,
+    NumpadDecimal: 99,
+    IntlBackslash: 100,
+    NumpadEqual: 103,
+    IntlRo: 135,
+    IntlYen: 137
+  }
+  for (let index = 0; index < 26; index += 1) {
+    usages[`Key${String.fromCharCode(65 + index)}`] = 4 + index
+  }
+  for (let digit = 1; digit <= 9; digit += 1) {
+    usages[`Digit${digit}`] = 29 + digit
+    usages[`Numpad${digit}`] = 88 + digit
+  }
+  usages.Digit0 = 39
+  return new Map(Object.entries(usages))
 }
 
 function buildAsciiKeyUsages(): Record<string, KeyUsage> {
@@ -84,11 +139,30 @@ function buildKeyUsageFrames(
   key: KeyUsage,
   modifiers: ServeSimKeyboardModifiers = {}
 ): ServeSimKeyboardFrame[] {
-  const frames = buildUsageFrames(key.usage)
+  let frames = buildUsageFrames(key.usage)
+  if (modifiers.alt) {
+    frames = [{ type: 'down', usage: ALT_USAGE }, ...frames, { type: 'up', usage: ALT_USAGE }]
+  }
   return key.shift || modifiers.shift
     ? [{ type: 'down', usage: SHIFT_USAGE }, ...frames, { type: 'up', usage: SHIFT_USAGE }]
     : frames
 }
+
+export function buildServeSimKeyboardFramesForCode(
+  code: string,
+  modifiers: ServeSimKeyboardModifiers = {}
+): ServeSimKeyboardFrame[] | null {
+  const usage = PHYSICAL_KEY_USAGES.get(code)
+  return usage === undefined ? null : buildKeyUsageFrames({ shift: false, usage }, modifiers)
+}
+
+// Cmd+V pastes the guest pasteboard; V keeps usage 0x19 on QWERTY, QWERTZ, AZERTY and Turkish layouts.
+export const SERVE_SIM_PASTE_FRAMES: readonly ServeSimKeyboardFrame[] = [
+  { type: 'down', usage: 227 },
+  { type: 'down', usage: 25 },
+  { type: 'up', usage: 25 },
+  { type: 'up', usage: 227 }
+]
 
 export function buildServeSimKeyboardFramesForKey(
   key: string,

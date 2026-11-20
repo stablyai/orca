@@ -162,15 +162,13 @@ export class EmulatorBridge {
     if (points.length === 0) {
       return
     }
-    const { backend, device } = await this.resolveTarget(opts)
-    const udid = await backend.resolveDeviceId(device)
-    const wsUrl = this.sessionRegistry.getSession(udid)?.wsUrl ?? null
-    await backend.gesture(udid, points, wsUrl)
+    const { backend, udid } = await this.resolveTargetUdid(opts)
+    await backend.gesture(udid, points, this.sessionRegistry.getSession(udid)?.wsUrl ?? null)
   }
 
   async type(text: string, opts?: EmulatorTargetOpts): Promise<void> {
-    const { backend, device } = await this.resolveTarget(opts)
-    await backend.type(device, text)
+    const { backend, udid } = await this.resolveTargetUdid(opts)
+    await backend.type(udid, text, this.sessionRegistry.getSession(udid)?.wsUrl ?? null)
   }
 
   async button(name: string, opts?: EmulatorTargetOpts): Promise<void> {
@@ -239,7 +237,7 @@ export class EmulatorBridge {
   }
 
   async kill(device?: string, worktreeId?: string): Promise<string> {
-    const { backend, udid } = await this.resolveStopTarget(device, worktreeId)
+    const { backend, udid } = await this.resolveTargetUdid({ device, worktreeId })
     await backend.stopHelperForDevice(udid, {
       helperPid: this.sessionRegistry.getSession(udid)?.pid,
       includeOrphaned: true
@@ -249,7 +247,7 @@ export class EmulatorBridge {
   }
 
   async shutdown(device?: string, worktreeId?: string): Promise<string> {
-    const { backend, udid } = await this.resolveStopTarget(device, worktreeId)
+    const { backend, udid } = await this.resolveTargetUdid({ device, worktreeId })
     await backend.stopHelperForDevice(udid, {
       helperPid: this.sessionRegistry.getSession(udid)?.pid,
       includeOrphaned: true
@@ -304,16 +302,11 @@ export class EmulatorBridge {
     )
   }
 
-  private async resolveStopTarget(
-    device?: string,
-    worktreeId?: string
+  private async resolveTargetUdid(
+    opts?: EmulatorTargetOpts
   ): Promise<{ backend: EmulatorBackend; udid: string }> {
-    if (device) {
-      const backend = await this.backendForDevice(device)
-      return { backend, udid: await backend.resolveDeviceId(device) }
-    }
-    const { backend, device: resolved } = await this.resolveTarget({ worktreeId })
-    return { backend, udid: await backend.resolveDeviceId(resolved) }
+    const { backend, device } = await this.resolveTarget(opts)
+    return { backend, udid: await backend.resolveDeviceId(device) }
   }
 
   private backendForKind(kind: EmulatorBackendKind): EmulatorBackend | null {

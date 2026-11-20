@@ -123,6 +123,17 @@ export class RuntimeEmulatorCommands {
     return RuntimeEmulatorCommands.OK
   }
 
+  // The pane sends physical keys only once the simulator's hardware layout matches the Mac's.
+  async emulatorSyncKeyboardLayout(params: {
+    worktree?: string
+  }): Promise<{ physicalKeys: boolean }> {
+    const bridge = this.requireEmulatorBridge()
+    const active = bridge.getActiveForWorktree(await this.resolveWorktreeId(params.worktree))
+    const backend = bridge.listBackends().find((candidate) => candidate.kind === active?.backend)
+    const sync = backend?.syncHardwareKeyboardLayout?.bind(backend)
+    return { physicalKeys: active && sync ? await sync(active.deviceUdid) : false }
+  }
+
   // Pane touches skip main, so the pane asks whether the active simulator still accepts input.
   async emulatorCheckInput(params: { worktree?: string }): Promise<{ ok: true }> {
     const worktreeId = await this.resolveWorktreeId(params.worktree)
