@@ -5,19 +5,20 @@ import { composioAppName } from '../../../../shared/composio/composio-curated-ap
 import { composioUserOfAccount } from '../../../composio/composio-api-events'
 import { composioCallRouter, ComposioUpkeep } from '../../../composio/composio-upkeep'
 import type { WebhookHostService } from '../../../webhooks/webhook-host-service'
+import type { WebhookCallRouter } from '../../../webhooks/webhook-call-outcomes'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { instanceOf } from './bots-composio'
 
 export function installComposioUpkeep(
   runtime: OrcaRuntimeService,
-  webhooks: WebhookHostService
+  webhooks: WebhookHostService,
+  route?: WebhookCallRouter
 ): ComposioUpkeep {
-  webhooks.setCallRouter(
-    composioCallRouter({
-      automations: () => webhooks.automations(),
-      expired: (accountId, app) => postReconnectCard(runtime, accountId, app)
-    })
-  )
+  const composioRoute = composioCallRouter({
+    automations: () => webhooks.automations(),
+    expired: (accountId, app) => postReconnectCard(runtime, accountId, app)
+  })
+  webhooks.setCallRouter(async (...args) => (await route?.(...args)) ?? composioRoute(...args))
   const upkeep = new ComposioUpkeep(async () => {
     const { bots, events } = instanceOf(runtime)
     await bots.drainCleanup()

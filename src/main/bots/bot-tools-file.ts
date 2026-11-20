@@ -289,7 +289,7 @@ export function botOwnTool(server: BotToolServer, folder: string): BotOwnTool {
  *  `launched` comes from the same read as the tools, so a write during launch can't look applied. */
 export async function botSessionToolServers(
   bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[],
-  record: { provider: string; location: { workspaceId: string } },
+  record: { provider: string; sessionId?: string; location: { workspaceId: string } },
   launchDirectory: string,
   relay: Pick<BotToolRelay, 'grant'> = botToolRelay
 ): Promise<{ tools: BotLaunchTools; launched: BotLaunchedTools | null }> {
@@ -305,7 +305,12 @@ export async function botSessionToolServers(
   return {
     tools: await BotLaunchTools.for(
       relay,
-      { botId: bot.id, folder: launchDirectory, agent: record.provider },
+      {
+        botId: bot.id,
+        folder: launchDirectory,
+        agent: record.provider,
+        sessionId: record.sessionId
+      },
       snapshot.servers
     ),
     launched: {
