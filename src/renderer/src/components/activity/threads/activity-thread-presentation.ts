@@ -297,7 +297,7 @@ export function activityThreadRowCopy(
   return { taskTitle, statusLine: '', statusKind: 'none', needsAttention, workspaceLabel }
 }
 
-/** The row names what its group header doesn't: the project chip, the workspace, or both. */
+/** The row names the project unless its group header does; the workspace only stands in for a missing project. */
 export function activityThreadRowIdentity(
   thread: {
     repo: Pick<Repo, 'displayName'> | null
@@ -305,17 +305,9 @@ export function activityThreadRowIdentity(
   },
   groupBy: ActivityGroupBy
 ): { showProject: boolean; showWorkspace: boolean } {
-  const showProject = thread.repo !== null && groupBy !== 'project'
-  // Why: the worktree group header shows the raw display name, which can be empty.
-  const headerNamesWorkspace =
-    groupBy === 'worktree' && Boolean(thread.worktree.displayName?.trim())
-  // Why: a folder workspace without a custom name falls back to the project name; the chip lowercases it.
-  const repeatsProject =
-    showProject &&
-    getActivityThreadWorkspaceTitle(thread.worktree).toLowerCase() ===
-      thread.repo?.displayName.trim().toLowerCase()
   return {
-    showProject,
-    showWorkspace: !showProject || !(headerNamesWorkspace || repeatsProject)
+    showProject: thread.repo !== null && groupBy !== 'project',
+    // Why: a workspace or branch name reads as noise next to the project; the hover card's jump action reaches it.
+    showWorkspace: thread.repo === null
   }
 }
