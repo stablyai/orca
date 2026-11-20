@@ -1,3 +1,4 @@
+import { labelFromModelId } from '../../../agent-session/options/model-catalog/model-id-label'
 import {
   isDefaultServiceTier,
   type SessionOptionDescriptor,
@@ -161,6 +162,14 @@ export function nativeChatModelPillLabel(
   descriptor: SessionOptionDescriptor,
   say: NativeChatSessionOptionSay
 ): string {
+  const fallback = descriptor.fallbackModel
+  if (fallback) {
+    const listed =
+      descriptor.kind.type === 'select'
+        ? descriptor.kind.choices.find((entry) => entry.value === fallback)
+        : undefined
+    return listed ? nativeChatSessionChoiceLabel(listed, say) : labelFromModelId(fallback)
+  }
   // The tooltip names the category; default sources still identify a model, while unknown sources do not.
   const choice = descriptor.valueSource === 'unknown' ? null : selectedNativeChatChoice(descriptor)
   if (choice) {

@@ -1,4 +1,7 @@
 import { claudeObservedEffort } from '../launch/claude-structured-session-options'
+import { readClaudeMessageEnvelope } from '../journal/claude-structured-item-translation'
+import { isRootClaudeFrame } from './claude-turn-opening'
+import { readClaudeModelFallback } from '../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import type { ClaudeSession } from '../claude-structured-session-state'
 
 /** Fast routing reports precede this input and cannot vouch for its execution. */
@@ -23,6 +26,7 @@ export function beginClaudeOptionMutation(session: ClaudeSession, key: string): 
   const sequence = session.optionMutationSequence
   if (key === 'model') {
     delete session.appliedOptions
+    delete session.modelFallback
   } else {
     if (session.reportedModelMutation === previous) {
       session.reportedModelMutation = sequence
@@ -36,7 +40,7 @@ export function beginClaudeOptionMutation(session: ClaudeSession, key: string): 
 }
 
 /** An init names execution; a control answer only acknowledges its input. */
-export function observeClaudeExecutionModel(
+function observeClaudeExecutionModel(
   session: ClaudeSession | null,
   model: string | null | undefined
 ): { model: string } | null {
@@ -50,4 +54,35 @@ export function observeClaudeExecutionModel(
   session.reportedOptions.model = model
   session.reportedModelMutation = session.optionMutationSequence
   return previous !== model ? { model } : null
+}
+
+/** Claude keeps the session on a main-thread refusal fallback; subagent fallbacks stay local. */
+function observeClaudeModelFallback(
+  session: ClaudeSession | null,
+  frame: Record<string, unknown>
+): boolean {
+  const envelope = session && isRootClaudeFrame(frame) ? readClaudeMessageEnvelope(frame) : null
+  const fallback =
+    envelope?.role === 'assistant'
+      ? envelope.content.map(readClaudeModelFallback).findLast((entry) => entry !== null)
+      : undefined
+  if (!session || !fallback || session.modelFallback?.model === fallback.to) {
+    return false
+  }
+  const requested = session.appliedInputOptions.get('model')
+  session.modelFallback = { model: fallback.to, ...(requested ? { requested } : {}) }
+  return true
+}
+
+/** Each model report restates the fallback, so a model write's clear reaches the status too. */
+export function observeClaudeFrameModels(
+  session: ClaudeSession | null,
+  frame: Record<string, unknown>,
+  initModel: string | null | undefined
+): { model?: string; fallbackModel: string | undefined } | null {
+  const execution = observeClaudeExecutionModel(session, initModel)
+  const fallbackChanged = observeClaudeModelFallback(session, frame)
+  return session && (execution || fallbackChanged)
+    ? { ...execution, fallbackModel: session.modelFallback?.model }
+    : null
 }

@@ -114,7 +114,13 @@ export async function readStructuredAgentSessionOptions(
     ))
   let options: Omit<AgentSessionOptionsResult, 'rewind'>
   if (live) {
-    const { catalogListing, effortFixed: _fixed, projectCurrent: _project, ...answer } = live
+    const {
+      catalogListing,
+      effortFixed: _fixed,
+      projectCurrent: _project,
+      modelFallback: _modelFallback,
+      ...answer
+    } = live
     options = answer
     // Fill missing live listings from saved catalog state; absent records keep the child’s answer.
     if (!catalogListing && !answer.listedModelIds && store.getConversation(sessionId)) {
@@ -166,6 +172,11 @@ export async function readStructuredAgentSessionOptions(
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
+  // A pick since the fallback outranks it, though the child runs the fallback until that pick's turn.
+  const fallbackModel =
+    live?.modelFallback && live.modelFallback.requested === saved.model
+      ? live.modelFallback.model
+      : undefined
   const current = {
     ...selected.current,
     ...options.current,
@@ -262,6 +273,7 @@ export async function readStructuredAgentSessionOptions(
       ...current,
       acceptedInputSources,
       reportedModel: undefined,
+      ...(fallbackModel ? { fallbackModel } : {}),
       ...(reportedEffort !== undefined ? { reportedEffort } : {}),
       defaulted,
       confirmed,

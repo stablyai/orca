@@ -239,6 +239,7 @@ export function claudeStructuredSessionOptionsFrom(
   ]
   return {
     models: wireClaudeModels(models),
+    ...(session.modelFallback ? { modelFallback: { ...session.modelFallback } } : {}),
     ...(changesLive ? {} : { fastModeSupport: CLAUDE_CLI_UPDATE_REQUIRED }),
     ...(changesLive ? {} : { effortFixed: true as const }),
     current: {
