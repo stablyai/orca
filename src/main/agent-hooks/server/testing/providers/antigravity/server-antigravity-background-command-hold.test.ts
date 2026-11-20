@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -228,4 +228,26 @@ it('ends the run on agy done when the finished subagent leaves the row during th
   expect(server.getStatusSnapshot()[0]?.subagents).toBeUndefined()
   await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
   expect(state()).toBe('done')
+})
+
+it('ends the run on agy done after a subagent that finished before its first poll is proven', async () => {
+  const brain = join(dir, 'brain', 'parent', '.system_generated')
+  mkdirSync(join(brain, 'logs'), { recursive: true })
+  mkdirSync(join(brain, 'subagents'), { recursive: true })
+  const transcriptPath = join(brain, 'logs', 'transcript.jsonl')
+  writeFileSync(
+    transcriptPath,
+    `${JSON.stringify({ source: 'USER_EXPLICIT', type: 'USER_INPUT', content: 'start the job' })}\n`
+  )
+  writeFileSync(
+    join(brain, 'subagents', 'child.json'),
+    JSON.stringify({ conversationId: 'child', state: 'SUBAGENT_STATE_ALIVE' })
+  )
+  await agyHook('PreInvocation', { transcriptPath })
+  await agyHook('PreToolUse', { ...subagentCall, transcriptPath })
+  await agyHook('PreInvocation', child)
+  await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL', transcriptPath })
+  await subagentIdleStop()
+  programDone()
+  await vi.waitFor(() => expect(state()).toBe('done'), { timeout: 10000 })
 })

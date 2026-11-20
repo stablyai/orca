@@ -12,7 +12,7 @@ export function reconcileAntigravityActiveSubagents(
 ): AgentSubagentSnapshot[] {
   const snapshots: AgentSubagentSnapshot[] = []
   for (const child of pane.children.values()) {
-    if (!pane.verifiedChildren.has(child.id)) {
+    if (!pane.verifiedChildren.has(child.id) || child.stopped) {
       continue
     }
     snapshots.push({

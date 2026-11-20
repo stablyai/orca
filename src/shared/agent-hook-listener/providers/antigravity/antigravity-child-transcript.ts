@@ -7,7 +7,10 @@ import {
   type AntigravityChildTranscriptTail
 } from './antigravity-brain-metadata'
 
-function childTranscriptFilePath(rootBrainDir: string, childId: string): string | undefined {
+export function antigravityTranscriptFilePath(
+  rootBrainDir: string,
+  childId: string
+): string | undefined {
   if (!childId || childId.includes('/') || childId.includes('\\') || childId.includes('..')) {
     return undefined
   }
@@ -20,7 +23,7 @@ export async function readAntigravityChildTranscriptTail(
   cache: AntigravityBrainCache,
   batch: RolloutReadBatch
 ): Promise<AntigravityChildTranscriptTail | undefined> {
-  const childTranscriptPath = childTranscriptFilePath(rootBrainDir, childId)
+  const childTranscriptPath = antigravityTranscriptFilePath(rootBrainDir, childId)
   if (!childTranscriptPath) {
     return undefined
   }

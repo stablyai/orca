@@ -33,6 +33,7 @@ import {
   recordAntigravityChildHook
 } from './antigravity-subagent-roster'
 import { readAntigravityToolCall } from './antigravity-tool-fields'
+import { antigravityTranscriptFilePath } from './antigravity-child-transcript'
 
 export { isAntigravityFeedbackTool }
 
@@ -192,7 +193,9 @@ export function normalizeAntigravityEvent(
 
   const rawModel = readFirstString(hookPayload, ['modelName', 'model'])
   if (rawModel) {
-    paneState.leadModel = normalizeAntigravityModel(rawModel) ?? paneState.leadModel
+    const resolvedModel = normalizeAntigravityModel(rawModel)
+    paneState.leadModel = resolvedModel ?? paneState.leadModel
+    paneState.leadModelAuto = resolvedModel ? undefined : true
   }
 
   if (eventName === 'Stop' && !stopStillBusy) {
@@ -201,7 +204,16 @@ export function normalizeAntigravityEvent(
     }
     paneState.children.clear()
     paneState.verifiedChildren.clear()
+    const rootTranscript =
+      paneState.rootBrainDir && paneState.rootConversationId
+        ? antigravityTranscriptFilePath(paneState.rootBrainDir, paneState.rootConversationId)
+        : undefined
+    const rootCursor = rootTranscript && paneState.brainCache.transcripts.get(rootTranscript)
     paneState.brainCache = createAntigravityBrainCache()
+    // Keep the root transcript's read position so later automatic turns read only new lines.
+    if (rootTranscript && rootCursor) {
+      paneState.brainCache.transcripts.set(rootTranscript, rootCursor)
+    }
     paneState.commands?.clear()
     paneState.discoversChildren = false
     paneState.dirty = false

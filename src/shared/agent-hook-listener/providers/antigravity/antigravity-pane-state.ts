@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import type { AgentStatusState } from '../../../agent-status/contracts/agent-status-types'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
@@ -16,15 +15,18 @@ import {
 } from './antigravity-brain-metadata'
 import { isAntigravityFeedbackTool, isAntigravityStopStillBusy } from './antigravity-event-rules'
 import { readAntigravityToolCall } from './antigravity-tool-fields'
+import { antigravityTranscriptFilePath } from './antigravity-child-transcript'
 
 export type TrackedAntigravityChild = {
   id: string
   startedAt: number
   revision: number
   state: 'working' | 'waiting'
+  stopped?: true
   description?: string
   agentType?: string
   model?: string
+  modelAuto?: true
   toolName?: string
   toolInput?: string
 }
@@ -40,6 +42,7 @@ export type AntigravityPaneChildState = {
   leadStateStartedAt?: number
   leadObservedAt?: number
   leadModel?: string
+  leadModelAuto?: true
   commands?: Set<number>
   children: Map<string, TrackedAntigravityChild>
   verifiedChildren: Set<string>
@@ -72,9 +75,10 @@ export function retireAntigravityChild(pane: AntigravityPaneChildState, id: stri
   const verified = pane.verifiedChildren.delete(id)
   pane.children.delete(id)
   if (pane.rootBrainDir) {
-    pane.brainCache.transcripts.delete(
-      join(pane.rootBrainDir, '..', id, '.system_generated', 'logs', 'transcript.jsonl')
-    )
+    const transcript = antigravityTranscriptFilePath(pane.rootBrainDir, id)
+    if (transcript) {
+      pane.brainCache.transcripts.delete(transcript)
+    }
     const path = antigravityChildDescriptorPath(pane.rootBrainDir, id)
     if (path) {
       pane.brainCache.jsonFiles.delete(path)
@@ -95,14 +99,22 @@ export function recordAntigravityChildHook(
   if (pane.retiredChildren.has(id) && eventName !== 'PreInvocation') {
     return
   }
+  const existing = pane.children.get(id)
   if (eventName === 'Stop' && !isAntigravityStopStillBusy(payload)) {
-    if (pane.children.has(id)) {
+    if (existing && pane.verifiedChildren.has(id)) {
       retireAntigravityChild(pane, id)
+    } else if (existing && !existing.stopped) {
+      // Retire only after the poll proves ownership, so a verified finish still starts the parent's grace.
+      existing.stopped = true
+      existing.revision++
+      pane.dirty = true
     }
     return
   }
+  if (existing?.stopped && eventName !== 'PreInvocation') {
+    return
+  }
   pane.retiredChildren.delete(id)
-  const existing = pane.children.get(id)
   const child: TrackedAntigravityChild = existing ?? {
     id,
     startedAt: now,
@@ -110,6 +122,7 @@ export function recordAntigravityChildHook(
     state: 'working'
   }
   if (eventName === 'PreInvocation' && existing) {
+    existing.stopped = undefined
     existing.revision++
   }
   const tool =
@@ -117,16 +130,26 @@ export function recordAntigravityChildHook(
   const toolName = tool?.toolName
   const toolInput = normalizeOptionalField(tool?.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
   const rawModel = readFirstString(payload, ['modelName', 'model'])
-  const model = normalizeAntigravityModel(rawModel) ?? child.model
+  const resolvedModel = normalizeAntigravityModel(rawModel)
+  const model = resolvedModel ?? child.model
+  const modelAuto = rawModel ? (resolvedModel ? undefined : true) : child.modelAuto
   const state = isAntigravityFeedbackTool(toolName) ? 'waiting' : 'working'
   if (
     !existing ||
     child.state !== state ||
     child.model !== model ||
+    child.modelAuto !== modelAuto ||
     child.toolName !== toolName ||
     child.toolInput !== toolInput
   ) {
-    Object.assign(child, { state, model, toolName, toolInput, revision: child.revision + 1 })
+    Object.assign(child, {
+      state,
+      model,
+      modelAuto,
+      toolName,
+      toolInput,
+      revision: child.revision + 1
+    })
     pane.children.set(id, child)
     pane.dirty = true
   }

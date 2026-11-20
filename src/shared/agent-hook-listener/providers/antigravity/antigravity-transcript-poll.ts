@@ -1,4 +1,3 @@
-import { join } from 'node:path'
 import type { AgentHookEventPayload } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { RolloutReadBatch } from '../codex/codex-rollout-async-reads'
@@ -8,7 +7,10 @@ import {
   readAntigravitySwarmMembers,
   type AntigravityChildMetadata
 } from './antigravity-brain-metadata'
-import { readAntigravityChildTranscriptTail } from './antigravity-child-transcript'
+import {
+  antigravityTranscriptFilePath,
+  readAntigravityChildTranscriptTail
+} from './antigravity-child-transcript'
 import {
   retireAntigravityChild,
   type AntigravityPaneChildState,
@@ -24,7 +26,8 @@ export function hasAntigravityPollWork(
     pane &&
     (pane.dirty ||
       (pane.rootBrainDir &&
-        (pane.children.size > 0 || (pane.leadModel === undefined && pane.leadState === 'working'))))
+        (pane.children.size > 0 ||
+          ((pane.leadModel === undefined || pane.leadModelAuto) && pane.leadState === 'working'))))
   )
 }
 export type AntigravityTranscriptPollReads = {
@@ -77,22 +80,25 @@ export async function readAntigravityTranscriptPoll(
     const batch = new RolloutReadBatch(current)
     try {
       const model =
-        child.model === undefined && metadata && !metadata.killed
+        (child.model === undefined || child.modelAuto) &&
+        metadata &&
+        !metadata.killed &&
+        !child.stopped
           ? (await readAntigravityChildTranscriptTail(brain, child.id, cache, batch))?.model
           : undefined
       if (current()) {
         result.children.push({ child, revision, metadata, model })
       }
-      if (model) {
-        cache.transcripts.delete(
-          join(brain, '..', child.id, '.system_generated', 'logs', 'transcript.jsonl')
-        )
+      const transcript = antigravityTranscriptFilePath(brain, child.id)
+      // An automatic model can change mid-run, so its transcript keeps its read position.
+      if (model && !child.modelAuto && transcript) {
+        cache.transcripts.delete(transcript)
       }
     } finally {
       batch.release()
     }
   }
-  if (pane.leadModel === undefined && pane.rootConversationId && wanted()) {
+  if ((pane.leadModel === undefined || pane.leadModelAuto) && pane.rootConversationId && wanted()) {
     const batch = new RolloutReadBatch(wanted)
     try {
       result.leadModel = (
@@ -113,7 +119,9 @@ export function pollAntigravityTranscriptStatus(
   if (!reads || pane !== reads.pane || pane.brainCache !== reads.cache) {
     return undefined
   }
-  pane.leadModel ??= reads.leadModel
+  if (reads.leadModel && (pane.leadModel === undefined || pane.leadModelAuto)) {
+    pane.leadModel = reads.leadModel
+  }
   for (const { child, revision, metadata, model } of reads.children) {
     if (pane.children.get(child.id) !== child || child.revision !== revision) {
       continue
@@ -126,7 +134,13 @@ export function pollAntigravityTranscriptStatus(
       pane.awaitingInitialHelperDiscovery = undefined
       child.description = metadata.description
       child.agentType = metadata.agentType
-      child.model = metadata.model ?? child.model ?? model
+      child.model =
+        metadata.model ?? (child.modelAuto ? (model ?? child.model) : (child.model ?? model))
+      if (child.stopped) {
+        retireAntigravityChild(pane, child.id)
+      }
+    } else if (child.stopped) {
+      retireAntigravityChild(pane, child.id)
     }
   }
   pane.dirty = false

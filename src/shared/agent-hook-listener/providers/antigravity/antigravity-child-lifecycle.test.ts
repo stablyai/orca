@@ -209,6 +209,21 @@ it('resolves automatic models from transcripts and preserves them across automat
     hook('root', 'PreToolUse', { modelName: 'auto', toolCall: { name: 'read_file' } })?.payload
       .model
   ).toBe('model-a')
+  appendFileSync(
+    join(dir, 'child', '.system_generated', 'logs', 'transcript.jsonl'),
+    '{"type":"PLANNER_RESPONSE","model":"model-c"}\n'
+  )
+  expect((await poll())?.payload.subagents?.[0]?.model).toBe('model-c')
+})
+
+it('follows the automatic model a later turn resolves', async () => {
+  hook('root', 'Stop', { fullyIdle: true })
+  hook('root', 'PreInvocation', { lastUserInput: 'Next', modelName: 'auto' })
+  appendFileSync(
+    join(dir, 'root', '.system_generated', 'logs', 'transcript.jsonl'),
+    '{"type":"PLANNER_RESPONSE","model":"model-c"}\n'
+  )
+  expect((await poll())?.payload.model).toBe('model-c')
 })
 
 it('keeps a root command monitoring after its child finishes', async () => {
