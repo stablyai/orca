@@ -44,7 +44,11 @@ const installed: ConnectorBotSlackState = {
 const confirm = vi.fn()
 const api = { state: vi.fn(), remove: vi.fn() }
 
-function renderCard(slack: ConnectorBotSlackStateResponse, teamId = 'T05', shown = bot): void {
+function renderCard(
+  slack: ConnectorBotSlackStateResponse,
+  options: { teamId?: string; shown?: Bot } = {}
+): void {
+  const teamId = 'teamId' in options ? options.teamId : 'T05'
   api.state.mockReset().mockResolvedValue({ ok: true, value: slack })
   api.remove.mockReset().mockResolvedValue({ ok: true, value: undefined })
   Object.assign(window, {
@@ -52,7 +56,7 @@ function renderCard(slack: ConnectorBotSlackStateResponse, teamId = 'T05', shown
   })
   render(
     <ConfirmationDialogContext.Provider value={confirm}>
-      <BotSlackCard bot={shown} teamId={teamId} defaultOpen />
+      <BotSlackCard bot={options.shown ?? bot} teamId={teamId} defaultOpen />
     </ConfirmationDialogContext.Provider>
   )
 }
@@ -138,9 +142,32 @@ describe('BotSlackCard', () => {
     renderCard({ state: 'created', teamId: 'T05', appId: 'A1' })
     expect(await screen.findByText('Waiting for the install in Slack.')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Finish setup' })).toBeDefined()
-    // Nothing to open or remove yet, so the row has no ⋯ menu.
-    expect(screen.queryByRole('button', { name: 'Slack actions' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Add' })).toHaveProperty('disabled', true)
+  })
+
+  it.each([
+    { state: 'created', teamId: 'T05', appId: 'A1' },
+    { state: 'uncertain', teamId: 'T05' },
+    { state: 'grant_expired', teamId: 'T05' }
+  ] satisfies ConnectorBotSlackState[])(
+    'removes an app that was never installed ($state), so a dropped setup can be cleared',
+    async (slack) => {
+      renderCard(slack)
+      confirm.mockResolvedValueOnce(true)
+      expect(await screen.findByRole('button', { name: 'Finish setup' })).toBeDefined()
+      openActions()
+      expect(screen.queryByRole('menuitem', { name: 'Slack app settings' })).toBeNull()
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove from Slack…' }))
+      await waitFor(() =>
+        expect(api.remove).toHaveBeenCalledWith({ botId: 'bot-1', teamId: 'T05' })
+      )
+    }
+  )
+
+  it('offers no Remove on the people-only row once the install is gone', async () => {
+    renderCard({ state: 'created', teamId: 'T05', appId: 'A1' }, { teamId: undefined })
+    expect(await screen.findByRole('button', { name: 'Finish setup' })).toBeDefined()
+    expect(screen.queryByRole('button', { name: 'Slack actions' })).toBeNull()
   })
 
   it('opens and closes the row from its name', async () => {
@@ -179,14 +206,23 @@ describe('BotSlackCard', () => {
       teamName: 'Acme',
       installerName: 'Alice'
     }
-    renderCard({ ...installed, teams: [installed, acme] }, 'T06', {
-      ...bot,
-      slackApps: [
-        { appId: 'A1', teamId: 'T05' },
-        { appId: 'A2', teamId: 'T06' }
-      ],
-      members: [...bot.members, { id: 'U-pri', name: 'Priya', source: 'slack', workspaceId: 'T06' }]
-    })
+    renderCard(
+      { ...installed, teams: [installed, acme] },
+      {
+        teamId: 'T06',
+        shown: {
+          ...bot,
+          slackApps: [
+            { appId: 'A1', teamId: 'T05' },
+            { appId: 'A2', teamId: 'T06' }
+          ],
+          members: [
+            ...bot.members,
+            { id: 'U-pri', name: 'Priya', source: 'slack', workspaceId: 'T06' }
+          ]
+        }
+      }
+    )
     expect(await screen.findByText('installed by Alice')).toBeDefined()
     expect(screen.getByText('Priya')).toBeDefined()
     // Saved before workspaces, so the first workspace's.
