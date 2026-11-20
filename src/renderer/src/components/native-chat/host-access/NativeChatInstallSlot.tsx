@@ -91,9 +91,20 @@ export function useNativeChatInstallSlot(
               : null
         }
       : props.agent === 'antigravity' && props.isVisible && hostProgram
-        ? { host: props.target, backend: 'agy' }
+        ? { host: props.target, backend: 'agy', ...orcasAgy(observation) }
         : null
   }
+}
+
+/** Orca's installed agy is the one a chat on the host program runs; the person's own wins. */
+function orcasAgy(observation: ManagedRuntimeInstallObservation) {
+  const state =
+    observation.kind === 'active' && observation.snapshot.kind === 'known'
+      ? observation.snapshot.state
+      : null
+  return state?.program === 'cli' && state.source === 'managed'
+    ? { orcasAgy: true, managedVersion: state.installedVersion }
+    : {}
 }
 
 /** A chat on the host's own program needs an install only when that program is Orca's missing

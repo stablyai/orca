@@ -12,6 +12,7 @@ import {
   readAgentSessionFailureFact
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { NativeChatStructuredComposerTransport } from './composer/submit/native-chat-structured-composer-transport'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 
 export type NativeChatBotKickoffView = {
   /** The owner hasn't written since the latest kickoff. */
@@ -97,8 +98,29 @@ export function nativeChatKickoffRefusal(session: KickoffSession): BotSetupRefus
   return {
     reason: latest.reason ?? '',
     ...(providerDetail ? { providerDetail } : {}),
-    ...(fact ? { kind: fact.kind } : {})
+    ...(fact ? { kind: fact.kind } : {}),
+    ...(fact?.kind === 'notSignedIn'
+      ? { notSignedIn: fact.account ? { account: fact.account } : {} }
+      : {})
   }
+}
+
+/** The sign-in a failed first screen is waiting on: the kickoff's refusal, or its turn's failure
+ *  line; null when it failed for another reason. */
+export function nativeChatFirstScreenSignIn(
+  firstScreen: NativeChatFirstScreen | null
+): { account?: AgentSessionAccountKind } | null {
+  if (firstScreen?.phase !== 'failed') {
+    return null
+  }
+  if (firstScreen.refused) {
+    return firstScreen.refused.notSignedIn ?? null
+  }
+  const failure = firstScreen.turn
+    .flatMap((message) => message.blocks)
+    .findLast((block) => block.type === 'text' && block.failure !== undefined)
+  const fact = failure?.type === 'text' ? failure.failure : undefined
+  return fact?.kind === 'notSignedIn' ? (fact.account ? { account: fact.account } : {}) : null
 }
 
 /** Ended once the host has a turn record that no longer runs, or refused the kickoff before any turn

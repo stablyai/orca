@@ -32,6 +32,7 @@ const auth = (
   host: { kind: 'local' },
   backend,
   managedVersion: '1.5.0',
+  orcasAgy: false,
   detection,
   keyAndAdc: true,
   switching: null,

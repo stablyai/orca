@@ -51,6 +51,8 @@ export type NativeChatAntigravityAuthTarget = {
   backend: 'managed' | 'agy'
   /** The version of Orca's installed copy, when the host has reported one. */
   managedVersion?: string | null
+  /** The agy this chat runs is Orca's own copy, not the person's. */
+  orcasAgy?: boolean
 }
 
 /** How an Antigravity chat signs in, and one-click ways to change it. */
@@ -58,6 +60,7 @@ export type NativeChatAntigravityAuth = {
   host: RuntimeClientTarget
   backend: NativeChatAntigravityAuthTarget['backend']
   managedVersion: string | null
+  orcasAgy: boolean
   detection: AntigravityChatAuthDetection | null
   /** The host takes the Gemini API key and gcloud methods. */
   keyAndAdc: boolean
@@ -139,6 +142,7 @@ export function NativeChatAntigravityAuthProvider({
   const hostProp = target?.host ?? null
   const backend = target?.backend ?? 'managed'
   const managedVersion = target?.managedVersion ?? null
+  const orcasAgy = target?.orcasAgy === true
   const t = useTranslate()
   // Callers rebuild the target each render; one per host keeps the context value steady.
   const shown = hostProp !== null
@@ -223,6 +227,7 @@ export function NativeChatAntigravityAuthProvider({
       host,
       backend,
       managedVersion,
+      orcasAgy,
       detection,
       keyAndAdc,
       switching,
@@ -236,7 +241,7 @@ export function NativeChatAntigravityAuthProvider({
       openSettings: () => openAntigravitySignInSettings(host),
       refresh: () => void refreshAntigravityChatAuthDetection(host, { force: true })
     }
-  }, [host, backend, managedVersion, detection, keyAndAdc, switching, decide])
+  }, [host, backend, managedVersion, orcasAgy, detection, keyAndAdc, switching, decide])
 
   const confirmTitle =
     confirming === GOOGLE_SIGN_IN
