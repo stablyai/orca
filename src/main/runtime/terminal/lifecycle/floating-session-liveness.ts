@@ -1,3 +1,4 @@
+import { reconsiderCreatorRest } from '../../orchestration/workers/turn-stops/worker-presence-report'
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory } from './pty-controller-inventory-refresh'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
@@ -192,6 +193,8 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     } else {
       // A waiting ask rechecks its question, which a settled Dispatch has closed.
       this.messageWaiters.notifyPrefix(questionAnswerWaitPrefix(handle.slice('dispatch:'.length)))
+      // A helper that settled may have been all that held back its creator's report.
+      reconsiderCreatorRest(handle, this.workerTurnStopReportDeps)
     }
     this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
   }

@@ -16,6 +16,12 @@ import type { AgentJournalCursor } from '../../journal/agent-session-journal-ide
  *  and the surface that offers the resume says so. */
 export const AGENT_SESSION_RESUME_TRIGGERS = ['quit', 'update'] as const
 export type AgentSessionResumeTrigger = (typeof AGENT_SESSION_RESUME_TRIGGERS)[number]
+/** An offer's cause: a teardown trigger, or a crash read back from the journal at the next start. */
+export const AGENT_SESSION_RESUME_MARKER_TRIGGERS = [
+  ...AGENT_SESSION_RESUME_TRIGGERS,
+  'crash'
+] as const
+export type AgentSessionResumeMarkerTrigger = (typeof AGENT_SESSION_RESUME_MARKER_TRIGGERS)[number]
 
 /** How an acted-on offer ended without the agent carrying on. `refused` is a definite no from the
  *  host or provider; `unconfirmed` means the continuation may have gone out and nothing proved it. */
@@ -38,9 +44,11 @@ export type AgentSessionResumeMarker = {
   latestUserItemId?: string | null
   /** Execution host's clock at teardown. */
   recordedAt: number
-  trigger: AgentSessionResumeTrigger
+  trigger: AgentSessionResumeMarkerTrigger
   /** Compare provider identity roots: Claude close advances the leaf after teardown, so full-key checks would refuse every resume. A changed root is a fork. */
   providerHandleRoot: string
+  /** A crash cut whose agent was not proven to have exited: a person continues it, never Orca alone. */
+  exitUnproven?: true
   /** Stable teardown identity for continuation deduplication, not launch ancestry. */
   teardownId: string
   /** Offer-time journal position; later accepted messages or another epoch mean the chat moved on. Older markers omit it. */
@@ -78,9 +86,13 @@ const agentSessionResumeMarkerSchema = z.object({
   work: agentSessionResumeWorkSchema,
   latestUserItemId: markerField.nullable().optional(),
   recordedAt: z.number().int().nonnegative(),
-  trigger: z.enum(AGENT_SESSION_RESUME_TRIGGERS),
+  trigger: z.enum(AGENT_SESSION_RESUME_MARKER_TRIGGERS),
   providerHandleRoot: markerField,
   teardownId: markerField,
+  /** A crash offer is stored as a quit plus this, since released builds reject a capsule naming an
+   *  unknown trigger but strip unknown keys; a rollback then still reads every offer. */
+  cause: z.literal('crash').optional().catch(undefined),
+  exitUnproven: z.literal(true).optional().catch(undefined),
   contextClearOperationId: markerField.optional().catch(undefined),
   journalCursor: z
     .object({ epoch: markerField, sequence: z.number().int().nonnegative() })
@@ -95,10 +107,25 @@ export function parseAgentSessionResumeMarker(value: unknown): AgentSessionResum
   if (!parsed.success) {
     return null
   }
-  const { activity, journalCursor, ...marker } = parsed.data
+  const { activity, journalCursor, cause, exitUnproven, ...marker } = parsed.data
   return {
     ...marker,
+    ...(exitUnproven ? { exitUnproven } : {}),
+    ...(cause === 'crash' ? { trigger: 'crash' as const } : {}),
     ...(journalCursor === undefined ? {} : { journalCursor }),
     ...(activity === undefined ? {} : { activity })
   }
+}
+
+/** The marker as the capsule file stores it; see `cause`. */
+export function storedAgentSessionResumeMarker(marker: AgentSessionResumeMarker): Omit<
+  AgentSessionResumeMarker,
+  'trigger'
+> & {
+  trigger: AgentSessionResumeTrigger
+  cause?: 'crash'
+} {
+  return marker.trigger === 'crash'
+    ? { ...marker, trigger: 'quit', cause: 'crash' }
+    : { ...marker, trigger: marker.trigger }
 }
