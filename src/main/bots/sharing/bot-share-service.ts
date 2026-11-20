@@ -35,6 +35,7 @@ import { BotShareReviews } from './bot-share-reviews'
 import { botSharePartFiles } from './bot-share-part-view'
 import type { BotShareable } from './bot-share-sources'
 import type { BotSharePicks } from '../../../shared/bots/bot-share-picks'
+import { stopBotShare } from './bot-share-stop'
 import type { BotSharePicksStore } from './bot-share-picks-store'
 
 export type BotSharePublished = { share: BotCloudShare; version: BotCloudVersion }
@@ -280,13 +281,7 @@ export class BotShareService {
   /** Stops the link; false when it was already stopped. With the bot on this host, its stored picks
    *  go too, so sharing it again starts from the defaults. */
   async stop(shareId: string, botId?: string): Promise<SkillCloudOperation<boolean>> {
-    const shares = botId ? await this.deps.client.listShares() : null
-    const stopped = await this.deps.client.revokeShare(shareId)
-    const served = shares?.status === 'ok' && shares.value.find((s) => s.id === shareId)?.name
-    if (stopped.status === 'ok' && botId && served === botPackageName(botId)) {
-      await this.deps.picks?.forget(botId).catch(() => undefined)
-    }
-    return stopped
+    return stopBotShare(this.deps, shareId, botId)
   }
 
   /** Whether the bot is shared, and where: read live from the cloud each time. */

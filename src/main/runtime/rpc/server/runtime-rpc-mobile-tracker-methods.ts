@@ -35,7 +35,7 @@ export const DEFAULT_SCOPE_HOST_METHODS = [
   'linear.updateIssue'
 ] as const
 
-/** Calls that store or report the phone's tracker account: they must not move hosts when the relay flips. */
+/** Calls that store the phone's tracker account: they must not move hosts when the relay flips. */
 const ACCOUNT_SETUP_METHODS: readonly string[] = [
   'linear.connect',
   'linear.status',

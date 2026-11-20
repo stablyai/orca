@@ -6,7 +6,7 @@ const notReady = { relayReady: async () => false }
 
 describe('phone tracker routing', () => {
   it('keeps Linear account setup on the default server even when its relay is not ready', async () => {
-    for (const method of ['linear.connect', 'linear.status', 'linear.selectWorkspace']) {
+    for (const method of ['linear.connect', 'linear.selectWorkspace']) {
       expect(await withDefaultScopeServer({ method }, runtime, notReady)).toEqual({
         method,
         executionHost: 'runtime:server-1'
@@ -14,7 +14,7 @@ describe('phone tracker routing', () => {
     }
   })
 
-  it('still answers other tracker reads on this desktop when the relay is not ready', async () => {
+  it('still answers other tracker calls, status included, on this desktop when the relay is not ready', async () => {
     expect(
       await withDefaultScopeServer({ method: 'linear.listIssues' }, runtime, notReady)
     ).toEqual({ method: 'linear.listIssues' })

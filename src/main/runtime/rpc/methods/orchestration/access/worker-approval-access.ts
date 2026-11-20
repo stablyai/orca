@@ -7,9 +7,10 @@ import type { OrchestrationAccessRuleInput } from './orchestration-method-access
 export type WorkerApprovalAccess = { answeredBy: 'person' | 'coordinator'; reason: string | null }
 
 /** Approve requires a person, or an agent caller when the user's setting is on; deny allows an agent
- *  or a person. A person is proven by the transport: the desktop app's own IPC, a phone's pairing, or
- *  a paired window that says so; the orca CLI never does, so an older CLI fails closed. An agent session and a
- *  paired Orca's forwarded call are agents. The setting read is this machine's, which runs the worker. */
+ *  or a person. A person is proven by the transport: the desktop app's own IPC or a phone's pairing
+ *  scope, never a client's own claim, which any holder of a pairing could make. A paired window, the
+ *  orca CLI, an agent session and a paired Orca's forwarded call are agents. The setting read is this
+ *  machine's, which runs the worker. */
 export function workerApprovalAccess({
   params,
   ctx
