@@ -116,7 +116,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     void this.ready.catch(() => {})
   }
 
-  /** The native owner that outlives the shell tool: a process the CLI backgrounds is reparented here. */
+  /** The native owner wrapping the CLI; on Linux it also adopts what the CLI backgrounds. */
   get ownerPid(): number | undefined {
     return this.raw.pid
   }
