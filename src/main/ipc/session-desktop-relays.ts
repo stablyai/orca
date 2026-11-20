@@ -79,6 +79,19 @@ export function parseCarriedDesktopRelays(
   return host
 }
 
+/** How main took relay ids a partition save carried; absent when it carried none. */
+export function carriedRelayStatus(
+  applied: Pick<DesktopRelayHostApplied, 'patch' | 'refused'> | null
+): 'applied' | 'unchanged' | 'refused' | undefined {
+  return !applied
+    ? undefined
+    : applied.refused
+      ? 'refused'
+      : applied.patch
+        ? 'applied'
+        : 'unchanged'
+}
+
 /** The desktop window's relay ids go through main, which changes only the keys the window owns.
  *  Returns the per-call applier the entries patch uses for relay ids that ride with it. */
 export function registerDesktopRelayHandlers(

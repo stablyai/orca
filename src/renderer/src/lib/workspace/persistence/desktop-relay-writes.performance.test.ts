@@ -51,3 +51,20 @@ it('names an ended relay once on a host whose other tab main keeps refusing', as
     stop()
   }
 })
+
+it("carries a full save's changed relay with that host's snapshot", async () => {
+  const main = inMemoryMain()
+  const { stop, dropRelay, durableSave } = await windowSavingTo(main)
+  try {
+    main.sentHosts.length = 0
+    dropRelay()
+
+    await durableSave()
+
+    // Main applies each host's relay ids in the same publish as its snapshot.
+    expect(main.sentHosts.flat().map(({ via }) => via)).not.toContain('separate')
+    expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toBeUndefined()
+  } finally {
+    stop()
+  }
+})

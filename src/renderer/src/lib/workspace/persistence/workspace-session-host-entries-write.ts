@@ -15,7 +15,10 @@ import type { HostPersistenceState, SessionApi } from './workspace-session-host-
 
 /** Hosts this window can still write: its catalogs' owners, hydrated partitions and this write's. */
 export function routedSessionHostIds(
-  state: HostPersistenceState,
+  state: Pick<
+    HostPersistenceState,
+    'repos' | 'hydratedRuntimeSessionHostIds' | 'folderWorkspaces' | 'projectGroups'
+  >,
   slices: HostSessionSlices
 ): Set<ExecutionHostId> {
   const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
@@ -46,6 +49,21 @@ export type CarriedRelayStatus = {
   relays: NonNullable<WorkspaceSessionEntriesPatchResult['relays']> | 'skipped'
 }
 
+/** How main took the relay ids a partition write carried; nothing when it carried none. */
+export function carriedRelayAnswer(
+  hostId: ExecutionHostId,
+  relays: DesktopRelayWrite['hosts'][number] | undefined,
+  result: { status: string; relays?: CarriedRelayStatus['relays'] } | void
+): CarriedRelayStatus | void {
+  if (!relays) {
+    return undefined
+  }
+  return {
+    hostId,
+    relays: result?.status === 'skipped' ? 'skipped' : (result?.relays ?? 'unchanged')
+  }
+}
+
 /** One partition's write: only the entries main hasn't acknowledged when it supports that, else
  *  the whole fields. A failed or fenced write forgets main's copy so the next one goes whole.
  *  `relays` (entries writes only): this partition's relay ids, applied in the same write. */
@@ -66,13 +84,13 @@ export function patchHostSlice(
     (result): CarriedRelayStatus | void => {
       if (result.status === 'skipped') {
         acknowledged.forget(hostId)
-        return relays ? { hostId, relays: 'skipped' } : undefined
+      } else {
+        acknowledge()
       }
-      acknowledge()
       if (result.normalizedFields?.length) {
         acknowledged.forget(hostId, result.normalizedFields)
       }
-      return relays ? { hostId, relays: result.relays ?? 'unchanged' } : undefined
+      return carriedRelayAnswer(hostId, relays, result)
     },
     (error: unknown) => {
       acknowledged.forget(hostId)

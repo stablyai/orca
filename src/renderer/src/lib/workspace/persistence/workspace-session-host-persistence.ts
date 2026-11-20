@@ -54,12 +54,16 @@ import {
   probeDesktopRelays,
   desktopRelayWriteFor,
   replaceDesktopRelays,
-  sendDesktopRelayWrite,
-  planDesktopRelayWrite,
-  settleSessionWrites,
-  type SessionWriteOutcome,
   type DesktopRelayApi
 } from './desktop-relay-writes'
+import {
+  planDesktopRelayWrite,
+  slicedHostIds,
+  setSnapshotsWithRelays,
+  settleSessionWrites,
+  type SessionWriteOutcome,
+  type SnapshotSetApi
+} from './desktop-relay-write-plan'
 import type { DesktopRelayWrite } from '../../../../../shared/workspace-session/desktop-relay-write'
 
 export type HostPersistenceState = WorkspaceTabOwnerCatalog & {
@@ -92,14 +96,7 @@ export type SessionApi = DesktopRelayApi & {
   ) => Promise<WorkspaceSessionEntriesPatchResult>
 }
 
-type DurableSessionApi = SessionApi & {
-  set: (
-    args: WorkspaceSessionState,
-    hostId?: ExecutionHostId,
-    options?: { relays?: 'separate' }
-  ) => Promise<void>
-  flush: () => Promise<void>
-}
+type DurableSessionApi = SessionApi & SnapshotSetApi & { flush: () => Promise<void> }
 
 export type WorkspaceSessionHostSnapshot = {
   state: WorkspaceSessionState
@@ -283,7 +280,12 @@ export function patchWorkspaceSessionByHost(
   acknowledged?.retainHosts(routedSessionHostIds(state, slices))
   // A host's relay ids ride with its entries patch, so main publishes them together once.
   const relayPlan =
-    relays && planDesktopRelayWrite(api, relays, acknowledged && api.patchEntries ? slices : null)
+    relays &&
+    planDesktopRelayWrite(
+      api,
+      relays,
+      acknowledged && api.patchEntries ? slicedHostIds(slices) : new Set()
+    )
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
   const carriedLocal = relayPlan?.carried.get(LOCAL_EXECUTION_HOST_ID)
   const localSlice = patchHostSlice(api, local, LOCAL_EXECUTION_HOST_ID, acknowledged, carriedLocal)
@@ -312,11 +314,7 @@ export async function persistWorkspaceSessionByHost(
 ): Promise<void> {
   const separate = await probeDesktopRelays(api)
   const { snapshots, desktopRelays } = buildWorkspaceSessionHostSnapshots(payload, state, separate)
-  const options = desktopRelays ? { relays: 'separate' as const } : {}
-  const sets = snapshots.map((s) => api.set(s.state, s.hostId, options))
-  // Sent in the same turn as the sets, so a later save's relay write can't reach main before it.
-  const relays = desktopRelays && sendDesktopRelayWrite(api, desktopRelays)
-  await Promise.all([...sets, relays])
+  await setSnapshotsWithRelays(api, snapshots, desktopRelays)
   await api.flush()
 }
 

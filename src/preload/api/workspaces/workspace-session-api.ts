@@ -10,7 +10,9 @@ import type {
 } from '../../../shared/workspace-session/workspace-session-entries-patch'
 import type {
   DesktopRelayWrite,
-  DesktopRelayWriteResult
+  DesktopRelayWriteResult,
+  WorkspaceSessionSetOptions,
+  WorkspaceSessionSetResult
 } from '../../../shared/workspace-session/desktop-relay-write'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 
@@ -20,12 +22,12 @@ export type WorkspaceSessionApi = {
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     /** Read persisted partitions at boot; the host catalog may omit some. */
     listHostIds: () => Promise<ExecutionHostId[]>
-    /** `relays: 'separate'`: relay ids go through applyDesktopRelays, so main keeps its own. */
+    /** `relays: 'separate'`: main keeps its relay ids, applying only `carried` by ownership. */
     set: (
       args: WorkspaceSessionState,
       hostId?: ExecutionHostId,
-      options?: { relays?: 'separate' }
-    ) => Promise<void>
+      options?: WorkspaceSessionSetOptions
+    ) => Promise<WorkspaceSessionSetResult | void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
     /** Changed keys only; absent where the session store takes whole fields (paired web client). */
     patchEntries?: (

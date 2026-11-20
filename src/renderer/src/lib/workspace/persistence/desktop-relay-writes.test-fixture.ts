@@ -15,7 +15,13 @@ import {
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { createSessionWriteSubscriber } from './session-write-subscriber'
 import { AcknowledgedWorkspaceSessionEntries } from './workspace-session-acknowledged-entries'
-import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-session-host-persistence'
+import {
+  patchWorkspaceSessionByHost,
+  persistWorkspaceSessionByHost,
+  type SessionApi
+} from './workspace-session-host-persistence'
+import { buildWorkspaceSessionPayload } from './workspace-session'
+import type { WorkspaceSessionApi } from '../../../../../preload/api/workspaces/workspace-session-api'
 import { probeDesktopRelays } from './desktop-relay-writes'
 
 export const DEBOUNCE_MS = 150
@@ -27,19 +33,20 @@ export const WORKTREE_ID = `${SSH_REPO.id}::/remote/wt`
 const EMPTY_PARTITION = {} as WorkspaceSessionState
 
 /** Main's partitions, written the way its session handlers apply a window's saves. */
+type Via = 'entries' | 'set' | 'separate'
+
 export function inMemoryMain() {
   const partitions = new Map<string, WorkspaceSessionState>()
   const fenced = new Set<string>()
-  // Each relay write main received: per host, the ids it carried.
-  // Each relay host main received, and whether it rode with that host's entries patch.
+  // Each relay host main received, and whether it rode with that host's partition write.
   const sentHosts: {
     hostId: string
     relayIdsByTabId: Record<string, string>
     removedTabIds?: string[]
-    via: 'entries' | 'separate'
+    via: Via
   }[][] = []
   const stored = (hostId: string) => partitions.get(hostId) ?? EMPTY_PARTITION
-  const record = (via: 'entries' | 'separate', hosts: DesktopRelayWrite['hosts']) =>
+  const record = (via: Via, hosts: DesktopRelayWrite['hosts']) =>
     sentHosts.push(
       hosts.map(({ hostId, relayIdsByTabId, removedTabIds }) => ({
         hostId,
@@ -55,8 +62,28 @@ export function inMemoryMain() {
     }
     return refused ? 'refused' : patch ? 'applied' : 'unchanged'
   }
-  const api: SessionApi = {
+  const api: SessionApi & Pick<WorkspaceSessionApi['session'], 'set' | 'flush'> = {
     get: async (hostId) => stored(hostId ?? 'local'),
+    set: async (session, hostId, options) => {
+      const key = hostId ?? 'local'
+      if (fenced.has(key)) {
+        return { status: 'skipped' }
+      }
+      const { remoteSessionIdsByTabId, desktopRelayOwnerByTabId } = stored(key)
+      partitions.set(
+        key,
+        options?.relays === 'separate'
+          ? { ...session, remoteSessionIdsByTabId, desktopRelayOwnerByTabId }
+          : session
+      )
+      if (!options?.carried) {
+        return { status: 'applied' }
+      }
+      record('set', [options.carried])
+      const relays = applyRelays(key, options.carried)
+      return { status: 'applied', relays }
+    },
+    flush: async () => {},
     patch: async () => {
       throw new Error('this window sends entries')
     },
@@ -158,7 +185,7 @@ export async function windowSavingTo(
   })
   await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
   // One tab's relay, or (no tab) every relay as the connection drops.
-  const endRelay = async (tabId?: string) => {
+  const dropRelay = (tabId?: string) =>
     store.setState((state) => ({
       tabsByWorktree: {
         [WORKTREE_ID]: state.tabsByWorktree[WORKTREE_ID]!.map((tab) =>
@@ -170,8 +197,17 @@ export async function windowSavingTo(
         : {},
       ...(tabId ? {} : { sshConnectionStates: new Map([['conn-1', sshState('disconnected')]]) })
     }))
+  const endRelay = async (tabId?: string) => {
+    dropRelay(tabId)
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
   }
+  // A durable full save (a requested tab close) before the debounced save runs.
+  const durableSave = () =>
+    persistWorkspaceSessionByHost(
+      main.api,
+      buildWorkspaceSessionPayload(store.getState()),
+      store.getState()
+    )
   const renameTab = async (title: string) => {
     store.setState((state) => ({
       tabsByWorktree: {
@@ -180,5 +216,5 @@ export async function windowSavingTo(
     }))
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
   }
-  return { store, stop, endRelay, renameTab }
+  return { store, stop, endRelay, dropRelay, durableSave, renameTab }
 }

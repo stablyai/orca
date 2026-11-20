@@ -6,8 +6,10 @@ import type {
 } from '../../shared/workspace-session/workspace-session-state-types'
 
 export type WindowSessionSetOptions = {
-  /** The window sends its relay ids through session:apply-desktop-relays; keep the stored ones. */
+  /** The window sends its relay ids by ownership (carried, or session:apply-desktop-relays); keep the stored ones. */
   relays?: 'separate'
+  /** This partition's relay ids; parsed by the handler. */
+  carried?: unknown
 }
 
 export function windowSaveKeepingRelayOwnership<

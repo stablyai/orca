@@ -14,7 +14,12 @@ import {
   windowSaveKeepingRelayOwnership,
   type WindowSessionSetOptions
 } from '../persistence/window-save-relay-ownership'
-import { parseCarriedDesktopRelays, registerDesktopRelayHandlers } from './session-desktop-relays'
+import {
+  carriedRelayStatus,
+  parseCarriedDesktopRelays,
+  registerDesktopRelayHandlers
+} from './session-desktop-relays'
+import type { WorkspaceSessionSetResult } from '../../shared/workspace-session/desktop-relay-write'
 import type { DesktopRelayHostWrite } from '../../shared/workspace-session/desktop-relay-ownership'
 import { isNoopWindowSessionPatch } from '../persistence/window-session-patch-noop'
 import { noteWindowSessionSaveUnchanged } from '../browser/extensions/tabs-and-windows/browser-extension-discarded-tabs'
@@ -76,6 +81,8 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
   }
 
+  const relayApplier = registerDesktopRelayHandlers(store, isFenced)
+
   ipcMain.handle(
     'session:set',
     (
@@ -83,21 +90,27 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       args: WorkspaceSessionState,
       hostId?: string | null,
       options?: WindowSessionSetOptions
-    ) => {
-      if (!isFenced(hostId)) {
-        const stored = store.getWorkspaceSession(hostId)
-        const save = windowSaveKeepingRelayOwnership(stored, args, 'set', options)
-        store.setWorkspaceSession(
-          ORCA_LAYOUT_OWNER_IS_MAIN
-            ? sessionForMain(save, hostId)
-            : windowSaveKeepingMainSleepRecords(stored, save, 'set'),
-          hostId
-        )
+    ): WorkspaceSessionSetResult => {
+      if (isFenced(hostId)) {
+        return { status: 'skipped' }
       }
+      const stored = store.getWorkspaceSession(hostId)
+      const save = windowSaveKeepingRelayOwnership(stored, args, 'set', options)
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        store.setWorkspaceSession(sessionForMain(save, hostId), hostId)
+        return { status: 'applied' }
+      }
+      const next = windowSaveKeepingMainSleepRecords(stored, save, 'set')
+      const relays = parseCarriedDesktopRelays(options?.carried, hostId)
+      const relayHostId = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+      const applied = relays ? relayApplier([relayHostId])(relayHostId, relays, next) : null
+      // One publish for the snapshot and the relay ids that ride with it.
+      store.setWorkspaceSession({ ...next, ...applied?.patch }, hostId)
+      applied?.stored()
+      const status = carriedRelayStatus(applied)
+      return status ? { status: 'applied', relays: status } : { status: 'applied' }
     }
   )
-
-  const relayApplier = registerDesktopRelayHandlers(store, isFenced)
 
   /** `relays`: the window's relay ids for this partition, applied by ownership in the same publish. */
   const patchWindowSession = (
@@ -120,13 +133,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       relays && !ORCA_LAYOUT_OWNER_IS_MAIN
         ? relayApplier([relayHostId])(relayHostId, relays, { ...stored, ...save })
         : null
-    const relayStatus: WorkspaceSessionEntriesPatchResult['relays'] = !applied
-      ? undefined
-      : applied.refused
-        ? 'refused'
-        : applied.patch
-          ? 'applied'
-          : 'unchanged'
+    const relayStatus = carriedRelayStatus(applied)
     const withRelays = relayStatus ? { relays: relayStatus } : {}
     if (!ORCA_LAYOUT_OWNER_IS_MAIN && isNoopWindowSessionPatch(stored, save)) {
       if (applied?.patch) {

@@ -8,11 +8,17 @@ import {
 import {
   probeDesktopRelays,
   replaceDesktopRelays,
-  sendDesktopRelayWrite,
-  takeDesktopRelayWrite
+  takeDesktopRelayWrite,
+  type DesktopRelayApi
 } from './desktop-relay-writes'
+import { planDesktopRelayWrite, settleSessionWrites } from './desktop-relay-write-plan'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { DesktopRelayWrite } from '../../../../../shared/workspace-session/desktop-relay-write'
+
+function sendDesktopRelayWrite(api: DesktopRelayApi, write: DesktopRelayWrite) {
+  const plan = planDesktopRelayWrite(api, write, new Set())
+  return settleSessionWrites([plan?.sendRest()], plan)
+}
 
 beforeEach(() => {
   vi.useFakeTimers()

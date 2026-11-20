@@ -9,6 +9,19 @@ export type DesktopRelayWrite = {
   hosts: (DesktopRelayHostWrite & { hostId: ExecutionHostId })[]
 }
 
+/** A full partition save. `relays: 'separate'`: main keeps its stored relay ids, except that it applies
+ *  `carried` (this partition's relay ids) by ownership in the same publish. */
+export type WorkspaceSessionSetOptions = {
+  relays?: 'separate'
+  carried?: DesktopRelayWrite['hosts'][number]
+}
+
+/** `relays`: how main took `carried`, absent when nothing was carried or the save was skipped. */
+export type WorkspaceSessionSetResult = {
+  status: 'applied' | 'skipped'
+  relays?: 'applied' | 'unchanged' | 'refused'
+}
+
 export type DesktopRelayWriteResult = {
   applied: ExecutionHostId[]
   unchanged: ExecutionHostId[]

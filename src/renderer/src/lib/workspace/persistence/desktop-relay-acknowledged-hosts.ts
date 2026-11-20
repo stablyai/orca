@@ -15,7 +15,14 @@ type AcknowledgedHost = {
 /** Tabs whose rows this window holds parked for a host: their relay ids may be live though unsent. */
 export type HeldRelayTabs = (hostId: ExecutionHostId) => ReadonlySet<string>
 
-const NO_HELD_TABS: HeldRelayTabs = () => new Set()
+/** What the window knew when it built a write (window-side only, never sent). */
+export type RelayWriteContext = {
+  held: HeldRelayTabs
+  /** Whether the window still routes saves to a host it left out of this write. */
+  routes: (hostId: ExecutionHostId) => boolean
+}
+
+const NO_CONTEXT: RelayWriteContext = { held: () => new Set(), routes: () => false }
 
 /** What main last accepted from this window, per host, so a save sends only the relay ids that
  *  changed. Any doubt (a failed, skipped or refused write, a full replacement) drops back to a baseline. */
@@ -78,7 +85,7 @@ export class AcknowledgedDesktopRelays {
   /** Narrow a full write to unacknowledged hosts and changed ids; `acknowledge` records main's answer. */
   narrow(
     full: DesktopRelayWrite,
-    held: HeldRelayTabs = NO_HELD_TABS
+    { held, routes }: RelayWriteContext = NO_CONTEXT
   ): {
     write: DesktopRelayWrite
     acknowledge: (result: DesktopRelayWriteResult) => void
@@ -94,9 +101,15 @@ export class AcknowledgedDesktopRelays {
       }
     }
     // A host this save leaves out (an incomplete host with no slice) resends a baseline when it next
-    // goes, still naming the ids that ended meanwhile.
+    // goes, still naming the ids that ended meanwhile. One the window no longer routes to is dropped:
+    // main clears its ownership when its workspaces go.
     for (const [hostId, host] of this.hosts) {
-      if (!wanted.has(hostId) && !host.stale) {
+      if (wanted.has(hostId)) {
+        continue
+      }
+      if (!routes(hostId)) {
+        this.hosts.delete(hostId)
+      } else if (!host.stale) {
         this.hosts.set(hostId, { ...host, stale: true })
       }
     }
