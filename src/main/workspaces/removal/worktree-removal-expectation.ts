@@ -4,8 +4,10 @@ import {
 } from './worktree-checkout-identity'
 import {
   WorktreeRemovalIncarnationChangedError,
+  isWorktreeIncarnationChanged,
   type WorktreeCheckoutIdentity
 } from '../../../shared/worktree/removal/worktree-checkout-identity'
+import { worktreeCheckoutExists } from './worktree-removal-table'
 export { WorktreeRemovalIncarnationChangedError } from '../../../shared/worktree/removal/worktree-checkout-identity'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
@@ -71,6 +73,22 @@ export class WorktreeRemovalExpectation {
     }
     await assertWorktreeCheckoutIdentity(checkout)
     this.check()
+  }
+
+  /** Resuming after a restart: a checkout Git already deleted proves nothing, but there is nothing
+   * left to protect either, so the removal fails with a retry instead of a silent refusal. */
+  async verifyResumedCheckout(root: string): Promise<void> {
+    this.check()
+    try {
+      await this.verifyCheckout(root)
+    } catch (error) {
+      if (isWorktreeIncarnationChanged(error) && !(await worktreeCheckoutExists(root))) {
+        throw new Error(
+          'The reviewed workspace folder is already gone. Retry deletion to finish cleanup.'
+        )
+      }
+      throw error
+    }
   }
 
   async bindCheckout(root: string, repoPath: string): Promise<void> {

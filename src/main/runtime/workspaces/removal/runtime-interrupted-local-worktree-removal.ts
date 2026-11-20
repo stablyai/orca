@@ -81,7 +81,7 @@ export function interruptedLocalWorktreeRemovalJob(
     run: async (stopSignal) => {
       expectation?.check()
       if (expectation) {
-        await expectation.verifyCheckout(record.worktreePath)
+        await expectation.verifyResumedCheckout(record.worktreePath)
       }
       const removedPushTarget = resolveRemovedPushTarget()
       const result = await finishInterruptedLocalWorktreeRemoval({
