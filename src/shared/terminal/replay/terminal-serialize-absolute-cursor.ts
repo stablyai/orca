@@ -15,10 +15,15 @@ type SerializeCursorTerminal = {
 type ReprintCell = {
   getChars: () => string
   getWidth: () => number
+  isInverse: () => number
+  isFgPalette: () => number
+  isFgRGB: () => number
+  getFgColor: () => number
   isBgPalette: () => number
   isBgRGB: () => number
   getBgColor: () => number
 }
+type ReprintLine = { getCell: (x: number) => ReprintCell | undefined }
 
 // Structural view of an xterm Terminal for reprinting the cursor row.
 type SnapshotTerminal = SerializeCursorTerminal & {
@@ -28,7 +33,7 @@ type SnapshotTerminal = SerializeCursorTerminal & {
       cursorX: number
       cursorY: number
       baseY: number
-      getLine: (y: number) => { getCell: (x: number) => ReprintCell | undefined } | undefined
+      getLine: (y: number) => ReprintLine | undefined
     }
     normal: { length: number }
   }
@@ -146,14 +151,15 @@ function buildPendingWrapRestore(
 ): string | null {
   const buffer = terminal.buffer.active
   const row = buffer.baseY + buffer.cursorY
-  const edge = buffer.getLine(row)?.getCell(terminal.cols - 1)
-  if (!edge) {
+  const line = buffer.getLine(row)
+  const edge = line?.getCell(terminal.cols - 1)
+  if (!line || !edge) {
     return null
   }
   let repaint: string
   if (edge.getChars() === '' && edge.getWidth() !== 0) {
-    // An erased edge serializes to nothing; a blank in its background looks the same and arms the wrap.
-    repaint = `\x1b[${cupCursorY + 1};${terminal.cols}H\x1b[${buildBackgroundSgr(edge)}m `
+    // An empty edge serializes to nothing, so print a blank that looks the same to arm the wrap.
+    repaint = buildBlankEdgeRepaint(line, edge, terminal.cols, cupCursorY)
   } else if (typeof serializer._serializeBufferByRange === 'function') {
     // Reprint the whole row so the edge cell keeps its exact style, link and width.
     const rowAnsi = serializer._serializeBufferByRange(
@@ -171,18 +177,58 @@ function buildPendingWrapRestore(
   return `${insertMode ? '\x1b[4l' : ''}\x1b]8;;\x1b\\${repaint}${insertMode ? '\x1b[4h' : ''}\x1b[0m${serializeCurrentPenState(serializer, terminal)}`
 }
 
-function buildBackgroundSgr(cell: ReprintCell): string {
-  const color = cell.getBgColor()
-  if (cell.isBgRGB()) {
-    return `0;48;2;${(color >> 16) & 0xff};${(color >> 8) & 0xff};${color & 0xff}`
+function buildBlankEdgeRepaint(
+  line: ReprintLine,
+  edge: ReprintCell,
+  cols: number,
+  cupCursorY: number
+): string {
+  const moveToEdge = `\x1b[${cupCursorY + 1};${cols}H`
+  if (edge.isInverse()) {
+    // Inverse shows the foreground as the blank's color; erasing cannot recreate that.
+    return `${moveToEdge}\x1b[0;7${buildColorSgr(edge, 'fg')}${buildColorSgr(edge, 'bg')}m `
   }
-  if (!cell.isBgPalette()) {
-    return '0'
+  const background = `\x1b[0${buildColorSgr(edge, 'bg')}m`
+  // EL 1 keeps a wrap-pending cursor, so a fully erased row is rebuilt exactly; otherwise the edge holds a space.
+  return isUniformlyErasedRow(line, edge, cols)
+    ? `${moveToEdge}${background} \x1b[1K`
+    : `${moveToEdge}${background} `
+}
+
+function isUniformlyErasedRow(line: ReprintLine, edge: ReprintCell, cols: number): boolean {
+  for (let x = 0; x < cols; x++) {
+    const cell = line.getCell(x)
+    if (
+      !cell ||
+      cell.getChars() !== '' ||
+      cell.getWidth() !== 1 ||
+      cell.isInverse() ||
+      cell.isBgRGB() !== edge.isBgRGB() ||
+      cell.isBgPalette() !== edge.isBgPalette() ||
+      cell.getBgColor() !== edge.getBgColor()
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+/** `;`-prefixed SGR params for one color of a cell, or '' for the default. */
+function buildColorSgr(cell: ReprintCell, layer: 'fg' | 'bg'): string {
+  const rgb = layer === 'fg' ? cell.isFgRGB() : cell.isBgRGB()
+  const palette = layer === 'fg' ? cell.isFgPalette() : cell.isBgPalette()
+  const color = layer === 'fg' ? cell.getFgColor() : cell.getBgColor()
+  const base = layer === 'fg' ? 30 : 40
+  if (rgb) {
+    return `;${base + 8};2;${(color >> 16) & 0xff};${(color >> 8) & 0xff};${color & 0xff}`
+  }
+  if (!palette) {
+    return ''
   }
   if (color < 8) {
-    return `0;${40 + color}`
+    return `;${base + color}`
   }
-  return color < 16 ? `0;${100 + color - 8}` : `0;48;5;${color}`
+  return color < 16 ? `;${base + 60 + color - 8}` : `;${base + 8};5;${color}`
 }
 
 function serializesModes(opts: unknown): boolean {

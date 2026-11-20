@@ -256,6 +256,24 @@ describe('pending-wrap cursor after replay (STA-16354)', () => {
     expect(next.getFgColor()).toBe(2)
   })
 
+  it('keeps an erased wrap-pending row empty for copy', async () => {
+    const restored = await replayWithSavedCursor('0123456789\x1b[2K')
+    expect(visibleText(restored)[0]).toBe('')
+    expect(restored.buffer.active.cursorX).toBe(10)
+  })
+
+  it('keeps the colors of an inverse blank edge', async () => {
+    // A wide glyph that cannot fit leaves an inverse blank at the edge.
+    const restored = await replayWithSavedCursor(
+      '\x1b[31;44;7m123456789界\x1b[?47h\x1b[1;1H0123456789\x1b[?47l'
+    )
+    expect(restored.buffer.active.cursorX).toBe(10)
+    const edge = cellAt(restored, 0, 9)
+    expect(!!edge.isInverse()).toBe(true)
+    expect(edge.getFgColor()).toBe(1)
+    expect(edge.getBgColor()).toBe(4)
+  })
+
   it('does not link reprinted cells to a link left open for later output', async () => {
     const { terminal, addon } = createTerminal(10, 8)
     await write(terminal, `0123456789\x1b]8;;${URL}\x1b\\`)
