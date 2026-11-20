@@ -210,6 +210,7 @@ export async function profile(
     errors,
     source,
     readers,
+    writer,
     convert: conversions.ensure,
     ensured,
     failOnce

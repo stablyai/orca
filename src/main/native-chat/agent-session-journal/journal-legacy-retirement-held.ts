@@ -172,6 +172,7 @@ export function provenOutcome(
     outcome,
     // Counts that cover every page; a walk resumed from progress without them covers fewer.
     completeness: proven.whole ? 'complete' : 'partial',
+    cumulative: proven.whole && proven.counts !== null,
     resumed,
     counts: proven.counts,
     sourceBytes: sourceBytes(observation),

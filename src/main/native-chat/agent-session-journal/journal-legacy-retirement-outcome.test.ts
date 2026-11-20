@@ -204,12 +204,12 @@ it('reports a deletion only once the source readers are released', async () => {
 
 it('reports a quit that stops the conversion the proof waits on as interrupted', () => {
   const stopped = new Error('journal maintenance stopped')
-  expect(legacyProofFailureOutcome(stopped, { counts: null, resumed: false }, false)).toMatchObject(
-    {
-      outcome: 'proving',
-      error: 'interrupted'
-    }
-  )
+  expect(
+    legacyProofFailureOutcome(stopped, { counts: null, resumed: false, whole: true }, false)
+  ).toMatchObject({
+    outcome: 'proving',
+    error: 'interrupted'
+  })
 })
 
 it('reports a later launch of the same outcome again when the walk got further', async () => {
@@ -240,4 +240,31 @@ it('reports a later launch of the same outcome again when the walk got further',
     ['proving', 'interrupted', '11_100'],
     ['proving', 'interrupted', '101_1000']
   ])
+})
+
+it('reports a held save that fails, and keeps the file until a later save goes through', async () => {
+  const events = recordEvents()
+  const held = await profile()
+  const maintain = held.writer.maintain.bind(held.writer)
+  let failing = true
+  held.writer.maintain = async (operation) => {
+    if (
+      failing &&
+      operation.kind === 'legacy-retirement-save' &&
+      operation.value.includes('"held"')
+    ) {
+      throw new Error('database or disk is full')
+    }
+    return maintain(operation)
+  }
+  const retirement = held.launch('1.0.1', true, undefined, undefined, false)
+  await retirement.run()
+  failing = false
+  const now = performance.now()
+  const clock = vi.spyOn(performance, 'now').mockImplementation(() => now + 2 * 3_600_000)
+  cleanup.push(() => clock.mockRestore())
+  await retirement.run()
+  expect(companions(held.filename)).toContain(held.filename)
+  expect(events.map((event) => event.outcome)).toEqual(['proving', 'proof_complete'])
+  expect(held.errors).toHaveLength(1)
 })

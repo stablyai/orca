@@ -120,7 +120,8 @@ export class JournalLegacyRetirement {
         const failed = legacyProofFailureOutcome(
           error,
           walkedFor(this.finishedWalk, this.observed) ?? this.proof.walked,
-          removing
+          removing,
+          this.stopped.signal.aborted
         )
         const bytes = this.observed ? sourceBytes(this.observed) : null
         await this.outcome({ ...failed, sourceBytes: bytes, activeMs: this.activeMs }).catch(
@@ -303,9 +304,11 @@ export class JournalLegacyRetirement {
     resumed: boolean
   ): Promise<void> {
     if (
-      (await this.writer
-        .maintain({ kind: 'legacy-retirement-save', value: JSON.stringify(proven), durable: false })
-        .catch(() => false)) !== true
+      (await this.writer.maintain({
+        kind: 'legacy-retirement-save',
+        value: JSON.stringify(proven),
+        durable: false
+      })) !== true
     ) {
       // Unsaved, the next launch would walk again; this one retries after the backoff.
       return this.later()

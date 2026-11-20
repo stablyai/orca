@@ -29,6 +29,8 @@ export type LegacyJournalRetirementOutcome = Pick<
   'outcome' | 'reason' | 'defer' | 'artifact' | 'error' | 'deletes' | 'completeness' | 'resumed'
 > & {
   counts: LegacyProofCounts | null
+  /** The counts cover every page from the first, so they only grow; never sent. */
+  cumulative: boolean
   sourceBytes: number | null
   activeMs: number | null
   elapsedMs: number | null
@@ -37,7 +39,7 @@ export type LegacyJournalRetirementOutcome = Pick<
 export function legacyJournalRetirementEvent(
   outcome: LegacyJournalRetirementOutcome
 ): LegacyJournalRetirementEvent {
-  const { counts, sourceBytes, activeMs, elapsedMs, ...fields } = outcome
+  const { counts, cumulative: _cumulative, sourceBytes, activeMs, elapsedMs, ...fields } = outcome
   return {
     ...fields,
     inventory_revision: LEGACY_PROOF_LAYOUT,
@@ -160,6 +162,7 @@ export class LegacyJournalRetirementReporter {
       completeness: 'unknown',
       resumed: false,
       counts: null,
+      cumulative: false,
       sourceBytes: null,
       activeMs: null,
       elapsedMs: null,
@@ -175,12 +178,13 @@ export class LegacyJournalRetirementReporter {
       event.artifact,
       event.error,
       event.deletes,
-      // Progress too, by bucket: a later walk that got further is reported, but only a few times.
       event.completeness,
-      event.chats_bucket,
-      event.newly_converted_bucket,
-      event.copies_bucket,
       event.source_bytes_bucket,
+      // Progress too, by bucket, once counts only grow: a walk that got further is reported, a few
+      // times at most. Counts of one launch's pages alone would move every launch.
+      ...(fields.cumulative
+        ? [event.chats_bucket, event.newly_converted_bucket, event.copies_bucket]
+        : []),
       this.version
     ])
     // Logged once per launch for each distinct outcome, however often a retry repeats it.
@@ -206,10 +210,20 @@ export class LegacyJournalRetirementReporter {
  */
 export function legacyProofFailureOutcome(
   error: unknown,
-  { counts, resumed }: { counts: LegacyProofCounts | null; resumed: boolean },
-  proven: boolean
+  {
+    counts,
+    resumed,
+    whole
+  }: { counts: LegacyProofCounts | null; resumed: boolean; whole: boolean },
+  proven: boolean,
+  stopping = false
 ): Partial<LegacyJournalRetirementOutcome> {
-  const walked = { completeness: 'partial', counts, resumed } as const
+  const walked = {
+    completeness: 'partial',
+    counts,
+    cumulative: whole && counts !== null,
+    resumed
+  } as const
   if (error instanceof JournalLegacyRetentionError) {
     return error.reason
       ? {
@@ -221,9 +235,11 @@ export function legacyProofFailureOutcome(
       : { outcome: 'proving', error: 'pending', ...walked }
   }
   // After a finished proof, only the removal itself (its commit or lock) can fail.
+  // Quitting closes what the proof waits on, whatever that failure then says.
+  const kind = stopping ? 'interrupted' : legacyProofErrorKind(error)
   return proven
-    ? { outcome: 'delete_failed', error: legacyProofErrorKind(error), ...walked }
-    : { outcome: 'proving', error: legacyProofErrorKind(error), ...walked }
+    ? { outcome: 'delete_failed', error: kind, ...walked }
+    : { outcome: 'proving', error: kind, ...walked }
 }
 
 function legacyProofErrorKind(error: unknown): LegacyJournalRetirementEvent['error'] {
