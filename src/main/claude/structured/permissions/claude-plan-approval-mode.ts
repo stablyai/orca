@@ -3,15 +3,16 @@ import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
 
 /** This process's requested mode, else its first init's; anything else asks for each edit.
- *  Undefined when the chat opened in Plan: no mode was seen before it, so Claude restores its own. */
+ *  Undefined when the chat opened in Plan with no requested mode: Claude restores its own. */
 export function claudePlanApprovalMode(
   session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit'>
 ): PermissionMode | undefined {
-  const mode =
-    session.launchIntent?.permissionMode ?? session.firstRootInit?.permissionMode ?? 'default'
+  const launched = session.launchIntent?.permissionMode
+  if (launched === undefined && session.firstRootInit?.permissionMode === 'plan') {
+    return undefined
+  }
+  const mode = launched ?? session.firstRootInit?.permissionMode ?? 'default'
   switch (mode) {
-    case 'plan':
-      return undefined
     case 'default':
     case 'acceptEdits':
     case 'dontAsk':
@@ -37,6 +38,19 @@ export function claudeBuildPermissionMode(
         session.launchIntent?.permissionMode
     }
   })
+}
+
+/** The mode a Build message sets; a lingering Plan with nothing to restore falls back to asking. */
+export function claudeBuildMessageMode(
+  session: Pick<
+    ClaudeSession,
+    'launchIntent' | 'firstRootInit' | 'appliedInputOptions' | 'reportedOptions'
+  >
+): PermissionMode | undefined {
+  return (
+    claudeBuildPermissionMode(session) ??
+    (session.reportedOptions.reportedPermissionMode === 'plan' ? 'default' : undefined)
+  )
 }
 
 function logPlanExitFailure(error: unknown): void {

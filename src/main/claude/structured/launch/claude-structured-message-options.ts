@@ -1,4 +1,4 @@
-import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
+import { claudeBuildMessageMode } from '../permissions/claude-plan-approval-mode'
 import { claudeStartedUnechoedSend } from '../turns/claude-command-lifecycle'
 import { claudeExecutionObservations } from '../turns/claude-structured-execution-observations'
 import { dispatchClaudeTurn } from '../dispatch/claude-structured-dispatch'
@@ -61,11 +61,7 @@ export async function applyClaudeMessageOptions(
   }
   throwIfSignalAborted(signal)
   if (options.interactionMode !== undefined) {
-    const mode =
-      options.interactionMode === 'plan'
-        ? 'plan'
-        : (claudeBuildPermissionMode(session) ??
-          (session.reportedOptions.reportedPermissionMode === 'plan' ? 'default' : undefined))
+    const mode = options.interactionMode === 'plan' ? 'plan' : claudeBuildMessageMode(session)
     if (mode) {
       await waitForPromiseWithSignal(
         session.connection.setPermissionMode(mode, { timeoutMs }),
