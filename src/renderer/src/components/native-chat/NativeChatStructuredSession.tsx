@@ -379,7 +379,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   <BotServerOutageCard key={hostOutage.environmentId} outage={hostOutage} />
                 ) : null}
                 {composerShown && (
-                  <NativeChatInstallSlot install={install} agentLabel={agentLabel} />
+                  <NativeChatInstallSlot
+                    install={install}
+                    agentLabel={agentLabel}
+                    installShownElsewhere={bot.kickoff.firstScreen?.phase === 'failed'}
+                  />
                 )}
                 {subagents.statusBar}
                 {composerShown ? (

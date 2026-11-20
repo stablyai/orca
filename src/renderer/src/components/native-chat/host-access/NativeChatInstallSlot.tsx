@@ -135,10 +135,12 @@ function installSlotSendBlockedReason(
 export function NativeChatInstallSlot(props: {
   install: { slot: NativeChatInstallSlotState; signIn: NativeChatSignInStripState | null }
   agentLabel: string
+  /** A new bot's setup card offers the install itself. */
+  installShownElsewhere?: boolean
 }): React.JSX.Element | null {
   const { slot, signIn } = props.install
   const strip =
-    slot.kind === 'install' && slot.layout === 'strip' ? (
+    slot.kind === 'install' && slot.layout === 'strip' && !props.installShownElsewhere ? (
       <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
     ) : signIn ? (
       <NativeChatSignInStrip state={signIn} agentLabel={props.agentLabel} />
