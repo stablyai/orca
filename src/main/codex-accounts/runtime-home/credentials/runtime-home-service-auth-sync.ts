@@ -180,7 +180,9 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
         return
       }
       if (systemAuth === null) {
-        removeFileAtomicallyIfUnchanged(runtimeAuthPath, runtimeAuthBeforeSync)
+        removeFileAtomicallyIfUnchanged(runtimeAuthPath, runtimeAuthBeforeSync, {
+          credential: true
+        })
         if (existsSync(runtimeAuthPath)) {
           this.persistSharedRuntimeAuthProvenance({ owner: 'fenced' })
           return
@@ -283,7 +285,8 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
       writeFileAtomically(systemDefaultAuthPath, contents, { mode: 0o600 })
     } else if (
       !writeFileAtomicallyIfUnchanged(systemDefaultAuthPath, options.expectedContents, contents, {
-        mode: 0o600
+        mode: 0o600,
+        credential: true
       })
     ) {
       return false

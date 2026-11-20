@@ -111,6 +111,22 @@ describe('writeFileAtomically', () => {
     }
   })
 
+  it('drops an interrupted held credential instead of keeping it beside a recreated target', () => {
+    setup()
+    try {
+      const target = join(dir, 'auth.json')
+      writeFileSync(`${target}.orca-guarded`, '{"token":"a"}')
+      writeFileSync(target, '{"token":"b"}')
+
+      expect(removeFileAtomicallyIfUnchanged(target, '{"token":"b"}', { credential: true })).toBe(
+        true
+      )
+      expect(readdirSync(dir)).toEqual([])
+    } finally {
+      cleanup()
+    }
+  })
+
   it('preserves a replacement created while the expected generation is quarantined', () => {
     setup()
     try {

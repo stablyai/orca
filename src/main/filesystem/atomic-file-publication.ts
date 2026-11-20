@@ -52,11 +52,17 @@ export function writeFileAtomically(
   }
 }
 
+/**
+ * `credential`: an earlier copy that conflicts with a recreated file is dropped as before, never
+ * kept beside it. A login can be signed in again; a token left behind can outlive a logout.
+ */
+export type GuardedFileOptions = { mode?: number; credential?: boolean }
+
 export function writeFileAtomicallyIfUnchanged(
   targetPath: string,
   expectedContents: string | null,
   contents: string,
-  options?: { mode?: number }
+  options?: GuardedFileOptions
 ): boolean {
   // Guarded recovery moves files through a held name; keep those passes eligible for retry.
   invalidateFileObservation(targetPath)
@@ -79,11 +85,13 @@ export function writeFileAtomicallyIfUnchanged(
 
 export function removeFileAtomicallyIfUnchanged(
   targetPath: string,
-  expectedContents: string
+  expectedContents: string,
+  options?: GuardedFileOptions
 ): boolean {
   invalidateFileObservation(targetPath)
   const heldPath = getGuardedOperationHeldPath(targetPath)
-  restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+  const keep = !options?.credential
+  restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
   try {
     assertHardLinkPublicationSupported(targetPath, targetPath)
   } catch (error) {
@@ -112,14 +120,18 @@ export function removeFileAtomicallyIfUnchanged(
     // A mismatch or a failure puts the held file back. After a removal the held name may already
     // be another removal's, which that one restores or drops itself.
     if (!removed) {
-      restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+      restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
     }
   }
   return matched && !existsSync(targetPath)
 }
 
-export function recoverInterruptedGuardedFileOperation(targetPath: string): void {
-  restoreMovedFileWithoutOverwrite(getGuardedOperationHeldPath(targetPath), targetPath)
+export function recoverInterruptedGuardedFileOperation(
+  targetPath: string,
+  options?: GuardedFileOptions
+): void {
+  const heldPath = getGuardedOperationHeldPath(targetPath)
+  restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, !options?.credential)
 }
 
 /**
@@ -131,7 +143,8 @@ export function recoverInterruptedGuardedFileOperation(targetPath: string): void
 function restoreMovedFileWithoutOverwrite(
   sourcePath: string,
   targetPath: string,
-  restore = true
+  restore = true,
+  keep = true
 ): void {
   if (!existsSync(sourcePath)) {
     return
@@ -147,7 +160,7 @@ function restoreMovedFileWithoutOverwrite(
   } catch {
     // An unreadable or vanished target proves nothing: keep the held bytes.
   }
-  if (matches) {
+  if (matches || !keep) {
     drop()
     return
   }
@@ -176,11 +189,12 @@ function attemptGuardedAtomicWrite(
   targetPath: string,
   expectedContents: string | null,
   contents: string,
-  options?: { mode?: number }
+  options?: GuardedFileOptions
 ): boolean {
+  const keep = !options?.credential
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   const heldPath = getGuardedOperationHeldPath(targetPath)
-  restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+  restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
   let superseded = false
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
@@ -197,19 +211,19 @@ function attemptGuardedAtomicWrite(
       throw error
     }
     if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
-      restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+      restoreMovedFileWithoutOverwrite(heldPath, targetPath, true, keep)
       return false
     }
     if (!publishFileWithoutOverwrite(tmpPath, targetPath)) {
       // Another writer's file supersedes the held one, even if it is deleted again meanwhile.
       superseded = true
-      restoreMovedFileWithoutOverwrite(heldPath, targetPath, false)
+      restoreMovedFileWithoutOverwrite(heldPath, targetPath, false, keep)
       return false
     }
     rmSync(heldPath, { force: true })
     return true
   } catch (error) {
-    restoreMovedFileWithoutOverwrite(heldPath, targetPath, !superseded)
+    restoreMovedFileWithoutOverwrite(heldPath, targetPath, !superseded, keep)
     throw error
   } finally {
     rmSync(tmpPath, { force: true })
