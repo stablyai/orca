@@ -25271,6 +25271,9 @@
         "provisionFailed": "The VM was not created, or creation was interrupted. Open Settings to destroy or remove it."
       },
       "suspendFailed": "Failed to suspend VM workspace"
+    },
+    "kind": {
+      "folder": "Folder workspace"
     }
   },
   "tabHoverCard": {

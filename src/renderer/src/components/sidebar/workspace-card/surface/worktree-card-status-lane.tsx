@@ -43,6 +43,7 @@ export function WorktreeCardStatusLane({
         reviewChecks={card.reviewChecks.total > 0 ? card.reviewChecks : undefined}
         newCardStyle={card.newCardStyle}
         hasBranchIdentity={Boolean(card.branchIdentityDisplay)}
+        isFolderWorkspace={card.isFolder}
         reviewStale={reviewStale}
       />
     </div>
