@@ -19,7 +19,10 @@ import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-ou
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import {
-  ChatViewTabContext,
+  NativeChatViewTabContext,
+  releaseNativeChatViewMemory
+} from '../ownership/native-chat-view-memory'
+import {
   chatViewRetention,
   useRetainedChatViewKey
 } from './native-chat-view-retention'
@@ -53,6 +56,10 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
   const effectsConnected = isActive || preparingHandoff
+  const viewTab = useMemo(
+    () => ({ tabId: tab.id, worktreeId: tab.worktreeId }),
+    [tab.id, tab.worktreeId]
+  )
   const backdropActive = useWindowBackdropActive()
   if (!target) {
     return null
@@ -66,10 +73,10 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       data-structured-agent-session-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
     >
-      <ChatViewTabContext value={tab.id}>
+      <NativeChatViewTabContext value={viewTab}>
       <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
         <NativeChatHostOutageOwner target={target}>
-          <NativeChatComposerEditorOwner tabId={tab.id}>
+          <NativeChatComposerEditorOwner viewTab={viewTab}>
             <ActivityPortalContainer visible={isActive}>
               <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
                 <NativeChatView
@@ -87,7 +94,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
           </NativeChatComposerEditorOwner>
         </NativeChatHostOutageOwner>
       </NativeChatPaneLifetime>
-      </ChatViewTabContext>
+      </NativeChatViewTabContext>
     </RetainedPaneHost>
   )
 })
@@ -187,6 +194,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       if (closed.size > 0) {
         chatViewRetention.forget(closed)
         releaseNativeChatComposerEditors(closed)
+        releaseNativeChatViewMemory(closed)
       }
     }, [ownedTabIds])
     // A removed workspace unmounts this layer without a tab close; tabs gone from the store are closed.
@@ -199,6 +207,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
         if (closed.size > 0) {
           chatViewRetention.forget(closed)
           releaseNativeChatComposerEditors(closed)
+          releaseNativeChatViewMemory(closed)
         }
       },
       [worktreeId]

@@ -1,4 +1,9 @@
 import { Editor, type EditorOptions } from '@tiptap/core'
+import { undoDepth } from '@tiptap/pm/history'
+import {
+  isNativeChatViewTabOpen,
+  type NativeChatViewTab
+} from '../../pane/ownership/native-chat-view-memory'
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { subscribeToNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import {
@@ -46,7 +51,10 @@ class ComposerEditors {
   private editors = new Map<string, OwnedEditor>()
   private generation = 0
 
-  retain = (keepDrafts?: (editors: this) => void): (() => void) => {
+  retain = (release?: {
+    keep: (editor: Editor) => boolean
+    done: (editors: ComposerEditors) => void
+  }): (() => void) => {
     const generation = ++this.generation
     return () => {
       // StrictMode reconnects the owner before this disposal; Activity never disconnects it.
@@ -55,19 +63,24 @@ class ComposerEditors {
           return
         }
         for (const [scope, entry] of this.editors) {
-          if (!keepDrafts || entry.editor.isEmpty) {
+          if (!release?.keep(entry.editor)) {
             this.editors.delete(scope)
             entry.release()
             entry.editor.destroy()
           }
         }
-        keepDrafts?.(this)
+        release?.done(this)
       })
     }
   }
 
   get size(): number {
     return this.editors.size
+  }
+
+  /** Every kept editor is empty, so only undo history is left to lose. */
+  holdsNoText(): boolean {
+    return [...this.editors.values()].every((entry) => entry.editor.isEmpty)
   }
 
   destroyAll(): void {
@@ -136,57 +149,60 @@ export function NativeChatComposerEditorView({ editor }: { editor: Editor }): nu
   return null
 }
 
-// Why: a chat view released to bound memory keeps only editors holding a draft, so undo and selection survive.
-const draftEditorsByTab = new Map<string, ComposerEditors>()
+// Why: a chat view released to bound memory keeps only editors with a draft or undo history, so undo and
+// selection survive. Drafts are the user's text and stay; editors left with only undo history are capped.
+const keptEditorsByTab = new Map<string, ComposerEditors>()
+const MAX_KEPT_UNDO_ONLY = 8
 
-// A closed tab whose view is still unmounting; its owner's deferred disposal must not keep its editors.
-const closedTabIds = new Set<string>()
-const MAX_CLOSED_TAB_IDS = 64
+const keepsEditor = (editor: Editor): boolean => !editor.isEmpty || undoDepth(editor.state) > 0
+
+function keepEditors(tabId: string, editors: ComposerEditors): void {
+  keptEditorsByTab.set(tabId, editors)
+  const undoOnly = [...keptEditorsByTab].filter(([, kept]) => kept.holdsNoText())
+  for (const [oldest, kept] of undoOnly.slice(0, Math.max(0, undoOnly.length - MAX_KEPT_UNDO_ONLY))) {
+    kept.destroyAll()
+    keptEditorsByTab.delete(oldest)
+  }
+}
 
 /** Closing a chat tab ends the editors its released view kept. */
 export function releaseNativeChatComposerEditors(tabIds: Iterable<string>): void {
   for (const tabId of tabIds) {
-    const kept = draftEditorsByTab.get(tabId)
-    if (kept) {
-      kept.destroyAll()
-      draftEditorsByTab.delete(tabId)
-      continue
-    }
-    closedTabIds.add(tabId)
-    if (closedTabIds.size > MAX_CLOSED_TAB_IDS) {
-      closedTabIds.delete(closedTabIds.values().next().value as string)
-    }
+    keptEditorsByTab.get(tabId)?.destroyAll()
+    keptEditorsByTab.delete(tabId)
   }
 }
 
 /** The tab owns editors and their state; only a shown composer gives one a view. */
 export function NativeChatComposerEditorOwner({
-  tabId,
+  viewTab,
   children
 }: {
   /** Set for a chat view that can be released while its tab stays open. */
-  tabId?: string
+  viewTab?: NativeChatViewTab
   children: React.ReactNode
 }) {
   const [owner] = useState(
-    () => (tabId ? draftEditorsByTab.get(tabId) : undefined) ?? new ComposerEditors()
+    () => (viewTab ? keptEditorsByTab.get(viewTab.tabId) : undefined) ?? new ComposerEditors()
   )
   useEffect(() => {
-    if (tabId && draftEditorsByTab.get(tabId) === owner) {
-      draftEditorsByTab.delete(tabId)
+    if (viewTab && keptEditorsByTab.get(viewTab.tabId) === owner) {
+      keptEditorsByTab.delete(viewTab.tabId)
     }
     return owner.retain(
-      tabId
-        ? (editors) => {
-            if (closedTabIds.delete(tabId)) {
-              editors.destroyAll()
-            } else if (editors.size > 0) {
-              draftEditorsByTab.set(tabId, editors)
+      viewTab
+        ? {
+            // A closed tab's editors end with it; a released view of an open tab keeps what it can't rebuild.
+            keep: (editor) => isNativeChatViewTabOpen(viewTab) && keepsEditor(editor),
+            done: (editors) => {
+              if (editors.size > 0) {
+                keepEditors(viewTab.tabId, editors)
+              }
             }
           }
         : undefined
     )
-  }, [owner, tabId])
+  }, [owner, viewTab])
   return <ComposerEditorOwner value={owner}>{children}</ComposerEditorOwner>
 }
 

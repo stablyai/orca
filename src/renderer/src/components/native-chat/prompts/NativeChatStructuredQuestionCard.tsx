@@ -28,6 +28,7 @@ export function NativeChatStructuredQuestionCard({
   return (
     <NativeChatQuestionCard
       prompt={card.prompt}
+      memoryKey={`question:${questions.map((question) => question.id).join(',')}`}
       allowOther={card.allowOther}
       freeTextInputs={card.freeTextInputs}
       onAnswer={(selections) => {

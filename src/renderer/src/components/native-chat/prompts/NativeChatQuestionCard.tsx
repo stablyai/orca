@@ -1,6 +1,6 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { useRef, useState, type RefObject } from 'react'
-import { useHoldChatViewMounted } from '../pane/routing/native-chat-view-retention'
+import { useEffect, useRef, useState, type RefObject } from 'react'
+import { useNativeChatViewMemory } from '../pane/ownership/native-chat-view-memory'
 import { Check, Pencil } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
@@ -51,7 +51,11 @@ export type NativeChatQuestionCardProps = {
   /** Another surface's own look for the card (an item page's open question). */
   look?: NativeChatQuestionCardLook
   draft?: NativeChatQuestionCardDraft
+  /** The prompt's identity in its chat, so a half-made answer survives the chat view being released. */
+  memoryKey?: string
 }
+
+type QuestionCardMemory = { index: number; selections: number[][]; otherText: string[] }
 
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
@@ -76,27 +80,28 @@ export function NativeChatQuestionCard({
   shouldFocus = false,
   answerInputRef,
   look,
-  draft
+  draft,
+  memoryKey
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
-  const [index, setIndex] = useState(0)
+  const memory = useNativeChatViewMemory<QuestionCardMemory>(memoryKey)
+  const [index, setIndex] = useState(() => memory.saved?.index ?? 0)
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
   // Use indices because labels can repeat and the agent commits numbered rows.
   const [selections, setSelections] = useState<number[][]>(
-    () => draft?.selections ?? prompt.questions.map(() => [])
+    () => draft?.selections ?? memory.saved?.selections ?? prompt.questions.map(() => [])
   )
   const [otherText, setOtherText] = useState<string[]>(
     () =>
-      draft?.otherText ?? prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
+      draft?.otherText ??
+      memory.saved?.otherText ??
+      prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
   )
   useReportNativeChatQuestionDraft(draft, selections, otherText)
-  // A started answer lives only in this card; keep its chat mounted until it is sent or dismissed.
-  useHoldChatViewMounted(
-    selections.some((picked) => picked.length > 0) ||
-      otherText.some((text, qi) => text !== (freeTextInputs?.[qi]?.initialValue ?? ''))
-  )
+  const { write: remember } = memory
+  useEffect(() => remember({ index, selections, otherText }), [remember, index, selections, otherText])
 
   const total = prompt.questions.length
   const isLast = index === total - 1
@@ -174,6 +179,7 @@ export function NativeChatQuestionCard({
     if (firstEmpty !== -1) {
       setIndex(firstEmpty)
     } else if (answered.some(Boolean)) {
+      remember(undefined)
       onAnswer(resolved)
     }
   }
@@ -223,6 +229,7 @@ export function NativeChatQuestionCard({
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
     } else if (action === 'cancel') {
+      remember(undefined)
       onCancel?.()
     }
   }
@@ -249,6 +256,7 @@ export function NativeChatQuestionCard({
   const cancel = onCancel
     ? (): void => {
         autoAdvance.cancel()
+        remember(undefined)
         onCancel()
       }
     : undefined

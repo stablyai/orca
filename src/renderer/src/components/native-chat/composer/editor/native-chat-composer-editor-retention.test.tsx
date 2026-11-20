@@ -20,6 +20,15 @@ import {
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { mountedEditorView } from './native-chat-mounted-editor-view'
 
+vi.mock('@/store', async () => {
+  const { create } = await import('zustand')
+  return {
+    useAppStore: create(() => ({ unifiedTabsByWorktree: { 'wt-released': [{ id: 'released-tab' }] } }))
+  }
+})
+
+const RELEASED_TAB = { tabId: 'released-tab', worktreeId: 'wt-released' }
+
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
@@ -77,7 +86,7 @@ it('keeps a draft editor with its undo across a released chat view, and frees it
   vi.useFakeTimers()
   const input = createRef<NativeChatComposerInput>()
   const pane = () => (
-    <NativeChatComposerEditorOwner tabId="released-tab">
+    <NativeChatComposerEditorOwner viewTab={RELEASED_TAB}>
       <NativeChatPromptEditor
         scopeKey="agent-session:released-editor"
         inputRef={input}

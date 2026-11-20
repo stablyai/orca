@@ -1,14 +1,16 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useContext, useLayoutEffect, useRef } from 'react'
+import {
+  NativeChatViewTabContext,
+  readNativeChatViewMemory,
+  writeNativeChatViewMemory
+} from '../../pane/ownership/native-chat-view-memory'
 
 // Why: a chat view released while hidden comes back where its reader left off, not at the end.
-const MAX_REMEMBERED = 256
 // A newer read generation can supersede the first page while the chat's read owner reactivates.
 const MAX_RESTORE_ATTEMPTS = 5
 
 export type NativeChatReadingPosition = { messageId: string; offset: number }
 type RestoreResult = 'landed' | 'missing' | 'aborted' | 'superseded'
-
-const remembered = new Map<string, NativeChatReadingPosition>()
 
 /** The first row reaching below the viewport's top, by its message, and how far the reader is into it. */
 function readingPositionOf(
@@ -47,6 +49,8 @@ export function useNativeChatReadingPosition({
   messageIdAt: (index: number) => string | null
   jumpTo: (position: NativeChatReadingPosition, settled: (result: RestoreResult) => void) => void
 }): () => boolean {
+  const tab = useContext(NativeChatViewTabContext)
+  const key = `reading-position:${positionKey}`
   // A reveal of a view that stayed mounted already holds its offset; only a fresh mount restores.
   const freshMountRef = useRef(true)
   // The restore in flight; an effect replay (StrictMode, a hide mid-restore) keeps the bookmark and retries it.
@@ -54,15 +58,17 @@ export function useNativeChatReadingPosition({
   const latest = useRef({ readerAtEnd, jumpTo, messageIdAt })
   latest.current = { readerAtEnd, jumpTo, messageIdAt }
   useLayoutEffect(() => {
-    if (!isVisible || !ready) {
+    if (!isVisible || !ready || !tab) {
       return
     }
     let cancelled = false
     let frame = 0
-    const position = freshMountRef.current ? remembered.get(positionKey) : undefined
+    const position = freshMountRef.current
+      ? readNativeChatViewMemory<NativeChatReadingPosition>(tab, key)
+      : undefined
     if (position === undefined) {
       freshMountRef.current = false
-      remembered.delete(positionKey)
+      writeNativeChatViewMemory(tab, key, undefined)
     } else {
       restoringRef.current = position
       const attempt = (tries: number): void => {
@@ -77,8 +83,8 @@ export function useNativeChatReadingPosition({
           // Landed, gone, or the reader moved on: the bookmark has done its job.
           restoringRef.current = null
           freshMountRef.current = false
-          if (remembered.get(positionKey) === position) {
-            remembered.delete(positionKey)
+          if (readNativeChatViewMemory(tab, key) === position) {
+            writeNativeChatViewMemory(tab, key, undefined)
           }
         })
       }
@@ -96,15 +102,8 @@ export function useNativeChatReadingPosition({
         container && !latest.current.readerAtEnd()
           ? readingPositionOf(container, latest.current.messageIdAt)
           : null
-      remembered.delete(positionKey)
-      if (next === null) {
-        return
-      }
-      remembered.set(positionKey, next)
-      if (remembered.size > MAX_REMEMBERED) {
-        remembered.delete(remembered.keys().next().value as string)
-      }
+      writeNativeChatViewMemory(tab, key, next ?? undefined)
     }
-  }, [isVisible, ready, positionKey, scrollRef])
+  }, [isVisible, ready, tab, key, scrollRef])
   return useCallback(() => restoringRef.current !== null, [])
 }
