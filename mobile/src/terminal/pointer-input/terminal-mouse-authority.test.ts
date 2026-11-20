@@ -95,6 +95,13 @@ describe('mobile mouse encoding proof', () => {
     )
   })
 
+  it('sends a click report without focusing the keyboard on a touch tap when mouse tracking encoding is proven', () => {
+    bootAltScreen(`${PANE_PREFIX}${ESC}[?1006h`)
+    touchTap()
+    expect(mouse.terminalInputBytes()).toContain(`${ESC}[<0;`)
+    expect(mouse.postedMessages().filter((posted) => posted.type === 'terminal-tap')).toEqual([])
+  })
+
   it.each([
     ['pixel', '?1016h', '[<65;'],
     ['explicit legacy', '?1006l', '[Ma']
