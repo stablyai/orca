@@ -10,14 +10,13 @@ function start() {
   return { owner, controller, release }
 }
 
-it('aborts the run when its document reloads', () => {
+it('aborts the run when its document commits a navigation', () => {
   const { owner, controller } = start()
 
-  owner.emit('did-start-navigation', { isMainFrame: false, isSameDocument: false })
-  owner.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true })
+  owner.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
   expect(controller.signal.aborted).toBe(false)
 
-  owner.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })
+  owner.emit('did-navigate')
   expect(controller.signal.aborted).toBe(true)
 })
 
@@ -36,5 +35,5 @@ it('stops listening once the run is released', () => {
   owner.emit('destroyed')
 
   expect(controller.signal.aborted).toBe(false)
-  expect(owner.listenerCount('did-start-navigation')).toBe(0)
+  expect(owner.listenerCount('did-navigate')).toBe(0)
 })
