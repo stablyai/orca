@@ -81,7 +81,8 @@ function DialogDisclosure({
   defaultOpen = false,
   variant = 'boxed',
   chevron = 'leading',
-  triggerClassName
+  triggerClassName,
+  contentClassName
 }: {
   label: React.ReactNode
   children: React.ReactNode
@@ -91,6 +92,7 @@ function DialogDisclosure({
   /** `trailing` keeps a label that starts with its own status icon aligned with sibling lines. */
   chevron?: 'leading' | 'trailing'
   triggerClassName?: string
+  contentClassName?: string
 }): React.JSX.Element {
   const [open, setOpen] = React.useState(defaultOpen)
   const contentId = React.useId()
@@ -123,7 +125,8 @@ function DialogDisclosure({
           'min-w-0',
           variant !== 'plain' &&
             'rounded-lg border border-input px-2.5 py-2 text-[11px] leading-normal text-muted-foreground',
-          variant === 'code' && 'scrollbar-sleek max-h-44 overflow-y-auto font-mono'
+          variant === 'code' && 'scrollbar-sleek max-h-44 overflow-y-auto font-mono',
+          contentClassName
         )}
       >
         {children}

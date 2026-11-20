@@ -124,18 +124,17 @@ export function DeleteWorktreeChangesSummary({
           : [null, null]
   const stillChecking = tone !== 'checking' && (changesChecking || ignoredChecking)
   // Secondary facts stay on the collapsed line so a failed check never hides a known loss.
-  const note =
-    loss && changesFailed
-      ? failedLabel
-      : ignoredUnchecked
-        ? t('components.workspace.delete.ignoredFiles.unavailable', 'Ignored files not checked')
-        : null
+  const note = [
+    loss && changesFailed ? failedLabel : null,
+    ignoredUnchecked
+      ? t('components.workspace.delete.ignoredFiles.unavailable', 'Ignored files not checked')
+      : null
+  ]
+    .filter(Boolean)
+    .join(' · ')
   const changedFiles = preview?.files ?? []
   const ignoredPaths = atRiskLocalFiles?.paths ?? atRiskLocalFiles?.samplePaths ?? []
-  // Opening waits for every scan so late results never resize an open list.
-  const hasDetails =
-    !stillChecking &&
-    (changedFiles.length > 0 || unsavedFiles.length > 0 || ignoredPaths.length > 0)
+  const hasDetails = changedFiles.length > 0 || unsavedFiles.length > 0 || ignoredPaths.length > 0
   if (!tone) {
     return null
   }
@@ -154,7 +153,8 @@ export function DeleteWorktreeChangesSummary({
         {text}
       </span>
       {note ? (
-        <span className="min-w-0 shrink truncate text-muted-foreground" title={note}>
+        // The note gives way first so a narrow line keeps the loss sentence.
+        <span className="min-w-0 shrink-[1000] truncate text-muted-foreground" title={note}>
           · {note}
         </span>
       ) : null}
@@ -173,10 +173,12 @@ export function DeleteWorktreeChangesSummary({
   return (
     <div aria-live="polite" className="min-w-0">
       {hasDetails ? (
+        // A fixed open height: results that land after opening scroll inside instead of moving Delete.
         <DialogDisclosure
           label={line}
           variant="code"
           chevron="trailing"
+          contentClassName="h-44"
           triggerClassName={`h-5 max-w-full min-w-0 gap-1.5 ${toneClassName}`}
         >
           {ignoredPaths.length > 0 && atRiskLocalFiles ? (
