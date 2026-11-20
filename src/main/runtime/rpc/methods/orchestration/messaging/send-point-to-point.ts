@@ -10,8 +10,7 @@ import {
 } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
 import { bindCoordinatorMutationPayload } from '../../../../orchestration/workers/reports/dispatch-message-binding'
 import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
-import { parseMessageTaskId, withMessageTaskId, withoutBotRequestClaim } from './message-payload'
-import { BOT_ITEM_MAIL_SENDER } from '../../../../../../shared/bots/bot-item-note-runs'
+import { parseMessageTaskId, withMessageTaskId } from './message-payload'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import { isEarlierTaskOfDispatch } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import type { SendParams } from './send-params'
@@ -24,7 +23,6 @@ import {
   workerReportRefusal,
   type WorkerReportRefusal
 } from '../../../../orchestration/workers/reports/worker-report-admission'
-import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -63,13 +61,6 @@ export function sendPointToPointMessage(args: {
     withSendWarnings
   } = args
   revalidateLegacyCoordinator?.()
-  // That sender and the bot-request field make a receiver admit the payload's image paths.
-  if (from === BOT_ITEM_MAIL_SENDER) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      `${BOT_ITEM_MAIL_SENDER} is Orca's own sender.`
-    )
-  }
   const messageType = (params.type ?? 'status') as MessageType
   const processIncarnation = isDispatchMutationMessageType(messageType)
     ? resolveProcessIncarnation()
@@ -86,9 +77,8 @@ export function sendPointToPointMessage(args: {
       isEarlierTaskOfDispatch(db, dispatch, quotedTaskId)
         ? quotedTaskId
         : undefined
-    const callerPayload = withoutBotRequestClaim(params.payload)
     const payload =
-      dispatch && staleTaskId ? withMessageTaskId(callerPayload, dispatch.task_id) : callerPayload
+      dispatch && staleTaskId ? withMessageTaskId(params.payload, dispatch.task_id) : params.payload
     const staleTaskWarning: SendRecipientWarning | undefined =
       dispatch && staleTaskId
         ? {
