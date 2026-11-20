@@ -15,24 +15,20 @@ import {
   zoomViewAt
 } from '../../../../../shared/document-preview/pan-zoom-view'
 
+import {
+  type PanZoomPointerGesture,
+  panZoomPointerDelta,
+  isPanZoomPointerClick
+} from './pan-zoom-pointer-gesture'
+
 type ZoomStep = (zoom: number, fitScale: number) => number
-
-/** Movement under this many pixels still counts as a click. */
-const CLICK_SLOP = 4
-
-type PointerGesture = { start: PanZoomPoint; last: PanZoomPoint; pan: boolean; alt: boolean }
 
 // Pinch zoom back to the fit lands near, not on, 1.
 const FIT_ZOOM_EPSILON = 1e-3
 
 export type PanZoomCursor = 'zoom-in' | 'zoom-out' | 'grab' | 'grabbing'
 
-type PanZoomGeometry = {
-  content: PanZoomSize
-  viewport: PanZoomSize
-  fitScale: number
-  contain: boolean
-}
+type PanZoomGeometry = Parameters<typeof containPanZoomView>[1] & { contain: boolean }
 
 export type PanZoomViewport = {
   canvas: HTMLDivElement | null
@@ -63,17 +59,20 @@ function settleView(view: PanZoomView, geometry: PanZoomGeometry): PanZoomView {
 export function usePanZoomViewport({
   content,
   upscale = false,
-  contain = false
+  contain = false,
+  dragToPan = false
 }: {
   content: PanZoomSize | null
   /** Let fit enlarge content past its natural size; vectors stay sharp. */
   upscale?: boolean
   /** Stop panning at the content's edges, keeping content that fits centered. */
   contain?: boolean
+  /** Let ordinary mouse drags pan while preserving click-to-zoom. */
+  dragToPan?: boolean
 }): PanZoomViewport {
   // State, not a ref: a dialog's portal canvas mounts after this component's first effects.
   const [canvas, setCanvas] = useState<HTMLDivElement | null>(null)
-  const gestureRef = useRef<PointerGesture | null>(null)
+  const gestureRef = useRef<PanZoomPointerGesture | null>(null)
   const [viewport, setViewport] = useState<PanZoomSize | null>(null)
   // null is the fitted view, so it follows the canvas as it resizes.
   const [manualView, setManualView] = useState<PanZoomView | null>(null)
@@ -269,12 +268,18 @@ export function usePanZoomViewport({
       onPointerMove: (event) => {
         setAltHeld(event.altKey)
         const gesture = gestureRef.current
-        if (!gesture?.pan || !geometry) {
+        if (!gesture || !geometry) {
           return
         }
-        const last = gesture.last
-        gesture.last = { x: event.clientX, y: event.clientY }
-        const delta = { x: event.clientX - last.x, y: event.clientY - last.y }
+        const delta = panZoomPointerDelta(
+          gesture,
+          { x: event.clientX, y: event.clientY },
+          dragToPan
+        )
+        if (!delta) {
+          return
+        }
+        setDragging(true)
         // Compose every pointer move even when several arrive before React renders.
         setManualView((current) => {
           const from = current
@@ -292,11 +297,7 @@ export function usePanZoomViewport({
       onPointerUp: (event) => {
         const gesture = gestureRef.current
         endDrag()
-        if (!gesture || gesture.alt) {
-          return
-        }
-        const moved = Math.hypot(event.clientX - gesture.start.x, event.clientY - gesture.start.y)
-        if (moved < CLICK_SLOP) {
+        if (gesture && isPanZoomPointerClick(gesture, event, dragToPan)) {
           const rect = event.currentTarget.getBoundingClientRect()
           toggleZoomAt({ x: event.clientX - rect.left, y: event.clientY - rect.top })
         }
@@ -304,7 +305,7 @@ export function usePanZoomViewport({
       onPointerCancel: endDrag,
       onLostPointerCapture: endDrag
     }),
-    [endDrag, geometry, toggleZoomAt]
+    [dragToPan, endDrag, geometry, toggleZoomAt]
   )
 
   let cursor: PanZoomCursor | null = null
