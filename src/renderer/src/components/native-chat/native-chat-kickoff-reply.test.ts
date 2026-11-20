@@ -105,5 +105,5 @@ it('shows a pending kickoff until the host refuses it before a turn opens', () =
       nativeChatKickoffEnded(refused),
       nativeChatKickoffRefusal(refused)
     )
-  ).toEqual({ phase: 'failed', turn: [], refused: 'Claude Code could not start.' })
+  ).toEqual({ phase: 'failed', turn: [], refused: { reason: 'Claude Code could not start.' } })
 })
