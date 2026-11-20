@@ -14,14 +14,13 @@ export type CheckOutcomeInput = {
 // Skipped means not applicable; count it passing everywhere so desktop/mobile agree on the same PR.
 const PASSED_CONCLUSIONS = new Set(['success', 'skipped'])
 
-// Why: these block the merge. GitLab `manual` is deliberately absent — it waits on a human.
+// GitLab `manual` is deliberately absent — it waits on a human.
 const FAILED_CONCLUSIONS = new Set([
   'failure',
   'error',
   'startup_failure',
   'timed_out',
-  'cancelled',
-  'action_required'
+  'cancelled'
 ])
 
 /** The single provider-neutral verdict for one check; every check surface must route through it. */
@@ -38,7 +37,7 @@ export function classifyCheckOutcome(check: CheckOutcomeInput): CheckOutcome {
     return 'passed'
   }
   // Why: anything that has not reached a terminal status is still running, whatever it calls itself.
-  if (conclusion === 'pending' || status !== 'completed') {
+  if (conclusion === 'pending' || conclusion === 'action_required' || status !== 'completed') {
     return 'pending'
   }
   return 'neutral'

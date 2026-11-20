@@ -77,9 +77,9 @@ it('counts a hidden failure and suite-only blocker after both first pages withou
     state: 'failure',
     total: 102,
     passed: 100,
-    failed: 2,
+    failed: 1,
     cancelled: 0,
-    pending: 0,
+    pending: 1,
     neutral: 0
   })
 })
@@ -143,9 +143,9 @@ it('recovers every REST page and endpoint before publishing a full verdict', asy
     state: 'failure',
     total: 103,
     passed: 100,
-    failed: 3,
+    failed: 2,
     cancelled: 1,
-    pending: 0,
+    pending: 1,
     neutral: 0
   })
 })

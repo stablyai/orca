@@ -27,17 +27,17 @@ export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDet
 
 /** Use one check breakdown across PR page/dialog and the sidebar header. */
 export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts {
-  // Use the shared rollup; split action_required back out because it blocks like failure but reads amber.
+  // Split approvals out of pending checks so detail views can name the required action.
   const summary = summarizeProviderChecks(checks)
   const needsAction = checks.filter(
     (check) => getCheckConclusion(check) === 'action_required'
   ).length
   return {
     passing: summary.passed,
-    failing: summary.failed - needsAction - (summary.cancelled ?? 0),
+    failing: summary.failed - (summary.cancelled ?? 0),
     cancelled: summary.cancelled ?? 0,
     needsAction,
-    pending: summary.pending,
+    pending: summary.pending - needsAction,
     neutral: summary.neutral
   }
 }
@@ -52,6 +52,7 @@ export function getOverallCheckCounts(
   }
   const summary = owner.checksSummary
   const failed = (summary?.failed ?? 0) - (summary?.cancelled ?? 0)
+  const pending = summary?.pending ?? 0
   const rows = getCheckCounts(checks)
   const distinctApprovals = new Set(
     checks
@@ -67,16 +68,15 @@ export function getOverallCheckCounts(
         normalizePRCheckHeadSha(check.observedHeadSha) !== undefined &&
         normalizePRCheckHeadSha(check.observedHeadSha) === normalizePRCheckHeadSha(owner.headSha)
     ) &&
-    failed > 0 &&
-    distinctApprovals === failed &&
-    rows.needsAction === distinctApprovals &&
-    rows.failing === 0
+    distinctApprovals > 0 &&
+    distinctApprovals <= pending &&
+    rows.needsAction === distinctApprovals
   return {
     passing: summary?.passed ?? 0,
-    failing: explained ? 0 : failed,
+    failing: failed,
     cancelled: summary?.cancelled ?? 0,
-    needsAction: explained ? failed : 0,
-    pending: summary?.pending ?? 0,
+    needsAction: explained ? distinctApprovals : 0,
+    pending: pending - (explained ? distinctApprovals : 0),
     neutral: summary?.neutral ?? 0
   }
 }

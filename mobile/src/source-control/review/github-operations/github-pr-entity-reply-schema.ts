@@ -26,7 +26,6 @@ export const CHECK_STATUS = ['pending', 'success', 'failure', 'neutral'] as cons
 export const MERGEABLE_STATE = ['MERGEABLE', 'CONFLICTING', 'UNKNOWN'] as const
 export const REVIEW_DECISION = ['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED'] as const
 const CHECK_RUN_STATUS = ['queued', 'in_progress', 'completed'] as const
-// Keep action_required: the shared classifier treats approval gates as failure, not pending.
 const CHECK_RUN_CONCLUSION = [
   'success',
   'failure',
