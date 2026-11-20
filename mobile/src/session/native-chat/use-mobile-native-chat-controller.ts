@@ -167,6 +167,7 @@ export function useMobileNativeChatController(args: {
     stop: handleNativeChatStop
   })
   const activeTurn = activeChatStructured ? structuredNativeChat : terminalTurn
+  const nativeChatAgentWorking = activeTurn.isWorking
   const workingEpoch = terminalTurn.workingEpoch
   const placedChatPending = useMemo(
     () =>
@@ -228,9 +229,8 @@ export function useMobileNativeChatController(args: {
       dispatchCommand: handleNativeChatDispatchCommand,
       hostId,
       isTabChatView,
-      isWorking: activeTurn.isWorking,
+      isWorking: nativeChatAgentWorking,
       reportedModel: activeSessionTab?.agentStatus?.model ?? null,
-      sessionReport: nativeChatLane.claudeSessionStatus,
       modelSwitchCommand: activeSessionTab?.agentStatus?.modelSwitchCommand,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
@@ -244,6 +244,7 @@ export function useMobileNativeChatController(args: {
         setOption: structuredNativeChat.setStructuredOption,
         invokeAction: structuredNativeChat.invokeStructuredOption
       },
+      sessionReport: nativeChatLane.claudeSessionStatus,
       toggleTabChatView,
       worktreeId
     })
@@ -289,7 +290,7 @@ export function useMobileNativeChatController(args: {
     nativeChatReceipts: activeChatStructured ? structuredNativeChat.receipts : null,
     nativeChatActionablePromptIds: structuredNativeChat.actionablePromptIds,
     nativeChatCommandRefusalCauses: structuredNativeChat.commandRefusalCauses,
-    nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : activeTurn.isWorking,
+    nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
     nativeChatSendFollowUp: activeChatStructured ? structuredNativeChat.sendFollowUp : null,
     nativeChatStreamingText: terminalTurn.streamingText,
     ...prompts,
