@@ -132,6 +132,20 @@ describe('BotTemplatesDialog', () => {
     await waitFor(() => expect(useAppStore.getState().activeModal).toBe('none'))
   })
 
+  it('opens a template with its name unfocused, and ⌘↩ creates straight away', async () => {
+    openBotTemplates('pr-review')
+    renderDialog()
+    fireEvent.click(screen.getByRole('button', { name: 'Use Pull request review' }))
+    const newBot = await screen.findByRole('dialog', { name: 'New bot' })
+    const form = newBot.querySelector('form')!
+    await waitFor(() => expect(document.activeElement).toBe(form))
+    fireEvent.keyDown(document.activeElement!, {
+      key: 'Enter',
+      ...(navigator.userAgent.includes('Mac') ? { metaKey: true } : { ctrlKey: true })
+    })
+    await waitFor(() => expect(mocks.createBot).toHaveBeenCalledTimes(1))
+  })
+
   it('makes an edited identity the new bot’s purpose, in place of the template’s lines', async () => {
     openBotTemplates('pr-review')
     renderDialog()

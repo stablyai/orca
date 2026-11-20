@@ -155,7 +155,7 @@ export const BOT_TEMPLATES_CODING: readonly BotTemplate[] = [
       'Reviews last week’s merged pull requests in a repo you pick and lists anything that needs a second look, with file and line.',
     mascot: 'N1',
     watches: 'Merged pull requests in the repos you pick',
-    does: 'Checks merged changes for leaked secrets, injection, missing auth and unsafe defaults.',
+    does: 'Checks them for leaked secrets, injection, missing auth and unsafe defaults.',
     reports: 'Here, Mondays at 9 AM and when a pull request merges',
     connectors: ['github'],
     schedules: [

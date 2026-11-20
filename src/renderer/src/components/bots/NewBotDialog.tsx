@@ -281,14 +281,13 @@ export function NewBotDialog({
         {...(origin ? {} : { 'aria-describedby': undefined })}
         {...keyboardNavMarkerHandlers}
         onOpenAutoFocus={(event) => {
-          // The name, not Radix's first tabbable (the picture), so typing names the bot.
           event.preventDefault()
-          const field = nameRef.current
-          field?.focus()
-          // A filled-in name (a template's) shows from its start, not scrolled to its end.
-          field?.setSelectionRange(0, 0)
-          if (field) {
-            field.scrollLeft = 0
+          // A template's name is already set: focus stays off it, so a long one shows its start with
+          // "…"; ⌘↩ still creates. Otherwise the name, not Radix's first tabbable, so typing names the bot.
+          if (template) {
+            formRef.current?.focus()
+          } else {
+            nameRef.current?.focus()
           }
         }}
         onCloseAutoFocus={(event) => {
@@ -316,7 +315,8 @@ export function NewBotDialog({
         </DialogHeader>
         <form
           ref={formRef}
-          className="flex min-h-0 flex-col gap-4"
+          tabIndex={-1}
+          className="flex min-h-0 flex-col gap-4 outline-none"
           onSubmit={(event) => void handleSubmit(event)}
           onKeyDown={(event) => {
             if (
