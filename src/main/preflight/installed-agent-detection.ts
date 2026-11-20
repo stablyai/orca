@@ -114,7 +114,7 @@ export async function detectInstalledAgents(
   // Orca's own copies live on this host, not in a WSL guest; terminals get their folders on PATH.
   if (runtime !== 'wsl') {
     const enabled = new Set(commands.map((command) => command.id))
-    for (const id of readInstalledManagedAgents()) {
+    for (const id of await readInstalledManagedAgents()) {
       if (isTuiAgent(id) && enabled.has(id) && !detected.includes(id)) {
         detected.push(id)
       }

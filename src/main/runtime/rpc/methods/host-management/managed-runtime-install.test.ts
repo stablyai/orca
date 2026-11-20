@@ -226,9 +226,9 @@ it("lists Orca's installed agy as an installed agent only while it may run", asy
   reclaimManagedRuntimeReleasesAtLaunch(runtime)
   rememberManagedAgentRelease('antigravity', join(host.dataDirectory, 'agy', '1.5.13'))
 
-  expect(readInstalledManagedAgents()).toContain('antigravity')
+  expect(await readInstalledManagedAgents()).toContain('antigravity')
   settings = { antigravityManagedAgyEnabled: false }
-  expect(readInstalledManagedAgents()).not.toContain('antigravity')
+  expect(await readInstalledManagedAgents()).not.toContain('antigravity')
 
   rememberManagedAgentRelease('antigravity', null)
   await rm(host.dataDirectory, { recursive: true, force: true })

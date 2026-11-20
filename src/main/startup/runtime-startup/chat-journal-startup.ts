@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { isHostShuttingDown } from '../quit/host-shutdown-state'
 import { mainProcessState as state } from '../main-process-state'
+import { holdInstalledManagedAgents } from '../../preflight/managed-agent-detection'
 import {
   reclaimManagedRuntimeReleasesAtLaunch,
   startManagedRuntimeAutoUpdates
@@ -16,6 +17,8 @@ export function beginChatJournalStartup(
   runtime: Pick<OrcaRuntimeService, 'beginStructuredAgentSessionStartupOpen'>,
   serveMode: boolean
 ): void {
+  // Agent detection before the release reclaim in chatJournalHostServing would miss Orca's copies.
+  holdInstalledManagedAgents()
   if (serveMode) {
     runtime.beginStructuredAgentSessionStartupOpen(serving.promise)
     return

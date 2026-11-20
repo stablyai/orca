@@ -8,7 +8,8 @@ vi.mock('../ipc/preflight/preflight-runtime-target', () => ({
 }))
 
 const { detectInstalledAgents } = await import('./installed-agent-detection')
-const { provideInstalledManagedAgents } = await import('./managed-agent-detection')
+const { holdInstalledManagedAgents, provideInstalledManagedAgents } =
+  await import('./managed-agent-detection')
 
 afterEach(() => {
   host.wsl = false
@@ -29,4 +30,18 @@ it('leaves out a disabled agent, and a WSL guest Orca installed nothing in', asy
   ])
   host.wsl = true
   expect(await detectInstalledAgents()).toEqual([])
+})
+
+it("waits for the runtime's first read of Orca's copies instead of answering without them", async () => {
+  holdInstalledManagedAgents()
+  let answered = false
+  const detecting = detectInstalledAgents().finally(() => {
+    answered = true
+  })
+  // Everything but the release read has finished by the next macrotask.
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(answered).toBe(false)
+  provideInstalledManagedAgents(() => ['grok'])
+
+  expect(await detecting).toEqual(['grok'])
 })
