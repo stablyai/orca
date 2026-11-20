@@ -13,7 +13,7 @@ function logWatchError(error) {
 }
 
 // One recursive subscription for the whole workspace, instead of a native stream per watched path.
-export function watchWorkspace(root, onEvents) {
+export function watchWorkspace(root, onEvents, onFailed) {
   let stopped = false
   let subscription = null
   let realRoot = root
@@ -45,7 +45,12 @@ export function watchWorkspace(root, onEvents) {
         subscription = active
       }
     })
-    .catch(logWatchError)
+    .catch((error) => {
+      logWatchError(error)
+      if (!stopped) {
+        onFailed()
+      }
+    })
   return {
     stop() {
       stopped = true

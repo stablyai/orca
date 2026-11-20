@@ -27,6 +27,7 @@ export function createServerSession({
 }) {
   let server = null
   let state = 'stopped'
+  let clientInitialize = null
   let initialize = null
   let configuration = null
   let bridgingWatches = false
@@ -41,10 +42,14 @@ export function createServerSession({
   let stopInstallWatch = null
   const queue = []
   const pending = new Set()
+  // Requests the current server sent the client; an answer to an earlier server's request is dropped.
+  const serverRequests = new Set()
   // What the running (or last) server has seen, so a new one can be brought to the same state.
   const documents = new Map()
   const registrations = new Map()
-  const clientRegistrations = new Set()
+  // Registrations the client holds for the current server, by id; withdrawn when that server stops.
+  const clientRegistrations = new Map()
+  const folderChanges = []
 
   const track = (message) => {
     const { method, params } = message
@@ -60,6 +65,8 @@ export function createServerSession({
       documents.delete(uri)
     } else if (method === 'workspace/didChangeConfiguration') {
       configuration = message
+    } else if (method === 'workspace/didChangeWorkspaceFolders') {
+      folderChanges.push(message)
     }
   }
 
@@ -87,11 +94,39 @@ export function createServerSession({
     if (!bridgingWatches || state !== 'ready' || workspaceWatch || registrations.size === 0) {
       return
     }
-    workspaceWatch = watchWorkspace(root, onWorkspaceEvents)
+    workspaceWatch = watchWorkspace(root, onWorkspaceEvents, onWatchFailed)
     stopInstallWatch = watchInstalls(root, () => {
       restartWhenIdle = true
       stopIfQuiet()
     })
+  }
+
+  // Without a working watcher, hand watching back to the server rather than serve stale files.
+  const onWatchFailed = () => {
+    if (!bridgingWatches) {
+      return
+    }
+    bridgingWatches = false
+    initialize = clientInitialize
+    restartWhenIdle = true
+    stopIfQuiet()
+  }
+
+  const withWatchCapability = (message) => {
+    const capabilities = message.params?.capabilities ?? {}
+    return {
+      ...message,
+      params: {
+        ...message.params,
+        capabilities: {
+          ...capabilities,
+          workspace: {
+            ...capabilities.workspace,
+            didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true }
+          }
+        }
+      }
+    }
   }
 
   const onWorkspaceEvents = (events) => {
@@ -154,6 +189,9 @@ export function createServerSession({
     if (configuration) {
       server.write(configuration)
     }
+    for (const change of folderChanges) {
+      server.write(change)
+    }
     for (const [uri, { languageId, version, text }] of documents) {
       server.write({
         jsonrpc: '2.0',
@@ -174,6 +212,13 @@ export function createServerSession({
 
   const dispatch = (message) => {
     const { method } = message
+    if (!method) {
+      // Answers go to the server that asked, even mid-start: it may wait on them before finishing initialize.
+      if (server && serverRequests.delete(message.id)) {
+        server.write(message)
+      }
+      return
+    }
     const background = isBackgroundRequest(message)
     if (background && state !== 'ready' && state !== 'starting') {
       toClient({ jsonrpc: '2.0', id: message.id, error: { code: REQUEST_CANCELLED, message: 'server stopped' } })
@@ -186,7 +231,7 @@ export function createServerSession({
         onEnd(0)
       } else if (method === 'textDocument/didClose') {
         documents.delete(message.params?.textDocument?.uri)
-      } else if (method && !NON_WAKING.has(method)) {
+      } else if (!NON_WAKING.has(method)) {
         queue.push(message)
         wake()
       }
@@ -196,7 +241,7 @@ export function createServerSession({
       queue.push(message)
       return
     }
-    if (method && method !== '$/cancelRequest' && !background) {
+    if (method !== '$/cancelRequest' && !background) {
       armIdle()
     }
     write(message)
@@ -209,14 +254,14 @@ export function createServerSession({
     for (const registration of message.params?.registrations ?? []) {
       if (bridgingWatches && registration.method === WATCHED_FILES) {
         registrations.set(registration.id, parseWatchers(root, registration.registerOptions?.watchers))
-      } else if (!clientRegistrations.has(registration.id)) {
-        // A restarted server registers again under the same ids; the client already has them.
-        clientRegistrations.add(registration.id)
+      } else {
+        clientRegistrations.set(registration.id, registration.method)
         forwarded.push(registration)
       }
     }
     startWatching()
     if (forwarded.length > 0) {
+      serverRequests.add(message.id)
       toClient({ ...message, params: { ...message.params, registrations: forwarded } })
     } else {
       answerServer(message.id)
@@ -232,6 +277,7 @@ export function createServerSession({
       }
     }
     if (forwarded.length > 0) {
+      serverRequests.add(message.id)
       toClient({ ...message, params: { unregisterations: forwarded } })
     } else {
       answerServer(message.id)
@@ -240,8 +286,14 @@ export function createServerSession({
 
   function fromServer(message) {
     if (message.id === replayId && !message.method) {
-      finishReplay()
+      if (message.error) {
+        console.error(`agent-typescript-lsp: restart failed: ${message.error.message}`)
+        server.kill()
+      } else {
+        finishReplay()
+      }
     } else if (message.id === shutdownId && !message.method) {
+      shutdownId = null
       server.write({ jsonrpc: '2.0', method: 'exit' })
     } else if (!message.method && pending.delete(message.id)) {
       toClient(message)
@@ -253,6 +305,9 @@ export function createServerSession({
     } else if (message.method === 'client/unregisterCapability') {
       onUnregister(message)
     } else {
+      if (message.method && message.id !== undefined) {
+        serverRequests.add(message.id)
+      }
       toClient(message)
     }
   }
@@ -265,14 +320,25 @@ export function createServerSession({
     server = null
     state = 'stopped'
     pending.clear()
+    serverRequests.clear()
     registrations.clear()
+    replayId = null
+    shutdownId = null
     if (closed || !expected) {
       onEnd(code ?? (signal ? 1 : 0))
       return
     }
-    // Answers to the old server's requests must not reach the new one, whose ids start over.
-    const kept = queue.splice(0).filter((message) => message.method)
-    queue.push(...kept)
+    if (clientRegistrations.size > 0) {
+      toClient({
+        jsonrpc: '2.0',
+        id: `${SESSION_ID_PREFIX}${++nextId}`,
+        method: 'client/unregisterCapability',
+        params: {
+          unregisterations: [...clientRegistrations].map(([id, method]) => ({ id, method }))
+        }
+      })
+      clientRegistrations.clear()
+    }
     if (restartWhenIdle) {
       restartWhenIdle = false
       wake()
@@ -284,23 +350,10 @@ export function createServerSession({
   return {
     fromClient(message) {
       if (message.method === 'initialize' && !initialize) {
-        const capabilities = message.params?.capabilities ?? {}
-        bridgingWatches = !capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration
-        initialize = bridgingWatches
-          ? {
-              ...message,
-              params: {
-                ...message.params,
-                capabilities: {
-                  ...capabilities,
-                  workspace: {
-                    ...capabilities.workspace,
-                    didChangeWatchedFiles: { dynamicRegistration: true, relativePatternSupport: true }
-                  }
-                }
-              }
-            }
-          : message
+        clientInitialize = message
+        bridgingWatches =
+          !message.params?.capabilities?.workspace?.didChangeWatchedFiles?.dynamicRegistration
+        initialize = bridgingWatches ? withWatchCapability(message) : message
         launch()
         state = 'ready'
         armIdle()
