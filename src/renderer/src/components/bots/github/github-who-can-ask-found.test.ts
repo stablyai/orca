@@ -144,11 +144,11 @@ describe('the GitHub picker’s reading of a search', () => {
     })
     expect(empty(read(), null, 'neil par')?.detail).toBe('Searched your repos.')
     expect(empty({ status: 'unavailable' }, none)?.detail).toBe(
-      'Couldn’t read repos. Check gh sign-in, then restart Orca.'
+      'Couldn’t read repos. Check gh, restart Orca.'
     )
     expect(empty({ status: 'unavailable' }, null, 'neil par')).toEqual({
       title: 'Couldn’t search for “neil par”',
-      detail: 'Couldn’t read repos. Check gh sign-in, then restart Orca.'
+      detail: 'Couldn’t read repos. Check gh, restart Orca.'
     })
     expect(empty({ status: 'skipped' }, null, 'neil par')?.detail).toBe('Try an exact username.')
   })
@@ -261,11 +261,11 @@ describe('the GitHub picker’s reading of a search', () => {
 
   it('points restart advice at the computer that read the list', () => {
     expect(value(answer({ status: 'unavailable' }, none, 'zed', 'remote')).note).toBe(
-      'Couldn’t read repos. Check gh sign-in, then restart the bot’s Orca.'
+      'Couldn’t read repos. Check the bot’s computer.'
     )
     const old = read({ reused: true, readAt: new Date(2026, 10, 1).getTime() })
     expect(value(answer(old, none, 'brennan', 'remote')).note).toBe(
-      'Repo list from Nov 1. Restart the bot’s Orca to refresh.'
+      'Repo list from Nov 1. Restart the bot’s Orca.'
     )
   })
 

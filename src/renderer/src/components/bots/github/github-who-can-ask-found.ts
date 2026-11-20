@@ -151,12 +151,9 @@ export function gitHubWhoCanAskAnswer(
         ? remote
           ? t(
               'bots.github.whoCanAsk.unavailableRemote',
-              'Couldn’t read repos. Check gh sign-in, then restart the bot’s Orca.'
+              'Couldn’t read repos. Check the bot’s computer.'
             )
-          : t(
-              'bots.github.whoCanAsk.unavailable',
-              'Couldn’t read repos. Check gh sign-in, then restart Orca.'
-            )
+          : t('bots.github.whoCanAsk.unavailable', 'Couldn’t read repos. Check gh, restart Orca.')
         : roster.status === 'none'
           ? t('bots.github.whoCanAsk.localNone', 'No repos connected.')
           : null
@@ -175,7 +172,7 @@ export function gitHubWhoCanAskAnswer(
       ? remote
         ? t(
             'bots.github.whoCanAsk.readEarlierRemote',
-            'Repo list from {{time}}. Restart the bot’s Orca to refresh.',
+            'Repo list from {{time}}. Restart the bot’s Orca.',
             { time }
           )
         : t(
