@@ -235,6 +235,8 @@ export function isSubagentRow(item: AgentJournalRenderItem): boolean {
 export type HistoryPageInput = {
   snapshot: AgentJournalSnapshot
   submissions?: AgentJournalSnapshot['submissions']
+  /** Sends whose stamp alone changed; clients already hold their messages. */
+  stampedSubmissionIds?: ReadonlySet<string>
   direction: AgentSessionHistoryDirection
   items: AgentJournalRenderItem[]
   removedItemIds?: string[]

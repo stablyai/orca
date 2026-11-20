@@ -185,10 +185,8 @@ export function completedStructuredAgentTurnSeconds(
     return Math.max(0, Math.floor((timing.completedAt - structuredAgentTurnOrigin(timing)) / 1000))
   }
   if (timing.durationMs !== undefined) {
-    // The provider measures from its own start; add the wait the live clock already showed.
-    return Math.floor(
-      (timing.durationMs + timing.startedAt - structuredAgentTurnOrigin(timing)) / 1000
-    )
+    // Claude's own measure already includes the model's wait.
+    return Math.floor(timing.durationMs / 1000)
   }
   return timing.completedAt !== undefined
     ? Math.max(0, Math.floor((timing.completedAt - structuredAgentTurnOrigin(timing)) / 1000))

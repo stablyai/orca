@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 
-const send = (writtenAt: number): AgentJournalSubmission => ({
+const send = (writtenAt?: number): AgentJournalSubmission => ({
   clientMessageId: 'c1',
   fence: 1,
   payloadFingerprint: 'f',
@@ -13,7 +13,7 @@ const send = (writtenAt: number): AgentJournalSubmission => ({
   resolvedAt: null,
   handoverRecorded: true,
   handedOverAt: 1_020,
-  writtenAt
+  ...(writtenAt === undefined ? {} : { writtenAt })
 })
 
 function sendingIds(submission: AgentJournalSubmission): string[] {
@@ -29,6 +29,7 @@ function sendingIds(submission: AgentJournalSubmission): string[] {
 describe('structured agent session "Sending…"', () => {
   // The provider's first reply can take many seconds; the turn has started by then.
   it('clears once the idle agent has taken the message', () => {
+    expect(sendingIds(send())).toEqual(['orca:c1'])
     expect(sendingIds(send(1_050))).toEqual([])
   })
 })
