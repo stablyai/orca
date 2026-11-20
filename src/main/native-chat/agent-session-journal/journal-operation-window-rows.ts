@@ -74,7 +74,7 @@ export function readOperationWindowItems(
     total =
       Number(
         scope.db
-          .prepare(`SELECT SUM(CASE WHEN octet_length(payload_json)<=${CUT_ROW_BYTES}
+          .prepare(`SELECT SUM(CASE WHEN octet_length(payload_json) + ${STORED_TEXT}<=${CUT_ROW_BYTES}
           OR NOT ${CUTTABLE} THEN octet_length(${projected}) + ${projectedStoredText} END) AS bytes ${rows}`)
           .get(...scope.prefix, start)?.bytes ?? 0
       ) + large.reduce((sum, row) => sum + row.bytes, 0)
@@ -82,8 +82,10 @@ export function readOperationWindowItems(
   // A cut row may keep a large input; the window total, not a per-row bound, admits it.
   // Largest first, Diff calls last: their patch names the files they edited. Each cut is
   // counted at the size it actually comes back at, which is whole when nothing could be cut.
-  const cutSize = scope.db
-    .prepare(`SELECT octet_length(${shortenedJsonSql(projected, JOURNAL_READER_REPLY_BYTE_LIMIT)}) AS bytes
+  // A cut row drops the stored marker, or decoding would read its whole saved text back in.
+  const shortened = `json_remove(${shortenedJsonSql(projected, JOURNAL_READER_REPLY_BYTE_LIMIT)},
+    '$.body.output.stored','$.body.patch.stored')`
+  const cutSize = scope.db.prepare(`SELECT octet_length(${shortened}) AS bytes
     FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
   const cut: string[] = []
   for (const row of large.toSorted(
@@ -91,10 +93,10 @@ export function readOperationWindowItems(
   )) {
     if (row.bytes > WINDOW_BYTES || (total > WINDOW_BYTES && row.bytes > CUT_ROW_BYTES)) {
       cut.push(row.itemId)
-      const shortened = cutSize.get(...scope.prefix, row.itemId)?.bytes
-      if (typeof shortened === 'number') {
-        total -= row.bytes - shortened
-        row.bytes = shortened
+      const cutBytes = cutSize.get(...scope.prefix, row.itemId)?.bytes
+      if (typeof cutBytes === 'number') {
+        total -= row.bytes - cutBytes
+        row.bytes = cutBytes
       }
     }
   }
@@ -106,7 +108,7 @@ export function readOperationWindowItems(
   // A cut row whose bulk is not its output or patch comes back whole, within the total above.
   const value = cut.length
     ? `CASE WHEN item_id IN (SELECT value FROM json_each(?))
-        THEN COALESCE(${shortenedJsonSql(projected, JOURNAL_READER_REPLY_BYTE_LIMIT)}, ${projected}) ELSE ${projected} END`
+        THEN COALESCE(${shortened}, ${projected}) ELSE ${projected} END`
     : projected
   return scope.db
     .prepare(`SELECT ${value} AS payload_json ${rows} ORDER BY sequence,sequence_index,ordinal`)
