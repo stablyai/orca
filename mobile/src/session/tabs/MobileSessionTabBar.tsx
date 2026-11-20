@@ -68,11 +68,14 @@ function ArrivingTabBarDot({ state }: { state: AgentDotState | undefined }) {
 export function MobileSessionTabBar({
   controller,
   inTopBar,
-  actionsCollapsed = false
+  actionsCollapsed = false,
+  homeChatId = null
 }: {
   controller: MobileSessionController
   inTopBar: boolean
   actionsCollapsed?: boolean
+  /** The route bot's main chat, whose recorded name "Home" reads in the phone's language. */
+  homeChatId?: string | null
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -92,13 +95,20 @@ export function MobileSessionTabBar({
   const rows = useMemo(
     () =>
       visibleTabs.map((tab) => {
-        const summary = buildMobileSessionTabSummary(tab, terminals, now)
+        const built = buildMobileSessionTabSummary(tab, terminals, now)
+        const summary =
+          homeChatId !== null &&
+          tab.type === 'agent-session' &&
+          tab.sessionId === homeChatId &&
+          built.title === 'Home'
+            ? { ...built, title: t('bots.tabs.homeTitle', 'Home') }
+            : built
         // The tab on screen is being read (useMarkViewedAgentRead), so it never rings.
         return summary.unread && tab.id === activeSessionTabId
           ? { ...summary, unread: false }
           : summary
       }),
-    [visibleTabs, terminals, now, activeSessionTabId]
+    [visibleTabs, terminals, now, activeSessionTabId, homeChatId, t]
   )
   const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
   const active: MobileSessionTabSummary | undefined = rows[activeIndex]

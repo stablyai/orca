@@ -12,10 +12,12 @@ import {
   type BotTemplate,
   type BotTemplateSkill
 } from '../../../../../shared/bots/bot-templates'
+import { BOT_TEMPLATE_SKILL_LINES } from '../../../../../shared/bots/bot-template-view'
 import {
-  BOT_TEMPLATE_SKILL_LINES,
-  botTemplateEventParts
-} from '../../../../../shared/bots/bot-template-view'
+  botTemplateEventWords,
+  botTemplateSkillName,
+  botTemplateText
+} from '../../../../../shared/bots/bot-template-text'
 
 export function BotTemplateComesWithHeading({
   showNote = true
@@ -93,35 +95,41 @@ export function BotTemplateComesWith({
   const muted = (text: string) => <span className="text-muted-foreground">{text}</span>
   return (
     <ul>
-      {template.skills.map((skill) => (
-        <Row
-          key={skill}
-          mono
-          icon={<BookOpen className="size-4" />}
-          title={skill}
-          line={BOT_TEMPLATE_SKILL_LINES[skill]}
-          state={
-            kept && onKeptChange ? (
-              <Checkbox
-                checked={kept.has(skill)}
-                onCheckedChange={(on) => onKeptChange(skill, on === true)}
-                aria-label={t('bots.templates.keepSkill', 'Add the {{skill}} skill', { skill })}
-              />
-            ) : null
-          }
-        />
-      ))}
+      {template.skills.map((skill) => {
+        const name = botTemplateSkillName(skill, t)
+        return (
+          <Row
+            key={skill}
+            // The folder name reads as code; a translated name reads as words.
+            mono={name === skill}
+            icon={<BookOpen className="size-4" />}
+            title={name}
+            line={botTemplateText(BOT_TEMPLATE_SKILL_LINES[skill], t)}
+            state={
+              kept && onKeptChange ? (
+                <Checkbox
+                  checked={kept.has(skill)}
+                  onCheckedChange={(on) => onKeptChange(skill, on === true)}
+                  aria-label={t('bots.templates.keepSkill', 'Add the {{skill}} skill', {
+                    skill: name
+                  })}
+                />
+              ) : null
+            }
+          />
+        )
+      })}
       {template.schedules.map((schedule) => (
         <Row
           key={schedule.id}
           icon={<Clock className="size-4" />}
-          title={schedule.when}
-          line={schedule.what}
+          title={botTemplateText(schedule.when, t)}
+          line={botTemplateText(schedule.what, t)}
           state={muted(t('bots.templates.stateOff', 'Off'))}
         />
       ))}
       {template.events.map((event) => {
-        const parts = botTemplateEventParts(event.name)
+        const parts = botTemplateEventWords(event.name, t)
         return (
           <Row
             key={event.id}

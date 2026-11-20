@@ -2,11 +2,8 @@
 import { translate } from '@/i18n/i18n'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { BotTools } from '../../../../shared/bot-tools'
-import {
-  LOOK_AROUND_EVERY_LABELS,
-  lookedDay,
-  type BotLookAround
-} from '../../../../shared/bots/bot-look-around'
+import { lookedDay, type BotLookAround } from '../../../../shared/bots/bot-look-around'
+import { lookAroundEveryLabel } from '../../../../shared/bots/bot-look-around-every-label'
 import type { BotTidyUp } from '../../../../shared/bots/bot-tidy-up'
 import { botToolTitle } from '../../../../shared/bots/bot-tool-labels'
 
@@ -18,7 +15,8 @@ const none = (): string => translate('bots.settingsPage.none', 'None')
 
 /** Names as a short list: "Slack, GitHub". */
 export function nameList(names: readonly string[], intlLocale?: string): string {
-  return new Intl.ListFormat(intlLocale, { type: 'unit', style: 'short' }).format(names)
+  // Why: CJK unit lists have no separator ("SlackGitHub"); narrow conjunctions read "Slack、GitHub".
+  return new Intl.ListFormat(intlLocale, { type: 'conjunction', style: 'narrow' }).format(names)
 }
 
 /** "12:04 PM" today, "yesterday 4:12 PM", then "Oct 29". */
@@ -52,7 +50,7 @@ export function lookAroundLine(
   if (!setting.on) {
     return off()
   }
-  const every = LOOK_AROUND_EVERY_LABELS[setting.every]
+  const every = lookAroundEveryLabel(setting.every, translate)
   return lastLookedAt
     ? `${every} · ${translate('bots.settingsPage.lastLooked', 'last looked {{when}}', {
         when: lookedWhen(lastLookedAt, now)

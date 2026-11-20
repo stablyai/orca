@@ -8,10 +8,9 @@ import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-a
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import type { BotLookAround } from '../../../src/shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
-import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import {
   ChoiceRows,
   DrillRow,
@@ -29,7 +28,8 @@ import {
 } from './MobileBotLookAround'
 import { MobileTidyUpPage, MobileTidyUpSection, type TidyUpPage } from './MobileBotTidyUp'
 import { useMobileBotTidyUp } from './use-mobile-bot-tidy-up'
-import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
+import { mobileBotAccessCopy } from './mobile-bot-access-copy'
+import { mobilePermissionModeCopy, mobilePermissionModeLabel } from './mobile-permission-mode-copy'
 import {
   accessGrantConfirmCopy,
   accessRequestLine,
@@ -65,11 +65,11 @@ function AccessRequestRow(props: {
   return (
     <ListRow
       title={person}
-      subtitle={accessRequestLine(props.request)}
+      subtitle={accessRequestLine(props.request, t)}
       accessory={
         <View style={optionStyles.rowActions}>
           <MobileBotTextButton
-            label={BOT_ACCESS_COPY.decline}
+            label={mobileBotAccessCopy(t, 'decline')}
             accessibilityLabel={t('bots.settings.declineName', 'Decline {{name}}', {
               name: person
             })}
@@ -77,7 +77,7 @@ function AccessRequestRow(props: {
             onPress={props.onDecline}
           />
           <MobileBotTextButton
-            label={BOT_ACCESS_COPY.review}
+            label={mobileBotAccessCopy(t, 'review')}
             accessibilityLabel={t('bots.settings.reviewName', 'Review {{name}}', { name: person })}
             disabled={props.disabled}
             onPress={props.onReview}
@@ -104,6 +104,7 @@ export function MobileBotSettingsTab(props: {
   hostName: string
 }) {
   const t = useMobileTranslation()
+  const locale = useMobileUiLocale()
   const { bot, applyBot } = props.routeBot
   const status = props.client ? readConnectionStatusProbe(props.client) : undefined
   const accessBot = { ...bot, accessHost: phoneAccessHost(status) }
@@ -189,7 +190,14 @@ export function MobileBotSettingsTab(props: {
     const failed = await removeEveryoneWhoCanAsk(client, bot, applyBot)
     setSaving(false)
     if (failed.length > 0) {
-      props.showToast(botAccessCopy('fixOnlyMeFailed', { names: failed.join(', ') }), 2400)
+      props.showToast(
+        mobileBotAccessCopy(t, 'fixOnlyMeFailed', {
+          names: new Intl.ListFormat(locale, { type: 'conjunction', style: 'narrow' }).format(
+            failed
+          )
+        }),
+        2400
+      )
     }
   }
   if (fixing) {
@@ -241,12 +249,12 @@ export function MobileBotSettingsTab(props: {
 
   // Any paired phone may grant (D3), so it always asks first, as the desktop does.
   if (granting && access) {
-    const copy = accessGrantConfirmCopy(granting, accessBot)
+    const copy = accessGrantConfirmCopy(granting, accessBot, t)
     return (
       <ConfirmContent
         title={copy.title}
         message={copy.message}
-        confirmLabel={BOT_ACCESS_COPY.confirm}
+        confirmLabel={mobileBotAccessCopy(t, 'confirm')}
         destructive
         onCancel={() => setGranting(null)}
         onConfirm={() => void access.decide(granting, 'granted')}
@@ -262,7 +270,7 @@ export function MobileBotSettingsTab(props: {
       label: inherit,
       description: t('bots.settings.sameAsChatsDetail', 'Uses your chat permission setting.')
     },
-    ...modes.map((mode) => ({ id: mode, ...agentChatPermissionModeCopy(bot.agent, mode) }))
+    ...modes.map((mode) => ({ id: mode, ...mobilePermissionModeCopy(bot.agent, mode, t) }))
   ]
   if (permissionsOpen) {
     return (
@@ -315,11 +323,7 @@ export function MobileBotSettingsTab(props: {
         />
         <DrillRow
           label={t('bots.settings.permissions', 'Permissions')}
-          value={
-            bot.permissionMode
-              ? agentChatPermissionModeCopy(bot.agent, bot.permissionMode).label
-              : inherit
-          }
+          value={bot.permissionMode ? mobilePermissionModeLabel(bot.permissionMode, t) : inherit}
           disabled={locked}
           onPress={() => setPermissionsOpen(true)}
         />
@@ -345,7 +349,7 @@ export function MobileBotSettingsTab(props: {
         />
       ) : null}
       {access && access.requests.length > 0 ? (
-        <Section title={BOT_ACCESS_COPY.heading}>
+        <Section title={mobileBotAccessCopy(t, 'heading')}>
           {access.requests.map((request) => (
             <AccessRequestRow
               key={request.requestId}

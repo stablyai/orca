@@ -17,7 +17,7 @@ import {
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { createBot } from '@/lib/bot-catalog'
+import { createBot, updateBot, useHostBots } from '@/lib/bot-catalog'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { BOT_NAME_MAX_LENGTH, type Bot, type BotAgent } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
@@ -45,46 +45,13 @@ import { DEFAULT_BOT_AVATAR_COLOR } from '../../../../shared/bots/bot-avatar-col
 import { botTemplate, type BotTemplateSkill } from '../../../../shared/bots/bot-templates'
 import { NewBotTemplateParts } from './NewBotTemplateParts'
 import type { BotCreateParams } from '../../../../shared/rpc-contract/bots-params'
-import { NewBotProposalFields, type NewBotProposalDraft } from './NewBotProposalFields'
+import { NewBotProposalFields } from './NewBotProposalFields'
+import { draftOf, editedProposal, shownDraft } from './new-bot-draft'
+import { botTemplateShownName } from '../../../../shared/bots/bot-template-text'
 import { NewBotPurposeField } from './NewBotPurposeField'
 import { BotCreateButton } from './BotCreateButton'
 import { BARE_HEADING_CLASS, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
 import { openBotTemplates } from './templates/bot-templates-open'
-
-type NewBotDraft = NewBotProposalDraft & { purpose: string }
-
-const draftOf = (proposal: BotProposal | undefined, purpose?: string): NewBotDraft => ({
-  purpose: proposal?.purpose ?? purpose ?? '',
-  watches: proposal?.watches,
-  does: proposal?.does,
-  reports: proposal?.reports
-})
-
-// An emptied field drops out of the new bot's SOUL.md.
-const trimmedDraft = (draft: NewBotProposalDraft): NewBotProposalDraft => ({
-  watches: draft.watches?.trim() || undefined,
-  does: draft.does?.trim() || undefined,
-  reports: draft.reports?.trim() || undefined
-})
-
-/** What the new bot is made from: the proposal as edited, or a typed purpose on its own. Either seeds
- *  SOUL.md; a cleared purpose keeps the proposal's, which its other lines need. */
-function editedProposal(
-  proposal: BotProposal | undefined,
-  draft: NewBotDraft,
-  name: string
-): BotProposal | null {
-  const purpose = draft.purpose.trim()
-  if (proposal) {
-    return {
-      ...proposal,
-      ...trimmedDraft(draft),
-      name,
-      purpose: purpose || proposal.purpose
-    }
-  }
-  return purpose ? { name, purpose } : null
-}
 
 export function NewBotDialog({
   open,
@@ -138,6 +105,7 @@ export function NewBotDialog({
   const [name, setName] = useState(proposal?.name ?? initialName ?? '')
   const [addHostMode, setAddHostMode] = useState<AddRemoteHostMode | null>(null)
   const [draft, setDraft] = useState(() => draftOf(proposal, initialPurpose))
+  const shown = shownDraft(proposal, draft, t)
   const hostChoice = useBotCreateHost(open, hosts, offerHostId)
   const { hostId, blocked } = hostChoice.host
   const menu = useBotAgentMenu(hostId, open)
@@ -145,6 +113,13 @@ export function NewBotDialog({
   const agentSetup = useBotAgentSetup(choices, hostId, initialAgent)
   const [creating, setCreating] = useState(false)
   const trimmedName = name.trim()
+  const hostBots = useHostBots(hostId)
+  const shownName = botTemplateShownName(
+    proposal,
+    name,
+    hostBots.map((bot) => bot.name),
+    t
+  )
   const createdBot = useRef(false)
   const picture = useNewBotPicture(
     useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
@@ -193,7 +168,7 @@ export function NewBotDialog({
     setCreating(true)
     let bot: Bot
     try {
-      const made = editedProposal(proposal, draft, trimmedName)
+      const made = editedProposal(proposal, draft, trimmedName, t)
       const offerHere = hostId === (offerHostId ?? LOCAL_EXECUTION_HOST_ID)
       bot = await createBot(hostId, {
         ...(made
@@ -212,6 +187,11 @@ export function NewBotDialog({
         avatarColor: picture.avatarColor,
         ...(takingOver ? { takingOver } : {})
       })
+      const goesBy = shownName.trim()
+      if (goesBy !== trimmedName) {
+        // A rename that fails leaves the English name, which still names the bot correctly.
+        bot = await updateBot(bot, { name: goesBy }).catch(() => bot)
+      }
       bot = await picture.saveUpload(bot)
     } catch (error) {
       setCreating(false)
@@ -309,14 +289,14 @@ export function NewBotDialog({
                   aria-label={t('bots.new.name', 'Name')}
                   autoComplete="off"
                   spellCheck={false}
-                  value={name}
+                  value={shownName}
                   maxLength={BOT_NAME_MAX_LENGTH}
                   placeholder={t('bots.new.name', 'Name')}
                   onChange={(event) => setName(event.target.value)}
                 />
               </NewBotPictureButton>
               <NewBotPurposeField
-                value={draft.purpose}
+                value={shown.purpose}
                 onChange={(purpose) => setDraft({ ...draft, purpose })}
               />
             </div>
@@ -332,7 +312,7 @@ export function NewBotDialog({
             {proposal ? (
               <div className="border-t border-border pt-4">
                 <NewBotProposalFields
-                  draft={draft}
+                  draft={shown}
                   worktrees={proposal.worktrees}
                   onChange={(fields) => setDraft({ ...draft, ...fields })}
                 />

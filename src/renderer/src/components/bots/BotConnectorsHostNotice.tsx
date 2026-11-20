@@ -21,6 +21,7 @@ import { botHasConnector, type Bot } from '../../../../shared/bot-types'
 import { botLinkOwners } from '../../../../shared/bot-link-owners'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { OrcaAccountServerStatus } from '../../../../shared/orca-account-server-sign-in'
+import { joinSentences } from '../../../../shared/text/sentence-joining'
 import { useBotHostLabel } from './use-bot-host-label'
 import { openBotConnectorsTab } from './bot-settings-open'
 
@@ -200,10 +201,7 @@ function ServerNotice({
         })
       : null
   const line = (text: string): React.JSX.Element => (
-    <p>
-      {lead ? `${lead} ` : ''}
-      {text}
-    </p>
+    <p>{lead ? joinSentences([lead, text]) : text}</p>
   )
   const signInButton = (label: string): React.JSX.Element =>
     signIn.phase === 'waiting' ? (
@@ -283,24 +281,24 @@ function ServerNotice({
           <>
             {lead
               ? line(
-                  [
-                    t('bots.host.notice.signedOut', '{{host}} is signed out of Orca.', { host }),
-                    state.linkedTo?.email === null
-                      ? t(
-                          'bots.host.notice.linksBelongElsewhere',
-                          '{{name}}’s connectors belong to another Orca account.',
-                          { name }
-                        )
-                      : state.linkedTo?.email
+                  joinSentences(
+                    [
+                      t('bots.host.notice.signedOut', '{{host}} is signed out of Orca.', { host }),
+                      state.linkedTo?.email === null
                         ? t(
-                            'bots.host.notice.linksBelong',
-                            '{{name}}’s connectors belong to {{email}}.',
-                            { name, email: state.linkedTo.email }
+                            'bots.host.notice.linksBelongElsewhere',
+                            '{{name}}’s connectors belong to another Orca account.',
+                            { name }
                           )
-                        : ''
-                  ]
-                    .filter(Boolean)
-                    .join(' ')
+                        : state.linkedTo?.email
+                          ? t(
+                              'bots.host.notice.linksBelong',
+                              '{{name}}’s connectors belong to {{email}}.',
+                              { name, email: state.linkedTo.email }
+                            )
+                          : ''
+                    ].filter(Boolean)
+                  )
                 )
               : line(
                   t(

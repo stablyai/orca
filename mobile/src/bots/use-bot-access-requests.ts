@@ -4,6 +4,7 @@ import type {
   ConnectorAccessRequest
 } from '../../../src/shared/connector-bot-access-contract'
 import { readHostMethodReply } from '../host-screen/sidebar-feed/host-sidebar-feed-operations'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { accessDecideFailureLine } from './bot-access-request-copy'
 import { botAccessRequestsRead, decideBotAccessRequest } from './bot-access-request-operations'
@@ -29,6 +30,7 @@ export function useBotAccessRequests({
   visible: boolean
   showToast: (message: string, durationMs?: number) => void
 }): BotAccessRequests | null {
+  const t = useMobileTranslation()
   const [requests, setRequests] = useState<readonly ConnectorAccessRequest[]>(NONE)
   const [deciding, setDeciding] = useState(false)
   // Answered here: a read that started before the host saved it must not bring it back, as on the desktop.
@@ -73,7 +75,7 @@ export function useBotAccessRequests({
           setRequests((rows) => rows.filter((row) => row.requestId !== request.requestId))
         }
         if (!answer.ok) {
-          showToast(accessDecideFailureLine(request, answer.error), 2400)
+          showToast(accessDecideFailureLine(request, answer.error, t), 2400)
         }
         // The host added the person; show them under People with access.
         if (answer.ok && decision === 'granted') {
@@ -83,7 +85,7 @@ export function useBotAccessRequests({
         setDeciding(false)
       }
     },
-    [client, showToast, refreshRoute]
+    [client, showToast, refreshRoute, t]
   )
 
   return botId ? { requests, deciding, decide } : null

@@ -19,6 +19,7 @@ import { BotHoverNeedsYou } from './BotHoverNeedsYou'
 import { BotHoverLatestLine, useBotRowLine } from './BotRowActivityLine'
 import { useBotSoulDescription } from './bot-soul-description'
 import { useBotHostLabel } from './use-bot-host-label'
+import { translateLocalExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
 
 /** Shared row facts. The collapsed preview reads them only while the card is open. */
 export function useBotRowDetails(bot: Bot, home: FolderWorkspace) {
@@ -50,7 +51,7 @@ export function BotHoverDetails({
   const homeLabel = t('bots.hover.openHome', 'Open {{name}}’s Home', { name: bot.name })
   const state = offline
     ? t('bots.row.hostDisconnected', '{{host}} disconnected', {
-        host: hostLabel ?? getLocalExecutionHostLabel()
+        host: hostLabel ?? translateLocalExecutionHostLabel(getLocalExecutionHostLabel(), t)
       })
     : bot.paused
       ? t('bots.row.paused', 'Paused')

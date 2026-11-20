@@ -1,9 +1,5 @@
 // The desktop's Request access wording, from the shared table, for the phone's bot sheet.
-import {
-  botAccessPlace,
-  botAccessCopy,
-  type BotAccessHost
-} from '../../../src/shared/bots/bot-access-copy'
+import type { BotAccessHost } from '../../../src/shared/bots/bot-access-copy'
 import {
   accessRequestIdentity,
   accessRequestPerson
@@ -15,12 +11,19 @@ import { normalizeMachineName } from '../../../src/shared/remote-runtime/host-me
 import type { AgentChatPermissionMode } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
-import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import {
   botAccessReach,
   botReachLineText,
   botStartingPermission
 } from '../../../src/shared/bots/bot-access-reach'
+import {
+  finalSentenceStop,
+  joinSentences,
+  sentenceStop
+} from '../../../src/shared/text/sentence-joining'
+import type { Translate } from '../i18n/mobile-i18n'
+import { mobileBotAccessCopy, mobileBotAccessPlace } from './mobile-bot-access-copy'
+import { mobilePermissionModeCopy } from './mobile-permission-mode-copy'
 
 /** What the phone knows of a bot's access. */
 export type PhoneAccessBot = {
@@ -38,7 +41,10 @@ export function phoneAccessHost(status: HostStatusReply | undefined): BotAccessH
   }
 }
 
-export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail?: string }[] {
+export function phoneBotReachLines(
+  bot: PhoneAccessBot,
+  t: Translate
+): { title: string; detail?: string }[] {
   const permission = botStartingPermission(bot, null)
   return botAccessReach({
     agent: bot.agent,
@@ -49,25 +55,26 @@ export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail
     botReachLineText(line, {
       name: bot.name,
       agentLabel: isTuiAgent(bot.agent) ? TUI_AGENT_DISPLAY_NAMES[bot.agent] : bot.agent,
-      place: botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null }),
-      mode: (mode) => agentChatPermissionModeCopy(bot.agent, mode)
+      place: mobileBotAccessPlace(t, bot.accessHost ?? { kind: 'unknown', name: null }),
+      mode: (mode) => mobilePermissionModeCopy(bot.agent, mode, t),
+      copy: (id, values) => mobileBotAccessCopy(t, id, values)
     })
   )
 }
 
-function accessRequestPlace(request: ConnectorAccessRequest): string {
+function accessRequestPlace(request: ConnectorAccessRequest, t: Translate): string {
   const connector = CONNECTOR_SOURCE_NAMES[request.source]
   return request.workspaceName
-    ? botAccessCopy('place', { connector, workspace: request.workspaceName })
+    ? mobileBotAccessCopy(t, 'place', { connector, workspace: request.workspaceName })
     : connector
 }
 
 /** Under the person's name: who the connector says they are, and where they asked. */
-export function accessRequestLine(request: ConnectorAccessRequest): string {
+export function accessRequestLine(request: ConnectorAccessRequest, t: Translate): string {
   const { requester } = request
   const unique =
     requester.detail === accessRequestPerson(request) ? { ...requester, detail: '' } : requester
-  return [accessRequestIdentity({ ...request, requester: unique }), accessRequestPlace(request)]
+  return [accessRequestIdentity({ ...request, requester: unique }), accessRequestPlace(request, t)]
     .filter(Boolean)
     .join(' · ')
 }
@@ -75,32 +82,36 @@ export function accessRequestLine(request: ConnectorAccessRequest): string {
 /** The desktop's "Give access" confirm; the bot runs on the computer, not this phone. */
 export function accessGrantConfirmCopy(
   request: ConnectorAccessRequest,
-  bot: PhoneAccessBot
+  bot: PhoneAccessBot,
+  t: Translate
 ): { title: string; message: string } {
   const person = accessRequestPerson(request)
   const identity = accessRequestIdentity(request)
   const name = bot.name
+  const place = mobileBotAccessPlace(t, bot.accessHost ?? { kind: 'unknown', name: null })
   return {
-    title: botAccessCopy('titleOne', { person, name }),
+    title: mobileBotAccessCopy(t, 'titleOne', { person, name }),
     message: [
-      botAccessCopy('descriptionOne', {
+      mobileBotAccessCopy(t, 'descriptionOne', {
         person,
         name,
-        place: accessRequestPlace(request),
-        ...botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
+        place: accessRequestPlace(request, t),
+        ...place
       }),
       identity
-        ? botAccessCopy('account', { connector: CONNECTOR_SOURCE_NAMES[request.source], identity })
+        ? mobileBotAccessCopy(t, 'account', {
+            connector: CONNECTOR_SOURCE_NAMES[request.source],
+            identity
+          })
         : null,
       // What the desktop's confirm lists: everything they reach through the bot.
-      ...phoneBotReachLines(bot).map((line) =>
-        line.detail ? `${line.title}. ${line.detail}` : `${line.title}.`
+      ...phoneBotReachLines(bot, t).map((line) =>
+        line.detail
+          ? joinSentences([`${line.title}${sentenceStop(line.title)}`, line.detail])
+          : `${line.title}${finalSentenceStop(line.title)}`
       ),
-      botAccessCopy('yourAccess', {
-        name,
-        ...botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
-      }),
-      botAccessCopy('removeAnyTime')
+      mobileBotAccessCopy(t, 'yourAccess', { name, ...place }),
+      mobileBotAccessCopy(t, 'removeAnyTime')
     ]
       .filter(Boolean)
       .join('\n\n')
@@ -108,17 +119,28 @@ export function accessGrantConfirmCopy(
 }
 
 /** Why the host didn't save an answer. */
-export function accessDecideFailureLine(request: ConnectorAccessRequest, error: string): string {
+export function accessDecideFailureLine(
+  request: ConnectorAccessRequest,
+  error: string,
+  t: Translate
+): string {
   switch (error) {
     case 'expired':
-      return 'This request was already answered or has expired.'
+      return t('bots.accessDecide.expired', 'This request was already answered or has expired.')
     case 'full':
-      return botAccessCopy('full', { person: accessRequestPerson(request) })
+      return mobileBotAccessCopy(t, 'full', { person: accessRequestPerson(request) })
     case 'granted_not_added':
-      return `Access was given, but ${accessRequestPerson(request)} isn’t listed yet. Orca will add them.`
+      return t(
+        'bots.accessDecide.grantedNotAdded',
+        'Access was given, but {{person}} isn’t listed yet. Orca will add them.',
+        { person: accessRequestPerson(request) }
+      )
     case 'signed_out':
-      return 'Sign in to Orca on your computer to answer requests.'
+      return t(
+        'bots.accessDecide.signedOut',
+        'Sign in to Orca on your computer to answer requests.'
+      )
     default:
-      return botAccessCopy('decideFailed')
+      return mobileBotAccessCopy(t, 'decideFailed')
   }
 }
