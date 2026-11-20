@@ -132,6 +132,9 @@ export class CodexAccountHistoryPasses {
           return
         }
         if (this.settledThisRun.get(key) === shared) {
+          if (shared) {
+            void this.moveReport.refresh()
+          }
           // Moves are done; only index work a stopped or failed heal left behind is retried.
           if (hasIncompleteHostCodexIndexHeal(INDEX_PENDING_DIR())) {
             requestHostCodexIndexHeal(
@@ -175,6 +178,8 @@ export class CodexAccountHistoryPasses {
     const moveOutcome = shared ? MOVE_OUTCOMES[outcome] : undefined
     if (moveOutcome) {
       void this.moveReport.record(key, moveOutcome)
+    } else {
+      this.moveReport.forget(key)
     }
   }
 

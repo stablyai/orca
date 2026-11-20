@@ -11,7 +11,7 @@ export const codexHistoryMoveStatusSchema = z
     moved: homeCount,
     // A running Codex holds a thread lock; retried every five minutes.
     stuck_busy: homeCount,
-    // The lock helper can't run, so a leftover lock file can't be cleared.
+    // No lock helper can run (no perl or flock, or no PowerShell), so the home never moves.
     stuck_no_lock_helper: homeCount,
     stuck_refused: homeCount,
     stuck_incomplete: homeCount,

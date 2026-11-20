@@ -1,5 +1,7 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { renameFileWithWindowsRetryAsync } from '../../shared/file-write/windows-retry-file-operations'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import type { EventProps } from '../../shared/telemetry/telemetry-event-classification'
 import { isTelemetryEnabled, track } from './client'
@@ -52,6 +54,9 @@ export class CodexHistoryMoveReport {
   private readonly outcomes = new Map<string, CodexHistoryMoveOutcome>()
   private marker: Promise<SentMarker> | null = null
   private queue: Promise<void> = Promise.resolve()
+  // How many homes the last listing found: fewer outcomes than that can't cover them, so the
+  // ownership reads behind a listing wait until enough passes have finished.
+  private listedHomes = 0
 
   constructor(
     private readonly deps: {
@@ -65,6 +70,16 @@ export class CodexHistoryMoveReport {
   /** Settles once any report this outcome completes has been sent; never rejects. */
   record(homeKey: string, outcome: CodexHistoryMoveOutcome): Promise<void> {
     this.outcomes.set(homeKey, outcome)
+    return this.refresh()
+  }
+
+  /** An unshared home's earlier outcome no longer says anything about its move. */
+  forget(homeKey: string): void {
+    this.outcomes.delete(homeKey)
+  }
+
+  /** Reports if every home has an outcome, for consent given after the passes settled. */
+  refresh(): Promise<void> {
     this.queue = this.queue.then(() => this.reportIfComplete()).catch(() => {})
     return this.queue
   }
@@ -82,10 +97,11 @@ export class CodexHistoryMoveReport {
       saved?.version === version ? saved : { version, sent: [] }
     )
     const marker = await this.marker
-    if (marker.sent.length >= MAX_SENDS_PER_VERSION) {
+    if (marker.sent.length >= MAX_SENDS_PER_VERSION || this.outcomes.size < this.listedHomes) {
       return
     }
     const homes = this.deps.sharedHomeKeys()
+    this.listedHomes = homes?.length ?? 0
     if (!homes || homes.length === 0 || homes.some((home) => !this.outcomes.has(home))) {
       return
     }
@@ -107,10 +123,15 @@ export class CodexHistoryMoveReport {
       return
     }
     marker.sent.push(key)
+    const target = this.deps.markerPath()
+    // Staged, so a failed write never empties a marker that already counts a report.
+    const staged = `${target}.${randomUUID()}.tmp`
     try {
-      await mkdir(dirname(this.deps.markerPath()), { recursive: true })
-      await writeFile(this.deps.markerPath(), `${JSON.stringify(marker)}\n`)
+      await mkdir(dirname(target), { recursive: true })
+      await writeFile(staged, `${JSON.stringify(marker)}\n`)
+      await renameFileWithWindowsRetryAsync(staged, target)
     } catch (error) {
+      await unlink(staged).catch(() => {})
       console.warn('[codex-account-history] Move telemetry marker not saved:', error)
     }
   }

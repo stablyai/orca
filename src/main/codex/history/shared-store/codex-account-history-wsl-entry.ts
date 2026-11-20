@@ -10,6 +10,10 @@ import {
 // Prints each rollout still owed an index row, then `{"result":…,"pendingDir":…}` last.
 async function main(): Promise<void> {
   const [mode, accountHome = '', storeHome = ''] = process.argv.slice(2)
+  // Anything else, such as an older host's `check`, must never share or unshare.
+  if (mode !== 'share' && mode !== 'unshare') {
+    throw new Error(`Unknown Codex account history mode: ${mode}`)
+  }
   if (!accountHome.startsWith('/') || !storeHome.startsWith('/')) {
     throw new Error('Codex account history needs absolute Linux homes')
   }
