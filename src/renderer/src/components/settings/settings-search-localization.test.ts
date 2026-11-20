@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { getKeybindingDefinition, type KeybindingDefinition } from '../../../../shared/keybindings'
+import { getKeybindingDefinition } from '../../../../shared/keybindings/definitions'
+import type { KeybindingDefinition } from '../../../../shared/keybindings/types'
 import { i18n } from '@/i18n/i18n'
-import { buildInterfaceSettingsSections } from '@/hooks/settings-navigation-interface-sections'
-import type { SettingsNavigationBuildOptions } from '@/hooks/settings-navigation-build-options'
+import { buildInterfaceSettingsSections } from '@/components/settings/navigation/settings-navigation-interface-sections'
+import type { SettingsNavigationBuildOptions } from '@/components/settings/navigation/settings-navigation-build-options'
 import { getShortcutsPaneTitleSearchEntry } from './shortcuts/shortcuts-search'
 import { groupDefinitions } from './shortcuts/shortcut-groups'
 import { buildShortcutRowVisibility } from './shortcuts/shortcut-row-visibility'
@@ -14,13 +15,15 @@ const navigationOptions: SettingsNavigationBuildOptions = {
   isLocalWindowsHost: false,
   isWindowsTerminalHost: false,
   isWebClient: false,
+  botsEnabled: false,
   hostQueuesMessages: false,
   typedChatPermissions: false,
   managedBrowserCreationEnabled: false,
   mobileEmulatorCreationEnabled: false,
   isDev: false,
   isLinearConnected: false,
-  repos: []
+  repos: [],
+  bots: []
 }
 
 afterEach(async () => {

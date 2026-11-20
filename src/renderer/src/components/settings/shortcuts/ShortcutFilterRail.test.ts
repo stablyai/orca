@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  getKeybindingDefinition,
-  type KeybindingActionId,
-  type KeybindingDefinition
-} from '../../../../../shared/keybindings'
-import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
+import { getKeybindingDefinition } from '../../../../../shared/keybindings/definitions'
+import type {
+  KeybindingActionId,
+  KeybindingDefinition,
+  KeybindingOverrides
+} from '../../../../../shared/keybindings/types'
 import { i18n } from '@/i18n/i18n'
 import type { ShortcutGroup } from './shortcut-groups'
 import { getShortcutsPaneTitleSearchEntry } from './shortcuts-search'
