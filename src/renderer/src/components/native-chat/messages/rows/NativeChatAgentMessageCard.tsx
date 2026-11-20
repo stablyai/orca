@@ -145,8 +145,10 @@ export function NativeChatAgentMessageCard({
         ) : null
       }
     >
-      {/* A sender's name cuts short in its chip before it wraps; only several senders take a second line. */}
-      <span className="flex min-w-0 flex-wrap items-center gap-x-1 whitespace-nowrap">
+      {/* One sender cuts short in its chip on one line; several may wrap to a second line. */}
+      <span
+        className={`flex min-w-0 items-center gap-x-1 whitespace-nowrap ${shown.length > 1 ? 'flex-wrap' : ''}`}
+      >
         <span className="shrink-0">{words}</span>
         {shown.length === 0 ? (
           <span className="min-w-0 truncate">{unnamedSenderLabel(t)}</span>
