@@ -1,4 +1,4 @@
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 
 /** True when the layout subtree holds at least one chat-panel group. */
 export function subtreeHasChatGroup(

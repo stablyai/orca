@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tool
 
 afterEach(cleanup)
 
-it.each([undefined, 'default', 'surface', 'tab-preview'] as const)(
+it.each([undefined, 'default', 'tab-preview'] as const)(
   'uses theme-matched surface and arrow tokens for the %s tooltip',
   (variant) => {
     render(

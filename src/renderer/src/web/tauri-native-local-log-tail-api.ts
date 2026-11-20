@@ -4,7 +4,7 @@ import type {
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
   LocalLogTailWatchArgs
-} from '../../../shared/local-log-tail-types'
+} from '../../../shared/file-content/local-log-tail-types'
 import { invokeNative, isTauriNativeHost, listenNative } from './tauri-native-host'
 
 /** Native local log snapshot tailing used by the editor's live log tabs. */

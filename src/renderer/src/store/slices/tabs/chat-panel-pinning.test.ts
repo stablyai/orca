@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../../../shared/tab-types'
-import { buildSplitNode } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
-import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
-import { createTestStore, makeTabGroup, makeUnifiedTab, seedStore } from '../store-test-helpers'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { buildSplitNode } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
+import { createGlobalSettingsFixture } from '../../../../../shared/settings/global-settings-test-fixture'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
+import { makeTabGroup, makeUnifiedTab } from './tab-group.test-fixture'
 import { shouldPinChatPanelColumn } from './chat-panel-layout'
 
 const mocks = vi.hoisted(() => ({ beginClose: vi.fn() }))

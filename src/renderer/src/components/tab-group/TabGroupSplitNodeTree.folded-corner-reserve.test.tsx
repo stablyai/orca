@@ -27,15 +27,15 @@ vi.mock('./TabGroupPanel', () => ({
 }))
 
 import { TabGroupSplitNodeTree } from './TabGroupSplitNodeTree'
-import { buildSplitNode } from '../../../../shared/workspace-layout/tab-group-layout-tree'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import { buildSplitNode } from '../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 
 afterEach(cleanup)
 
 function tree(
   layout: TabGroupLayoutNode,
-  chatGroupIds: ReadonlySet<string>,
-  collapse = true
+  _chatGroupIds: ReadonlySet<string>,
+  _collapse = true
 ): React.JSX.Element {
   return (
     <TabGroupSplitNodeTree
@@ -44,8 +44,6 @@ function tree(
       isWorktreeActive
       isTabDragActive={false}
       hoveredTabInsertion={null}
-      collapseNonChatGroups={collapse}
-      chatGroupIds={chatGroupIds}
     />
   )
 }

@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { TooltipProvider } from '../ui/tooltip'
-import { requestTerminalTabRenameWhenMounted } from '../tab-bar/terminal-tab-rename-request'
+import { requestTerminalTabRenameWhenMounted } from '../tab-bar/terminal-tabs/terminal-tab-rename-request'
 import { ChatPanelHeader } from './ChatPanelHeader'
 
 const state = vi.hoisted(() => ({
@@ -57,8 +57,8 @@ describe('fixed chat panel header', () => {
       const { container } = render(
         <TooltipProvider>
           <ChatPanelHeader
-          worktreeId="workspace"
-          groupId="chat-group"
+            worktreeId="workspace"
+            groupId="chat-group"
             chats={[{ ...chat, agentSessionAgent: agent }]}
             activeTabId={chat.id}
             onActivate={vi.fn()}
@@ -85,7 +85,12 @@ describe('fixed chat panel header', () => {
     }
     const view = render(
       <TooltipProvider>
-        <ChatPanelHeader {...props} worktreeId="workspace" groupId="chat-group" activeTabId={chat.id} />
+        <ChatPanelHeader
+          {...props}
+          worktreeId="workspace"
+          groupId="chat-group"
+          activeTabId={chat.id}
+        />
       </TooltipProvider>
     )
     expect(
@@ -98,15 +103,20 @@ describe('fixed chat panel header', () => {
     expect(props.onActivate).toHaveBeenCalledWith('chat-2')
     view.rerender(
       <TooltipProvider>
-        <ChatPanelHeader {...props} worktreeId="workspace" groupId="chat-group" activeTabId="chat-2" />
+        <ChatPanelHeader
+          {...props}
+          worktreeId="workspace"
+          groupId="chat-group"
+          activeTabId="chat-2"
+        />
       </TooltipProvider>
     )
     expect(
       view.container.querySelector('[data-chat-panel-header] > [data-agent-icon="codex"] svg')
     ).toBeTruthy()
-    expect(
-      screen.getByRole('tab', { name: 'Review changes' }).getAttribute('aria-selected')
-    ).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Review changes' }).getAttribute('aria-selected')).toBe(
+      'true'
+    )
   })
 
   it('shows the conversation title instead of a tab, with only a close action', () => {

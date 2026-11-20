@@ -1,6 +1,9 @@
-import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
-import type { FsChangeEvent, FsChangedPayload } from '../../../../shared/filesystem-entry-types'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import { relativePathInsideRoot } from '../../../../shared/file-access/cross-platform-path'
+import type {
+  FsChangeEvent,
+  FsChangedPayload
+} from '../../../../shared/file-watch/filesystem-change-event'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import { editLinesFromContents } from '../../../../shared/native-chat/tools/native-chat-edit-lcs'
 import {
   finalizeEditFile,
@@ -9,7 +12,7 @@ import {
   type NativeChatEditFile,
   type NativeChatEditLine
 } from '../../../../shared/native-chat/tools/native-chat-edit-model'
-import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
+import type { NativeChatTurnDiff } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
 /** Files a turn's watcher diff never attributes to the agent. */
 const WATCHED_DIFF_EXCLUDED_SEGMENTS = new Set(['.git', 'node_modules'])

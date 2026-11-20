@@ -6,7 +6,7 @@ import {
   RENAME_TERMINAL_TAB_EVENT,
   requestTerminalTabRenameWhenMounted,
   type RenameTerminalTabDetail
-} from './terminal-tab-rename-request'
+} from './terminal-tabs/terminal-tab-rename-request'
 
 const listeners: [string, EventListener][] = []
 

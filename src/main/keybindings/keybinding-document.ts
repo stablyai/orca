@@ -1,14 +1,15 @@
+import { getKeybindingDefinition, isKeybindingActionId } from '../../shared/keybindings/definitions'
+import { findKeybindingConflicts } from '../../shared/keybindings/formatting'
 import {
-  findKeybindingConflicts,
-  getKeybindingDefinition,
-  isKeybindingActionId,
   normalizeKeybindingArrayForAction,
-  normalizeKeybindingListForAction,
-  type KeybindingActionId,
-  type KeybindingFileDiagnostic,
-  type KeybindingOverrides,
-  type KeybindingPlatform
-} from '../../shared/keybindings'
+  normalizeKeybindingListForAction
+} from '../../shared/keybindings/normalization'
+import type {
+  KeybindingActionId,
+  KeybindingFileDiagnostic,
+  KeybindingOverrides,
+  KeybindingPlatform
+} from '../../shared/keybindings/types'
 
 export type JsonObject = Record<string, unknown>
 

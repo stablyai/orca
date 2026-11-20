@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MemoryStorage } from './web-preload-api-test-harness'
+import { MemoryStorage } from './testing/web-preload-api-test-harness'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_APP_RESTART_STARTED_EVENT
-} from '../../../shared/updater-renderer-events'
+} from '../../../shared/updater/updater-renderer-events'
 
 const native = vi.hoisted(() => ({ invoke: vi.fn() }))
 vi.mock('./tauri-native-host', () => ({

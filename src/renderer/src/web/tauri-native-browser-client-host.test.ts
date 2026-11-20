@@ -5,7 +5,7 @@ import {
   BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY,
   BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION
 } from '../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { tauriBrowserClientPageRendererBus } from './tauri-native-browser-client-page-renderer-bus'
 import {
   closeTauriBrowserClientHost,

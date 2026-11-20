@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installBrowserGlobals } from './web-preload-api-test-harness'
+import { installBrowserGlobals } from './testing/web-preload-api-test-harness'
 
 const callRuntimeResult = vi.hoisted(() => vi.fn())
 vi.mock('./runtime/client/web-runtime-calls', () => ({ callRuntimeResult }))

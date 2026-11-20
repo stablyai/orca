@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import SidebarCollapseRail from './SidebarCollapseRail'
 
 const mocks = vi.hoisted(

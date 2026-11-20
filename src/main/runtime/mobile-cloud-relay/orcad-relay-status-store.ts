@@ -1,4 +1,7 @@
-import type { MobileRelayStatus, MobileRelayStatusDetail } from '../../../shared/mobile-relay-status'
+import type {
+  MobileRelayStatus,
+  MobileRelayStatusDetail
+} from '../../../shared/remote-runtime/relay/mobile-relay-status'
 
 let lastRelayStatus: MobileRelayStatusDetail = { status: 'offline' }
 

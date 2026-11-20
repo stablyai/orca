@@ -7,17 +7,17 @@ import type {
   ReactErrorBoundaryReportArgs,
   ReactErrorBoundaryReportResult,
   UncapturedCrashReportContext
-} from '../../../shared/crash-reporting'
-import type { CrashReportsApi } from '../../../preload/api/crash-report-api'
+} from '../../../shared/crash-reporting/crash-reporting'
+import type { CrashReportsApi } from '../../../preload/api/diagnostics/crash-report-api'
 import {
   formatCrashReportText,
   formatUncapturedCrashReportText
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 import {
   assertClipboardTextWriteWithinLimit,
   isClipboardTextWriteTooLargeError
-} from '../../../shared/clipboard-text'
-import { formatCrashReportCopyText } from '../../../main/crash-reporting/crash-report-copy-text'
+} from '../../../shared/clipboard/clipboard-text'
+import { formatCrashReportCopyText } from '../../../main/crash-reporting/reports/crash-report-copy-text'
 import { invokeNative, invokePlugin, isTauriNativeHost } from './tauri-native-host'
 import { getBrowserPlatform } from './preload-api/web-storage'
 

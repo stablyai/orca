@@ -20,7 +20,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { Room, RoomMember } from './room-types'
 import { CreateRoomDialog } from './CreateRoomDialog'
 import { RoomMemberAvatar } from './RoomMemberAvatar'

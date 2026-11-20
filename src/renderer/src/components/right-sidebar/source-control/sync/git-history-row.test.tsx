@@ -2,8 +2,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { GitHistoryItemRef } from '../../../../../../shared/git-history'
-import type { GitHistoryItemViewModel } from '../../../../../../shared/git-history-graph'
+import type { GitHistoryItemRef } from '../../../../../../shared/git/history/git-history-types'
+import type { GitHistoryItemViewModel } from '../../../../../../shared/git/history/git-history-graph'
 import { GitHistoryRow } from './git-history-row'
 
 const subject = 'Fix retained agent exits'

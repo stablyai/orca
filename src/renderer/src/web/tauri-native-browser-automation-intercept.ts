@@ -2,7 +2,7 @@ import type {
   BrowserInterceptDisableResult,
   BrowserInterceptedRequest,
   BrowserInterceptEnableResult
-} from '../../../shared/runtime-browser-contracts'
+} from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type { AutomationCommandContext } from './tauri-native-browser-automation'
 import { isRecord } from './tauri-native-browser-automation'
 import {

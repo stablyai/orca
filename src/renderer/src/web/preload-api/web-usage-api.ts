@@ -2,21 +2,24 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   UsageProviderApi,
   UsageProviderSnapshot
-} from '../../../../preload/api/agent-usage-api'
+} from '../../../../preload/api/agent-usage/agent-usage-api'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageSnapshot
-} from '../../../../shared/claude-usage-types'
+} from '../../../../shared/agent-usage/analytics/claude-usage-types'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageSnapshot
-} from '../../../../shared/codex-usage-types'
-import type { MuseUsageBreakdownKind, MuseUsageSnapshot } from '../../../../shared/muse-usage-types'
+} from '../../../../shared/agent-usage/analytics/codex-usage-types'
+import type {
+  MuseUsageBreakdownKind,
+  MuseUsageSnapshot
+} from '../../../../shared/agent-usage/analytics/muse-usage-types'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageSnapshot
-} from '../../../../shared/opencode-usage-types'
-import { callRuntimeResult } from './web-runtime-calls'
+} from '../../../../shared/agent-usage/analytics/opencode-usage-types'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
 
 type RuntimeUsageProvider = 'claude' | 'codex' | 'opencode' | 'muse'
 

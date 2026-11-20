@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { installBrowserGlobals } from './web-preload-api-test-harness'
+import { installBrowserGlobals } from './testing/web-preload-api-test-harness'
 
 function installTauriHost(invokeImpl: (command: string) => unknown) {
   const globals = installBrowserGlobals('Windows')
@@ -22,7 +22,7 @@ describe('tauri settings fonts', () => {
     installBrowserGlobals('Windows')
     const { createTauriNativeSettingsApi } = await import('./tauri-native-settings-api')
     expect(createTauriNativeSettingsApi()).toBeUndefined()
-    const { createWebSettingsApi } = await import('./preload-api/web-settings-api')
+    const { createWebSettingsApi } = await import('./preload-api/preferences/web-settings-api')
     await expect(createWebSettingsApi().settings?.listFonts?.()).resolves.toEqual([])
   })
 })

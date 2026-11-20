@@ -40,6 +40,7 @@ export type PtyInventoryRefreshOptions = {
 }
 
 export type RuntimePtyController = {
+  signal?(ptyId: string, signal: string): Promise<void> | void
   claimStablePaneCreate?(args: {
     worktreeId: string
     connectionId: string | null

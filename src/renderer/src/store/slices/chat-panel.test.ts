@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore, seedStore } from './store-test-helpers'
-import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace-session-unified-tabs'
-import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
-import { buildHydratedTabState } from './tabs-hydration'
+import { createTabsSliceMockApi } from './tabs/tabs-slice-test-harness'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
+import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
+import { parseWorkspaceSession } from '../../../../shared/workspace-session/workspace-session-schema'
+import { buildHydratedTabState } from './tabs/tabs-hydration'
 import { applyDefaultChatPanelLayout } from './tabs/chat-panel-layout'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

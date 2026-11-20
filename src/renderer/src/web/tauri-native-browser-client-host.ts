@@ -4,7 +4,7 @@ import {
   type BrowserClientPageMetadataParams,
   type BrowserClientPageMetadataPublishOutcome
 } from '../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 import { attachTauriBrowserClientHost } from './tauri-native-browser-client-host-attach'
 import type { HostedPage, HostRecord } from './tauri-native-browser-client-host-page-commands'

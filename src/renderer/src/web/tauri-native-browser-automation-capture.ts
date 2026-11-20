@@ -1,7 +1,7 @@
 import type {
   BrowserCaptureStartResult,
   BrowserCaptureStopResult
-} from '../../../shared/runtime-browser-contracts'
+} from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type { AutomationCommandContext } from './tauri-native-browser-automation'
 import {
   clearTauriBrowserNetworkPending,

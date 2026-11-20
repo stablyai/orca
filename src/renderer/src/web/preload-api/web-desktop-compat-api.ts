@@ -1,32 +1,27 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { WslHostsPreloadApi } from '../../../../preload/api/wsl-hosts-api'
+import type { WslHostsPreloadApi } from '../../../../preload/api/wsl/wsl-hosts-api'
 import type {
   DocPreviewCacheFileRequest,
   DocPreviewGrantRequest,
   DocPreviewResourceRequest
-} from '../../../../preload/api/doc-preview-api'
-import type {
-  AutomationDispatchResult,
-  AutomationPrecheckResult,
-  AutomationRun
-} from '../../../../shared/automations-types'
-import type { DocPreviewFailure } from '../../../../shared/doc-preview-scheme'
+} from '../../../../preload/api/document-preview/doc-preview-api'
+import type { DocPreviewFailure } from '../../../../shared/document-preview/doc-preview-scheme'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceAnalyzeInput,
   WorkspaceSpaceScanProgress
-} from '../../../../shared/workspace-space-types'
-import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+} from '../../../../shared/workspace-disk-space/workspace-space-types'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type {
   WslHostAddResult,
   WslHostCapability,
   WslHostDistro,
   WslHostServerStop,
   WslHostStatus
-} from '../../../../shared/wsl-host-types'
+} from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { noopUnsubscribe } from './web-storage'
 import { invokeNative, isTauriNativeHost, listenNative } from '../tauri-native-host'
-import { callRuntimeResult } from './web-runtime-calls'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
 import { onWslHostStatusChanged } from './web-wsl-runtime-events'
 
 /** Desktop compatibility APIs, with Tauri-native implementations where available. */
@@ -148,15 +143,7 @@ export function createWebAutomationsApi(): NonNullable<PreloadApi['automations']
       Promise.resolve({ manager: null, error: null, updatedAt: Date.now() }),
     runExternalActionForOwner: () => Promise.resolve(),
     retainExternalScopes: () => Promise.resolve(),
-    runPrecheck: (args) =>
-      callRuntimeResult<AutomationPrecheckResult | null>('automation.runPrecheck', args),
-    markDispatchResult: (result: AutomationDispatchResult) =>
-      callRuntimeResult<{ run: AutomationRun }>('automation.markDispatchResult', result).then(
-        ({ run }) => run
-      ),
     snapshotWorkspaceName: () => Promise.resolve(0),
-    rendererReady: () => Promise.resolve(),
-    onDispatchRequested: () => noopUnsubscribe,
     onChanged: () => noopUnsubscribe
   }
 }
@@ -174,6 +161,7 @@ export function createWebWslHostsApi(): WslHostsPreloadApi {
     connect: (args) => callRuntimeResult<void>('wslHosts.connect', args),
     getStatuses: () => callRuntimeResult<WslHostStatus[]>('wslHosts.getStatuses').catch(() => []),
     onStatusChanged: onWslHostStatusChanged,
+    onCapabilityChanged: () => noopUnsubscribe,
     setVisibleWork: (args) =>
       callRuntimeResult<void>('wslHosts.setVisibleWork', args).catch(() => {}),
     // The paired host owns its own window focus; a browser client cannot raise it.

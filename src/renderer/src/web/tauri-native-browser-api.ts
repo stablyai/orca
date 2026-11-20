@@ -3,7 +3,7 @@ import { buildBrowserAnnotationViewportBridgeScript } from '../../../shared/brow
 import type {
   BrowserCertificateProceedResult,
   BrowserViewportOverride
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserCaptureSelectionScreenshotResult,
   BrowserGrabCancelReason,
@@ -11,7 +11,7 @@ import type {
   BrowserGrabResult,
   BrowserExtractHoverResult,
   BrowserSetGrabModeResult
-} from '../../../shared/browser-grab-types'
+} from '../../../shared/browser/element-grab/browser-grab-types'
 import { clampGrabPayload } from '../../../main/browser/element-grab/browser-grab-payload'
 import { buildGuestOverlayScript } from '../../../main/browser/element-grab/grab-guest-script'
 import {

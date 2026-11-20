@@ -1,14 +1,35 @@
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
-  RuntimeClientEvent,
-  RuntimeClientEventStreamMessage
-} from '../../../../shared/runtime-client-events'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-runtime-session'
+  PortForwardEntry,
+  UnrestoredPortForward
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
+import {
+  getClientForEnvironment,
+  requireActiveEnvironmentOrNull
+} from '../runtime/client/web-runtime-session'
 
-type SshCredentialRequest = Extract<RuntimeClientEvent, { type: 'sshCredentialRequest' }>
-type SshCredentialResolved = Extract<RuntimeClientEvent, { type: 'sshCredentialResolved' }>
-type SshPortForwardsChanged = Extract<RuntimeClientEvent, { type: 'sshPortForwardsChanged' }>
+type SshCredentialRequest = {
+  type: 'sshCredentialRequest'
+  requestId: string
+  targetId: string
+  kind: 'keyboard-interactive' | 'passphrase' | 'password'
+  detail: string
+  echo?: boolean
+}
+type SshCredentialResolved = { type: 'sshCredentialResolved'; requestId: string }
+type SshPortForwardsChanged = {
+  type: 'sshPortForwardsChanged'
+  targetId: string
+  forwards: PortForwardEntry[]
+  unrestored?: UnrestoredPortForward[]
+}
 type SshStateChanged = Extract<RuntimeClientEvent, { type: 'sshStateChanged' }>
+type SshStreamEvent =
+  | SshCredentialRequest
+  | SshCredentialResolved
+  | SshPortForwardsChanged
+  | SshStateChanged
 
 const sshCredentialRequestListeners = new Set<(request: SshCredentialRequest) => void>()
 const sshCredentialResolvedListeners = new Set<(resolved: SshCredentialResolved) => void>()
@@ -32,7 +53,7 @@ function deliverSshRuntimeEvent(response: RuntimeRpcResponse<unknown>): void {
     scheduleSshRuntimeEventSubscription()
     return
   }
-  const message = response.result as RuntimeClientEventStreamMessage
+  const message = response.result as SshStreamEvent
   if (message.type === 'sshCredentialRequest') {
     for (const listener of sshCredentialRequestListeners) {
       listener(message)

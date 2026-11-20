@@ -5,30 +5,31 @@ import { isRegistrationFencedUnsubscribe, type RpcContext, type RpcRequest } fro
 import { resolveRpcCallerIdentity } from '../callers/rpc-caller-identity'
 import type { RpcCallerScope } from '../callers/rpc-caller-scope'
 
-export type RpcDispatchStreamingOptions = Pick<
-  RpcContext,
-  | 'authenticatedCallerFingerprint'
-  | 'connectionId'
-  | 'signal'
-  | 'clientId'
-  | 'pairedDeviceId'
-  | 'pairedDeviceParentId'
-  | 'caller'
-  | 'plugin'
-  | 'clientKind'
-  | 'clientCapabilities'
-  | 'capabilitySource'
-  | 'updateClientCapabilities'
-  | 'pairing'
-  | 'pairingOffers'
-  | 'deviceSelf'
-  | 'mobile'
-  | 'mobileRelayHosts'
-  | 'peerDesktops'
-  | 'delegatedMobileDevices'
-  | 'sendBinary'
-  | 'registerBinaryStreamHandler'
-  | 'registerBinaryMessageHandler'
+export type RpcDispatchStreamingOptions = Partial<
+  Pick<
+    RpcContext,
+    | 'authenticatedCallerFingerprint'
+    | 'connectionId'
+    | 'signal'
+    | 'clientId'
+    | 'pairedDeviceId'
+    | 'pairedDeviceParentId'
+    | 'caller'
+    | 'plugin'
+    | 'clientKind'
+    | 'clientCapabilities'
+    | 'capabilitySource'
+    | 'updateClientCapabilities'
+    | 'pairing'
+    | 'pairingOffers'
+    | 'deviceSelf'
+    | 'mobileRelayHosts'
+    | 'peerDesktops'
+    | 'delegatedMobileDevices'
+    | 'sendBinary'
+    | 'registerBinaryStreamHandler'
+    | 'registerBinaryMessageHandler'
+  >
 > & {
   /** What the transport proved the caller may do; absent means this host's owner. */
   callerScope?: RpcCallerScope
@@ -80,7 +81,6 @@ export function rpcContextFromTransport(
     pairing: options?.pairing,
     pairingOffers: options?.pairingOffers,
     deviceSelf: options?.deviceSelf,
-    mobile: options?.mobile,
     mobileRelayHosts: options?.mobileRelayHosts,
     peerDesktops: options?.peerDesktops,
     delegatedMobileDevices: options?.delegatedMobileDevices,

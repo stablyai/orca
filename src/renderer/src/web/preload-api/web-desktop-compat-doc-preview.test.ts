@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DocPreviewGrantRequest } from '../../../../preload/api/doc-preview-api'
+import type { DocPreviewGrantRequest } from '../../../../preload/api/document-preview/doc-preview-api'
 import { createWebDocPreviewApi } from './web-desktop-compat-api'
 
 const native = vi.hoisted(() => ({ invoke: vi.fn() }))

@@ -5,8 +5,8 @@ import type {
   ReleaseBuildListResult,
   UpdateCheckOptions,
   UpdateStatus
-} from '../../../shared/update-status-types'
-import type { ReleaseChannel } from '../../../shared/release-channel'
+} from '../../../shared/updater/update-status-types'
+import type { ReleaseChannel } from '../../../shared/updater/release-channel'
 import { invokeNative, isTauriNativeHost, listenNative } from './tauri-native-host'
 
 type NativeUpdaterStatus =

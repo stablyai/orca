@@ -100,14 +100,16 @@ export async function writeRemoteFileIfUnchanged(
   precondition: FileWriteDiskPrecondition,
   beforeSend?: () => void
 ): Promise<FileWriteResult> {
+  const target = context.target
+  if (target.kind !== 'environment') {
+    throw new Error('Remote file write requires an environment target')
+  }
   // Why once per save: a retry may follow a reconnect, never a re-pair to another host.
-  const pairingRevision = captureRuntimeEnvironmentRequestRevision(
-    targetEnvironmentId(context.target)
-  )
+  const pairingRevision = captureRuntimeEnvironmentRequestRevision(targetEnvironmentId(target))
   const attempt = async (): Promise<FileWriteResult> =>
     parseFileWriteResult(
       await callRuntimeFileMutationWithCapabilities<unknown>(
-        context.target,
+        target,
         'files.write',
         async (capabilities) => {
           if (hostEnforcesPrecondition(capabilities, precondition)) {

@@ -4,9 +4,9 @@ import type {
   NotificationDispatchResult,
   NotificationPermissionStatusResult,
   NotificationSoundResult
-} from '../../../shared/notification-settings-types'
+} from '../../../shared/notifications/notification-settings-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { getBrowserPlatform } from './preload-api/web-storage'
 import { emitTauriNativeUiEvent } from './tauri-native-ui-api'
 import { setTauriTrayAttention } from './tauri-native-tray-api'
@@ -45,6 +45,7 @@ export function createTauriNativeNotificationsApi(): PreloadApi['notifications']
       )
       return away ?? undefined
     },
+    acknowledgeAttention: async () => ({ dismissed: 0 }),
     dispatch: async (args): Promise<NotificationDispatchResult> => {
       if (!isSupported) {
         return { delivered: false, reason: 'not-supported' }

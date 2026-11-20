@@ -1,5 +1,5 @@
-import { handleAppMenuPasteRequest } from '@/lib/app-menu-paste'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { handleAppMenuPasteRequest } from '@/lib/clipboard/menu/app-menu-paste'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { isTauriNativeHost } from '../../web/tauri-native-host'
 
 export type PlainEditableDomMenuAction = 'cut' | 'copy' | 'paste' | 'paste-plain' | 'select-all'

@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { ProjectHostSetup } from '../../../../shared/project-types'
-import { callRuntimeResult } from './web-runtime-calls'
+import type { ProjectHostSetup } from '../../../../shared/project/project-types'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
 
 /** Project metadata is persisted by the local orcad runtime in Tauri. */
 export function createWebProjectsApi(): NonNullable<Partial<PreloadApi>['projects']> {

@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import WebConnect from './WebConnect'
+import WebConnect from './pairing/WebConnect'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 vi.mock('./web-device-key-support', () => ({ readWebDeviceKeySupport: () => null }))

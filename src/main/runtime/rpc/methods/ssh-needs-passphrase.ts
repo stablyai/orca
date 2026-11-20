@@ -1,5 +1,5 @@
-import { SshTarget } from '../../../../shared/rpc-contract/ssh-params'
-import { isSshCredentialDeclined } from '../../../ssh/ssh-credential-decline'
+import { SshTarget } from '../../../../shared/rpc-contract/ssh/ssh-params'
+import { isSshCredentialDeclined } from '../../../ssh/authentication/ssh-credential-decline'
 import {
   getSshConnectionManager,
   listRegisteredSshTargets

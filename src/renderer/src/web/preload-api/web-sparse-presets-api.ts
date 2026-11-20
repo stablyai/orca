@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
-import { callRuntimeResult } from './web-runtime-calls'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
 import { noopUnsubscribe } from './web-storage'
 
 export function createWebSparsePresetsApi(): NonNullable<Partial<PreloadApi>['sparsePresets']> {

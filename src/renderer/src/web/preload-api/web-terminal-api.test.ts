@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createPtyApi, createSshApi } from './web-terminal-api'
+import { createPtyApi, createSshApi } from './host-capabilities/web-terminal-api'
 
 const {
   callRuntimeResult,

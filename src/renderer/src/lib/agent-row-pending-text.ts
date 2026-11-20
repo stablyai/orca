@@ -1,4 +1,4 @@
-import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { translate } from '@/i18n/i18n'
 
 // Why dsh parity: a row waiting on the user names what it needs in the

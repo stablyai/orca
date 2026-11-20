@@ -1,9 +1,9 @@
-import '../unused-default-rpc-methods.test-fixture'
+import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { SSH_METHODS } from './ssh'
+import { SSH_METHODS } from './ssh/ssh'
 
 const {
   connectRegisteredSshTargetMock,

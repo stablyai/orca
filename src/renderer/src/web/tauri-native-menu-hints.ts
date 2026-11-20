@@ -5,13 +5,11 @@
 // rendered chord list or null to clear.
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  formatKeybindingList,
-  getEffectiveKeybindingsForAction,
-  type KeybindingActionId
-} from '../../../shared/keybindings'
+import { getEffectiveKeybindingsForAction } from '../../../shared/keybindings/effective'
+import { formatKeybindingList } from '../../../shared/keybindings/formatting'
+import type { KeybindingActionId } from '../../../shared/keybindings/types'
 import { translate } from '../i18n/i18n'
-import { shortcutPlatform } from '../app-shell/app-window-chrome'
+import { shortcutPlatform } from '../app-shell/chrome/app-window-chrome'
 import { useAppStore } from '../store'
 import { invokeNative, isTauriNativeHost } from './tauri-native-host'
 

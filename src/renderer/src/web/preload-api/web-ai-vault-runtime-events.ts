@@ -1,6 +1,6 @@
-import type { AiVaultScanProgressUpdate } from '../../../../shared/ai-vault-scan-progress'
-import { subscribeRuntimeClientEvents } from '../../runtime/runtime-client-events'
-import { requireActiveEnvironmentOrNull } from './web-runtime-session'
+import type { AiVaultScanProgressUpdate } from '../../../../shared/ai-vault/scanning/ai-vault-scan-progress'
+import { subscribeRuntimeClientEvents } from '../../runtime/rpc/subscriptions/runtime-client-events'
+import { requireActiveEnvironmentOrNull } from '../runtime/client/web-runtime-session'
 
 const listeners = new Set<(update: AiVaultScanProgressUpdate) => void>()
 let subscription: { unsubscribe: () => void } | null = null
@@ -28,11 +28,15 @@ function ensureSubscription(): void {
   subscriptionPromise = subscribeRuntimeClientEvents(
     environment.id,
     (event) => {
-      if (event.type !== 'aiVaultScanProgress') {
+      const raw = event as unknown as
+        | ({ type: 'aiVaultScanProgress' } & AiVaultScanProgressUpdate)
+        | { type: string }
+      if (raw.type !== 'aiVaultScanProgress') {
         return
       }
+      const update = raw as { type: 'aiVaultScanProgress' } & AiVaultScanProgressUpdate
       for (const listener of listeners) {
-        listener({ scanKey: event.scanKey, progress: event.progress })
+        listener({ scanKey: update.scanKey, progress: update.progress })
       }
     },
     () => scheduleRetry()

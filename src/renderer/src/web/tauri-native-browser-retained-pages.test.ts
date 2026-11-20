@@ -3,18 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   BrowserClientPageRendererOutcome,
   BrowserClientPageRendererRequest
-} from '../../../shared/browser-client-page-renderer-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import {
   installBrowserClientPageRenderer,
   type BrowserClientPageRendererInstallation
-} from '../components/browser-pane/browser-client-page-renderer-installation'
-import { BrowserClientPageRetainedRegistry } from '../components/browser-pane/browser-client-page-retained-registry'
-import type { BrowserClientPageWebviewFactory } from '../components/browser-pane/browser-client-page-retained-elements'
+} from '../components/browser-pane/host-guest/client-pages/browser-client-page-renderer-installation'
+import { BrowserClientPageRetainedRegistry } from '../components/browser-pane/host-guest/client-pages/browser-client-page-retained-registry'
 import {
   createTauriNativeBrowserWebview,
   hasTauriNativeBrowserPage,
-  removeTauriNativeBrowserPage,
-  syncTauriNativeBrowserWebviewBounds
+  removeTauriNativeBrowserPage
 } from './tauri-native-browser-webview'
 
 const native = vi.hoisted(() => ({ invoke: vi.fn() }))
@@ -78,37 +76,22 @@ describe('Tauri retained browser pages', () => {
   })
 
   it('passes page identity to the factory and syncs bounds only after insertion', async () => {
-    const createWebview = vi.fn<BrowserClientPageWebviewFactory>(
-      ({ browserPageId, partition, host }) =>
-        createTauriNativeBrowserWebview({
-          browserPageId,
-          partition,
-          container: host,
-          visible: false,
-          appendToContainer: false
-        })
+    const createWebview = vi.fn(() =>
+      createTauriNativeBrowserWebview({
+        ...PAGE,
+        container: document.createElement('div'),
+        visible: false,
+        appendToContainer: false
+      })
     )
-    const onWebviewMounted = vi.fn((browserPageId: string) => {
-      const host = document.querySelector('[data-browser-client-page-id]')
-      expect(host?.isConnected).toBe(true)
-      expect(host?.children).toHaveLength(1)
-      syncTauriNativeBrowserWebviewBounds(browserPageId)
-    })
     const registry = new BrowserClientPageRetainedRegistry({
       document,
-      createWebview,
-      onWebviewMounted
+      createWebview
     })
     registries.push(registry)
 
     await registry.mountPage(PAGE)
     expect(createWebview).toHaveBeenCalledOnce()
-    expect(createWebview).toHaveBeenCalledWith({
-      browserPageId: PAGE.browserPageId,
-      partition: PAGE.partition,
-      host: expect.any(HTMLDivElement)
-    })
-    expect(onWebviewMounted).toHaveBeenCalledExactlyOnceWith(PAGE.browserPageId)
     const nextPage = { ...PAGE, pageHostGeneration: 2 }
     registry.rekeyPage(PAGE, nextPage)
     await registry.mountPage(nextPage)

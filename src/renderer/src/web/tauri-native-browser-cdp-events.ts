@@ -3,7 +3,7 @@ import type {
   BrowserConsoleResult,
   BrowserNetworkEntry,
   BrowserNetworkLogResult
-} from '../../../shared/runtime-browser-contracts'
+} from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { invokeNative, listenNative } from './tauri-native-host'
 import { isRecord } from './tauri-native-browser-automation'
 import type { PendingNetworkRequest } from './tauri-native-browser-cdp-network-buffer'

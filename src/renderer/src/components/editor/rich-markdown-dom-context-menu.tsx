@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronRightIcon } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   buildRichMarkdownDomContextMenuModel,
   enabledDomMenuEntryIndices,
@@ -17,7 +17,7 @@ import {
 import {
   isRichMarkdownContextCommandTarget,
   runRichMarkdownContextCommand
-} from './rich-markdown-context-command-routing'
+} from './rich-markdown/commands/rich-markdown-context-command-routing'
 
 // Why: Radix ContextMenu primitives need a trigger element to anchor on, but
 // the menu opens at the raw cursor point inside the ProseMirror DOM. Copy the

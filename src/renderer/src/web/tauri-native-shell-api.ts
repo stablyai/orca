@@ -4,14 +4,14 @@ import type {
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathFailureReason,
   ShellOpenLocalPathResult
-} from '../../../shared/shell-open-types'
+} from '../../../shared/shell/opening/shell-open-types'
 import {
   parseRoutableExecutionHostId,
   toSshExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import { getWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import { validatePathExistenceBatch } from '../../../shared/file-access/path-existence-batch'
-import type { SshExternalEditorAuthorityResult } from '../../../shared/ssh-types'
+import type { SshExternalEditorAuthorityResult } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { createShellApi } from './preload-api/browser/web-shell-api'
 import { callRuntimeResult } from './runtime/client/web-runtime-calls'
 import { getBrowserPlatform } from './preload-api/web-storage'
@@ -225,29 +225,30 @@ export function createTauriNativeShellApi(): NonNullable<Partial<PreloadApi>['sh
     },
     openFileUri: async (uri, ownerHostId) => {
       if (parseRoutableExecutionHostId(ownerHostId)?.kind !== 'local') {
-        return
+        return 'failed'
       }
       let parsed: URL
       try {
         parsed = new URL(uri)
       } catch {
-        return
+        return 'failed'
       }
       if (parsed.protocol !== 'file:') {
-        return
+        return 'failed'
       }
       // Why: only this computer's files open here; a remote host's URI never resolves locally.
       if (parsed.hostname && parsed.hostname !== 'localhost') {
-        return
+        return 'failed'
       }
       let path = decodeURIComponent(parsed.pathname)
       if (getBrowserPlatform() === 'win32' && /^\/[A-Za-z]:/.test(path)) {
         path = path.slice(1)
       }
       const target = await resolveShellTarget(path, ownerHostId)
-      if (target.ok) {
-        await openNativePath(target.path)
+      if (!target.ok) {
+        return 'failed'
       }
+      return (await openNativePath(target.path)) ? 'opened' : 'failed'
     },
     pathsExist: async (paths) => {
       validatePathExistenceBatch(paths)
@@ -310,7 +311,6 @@ export function createTauriNativeShellApi(): NonNullable<Partial<PreloadApi>['sh
           directory: true,
           ...(defaultPath ? { defaultPath } : {})
         })
-      )[0] ?? null,
-    copyFile: (args) => invokeNative('poc_copy_file', args)
+      )[0] ?? null
   }
 }

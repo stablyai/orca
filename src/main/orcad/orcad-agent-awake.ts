@@ -7,10 +7,10 @@
 import {
   normalizeComputerAwakeMode,
   type ComputerAwakeStatus
-} from '../../shared/computer-awake-mode'
-import { AgentAwakeStatusLease, type AgentAwakeStatus } from '../agent-awake-status-lease'
-import type { AgentHookServer } from '../agent-hooks/server'
-import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'
+} from '../../shared/app-lifecycle/computer-awake-mode'
+import { AgentAwakeStatusLease, type AgentAwakeStatus } from '../power/agent-awake-status-lease'
+import type { AgentHookServer } from '../agent-hooks/server/agent-hook-server'
+import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences/profile-preferences'
 
 export type AgentAwakeStatusListener = (status: ComputerAwakeStatus) => void
 

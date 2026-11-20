@@ -1,7 +1,7 @@
 import { buildSnapshot, type RefEntry } from '../../../main/browser/cdp/snapshots/snapshot-engine'
 import type { BrowserClientAutomationMethod } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
-import type { BrowserSnapshotResult } from '../../../shared/runtime-browser-contracts'
+import type { BrowserSnapshotResult } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { invokeNative } from './tauri-native-host'
 import { getTauriNativeBrowserPageInfo } from './tauri-native-browser-webview'
 import { runTauriBrowserAutomationCommand } from './tauri-native-browser-automation-commands'

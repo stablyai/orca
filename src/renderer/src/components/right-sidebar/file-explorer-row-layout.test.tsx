@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { WorkspaceFileIcon } from '@/components/WorkspaceFileIcon'
 import { FileExplorerIndentGuides } from './FileExplorerIndentGuides'
-import { InlineInputRow } from './file-explorer-inline-input-row'
+import { InlineInputRow } from './file-explorer/mutations/file-explorer-inline-input-row'
 import { FILE_EXPLORER_ROW_HEIGHT, getFileExplorerRowPadding } from './file-explorer-row-layout'
 
 describe('compact file explorer rows', () => {
@@ -49,8 +49,7 @@ describe('compact file explorer rows', () => {
           parentPath: '/project',
           type: 'rename',
           depth: 0,
-          existingName: '__fixtures__',
-          isDirectory: true
+          existingName: '__fixtures__'
         }}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}

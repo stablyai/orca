@@ -1,12 +1,12 @@
 import type {
   PtyMainDeliveryDiagnostics,
   PtyPerPtyDeliveryDiagnostics
-} from '../../../shared/pty-delivery-diagnostics'
+} from '../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
-} from '../../../shared/pty-renderer-delivery-health'
-import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../shared/pty-delivery-diagnostics'
+} from '../../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
+import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 
 type TauriPtyDeliveryState = {
   sentChars: number

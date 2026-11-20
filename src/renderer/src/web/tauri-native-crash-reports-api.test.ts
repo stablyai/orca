@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installBrowserGlobals } from './web-preload-api-test-harness'
-import type { CrashReportRecord } from '../../../shared/crash-reporting'
+import { installBrowserGlobals } from './testing/web-preload-api-test-harness'
+import type { CrashReportRecord } from '../../../shared/crash-reporting/crash-reporting'
 
 type InvokeHandler = (command: string, args?: Record<string, unknown>) => Promise<unknown>
 

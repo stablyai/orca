@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isIosWebPlatform } from '../lib/ios-web-platform'
+import { isIosWebPlatform } from '../app-shell/platform/ios-web-platform'
 import { isTabletViewport } from './web-tablet-layout'
 
 describe('web tablet layout', () => {

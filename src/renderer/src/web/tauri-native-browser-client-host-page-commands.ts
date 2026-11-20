@@ -1,8 +1,11 @@
+import type { z } from 'zod'
 import type {
   BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult,
+  BrowserClientHostCommandResultParams,
   BrowserHostLeaseAuthority
 } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
+
+type BrowserClientHostCommandResult = z.infer<typeof BrowserClientHostCommandResultParams>['result']
 import {
   BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR,
   requiresBrowserClientFileChannel

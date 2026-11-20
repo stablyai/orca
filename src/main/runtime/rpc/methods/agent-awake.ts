@@ -6,7 +6,7 @@
 // it.
 
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
-import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
+import { bindStructuredAgentSessionStream } from './structured-sessions/subscriptions/structured-agent-session-status-stream'
 import type { OrcadAgentAwakeService } from '../../../orcad/orcad-agent-awake'
 
 // Why a module setter: RpcContext only carries OrcaRuntimeService, and the

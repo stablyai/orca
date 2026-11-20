@@ -8,9 +8,9 @@ import type {
   PortForwardEntry,
   SshTarget,
   SshTargetAddResult
-} from '../../../../shared/ssh-types'
-import { callRuntimeResult } from './web-runtime-calls'
-import { requireActiveEnvironmentOrNull } from './web-runtime-session'
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
+import { requireActiveEnvironmentOrNull } from '../runtime/client/web-runtime-session'
 import { noopUnsubscribe } from './web-storage'
 import {
   onSshCredentialRequest,
@@ -18,10 +18,11 @@ import {
   onSshPortForwardsChanged,
   onSshStateChanged
 } from './web-ssh-runtime-events'
-import { admitSshConnectionStateForAuthorityReconciliation } from '../../../../shared/ssh-retained-payload-admission'
+import { admitSshConnectionStateForAuthorityReconciliation } from '../../../../shared/remote-runtime/ssh/ssh-retained-payload-admission'
 
 export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
   return {
+    onTargetRemoved: () => () => {},
     // Why: SSH is owned by the paired runtime; keep target mutations on that host instead of
     // silently maintaining a second browser-only copy.
     listTargets: async () => {

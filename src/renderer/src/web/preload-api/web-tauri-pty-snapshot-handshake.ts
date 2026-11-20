@@ -1,5 +1,5 @@
-import type { PtyApi } from '../../../../preload/api/pty-api'
-import type { RemoteRuntimeMultiplexedTerminalCallbacks } from '../../runtime/remote-runtime-terminal-multiplexer-types'
+import type { PtyApi } from '../../../../preload/api/terminal/pty-api'
+import type { RemoteRuntimeMultiplexedTerminalCallbacks } from '../../runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
 
 type SnapshotMeta = Parameters<RemoteRuntimeMultiplexedTerminalCallbacks['onSnapshot']>[1]
 type SpawnResult = Awaited<ReturnType<PtyApi['spawn']>>

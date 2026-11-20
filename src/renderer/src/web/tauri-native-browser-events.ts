@@ -2,7 +2,7 @@ import type { PreloadApi } from '../../../preload/api-types'
 import type {
   BrowserContextMenuDismissedEvent,
   BrowserContextMenuRequestedEvent
-} from '../../../shared/browser-guest-events'
+} from '../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { listenNative } from './tauri-native-host'
 
 export type TauriBrowserPageEvent = {

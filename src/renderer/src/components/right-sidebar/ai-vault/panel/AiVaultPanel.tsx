@@ -184,11 +184,7 @@ export default function AiVaultPanel({
     limit: sessionLimit === 'unlimited' ? undefined : sessionLimit,
     unlimited: sessionLimit === 'unlimited'
   })
-  const scanProgress = useAiVaultScanProgress(
-    executionHostScope,
-    requestedScanKey,
-    scanResult?.scanId
-  )
+  const scanProgress = useAiVaultScanProgress(executionHostScope, requestedScanKey)
   const stripProgress = searching ? null : scanProgress
   // Keep session maps independent of active workspace switches to avoid rebuilding them during navigation (#10841).
   const sessionProjectById = useMemo(

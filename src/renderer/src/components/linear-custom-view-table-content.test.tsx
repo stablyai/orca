@@ -7,7 +7,8 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: () => null
 }))
 
-const { LinearCustomViewTableContent } = await import('./linear-custom-view-table-content')
+const { LinearCustomViewTableContent } =
+  await import('./task-page/linear/views/linear-custom-view-table-content')
 
 describe('LinearCustomViewTableContent', () => {
   const views = [

@@ -61,6 +61,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     setSearchEnabled: () => Promise.reject(new Error('unsupported')),
     clearSearchIndex: () =>
       Promise.reject(new Error('Clearing Agent Session History is unavailable in the browser.')),
+    buildHandoffPack: () => Promise.reject(new Error('unsupported')),
     listSessions: (args?: AiVaultListArgs) => {
       const environment = requireActiveEnvironment()
       const executionHostId = toRuntimeExecutionHostId(environment.id)

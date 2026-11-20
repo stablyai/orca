@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../shared/tab-types'
-import type { AgentSessionLaunchPlan } from './agent-session-launch-plan'
-import type { StructuredAgentLaunchSettlement } from './structured-agent-launch-settlement'
+import type { Tab } from '../../../shared/workspace-layout/tab-groups/tab-types'
+import type { AgentSessionLaunchPlan } from './agent-session/launch/routing/agent-session-launch-plan'
+import type { StructuredAgentLaunchSettlement } from './agent-session/launch/continuation/structured-agent-launch-settlement'
 
 const mocks = vi.hoisted(() => ({
   createUnifiedTab: vi.fn(),

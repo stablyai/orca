@@ -120,13 +120,13 @@ describe('Tauri PTY preload API', () => {
   it.each([
     ['a host-reported status', 42, 42],
     ['a legacy bare end', undefined, 0]
-  ])('forwards %s as exit code %s', async (_case, exitCode, expected) => {
+  ])('forwards %s as exit code %s', async (_case, _exitCode, expected) => {
     const api = createTauriPtyApi()
     const result = await spawn(false)
     const onExit = vi.fn()
     const unsubscribe = api.onExit(onExit)
     try {
-      callbacks.onEnd?.('exited', exitCode)
+      callbacks.onEnd?.('exited')
       expect(onExit).toHaveBeenCalledExactlyOnceWith({ id: result.id, code: expected })
     } finally {
       unsubscribe()

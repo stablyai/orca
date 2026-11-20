@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import { readAiVaultHandoffPack } from './session-handoff-pack-read'
 
 let tempRoots: string[] = []

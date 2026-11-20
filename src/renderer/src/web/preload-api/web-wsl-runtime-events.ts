@@ -1,6 +1,6 @@
-import type { WslHostStatus } from '../../../../shared/wsl-host-types'
-import { subscribeRuntimeClientEvents } from '../../runtime/runtime-client-events'
-import { requireActiveEnvironmentOrNull } from './web-runtime-session'
+import type { WslHostStatus } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import { subscribeRuntimeClientEvents } from '../../runtime/rpc/subscriptions/runtime-client-events'
+import { requireActiveEnvironmentOrNull } from '../runtime/client/web-runtime-session'
 
 const listeners = new Set<(status: WslHostStatus) => void>()
 let subscription: { unsubscribe: () => void } | null = null
@@ -28,11 +28,15 @@ function ensureSubscription(): void {
   subscriptionPromise = subscribeRuntimeClientEvents(
     environment.id,
     (event) => {
-      if (event.type !== 'wslHostStatusChanged') {
+      const raw = event as unknown as
+        | { type: 'wslHostStatusChanged'; status: WslHostStatus }
+        | { type: string }
+      if (raw.type !== 'wslHostStatusChanged') {
         return
       }
+      const change = raw as { type: 'wslHostStatusChanged'; status: WslHostStatus }
       for (const listener of listeners) {
-        listener(event.status)
+        listener(change.status)
       }
     },
     () => scheduleRetry()

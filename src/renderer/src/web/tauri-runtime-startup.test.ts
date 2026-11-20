@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { initializeTauriRuntime as InitializeTauriRuntime } from './tauri-runtime-startup'
-import type { readStoredWebRuntimeEnvironment as ReadStoredWebRuntimeEnvironment } from './web-runtime-environment'
-import type { getStoredSettings as GetStoredSettings } from './preload-api/web-preferences-store'
-import { installBrowserGlobals } from './web-preload-api-test-harness'
+import type { readStoredWebRuntimeEnvironment as ReadStoredWebRuntimeEnvironment } from './pairing/web-runtime-environment'
+import type { getStoredSettings as GetStoredSettings } from './preload-api/preferences/web-preferences-store'
+import { installBrowserGlobals } from './testing/web-preload-api-test-harness'
 
 async function loadRuntimeStartup(): Promise<{
   initializeTauriRuntime: typeof InitializeTauriRuntime
@@ -12,8 +12,8 @@ async function loadRuntimeStartup(): Promise<{
   const [{ initializeTauriRuntime }, { readStoredWebRuntimeEnvironment }, { getStoredSettings }] =
     await Promise.all([
       import('./tauri-runtime-startup'),
-      import('./web-runtime-environment'),
-      import('./preload-api/web-preferences-store')
+      import('./pairing/web-runtime-environment'),
+      import('./preload-api/preferences/web-preferences-store')
     ])
   return { initializeTauriRuntime, readStoredWebRuntimeEnvironment, getStoredSettings }
 }

@@ -1,10 +1,10 @@
-import '../unused-default-rpc-methods.test-fixture'
+import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { SSH_METHODS } from './ssh'
+import { SSH_METHODS } from './ssh/ssh'
 
 const { listRegisteredSshTargetsMock, getSshConnectionManagerMock, isSshCredentialDeclinedMock } =
   vi.hoisted(() => ({

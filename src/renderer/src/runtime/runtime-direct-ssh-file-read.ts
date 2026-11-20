@@ -4,7 +4,7 @@ import { IMAGE_FILE_MIME_TYPES } from '../../../shared/file-preview/image-mime-t
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../shared/runtime-types'
+} from '../../../shared/file-content/runtime-file-read'
 import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import type {
   RuntimeFileOperationArgs,
@@ -35,9 +35,7 @@ type DirectSshFileContext = Pick<
 export function isDirectSshFileContext(
   context: Pick<RuntimeFileOperationArgs, 'target' | 'connectionId'>
 ): context is DirectSshFileContext & { connectionId: string } {
-  return (
-    isTauriNativeHost() && context.target.kind === 'local' && Boolean(context.connectionId)
-  )
+  return isTauriNativeHost() && context.target.kind === 'local' && Boolean(context.connectionId)
 }
 
 export async function readDirectSshFileChunk(

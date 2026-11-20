@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { translate } from '@/i18n/i18n'
-import { useActiveWorktreeId, useAllWorktrees } from '@/store/selectors'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useActiveWorktreeId } from '@/store/workspaces/selection/use-selected-worktree'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { LOCAL, type Room } from './room-types'
 
 export function useRooms() {

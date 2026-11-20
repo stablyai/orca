@@ -116,11 +116,6 @@ function isRuntimeClientEvent(
     message.type === 'nativeChatLaunchDraftResolved' ||
     message.type === 'terminalSideEffects' ||
     message.type === 'sshStateChanged' ||
-    message.type === 'sshPortForwardsChanged' ||
-    message.type === 'sshCredentialRequest' ||
-    message.type === 'sshCredentialResolved' ||
-    message.type === 'wslHostStatusChanged' ||
-    message.type === 'aiVaultScanProgress' ||
     message.type === 'automationsChanged' ||
     message.type === 'browserProfilesChanged' ||
     message.type === 'linearLinkedIssueUpdated' ||

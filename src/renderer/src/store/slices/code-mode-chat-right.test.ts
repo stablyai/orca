@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
-import { buildSplitNode } from '../../../../shared/workspace-layout/tab-group-layout-tree'
-import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore, makeTabGroup, seedStore } from './store-test-helpers'
+import { createGlobalSettingsFixture } from '../../../../shared/settings/global-settings-test-fixture'
+import { buildSplitNode } from '../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
+import { createTabsSliceMockApi } from './tabs/tabs-slice-test-harness'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
+import { makeTabGroup } from './tabs/tab-group.test-fixture'
 import { normalizeWorktreeChatSide } from './tabs/chat-panel-layout'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

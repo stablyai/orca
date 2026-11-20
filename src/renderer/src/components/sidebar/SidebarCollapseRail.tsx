@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 
 /** dsh-style collapsed sidebar width: icon rail, no resize. */

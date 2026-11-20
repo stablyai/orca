@@ -1,4 +1,4 @@
-import { isIosWebPlatform } from '../lib/ios-web-platform'
+import { isIosWebPlatform } from '../app-shell/platform/ios-web-platform'
 import { useEffect, useState } from 'react'
 
 export const WEB_TABLET_MIN_WIDTH = 600

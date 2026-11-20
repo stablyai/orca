@@ -13,8 +13,8 @@ import {
   type RichMarkdownDomMenuEntry
 } from './rich-markdown-dom-context-menu-model'
 import { RichMarkdownDomContextMenu } from './rich-markdown-dom-context-menu'
-import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
+import { createRichMarkdownExtensions } from './rich-markdown/schema/rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from './rich-markdown/document/rich-markdown-source-transport'
 
 const TABLE = `| A | B |
 | --- | --- |

@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
-import { callRuntimeResult } from './web-runtime-calls'
+import type { NestedRepoScanResult } from '../../../../shared/project/groups/project-group-types'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
 import { noopUnsubscribe } from './web-storage'
 
 /** Project groups are runtime-owned in Tauri; this keeps the renderer API Electron-compatible. */
@@ -47,6 +47,8 @@ export function createWebProjectGroupsApi(): NonNullable<Partial<PreloadApi>['pr
         groupName: args.groupName,
         projectPaths: args.projectPaths,
         mode: args.mode
-      })
+      }),
+    checkHooks: () => Promise.reject(new Error('unsupported')),
+    updateMany: () => Promise.reject(new Error('unsupported'))
   }
 }

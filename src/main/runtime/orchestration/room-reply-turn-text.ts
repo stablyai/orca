@@ -1,5 +1,5 @@
-import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
-import { isTextBlock } from '../../../shared/native-chat-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { isTextBlock } from '../../../shared/native-chat/native-chat-types'
 
 const REPLY_TEXT_MAX = 4000
 

@@ -102,9 +102,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         )}
       </div>
       {layout.showRightSidebarControls ? <SidebarLayoutToggle /> : null}
-      {layout.showRightSidebarControls && layout.toolsSidebarOnLeft && !layout.rightSidebarOpen ? (
-        <RightSidebarToggle />
-      ) : null}
+      {layout.showRightSidebarControls && !layout.rightSidebarOpen ? <RightSidebarToggle /> : null}
       {/* Why: Back/Forward span worktree + page history, so show the cluster wherever the shortcut is live (hidden in Settings/non-stack views). */}
       {shouldShowWorktreeHistoryControls(layout.activeView) && (
         // Collapsed headers shrink-wrap, so ml-auto alone cannot leave a history-button gutter.

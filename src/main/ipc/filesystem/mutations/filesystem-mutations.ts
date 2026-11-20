@@ -228,13 +228,15 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       const lifetime = abortWhenRendererGone(event.sender)
       let request: RuntimeUploadFileStreamRequest | undefined
       try {
+        const environmentId = (await resolveEnvironment(userDataPath, args.environmentId)).id
         request = {
           ...args,
-          environmentId: (await resolveEnvironment(userDataPath, args.environmentId)).id
+          environmentId
         }
         lifetime.signal.throwIfAborted()
         return await streamExternalFileToRuntime({
           ...request,
+          environmentId,
           userDataPath,
           signal: lifetime.signal
         })

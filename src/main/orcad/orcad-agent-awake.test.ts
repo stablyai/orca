@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcadAgentAwakeService } from './orcad-agent-awake'
-import type { AgentAwakeStatus } from '../agent-awake-status-lease'
+import type { AgentAwakeStatus } from '../power/agent-awake-status-lease'
 import type { AgentHookStatusChangeEntry } from '../agent-hooks/server/server-types'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 
 function workingEntry(overrides: Partial<AgentHookStatusChangeEntry> = {}): AgentAwakeStatus {
   return {

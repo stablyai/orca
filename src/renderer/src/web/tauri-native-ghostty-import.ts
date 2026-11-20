@@ -7,7 +7,9 @@
 // the same way: Windows has no named Ghostty theme dirs, so only absolute
 // `theme = <path>` references merge.
 
-import type { GhosttyImportPreview } from '../../../shared/global-settings-types'
+import type { SettingsApi } from '../../../preload/api/preferences/settings-api'
+
+type GhosttyImportPreview = Awaited<ReturnType<SettingsApi['previewGhosttyImport']>>
 import { getStoredSettings } from './preload-api/preferences/web-preferences-store'
 import { parseGhosttyConfig } from '../../../main/ghostty/parser'
 import { mapGhosttyToOrca } from '../../../main/ghostty/mapper'

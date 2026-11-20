@@ -2,13 +2,13 @@ import type { PreloadApi } from '../../../preload/api-types'
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile
-} from '../../../shared/browser-workspace-types'
-import type { DetectedBrowserInfo } from '../../../preload/api/browser-api'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
+import type { DetectedBrowserInfo } from '../../../preload/api/browser/browser-api'
 import type {
   BrowserIdentityModeSetResult,
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
-} from '../../../shared/browser-user-agent-mode'
+} from '../../../shared/browser/identity/browser-user-agent-mode'
 import { invokeNative } from './tauri-native-host'
 import { getTauriBrowserClientRouteIdentity } from './tauri-native-browser-client-host'
 import {

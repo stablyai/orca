@@ -4,7 +4,7 @@ import {
   SshLegacyRelayPaneOutputPaused,
   SshLegacyRelayPaneResize,
   SshLegacyRelayPaneWrite
-} from '../../../../shared/rpc-contract/ssh-params'
+} from '../../../../shared/rpc-contract/ssh/ssh-params'
 import {
   attachLegacyRelayPane,
   closeLegacyRelayPane,
@@ -13,7 +13,7 @@ import {
   resizeLegacyRelayPane,
   setLegacyRelayPaneOutputPaused,
   writeLegacyRelayPane
-} from '../../../ssh/legacy-relay/legacy-relay-bridge-registry'
+} from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 import { defineMethod } from '../core'
 
 // Why host-admin: every channel reaches a remote shell, so paired clients need the same

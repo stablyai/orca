@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { TerminalListParams } from '../../../../shared/rpc-contract/terminal-unary-params'
+import { TerminalListParams } from '../../../../shared/rpc-contract/terminal/terminal-unary-params'
 import { createRuntimePtyQueryApi } from './web-terminal-runtime-queries'
 
 const { callEnvironmentEnvelope, requireActiveEnvironment } = vi.hoisted(() => ({

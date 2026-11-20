@@ -1,12 +1,12 @@
-import { errorMessage } from '../../../../shared/error-message'
-import { SshTarget } from '../../../../shared/rpc-contract/ssh-params'
+import { errorMessage } from '../../../../shared/errors/error-message'
+import { SshTarget } from '../../../../shared/rpc-contract/ssh/ssh-params'
 import {
   getSshConnectionManager,
   listRegisteredSshTargets,
   markSshTestProbe,
   unmarkSshTestProbe
 } from '../../../ssh/targets/ssh-target-registry'
-import { getPublicSshState } from '../../public-ssh-state'
+import { getPublicSshState } from '../../hosts/platform-probe/public-ssh-state'
 import { defineMethod } from '../core'
 
 export const SSH_TEST_CONNECTION_METHODS = [

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { eraseRpcMethods } from '../../core'
-import { TERMINAL_METHODS } from '../terminal'
+import { TERMINAL_METHODS } from './terminal'
 import { moveLeafToNewTabOnRuntime } from './terminal-leaf-move-method'
 
 function moveMethod() {

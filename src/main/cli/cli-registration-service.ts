@@ -1,18 +1,21 @@
-import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { resolveAppImageCacheKey } from './appimage-extracted-root'
+import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
+import { resolveAppImageCacheKey } from '../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import { CliInstaller } from './cli-installer'
-import { runKeyedSerializedOperation } from './keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import {
   recordWslCliRegistrationInstalled,
   recordWslCliRegistrationRemoved
-} from './wsl-cli-registration-registry'
-import { unreachableWslCliStatus, WslCliUnreachableError } from './wsl-cli-status'
-import { WslCliInstaller } from './wsl-cli-installer'
-import { runSerializedWslCliRegistrationOperation } from './wsl-cli-registration-operation'
-import { getCanonicalUserDataPath } from '../persistence'
-import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
-import { getDefaultWslDistro } from '../wsl'
-import { resolveAppImageRuntimeIdentity } from '../appimage-runtime-identity'
+} from './wsl/wsl-cli-registration-registry'
+import { unreachableWslCliStatus, WslCliUnreachableError } from './wsl/wsl-cli-status'
+import { WslCliInstaller } from './wsl/wsl-cli-installer'
+import { runSerializedWslCliRegistrationOperation } from './wsl/wsl-cli-registration-operation'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
+import {
+  hydrateShellPath,
+  mergePathSegments
+} from '../startup/shell-environment/hydrate-shell-path'
+import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
+import { resolveAppImageRuntimeIdentity } from '../updater/linux-package/appimage-runtime-identity'
 
 const APPIMAGE_REPAIR_RETRY_MS = 30_000
 const localCliRegistrationQueues = new Map<string, Promise<void>>()

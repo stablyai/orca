@@ -2,10 +2,10 @@ import { beforeEach, vi } from 'vitest'
 import type {
   RemoteRuntimeMultiplexedTerminal,
   RemoteRuntimeMultiplexedTerminalCallbacks
-} from '../../runtime/remote-runtime-terminal-multiplexer-types'
+} from '../../runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
 import { createTauriPtyApi as createApi } from './web-tauri-pty-api'
 import type { TauriPtySpawnOptions } from './web-tauri-pty-runtime-params'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 
 export { callRuntimeResult, callTauriPtyHost, requireActiveEnvironment, subscribeTerminal }
 
@@ -32,9 +32,12 @@ const { callRuntimeResult, callTauriPtyHost, requireActiveEnvironment, subscribe
 vi.mock('./web-runtime-calls', () => ({ callRuntimeResult }))
 vi.mock('./web-tauri-pty-host', () => ({ callTauriPtyHost }))
 vi.mock('./web-runtime-session', () => ({ requireActiveEnvironment }))
-vi.mock('../../runtime/remote-runtime-terminal-multiplexer', () => ({
-  getRemoteRuntimeTerminalMultiplexer: () => ({ subscribeTerminal })
-}))
+vi.mock(
+  '../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry',
+  () => ({
+    getRemoteRuntimeTerminalMultiplexer: () => ({ subscribeTerminal })
+  })
+)
 
 type MutableStream = RemoteRuntimeMultiplexedTerminal & {
   sent: { text: string; seq?: number }[]
@@ -50,6 +53,7 @@ export function createStream(acknowledgesInput: boolean): MutableStream {
   return {
     streamId: 1,
     sent,
+    setOutputCadence: vi.fn(),
     sendInput: vi.fn((text: string, inputSeq?: number) => {
       sent.push({ text, seq: inputSeq })
       return true

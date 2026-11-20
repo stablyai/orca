@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session-turn-completion-wire'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import { OrchestrationDb } from './db'
+import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { OrchestrationDb } from './db/orchestration-db'
 import { ensureRoomReplyWatcher } from './room-reply-watcher'
 
 const aliceMember = 'orca_session_id:session_alice_0001'

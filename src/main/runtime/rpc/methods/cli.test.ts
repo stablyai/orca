@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../../../shared/cli/cli-install-types'
 import { eraseRpcMethods, type RpcContext } from '../core'
 import { CLI_METHODS } from './cli'
 

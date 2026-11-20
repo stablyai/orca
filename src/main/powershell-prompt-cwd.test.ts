@@ -4,12 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { removeTreeSync } from '../shared/windows-transient-lock-removal'
-import {
-  encodePowerShellCommand,
-  getPowerShellOsc133Bootstrap
-} from './powershell-osc133-bootstrap'
-import { resolveWindowsPowerShellExecutablePath } from './providers/windows-powershell-executable'
+import { removeTreeSync } from '../shared/file-write/windows-transient-lock-removal'
+import { encodePowerShellCommand } from '../shared/shell/launch/powershell-command-encoding'
+import { getPowerShellOsc133Bootstrap } from './pty/shell-startup/powershell-osc133-bootstrap'
+import { resolveWindowsPowerShellExecutablePath } from './providers/shell-launch/windows/powershell-executable'
 
 const directories: string[] = []
 const osc7 = new RegExp(

@@ -1,20 +1,26 @@
-import type { Store } from '../persistence'
-import { hasOrcadTemplate } from '../orcad/orcad-artifact-materializer'
-import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
-import { getRuntimeEnvironmentStatus } from '../ipc/runtime-environments/runtime-environment-status-probe'
-import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
-import { resolveEnvironment } from '../../shared/runtime-environment-store'
-import { getPreferredPairedRuntimeConnection } from '../../shared/runtime-environments'
-import type { WslHostStatus } from '../../shared/wsl-host-types'
-import { requestOrcadTerminalCensus } from '../ssh/orcad-terminal-census-client'
-import type { WslHostRuntimeAccess } from './wsl-host-server-stop'
-import { changesWslHostAccounts, pushWslOrcadHostAccountEnv } from './wsl-orcad-host-account-push'
-import { wslOrcadHostSupports } from './wsl-orcad-host-environments'
-import { createWslHostConnector } from './wsl-host-connector'
-import { createFakeWslHostConnector, readFakeWslHostsConfig } from './wsl-host-e2e-fake-connector'
-import { WslHostService } from './wsl-host-service'
-import { wslHostsGateOpen } from './wsl-host-gate'
-import { getWslHostService, setWslHostService } from './wsl-host-service-instance'
+import type { Store } from '../persistence/loading-store/store'
+import { hasOrcadTemplate } from '../orcad/artifact-slots/orcad-artifact-materializer'
+import { retireRemovedRuntimeEnvironment } from '../ipc/runtime-environments/catalog/runtime-environment-removal-cleanup'
+import { getRuntimeEnvironmentStatus } from '../ipc/runtime-environments/status/runtime-environment-status-probe'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getPreferredPairedRuntimeConnection } from '../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { WslHostStatus } from '../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import { requestOrcadTerminalCensus } from '../managed-server/lifecycle/orcad-terminal-census-client'
+import type { WslHostRuntimeAccess } from './host-lifecycle/wsl-host-server-stop'
+import {
+  changesWslHostAccounts,
+  pushWslOrcadHostAccountEnv
+} from './orcad/wsl-orcad-host-account-push'
+import { wslOrcadHostSupports } from './orcad/wsl-orcad-host-environments'
+import { createWslHostConnector } from './host-lifecycle/wsl-host-connector'
+import {
+  createFakeWslHostConnector,
+  readFakeWslHostsConfig
+} from './host-lifecycle/wsl-host-e2e-fake-connector'
+import { WslHostService } from './host-lifecycle/wsl-host-service'
+import { wslHostsGateOpen } from './host-lifecycle/wsl-host-gate'
+import { getWslHostService, setWslHostService } from './host-lifecycle/wsl-host-service-instance'
 
 export type WslHostRuntimeOptions = {
   store: Store
@@ -37,9 +43,11 @@ function createRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAcces
       }
       return response.result
     },
-    census: (environmentId) =>
+    census: async (environmentId) =>
       requestOrcadTerminalCensus(
-        getPreferredPairedRuntimeConnection(resolveEnvironment(getUserDataPath(), environmentId)),
+        getPreferredPairedRuntimeConnection(
+          await resolveEnvironment(getUserDataPath(), environmentId)
+        ),
         0
       )
   }
@@ -64,24 +72,26 @@ function createService(args: WslHostRuntimeOptions): WslHostService | null {
       void getRuntimeEnvironmentStatus(args.getUserDataPath(), environmentId, undefined, {
         reconnect: true
       }).catch(() => {})
-      const distro = service.recordForEnvironment(environmentId)?.distro
-      if (distro) {
-        const call = (method: string, params: unknown) =>
-          callRuntimeEnvironment(args.getUserDataPath(), environmentId, method, params)
-        void pushWslOrcadHostAccountEnv({
-          environmentId,
-          distro,
-          call,
-          hostSupports: (capability) =>
-            wslOrcadHostSupports(environmentId, capability, () => call('status.get', undefined))
-        })
-      }
+      void service.recordForEnvironment(environmentId).then((record) => {
+        const distro = record?.distro
+        if (distro) {
+          const call = (method: string, params: unknown) =>
+            callRuntimeEnvironment(args.getUserDataPath(), environmentId, method, params)
+          void pushWslOrcadHostAccountEnv({
+            environmentId,
+            distro,
+            call,
+            hostSupports: (capability) =>
+              wslOrcadHostSupports(environmentId, capability, () => call('status.get', undefined))
+          })
+        }
+      })
     },
     removed: (environmentId) =>
       retireRemovedRuntimeEnvironment(environmentId, args.invalidateTransport, args.store)
   })
   const onChange = service.handleConnectionChange.bind(service)
-  const isKnownDistro = (distro: string): boolean => service.isKnownDistro(distro)
+  const isKnownDistro = (distro: string): Promise<boolean> => service.isKnownDistro(distro)
   const runtime = createRuntimeAccess(args.getUserDataPath)
   service.attach(
     fake
@@ -116,20 +126,22 @@ export function startWslHostRuntime(args: WslHostRuntimeOptions): WslHostService
         if (status.state !== 'ready') {
           continue
         }
-        const distro = service.recordForEnvironment(status.environmentId)?.distro
-        if (distro) {
-          const call = (method: string, params: unknown) =>
-            callRuntimeEnvironment(args.getUserDataPath(), status.environmentId, method, params)
-          void pushWslOrcadHostAccountEnv({
-            environmentId: status.environmentId,
-            distro,
-            call,
-            hostSupports: (capability) =>
-              wslOrcadHostSupports(status.environmentId, capability, () =>
-                call('status.get', undefined)
-              )
-          })
-        }
+        void service.recordForEnvironment(status.environmentId).then((record) => {
+          const distro = record?.distro
+          if (distro) {
+            const call = (method: string, params: unknown) =>
+              callRuntimeEnvironment(args.getUserDataPath(), status.environmentId, method, params)
+            void pushWslOrcadHostAccountEnv({
+              environmentId: status.environmentId,
+              distro,
+              call,
+              hostSupports: (capability) =>
+                wslOrcadHostSupports(status.environmentId, capability, () =>
+                  call('status.get', undefined)
+                )
+            })
+          }
+        })
       }
     }
     if ('experimentalWslHosts' in updates) {

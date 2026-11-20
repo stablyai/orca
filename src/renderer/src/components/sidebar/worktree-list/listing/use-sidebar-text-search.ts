@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { SidebarFeedIndex } from '../../../../../../shared/sidebar-list/sidebar-feed-index'
+import type { SidebarFeedIndex } from '../../../../../../shared/sidebar-list/feed/sidebar-feed-index'
 import {
   didWorkspaceTextQueryHitLimit,
   EMPTY_COLLAPSED_GROUPS,

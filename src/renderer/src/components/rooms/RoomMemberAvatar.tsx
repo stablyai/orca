@@ -1,6 +1,6 @@
 import { Bot, Crown, User } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { cn } from '@/lib/class-names'
 import type { RoomMember } from './room-types'
 
 type AvatarMember = Pick<RoomMember, 'name'> & { isAdmin?: boolean; agent?: string }

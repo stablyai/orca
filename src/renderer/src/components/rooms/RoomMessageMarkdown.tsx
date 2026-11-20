@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import type { JSX } from 'react'
-import { MarkdownPreviewBody } from '@/components/editor/MarkdownPreviewBody'
-import { cn } from '@/lib/utils'
+import { MarkdownPreviewBody } from '@/components/editor/markdown-preview/render-tree/MarkdownPreviewBody'
+import { cn } from '@/lib/class-names'
 import { stripRoomToolBlocks } from './room-chat-transcript-model'
 
 const EMPTY_COMPONENTS = {}

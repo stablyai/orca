@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canShowRightSidebarForView,
   rightSidebarShowsPullRequestData
-} from './right-sidebar-visibility'
+} from '../components/right-sidebar/visibility/right-sidebar-visibility'
 import type { AppState } from '@/store/types'
 
 function makeState(

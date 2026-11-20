@@ -1,14 +1,19 @@
-import type {
-  RuntimeClientEvent,
-  RuntimeClientEventStreamMessage
-} from '../../../../shared/runtime-client-events'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-runtime-session'
+import type { LegacyRelayBridgedPane } from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import {
+  getClientForEnvironment,
+  requireActiveEnvironmentOrNull
+} from '../runtime/client/web-runtime-session'
 
-type LegacyRelayBridgedPanesChanged = Extract<
-  RuntimeClientEvent,
-  { type: 'legacyRelayBridgedPanesChanged' }
->
+type LegacyRelayBridgedPanesChanged = {
+  type: 'legacyRelayBridgedPanesChanged'
+  panes: LegacyRelayBridgedPane[]
+}
+type LegacyRelayBridgeStreamEvent =
+  | LegacyRelayBridgedPanesChanged
+  | { type: 'legacyRelayBridgedPaneData'; ptyId: string; data: string }
+  | { type: 'legacyRelayBridgedPaneReplay'; ptyId: string; replay: string }
+  | { type: 'legacyRelayBridgedPaneExit'; ptyId: string; code: number }
 
 const panesListeners = new Set<(panes: LegacyRelayBridgedPanesChanged['panes']) => void>()
 const dataListeners = new Set<(event: { ptyId: string; data: string }) => void>()
@@ -32,7 +37,7 @@ function deliverEvent(response: RuntimeRpcResponse<unknown>): void {
     scheduleSubscription()
     return
   }
-  const message = response.result as RuntimeClientEventStreamMessage
+  const message = response.result as LegacyRelayBridgeStreamEvent
   if (message.type === 'legacyRelayBridgedPanesChanged') {
     for (const listener of panesListeners) {
       listener(message.panes)

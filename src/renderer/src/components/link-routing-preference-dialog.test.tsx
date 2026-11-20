@@ -2,11 +2,11 @@
 import { cleanup, render, renderHook, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LinkRoutingPreferenceDialogProvider } from './link-routing-preference-dialog'
+import { LinkRoutingPreferenceDialogProvider } from './link-actions/link-routing-preference-dialog'
 import {
   useLinkRoutingPreferenceDialog,
   type LinkRoutingPreferenceDialogOptions
-} from './link-routing-preference-dialog-context'
+} from './link-actions/link-routing-preference-dialog-context'
 
 const mocks = vi.hoisted(() => ({ setBlocking: vi.fn() }))
 vi.mock('@/store', () => ({

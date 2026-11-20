@@ -1,7 +1,7 @@
 import type {
   BrowserConsoleResult,
   BrowserNetworkLogResult
-} from '../../../shared/runtime-browser-contracts'
+} from '../../../shared/browser/runtime/runtime-browser-contracts'
 import type { AutomationCommandContext, TauriCdpSender } from './tauri-native-browser-automation'
 import {
   readTauriBrowserConsole,

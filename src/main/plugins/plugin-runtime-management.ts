@@ -1,4 +1,4 @@
-import type { PluginLockfile } from '../../shared/plugins/plugin-install-lockfile'
+import type { PluginLockfile } from '../../shared/plugins/installation/plugin-install-lockfile'
 import type { PluginService } from './plugin-service'
 
 export function canRemoveInstalledPlugin(

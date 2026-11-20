@@ -1,7 +1,7 @@
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-result'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
-import { callEnvironmentEnvelope } from './web-runtime-calls'
+import { unwrapRuntimeRpcResult } from '../../runtime/rpc/calls/runtime-rpc-result'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
+import { callEnvironmentEnvelope } from '../runtime/client/web-runtime-calls'
 import type { TauriPtyState } from './web-tauri-pty-state'
 
 type TauriPtyCwdBinding = Pick<TauriPtyState, 'handle' | 'cwd' | 'endpoint'>

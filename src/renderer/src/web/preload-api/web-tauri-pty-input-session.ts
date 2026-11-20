@@ -1,7 +1,7 @@
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-contracts'
-import { createRemoteRuntimeInputJournal } from '../../components/terminal-pane/remote-runtime-input-journal'
-import type { RemoteRuntimeInputEndpoint } from '../../components/terminal-pane/remote-runtime-recovery-input-hold'
-import type { RemoteRuntimeMultiplexedTerminal } from '../../runtime/remote-runtime-terminal-multiplexer-types'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import { createRemoteRuntimeInputJournal } from '../../components/terminal-pane/pty-transport/remote-runtime/input/remote-runtime-input-journal'
+import type { RemoteRuntimeInputEndpoint } from '../../components/terminal-pane/pty-transport/remote-runtime/input/remote-runtime-recovery-input-hold'
+import type { RemoteRuntimeMultiplexedTerminal } from '../../runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
 
 export type TauriPtyInputSession = {
   key: string

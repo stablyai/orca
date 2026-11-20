@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { getAgentSessionIdsKey } from './ai-vault-agent-session-refresh-key'
-import { useAiVaultSessionHostRefreshEvents } from './ai-vault-host-scope'
+import { getAgentSessionIdsKey } from './ai-vault/scanning/ai-vault-agent-session-refresh-key'
+import { useAiVaultSessionHostRefreshEvents } from './ai-vault/scope/ai-vault-host-scope'
 
 // Why split: keeps the session list hook under the line budget. Triggers only
 // read screen state and call back into the list refresh, so they own no scan state.

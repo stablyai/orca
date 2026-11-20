@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../shared/orca-session-address'
-import { createStructuredAgentSessionId } from '../../../shared/structured-agent-session-create'
-import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../shared/agent-session/identity/orca-session-address'
+import { createStructuredAgentSessionOperationId } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { createStructuredAgentSessionForWorktree } from '../rpc/methods/structured-agent-session-create'
-import type { OrchestrationDb } from './db'
+import { createStructuredAgentSessionForWorktree } from '../rpc/methods/structured-sessions/creation/structured-agent-session-create'
+import type { OrchestrationDb } from './db/orchestration-db'
 import type { RoomWithMembers } from './db/rooms/room-store'
 import { OrchestrationError } from './orchestration-error'
 import { MAIN_BOT_INSTRUCTIONS, MAIN_BOT_TOOL_DOC } from './room-admin-tools'
@@ -42,7 +44,7 @@ export async function spawnRoomBot(args: {
       ? `${args.instructions.trim()}\n${MAIN_BOT_TOOL_DOC}`
       : MAIN_BOT_INSTRUCTIONS
     : args.instructions?.trim()
-  const sessionId = createStructuredAgentSessionId(args.agent, randomUUID)
+  const sessionId = `${args.agent}_${randomUUID()}`
   const created = await createStructuredAgentSessionForWorktree({
     runtime: args.runtime,
     ensureHost: async () => {

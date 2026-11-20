@@ -1,7 +1,7 @@
 import type { SshConnectionManager } from './connection/ssh-connection-manager'
-import type { SshConnectionStore } from './connection/ssh-connection-store'
+import type { SshConnectionStore } from './targets/ssh-connection-store'
 import type { SshPortForwardManager } from './port-forwarding/ssh-port-forward'
-import type { SavedPortForward } from '../../shared/ssh-types'
+import type { SavedPortForward } from '../../shared/remote-runtime/ssh/ssh-types'
 
 type PortForwardPersistenceDependencies = {
   store: Pick<SshConnectionStore, 'getTarget' | 'updateTarget'>

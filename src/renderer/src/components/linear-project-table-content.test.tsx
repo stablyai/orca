@@ -7,7 +7,8 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: () => null
 }))
 
-const { LinearProjectTableContent } = await import('./linear-project-table-content')
+const { LinearProjectTableContent } =
+  await import('./task-page/linear/projects/linear-project-table-content')
 
 describe('LinearProjectTableContent', () => {
   const projects = [

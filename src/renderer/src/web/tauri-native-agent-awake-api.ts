@@ -7,9 +7,9 @@
 // host whose agents this machine's blocker must track.
 
 import type { PreloadApi } from '../../../preload/api-types'
-import type { ComputerAwakeStatus } from '../../../shared/computer-awake-mode'
+import type { ComputerAwakeStatus } from '../../../shared/app-lifecycle/computer-awake-mode'
 import { invokeNative, isTauriNativeHost, listenNative } from './tauri-native-host'
-import { createWebRuntimeApi } from './preload-api/web-runtime-api'
+import { createWebRuntimeApi } from './preload-api/runtime/web-runtime-api'
 
 const EVENT_AGENT_AWAKE_CHANGED = 'agentAwake:changed'
 

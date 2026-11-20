@@ -1,7 +1,7 @@
-import type { PtyApi } from '../../../../preload/api/pty-api'
-import type { PtySessionListScope } from '../../../../shared/pty-listed-session'
-import type { RuntimeTerminalListResult } from '../../../../shared/runtime-terminal-contracts'
-import { hostScopeCensusIsComplete } from '../../../../shared/runtime-listing-host-scope'
+import type { PtyApi } from '../../../../preload/api/terminal/pty-api'
+import type { PtySessionListScope } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
+import type { RuntimeTerminalListResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { hostScopeCensusIsComplete } from '../../../../shared/execution-host/runtime-listing-host-scope'
 import {
   parseRemoteRuntimePtyId,
   toRemoteRuntimePtyId
@@ -10,10 +10,10 @@ import {
   classifyTerminalProcessInspectionFailure,
   clientOnlyUnverifiableInspection,
   type TerminalProcessInspection
-} from '../../../../shared/terminal-process-inspection'
-import { unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-result'
-import { callEnvironmentEnvelope } from './web-runtime-calls'
-import { requireActiveEnvironment } from './web-runtime-session'
+} from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { unwrapRuntimeRpcResult } from '../../runtime/rpc/calls/runtime-rpc-result'
+import { callEnvironmentEnvelope } from '../runtime/client/web-runtime-calls'
+import { requireActiveEnvironment } from '../runtime/client/web-runtime-session'
 import { callTauriPtyHost } from './web-tauri-pty-host'
 
 type MainBufferSnapshot = Awaited<ReturnType<PtyApi['getMainBufferSnapshot']>>

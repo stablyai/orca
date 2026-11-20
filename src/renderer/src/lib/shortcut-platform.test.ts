@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
-import { isSelectAllShortcut } from './editable-target'
-import { getShortcutPlatform } from './shortcut-platform'
+import { isSelectAllShortcut } from './text-input/focus/editable-target'
+import { getShortcutPlatform } from './keyboard/shortcut-platform'
 
 const originalUserAgent = navigator.userAgent
 const originalMaxTouchPoints = navigator.maxTouchPoints

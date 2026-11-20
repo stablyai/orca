@@ -17,7 +17,8 @@ export function createWebMobileApi(): Partial<PreloadApi> {
       getRelayStatus: () => Promise.resolve({ status: 'offline' as const }),
       onRelayStatusChanged: () => noopUnsubscribe,
       consumePendingUnpairedDeviceAuthFailure: () => Promise.resolve(false),
-      onUnpairedDeviceAuthFailure: () => noopUnsubscribe
+      onUnpairedDeviceAuthFailure: () => noopUnsubscribe,
+      isWebSocketReady: () => Promise.resolve({ ready: false, endpoint: null })
     }
   }
 }

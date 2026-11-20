@@ -1,10 +1,10 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
-} from '../../../../shared/folder-workspace-path-status'
-import { callRuntimeResult } from './web-runtime-calls'
+} from '../../../../shared/folder-workspaces/folder-workspace-path-status'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
 
 /**
  * Folder workspaces are owned by the local orcad runtime in Tauri, just as they
@@ -24,13 +24,7 @@ export function createWebFolderWorkspacesApi(): NonNullable<
           args
         )
       ).status,
-    create: async (args) =>
-      (
-        await callRuntimeResult<{ folderWorkspace: FolderWorkspace }>(
-          'folderWorkspace.create',
-          args
-        )
-      ).folderWorkspace,
+    create: (args) => callRuntimeResult('folderWorkspace.create', args),
     update: async (args) =>
       (
         await callRuntimeResult<{ folderWorkspace: FolderWorkspace | null }>(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { subtreeHasChatGroup } from './subtree-chat-groups'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
-import { buildSplitNode } from '../../../../shared/workspace-layout/tab-group-layout-tree'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import { buildSplitNode } from '../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 
 describe('subtreeHasChatGroup', () => {
   it('matches a chat leaf by group id', () => {

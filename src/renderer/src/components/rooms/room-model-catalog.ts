@@ -1,5 +1,5 @@
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session-wire'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { LOCAL } from './room-types'
 
 export type CatalogModel = {

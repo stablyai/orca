@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { SSH_CREDENTIAL_TIMEOUT_MS } from './connection/ssh-connection-timing'
 import type { SshCredentialKind } from './connection/ssh-connection-callbacks'
-import { recordSshCredentialDeclined } from './ssh-credential-decline'
+import { recordSshCredentialDeclined } from './authentication/ssh-credential-decline'
 
 type SshCredentialRequest = {
   requestId: string

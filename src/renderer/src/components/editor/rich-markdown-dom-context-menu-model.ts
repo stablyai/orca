@@ -1,9 +1,9 @@
 import type { Editor } from '@tiptap/react'
 import { translate } from '@/i18n/i18n'
-import { handleAppMenuPasteRequest } from '@/lib/app-menu-paste'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { handleAppMenuPasteRequest } from '@/lib/clipboard/menu/app-menu-paste'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { isTauriNativeHost } from '../../web/tauri-native-host'
-import type { RichMarkdownContextMenuCommand } from '../../../../shared/rich-markdown-context-menu'
+import type { RichMarkdownContextMenuCommand } from '../../../../shared/editor/markdown/rich-markdown-context-menu'
 
 export type RichMarkdownDomMenuCellType = 'body' | 'header'
 

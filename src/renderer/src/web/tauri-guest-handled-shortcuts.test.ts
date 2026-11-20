@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { KEYBINDING_DEFINITIONS, type KeybindingOverrides } from '../../../shared/keybindings'
+import { KEYBINDING_DEFINITIONS } from '../../../shared/keybindings/definitions'
+import type { KeybindingOverrides } from '../../../shared/keybindings/types'
 import {
   EVENT_BROWSER_HANDLED_SHORTCUTS,
   computeTauriGuestHandledShortcuts,

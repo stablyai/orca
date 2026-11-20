@@ -1,7 +1,7 @@
-import { requestTerminalTabRenameWhenMounted } from '@/components/tab-bar/terminal-tab-rename-request'
+import { requestTerminalTabRenameWhenMounted } from '@/components/tab-bar/terminal-tabs/terminal-tab-rename-request'
 import { useAppStore } from '@/store'
-import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
-import { activateAndRevealWorkspace } from './worktree-activation'
+import { focusTerminalTabSurface } from '../components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { activateAndRevealWorkspace } from './workspace/activation/worktree-activation'
 
 /** Reveals a tab launched from Chat UI before opening its inline name editor. */
 export function activateNativeChatAgentLaunchTab(tabId: string): void {

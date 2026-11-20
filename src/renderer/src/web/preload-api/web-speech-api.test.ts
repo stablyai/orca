@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { subscribeRuntimeEnvironment } from '../../runtime/runtime-environment-pairing-refresh'
+import type { subscribeRuntimeEnvironment } from '../../runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import { createWebSpeechApi } from './web-speech-api'
 
 const { subscribe, callRuntimeResult } = vi.hoisted(() => ({
@@ -7,7 +7,7 @@ const { subscribe, callRuntimeResult } = vi.hoisted(() => ({
   callRuntimeResult: vi.fn()
 }))
 
-vi.mock('../../runtime/runtime-environment-pairing-refresh', () => ({
+vi.mock('../../runtime/rpc/environment-revisions/runtime-environment-pairing-refresh', () => ({
   subscribeRuntimeEnvironment: subscribe
 }))
 vi.mock('./web-runtime-calls', () => ({ callRuntimeResult }))

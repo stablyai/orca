@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveNiubashPath, resolveNiubashShellPath } from './niubash'
-import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
-import { shellPathProbe, SHELL_PATH_DELIMITER } from './startup/shell-path-probe'
-import { resolveSetupRunnerShell } from './worktree-runner-script'
+import { resolveWindowsShellLaunchArgs } from './providers/shell-launch/windows/shell-args'
+import { shellPathProbe, SHELL_PATH_DELIMITER } from './startup/shell-environment/shell-path-probe'
+import { resolveSetupRunnerShell } from './workspace-hooks/worktree-runner-script'
 
 afterEach(() => vi.unstubAllGlobals())
 

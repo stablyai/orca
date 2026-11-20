@@ -1,13 +1,11 @@
 import { useEffect, useRef } from 'react'
-import {
-  KEYBINDING_DEFINITIONS,
-  getEffectiveKeybindingsForDefinition,
-  parseKeybinding,
-  platformModifiers,
-  type KeybindingOverrides
-} from '../../../shared/keybindings'
+import { KEYBINDING_DEFINITIONS } from '../../../shared/keybindings/definitions'
+import { getEffectiveKeybindingsForDefinition } from '../../../shared/keybindings/effective'
+import { platformModifiers } from '../../../shared/keybindings/matching-key'
+import { parseKeybinding } from '../../../shared/keybindings/parser'
+import type { KeybindingOverrides } from '../../../shared/keybindings/types'
 import { useAppStore } from '../store'
-import { shortcutPlatform } from '../app-shell/app-window-chrome'
+import { shortcutPlatform } from '../app-shell/chrome/app-window-chrome'
 import { emitNative, invokeNative, isTauriNativeHost } from './tauri-native-host'
 
 // Why: the guest init script suppresses its own default handling only for

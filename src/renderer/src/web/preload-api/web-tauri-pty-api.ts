@@ -1,11 +1,12 @@
+/* eslint-disable max-lines */
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-contracts'
-import type { TerminalInputKind } from '../../../../shared/terminal-input-kind'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { callRuntimeResult } from './web-runtime-calls'
-import { requireActiveEnvironment } from './web-runtime-session'
-import { getRemoteRuntimeTerminalMultiplexer } from '../../runtime/remote-runtime-terminal-multiplexer'
-import type { RemoteRuntimeMultiplexedTerminal } from '../../runtime/remote-runtime-terminal-multiplexer-types'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
+import { requireActiveEnvironment } from '../runtime/client/web-runtime-session'
+import { getRemoteRuntimeTerminalMultiplexer } from '../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+import type { RemoteRuntimeMultiplexedTerminal } from '../../runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
 import {
   addTauriPtyDataListener,
   addTauriPtyExitListener,
@@ -111,11 +112,10 @@ async function spawnTauriPty(opts: TauriPtySpawnOptions): Promise<SpawnResult> {
             ...meta,
             rawLength: meta?.rawLength ?? data.length
           }),
-        onEnd: (verdict, exitCode) => {
+        onEnd: (verdict) => {
           snapshotHandshake.fail(new Error(`terminal_initial_snapshot_${verdict}`))
           const exited = verdict === 'exited'
-          // Why ?? 0: legacy hosts end codeless; Electron reports 0 for a clean finish.
-          const code = exited ? (exitCode ?? 0) : 1
+          const code = exited ? 0 : 1
           retireTauriPty(id, inputSession, subscribedStream, code, exited, !exited)
         },
         onError: () => {
@@ -214,6 +214,13 @@ function stateFor(id: string): TauriPtyState | null {
   return tauriPtyStates.get(id) ?? null
 }
 
+function sendTerminalCommand(id: string, method: string): void {
+  const state = stateFor(id)
+  if (state) {
+    void callTauriPtyHost(state.id, method, { terminal: state.handle }).catch(() => {})
+  }
+}
+
 export function createTauriPtyApi(): TauriPtyApi {
   return {
     spawn: spawnTauriPty,
@@ -279,22 +286,8 @@ export function createTauriPtyApi(): TauriPtyApi {
         )
       }
     },
-    clearBuffer: (id) => {
-      const state = stateFor(id)
-      if (state) {
-        void callTauriPtyHost(state.id, 'terminal.clearBuffer', { terminal: state.handle }).catch(
-          () => {}
-        )
-      }
-    },
-    resetInputModes: (id) => {
-      const state = stateFor(id)
-      if (state) {
-        void callTauriPtyHost(state.id, 'terminal.resetInputModes', {
-          terminal: state.handle
-        }).catch(() => {})
-      }
-    },
+    clearBuffer: (id) => sendTerminalCommand(id, 'terminal.clearBuffer'),
+    resetInputModes: (id) => sendTerminalCommand(id, 'terminal.resetInputModes'),
     kill: async (id, opts) => {
       const state = stateFor(id)
       if (!state) {
@@ -313,17 +306,9 @@ export function createTauriPtyApi(): TauriPtyApi {
     },
     getCwd: (id) => readTauriPtyCwd(id, stateFor),
     getSize: async (id) => stateFor(id)?.size ?? null,
-    onData: (callback) => {
-      return addTauriPtyDataListener(callback)
-    },
-    onReplay: (callback) => {
-      return addTauriPtyReplayListener(callback)
-    },
-    onExit: (callback) => {
-      return addTauriPtyExitListener(callback)
-    },
-    onSpawned: (callback) => {
-      return addTauriPtySpawnedListener(callback)
-    }
+    onData: addTauriPtyDataListener,
+    onReplay: addTauriPtyReplayListener,
+    onExit: addTauriPtyExitListener,
+    onSpawned: addTauriPtySpawnedListener
   }
 }

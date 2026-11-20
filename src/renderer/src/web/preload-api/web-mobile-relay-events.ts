@@ -1,6 +1,6 @@
-import type { MobileRelayStatusDetail } from '../../../../shared/mobile-relay-status'
-import { subscribeRuntimeClientEvents } from '../../runtime/runtime-client-events'
-import { requireActiveEnvironmentOrNull } from './web-runtime-session'
+import type { MobileRelayStatusDetail } from '../../../../shared/remote-runtime/relay/mobile-relay-status'
+import { subscribeRuntimeClientEvents } from '../../runtime/rpc/subscriptions/runtime-client-events'
+import { requireActiveEnvironmentOrNull } from '../runtime/client/web-runtime-session'
 
 const listeners = new Set<(detail: MobileRelayStatusDetail) => void>()
 let subscription: { unsubscribe: () => void } | null = null
@@ -28,11 +28,15 @@ function ensureSubscription(): void {
   subscriptionPromise = subscribeRuntimeClientEvents(
     environment.id,
     (event) => {
-      if (event.type !== 'mobileRelayStatusChanged') {
+      const raw = event as unknown as
+        | ({ type: 'mobileRelayStatusChanged' } & MobileRelayStatusDetail)
+        | { type: string }
+      if (raw.type !== 'mobileRelayStatusChanged') {
         return
       }
+      const detail = raw as { type: 'mobileRelayStatusChanged' } & MobileRelayStatusDetail
       for (const listener of listeners) {
-        listener({ status: event.status, cellUrl: event.cellUrl })
+        listener({ status: detail.status, cellUrl: detail.cellUrl })
       }
     },
     () => scheduleRetry()

@@ -4,14 +4,14 @@ import type {
   WslHostDistro,
   WslHostServerStop,
   WslHostStatus
-} from '../../../../shared/wsl-host-types'
+} from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import {
   WslHostAddParams,
   WslHostConnectParams,
   WslHostEnvironmentParams,
   WslHostVisibleWorkParams
 } from '../../../../shared/rpc-contract/wsl-host-params'
-import { getWslHostService } from '../../../wsl/wsl-host-service-instance'
+import { getWslHostService } from '../../../wsl/host-lifecycle/wsl-host-service-instance'
 import { defineMethod } from '../core'
 
 function requireWslHostService() {

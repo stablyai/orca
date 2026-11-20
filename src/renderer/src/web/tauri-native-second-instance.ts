@@ -1,4 +1,4 @@
-import type { MarkdownDocument } from '../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
 import { skillShareIdFromArguments } from '../../../shared/skills/sharing/skill-share-link'
 import type { PreloadApi } from '../../../preload/api-types'
 import { invokeNative, listenNative } from './tauri-native-host'

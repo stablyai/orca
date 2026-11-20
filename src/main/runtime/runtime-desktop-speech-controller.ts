@@ -11,7 +11,7 @@ import {
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
 import type { SttEvent } from '../speech/stt-service'
-import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeStore } from './construction/runtime-store-contract'
 
 export type RuntimeDesktopSpeechEvent =
   | { type: 'downloadProgress'; modelId: string; progress: number }
@@ -108,7 +108,7 @@ export class RuntimeDesktopSpeechController {
       await getSpeechSttService(store).startDictation(
         modelId,
         (event) => this.acceptEvent(active, event),
-        hotwordsPath,
+        hotwords?.map((term) => ({ term })),
         owner
       )
     } catch (error) {

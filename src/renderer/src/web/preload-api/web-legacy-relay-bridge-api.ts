@@ -1,11 +1,11 @@
-import type { LegacyRelayBridgeApi } from '../../../../preload/api/legacy-relay-bridge-api'
+import type { LegacyRelayBridgeApi } from '../../../../preload/api/mobile/legacy-relay-bridge-api'
 import type {
   LegacyRelayBridgeAttachResult,
   LegacyRelayBridgeCloseResult,
   LegacyRelayBridgedPane
-} from '../../../../shared/legacy-relay-bridge-contract'
-import { callRuntimeResult } from './web-runtime-calls'
-import { requireActiveEnvironmentOrNull } from './web-runtime-session'
+} from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
+import { requireActiveEnvironmentOrNull } from '../runtime/client/web-runtime-session'
 import {
   onLegacyRelayBridgedPaneData,
   onLegacyRelayBridgedPaneExit,

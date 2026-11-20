@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
-import { VirtualizedList } from '@/components/virtualized-list'
+import { VirtualizedList } from '@/components/ui/virtualized-list'
 import { translate } from '@/i18n/i18n'
-import type { GitHistoryItem, GitHistoryResult } from '../../../../../../shared/git-history'
-import type { GitHistoryItemViewModel } from '../../../../../../shared/git-history-graph'
-import { getGitHistoryItemLaneIndex } from '../../../../../../shared/git-history-graph'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type {
+  GitHistoryItem,
+  GitHistoryResult
+} from '../../../../../../shared/git/history/git-history-types'
+import type { GitHistoryItemViewModel } from '../../../../../../shared/git/history/git-history-graph'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { SourceControlRowOpenEvent } from '../listing/split-open'
 import { GitHistoryRow } from './git-history-row'
 import { GitHistoryCommitFiles, type GitHistoryCommitFilesState } from './git-history-commit-files'
@@ -53,20 +55,6 @@ export function GitHistoryList({
   paginationPaused?: boolean
 }): React.JSX.Element {
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
-  const graphLaneCount = useMemo(
-    () =>
-      viewModels.reduce(
-        (count, row) =>
-          Math.max(
-            count,
-            row.inputSwimlanes.length,
-            row.outputSwimlanes.length,
-            getGitHistoryItemLaneIndex(row) + 1
-          ),
-        1
-      ),
-    [viewModels]
-  )
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
@@ -86,7 +74,7 @@ export function GitHistoryList({
     }
   }, [identity, scrollElement])
 
-  const canLoad = Boolean(result.hasMore && result.nextCursor && onLoadMore)
+  const canLoad = Boolean(onLoadMore)
   const pagingDisabled = refreshing || paginationPaused
   useEffect(() => {
     const sentinel = sentinelRef.current
@@ -186,7 +174,6 @@ export function GitHistoryList({
           const row = (
             <GitHistoryRow
               viewModel={viewModel}
-              graphLaneCount={graphLaneCount}
               expanded={isExpanded}
               preserveRefIds={result.baseRef ? [result.baseRef.id] : undefined}
               onOpenCommit={onOpenCommit}

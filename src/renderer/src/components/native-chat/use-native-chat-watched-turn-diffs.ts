@@ -2,12 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
-} from '@/hooks/worktree-file-change-event'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { getRuntimeGitDiff } from '@/runtime/runtime-git-diff-client'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/files/watching/worktree-file-change-event'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { getRuntimeGitDiff } from '@/runtime/source-control/git/runtime-git-diff-client'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
   MAX_WATCHED_DIFF_FILES_PER_TURN,
   watchedFilePathsFromFsPayload,

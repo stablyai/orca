@@ -243,29 +243,13 @@ export async function getRuntimeGitHistory(
   /** `wakeWslDistro`: Refresh, a user act that may start a stopped WSL distro. Local only. */
   { wakeWslDistro, ...options }: GitHistoryOptions & { wakeWslDistro?: boolean } = {}
 ): Promise<GitHistoryResult> {
-  try {
-    return await readRuntimeGitHistory(context, options)
-  } catch (error) {
-    // Why: older hosts throw on huge ref counts instead of falling back.
-    if (options.scope === 'all' && !options.forceAllRefs && isHistoryRefLimitError(error)) {
-      const fallback = await readRuntimeGitHistory(context, {
-        ...options,
-        includeRelatedRefs: false,
-        scope: 'current'
-      })
-      return { ...fallback, refLimitExceeded: true }
-    }
-    throw error
-  }
-}
-
-function isHistoryRefLimitError(error: unknown): boolean {
-  return error instanceof Error && error.message.includes('Too many branch refs')
+  return readRuntimeGitHistory(context, options, wakeWslDistro)
 }
 
 async function readRuntimeGitHistory(
   context: RuntimeGitContext,
-  options: GitHistoryOptions
+  options: GitHistoryOptions,
+  wakeWslDistro?: boolean
 ): Promise<GitHistoryResult> {
   const target = context.target
   if (target.kind === 'local' || !context.worktreeId) {

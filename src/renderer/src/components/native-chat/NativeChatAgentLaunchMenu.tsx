@@ -7,14 +7,15 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
+import { QuickLaunchAgentMenuItems } from '@/components/agent/launch-menu/AgentMenuItems'
 import { activateNativeChatAgentLaunchTab } from '@/lib/activate-native-chat-agent-launch-tab'
 import { useAppStore } from '@/store'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { translate } from '@/i18n/i18n'
-import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import { useNativeChatTabOwnerWorktreeId } from './pane/ownership/use-native-chat-tab-owner'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 export type NativeChatAgentLaunchMenuProps = {
   terminalTabId: string
@@ -65,7 +66,6 @@ export function NativeChatAgentLaunchMenu({
               worktreeId={worktreeId}
               groupId={groupId}
               onFocusTerminal={activateNativeChatAgentLaunchTab}
-              onFocusChat={activateNativeChatAgentLaunchTab}
               launchSource="native_chat"
             />
           ) : null

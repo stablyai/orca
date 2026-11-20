@@ -1,4 +1,4 @@
-import type { BrowserSessionProfileSource } from '../../../shared/browser-workspace-types'
+import type { BrowserSessionProfileSource } from '../../../shared/browser/workspaces/browser-workspace-types'
 
 // Why localStorage: the Tauri renderer has no main process holding the import
 // map like Electron's clientRouteCookieImportSources, so this desktop's

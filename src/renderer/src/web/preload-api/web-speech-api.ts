@@ -1,15 +1,15 @@
 import { z } from 'zod'
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { SecretAtRestProtection } from '../../../../shared/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../../../shared/secure-storage/secret-at-rest-protection'
 import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechModelManifest,
   SpeechModelState,
   SpeechTranscriptEvent
-} from '../../../../shared/speech-types'
-import { subscribeRuntimeEnvironment } from '../../runtime/runtime-environment-pairing-refresh'
-import { callRuntimeResult } from './web-runtime-calls'
+} from '../../../../shared/speech/speech-types'
+import { subscribeRuntimeEnvironment } from '../../runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
 
 const SpeechEvent = z.union([
   z.object({ type: z.enum(['ready', 'stopped']), sessionId: z.string() }),
@@ -140,6 +140,11 @@ export function createWebSpeechApi(): NonNullable<Partial<PreloadApi>['speech']>
       callRuntimeResult<{ configured: boolean }>('speech.desktop.saveOpenAiApiKey', { apiKey }),
     clearOpenAiApiKey: () =>
       callRuntimeResult<{ configured: boolean }>('speech.desktop.clearOpenAiApiKey'),
+    getOpenAiCompatibleProvider: () => Promise.reject(new Error('unsupported')),
+    saveOpenAiCompatibleProvider: () => Promise.reject(new Error('unsupported')),
+    clearOpenAiCompatibleProvider: () => Promise.reject(new Error('unsupported')),
+    cancelDictation: () => Promise.reject(new Error('unsupported')),
+    onSpeechPending: () => () => {},
     downloadModel: (modelId) => callRuntimeResult('speech.desktop.downloadModel', { modelId }),
     cancelDownload: (modelId) => callRuntimeResult('speech.desktop.cancelDownload', { modelId }),
     deleteModel: (modelId) => callRuntimeResult('speech.desktop.deleteModel', { modelId }),

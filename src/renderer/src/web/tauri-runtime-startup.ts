@@ -1,11 +1,14 @@
 import { invokeNative, isTauriNativeHost } from './tauri-native-host'
-import { parseWebPairingInput } from './web-pairing'
+import { parseWebPairingInput } from './pairing/web-pairing'
 import {
   createStoredWebRuntimeEnvironment,
   readStoredWebRuntimeEnvironment,
   saveStoredWebRuntimeEnvironment
-} from './web-runtime-environment'
-import { getStoredSettings, writeStoredSettings } from './preload-api/web-preferences-store'
+} from './pairing/web-runtime-environment'
+import {
+  getStoredSettings,
+  writeStoredSettings
+} from './preload-api/preferences/web-preferences-store'
 
 export async function initializeTauriRuntime(): Promise<void> {
   if (!isTauriNativeHost()) {

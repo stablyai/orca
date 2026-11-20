@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -82,6 +83,7 @@ export class RuntimeClientSettingsController {
       agentDefaultArgs: launchProfile.agentDefaultArgs,
       agentDefaultEnv: launchProfile.agentDefaultEnv,
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
+      keepComputerAwakeWhileAgentsRun: settings.keepComputerAwakeWhileAgentsRun === true,
       // Always present, so a client can tell this host accepts the setting (older hosts omit it).
       codexShareHistoryAcrossAccounts: settings.codexShareHistoryAcrossAccounts !== false,
       claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled !== false,

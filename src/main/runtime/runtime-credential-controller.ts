@@ -1,6 +1,9 @@
-import type { CursorAccountStatus, GrokAccountStatus } from '../../shared/rate-limit-types'
+import type {
+  CursorAccountStatus,
+  GrokAccountStatus
+} from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { MiniMaxCredentialsStatus } from '../../shared/minimax-credential-types'
-import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
+import type { ZcodePlanCredentialsStatus } from '../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import {
   clearMiniMaxSessionCookie,
   getMiniMaxSessionCookieProtection,
@@ -13,7 +16,7 @@ import {
   hasMiniMaxApiKey,
   saveMiniMaxApiKey
 } from '../minimax/minimax-api-key-store'
-import { clearMiniMaxSessionCookieJar } from '../rate-limits/minimax/minimax-request-context'
+import { clearMiniMaxSessionCookieJar } from '../rate-limits/providers/minimax/minimax-request-context'
 import {
   clearZcodePlanApiKey,
   getZcodePlanApiKeyProtection,
@@ -24,12 +27,12 @@ import {
   clearOpenCodeGoApiKey,
   hasOpenCodeGoApiKey,
   saveOpenCodeGoApiKey
-} from '../opencode/opencode-go-api-key-store'
+} from '../opencode/accounts/opencode-go-api-key-store'
 import { getCursorAccountStatus } from '../cursor-accounts/status'
 import { getGrokAccountStatus } from '../grok-accounts/status'
-import { hasZcodeCliPlanCredentials } from '../rate-limits/zcode-usage-fetcher'
-import { refreshAfterCredentialChange } from '../ipc/credential-change-rate-limit-refresh'
-import type { RateLimitService } from '../rate-limits/service'
+import { hasZcodeCliPlanCredentials } from '../rate-limits/providers/zcode/zcode-usage-credentials'
+import { refreshAfterCredentialChange } from '../ipc/accounts/credential-change-rate-limit-refresh'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 
 export class RuntimeCredentialController {
   constructor(private readonly getRateLimits: () => RateLimitService) {}

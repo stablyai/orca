@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal-unary-params'
+import { TerminalHandle } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
 import { defineMethod } from '../../core'
 
 type TerminalCwdHost = Pick<

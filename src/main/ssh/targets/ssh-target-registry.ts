@@ -61,12 +61,13 @@ export function listRegisteredSuppressedSshConfigAliases(): string[] {
 }
 
 /** Import the host-owned OpenSSH config without exposing the profile store to RPC code. */
-export function importRegisteredSshConfig(options?: { reAdopt?: boolean }): SshConfigImportResult {
+export async function importRegisteredSshConfig(options?: {
+  reAdopt?: boolean
+}): Promise<SshConfigImportResult> {
   if (!sshStore) {
     throw new Error('ssh_handlers_not_registered')
   }
-  const targets = sshStore.importFromSshConfig(options)
-  const repoReadoptions = sshStore.lastRepoReadoptions
+  const { targets, repoReadoptions } = await sshStore.importFromSshConfig(options)
   sshStore.lastRepoReadoptions = []
   return { targets, repoReadoptions }
 }

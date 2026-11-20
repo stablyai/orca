@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {

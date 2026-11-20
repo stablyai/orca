@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Room round runner: one pass of the room's speaking order.
  *
@@ -14,13 +15,13 @@
  */
 
 import { createHash } from 'node:crypto'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
-import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
+import { parseOrcaSessionAddress } from '../../../shared/agent-session/identity/orca-session-address'
 import { roomMentionsIn, type RoomMentionable } from '../../../shared/orchestration-room-mentions'
-import type { OrchestrationDb } from './db'
+import type { OrchestrationDb } from './db/orchestration-db'
 import type { RoomLogRow, RoomMemberRow, RoomWithMembers } from './db/rooms/room-store'
-import { sendAgentTurn, type StructuredAgentTurnHost } from './send-agent-turn'
+import { sendAgentTurn, type StructuredAgentTurnHost } from './turn-delivery/send-agent-turn'
 
 export type RoomSlotStatus =
   | 'waiting'
@@ -103,8 +104,8 @@ function roomPrompt(
   const earlier = unseen.filter((l) => l.seq < round.startSeq).slice(-ROOM_EARLIER_MAX)
   const current = unseen.filter((l) => l.seq >= round.startSeq)
   const index = round.slots.findIndex((s) => s.status === 'speaking')
-  const before = index < 0 ? 0 : index
-  const after = index < 0 ? 0 : round.slots.length - index - 1
+  const before = Math.max(0, index)
+  const after = index === -1 ? 0 : round.slots.length - index - 1
 
   const parts = [
     `Members: the user${peers.length ? `, ${peers.join(', ')}` : ''} and you${leads ? ' (admin)' : ''}. Members speak one at a time; each message is posted before the next speaker starts. ${ROOM_CALLS_TEXT}`,
@@ -133,7 +134,9 @@ function openingSpeakers(room: RoomWithMembers, text: string): RoomMemberRow[] {
     name: m.name
   }))
   const { all, found } = roomMentionsIn(text, mentionables)
-  if (all) return room.members
+  if (all) {
+    return room.members
+  }
   if (found.length > 0) {
     const ids = new Set(found.map((f) => f.id))
     return room.members.filter((m) => ids.has(m.member_id))
@@ -188,7 +191,9 @@ export async function sendRoomTurn(args: {
       message: `Member ${args.member.name} has no structured session address.`
     }
   }
-  if (args.signal?.aborted) return { kind: 'failed', code: 'ABORTED', message: 'stopped' }
+  if (args.signal?.aborted) {
+    return { kind: 'failed', code: 'ABORTED', message: 'stopped' }
+  }
 
   const body: AgentJournalMessageItem = {
     kind: 'message',
@@ -268,8 +273,12 @@ export async function runRoomRound(
 
   let spent = 0
   for (let index = 0; index < slots.length; index += 1) {
-    if (deps.signal?.aborted) break
-    if (spent >= turnBudget) break
+    if (deps.signal?.aborted) {
+      break
+    }
+    if (spent >= turnBudget) {
+      break
+    }
     const slot = slots[index]
     const member = room.members.find((m) => m.member_id === slot.memberId)
     if (!member) {
@@ -333,10 +342,14 @@ export async function postRoomReply(
   deps: RoomRoundDeps
 ): Promise<{ seq: number; followUps: RoomMemberRow[] }> {
   const member = room.members.find((m) => m.member_id === memberId)
-  if (!member) throw new Error(`Member ${memberId} is not in room ${room.id}`)
+  if (!member) {
+    throw new Error(`Member ${memberId} is not in room ${room.id}`)
+  }
   const stripped = stripRoomSpeakerName(member.name, text.trim())
   deps.db.setRoomMemberStatus(room.id, memberId, 'idle')
-  if (isPass(stripped)) return { seq: room.seq, followUps: [] }
+  if (isPass(stripped)) {
+    return { seq: room.seq, followUps: [] }
+  }
   const seq = deps.db.appendRoomLine(room.id, {
     who: member.name,
     memberId: member.member_id,

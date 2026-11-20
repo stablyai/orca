@@ -1,12 +1,12 @@
 import { Pencil, Plus, X } from 'lucide-react'
-import type { Tab } from '../../../../shared/tab-types'
-import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import { resolveUnifiedTabLabel } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import { ImeInput } from '@/lib/ime-text-field'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -15,10 +15,10 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { useSortableTabRename } from '../tab-bar/use-sortable-tab-rename'
-import { QuickLaunchAgentMenuItems } from '../tab-bar/QuickLaunchButton'
+import { useSortableTabRename } from '../tab-bar/terminal-tabs/use-sortable-tab-rename'
+import { QuickLaunchAgentMenuItems } from '../agent/launch-menu/AgentMenuItems'
 import { activateNativeChatAgentLaunchTab } from '@/lib/activate-native-chat-agent-launch-tab'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function ChatPanelHeader({
   chats,
@@ -82,12 +82,7 @@ export function ChatPanelHeader({
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={newChatLabel}
-                className="shrink-0"
-              >
+              <Button variant="ghost" size="icon-xs" aria-label={newChatLabel} className="shrink-0">
                 <Plus />
               </Button>
             </DropdownMenuTrigger>
@@ -100,7 +95,6 @@ export function ChatPanelHeader({
             worktreeId={worktreeId}
             groupId={groupId}
             onFocusTerminal={activateNativeChatAgentLaunchTab}
-            onFocusChat={activateNativeChatAgentLaunchTab}
             launchSource="native_chat"
           />
         </DropdownMenuContent>

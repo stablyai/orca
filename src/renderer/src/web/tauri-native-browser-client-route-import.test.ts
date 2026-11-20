@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { tauriBrowserClientPageRendererBus } from './tauri-native-browser-client-page-renderer-bus'
 import {
   closeTauriBrowserClientHost,

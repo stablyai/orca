@@ -1,20 +1,21 @@
+/* eslint-disable max-lines */
 /**
  * Room RPC methods: CRUD for group chats and the entry point that sends a user
  * message into a room and runs the opening round of member prompts.
  */
 
 import { randomUUID } from 'node:crypto'
-import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { defineMethod } from '../../../core'
 import { runRoomRound, postRoomReply } from '../../../../orchestration/room-round'
 import { ROOM_SOURCE, spawnRoomBot } from '../../../../orchestration/room-bot-spawn'
 import { MAIN_BOT_NAME, MAIN_BOT_ROOM_NAME } from '../../../../orchestration/room-admin-tools'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
-} from '../../../../../../shared/structured-agent-session-mutation'
+} from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { ensureRoomReplyWatcherForCurrentHost } from '../../../../orchestration/room-reply-watcher'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
@@ -111,6 +112,7 @@ const exposeRoomLine = (line: {
 const exposeRoomLineOrNone = (line: Parameters<typeof exposeRoomLine>[0] | undefined) =>
   line ? exposeRoomLine(line) : null
 
+/* eslint-disable max-lines */
 /** A failed admin that never produced a normal room reply can be replaced safely. */
 const adminNeedsRespawn = (
   db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
@@ -172,7 +174,9 @@ export const ORCHESTRATION_ROOM_METHODS = [
         : params.name
           ? db.getRoomByName(params.name)
           : undefined
-      if (!room) throw roomError('room_not_found', 'The room is not here.')
+      if (!room) {
+        throw roomError('room_not_found', 'The room is not here.')
+      }
       return { room: exposeRoom(room) }
     }
   }),
@@ -209,7 +213,9 @@ export const ORCHESTRATION_ROOM_METHODS = [
         // Member row wins; a missing session link just reuses the main chat.
       }
       const room = db.getRoom(params.id)
-      if (!room) throw roomError('room_not_found', 'The room is not here.')
+      if (!room) {
+        throw roomError('room_not_found', 'The room is not here.')
+      }
       return { room: exposeRoom(room) }
     }
   }),
@@ -221,7 +227,9 @@ export const ORCHESTRATION_ROOM_METHODS = [
     handler: async (params, ctx) => {
       const db = ctx.runtime.getOrchestrationDb()
       const room = db.getRoom(params.id)
-      if (!room) throw roomError('room_not_found', 'The room is not here.')
+      if (!room) {
+        throw roomError('room_not_found', 'The room is not here.')
+      }
       const spawned = await spawnRoomBot({
         runtime: ctx.runtime,
         db,
@@ -275,7 +283,9 @@ export const ORCHESTRATION_ROOM_METHODS = [
         try {
           db.removeRoomMember(room.id, admin.member_id)
           const refilled = db.getRoom(room.id)
-          if (refilled) room = refilled
+          if (refilled) {
+            room = refilled
+          }
           admin = undefined
         } catch {
           // Repair is best-effort; a stale row just stays until next ensure.
@@ -389,7 +399,9 @@ export const ORCHESTRATION_ROOM_METHODS = [
         : params.name
           ? db.getRoomByName(params.name)
           : undefined
-      if (!room) throw roomError('room_not_found', 'The room is not here.')
+      if (!room) {
+        throw roomError('room_not_found', 'The room is not here.')
+      }
       const targetMember = params.targetMemberId
         ? room.members.find((m) => m.member_id === params.targetMemberId)
         : undefined
@@ -439,7 +451,9 @@ export const ORCHESTRATION_ROOM_METHODS = [
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const room = db.getRoom(params.id)
-      if (!room) throw roomError('room_not_found', 'The room is not here.')
+      if (!room) {
+        throw roomError('room_not_found', 'The room is not here.')
+      }
       const host = getStructuredAgentSessionHost()
       if (!host) {
         throw roomError(
@@ -473,14 +487,16 @@ export const ORCHESTRATION_ROOM_METHODS = [
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const room = db.getRoom(params.id)
-      if (!room) throw roomError('room_not_found', 'The room is not here.')
+      if (!room) {
+        throw roomError('room_not_found', 'The room is not here.')
+      }
       const limit = params.limit ?? 60
       const lines = params.memberId
         ? db.unseenRoomLines(room.id, params.memberId, 200, limit)
         : (db.db
             .prepare(`SELECT * FROM room_log WHERE room_id = ? ORDER BY seq DESC LIMIT ?`)
             .all(room.id, limit)
-            .reverse() as {
+            .toReversed() as {
             seq: number
             who: string
             member_id: string | null

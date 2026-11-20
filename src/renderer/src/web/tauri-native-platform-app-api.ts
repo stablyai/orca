@@ -1,18 +1,16 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import type { AppApi, PlatformApi } from '../../../preload/api/app-api'
-import type {
-  RuntimeMobileSessionAgentTab,
-  RuntimeMobileSessionTabsResult
-} from '../../../shared/runtime-types'
+import type { RuntimeMobileSessionAgentTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { createWebAppApi } from './preload-api/app/web-app-api'
 import { createWebRuntimeApi } from './preload-api/runtime/web-runtime-api'
 import { callRuntimeResult } from './runtime/client/web-runtime-calls'
 import { getBrowserPlatform } from './preload-api/web-storage'
-import type { MarkdownDocument } from '../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
 import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
-} from '../../../shared/terminal-render-desync-evidence'
+} from '../../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import { invokeNative, invokePlugin, isTauriNativeHost } from './tauri-native-host'
 import { prepareAndInvokeAppRestart } from '../../../preload/renderer/restart/renderer-restart-wiring'
 
@@ -29,7 +27,8 @@ function fallbackPlatformInfo(): TauriNativePlatformInfo {
     osRelease: '',
     arch: '',
     shell: '',
-    displayServer: null
+    displayServer: null,
+    windowMaterial: 'off'
   }
 }
 

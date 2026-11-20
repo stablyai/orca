@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installBrowserGlobals } from './web-preload-api-test-harness'
+import { installBrowserGlobals } from './testing/web-preload-api-test-harness'
 
 type Listener = { event: string; handler: (message: { payload: unknown }) => void }
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
-import { OrchestrationDb } from './db'
+import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
+import { OrchestrationDb } from './db/orchestration-db'
 import { postRoomReply, runRoomRound, stripRoomSpeakerName, type RoomRoundDeps } from './room-round'
-import type { StructuredAgentTurnHost } from './send-agent-turn'
+import type { StructuredAgentTurnHost } from './turn-delivery/send-agent-turn'
 
 const alice = {
   memberId: 'orca_session_id:session_alice_0001',

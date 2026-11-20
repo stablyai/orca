@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
-import type { GitDiffTextResult } from '../../../../shared/git-diff-compare-types'
+import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
+import type { GitDiffTextResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import {
   isWatchedTurnDiffFile,
   mergeNativeChatTurnDiffs,

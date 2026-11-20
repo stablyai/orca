@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { installBrowserGlobals } from './web-preload-api-test-harness'
+import { installBrowserGlobals } from './testing/web-preload-api-test-harness'
 
 function installTauriHost(invokeImpl: (command: string, args?: unknown) => unknown) {
   const globals = installBrowserGlobals('Windows')

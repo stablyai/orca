@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { LOCAL, type Room, type RoomLine } from './room-types'
 
 export function useRoomLog(roomId: string | null) {

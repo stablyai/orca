@@ -1,15 +1,15 @@
-import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
-import type { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { DegradedDaemonPtyProvider } from './providers/routing/degraded-daemon-pty-provider'
+import type { DaemonPtyAdapter } from './providers/adapter/daemon-pty-adapter'
 import {
   getAllDaemonAdapters,
   getCurrentDaemonAdapter,
   type DaemonProvider
-} from './daemon-provider-routing'
-import { getDaemonProvider } from './daemon-provider-state'
-import { restartDaemon } from './daemon-provider-restart'
-import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
-import type { DaemonSessionInfo } from './types'
-import type { DaemonAsyncIoStatus } from '../../shared/daemon-async-io-health'
+} from './providers/lifecycle/daemon-provider-routing'
+import { getDaemonProvider } from './providers/lifecycle/daemon-provider-state'
+import { restartDaemon } from './providers/lifecycle/daemon-provider-restart'
+import type { DaemonEndpointIdentity } from './protocol/daemon-hello-protocol'
+import type { DaemonSessionInfo } from './protocol/daemon-session-info'
+import type { DaemonAsyncIoStatus } from '../../shared/terminal/daemon/daemon-async-io-health'
 
 const MAX_POLL_ATTEMPTS = 65
 const POLL_INTERVAL_MS = 100
