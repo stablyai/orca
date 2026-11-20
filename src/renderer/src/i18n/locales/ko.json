@@ -29024,14 +29024,14 @@
     }
   },
   "openOnHost": {
-    "projectMenu": "{{host}}에서 열기…",
-    "workspaceMenu": "{{host}}에서 열기…",
+    "menuItem": "{{host}}에서 열기…",
+    "checking": "{{host}} 확인 중…",
     "title": "{{host}}에서 {{name}} 열기",
     "existingLocation": "{{path}}에서 열립니다",
     "cloneLocation": "{{url}}에서 {{path}}(으)로 클론",
     "branch": "브랜치 {{branch}}",
     "pushFirst": "먼저 {{branch}} 푸시",
-    "publishFirst": "먼저 {{branch}}을(를) origin에 게시",
+    "publishFirst": "먼저 {{branch}} 게시",
     "unpublishedBlocked": "{{branch}}이(가) 아직 원격에 없어 {{host}}에서 가져올 수 없습니다. 먼저 게시하세요",
     "detached": "{{host}}에서 이 워크스페이스를 열려면 브랜치를 체크아웃하세요",
     "primary": "{{host}}에서 열기",

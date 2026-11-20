@@ -31028,14 +31028,14 @@
     }
   },
   "openOnHost": {
-    "projectMenu": "在 {{host}} 上打开…",
-    "workspaceMenu": "在 {{host}} 上打开…",
+    "menuItem": "在 {{host}} 上打开…",
+    "checking": "正在检查 {{host}}…",
     "title": "在 {{host}} 上打开 {{name}}",
     "existingLocation": "在 {{path}} 中打开",
     "cloneLocation": "从 {{url}} 克隆到 {{path}}",
     "branch": "分支 {{branch}}",
     "pushFirst": "先推送 {{branch}}",
-    "publishFirst": "先将 {{branch}} 发布到 origin",
+    "publishFirst": "先发布 {{branch}}",
     "unpublishedBlocked": "{{branch}} 尚未在远程仓库中，{{host}} 无法获取。请先发布",
     "detached": "检出一个分支后才能在 {{host}} 上打开此工作区",
     "primary": "在 {{host}} 上打开",

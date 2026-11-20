@@ -46,9 +46,7 @@ export function OpenOnHostMenuItems({
             }
           >
             <MonitorUp className="size-3.5" />
-            {worktree
-              ? t('openOnHost.workspaceMenu', 'Open on {{host}}…', { host: target.label })
-              : t('openOnHost.projectMenu', 'Open on {{host}}…', { host: target.label })}
+            {t('openOnHost.menuItem', 'Open on {{host}}…', { host: target.label })}
             {reason ? (
               <span className="ml-auto shrink-0 text-2xs text-muted-foreground">{reason}</span>
             ) : null}

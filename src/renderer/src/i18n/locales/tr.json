@@ -31410,14 +31410,14 @@
     }
   },
   "openOnHost": {
-    "projectMenu": "{{host}} üzerinde aç…",
-    "workspaceMenu": "{{host}} üzerinde aç…",
+    "menuItem": "{{host}} üzerinde aç…",
+    "checking": "{{host}} denetleniyor…",
     "title": "{{name}} öğesini {{host}} üzerinde aç",
     "existingLocation": "{{path}} içinde açılır",
     "cloneLocation": "{{url}} adresinden {{path}} içine klonla",
     "branch": "Dal {{branch}}",
     "pushFirst": "Önce {{branch}} dalını gönder",
-    "publishFirst": "Önce {{branch}} dalını origin'e yayımla",
+    "publishFirst": "Önce {{branch}} dalını yayımla",
     "unpublishedBlocked": "{{branch}} henüz bir uzak depoda değil, bu yüzden {{host}} onu alamaz. Önce yayımlayın",
     "detached": "Bu çalışma alanını {{host}} üzerinde açmak için bir dala geçin",
     "primary": "{{host}} üzerinde aç",

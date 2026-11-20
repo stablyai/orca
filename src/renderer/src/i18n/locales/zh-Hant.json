@@ -28188,14 +28188,14 @@
     }
   },
   "openOnHost": {
-    "projectMenu": "在 {{host}} 上開啟…",
-    "workspaceMenu": "在 {{host}} 上開啟…",
+    "menuItem": "在 {{host}} 上開啟…",
+    "checking": "正在檢查 {{host}}…",
     "title": "在 {{host}} 上開啟 {{name}}",
     "existingLocation": "在 {{path}} 中開啟",
     "cloneLocation": "從 {{url}} 複製到 {{path}}",
     "branch": "分支 {{branch}}",
     "pushFirst": "先推送 {{branch}}",
-    "publishFirst": "先將 {{branch}} 發佈到 origin",
+    "publishFirst": "先發佈 {{branch}}",
     "unpublishedBlocked": "{{branch}} 尚未在遠端儲存庫中，{{host}} 無法擷取。請先發佈",
     "detached": "簽出一個分支後才能在 {{host}} 上開啟此工作區",
     "primary": "在 {{host}} 上開啟",

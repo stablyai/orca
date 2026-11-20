@@ -31803,14 +31803,14 @@
     }
   },
   "openOnHost": {
-    "projectMenu": "Abrir em {{host}}…",
-    "workspaceMenu": "Abrir em {{host}}…",
+    "menuItem": "Abrir em {{host}}…",
+    "checking": "Verificando {{host}}…",
     "title": "Abrir {{name}} em {{host}}",
     "existingLocation": "Abre em {{path}}",
     "cloneLocation": "Clonar de {{url}} para {{path}}",
     "branch": "Branch {{branch}}",
     "pushFirst": "Fazer push de {{branch}} primeiro",
-    "publishFirst": "Publicar {{branch}} no origin primeiro",
+    "publishFirst": "Publicar {{branch}} primeiro",
     "unpublishedBlocked": "{{branch}} ainda não está em um remoto, então {{host}} não pode buscá-lo. Publique-o primeiro",
     "detached": "Faça checkout de um branch para abrir este workspace em {{host}}",
     "primary": "Abrir em {{host}}",
