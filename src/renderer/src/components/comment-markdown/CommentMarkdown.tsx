@@ -60,7 +60,7 @@ function remarkNativeChatFileLinks(
 }
 
 export function remarkGitHubReferences(
-  defaultRepo: GitHubRepoReference,
+  defaultRepo: GitHubRepoReference | null,
   projectRepos?: readonly GitHubRepoReference[]
 ): () => (tree: Parameters<typeof linkGitHubReferences>[0]) => void {
   return () => (tree) => linkGitHubReferences(tree, defaultRepo, projectRepos)
@@ -102,7 +102,7 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   math?: boolean
   variant?: 'compact' | 'document'
   githubRepo?: GitHubRepoReference | null
-  /** Repos `name#123` can name besides `githubRepo`; only read when `githubRepo` is set. */
+  /** Repos `name#123` can name besides `githubRepo`; they link even without `githubRepo`. */
   projectGitHubRepos?: readonly GitHubRepoReference[]
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
@@ -187,8 +187,8 @@ const CommentMarkdown = React.memo(
         : basePlugins
       const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
-      return githubRepo
-        ? [...withExtension, remarkGitHubReferences(githubRepo, projectGitHubRepos)]
+      return githubRepo || projectGitHubRepos?.length
+        ? [...withExtension, remarkGitHubReferences(githubRepo ?? null, projectGitHubRepos)]
         : withExtension
     }, [
       extension,

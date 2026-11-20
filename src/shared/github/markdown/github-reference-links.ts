@@ -56,10 +56,11 @@ function sameName(a: string, b: string): boolean {
 /** The one known repo called `name`; on a tie, the one owned by the default repo's owner. */
 function repoNamed(
   name: string,
-  defaultRepo: GitHubRepoReference,
+  defaultRepo: GitHubRepoReference | null,
   projectRepos: readonly GitHubRepoReference[]
 ): GitHubRepoReference | null {
-  const matches = [defaultRepo, ...projectRepos].filter(
+  const known = defaultRepo ? [defaultRepo, ...projectRepos] : projectRepos
+  const matches = known.filter(
     (candidate, i, all) =>
       sameName(candidate.repo, name) &&
       all.findIndex(
@@ -68,6 +69,9 @@ function repoNamed(
   )
   if (matches.length === 1) {
     return matches[0]
+  }
+  if (!defaultRepo) {
+    return null
   }
   const sameOwner = matches.filter((candidate) => sameName(candidate.owner, defaultRepo.owner))
   return sameOwner.length === 1 ? sameOwner[0] : null
@@ -87,7 +91,7 @@ function repoNameStart(value: string, hashIndex: number, cursor: number): number
 
 function splitGitHubReferenceText(
   value: string,
-  defaultRepo: GitHubRepoReference,
+  defaultRepo: GitHubRepoReference | null,
   projectRepos: readonly GitHubRepoReference[]
 ): MarkdownNode[] {
   const parts: MarkdownNode[] = []
@@ -95,22 +99,21 @@ function splitGitHubReferenceText(
 
   for (const match of value.matchAll(GITHUB_REFERENCE_PATTERN)) {
     let index = match.index ?? 0
-    let owner = match[1] ?? defaultRepo.owner
-    let repo = match[2] ?? defaultRepo.repo
     const number = match[3]
     if (!number) {
       continue
     }
+    // `#123` and `owner/repo#123` only link in a chat whose own repo is on github.com.
+    let target: GitHubRepoReference | null =
+      defaultRepo && match[1] && match[2] ? { owner: match[1], repo: match[2] } : defaultRepo
     if (isEmbeddedGitHubReference(value, index)) {
       const nameStart = match[1] ? -1 : repoNameStart(value, index, cursor)
-      const named =
+      target =
         nameStart < 0 ? null : repoNamed(value.slice(nameStart, index), defaultRepo, projectRepos)
-      if (!named) {
-        continue
-      }
       index = nameStart
-      owner = named.owner
-      repo = named.repo
+    }
+    if (!target) {
+      continue
     }
     const end = (match.index ?? 0) + match[0].length
 
@@ -119,7 +122,7 @@ function splitGitHubReferenceText(
     }
     parts.push({
       type: 'link',
-      url: createGitHubIssueUrl(owner, repo, number),
+      url: createGitHubIssueUrl(target.owner, target.repo, number),
       title: null,
       children: [{ type: 'text', value: value.slice(index, end) }]
     })
@@ -136,10 +139,11 @@ function splitGitHubReferenceText(
 }
 
 /** Turns `#123`, `owner/repo#123` and `name#123` in an mdast tree's text into issue links, in
- *  place. `name#123` links only when `name` is the repo of exactly one of `projectRepos`. */
+ *  place. The first two need `defaultRepo`; `name#123` links when `name` is the repo of exactly
+ *  one of `defaultRepo` and `projectRepos`. */
 export function linkGitHubReferences(
   node: MarkdownNode,
-  defaultRepo: GitHubRepoReference,
+  defaultRepo: GitHubRepoReference | null,
   projectRepos: readonly GitHubRepoReference[] = []
 ): void {
   if (!node.children || node.type === 'link' || node.type === 'image') {

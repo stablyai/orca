@@ -34,7 +34,7 @@ export type NativeChatGitHubRepo = {
   referenceRepo: GitHubRepoReference | null
 }
 
-function readCachedOriginKey(repo: Repo | null): string | null {
+export function readCachedOriginKey(repo: Repo | null): string | null {
   const cacheKey = repo ? repoSlugCacheKey(repo) : null
   const cached = cacheKey ? readRepoSlugCache(cacheKey) : null
   return cached?.hit ? cached.value : null

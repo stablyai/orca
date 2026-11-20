@@ -1,47 +1,77 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
 import { resolveRepoSlug } from '@/lib/workspace/catalog/repo-slug-index'
 import {
   getRepoSlugCacheVersion,
+  nextRepoSlugFailureRetryDelay,
+  repoSlugCacheKey,
   subscribeRepoSlugCache
 } from '@/lib/workspace/catalog/repo-slug-cache'
 import {
   githubReferenceRepo,
   type GitHubRepoReference
 } from '../../../../../../shared/github/markdown/github-reference-links'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { readCachedOriginKey } from './native-chat-github-repo'
 
 const NO_REPOS: readonly GitHubRepoReference[] = []
 
-function referenceKey(repos: readonly GitHubRepoReference[]): string {
-  return repos.map(({ owner, repo }) => `${owner}/${repo}`.toLowerCase()).join('\n')
+/** `owner/repo` per line for each project whose slug is cached. */
+function cachedReferenceKey(repos: readonly Repo[]): string {
+  return repos
+    .flatMap((repo) => {
+      const originKey = readCachedOriginKey(repo)
+      const reference = originKey ? githubReferenceRepo(repo, originKey) : null
+      return reference ? [`${reference.owner}/${reference.repo}`] : []
+    })
+    .join('\n')
 }
 
 /** The GitHub repo of every git project in Orca, so a chat's `name#123` can name one of them. */
 export function useProjectGitHubRepos(): readonly GitHubRepoReference[] {
   const repos = useAppStore((state) => state.repos)
   const slugCacheVersion = useSyncExternalStore(subscribeRepoSlugCache, getRepoSlugCacheVersion)
-  const [references, setReferences] = useState(NO_REPOS)
+  const gitRepos = useMemo(() => repos.filter((repo) => !repo.kind || repo.kind === 'git'), [repos])
+  const [retryGeneration, setRetryGeneration] = useState(0)
+  const [retryDelayMs, setRetryDelayMs] = useState<number | null>(null)
 
+  // Fill the slug cache; its change notifications re-derive the list below.
   useEffect(() => {
     let cancelled = false
-    const gitRepos = repos.filter((repo) => !repo.kind || repo.kind === 'git')
-    void Promise.all(
-      gitRepos.map(async (repo) => {
-        const originKey = await resolveRepoSlug(repo)
-        return originKey ? githubReferenceRepo(repo, originKey) : null
-      })
-    ).then((resolved) => {
-      if (cancelled) {
-        return
+    setRetryDelayMs(null)
+    void Promise.all(gitRepos.map(resolveRepoSlug)).then(() => {
+      if (!cancelled) {
+        const cacheKeys = new Set(gitRepos.flatMap((repo) => repoSlugCacheKey(repo) ?? []))
+        setRetryDelayMs(nextRepoSlugFailureRetryDelay(cacheKeys))
       }
-      const next = resolved.filter((reference) => reference !== null)
-      // Every chat message's markdown depends on this list; keep its identity while it is the same.
-      setReferences((current) => (referenceKey(current) === referenceKey(next) ? current : next))
     })
     return () => {
       cancelled = true
     }
-  }, [repos, slugCacheVersion])
+  }, [gitRepos, slugCacheVersion, retryGeneration])
 
-  return references
+  // A failed lookup expires without a cache notification; ask again once it does.
+  useEffect(() => {
+    if (retryDelayMs === null) {
+      return
+    }
+    const retryTimer = setTimeout(() => setRetryGeneration((value) => value + 1), retryDelayMs)
+    return () => clearTimeout(retryTimer)
+  }, [retryDelayMs])
+
+  // Derived from the current projects only, so a closed project never lingers.
+  const referenceKey = useSyncExternalStore(subscribeRepoSlugCache, () =>
+    cachedReferenceKey(gitRepos)
+  )
+  // Every chat message's markdown depends on this list; keep its identity while it is the same.
+  return useMemo(
+    () =>
+      referenceKey
+        ? referenceKey.split('\n').map((slug) => {
+            const [owner = '', repo = ''] = slug.split('/')
+            return { owner, repo }
+          })
+        : NO_REPOS,
+    [referenceKey]
+  )
 }
