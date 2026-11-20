@@ -56,7 +56,7 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
   if (typeof body !== 'object' || body === null) {
     return null
   }
-  const fields = body as { payload?: unknown; configDir?: unknown; paneKey?: unknown }
+  const fields = body as { payload?: unknown; configDir?: unknown }
   if (typeof fields.payload !== 'string' || !fields.payload) {
     return null
   }
@@ -79,6 +79,6 @@ export function parseClaudeStatusLineBody(body: unknown): ClaudeStatusLineRateLi
     return null
   }
   const configDir = typeof fields.configDir === 'string' ? fields.configDir.trim() : ''
-  const paneKey = typeof fields.paneKey === 'string' ? fields.paneKey.trim() : ''
+  const paneKey = 'paneKey' in body && typeof body.paneKey === 'string' ? body.paneKey.trim() : ''
   return { configDir: configDir || null, paneKey: paneKey || null, fiveHour, sevenDay }
 }

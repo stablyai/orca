@@ -359,7 +359,7 @@ describe('RateLimitService', () => {
       provenance: 'profile:a'
     }))
     await service.refresh()
-    const resetsAt = Math.floor(Date.now() / 1000) + 3 * 60 * 60
+    const resetsAt = Date.parse('2100-01-01T00:00:00Z') / 1000
     const post = (paneKey: string, usedPercentage: number) => {
       const event = parseClaudeStatusLineBody({
         paneKey,
