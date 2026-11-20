@@ -185,11 +185,12 @@ export function BotAppsCatalog({
         }}
         onBack={back}
         onClose={close}
+        onManage={manage}
       />
     )
   }
   if (step?.kind === 'custom') {
-    return <CustomAppStep bot={bot} onBack={back} onClose={close} />
+    return <CustomAppStep bot={bot} onBack={back} onClose={close} onManage={manage} />
   }
   if (step?.kind === 'composio-account') {
     const { app } = step

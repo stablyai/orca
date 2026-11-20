@@ -40,56 +40,63 @@ export function botMcpAppUrl(app: Pick<BotMcpApp, 'url' | 'variable'>, value?: s
   return variable ? app.url.replace(`{${variable.key}}`, value || variable.default) : app.url
 }
 
+function parseWebUrl(text: string): URL | null {
+  try {
+    const url = new URL(text)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url : null
+  } catch {
+    return null
+  }
+}
+
 /**
- * What filled the app's blank in a URL it was added at, as its row tags it: the site's name or the
- * typed host. Null at the default, or for a URL the app's template doesn't match.
+ * Which value a URL the app was added at fills its blank with: the site's name or the host, and
+ * whether it is the default. Null for a URL the app's template doesn't make, whole path included.
  */
+export function botMcpAppUrlPlace(
+  app: Pick<BotMcpApp, 'url' | 'variable'>,
+  url: string
+): { name: string; isDefault: boolean } | null {
+  const variable = app.variable
+  const parsed = parseWebUrl(url)
+  if (!variable || !parsed) {
+    return null
+  }
+  const makes = (value?: string): boolean =>
+    parseWebUrl(botMcpAppUrl(app, value))?.href === parsed.href
+  const named =
+    'choices' in variable
+      ? variable.choices.find((choice) => makes(choice.value))?.name
+      : makes(parsed.host)
+        ? parsed.host
+        : undefined
+  return named === undefined ? null : { name: named, isDefault: makes() }
+}
+
+/** The tag a row shows for an app added at another site or host; null at the default. */
 export function botMcpAppUrlTag(
   app: Pick<BotMcpApp, 'url' | 'variable'>,
   url: string
 ): string | null {
-  const variable = app.variable
-  if (!variable) {
-    return null
-  }
-  const [before, after = ''] = app.url.split(`{${variable.key}}`)
-  if (
-    url.length <= before.length + after.length ||
-    !url.startsWith(before) ||
-    !url.endsWith(after)
-  ) {
-    return null
-  }
-  const value = url.slice(before.length, url.length - after.length)
-  if (value === variable.default) {
-    return null
-  }
-  return 'choices' in variable
-    ? (variable.choices.find((choice) => choice.value === value)?.name ?? null)
-    : value
+  const place = botMcpAppUrlPlace(app, url)
+  return place && !place.isDefault ? place.name : null
 }
 
-const HOST_LABEL = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?'
-const HOST_WITH_PORT = new RegExp(`^${HOST_LABEL}(?:\\.${HOST_LABEL})*(?::(\\d{1,5}))?$`)
-
 /**
- * A typed host as the URL takes it: a pasted scheme and path dropped, lowercased. '' when empty;
- * null when what is left is not a host name with an optional port.
+ * A typed GitLab-style address as a URL's host and optional port: a bare authority, or a pasted
+ * http(s) URL whose path is dropped. '' when empty; null for userinfo, another scheme, port 0, or
+ * anything the URL parser refuses (bad IDNA included).
  */
 export function botMcpAppHost(input: string): string | null {
-  const host = input
-    .trim()
-    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')
-    .split(/[/?#]/)[0]
-    .toLowerCase()
-  if (!host) {
-    return input.trim() ? null : ''
+  const text = input.trim()
+  if (!text) {
+    return ''
   }
-  const match = host.length <= 253 ? HOST_WITH_PORT.exec(host) : null
-  if (!match || (match[1] !== undefined && (Number(match[1]) < 1 || Number(match[1]) > 65535))) {
+  const url = parseWebUrl(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`)
+  if (!url || !url.hostname || url.username || url.password || url.port === '0') {
     return null
   }
-  return host
+  return url.port ? `${url.hostname}:${url.port}` : url.hostname
 }
 
 export const BOT_MCP_APPS: readonly BotMcpApp[] = [

@@ -21,6 +21,7 @@ import {
   type BotMcpAppUrlVariable
 } from '../../../../../shared/bots/bot-mcp-apps'
 import { BotAppStepHeading } from './BotAppStepParts'
+import { sitePlace, urlVariableHint, urlVariableLabel } from './bot-app-url-variable-copy'
 import type { BotMcpAppPreset } from './BotAppUrlStep'
 
 export function BotAppUrlVariableForm({
@@ -63,7 +64,7 @@ export function BotAppUrlVariableForm({
       {choices ? (
         <SitePicker
           id={fieldId}
-          label={variable.label}
+          label={urlVariableLabel(t, app.name, variable)}
           choices={choices}
           value={value}
           onValue={setValue}
@@ -85,7 +86,7 @@ export function BotAppUrlVariableForm({
           {expanded ? (
             <div className="mt-3">
               <Label htmlFor={fieldId} className="mb-1.5">
-                {variable.label}
+                {urlVariableLabel(t, app.name, variable)}
               </Label>
               <Input
                 id={fieldId}
@@ -114,7 +115,7 @@ export function BotAppUrlVariableForm({
                   ? t('bots.apps.mcp.hostInvalid', 'Enter a host name, like {{example}}.', {
                       example: variable.placeholder
                     })
-                  : variable.hint}
+                  : urlVariableHint(t, app.name, variable.hint)}
               </p>
             </div>
           ) : null}
@@ -143,6 +144,7 @@ function SitePicker({
   value: string
   onValue: (value: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <Label htmlFor={id} className="mb-1.5">
@@ -156,7 +158,7 @@ function SitePicker({
           {choices.map((choice) => (
             <SelectItem key={choice.value} value={choice.value}>
               {choice.name}
-              <span className="text-muted-foreground">· {choice.place}</span>
+              <span className="text-muted-foreground">· {sitePlace(t, choice)}</span>
             </SelectItem>
           ))}
         </SelectContent>

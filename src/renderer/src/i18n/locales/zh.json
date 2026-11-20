@@ -26265,7 +26265,25 @@
         "adding": "正在添加 {{app}}…",
         "addTitle": "添加 {{app}}",
         "advanced": "高级",
-        "hostInvalid": "请输入主机名，例如 {{example}}。"
+        "hostInvalid": "请输入主机名，例如 {{example}}。",
+        "datadog": {
+          "siteLabel": "Datadog 站点"
+        },
+        "gitlab": {
+          "hostLabel": "GitLab 地址（可选）",
+          "hostHint": "适用于自管理或 Dedicated 实例。留空则使用 GitLab.com。"
+        },
+        "place": {
+          "usEast": "美国东部",
+          "usWest": "美国西部",
+          "usCentral": "美国中部",
+          "europe": "欧洲",
+          "japan": "日本",
+          "australia": "澳大利亚",
+          "unitedKingdom": "英国"
+        },
+        "elsewhereTitle": "{{app}} 已在 {{bot}} 上",
+        "elsewhereLine": "它已添加在 {{place}}。请先在“管理”中移除，再添加其他。"
       },
       "unsupported": "暂不支持此应用",
       "cantReach": "无法连接 {{app}}",

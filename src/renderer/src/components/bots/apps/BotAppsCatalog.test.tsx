@@ -14,6 +14,8 @@ import { AddConnectorDialog } from '../AddConnectorDialog'
 import { resetComposioClientForTest } from '../composio/composio-client'
 import { retryBotToolCheck } from '../bot-tools-revision'
 import { COMPOSIO_PAGES } from '../../../../../shared/composio/composio-apps'
+import { i18n } from '@/i18n/i18n'
+import zh from '@/i18n/locales/zh.json'
 
 const bot: Bot = {
   id: 'bot-1',
@@ -189,6 +191,56 @@ describe('Add to <bot>', () => {
     })
   })
 
+  it('on Try again, names the other site already added instead of signing in to it', async () => {
+    let saved = false
+    answer({
+      ...tools,
+      'bots.tools.list': () => ({
+        own: saved
+          ? [{ name: 'datadog', detail: 'https://mcp.datadoghq.com/v1/mcp', remote: true }]
+          : [],
+        inherited: []
+      }),
+      'bots.tools.add': () => {
+        // Another window adds US1 while this one picks EU.
+        saved = true
+        throw new Error('A tool named datadog already exists.')
+      }
+    })
+    open()
+    fireEvent.click(screen.getByRole('button', { name: /^Monitoring/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Datadog' }))
+    fireEvent.keyDown(await screen.findByRole('combobox', { name: 'Datadog site' }), {
+      key: 'ArrowDown'
+    })
+    fireEvent.click(await screen.findByRole('option', { name: /^EU/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByText('Datadog is already on Reviewer')).toBeTruthy()
+    expect(screen.getByText('It’s added at US1. Remove it in Manage to add another.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Manage' })).toBeTruthy()
+    expect(calls('bots.tools.connect')).toHaveLength(0)
+    expect(calls('bots.tools.add')).toHaveLength(1)
+  })
+
+  it('shows the site field and places in the user’s language, site codes as they are', async () => {
+    i18n.addResourceBundle('zh', 'translation', zh)
+    await i18n.changeLanguage('zh')
+    try {
+      answer(tools)
+      open()
+      fireEvent.click(screen.getByRole('button', { name: /^监控|^Monitoring/ }))
+      fireEvent.click(await screen.findByRole('button', { name: /Datadog/ }))
+      fireEvent.keyDown(await screen.findByRole('combobox', { name: 'Datadog 站点' }), {
+        key: 'ArrowDown'
+      })
+      expect(await screen.findByRole('option', { name: 'EU · 欧洲' })).toBeTruthy()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
   it('adds GitLab at a typed self-managed host, refusing one that is not a host', async () => {
     answer({ ...tools, 'bots.tools.add': () => ({ tool: signInTool('gitlab') }) })
     open()
@@ -219,7 +271,7 @@ describe('Add to <bot>', () => {
     answer({
       ...tools,
       'bots.tools.list': () => ({
-        own: added ? [signInTool('sentry')] : [],
+        own: added ? [{ ...signInTool('sentry'), detail: 'https://mcp.sentry.dev/mcp' }] : [],
         inherited: []
       }),
       'bots.tools.add': () => {
