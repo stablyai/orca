@@ -19,6 +19,7 @@ import { refreshBotGroups } from '@/lib/bot-group-list'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import type { Bot } from '../../../../shared/bot-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { getTranslatedExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
 import { BotAvatar } from './BotAvatar'
 import { useBotPurposes } from './use-bot-purposes'
 import { BotNameSuggestion, takeSuggestionOnTab } from './BotNameSuggestion'
@@ -32,6 +33,8 @@ import {
   botGroupUnchanged
 } from '../../../../shared/bots/bot-group-pick'
 import { useBotGroupDelete } from './use-bot-group-delete'
+import { useBotHostLabel } from './use-bot-host-label'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
 export function BotGroupMembersDialog({
   group,
@@ -43,7 +46,13 @@ export function BotGroupMembersDialog({
   const t = useTranslate()
   const allBots = useBots()
   // A group lives on one computer: once a member is picked, only that computer's bots can join.
+  // The others stay listed but can't be picked, so a bot never silently disappears.
   const [pickHost, setPickHost] = useState<ExecutionHostId | null>(group?.hostId ?? null)
+  // A paired web window's bots all live on its one server, and it can't name hosts.
+  const manyHosts = useMemo(
+    () => !isPairedWebClientWindow() && new Set(allBots.map((bot) => bot.hostId)).size > 1,
+    [allBots]
+  )
   const bots = useMemo(
     () => (pickHost ? allBots.filter((bot) => bot.hostId === pickHost) : allBots),
     [allBots, pickHost]
@@ -77,7 +86,9 @@ export function BotGroupMembersDialog({
       name,
       picked.map((bot) => bot.id)
     )
-  const shownBots = filterByName(bots, query, (bot) => bot.name)
+  const shownBots = filterByName(allBots, query, (bot) => bot.name)
+  const elsewhere = (bot: Bot) => pickHost !== null && bot.hostId !== pickHost
+  const someElsewhere = shownBots.some(elsewhere)
   const toggle = (bot: Bot) => {
     const { id } = bot
     const on = selected.includes(id)
@@ -172,20 +183,30 @@ export function BotGroupMembersDialog({
                 : null}
             </span>
           </div>
-          {bots.length > FILTER_FROM ? <BotPickFilter value={query} onChange={setQuery} /> : null}
+          {allBots.length > FILTER_FROM ? (
+            <BotPickFilter value={query} onChange={setQuery} />
+          ) : null}
           <BotPickRows role="group" labelledBy="bot-group-members">
             {shownBots.map((bot) => (
               <MemberRow
                 key={botRefKey(bot)}
                 bot={bot}
                 purpose={purposes.get(botRefKey(bot)) ?? null}
-                on={selected.includes(bot.id)}
-                pop={popped === bot.id}
-                disabled={saving}
+                // Ids are unique only per computer: another computer's bot is never the picked one.
+                on={!elsewhere(bot) && selected.includes(bot.id)}
+                pop={!elsewhere(bot) && popped === bot.id}
+                disabled={saving || elsewhere(bot)}
+                describedBy={elsewhere(bot) ? 'bot-group-same-computer' : undefined}
+                showHost={manyHosts}
                 onToggle={() => toggle(bot)}
               />
             ))}
           </BotPickRows>
+          {someElsewhere ? (
+            <p id="bot-group-same-computer" className="mt-2 text-xs text-muted-foreground">
+              {t('bots.groups.sameComputer', 'Bots in a group must be on the same computer.')}
+            </p>
+          ) : null}
         </div>
         {removedDefault ? (
           <p className="text-xs text-muted-foreground">
@@ -273,6 +294,8 @@ function MemberRow({
   on,
   pop,
   disabled,
+  showHost,
+  describedBy,
   onToggle
 }: {
   bot: Bot
@@ -280,6 +303,10 @@ function MemberRow({
   on: boolean
   pop: boolean
   disabled: boolean
+  /** Bots span more than one computer: say which one this is. */
+  showHost: boolean
+  /** Why it can't be picked. */
+  describedBy?: string
   onToggle: () => void
 }): React.JSX.Element {
   return (
@@ -287,6 +314,7 @@ function MemberRow({
       role="checkbox"
       aria-checked={on}
       disabled={disabled}
+      aria-describedby={describedBy}
       // A pointer pick leaves focus in the name field, so its Tab suggestion still works.
       onMouseDown={(event) => event.preventDefault()}
       onClick={onToggle}
@@ -295,6 +323,14 @@ function MemberRow({
       detail={purpose}
       on={on}
       pop={pop}
+      trailing={showHost ? <MemberHost hostId={bot.hostId} /> : null}
     />
   )
+}
+
+/** The row's computer; only mounted when bots span more than one, so others don't subscribe. */
+function MemberHost({ hostId }: { hostId: ExecutionHostId }): React.JSX.Element {
+  const t = useTranslate()
+  const host = useBotHostLabel(hostId) ?? getTranslatedExecutionHostLabel(hostId, t)
+  return <span className="max-w-32 shrink-0 truncate text-xs text-muted-foreground">{host}</span>
 }
