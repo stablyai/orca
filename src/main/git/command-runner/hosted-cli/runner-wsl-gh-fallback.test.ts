@@ -101,8 +101,10 @@ const win32Resolver = new NativeExecutableResolver('win32')
 
 describe('ghExecFileAsync WSL fallback', () => {
   const originalPlatform = process.platform
+  const originalSystemRoot = process.env.SystemRoot
 
   beforeEach(() => {
+    process.env.SystemRoot = 'C:\\Windows'
     spawnMock.mockReset()
     getDefaultWslDistroMock.mockReset()
     getDefaultWslDistroMock.mockReturnValue(null)
@@ -125,6 +127,11 @@ describe('ghExecFileAsync WSL fallback', () => {
       configurable: true,
       value: originalPlatform
     })
+    if (originalSystemRoot === undefined) {
+      delete process.env.SystemRoot
+    } else {
+      process.env.SystemRoot = originalSystemRoot
+    }
     // Last, so a blocked launch still leaves the platform and breaker restored.
     expect(blockedLaunches.splice(0)).toEqual([])
   })
