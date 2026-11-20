@@ -29,8 +29,8 @@ function seed(retained: number): OrchestrationDb {
 
 // Rows the query's index range holds for the handle: what each delivery's selection walks.
 function indexCandidates(db: OrchestrationDb, sql: string): number {
-  const name = /INDEXED BY (\w+)/.exec(sql)?.[1]
-  expect(name).toBeDefined()
+  const name = /INDEXED BY (\w+)/.exec(sql)?.[1] ?? ''
+  expect(name).not.toBe('')
   const definition = String(
     db.db.prepare(`SELECT sql FROM sqlite_master WHERE name = ?`).get(name)?.sql
   )

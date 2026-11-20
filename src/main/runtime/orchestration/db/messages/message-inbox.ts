@@ -107,6 +107,7 @@ export function getUndeliveredUnreadMessages(
          WHERE ${conditions.join(' AND ')}
          ORDER BY sequence${limitSql}`
       )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * FROM messages yields MessageRow columns.
       .all(...params) as MessageRow[]
   )
 }
