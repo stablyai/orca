@@ -1,28 +1,30 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { CalendarDays, FileCode2, KanbanSquare, MessageSquareText } from 'lucide-react'
 import { Card } from '../ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { useTranslate } from '@/i18n/use-translate'
-import { WorkbenchAutomationBar } from './workbench-automation-bar'
+import { DEFAULT_PIPELINE_CONFIG } from '../../../../shared/github/issue-flow/pipeline-config'
+import { createPipelineRun } from '../../../../shared/github/issue-flow/pipeline-run'
+import { WorkbenchAutomationBar, type AutomationStageState } from './workbench-automation-bar'
 import { WorkbenchKanbanPanel } from './workbench-kanban-panel'
 import { WorkbenchSchedulePanel } from './workbench-schedule-panel'
 
 export default function WorkbenchPage(): React.JSX.Element {
   const t = useTranslate()
   const [tab, setTab] = useState('schedule')
+  const [run] = useState(() => createPipelineRun(DEFAULT_PIPELINE_CONFIG, 'issue-1'))
+  const stages = useMemo<readonly AutomationStageState[]>(
+    () =>
+      DEFAULT_PIPELINE_CONFIG.stages.map((stage) => ({
+        id: stage.id,
+        status: run.stages[stage.id]
+      })),
+    [run]
+  )
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden bg-background p-3">
-      <WorkbenchAutomationBar
-        stages={[
-          { id: 'triage', status: 'pass' },
-          { id: 'approval', status: 'active' },
-          { id: 'fix', status: 'idle' },
-          { id: 'review', status: 'idle' },
-          { id: 'ci', status: 'idle' },
-          { id: 'merge', status: 'idle' }
-        ]}
-      />
+      <WorkbenchAutomationBar stages={stages} />
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
         <TabsList className="w-fit">
           <TabsTrigger value="schedule">

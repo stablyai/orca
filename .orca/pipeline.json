@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "initial": "triage",
+  "stages": [
+    {
+      "id": "triage",
+      "label": "Triage",
+      "on": {
+        "triaged:auto": { "goto": "fix" },
+        "triaged:manual": { "goto": "approval" }
+      }
+    },
+    {
+      "id": "approval",
+      "label": "Approval",
+      "on": {
+        "approved": { "goto": "fix" }
+      }
+    },
+    {
+      "id": "fix",
+      "label": "Fix",
+      "on": {
+        "fix:completed": { "goto": "review" }
+      }
+    },
+    {
+      "id": "review",
+      "label": "Review",
+      "on": {
+        "review:passed": { "goto": "ci" },
+        "review:changes-requested": { "goto": "fix", "markCurrent": "attention" }
+      }
+    },
+    {
+      "id": "ci",
+      "label": "CI",
+      "on": {
+        "ci:passed": { "goto": "merge" },
+        "ci:failed": { "goto": "fix", "markCurrent": "attention" }
+      }
+    },
+    {
+      "id": "merge",
+      "label": "Merge",
+      "on": {
+        "merged": { "goto": null }
+      }
+    }
+  ]
+}
