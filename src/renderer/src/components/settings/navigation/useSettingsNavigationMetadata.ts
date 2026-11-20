@@ -1,7 +1,8 @@
+import { shallow } from 'zustand/shallow'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useSupportedGroupHookSettings } from '../repository/hooks/use-supported-group-hook-settings'
 import type { ProjectGroupSettingsEntry } from '../repository/hooks/use-supported-group-hook-settings'
 import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -148,15 +149,14 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const bots = useBots(botsEnabled)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((state) => state.settings)
-  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
-    useShallow((state) => {
-      const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] =
+    useAppStoreWithHostStatuses((state, statuses) => {
+      const policy = getClientCreationActionPolicy(state, state.activeWorktreeId, statuses)
       return [
         policy['managed-browser'].state === 'enabled',
         policy['mobile-emulator'].state === 'enabled'
       ] as const
-    })
-  )
+    }, shallow)
   const typedChatPermissions = useChatSettingsOwnPermissions()
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages({ kind: 'local' })
   const isMac = isMacUserAgent()

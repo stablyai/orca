@@ -1,5 +1,9 @@
 import { useAppStateView } from '@/store/retained-views/app-state-view'
-import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import {
+  buildAgentLaunchRouteInput,
+  buildAgentLaunchRouteView
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { readRuntimeStatusesForView } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { useMemo } from 'react'
@@ -101,7 +105,8 @@ export function useSourceControlActionAgentChoice(args: {
       selectedAgent &&
       !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
     )
-  const route = buildAgentLaunchRouteInput(store.getState(), {
+  const routeView = buildAgentLaunchRouteView(store.getState(), readRuntimeStatusesForView(store))
+  const route = buildAgentLaunchRouteInput(routeView, {
     agent: selectedAgent ?? 'claude',
     workspace: args.worktreeId
       ? { worktreeId: args.worktreeId, kind: workspaceKindForWorktreeId(args.worktreeId) }
