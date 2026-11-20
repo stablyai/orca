@@ -31,19 +31,22 @@ const waitingSteps = new Map<number, number>()
 
 /** A reveal frame clock that steps on the first animation frame at least `stepMs` after the
  *  request. Each step parses and draws the reply again, so steps are spaced out. */
-export const nativeChatRevealStepFrames = (stepMs: number): NativeChatTextRevealFrames => ({
+export const nativeChatRevealStepFrames = (
+  stepMs: number | (() => number)
+): NativeChatTextRevealFrames => ({
   now: () => performance.now(),
   request: (step) => {
-    const due = performance.now() + stepMs - FRAME_SLACK_MS
-    const wait = (frameStart: number): void => {
+    const wait = typeof stepMs === 'number' ? stepMs : stepMs()
+    const due = performance.now() + wait - FRAME_SLACK_MS
+    const onFrame = (frameStart: number): void => {
       if (frameStart < due) {
-        waitingSteps.set(id, requestAnimationFrame(wait))
+        waitingSteps.set(id, requestAnimationFrame(onFrame))
         return
       }
       waitingSteps.delete(id)
       step()
     }
-    const id = requestAnimationFrame(wait)
+    const id = requestAnimationFrame(onFrame)
     waitingSteps.set(id, id)
     return id
   },
