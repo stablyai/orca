@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { inMemoryMain, SSH_HOST, windowSavingTo } from './desktop-relay-writes.test-fixture'
+import {
+  inMemoryMain,
+  SSH_HOST,
+  SSH_REPO,
+  windowSavingTo
+} from './desktop-relay-writes.test-fixture'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -31,6 +36,17 @@ describe('relay ids saved by ownership', () => {
   it("keeps a host's relay ids when its worktree listing hasn't arrived yet", async () => {
     const main = inMemoryMain()
     const { stop } = await windowSavingTo(main, { listed: false })
+    try {
+      expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
+    } finally {
+      stop()
+    }
+  })
+
+  it('saves relay ids for a repo that names its SSH host only by execution host', async () => {
+    const main = inMemoryMain()
+    const repo = { ...SSH_REPO, connectionId: null, executionHostId: SSH_HOST }
+    const { stop } = await windowSavingTo(main, { repo })
     try {
       expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toEqual({ 'tab-a': 'relay-a' })
     } finally {

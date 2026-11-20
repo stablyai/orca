@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
@@ -14,7 +15,7 @@ import { patchWorkspaceSessionByHost, type SessionApi } from './workspace-sessio
 import { probeDesktopRelays } from './desktop-relay-writes'
 
 export const DEBOUNCE_MS = 150
-const SSH_REPO = { ...TEST_REPO, connectionId: 'conn-1' }
+export const SSH_REPO: Repo = { ...TEST_REPO, connectionId: 'conn-1' }
 export const SSH_HOST = getRepoExecutionHostId(SSH_REPO)
 export const WORKTREE_ID = `${SSH_REPO.id}::/remote/wt`
 
@@ -88,7 +89,7 @@ function sshState(status: 'connected' | 'disconnected') {
 
 export async function windowSavingTo(
   main: ReturnType<typeof inMemoryMain>,
-  { listed = true }: { listed?: boolean } = {}
+  { listed = true, repo = SSH_REPO }: { listed?: boolean; repo?: Repo } = {}
 ) {
   probeDesktopRelays(main.api)
   await vi.advanceTimersByTimeAsync(0)
@@ -101,7 +102,7 @@ export async function windowSavingTo(
       patchWorkspaceSessionByHost(main.api, patch, store.getState(), acknowledged).written
   })
   seedStore(store, {
-    repos: [SSH_REPO],
+    repos: [repo],
     // Unlisted: a cold start before the SSH host's worktree listing arrives.
     worktreesByRepo: listed
       ? {

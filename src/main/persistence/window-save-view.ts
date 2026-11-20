@@ -137,12 +137,7 @@ function withReconnectFacts<T extends WorkspaceSessionPatch>(
   const next: T = { ...session }
   for (const field of fields) {
     if (facts[field] === undefined) {
-      // A field the window sent that recomputes to nothing clears the stored value; omitting it would keep it.
-      if (Object.hasOwn(session, field)) {
-        Object.assign(next, { [field]: undefined })
-      } else {
-        delete next[field]
-      }
+      delete next[field]
     } else {
       Object.assign(next, { [field]: facts[field] })
     }

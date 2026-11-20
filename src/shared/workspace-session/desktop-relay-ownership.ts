@@ -41,41 +41,43 @@ export function applyDesktopRelayWrite(
 ): DesktopRelayApplyResult {
   const stored = session.remoteSessionIdsByTabId ?? {}
   const before = session.desktopRelayOwnerByTabId ?? {}
-  const owners: Record<string, string> = { ...before }
+  // Changes keyed by tab (undefined deletes); maps are copied only when something changes.
+  const relayChanges = new Map<string, string | undefined>()
+  const ownerChanges = new Map<string, string | undefined>()
+  const ownerOf = (tabId: string) =>
+    ownerChanges.has(tabId) ? ownerChanges.get(tabId) : before[tabId]
   const adopting =
     adoptLegacy !== null &&
     (session.desktopRelayAdoptionVersion ?? 0) < DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
-  const adopted: string[] = []
   if (adoptLegacy && adopting) {
     for (const [tabId, relayId] of Object.entries(adoptLegacy(session))) {
-      if (!Object.hasOwn(owners, tabId) && stored[tabId] === relayId) {
-        owners[tabId] = relayId
-        adopted.push(tabId)
+      if (!Object.hasOwn(before, tabId) && stored[tabId] === relayId) {
+        ownerChanges.set(tabId, relayId)
       }
     }
   }
-  const relays: Record<string, string> = { ...stored }
   const desired = write.relayIdsByTabId
   const removed = write.removedTabIds
   let liveTabs: Set<string> | null = null
   let refused = false
   const touched = removed
-    ? [...Object.keys(desired), ...removed]
-    : new Set([...Object.keys(stored), ...Object.keys(desired), ...Object.keys(owners)])
+    ? new Set([...Object.keys(desired), ...removed])
+    : new Set([...Object.keys(stored), ...Object.keys(desired), ...Object.keys(before)])
   for (const tabId of touched) {
     const wanted = desired[tabId]
     const current = stored[tabId]
-    const owned = owners[tabId] !== undefined && owners[tabId] === current
+    const owner = ownerOf(tabId)
+    const owned = owner !== undefined && owner === current
     if (wanted !== undefined) {
       if (current === wanted || owned) {
-        relays[tabId] = wanted
-        owners[tabId] = wanted
+        relayChanges.set(tabId, wanted)
+        ownerChanges.set(tabId, wanted)
         continue
       }
       liveTabs ??= tabIdsWithRows(session)
       if (current === undefined && liveTabs.has(tabId)) {
-        relays[tabId] = wanted
-        owners[tabId] = wanted
+        relayChanges.set(tabId, wanted)
+        ownerChanges.set(tabId, wanted)
       } else {
         refused = true
       }
@@ -85,33 +87,45 @@ export function applyDesktopRelayWrite(
       continue
     }
     if (owned) {
-      delete relays[tabId]
+      relayChanges.set(tabId, undefined)
     }
     // A key the window no longer holds, or whose id main changed, is no longer the window's.
-    if (owned || owners[tabId] !== current) {
-      delete owners[tabId]
+    if (owned || owner !== current) {
+      ownerChanges.set(tabId, undefined)
     }
   }
-  const relaysChanged = !sameRecord(stored, relays)
-  const ownersChanged = !sameRecord(before, owners)
-  if (!relaysChanged && !ownersChanged && !adopting) {
+  const relaysChanged = [...relayChanges].filter(([tabId, relayId]) => stored[tabId] !== relayId)
+  const ownersChanged = [...ownerChanges].filter(([tabId, relayId]) => before[tabId] !== relayId)
+  if (relaysChanged.length === 0 && ownersChanged.length === 0 && !adopting) {
     return { patch: null, refused, changedTabIds: [] }
   }
-  // Only keys this write touched or adopted can differ.
-  const changedTabIds = [...new Set([...touched, ...adopted])].filter(
-    (tabId) => relays[tabId] !== stored[tabId] || owners[tabId] !== before[tabId]
-  )
   const patch: RelayFields = {}
-  if (relaysChanged) {
-    patch.remoteSessionIdsByTabId = Object.keys(relays).length > 0 ? relays : undefined
+  if (relaysChanged.length > 0) {
+    patch.remoteSessionIdsByTabId = withChanges(stored, relaysChanged)
   }
-  if (ownersChanged) {
-    patch.desktopRelayOwnerByTabId = Object.keys(owners).length > 0 ? owners : undefined
+  if (ownersChanged.length > 0) {
+    patch.desktopRelayOwnerByTabId = withChanges(before, ownersChanged)
   }
   if (adopting) {
     patch.desktopRelayAdoptionVersion = DESKTOP_RELAY_LEGACY_ADOPTION_VERSION
   }
+  const changedTabIds = [...new Set([...relaysChanged, ...ownersChanged].map(([tabId]) => tabId))]
   return { refused, patch, changedTabIds }
+}
+
+function withChanges(
+  record: Record<string, string>,
+  changes: readonly (readonly [string, string | undefined])[]
+): Record<string, string> | undefined {
+  const next = { ...record }
+  for (const [tabId, value] of changes) {
+    if (value === undefined) {
+      delete next[tabId]
+    } else {
+      next[tabId] = value
+    }
+  }
+  return Object.keys(next).length > 0 ? next : undefined
 }
 
 /** For main writers that change or remove these keys' relay ids: the window no longer owns them. A
@@ -151,12 +165,4 @@ function tabIdsWithRows(session: WorkspaceSessionState): Set<string> {
     }
   }
   return tabIds
-}
-
-function sameRecord(left: Record<string, string>, right: Record<string, string>): boolean {
-  const leftKeys = Object.keys(left)
-  if (leftKeys.length !== Object.keys(right).length) {
-    return false
-  }
-  return leftKeys.every((key) => Object.hasOwn(right, key) && left[key] === right[key])
 }
