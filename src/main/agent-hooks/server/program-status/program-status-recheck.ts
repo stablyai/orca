@@ -4,7 +4,10 @@ import { markAntigravityDoneRetried } from './hook-precedence'
 import type { PaneTimers } from './pane-timers'
 import type { HookListenerState } from '../../../../shared/agent-hook-listener/listener-state'
 import type { AgentHookSource } from '../../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import { getOrCreateAntigravityPaneState } from '../../../../shared/agent-hook-listener/providers/antigravity/antigravity-pane-state'
+import {
+  antigravityHelpersSettled,
+  getOrCreateAntigravityPaneState
+} from '../../../../shared/agent-hook-listener/providers/antigravity/antigravity-pane-state'
 
 function antigravityTurn(row: AgentHookEventPayload | undefined) {
   return row
@@ -85,7 +88,7 @@ export function wakeAntigravityDone(
     return
   }
   const pane = state.antigravityChildWorkByPaneKey.get(paneKey)
-  if (pane?.helpersIdleAt !== undefined && pane.verifiedChildren.size === 0) {
+  if (pane?.helpersIdleAt !== undefined && antigravityHelpersSettled(pane)) {
     rechecks.wake(paneKey)
   }
 }

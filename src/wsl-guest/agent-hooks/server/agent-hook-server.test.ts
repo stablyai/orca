@@ -87,6 +87,61 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('polls a replayed Antigravity pane once listening so a subagent that stopped offline is proven', async () => {
+    const brain = join(dir, 'brain', 'parent', '.system_generated')
+    mkdirSync(join(brain, 'logs'), { recursive: true })
+    mkdirSync(join(brain, 'subagents'), { recursive: true })
+    const transcriptPath = join(brain, 'logs', 'transcript.jsonl')
+    writeFileSync(
+      transcriptPath,
+      `${JSON.stringify({ source: 'USER_EXPLICIT', type: 'USER_INPUT', content: 'job' })}\n`
+    )
+    writeFileSync(
+      join(brain, 'subagents', 'child.json'),
+      JSON.stringify({ conversationId: 'child', state: 'SUBAGENT_STATE_ALIVE' })
+    )
+    const root = { conversationId: 'parent', lastUserInput: 'job', transcriptPath }
+    const child = { conversationId: 'child', lastUserInput: '' }
+    const hooks: [string, Record<string, unknown>][] = [
+      ['PreInvocation', root],
+      ['PreToolUse', { ...root, toolCall: { name: 'invoke_subagent' } }],
+      ['PreInvocation', child],
+      ['Stop', { ...root, fullyIdle: false }],
+      ['Stop', { ...child, fullyIdle: true }]
+    ]
+    mkdirSync(join(dir, 'spool'))
+    writeFileSync(
+      join(dir, 'spool', 'pane-agy.jsonl'),
+      `${hooks
+        .map(([hookEventName, payload], index) =>
+          JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-1',
+            source: 'antigravity',
+            payload: { ...payload, hookEventName },
+            receivedAt: Date.now() + index
+          })
+        )
+        .join('\n')}\n`
+    )
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    try {
+      await server.start()
+      await vi.waitFor(
+        () =>
+          expect(
+            forward.mock.calls.some(([envelope]) =>
+              envelope.payload.subagents?.some((subagent) => subagent.id === 'child')
+            )
+          ).toBe(true),
+        { timeout: 10000 }
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
   it('forwards Claude background monitoring until its authoritative inventory drains', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })

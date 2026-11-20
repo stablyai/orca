@@ -23,6 +23,8 @@ export type TrackedAntigravityChild = {
   revision: number
   state: 'working' | 'waiting'
   stopped?: true
+  /** Tracked again after it retired: its proof does not settle a newer spawn. */
+  wokeAgain?: true
   description?: string
   agentType?: string
   model?: string
@@ -86,9 +88,17 @@ export function retireAntigravityChild(pane: AntigravityPaneChildState, id: stri
     }
   }
   pane.dirty = true
-  if (verified && pane.verifiedChildren.size === 0 && !pane.commands?.size) {
+  if (verified && antigravityHelpersSettled(pane)) {
     pane.helpersIdleAt = Date.now()
   }
+}
+/** No proven child, tracked command or unsettled spawn is left, so the parent's grace may start. */
+export function antigravityHelpersSettled(pane: AntigravityPaneChildState): boolean {
+  return (
+    pane.verifiedChildren.size === 0 &&
+    !pane.commands?.size &&
+    pane.pendingHelperSpawns === undefined
+  )
 }
 export function recordAntigravityChildHook(
   pane: AntigravityPaneChildState,
@@ -115,12 +125,13 @@ export function recordAntigravityChildHook(
   if (existing?.stopped && eventName !== 'PreInvocation') {
     return
   }
-  pane.retiredChildren.delete(id)
+  const wokeAgain = pane.retiredChildren.delete(id) && !existing ? true : undefined
   const child: TrackedAntigravityChild = existing ?? {
     id,
     startedAt: now,
     revision: 0,
-    state: 'working'
+    state: 'working',
+    wokeAgain
   }
   if (eventName === 'PreInvocation' && existing) {
     existing.stopped = undefined
@@ -168,7 +179,9 @@ export function verifyAntigravityChild(pane: AntigravityPaneChildState, id: stri
   }
   pane.verifiedChildren.add(id)
   pane.helpersIdleAt = undefined
-  settleAntigravityHelperSpawn(pane)
+  if (!pane.children.get(id)?.wokeAgain) {
+    settleAntigravityHelperSpawn(pane)
+  }
 }
 /** A spawn settles when its child is proven or when agy reports the spawn failed. */
 export function settleAntigravityHelperSpawn(pane: AntigravityPaneChildState): void {

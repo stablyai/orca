@@ -171,6 +171,12 @@ it.each([100, 1000])(
       const members: Record<string, unknown> = {}
       for (let i = 0; i < workers; i++) {
         members[`w${i}`] = { conversation_id: `w-${i}`, phase: 'RUNNING', applied_model: 'model-b' }
+        const logs = join(dir, `w-${i}`, '.system_generated', 'logs')
+        mkdirSync(logs, { recursive: true })
+        writeFileSync(
+          join(logs, 'transcript.jsonl'),
+          '{"type":"PLANNER_RESPONSE","model":"model-c"}\n'
+        )
       }
       writeFileSync(join(swarm, 'members.json'), JSON.stringify({ members }))
       const state = createHookListenerState()
