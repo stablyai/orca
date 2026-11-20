@@ -18,7 +18,7 @@ import {
 import '../prompts/codex-structured-prompt-replies'
 
 describe('codex turn lifecycle rows', () => {
-  it('settles prompts when a turn completes while awaiting approval', () => {
+  it('cancels a pending approval and question when their turn completes', () => {
     const tap = recorder()
     const clearPromptTurn = vi.fn()
     const translator = createCodexJournalTranslator({
@@ -37,35 +37,6 @@ describe('codex turn lifecycle rows', () => {
       codexItemId: 'exec-cancelled',
       promptKey: 'approval-cancelled'
     })
-
-    expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
-      accepted: true
-    })
-    expect(tap.rows.map((row) => row.body)).toEqual([
-      expect.objectContaining({ kind: 'turn', state: 'running' }),
-      expect.objectContaining({
-        kind: 'approval',
-        resolution: expect.objectContaining({ state: 'pending' })
-      }),
-      expect.objectContaining({
-        kind: 'approval',
-        resolution: expect.objectContaining({ state: 'cancelled' })
-      }),
-      expect.objectContaining({ kind: 'turn', state: 'completed' })
-    ])
-    expect(clearPromptTurn).toHaveBeenCalledWith(THREAD_ID, TURN_ID)
-  })
-
-  it('settles questions when a turn completes while awaiting input', () => {
-    const tap = recorder()
-    const clearPromptTurn = vi.fn()
-    const translator = createCodexJournalTranslator({
-      sink: tap.sink,
-      primaryThreadId: () => THREAD_ID,
-      clearPromptTurn
-    })
-
-    translator.handle(notification('turn/started', { turn: { id: TURN_ID } }))
     translator.handle({
       type: 'prompt',
       sessionId: SESSION_ID,
@@ -84,18 +55,33 @@ describe('codex turn lifecycle rows', () => {
     expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
       accepted: true
     })
-    expect(tap.rows.map((row) => row.body)).toEqual([
+    const bodies = tap.rows.map((row) => row.body)
+    expect(bodies.slice(0, 3)).toEqual([
       expect.objectContaining({ kind: 'turn', state: 'running' }),
       expect.objectContaining({
-        kind: 'question',
+        kind: 'approval',
         resolution: expect.objectContaining({ state: 'pending' })
       }),
       expect.objectContaining({
         kind: 'question',
-        resolution: expect.objectContaining({ state: 'cancelled' })
-      }),
-      expect.objectContaining({ kind: 'turn', state: 'completed' })
+        resolution: expect.objectContaining({ state: 'pending' })
+      })
     ])
+    const cancellations = bodies.slice(3, -1)
+    expect(cancellations).toHaveLength(2)
+    expect(cancellations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'approval',
+          resolution: expect.objectContaining({ state: 'cancelled' })
+        }),
+        expect.objectContaining({
+          kind: 'question',
+          resolution: expect.objectContaining({ state: 'cancelled' })
+        })
+      ])
+    )
+    expect(bodies.at(-1)).toMatchObject({ kind: 'turn', state: 'completed' })
     expect(clearPromptTurn).toHaveBeenCalledWith(THREAD_ID, TURN_ID)
   })
 

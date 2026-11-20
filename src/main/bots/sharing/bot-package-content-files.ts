@@ -8,13 +8,14 @@ import {
   BOT_PACKAGE_SOUL_PATH,
   type BotPackageV1
 } from '../../../shared/bots/bot-package'
-import { observeSkillPackage } from '../../skills/package-archive/skill-package-identity'
 import type { BotPackageContent, BotPackageRawFile } from './bot-package-content'
 import type { BotTransportManifest } from './bot-package-transport'
 import type { BotShareable } from './bot-share-sources'
+import { ownSkillFiles } from './bot-share-skills'
 
 /** The picked parts of a bot's home, as they are now. A skill folder is read through the skill
- *  package observer, which refuses links and holds the size and depth limits. */
+ *  package observer, which refuses links and holds the size and depth limits; a skill nested inside
+ *  it is its own part and stays out. */
 export async function sharerRawFiles(
   shareable: BotShareable,
   bot: BotPackageV1
@@ -30,8 +31,7 @@ export async function sharerRawFiles(
     if (!skill) {
       continue
     }
-    const observed = await observeSkillPackage(skill.directory)
-    for (const file of observed.files) {
+    for (const file of await ownSkillFiles(skill.directory)) {
       files.push({
         path: `skills/${name}/${file.path}`,
         bytes: await readFile(join(skill.directory, ...file.path.split('/')))

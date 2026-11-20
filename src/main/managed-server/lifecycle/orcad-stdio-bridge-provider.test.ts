@@ -90,7 +90,7 @@ const closedOf = (socket: Socket): Promise<void> =>
   new Promise((resolve) => (socket.destroyed ? resolve() : socket.once('close', () => resolve())))
 
 describe('the managed tunnel over the stdio bridge', () => {
-  it('serves the same local port a forward would, one bridge per connection', async () => {
+  it('serves both connections and closes them when the tunnel closes', async () => {
     const openChannel = vi.fn(async () => localBridge())
     const forward = await startProvider({ openChannel })
     expect(forward.entry.localPort).toBeGreaterThan(0)
@@ -101,13 +101,7 @@ describe('the managed tunnel over the stdio bridge', () => {
     expect(await echoOf(first, 'first')).toBe('first')
     expect(await echoOf(second, 'second')).toBe('second')
     expect(openChannel).toHaveBeenCalledTimes(2)
-  })
-
-  it('closes every bridge and connection when the tunnel closes', async () => {
-    const forward = await startProvider()
-    const socket = await dial(forward.entry.localPort)
-    expect(await echoOf(socket, 'ping')).toBe('ping')
     await forward.close()
-    await closedOf(socket)
+    await Promise.all([closedOf(first), closedOf(second)])
   })
 })

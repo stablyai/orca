@@ -34,17 +34,20 @@ afterEach(() => {
 })
 
 describe('SlackConfigTokenForm', () => {
-  it('takes the refresh token copied in Slack when the window comes back, once', async () => {
+  it('fills the field with the token copied in Slack when the window comes back, and sends only on submit', async () => {
     const { onSubmit, readClipboardText } = shown(`  ${REFRESH}\n`)
     // Nothing is read until Slack's page was opened from here.
     fireEvent.focus(window)
     expect(readClipboardText).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: /Get config token/ }))
     fireEvent.focus(window)
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(REFRESH))
+    const field = screen.getByLabelText<HTMLInputElement>('Configuration refresh token')
+    await waitFor(() => expect(field.value).toBe(REFRESH))
     fireEvent.focus(window)
     expect(readClipboardText).toHaveBeenCalledTimes(1)
-    expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(onSubmit).not.toHaveBeenCalled()
+    fireEvent.submit(field.closest('form')!)
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith(REFRESH)
   })
 
   it('reads the clipboard once per opening, and not at all when Slack’s page did not open', async () => {

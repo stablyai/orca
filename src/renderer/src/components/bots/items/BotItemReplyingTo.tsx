@@ -1,7 +1,7 @@
 // The comment box's reply mark while the agent's question waits: "Replying to: <question>", which hides
 // for that question; and the check that the box's question placeholder fits on its one line.
 import { useEffect, useLayoutEffect, useState, type RefObject } from 'react'
-import { CornerDownRight, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   glowNativeChatComposer,
@@ -66,8 +66,9 @@ export function BotItemReplyingTo({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="mx-1 mb-0.5 mt-0.5 flex h-6 max-w-[calc(100%-8px)] min-w-0 items-center gap-1.5 self-start rounded-md bg-foreground/[0.06] pl-[7px] pr-[3px] text-xs text-muted-foreground">
-      <CornerDownRight className="size-3 shrink-0" />
+    <div className="mx-1 mb-0.5 mt-0.5 flex h-6 max-w-[calc(100%-8px)] min-w-0 items-center gap-2 self-start rounded-md bg-foreground/[0.06] pl-2.5 pr-[3px] text-xs text-muted-foreground">
+      {/* The open question line's own mark. */}
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-agent-question" />
       <span className="min-w-0 truncate">
         {t('bots.items.comment.replyingTo', 'Replying to:')}{' '}
         <span className="text-foreground">{question}</span>

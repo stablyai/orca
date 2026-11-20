@@ -4458,13 +4458,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Suma del conjunto de trabajo (WS): las páginas residentes en RAM en este momento. Las páginas compartidas pueden aparecer en más de un proceso, y la memoria que Windows ha paginado a disco no se cuenta aquí.",
-                "privateBytesDescription": "Suma de bytes privados: la memoria que estos procesos han confirmado, contada tanto si está residente como si está paginada a disco. Es lo que el host imputa a su límite de confirmación, así que sigue subiendo mientras el conjunto de trabajo de arriba se reduce por la paginación.",
-                "footprintDescription": "Suma de la huella de memoria, la misma cifra que muestra el Monitor de Actividad: la memoria propia de cada proceso, incluida la memoria gráfica. Las páginas compartidas entre procesos no se cuentan dos veces.",
-                "rssDescription": "Suma del tamaño del conjunto residente (RSS). Las páginas compartidas o con alias pueden aparecer en más de un proceso.",
                 "memColumn": "Mem.",
-                "memorySummary": "Σ Memoria",
-                "privateSummary": "Σ Privada"
+                "memorySummary": "Σ Memoria"
               }
             },
             "manager": {
@@ -11941,7 +11936,8 @@
           "source": {
             "cli": "Archivo de autenticación de Cursor CLI",
             "desktop": "IDE de Cursor",
-            "keychain": "Llavero de macOS (cursor-agent)"
+            "keychain": "Llavero de macOS (cursor-agent)",
+            "keyring": "Llavero de Linux (cursor-agent)"
           },
           "staleUsage": "Último uso conocido — falló la actualización más reciente: {{reason}}",
           "subtitle": "Muestra tu uso del plan de Cursor a partir del inicio de sesión que ya está en este equipo. Orca solo lo lee — nunca modifica tu inicio de sesión de Cursor.",
@@ -17048,8 +17044,6 @@
             "27d863542c": "Anotaciones del navegador",
             "e48569ac6d": "No se pudo acceder a este sitio.",
             "bbe8f15e83": "Este panel se representa desde el servidor de ejecución activo.",
-            "8b7e6d1f5a": "Las anotaciones del navegador solo están disponibles en las pestañas del navegador local.",
-            "deb5293610": "Anotaciones del navegador no disponibles en runtime remoto",
             "90d021f2ad": "Agregar",
             "0cb3bd6221": "Intención de anotación",
             "532bac48c5": "Describe aquí lo que el agente debería cambiar...",
@@ -18851,7 +18845,8 @@
       "install": {
         "checking": "Comprobando si {{agent}} está listo en este host…",
         "cliInstall": "Instalar",
-        "cliRecheck": "Verificar de nuevo"
+        "cliRecheck": "Verificar de nuevo",
+        "openAgentSettings": "Abrir ajustes"
       },
       "reasoning": "Razonamiento",
       "contextMenu": {
@@ -18892,6 +18887,7 @@
         "claudeAccountFolderMissing": "Falta la carpeta de la cuenta de Claude seleccionada. Vuelva a iniciar sesión en ella o elija otra cuenta.",
         "claudeAccountSetupFailed": "No se pudo configurar la cuenta de Claude seleccionada. Vuelva a intentarlo o elija otra cuenta.",
         "agentCommandNotRunnable": "El Comando de {{agent}} en Ajustes → Agentes debe empezar con un programa que Orca pueda encontrar. No se admiten variables, tuberías ni otra sintaxis de shell; usa el ajuste Entorno para las variables. Cámbialo o restablécelo.",
+        "agentCommandFailed": "El Comando de {{agent}} en Ajustes → Agentes no inició {{agent}}: {{detail}}. Cámbialo o restablécelo.",
         "runtimeNotInstalled": "{{agent}} no está instalado en el equipo que ejecuta este chat. Instálelo desde el chat en una versión actual de Orca.",
         "fullAccessAsRoot": "{{agent}} no usará Acceso total mientras se ejecute como root. Elija otro permiso para {{agent}} en Configuración → Agentes para el equipo que ejecuta este chat y luego inicie un chat nuevo.",
         "launchPreparationFailed": "Orca no pudo preparar el inicio de {{agent}} en el equipo que ejecuta este chat.",
@@ -22427,8 +22423,7 @@
     "refresh": "Actualizar",
     "restartLocal": "Reiniciar daemon local",
     "killAllLocal": "Finalizar todas las sesiones locales",
-    "killFailed": "No se pudo finalizar el terminal. Se conservan las sesiones observadas por última vez.",
-    "metricDetails": "Detalles de las métricas"
+    "killFailed": "No se pudo finalizar el terminal. Se conservan las sesiones observadas por última vez."
   },
   "csv": {
     "detectingDelimiter": "Detectando delimitador…",
@@ -24275,5 +24270,8 @@
     "dontSend": "No enviar",
     "sending": "Enviando…",
     "sendReport": "Enviar informe"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "Este equipo"
   }
 }

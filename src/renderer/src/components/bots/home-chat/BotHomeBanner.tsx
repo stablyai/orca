@@ -1,5 +1,4 @@
-// Home's pill shrinks to its avatar on scroll; header containers at most 260 CSS px wide hide it entirely.
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+// Home's pill always shows avatar + name (no tooltip needed); header containers at most 260 CSS px wide hide it entirely.
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -21,24 +20,17 @@ export function BotHomeBanner({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          data-bot-home-banner=""
-          aria-label={t('bots.tabs.homeBanner', "Open {{name}}'s page", { name: bot.name })}
-          onClick={(event) => {
-            event.stopPropagation()
-            openBotActivityPanel()
-          }}
-        >
-          <BotAvatar bot={bot} className="size-5 shrink-0 rounded-full text-3xs" />
-          <span data-bot-home-banner-name="">{bot.name}</span>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={4}>
-        {bot.name}
-      </TooltipContent>
-    </Tooltip>
+    <button
+      type="button"
+      data-bot-home-banner=""
+      aria-label={t('bots.tabs.homeBanner', "Open {{name}}'s page", { name: bot.name })}
+      onClick={(event) => {
+        event.stopPropagation()
+        openBotActivityPanel()
+      }}
+    >
+      <BotAvatar bot={bot} className="size-5 shrink-0 rounded-full text-3xs" />
+      <span data-bot-home-banner-name="">{bot.name}</span>
+    </button>
   )
 }

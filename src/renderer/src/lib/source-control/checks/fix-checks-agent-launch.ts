@@ -29,6 +29,7 @@ import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/exec
 import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { activateAndRevealWorktreeWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   type SourceControlActionRecipe,
@@ -202,7 +203,12 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
     const targetRepo =
       latestStore.repos.find((candidate) => candidate.id === targetWorktree.repoId) ?? repo
     const launchPlatform = targetRepo
-      ? resolveRepoWorktreeLaunchPlatform(latestStore, targetRepo, targetWorktree)
+      ? resolveRepoWorktreeLaunchPlatform(
+          latestStore,
+          readRuntimeStatuses(),
+          targetRepo,
+          targetWorktree
+        )
       : undefined
     const { commandInput: projectedPrompt, ...projection } = projectSourceControlActionLaunch(
       recipe,
