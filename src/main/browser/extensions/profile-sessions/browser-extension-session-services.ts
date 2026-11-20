@@ -6,6 +6,7 @@ import { observeBrowserExtensionCookieChanges } from '../api/cookies'
 import { observeBrowserExtensionActionSession } from '../actions/browser-extension-action-registry'
 import { revokeBrowserExtensionActiveTabInSession } from '../permissions/browser-extension-active-tab'
 import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-extension-api-host'
+import { hasBrowserExtensionWorkerCallsInFlight } from '../api-runtime/browser-extension-worker-api-host'
 import { getActiveBrowserTabId } from '../tabs-and-windows/browser-extension-tab-model'
 import {
   forgetBrowserExtensionContentScriptRestore,
@@ -20,6 +21,7 @@ import {
 import { setBrowserExtensionSessionHooks } from './browser-extension-session-loader'
 import {
   forgetBrowserExtensionCleanStartNeed,
+  noteBrowserExtensionNeedsCleanStart,
   isBrowserExtensionStateKeptWhileIdle
 } from './browser-extension-idle-kept-state'
 import {
@@ -76,6 +78,10 @@ export function installBrowserExtensionSessionServices(): void {
           forgetBrowserExtensionCleanStartNeed(profileId, extension.id)
         )
         sess.extensions.on('extension-unloaded', (_event, extension) => {
+          // Why: a call main was still handling may have changed state the reattach can't see.
+          if (hasBrowserExtensionWorkerCallsInFlight(sess, extension.id)) {
+            noteBrowserExtensionNeedsCleanStart(profileId, extension.id)
+          }
           forgetBrowserExtensionContentScriptRestore(sess, extension.id)
           revokeBrowserExtensionActiveTabInSession(sess, extension.id)
           // Why the attach-time id: deleting a profile forgets its session before unloading.
@@ -118,7 +124,8 @@ export function installBrowserExtensionSessionServices(): void {
             CONTENT_SCRIPT_RESTORE_TIMEOUT_MS
           ),
           whenBrowserExtensionDnrLoaded(sess)
-        ])
+        ]),
+        CONTENT_SCRIPT_RESTORE_TIMEOUT_MS
       )
     }
   })

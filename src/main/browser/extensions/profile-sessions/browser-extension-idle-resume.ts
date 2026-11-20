@@ -1,4 +1,7 @@
-import { forgetBrowserExtensionSessionContentScripts } from '../api-runtime/browser-extension-content-scripts'
+import {
+  forgetBrowserExtensionSessionContentScripts,
+  restartBrowserExtensionContentScripts
+} from '../api-runtime/browser-extension-content-scripts'
 import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'
 import { forgetSidePanelExtensionOptions } from '../side-panel/browser-extension-side-panel-options'
 import { clearBrowserExtensionDnrSessionRules } from '../declarative-net-request/session/browser-extension-dnr-session'
@@ -34,17 +37,21 @@ export async function settleBrowserExtensionResume(
   sess: Electron.Session,
   profileId: string,
   extension: Electron.Extension,
-  restore: Promise<unknown>
+  restore: Promise<unknown>,
+  restoreTimeoutMs: number
 ): Promise<void> {
   try {
     await restore
     claimBrowserExtensionIdleState(profileId, extension.id)
   } catch (error) {
-    if (isBrowserExtensionResuming(profileId, extension.id)) {
-      dropBrowserExtensionIdleState({ profileId, extensionId: extension.id })
-      await clearBrowserExtensionDnrSessionRules(sess, extension.id)
-      fireRuntimeLifecycleEvents(sess, profileId, extension, 'startup')
+    if (!isBrowserExtensionResuming(profileId, extension.id)) {
+      throw error
     }
-    throw error
+    console.warn(`[browser-extensions] Could not resume ${extension.id}; starting it clean:`, error)
+    dropBrowserExtensionIdleState({ profileId, extensionId: extension.id })
+    await Promise.all([
+      restartBrowserExtensionContentScripts(sess, profileId, extension, restoreTimeoutMs),
+      clearBrowserExtensionDnrSessionRules(sess, extension.id)
+    ]).finally(() => fireRuntimeLifecycleEvents(sess, profileId, extension, 'startup'))
   }
 }

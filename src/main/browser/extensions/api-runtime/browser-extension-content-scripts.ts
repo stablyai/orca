@@ -198,6 +198,41 @@ function enqueue(
   return run
 }
 
+// Serialized into a native-only extension page; keep all its dependencies inside this function.
+function unregisterAllNativeScripts(): Promise<unknown> {
+  const root: { chrome?: { scripting?: unknown } } = globalThis
+  const scripting = root.chrome?.scripting
+  if (!scripting || typeof scripting !== 'object' || !('unregisterContentScripts' in scripting)) {
+    throw new Error('Native scripting API is unavailable')
+  }
+  const { unregisterContentScripts } = scripting
+  if (typeof unregisterContentScripts !== 'function') {
+    throw new Error('Native scripting API is unavailable')
+  }
+  return Promise.resolve(unregisterContentScripts.call(scripting))
+}
+
+/**
+ * A resumed extension whose restore failed partway starts clean: no registration it half-restored
+ * stays, its scripting calls work again, and only its persistent scripts come back.
+ */
+export async function restartBrowserExtensionContentScripts(
+  session: Electron.Session,
+  profileId: string,
+  extension: Electron.Extension,
+  timeoutMs: number
+): Promise<void> {
+  forgetBrowserExtensionContentScriptRestore(session, extension.id)
+  forgetBrowserExtensionSessionContentScripts(profileId, extension.id)
+  await runBrowserExtensionNativePage({
+    session,
+    extensionId: extension.id,
+    code: `(${unregisterAllNativeScripts.toString()})()`,
+    timeoutMs
+  })
+  await restoreBrowserExtensionContentScripts(session, profileId, extension, timeoutMs)
+}
+
 export async function restoreBrowserExtensionContentScripts(
   session: Electron.Session,
   profileId: string,
