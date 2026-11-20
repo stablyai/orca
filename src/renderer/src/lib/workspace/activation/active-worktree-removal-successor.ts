@@ -12,7 +12,10 @@ import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalo
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import { getDeleteStateForWorktreeHost } from '@/components/sidebar/workspace-actions/deletion/worktree-delete-state-host-match'
-import { createSleepingSweepHiddenCheck } from '@/components/sidebar/worktree-list/listing/sleeping-sweep-visibility'
+import {
+  createSleepingSweepHiddenCheck,
+  createWorkspaceAsleepCheck
+} from '@/components/sidebar/worktree-list/listing/sleeping-sweep-visibility'
 import { getSidebarSleepingSweepRetainedIds } from '@/components/sidebar/worktree-list/listing/use-sleeping-sweep-retention'
 import { hasWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import {
@@ -75,7 +78,8 @@ export function pickActiveWorktreeSuccessor(
   sleepingSweepRetainedIds: ReadonlySet<string>
 ): Worktree | null {
   const repoById = getIndexedRepoMap(state.repos)
-  // Activating seeds a terminal, so a row "Hide sleeping" keeps out of the sidebar would be woken.
+  // Activating clears sleep intent and seeds a terminal, so a slept row or one "Hide sleeping" hides would be woken.
+  const isAsleep = createWorkspaceAsleepCheck(state, sleepingSweepRetainedIds)
   const isHiddenAsleep =
     state.persistedUIReady && state.workspaceSessionReady && !state.showSleepingWorkspaces
       ? createSleepingSweepHiddenCheck(state, sleepingSweepRetainedIds)
@@ -85,9 +89,8 @@ export function pickActiveWorktreeSuccessor(
       !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting &&
       !isWorktreeRetiredByRemoval(worktree) &&
       !isHostedOnRuntimeOwnedSshTarget(worktree, repoById) &&
-      // Activation clears sleep intent, so handing off to a slept sibling would wake it.
-      !hasWorktreeSleepIntent(worktree.id) &&
-      !isHiddenAsleep?.(worktree)
+      !isHiddenAsleep?.(worktree) &&
+      !(hasWorktreeSleepIntent(worktree.id) && isAsleep(worktree))
   )
   const others = siblings.filter((worktree) => !worktree.isMainWorktree)
   if (others.length > 0) {

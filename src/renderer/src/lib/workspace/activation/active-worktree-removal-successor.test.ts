@@ -3,6 +3,7 @@ import { pickActiveWorktreeSuccessor } from './active-worktree-removal-successor
 import { createTestStore, seedStore } from '../../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../../store/repos/repo.test-fixture'
+import { makeTerminalTab } from '../../../store/terminals/testing/terminal-row.test-fixture'
 import {
   forgetWorktreeSleepIntent,
   markWorktreeSleepIntent
@@ -41,6 +42,21 @@ describe('pickActiveWorktreeSuccessor', () => {
     forgetWorktreeSleepIntent(main.id)
     expect(pickActiveWorktreeSuccessor(store.getState(), removed, new Set())?.id).toBe(
       'repo1::/main'
+    )
+  })
+
+  it('still hands focus to a slept workspace something else already woke', () => {
+    const store = createTestStore()
+    seedStore(store, {
+      repos: [TEST_REPO],
+      worktreesByRepo: { repo1: [slept, main] },
+      tabsByWorktree: { [slept.id]: [makeTerminalTab({ id: 'tab-1', worktreeId: slept.id })] },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      showSleepingWorkspaces: true
+    })
+    markWorktreeSleepIntent(slept.id)
+    expect(pickActiveWorktreeSuccessor(store.getState(), removed, new Set())?.id).toBe(
+      'repo1::/slept'
     )
   })
 })
