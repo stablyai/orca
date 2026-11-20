@@ -1,26 +1,24 @@
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
+import {
+  getVisiblePaneTerminals,
+  rebuildTerminalWebglRenderersForPanes
+} from '../pane-manager-registry'
 
 // A 4096² merged page means the shared atlas reached ~64 MiB; on Apple GPUs each context keeps its upload memory until the context is destroyed (GiBs across panes).
 const ATLAS_REBUILD_PAGE_SIZE = 4096
 const ATLAS_REBUILD_MIN_INTERVAL_MS = 10_000
-// A rebuild repaints from the buffer, so wait out a synchronized-output (DEC 2026) frame; cap it like xterm's own 1 s sync timeout, which paused panes never arm.
-const SYNCHRONIZED_FRAME_RETRY_MS = 250
-const SYNCHRONIZED_FRAME_MAX_RETRIES = 4
 // Only macOS was measured retaining it (desktop app and Mac browsers); elsewhere a mass context recreate risks the driver's context budget. Touch excludes iPadOS desktop-mode agents.
 const ATLAS_MEMORY_REBUILD_ENABLED =
   typeof navigator !== 'undefined' &&
   navigator.userAgent.includes('Macintosh') &&
   !(navigator.maxTouchPoints > 0)
 
-type AtlasRebuilder = (panes: ManagedPaneInternal[]) => void
 type XtermWebglAddonAtlasInternals = { _renderer?: { _charAtlas?: object } }
 
-let rebuildPanes: AtlasRebuilder | null = null
 let rebuildTimer: ReturnType<typeof setTimeout> | null = null
-let synchronizedFrameRetries = 0
 let lastRebuildAt = Number.NEGATIVE_INFINITY
-// Per atlas, so one atlas's output never re-arms another; weak so a retired atlas is never kept alive. A rebuild retires the atlas, so its successor starts clean.
+// Per atlas, so one atlas's output never re-arms another; weak so a retired atlas is never kept alive.
 const atlasesWithLargePage = new WeakSet<object>()
 const atlasesWithOutput = new WeakSet<object>()
 const attachedPanes = new Map<object, ManagedPaneInternal>()
@@ -33,42 +31,52 @@ function isRebuildDue(atlas: object | undefined): atlas is object {
   return atlas !== undefined && atlasesWithLargePage.has(atlas) && atlasesWithOutput.has(atlas)
 }
 
-/** Wired by the reattach module, which owns detaching and reattaching pane renderers. */
-export function setTerminalWebglAtlasRebuilder(rebuilder: AtlasRebuilder): void {
-  rebuildPanes = rebuilder
-}
-
 function rebuildDueAtlases(): void {
   rebuildTimer = null
-  // Every owner of a due atlas detaches together, or a remaining owner keeps it alive; other atlases' renderers are untouched.
-  const panes = [...attachedPanes.values()].filter((pane) => isRebuildDue(atlasOf(pane)))
-  if (panes.length === 0) {
-    synchronizedFrameRetries = 0
-    return
-  }
-  if (
-    synchronizedFrameRetries < SYNCHRONIZED_FRAME_MAX_RETRIES &&
-    panes.some((pane) => pane.terminal.modes.synchronizedOutputMode)
-  ) {
-    synchronizedFrameRetries++
-    rebuildTimer = setTimeout(rebuildDueAtlases, SYNCHRONIZED_FRAME_RETRY_MS)
-    return
-  }
-  synchronizedFrameRetries = 0
-  lastRebuildAt = Date.now()
-  // Normally retired by the rebuild; clearing also stops a surviving atlas from rebuilding again without new output.
-  for (const pane of panes) {
+  const owners = new Map<object, ManagedPaneInternal[]>()
+  for (const pane of attachedPanes.values()) {
     const atlas = atlasOf(pane)
-    if (atlas) {
-      atlasesWithLargePage.delete(atlas)
-      atlasesWithOutput.delete(atlas)
+    if (!isRebuildDue(atlas)) {
+      continue
+    }
+    const atlasPanes = owners.get(atlas)
+    if (atlasPanes) {
+      atlasPanes.push(pane)
+    } else {
+      owners.set(atlas, [pane])
     }
   }
+  if (owners.size === 0) {
+    return
+  }
+  // A new canvas paints straight from the buffer, so a visible pane mid synchronized-output (DEC 2026) frame would flash it half drawn; that atlas waits for its next output.
+  const visibleTerminals = getVisiblePaneTerminals()
+  const panes = new Set<ManagedPaneInternal>()
+  for (const [atlas, atlasPanes] of owners) {
+    if (
+      atlasPanes.some(
+        (pane) => visibleTerminals.has(pane.terminal) && pane.terminal.modes.synchronizedOutputMode
+      )
+    ) {
+      continue
+    }
+    // Normally retired by the rebuild; clearing also stops a surviving atlas from rebuilding again without new output.
+    atlasesWithLargePage.delete(atlas)
+    atlasesWithOutput.delete(atlas)
+    for (const pane of atlasPanes) {
+      panes.add(pane)
+    }
+  }
+  if (panes.size === 0) {
+    return
+  }
+  lastRebuildAt = Date.now()
   recordTerminalWebglDiagnostic('webgl-renderer-rebuild', {
-    panes: panes.length,
+    panes: panes.size,
     reason: 'atlas-memory'
   })
-  rebuildPanes?.(panes)
+  // Every owner of a due atlas detaches together, or a remaining owner keeps it alive; other atlases' renderers are untouched.
+  rebuildTerminalWebglRenderersForPanes(panes)
 }
 
 function scheduleRebuild(): void {

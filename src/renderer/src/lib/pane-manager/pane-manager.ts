@@ -110,7 +110,11 @@ export class PaneManager {
       requestPaneReparentFrame: (callback) => this.reparentFrames.request(callback)
     }
     // Atlas recovery must reach every manager (resetAndRefreshAllTerminalWebglAtlases explains shared generations).
-    registerLivePaneManager(this, () => detachPanesWebglForRebuild(this.panes.values()))
+    registerLivePaneManager(this, (only) =>
+      detachPanesWebglForRebuild(
+        only ? [...this.panes.values()].filter((pane) => only.has(pane)) : this.panes.values()
+      )
+    )
   }
 
   createInitialPane(opts?: { focus?: boolean; leafId?: string }): ManagedPane {

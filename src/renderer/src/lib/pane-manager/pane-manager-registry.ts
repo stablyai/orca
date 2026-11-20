@@ -16,8 +16,8 @@ type RegisteredPaneManager = {
 
 const liveManagers = new Set<RegisteredPaneManager>()
 const managerIds = new WeakMap<RegisteredPaneManager, number>()
-/** Detaches a manager's WebGL renderers and returns the step that reattaches them. */
-type WebglRendererDetacher = () => () => void
+/** Detaches a manager's WebGL renderers (only those in `only`, when given) and returns the step that reattaches them. */
+type WebglRendererDetacher = (only?: ReadonlySet<unknown>) => () => void
 const webglRendererDetachers = new WeakMap<RegisteredPaneManager, WebglRendererDetacher>()
 let nextManagerId = 1
 
@@ -107,6 +107,46 @@ export function rebuildAllTerminalWebglRenderers(reason: string): void {
       // A manager disposed mid-rebuild must not block its siblings.
     }
   }
+}
+
+/** Recreates the given panes' WebGL renderers; all detach before any reattach so their shared atlas retires, and hidden managers' panes stay detached until reveal re-attaches them. */
+export function rebuildTerminalWebglRenderersForPanes(panes: ReadonlySet<unknown>): void {
+  const reattachSteps: (() => void)[] = []
+  for (const manager of liveManagers) {
+    try {
+      const reattach = webglRendererDetachers.get(manager)?.(panes)
+      if (reattach && manager.isVisibleForAtlasRecovery?.() !== false) {
+        reattachSteps.push(reattach)
+      }
+    } catch {
+      // A manager disposed mid-rebuild must not block its siblings.
+    }
+  }
+  for (const reattach of reattachSteps) {
+    try {
+      reattach()
+    } catch {
+      // A manager disposed mid-rebuild must not block its siblings.
+    }
+  }
+}
+
+/** Terminals of panes whose manager is on screen. */
+export function getVisiblePaneTerminals(): Set<unknown> {
+  const terminals = new Set<unknown>()
+  for (const manager of liveManagers) {
+    if (manager.isVisibleForAtlasRecovery?.() === false) {
+      continue
+    }
+    try {
+      for (const pane of manager.getPanes?.() ?? []) {
+        terminals.add(pane.terminal)
+      }
+    } catch {
+      // One manager’s teardown must not sink the rest.
+    }
+  }
+  return terminals
 }
 
 /** Report each pane’s WebGL/DOM state so freeze reports distinguish missed repaint from atlas corruption/context loss. */

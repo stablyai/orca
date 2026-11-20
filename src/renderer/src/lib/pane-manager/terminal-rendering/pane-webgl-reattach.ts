@@ -1,7 +1,6 @@
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import { attachWebgl, clearTerminalWebglAttachBackoff, disposeWebgl } from './pane-webgl-renderer'
 import { canRetryPaneWebglAfterContextLoss } from './pane-webgl-context-loss-policy'
-import { setTerminalWebglAtlasRebuilder } from './terminal-webgl-atlas-memory-rebuild'
 
 export function clearPaneWebglContextLossForRetry(pane: ManagedPaneInternal): boolean {
   if (!pane.webglDisabledAfterContextLoss) {
@@ -54,5 +53,3 @@ export function detachPanesWebglForRebuild(panes: Iterable<ManagedPaneInternal>)
   }
   return () => reattach.forEach(reattachDetachedWebgl)
 }
-
-setTerminalWebglAtlasRebuilder((panes) => detachPanesWebglForRebuild(panes)())
