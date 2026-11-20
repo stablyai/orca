@@ -9,8 +9,9 @@ import { rewritesRequestHeaders } from './browser-manager-navigation'
 
 // An unloading frame leaves the frame tree just after its pagehide.
 const REMOVAL_CHECK_DELAY_MS = 250
-// One check per guest covers every site iframe that unloaded in a burst; churn can't postpone it.
-const removalChecks = new Map<number, ReturnType<typeof setTimeout>>()
+// One check per guest covers a burst of unloads; churn can't postpone it, and an unload during a
+// pending check earns one more pass in case its frame left the tree after that check.
+const removalChecks = new Map<number, { again: boolean }>()
 
 function subframeRewritesRequestHeaders(url: string): boolean {
   return rewritesRequestHeaders(
@@ -64,9 +65,17 @@ export function noteBrowserGuestSubframeUnloaded(
   if (demanding.size === 0 || (frame && !demanding.has(frame.frameTreeNodeId))) {
     return
   }
-  if (removalChecks.has(guest.id)) {
+  scheduleRemovalCheck(guest)
+}
+
+function scheduleRemovalCheck(guest: Electron.WebContents): void {
+  const pending = removalChecks.get(guest.id)
+  if (pending) {
+    pending.again = true
     return
   }
+  const check = { again: false }
+  removalChecks.set(guest.id, check)
   const timer = setTimeout(() => {
     removalChecks.delete(guest.id)
     if (guest.isDestroyed()) {
@@ -82,7 +91,9 @@ export function noteBrowserGuestSubframeUnloaded(
     } catch {
       // A disposed frame tree can't prove the site iframes gone; keep the policy on.
     }
+    if (check.again && getBrowserGuestFrameUserAgentDemand(guest.id).size > 0) {
+      scheduleRemovalCheck(guest)
+    }
   }, REMOVAL_CHECK_DELAY_MS)
   timer.unref?.()
-  removalChecks.set(guest.id, timer)
 }

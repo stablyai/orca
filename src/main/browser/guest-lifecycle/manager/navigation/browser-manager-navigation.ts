@@ -127,9 +127,9 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     }
   }
 
-  /** At commit, and when a mobile preset changes: the committed page's own demand. */
-  protected settleUserAgentDemand(guest: Electron.WebContents, frames: 'keep' | 'clear'): void {
-    // Commit and CDP detach can fire before startup sets the identity; nothing rewrites yet.
+  /** At commit: the new page's own demand; the old document's iframes are gone. */
+  protected settleUserAgentDemand(guest: Electron.WebContents): void {
+    // A commit can fire before startup sets the identity; nothing rewrites yet.
     if (!isBrowserProcessUserAgentInitialized()) {
       return
     }
@@ -138,7 +138,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       guest.session,
       guest.id,
       rewritesRequestHeaders(url, this.resolveGuestTabIdentity(guest, url)),
-      frames
+      'clear'
     )
   }
 

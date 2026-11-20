@@ -14,12 +14,12 @@ function withoutHash(rawUrl: string): string {
 /**
  * Whether the current main-frame navigation is a form POST, from the preload's report of a
  * submitted form: the next navigation to that form's action URL counts. A page that loaded as a
- * POST result stays one for reloads and Back/Forward, which repeat or restore the POST.
+ * POST result stays one for reloads and Back/Forward, which repeat or restore the POST. A mark
+ * survives redirects: Electron doesn't report their status, and a 307/308 keeps the POST.
  */
 export function createFormPostNavigationTracker(): {
   submitted: (actionUrl: string) => void
   started: (url: string) => void
-  redirected: () => void
   /** `method` is the request's own method when a request listener saw it. */
   committed: (url: string, method: string | null) => boolean
   /** The committed document was a fresh navigation; true if that drops a remembered POST mark. */
@@ -39,14 +39,6 @@ export function createFormPostNavigationTracker(): {
       fromMemory = target !== submitted && postResultUrls.has(target)
       post = target === submitted || fromMemory
       submitted = null
-    },
-    // Electron doesn't report a redirect's status, so a 307/308 that keeps the POST can't be told
-    // from a Post/Redirect/Get; keeping the page beats restoring a POST result with GET.
-    redirected: () => {
-      if (fromMemory) {
-        post = false
-        fromMemory = false
-      }
     },
     committed: (url, method) => {
       const isPost = method !== null ? method !== 'GET' : post

@@ -236,13 +236,6 @@ export function installBrowserGuestDiscardProtection(
       publish()
     }
   }
-  const redirected = (
-    details: Electron.Event<Electron.WebContentsDidRedirectNavigationEventParams>
-  ): void => {
-    if (details.isMainFrame) {
-      formPost.redirected()
-    }
-  }
   const committed = (): void => {
     owner.currentEdited = false
     owner.currentPost = formPost.committed(guest.getURL(), pendingMethod)
@@ -286,7 +279,6 @@ export function installBrowserGuestDiscardProtection(
   guest.on('render-process-gone', unresponsive)
   guest.on('frame-created', frameCreated)
   guest.on('did-start-navigation', navigation)
-  guest.on('did-redirect-navigation', redirected)
   guest.on('did-navigate', committed)
   guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
@@ -303,7 +295,6 @@ export function installBrowserGuestDiscardProtection(
     guest.off('render-process-gone', unresponsive)
     guest.off('frame-created', frameCreated)
     guest.off('did-start-navigation', navigation)
-    guest.off('did-redirect-navigation', redirected)
     guest.off('did-navigate', committed)
     guest.off('did-navigate-in-page', inPageNavigation)
   }

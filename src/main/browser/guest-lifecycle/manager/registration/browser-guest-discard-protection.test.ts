@@ -308,7 +308,7 @@ it('keeps a page an embedded form POSTed to the top from being discarded', () =>
   }
 })
 
-it('keeps the page a form POST redirects to, which a 307 or 308 loads with POST', () => {
+it('keeps protecting the page a form POST redirects to', () => {
   let url = 'https://example.test/login'
   const mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
