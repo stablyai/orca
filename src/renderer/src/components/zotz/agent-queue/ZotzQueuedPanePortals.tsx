@@ -7,8 +7,10 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import type { ZotzAgentQueueSnapshot } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue-snapshot'
 import type { TerminalPaneController } from '../../terminal-pane/controller/use-terminal-pane-controller'
 import { useNow } from '@/hooks/use-now'
+import { useWorkspaceRuntimeEnvironmentId } from '@/lib/workspace/ownership/workspace-runtime-environment'
 import { formatZotzGb, minutesSince } from './zotz-memory-format'
-import { useZotzAgentQueue } from './zotz-agent-queue-store'
+import type { ZotzHostQueueAction } from './zotz-host-agent-queue-actions'
+import { useZotzQueueOnHost } from './use-zotz-queue-on-host'
 
 type QueuedTask = ZotzAgentQueueSnapshot['queued'][number]
 
@@ -106,14 +108,20 @@ export function ZotzQueuedPaneCard({
   )
 }
 
+type QueueAct = ((action: ZotzHostQueueAction, id: string) => void) | undefined
+
 function QueuedPanePortal({
   pane,
   tabId,
-  snapshot
+  snapshot,
+  hostLabel,
+  act
 }: {
   pane: ManagedPane
   tabId: string
   snapshot: ZotzAgentQueueSnapshot
+  hostLabel?: string
+  act: QueueAct
 }): React.JSX.Element | null {
   const task = snapshot.queued.find((entry) => entry.id === makePaneKey(tabId, pane.leafId))
   if (!task) {
@@ -127,8 +135,9 @@ function QueuedPanePortal({
       <ZotzQueuedPaneCard
         task={task}
         snapshot={snapshot}
-        onCancel={() => void window.api.zotzAgentQueue.cancel(task.id)}
-        onForceStart={() => void window.api.zotzAgentQueue.forceStart(task.id)}
+        hostLabel={hostLabel}
+        onCancel={act ? () => act('cancel', task.id) : undefined}
+        onForceStart={act ? () => act('forceStart', task.id) : undefined}
       />
     </div>,
     pane.container,
@@ -144,7 +153,8 @@ export function ZotzCanceledPaneNotice({
   onDismiss
 }: {
   launch: CanceledLaunch
-  onDismiss: () => void
+  /** Absent when the strip belongs to a server this window cannot drive. */
+  onDismiss?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -158,31 +168,35 @@ export function ZotzCanceledPaneNotice({
           agent: launch.agent
         })}
       </span>
-      <Button
-        type="button"
-        size="icon-xs"
-        variant="ghost"
-        aria-label={t('zotz.agentQueue.dismissCanceled', 'Dismiss')}
-        onClick={onDismiss}
-      >
-        <X className="size-3.5" />
-      </Button>
+      {onDismiss ? (
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="ghost"
+          aria-label={t('zotz.agentQueue.dismissCanceled', 'Dismiss')}
+          onClick={onDismiss}
+        >
+          <X className="size-3.5" />
+        </Button>
+      ) : null}
     </div>
   )
 }
 
 function CanceledPanePortal({
   pane,
-  launch
+  launch,
+  act
 }: {
   pane: ManagedPane
   launch: CanceledLaunch
+  act: QueueAct
 }): React.JSX.Element {
   return createPortal(
     <div className="absolute inset-x-2 top-2 z-40" data-zotz-canceled-pane="">
       <ZotzCanceledPaneNotice
         launch={launch}
-        onDismiss={() => void window.api.zotzAgentQueue.dismissCanceled(launch.id)}
+        onDismiss={act ? () => act('dismissCanceled', launch.id) : undefined}
       />
     </div>,
     pane.container,
@@ -196,8 +210,11 @@ export function ZotzQueuedPanePortals({
 }: {
   controller: TerminalPaneController
 }): React.JSX.Element | null {
-  const snapshot = useZotzAgentQueue()
-  if (snapshot.queued.length === 0 && snapshot.canceled.length === 0) {
+  // A server's pane waits in that server's queue, keyed by this window's tab and leaf.
+  const { snapshot, hostLabel, act } = useZotzQueueOnHost(
+    useWorkspaceRuntimeEnvironmentId(controller.worktreeId)
+  )
+  if (!snapshot || (snapshot.queued.length === 0 && snapshot.canceled.length === 0)) {
     return null
   }
   const { managedPanes, tabId } = controller
@@ -208,9 +225,16 @@ export function ZotzQueuedPanePortals({
           (entry) => entry.id === makePaneKey(tabId, pane.leafId)
         )
         return canceled ? (
-          <CanceledPanePortal key={pane.id} pane={pane} launch={canceled} />
+          <CanceledPanePortal key={pane.id} pane={pane} launch={canceled} act={act} />
         ) : (
-          <QueuedPanePortal key={pane.id} pane={pane} tabId={tabId} snapshot={snapshot} />
+          <QueuedPanePortal
+            key={pane.id}
+            pane={pane}
+            tabId={tabId}
+            snapshot={snapshot}
+            hostLabel={hostLabel}
+            act={act}
+          />
         )
       })}
     </>

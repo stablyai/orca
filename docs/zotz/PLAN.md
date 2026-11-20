@@ -660,3 +660,10 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - **Servidor:** llamadas RPC nuevas `zotz.agentQueue.cancel`, `forceStart` y `dismissCanceled` (permiso `workspace`, id de 1 a 1024 caracteres, igual que el IPC de la ventana) y la capability `zotz.agent-queue-control.v1`, aparte de la de lectura porque un servidor que publica su cola puede no tener todavía estas llamadas. En un servidor sin limitador no hacen nada ni fallan.
 - **Cliente:** `zotz-host-agent-queue-actions.ts` llama al servidor y, si falla, avisa con el nombre del servidor; no actualiza nada a mano porque el flujo de la cola del servidor reporta el resultado. Los botones del aviso del chat de un servidor salen solo si declara la capability de control.
 - **Sin cubrir todavía:** tarjetas sobre terminales de un servidor (falta comprobar que la clave de panel coincide) y el tablero por máquina. No se verificó con la MSI real.
+
+### 2026-11-20 — Cola de memoria de los servidores, terminales (`zotz/cola-servidores-terminales`)
+
+- Un agente de terminal lanzado en un servidor y retenido por su limitador no mostraba nada en la laptop: la tarjeta "En cola" del pane solo leía la cola local. Ahora lee la cola del servidor dueño del worktree, con "En {servidor}" y Cancelar / _Launch anyway_ si el servidor declara la capability de control; la franja de cancelado también.
+- **Clave de panel:** el servidor recibe el `tabId`/`leafId` de la laptop en `terminal.create` y `terminal.createAgentSession` y los conserva, así que la cola lo guarda con la misma clave que calcula la ventana.
+- `use-zotz-queue-on-host.ts` reúne cola, nombre y acciones de la máquina (local o servidor) para el chat y la terminal.
+- **Riesgo abierto:** la laptop espera la respuesta de crear la terminal remota ~3 min (`REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS`); si el agente sigue en cola más tiempo, el pane se da por desconectado. Falta que una espera en cola no cuente como caída.
