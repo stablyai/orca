@@ -135,6 +135,29 @@ it("posts a quick reply as the owner's comment, and Alt-click puts it in the box
   expect(actions.type).toHaveBeenCalledOnce()
 })
 
+it('tags the comment that asks Needs you while the item waits on it, and only that one', () => {
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'readable copy' }
+  })
+  const events: BotItemEvent[] = [
+    { id: 'e1', kind: 'commented', actor: ASKER, data: { text: 'Started on it.' }, at: 100 },
+    ...WAITING
+  ]
+  render(
+    <BotItemActivityList
+      bot={BOT}
+      item={item}
+      events={events}
+      quickReplies={{ send: vi.fn(), edit: vi.fn(), recover: vi.fn(), type: vi.fn() }}
+    />
+  )
+
+  const [plain, asking] = screen.getAllByRole('article')
+  expect(asking!.textContent).toContain('Needs you')
+  expect(plain!.textContent).not.toContain('Needs you')
+})
+
 it('shows an answer an older host recorded as a quoted comment, the question reading Question → pick', () => {
   const events: BotItemEvent[] = [
     ...WAITING,

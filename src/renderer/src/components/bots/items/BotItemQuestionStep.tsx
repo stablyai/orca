@@ -19,30 +19,40 @@ export const BOT_ITEM_CHIP =
 const CHIP_ACTION =
   'outline-none hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring/50'
 
+/** The recommended reply of an open line: filled, the one the owner most likely means. */
+export const BOT_ITEM_CHIP_RECOMMENDED =
+  'border-foreground bg-foreground text-background hover:bg-foreground/90'
+
+/** An open question's words: a title, 14 px semibold, over the Markdown's own 13 px. */
+export const BOT_ITEM_OPEN_QUESTION =
+  'font-semibold [&_p]:font-semibold [&>*]:text-sm [&>*]:leading-5'
+
 /** The picked reply of a line reopened. */
 const CHIP_PICKED = 'flex items-center gap-1.5 border-foreground/28 bg-foreground/8 text-foreground'
 
-export function BotItemChipWords({ reply }: { reply: BotItemQuickReply }): React.JSX.Element {
+export function BotItemChipWords({
+  reply,
+  filled = false
+}: {
+  reply: BotItemQuickReply
+  /** On a filled chip: its Recommended reads on the dark fill. */
+  filled?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   return (
     <>
       {reply.label}
       {reply.recommended ? (
-        <span className="ml-1.5 whitespace-nowrap text-2xs text-muted-foreground">
+        <span
+          className={cn(
+            'ml-1.5 whitespace-nowrap text-2xs',
+            filled ? 'text-background/70' : 'text-muted-foreground'
+          )}
+        >
           {t('bots.items.ask.recommended', 'Recommended')}
         </span>
       ) : null}
     </>
-  )
-}
-
-/** The open line's mark: hangs in the gutter, so the question, the body and the chips share one left edge. */
-export function BotItemQuestionDot(): React.JSX.Element {
-  return (
-    <span
-      aria-hidden
-      className="absolute -left-3 top-[6.5px] size-1.5 rounded-full bg-agent-question"
-    />
   )
 }
 
@@ -155,8 +165,7 @@ export function BotItemQuestionStep({
         className="duration-[180ms] animate-in fade-in-0 slide-in-from-bottom-1 motion-reduce:animate-none"
       >
         <div className="flex items-start gap-2">
-          <div className="relative min-w-0 flex-1 font-medium [&_p]:font-medium">
-            <BotItemQuestionDot />
+          <div className={cn('min-w-0 flex-1', BOT_ITEM_OPEN_QUESTION)}>
             <BotItemMarkdown text={decision.question} />
           </div>
           <StepNav steps={steps} />
@@ -164,13 +173,19 @@ export function BotItemQuestionStep({
         <div className="mt-2.5 flex flex-wrap gap-2">
           {decision.replies.map((reply) => {
             const picked = held === reply.label
+            // Filled until the owner picks one on this line; then the pick stands out instead.
+            const filled = reply.recommended && held === null
             return (
               <button
                 key={reply.label}
                 type="button"
                 title={reply.detail}
                 aria-pressed={picked}
-                className={cn(BOT_ITEM_CHIP, CHIP_ACTION, picked ? CHIP_PICKED : 'text-foreground')}
+                className={cn(
+                  BOT_ITEM_CHIP,
+                  CHIP_ACTION,
+                  picked ? CHIP_PICKED : filled ? BOT_ITEM_CHIP_RECOMMENDED : 'text-foreground'
+                )}
                 onClick={(event) => {
                   if (event.altKey || event.shiftKey) {
                     actions.edit(reply.label)
@@ -181,7 +196,7 @@ export function BotItemQuestionStep({
               >
                 {picked ? <Check className="size-3 shrink-0" /> : null}
                 <span className="min-w-0">
-                  <BotItemChipWords reply={reply} />
+                  <BotItemChipWords reply={reply} filled={filled} />
                 </span>
               </button>
             )
