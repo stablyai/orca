@@ -1,15 +1,15 @@
 import { stat } from 'node:fs/promises'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   HANDOFF_AGENTS,
   isHandoffAgent,
   type HandoffAgent
 } from '../../shared/agent-handoff-agents'
-import { parseCodexSessionFile } from '../ai-vault/session-scanner-codex-parser'
-import { parseMessageGraphSessionFile } from '../ai-vault/session-scanner-graph-parsers'
-import { parseClaudeSessionFile } from '../ai-vault/session-scanner-primary-parsers'
+import { parseCodexSessionFile } from '../ai-vault/scanners/codex/session-scanner-codex-parser'
+import { parseMessageGraphSessionFile } from '../ai-vault/scanners/session-scanner-graph-parsers'
+import { parseClaudeSessionFile } from '../ai-vault/scanners/claude/session-scanner-primary-parsers'
 import type { FileWithMtime } from '../ai-vault/session-scanner-types'
-import type { TranscriptMessage } from '../ai-vault/session-transcript-consumers'
+import type { TranscriptMessage } from '../ai-vault/transcripts/session-transcript-consumers'
 
 export { HANDOFF_AGENTS, isHandoffAgent }
 export type { HandoffAgent }

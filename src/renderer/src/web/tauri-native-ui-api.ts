@@ -5,8 +5,8 @@ import {
   assertClipboardTextWithinLimitWithYield,
   assertClipboardTextWriteWithinLimitWithYield,
   type ReadClipboardTextOptions
-} from '../../../shared/clipboard-text'
-import { uiZoomFactorFromLevel } from '../../../shared/ui-zoom-level'
+} from '../../../shared/clipboard/clipboard-text'
+import { uiZoomFactorFromLevel } from '../../../shared/app-lifecycle/windows/ui-zoom-level'
 import { invokeNative, invokePlugin, isTauriNativeHost, listenNative } from './tauri-native-host'
 import { createTauriNativeSecondInstanceBridge } from './tauri-native-second-instance'
 import {
@@ -15,9 +15,9 @@ import {
   tauriClipboardHasImage,
   writeTauriClipboardImage
 } from './tauri-native-clipboard'
-import { saveClipboardImageAsWebAgentSessionAttachment } from './preload-api/web-agent-session-attachment-upload'
-import { saveClipboardImageAsTempFileInRuntime } from './preload-api/web-clipboard-api'
-import { requireActiveEnvironmentOrNull } from './preload-api/web-runtime-session'
+import { saveClipboardImageAsWebAgentSessionAttachment } from './preload-api/agents/web-agent-session-attachment-upload'
+import { saveClipboardImageAsTempFileInRuntime } from './preload-api/clipboard/web-clipboard-api'
+import { requireActiveEnvironmentOrNull } from './runtime/client/web-runtime-session'
 
 const EVENT_MAXIMIZE_CHANGED = 'window:maximize-changed'
 const EVENT_FULLSCREEN_CHANGED = 'window:fullscreen-changed'

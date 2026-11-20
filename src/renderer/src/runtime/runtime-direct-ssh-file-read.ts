@@ -1,17 +1,17 @@
 import { basename } from '@/lib/path'
-import { BINARY_PROBE_BYTES } from '../../../shared/binary-buffer'
-import { IMAGE_FILE_MIME_TYPES } from '../../../shared/image-file-extensions'
+import { BINARY_PROBE_BYTES } from '../../../shared/file-preview/binary-buffer'
+import { IMAGE_FILE_MIME_TYPES } from '../../../shared/file-preview/image-mime-types'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
 } from '../../../shared/runtime-types'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import type {
   RuntimeFileOperationArgs,
   RuntimeFileReadArgs,
   RuntimeReadableFileContent
-} from './runtime-file-client-types'
-import { isTauriDirectSshFileContext } from './runtime-file-routing'
+} from './files/runtime-file-client-types'
+import { isTauriNativeHost } from '@/web/tauri-native-bridge'
 
 const DIRECT_SSH_READ_CHUNK_BYTES = 384 * 1024
 const DIRECT_SSH_MAX_FILE_BYTES = 50 * 1024 * 1024
@@ -35,7 +35,9 @@ type DirectSshFileContext = Pick<
 export function isDirectSshFileContext(
   context: Pick<RuntimeFileOperationArgs, 'target' | 'connectionId'>
 ): context is DirectSshFileContext & { connectionId: string } {
-  return isTauriDirectSshFileContext(context)
+  return (
+    isTauriNativeHost() && context.target.kind === 'local' && Boolean(context.connectionId)
+  )
 }
 
 export async function readDirectSshFileChunk(

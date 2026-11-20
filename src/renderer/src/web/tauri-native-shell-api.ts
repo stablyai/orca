@@ -5,12 +5,15 @@ import type {
   ShellOpenLocalPathFailureReason,
   ShellOpenLocalPathResult
 } from '../../../shared/shell-open-types'
-import { parseRoutableExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
-import { getWindowsPathAccess } from '@/lib/windows-path-access'
-import { validatePathExistenceBatch } from '../../../shared/path-existence-batch'
+import {
+  parseRoutableExecutionHostId,
+  toSshExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import { getWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
+import { validatePathExistenceBatch } from '../../../shared/file-access/path-existence-batch'
 import type { SshExternalEditorAuthorityResult } from '../../../shared/ssh-types'
-import { createShellApi } from './preload-api/web-shell-api'
-import { callRuntimeResult } from './preload-api/web-runtime-calls'
+import { createShellApi } from './preload-api/browser/web-shell-api'
+import { callRuntimeResult } from './runtime/client/web-runtime-calls'
 import { getBrowserPlatform } from './preload-api/web-storage'
 import { invokeNative, invokePlugin, isTauriNativeHost } from './tauri-native-host'
 

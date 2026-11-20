@@ -3,8 +3,8 @@ import {
   BrowserClientPageRendererRequest,
   type BrowserClientPageRendererOutcome as RendererOutcome,
   type BrowserClientPageRendererRequest as RendererRequest
-} from '../../../shared/browser-client-page-renderer-protocol'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+} from '../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 
 export type TauriRendererRequestCallback = (
   request: RendererRequest

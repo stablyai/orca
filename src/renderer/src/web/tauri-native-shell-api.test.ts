@@ -18,7 +18,7 @@ vi.mock('./preload-api/web-shell-api', () => ({
   createShellApi: () => ({})
 }))
 
-vi.mock('./preload-api/web-runtime-calls', () => ({
+vi.mock('./runtime/client/web-runtime-calls', () => ({
   callRuntimeResult: vi.fn()
 }))
 
@@ -26,7 +26,7 @@ vi.mock('./preload-api/web-storage', () => ({
   getBrowserPlatform: () => platform.current
 }))
 
-vi.mock('@/lib/windows-path-access', () => ({
+vi.mock('@/lib/files/os-open/windows-path-access', () => ({
   getWindowsPathAccess: () => windowsAccess.access
 }))
 

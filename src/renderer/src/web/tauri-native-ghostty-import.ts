@@ -8,7 +8,7 @@
 // `theme = <path>` references merge.
 
 import type { GhosttyImportPreview } from '../../../shared/global-settings-types'
-import { getStoredSettings } from './preload-api/web-preferences-store'
+import { getStoredSettings } from './preload-api/preferences/web-preferences-store'
 import { parseGhosttyConfig } from '../../../main/ghostty/parser'
 import { mapGhosttyToOrca } from '../../../main/ghostty/mapper'
 import { readStagedFileText, stagePath } from './tauri-native-staged-read'

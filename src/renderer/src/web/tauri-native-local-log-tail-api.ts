@@ -1,4 +1,4 @@
-import type { FilesystemApi } from '../../../preload/api/filesystem-api'
+import type { FilesystemApi } from '../../../preload/api/filesystem/filesystem-api'
 import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,

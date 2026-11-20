@@ -11,8 +11,8 @@ import type {
   WarpThemeImportPreviewTheme,
   WarpThemeImportSkippedFile,
   WarpThemeImportSource
-} from '../../../shared/terminal-custom-themes'
-import { makeCustomTerminalThemeSelection } from '../../../shared/terminal-custom-themes'
+} from '../../../shared/terminal-themes/terminal-custom-themes'
+import { makeCustomTerminalThemeSelection } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { parseWarpThemeYaml } from '../../../main/warp-themes/parser'
 import { invokeNative, invokePlugin } from './tauri-native-host'
 import { readStagedFileText, stagePath } from './tauri-native-staged-read'

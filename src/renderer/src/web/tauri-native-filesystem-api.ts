@@ -1,14 +1,16 @@
-import type { FilesystemApi } from '../../../preload/api/filesystem-api'
+import type { FilesystemApi } from '../../../preload/api/filesystem/filesystem-api'
 import type {
   ImportItemResult,
-  ResolveDroppedPathsResult,
-  StagedExternalImportSource
-} from '../../../shared/filesystem-import-result-types'
-import type { RuntimeUploadFileStreamRequest } from '../../../shared/runtime-upload-staging-contract'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { callRuntimeRpc } from '../runtime/runtime-rpc-client'
+  ResolveDroppedPathsResult
+} from '../../../shared/file-import/filesystem-import-result'
+import type {
+  RuntimeUploadFileStreamRequest,
+  StagedRuntimeUploadSource as StagedExternalImportSource
+} from '../../../shared/file-import/runtime-upload-staging-contract'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { callRuntimeRpc } from '../runtime/rpc/calls/runtime-rpc-call'
 import { uploadPathsToAgentSessionAttachments } from './tauri-native-attachment-upload'
-import { requireActiveEnvironment } from './preload-api/web-runtime-session'
+import { requireActiveEnvironment } from './runtime/client/web-runtime-session'
 import { invokeNative, invokePlugin, isTauriNativeHost } from './tauri-native-host'
 
 const RUNTIME_UPLOAD_CHUNK_BYTES = 384 * 1024

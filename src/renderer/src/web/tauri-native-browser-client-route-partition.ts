@@ -1,4 +1,4 @@
-import type { BrowserHostLeaseAuthority } from '../../../shared/browser-client-host-protocol'
+import type { BrowserHostLeaseAuthority } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { invokeNative } from './tauri-native-host'
 
 // Client-route partition naming for pages this desktop hosts for a paired

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callRuntimeResult = vi.hoisted(() => vi.fn())
 
-vi.mock('./preload-api/web-runtime-calls', () => ({ callRuntimeResult }))
+vi.mock('./runtime/client/web-runtime-calls', () => ({ callRuntimeResult }))
 
 import { createTauriNativeCliApi } from './tauri-native-cli-api'
 

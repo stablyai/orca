@@ -1,9 +1,9 @@
-import type { FilesystemApi } from '../../../preload/api/filesystem-api'
+import type { FilesystemApi } from '../../../preload/api/filesystem/filesystem-api'
 import {
   createRejectedNativeFileDropPayload,
   validateNativeFileDropPaths
-} from '../../../shared/native-file-drop'
-import type { PreparedDroppedPaths } from '../../../shared/native-file-drop-preparation'
+} from '../../../shared/file-import/native-file-drop'
+import type { PreparedDroppedPaths } from '../../../shared/file-import/native-file-drop-preparation'
 import { invokeNative, isTauriNativeHost } from './tauri-native-host'
 
 type FilesystemDropApi = Pick<FilesystemApi['fs'], 'getPathForFile' | 'prepareDroppedPaths'>

@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../preload/api-types'
-import { createReposApi } from './preload-api/web-repositories-api'
+import { createReposApi } from './preload-api/workspaces/web-repositories-api'
 import { invokePlugin, isTauriNativeHost } from './tauri-native-host'
 
 function pickedPaths(value: string | string[] | null): string[] {

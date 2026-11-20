@@ -1,5 +1,5 @@
 import { invokeNative, isTauriNativeHost } from './tauri-native-host'
-import { callRuntimeResult } from './preload-api/web-runtime-calls'
+import { callRuntimeResult } from './runtime/client/web-runtime-calls'
 
 /** Mirrors `restartLocalTerminalsAfterElevation`: after an elevated relaunch
  *  the helper passes the marker, and local terminals must run under the new

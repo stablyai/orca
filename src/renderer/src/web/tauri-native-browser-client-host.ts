@@ -1,11 +1,11 @@
-import type { BrowserHostLeaseAuthority } from '../../../shared/browser-client-host-protocol'
+import type { BrowserHostLeaseAuthority } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   BrowserClientPageMetadataAck,
   type BrowserClientPageMetadataParams,
   type BrowserClientPageMetadataPublishOutcome
-} from '../../../shared/browser-client-page-metadata-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 import { attachTauriBrowserClientHost } from './tauri-native-browser-client-host-attach'
 import type { HostedPage, HostRecord } from './tauri-native-browser-client-host-page-commands'
 import {

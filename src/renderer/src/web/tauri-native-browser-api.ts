@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../preload/api-types'
-import { buildBrowserAnnotationViewportBridgeScript } from '../../../shared/browser-annotation-viewport-bridge'
+import { buildBrowserAnnotationViewportBridgeScript } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import type {
   BrowserCertificateProceedResult,
   BrowserViewportOverride
@@ -12,12 +12,12 @@ import type {
   BrowserExtractHoverResult,
   BrowserSetGrabModeResult
 } from '../../../shared/browser-grab-types'
-import { clampGrabPayload } from '../../../main/browser/browser-grab-payload'
-import { buildGuestOverlayScript } from '../../../main/browser/grab-guest-script'
+import { clampGrabPayload } from '../../../main/browser/element-grab/browser-grab-payload'
+import { buildGuestOverlayScript } from '../../../main/browser/element-grab/grab-guest-script'
 import {
   HIDE_BROWSER_GRAB_OVERLAY_SCRIPT,
   RESTORE_BROWSER_GRAB_OVERLAY_SCRIPT
-} from '../../../main/browser/browser-grab-screenshot'
+} from '../../../main/browser/element-grab/browser-grab-screenshot'
 import { invokeNative, listenNative } from './tauri-native-host'
 import { createTauriNativeBrowserEventsApi } from './tauri-native-browser-events'
 import { createTauriNativeBrowserSessionApi } from './tauri-native-browser-session'
@@ -91,7 +91,7 @@ export function createTauriNativeBrowserApi(): Partial<PreloadApi['browser']> {
         // Lazy so importing the browser API never pulls the session store
         // (which reads localStorage at module scope) into window-less tests.
         const { getClientForEnvironment, resolveEnvironment } =
-          await import('./preload-api/web-runtime-session')
+          await import('./runtime/client/web-runtime-session')
         const environment = resolveEnvironment(environmentId)
         return await publishTauriBrowserClientPageMetadata(
           params,

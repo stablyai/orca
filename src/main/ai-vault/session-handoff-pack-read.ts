@@ -1,6 +1,6 @@
 import type { AiVaultHandoffPackArgs, AiVaultHandoffPackResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { isHandoffAgent } from '../../shared/agent-handoff-agents'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import {
   buildAgentHandoffPack,
   renderAgentHandoffPrompt

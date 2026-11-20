@@ -1,6 +1,6 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import type { CliInstallStatus } from '../../../shared/cli-install-types'
-import { callRuntimeResult } from './preload-api/web-runtime-calls'
+import { callRuntimeResult } from './runtime/client/web-runtime-calls'
 
 type CliApi = NonNullable<Partial<PreloadApi>['cli']>
 

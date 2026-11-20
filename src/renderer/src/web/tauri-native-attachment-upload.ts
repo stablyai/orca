@@ -4,13 +4,13 @@ import {
   type AgentSessionAttachmentPathUploadResult,
   type AgentSessionAttachmentUploadCommitResult,
   type AgentSessionAttachmentUploadTarget
-} from '../../../shared/agent-session-attachments'
+} from '../../../shared/agent-session/agent-session-attachments'
 import type {
-  StagedExternalImportEntry,
-  StagedExternalImportSource
-} from '../../../shared/filesystem-import-result-types'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { callRuntimeRpc } from '../runtime/runtime-rpc-client'
+  StagedRuntimeUploadEntry as StagedExternalImportEntry,
+  StagedRuntimeUploadSource as StagedExternalImportSource
+} from '../../../shared/file-import/runtime-upload-staging-contract'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { callRuntimeRpc } from '../runtime/rpc/calls/runtime-rpc-call'
 import { invokeNative } from './tauri-native-host'
 
 const RUNTIME_UPLOAD_CHUNK_TIMEOUT_MS = 30_000

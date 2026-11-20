@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserClientAutomationMethod } from '../../../shared/browser-client-automation-protocol'
-import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../../shared/browser-client-file-channel-methods'
+import type { BrowserClientAutomationMethod } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../../shared/browser/client-hosting/browser-client-file-channel-methods'
 import {
   executeTauriBrowserClientAutomation,
   isRecord,

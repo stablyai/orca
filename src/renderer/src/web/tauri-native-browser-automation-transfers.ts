@@ -2,7 +2,7 @@ import {
   BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES,
   BROWSER_CLIENT_FILE_CHANNEL_MAX_FILES_PER_COMMAND,
   BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES
-} from '../../../shared/browser-client-file-channel-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import { invokeNative } from './tauri-native-host'
 import type { AutomationCommandContext, TauriCdpSender } from './tauri-native-browser-automation'
 import {

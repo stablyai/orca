@@ -1,10 +1,10 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 import {
   BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES,
   BrowserClientFileChannelReadResult,
   BrowserClientFileChannelWriteResult
-} from '../../../shared/browser-client-file-channel-protocol'
-import type { BrowserHostLeaseAuthority } from '../../../shared/browser-client-host-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
+import type { BrowserHostLeaseAuthority } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { listenNative } from './tauri-native-host'
 import type { TauriBrowserHostClient } from './tauri-native-browser-client-host'
 

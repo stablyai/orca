@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installBrowserGlobals } from './web-preload-api-test-harness'
 
 const callRuntimeResult = vi.hoisted(() => vi.fn())
-vi.mock('./preload-api/web-runtime-calls', () => ({ callRuntimeResult }))
+vi.mock('./runtime/client/web-runtime-calls', () => ({ callRuntimeResult }))
 
 function installTauriHost(invokeImpl: (command: string) => unknown) {
   const globals = installBrowserGlobals('Windows')

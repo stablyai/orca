@@ -1,5 +1,5 @@
-import type { BrowserClientAutomationMethod } from '../../../shared/browser-client-automation-protocol'
-import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../../shared/browser-client-file-channel-methods'
+import type { BrowserClientAutomationMethod } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR } from '../../../shared/browser/client-hosting/browser-client-file-channel-methods'
 import type { AutomationCommandContext } from './tauri-native-browser-automation'
 import { readNumber, readString, requireString } from './tauri-native-browser-automation'
 import {

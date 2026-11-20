@@ -4,7 +4,7 @@ import {
   assertClipboardImageDimensionsWithinLimit,
   clipboardImageThumbnailSize,
   type ClipboardImageThumbnail
-} from '../../../shared/clipboard-image'
+} from '../../../shared/clipboard/clipboard-image'
 import { invokePlugin } from './tauri-native-host'
 
 type ClipboardImagePixels = {

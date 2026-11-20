@@ -3,8 +3,10 @@
 // file identity (size/inode/mtime) and chunk reads re-verify it, so a swapped
 // file is refused rather than silently imported.
 
-import type { StagedExternalImportSource } from '../../../shared/filesystem-import-result-types'
-import type { StagedRuntimeUploadFileIdentity } from '../../../shared/runtime-upload-staging-contract'
+import type {
+  StagedRuntimeUploadFileIdentity,
+  StagedRuntimeUploadSource as StagedExternalImportSource
+} from '../../../shared/file-import/runtime-upload-staging-contract'
 import { invokeNative } from './tauri-native-host'
 
 const READ_CHUNK_BYTES = 512 * 1024

@@ -1,14 +1,14 @@
-import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../shared/browser-client-automation-protocol'
+import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY,
   BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION
-} from '../../../shared/browser-client-file-channel-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import {
   BrowserClientHostEvent,
   type BrowserClientHostCommandEvent,
   type BrowserClientHostedPageInventory,
   type BrowserHostLeaseAuthority
-} from '../../../shared/browser-client-host-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { TauriBrowserHostClient } from './tauri-native-browser-client-host'
 import {
   executeTauriBrowserClientHostPageCommand,

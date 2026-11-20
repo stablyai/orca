@@ -2,11 +2,11 @@ import type {
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult,
   BrowserHostLeaseAuthority
-} from '../../../shared/browser-client-host-protocol'
+} from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR,
   requiresBrowserClientFileChannel
-} from '../../../shared/browser-client-file-channel-methods'
+} from '../../../shared/browser/client-hosting/browser-client-file-channel-methods'
 import { invokeNative } from './tauri-native-host'
 import {
   ensureTauriBrowserAutomationContext,
