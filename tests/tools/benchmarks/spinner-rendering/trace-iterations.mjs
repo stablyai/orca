@@ -36,6 +36,9 @@ export async function traceIterations(cdp, outputPath, durationMs = 2200) {
     }
   }
   const measuredMs = (last - first) / 1000
+  if (!(measuredMs > 0)) {
+    throw new Error(`Trace has no timed events; rates would be meaningless. Raw trace: ${outputPath}`)
+  }
   const compositorThreads = new Set(
     events
       .filter((event) => event.name === 'thread_name' && event.args?.name === 'Compositor')
