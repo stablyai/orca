@@ -315,7 +315,7 @@ export class CodexAccountService {
     deviceChannel?.signal.addEventListener('abort', cancelForChannel, { once: true })
     try {
       await runCodexLoginSession(managedHomePath, {
-        wslCommand: 'wsl.exe',
+        wslCommand: windowsSystem32Binary('wsl.exe'),
         spawn: ({ command, args, env, stdio }) => {
           assertWslDistroAllowed(command, args)
           return spawn(command, args, {
