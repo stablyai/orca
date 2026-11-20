@@ -105,7 +105,7 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     }
     subscribeRuntimeRpc(LOCAL_TARGET, 'agentCliUpdate.subscribe', null, {
       onEvent: (result) => {
-        if ((result as { agent?: unknown } | null)?.agent) {
+        if (typeof result === 'object' && result !== null && 'agent' in result && result.agent) {
           get().recheckAgentCliUpdates(LOCAL_TARGET)
         }
       },
