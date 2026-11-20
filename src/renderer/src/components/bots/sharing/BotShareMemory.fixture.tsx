@@ -51,7 +51,7 @@ const MEMORY: [string, number][] = [
   ['slack-dm-preview', 16]
 ]
 
-function candidate(secret: boolean): BotShareCandidateSummary {
+function candidate(secret: boolean, files = MEMORY): BotShareCandidateSummary {
   return {
     candidateId: 'c1',
     packageId: 'package-1',
@@ -83,7 +83,7 @@ function candidate(secret: boolean): BotShareCandidateSummary {
       schedules: [],
       eventSuggestions: [],
       tools: [],
-      memory: MEMORY.map(([topic, lines]) => ({ topic, lines }))
+      memory: files.map(([topic, lines]) => ({ topic, lines }))
     },
     automationIds: { schedules: [], eventSuggestions: [] },
     flags: [
@@ -95,18 +95,20 @@ function candidate(secret: boolean): BotShareCandidateSummary {
   }
 }
 
-const stub = (secret: boolean) => (): void => {
-  const runtime: unknown = window.api.runtime
-  Reflect.set(window.api, 'runtime', {
-    ...(typeof runtime === 'object' ? runtime : {}),
-    call: async ({ method }: { method: string }) =>
-      method === 'bots.share.prepare'
-        ? { ok: true, result: { candidate: candidate(secret) } }
-        : method === 'bots.share.status'
-          ? { ok: true, result: { status: 'ok', value: [] } }
-          : { ok: false, error: { code: 'runtime_error', message: method } }
-  })
-}
+const stub =
+  (secret: boolean, files = MEMORY) =>
+  (): void => {
+    const runtime: unknown = window.api.runtime
+    Reflect.set(window.api, 'runtime', {
+      ...(typeof runtime === 'object' ? runtime : {}),
+      call: async ({ method }: { method: string }) =>
+        method === 'bots.share.prepare'
+          ? { ok: true, result: { candidate: candidate(secret, files) } }
+          : method === 'bots.share.status'
+            ? { ok: true, result: { status: 'ok', value: [] } }
+            : { ok: false, error: { code: 'runtime_error', message: method } }
+    })
+  }
 
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 300))
 
@@ -177,6 +179,27 @@ export const previewFocus = defineFixture({
   interact: async () => {
     await openPartial()
     ;(await find('button[aria-label="Preview bots-docs"]'))?.focus()
+    await settle()
+  }
+})
+/** 70 files, past the 64 a share carries: Include memory picks the first 64. */
+export const overLimit = defineFixture({
+  ...base,
+  setup: stub(true, [
+    ...MEMORY,
+    ...Array.from({ length: 46 }, (_, index): [string, number] => [`note-${index + 1}`, 8])
+  ]),
+  interact: async () => {
+    ;(await find('[role="switch"][aria-label="Include memory"]'))?.click()
+    await settle()
+  }
+})
+/** The same, scrolled to the end: the six left over are greyed until a picked one goes. */
+export const overLimitEnd = defineFixture({
+  ...overLimit,
+  interact: async () => {
+    await overLimit.interact?.(document.body)
+    document.querySelector('[role="checkbox"][aria-label="note-46"]')?.scrollIntoView()
     await settle()
   }
 })
