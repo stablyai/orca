@@ -18215,7 +18215,6 @@
         "stoppedUpdate_other": "Orca 업데이트로 채팅 {{count}}개가 중지되었습니다.",
         "stoppedRestart_other": "Orca 종료로 채팅 {{count}}개가 중지되었습니다.",
         "promptsNotResent": "재개해도 프롬프트는 다시 전송되지 않습니다.",
-        "promptsNotSent": "프롬프트는 다시 전송되지 않았습니다.",
         "resume": "재개",
         "details": "세부 정보",
         "close": "닫기",

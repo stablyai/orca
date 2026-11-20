@@ -20536,7 +20536,6 @@
         "stoppedRestart_one": "{{count}} chat stopped when Orca closed.",
         "stoppedRestart_other": "{{count}} chats stopped when Orca closed.",
         "promptsNotResent": "Resuming won’t send your prompts again.",
-        "promptsNotSent": "Your prompts weren’t sent again.",
         "resume": "Resume",
         "details": "Details",
         "close": "Close",

@@ -19076,7 +19076,6 @@
         "stoppedRestart_one": "Orca kapanırken {{count}} sohbet durdu.",
         "stoppedRestart_other": "Orca kapanırken {{count}} sohbet durdu.",
         "promptsNotResent": "Devam ettirmek istemlerinizi yeniden göndermez.",
-        "promptsNotSent": "İstemleriniz yeniden gönderilmedi.",
         "resume": "Devam ettir",
         "details": "Ayrıntılar",
         "close": "Kapat",
