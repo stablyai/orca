@@ -1,5 +1,8 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import { nativeExecutableResolver } from '@orca/process-host/native-executable-resolution'
+import {
+  nativeExecutableResolver,
+  type NativeExecutableSelection
+} from '@orca/process-host/native-executable-resolution'
 import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { spawnProcess } from '@orca/process-host'
 import type {
@@ -44,10 +47,13 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
   >()
 
-  const spawnChild = ({ id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>): void => {
+  const spawnChild = (
+    { id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>,
+    selection: NativeExecutableSelection | undefined
+  ): void => {
     let child: ChildProcessWithoutNullStreams
     try {
-      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] })
+      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] }, selection)
     } catch (error) {
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
@@ -116,56 +122,61 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
   }
 
   // Each launch waits a turn so cancels queued behind a slow CreateProcess can withdraw it first.
-  const queued = new Map<
-    number,
-    {
-      request: Extract<WorkerThreadChildRequest, { type: 'spawn' }>
-      early: WorkerThreadChildRequest[]
-      lookup?: Promise<unknown>
-    }
-  >()
+  type QueuedLaunch = {
+    request: Extract<WorkerThreadChildRequest, { type: 'spawn' }>
+    early: WorkerThreadChildRequest[]
+    selection?: NativeExecutableSelection
+  }
+  const queued = new Map<number, QueuedLaunch>()
+  // Launches whose PATH lookup settled, in that order; a withdrawn one is skipped when reached.
+  const startable: QueuedLaunch[] = []
   let launching = false
   const launchNext = (): void => {
-    const next = queued.values().next()
-    if (next.done) {
+    let entry = startable.shift()
+    while (entry && queued.get(entry.request.id) !== entry) {
+      entry = startable.shift()
+    }
+    if (!entry) {
       launching = false
       return
     }
-    const entry = next.value
-    const start = (): void => {
-      if (queued.get(entry.request.id) !== entry) {
-        launchNext()
-        return
-      }
-      queued.delete(entry.request.id)
-      spawnChild(entry.request)
-      for (const request of entry.early) {
-        handle(request)
-      }
-      setImmediate(launchNext)
+    queued.delete(entry.request.id)
+    spawnChild(entry.request, entry.selection)
+    for (const request of entry.early) {
+      handle(request)
     }
-    // The spawn's sync PATH lookup then hits this warm cache, so a slow PATH directory never blocks other children.
-    if (entry.lookup) {
-      void entry.lookup.then(start)
-    } else {
-      start()
+    setImmediate(launchNext)
+  }
+  const makeStartable = (entry: QueuedLaunch): void => {
+    startable.push(entry)
+    if (!launching) {
+      launching = true
+      setImmediate(launchNext)
     }
   }
 
   const handle = (request: WorkerThreadChildRequest): void => {
     if (request.type === 'spawn') {
-      const { program, env } = request.spec
-      queued.set(request.id, {
-        request,
-        early: [],
-        ...(process.platform === 'darwin'
-          ? { lookup: nativeExecutableResolver.resolveAsync(program, env).catch(() => {}) }
-          : {})
-      })
-      if (!launching) {
-        launching = true
-        setImmediate(launchNext)
+      const entry: QueuedLaunch = { request, early: [] }
+      queued.set(request.id, entry)
+      if (process.platform !== 'darwin') {
+        makeStartable(entry)
+        return
       }
+      // macOS resolves PATH itself; each launch looks up async so a slow PATH directory blocks no other child.
+      void nativeExecutableResolver
+        .resolveAsync(request.spec.program, request.spec.env)
+        .then(
+          (selection) => {
+            entry.selection = selection
+          },
+          () => {}
+        )
+        .then(() => {
+          if (queued.get(request.id) === entry) {
+            makeStartable(entry)
+          }
+        })
       return
     }
     const waiting = queued.get(request.id)
