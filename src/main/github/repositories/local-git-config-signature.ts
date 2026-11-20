@@ -60,16 +60,21 @@ async function readUncachedLocalGitConfigSignature(repoPath: string): Promise<st
   if (!configPaths) {
     return undefined
   }
+  let branchRead: Promise<string> | undefined
+  const readBranch = (): Promise<string> => {
+    branchRead ??= readBranchSignature(configPaths.headPath)
+    return branchRead
+  }
   const signatures = await Promise.all([
-    readConfigPathSignatures(configPaths.commonConfigPath, configPaths.headPath),
-    readConfigPathSignatures(configPaths.worktreeConfigPath, configPaths.headPath)
+    readConfigPathSignatures(configPaths.commonConfigPath, readBranch),
+    readConfigPathSignatures(configPaths.worktreeConfigPath, readBranch)
   ])
   return signatures.flat().join('\0')
 }
 
 async function readConfigPathSignatures(
   configPath: string,
-  headPath: string,
+  readBranch: () => Promise<string>,
   visited = new Set<string>()
 ): Promise<string[]> {
   if (visited.has(configPath)) {
@@ -90,11 +95,19 @@ async function readConfigPathSignatures(
     dirname(configPath)
   )
   const includedSignatures = await Promise.all(
-    includedPaths.map((includedPath) => readConfigPathSignatures(includedPath, headPath, visited))
+    includedPaths.map((includedPath) => readConfigPathSignatures(includedPath, readBranch, visited))
   )
   // HEAD contents distinguish branch switches even on filesystems with coarse timestamps.
-  const branchSignature = onBranch ? [await readFile(headPath, 'utf8')] : []
+  const branchSignature = onBranch ? [await readBranch()] : []
   return [ownSignature, ...branchSignature, ...includedSignatures.flat()]
+}
+
+async function readBranchSignature(headPath: string): Promise<string> {
+  const head = await readFile(headPath, 'utf8')
+  // Reftable stores HEAD in the table stack; its loose HEAD is a fixed placeholder.
+  return head.trim() === 'ref: refs/heads/.invalid'
+    ? readFile(join(dirname(headPath), 'reftable', 'tables.list'), 'utf8')
+    : head
 }
 
 async function readConfigPathSignature(configPath: string): Promise<string> {
@@ -143,6 +156,10 @@ function parseConfigSection(line: string): { name: string; rest: string } | null
   for (let index = 1; index < line.length; index += 1) {
     const char = line[index]
     if (quote) {
+      if (char === '\\') {
+        index += 1
+        continue
+      }
       if (char === quote) {
         quote = null
       }
@@ -156,7 +173,7 @@ function parseConfigSection(line: string): { name: string; rest: string } | null
       continue
     }
     return {
-      name: line.slice(1, index).trim().toLowerCase(),
+      name: line.slice(1, index).replace(/\\(.)/g, '$1').trim().toLowerCase(),
       rest: line.slice(index + 1).trim()
     }
   }

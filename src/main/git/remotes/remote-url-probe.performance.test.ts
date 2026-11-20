@@ -3,15 +3,28 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn<(args: string[]) => Promise<{ stdout: string }>>()
+const { gitExecFileAsyncMock, headReadMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn<(args: string[]) => Promise<{ stdout: string }>>(),
+  headReadMock: vi.fn()
 }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...fs,
+    readFile: (...args: Parameters<typeof fs.readFile>) => {
+      if (String(args[0]).endsWith('/HEAD')) headReadMock()
+      return fs.readFile(...args)
+    }
+  }
+})
 
 vi.mock('../command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
+import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { listCachedRemoteNames } from './remote-name-listing'
 import { readRemoteUrl } from './remote-url-probe'
 
@@ -20,6 +33,7 @@ let root: string
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'remote-url-probe-perf-'))
   gitExecFileAsyncMock.mockReset()
+  headReadMock.mockClear()
   gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
     if (args[0] === 'remote' && args[1] === 'get-url') {
       throw new Error(`error: No such remote '${args[2]}'`)
@@ -90,3 +104,20 @@ it.each([190, 1900])(
   },
   30_000
 )
+
+it.each([10, 100])('reads HEAD once across conditional config fragments (N=%i)', async (files) => {
+  await mkdir(join(root, '.git'))
+  await writeFile(join(root, '.git', 'HEAD'), 'ref: refs/heads/first\n')
+  const includes: string[] = []
+  for (let index = 0; index < files; index += 1) {
+    const name = `fragment-${index}`
+    includes.push(`[include] path = ${name}`)
+    await writeFile(
+      join(root, '.git', name),
+      '[includeIf "onbranch:release/**"] path = remote-config\n'
+    )
+  }
+  await writeFile(join(root, '.git', 'config'), includes.join('\n'))
+  expect(await readLocalGitConfigSignature({ repoPath: root, connectionId: null })).toBeDefined()
+  expect(headReadMock).toHaveBeenCalledTimes(1)
+})

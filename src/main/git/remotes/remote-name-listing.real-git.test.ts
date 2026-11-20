@@ -33,10 +33,16 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-it.each(['folder', 'linked worktree'])(
+it.each(['folder', 'linked worktree', 'escaped condition', 'reftable'])(
   'refreshes branch-conditional remotes immediately in a %s',
   async (kind) => {
-    await git(root, 'init', '-b', 'nope-remote')
+    await git(
+      root,
+      'init',
+      '-b',
+      'nope-remote',
+      ...(kind === 'reftable' ? ['--ref-format=reftable'] : [])
+    )
     await git(
       root,
       '-c',
@@ -56,7 +62,9 @@ it.each(['folder', 'linked worktree'])(
       ? git(root, 'config', 'includeIf.onbranch:with-remote.path', 'branch-remote')
       : appendFile(
           join(root, '.git', 'config'),
-          '[includeIf "onbranch:with-remote"] path = branch-remote\n'
+          kind === 'escaped condition'
+            ? '[includeIf "onbranch\\:with-remote"] path = branch-remote\n'
+            : '[includeIf "onbranch:with-remote"] path = branch-remote\n'
         ))
     let repoPath = root
     if (kind === 'linked worktree') {
