@@ -5,6 +5,12 @@ import type { BotGroupRuntime } from './bot-group-runtime'
 /** What a mail turn whose operation can never run settles to, in place of "Starting…". */
 export const BOT_GROUP_MAIL_NEVER_STARTED = 'This mail never started a turn.'
 
+/** A turn still open (a card waiting, an attempt in the lane) is asked again no sooner than this,
+ *  so reads that follow each other do not each ask the chat. */
+const RECHECK_MS = 15_000
+/** Past this many remembered turns the memory starts over; a turn it forgets is only asked again. */
+const MAX_REMEMBERED_CHECKS = 5_000
+
 /** The chat proves the operation never ran and never will. */
 const NEVER_RAN = new Set(['absent', 'refused', 'withdrawn'])
 /** The chat holds a send the room renders from itself; nothing to settle, ever. */
@@ -18,30 +24,36 @@ const ANSWERED = new Set(['accepted', 'rejected', 'unknown'])
  */
 export function settleDeadGroupMailTurns(
   groups: BotGroupRuntime,
-  messages: readonly BotGroupMessage[]
+  messages: readonly BotGroupMessage[],
+  now = Date.now()
 ): void {
+  const checks = groups.mailTurnChecks
+  if (checks.size > MAX_REMEMBERED_CHECKS) {
+    checks.clear()
+  }
   for (const message of messages) {
     for (const turn of message.turns) {
       const { operationId } = turn
+      const last = checks.get(operationId)
       if (
         !turn.mailbox ||
         turn.error !== undefined ||
         turn.revoked ||
         turn.reply !== undefined ||
         turn.frozenItems ||
-        groups.mailTurnChecks.has(operationId)
+        last?.state === 'checking' ||
+        last?.state === 'answered' ||
+        (last && now - last.at < RECHECK_MS)
       ) {
         continue
       }
-      groups.mailTurnChecks.set(operationId, 'checking')
+      checks.set(operationId, { state: 'checking', at: now })
       void settle(groups, message.id, turn)
         .then((answered) =>
-          answered
-            ? groups.mailTurnChecks.set(operationId, 'answered')
-            : groups.mailTurnChecks.delete(operationId)
+          checks.set(operationId, { state: answered ? 'answered' : 'open', at: Date.now() })
         )
         .catch((error: unknown) => {
-          groups.mailTurnChecks.delete(operationId)
+          checks.set(operationId, { state: 'open', at: Date.now() })
           console.warn('[bot-groups] could not check a mail turn', error)
         })
     }
