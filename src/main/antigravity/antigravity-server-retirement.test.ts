@@ -1,8 +1,11 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
-import { retireAntigravityServerLeftovers } from './antigravity-server-retirement'
+import { afterEach, expect, it, vi } from 'vitest'
+import {
+  retireAntigravityServerLeftovers,
+  scheduleAntigravityServerRetirement
+} from './antigravity-server-retirement'
 
 let data = ''
 afterEach(() => rmSync(data, { recursive: true, force: true }))
@@ -51,4 +54,19 @@ it("finds the server's /tmp folder only under a parent this user owns privately"
   chmodSync(parent, 0o777)
   expect(await antigravityServerShortTemp('/data', uid, data)).toBeNull()
   expect(await antigravityServerShortTemp('/data', uid + 1, data)).toBeNull()
+})
+
+it("runs the launch's login-copy upkeep off the startup path, and a failure there is only logged", async () => {
+  vi.useFakeTimers()
+  try {
+    const upkeep = vi.fn(async () => {
+      throw new Error('store not ready')
+    })
+    scheduleAntigravityServerRetirement(join(tmpdir(), 'no-orca-data'), upkeep)
+    expect(upkeep).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(upkeep).toHaveBeenCalledTimes(1)
+  } finally {
+    vi.useRealTimers()
+  }
 })

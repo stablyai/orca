@@ -99,11 +99,10 @@ function agentCliInstallation(
 /** Each installation reclaims stale releases when created, so create them every launch, not only when a client asks. */
 export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
   provideManagedAgentDetection(runtime)
-  scheduleAntigravityServerRetirement(getProfileUserDataPath())
+  const dataDirectory = getProfileUserDataPath()
   // A login that agy dropped while Orca was closed doesn't stay in Orca's chat home.
-  void syncAgyLoginCopy(
-    runtime.requireStore().getSettings().antigravityChatAuth,
-    getProfileUserDataPath()
+  scheduleAntigravityServerRetirement(dataDirectory, () =>
+    syncAgyLoginCopy(runtime.requireStore().getSettings().antigravityChatAuth, dataDirectory)
   )
   for (const agent of MANAGED_AGENT_CLI_IDS) {
     try {

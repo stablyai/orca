@@ -40,8 +40,17 @@ export async function antigravityServerShortTemp(
 const RETIRE_DELAY_MS = 30_000
 
 /** Runs in the background after every launch; whatever is already gone is skipped. */
-export function scheduleAntigravityServerRetirement(dataDirectory: string): void {
-  setTimeout(() => void retireAntigravityServerLeftovers(dataDirectory), RETIRE_DELAY_MS).unref()
+/** `alsoLater`: other launch upkeep that should wait off the startup path with this clean-up. */
+export function scheduleAntigravityServerRetirement(
+  dataDirectory: string,
+  alsoLater?: () => Promise<void>
+): void {
+  setTimeout(() => {
+    void retireAntigravityServerLeftovers(dataDirectory)
+    void Promise.resolve()
+      .then(alsoLater)
+      .catch((error: unknown) => console.warn('[antigravity] launch upkeep skipped:', error))
+  }, RETIRE_DELAY_MS).unref()
 }
 
 export async function retireAntigravityServerLeftovers(dataDirectory: string): Promise<void> {
