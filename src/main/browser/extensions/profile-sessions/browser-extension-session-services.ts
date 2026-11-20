@@ -18,14 +18,15 @@ import {
   whenBrowserExtensionDnrLoaded
 } from '../declarative-net-request/session/browser-extension-dnr-session'
 import { setBrowserExtensionSessionHooks } from './browser-extension-session-loader'
-import { isBrowserExtensionStateKeptWhileIdle } from './browser-extension-idle-kept-state'
+import {
+  claimBrowserExtensionIdleState,
+  forgetBrowserExtensionSessionStorageUse,
+  isBrowserExtensionStateKeptWhileIdle
+} from './browser-extension-idle-kept-state'
 import {
   forgetBrowserExtensionSessionState,
-  installBrowserExtensionIdleResume,
-  keepBrowserExtensionSessionsWhileIdle,
-  resumeBrowserExtensionAfterIdle
+  installBrowserExtensionIdleResume
 } from './browser-extension-idle-resume'
-import { forgetBrowserExtensionSessionStorageWritten } from '../profile-storage/browser-extension-session-storage-snapshot'
 import { closeBrowserExtensionSidePanelsForExtension } from '../side-panel/browser-extension-side-panel-host'
 import {
   installBrowserExtensionWebRequestForwarding,
@@ -71,12 +72,14 @@ export function installBrowserExtensionSessionServices(): void {
       attachBrowserExtensionDnr(sess, profileId, enabledExtensionIds)
       if (!servedSessions.has(sess)) {
         servedSessions.add(sess)
+        sess.extensions.on('extension-loaded', (_event, extension) =>
+          forgetBrowserExtensionSessionStorageUse(profileId, extension.id)
+        )
         sess.extensions.on('extension-unloaded', (_event, extension) => {
           forgetBrowserExtensionContentScriptRestore(sess, extension.id)
           revokeBrowserExtensionActiveTabInSession(sess, extension.id)
           // Why the attach-time id: deleting a profile forgets its session before unloading.
           closeBrowserExtensionSidePanelsForExtension(profileId, extension.id)
-          forgetBrowserExtensionSessionStorageWritten(sess, extension.id)
           if (!isBrowserExtensionStateKeptWhileIdle(profileId, extension.id)) {
             forgetBrowserExtensionSessionState(profileId, extension.id)
           }
@@ -102,9 +105,8 @@ export function installBrowserExtensionSessionServices(): void {
       }
     },
     detached: stopObservingBrowserExtensionWebRequests,
-    unloading: keepBrowserExtensionSessionsWhileIdle,
     loaded: async (sess, profileId, extension) => {
-      await resumeBrowserExtensionAfterIdle(sess, profileId, extension)
+      claimBrowserExtensionIdleState(profileId, extension.id)
       await Promise.all([
         restoreBrowserExtensionContentScripts(
           sess,

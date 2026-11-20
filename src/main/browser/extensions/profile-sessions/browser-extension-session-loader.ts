@@ -53,7 +53,6 @@ export type BrowserExtensionSessionHooks = {
     profileId: string,
     extension: Electron.Extension
   ) => Promise<void>
-  unloading: idleKeptState.BrowserExtensionUnloadingHook
   /** Extensions turned off: undo what `attached` added to the request path. */
   detached: (sess: Electron.Session) => void
   uninstalled: (profileId: string, extensionIds: ReadonlySet<string>) => void
@@ -158,9 +157,7 @@ export function attachBrowserExtensionsToProfileSession(
 async function unloadProfileSession(state: ProfileSessionState): Promise<void> {
   forgetBrowserExtensionLoadFailures({ profileId: state.profile.id })
   await Promise.all([state.loading.catch(() => {}), state.loads.close()])
-  const extensions = state.session.extensions.getAllExtensions()
-  await sessionHooks?.unloading(state.session, state.profile.id, extensions)
-  for (const extension of extensions) {
+  for (const extension of state.session.extensions.getAllExtensions()) {
     removeBrowserExtensionFromSession(state.session, extension.id)
   }
   forgetBrowserExtensionContexts(state.session)

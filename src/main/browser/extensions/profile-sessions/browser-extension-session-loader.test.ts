@@ -106,6 +106,7 @@ mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-loader-'))
 const apiHost = await import('../api-runtime/browser-extension-api-host')
 const { setBrowserExtensionSupportEnabled } = await import('../browser-extension-support')
 const loader = await import('./browser-extension-session-loader')
+const idleKeptState = await import('./browser-extension-idle-kept-state')
 await import('./browser-extension-load-errors')
 const { getBrowserExtensionProfileStateStore } =
   await import('../profile-storage/browser-extension-profile-state-store')
@@ -309,7 +310,7 @@ describe('a profile whose last page closed', () => {
     await loader.detachBrowserExtensionsFromAllProfileSessions()
   })
 
-  it('resumes its extensions on reopen without firing runtime.onStartup again', async () => {
+  it('resumes its extensions on reopen without onStartup, unless they used session storage', async () => {
     const resumed = { ...profile, id: 'resumed-profile', partition: 'persist:orca-browser-resumed' }
     setBrowserExtensionSupportEnabled(true)
     await loader.detachBrowserExtensionsFromAllProfileSessions()
@@ -337,6 +338,18 @@ describe('a profile whose last page closed', () => {
       'onStartup',
       []
     )
+    // Session storage empties on unload, so an extension that used it starts clean instead.
+    idleKeptState.noteBrowserExtensionSessionStorageUsed(resumed.id, ID)
+    await loader.unloadBrowserExtensionsFromIdleProfile(resumed.id, () => {})
+    mocks.emitWorkerStart.mockClear()
+    await attach()
+    expect(mocks.emitWorkerStart).toHaveBeenCalledWith(
+      expect.anything(),
+      ID,
+      'runtime',
+      'onStartup',
+      []
+    )
     mocks.prepared.hasWorker = false
     await loader.detachBrowserExtensionsFromAllProfileSessions()
   })
@@ -349,7 +362,6 @@ it('does not restore stale enablement after uninstall and reinstall in another O
     attached: () => {},
     detached: () => {},
     loaded: async () => {},
-    unloading: async () => {},
     uninstalled: mocks.uninstalled
   })
   const store = getBrowserExtensionInstallStore()

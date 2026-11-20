@@ -82,6 +82,16 @@ class BrowserExtensionDnrStore extends BrowserExtensionProfileDocumentStore {
     return super.forgetExtensionsExcept(profileId, extensionIds)
   }
 
+  /** A reload or update installed this copy: rules another version left go in every profile. */
+  forgetSessionRulesOfOtherVersions(extension: Pick<Electron.Extension, 'id' | 'version'>): void {
+    for (const profileId of this.sessionRules.keys()) {
+      const saved = this.sessionRules.get(profileId)?.get(extension.id)
+      if (saved && saved.version !== extension.version) {
+        this.forgetSessionRulesExcept(profileId, (id) => id !== extension.id)
+      }
+    }
+  }
+
   /** Extensions turned off, like a browser quit: every profile's session rules go. */
   forgetAllSessionRules(): void {
     this.sessionRules.clear()

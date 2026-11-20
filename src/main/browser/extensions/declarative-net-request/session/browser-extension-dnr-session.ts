@@ -14,7 +14,6 @@ import { DnrFrameTracker } from './browser-extension-dnr-frames'
 import { DNR_API_CONSTANTS, DNR_GLOBAL_STATIC_RULE_LIMIT } from './browser-extension-dnr-limits'
 import { DnrMatchedRules } from './browser-extension-dnr-matched-rules'
 import { getBrowserExtensionInstallStore } from '../../installation/browser-extension-install-store'
-import { getBrowserExtensionDnrStore } from './browser-extension-dnr-store'
 import { extensionHasPermission } from '../../api-runtime/browser-extension-namespace-registry'
 import { whenBrowserExtensionProfileLoaded } from '../../profile-sessions/browser-extension-session-loader'
 import { resolveBrowserExtensionTab } from '../../tabs-and-windows/browser-extension-tab-model'
@@ -301,25 +300,6 @@ export function attachBrowserExtensionDnr(
     runtime.removeExtension(extension.id)
   )
   session.extensions.getAllExtensions().forEach(add)
-}
-
-/** A clean start after an idle unload: the extension's onStartup adds its session rules again. */
-export async function clearBrowserExtensionDnrSessionRules(
-  session: Electron.Session,
-  extension: Electron.Extension
-): Promise<void> {
-  const profileId = runtimes.get(session)?.profileId
-  if (profileId) {
-    getBrowserExtensionDnrStore().writeSessionRules(profileId, extension, [])
-  }
-  const rules = runtimes.get(session)?.extensions.get(extension.id)?.rules
-  // Why wait first: the rules restored at load are only listed once that load ran.
-  await rules?.enqueue(() => undefined)
-  await rules?.updateRules(
-    'session',
-    rules.getRules('session').map((rule) => rule.id),
-    []
-  )
 }
 
 /** Startup waits for an extension's rules with its other restored state. */

@@ -1,10 +1,11 @@
+import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import type { BrowserExtensionLoadKind } from './browser-extension-runtime-lifecycle'
 
 /**
- * An idle unload only stops extensions to save memory, so what they set for the session (action
- * badge and icon, side panel options, non-persistent content scripts) waits for the reattach.
- * Profile → extension id → install time of the copy whose state is kept, until a load claims it.
+ * An idle unload only stops extensions to save memory, so what they set for the session (request
+ * rules, action badge and icon, side panel options, non-persistent content scripts) waits for the
+ * reattach. Profile → extension id → install time of the copy whose state is kept.
  */
 const keptByProfileId = new Map<string, Map<string, number>>()
 /** Kept state the reattach settled, until the extension's load claims it or the attach finishes. */
@@ -13,15 +14,47 @@ const awaitingByProfileId = new Map<string, Map<string, number>>()
 const idleUnloadedProfileIds = new Set<string>()
 /** Profile → extensions reloaded while it was idle; they get onInstalled(update) on reattach. */
 const reloadedWhileIdle = new Map<string, Set<string>>()
-/** Profile → extensions whose session state could not all be kept; they start clean on reattach. */
-const cleanStarts = new Map<string, Set<string>>()
+/**
+ * Profile → extensions that used chrome.storage.session since they loaded. Unloading empties that
+ * area and it can't be put back, so these start clean, with onStartup, instead of resuming.
+ */
+const sessionStorageUsers = new Map<string, Set<string>>()
 const dropListeners = new Set<(profileId: string, extensionId: string) => void>()
 
 function installTime(extensionId: string): number | undefined {
   return getBrowserExtensionInstallStore().get(extensionId)?.installTime
 }
 
-/** Called as an idle unload begins, with the copies running then; later loads start fresh. */
+function addTo(map: Map<string, Set<string>>, profileId: string, extensionId: string): void {
+  map.set(profileId, (map.get(profileId) ?? new Set<string>()).add(extensionId))
+}
+
+/** A page or worker wrote chrome.storage.session, or opened it to content scripts. */
+export function noteBrowserExtensionSessionStorageUsed(
+  profileId: string,
+  extensionId: string
+): void {
+  addTo(sessionStorageUsers, profileId, extensionId)
+}
+
+/** Each load starts with an empty chrome.storage.session. */
+export function forgetBrowserExtensionSessionStorageUse(profileId: string, extensionId: string) {
+  sessionStorageUsers.get(profileId)?.delete(extensionId)
+}
+
+/**
+ * Offscreen documents write storage without Orca's relay, so their use can't be seen; an extension
+ * that may open one is treated as a session storage user.
+ */
+function usedSessionStorage(profileId: string, extensionId: string): boolean {
+  const permissions = getBrowserExtensionInstallStore().get(extensionId)?.permissions ?? []
+  return (
+    sessionStorageUsers.get(profileId)?.has(extensionId) === true ||
+    (permissions.includes('offscreen') && permissions.includes('storage'))
+  )
+}
+
+/** Called as an idle unload begins, with the copies running then; later loads start clean. */
 export function beginIdleUnload(
   profileId: string,
   extensions: readonly Pick<Electron.Extension, 'id'>[]
@@ -39,13 +72,6 @@ export function beginIdleUnload(
   }
 }
 
-/** Before any unload removes a profile's extensions: keep what an idle unload can keep. */
-export type BrowserExtensionUnloadingHook = (
-  sess: Electron.Session,
-  profileId: string,
-  extensions: Electron.Extension[]
-) => Promise<void>
-
 /** Unload listeners skip forgetting the session state of an extension kept here. */
 export function isBrowserExtensionStateKeptWhileIdle(
   profileId: string,
@@ -62,38 +88,37 @@ export function onBrowserExtensionIdleStateDropped(
 }
 
 /**
- * Before an attach loads anything: a copy updated, reinstalled or disabled while idle starts fresh.
- * Returns each extension's load kind, since Chrome fires runtime.onStartup only for a profile's
- * first start, when session state is empty.
+ * Before an attach loads anything. An extension resumes, with its kept state and no lifecycle
+ * event, only if the same copy ran when the profile went idle and it never used
+ * chrome.storage.session. Any other starts clean: kept state and session rules go, and onStartup
+ * fires, so it is never left with partial state and no signal. One reloaded while idle gets
+ * onInstalled(update) instead.
  */
 export function settleKeptStateOnAttach(
   profileId: string,
   enabledExtensionIds: readonly string[]
 ): (extensionId: string) => BrowserExtensionLoadKind {
   const enabled = new Set(enabledExtensionIds)
-  dropKept(keptByProfileId, profileId, (id, time) => !enabled.has(id) || installTime(id) !== time)
-  const kept = keptByProfileId.get(profileId)
+  dropKept(
+    keptByProfileId,
+    profileId,
+    (id, time) => !enabled.has(id) || installTime(id) !== time || usedSessionStorage(profileId, id)
+  )
+  const resumed = keptByProfileId.get(profileId) ?? new Map<string, number>()
   keptByProfileId.delete(profileId)
-  if (kept) {
-    awaitingByProfileId.set(profileId, kept)
+  if (resumed.size > 0) {
+    awaitingByProfileId.set(profileId, resumed)
   }
   const reloaded = reloadedWhileIdle.get(profileId) ?? new Set<string>()
-  const clean = cleanStarts.get(profileId) ?? new Set<string>()
   reloadedWhileIdle.delete(profileId)
-  cleanStarts.delete(profileId)
-  const resumed = idleUnloadedProfileIds.has(profileId)
-  return (extensionId) =>
-    reloaded.has(extensionId) ? 'reload' : resumed && !clean.has(extensionId) ? 'other' : 'startup'
-}
-
-/**
- * An extension whose session state the idle unload could not all keep (session storage unreadable,
- * or loaded after the unload began): drop the rest so its onStartup rebuilds from a clean start.
- */
-export function startBrowserExtensionCleanAfterIdle(profileId: string, extensionId: string): void {
-  const clean = cleanStarts.get(profileId) ?? new Set<string>()
-  cleanStarts.set(profileId, clean.add(extensionId))
-  dropBrowserExtensionIdleState({ profileId, extensionId })
+  const kindFor = (id: string): BrowserExtensionLoadKind =>
+    reloaded.has(id) ? 'reload' : resumed.has(id) ? 'other' : 'startup'
+  for (const id of enabled) {
+    if (kindFor(id) === 'startup') {
+      getBrowserExtensionDnrStore().writeSessionRules(profileId, { id, version: '' }, [])
+    }
+  }
+  return kindFor
 }
 
 /** The reattach loaded the kept copy: its state is live again. */
@@ -105,7 +130,10 @@ export function claimBrowserExtensionIdleState(profileId: string, extensionId: s
   }
 }
 
-/** The reattach's loads settled: what none claimed failed, was disabled or reloaded meanwhile. */
+/**
+ * The reattach's loads settled: what none claimed failed, was disabled or reloaded meanwhile. It
+ * isn't loaded when the profile next goes idle, so its next reattach starts it clean.
+ */
 export function dropUnclaimedBrowserExtensionIdleState(profileId: string): void {
   dropKept(awaitingByProfileId, profileId, () => true)
 }
@@ -117,16 +145,16 @@ export function noteBrowserExtensionReloadedWhileIdle(
 ): void {
   for (const profileId of detachedProfileIds) {
     if (idleUnloadedProfileIds.has(profileId)) {
-      const reloaded = reloadedWhileIdle.get(profileId) ?? new Set<string>()
-      reloadedWhileIdle.set(profileId, reloaded.add(extensionId))
+      addTo(reloadedWhileIdle, profileId, extensionId)
     }
   }
   dropBrowserExtensionIdleState({ extensionId })
 }
 
 /**
- * Drops kept state: the extension was reloaded or uninstalled, or the profile deleted. `forgetProfile` (profile delete) and an empty scope
- * (extensions turned off, like a browser quit) also forget that the profile went idle.
+ * Drops kept state: the extension was reloaded or uninstalled, or the profile deleted.
+ * `forgetProfile` (profile delete) and an empty scope (extensions turned off, like a browser quit)
+ * also forget that the profile went idle.
  */
 export function dropBrowserExtensionIdleState(scope: {
   profileId?: string
@@ -137,31 +165,36 @@ export function dropBrowserExtensionIdleState(scope: {
   if (profileId === undefined && extensionId === undefined) {
     idleUnloadedProfileIds.clear()
     reloadedWhileIdle.clear()
-    cleanStarts.clear()
+    sessionStorageUsers.clear()
   } else if (profileId !== undefined && scope.forgetProfile) {
     idleUnloadedProfileIds.delete(profileId)
     reloadedWhileIdle.delete(profileId)
-    cleanStarts.delete(profileId)
+    sessionStorageUsers.delete(profileId)
   }
   for (const map of [keptByProfileId, awaitingByProfileId]) {
     for (const id of profileId === undefined ? [...map.keys()] : [profileId]) {
-      dropKept(map, id, (kept) => extensionId === undefined || extensionId === kept)
+      dropKept(map, id, extensionId === undefined ? () => true : extensionId)
     }
   }
 }
 
+/** `matches` is one extension id (a keyed lookup) or a test over every kept extension. */
 function dropKept(
   map: Map<string, Map<string, number>>,
   profileId: string,
-  matches: (extensionId: string, time: number) => boolean
+  matches: string | ((extensionId: string, time: number) => boolean)
 ): void {
   const kept = map.get(profileId)
-  for (const [extensionId, time] of kept ?? []) {
-    if (matches(extensionId, time)) {
-      kept?.delete(extensionId)
-      for (const listener of dropListeners) {
-        listener(profileId, extensionId)
-      }
+  const ids =
+    typeof matches === 'string'
+      ? kept?.has(matches)
+        ? [matches]
+        : []
+      : [...(kept ?? [])].filter(([id, time]) => matches(id, time)).map(([id]) => id)
+  for (const extensionId of ids) {
+    kept?.delete(extensionId)
+    for (const listener of dropListeners) {
+      listener(profileId, extensionId)
     }
   }
   if (kept?.size === 0) {

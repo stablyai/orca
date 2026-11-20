@@ -2,6 +2,7 @@ import type { InstalledBrowserExtension } from '../../../../shared/browser/exten
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { prepareBrowserExtensionDirectory } from '../installation/browser-extension-load-directory'
 import { noteBrowserExtensionReloadedWhileIdle } from './browser-extension-idle-kept-state'
+import { getBrowserExtensionDnrStore } from '../declarative-net-request/session/browser-extension-dnr-store'
 import {
   getBrowserExtensionSessionForProfile,
   loadBrowserExtensionIntoProfile,
@@ -37,15 +38,15 @@ export async function reloadBrowserExtensionWhereEnabled(
   for (const profileId of profileIds) {
     unloadBrowserExtensionFromProfile(profileId, extension.id)
   }
+  const attached = new Set(profileIds)
+  getBrowserExtensionDnrStore().forgetSessionRulesOfOtherVersions(extension)
   // Profiles idle or going idle load the new copy, as a reload, when they reopen.
   noteBrowserExtensionReloadedWhileIdle(
     extension.id,
     browserSessionRegistry
       .listProfiles()
       .map((profile) => profile.id)
-      .filter(
-        (profileId) => isEnabledIn(profileId, extension.id) && !profileIds.includes(profileId)
-      )
+      .filter((profileId) => isEnabledIn(profileId, extension.id) && !attached.has(profileId))
   )
   if (options.refresh) {
     await prepareBrowserExtensionDirectory(extension, { refresh: true })

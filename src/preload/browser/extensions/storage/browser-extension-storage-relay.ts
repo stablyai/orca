@@ -113,17 +113,22 @@ export function installBrowserExtensionStorageRelay(
       hasListeners: () => registered.size > 0
     }
   }
-  let reportedSessionWrite = false
+  // Main restarts an idle profile's extension clean when it used the session area; once per run is enough.
+  let reportedSessionUse = false
+  const noteSessionUse = (): void => {
+    if (!reportedSessionUse) {
+      reportedSessionUse = true
+      void bridge.call(relayNamespace, 'report', ['session', {}])
+    }
+  }
   const publish = (areaName: string, changes: StorageChanges): void => {
     if (Object.keys(changes).length === 0) {
       return
     }
     if (context === 'worker') {
       deliver(areaName, changes)
-      // Main keeps a written session area across an idle unload; one report per worker run is enough.
-      if (areaName === 'session' && !reportedSessionWrite) {
-        reportedSessionWrite = true
-        void bridge.call(relayNamespace, 'report', [areaName, changes])
+      if (areaName === 'session') {
+        noteSessionUse()
       }
     } else {
       void bridge.call(relayNamespace, 'report', [areaName, changes])
@@ -145,6 +150,14 @@ export function installBrowserExtensionStorageRelay(
     const get = area.get
     if (!isCallable(get)) {
       return
+    }
+    const setAccessLevel = area.setAccessLevel
+    // Why: content scripts may then write the area without the relay seeing it.
+    if (areaName === 'session' && isCallable(setAccessLevel)) {
+      define(area, 'setAccessLevel', (...input: unknown[]) => {
+        noteSessionUse()
+        return setAccessLevel.call(area, ...input)
+      })
     }
     for (const [method, keysOf] of Object.entries(writeKeys)) {
       const native = area[method]
