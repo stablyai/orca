@@ -126,7 +126,13 @@ export function MobileNativeChatAsk({
     setSelections(next)
     autoAdvance.cancel()
     if (picked && !multi && optIndex !== OTHER && !keep) {
-      autoAdvance.schedule(() => void advance(next))
+      autoAdvance.schedule(() => {
+        // Auto-submit gets the Submit tap's haptic; moving to the next step stays silent.
+        if (isLast) {
+          triggerSelection()
+        }
+        void advance(next)
+      })
     }
   }
 
