@@ -163,6 +163,21 @@ describe('localAgentRestartCandidates', () => {
     ])
   })
 
+  it('leaves a session unchecked when its turn starts while the scan waits', async () => {
+    seedPane({ agentType: 'codex', providerSession: SESSION, foreground: 'codex' })
+    const paneKey = makePaneKey(TAB_ID, LEAF_ID)
+    const row = get().agentStatusByPaneKey.get(paneKey)!
+    vi.mocked(inspectRuntimeTerminalProcess).mockImplementation(async () => {
+      useAppStore.setState({
+        agentStatusByPaneKey: acceptedAgentStatuses([[paneKey, { ...row, state: 'working' }]])
+      })
+      return { foregroundProcess: 'codex', hasChildProcesses: true }
+    })
+    expect(await localAgentRestartCandidates(get())).toMatchObject([
+      { restartable: true, quiet: false }
+    ])
+  })
+
   it('keeps a Claude session that runs on an account other than the selected one', async () => {
     stubClaudeAccountsList()
     seedPane({

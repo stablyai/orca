@@ -32,10 +32,11 @@ export function isSessionHeldByAnotherPane(
   )
 }
 
-// Same source order as resolvePaneAgentSessionId: live row first, else the sleeping record.
+// Same source as resolvePaneAgentSessionId: a confirmed live row, else the sleeping record.
 function paneAgentType(state: AppState, paneKey: string): string | undefined {
-  return (
-    state.agentStatusByPaneKey.get(paneKey)?.agentType ??
-    state.sleepingAgentSessionsByPaneKey[paneKey]?.agent
-  )
+  const live = state.agentStatusByPaneKey.get(paneKey)
+  if (live && live.restoredUnconfirmed !== true) {
+    return live.agentType
+  }
+  return state.sleepingAgentSessionsByPaneKey[paneKey]?.agent
 }

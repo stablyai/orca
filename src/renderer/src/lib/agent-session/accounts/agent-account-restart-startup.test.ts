@@ -251,4 +251,36 @@ describe('buildManualRestartStartup', () => {
     seedOtherPane('claude')
     expect(buildManualRestartStartup('codex', pane)?.launchAgent).toBe('codex')
   })
+
+  it('reads a restored pane agent from its saved record, as its session id is read', () => {
+    seedAgentStatus({
+      agentType: 'codex',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    seedOtherPane('claude')
+    const otherPaneKey = makePaneKey(OTHER_TAB, OTHER_LEAF)
+    const state = useAppStore.getState()
+    useAppStore.setState({
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        ...state.agentStatusByPaneKey,
+        [
+          otherPaneKey,
+          { ...state.agentStatusByPaneKey.get(otherPaneKey)!, restoredUnconfirmed: true }
+        ]
+      ]),
+      sleepingAgentSessionsByPaneKey: {
+        [otherPaneKey]: {
+          paneKey: otherPaneKey,
+          worktreeId: WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: SESSION_ID },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+    expect(buildManualRestartStartup('codex', pane)).toBeNull()
+  })
 })

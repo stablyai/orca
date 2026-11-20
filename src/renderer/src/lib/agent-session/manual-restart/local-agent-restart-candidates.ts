@@ -1,4 +1,5 @@
 /** Local agent terminal sessions a manual restart can resume, and why the others cannot. */
+import { useAppStore } from '@/store/index'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
@@ -31,7 +32,6 @@ import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { ClaudeHostFolders } from '../../../../../shared/agent-accounts/claude/claude-pane-account-folder'
 
 export type AgentRestartCantReason =
@@ -63,7 +63,6 @@ const WORK_FOLDER_SCOPED_AGENTS: ReadonlySet<TuiAgent> = new Set(['kimi', 'dsh']
 
 type AgentPane = LocalTerminalLeaf & {
   agent: TuiAgent
-  entry: AgentStatusEntry | undefined
   providerSession: AgentProviderSessionMetadata | null
   agentTeams: boolean
   wsl: boolean
@@ -94,7 +93,6 @@ function* localAgentPanes(state: AppState): Generator<AgentPane> {
     yield {
       ...leaf,
       agent,
-      entry,
       providerSession:
         normalizeAgentProviderSession(
           entry?.agentType === agent ? entry.providerSession : undefined
@@ -216,14 +214,16 @@ export async function localAgentRestartCandidates(
     collectHostPtyEvidence(state),
     panes.some((pane) => pane.agent === 'claude') ? readClaudeAccountView(state) : undefined
   ])
-  const input = collectAgentPaneInputEvidence(state)
+  // Why fresh: the scan can wait seconds on a slow host, and a turn that starts meanwhile must not start ticked.
+  const fresh = useAppStore.getState()
+  const input = collectAgentPaneInputEvidence(fresh)
   const inUsePtyIds = new Set(input.inUsePtyIds)
   return panes.flatMap((pane, index): AgentRestartCandidate[] => {
     const paneRunning = running[index]
     if (paneRunning === false) {
       return []
     }
-    const { entry } = pane
+    const entry = fresh.agentStatusByPaneKey.get(pane.paneKey)
     const runtimePtyId = toRuntimePtyId(pane.ptyId)
     const evidence = getAgentPaneQuietEvidence(
       input.lastTerminalInputAtByPaneKey[pane.paneKey],
