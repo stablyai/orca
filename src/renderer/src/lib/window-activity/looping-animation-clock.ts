@@ -8,7 +8,10 @@ import { rideSharedNow } from '@/lib/window-activity/use-now'
 const STEPS_PER_CYCLE: ReadonlyMap<string, number> = new Map([
   ['spin', 8],
   ['agent-spinner-rotate', 8],
-  ['pulse', 4]
+  ['pulse', 4],
+  ['browser-agent-glow-breathe', 4],
+  // The stale-review highlight crosses its text in six hops.
+  ['tw-shimmer', 6]
 ])
 const LABEL_TICK_MS = 1_000
 // Bounds the hit tests in a tick where a lot of off-screen content changed.
@@ -49,7 +52,8 @@ function documentDeps(doc: Document): LoopingAnimationClockDeps {
       const onStart = (event: AnimationEvent): void => {
         if (STEPS_PER_CYCLE.has(event.animationName) && event.target instanceof Element) {
           // Only this element's animations: a document-wide scan per mount would not scale.
-          listener(event.target.getAnimations())
+          // subtree: an animation on ::before belongs to this element too.
+          listener(event.target.getAnimations({ subtree: true }))
         }
       }
       doc.addEventListener('animationstart', onStart)
