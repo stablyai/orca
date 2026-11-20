@@ -32,6 +32,13 @@ let probedApi: DesktopRelayApi | null = null
 let probe: Promise<boolean> = Promise.resolve(false)
 let settled: boolean | null = null
 const acknowledgedRelays = new AcknowledgedDesktopRelays()
+// Partitions this window couldn't read at startup: it holds none of their rows or relay ids.
+const unreadHostIds = new Set<ExecutionHostId>()
+
+/** A partition read that failed: the window never speaks for that host's relay ids in full. */
+export function noteUnreadSessionHost(hostId: ExecutionHostId): void {
+  unreadHostIds.add(hostId)
+}
 
 /** Ask main once whether it applies relay ids by ownership. An older main (no handler), the paired web
  *  client (no method) and main-owned layout answer no, and keep relay ids in ordinary saves. */
@@ -98,7 +105,7 @@ function completeRelayHostIds(state: RelayHostState): Set<ExecutionHostId> {
     }
   }
   for (const hostId of hostIds) {
-    if (state.contestedHostWorkspaceSessions?.[hostId]) {
+    if (state.contestedHostWorkspaceSessions?.[hostId] || unreadHostIds.has(hostId)) {
       hostIds.delete(hostId)
     }
   }
