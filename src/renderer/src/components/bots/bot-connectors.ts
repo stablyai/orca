@@ -66,7 +66,9 @@ export function useBotConnectorAvailable(
   const cloudOn = {
     linear: cloudHasIt(linear.status),
     github: cloudHasIt(github.status),
-    cliq: cloudHasIt(cliq.status)
+    // Only the cloud's own answer offers Cliq: a failed read (signed out, offline) can't tell a cloud
+    // that has it from one that doesn't, and Cliq ships dark until the cloud does.
+    cliq: cliq.status === 'ready'
   }
   return (connector) =>
     connector.available &&

@@ -38,11 +38,18 @@ export function botCliqSetupStep(
     return { kind: 'failed', code: view.status === 'off' ? BOT_CLIQ_OFF : view.error }
   }
   const { orgs } = view.cliq
-  // The trip's organization first, then the one asked for, then the only one signed in.
-  const wanted = connect.status === 'linked' ? connect.link.org?.orgId : choice.orgId
+  // The trip's organization first, then the one asked for or picked, then the only one signed in.
+  const wanted = (connect.status === 'linked' ? connect.link.org?.orgId : undefined) ?? choice.orgId
   const open = orgs.filter((entry) => !choice.taken?.includes(entry.orgId))
-  const org = orgs.find((entry) => entry.orgId === wanted) ?? (open.length === 1 ? open[0] : null)
+  // An organization asked for by name (repairing its row) is never swapped for another one.
+  const org =
+    orgs.find((entry) => entry.orgId === wanted) ??
+    (wanted == null && open.length === 1 ? open[0] : null)
   if (!org) {
+    // The asked-for organization has no sign-in here: signing in there is the way on.
+    if (wanted != null) {
+      return { kind: 'connect', error: connect.status === 'failed' ? connect.error : null }
+    }
     return open.length > 1
       ? { kind: 'pick', orgs: open }
       : { kind: 'connect', error: connect.status === 'failed' ? connect.error : null }
