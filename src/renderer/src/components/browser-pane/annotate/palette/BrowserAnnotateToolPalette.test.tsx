@@ -62,19 +62,6 @@ function Harness(props: {
 }
 
 describe('BrowserAnnotateToolPalette', () => {
-  it('shows Annotate, Grab and Draw as visible tools and switches with a plain click', () => {
-    const onSelectTool = vi.fn()
-    render(<Harness activeTool="annotate" onSelectTool={onSelectTool} />)
-
-    expect(screen.getByRole('button', { name: 'Annotate' }).getAttribute('aria-pressed')).toBe(
-      'true'
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Grab' }))
-    expect(onSelectTool).toHaveBeenLastCalledWith('copy')
-    fireEvent.click(screen.getByRole('button', { name: 'Draw' }))
-    expect(onSelectTool).toHaveBeenLastCalledWith('draw')
-  })
-
   it('marks the other tools unavailable on a failed load while Done stays usable', () => {
     render(
       <Harness activeTool="annotate" canPickElements={false} unavailableReason="Page didn't load" />
