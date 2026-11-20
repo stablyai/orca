@@ -116,15 +116,16 @@ it("lists a paired server's bots after this computer's, with its pill, dimmed wh
   expect(completeMention).toHaveBeenCalledWith(PERF_M4, '[Bot: Perf bot](bot:perf-m4@m4)')
 })
 
-it("lists only that server's bots in a chat on a paired server", () => {
+it("lists a paired server's chat's own bots first, then this computer's and other servers' with their pill", () => {
   const { result, openAt } = chat('runtime:m4')
   openAt()
-  expect(result.current.mentionFiles.files).toEqual([BUILD, PERF_M4, 'src/perf.ts'])
+  expect(result.current.mentionFiles.files).toEqual([BUILD, PERF_M4, PERF, 'src/perf.ts'])
+  expect(result.current.roomContext?.mentions.find((m) => m.key === PERF)?.host).toBeTruthy()
+  expect(result.current.roomContext?.mentions.find((m) => m.key === BUILD)?.host).toBe(undefined)
 })
 
-it('lists no bots where the chat runs on a computer with none listed here', () => {
+it("lists every reachable host's bots where the chat's own computer has none", () => {
   const { result, openAt } = chat('runtime:linux')
   openAt()
-  expect(result.current.mentionFiles.files).toEqual(['src/perf.ts'])
-  expect(roster).not.toHaveBeenCalled()
+  expect(result.current.mentionFiles.files).toEqual([PERF, BUILD, PERF_M4, 'src/perf.ts'])
 })

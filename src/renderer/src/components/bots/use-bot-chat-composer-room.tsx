@@ -52,7 +52,11 @@ export function useBotChatComposerRoom(
     const own = self ? here.find((bot) => isSameBot(bot, self)) : undefined
     const others = here.filter((bot) => bot !== own)
     const first = [...(own && selfChats ? [own] : []), ...others]
-    return hostId === LOCAL_EXECUTION_HOST_ID ? [...first, ...bots.filter(isOnPairedServer)] : first
+    const elsewhere = bots.filter(
+      (bot) =>
+        bot.hostId !== hostId && (bot.hostId === LOCAL_EXECUTION_HOST_ID || isOnPairedServer(bot))
+    )
+    return [...first, ...elsewhere]
   }, [bots, self, hostId, selfChats])
   const live = useSyncExternalStore(subscribeToBotChanges, readLiveBotHostIds, readLiveBotHostIds)
   // What each is for is read once for every chat, and only when someone opens `@`.
