@@ -85,7 +85,9 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
           terminalElement: pane.terminal.element,
           isComposing: () => imeCompositionTracker.isActive(),
           sendInput: (data) => pane.terminal.input(data),
-          getKittyKeyboardFlags
+          getKittyKeyboardFlags,
+          // macOS only: Linux IBus commits every composed syllable as insertText, and none of it is rebuilt.
+          subscribeToTerminalData: isMac ? (listener) => pane.terminal.onData(listener) : undefined
         })
       : { claimKeyEvent: () => false, dispose: () => undefined }
   imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)

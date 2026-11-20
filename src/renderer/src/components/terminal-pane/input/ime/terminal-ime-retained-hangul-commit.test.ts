@@ -3,8 +3,9 @@
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
+import { installTerminalImeRetainedHangulCommit } from './terminal-ime-retained-hangul-commit'
 
-function open() {
+function open(options: { trackTerminalData: boolean } = { trackTerminalData: false }) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const terminal = new Terminal()
@@ -14,7 +15,10 @@ function open() {
     terminalElement: terminal.element,
     isComposing: () => false,
     sendInput: (data) => terminal.input(data),
-    getKittyKeyboardFlags: () => 0
+    getKittyKeyboardFlags: () => 0,
+    subscribeToTerminalData: options.trackTerminalData
+      ? (listener) => terminal.onData(listener)
+      : undefined
   })
   terminal.attachCustomKeyEventHandler((event) => !forwarder.claimKeyEvent(event))
   const emitted: string[] = []
@@ -38,6 +42,32 @@ function replacingCommit(textarea: HTMLTextAreaElement, start: number, end: numb
     new InputEvent('beforeinput', { data, inputType: 'insertText', bubbles: true })
   )
   plainCommit(textarea, data)
+}
+
+function composition(
+  textarea: HTMLTextAreaElement,
+  type: 'compositionstart' | 'compositionupdate' | 'compositionend',
+  data?: string
+) {
+  const event = new CompositionEvent(type, { bubbles: true })
+  if (data !== undefined) {
+    Object.defineProperty(event, 'data', { value: data })
+  }
+  textarea.dispatchEvent(event)
+}
+
+// Blink writes the composing range, then fires input(insertCompositionText).
+function compositionText(textarea: HTMLTextAreaElement, start: number, text: string) {
+  composition(textarea, 'compositionupdate', text)
+  textarea.value = textarea.value.slice(0, start) + text
+  textarea.setSelectionRange(start + text.length, start + text.length)
+  textarea.dispatchEvent(
+    new InputEvent('input', { data: text, inputType: 'insertCompositionText', bubbles: true })
+  )
+}
+
+function nextEventLoop(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 0))
 }
 
 describe('#9738 plain-committed jamo rebuilt in place', () => {
@@ -123,5 +153,144 @@ describe('#9738 plain-committed jamo rebuilt in place', () => {
     )
 
     expect(pane.textarea.value).toBe('')
+  })
+
+  describe('with terminal data tracked, as on macOS', () => {
+    beforeEach(() => {
+      pane.forwarder.dispose()
+      pane.terminal.dispose()
+      pane.container.remove()
+      pane = open({ trackTerminalData: true })
+    })
+
+    // Chromium fires the next keydown while the previous syllable still composes, so the forwarder never claims it.
+    function composeThenPlainCommitDuringComposition() {
+      keydown(pane.textarea, 'ㅈ', 'KeyW', 229)
+      composition(pane.textarea, 'compositionstart')
+      compositionText(pane.textarea, 0, '전')
+      pane.textarea.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'ㅎ',
+          code: 'KeyG',
+          keyCode: 229,
+          isComposing: true,
+          bubbles: true
+        })
+      )
+      composition(pane.textarea, 'compositionend', '전')
+      plainCommit(pane.textarea, 'ㅎ')
+    }
+
+    it('erases a jamo xterm delivered because its keydown arrived mid-composition', async () => {
+      composeThenPlainCommitDuringComposition()
+      await nextEventLoop()
+
+      keydown(pane.textarea, 'ㅏ', 'KeyK', 229)
+      pane.textarea.setSelectionRange(1, 2)
+      composition(pane.textarea, 'compositionstart')
+      compositionText(pane.textarea, 1, '하')
+      composition(pane.textarea, 'compositionend', '하')
+      await nextEventLoop()
+
+      expect(pane.emitted.join('')).toBe('전ㅎ\x7f하')
+    })
+
+    it('erases a claimed jamo that the pending composition finalizer delivered', async () => {
+      keydown(pane.textarea, 'ㅈ', 'KeyW', 229)
+      composition(pane.textarea, 'compositionstart')
+      compositionText(pane.textarea, 0, '전')
+      composition(pane.textarea, 'compositionend', '전')
+      // Claimed, but lands while the 전 transaction is accepted and not yet settled.
+      keydown(pane.textarea, 'ㅎ', 'KeyG', 71)
+      plainCommit(pane.textarea, 'ㅎ')
+      await nextEventLoop()
+
+      keydown(pane.textarea, 'ㅏ', 'KeyK', 229)
+      pane.textarea.setSelectionRange(1, 2)
+      composition(pane.textarea, 'compositionstart')
+      compositionText(pane.textarea, 1, '하')
+      composition(pane.textarea, 'compositionend', '하')
+      await nextEventLoop()
+
+      expect(pane.emitted.join('')).toBe('전ㅎ\x7f하')
+    })
+
+    it('erases both when a rebuild spans a jamo xterm delivered and one the forwarder sent', async () => {
+      composeThenPlainCommitDuringComposition()
+      await nextEventLoop()
+      keydown(pane.textarea, 'ㅏ', 'KeyK', 75)
+      plainCommit(pane.textarea, 'ㅏ')
+
+      keydown(pane.textarea, 'ㄴ', 'KeyS', 83)
+      replacingCommit(pane.textarea, 1, 3, '한')
+
+      expect(pane.emitted.join('')).toBe('전ㅎㅏ\x7f\x7f한')
+    })
+  })
+})
+
+describe('retaining a jamo xterm sends', () => {
+  it('erases it only after the terminal data shows it was sent', () => {
+    const element = document.createElement('div')
+    const textarea = document.createElement('textarea')
+    element.appendChild(textarea)
+    document.body.appendChild(element)
+    const sent: string[] = []
+    let terminalData: (data: string) => void = () => undefined
+    const retained = installTerminalImeRetainedHangulCommit({
+      terminalElement: element,
+      sendInput: (data) => sent.push(data),
+      getKittyKeyboardFlags: () => 0,
+      subscribeToTerminalData: (listener) => {
+        terminalData = listener
+        return { dispose: () => undefined }
+      }
+    })
+    const commitJamoAfterSyllable = () => {
+      textarea.value = '전'
+      textarea.setSelectionRange(1, 1)
+      plainCommit(textarea, 'ㅎ')
+    }
+    const beginRebuild = () => {
+      textarea.setSelectionRange(1, 2)
+      textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+    }
+
+    commitJamoAfterSyllable()
+    // The pending syllable leaves without the jamo, so a rebuild now must not erase anything.
+    terminalData('전')
+    beginRebuild()
+    expect(sent).toEqual([])
+
+    commitJamoAfterSyllable()
+    // Backspace flushes the pending text and erases the jamo from the PTY itself.
+    keydown(textarea, 'Backspace', 'Backspace', 8)
+    terminalData('전ㅎ')
+    beginRebuild()
+    expect(sent).toEqual([])
+
+    commitJamoAfterSyllable()
+    // The jamo is never sent and a mouse paste empties the field; ㅎㅎ is then typed as ordinary compositions.
+    textarea.value = ''
+    composition(textarea, 'compositionstart')
+    compositionText(textarea, 0, 'ㅎ')
+    composition(textarea, 'compositionend', 'ㅎ')
+    composition(textarea, 'compositionstart')
+    compositionText(textarea, 1, 'ㅎ')
+    // The first ㅎ leaves while the second composes at the unsent jamo's offset.
+    terminalData('ㅎ')
+    textarea.setSelectionRange(1, 2)
+    textarea.dispatchEvent(
+      new InputEvent('beforeinput', { inputType: 'insertCompositionText', bubbles: true })
+    )
+    expect(sent).toEqual([])
+
+    commitJamoAfterSyllable()
+    terminalData('전ㅎ')
+    beginRebuild()
+    expect(sent).toEqual(['\x7f'])
+
+    retained.dispose()
+    element.remove()
   })
 })
