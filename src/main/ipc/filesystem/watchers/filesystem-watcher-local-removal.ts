@@ -1,5 +1,6 @@
+import { publishToDocuments, type AppDocument } from '../../app-registry/app-handler-registry'
 import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
-import type { WebContents } from 'electron'
+
 import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
 import {
   createWatcherRemovalDeadline,
@@ -25,7 +26,7 @@ export async function closeLocalWatcherForWorktreePath(
   const { key: rootKey } = getLocalWatcherRoot(worktreePath)
   const suspended = watcherLifecycleState.suspendedLocalWatcherListeners.get(rootKey) ?? {
     worktreePath,
-    listeners: new Map<number, WebContents>()
+    listeners: new Map<number, AppDocument>()
   }
   const waiters = watcherLifecycleState.cancelledLocalInstallWaiters.get(rootKey)
   for (const source of [
@@ -125,7 +126,7 @@ export async function restoreLocalWatcherAfterFailedRemoval(worktreePath: string
     return
   }
   const failures: {
-    sender: WebContents
+    sender: AppDocument
     signal: AbortSignal
     error: unknown
   }[] = []
@@ -148,11 +149,15 @@ export async function restoreLocalWatcherAfterFailedRemoval(worktreePath: string
       if (!isCurrentWatcherSender(sender, signal)) {
         continue
       }
-      sender.send('fs:changed', {
-        worktreePath: suspended.worktreePath,
-        events: [{ kind: 'overflow', absolutePath: suspended.worktreePath }],
-        resync: true
-      } satisfies FsChangedPayload)
+      publishToDocuments(
+        'fs:changed',
+        {
+          worktreePath: suspended.worktreePath,
+          events: [{ kind: 'overflow', absolutePath: suspended.worktreePath }],
+          resync: true
+        } satisfies FsChangedPayload,
+        sender.caller
+      )
     } catch (error) {
       if (!isCurrentWatcherSender(sender, signal)) {
         continue
@@ -170,7 +175,7 @@ export async function restoreLocalWatcherAfterFailedRemoval(worktreePath: string
   if (liveFailures.length > 0) {
     const current = suspendedByKey.get(rootKey) ?? {
       worktreePath: suspended.worktreePath,
-      listeners: new Map<number, WebContents>()
+      listeners: new Map<number, AppDocument>()
     }
     for (const { sender } of liveFailures) {
       current.listeners.set(sender.id, sender)

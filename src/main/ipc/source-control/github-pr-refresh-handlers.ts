@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler, appDocumentFor } from '../app-registry/app-handler-registry'
+
 import { resolve } from 'node:path'
 import type {
   GitHubPRRefreshCandidate,
@@ -71,7 +72,7 @@ export function registerGitHubPRRefreshHandlers(
     isPRRefreshCandidateRegistered(candidate, store.getRepos())
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:prForBranch',
     async (
       _event,
@@ -147,7 +148,7 @@ export function registerGitHubPRRefreshHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:refreshPRNow',
     async (
       _event,
@@ -168,7 +169,7 @@ export function registerGitHubPRRefreshHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:enqueuePRRefresh',
     (
       event,
@@ -182,18 +183,23 @@ export function registerGitHubPRRefreshHandlers(
       if (validation.kind === 'skipped') {
         return validation.result
       }
-      enqueuePRRefresh(validation.candidate, args.reason, args.priority ?? 0, event?.sender?.id)
+      enqueuePRRefresh(
+        validation.candidate,
+        args.reason,
+        args.priority ?? 0,
+        appDocumentFor(event)?.id
+      )
       return { kind: 'queued' }
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:reportVisiblePRRefreshCandidates',
     (event, args: { candidates: GitHubPRRefreshCandidate[]; generation: number }) => {
-      const senderId = event.sender.id
+      const senderId = appDocumentFor(event).id
       if (!visibilityCleanupRegistered.has(senderId)) {
         visibilityCleanupRegistered.add(senderId)
-        const lifetime = abortWhenRendererGone(event.sender)
+        const lifetime = abortWhenRendererGone(appDocumentFor(event))
         lifetime.signal.addEventListener(
           'abort',
           () => {

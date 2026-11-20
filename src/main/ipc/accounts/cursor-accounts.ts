@@ -1,6 +1,7 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import { getCursorAccountStatus } from '../../cursor-accounts/status'
 
 export function registerCursorAccountHandlers(): void {
-  ipcMain.handle('cursorAccounts:getStatus', () => getCursorAccountStatus())
+  registerAppHandler('cursorAccounts:getStatus', () => getCursorAccountStatus())
 }

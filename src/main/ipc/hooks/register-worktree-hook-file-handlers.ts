@@ -1,5 +1,6 @@
+import { registerAppHandler } from '../app-registry/app-handler-registry'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
-import { ipcMain } from 'electron'
+
 import {
   getRepoDialableSshTargetId,
   type ExecutionHostId
@@ -19,7 +20,7 @@ import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects
 export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): void {
   const { store } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'hooks:readIssueCommand',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId; wakeWslDistro?: boolean }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
@@ -57,7 +58,7 @@ export function registerWorktreeHookFileHandlers(context: WorktreeIpcContext): v
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'hooks:writeIssueCommand',
     async (
       _event,

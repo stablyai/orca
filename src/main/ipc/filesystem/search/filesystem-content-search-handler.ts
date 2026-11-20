@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler, appDocumentFor } from '../../app-registry/app-handler-registry'
+
 import type { SearchOptions, SearchResult } from '../../../../shared/file-search/code-search-types'
 import {
   throwIfSignalAborted,
@@ -16,11 +17,11 @@ import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 export function registerFilesystemContentSearchHandler(context: FilesystemHandlerContext): void {
   const { store, activeTextSearches } = context
   const searches = createSenderScopedRequestCancellations()
-  ipcMain.handle('fs:cancelSearch', (event, args: { requestToken: string }) => {
+  registerAppHandler('fs:cancelSearch', (event, args: { requestToken: string }) => {
     searches.cancel(event, args.requestToken)
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:search',
     async (
       event,
@@ -44,7 +45,7 @@ export function registerFilesystemContentSearchHandler(context: FilesystemHandle
           args.rootPath,
           rootPath
         )
-        const searchKey = `${event.sender.id}:${rootPath}`
+        const searchKey = `${appDocumentFor(event).id}:${rootPath}`
         const { wslDistro, wslDistroForOutput } = resolveBundledRipgrepWslRouting(
           rootPath,
           localGitOptions.wslDistro

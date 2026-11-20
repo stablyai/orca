@@ -1,7 +1,9 @@
+import { registerSettingsDocumentBroadcasts } from './settings-document-broadcasts'
+import { registerAppHandler, appDocumentFor } from '../app-registry/app-handler-registry'
 import { sanitizeRendererSettingsUpdate } from './renderer-settings-update'
 import { confirmBrowserPasswordOwner } from '../../browser-passwords/browser-password-reauth'
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
@@ -23,7 +25,7 @@ import { recordManagedHookInstallFailure } from '../../agent-hooks/installation/
 import { applyElectronProxySettings } from '../../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../../browser/sessions/proxy/browser-session-proxy'
 import { applyProxyToElectronUpdaterSession } from '../../updater/lifecycle/electron-updater-proxy-session'
-import { applyAutomaticUpdatesSetting } from '../../updater/updater-service'
+
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
@@ -67,42 +69,25 @@ export function registerSettingsHandlers(
   agentAwakeService?: AgentAwakeService
 ): void {
   registerCustomAppIconHandlers(store)
-  ipcMain.handle(
+  registerAppHandler(
     'agentAwake:getStatus',
     () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }
   )
-  agentAwakeService?.subscribe?.((status) => {
-    for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) {
-        window.webContents.send('agentAwake:changed', status)
-      }
-    }
-  })
+  registerSettingsDocumentBroadcasts(store, agentAwakeService)
 
-  store.onSettingsChanged((updates, _settings, originWebContentsId) => {
-    applyAutomaticUpdatesSetting(updates.automaticUpdates)
-    for (const window of BrowserWindow.getAllWindows()) {
-      const isOrigin =
-        originWebContentsId !== undefined && window.webContents.id === originWebContentsId
-      if (!window.isDestroyed() && !isOrigin) {
-        window.webContents.send('settings:changed', updates)
-      }
-    }
-  })
-
-  ipcMain.handle(
+  registerAppHandler(
     'settings:get',
     async () => await readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'settings:update-pr-bot-author-override',
     (event, args: { author: string; isBot: boolean }) => {
       const current = store.getSettings().prBotAuthorOverrides
       const next = applyPRBotAuthorOverride(current, args.author, args.isBot)
       store.updateSettings(
         { prBotAuthorOverrides: next },
-        { notifyListeners: true, originWebContentsId: event.sender.id }
+        { notifyListeners: true, originWebContentsId: appDocumentFor(event).id }
       )
       return store.getSettings()
     }
@@ -113,7 +98,7 @@ export function registerSettingsHandlers(
     event.returnValue = await readSettingsWithRuntimeEnvironmentPreference(store, registryRoot())
   })
 
-  ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
+  registerAppHandler('settings:set', async (event, args: Partial<GlobalSettings>) => {
     const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
     // Generic settings writers cannot change the server preference owned by Advanced controls.
     delete sanitizedArgs.activeRuntimeEnvironmentId
@@ -188,7 +173,7 @@ export function registerSettingsHandlers(
     const before = store.getSettings()
     const updateOptions = {
       notifyListeners: true,
-      originWebContentsId: event.sender.id
+      originWebContentsId: appDocumentFor(event).id
     }
     const result =
       'alwaysForceDeleteWorktrees' in sanitizedArgs ||
@@ -292,7 +277,7 @@ export function registerSettingsHandlers(
     return store.getSettings()
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'settings:set-active-runtime-environment-preference',
     async (event, args: { environmentId?: unknown }): Promise<GlobalSettings> => {
       const requestedEnvironmentId = args?.environmentId
@@ -304,7 +289,7 @@ export function registerSettingsHandlers(
         requestedId === null ? null : (await resolveEnvironment(registryRoot(), requestedId)).id
       return store.updateSettings(
         { activeRuntimeEnvironmentId: environmentId },
-        { notifyListeners: true, originWebContentsId: event.sender.id }
+        { notifyListeners: true, originWebContentsId: appDocumentFor(event).id }
       )
     }
   )
@@ -313,11 +298,14 @@ export function registerSettingsHandlers(
 
   registerSettingsImportHandlers(store)
 
-  ipcMain.handle('cache:getGitHub', () => {
+  registerAppHandler('cache:getGitHub', () => {
     return store.getGitHubCache()
   })
 
-  ipcMain.handle('cache:setGitHub', (_event, args: { cache: PersistedState['githubCache'] }) => {
-    store.setGitHubCache(args.cache)
-  })
+  registerAppHandler(
+    'cache:setGitHub',
+    (_event, args: { cache: PersistedState['githubCache'] }) => {
+      store.setGitHubCache(args.cache)
+    }
+  )
 }

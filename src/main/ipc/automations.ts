@@ -1,6 +1,7 @@
+import { registerAppHandler } from './app-registry/app-handler-registry'
 import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
-import { ipcMain } from 'electron'
+
 import type { Store } from '../persistence/loading-store/store'
 import type { AutomationService } from '../automations/automation-service'
 import { createScopedExternalAutomations } from '../automations/external-managers/scoped-external-automations'
@@ -58,7 +59,7 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
   // Runtime RPC CRUD takes the service-installed priority lease.
   service.externalProbePriority = (run) => underOrcaPriority(probeScheduler, run)
   // Guard derives one host and manager ID from the captured owner.
-  ipcMain.handle(
+  registerAppHandler(
     'automations:listExternalManagerForOwner',
     (
       _event,
@@ -66,19 +67,19 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
     ): Promise<ExternalAutomationManagerCacheEntry> =>
       scopedExternal.listManager(requireCapturedOwner(request))
   )
-  ipcMain.handle(
+  registerAppHandler(
     'automations:runExternalActionForOwner',
     (_event, request: ScopedExternalManagerActionRequest): Promise<void> =>
       scopedExternal.runAction(requireCapturedOwner(request))
   )
   // Cancel scopes no longer viewed; an empty retained set cancels all.
-  ipcMain.handle(
+  registerAppHandler(
     'automations:retainExternalScopes',
     (_event, request?: { owners?: readonly AutomationOwnerRef[] } | null): void => {
       probeScheduler.retainScopes((request?.owners ?? []).map(ownerKey))
     }
   )
-  ipcMain.handle(
+  registerAppHandler(
     'automations:snapshotWorkspaceName',
     (_event, args: { workspaceId: string; hostId?: string; displayName: string }): number => {
       const host = parseExecutionHostId(args.hostId)

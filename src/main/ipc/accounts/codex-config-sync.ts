@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { removeAppHandler, registerAppHandler } from '../app-registry/app-handler-registry'
+
 import { join } from 'node:path'
 import { getSystemCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
 import { getCodexConfigSyncStatus } from '../../codex/configuration/settings/config-sync-stall'
@@ -11,8 +12,8 @@ type CodexMirroredHomeResolver = {
 }
 
 export function registerCodexConfigSyncHandlers(runtimeHome: CodexMirroredHomeResolver): void {
-  ipcMain.removeHandler('codexConfigSync:status')
-  ipcMain.handle('codexConfigSync:status', (): CodexConfigSyncStatus => {
+  removeAppHandler('codexConfigSync:status')
+  registerAppHandler('codexConfigSync:status', (): CodexConfigSyncStatus => {
     const systemHomePath = getSystemCodexHomePath()
     const mirrored = runtimeHome.getMirroredHostHomePathForStatus()
     if (mirrored.kind === 'unavailable') {

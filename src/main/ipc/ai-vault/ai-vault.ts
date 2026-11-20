@@ -1,9 +1,10 @@
+import { publishToDocuments, registerAppHandler } from '../app-registry/app-handler-registry'
 import { scanLocalAiVaultSessionsAsIssue } from './ai-vault-local-scan'
 import {
   captureRuntimeAiVaultProjectionDependency,
   type AiVaultProjectionDependency
 } from './ai-vault-projection-dependency'
-import { app, ipcMain } from 'electron'
+import { app } from 'electron'
 import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
 import { resetAiVaultSessionListCacheForTests } from '../../ai-vault/listing/cached-session-list'
 import type { AiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
@@ -232,7 +233,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   handlerOptions = options
   // Configure the same source/cache instance used by runtime RPC and headless serve.
   configureAiVaultSessionSources(options)
-  ipcMain.handle('aiVault:listSessions', async (event, args?: AiVaultListArgs) => {
+  registerAppHandler('aiVault:listSessions', async (event, args?: AiVaultListArgs) => {
     const requestToken =
       typeof args?.requestToken === 'string' && args.requestToken.length <= 128
         ? args.requestToken
@@ -252,12 +253,12 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
       listCancellations.finish(event, requestToken, controller)
     }
   })
-  ipcMain.handle(
+  registerAppHandler(
     'aiVault:resolveSessionTitles',
     (_event, args: AiVaultSessionTitlesArgs): Promise<AiVaultSessionTitlesResult> =>
       resolveAiVaultSessionTitles(args)
   )
-  ipcMain.handle(
+  registerAppHandler(
     'aiVault:cancelListSessions',
     (event, args: { requestToken?: string } | undefined): void => {
       if (typeof args?.requestToken === 'string' && args.requestToken.length <= 128) {
@@ -266,12 +267,12 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     }
   )
   registerAiVaultResumeHandler(options)
-  ipcMain.handle(
+  registerAppHandler(
     'aiVault:listSubagentSessions',
     (_event, args?: AiVaultSubagentListArgs): Promise<AiVaultSubagentListResult> =>
       listAiVaultSubagentSessions(args)
   )
-  ipcMain.handle('aiVault:getFirstUserPrompt', (_event, args?: AiVaultFirstUserPromptArgs) =>
+  registerAppHandler('aiVault:getFirstUserPrompt', (_event, args?: AiVaultFirstUserPromptArgs) =>
     handleAiVaultGetFirstUserPrompt(args)
   )
   registerAiVaultDeleteHandler(aiVaultDeleteDeps)
@@ -279,7 +280,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   // macOS app activation skips DOM focus events, so emit the refresh signal here.
   app.on('browser-window-focus', (_event, window) => {
     if (!window.isDestroyed()) {
-      window.webContents.send('aiVault:windowFocused')
+      publishToDocuments('aiVault:windowFocused', undefined, { sourceId: window.webContents.id })
     }
   })
 }

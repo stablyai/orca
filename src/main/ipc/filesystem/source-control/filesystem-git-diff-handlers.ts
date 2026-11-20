@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import { getBranchDiff } from '../../../git/source-control/comparisons/branch-diff'
 import { getCommitDiff } from '../../../git/source-control/comparisons/commit-diff'
@@ -13,7 +14,7 @@ import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 
 export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
-  ipcMain.handle(
+  registerAppHandler(
     'git:branchDiff',
     async (
       _event,
@@ -54,7 +55,7 @@ export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerCont
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:commitDiff',
     async (
       _event,

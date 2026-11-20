@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ORIGINAL_PLATFORM = process.platform

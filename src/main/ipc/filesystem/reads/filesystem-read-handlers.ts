@@ -1,3 +1,4 @@
+import { registerAppHandler, appDocumentFor } from '../../app-registry/app-handler-registry'
 import { classifyFilesystemDirectoryEntries } from '../../../filesystem/local-file-io/filesystem-symlink-directory-entries'
 import { hasSymlinkBelowRoot } from '../../../filesystem/local-file-io/filesystem-symlink-ancestor'
 import { markdownDocumentsFromRelativePaths } from '../../../../shared/file-listing/markdown-document-paths'
@@ -6,7 +7,7 @@ import {
   validatePathExistenceBatch,
   type PathExistenceResult
 } from '../../../../shared/file-access/path-existence-batch'
-import { ipcMain } from 'electron'
+
 import { readdir, stat } from 'node:fs/promises'
 import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
 import type { MarkdownDocument } from '../../../../shared/file-listing/file-document'
@@ -44,7 +45,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
   registerFilesystemChunkReadHandler(context)
   const { store } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:readDir',
     async (
       _event,
@@ -95,7 +96,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:readFile',
     async (
       event,
@@ -134,13 +135,13 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:readPreviewRange',
     (event, args: { url: string; offset: number; length: number }) =>
-      readPreviewGrantRange(event.sender, String(args?.url), args?.offset, args?.length)
+      readPreviewGrantRange(appDocumentFor(event), String(args?.url), args?.offset, args?.length)
   )
 
-  ipcMain.handle('fs:grantRuntimeFilePreview', (event, args: unknown) => {
+  registerAppHandler('fs:grantRuntimeFilePreview', (event, args: unknown) => {
     const remote = parseRemoteFilePreviewAddress(args)
     if (!remote) {
       throw new Error('Invalid preview path')
@@ -148,7 +149,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     return grantRemoteFilePreview(event, remote, store)
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:listMarkdownDocuments',
     async (
       _event,
@@ -177,7 +178,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:stat',
     async (
       _event,
@@ -203,7 +204,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:hasSymlinkBelowRoot',
     (_event, args: { rootPath: string; path: string }): Promise<boolean> =>
       guardWslUncPathAccess(args.rootPath, async () => {
@@ -213,7 +214,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       })
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:pathsExist',
     async (
       _event,
@@ -243,7 +244,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:pathExists',
     async (
       _event,

@@ -1,5 +1,13 @@
+import {
+  publishToDocuments,
+  appDocumentFor,
+  type AppDocument,
+  type AppCaller,
+  registerAppHandler,
+  registerAppListener
+} from './app-registry/app-handler-registry'
 import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watching/transcript-watch-contract'
-import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
+
 import type { AgentType } from '../../shared/agent-status/contracts/agent-status-types'
 import type {
   NativeChatMessage,
@@ -7,7 +15,8 @@ import type {
 } from '../../shared/native-chat/native-chat-types'
 
 import { subscribeNativeChatTranscript } from '../native-chat/transcript-watch'
-import { readNativeChatTranscriptTail } from '../native-chat/transcript-tail-reader'
+import { readSession, type NativeChatReadSessionArgs } from './native-chat-session-read'
+export type { NativeChatReadSessionArgs } from './native-chat-session-read'
 import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
@@ -16,40 +25,8 @@ import { abortWhenRendererGone } from './renderer-requests/renderer-lifetime-abo
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { openNativeChatTranscript } from '../native-chat/transcript-discovery/native-chat-open-wake'
 
-export type NativeChatReadSessionArgs = {
-  agent: AgentType
-  sessionId: string
-  /** Recent-turn window; increase it to page backward. */
-  limit?: number
-  /** Hook-authoritative path when session IDs no longer identify transcript filenames. */
-  transcriptPath?: string
-  /** The user opened or paged this chat: may start its stopped WSL distro (E9). Absent never does. */
-  wakeWslDistro?: boolean
-  /** Provider row cursor for an older page; absent reads the newest window. */
-  beforeOffset?: number
-}
-
-const isTranscriptCursor = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-
-async function readSession(args: NativeChatReadSessionArgs) {
-  const { agent, sessionId } = args
-  const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
-  const wake = args.wakeWslDistro === true
-  const { transcriptPath, waking } = openNativeChatTranscript(sessionId, args.transcriptPath, wake)
-  await waking
-  return readNativeChatTranscriptTail({
-    agent,
-    sessionId,
-    transcriptPath,
-    limit,
-    beforeOffset: isTranscriptCursor(args.beforeOffset) ? args.beforeOffset : undefined,
-    sourceOrder: true
-  })
-}
-
 export type NativeChatSubscribeArgs = {
-  /** Renderer ID unique within WebContents, echoed on updates to route each viewer. */
+  /** Renderer ID unique within AppDocument, echoed on updates to route each viewer. */
   subscriptionId: string
   agent: AgentType
   sessionId: string
@@ -136,7 +113,7 @@ function teardownAllForSender(senderId: number): void {
   liveSubscriptions.delete(senderId)
 }
 
-function registerSenderCleanup(sender: WebContents): AbortSignal {
+function registerSenderCleanup(sender: AppDocument): AbortSignal {
   const existing = senderLifetimes.get(sender.id)
   if (existing) {
     return existing.signal
@@ -179,8 +156,8 @@ function takePendingSubscription(
   return true
 }
 
-async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArgs): Promise<void> {
-  const sender = event.sender
+async function handleSubscribe(event: AppCaller, args: NativeChatSubscribeArgs): Promise<void> {
+  const sender = appDocumentFor(event)
   if (sender.isDestroyed()) {
     return
   }
@@ -208,7 +185,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
         subscriptionId,
         frame: { type: 'snapshot', messages: [], hasMore: false, pending: true }
       }
-      sender.send('nativeChat:appended', payload)
+      publishToDocuments('nativeChat:appended', payload, sender.caller)
     },
     onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle) => {
       if (!canPublish()) {
@@ -225,21 +202,25 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
           ...(lifecycle ? { lifecycle } : {})
         }
       }
-      sender.send('nativeChat:appended', payload)
+      publishToDocuments('nativeChat:appended', payload, sender.caller)
     },
     onReplace: (messages, hasMore, _beforeOffset, lifecycle) => {
       if (!canPublish()) {
         return
       }
-      sender.send('nativeChat:appended', {
-        subscriptionId,
-        frame: {
-          type: 'replacement',
-          messages,
-          hasMore,
-          ...(lifecycle ? { lifecycle } : {})
-        }
-      } satisfies NativeChatAppendedPayload)
+      publishToDocuments(
+        'nativeChat:appended',
+        {
+          subscriptionId,
+          frame: {
+            type: 'replacement',
+            messages,
+            hasMore,
+            ...(lifecycle ? { lifecycle } : {})
+          }
+        } satisfies NativeChatAppendedPayload,
+        sender.caller
+      )
     },
     onAppend: (messages, lifecycle) => {
       if (!canPublish()) {
@@ -253,7 +234,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
           ...(lifecycle ? { lifecycle } : {})
         }
       }
-      sender.send('nativeChat:appended', payload)
+      publishToDocuments('nativeChat:appended', payload, sender.caller)
     }
   }
   let subscription: NativeChatTranscriptSubscription
@@ -290,7 +271,7 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
         error: 'Transcript unavailable'
       }
     }
-    sender.send('nativeChat:appended', payload)
+    publishToDocuments('nativeChat:appended', payload, sender.caller)
   }
 }
 
@@ -320,17 +301,17 @@ export function _getNativeChatPendingSubscriptionCountForTest(): number {
 }
 
 export function registerNativeChatHandlers(): void {
-  ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
+  registerAppHandler('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
     readSession(args)
   )
-  ipcMain.on('nativeChat:subscribe', (event, args: NativeChatSubscribeArgs) => {
+  registerAppListener('nativeChat:subscribe', (event, args: NativeChatSubscribeArgs) => {
     void handleSubscribe(event, args)
   })
-  ipcMain.on('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
-    teardownSubscription(event.sender.id, args.subscriptionId)
+  registerAppListener('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
+    teardownSubscription(appDocumentFor(event).id, args.subscriptionId)
   })
   // Failure output is local-only because paired hosts do not transmit agent output.
-  ipcMain.handle('nativeChat:conversationNameFailureOutput', (_event, sessionId: unknown) => {
+  registerAppHandler('nativeChat:conversationNameFailureOutput', (_event, sessionId: unknown) => {
     const naming = getStructuredAgentSessionHost()?.deps.conversationNaming
     return typeof sessionId === 'string' ? (naming?.failureOutput(sessionId) ?? null) : null
   })

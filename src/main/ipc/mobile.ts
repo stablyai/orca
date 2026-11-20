@@ -1,3 +1,4 @@
+import { registerAppHandler, appDocumentFor } from './app-registry/app-handler-registry'
 import { usesLegacyE2EE } from '../runtime/rpc/server/pairing/device-sighting'
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import type { RuntimeAccessGrant } from '../../shared/remote-runtime/host-catalog/runtime-access-grants'
@@ -67,7 +68,7 @@ export function registerMobileHandlers(
   }
   const getDefaultRouteInterfaceNames =
     dependencies.getDefaultRouteInterfaceNames ?? getWindowsDefaultRouteInterfaceNames
-  ipcMain.handle(
+  registerAppHandler(
     'mobile:listNetworkInterfaces',
     async (): Promise<{ interfaces: NetworkInterface[] }> => ({
       interfaces: await getPairingNetworkInterfaces(
@@ -77,7 +78,7 @@ export function registerMobileHandlers(
     })
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'mobile:getPairingQR',
     async (
       _event,
@@ -123,7 +124,7 @@ export function registerMobileHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'mobile:getRuntimePairingUrl',
     async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
       const offer = await requestRuntimePairingOffer(
@@ -154,7 +155,7 @@ export function registerMobileHandlers(
     }
   )
 
-  ipcMain.handle('mobile:listDevices', () => {
+  registerAppHandler('mobile:listDevices', () => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { devices: [] }
@@ -175,7 +176,7 @@ export function registerMobileHandlers(
     }
   })
 
-  ipcMain.handle('mobile:listRuntimeAccessGrants', () => {
+  registerAppHandler('mobile:listRuntimeAccessGrants', () => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { grants: [] }
@@ -190,7 +191,7 @@ export function registerMobileHandlers(
     }
   })
 
-  ipcMain.handle('mobile:revokeDevice', async (_event, args: { deviceId: string }) => {
+  registerAppHandler('mobile:revokeDevice', async (_event, args: { deviceId: string }) => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { revoked: false }
@@ -198,7 +199,7 @@ export function registerMobileHandlers(
     return { revoked: await rpcServer.revokeMobileDevice(args.deviceId) }
   })
 
-  ipcMain.handle('mobile:revokeRuntimeAccess', (_event, args: { deviceId: string }) => {
+  registerAppHandler('mobile:revokeRuntimeAccess', (_event, args: { deviceId: string }) => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { revoked: false }
@@ -231,16 +232,16 @@ export function registerMobileHandlers(
     return true
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'mobile:getRelayStatus',
     (): MobileRelayStatusDetail => dependencies.getRelayStatus?.() ?? { status: 'offline' }
   )
 
-  ipcMain.handle('mobile:consumePendingUnpairedDeviceAuthFailure', (event) => {
-    if (!isWindowRenderer(event)) {
+  registerAppHandler('mobile:consumePendingUnpairedDeviceAuthFailure', (event) => {
+    if (event.windowId === null) {
       return false
     }
-    return dependencies.consumePendingUnpairedDeviceAuthFailure?.(event.sender.id) ?? false
+    return dependencies.consumePendingUnpairedDeviceAuthFailure?.(appDocumentFor(event).id) ?? false
   })
 }
 

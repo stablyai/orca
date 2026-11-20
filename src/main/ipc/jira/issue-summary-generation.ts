@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler, appDocumentFor } from '../app-registry/app-handler-registry'
+
 import {
   GenerateIssueSummary,
   CancelGenerateIssueSummary
@@ -15,11 +16,11 @@ export function registerJiraIssueSummaryGenerationHandlers(
   store: Pick<Store, 'getSettings'>,
   commitMessageAgentEnv?: CommitMessageAgentEnvironmentResolvers
 ): void {
-  ipcMain.handle('jira:generateIssueSummary', async (event, args: unknown) => {
+  registerAppHandler('jira:generateIssueSummary', async (event, args: unknown) => {
     const request = GenerateIssueSummary.parse(args)
-    const owner = `window:${event.sender.id}`
+    const owner = `window:${appDocumentFor(event).id}`
     const cancel = (): void => cancelJiraIssueSummaryRequest(owner, request)
-    const releaseDestroyed = addFanoutListener(event.sender, 'destroyed', cancel)
+    const releaseDestroyed = addFanoutListener(appDocumentFor(event), 'destroyed', cancel)
     try {
       return await generateJiraIssueSummaryRequest(
         {
@@ -33,9 +34,9 @@ export function registerJiraIssueSummaryGenerationHandlers(
       releaseDestroyed()
     }
   })
-  ipcMain.handle('jira:cancelGenerateIssueSummary', (event, args: unknown) => {
+  registerAppHandler('jira:cancelGenerateIssueSummary', (event, args: unknown) => {
     cancelJiraIssueSummaryRequest(
-      `window:${event.sender.id}`,
+      `window:${appDocumentFor(event).id}`,
       CancelGenerateIssueSummary.parse(args)
     )
   })

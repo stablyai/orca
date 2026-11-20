@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import type { Store } from '../../persistence/loading-store/store'
 import { runPreflightCheck } from '../../preflight/agent-detection'
 import { detectRemoteWindowsTerminalCapabilities } from './preflight-remote-windows-terminal-capabilities'
@@ -47,7 +48,7 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
       agentCmdOverrides: settings.agentCmdOverrides
     }
   }
-  ipcMain.handle(
+  registerAppHandler(
     'preflight:check',
     async (
       _event,
@@ -58,7 +59,7 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
   )
 
   // Mount-time detection must not start a stopped distro; opening an agent picker wakes it.
-  ipcMain.handle(
+  registerAppHandler(
     'preflight:detectAgents',
     async (_event, args?: AgentDetectionRequest & PreflightWake) =>
       runPreflightAct(args, async () => {
@@ -68,11 +69,11 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
       })
   )
 
-  ipcMain.handle('preflight:zcodeInteractiveCapability', async () =>
+  registerAppHandler('preflight:zcodeInteractiveCapability', async () =>
     readZCodeInteractiveCapability(store?.getSettings())
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'preflight:refreshAgents',
     async (_event, args?: AgentDetectionRequest & PreflightWake & { userInitiated?: boolean }) =>
       runPreflightAct(args, async () => {
@@ -82,13 +83,13 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
       })
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'preflight:detectRemoteAgents',
     async (_event, args: { connectionId: string }): Promise<string[]> =>
       detectAgentsOnHost({ kind: 'ssh', connectionId: args.connectionId })
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'preflight:detectRemoteWindowsTerminalCapabilities',
     async (_event, args: { connectionId: string }): Promise<RemoteWindowsTerminalCapabilities> => {
       return detectRemoteWindowsTerminalCapabilities(args)

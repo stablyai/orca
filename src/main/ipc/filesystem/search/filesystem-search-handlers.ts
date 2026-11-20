@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import { listQuickOpenFiles } from './filesystem-list-files'
 import {
   isFileNameFilterQueryTooLarge,
@@ -12,7 +13,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
   registerFilesystemContentSearchHandler(context)
   const { store } = context
   const { listFilesCancellations } = context
-  ipcMain.handle(
+  registerAppHandler(
     'fs:listFiles',
     async (
       event,
@@ -59,7 +60,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
     }
   )
 
-  ipcMain.handle('fs:cancelListFiles', (event, args: { requestToken: string }): void => {
+  registerAppHandler('fs:cancelListFiles', (event, args: { requestToken: string }): void => {
     listFilesCancellations.cancel(event, args.requestToken)
   })
 }

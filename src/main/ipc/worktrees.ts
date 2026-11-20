@@ -1,5 +1,6 @@
+import { removeAppHandler } from './app-registry/app-handler-registry'
 import { registerWorktreeSleepHandlers } from './worktrees/sleep/register-worktree-sleep-handlers'
-import { ipcMain, type BrowserWindow } from 'electron'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
@@ -79,7 +80,7 @@ export function registerWorktreeHandlers(
   }
 
   for (const channel of WORKTREE_HANDLER_CHANNELS) {
-    ipcMain.removeHandler(channel)
+    removeAppHandler(channel)
   }
 
   disposeSparseCheckoutCacheInvalidation?.()

@@ -1,6 +1,7 @@
+import { registerAppHandler, appDocumentFor } from '../app-registry/app-handler-registry'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { OptionalGhAccountExpectation } from '../../../shared/rpc-contract/github/github-repo-target-params'
-import { ipcMain } from 'electron'
+
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import {
@@ -17,7 +18,7 @@ import {
 import { broadcastGitHubWorkItemMutation } from './github-work-item-mutation-events'
 
 export function registerGitHubPRReviewHandlers(store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'gh:setPRFileViewed',
     async (
       event,
@@ -57,14 +58,14 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       if (ok) {
         broadcastGitHubWorkItemMutation(
           { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
-          event.sender.id
+          appDocumentFor(event).id
         )
       }
       return ok
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:addPRReviewCommentReply',
     async (
       event,
@@ -114,14 +115,14 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       if (result.ok) {
         broadcastGitHubWorkItemMutation(
           { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
-          event.sender.id
+          appDocumentFor(event).id
         )
       }
       return result
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:addPRReviewComment',
     async (
       event,
@@ -180,7 +181,7 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       if (result.ok) {
         broadcastGitHubWorkItemMutation(
           { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
-          event.sender.id
+          appDocumentFor(event).id
         )
       }
       return result

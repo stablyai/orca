@@ -1,4 +1,5 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { removeAppHandler, registerAppHandler } from '../app-registry/app-handler-registry'
+import { BrowserWindow } from 'electron'
 import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
 import { sendScrcpyButton, sendScrcpyText } from '../../emulator/android/scrcpy-control-input'
 
@@ -26,10 +27,10 @@ function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
 // Live Android pane typing and paste go to the same scrcpy control socket as the pane's
 // touches (emulator-scrcpy-touch.ts), so keys and taps reach the device in the order sent.
 export function registerEmulatorScrcpyKeyboardHandler(): void {
-  ipcMain.removeHandler('emulator:scrcpyKeyboard')
-  ipcMain.handle('emulator:scrcpyKeyboard', (event, value: unknown): boolean => {
+  removeAppHandler('emulator:scrcpyKeyboard')
+  registerAppHandler('emulator:scrcpyKeyboard', (event, value: unknown): boolean => {
     const input = parseScrcpyKeyboardInput(value)
-    if (!BrowserWindow.fromWebContents(event.sender) || !input) {
+    if (!(event.windowId === null ? null : BrowserWindow.fromId(event.windowId)) || !input) {
       return false
     }
     const control = scrcpyVideoRegistry.control(input.deviceId)

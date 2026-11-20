@@ -1,3 +1,4 @@
+import '../../app-registry/testing/app-ipc-test-host'
 import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
 
 import { EventEmitter } from 'node:events'

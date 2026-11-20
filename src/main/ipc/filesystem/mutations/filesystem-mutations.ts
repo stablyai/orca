@@ -1,4 +1,5 @@
-import { app, ipcMain } from 'electron'
+import { registerAppHandler, appDocumentFor } from '../../app-registry/app-handler-registry'
+import { app } from 'electron'
 import { constants } from 'node:fs'
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
@@ -38,7 +39,7 @@ import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store
 import { windowsFsPath } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
 
 export function registerFilesystemMutationHandlers(store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'fs:createFile',
     async (
       _event,
@@ -64,7 +65,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:createDir',
     async (
       _event,
@@ -86,7 +87,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   )
 
   // Cross-volume rename propagates EXDEV through IPC.
-  ipcMain.handle(
+  registerAppHandler(
     'fs:rename',
     async (
       _event,
@@ -117,7 +118,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:copy',
     async (
       _event,
@@ -152,7 +153,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:importExternalPaths',
     async (
       _event,
@@ -197,7 +198,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:stageExternalPathsForRuntimeUpload',
     async (
       _event,
@@ -218,11 +219,11 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   )
 
   // Main owns handles and runtime sockets; renderer retains commit/rollback orchestration without file bytes.
-  ipcMain.handle(
+  registerAppHandler(
     'fs:uploadExternalFileToRuntime',
     async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
       const userDataPath = app.getPath('userData')
-      const lifetime = abortWhenRendererGone(event.sender)
+      const lifetime = abortWhenRendererGone(appDocumentFor(event))
       let request: RuntimeUploadFileStreamRequest | undefined
       try {
         request = {
@@ -248,7 +249,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   )
 
   // Terminal drops reference local paths in place; explorer imports copy into a picked destination.
-  ipcMain.handle(
+  registerAppHandler(
     'fs:resolveDroppedPathsForAgent',
     async (
       _event,

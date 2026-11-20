@@ -1,5 +1,6 @@
+import { registerAppHandler } from '../app-registry/app-handler-registry'
 import type { BrowserWindow, OpenDialogOptions } from 'electron'
-import { ipcMain } from 'electron'
+
 import { dirname } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -32,7 +33,7 @@ export function registerRepoFolderPickerHandlers(
     properties: OpenDialogOptions['properties']
   ): OpenDialogOptions => ({ defaultPath: newestLocalProjectParent(store), properties })
 
-  ipcMain.handle('repos:pickFolder', async () => {
+  registerAppHandler('repos:pickFolder', async () => {
     const result = await showSingleFlightOpenDialog(
       projectPickerOptions(['openDirectory']),
       mainWindow
@@ -43,7 +44,7 @@ export function registerRepoFolderPickerHandlers(
     return result.filePaths[0]
   })
 
-  ipcMain.handle('repos:pickFolders', async () => {
+  registerAppHandler('repos:pickFolders', async () => {
     const result = await showSingleFlightOpenDialog(
       projectPickerOptions(['openDirectory', 'multiSelections']),
       mainWindow
@@ -55,7 +56,7 @@ export function registerRepoFolderPickerHandlers(
   })
 
   // Clone destinations need a generic picker because they may not contain a Git repo.
-  ipcMain.handle('repos:pickDirectory', async () => {
+  registerAppHandler('repos:pickDirectory', async () => {
     const result = await showSingleFlightOpenDialog(
       // macOS creates typed partial paths when directory creation is enabled; defer creation to submit.
       projectPickerOptions(['openDirectory']),

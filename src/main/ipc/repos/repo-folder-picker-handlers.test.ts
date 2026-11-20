@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserWindow } from 'electron'
 import type { Repo } from '../../../shared/repository/repo-types'

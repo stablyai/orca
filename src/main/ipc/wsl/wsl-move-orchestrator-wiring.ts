@@ -1,9 +1,16 @@
+import {
+  publishToDocuments,
+  removeAppHandler,
+  registerAppHandler,
+  appDocumentFor
+} from '../app-registry/app-handler-registry'
+import type { AppCaller, AppDocument } from '../app-registry/app-handler-registry'
 /**
  * The move orchestrator's production ports and IPC (D3a). Dark: with the internal WSL hosts gate
  * closed, or without a WSL host service, nothing is constructed and the IPC answers empty.
  * Automatic starts also stop when ORCA_WSL_MOVE_AUTO=0; explicit user actions still run.
  */
-import { app, ipcMain, type WebContents } from 'electron'
+import { app } from 'electron'
 import {
   WSL_MOVE_CUTOVER_PHASES,
   wslMoveJournalKey
@@ -121,7 +128,9 @@ function prepareHost(
 function publish(records: WslMoveOrchestratorRecord[]): void {
   const window = getTrustedUIRendererWindow()
   if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
-    window.webContents.send(WSL_MOVE_ORCHESTRATOR_STATUS_CHANNEL, records)
+    publishToDocuments(WSL_MOVE_ORCHESTRATOR_STATUS_CHANNEL, records, {
+      sourceId: window.webContents.id
+    })
   }
 }
 
@@ -220,35 +229,35 @@ export function registerWslMoveOrchestrator(
   driverDeps: () => WslMoveDriverDeps
 ): void {
   for (const channel of WSL_MOVE_ORCHESTRATOR_HANDLER_CHANNELS) {
-    ipcMain.removeHandler(channel)
+    removeAppHandler(channel)
   }
-  const isMainWindow = (sender: WebContents | undefined): boolean =>
+  const isMainWindow = (sender: AppDocument | undefined): boolean =>
     !!sender && getTrustedUIRendererWebContents()?.id === sender.id
   // Not setting-gated: a move already in flight when the setting turns off stays visible.
-  ipcMain.handle('wslMoveOrchestrator:list', (): WslMoveOrchestratorRecord[] =>
+  registerAppHandler('wslMoveOrchestrator:list', (): WslMoveOrchestratorRecord[] =>
     orchestrator && wslHostsGateOpen() ? orchestrator.list() : []
   )
   // T2: the window opened a bridge project of this distro; the orchestrator checks it is running.
-  ipcMain.handle(
+  registerAppHandler(
     'wslMoveOrchestrator:projectOpened',
-    (event: { sender?: WebContents }, distro: unknown): void => {
+    (event: AppCaller, distro: unknown): void => {
       if (
         orchestrator &&
         wslHostsOptedIn(store.getSettings()) &&
-        isMainWindow(event.sender) &&
+        isMainWindow(appDocumentFor(event)) &&
         typeof distro === 'string'
       ) {
         void orchestrator.trigger(distro, 'project-opened')
       }
     }
   )
-  ipcMain.handle(
+  registerAppHandler(
     'wslMoveOrchestrator:userAction',
-    async (event: { sender?: WebContents }, request: unknown) => {
+    async (event: AppCaller, request: unknown) => {
       if (
         !orchestrator ||
         !wslHostsGateOpen() ||
-        !isMainWindow(event.sender) ||
+        !isMainWindow(appDocumentFor(event)) ||
         typeof request !== 'object' ||
         request === null ||
         !('distro' in request) ||
@@ -269,11 +278,11 @@ export function registerWslMoveOrchestrator(
       return orchestrator.userAction(request.distro, action, { unsavedWorkspaceIds: unsaved })
     }
   )
-  ipcMain.handle(
+  registerAppHandler(
     'wslMoveOrchestrator:answerSleptPanes',
-    (event: { sender?: WebContents }, request: unknown): void => {
+    (event: AppCaller, request: unknown): void => {
       if (
-        !isMainWindow(event.sender) ||
+        !isMainWindow(appDocumentFor(event)) ||
         typeof request !== 'object' ||
         request === null ||
         !('requestId' in request) ||

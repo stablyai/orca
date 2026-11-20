@@ -1,8 +1,9 @@
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
 import {
   getRepoDialableSshTargetId,
   parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
-import { ipcMain } from 'electron'
+
 import type {
   ListKnownWorktreesForExecutionHostArgs,
   HostQualifiedKnownWorktreeResult,
@@ -33,7 +34,7 @@ import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-i
 export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
   const { store } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:listKnownForExecutionHost',
     (_event, args: ListKnownWorktreesForExecutionHostArgs): HostQualifiedKnownWorktreeResult => {
       // Malformed requests return rejected; the inert ssh: fallback resolves no owner.
@@ -92,7 +93,7 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:forgetRemovedForExecutionHost',
     (
       _event,

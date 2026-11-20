@@ -1,10 +1,11 @@
-import { ipcMain } from 'electron'
+import { removeAppHandler, registerAppHandler } from './app-registry/app-handler-registry'
+
 import type { LinkPreviewResult } from '../../shared/browser/link-preview'
 import { getLinkPreview } from '../link-preview/link-preview'
 
 export function registerLinkPreviewHandlers(): void {
-  ipcMain.removeHandler('linkPreview:get')
-  ipcMain.handle(
+  removeAppHandler('linkPreview:get')
+  registerAppHandler(
     'linkPreview:get',
     async (_event, rawArgs?: unknown): Promise<LinkPreviewResult> => {
       const url =

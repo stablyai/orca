@@ -1,4 +1,5 @@
-import { ipcMain, shell } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+import { shell } from 'electron'
 import { lstat, rm, writeFile } from 'node:fs/promises'
 import type { SshMutationExpectation } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { assertSshMutationExpectation } from '../../../ssh/connection/authority/ssh-connection-generation'
@@ -26,7 +27,7 @@ import { TRASH_DELETE_FAILED_MESSAGE } from '../../../../shared/file-access/tras
 export function registerFilesystemWriteHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:writeFile',
     async (
       _event,
@@ -62,7 +63,7 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:writeFileBytes',
     async (
       _event,
@@ -95,7 +96,7 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'fs:deletePath',
     async (
       _event,

@@ -1,3 +1,4 @@
+import '../../app-registry/testing/app-ipc-test-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'

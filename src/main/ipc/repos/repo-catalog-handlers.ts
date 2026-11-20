@@ -1,4 +1,5 @@
-import { type BrowserWindow, ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Project, ProjectUpdateArgs } from '../../../shared/project/project-types'
 import {
@@ -39,7 +40,7 @@ export function registerRepoCatalogHandlers(
   // Enrichment deduplicates by callback identity; per-call closures accumulate broadcasts during slow sweeps.
   const broadcastReposChanged = (): void => notifyReposChanged(mainWindow)
 
-  ipcMain.handle('repos:list', () => {
+  registerAppHandler('repos:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })
     // Git/gh username discovery must not block synchronous listing; completion triggers a refresh (#7225).
     enrichRepoGitUsernames(store, { onChanged: broadcastReposChanged })
@@ -47,12 +48,12 @@ export function registerRepoCatalogHandlers(
   })
 
   // The local rows `repos:list` hides once their WSL host owns them; read-only, for their chats.
-  ipcMain.handle('repos:listWslMoved', () =>
+  registerAppHandler('repos:listWslMoved', () =>
     listWslMovedProjects(store.getRepos(), store.getFolderWorkspaces())
   )
 
   // Desktop-only reads (environment registry and saved state): never wakes a stopped distro.
-  ipcMain.handle('repos:listHostCatalogSnapshots', async () =>
+  registerAppHandler('repos:listHostCatalogSnapshots', async () =>
     listHostRepoCatalogSnapshots(
       store,
       (await listEnvironments(getRuntimeEnvironmentRegistryRoot())).filter(
@@ -61,12 +62,12 @@ export function registerRepoCatalogHandlers(
     )
   )
 
-  ipcMain.handle('projects:list', () => {
+  registerAppHandler('projects:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })
     return store.getProjects()
   })
 
-  ipcMain.handle('projects:update', (_event, rawArgs: ProjectUpdateArgs): Project | null => {
+  registerAppHandler('projects:update', (_event, rawArgs: ProjectUpdateArgs): Project | null => {
     const args = parseProjectGroupIpcArgs(
       ProjectUpdateIpcArgs,
       rawArgs,
@@ -77,12 +78,12 @@ export function registerRepoCatalogHandlers(
     return store.updateProject(args.projectId, args.updates)
   })
 
-  ipcMain.handle('projectHostSetups:list', () => {
+  registerAppHandler('projectHostSetups:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })
     return visibleProjectHostSetups(store)
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'repos:reorder',
     (_event, args: { orderedIds: string[] }): { status: 'applied' | 'rejected' } => {
       // Reject stale drag permutations so the renderer can resync after concurrent changes.
@@ -96,7 +97,7 @@ export function registerRepoCatalogHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'repos:reorderForHost',
     (
       _event,
@@ -117,7 +118,7 @@ export function registerRepoCatalogHandlers(
   )
 
   // Removal is host-scoped because repo IDs can collide.
-  ipcMain.handle(
+  registerAppHandler(
     'repos:removeForHost',
     async (_event, args: { repoId: string; hostId: string }) => {
       const hostId = normalizeExecutionHostId(args.hostId)

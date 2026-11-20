@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import {
   clearZcodePlanApiKeyCredential,
   getZcodePlanCredentialsStatus,
@@ -7,11 +8,11 @@ import {
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 
 export function registerZcodePlanCredentialsHandlers(rateLimits: RateLimitService | null): void {
-  ipcMain.handle('zcodePlanCredentials:getStatus', () => getZcodePlanCredentialsStatus())
-  ipcMain.handle('zcodePlanCredentials:saveApiKey', (_event, key: unknown) =>
+  registerAppHandler('zcodePlanCredentials:getStatus', () => getZcodePlanCredentialsStatus())
+  registerAppHandler('zcodePlanCredentials:saveApiKey', (_event, key: unknown) =>
     saveZcodePlanApiKeyCredential(rateLimits, key)
   )
-  ipcMain.handle('zcodePlanCredentials:clearApiKey', () =>
+  registerAppHandler('zcodePlanCredentials:clearApiKey', () =>
     clearZcodePlanApiKeyCredential(rateLimits)
   )
 }

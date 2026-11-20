@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { removeAppListeners, registerAppListener } from '../app-registry/app-handler-registry'
+
 import { isStablePaneId } from '../../../shared/workspace-layout/stable-pane-id'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { isValidPaneKey } from '../../agent-hooks/server/server-status-identity'
@@ -13,10 +14,10 @@ export type AgentPaneAuthorityOwnership = {
 export function registerAgentPaneAuthorityIpcHandlers(
   ownership: AgentPaneAuthorityOwnership
 ): void {
-  ipcMain.removeAllListeners('agentStatus:retirePaneAuthority')
-  ipcMain.removeAllListeners('agentStatus:restorePaneAuthority')
-  ipcMain.removeAllListeners('agentStatus:transferPaneAuthority')
-  ipcMain.on('agentStatus:restorePaneAuthority', (_event, paneKey: unknown) => {
+  removeAppListeners('agentStatus:retirePaneAuthority')
+  removeAppListeners('agentStatus:restorePaneAuthority')
+  removeAppListeners('agentStatus:transferPaneAuthority')
+  registerAppListener('agentStatus:restorePaneAuthority', (_event, paneKey: unknown) => {
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return
     }
@@ -26,7 +27,7 @@ export function registerAgentPaneAuthorityIpcHandlers(
       console.warn('[agent-hooks] restorePaneAuthority failed:', err)
     }
   })
-  ipcMain.on(
+  registerAppListener(
     'agentStatus:retirePaneAuthority',
     (_event, paneKey: unknown, retirementId: unknown) => {
       if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
@@ -46,7 +47,7 @@ export function registerAgentPaneAuthorityIpcHandlers(
       }
     }
   )
-  ipcMain.on('agentStatus:transferPaneAuthority', (_event, value: unknown) => {
+  registerAppListener('agentStatus:transferPaneAuthority', (_event, value: unknown) => {
     if (!value || typeof value !== 'object') {
       return
     }

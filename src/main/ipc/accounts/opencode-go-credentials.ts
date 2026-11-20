@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import {
   clearOpenCodeGoApiKey,
   hasOpenCodeGoApiKey,
@@ -30,8 +31,8 @@ function refreshAfterOpenCodeGoCredentialChange(
 export function registerOpenCodeGoCredentialsHandlers(
   rateLimits: CredentialRateLimits | null
 ): void {
-  ipcMain.handle('opencodeGoCredentials:getStatus', () => getOpenCodeGoCredentialsStatus())
-  ipcMain.handle('opencodeGoCredentials:saveApiKey', (_event, key: unknown) => {
+  registerAppHandler('opencodeGoCredentials:getStatus', () => getOpenCodeGoCredentialsStatus())
+  registerAppHandler('opencodeGoCredentials:saveApiKey', (_event, key: unknown) => {
     if (typeof key !== 'string') {
       throw new Error('OpenCode Go API key must be a string')
     }
@@ -39,7 +40,7 @@ export function registerOpenCodeGoCredentialsHandlers(
     refreshAfterOpenCodeGoCredentialChange(rateLimits, false)
     return getOpenCodeGoCredentialsStatus()
   })
-  ipcMain.handle('opencodeGoCredentials:clearApiKey', () => {
+  registerAppHandler('opencodeGoCredentials:clearApiKey', () => {
     clearOpenCodeGoApiKey()
     refreshAfterOpenCodeGoCredentialChange(rateLimits, true)
     return getOpenCodeGoCredentialsStatus()

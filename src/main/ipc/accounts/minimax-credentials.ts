@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import {
   clearMiniMaxApiKeyCredential,
   clearMiniMaxSessionCookieCredential,
@@ -9,15 +10,17 @@ import {
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 
 export function registerMiniMaxCredentialsHandlers(rateLimits: RateLimitService | null): void {
-  ipcMain.handle('minimaxCredentials:getStatus', () => getMiniMaxCredentialsStatus())
-  ipcMain.handle('minimaxCredentials:saveCookie', (_event, cookie: unknown) =>
+  registerAppHandler('minimaxCredentials:getStatus', () => getMiniMaxCredentialsStatus())
+  registerAppHandler('minimaxCredentials:saveCookie', (_event, cookie: unknown) =>
     saveMiniMaxSessionCookieCredential(rateLimits, cookie)
   )
-  ipcMain.handle('minimaxCredentials:clearCookie', () =>
+  registerAppHandler('minimaxCredentials:clearCookie', () =>
     clearMiniMaxSessionCookieCredential(rateLimits)
   )
-  ipcMain.handle('minimaxCredentials:saveApiKey', (_event, key: unknown) =>
+  registerAppHandler('minimaxCredentials:saveApiKey', (_event, key: unknown) =>
     saveMiniMaxApiKeyCredential(rateLimits, key)
   )
-  ipcMain.handle('minimaxCredentials:clearApiKey', () => clearMiniMaxApiKeyCredential(rateLimits))
+  registerAppHandler('minimaxCredentials:clearApiKey', () =>
+    clearMiniMaxApiKeyCredential(rateLimits)
+  )
 }

@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import {
   getRepoDialableSshTargetId,
   type ExecutionHostId
@@ -16,7 +17,7 @@ import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContext): void {
   const { store } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'hooks:inspectSetupScriptImports',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)

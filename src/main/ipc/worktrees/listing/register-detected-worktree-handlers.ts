@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import type {
   HostQualifiedDetectedWorktreeResult,
@@ -36,7 +37,7 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
     notifyWatchedWorktreeCatalogChanged(context.mainWindow, repoId)
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:listDetected',
     async (
       event,
@@ -134,7 +135,7 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:scanStartingWslDistro',
     async (_event, args: { repoId: string }): Promise<void> => {
       if (typeof args?.repoId === 'string') {
@@ -143,7 +144,7 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:cancelListDetected',
     (event, args: { providerRequestId: ProviderRequestId }): void => {
       detectedWorktreeCancellations.cancel(event, args.providerRequestId)

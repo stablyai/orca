@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { removeAppListeners, registerAppListener } from '../app-registry/app-handler-registry'
+import { BrowserWindow } from 'electron'
 import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
 import { sendScrcpyTouch, type ScrcpyTouchPhase } from '../../emulator/android/scrcpy-control-input'
 
@@ -28,9 +29,12 @@ function isScrcpyTouchMessage(value: unknown): value is ScrcpyTouchMessage {
 // Live Android pane touches, one fire-and-forget message per pointer phase, so drags reach
 // the scrcpy control socket as they happen instead of being replayed on release.
 export function registerEmulatorScrcpyTouchHandler(): void {
-  ipcMain.removeAllListeners('emulator:scrcpyTouch')
-  ipcMain.on('emulator:scrcpyTouch', (event, touch: unknown) => {
-    if (!BrowserWindow.fromWebContents(event.sender) || !isScrcpyTouchMessage(touch)) {
+  removeAppListeners('emulator:scrcpyTouch')
+  registerAppListener('emulator:scrcpyTouch', (event, touch: unknown) => {
+    if (
+      !(event.windowId === null ? null : BrowserWindow.fromId(event.windowId)) ||
+      !isScrcpyTouchMessage(touch)
+    ) {
       return
     }
     // No adb fallback per phase: a v2.4 server stops its video when the control socket ends,

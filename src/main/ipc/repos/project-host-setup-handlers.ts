@@ -1,4 +1,5 @@
-import { type BrowserWindow, ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+import type { BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type {
@@ -55,7 +56,7 @@ export function registerProjectHostSetupHandlers(
   store: Store,
   metadata: RepositoryMetadataOwner
 ): void {
-  ipcMain.handle(
+  registerAppHandler(
     'projectHostSetups:create',
     (_event, rawArgs: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult => {
       const args = parseProjectGroupIpcArgs(
@@ -73,7 +74,7 @@ export function registerProjectHostSetupHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'projectHostSetups:update',
     async (_event, rawArgs: ProjectHostSetupUpdateArgs): Promise<ProjectHostSetupUpdateResult> => {
       const args = parseProjectGroupIpcArgs(
@@ -102,7 +103,7 @@ export function registerProjectHostSetupHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'projectHostSetups:delete',
     (_event, rawArgs: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult => {
       const args = parseProjectGroupIpcArgs(
@@ -120,7 +121,7 @@ export function registerProjectHostSetupHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'projectHostSetups:setupExistingFolder',
     async (
       _event,

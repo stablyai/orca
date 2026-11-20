@@ -61,7 +61,7 @@ import {
 import { buildWslMoveShellHistoryBlobs } from '../../persistence/moving-wsl-projects/terminal-state/wsl-move-shell-history-blobs'
 import { inspectPtyProviderProcessForRenderer } from '../../providers/pty/process-inspection'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from '../ui'
+import { getTrustedUIRendererWebContents, sendToTrustedUIRenderer } from '../ui'
 import { registerWslMoveHandlers } from './wsl-move-handlers'
 import { wslMoveMappedDrivePorts } from './wsl-move-mapped-drive-ports'
 import { registerWslMoveOrchestrator } from './wsl-move-orchestrator-wiring'
@@ -88,7 +88,6 @@ import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 import { ptyPaneKey } from '../pty/pane/key-state'
 import { tryGetProviderForPty } from '../pty/provider/registry'
 import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
-/** The move's IPC handlers; its driver reads every move dependency from this module. */
 export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
   setWslMoveReloadableWindow(() => {
     const contents = getTrustedUIRendererWebContents()
@@ -105,7 +104,6 @@ export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService)
   registerWslMoveOrchestrator(store, () => createWslMoveDriverDeps(store, runtime, 'automatic'))
 }
 
-/** Each live bridge pane's shell folder, one process read per distro. */
 async function readWslMovePaneShellCwds(
   panes: readonly WslMoveRestoreHintPane[]
 ): Promise<Map<string, string>> {
@@ -252,12 +250,8 @@ export function createWslMoveDriverDeps(
       // A step the host could not take yet (automations back on) retries in this run too.
       scheduleWslMoveRewriteRetry(userDataPath)
     },
-    progress: (event: WslMoveProgressEvent) => {
-      const window = getTrustedUIRendererWindow()
-      if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
-        window.webContents.send(WSL_MOVE_PROGRESS_CHANNEL, event)
-      }
-    },
+    progress: (event: WslMoveProgressEvent) =>
+      sendToTrustedUIRenderer(WSL_MOVE_PROGRESS_CHANNEL, event),
     newMigrationId: () => randomUUID(),
     now: () => new Date()
   }

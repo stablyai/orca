@@ -1,5 +1,6 @@
+import { removeAppHandler, registerAppHandler } from '../app-registry/app-handler-registry'
 import os from 'node:os'
-import { app, ipcMain } from 'electron'
+import { app } from 'electron'
 import { readFeedbackImagesDelivered, validateFeedbackImages } from './feedback-image-attachments'
 import type {
   FeedbackRequestFailure,
@@ -211,8 +212,8 @@ export async function submitFeedback(
 }
 
 export function registerFeedbackHandlers(): void {
-  ipcMain.removeHandler('feedback:submit')
-  ipcMain.handle('feedback:submit', (_event, args: FeedbackSubmitArgs) => {
+  removeAppHandler('feedback:submit')
+  registerAppHandler('feedback:submit', (_event, args: FeedbackSubmitArgs) => {
     // Validate before typed-array normalization can expand hostile renderer input.
     if (args.images !== undefined) {
       const imageError = validateFeedbackImages(args.images)

@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import {
   listTeams,
   getTeamStates,
@@ -9,14 +10,14 @@ import { normalizeWorkspaceId, normalizeWorkspaceSelection } from './ipc-args'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 
 export function registerLinearTeamHandlers(): void {
-  ipcMain.handle(
+  registerAppHandler(
     'linear:listTeams',
     async (_event, args?: { workspaceId?: LinearWorkspaceSelection }) => {
       return listTeams(normalizeWorkspaceSelection(args?.workspaceId))
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'linear:teamStates',
     async (_event, args: { teamId: string; workspaceId?: string }) => {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {
@@ -26,7 +27,7 @@ export function registerLinearTeamHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'linear:teamLabels',
     async (_event, args: { teamId: string; workspaceId?: string }) => {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {
@@ -36,7 +37,7 @@ export function registerLinearTeamHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'linear:teamMembers',
     async (_event, args: { teamId: string; workspaceId?: string }) => {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {

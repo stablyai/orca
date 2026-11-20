@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
 import type { GitLabMRInvolvement } from '../../../shared/gitlab/gitlab-types'
@@ -23,7 +24,7 @@ import {
 } from './gitlab-repo-access'
 
 export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:mrForBranch',
     async (
       _event,
@@ -40,17 +41,20 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('gitlab:mr', async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
-    const repo = assertRegisteredRepo(args, store)
-    return getMergeRequest(
-      repo.path,
-      args.iid,
-      repoConnectionId(repo),
-      ...hostedReviewOptionArgs(store, repo)
-    )
-  })
+  registerAppHandler(
+    'gitlab:mr',
+    async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
+      const repo = assertRegisteredRepo(args, store)
+      return getMergeRequest(
+        repo.path,
+        args.iid,
+        repoConnectionId(repo),
+        ...hostedReviewOptionArgs(store, repo)
+      )
+    }
+  )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:listMRs',
     async (
       _event,

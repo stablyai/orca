@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import { PLUGIN_HOOK_SPECS } from '../../../shared/plugins/events/plugin-hook-payloads'
 import type { EditorSaveHookDecision } from '../../../shared/plugins/events/plugin-editor-save-hook'
 import { PluginHookDeniedError, runPluginHook } from '../../plugins/hooks/plugin-hook-dispatch'
@@ -9,7 +10,7 @@ import { PluginHookDeniedError, runPluginHook } from '../../plugins/hooks/plugin
  * renderer path, so they are decided here, on the desktop, before the write leaves it.
  */
 export function registerPluginEditorSaveHookHandler(): void {
-  ipcMain.handle(
+  registerAppHandler(
     'plugins:editorSaveHook',
     async (_event, payload: unknown): Promise<EditorSaveHookDecision> => {
       const schema = PLUGIN_HOOK_SPECS['editor.save.before'].payload

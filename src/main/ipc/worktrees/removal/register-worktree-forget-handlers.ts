@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import type {
   RemoveWorktreeResult,
   ForceDeleteWorktreeBranchResult
@@ -46,7 +47,7 @@ import { teardownStops } from '../../../runtime/workspaces/removal/owned-session
 export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, worktreeRemovalsInFlight } = context
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:forgetLocal',
     async (
       _event,
@@ -155,7 +156,7 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:forceDeletePreservedBranch',
     async (
       _event,

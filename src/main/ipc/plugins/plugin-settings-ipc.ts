@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import { z } from 'zod'
 import { isQualifiedPluginKey } from '../../../shared/plugins/frames/plugin-tab-key'
 import type { PluginService } from '../../plugins/plugin-service'
@@ -21,11 +22,11 @@ export function registerPluginSettingsHandlers(pluginService: PluginService): vo
     dataChanged: (pluginKey: string, key: string) =>
       pluginService.panelBridge.dataChanged(pluginKey, 'settings', key)
   })
-  ipcMain.handle('plugins:getSettings', async (_event, args: unknown) => {
+  registerAppHandler('plugins:getSettings', async (_event, args: unknown) => {
     await pluginService.whenReady()
     return readPluginDeclaredSettings(host(), readArgsSchema.parse(args).pluginKey)
   })
-  ipcMain.handle('plugins:setSetting', async (_event, args: unknown) => {
+  registerAppHandler('plugins:setSetting', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const { pluginKey, key, value } = writeArgsSchema.parse(args)
     return writePluginDeclaredSetting(host(), pluginKey, key, value)

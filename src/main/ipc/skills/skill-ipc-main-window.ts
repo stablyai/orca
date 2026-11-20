@@ -1,12 +1,13 @@
-import { ipcMain, type IpcMainInvokeEvent } from 'electron'
-import { getTrustedUIRendererWebContents } from '../ui'
+import { type AppCaller, registerAppHandler } from '../app-registry/app-handler-registry'
+
+import type { AppChannel } from '../../../shared/app-ipc/app-channel-manifest'
 
 export function handleMainWindowSkillIpc<Args extends unknown[], Result>(
-  channel: string,
-  listener: (event: IpcMainInvokeEvent, ...args: Args) => Result
+  channel: AppChannel,
+  listener: (event: AppCaller, ...args: Args) => Result
 ): void {
-  ipcMain.handle(channel, (event, ...args) => {
-    if (getTrustedUIRendererWebContents() !== event.sender) {
+  registerAppHandler(channel, (event, ...args) => {
+    if (event.role !== 'main') {
       throw new Error('Unauthorized skill IPC sender')
     }
     return listener(event, ...(args as Args))

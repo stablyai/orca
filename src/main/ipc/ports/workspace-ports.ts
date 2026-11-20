@@ -1,4 +1,9 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import {
+  publishToDocuments,
+  removeAppHandler,
+  registerAppHandler
+} from '../app-registry/app-handler-registry'
+import { BrowserWindow } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from '../../ports/advertised-url-watcher'
 import type {
@@ -41,10 +46,10 @@ export function registerWorkspacePortHandlers(
     broadcastWorkspacePortAdvertisedUrlChanged(getWindows, event)
   })
 
-  ipcMain.removeHandler('workspacePorts:scan')
-  ipcMain.removeHandler('workspacePorts:kill')
-  ipcMain.removeHandler('workspacePorts:probePage')
-  ipcMain.handle(
+  removeAppHandler('workspacePorts:scan')
+  removeAppHandler('workspacePorts:kill')
+  removeAppHandler('workspacePorts:probePage')
+  registerAppHandler(
     'workspacePorts:scan',
     (_event, rawArgs?: unknown): Promise<WorkspacePortScanResult> => {
       const args = parseScanRequest(rawArgs)
@@ -69,7 +74,7 @@ export function registerWorkspacePortHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'workspacePorts:kill',
     async (_event, rawArgs?: unknown): Promise<WorkspacePortKillResult> => {
       const args = parseKillRequest(rawArgs)
@@ -81,7 +86,7 @@ export function registerWorkspacePortHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'workspacePorts:probePage',
     async (_event, rawArgs?: unknown): Promise<WorkspacePortPageProbeResult> => {
       const args = parseProbePageRequest(rawArgs)
@@ -102,7 +107,7 @@ function broadcastWorkspacePortAdvertisedUrlChanged(
     if (webContents.isDestroyed()) {
       continue
     }
-    webContents.send('workspacePorts:advertised-url-changed', event)
+    publishToDocuments('workspacePorts:advertised-url-changed', event, { sourceId: webContents.id })
   }
 }
 

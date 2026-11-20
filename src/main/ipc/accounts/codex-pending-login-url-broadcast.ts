@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../app-registry/app-handler-registry'
 import { BrowserWindow } from 'electron'
 import { CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL } from '../../../shared/agent-accounts/codex/codex-auth-errors'
 
@@ -7,7 +8,9 @@ export function broadcastCodexPendingLoginUrl(url: string | null): void {
       continue
     }
     try {
-      window.webContents.send(CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL, url)
+      publishToDocuments(CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL, url, {
+        sourceId: window.webContents.id
+      })
     } catch {
       // A renderer can disappear between isDestroyed() and send().
     }

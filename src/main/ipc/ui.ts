@@ -1,3 +1,4 @@
+import { publishToDocuments, registerAppHandler } from './app-registry/app-handler-registry'
 import { normalizeJiraQuickFilterState } from '../../shared/jira/jira-quick-filters'
 import { JiraQuickFilterStateParam } from '../../shared/rpc-contract/jira/jira-quick-filter-params'
 import {
@@ -30,7 +31,9 @@ export function sendToTrustedUIRenderer(
   excludedWebContentsId?: number
 ): void {
   const renderer = getTrustedUIRendererWebContents(excludedWebContentsId)
-  renderer?.send(channel, payload)
+  if (renderer) {
+    publishToDocuments(channel, payload, { sourceId: renderer.id })
+  }
 }
 
 export function getTrustedUIRendererWebContents(
@@ -59,35 +62,35 @@ export function registerUIHandlers(
 ): void {
   store.onUIChanged((ui) => sendToTrustedUIRenderer('ui:stateChanged', ui))
 
-  ipcMain.handle('ui:getJiraQuickFilters', () =>
+  registerAppHandler('ui:getJiraQuickFilters', () =>
     normalizeJiraQuickFilterState(store.getUI().jiraQuickFilterState)
   )
-  ipcMain.handle('ui:setJiraQuickFilters', (_event, input: unknown) => {
+  registerAppHandler('ui:setJiraQuickFilters', (_event, input: unknown) => {
     const state = normalizeJiraQuickFilterState(JiraQuickFilterStateParam.parse(input))
     store.updateUI({ jiraQuickFilterState: state })
     return state
   })
-  ipcMain.handle('ui:getJiraSavedFilters', () =>
+  registerAppHandler('ui:getJiraSavedFilters', () =>
     normalizeJiraSavedFilterState(store.getUI().jiraSavedFilterState)
   )
-  ipcMain.handle('ui:mutateJiraSavedFilters', (_event, input: unknown) => {
+  registerAppHandler('ui:mutateJiraSavedFilters', (_event, input: unknown) => {
     const mutation = JiraSavedFilterMutationParam.parse(input)
     const state = mutateJiraSavedFilterState(store.getUI().jiraSavedFilterState, mutation)
     store.updateUI({ jiraSavedFilterState: state })
     return state
   })
-  ipcMain.handle('ui:get', () => {
+  registerAppHandler('ui:get', () => {
     return store.getUI()
   })
 
-  ipcMain.handle('ui:set', (_event, args: Partial<PersistedUIState>) => {
+  registerAppHandler('ui:set', (_event, args: Partial<PersistedUIState>) => {
     // A window a WSL move rewrote under is stale until main reloads it.
     if (!isWslMoveWindowWriteHeld()) {
       store.updateUI(args)
     }
   })
 
-  ipcMain.handle('ui:recordFeatureInteraction', (_event, id: unknown) => {
+  registerAppHandler('ui:recordFeatureInteraction', (_event, id: unknown) => {
     if (!isFeatureInteractionId(id)) {
       throw new Error('invalid_feature_interaction_id')
     }

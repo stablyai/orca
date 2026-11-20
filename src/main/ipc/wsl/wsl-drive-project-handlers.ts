@@ -1,8 +1,9 @@
+import { removeAppHandler, registerAppHandler } from '../app-registry/app-handler-registry'
 /**
  * IPC for converting a WSL-runtime project on a Windows drive to Windows Git (D1c). Refused while
  * the internal WSL hosts gate is closed or off Windows, before anything is read.
  */
-import { ipcMain } from 'electron'
+
 import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { registerWslDriveUncConversionHandlers } from './wsl-drive-unc-conversion-handlers'
@@ -23,13 +24,13 @@ export const WSL_DRIVE_PROJECT_HANDLER_CHANNELS = [
 
 export function registerWslDriveProjectHandlers(store: Store, runtime: OrcaRuntimeService): void {
   for (const channel of WSL_DRIVE_PROJECT_HANDLER_CHANNELS) {
-    ipcMain.removeHandler(channel)
+    removeAppHandler(channel)
   }
   registerWslDriveUncConversionHandlers(store, runtime)
-  ipcMain.handle('wslDriveProject:preview', async (_event, projectId: unknown) =>
+  registerAppHandler('wslDriveProject:preview', async (_event, projectId: unknown) =>
     previewWslDriveProjectWindowsGit(gatedDeps(store), requireId(projectId))
   )
-  ipcMain.handle('wslDriveProject:convert', async (_event, args: unknown) => {
+  registerAppHandler('wslDriveProject:convert', async (_event, args: unknown) => {
     const request = typeof args === 'object' && args !== null ? args : {}
     const alignLineEndings = 'alignLineEndings' in request && request.alignLineEndings === true
     return convertWslDriveProjectToWindowsGit(

@@ -1,6 +1,7 @@
+import { registerAppHandler } from './app-registry/app-handler-registry'
 import { once } from 'node:events'
 import { homedir } from 'node:os'
-import { app, ipcMain, shell } from 'electron'
+import { app, shell } from 'electron'
 import { spawnDetachedWithoutInheritance } from '@orca/process-host/isolated-detached-spawn'
 import {
   ORCA_UNINSTALL_STEPS,
@@ -76,12 +77,12 @@ export function registerOrcaUninstallHandlers(store: Store): void {
   // Steps update the plan the renderer last read, so retries keep earlier results.
   let current: OrcaUninstallPlan | null = null
 
-  ipcMain.handle('orcaUninstall:getPlan', async (): Promise<OrcaUninstallPlan> => {
+  registerAppHandler('orcaUninstall:getPlan', async (): Promise<OrcaUninstallPlan> => {
     current = await buildOrcaUninstallPlan(await createHost(store))
     return current
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaUninstall:runStep',
     async (_event, args: OrcaUninstallRunStepArgs): Promise<OrcaUninstallPlan> => {
       if (!ORCA_UNINSTALL_STEPS.includes(args?.step)) {
@@ -101,7 +102,7 @@ export function registerOrcaUninstallHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'orcaUninstall:finish',
     async (_event, action: OrcaUninstallFinishAction): Promise<void> => {
       const appPath = current?.appPath ?? (await createHost(store)).identity.appPath

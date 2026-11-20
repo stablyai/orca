@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain, shell } from 'electron'
+import { publishToDocuments, registerAppHandler } from './app-registry/app-handler-registry'
+import { BrowserWindow, shell } from 'electron'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/keybindings/types'
 import type { KeybindingService } from '../keybindings/keybinding-service'
 import { rebuildAppMenu } from '../menu/register-app-menu'
@@ -6,7 +7,7 @@ import { rebuildAppMenu } from '../menu/register-app-menu'
 function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
-      window.webContents.send('keybindings:changed', snapshot)
+      publishToDocuments('keybindings:changed', snapshot, { sourceId: window.webContents.id })
     }
   }
   rebuildAppMenu()
@@ -16,16 +17,16 @@ export function registerKeybindingHandlers(
   service: KeybindingService,
   onChanged?: () => void
 ): void {
-  ipcMain.handle('keybindings:get', () => service.getSnapshot())
+  registerAppHandler('keybindings:get', () => service.getSnapshot())
 
-  ipcMain.handle('keybindings:ensureFile', () => {
+  registerAppHandler('keybindings:ensureFile', () => {
     const snapshot = service.ensureFile()
     broadcastKeybindingsChanged(snapshot)
     onChanged?.()
     return snapshot
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'keybindings:setAction',
     (_event, args: { actionId: KeybindingActionId; bindings: string[] | null }) => {
       const snapshot = service.setActionBindings(args.actionId, args.bindings)
@@ -35,14 +36,14 @@ export function registerKeybindingHandlers(
     }
   )
 
-  ipcMain.handle('keybindings:reload', () => {
+  registerAppHandler('keybindings:reload', () => {
     const snapshot = service.reload()
     broadcastKeybindingsChanged(snapshot)
     onChanged?.()
     return snapshot
   })
 
-  ipcMain.handle('keybindings:openFile', async () => {
+  registerAppHandler('keybindings:openFile', async () => {
     const snapshot = service.ensureFile()
     const error = await shell.openPath(snapshot.path)
     if (error) {
@@ -51,7 +52,7 @@ export function registerKeybindingHandlers(
     return snapshot
   })
 
-  ipcMain.handle('keybindings:revealFile', () => {
+  registerAppHandler('keybindings:revealFile', () => {
     const snapshot = service.ensureFile()
     shell.showItemInFolder(snapshot.path)
     return snapshot

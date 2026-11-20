@@ -1,3 +1,4 @@
+import { appDocumentFor, publishToDocuments } from '../app-registry/app-handler-registry'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { app } from 'electron'
@@ -75,8 +76,8 @@ function registerSharingHandlers(runtime: OrcaRuntimeService, discover: SkillSha
   handleMainWindowSkillIpc('skills:publishShare', async (event, value: unknown) => {
     const input = skillSharePublishIpcSchema.parse(value)
     return preparations.publish(input, (progress) => {
-      if (!event.sender.isDestroyed()) {
-        event.sender.send('skills:shareProgress', progress)
+      if (!appDocumentFor(event).isDestroyed()) {
+        publishToDocuments('skills:shareProgress', progress, event)
       }
     })
   })

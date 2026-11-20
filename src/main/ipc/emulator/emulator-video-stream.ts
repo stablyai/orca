@@ -1,4 +1,10 @@
-import { BrowserWindow, ipcMain, type WebContents } from 'electron'
+import {
+  publishToDocuments,
+  type AppDocument,
+  registerAppHandler,
+  appDocumentFor
+} from '../app-registry/app-handler-registry'
+
 import { randomUUID } from 'node:crypto'
 import { AvccFrameStream } from '../../emulator/avcc-frame-stream'
 import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
@@ -10,14 +16,14 @@ export function registerEmulatorVideoStreamHandlers(
   resolveIosVideoStreamUrl: (deviceId: string) => string | null | undefined
 ): void {
   type Subscription = {
-    owner: WebContents
+    owner: AppDocument
     unsubscribe: () => void
     disposeLifetime: () => void
     startTimer: ReturnType<typeof setTimeout> | null
   }
   const subscriptions = new Map<string, Subscription>()
 
-  const stopSubscription = (streamId: string, owner?: WebContents): void => {
+  const stopSubscription = (streamId: string, owner?: AppDocument): void => {
     const subscription = subscriptions.get(streamId)
     if (!subscription || (owner && subscription.owner !== owner)) {
       return
@@ -30,11 +36,11 @@ export function registerEmulatorVideoStreamHandlers(
     subscription.unsubscribe()
   }
 
-  ipcMain.handle(
+  registerAppHandler(
     'emulator:videoStreamStart',
     (event, args: { deviceId: string; streamId?: string }) => {
-      const owner = event.sender
-      if (!BrowserWindow.fromWebContents(owner)) {
+      const owner = appDocumentFor(event)
+      if (event.windowId === null) {
         throw new Error('Emulator video stream must originate from a BrowserWindow.')
       }
       if (typeof args?.deviceId !== 'string') {
@@ -70,17 +76,21 @@ export function registerEmulatorVideoStreamHandlers(
           const fail = (message: string): void => {
             stopSubscription(streamId, owner)
             if (!owner.isDestroyed()) {
-              owner.send('emulator:frameStreamError', { streamId, message })
+              publishToDocuments('emulator:frameStreamError', { streamId, message }, owner.caller)
             }
           }
           const stream = new AvccFrameStream(iosVideoStreamUrl, {
             onFrame: (frame) => {
               if (!owner.isDestroyed()) {
-                owner.send('emulator:videoStreamFrame', {
-                  streamId,
-                  deviceId: args.deviceId,
-                  ...frame
-                })
+                publishToDocuments(
+                  'emulator:videoStreamFrame',
+                  {
+                    streamId,
+                    deviceId: args.deviceId,
+                    ...frame
+                  },
+                  owner.caller
+                )
               }
             },
             onError: fail
@@ -100,22 +110,34 @@ export function registerEmulatorVideoStreamHandlers(
           if (videoEvent.type === 'end') {
             stopSubscription(streamId, owner)
             // Shares the MJPEG error channel; the renderer matches it by stream id.
-            owner.send('emulator:frameStreamError', {
-              streamId,
-              message: 'The Android video stream ended.'
-            })
+            publishToDocuments(
+              'emulator:frameStreamError',
+              {
+                streamId,
+                message: 'The Android video stream ended.'
+              },
+              owner.caller
+            )
           } else if (videoEvent.type === 'meta') {
-            owner.send('emulator:videoStreamMeta', {
-              streamId,
-              deviceId: args.deviceId,
-              meta: videoEvent.meta
-            })
+            publishToDocuments(
+              'emulator:videoStreamMeta',
+              {
+                streamId,
+                deviceId: args.deviceId,
+                meta: videoEvent.meta
+              },
+              owner.caller
+            )
           } else {
-            owner.send('emulator:videoStreamFrame', {
-              streamId,
-              deviceId: args.deviceId,
-              ...videoEvent.frame
-            })
+            publishToDocuments(
+              'emulator:videoStreamFrame',
+              {
+                streamId,
+                deviceId: args.deviceId,
+                ...videoEvent.frame
+              },
+              owner.caller
+            )
           }
         })
         pendingSubscription.unsubscribe = unsubscribe
@@ -124,7 +146,7 @@ export function registerEmulatorVideoStreamHandlers(
     }
   )
 
-  ipcMain.handle('emulator:videoStreamStop', (event, args: { streamId: string }) => {
-    stopSubscription(args.streamId, event.sender)
+  registerAppHandler('emulator:videoStreamStop', (event, args: { streamId: string }) => {
+    stopSubscription(args.streamId, appDocumentFor(event))
   })
 }

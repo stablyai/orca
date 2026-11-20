@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
 import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/metadata/display-name-provenance'
@@ -30,7 +31,7 @@ import {
 
 export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime } = context
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:updateMeta',
     (
       _event,
@@ -89,7 +90,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
     }
   )
 
-  ipcMain.handle('worktrees:listLineage', async () => {
+  registerAppHandler('worktrees:listLineage', async () => {
     return {
       lineage: store.getAllWorktreeLineage(),
       workspaceLineage: store.getAllWorkspaceLineage(),
@@ -98,7 +99,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
     }
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:updateLineage',
     async (
       _event,
@@ -132,7 +133,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
     }
   )
 
-  ipcMain.handle('worktrees:persistSortOrder', (_event, args: WorktreeSortOrderRequest) => {
+  registerAppHandler('worktrees:persistSortOrder', (_event, args: WorktreeSortOrderRequest) => {
     if (!Array.isArray(args?.orderedIds) || args.orderedIds.length === 0) {
       return
     }
@@ -144,7 +145,7 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
     )
   })
 
-  ipcMain.handle(
+  registerAppHandler(
     'worktrees:getBranchRenameFailureOutput',
     (_event, args: { worktreeId: string }) => {
       if (typeof args?.worktreeId !== 'string' || args.worktreeId.length === 0) {

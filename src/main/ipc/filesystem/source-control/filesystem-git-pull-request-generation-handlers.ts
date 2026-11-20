@@ -1,8 +1,9 @@
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
 } from '../../../../shared/text-generation/text-generation-failure-copy'
-import { ipcMain } from 'electron'
+
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
@@ -34,7 +35,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
   context: FilesystemHandlerContext
 ): void {
   const { store, commitMessageAgentEnv } = context
-  ipcMain.handle(
+  registerAppHandler(
     'git:generatePullRequestFields',
     async (
       _event,
@@ -154,7 +155,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:cancelGeneratePullRequestFields',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {

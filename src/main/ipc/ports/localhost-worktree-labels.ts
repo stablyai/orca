@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import { URL } from 'node:url'
 import {
   LOOPBACK_LOCALHOST_HOSTS,
@@ -14,7 +15,7 @@ import {
 } from '../../ports/workspace-port-ownership'
 
 export function registerLocalhostWorktreeLabelHandlers(store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'localhostWorktreeLabels:register',
     async (_event, rawArgs: unknown): Promise<LocalhostWorktreeLabelResult> => {
       const route = parseRegisterArgs(rawArgs)

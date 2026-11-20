@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { removeAppHandler, registerAppHandler } from '../app-registry/app-handler-registry'
+
 import type {
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -25,11 +26,11 @@ export function registerAgentHookHandlers(
   dependencies: AgentHookHandlerDependencies = {}
 ): void {
   // Allow safe re-registration independently of the outer module guard.
-  ipcMain.removeHandler('agentStatus:getSnapshot')
-  ipcMain.removeHandler('agentStatus:inferInterrupt')
-  ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
-  ipcMain.removeHandler('agentStatus:hasVerifiableAgentProcess')
-  ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
+  removeAppHandler('agentStatus:getSnapshot')
+  removeAppHandler('agentStatus:inferInterrupt')
+  removeAppHandler('agentStatus:inferQuestionAnswered')
+  removeAppHandler('agentStatus:hasVerifiableAgentProcess')
+  removeAppHandler('agentStatus:getMigrationUnsupportedSnapshot')
   registerAgentStatusRowTeardownIpcHandlers()
   registerAgentPaneAuthorityIpcHandlers({
     ownsPty: createAgentPaneAuthorityOwnership({
@@ -38,7 +39,7 @@ export function registerAgentHookHandlers(
         runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
     })
   })
-  ipcMain.handle('agentStatus:getSnapshot', (): AgentStatusIpcPayload[] => {
+  registerAppHandler('agentStatus:getSnapshot', (): AgentStatusIpcPayload[] => {
     // Pull after workspace hydration to replay enriched statuses without losing startup rows.
     return (
       agentHookServer
@@ -48,22 +49,24 @@ export function registerAgentHookHandlers(
         .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
     )
   })
-  ipcMain.handle('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {
+  registerAppHandler('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {
     if (typeof request !== 'object' || request === null) {
       return false
     }
     return agentHookServer.inferInterrupt(request as AgentInterruptInferenceRequest)
   })
-  ipcMain.handle('agentStatus:inferQuestionAnswered', (_event, request: unknown): boolean => {
+  registerAppHandler('agentStatus:inferQuestionAnswered', (_event, request: unknown): boolean => {
     if (typeof request !== 'object' || request === null) {
       return false
     }
     return agentHookServer.inferQuestionAnswered(request as AgentQuestionAnsweredInferenceRequest)
   })
-  ipcMain.handle('agentStatus:hasVerifiableAgentProcess', (_event, paneKey: unknown): boolean =>
-    typeof paneKey === 'string' ? agentHookServer.hasVerifiableAgentProcess(paneKey) : false
+  registerAppHandler(
+    'agentStatus:hasVerifiableAgentProcess',
+    (_event, paneKey: unknown): boolean =>
+      typeof paneKey === 'string' ? agentHookServer.hasVerifiableAgentProcess(paneKey) : false
   )
-  ipcMain.handle(
+  registerAppHandler(
     'agentStatus:getMigrationUnsupportedSnapshot',
     (): MigrationUnsupportedPtyEntry[] => getMigrationUnsupportedPtySnapshot()
   )

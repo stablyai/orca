@@ -1,9 +1,10 @@
-import type { WebContents } from 'electron'
+import type { AppDocument } from '../../app-registry/app-handler-registry'
+
 import { abortWhenRendererGone } from '../../renderer-requests/renderer-lifetime-abort'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 
 export function captureWatcherSenderLifetime(
-  sender: WebContents,
+  sender: AppDocument,
   cleanup: () => void
 ): AbortSignal {
   const existing = watcherLifecycleState.senderLifetimes.get(sender.id)
@@ -27,7 +28,7 @@ export function captureWatcherSenderLifetime(
   return lifetime.signal
 }
 
-export function isCurrentWatcherSender(sender: WebContents, signal: AbortSignal): boolean {
+export function isCurrentWatcherSender(sender: AppDocument, signal: AbortSignal): boolean {
   return (
     !sender.isDestroyed() &&
     !signal.aborted &&

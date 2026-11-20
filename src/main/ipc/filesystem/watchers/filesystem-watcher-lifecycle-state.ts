@@ -1,9 +1,10 @@
-import type { WebContents } from 'electron'
+import type { AppDocument } from '../../app-registry/app-handler-registry'
+
 import type { WatchedRoot } from './filesystem-watcher-wsl'
 
 export type LocalWatcherInstallToken = {
   cancelled: boolean
-  listeners: Map<number, WebContents>
+  listeners: Map<number, AppDocument>
   abortController: AbortController
 }
 
@@ -11,7 +12,7 @@ export type LocalWatcherInstallToken = {
 export type LocalWatcherInstallResult = 'installed' | 'unavailable' | 'capacity' | 'cancelled'
 
 export type LocalWatcherCapacityRetry = {
-  listeners: Map<number, WebContents>
+  listeners: Map<number, AppDocument>
   cancelWait: () => void
 }
 
@@ -21,13 +22,13 @@ export const UNWATCHABLE_ROOT_CACHE_MAX = 256
 export const WATCHER_TEARDOWN_GRACE_MS = 30_000
 
 // Cancelled-install waiters need separate ownership while absent from listener maps.
-export type CancelledInstallWaiter = { token: symbol; sender: WebContents }
+export type CancelledInstallWaiter = { token: symbol; sender: AppDocument }
 export type CancelledInstallWaiters = Map<string, Map<number, CancelledInstallWaiter>>
 
 export const watcherLifecycleState = {
   watchedRoots: new Map<string, WatchedRoot>(),
   unwatchableRoots: new Set<string>(),
-  // One lifetime per WebContents avoids per-root MaxListeners warnings.
+  // One lifetime per AppDocument avoids per-root MaxListeners warnings.
   senderLifetimes: new Map<number, { signal: AbortSignal; dispose: () => void }>(),
   pendingTeardowns: new Map<string, ReturnType<typeof setTimeout>>(),
   // Shutdown must await native unsubscribe work already started by destroyed senders.
@@ -35,7 +36,7 @@ export const watcherLifecycleState = {
   pendingLocalUnsubscribesByRoot: new Map<string, Set<Promise<void>>>(),
   suspendedLocalWatcherListeners: new Map<
     string,
-    { worktreePath: string; listeners: Map<number, WebContents> }
+    { worktreePath: string; listeners: Map<number, AppDocument> }
   >(),
   // Generation fencing prevents reopened subsystems from reviving retired waiters.
   localWatchersClosed: false,

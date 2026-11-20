@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../app-registry/app-handler-registry'
 import { BrowserWindow } from 'electron'
 import { deferUntilWslDistroRunning } from '../../wsl/discovery/wsl-background-distro-gate'
 import {
@@ -14,7 +15,9 @@ function broadcastWslDistroRunning(distro: string): void {
       continue
     }
     try {
-      window.webContents.send(PREFLIGHT_WSL_DISTRO_RUNNING_CHANNEL, distro)
+      publishToDocuments(PREFLIGHT_WSL_DISTRO_RUNNING_CHANNEL, distro, {
+        sourceId: window.webContents.id
+      })
     } catch {
       // A renderer can disappear between isDestroyed() and send().
     }

@@ -1,4 +1,5 @@
-import { type BrowserWindow, ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import type { Store } from '../../persistence/loading-store/store'
@@ -37,7 +38,7 @@ export function registerNestedRepoImportHandler(
   store: Store,
   enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
 ): void {
-  ipcMain.handle(
+  registerAppHandler(
     'projectGroups:importNested',
     async (_event, rawArgs: unknown): Promise<ProjectGroupImportResult> => {
       const args = parseProjectGroupIpcArgs(

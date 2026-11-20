@@ -1,8 +1,9 @@
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
 } from '../../../../shared/text-generation/text-generation-failure-copy'
-import { ipcMain } from 'electron'
+
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
@@ -34,7 +35,7 @@ export function registerFilesystemGitCommitGenerationHandlers(
   context: FilesystemHandlerContext
 ): void {
   const { store, commitMessageAgentEnv } = context
-  ipcMain.handle(
+  registerAppHandler(
     'git:generateCommitMessage',
     async (
       _event,
@@ -127,7 +128,7 @@ export function registerFilesystemGitCommitGenerationHandlers(
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:cancelGenerateCommitMessage',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {

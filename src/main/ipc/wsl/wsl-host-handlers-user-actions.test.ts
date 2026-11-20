@@ -1,3 +1,4 @@
+import '../app-registry/testing/app-ipc-test-host'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type Handler = (event: unknown, request?: unknown) => unknown

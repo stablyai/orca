@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import type {
   GitLabMRInlineCommentInput,
   GitLabMRUpdate
@@ -27,7 +28,7 @@ import {
 } from './gitlab-repo-access'
 
 export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:closeMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
       const repo = assertRegisteredRepo(args, store)
@@ -42,7 +43,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:reopenMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
       const repo = assertRegisteredRepo(args, store)
@@ -57,7 +58,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:mergeMR',
     async (
       _event,
@@ -76,7 +77,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:updateMR',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number; updates: GitLabMRUpdate }) => {
       const repo = assertRegisteredRepo(args, store)
@@ -92,7 +93,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:updateMRReviewers',
     async (
       _event,
@@ -118,7 +119,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:addMRComment',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number; body: string }) => {
       const repo = assertRegisteredRepo(args, store)
@@ -134,7 +135,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:addMRInlineComment',
     async (
       _event,
@@ -160,7 +161,7 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:resolveMRDiscussion',
     async (
       _event,

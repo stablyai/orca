@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../app-registry/app-handler-registry'
 import { readableWslDistroHoldText } from '../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
@@ -951,7 +952,7 @@ export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string
   // Invalidate before notifying so observer list requests see the changed catalog.
   runWorktreeChangeInvalidators(repoId)
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('worktrees:changed', { repoId })
+    publishToDocuments('worktrees:changed', { repoId }, { sourceId: mainWindow.webContents.id })
   }
 }
 
@@ -965,7 +966,9 @@ export function notifyWorktreeGitStatusMetadataChanged(
     const payload: GitStatusMetadataChangedEvent = worktreePaths
       ? { repoId, worktreePaths: [...worktreePaths] }
       : { repoId }
-    mainWindow.webContents.send('worktrees:gitStatusMetadataChanged', payload)
+    publishToDocuments('worktrees:gitStatusMetadataChanged', payload, {
+      sourceId: mainWindow.webContents.id
+    })
   }
 }
 
@@ -976,7 +979,11 @@ export function notifyWorktreeHeadIdentitiesChanged(
 ): void {
   // Background workspaces lack active status refresh; publish head moves through targeted events.
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('worktrees:headIdentitiesChanged', { repoId, identities })
+    publishToDocuments(
+      'worktrees:headIdentitiesChanged',
+      { repoId, identities },
+      { sourceId: mainWindow.webContents.id }
+    )
   }
 }
 
@@ -989,7 +996,7 @@ export function emitCreateWorktreeProgress(
 ): void {
   if (!mainWindow.isDestroyed()) {
     const event: CreateWorktreeProgressEvent = { creationId, phase, ...detail }
-    mainWindow.webContents.send('createWorktree:progress', event)
+    publishToDocuments('createWorktree:progress', event, { sourceId: mainWindow.webContents.id })
   }
 }
 

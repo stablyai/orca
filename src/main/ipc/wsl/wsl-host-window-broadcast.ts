@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../app-registry/app-handler-registry'
 /** WSL host events main sends every window: host status, and capability changes mid-run. */
 import { BrowserWindow } from 'electron'
 import {
@@ -15,7 +16,7 @@ function broadcast(channel: string, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
       try {
-        window.webContents.send(channel, payload)
+        publishToDocuments(channel, payload, { sourceId: window.webContents.id })
       } catch {
         /* A renderer can close during publication. */
       }

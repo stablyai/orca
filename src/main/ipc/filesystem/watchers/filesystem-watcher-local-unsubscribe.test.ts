@@ -1,3 +1,4 @@
+import '../../app-registry/testing/app-ipc-test-host'
 import { createWatcherSender } from './filesystem-watcher-test-sender'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ParcelWatcherProcess from '../watcher-process/parcel-watcher-process'

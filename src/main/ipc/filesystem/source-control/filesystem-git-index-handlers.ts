@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import {
   resolveConflict,
   stageFile,
@@ -29,7 +30,7 @@ import {
 
 export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
-  ipcMain.handle(
+  registerAppHandler(
     'git:stage',
     async (
       _event,
@@ -47,7 +48,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:resolveConflict',
     async (
       _event,
@@ -76,7 +77,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:unstage',
     async (
       _event,
@@ -94,7 +95,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:discard',
     async (
       _event,
@@ -112,7 +113,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:bulkDiscard',
     async (
       _event,
@@ -133,7 +134,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:bulkStage',
     async (
       _event,
@@ -164,7 +165,7 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'git:bulkUnstage',
     async (
       _event,

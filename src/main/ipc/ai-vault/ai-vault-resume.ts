@@ -1,6 +1,7 @@
+import { registerAppHandler } from '../app-registry/app-handler-registry'
 import { AiVaultPrepareSessionResumeParams } from '../../../shared/rpc-contract/ai-vault/ai-vault-params'
 import { prepareStructuredChatCliFork } from '../../ai-vault/structured-sessions/structured-chat-cli-fork'
-import { ipcMain } from 'electron'
+
 import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult,
@@ -29,11 +30,11 @@ export type AiVaultResumeHandlerOptions = {
 }
 
 export function registerAiVaultResumeHandler(options: AiVaultResumeHandlerOptions): void {
-  ipcMain.handle(
+  registerAppHandler(
     'aiVault:prepareSessionResume',
     (_event, args: AiVaultPrepareSessionResumeRequest) => prepareAiVaultSessionResume(args, options)
   )
-  ipcMain.handle('aiVault:prepareSessionHandoff', (_event, args: AiVaultSessionHandoffArgs) =>
+  registerAppHandler('aiVault:prepareSessionHandoff', (_event, args: AiVaultSessionHandoffArgs) =>
     prepareAiVaultSessionHandoff(args)
   )
 }

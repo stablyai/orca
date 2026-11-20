@@ -1,3 +1,4 @@
+import { publishToDocuments } from '../../app-registry/app-handler-registry'
 import { stat } from 'node:fs/promises'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type {
@@ -103,7 +104,7 @@ function emitOverflowPayload(root: WatchedRoot): void {
   }
   for (const [, wc] of root.listeners) {
     if (!wc.isDestroyed()) {
-      wc.send('fs:changed', payload)
+      publishToDocuments('fs:changed', payload, wc.caller)
     }
   }
 }
@@ -172,7 +173,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
 
     for (const [, wc] of root.listeners) {
       if (!wc.isDestroyed()) {
-        wc.send('fs:changed', payload)
+        publishToDocuments('fs:changed', payload, wc.caller)
       }
     }
   } finally {

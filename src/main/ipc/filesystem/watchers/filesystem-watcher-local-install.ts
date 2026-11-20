@@ -1,3 +1,4 @@
+import type { AppDocument } from '../../app-registry/app-handler-registry'
 import { stat } from 'node:fs/promises'
 import { isWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { WATCHER_IGNORE_DIRS } from './filesystem-watcher-ignore'
@@ -41,7 +42,7 @@ export async function installLocalWatcher(
   worktreePath: string,
   cancelToken: LocalWatcherInstallToken,
   scheduleRetry: (
-    listeners: Map<number, Electron.WebContents>,
+    listeners: Map<number, AppDocument>,
     waitForRetry?: WaitForLocalWatcherRetry
   ) => void
 ): Promise<LocalWatcherInstallResult> {

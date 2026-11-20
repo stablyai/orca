@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../../app-registry/app-handler-registry'
+
 import { readWorktreeAtRiskLocalFiles } from '../../../git/worktrees/removal/worktree-at-risk-local-files'
 import type { WorktreeAtRiskLocalFiles } from '../../../../shared/worktree/removal/at-risk-local-files'
 import { getLocalRepoForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
@@ -13,7 +14,7 @@ export function registerFilesystemGitAtRiskLocalFilesHandlers(
 ): void {
   // Request tokens are unique per scan, so these share the sender-scoped status registry.
   const { store, gitStatusCancellations: cancellations } = context
-  ipcMain.handle(
+  registerAppHandler(
     'git:atRiskLocalFiles',
     async (
       event,
@@ -45,7 +46,10 @@ export function registerFilesystemGitAtRiskLocalFilesHandlers(
     }
   )
 
-  ipcMain.handle('git:cancelAtRiskLocalFiles', (event, args: { requestToken: string }): void => {
-    cancellations.cancel(event, args.requestToken)
-  })
+  registerAppHandler(
+    'git:cancelAtRiskLocalFiles',
+    (event, args: { requestToken: string }): void => {
+      cancellations.cancel(event, args.requestToken)
+    }
+  )
 }

@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import type { Store } from '../../persistence/loading-store/store'
 import {
   diagnoseAuth,
@@ -22,19 +23,19 @@ import {
 import { registerGitLabWorkItemHandlers } from './gitlab-work-item-handlers'
 
 export function registerGitLabHandlers(store: Store): void {
-  ipcMain.handle('gitlab:viewer', async () => {
+  registerAppHandler('gitlab:viewer', async () => {
     return getAuthenticatedViewer()
   })
 
-  ipcMain.handle('gitlab:diagnoseAuth', async () => diagnoseAuth())
+  registerAppHandler('gitlab:diagnoseAuth', async () => diagnoseAuth())
 
-  ipcMain.handle(
+  registerAppHandler(
     'gitlab:rateLimit',
     async (_event, args?: { force?: boolean; host?: string | null }) =>
       getRateLimit({ force: Boolean(args?.force), host: args?.host ?? null })
   )
 
-  ipcMain.handle('gitlab:projectSlug', async (_event, args: GitLabRepoSelectorArgs) => {
+  registerAppHandler('gitlab:projectSlug', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
     return getProjectSlug(repo.path, repoConnectionId(repo), ...hostedReviewOptionArgs(store, repo))
   })
@@ -46,7 +47,7 @@ export function registerGitLabHandlers(store: Store): void {
   registerGitLabCiJobHandlers(store)
 
   // Todos are user-scoped; repoPath is only the registration guard.
-  ipcMain.handle('gitlab:todos', async (_event, args: GitLabRepoSelectorArgs) => {
+  registerAppHandler('gitlab:todos', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
     return listTodos(repo.path, repoConnectionId(repo), ...localGitOptionArgs(store, repo))
   })

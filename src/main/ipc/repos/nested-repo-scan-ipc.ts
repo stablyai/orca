@@ -1,4 +1,5 @@
-import type { IpcMainInvokeEvent } from 'electron'
+import { publishToDocuments, type AppCaller } from '../app-registry/app-handler-registry'
+
 import { isAbsolute } from 'node:path'
 import type { z } from 'zod'
 import type { NestedRepoScanResult } from '../../../shared/project/groups/project-group-types'
@@ -94,7 +95,7 @@ export async function scanNestedReposForIpc(args: {
 }
 
 export async function runNestedRepoScanForIpc(
-  event: IpcMainInvokeEvent,
+  event: AppCaller,
   args: z.infer<typeof ProjectGroupScanNestedArgs>
 ): Promise<NestedRepoScanResult> {
   const controller = args.scanId ? new AbortController() : undefined
@@ -109,10 +110,14 @@ export async function runNestedRepoScanForIpc(
       signal: controller?.signal,
       onProgress: args.scanId
         ? (scan) => {
-            event.sender.send('projectGroups:scanNestedProgress', {
-              scanId: args.scanId,
-              scan
-            })
+            publishToDocuments(
+              'projectGroups:scanNestedProgress',
+              {
+                scanId: args.scanId,
+                scan
+              },
+              event
+            )
           }
         : undefined
     })

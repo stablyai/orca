@@ -1,3 +1,9 @@
+import {
+  publishToDocuments,
+  removeAppHandler,
+  registerAppHandler,
+  appDocumentFor
+} from '../app-registry/app-handler-registry'
 import { app, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
@@ -30,11 +36,11 @@ export function registerDashboardPopoutHandlers(
   keybindings?: KeybindingService
 ): void {
   ipcMain.removeHandler('dashboardPopout:open')
-  ipcMain.removeHandler('dashboard:publishSnapshot')
-  ipcMain.removeHandler('dashboard:requestSnapshot')
-  ipcMain.removeHandler('dashboard:getPopoutOpen')
+  removeAppHandler('dashboard:publishSnapshot')
+  removeAppHandler('dashboard:requestSnapshot')
+  removeAppHandler('dashboard:getPopoutOpen')
   ipcMain.removeHandler('dashboardPopout:revealAgent')
-  ipcMain.removeHandler('dashboardPopout:ackAgent')
+  removeAppHandler('dashboardPopout:ackAgent')
 
   onDashboardPopoutOpenChanged((open) => {
     if (!open) {
@@ -60,8 +66,8 @@ export function registerDashboardPopoutHandlers(
     })
   })
 
-  ipcMain.handle('dashboard:publishSnapshot', (event, snapshot: unknown): void => {
-    if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
+  registerAppHandler('dashboard:publishSnapshot', (event, snapshot: unknown): void => {
+    if (event.role !== 'main' || !isDashboardEnabled(store)) {
       return
     }
     const admitted = admitDashboardSnapshot(snapshot)
@@ -78,32 +84,33 @@ export function registerDashboardPopoutHandlers(
       admitted.snapshot.repoIconsByRepoId === undefined && lastSnapshot?.repoIconsByRepoId
         ? { ...admitted.snapshot, repoIconsByRepoId: lastSnapshot.repoIconsByRepoId }
         : admitted.snapshot
-    getDashboardPopoutWindow()?.webContents.send('dashboard:snapshot', admitted.snapshot)
+    const popout = getDashboardPopoutWindow()
+    if (popout) {
+      publishToDocuments('dashboard:snapshot', admitted.snapshot, { windowId: popout.id })
+    }
   })
 
   // Replay immediately, then request fresh renderer state.
-  ipcMain.handle('dashboard:requestSnapshot', (event): void => {
-    if (!isDashboardPopoutRenderer(event.sender) || !isDashboardEnabled(store)) {
+  registerAppHandler('dashboard:requestSnapshot', (event): void => {
+    if (event.role !== 'dashboard-popout' || !isDashboardEnabled(store)) {
       return
     }
     if (lastSnapshot) {
-      event.sender.send('dashboard:snapshot', lastSnapshot)
+      publishToDocuments('dashboard:snapshot', lastSnapshot, appDocumentFor(event).caller)
     }
     sendToTrustedUIRenderer('dashboard:snapshotRequested', null)
   })
 
-  ipcMain.handle('dashboard:getPopoutOpen', (event): boolean =>
-    isTrustedUIRenderer(event.sender) && isDashboardEnabled(store)
-      ? getDashboardPopoutWindow() !== null
-      : false
+  registerAppHandler('dashboard:getPopoutOpen', (event): boolean =>
+    event.role === 'main' && isDashboardEnabled(store) ? getDashboardPopoutWindow() !== null : false
   )
 
   // Acknowledge in the main store so popout views also mute sidebar rows.
-  ipcMain.handle('dashboardPopout:ackAgent', (event, args: unknown): void => {
+  registerAppHandler('dashboardPopout:ackAgent', (event, args: unknown): void => {
     const ack = args && typeof args === 'object' ? args : {}
     const paneKey = 'paneKey' in ack ? ack.paneKey : undefined
     if (
-      !isDashboardPopoutRenderer(event.sender) ||
+      event.role !== 'dashboard-popout' ||
       !isDashboardEnabled(store) ||
       !isDashboardPaneKey(paneKey)
     ) {
@@ -128,7 +135,7 @@ export function registerDashboardPopoutHandlers(
       return
     }
     safelyRevealWindow(mainWindow)
-    mainWindow.webContents.send('ui:revealDashboardAgent', args)
+    publishToDocuments('ui:revealDashboardAgent', args, { sourceId: mainWindow.webContents.id })
     if (!isBackgroundLaunch()) {
       try {
         app.focus({ steal: true })

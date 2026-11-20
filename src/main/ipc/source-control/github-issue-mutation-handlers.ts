@@ -1,6 +1,7 @@
+import { registerAppHandler, appDocumentFor } from '../app-registry/app-handler-registry'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { OptionalGhAccountExpectation } from '../../../shared/rpc-contract/github/github-repo-target-params'
-import { ipcMain } from 'electron'
+
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { GitHubIssueUpdate } from '../../../shared/work-items/issue-mutation-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
@@ -17,7 +18,7 @@ import {
 import { broadcastGitHubWorkItemMutation } from './github-work-item-mutation-events'
 
 export function registerGitHubIssueMutationHandlers(store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'gh:updateIssue',
     async (
       event,
@@ -46,14 +47,14 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
       if (result.ok) {
         broadcastGitHubWorkItemMutation(
           { repoPath: repo.path, repoId: repo.id, type: 'issue', number: args.number },
-          event.sender.id
+          appDocumentFor(event).id
         )
       }
       return result
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:addIssueComment',
     async (
       event,
@@ -92,14 +93,14 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
             type: args.type ?? 'issue',
             number: args.number
           },
-          event.sender.id
+          appDocumentFor(event).id
         )
       }
       return result
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:listLabels',
     (
       _event,
@@ -135,7 +136,7 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'gh:listAssignableUsers',
     (
       _event,

@@ -1,17 +1,18 @@
-import type { IpcMainInvokeEvent } from 'electron'
+import { appDocumentFor, type AppCaller } from '../app-registry/app-handler-registry'
+
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
 export type SenderScopedRequestCancellations = {
   /** Registers a cancellable request; aborts any previous request that reused the token. */
-  begin: (event: IpcMainInvokeEvent, requestToken: string | undefined) => AbortController | null
+  begin: (event: AppCaller, requestToken: string | undefined) => AbortController | null
   /** Removes the registration once the request settles (no-op if it was replaced). */
   finish: (
-    event: IpcMainInvokeEvent,
+    event: AppCaller,
     requestToken: string | undefined,
     controller: AbortController | null
   ) => void
   /** Best-effort abort from the issuing webContents; a settled request is gone. */
-  cancel: (event: IpcMainInvokeEvent, requestToken: string) => void
+  cancel: (event: AppCaller, requestToken: string) => void
 }
 
 type SenderRequests = {
@@ -28,11 +29,11 @@ export function createSenderScopedRequestCancellations(): SenderScopedRequestCan
     }
     requests.lifetime.dispose()
   }
-  const requestsFor = (event: IpcMainInvokeEvent): SenderRequests => {
-    const senderId = event.sender.id
+  const requestsFor = (event: AppCaller): SenderRequests => {
+    const senderId = appDocumentFor(event).id
     let requests = senders.get(senderId)
     if (!requests) {
-      const lifetime = abortWhenRendererGone(event.sender)
+      const lifetime = abortWhenRendererGone(appDocumentFor(event))
       const owned: SenderRequests = { controllers: new Map(), lifetime }
       senders.set(senderId, owned)
       lifetime.signal.addEventListener(
@@ -56,7 +57,7 @@ export function createSenderScopedRequestCancellations(): SenderScopedRequestCan
       if (!requestToken) {
         return null
       }
-      senders.get(event.sender.id)?.controllers.get(requestToken)?.abort()
+      senders.get(appDocumentFor(event).id)?.controllers.get(requestToken)?.abort()
       const controller = new AbortController()
       requestsFor(event).controllers.set(requestToken, controller)
       return controller
@@ -65,16 +66,16 @@ export function createSenderScopedRequestCancellations(): SenderScopedRequestCan
       if (!requestToken || !controller) {
         return
       }
-      const requests = senders.get(event.sender.id)
+      const requests = senders.get(appDocumentFor(event).id)
       if (requests?.controllers.get(requestToken) === controller) {
         requests.controllers.delete(requestToken)
         if (requests.controllers.size === 0) {
-          release(event.sender.id, requests)
+          release(appDocumentFor(event).id, requests)
         }
       }
     },
     cancel: (event, requestToken) => {
-      senders.get(event.sender.id)?.controllers.get(requestToken)?.abort()
+      senders.get(appDocumentFor(event).id)?.controllers.get(requestToken)?.abort()
     }
   }
 }

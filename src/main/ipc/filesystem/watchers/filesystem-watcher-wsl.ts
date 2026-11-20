@@ -1,7 +1,8 @@
+import type { AppDocument } from '../../app-registry/app-handler-registry'
 /** Poll inside WSL so distro shutdown kills the watcher instead of Windows UNC polling repeatedly waking it. */
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
-import type { WebContents } from 'electron'
+
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import { queueWatcherEvents } from './filesystem-watcher-event-batch'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
@@ -16,7 +17,7 @@ export type WatcherSubscription = {
 
 export type WatchedRoot = {
   subscription: WatcherSubscription
-  listeners: Map<number, WebContents>
+  listeners: Map<number, AppDocument>
   batch: DebouncedBatch
   // Renderer paths must use real spelling, never folded comparison keys.
   rootPath: string

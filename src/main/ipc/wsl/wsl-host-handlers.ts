@@ -1,7 +1,12 @@
+import {
+  appDocumentFor,
+  removeAppHandler,
+  registerAppHandler
+} from '../app-registry/app-handler-registry'
 import { canCreateWslHostService } from './wsl-host-service-availability'
 import { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
 export { WSL_HOST_HANDLER_CHANNELS } from './wsl-host-handler-channels'
-import { ipcMain } from 'electron'
+
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 import { noteWslHostUserAction } from '../../wsl/host-lifecycle/wsl-host-user-actions'
 import type {
@@ -218,7 +223,7 @@ function releaseHoldersWhileGatedOff(userDataPath: string): void {
 
 export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise<void> {
   for (const channel of WSL_HOST_HANDLER_CHANNELS) {
-    ipcMain.removeHandler(channel)
+    removeAppHandler(channel)
   }
   // Install no API without a service, matching the preload gate.
   if (!canCreateWslHostService()) {
@@ -234,8 +239,8 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
     }
     wsl = service
   })()
-  const handle: typeof ipcMain.handle = (channel, listener) =>
-    ipcMain.handle(channel, async (...params) => {
+  const handle: typeof registerAppHandler = (channel, listener) =>
+    registerAppHandler(channel, async (...params) => {
       await ready
       return listener(...params)
     })
@@ -285,7 +290,7 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
   handle('wslHosts:getStatuses', () => wsl.getStatuses())
   const visibleWork = new WslHostVisibleWorkByWindow()
   handle('wslHosts:setVisibleWork', (event, request: { environmentIds: string[] }) => {
-    const sender = event.sender
+    const sender = appDocumentFor(event)
     const windowId = sender.id
     const ids = Array.isArray(request.environmentIds) ? request.environmentIds : []
     if (!visibleWork.has(windowId)) {

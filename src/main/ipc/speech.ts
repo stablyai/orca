@@ -1,3 +1,5 @@
+import { registerSpeechApplicationHandlers } from './speech/speech-application-handlers'
+import { publishToDocuments } from './app-registry/app-handler-registry'
 import {
   ipcMain,
   BrowserWindow,
@@ -8,152 +10,19 @@ import {
 import { abortWhenRendererGone } from './renderer-requests/renderer-lifetime-abort'
 import { dictationTermsFor } from '../../shared/speech/dictation/dictation-dictionary'
 import { dictationTextSettingsFor } from '../../shared/speech/dictation/dictation-cleanup'
-import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
-import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
-import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
-import {
-  clearOpenAiSpeechApiKey,
-  getOpenAiSpeechApiKeyProtection,
-  hasOpenAiSpeechApiKey
-} from '../speech/openai-api-key-store'
-import {
-  saveVerifiedOpenAiCompatibleSpeechProvider,
-  saveVerifiedOpenAiSpeechApiKey
-} from '../speech/openai-api-key-verification'
-import {
-  clearOpenAiCompatibleSpeechProvider,
-  summarizeOpenAiCompatibleSpeechProvider
-} from '../speech/openai-compatible-speech-provider-store'
-import type {
-  DictationContext,
-  OpenAiCompatibleSpeechProvider
-} from '../../shared/speech/speech-types'
-import type { Store } from '../persistence/loading-store/store'
-import type { DictationCleanupResult } from '../../shared/speech/dictation/dictation-cleanup'
-import { cancelDictationCleanup, cleanUpDictatedText } from '../speech/dictation-cleanup-service'
-import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
 
-// Ten minutes of fast speech is under 20,000 characters; anything far past it isn't dictation.
-const MAX_CLEANUP_TEXT_LENGTH = 100_000
+import { getSpeechSttService } from '../speech/speech-runtime-service'
+
+import type { DictationContext } from '../../shared/speech/speech-types'
+import type { Store } from '../persistence/loading-store/store'
+
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
 
 export function registerSpeechHandlers(
   store: Store,
   agentEnvResolvers?: CommitMessageAgentEnvironmentResolvers
 ): void {
-  ipcMain.handle(
-    'speech:cleanUpDictation',
-    (
-      _event,
-      args: { text: string; context?: DictationContext; requestId: string }
-    ): Promise<DictationCleanupResult> => {
-      if (typeof args?.text !== 'string' || args.text.length > MAX_CLEANUP_TEXT_LENGTH) {
-        return Promise.resolve({
-          status: 'failed',
-          reason: 'Dictated text is too long to clean up.'
-        })
-      }
-      return cleanUpDictatedText(
-        {
-          text: args.text,
-          terms: dictationTermsFor(store.getSettings().voice, {
-            dictationTerms: args.context?.repoTerms,
-            displayName: args.context?.repoName
-          }),
-          requestId: typeof args.requestId === 'string' ? args.requestId : undefined
-        },
-        { getSettings: () => store.getSettings(), getAgentEnvResolvers: () => agentEnvResolvers }
-      )
-    }
-  )
-
-  ipcMain.handle('speech:cancelDictationCleanup', (_event, requestId: unknown) => {
-    if (typeof requestId === 'string') {
-      cancelDictationCleanup(requestId)
-    }
-  })
-
-  ipcMain.handle('speech:getCatalog', () => {
-    return SPEECH_MODEL_CATALOG
-  })
-
-  ipcMain.handle('speech:getModelStates', async () => {
-    return getSpeechModelManager(store).getModelStates()
-  })
-
-  ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
-    return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
-  })
-
-  ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
-    await saveVerifiedOpenAiSpeechApiKey(apiKey)
-    return { configured: true, protection: getOpenAiSpeechApiKeyProtection() }
-  })
-
-  ipcMain.handle('speech:clearOpenAiApiKey', async () => {
-    clearOpenAiSpeechApiKey()
-    return { configured: false, protection: null }
-  })
-
-  ipcMain.handle('speech:getOpenAiCompatibleProvider', () => {
-    try {
-      return summarizeOpenAiCompatibleSpeechProvider()
-    } catch {
-      return null
-    }
-  })
-
-  ipcMain.handle(
-    'speech:saveOpenAiCompatibleProvider',
-    async (_event, input: OpenAiCompatibleSpeechProvider) => {
-      await saveVerifiedOpenAiCompatibleSpeechProvider(input)
-    }
-  )
-
-  ipcMain.handle('speech:clearOpenAiCompatibleProvider', () => {
-    clearOpenAiCompatibleSpeechProvider()
-  })
-
-  ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
-    const manager = getSpeechModelManager(store)
-    const window = BrowserWindow.fromWebContents(event.sender)
-    if (!window) {
-      return
-    }
-    const clearProgressCallback = manager.setProgressCallback((id, progress) => {
-      if (!window.isDestroyed()) {
-        window.webContents.send('speech:downloadProgress', { modelId: id, progress })
-      }
-    })
-    // Scope process-wide model progress callbacks to the download/window lifetime to avoid retaining stale windows.
-    let progressCallbackCleared = false
-    const cleanupProgressCallback = (): void => {
-      if (progressCallbackCleared) {
-        return
-      }
-      progressCallbackCleared = true
-      window.off('closed', cleanupProgressCallback)
-      clearProgressCallback()
-    }
-    window.once('closed', cleanupProgressCallback)
-    try {
-      await manager.downloadModel(modelId)
-    } finally {
-      cleanupProgressCallback()
-    }
-  })
-
-  ipcMain.handle('speech:cancelDownload', async (_event, modelId: string) => {
-    getSpeechModelManager(store).cancelDownload(modelId)
-  })
-
-  ipcMain.handle('speech:deleteModel', async (_event, modelId: string) => {
-    await deleteLocalSpeechModel({
-      store,
-      modelManager: getSpeechModelManager(store),
-      sttService: getSpeechSttService(store),
-      modelId
-    })
-  })
+  registerSpeechApplicationHandlers(store, agentEnvResolvers)
 
   // Renderer run ids restart per document; a retired document's owner must not be reused by its successor.
   const retiredDocumentCounts = new Map<number, number>()
@@ -241,23 +110,47 @@ export function registerSpeechHandlers(
             }
             switch (msg.type) {
               case 'ready':
-                window.webContents.send('speech:ready', { sessionId })
+                publishToDocuments(
+                  'speech:ready',
+                  { sessionId },
+                  { sourceId: window.webContents.id }
+                )
                 break
               case 'partial':
-                window.webContents.send('speech:partial', { text: msg.text ?? '', sessionId })
+                publishToDocuments(
+                  'speech:partial',
+                  { text: msg.text ?? '', sessionId },
+                  { sourceId: window.webContents.id }
+                )
                 break
               case 'final':
-                window.webContents.send('speech:final', { text: msg.text ?? '', sessionId })
+                publishToDocuments(
+                  'speech:final',
+                  { text: msg.text ?? '', sessionId },
+                  { sourceId: window.webContents.id }
+                )
                 break
               case 'speech-pending':
-                window.webContents.send('speech:pending', { pending: msg.pending, sessionId })
+                publishToDocuments(
+                  'speech:pending',
+                  { pending: msg.pending, sessionId },
+                  { sourceId: window.webContents.id }
+                )
                 break
               case 'stopped':
                 cleanupSessionListener()
-                window.webContents.send('speech:stopped', { sessionId })
+                publishToDocuments(
+                  'speech:stopped',
+                  { sessionId },
+                  { sourceId: window.webContents.id }
+                )
                 break
               case 'error':
-                window.webContents.send('speech:error', { error: msg.error ?? '', sessionId })
+                publishToDocuments(
+                  'speech:error',
+                  { error: msg.error ?? '', sessionId },
+                  { sourceId: window.webContents.id }
+                )
                 void getSpeechSttService(store)
                   .stopDictation(owner)
                   .catch(() => undefined)

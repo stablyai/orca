@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { registerAppHandler } from '../app-registry/app-handler-registry'
+
 import type { Store } from '../../persistence/loading-store/store'
 import type {
   BaseRefDefaultResult,
@@ -24,7 +25,7 @@ import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gat
 import { broadcastWhenWslDistroRunning } from '../preflight/preflight-wsl-refusal-retry'
 
 export function registerBaseRefQueryHandlers(store: Store): void {
-  ipcMain.handle(
+  registerAppHandler(
     'repos:getBaseRefDefault',
     async (
       _event,
@@ -55,7 +56,7 @@ export function registerBaseRefQueryHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'repos:searchBaseRefs',
     async (
       _event,
@@ -65,7 +66,7 @@ export function registerBaseRefQueryHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerAppHandler(
     'repos:searchBaseRefDetails',
     async (
       _event,
