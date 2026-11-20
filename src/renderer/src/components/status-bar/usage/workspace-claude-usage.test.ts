@@ -88,7 +88,6 @@ it('shows the system-default preview for a system-default workspace while the ho
   expect(workspaceAccountUsage(state, 'claude', 'system-default')?.session?.usedPercent).toBe(38)
   expect(workspaceAccountUsage(state, 'claude', 'work')?.session?.usedPercent).toBe(91)
 })
-
 it('does not show an unlabeled managed-account reading as System default usage', () => {
   const state = createEmptyRateLimitState({
     claude: {

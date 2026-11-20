@@ -271,7 +271,7 @@ export class ClaudeProfileRouter {
     const login = profile ? null : this.systemDefaultLogin()
     return {
       [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath,
-      [CLAUDE_USAGE_ACCOUNT_ID_ENV]: claudeWorkspaceUsageAccountId(profile?.accountId, login),
+      [CLAUDE_USAGE_ACCOUNT_ID_ENV]: claudeWorkspaceUsageAccountId(profile?.accountId, login) ?? '',
       // Preserve the user's inherited CLAUDE_CONFIG_DIR for System default.
       ...(home ? { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home } : {})
     }
