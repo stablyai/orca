@@ -167,7 +167,7 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
     state.worktreesByRepo
   )
 
-  const hostIdByWorktreeId = (worktreeId: string): ExecutionHostId => {
+  const resolveHostId = (worktreeId: string): ExecutionHostId => {
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
       return getFolderWorkspacePartitionHostId(state, worktreeId)
@@ -203,6 +203,16 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
       return LOCAL_EXECUTION_HOST_ID
     }
     return workspaceSessionPartitionHostId(repoHostId)
+  }
+  // Routing reads only the captured state, and many tab and pane keys share a workspace: resolve each once.
+  const hostByWorktreeId = new Map<string, ExecutionHostId>()
+  const hostIdByWorktreeId = (worktreeId: string): ExecutionHostId => {
+    let hostId = hostByWorktreeId.get(worktreeId)
+    if (hostId === undefined) {
+      hostId = resolveHostId(worktreeId)
+      hostByWorktreeId.set(worktreeId, hostId)
+    }
+    return hostId
   }
   return { hostIdByWorktreeId, claims }
 }

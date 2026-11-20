@@ -126,6 +126,29 @@ export function TerminalRenderingSection({
           }
         />
       </SearchableSetting>
+      <SearchableSetting
+        title={t('terminal.recentImages.setting', 'Pasted and dropped image previews')}
+        description={t(
+          'terminal.recentImages.settingDescription',
+          'Show recent local images in the pane header after you paste or drop them.'
+        )}
+        keywords={['terminal', 'paste', 'drop', 'image', 'preview']}
+        className="py-2"
+      >
+        <SettingsSwitchRow
+          label={t('terminal.recentImages.setting', 'Pasted and dropped image previews')}
+          description={t(
+            'terminal.recentImages.settingDescription',
+            'Show recent local images in the pane header after you paste or drop them.'
+          )}
+          checked={settings.terminalDroppedImagesPreview !== false}
+          onChange={() =>
+            updateSettings({
+              terminalDroppedImagesPreview: settings.terminalDroppedImagesPreview === false
+            })
+          }
+        />
+      </SearchableSetting>
     </SettingsGroup>
   )
 }

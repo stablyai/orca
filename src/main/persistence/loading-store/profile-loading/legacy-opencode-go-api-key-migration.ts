@@ -9,9 +9,9 @@ type LegacyOpenCodeGoApiKeySecrets = Pick<
 >
 
 export type OpenCodeGoApiKeyTarget = {
-  has: () => boolean
-  read: () => string | null
-  save: (key: string) => void
+  has: () => boolean | Promise<boolean>
+  read: () => string | null | Promise<string | null>
+  save: (key: string) => void | Promise<void>
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -50,17 +50,17 @@ export function retainLegacyOpenCodeGoApiKey(
 }
 
 /** Prefer an existing main-owned key; true permits dropping the retained legacy slot. */
-export function migrateLegacyOpenCodeGoApiKey(
+export async function migrateLegacyOpenCodeGoApiKey(
   secrets: LegacyOpenCodeGoApiKeySecrets,
   target: OpenCodeGoApiKeyTarget
-): boolean {
+): Promise<boolean> {
   const sealed = secrets.sealedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT)
   if (!sealed) {
     return false
   }
   try {
     // Another app identity may own this key; read failure must retain the legacy copy.
-    const existing = target.has() ? target.read() : null
+    const existing = (await target.has()) ? await target.read() : null
     if (existing === null) {
       const decrypted = secrets.decryptWithStatus(
         LEGACY_OPENCODE_GO_API_KEY_SLOT,
@@ -74,7 +74,7 @@ export function migrateLegacyOpenCodeGoApiKey(
       }
       const key = decrypted.plaintext.trim()
       if (key) {
-        target.save(key)
+        await target.save(key)
       }
     } else {
       // Another profile may already own the machine-wide key; report the discarded duplicate.
@@ -86,6 +86,9 @@ export function migrateLegacyOpenCodeGoApiKey(
     // Preserve ciphertext and retry startup migration after disk/keychain failures.
     secrets.retainSealed(LEGACY_OPENCODE_GO_API_KEY_SLOT, sealed)
     console.warn('[opencode-go] Could not migrate the saved API key out of settings.')
+    return false
+  }
+  if (secrets.sealedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT) !== sealed) {
     return false
   }
   secrets.removeRetainedBlob(LEGACY_OPENCODE_GO_API_KEY_SLOT)

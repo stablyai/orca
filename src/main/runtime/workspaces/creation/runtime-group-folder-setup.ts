@@ -29,6 +29,7 @@ export type RuntimeGroupFolderCreateInput = FolderWorkspaceCreateInput &
     | 'startupCwd'
     | 'startupPaneKey'
     | 'startupAccountEnv'
+    | 'terminalImageViewerSupported'
     | 'onStartupTerminalCreated'
     | 'onStartupPromptCarry'
     | 'onWorkspaceCreated'

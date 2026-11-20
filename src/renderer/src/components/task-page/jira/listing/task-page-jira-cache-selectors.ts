@@ -7,47 +7,54 @@ import type { JiraIssue } from '../../../../../../shared/jira/jira-types'
 
 type JiraIssueCache = Record<string, CacheEntry<JiraIssue>>
 type JiraSearchCache = Record<string, CacheEntry<JiraIssue[]>>
+type CachedJiraIssueCopy = { cacheKey: string; issue: JiraIssue }
 
 export type TaskPageJiraIssueLookupOptions = {
   sourceContext?: TaskSourceContext | null
   siteId?: string | null
 }
 
-function visitTaskPageJiraIssues(
+const copiesBySnapshot = new WeakMap<
+  JiraIssueCache,
+  WeakMap<JiraSearchCache, Map<string, CachedJiraIssueCopy[]>>
+>()
+
+// Why: the list looks up every row per cache change; one pass per snapshot keeps that linear.
+function cachedJiraIssueCopies(
   jiraIssueCache: JiraIssueCache,
-  jiraSearchCache: JiraSearchCache,
-  options: TaskPageJiraIssueLookupOptions,
-  visit: (issue: JiraIssue) => void
-): void {
-  const sourceScope =
-    options.sourceContext?.provider === 'jira'
-      ? `${getTaskSourceCacheScope(options.sourceContext)}::`
-      : null
-  const matchesScope = (cacheKey: string): boolean =>
-    sourceScope === null || cacheKey.startsWith(sourceScope)
-  const consider = (issue: JiraIssue | null | undefined): void => {
-    if (issue && (!options.siteId || issue.siteId === options.siteId)) {
-      visit(issue)
+  jiraSearchCache: JiraSearchCache
+): Map<string, CachedJiraIssueCopy[]> {
+  let bySearchCache = copiesBySnapshot.get(jiraIssueCache)
+  if (!bySearchCache) {
+    bySearchCache = new WeakMap()
+    copiesBySnapshot.set(jiraIssueCache, bySearchCache)
+  }
+  const cached = bySearchCache.get(jiraSearchCache)
+  if (cached) {
+    return cached
+  }
+  const copies = new Map<string, CachedJiraIssueCopy[]>()
+  const add = (cacheKey: string, issue: JiraIssue | null | undefined): void => {
+    if (!issue) {
+      return
+    }
+    const forKey = copies.get(issue.key)
+    if (forKey) {
+      forKey.push({ cacheKey, issue })
+    } else {
+      copies.set(issue.key, [{ cacheKey, issue }])
     }
   }
   for (const [cacheKey, entry] of Object.entries(jiraIssueCache)) {
-    if (matchesScope(cacheKey)) {
-      consider(entry?.data)
-    }
+    add(cacheKey, entry?.data)
   }
   for (const [cacheKey, entry] of Object.entries(jiraSearchCache)) {
-    if (matchesScope(cacheKey)) {
-      entry?.data?.forEach(consider)
+    for (const issue of entry?.data ?? []) {
+      add(cacheKey, issue)
     }
   }
-}
-
-function newestJiraIssue(current: JiraIssue | null, candidate: JiraIssue): JiraIssue {
-  const timestamp = (issue: JiraIssue): number => {
-    const time = Date.parse(issue.updatedAt)
-    return Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
-  }
-  return current === null || timestamp(candidate) > timestamp(current) ? candidate : current
+  bySearchCache.set(jiraSearchCache, copies)
+  return copies
 }
 
 export function findTaskPageJiraIssue(
@@ -59,12 +66,32 @@ export function findTaskPageJiraIssue(
   if (!jiraIssueKey) {
     return null
   }
+  const sourceScope =
+    options.sourceContext?.provider === 'jira'
+      ? getTaskSourceCacheScope(options.sourceContext)
+      : null
+
+  // Why: entries for older searches outlive their TTL, so the first match can be a stale copy.
+  // Keep the most recently updated copy; optimistic edits are patched into every copy.
   let newest: JiraIssue | null = null
-  visitTaskPageJiraIssues(jiraIssueCache, jiraSearchCache, options, (issue) => {
-    if (issue.key === jiraIssueKey) {
-      newest = newestJiraIssue(newest, issue)
+  let newestTime = Number.NEGATIVE_INFINITY
+  for (const { cacheKey, issue } of cachedJiraIssueCopies(jiraIssueCache, jiraSearchCache).get(
+    jiraIssueKey
+  ) ?? []) {
+    if (options.siteId && issue.siteId !== options.siteId) {
+      continue
     }
-  })
+    // Scope drawer lookup by site/source so identical issue keys cannot borrow another host/account’s cache.
+    if (sourceScope !== null && !cacheKey.startsWith(`${sourceScope}::`)) {
+      continue
+    }
+    const time = Date.parse(issue.updatedAt)
+    const comparable = Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
+    if (newest === null || comparable > newestTime) {
+      newest = issue
+      newestTime = comparable
+    }
+  }
   return newest
 }
 
@@ -74,25 +101,18 @@ export function resolveTaskPageJiraIssues(
   jiraSearchCache: JiraSearchCache,
   options: Pick<TaskPageJiraIssueLookupOptions, 'sourceContext'> = {}
 ): JiraIssue[] {
-  if (issues.length === 0) {
-    return issues
-  }
-  const identity = (key: string, siteId?: string): string => JSON.stringify([siteId ?? null, key])
-  const newest = new Map<string, JiraIssue | null>(
-    issues.map((issue) => [identity(issue.key, issue.siteId), null])
-  )
-  const consider = (key: string, issue: JiraIssue): void => {
-    if (newest.has(key)) {
-      newest.set(key, newestJiraIssue(newest.get(key) ?? null, issue))
+  return issues.map((issue) => {
+    const cached = findTaskPageJiraIssue(jiraIssueCache, jiraSearchCache, issue.key, {
+      ...options,
+      siteId: issue.siteId
+    })
+    if (!cached) {
+      return issue
     }
-  }
-  visitTaskPageJiraIssues(jiraIssueCache, jiraSearchCache, options, (issue) => {
-    consider(identity(issue.key, issue.siteId), issue)
-    if (issue.siteId) {
-      consider(identity(issue.key), issue)
-    }
+    const fetchedTime = Date.parse(issue.updatedAt)
+    const cachedTime = Date.parse(cached.updatedAt)
+    return !Number.isNaN(fetchedTime) && (Number.isNaN(cachedTime) || fetchedTime > cachedTime)
+      ? issue
+      : cached
   })
-  return issues.map((issue) =>
-    newestJiraIssue(newest.get(identity(issue.key, issue.siteId)) ?? null, issue)
-  )
 }

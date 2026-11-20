@@ -24,6 +24,7 @@ function issue(statusName: string, updatedAt: string): JiraIssue {
 }
 
 describe('Jira list cache projection scan bound', () => {
+  // Guards the refreshed-row resolution in #45049 without repeating cache scans per row.
   it.each([100, 1000])('visits each cached issue once for %i displayed rows', (size) => {
     let reads = 0
     const stale = Array.from({ length: size }, (_, i) => ({
