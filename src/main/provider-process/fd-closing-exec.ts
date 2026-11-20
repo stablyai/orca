@@ -1,4 +1,5 @@
 import { access, constants } from 'node:fs/promises'
+import { setFdClosingExec } from '@orca/process-host/fd-closing-exec-launch'
 import { resolveProviderExecPath } from './provider-process-supervisor'
 
 let missingLogged = false
@@ -20,9 +21,16 @@ export async function resolveFdClosingExec(): Promise<string | undefined> {
     if (!missingLogged) {
       missingLogged = true
       console.warn(
-        `[fd-closing-exec] ${path} is unavailable; children will inherit main's descriptors`
+        `[fd-closing-exec] ${path} is unavailable; children will inherit our descriptors`
       )
     }
     return undefined
+  }
+}
+
+/** Launches that opt in before this resolves start as before, inheriting our descriptors. */
+export function installFdClosingExec(): void {
+  if (process.platform === 'linux') {
+    void resolveFdClosingExec().then(setFdClosingExec)
   }
 }

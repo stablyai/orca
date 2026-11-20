@@ -10,7 +10,9 @@ export function spawnProcess(spec: PipedProcessSpec): ChildProcessWithoutNullStr
 export function spawnProcess(spec: ProcessSpec): ChildProcess
 export function spawnProcess(spec: ProcessSpec): ChildProcess {
   const resolved = resolveSpawn(spec, process.platform)
-  const launch = fdClosingLaunch(spec.fdClosingExec, resolved.file, resolved.args, resolved.options)
+  const launch = spec.closeInheritedFds
+    ? fdClosingLaunch(resolved.file, resolved.args, resolved.options)
+    : null
   return spawnNativeProcess(
     launch?.file ?? resolved.file,
     launch?.args ?? resolved.args,

@@ -23,7 +23,6 @@ import {
 } from '@orca/process-host/process-tree-termination'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { fdClosingLaunch } from '@orca/process-host/fd-closing-exec-launch'
-import { resolveFdClosingExec } from '../provider-process/fd-closing-exec'
 
 const HOOK_TIMEOUT = 120_000
 
@@ -242,83 +241,76 @@ export function runHook(
   Object.assign(shellHookEnv, getSetupEnvVars(repo, cwd, options.identity))
   dropIncoherentCondaActivationEnv(shellHookEnv)
 
-  const runShellHook = (fdClosingExec: string | undefined): Promise<HookProcessOutcome> =>
-    new Promise<HookProcessOutcome>((resolve) => {
-      // Settle at the deadline even if the hook traps SIGTERM or keeps running (#19334).
-      let settled = false
-      let deadline: NodeJS.Timeout | undefined
-      const settle = (result: HookProcessOutcome): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        if (deadline) {
-          clearTimeout(deadline)
-        }
-        resolve(result)
+  return new Promise<HookProcessOutcome>((resolve) => {
+    // Settle at the deadline even if the hook traps SIGTERM or keeps running (#19334).
+    let settled = false
+    let deadline: NodeJS.Timeout | undefined
+    const settle = (result: HookProcessOutcome): void => {
+      if (settled) {
+        return
       }
-      const shell = getHookShell()
-      const spawnOptions = {
-        cwd,
-        // Unattended hooks must suppress interactive Git prompts while retaining cached auth (#7652).
-        env: promptGuardShellEnv(shellHookEnv),
-        stdio: ['ignore', 'pipe', 'pipe'],
-        // Hide Windows hook consoles to prevent flashes and focus theft.
-        windowsHide: true,
-        // POSIX groups let signals reach descendants; Windows detached would create a new console.
-        ...(process.platform === 'win32' ? {} : { detached: true })
-      } satisfies SpawnOptions
-      // Linux: the `<shell> -c` argv Node's shell option builds, run without main's other fds.
-      const launch = shell
-        ? fdClosingLaunch(fdClosingExec, shell, ['-c', script], spawnOptions)
-        : null
-      // exec ignores detached; spawn creates the process group needed for tree termination.
-      const child = launch
-        ? spawn(launch.file, launch.args, spawnOptions)
-        : spawn(script, { ...spawnOptions, shell })
-      const stdout = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
-      const stderr = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
-      child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))
-      child.stderr?.on('data', (chunk: Buffer | string) => stderr.write(chunk))
-      // Unhandled stream errors crash main; retain exit reporting even when output fails.
-      for (const stream of [child.stdin, child.stdout, child.stderr]) {
-        stream?.on('error', () => {})
+      settled = true
+      if (deadline) {
+        clearTimeout(deadline)
       }
-      child.on('error', (error) => {
-        settle(hookProcessError(error, readSink(stdout), readSink(stderr), { hookName, cwd }))
-      })
-      child.on('close', (code, signal) => {
+      resolve(result)
+    }
+    const shell = getHookShell()
+    const spawnOptions = {
+      cwd,
+      // Unattended hooks must suppress interactive Git prompts while retaining cached auth (#7652).
+      env: promptGuardShellEnv(shellHookEnv),
+      stdio: ['ignore', 'pipe', 'pipe'],
+      // Hide Windows hook consoles to prevent flashes and focus theft.
+      windowsHide: true,
+      // POSIX groups let signals reach descendants; Windows detached would create a new console.
+      ...(process.platform === 'win32' ? {} : { detached: true })
+    } satisfies SpawnOptions
+    // Linux: the `<shell> -c` argv Node's shell option builds, run without main's other fds.
+    const launch = shell ? fdClosingLaunch(shell, ['-c', script], spawnOptions) : null
+    // exec ignores detached; spawn creates the process group needed for tree termination.
+    const child = launch
+      ? spawn(launch.file, launch.args, spawnOptions)
+      : spawn(script, { ...spawnOptions, shell })
+    const stdout = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
+    const stderr = createOutputSink(HOOK_OUTPUT_LIMIT_BYTES)
+    child.stdout?.on('data', (chunk: Buffer | string) => stdout.write(chunk))
+    child.stderr?.on('data', (chunk: Buffer | string) => stderr.write(chunk))
+    // Unhandled stream errors crash main; retain exit reporting even when output fails.
+    for (const stream of [child.stdin, child.stdout, child.stderr]) {
+      stream?.on('error', () => {})
+    }
+    child.on('error', (error) => {
+      settle(hookProcessError(error, readSink(stdout), readSink(stderr), { hookName, cwd }))
+    })
+    child.on('close', (code, signal) => {
+      settle(
+        classifyHookProcessResult(
+          {
+            code: signal ? null : code,
+            stdout: readSink(stdout),
+            stderr: readSink(stderr),
+            timedOut: false
+          },
+          { hookName, cwd, timeoutMs }
+        )
+      )
+    })
+    // Arming after settlement could later signal a reused PID.
+    if (!settled) {
+      deadline = setTimeout(() => {
         settle(
           classifyHookProcessResult(
-            {
-              code: signal ? null : code,
-              stdout: readSink(stdout),
-              stderr: readSink(stderr),
-              timedOut: false
-            },
+            { code: null, stdout: readSink(stdout), stderr: readSink(stderr), timedOut: true },
             { hookName, cwd, timeoutMs }
           )
         )
-      })
-      // Arming after settlement could later signal a reused PID.
-      if (!settled) {
-        deadline = setTimeout(() => {
-          settle(
-            classifyHookProcessResult(
-              { code: null, stdout: readSink(stdout), stderr: readSink(stderr), timedOut: true },
-              { hookName, cwd, timeoutMs }
-            )
-          )
-          // Terminate descendants too, with a SIGTERM grace period for cooperative hooks to clean up.
-          void signalProcessTree(child, 'SIGTERM')
-          setTimeout(() => {
-            void forceTerminateProcessTree(child)
-          }, SIGTERM_GRACE_MS).unref?.()
-        }, timeoutMs)
-      }
-    })
-  // Off Linux nothing is resolved, so the hook spawns synchronously as before.
-  return process.platform === 'linux'
-    ? resolveFdClosingExec().then(runShellHook)
-    : runShellHook(undefined)
+        // Terminate descendants too, with a SIGTERM grace period for cooperative hooks to clean up.
+        void signalProcessTree(child, 'SIGTERM')
+        setTimeout(() => {
+          void forceTerminateProcessTree(child)
+        }, SIGTERM_GRACE_MS).unref?.()
+      }, timeoutMs)
+    }
+  })
 }

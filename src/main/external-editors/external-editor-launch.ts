@@ -7,7 +7,6 @@ import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import { isVsCodeLauncherExecutable } from '../../shared/editor/launch/remote-ssh-editor-launcher'
 import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import { envWithoutAppImageRuntime } from '../pty/shell-startup/appimage-terminal-env'
-import { resolveFdClosingExec } from '../provider-process/fd-closing-exec'
 import {
   getLauncherBaseName,
   hasMatchingOuterQuotes,
@@ -237,10 +236,7 @@ export function resolveExternalEditorExecutable(
     : resolveEditorCliCommand(trimmed, platform, fileExists)
 }
 
-function startExternalEditorProcess(
-  launchSpec: ExternalEditorLaunchSpec,
-  fdClosingExec: string | undefined
-): ChildProcess {
+function startExternalEditorProcess(launchSpec: ExternalEditorLaunchSpec): ChildProcess {
   const detachedOptions = {
     detached: true,
     stdio: 'ignore',
@@ -248,7 +244,7 @@ function startExternalEditorProcess(
     env: process.platform === 'linux' ? envWithoutAppImageRuntime(process.env) : undefined
   } as const
   // An editor can outlive main indefinitely; it must not keep a crashed main's children alive.
-  const hostOptions = { ...detachedOptions, fdClosingExec }
+  const hostOptions = { ...detachedOptions, closeInheritedFds: true }
   if (launchSpec.kind === 'shell') {
     const { spawnCmd, spawnArgs, hideWindowsConsole } = launchSpec
     return hideWindowsConsole
@@ -278,9 +274,8 @@ function startExternalEditorProcess(
 }
 
 export async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec): Promise<void> {
-  const fdClosingExec = await resolveFdClosingExec()
   await new Promise<void>((resolvePromise, rejectPromise) => {
-    const child = startExternalEditorProcess(launchSpec, fdClosingExec)
+    const child = startExternalEditorProcess(launchSpec)
     let settled = false
     function cleanup(): void {
       child.off('error', onError)

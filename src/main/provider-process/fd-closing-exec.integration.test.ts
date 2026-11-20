@@ -1,6 +1,8 @@
 import { spawnProcess } from '@orca/process-host'
-import { FD_CLOSING_EXEC_ARGS } from '@orca/process-host/fd-closing-exec-launch'
+import { FD_CLOSING_EXEC_ARGS, setFdClosingExec } from '@orca/process-host/fd-closing-exec-launch'
 import { once } from 'node:events'
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
@@ -49,8 +51,12 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
         throw new Error('Missing stand-in descriptor')
       }
       leaked.resume()
-      // EOF arrives only once no helper pid holds the descriptor; the CLI sleeps far longer.
+      // EOF arrives only once no helper pid holds it; the gate stays shut, so the helper still runs.
       await once(leaked, 'end')
+      expect({ exitCode: child.exitCode, signalCode: child.signalCode }).toEqual({
+        exitCode: null,
+        signalCode: null
+      })
     } finally {
       // Closing the owner and gate pipes ends the watcher and the gated leader.
       for (const stream of child.stdio) {
@@ -60,13 +66,21 @@ describe.runIf(process.platform === 'linux')('fd-closing exec', () => {
     }
   })
 
-  it('still reports a missing program as ENOENT', async () => {
-    const child = spawnProcess({
-      program: 'orca-fd-closing-missing-program',
-      fdClosingExec: helper,
-      stdio: 'ignore'
-    })
-    const [error] = await once(child, 'error')
-    expect(error).toMatchObject({ code: 'ENOENT' })
+  it('still reports a missing program or interpreter as ENOENT', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-fd-closing-'))
+    const script = join(dir, 'broken-interpreter')
+    await writeFile(script, '#!/orca-fd-closing-missing-interpreter\n')
+    await chmod(script, 0o755)
+    setFdClosingExec(helper)
+    try {
+      for (const program of ['orca-fd-closing-missing-program', script]) {
+        const child = spawnProcess({ program, closeInheritedFds: true, stdio: 'ignore' })
+        const [error] = await once(child, 'error')
+        expect(error).toMatchObject({ code: 'ENOENT' })
+      }
+    } finally {
+      setFdClosingExec(undefined)
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })

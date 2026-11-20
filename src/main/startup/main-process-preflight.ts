@@ -65,6 +65,7 @@ import {
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/app-lifecycle/launch/single-instance-exit-code'
 import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
+import { installFdClosingExec } from '../provider-process/fd-closing-exec'
 import { installMainProcessTreeKillGate } from '../pty/process-retirement/own-chromium-tree-kill-guard'
 import { setSecretStore } from '../../shared/secure-storage/secret-store'
 import { ElectronSecretStore } from '../host/electron-secret-store'
@@ -195,6 +196,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   configureOrcaUserDataPathEnv()
   // #16761: install the lazy environment accessor immediately after userData selection or early resolves can throw/memoize the wrong profile.
   setAppEnvironment(new ElectronAppEnvironment())
+  installFdClosingExec()
   // Capture after overrides, before ready-time app naming can change userData on case-sensitive filesystems.
   initDataPath()
   startEventLoopDelayProbe('main', getCanonicalUserDataPath())

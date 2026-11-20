@@ -1,25 +1,35 @@
-import { accessSync, constants, statSync } from 'node:fs'
-import { delimiter, resolve } from 'node:path'
+import { accessSync, closeSync, constants, openSync, readSync, statSync } from 'node:fs'
+import { delimiter } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { SpawnOptions } from 'node:child_process'
 
 export const FD_CLOSING_EXEC_ARGS = ['--exec-without-inherited-fds', '--'] as const
 
 // libuv's search path when the child's environment has no PATH.
 const DEFAULT_SEARCH_PATH = '/usr/bin:/bin'
+// Linux reads at most this much of a `#!` line.
+const SHEBANG_MAX_BYTES = 256
+
+let installedHelper: string | undefined
+
+/** Main installs the Linux helper that execs a command keeping only stdio and NODE_CHANNEL_FD. */
+export function setFdClosingExec(helper: string | undefined): void {
+  installedHelper = helper
+}
 
 export type FdClosingLaunch = { file: string; args: string[] }
 
 /**
- * Linux: run `file` through the fd-closing helper so the child keeps only stdio and the IPC
- * channel. Null off Linux, or when `file` doesn't resolve to a runnable file, so the direct spawn
+ * Linux: run `file` through the installed fd-closing helper so the child keeps only stdio and the
+ * IPC channel. Null off Linux, without a helper, or when `file` wouldn't exec, so the direct spawn
  * still fails with ENOENT/EACCES instead of the helper's exit 127.
  */
 export function fdClosingLaunch(
-  helper: string | undefined,
   file: string,
   args: readonly string[],
   options: Pick<SpawnOptions, 'cwd' | 'env' | 'stdio'>
 ): FdClosingLaunch | null {
+  const helper = installedHelper
   if (process.platform !== 'linux' || !helper) {
     return null
   }
@@ -27,38 +37,61 @@ export function fdClosingLaunch(
   if (Array.isArray(stdio) && stdio.slice(3).some((slot) => slot !== 'ipc' && slot != null)) {
     throw new Error('fd-closing launches keep only stdio and IPC; extra stdio slots would close')
   }
-  const runnable = resolveRunnable(file, String(options.cwd ?? process.cwd()), options.env)
-  return runnable ? { file: helper, args: [...FD_CLOSING_EXEC_ARGS, runnable, ...args] } : null
+  // The helper starts after the child's chdir and execvp's the same name, so argv0 is unchanged.
+  return wouldExec(file, options)
+    ? { file: helper, args: [...FD_CLOSING_EXEC_ARGS, file, ...args] }
+    : null
 }
 
-// execvp's lookup: a name with a slash is a path; otherwise each PATH entry, empty ones from cwd.
-function resolveRunnable(
-  file: string,
-  cwd: string,
-  env: NodeJS.ProcessEnv | undefined
-): string | null {
+// execvp's lookup, unnormalized so symlinks and `..` resolve as the kernel does.
+function wouldExec(file: string, options: Pick<SpawnOptions, 'cwd' | 'env'>): boolean {
+  const cwd = options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd
+  const inCwd = (path: string): string =>
+    path.startsWith('/') || cwd === undefined ? path : `${cwd}/${path}`
   if (file.includes('/')) {
-    const path = resolve(cwd, file)
-    return isRunnable(path) ? path : null
+    return isRunnable(inCwd(file))
   }
-  const searchPath = (env ?? process.env).PATH ?? DEFAULT_SEARCH_PATH
-  for (const directory of searchPath.split(delimiter)) {
-    const path = resolve(cwd, directory, file)
-    if (isRunnable(path)) {
-      return path
-    }
-  }
-  return null
+  const searchPath = (options.env ?? process.env).PATH ?? DEFAULT_SEARCH_PATH
+  return searchPath
+    .split(delimiter)
+    .some((directory) => isRunnable(inCwd(directory === '' ? file : `${directory}/${file}`)))
 }
 
+// A script runs only if its `#!` interpreter does; exec otherwise fails with ENOENT or EACCES.
 function isRunnable(path: string): boolean {
+  if (!isExecutableFile(path)) {
+    return false
+  }
+  const interpreter = shebangInterpreter(path)
+  return interpreter === null || isExecutableFile(interpreter)
+}
+
+function isExecutableFile(path: string): boolean {
   try {
-    if (!statSync(path).isFile()) {
-      return false
-    }
     accessSync(path, constants.X_OK)
-    return true
+    return statSync(path).isFile()
   } catch {
     return false
   }
+}
+
+function shebangInterpreter(path: string): string | null {
+  const head = Buffer.alloc(SHEBANG_MAX_BYTES)
+  let length: number
+  try {
+    const fd = openSync(path, 'r')
+    try {
+      length = readSync(fd, head, 0, SHEBANG_MAX_BYTES, 0)
+    } finally {
+      closeSync(fd)
+    }
+  } catch {
+    // An execute-only file can't be read here; exec still decides.
+    return null
+  }
+  const text = head.subarray(0, length).toString('latin1')
+  if (!text.startsWith('#!')) {
+    return null
+  }
+  return text.slice(2).split('\n')[0].trim().split(/[ \t]/)[0] || null
 }
