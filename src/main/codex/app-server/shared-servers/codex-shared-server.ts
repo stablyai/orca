@@ -171,8 +171,14 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         })
       )
       proven &&= stopped.every(Boolean)
-      if (!proven) {
+      if (!proven && !this.hasExited) {
         proven = await this.handleStuckTurn()
+      }
+      if (this.hasExited) {
+        // An exit mid-wait ends every turn waiter without a turn/completed; only the reaped tree
+        // can prove this chat's commands are gone.
+        await this.afterReap()
+        proven = this.workloadVerdict() === 'exited'
       }
       if (!this.closed) {
         // A chat that already resumed one of these threads here owns its subscription now.

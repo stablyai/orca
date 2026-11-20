@@ -371,4 +371,18 @@ describe('shared Codex app-servers', () => {
     })
     expect(opener).toBe(spawnCodexAppServerConnection)
   })
+
+  it('does not count a server exit during Stop as the turn ending', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex('ignored', 'unverifiable')
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    const closing = connA.close()
+    await vi.advanceTimersByTimeAsync(1_000)
+    servers[0]!.crash()
+    await vi.advanceTimersByTimeAsync(20_000)
+    await closing
+    expect(connA.processTreeUnproven).toBe(true)
+  })
 })
