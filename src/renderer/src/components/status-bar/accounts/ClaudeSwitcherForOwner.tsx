@@ -46,6 +46,10 @@ import { AccountSwitchSection, AccountSwitchSignedOutHeading } from './AccountSw
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
 import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-sign-in'
+import {
+  claudeInactiveUsageAccountId,
+  claudeRowCanShowNotChecked
+} from '../../../../../shared/agent-accounts/claude/claude-system-default-inactive'
 import { getOwnerAccountRows } from './owner-account-rows'
 
 const EMPTY_CLAUDE_ACCOUNTS = emptyClaudeAccountsState()
@@ -259,7 +263,16 @@ export function ClaudeSwitcherForOwner({
       hasActiveRuntimeEnvironment && target.id === null && target.runtimeTarget.runtime === 'wsl'
         ? { ...target, disabled: true }
         : target,
-    inactiveUsage: target.id ? inactiveClaudeAccounts.find((a) => a.accountId === target.id) : null,
+    inactiveUsage: (() => {
+      const accountId = claudeInactiveUsageAccountId({
+        id: target.id,
+        active: target.active,
+        runtime: target.runtimeTarget.runtime
+      })
+      return accountId
+        ? (inactiveClaudeAccounts.find((account) => account.accountId === accountId) ?? null)
+        : null
+    })(),
     // Why local only: the hidden sign-in runs on this device, not a remote server.
     signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
   }))
@@ -296,7 +309,14 @@ export function ClaudeSwitcherForOwner({
       )
     }
     // Why local only: an older host publishes no per-account readings, so "not checked" could be false.
-    return target.id && !target.active && !hasActiveRuntimeEnvironment ? (
+    return claudeRowCanShowNotChecked(
+      {
+        id: target.id,
+        active: target.active,
+        runtime: target.runtimeTarget.runtime
+      },
+      hasActiveRuntimeEnvironment
+    ) ? (
       <AccountUsageNotChecked />
     ) : null
   }
@@ -312,9 +332,14 @@ export function ClaudeSwitcherForOwner({
       key={`${selectedGroup?.key}:${target.id ?? 'system'}`}
       aria-description={
         !signInId &&
-        !target.active &&
-        target.id &&
-        !hasActiveRuntimeEnvironment &&
+        claudeRowCanShowNotChecked(
+          {
+            id: target.id,
+            active: target.active,
+            runtime: target.runtimeTarget.runtime
+          },
+          hasActiveRuntimeEnvironment
+        ) &&
         !inactiveUsage?.isFetching &&
         isClaudeAccountNotChecked(inactiveUsage?.rateLimits)
           ? notCheckedDescription

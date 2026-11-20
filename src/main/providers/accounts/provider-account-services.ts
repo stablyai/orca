@@ -23,6 +23,7 @@ import {
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
+import { inactiveClaudeMenuAccounts } from '../../../shared/agent-accounts/claude/claude-system-default-inactive'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
@@ -169,13 +170,9 @@ export function createProviderAccountServices(
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()
-    const activeIds = new Set(
-      [
-        normalizeClaudeRuntimeSelection(settings).host,
-        ...Object.values(normalizeClaudeRuntimeSelection(settings).wsl)
-      ].filter(Boolean)
-    )
-    return settings.claudeManagedAccounts
+    const selection = normalizeClaudeRuntimeSelection(settings)
+    const activeIds = new Set([selection.host, ...Object.values(selection.wsl)].filter(Boolean))
+    const inactiveSaved = settings.claudeManagedAccounts
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
@@ -183,6 +180,7 @@ export function createProviderAccountServices(
         wslDistro: account.wslDistro,
         wslLinuxAuthPath: account.wslLinuxAuthPath
       }))
+    return inactiveClaudeMenuAccounts(inactiveSaved, selection.host)
   })
   rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store.getSettings()
