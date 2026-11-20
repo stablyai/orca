@@ -7,7 +7,25 @@ import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 
-const BOT = { id: 'bot-a', hostId: 'local' } as Bot
+const BOT: Bot = {
+  id: 'bot-a',
+  name: 'Bot builder',
+  hostId: 'local',
+  folder: 'bot-builder',
+  folderWorkspaceId: 'w1',
+  agent: 'codex',
+  avatar: null,
+  paused: false,
+  permissionMode: 'ask',
+  notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+  members: [],
+  slack: null,
+  chatSessionId: null,
+  linear: null,
+  github: null,
+  createdAt: 1,
+  updatedAt: 1
+}
 const asker = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' } as const
 const ask = {
   questions: [
@@ -30,9 +48,9 @@ it('posts a typed answer held for one line with the next answer that carries an 
   })
   const { result } = renderHook(() => useBotItemQuestionSteps(BOT, item, events, send, []))
 
-  act(() => result.current.comment('what do other products do', [], 'e1:0'))
+  act(() => result.current.fromBox('what do other products do', [], 'e1:0'))
   expect(send).not.toHaveBeenCalled()
-  act(() => result.current.comment('[Image #1] vercel sign in works', ['/shot.png'], 'e1:1'))
+  act(() => result.current.fromBox('[Image #1] vercel sign in works', ['/shot.png'], 'e1:1'))
 
   expect(send).toHaveBeenCalledExactlyOnceWith(
     'Fix Datadog with a site picker? → what do other products do\nVercel: test it or hide it? → [Image #1] vercel sign in works',

@@ -98,8 +98,8 @@ export function useBotItemQuestionSteps(
   sent: BotItemSentAnswers | null
   /** A quick reply of one question, posted at once as it always has. */
   quick: (text: string) => void
-  /** The comment box's send, with the waiting line "Replying to" names, by its id. */
-  comment: (text: string, paths: readonly string[], replyingTo: string | null) => void
+  /** The comment box's send: "Replying to" a line of several questions, it answers that line. */
+  fromBox: (text: string, paths: readonly string[], replyingTo: string | null) => void
   /** What the comment box replies to: with several questions, the line the step is on. */
   waitingLine: { id: string; line: string; replies: boolean } | null
 } {
@@ -135,7 +135,7 @@ export function useBotItemQuestionSteps(
     }
     hold(next)
   })
-  const comment = useLatestHandler(
+  const fromBox = useLatestHandler(
     (text: string, paths: readonly string[], replyingTo: string | null) => {
       if (!waiting) {
         send(text, paths)
@@ -171,7 +171,7 @@ export function useBotItemQuestionSteps(
         ? sent
         : null,
     quick,
-    comment,
+    fromBox,
     waitingLine: stepLine
       ? {
           id: `${askId}:${steps.current}`,

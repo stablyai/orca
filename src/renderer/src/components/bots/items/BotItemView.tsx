@@ -233,16 +233,13 @@ export function BotItemBody({
     [fileContext?.fileLinkContext, runtimeContext]
   )
   // `waitingLine`: the question the comment box names, until a reply is on its way.
-  const {
-    steps,
-    sent,
-    quick,
-    comment: commentFromBox,
-    waitingLine
-  } = useBotItemQuestionSteps(bot, item, view.events, sendLatest, pending.shown)
-  // The box's Enter, "Replying to" a line of several questions, answers that line like a quick reply.
-  const sendFromBox = (text: string, paths: readonly string[]): void =>
-    commentFromBox(text, paths, comment.current?.replyingTo() ?? null)
+  const { steps, sent, quick, fromBox, waitingLine } = useBotItemQuestionSteps(
+    bot,
+    item,
+    view.events,
+    sendLatest,
+    pending.shown
+  )
   const quickReplies = useMemo(
     () =>
       deleted
@@ -386,7 +383,7 @@ export function BotItemBody({
                 attachTo={attachTo}
                 nav={nav}
                 question={waitingOn}
-                onSend={sendFromBox}
+                onSend={fromBox}
               />
             )}
           </NativeChatPaneFileDropSurface>
