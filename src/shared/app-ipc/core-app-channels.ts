@@ -42,6 +42,7 @@ export const CORE_APP_CHANNELS = [
   'claudeAccounts:add',
   'claudeAccounts:cancelPendingLogin',
   'claudeAccounts:list',
+  'claudeAccounts:moveUnheldRunningSessions',
   'claudeAccounts:reauthenticate',
   'claudeAccounts:remove',
   'claudeAccounts:rename',

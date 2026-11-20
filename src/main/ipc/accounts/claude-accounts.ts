@@ -45,7 +45,7 @@ export function registerClaudeAccountHandlers(
         ? claudeAccounts.selectAccountForTarget(args.accountId, args)
         : claudeAccounts.selectAccount(args.accountId)
   )
-  ipcMain.handle(
+  registerAppHandler(
     'claudeAccounts:moveUnheldRunningSessions',
     (_event, args: { change: ClaudeHostSelectionChange; heldPtyIds: string[] }) =>
       moveUnheldSessions(args.change, new Set(args.heldPtyIds))

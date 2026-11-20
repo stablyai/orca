@@ -55,6 +55,7 @@ import { emitServeBrowserIdentityActionLine } from '../../server/serve-stdout-bo
 import { getBrowserIdentityModeStatus } from '../../browser/identity/mode/browser-identity-mode-store'
 import { beginChatJournalStartup, chatJournalHostServing } from './chat-journal-startup'
 import { e2eHeadlessServeWithoutBrowser } from '../serve-launch/e2e-headless-serve-without-browser'
+import { publishToDocuments } from '../../ipc/app-registry/app-handler-registry'
 
 type RuntimeService = NonNullable<typeof state.core.runtime>
 
@@ -135,7 +136,9 @@ function installRuntimeRpc(
     // Retain the one-shot across the runtime-start/renderer-mount race.
     state.core.pendingUnpairedDeviceAuthFailure = true
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-      state.mainWindow.webContents.send('mobile:unpairedDeviceAuthFailure')
+      publishToDocuments('mobile:unpairedDeviceAuthFailure', undefined, {
+        sourceId: state.mainWindow.webContents.id
+      })
     }
   })
   return runtimeRpc
