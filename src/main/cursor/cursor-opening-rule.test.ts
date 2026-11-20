@@ -70,7 +70,7 @@ describe('Cursor opening rule', () => {
       secondPlaced = true
       return undo
     })
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await Promise.resolve()
     expect(secondPlaced).toBe(false)
     await first()
     await (
