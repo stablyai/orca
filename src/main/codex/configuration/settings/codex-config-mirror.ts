@@ -14,7 +14,7 @@ import {
 } from './config-settings-promotion'
 import { observeCodexSettingsBaseline, readCodexSettingsBaseline } from './config-settings-baseline'
 import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config-sync-stall'
-import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
+import { preserveRuntimeEdits } from './codex-config-settings-preservation'
 import {
   applyMeasuredRuntimeOwnedConfig,
   applyRuntimeOwnedConfig
@@ -27,6 +27,7 @@ import {
   resolveCodexConfigMirrorSourceDirectory
 } from './codex-config-mirror-source'
 import { mergeSystemCodexConfigIntoRuntime } from './codex-config-mirror-merge'
+import type { CodexRegistrationBaseline } from './config-plugin-registration-promotion'
 
 // Mirrored MCP environment tokens require owner-only writes.
 const RUNTIME_CONFIG_WRITE = { mode: 0o600 } as const
@@ -96,6 +97,7 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
     ),
     // Missing marketplace/plugin tables in later source configs now count as removals.
     mirroredRegistrations: true,
+    registrations: mirrorResult.registrationBaseline,
     mirroredMcpServers: mirrorResult.mirroredMcpServerNames,
     mirroredMcpServerRoot: mirrorResult.mirroredMcpServerRoot
   })
@@ -217,6 +219,7 @@ type CodexConfigMirrorResult =
       preservedConflictKeys: ReadonlySet<string>
       mirroredMcpServerNames: ReadonlySet<string>
       mirroredMcpServerRoot: boolean
+      registrationBaseline?: CodexRegistrationBaseline
     }
 
 function syncSystemConfigIntoManagedCodexHomeUnsafe(
@@ -290,16 +293,14 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     readMcpServerTomlOwnership(systemConfig)
   // Reuse the observed snapshot rather than mixing reads across path-state changes.
   const runtimeConfig = runtimeConfigObservation.value
-  const preserved = preserveRuntimeConflictValues(
-    mergeSystemCodexConfigIntoRuntime(
-      runtimeConfig,
-      systemConfig,
-      sourceConfigDir,
-      promotionPlan.mirroredMcpServers,
-      promotionPlan.mirroredMcpServerRoot
-    ),
-    promotionPlan.runtimeValuesToPreserve
+  const merged = mergeSystemCodexConfigIntoRuntime(
+    runtimeConfig,
+    systemConfig,
+    sourceConfigDir,
+    promotionPlan.mirroredMcpServers,
+    promotionPlan.mirroredMcpServerRoot
   )
+  const preserved = preserveRuntimeEdits(merged, runtimeConfig, systemConfig, promotionPlan)
   const nextRuntimeConfig = applyMeasuredRuntimeOwnedConfig(
     preserved.content,
     runtimeHomePath,
@@ -323,6 +324,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     status: 'mirrored',
     preservedConflictKeys: preserved.keys,
     mirroredMcpServerNames,
-    mirroredMcpServerRoot
+    mirroredMcpServerRoot,
+    registrationBaseline: preserved.registrationBaseline
   }
 }

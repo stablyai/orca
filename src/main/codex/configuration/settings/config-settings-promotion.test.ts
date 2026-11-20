@@ -15,6 +15,7 @@ import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import type * as TomlAtomicWrite from '../toml/config-toml-atomic-write'
+import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
 
 // Bypass platform-specific socket paths so asserted config bytes stay host-independent.
 vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal) => ({
@@ -24,8 +25,19 @@ vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal
 
 const { homedirMock, promotionTestState } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>(),
-  promotionTestState: { failAtomicWrite: false }
+  promotionTestState: { failAtomicWrite: false, wslSystemConfigPath: null as string | null }
 }))
+
+vi.mock('../../../../shared/file-access/wsl-paths', async (importOriginal) => {
+  const actual = await importOriginal<typeof WslPaths>()
+  return {
+    ...actual,
+    parseWslUncPath: (path: string) =>
+      path === promotionTestState.wslSystemConfigPath
+        ? { distro: 'Ubuntu', linuxPath: '/home/u/.codex/config.toml' }
+        : actual.parseWslUncPath(path)
+  }
+})
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
@@ -61,6 +73,7 @@ beforeEach(() => {
   process.env.ORCA_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(tmpHome)
   promotionTestState.failAtomicWrite = false
+  promotionTestState.wslSystemConfigPath = null
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
   }
@@ -118,6 +131,32 @@ function simulateCodexSettingWrite(key: string, rawValue: string): void {
 }
 
 describe('codex settings write-back promotion', () => {
+  it('keeps runtime edits in the managed home instead of writing a WSL guest config', () => {
+    const original = 'model = "gpt-5"\n\n[mcp_servers.docs]\nurl = "https://docs.example"\n'
+    writeSystemConfig(original)
+    promotionTestState.wslSystemConfigPath = systemConfigPath()
+    syncSystemConfigIntoManagedCodexHome()
+    simulateCodexSettingWrite('model', '"o4"')
+    writeFileSync(
+      runtimeConfigPath(),
+      `${readRuntimeConfig()}\n[plugins."ponytail@ponytail"]\nenabled = true\n`,
+      'utf-8'
+    )
+
+    syncSystemConfigIntoManagedCodexHome()
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readSystemConfig()).toBe(original)
+    expect(readRuntimeConfig()).toContain('model = "o4"')
+    expect(readRuntimeConfig()).toContain('[plugins."ponytail@ponytail"]')
+
+    writeSystemConfig(original.replace('"gpt-5"', '"o5"'))
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).toContain('model = "o5"')
+    expect(readRuntimeConfig()).toContain('[plugins."ponytail@ponytail"]')
+  })
+
   it('retries a runtime change after a missing system config returns', () => {
     writeSystemConfig('model = "gpt-5"\n')
     syncSystemConfigIntoManagedCodexHome()
