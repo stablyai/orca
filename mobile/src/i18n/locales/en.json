@@ -5495,7 +5495,8 @@
         "label": "Comment",
         "add": "Add a comment…",
         "submit": "Comment",
-        "showLess": "Show less"
+        "showLess": "Show less",
+        "fileOnComputer": "Open {{name}} on your computer."
       },
       "link": {
         "notRead": "Not read yet",

@@ -37,16 +37,12 @@ const SET = defineMethod({
     if (params.files?.length && !comment?.trim() && !ask) {
       throw new BotItemError('invalid_argument', '--file goes with --comment. Nothing was posted.')
     }
-    // With an ask, its context is the words the files go under; the host spells the text out of it.
-    const attached = await admitBotItemFiles(
-      context,
-      item,
-      ask?.context ?? comment ?? '',
-      params.files
-    )
-    if (ask) {
+    // With an ask, the files go under its own context; its comment is the host's rendering of it.
+    const words = ask ? (ask.context ?? '') : (comment ?? '')
+    const attached = await admitBotItemFiles(context, item, words, params.files)
+    if (ask && params.files?.length) {
       ask = { ...ask, ...(attached.text ? { context: attached.text } : {}) }
-    } else if (comment !== undefined) {
+    } else if (!ask && comment !== undefined) {
       comment = attached.text
     }
     const images = attached.images.length > 0 ? attached.images : undefined

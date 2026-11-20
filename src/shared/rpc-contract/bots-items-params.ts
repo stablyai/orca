@@ -61,7 +61,7 @@ export const BotItemsComment = z
     text: z.string(),
     files: Files
   })
-  .refine((value) => value.text.trim() || value.files?.length, 'Missing --text')
+  .refine((value) => value.text.trim() || value.files?.length, 'Missing --text or --file')
 
 export const BotItemsDone = z.object({ ...Caller, item: Item, note: OptionalString })
 

@@ -48,7 +48,9 @@ export function NativeChatAttachmentPeek({
         const chunk = attachmentTextChunkSchema.parse(result)
         const bytes = Uint8Array.from(atob(chunk.contentBase64), (char) => char.charCodeAt(0))
         const head = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
-        setPeek({ path, text: nativeChatAttachmentPeekText(path, head) })
+        const text = nativeChatAttachmentPeekText(path, head)
+        // First bytes that show nothing give no preview; only a 0-byte file is empty.
+        setPeek({ path, text: text || chunk.size === 0 ? text : null })
       },
       () => !abort.signal.aborted && setPeek({ path, text: null })
     )

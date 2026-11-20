@@ -48,6 +48,10 @@ function useHostImages(client: RpcClient | null): Reads {
       // Store paths read from the attachment store, which needs no workspace.
       void readHostChatImage({ client, worktreeId: '' }, path, signal).then((uri) => {
         if (!signal.aborted) {
+          // A failed read may be tried again by the next tile or viewer that asks.
+          if (uri === null) {
+            started.current.delete(path)
+          }
           setUris((current) => ({ ...current, [path]: uri }))
         }
       })
@@ -129,11 +133,22 @@ function Viewer({
 }) {
   const image = images[index]!
   const { read } = reads
-  useEffect(() => read(image.path), [read, image.path])
-  const uri = reads.uris[image.path]
+  // The neighbours too, so a step lands on a read image.
+  useEffect(() => {
+    for (const near of [index - 1, index, index + 1]) {
+      const path = images[near]?.path
+      if (path) {
+        read(path)
+      }
+    }
+  }, [read, images, index])
+  // Shown until the next image's bytes arrive, so a step never closes the viewer.
+  const last = useRef<string | null>(null)
+  const uri = reads.uris[image.path] ?? last.current
   if (!uri) {
     return null
   }
+  last.current = uri
   const many = images.length > 1
   return (
     <MobileImageViewer

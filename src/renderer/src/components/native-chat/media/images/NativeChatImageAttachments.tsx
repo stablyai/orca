@@ -167,14 +167,23 @@ export function NativeChatImageViewer({
   runtimeContext: RuntimeFileOperationArgs | null | undefined
 }): React.JSX.Element {
   const block = index === null ? undefined : blocks[index]
-  const { displaySrc } = useTranscriptImageSrc(block, runtimeContext, block !== undefined)
+  const read = useTranscriptImageSrc(block, runtimeContext, block !== undefined)
+  // The read keeps the last image's source until the next one's loads: never show it under this name.
+  const [left, setLeft] = useState<{ index: number; src: string | undefined } | null>(null)
+  const displaySrc =
+    left?.index === index && left.src === read.displaySrc ? undefined : read.displaySrc
   const label = block ? nativeChatImageLabel(block) : ''
   const step = (by: number) => {
     if (index === null || blocks.length < 2) {
       return undefined
     }
     const to = index + by
-    return to < 0 || to >= blocks.length ? null : () => onIndexChange(to)
+    return to < 0 || to >= blocks.length
+      ? null
+      : () => {
+          setLeft({ index: to, src: read.displaySrc })
+          onIndexChange(to)
+        }
   }
   return (
     <PanZoomImageDialog
