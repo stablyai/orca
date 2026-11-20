@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { replaceTabBuckets } from '@/store/record-transitions/keyed-record-transitions'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { getStructuredChatTabNames } from './structured-chat-name-observation'
 
 // Perf contract (tracked in #45759): every terminal title write re-resolved every chat's name,
@@ -48,11 +49,12 @@ function chatReadsForTitleWrite(workspaces: number): number {
   useAppStore.setState({ unifiedTabsByWorktree: tabs })
   expect(getStructuredChatTabNames().size).toBe(workspaces)
   const [terminal, chat] = tabs[`wt-${workspaces}-0`]
-  useAppStore.setState({
-    unifiedTabsByWorktree: replaceTabBuckets(tabs, [
-      [`wt-${workspaces}-0`, [{ ...terminal, label: 'vim' }, chat]]
-    ])
-  })
+  const retitled = replaceTabBuckets(tabs, [
+    [`wt-${workspaces}-0`, [{ ...terminal, label: 'vim' }, chat]]
+  ])
+  useAppStore.setState({ unifiedTabsByWorktree: retitled })
+  // Advancing the shared chat list re-filters the replaced bucket; count name resolution alone.
+  getStructuredAgentSessionTabs(retitled)
   chatReads = 0
   getStructuredChatTabNames()
   return chatReads
