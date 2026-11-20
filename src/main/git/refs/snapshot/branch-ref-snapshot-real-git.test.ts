@@ -16,6 +16,7 @@ import {
   makeRequest
 } from '../../../runtime/rpc/methods/projects/repo-rpc.test-fixture'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 
 import { subscribeGitRefChanges } from '../git-ref-change-signal'
 import { resolveBranchSnapshotIdentity } from './branch-ref-snapshot-identity'
@@ -195,7 +196,9 @@ it('shares linked checkout branches while reading current branch and occupancy p
   expect(mainBranches.branches[0]).toBe('main')
   expect(linkedBranches.current).toBe('other')
   expect(linkedBranches.branches[0]).toBe('other')
-  expect(linkedBranches.worktreePaths?.other).toBe(await realpath(linked))
+  expect(normalizeRuntimePathForComparison(linkedBranches.worktreePaths?.other ?? '')).toBe(
+    normalizeRuntimePathForComparison(await realpath(linked))
+  )
   await git(root, 'branch', 'fresh')
   expect(await searchBaseRefDetails(nested, 'fresh', 20)).toEqual([
     { refName: 'refs/heads/fresh', localBranchName: 'fresh' }
@@ -209,7 +212,11 @@ it('fences all live repositories for own writes from linked, known and unknown p
   roots.push(linkedParent)
   const linked = join(linkedParent, 'checkout')
   await git(root, 'worktree', 'add', '-qb', 'linked-scope', linked)
-  expect((await listLocalBranches(root)).worktreePaths?.['linked-scope']).toBe(linked)
+  expect(
+    normalizeRuntimePathForComparison(
+      (await listLocalBranches(root)).worktreePaths?.['linked-scope'] ?? ''
+    )
+  ).toBe(normalizeRuntimePathForComparison(linked))
   await searchBaseRefDetails(other, '', 20)
   const a = await resolveBranchSnapshotIdentity(root, {})
   const b = await resolveBranchSnapshotIdentity(other, {})
