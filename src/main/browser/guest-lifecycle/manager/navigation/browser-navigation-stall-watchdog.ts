@@ -5,6 +5,7 @@ import type {
 import { isEligibleLocalCertificateHost } from '../../../../../shared/browser/navigation/browser-url'
 import { startSpan } from '../../../../observability/tracer'
 import { observeBrowserGuestRequests } from '../../../sessions/requests/browser-session-web-request-observer'
+import { blockedMainFrameRequestBeingReported } from '../../../sessions/requests/browser-session-request-decisions'
 import {
   onBrowserGuestSemanticVisibilityChanged,
   readBrowserGuestSemanticVisibility
@@ -12,10 +13,6 @@ import {
 
 /** Long enough that a slow server or a cold dev-server compile isn't called stuck. */
 export const BROWSER_LOAD_STALL_AFTER_MS = 5_000
-
-// After a main-frame failure, how long to wait for the main frame to go idle (20 × 50 ms).
-const FAILURE_IDLE_CHECKS = 20
-const FAILURE_IDLE_CHECK_MS = 50
 
 type PendingLoad = {
   origin: string
@@ -211,15 +208,8 @@ export function installBrowserNavigationStallWatchdog(
     recordCommit()
     finish('committed')
   }
-  // Ends a 204 or a download, and a failed load once nothing in the page is loading.
-  const stopped = (): void => {
-    if (!guest.isLoadingMainFrame()) {
-      finish('stopped')
-    }
-  }
-  // A failure can belong to a navigation this one replaced (e.g. a delayed extension block), so
-  // it ends the watch only once the main frame goes idle; loading iframes can delay
-  // did-stop-loading indefinitely, and cancellation can finish a few ticks after the failure.
+  // Electron reports no failure for a navigation a newer one replaced; only an extension block
+  // decided late can arrive after that, so it ends the watch only if it names this load's request.
   const failed = (
     _event: Electron.Event,
     _code: number,
@@ -227,22 +217,16 @@ export function installBrowserNavigationStallWatchdog(
     _url: string,
     isMainFrame: boolean
   ): void => {
-    const load = pending
-    if (!isMainFrame || !load) {
-      return
+    const blocked = blockedMainFrameRequestBeingReported()
+    if (isMainFrame && pending && (blocked === null || blocked === pending.requestId)) {
+      finish('failed')
     }
-    let checksLeft = FAILURE_IDLE_CHECKS
-    const check = (): void => {
-      if (pending !== load || guest.isDestroyed()) {
-        return
-      }
-      if (!guest.isLoadingMainFrame()) {
-        finish('failed')
-      } else if (--checksLeft > 0) {
-        setTimeout(check, FAILURE_IDLE_CHECK_MS).unref?.()
-      }
+  }
+  // A 204 or a download ends the navigation without a commit or a failure.
+  const stopped = (): void => {
+    if (!guest.isLoadingMainFrame()) {
+      finish('stopped')
     }
-    setTimeout(check, 0).unref?.()
   }
   const closed = (): void => finish('closed')
 
