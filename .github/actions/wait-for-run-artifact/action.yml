@@ -39,17 +39,17 @@ runs:
         delay=2
         sightings=0
         last='no response yet'
-        # Stop a stalled reader without ever blocking on it: TERM, short grace, then KILL plus
-        # taskkill on Windows (MSYS signals may not reach native gh.exe). A survivor is abandoned.
+        # Stop a stalled reader without ever blocking on it: TERM, short grace, then KILL plus a
+        # detached taskkill on Windows (MSYS signals may not reach native gh.exe). A survivor is abandoned.
         stop_reader() {
           kill "$1" 2>/dev/null
-          for _ in 1 2 3 4; do kill -0 "$1" 2>/dev/null || break; sleep 0.5; done
+          for _ in 1 2 3 4; do kill -0 "$1" 2>/dev/null || break; nap 0.5; done
           if kill -0 "$1" 2>/dev/null; then
             if [ -r "/proc/$1/winpid" ] && command -v taskkill >/dev/null; then
-              taskkill //F //T //PID "$(cat "/proc/$1/winpid")" >/dev/null 2>&1
+              taskkill //F //T //PID "$(cat "/proc/$1/winpid")" >/dev/null 2>&1 </dev/null &
             fi
             kill -KILL "$1" 2>/dev/null
-            sleep 0.5
+            nap 0.5
           fi
           if kill -0 "$1" 2>/dev/null; then
             echo "::warning::Could not stop the stalled artifact-list read (pid $1); continuing without it."
@@ -57,8 +57,14 @@ runs:
             wait "$1" 2>/dev/null
           fi
         }
+        # Why: sleep in the background so a cancellation signal interrupts the wait immediately.
+        nap() { sleep "$1" >/dev/null 2>&1 & wait $!; }
+        pid=''
         out=$(mktemp)
-        trap 'rm -f "$out"' EXIT
+        # Why: on cancellation, stop the in-flight reader too, not just the polling shell.
+        trap 'if [ -n "$pid" ]; then stop_reader "$pid"; fi; rm -f "$out"' EXIT
+        trap 'exit 143' TERM
+        trap 'exit 130' INT
         while :; do
           remaining=$((deadline - SECONDS))
           if [ "$remaining" -le 0 ]; then
@@ -66,10 +72,10 @@ runs:
             exit 1
           fi
           # Why: SignPath's lookup is run-scoped, so poll the run's artifact list rather than /artifacts/<id>.
-          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" --jq '.artifacts[].id' >"$out" 2>&1 &
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" --jq '.artifacts[].id' >"$out" 2>&1 </dev/null &
           pid=$!
           # Why: bound the read by the deadline without timeout(1); --norc Git Bash may resolve it to System32's timeout.exe.
-          while kill -0 "$pid" 2>/dev/null && [ "$SECONDS" -lt "$deadline" ]; do sleep 0.5; done
+          while kill -0 "$pid" 2>/dev/null && [ "$SECONDS" -lt "$deadline" ]; do nap 0.5; done
           if kill -0 "$pid" 2>/dev/null; then
             stop_reader "$pid"
             status=124
@@ -77,6 +83,7 @@ runs:
             wait "$pid"
             status=$?
           fi
+          pid=
           ids=$(tr -d '\r' <"$out")
           if [ "$status" -eq 124 ]; then
             sightings=0
@@ -103,6 +110,6 @@ runs:
           remaining=$((deadline - SECONDS))
           [ "$remaining" -le 0 ] && continue
           [ "$sightings" -eq 0 ] && echo "Artifact $ARTIFACT_ID not listed for run $GITHUB_RUN_ID yet ($last); retrying in ${delay}s."
-          sleep "$((delay < remaining ? delay : remaining))"
+          nap "$((delay < remaining ? delay : remaining))"
           delay=$((delay * 2 > 15 ? 15 : delay * 2))
         done
