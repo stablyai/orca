@@ -125,6 +125,7 @@ it("tells a thread chat its answer lands there only on its thread's workers' rep
         message: db.insertMessage({
           runId: run.id,
           from,
+          ...(from === 'orca:items' ? { orcaAuthored: 'item-mail' as const } : {}),
           to: `run:${run.id}`,
           subject: 'Done',
           type: 'status'
@@ -258,6 +259,8 @@ it("gives a chat the images of item mail and of a bot request about an item as i
         message: db.insertMessage({
           runId: run.id,
           from,
+          ...(from === 'orca:items' ? { orcaAuthored: 'item-mail' as const } : {}),
+          ...(kind === 'botRequest' ? { orcaAuthored: 'bot-request' as const } : {}),
           to: 'term_bot',
           subject: 'Your owner commented',
           type: 'status',
@@ -290,6 +293,7 @@ it('reads accepted item mail sent whole with its images, and not once an image w
       const message = db.insertMessage({
         id,
         from: 'orca:items',
+        orcaAuthored: 'item-mail',
         to: 'term_bot',
         subject: 'Your owner commented',
         body: 'see the screenshot',
