@@ -27579,10 +27579,6 @@
       "checkingConnections": "正在检查连接",
       "checkedConnections": "已检查连接"
     },
-    "header": {
-      "runs": "运行你的 {{agent}}",
-      "newBot": "你的新机器人"
-    },
     "github": {
       "whoCanAsk": {
         "search": "按 GitHub 用户名搜索",
