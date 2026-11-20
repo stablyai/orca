@@ -94,18 +94,28 @@ function launchContext(input: TerminalLaunch, requireDirectCommand = true): Clau
     const parsed = tokenizeStartupCommand(startupCommand, input.shell)
     if (parsed.ok) {
       if (input.shell === 'posix') {
-        const literalPrefix = parsed.tokens.slice(
-          0,
-          parsed.spans.findIndex((span) => span.divergesFromShell) < 0
-            ? undefined
-            : parsed.spans.findIndex((span) => span.divergesFromShell)
-        )
-        const outer = extractLeadingEnvAssignments(literalPrefix)
+        const outer = extractLeadingEnvAssignments(parsed.tokens)
         const inner =
           outer.rest[0]?.split('/').at(-1) === 'env'
             ? extractLeadingEnvAssignments(outer.rest.slice(1))
             : undefined
-        Object.assign(env, outer.env, inner?.env)
+        const rest = (inner ?? outer).rest
+        const executable = rest[0]?.replace(/[;&|].*$/, '')
+        const prefixCount = parsed.tokens.length - rest.length
+        if (
+          executable &&
+          findClaudeExecutableIndex([executable], input.shell) === 0 &&
+          !parsed.spans.slice(0, prefixCount).some((span) => span.divergesFromShell)
+        ) {
+          const assignments = { ...outer.env, ...inner?.env }
+          Object.assign(env, assignments)
+          if (input.wsl) {
+            env.WSLENV =
+              env.WSLENV?.split(':')
+                .filter((token) => !Object.hasOwn(assignments, token.split('/')[0]))
+                .join(':') ?? ''
+          }
+        }
       }
       if (direct) {
         command = parsed.tokens[findClaudeExecutableIndex(parsed.tokens, input.shell)]

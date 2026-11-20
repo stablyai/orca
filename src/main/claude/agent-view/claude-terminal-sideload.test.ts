@@ -255,3 +255,63 @@ it('keeps a Windows-only config passthrough out of the guest account check', asy
     vi.unstubAllEnvs()
   }
 })
+
+it.each(['w', 'p'])(
+  'forwards a literal guest account without inherited /%s transport rules',
+  async (direction) => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', String.raw`C:\accounts\personal`)
+    vi.stubEnv('WSLENV', `CLAUDE_CONFIG_DIR/${direction}:OTHER/p`)
+    try {
+      const { deps, support, run } = fixture()
+      const launch = {
+        command: 'CLAUDE_CONFIG_DIR=/account/locked claude',
+        cwd: '/project',
+        shell: 'posix' as const,
+        wsl: { distro: 'work' },
+        env: {
+          ORCA_CLAUDE_CONFIG_DIR: '/home/guest/.claude',
+          ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR: '/orca/plugin'
+        }
+      }
+      await prewarmClaudeTerminalSideload(launch, deps)
+      expect(run.mock.calls[0][0]).toMatchObject({
+        env: { CLAUDE_CONFIG_DIR: '/account/locked', WSLENV: 'OTHER/p' }
+      })
+      prepareClaudeTerminalSideload(launch, support)
+      expect(launch.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBeUndefined()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  }
+)
+
+it('keeps relative config folders isolated by their execution directory', async () => {
+  const { deps, support } = fixture(noInput)
+  const open = { ...input('.claude'), cwd: '/project/open' }
+  await prewarmClaudeTerminalSideload(open, deps)
+  deps.runProcess.mockResolvedValueOnce({
+    code: 1,
+    stdout: '',
+    stderr: refusal,
+    timedOut: false,
+    signal: null,
+    environmentResolved: true
+  })
+  const locked = { ...input('.claude'), cwd: '/project/locked' }
+  await prewarmClaudeTerminalSideload(locked, deps)
+  prepareClaudeTerminalSideload(locked, support)
+  prepareClaudeTerminalSideload(open, support)
+  expect(locked.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBeUndefined()
+  expect(open.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR).toBe('/orca/plugin')
+})
+
+it('does not attribute an earlier command account to Claude', () => {
+  const { support } = fixture()
+  support.observeExit(
+    { command: '/bin/claude', cwd: '/project', env: input().env },
+    new Error(refusal)
+  )
+  const launch = { ...input(), command: 'CLAUDE_CONFIG_DIR=/account/open make; claude' }
+  prepareClaudeTerminalSideload(launch, support)
+  expect(launch.env.CLAUDE_CODE_PLUGIN_DIRS).toBe('')
+})

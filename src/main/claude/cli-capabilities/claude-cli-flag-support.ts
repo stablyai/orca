@@ -1,6 +1,6 @@
 import { createClaudeSideloadProbe } from './claude-sideload-probe-cache'
 import { realpath, stat } from 'node:fs/promises'
-import { normalize, posix } from 'node:path'
+import { resolve, posix } from 'node:path'
 import { defaultClaudeConfigDir } from '../structured/launch/claude-config-dir-pin'
 import { claudeVersionReaches, probeClaudeCliVersion } from './claude-hook-event-versions'
 
@@ -115,7 +115,7 @@ export type ClaudeCliFlagCheck = (
 
 export type ClaudeCliFlagSupport = {
   sideloadRefused?: (
-    launch: Pick<ClaudeCliLaunch, 'env' | 'hostKey' | 'accountConfigDir'>
+    launch: Pick<ClaudeCliLaunch, 'env' | 'hostKey' | 'accountConfigDir' | 'cwd'>
   ) => boolean
   probeSideload?: (
     launch: ClaudeCliLaunch,
@@ -188,9 +188,11 @@ export function createClaudeCliFlagSupport(
   }
   const known = new Map<string, BinaryFacts>()
   const refusedByAccount = new Map<string, Set<string>>()
-  const accountKey = (launch: Pick<ClaudeCliLaunch, 'env' | 'hostKey' | 'accountConfigDir'>) => {
+  const accountKey = (
+    launch: Pick<ClaudeCliLaunch, 'env' | 'hostKey' | 'accountConfigDir' | 'cwd'>
+  ) => {
     const folder = (launch.accountConfigDir || defaultClaudeConfigDir(launch.env)).trim()
-    const path = launch.hostKey ? posix.normalize(folder) : normalize(folder)
+    const path = launch.hostKey ? posix.resolve(launch.cwd, folder) : resolve(launch.cwd, folder)
     const normalized = !launch.hostKey && process.platform === 'win32' ? path.toLowerCase() : path
     return JSON.stringify([launch.hostKey ?? 'local', normalized.replace(/[\\/]+$/, '')])
   }
