@@ -91,6 +91,11 @@ export function readGuestWindowsDriveMounts(): readonly string[] {
   return mounts
 }
 
+/** The Windows drive mounts a reader already found, without reading; empty until one has. */
+export function knownGuestWindowsDriveMounts(): readonly string[] {
+  return cachedGuestMounts ?? []
+}
+
 /** readGuestWindowsDriveMounts for callers that must not block the event loop; both fill one cache. */
 export async function readGuestWindowsDriveMountsAsync(): Promise<readonly string[]> {
   if (cachedGuestMounts) {

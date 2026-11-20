@@ -14,6 +14,7 @@ import {
   type ManagedRuntimePin
 } from './managed-runtime-release'
 import { ManagedRuntimeInstallation } from './managed-runtime-installation'
+import { followLatestRelease } from './managed-runtime-latest-release'
 import { getTarProgram } from '../../shared/archives/zip-extractor-command'
 
 vi.mock('./managed-runtime-release', async (importOriginal) => {
@@ -381,4 +382,29 @@ it('installs the last known release when a later lookup of the latest fails', as
     installedVersion: '2.0',
     operation: { phase: 'succeeded' }
   })
+})
+
+it('offers Install after a failed lookup, and says why when looking again fails too', async () => {
+  const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+  roots.push(dataDirectory)
+  const runtime: ManagedRuntime = {
+    label: 'Agent',
+    root: () => join(dataDirectory, 'agent-runtimes', 'agent'),
+    ...followLatestRelease(async () => {
+      throw new Error('API rate limit exceeded')
+    })
+  }
+  const installation = new ManagedRuntimeInstallation('agent', runtime, {
+    dataDirectory,
+    findExternal: async () => false,
+    fence: (work) => work()
+  })
+  expect(await installation.status()).toMatchObject({ available: true, version: null })
+  installation.install()
+  await vi.waitFor(async () =>
+    expect((await installation.status(false)).operation).toMatchObject({
+      phase: 'failed',
+      error: "Couldn't look up the latest Agent release. Check your connection and try again."
+    })
+  )
 })

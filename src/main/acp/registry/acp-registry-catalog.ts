@@ -46,9 +46,10 @@ const registry = hourlyLookup(fetchRegistry)
 /** `id`'s registry listing, looked up at most hourly; a failed lookup answers from the last known one. */
 export async function acpRegistryAgent(
   id: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  retryFailed?: boolean
 ): Promise<AcpRegistryAgent | null> {
-  await registry.refresh(signal).catch((error: unknown) => {
+  await registry.refresh(signal, retryFailed).catch((error: unknown) => {
     if (!registry.latest()) {
       throw error
     }

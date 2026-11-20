@@ -27,6 +27,11 @@ import {
 } from '../acp/launch/acp-minimum-versions'
 import { readInheritedPath } from '../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
+import {
+  isUnderWindowsDriveMount,
+  knownGuestWindowsDriveMounts,
+  readGuestWindowsDriveMountsAsync
+} from '../wsl/filesystem/wsl-guest-windows-drive-path'
 
 // Hermes ships only as a git checkout its installer builds with uv, so it stays the user's own install.
 export const MANAGED_AGENT_CLI_IDS = [
@@ -103,6 +108,8 @@ export function rememberManagedAgentRelease(
 ): void {
   if (release) {
     installedReleases.set(agent, release)
+    // Terminal PATH assembly places Orca's copies by these and can't read the disk itself.
+    void readGuestWindowsDriveMountsAsync()
   } else {
     installedReleases.delete(agent)
   }
@@ -125,7 +132,7 @@ export function onManagedAgentUse(listener: (agent: ManagedAgentCliId) => void):
   managedUseListener = listener
 }
 
-/** Last on PATH, so sign-in commands and CLI tabs reach Orca's copies and never shadow the user's own. */
+/** After the user's own PATH entries, so sign-in commands and CLI tabs reach Orca's copies and never shadow the user's own. */
 export function appendManagedAgentDirsToChildPath(
   env: Record<string, string>,
   platform: NodeJS.Platform = process.platform
@@ -146,7 +153,13 @@ export function appendManagedAgentDirsToChildPath(
   const entries = readInheritedPath(env, platform).split(separator).filter(Boolean)
   const missing = folders.filter((folder) => !entries.includes(folder))
   if (missing.length > 0) {
-    env[key] = [...entries, ...missing].join(separator)
+    // On a WSL host, Windows-drive entries hold shims it can't run, so Orca's copies go before them.
+    const mounts = knownGuestWindowsDriveMounts()
+    const drive = entries.findIndex((entry) =>
+      isUnderWindowsDriveMount(entry.replace(/\/+$/, ''), mounts)
+    )
+    const at = drive === -1 ? entries.length : drive
+    env[key] = [...entries.slice(0, at), ...missing, ...entries.slice(at)].join(separator)
   }
   // Startup files re-add them after a login profile rebuilds PATH.
   env.ORCA_MANAGED_AGENT_PATH = folders.join(separator)

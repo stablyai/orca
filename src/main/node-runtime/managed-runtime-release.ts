@@ -34,7 +34,9 @@ export type ManagedRuntime = {
   root(dataDirectory: string): string
   pin(): ManagedRuntimePin | null
   /** Runtimes that follow a published latest release look it up here; pin() answers from it. */
-  refreshPin?(signal?: AbortSignal): Promise<void>
+  refreshPin?(signal?: AbortSignal, retryFailed?: boolean): Promise<void>
+  /** True while the latest release couldn't be looked up and none is known: not a host without a build. */
+  pinUnknown?(): boolean
   /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
   /** Add files the unpacked release needs before it is checked and published, e.g. a second command name. */
@@ -218,7 +220,10 @@ async function receiptMembers(
   )
 }
 
-/** Exclusive writer only: keep must match launch resolution so reclamation cannot remove a running release. */
+/**
+ * Exclusive writer only: keep must match launch resolution so reclamation cannot remove a running release.
+ * The release link and the release it reaches stay too, so open terminals keep their PATH.
+ */
 export async function reclaimRuntimeReleases(
   root: string,
   keep: readonly string[]
@@ -226,7 +231,8 @@ export async function reclaimRuntimeReleases(
   const names = await readdir(root).catch((error: NodeJS.ErrnoException) =>
     error.code === 'ENOENT' ? [] : Promise.reject(error)
   )
-  const stale = names.filter((name) => !keep.includes(name))
+  const kept = [...keep, RUNTIME_RELEASE_LINK, await linkedRuntimeRelease(root)]
+  const stale = names.filter((name) => !kept.includes(name))
   const results = await Promise.allSettled(
     stale.map((name) => rm(join(root, name), { recursive: true, force: true }))
   )

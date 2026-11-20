@@ -8,29 +8,48 @@ const LOOKUP_DEADLINE_MS = 60_000
 export type HourlyLookup<T> = {
   /** The last value a lookup answered, or undefined before one has. */
   latest: () => T | undefined
-  /** Look up again when the last answer is over an hour old, joining a lookup in flight; `signal` ends only this wait. */
-  refresh: (signal?: AbortSignal) => Promise<void>
+  /** Whether the last lookup failed before any answered, so the value is unknown rather than absent. */
+  failed: () => boolean
+  /**
+   * Look up again when the last lookup is over an hour old, joining one in flight; `signal` ends only this wait.
+   * `retryFailed` looks again after a failure while nothing is known, for an install the user asked for.
+   */
+  refresh: (signal?: AbortSignal, retryFailed?: boolean) => Promise<void>
 }
 
-/** A failed lookup keeps the last known value and is retried on the next refresh. */
+/** A failed lookup counts as a check too: it keeps the last known value and waits the hour like a success. */
 export function hourlyLookup<T>(
-  fetchLatest: (signal?: AbortSignal) => Promise<T>
+  fetchLatest: (signal?: AbortSignal, retryFailed?: boolean) => Promise<T>
 ): HourlyLookup<T> {
-  let latest: { value: T; at: number } | null = null
+  let latest: { value: T } | null = null
+  let checkedAt: number | null = null
+  let failed = false
   let lookup: Promise<void> | null = null
   return {
     latest: () => latest?.value,
-    refresh: async (signal) => {
-      if (latest && Date.now() - latest.at < REFRESH_MS) {
+    failed: () => failed && !latest,
+    refresh: async (signal, retryFailed = false) => {
+      const recent = checkedAt !== null && Date.now() - checkedAt < REFRESH_MS
+      if (recent && !(retryFailed && !latest) && !lookup) {
         return
       }
-      lookup ??= fetchLatest(AbortSignal.timeout(LOOKUP_DEADLINE_MS))
-        .then((value) => {
-          latest = { value, at: Date.now() }
-        })
-        .finally(() => {
-          lookup = null
-        })
+      if (!lookup) {
+        checkedAt = Date.now()
+        lookup = fetchLatest(AbortSignal.timeout(LOOKUP_DEADLINE_MS), retryFailed)
+          .then(
+            (value) => {
+              latest = { value }
+              failed = false
+            },
+            (error: unknown) => {
+              failed = true
+              throw error
+            }
+          )
+          .finally(() => {
+            lookup = null
+          })
+      }
       await waitForPromiseWithSignal(lookup, signal)
     }
   }
@@ -38,10 +57,14 @@ export function hourlyLookup<T>(
 
 /** Follow a published latest release, looked up at most hourly; a failed lookup keeps the last known release. */
 export function followLatestRelease(
-  fetchLatest: (signal?: AbortSignal) => Promise<ManagedRuntimePin | null>
-): Required<Pick<ManagedRuntime, 'pin' | 'refreshPin'>> {
+  fetchLatest: (signal?: AbortSignal, retryFailed?: boolean) => Promise<ManagedRuntimePin | null>
+): Required<Pick<ManagedRuntime, 'pin' | 'refreshPin' | 'pinUnknown'>> {
   const release = hourlyLookup(fetchLatest)
-  return { pin: () => release.latest() ?? null, refreshPin: release.refresh }
+  return {
+    pin: () => release.latest() ?? null,
+    refreshPin: release.refresh,
+    pinUnknown: release.failed
+  }
 }
 
 /** Look up the latest release before an install; a failed lookup installs the last known one, as status reads keep it. */
@@ -49,7 +72,7 @@ export async function refreshRuntimePin(
   runtime: ManagedRuntime,
   signal: AbortSignal
 ): Promise<void> {
-  await runtime.refreshPin?.(signal).catch((error: unknown) => {
+  await runtime.refreshPin?.(signal, true).catch((error: unknown) => {
     signal.throwIfAborted()
     if (runtime.pin()) {
       console.warn(

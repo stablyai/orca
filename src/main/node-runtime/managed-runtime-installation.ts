@@ -11,13 +11,12 @@ import type {
 import type { MainHttpClient } from '../network/http-client'
 import { RevisionedState } from '../runtime/events/revisioned-state'
 import {
-  linkedRuntimeRelease,
   linkRuntimeRelease,
   reclaimRuntimeReleases,
   resolveInstalledRuntimeRelease,
-  RUNTIME_RELEASE_LINK,
   runtimeReleaseLink,
   type ManagedRuntime,
+  type ManagedRuntimePin,
   type ReportedRuntimeRelease
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
@@ -105,7 +104,8 @@ export class ManagedRuntimeInstallation {
     }
     const source = (await this.deps.findExternal()) ? 'external' : release ? 'managed' : null
     return {
-      available: pin !== null,
+      // An Install after a failed lookup looks again and says why it failed.
+      available: pin !== null || this.runtime.pinUnknown?.() === true,
       version: pin?.version ?? null,
       ...(pin && { downloadBytes: pin.archiveBytes }),
       installedVersion: release?.version ?? null,
@@ -234,9 +234,10 @@ export class ManagedRuntimeInstallation {
     const previous = this.runtime.refreshPin
       ? ((await this.facts?.read.catch(() => null))?.installedVersion ?? null)
       : null
+    let pin: ManagedRuntimePin | null = null
     try {
       await refreshRuntimePin(this.runtime, signal)
-      const pin = this.runtime.pin()
+      pin = this.runtime.pin()
       if (!pin) {
         throw new Error(unavailableText(this.runtime.label))
       }
@@ -259,8 +260,9 @@ export class ManagedRuntimeInstallation {
       }
       this.publish(run, { phase: 'succeeded' })
     } catch (error) {
-      if (run.committed) {
+      if (run.committed && pin) {
         console.warn(`[managed-runtime] ${this.agent} installed; staging not removed:`, error)
+        await this.link(join(this.root, pin.version))
         this.publish(run, { phase: 'succeeded' })
       } else if (run.controller.signal.aborted) {
         this.publish(run, { phase: 'cancelled' })
@@ -327,10 +329,9 @@ export class ManagedRuntimeInstallation {
     })
   }
 
-  /** Keep the release launches resolve to, the one running chats may still use, and the one terminals' link reaches. */
+  /** Keep the release launches resolve to and the one running chats may still use. */
   private async reclaimOlderThan(current: string | null, previous: string | null): Promise<void> {
-    const linked = await linkedRuntimeRelease(this.root)
-    const keep = [current, previous, RUNTIME_RELEASE_LINK, linked].filter((name) => name !== null)
+    const keep = [current, previous].filter((version) => version !== null)
     const failed = await reclaimRuntimeReleases(this.root, keep).catch((error: unknown) => [
       String(error)
     ])
