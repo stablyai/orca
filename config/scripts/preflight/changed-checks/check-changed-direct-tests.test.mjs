@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectImportingTests } from './check-changed-direct-tests.mjs'
+import { importerPattern, selectImportingTests } from './check-changed-direct-tests.mjs'
 
 describe('selectImportingTests', () => {
   it('selects tests whose relative, alias, or mock specifiers resolve to a changed module', () => {
@@ -15,5 +15,11 @@ describe('selectImportingTests', () => {
       'src/main/other/run.test.ts',
       'src/renderer/src/app.test.tsx'
     ])
+  })
+
+  it('prefilters explicit index imports of a changed index module', () => {
+    const pattern = new RegExp(importerPattern(['src/main/bots/index.ts']))
+    expect(pattern.test("import { run } from '../bots/index.js'")).toBe(true)
+    expect(pattern.test("import { run } from '../bots'")).toBe(true)
   })
 })

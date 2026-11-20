@@ -21,9 +21,13 @@ function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// One `git grep` pattern for specifiers ending in a changed module's basename.
+// One `git grep` pattern for specifiers ending in a changed module's name (`dir` or `dir/index`).
 export function importerPattern(files) {
-  const names = new Set(files.map((file) => escapeRegExp(path.posix.basename(moduleKey(file)))))
+  const names = new Set()
+  for (const file of files) {
+    names.add(escapeRegExp(path.posix.basename(moduleKey(file))))
+    names.add(escapeRegExp(path.posix.basename(file).replace(SCRIPT_EXTENSION, '')))
+  }
   return `['"/](${[...names].join('|')})(\\.[cm]?[jt]sx?)?['"]`
 }
 
