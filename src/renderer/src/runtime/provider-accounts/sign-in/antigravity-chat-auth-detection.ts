@@ -39,6 +39,7 @@ function entryFor(owner: RuntimeClientTarget): Entry {
     for (const [key, held] of entries) {
       if (
         held.observers === 0 &&
+        held.fetchedAt > 0 &&
         !held.inFlight &&
         Date.now() - held.fetchedAt > UNOBSERVED_KEEP_MS
       ) {
