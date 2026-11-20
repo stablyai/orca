@@ -1,4 +1,5 @@
-import { test, expect } from './helpers/orca-app'
+import { expect } from '@stablyai/playwright-test'
+import { test } from '../electron-fixtures/orca-app'
 
 // Exercise the real sandboxed preload and IPC serialization without recording audio.
 test('dictation preserves floating-point samples through the sandboxed preload', async ({

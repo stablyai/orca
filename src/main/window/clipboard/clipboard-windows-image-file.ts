@@ -85,15 +85,20 @@ export function readWindowsCopiedFilePath({
   fileNameW,
   shellIdListArray
 }: WindowsClipboardFileFormats): string | null {
-  if (uriList?.length) {
-    try {
-      const paths = clipboardFilePathsFromUriList(uriList, 'win32')
-      return paths.length === 1 && isFullyQualifiedWindowsPath(paths[0]) ? paths[0] : null
-    } catch {
-      return null
-    }
+  const paths = uriList?.length ? readUriListPaths(uriList) : []
+  if (paths.length > 0) {
+    return paths.length === 1 && isFullyQualifiedWindowsPath(paths[0]) ? paths[0] : null
   }
+  // An unreadable URI list falls back to Explorer's legacy formats.
   return hasAtMostOneShellItem(shellIdListArray) ? decodeFileNameW(fileNameW) : null
+}
+
+function readUriListPaths(uriList: Buffer): string[] {
+  try {
+    return clipboardFilePathsFromUriList(uriList, 'win32')
+  } catch {
+    return []
+  }
 }
 
 export function readWindowsCopiedImageFilePath(
