@@ -3,6 +3,7 @@ import type { WorkspaceCleanupWorkspaceRef } from '../../../shared/workspace-cle
 import { readWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { WorktreeRemovalNotStartedError } from '../removal/worktree-removal-expectation'
+import { isWorktreeIdentityUnverifiable } from '../../../shared/worktree/removal/worktree-checkout-identity'
 
 type CleanupAdmission<T> =
   | { admitted: false; cause: 'pinned' | 'git-unknown' | 'removing' }
@@ -61,7 +62,10 @@ export async function admitWorkspaceCleanup<T>(
           return result
         },
         async (error: unknown) => {
-          await retire(error instanceof WorktreeRemovalNotStartedError)
+          // A route that couldn't verify the checkout refused before deleting anything.
+          await retire(
+            error instanceof WorktreeRemovalNotStartedError || isWorktreeIdentityUnverifiable(error)
+          )
           throw error
         }
       )

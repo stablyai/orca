@@ -39,12 +39,15 @@ export class WorktreeRemovalIdentityUnverifiableError extends Error {
   }
 }
 
+/** Also through a removal owner's not-started wrapper, which keeps the refusal as its cause. */
 export function isWorktreeIdentityUnverifiable(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    error.code === 'ERR_ORCA_WORKTREE_IDENTITY_UNVERIFIABLE'
-  )
+  for (let current = error, depth = 0; current instanceof Error && depth < 4; depth++) {
+    if ('code' in current && current.code === 'ERR_ORCA_WORKTREE_IDENTITY_UNVERIFIABLE') {
+      return true
+    }
+    current = current.cause
+  }
+  return false
 }
 
 /** Refused before anything was deleted: the checkout changed, or its identity couldn't be checked. */

@@ -13,6 +13,7 @@ import { WorkspaceLifecycleQueue } from '../../runtime/workspaces/lifecycle/work
 import { queueWorkspaceDelete } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import { pinWorkspacesForCleanup } from './workspace-cleanup-pin'
 import { admitWorkspaceCleanup } from './workspace-cleanup-admission'
+import { WorktreeRemovalIdentityUnverifiableError } from '../../../shared/worktree/removal/worktree-checkout-identity'
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
@@ -163,4 +164,26 @@ it('persists successful batch pins without claiming a failed row was kept', asyn
   const persisted = Object.values(readPersistedState().worktreeMeta)
   expect(persisted.find((row) => row.instanceId === 'a')?.isPinned).toBe(true)
   expect(persisted.find((row) => row.instanceId === 'b')?.isPinned ?? false).toBe(false)
+})
+it('releases the admission when the removal route refused to delete an unverifiable checkout', async () => {
+  const { store, rows } = fixture(false)
+  const ref = {
+    ...rows[0],
+    repoId: 'repo',
+    repoName: 'Fixture',
+    displayName: 'a',
+    path: join(testState.dir, 'a'),
+    branch: 'a'
+  }
+  const refused = await admitWorkspaceCleanup(store, ref, async () => {
+    throw new WorktreeRemovalIdentityUnverifiableError()
+  })
+  expect(refused.admitted).toBe(true)
+  await expect(refused.admitted && refused.completion).rejects.toMatchObject({
+    code: 'ERR_ORCA_WORKTREE_IDENTITY_UNVERIFIABLE'
+  })
+  // A later run may try the same, unchanged workspace again instead of reading it as still removing.
+  const again = await admitWorkspaceCleanup(store, ref, async () => 'removed')
+  expect(again.admitted).toBe(true)
+  expect(again.admitted && (await again.completion)).toBe('removed')
 })
