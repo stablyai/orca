@@ -53,7 +53,7 @@ describe('group @Name hand-offs', () => {
     })
     expect(handoff.turns.map((turn) => turn.botId)).toEqual(['bot-1'])
     await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2))
-    const prompt = mocks.send.mock.calls[1]![0].turn.body.blocks[0].text as string
+    const prompt: string = mocks.send.mock.calls[1]![0].turn.body.blocks[0].text
     expect(prompt).toContain(`Original human instruction (room message ${asked.id}`)
     expect(prompt).toContain('@Scout plan the release')
     expect(prompt).toContain('Plan ready.')
