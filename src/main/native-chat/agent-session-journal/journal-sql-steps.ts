@@ -22,6 +22,7 @@ import {
 import { journalLifecycleMutationItemId } from './writing/journal-lifecycle-mutation'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
 import { applyJournalDomainLifecycleOperation } from './journal-domain-taken-stop'
+import { jsonUtf8ByteLength } from '../../../shared/json-stream/node-json-utf8-byte-length'
 
 export type JournalDomainStepsCommit = JournalDomainLifecycleCommit & { value: JournalStepsResult }
 
@@ -238,7 +239,7 @@ function writeStep(
     identity = step.identity
     body = step.body
   }
-  if (Buffer.byteLength(JSON.stringify({ identity, body }), 'utf8') + 512 > step.reservedBytes) {
+  if (jsonUtf8ByteLength({ identity, body }) + 512 > step.reservedBytes) {
     throw new Error('structured agent-session transition step exceeded its reserved size')
   }
   const written = applyJournalDomainItem(

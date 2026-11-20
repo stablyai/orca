@@ -1,3 +1,10 @@
+import {
+  jsonStringBytes,
+  normalizedJsonValue,
+  primitiveJsonBytes,
+  rawJsonBytes
+} from './node-json-utf8-byte-length'
+
 export class JsonStringifyByteLimitError extends Error {
   constructor(
     readonly observedBytes: number,
@@ -6,80 +13,6 @@ export class JsonStringifyByteLimitError extends Error {
     super(`JSON output exceeds ${maxBytes} bytes`)
     this.name = 'JsonStringifyByteLimitError'
   }
-}
-
-function jsonStringBytes(value: string): number {
-  let bytes = 2
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (
-      code === 0x22 ||
-      code === 0x5c ||
-      code === 0x08 ||
-      code === 0x09 ||
-      code === 0x0a ||
-      code === 0x0c ||
-      code === 0x0d
-    ) {
-      bytes += 2
-    } else if (code < 0x20) {
-      bytes += 6
-    } else if (code <= 0x7f) {
-      bytes += 1
-    } else if (code <= 0x7ff) {
-      bytes += 2
-    } else if (code >= 0xd800 && code <= 0xdbff) {
-      const next = value.charCodeAt(index + 1)
-      if (next >= 0xdc00 && next <= 0xdfff) {
-        bytes += 4
-        index += 1
-      } else {
-        bytes += 6
-      }
-    } else if (code >= 0xdc00 && code <= 0xdfff) {
-      bytes += 6
-    } else {
-      bytes += 3
-    }
-  }
-  return bytes
-}
-
-function normalizedJsonValue(value: unknown, container: unknown): unknown {
-  const tag =
-    value !== null && typeof value === 'object' ? Object.prototype.toString.call(value) : ''
-  if (tag === '[object Number]' || tag === '[object String]' || tag === '[object Boolean]') {
-    return (value as { valueOf(): unknown }).valueOf()
-  }
-  if (value === undefined || typeof value === 'function' || typeof value === 'symbol') {
-    return Array.isArray(container) ? null : undefined
-  }
-  return value
-}
-
-function primitiveJsonBytes(value: unknown): number | null {
-  if (value === null) {
-    return 4
-  }
-  if (typeof value === 'string') {
-    return jsonStringBytes(value)
-  }
-  if (typeof value === 'boolean') {
-    return value ? 4 : 5
-  }
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? String(value).length : 4
-  }
-  return null
-}
-
-function rawJsonBytes(value: unknown): number | null {
-  const isRawJSON = (JSON as { isRawJSON?: (candidate: unknown) => boolean }).isRawJSON
-  if (!isRawJSON?.(value)) {
-    return null
-  }
-  const rawJSON = (value as { rawJSON?: unknown }).rawJSON
-  return typeof rawJSON === 'string' ? Buffer.byteLength(rawJSON, 'utf8') : null
 }
 
 function normalizedJsonIndent(space: number | string | undefined): string {

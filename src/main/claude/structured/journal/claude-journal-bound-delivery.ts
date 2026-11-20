@@ -2,6 +2,7 @@ import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionReadingControl
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { jsonUtf8ByteLength } from '../../../../shared/json-stream/node-json-utf8-byte-length'
 
 /** Own provider observations until their saved identity input is available. */
 export class ClaudeJournalBoundDelivery {
@@ -56,7 +57,7 @@ export class ClaudeJournalBoundDelivery {
       run()
       return
     }
-    const bytes = Buffer.byteLength(JSON.stringify(payload ?? null), 'utf8') + 64
+    const bytes = jsonUtf8ByteLength(payload ?? null) + 64
     if (this.entries >= 1_024 || this.bytes + bytes > 32 * 1024 * 1024) {
       const error = new Error('Claude event delivery capacity exceeded before journal binding')
       this.dispose()
