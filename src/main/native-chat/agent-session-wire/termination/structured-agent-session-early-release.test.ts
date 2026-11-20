@@ -30,17 +30,6 @@ afterEach(async () => {
 })
 
 describe('releasing a finished background run', () => {
-  it('stops the agent of a run nobody watches without waiting out the idle window', async () => {
-    await finishedRun()
-
-    // A send still owed keeps the agent; under load the dispatch's settle trails its call.
-    await eventually(async () => {
-      await rig.host.releaseIdleSession(SESSION)
-      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
-    })
-    expect(agentRunning()).toBe(false)
-  })
-
   it('keeps the agent while someone has the chat open', async () => {
     await finishedRun()
     await rig.host.subscribe({ id: 'pane', sessionId: SESSION, emit: () => {} })
@@ -115,13 +104,14 @@ describe('releasing a finished background run', () => {
     expect(agentRunning()).toBe(true)
   })
 
-  it('resumes the same conversation when someone replies after the release', async () => {
+  it('releases an unwatched run immediately and resumes the same conversation on reply', async () => {
     await finishedRun()
-    // As above: the founding dispatch's settle can trail its call, which keeps the agent.
+    // Wait for the founding dispatch to settle so release can close the agent.
     await eventually(async () => {
       await rig.host.releaseIdleSession(SESSION)
-      expect(agentRunning()).toBe(false)
+      expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
     })
+    expect(agentRunning()).toBe(false)
 
     const fence = rig.store.getConversation(SESSION)!.currentFence
     expect(await rig.host.send(REST_TEST_CALLER, restTestSend('and then?', fence))).toMatchObject({
