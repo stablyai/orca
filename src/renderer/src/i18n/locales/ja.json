@@ -4593,6 +4593,7 @@
             "81cd37af99": "メイン",
             "fa6d36758d": "セッション {{value0}} を強制終了",
             "e9a5d3c2b1f0": "{{value0}} を終了しますか？",
+            "8a0472ab54": "{{value0}} に接続できませんでした。リソースは不明です。",
             "1ea066b73f": "リソースを表示するには {{value0}} を更新してください。",
             "endOrphanTerminals_other": "孤立したターミナル {{count}} 件を終了",
             "orphanCount_other": "孤立 {{count}} 件"

@@ -11,7 +11,10 @@ import {
   activateAndRevealWorktree
 } from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
-import { activateStructuredAgentSessionById } from '@/lib/agent-session/structured-agent-session-tab-activation'
+import {
+  activateStructuredAgentSessionById,
+  activateStructuredAgentSessionTabOnOwner
+} from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../../../store/index'
 import type { AppState } from '../../../../store/types'
@@ -140,7 +143,10 @@ export function useResourceUsageActions({
   const openChat = useCallback(
     (worktreeId: string, agentSessionId: string): void => {
       navigateToWorktree(worktreeId)
-      activateStructuredAgentSessionById({ worktreeId, sessionId: agentSessionId })
+      // A chat with no tab in this window still opens through its host's tab selection.
+      if (!activateStructuredAgentSessionById({ worktreeId, sessionId: agentSessionId })) {
+        activateStructuredAgentSessionTabOnOwner(worktreeId, agentSessionId)
+      }
     },
     [navigateToWorktree]
   )

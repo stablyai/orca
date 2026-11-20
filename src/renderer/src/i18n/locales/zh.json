@@ -4878,6 +4878,7 @@
             "81cd37af99": "主进程",
             "fa6d36758d": "终止会话 {{value0}}",
             "e9a5d3c2b1f0": "终止 {{value0}}？",
+            "8a0472ab54": "无法连接 {{value0}}，其资源未知",
             "1ea066b73f": "更新 {{value0}} 以查看其资源",
             "endOrphanTerminals_other": "终止 {{count}} 个孤立终端",
             "orphanCount_other": "{{count}} 个孤立项"

@@ -4627,6 +4627,7 @@
             "f8e0d794b4": "Daemon antwortet nicht",
             "59f178fe11": "{{value0}}, Daemon nicht erreichbar",
             "21cacb16d1": "· entfernt",
+            "8a0472ab54": "{{value0}} konnte nicht erreicht werden; die Ressourcen sind unbekannt.",
             "1ea066b73f": "{{value0}} aktualisieren, um die Ressourcen anzuzeigen.",
             "73a3fd68a9": "Repo einklappen",
             "b12e31dfcb": "Repo ausklappen",

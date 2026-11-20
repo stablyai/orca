@@ -4150,6 +4150,7 @@
             "81cd37af99": "Principal",
             "fa6d36758d": "Terminar sesión {{value0}}",
             "e9a5d3c2b1f0": "¿Terminar {{value0}}?",
+            "8a0472ab54": "No se pudo contactar con {{value0}}; se desconocen sus recursos.",
             "1ea066b73f": "Actualiza {{value0}} para ver sus recursos.",
             "endOrphanTerminals_one": "Terminar {{count}} terminal huérfano",
             "endOrphanTerminals_other": "Terminar {{count}} terminales huérfanos",

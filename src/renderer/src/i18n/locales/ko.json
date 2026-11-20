@@ -4077,6 +4077,7 @@
             "81cd37af99": "메인",
             "fa6d36758d": "세션 {{value0}} 강제 종료",
             "e9a5d3c2b1f0": "{{value0}}을(를) 종료할까요?",
+            "8a0472ab54": "{{value0}}에 연결할 수 없어 리소스를 알 수 없습니다.",
             "1ea066b73f": "리소스를 보려면 {{value0}}을(를) 업데이트하세요.",
             "endOrphanTerminals_other": "고아 터미널 {{count}}개 종료",
             "orphanCount_other": "고아 {{count}}개"

@@ -4419,6 +4419,7 @@
             "81cd37af99": "Main",
             "fa6d36758d": "Tuer la session {{value0}}",
             "e9a5d3c2b1f0": "Tuer {{value0}} ?",
+            "8a0472ab54": "Impossible de joindre {{value0}} ; ses ressources sont inconnues.",
             "1ea066b73f": "Mettez à jour {{value0}} pour voir ses ressources.",
             "endOrphanTerminals_one": "Terminer {{count}} terminal orphelin",
             "endOrphanTerminals_other": "Terminer {{count}} terminaux orphelins",

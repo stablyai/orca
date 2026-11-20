@@ -3500,6 +3500,7 @@
             "81cd37af99": "Principal",
             "fa6d36758d": "Encerrar sessão {{value0}}",
             "e9a5d3c2b1f0": "Encerrar {{value0}}?",
+            "8a0472ab54": "Não foi possível acessar {{value0}}; seus recursos são desconhecidos.",
             "1ea066b73f": "Atualize {{value0}} para ver seus recursos.",
             "endOrphanTerminals_one": "Encerrar {{count}} terminal órfão",
             "endOrphanTerminals_other": "Encerrar {{count}} terminais órfãos",

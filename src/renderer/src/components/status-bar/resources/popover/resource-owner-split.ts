@@ -1,4 +1,7 @@
-import type { MemorySnapshot } from '../../../../../../shared/diagnostics/process-stats-types'
+import type {
+  MemorySnapshot,
+  UsageValues
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import type { PtyListedSession } from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { isProgramStatusRow } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '../../../../store/index'
@@ -38,9 +41,10 @@ export function splitSnapshotByOwner(
   return { orca: { memory: snapshot.app.memory }, agents, yourProcesses }
 }
 
-/** Agent processes no single chat owns: the agent total less every chat listed under a workspace. */
+/** Agent processes no listed chat row accounts for, such as a server several chats share. */
 export function sharedAgentProcessUsage(
-  snapshot: MemorySnapshot
+  snapshot: MemorySnapshot,
+  listed: readonly { worktrees: readonly { chats: readonly UsageValues[] }[] }[]
 ): { cpu: number; memory: number } | null {
   const total = snapshot.agentProcesses
   if (!total) {
@@ -48,10 +52,12 @@ export function sharedAgentProcessUsage(
   }
   let cpu = total.cpu
   let memory = total.memory
-  for (const worktree of snapshot.worktrees) {
-    for (const chat of worktree.chats ?? []) {
-      cpu -= chat.cpu
-      memory -= chat.memory
+  for (const group of listed) {
+    for (const worktree of group.worktrees) {
+      for (const chat of worktree.chats) {
+        cpu -= chat.cpu
+        memory -= chat.memory
+      }
     }
   }
   return memory > 0 ? { cpu: Math.max(0, cpu), memory } : null
