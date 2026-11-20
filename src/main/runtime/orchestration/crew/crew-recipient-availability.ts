@@ -1,6 +1,5 @@
-import type { CrewHostDerivation } from './crew-host-derivation'
+import type { CrewHostDeps, CrewHostDerivation } from './crew-host-derivation'
 import type { Party } from './crew-parties'
-import type { CrewReadDependencies } from './crew-read-dependencies'
 import type { CrewRecipientKey } from './crew-recipient-worker-facts'
 
 export type CrewActionCandidate = { party: Party; preferred: string | undefined }
@@ -10,7 +9,7 @@ export function crewRecipientAvailability(
   host: CrewHostDerivation,
   self: Party,
   candidates: CrewActionCandidate[],
-  deps: CrewReadDependencies,
+  deps: CrewHostDeps,
   admitted: (address: string) => boolean,
   attached = false
 ) {

@@ -4,7 +4,7 @@ import { maximalCrewClaims } from './crew-claim-reduction'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
 import type { CrewParentClaim, CrewParentInputs } from './crew-parent-inputs'
 import type { createCrewPartyRegistry, Party } from './crew-parties'
-import type { CrewReadDependencies } from './crew-read-dependencies'
+import type { CrewHostDeps } from './crew-host-derivation'
 
 type Registry = ReturnType<typeof createCrewPartyRegistry>
 export type CrewParentRelation = {
@@ -38,7 +38,7 @@ export function crewParentRelations(
   inputs: CrewParentInputs,
   self: Party,
   registry: Registry,
-  deps: CrewReadDependencies
+  deps: CrewHostDeps
 ): CrewParentRelation[] {
   const bound = (row: CrewParentClaim) => {
     if (!row.session && !row.handle && !row.pane) {
