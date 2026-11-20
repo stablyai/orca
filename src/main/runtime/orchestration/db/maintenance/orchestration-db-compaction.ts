@@ -314,8 +314,9 @@ export class OrchestrationDbCompaction {
         return await giveUp('stale')
       }
       try {
-        // Refused while any other connection, in any process, has the file open (after a short wait for an
-        // exiting checkpoint thread); once held, it keeps every other one out.
+        // Refused while another connection that has read the file is open (after a short wait for an exiting
+        // checkpoint thread); once held, it keeps every other reader and writer out. An external handle that
+        // never read holds no lock, so it isn't excluded (see the PR's "Not covered").
         // The checkpoint leaves an empty WAL, so nothing of the old file can be replayed onto the copy.
         lock.exec(
           `PRAGMA busy_timeout = ${LOCK_WAIT_MS}; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT;
