@@ -6,21 +6,8 @@ import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
 import { z } from 'zod'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
-import type {
-  RequestPermissionRequest,
-  RequestPermissionResponse
-} from '../generated/acp-protocol.generated'
 
 const envelope = z.looseObject({ sessionId: z.string() })
-
-export function denyAcpTextTaskPermission(
-  request: RequestPermissionRequest
-): RequestPermissionResponse {
-  const denied = request.options.find((option) => option.kind === 'reject_once')
-  return {
-    outcome: denied ? { outcome: 'selected', optionId: denied.optionId } : { outcome: 'cancelled' }
-  }
-}
 
 export function acpTextTaskCompletion(
   dialect: AcpLaunchSpec['dialect'],

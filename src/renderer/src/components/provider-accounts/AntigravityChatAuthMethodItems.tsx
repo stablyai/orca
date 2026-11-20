@@ -3,10 +3,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { AntigravityChatAuthConfig } from '../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { SelectItem } from '../ui/select'
 
-const GOOGLE_METHODS: readonly AntigravityChatAuthConfig['method'][] = [
-  'oauth-personal',
-  'oauth-business'
-]
+const GOOGLE_METHODS: readonly AntigravityChatAuthConfig['method'][] = ['oauth-personal']
 const ALL_METHODS: readonly AntigravityChatAuthConfig['method'][] = [
   ...GOOGLE_METHODS,
   'gemini-api-key',
@@ -19,9 +16,8 @@ export function antigravityChatAuthMethodLabel(
 ): string | null {
   switch (method) {
     case 'oauth-personal':
-      return t('accounts.antigravity.personal', 'Google account')
     case 'oauth-business':
-      return t('accounts.antigravity.enterprise', 'Gemini Enterprise')
+      return t('accounts.antigravity.agySignIn', "agy's Google sign-in")
     case 'gemini-api-key':
       return t('accounts.antigravity.apiKey', 'Gemini API key')
     case 'agent-platform':
@@ -34,9 +30,11 @@ export function antigravityChatAuthMethodLabel(
 function methodDescription(method: AntigravityChatAuthConfig['method'], t: Translate): string {
   switch (method) {
     case 'oauth-personal':
-      return t('accounts.antigravity.personalOption', 'Your personal Google AI plan')
     case 'oauth-business':
-      return t('accounts.antigravity.enterpriseOption', "Your organization's license")
+      return t(
+        'accounts.antigravity.agySignInOption',
+        'Google or Gemini Enterprise, signed in in agy'
+      )
     case 'gemini-api-key':
       return t('accounts.antigravity.apiKeyOption', 'A key from Google AI Studio')
     case 'agent-platform':
@@ -44,7 +42,7 @@ function methodDescription(method: AntigravityChatAuthConfig['method'], t: Trans
   }
 }
 
-/** The account types the host's Antigravity chat can sign in with; older hosts offer only Google's. */
+/** The ways the host's Antigravity chat can sign in; older hosts offer only Google's. */
 export function AntigravityChatAuthMethodItems({
   keyAndAdc
 }: {

@@ -44,23 +44,19 @@ export type StructuredAgentRuntimeCatalogEntry =
   | { kind: 'pi' | 'codex' | 'claude'; metadata: StructuredAgentRuntimeMetadata }
   | { kind: 'acp'; metadata: StructuredAgentRuntimeMetadata; spec: AcpLaunchSpec }
 
-// Why the host's data folder: a start runs Orca's installed release before PATH.
 function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
-  const { agent, managedRuntime } = spec
+  const { agent } = spec
   return {
     resolve: (shellEnv, commandSettings) => {
       const env = { ...shellEnv, ...spec.env }
-      const options = { commandSettings, dataDirectory: getProfileUserDataPath() }
-      return { ...resolveAcpLaunchCommand(spec, env, options), env }
+      return { ...resolveAcpLaunchCommand(spec, env, { commandSettings }), env }
     },
-    ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {}),
     // Hosts without the user's own install can install Orca's copy.
     ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
           hostAlternative: (shellEnv, settings) =>
-            acpHostProgramTakesNewChats(spec, shellEnv, getProfileUserDataPath(), settings),
-          ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
+            acpHostProgramTakesNewChats(spec, shellEnv, getProfileUserDataPath(), settings)
         }
       : {})
   }
@@ -84,16 +80,13 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
   return {
     definition: acpStructuredAgentDefinition(spec),
     chatProgram: acpChatProgram(spec),
-    supportsLocation: (location) => supportsAcpStructuredLocation(spec, location),
+    supportsLocation: (location) => supportsAcpStructuredLocation(location),
     ...(minimumVersions
       ? {
           launchCheck: {
             resolveLaunch: (shellEnv, commandSettings) => {
               const env = { ...shellEnv, ...spec.env }
-              const invocation = resolveAcpLaunchCommand(spec, env, {
-                commandSettings,
-                dataDirectory: null
-              })
+              const invocation = resolveAcpLaunchCommand(spec, env, { commandSettings })
               return { ...invocation, env }
             },
             minimumVersions,

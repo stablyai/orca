@@ -1,9 +1,5 @@
 import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { AntigravityChatAuthDetection } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
-import {
-  ANTIGRAVITY_ACCOUNT_INELIGIBLE,
-  ANTIGRAVITY_SUBSCRIPTION_REQUIRED
-} from '../../../../../shared/agent-accounts/antigravity/antigravity-sign-in-sentences'
 
 type Method = AntigravityChatAuthConfig['method']
 
@@ -11,11 +7,9 @@ type Method = AntigravityChatAuthConfig['method']
 export type AntigravityChatAuthAlternative =
   | { method: 'gemini-api-key'; source: 'saved' | 'environment' }
   | { method: 'agent-platform'; project: string }
-  | { method: 'oauth-personal' }
 
-/** Detected methods other than the one in use, best first. A key needs no Google Cloud project,
- *  gcloud needs one it can name, and a saved Google sign-in comes last because it is what failed
- *  most often (no subscription). */
+/** Detected methods other than the one in use, best first: a key needs no Google Cloud project,
+ *  gcloud needs one it can name. */
 export function antigravityChatAuthAlternatives(
   detection: AntigravityChatAuthDetection | null
 ): AntigravityChatAuthAlternative[] {
@@ -30,15 +24,12 @@ export function antigravityChatAuthAlternatives(
   if (current !== 'agent-platform' && detection.adc.available && detection.adc.project) {
     alternatives.push({ method: 'agent-platform', project: detection.adc.project })
   }
-  const onGoogle = current === 'oauth-personal' || current === 'oauth-business'
-  if (!onGoogle && detection.googleSignIn.personal) {
-    alternatives.push({ method: 'oauth-personal' })
-  }
   return alternatives
 }
 
 export type AntigravityChatAuthMenuItem = {
-  method: Method
+  /** An older Gemini Enterprise choice is never offered; it reads as agy's Google sign-in. */
+  method: Exclude<Method, 'oauth-business'>
   active: boolean
   /** The host has credentials this method would use. */
   detected: boolean
@@ -46,9 +37,8 @@ export type AntigravityChatAuthMenuItem = {
   opensSettings: boolean
 }
 
-const MENU_ORDER: readonly Method[] = [
+const MENU_ORDER: readonly AntigravityChatAuthMenuItem['method'][] = [
   'oauth-personal',
-  'oauth-business',
   'gemini-api-key',
   'agent-platform'
 ]
@@ -58,24 +48,21 @@ export function antigravityChatAuthMenuItems(
   detection: AntigravityChatAuthDetection | null,
   keyAndAdc: boolean
 ): AntigravityChatAuthMenuItem[] {
-  const current = detection?.method ?? null
+  // An older Gemini Enterprise choice is agy's Google sign-in now.
+  const current = detection?.method === 'oauth-business' ? 'oauth-personal' : detection?.method
   const adcReady = Boolean(detection?.adc.available && detection.adc.project)
-  const detected: Record<Method, boolean> = {
-    'oauth-personal': Boolean(detection?.googleSignIn.personal),
-    'oauth-business': Boolean(detection?.googleSignIn.business),
+  const detected: Record<AntigravityChatAuthMenuItem['method'], boolean> = {
+    'oauth-personal': false,
     'gemini-api-key': Boolean(detection?.apiKey.available),
     'agent-platform': adcReady
   }
-  return MENU_ORDER.filter(
-    (method) => keyAndAdc || method === 'oauth-personal' || method === 'oauth-business'
-  ).map((method) => ({
+  return MENU_ORDER.filter((method) => keyAndAdc || method === 'oauth-personal').map((method) => ({
     method,
     active: method === current,
     detected: detected[method],
     opensSettings:
       method !== current &&
-      (method === 'oauth-business' ||
-        (method === 'gemini-api-key' && !detected[method]) ||
+      ((method === 'gemini-api-key' && !detected[method]) ||
         (method === 'agent-platform' && !adcReady))
   }))
 }
@@ -98,18 +85,13 @@ const REFUSED =
 /** Classifies a sign-in error or a failed turn; null when switching methods wouldn't help. */
 export function antigravityAuthFailureReason(input: {
   failureKind?: string
-  /** `system`: the host's own agy, whose sign-in Orca doesn't manage. */
-  account?: string
   text: string
 }): AntigravityAuthFailureReason | null {
-  if (input.account === 'system') {
-    return null
-  }
   const { text } = input
-  if (text === ANTIGRAVITY_SUBSCRIPTION_REQUIRED || SUBSCRIPTION.test(text)) {
+  if (SUBSCRIPTION.test(text)) {
     return 'noSubscription'
   }
-  if (text === ANTIGRAVITY_ACCOUNT_INELIGIBLE || INELIGIBLE.test(text)) {
+  if (INELIGIBLE.test(text)) {
     return 'ineligible'
   }
   if (input.failureKind === 'usageLimitReached' || USAGE_LIMIT.test(text)) {

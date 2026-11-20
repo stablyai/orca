@@ -60,11 +60,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
       resolveWorkspacePath: deps.resolveWorkspacePath,
       accepts: (record) =>
         record.provider === spec.agent &&
-        supportsAcpStructuredLocation(
-          spec,
-          record.location,
-          deps.isWindowsProcessStartTimeAvailable
-        ),
+        supportsAcpStructuredLocation(record.location, deps.isWindowsProcessStartTimeAvailable),
       scan: (record, cwd, isCurrent, _generation, contextSignal, _admitted, demand) => {
         const signal = AbortSignal.any([lifetime.signal, contextSignal])
         let answer: (value: AtRestCommandScan) => void = () => {}

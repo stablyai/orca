@@ -7,7 +7,6 @@ import { createStructuredAgentSessionLogger } from '../../native-chat/agent-sess
 import { collectBundle } from '../../observability/bundle'
 import { createLocalFileSink } from '../../observability/local-file-sink'
 import { setActiveSink } from '../../observability/tracer'
-import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 import { GROK, openAcpAdapterRig } from './testing/acp-structured-adapter.test-support'
 
 afterEach(async () => {
@@ -20,8 +19,8 @@ it.each(['initialize', 'session/new', 'authenticate'])(
   'keeps a live %s rejection and stderr in the startup failure',
   async (method) => {
     const rig = await openAcpAdapterRig({
-      spec: acpLaunchSpecFor('antigravity')!,
-      initialize: { authMethods: [{ id: 'oauth-personal', name: 'Google' }] },
+      spec: GROK,
+      initialize: { authMethods: [{ id: 'cached_token', name: 'Cached sign-in' }] },
       script: (agent) => {
         if (method === 'authenticate') {
           agent.on('session/new', (frame) => agent.fail(frame, -32000, 'Sign in'))

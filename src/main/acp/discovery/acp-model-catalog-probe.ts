@@ -23,7 +23,7 @@ import {
   createAcpAgentConnection,
   type AcpAgentConnectionOptions
 } from '../process/acp-agent-connection'
-import { acpClientInfo } from '../launch/acp-client-info'
+import { ORCA_ACP_CLIENT_INFO } from '../launch/acp-client-info'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import { acpListingDependsOnRelease, acpModelListingForRelease } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
@@ -65,7 +65,7 @@ export function createAcpModelCatalogProbe(
     operation?: StructuredAgentResolutionOperation
   ) => {
     assertStructuredAgentResolutionCurrent(operation)
-    // A host install can list differently from Orca's managed one, so the account picks the spec.
+    // agy's own home and Orca's chat home list differently, so the account picks the spec.
     const spec = acpLaunchSpecForAccount(agentSpec, accountHome)
     const discovery = spec.modelDiscovery
     if (discovery.kind === 'unavailable') {
@@ -73,7 +73,7 @@ export function createAcpModelCatalogProbe(
     }
     // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
-    const { command, prefixArgs, env, envToDelete, version } = await resolveAcpLaunchInvocation(
+    const { command, prefixArgs, env, envToDelete } = await resolveAcpLaunchInvocation(
       spec,
       accountHome,
       {
@@ -90,7 +90,6 @@ export function createAcpModelCatalogProbe(
     )
     assertStructuredAgentResolutionCurrent(operation)
     return {
-      answerSignIn: spec.signIn?.answered,
       identity: { command, prefixArgs, cwd, workspace },
       inputStamp: JSON.stringify(
         await Promise.all(
@@ -131,8 +130,7 @@ export function createAcpModelCatalogProbe(
           env,
           envToDelete
         }
-        // Chats send this identity, and some servers list models only to clients they allowlist.
-        const connectionOptions = { clientInfo: acpClientInfo(spec, version ?? release.version) }
+        const connectionOptions = { clientInfo: ORCA_ACP_CLIENT_INFO }
         const run = { label: spec.agent, signal: options?.signal, timeoutMs: null }
         // OMP records every model switch as account usage; starting on the picked model records none.
         const launchedModel =
@@ -278,26 +276,24 @@ export function createAcpModelCatalogProbe(
     resolve(home, options?.workspacePath ?? '', 'recover', options?.operation).then((resolved) =>
       resolved
         .run(options?.signal, options?.operation, options?.selectedModels, options?.publish)
-        .catch(signedOutAsUnavailable(resolved.answerSignIn))
+        .catch(signedOutAsUnavailable)
     )
   return Object.assign(probe, {
     resolve: async (...args: Parameters<typeof resolve>) => {
-      const { answerSignIn, ...resolved } = await resolve(...args)
+      const resolved = await resolve(...args)
       return {
         ...resolved,
         run: (...runArgs: Parameters<typeof resolved.run>) =>
-          resolved.run(...runArgs).catch(signedOutAsUnavailable(answerSignIn))
+          resolved.run(...runArgs).catch(signedOutAsUnavailable)
       }
     }
   })
 }
 
-// A listing often reaches a signed-out server before any chat sends; telling the spec lets a chat
-// offer its sign-in choices without a failed send first.
-const signedOutAsUnavailable = (answerSignIn?: (signedIn: boolean) => void) => (error: unknown) => {
+// A listing often reaches a signed-out agent before any chat sends.
+const signedOutAsUnavailable = (error: unknown): never => {
   if (!(error instanceof AcpAgentError && error.code === -32000)) {
     throw error
   }
-  answerSignIn?.(false)
   throw new AgentModelCatalogUnavailableError({ reason: 'notSignedIn' })
 }

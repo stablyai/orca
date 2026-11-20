@@ -8,11 +8,9 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { onManagedRuntimeReleasesChanged } from '../../../node-runtime/managed-runtime-installation'
 import { onAgentsRefreshedOnHost } from '../../../preflight/agents-refreshed-on-host'
-import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import {
   observeStructuredAgentLaunch,
   resolveHostStructuredAgentLaunchEnvironment,
-  structuredAgentHostAlternativeReady,
   type LaunchEnvironmentSettings
 } from './structured-agent-launch-support'
 import {
@@ -37,7 +35,7 @@ const HEALTH_SETTINGS = [
   'agentDefaultEnv',
   'nativeChatInheritShellEnvironment',
   'nativeChatShellEnvironmentVariables',
-  // Why: a saved Gemini Enterprise choice keeps chats off the host's agy (hostAlternative).
+  // Why: a saved key or gcloud choice keeps new chats off agy's own home (hostAlternative).
   'antigravityChatAuth',
   'antigravityManagedAgyEnabled',
   ...SHELL_SETTINGS
@@ -54,16 +52,10 @@ const HOST_LOCATION: AgentSessionExecutionLocation = {
 type HealthRuntime = Parameters<typeof observeStructuredAgentLaunch>[2]
 
 async function observeHostAgent(
-  { definition: { agent }, supportsLocation, chatProgram }: StructuredAgentRuntimeMetadata,
+  { definition: { agent }, supportsLocation }: StructuredAgentRuntimeMetadata,
   runtime: HealthRuntime
 ): Promise<AgentSessionAgentAvailability> {
-  if (chatProgram?.onlyHostAlternative?.() && supportsLocation(HOST_LOCATION)) {
-    const ready = await structuredAgentHostAlternativeReady(agent, runtime).catch(() => null)
-    if (ready !== false) {
-      return { agent, state: ready ? 'available' : 'unknown' }
-    }
-  }
-  if (!supportsLocation(HOST_LOCATION) || chatProgram?.onlyHostAlternative?.()) {
+  if (!supportsLocation(HOST_LOCATION)) {
     const reason = structuredChatUnavailableOnPlatform(agent, process.platform)
       ? 'windows'
       : 'agent'
@@ -176,8 +168,6 @@ export function installStructuredAgentAvailability(
   })
   onAgentsRefreshedOnHost(() => derive(false))
   onManagedRuntimeReleasesChanged(() => derive(false))
-  // A host program's new answer (e.g. agy found incompatible at a chat start) changes its chat program.
-  ACP_LAUNCH_SPECS.forEach((spec) => spec.hostBackend?.onSelectionChanged?.(() => derive(false)))
   derive()
   return {
     /** Reads the latest snapshot and every later one; returns the release. */

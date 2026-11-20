@@ -1,8 +1,8 @@
 // Launch reads use receipts and member sizes; full hashing belongs to installation.
 
-import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
+import { lstatSync, readFileSync, readdirSync } from 'node:fs'
 import { lstat, readdir, rm, writeFile } from 'node:fs/promises'
-import { basename, dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
@@ -148,24 +148,6 @@ export async function runtimeReleaseMayBePublished(root: string): Promise<boolea
       )
   )
   return receipts.some(Boolean)
-}
-
-/** Require every pinned companion beside the resolved executable; never launch an isolated server file. */
-export function copyBesidePinnedMembers(
-  command: string,
-  pin: ManagedRuntimePin | null
-): string | null {
-  try {
-    const real = realpathSync(command)
-    const members = pin && 'members' in pin ? pin.members : []
-    const whole = members.every((member) => {
-      const file = statSync(join(dirname(real), basename(member.path)))
-      return file.isFile() && (process.platform === 'win32' || (file.mode & 0o111) !== 0)
-    })
-    return whole ? real : null
-  } catch {
-    return null
-  }
 }
 
 /** Write before atomic rename so published releases cannot carry partial receipts. */

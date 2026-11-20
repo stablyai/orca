@@ -9,7 +9,7 @@ import type {
   ManagedRuntimeProgram
 } from '../../shared/agent-launch/installation/managed-runtime-install'
 import type { MainHttpClient } from '../network/http-client'
-import { RevisionedState, type RevisionClock } from '../runtime/events/revisioned-state'
+import { RevisionedState } from '../runtime/events/revisioned-state'
 import {
   reclaimRuntimeReleases,
   resolveInstalledRuntimeRelease,
@@ -32,17 +32,9 @@ export type ManagedRuntimeInstallationDeps = {
   /** Reject unless no host workload uses this runtime. */
   fence: (work: () => Promise<void>) => Promise<void>
   fetcher?: MainHttpClient['fetch']
-  /** Shared with the agent's other installation, so a stream switching between them stays ordered. */
-  revisions?: RevisionClock
 }
 
 type Run = { id: string; controller: AbortController; committed: boolean }
-
-let releasesRevision = 0
-/** Rises whenever an install or removal settles, so answers that read Orca's copies retire. */
-export function managedRuntimeReleasesRevision(): number {
-  return releasesRevision
-}
 
 const releaseChangeListeners = new Set<() => void>()
 export function onManagedRuntimeReleasesChanged(listener: () => void): () => void {
@@ -58,7 +50,7 @@ const unavailableText = (label: string): string =>
   `${label} is not available on ${process.platform} ${process.arch}.`
 
 export class ManagedRuntimeInstallation {
-  private readonly state: RevisionedState<ManagedRuntimeOperation | null>
+  private readonly state = new RevisionedState<ManagedRuntimeOperation | null>(null)
   private readonly root: string
   private running: Run | null = null
   private mutation: Promise<void>
@@ -71,7 +63,6 @@ export class ManagedRuntimeInstallation {
     private readonly runtime: ManagedRuntime,
     private readonly deps: ManagedRuntimeInstallationDeps
   ) {
-    this.state = new RevisionedState<ManagedRuntimeOperation | null>(null, deps.revisions)
     this.root = runtime.root(deps.dataDirectory)
     this.mutation = this.reclaim()
   }
@@ -215,10 +206,6 @@ export class ManagedRuntimeInstallation {
     return operation
   }
 
-  runs(operationId: string): boolean {
-    return this.state.get().value?.id === operationId
-  }
-
   /** Await unwinding; already-committed installs succeed despite cancellation. */
   async cancel(operationId: string): Promise<ManagedRuntimeOperation | null> {
     const current = this.state.get().value
@@ -246,7 +233,6 @@ export class ManagedRuntimeInstallation {
       if (settles) {
         // Reread the disk now so onRelease learns the outcome even when no client is watching.
         void this.status(false).catch(() => {})
-        releasesRevision += 1
         releaseChangeListeners.forEach((listener) => listener())
       }
     }

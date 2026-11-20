@@ -20,7 +20,7 @@ export function isAcpStructuredOptionKey(key: string): boolean {
 }
 
 export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAgentDefinition {
-  const { agent, managedRuntime, hostBackend } = spec
+  const { agent, hostBackend } = spec
   return {
     agent,
     handleTransport: ACP_HANDLE_TRANSPORT,
@@ -41,7 +41,6 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       steering: 'queue',
       approvalEnforcement: 'orca'
     },
-    ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),
     ...(isManagedAgentCli(agent) && { managedRuntime: () => managedAgentCli(agent).available() }),
     ...(hostBackend && { runsHostProgram: (home) => hostBackend.pins(home) }),
     restingOptions: {

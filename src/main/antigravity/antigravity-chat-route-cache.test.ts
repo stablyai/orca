@@ -15,7 +15,7 @@ vi.mock('./antigravity-host-acp', async (importOriginal) => ({
 }))
 
 const { lastAntigravityAgySignedOut } = await import('./antigravity-chat-route')
-const { antigravityHostChatRoute } = await import('./antigravity-acp-launch-spec')
+const { ANTIGRAVITY_LAUNCH_SPEC } = await import('./antigravity-acp-launch-spec')
 
 const folders: string[] = []
 afterEach(() => folders.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true })))
@@ -32,7 +32,7 @@ it('says agy is signed out only from an answer already found, never by asking it
   const command = join(homePath, 'agy')
   writeFileSync(command, '')
   // A chat start on a host whose agy has no login.
-  await antigravityHostChatRoute({
+  await ANTIGRAVITY_LAUNCH_SPEC.hostBackend.select({
     command,
     env: { PATH: '' },
     envToDelete: [],

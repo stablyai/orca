@@ -52,7 +52,7 @@ describe('Windows agy install directory discovery', () => {
     const resolved = resolveAcpLaunchCommand(
       ANTIGRAVITY_LAUNCH_SPEC.hostBackend.spec,
       { PATH: '', LocalAppData: localAppData },
-      { homePath: home, dataDirectory: null }
+      { homePath: home }
     )
     expect(resolved.command).toBe(agyExe)
   })

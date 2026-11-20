@@ -16,7 +16,7 @@ import { resolveOmpSessionsDir } from '../../ai-vault/scanners/omp/omp-session-r
 import { AcpRpcError } from '../transport/acp-errors'
 import { acpReleaseWithChild } from '../launch/acp-structured-launch-preparation'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
-import { acpClientInfo } from '../launch/acp-client-info'
+import { ORCA_ACP_CLIENT_INFO } from '../launch/acp-client-info'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 
@@ -82,7 +82,7 @@ export async function copyAcpConversation(
           env: launch.env,
           envToDelete: launch.envToDelete
         },
-        { clientInfo: acpClientInfo(launch.spec, launch.version ?? null) }
+        { clientInfo: ORCA_ACP_CLIENT_INFO }
       )
       options.track(connection)
       const sessionId = await waitForPromiseWithSignal(

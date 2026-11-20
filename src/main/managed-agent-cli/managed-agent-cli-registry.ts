@@ -84,7 +84,7 @@ const MANAGED_AGENT_CLIS: Record<ManagedAgentCliId, ManagedAgentCli> = {
   grok: GROK_MANAGED_CLI,
   kimi: KIMI_MANAGED_CLI,
   omp: OMP_MANAGED_CLI,
-  // Stands in for `agy` only, never for the legacy ACP server Antigravity chats may run instead.
+  // Stands in for `agy`.
   antigravity: AGY_MANAGED_CLI
 }
 

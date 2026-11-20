@@ -5,7 +5,7 @@ import {
 } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { ANTIGRAVITY_LAUNCH_GATE, antigravityChatSignIn } from './antigravity-chat-account'
+import { ANTIGRAVITY_LAUNCH_GATE } from './antigravity-chat-account'
 import {
   assertAntigravityChatAuthPublished,
   publishAntigravityChatAuth
@@ -20,7 +20,7 @@ export function readAntigravityChatAuthConfig(store: AuthStore): AntigravityChat
     return { method: 'oauth-personal' }
   }
   const parsed = AntigravityChatAuthConfigSchema.safeParse(value)
-  return parsed.success ? parsed.data : null
+  return parsed.success ? resolveAntigravityChatAuthConfig(parsed.data) : null
 }
 
 export function applyAntigravityChatAuthConfig(
@@ -63,7 +63,6 @@ export function applyAntigravityChatAuthConfig(
         }
         throw error
       }
-      antigravityChatSignIn.set({ auth: 'unknown', flow: null })
       agentModelCatalogStore.expireAgent('antigravity')
       return next
     })

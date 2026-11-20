@@ -119,8 +119,6 @@ export type StructuredAgentChatProgram = {
     env: Record<string, string>,
     settings: AcpHostBackendSettings
   ) => Promise<boolean>
-  /** Whether no release Orca can install runs here, so chats start only on `hostAlternative`. */
-  onlyHostAlternative?: () => boolean
 }
 
 export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {

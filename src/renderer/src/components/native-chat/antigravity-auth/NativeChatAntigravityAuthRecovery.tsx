@@ -38,7 +38,6 @@ export function NativeChatNoticeAuthRecovery({
     <NativeChatAntigravityAuthRecovery
       agentName={agentName}
       failureKind={failure?.kind}
-      account={failure?.account}
       problem={
         failure !== undefined ||
         (look.kind === 'line' && (look.tone === 'error' || look.tone === 'warning'))
@@ -54,13 +53,11 @@ export function NativeChatNoticeAuthRecovery({
 export function NativeChatAntigravityAuthRecovery({
   agentName,
   failureKind,
-  account,
   text,
   problem
 }: {
   agentName: string | undefined
   failureKind: string | undefined
-  account: string | undefined
   /** Everything the row shows or keeps behind Details, where a 401/403 usually is. */
   text: string
   /** The row reports a failure or warning; plain status lines never offer a switch. */
@@ -68,10 +65,16 @@ export function NativeChatAntigravityAuthRecovery({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const auth = useNativeChatAntigravityAuth()
-  if (!problem || !auth?.detection || agentSessionSetupFor(agentName)?.agent !== 'antigravity') {
+  // A chat on agy's own home keeps agy's login whatever Orca saves, so a switch can't fix it.
+  if (
+    !problem ||
+    !auth?.detection ||
+    auth.ownHome ||
+    agentSessionSetupFor(agentName)?.agent !== 'antigravity'
+  ) {
     return null
   }
-  const reason = antigravityAuthFailureReason({ failureKind, account, text })
+  const reason = antigravityAuthFailureReason({ failureKind, text })
   if (!reason || antigravityAuthFailureOutlived(reason, text, auth.detection.method)) {
     return null
   }

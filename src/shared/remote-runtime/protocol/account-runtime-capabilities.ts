@@ -3,11 +3,9 @@ export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentia
 // Why: `orca account add claude` signs in to an account folder the host creates first.
 export const CLAUDE_SIGN_IN_RUNTIME_CAPABILITY = 'accounts.claude-sign-in.v1' as const
 export const ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY = 'accounts.antigravity-native.v1' as const
-// Why separate: a host that serves the terminal accounts may predate the chat sign-in's methods.
-export const ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY =
-  'accounts.antigravity-chat-sign-in.v1' as const
-export const ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY =
-  'accounts.antigravity-chat-sign-in-intent.v1' as const
+// Retired with Orca's own Antigravity Google sign-in: `accounts.antigravity-chat-sign-in.v1` and
+// `accounts.antigravity-chat-sign-in-intent.v1`. Hosts no longer advertise them, so older clients
+// never call the removed sign-in methods.
 export const ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY =
   'accounts.antigravity-chat-auth-config.v1' as const
 // Why separate: older hosts reject the Gemini API key and Agent Platform account types.
@@ -28,9 +26,7 @@ export const ACCOUNT_RUNTIME_CAPABILITIES = [
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
   CLAUDE_SIGN_IN_RUNTIME_CAPABILITY,
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
-  ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
-  ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_DETECT_RUNTIME_CAPABILITY,
   DATA_ACCOUNT_RUNTIME_CAPABILITY,

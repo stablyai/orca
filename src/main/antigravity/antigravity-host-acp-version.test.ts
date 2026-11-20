@@ -11,7 +11,7 @@ vi.mock('./antigravity-acp-runtime-probe', () => ({
 }))
 
 import {
-  antigravityHostAcpReady,
+  checkAntigravityHostAcp,
   forgetAntigravityHostAcpChecks,
   readyAntigravityHostAcpVersion
 } from './antigravity-host-acp'
@@ -30,10 +30,10 @@ it('names the version of the agy the latest answer vouched for, even from the ca
   versions.set(mine, '1.5.13').set(other, '1.6.0')
 
   expect(readyAntigravityHostAcpVersion()).toBeNull()
-  await antigravityHostAcpReady(mine, {}, [])
-  await antigravityHostAcpReady(other, {}, [])
+  await checkAntigravityHostAcp(mine, {}, [])
+  await checkAntigravityHostAcp(other, {}, [])
   expect(readyAntigravityHostAcpVersion()).toBe('1.6.0')
   // Answered from the cache: no new check runs, and the version is still this binary's.
-  await antigravityHostAcpReady(mine, {}, [])
+  await checkAntigravityHostAcp(mine, {}, [])
   expect(readyAntigravityHostAcpVersion()).toBe('1.5.13')
 })

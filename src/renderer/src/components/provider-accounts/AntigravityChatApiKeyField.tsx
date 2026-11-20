@@ -14,18 +14,10 @@ const GET_KEY_URL = 'https://aistudio.google.com/apikey'
 type Props = {
   owner: RuntimeClientTarget
   disabled: boolean
-  onStatus: (status: AntigravityChatApiKeyStatus | null) => void
-  /** A newly saved key signs the chat in right away. */
-  onSaved: () => void
 }
 
 /** Paste a Gemini API key, kept encrypted on the chat's host; GEMINI_API_KEY is the fallback. */
-export function AntigravityChatApiKeyField({
-  owner,
-  disabled,
-  onStatus,
-  onSaved
-}: Props): React.JSX.Element {
+export function AntigravityChatApiKeyField({ owner, disabled }: Props): React.JSX.Element {
   const t = useTranslate()
   const id = useId()
   const [status, setStatus] = useState<AntigravityChatApiKeyStatus | null>(null)
@@ -47,7 +39,6 @@ export function AntigravityChatApiKeyField({
       current = false
     }
   }, [environmentId])
-  useEffect(() => onStatus(status), [status, onStatus])
 
   const run = (action: { kind: 'save'; apiKey: string } | { kind: 'clear' }): void => {
     setPending(true)
@@ -57,9 +48,6 @@ export function AntigravityChatApiKeyField({
         setStatus(next)
         setDraft('')
         setReplacing(false)
-        if (action.kind === 'save') {
-          onSaved()
-        }
       })
       .catch((cause: unknown) =>
         setError(

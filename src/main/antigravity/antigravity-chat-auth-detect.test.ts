@@ -1,10 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { detectAntigravityChatAuth } from './antigravity-chat-auth-detect'
-import { antigravityChatSignIn } from './antigravity-chat-account'
-import { seedAntigravityChatAuth } from './antigravity-chat-saved-sign-in'
 
 const dirs: string[] = []
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })))
@@ -26,7 +24,6 @@ const sources = (
   config: () => ({ method: 'oauth-personal' }),
   launchEnv: async () => env,
   apiKeyStatus: async () => ({ saved: false, inEnvironment: Boolean(env.GEMINI_API_KEY) }),
-  googleSignIn: async () => false,
   liveChats: () => 0,
   ...overrides
 })
@@ -61,7 +58,7 @@ describe('detectAntigravityChatAuth', () => {
     expect(detection.adc).toEqual({ available: true, project: 'sa-project' })
   })
 
-  it("names the project a switch to gcloud would keep, but not Enterprise's", async () => {
+  it('names the project a switch to gcloud would keep', async () => {
     const gcloud = folder({
       'application_default_credentials.json': JSON.stringify({ quota_project_id: 'adc-project' })
     })
@@ -71,14 +68,7 @@ describe('detectAntigravityChatAuth', () => {
         { config: () => ({ method: 'gemini-api-key', gcpProject: 'kept' }) }
       )
     )
-    const enterprise = await detectAntigravityChatAuth(
-      sources(
-        { CLOUDSDK_CONFIG: gcloud },
-        { config: () => ({ method: 'oauth-business', gcpProject: 'license', gcpLocation: 'us' }) }
-      )
-    )
     expect(keyed.adc.project).toBe('kept')
-    expect(enterprise.adc.project).toBe('adc-project')
   })
 
   it.each([
@@ -99,56 +89,17 @@ describe('detectAntigravityChatAuth', () => {
     expect(detection.adc).toEqual({ available: false, project: null })
   })
 
-  it("reports each Google method's saved sign-in, and survives a config being saved", async () => {
+  it('survives a config being saved', async () => {
     const detection = await detectAntigravityChatAuth(
       sources(
         { CLOUDSDK_CONFIG: folder() },
         {
-          googleSignIn: async (method) => method === 'oauth-business',
           config: () => {
             throw new Error('being saved')
           }
         }
       )
     )
-    expect(detection.googleSignIn).toEqual({ personal: false, business: true })
     expect(detection.method).toBeNull()
-  })
-})
-
-describe('seedAntigravityChatAuth', () => {
-  beforeEach(() => antigravityChatSignIn.set({ auth: 'unknown', flow: null }))
-
-  it('reads a saved Google token as signed in after a restart', async () => {
-    const home = folder({ 'antigravity-acp/acp_token.json': '{"refresh_token":"r"}' })
-    await seedAntigravityChatAuth(() => 'oauth-personal', home)
-    expect(antigravityChatSignIn.get().value.auth).toBe('signedIn')
-  })
-
-  it('leaves auth unknown for a missing or unreadable token, or a key or ADC method', async () => {
-    const broken = folder({ 'antigravity-acp/acp_token.json': 'not json' })
-    await seedAntigravityChatAuth(() => 'oauth-personal', broken)
-    await seedAntigravityChatAuth(() => 'oauth-business', broken)
-    const token = folder({ 'antigravity-acp/acp_token.json': '{}' })
-    await seedAntigravityChatAuth(() => 'gemini-api-key', token)
-    await seedAntigravityChatAuth(() => 'agent-platform', token)
-    expect(antigravityChatSignIn.get().value.auth).toBe('unknown')
-  })
-
-  it("never overrides the server's own answer", async () => {
-    const home = folder({ 'antigravity-acp/acp_token.json': '{}' })
-    const seeded = seedAntigravityChatAuth(() => 'oauth-personal', home)
-    antigravityChatSignIn.set({ auth: 'signedOut', flow: null })
-    await seeded
-    expect(antigravityChatSignIn.get().value.auth).toBe('signedOut')
-  })
-  it('waits for a running sign-in flow to answer instead of seeding', async () => {
-    const home = folder({ 'antigravity-acp/acp_token.json': '{}' })
-    antigravityChatSignIn.set({
-      auth: 'unknown',
-      flow: { flowId: 'f', owner: 'o', phase: 'waiting' }
-    })
-    await seedAntigravityChatAuth(() => 'oauth-personal', home)
-    expect(antigravityChatSignIn.get().value.auth).toBe('unknown')
   })
 })

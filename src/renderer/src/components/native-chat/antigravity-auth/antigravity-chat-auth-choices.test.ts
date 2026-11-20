@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { AntigravityChatAuthDetection } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
-import { ANTIGRAVITY_ACCOUNT_INELIGIBLE } from '../../../../../shared/agent-accounts/antigravity/antigravity-sign-in-sentences'
 import {
   antigravityAuthFailureOutlived,
   antigravityAuthFailureReason,
@@ -25,11 +24,9 @@ describe('antigravityChatAuthAlternatives', () => {
       { method: 'gemini-api-key', source: 'environment' },
       { method: 'agent-platform', project: 'my-project' }
     ])
-    expect(
-      antigravityChatAuthAlternatives(
-        detection({ method: 'gemini-api-key', googleSignIn: { personal: true, business: false } })
-      )
-    ).toEqual([{ method: 'agent-platform', project: 'my-project' }, { method: 'oauth-personal' }])
+    expect(antigravityChatAuthAlternatives(detection({ method: 'gemini-api-key' }))).toEqual([
+      { method: 'agent-platform', project: 'my-project' }
+    ])
   })
 
   it('offers gcloud only with a project it can use, and nothing without detections', () => {
@@ -47,13 +44,9 @@ describe('antigravityChatAuthAlternatives', () => {
 
 describe('antigravityChatAuthMenuItems', () => {
   it('keeps a fixed order, marks the active method and tags detected ones', () => {
-    const items = antigravityChatAuthMenuItems(
-      detection({ method: 'gemini-api-key', googleSignIn: { personal: true, business: false } }),
-      true
-    )
+    const items = antigravityChatAuthMenuItems(detection({ method: 'gemini-api-key' }), true)
     expect(items).toEqual([
-      { method: 'oauth-personal', active: false, detected: true, opensSettings: false },
-      { method: 'oauth-business', active: false, detected: false, opensSettings: true },
+      { method: 'oauth-personal', active: false, detected: false, opensSettings: false },
       { method: 'gemini-api-key', active: true, detected: true, opensSettings: false },
       { method: 'agent-platform', active: false, detected: true, opensSettings: false }
     ])
@@ -68,18 +61,23 @@ describe('antigravityChatAuthMenuItems', () => {
       antigravityChatAuthMenuItems(none, true)
         .filter((item) => item.opensSettings)
         .map((item) => item.method)
-    ).toEqual(['oauth-business', 'gemini-api-key', 'agent-platform'])
+    ).toEqual(['gemini-api-key', 'agent-platform'])
     expect(antigravityChatAuthMenuItems(none, false).map((item) => item.method)).toEqual([
-      'oauth-personal',
-      'oauth-business'
+      'oauth-personal'
     ])
+  })
+
+  it("marks an older Gemini Enterprise choice as agy's Google sign-in", () => {
+    expect(
+      antigravityChatAuthMenuItems(detection({ method: 'oauth-business' }), true)[0]
+    ).toMatchObject({ method: 'oauth-personal', active: true })
   })
 })
 
 describe('antigravityAuthFailureReason', () => {
   it.each([
     [{ text: 'error: SUBSCRIPTION_REQUIRED' }, 'noSubscription'],
-    [{ text: ANTIGRAVITY_ACCOUNT_INELIGIBLE }, 'ineligible'],
+    [{ text: "This Google account can't use Antigravity." }, 'ineligible'],
     [{ text: 'Usage limit reached for this account' }, 'usageLimit'],
     [{ failureKind: 'usageLimitReached', text: '' }, 'usageLimit'],
     [{ failureKind: 'notSignedIn', text: '' }, 'signedOut'],
@@ -88,9 +86,7 @@ describe('antigravityAuthFailureReason', () => {
     // A tool's own request failing says nothing about the chat's sign-in.
     [{ text: 'fetch https://example.com returned 403' }, null],
     [{ text: 'HTTP 429 from the docs site' }, null],
-    [{ text: 'The model is overloaded' }, null],
-    // The host's own agy keeps agy's login.
-    [{ failureKind: 'notSignedIn', account: 'system', text: '403' }, null]
+    [{ text: 'The model is overloaded' }, null]
   ] as const)('%o is %s', (input, reason) => {
     expect(antigravityAuthFailureReason(input)).toBe(reason)
   })

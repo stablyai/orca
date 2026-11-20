@@ -38,21 +38,19 @@ export function NativeChatAntigravityAuthChip({
   const t = useTranslate()
   const auth = useNativeChatAntigravityAuth()
   const method = auth?.detection?.method
-  const onAgy = auth?.backend === 'agy'
+  // On agy's own home, agy's login serves this chat whatever method is saved; another method
+  // applies to new chats. On Orca's chat home the saved method is this chat's too.
+  const onAgy = auth?.ownHome === true
   if (!auth || (!method && !onAgy) || (onAgy && auth.programPending)) {
     return null
   }
-  // On the host's agy, agy's own login serves this chat whatever Google method is saved; another
-  // method moves new chats to Orca's server.
   const items = antigravityChatAuthMenuItems(auth.detection, auth.keyAndAdc).filter(
     (item) => !onAgy || item.method !== 'oauth-personal'
   )
   // The host's current version; a chat started before an upgrade runs the older one until it restarts.
   const program = antigravityProgramLabel(
-    onAgy && auth.orcasAgy ? 'orcasAgy' : auth.backend,
-    onAgy
-      ? (auth.detection?.agyVersion ?? (auth.orcasAgy ? auth.managedVersion : null))
-      : auth.managedVersion,
+    auth.orcasAgy ? 'orcasAgy' : 'agy',
+    auth.detection?.agyVersion ?? (auth.orcasAgy ? auth.managedVersion : null),
     t
   )
   const label = onAgy ? program : (antigravityChatAuthMethodLabel(method ?? '', t) ?? '')
@@ -118,7 +116,7 @@ export function NativeChatAntigravityAuthChip({
                 if (item.active && !onAgy) {
                   return
                 }
-                if (item.opensSettings || item.method === 'oauth-business') {
+                if (item.opensSettings) {
                   auth.openSettings()
                 } else {
                   auth.switchTo(item.method)

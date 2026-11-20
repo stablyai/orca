@@ -20,7 +20,6 @@ import {
 } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
-import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
@@ -120,8 +119,6 @@ export type AcpLaunchInvocationDeps = {
 
 /** What a launch runs, and the spec of the backend the account home pins. */
 export type AcpLaunchInvocation = StructuredAgentCommand & {
-  /** The managed release's version, when the launch runs one. */
-  version?: string
   env: Record<string, string>
   envToDelete: string[]
   spec: AcpLaunchSpec
@@ -156,8 +153,8 @@ async function readAcpLaunchInvocation(
     overlayEnvironmentVariables(base, deps.resolveLaunchEnv?.(spec.agent), process.platform)
   )
   const commandSettings = deps.resolveCommandSettings?.()
-  // Orca's account-type setting selects only the managed server's sign-in.
-  const usesChatAuth = spec.agent === 'antigravity' && spec.authMethod !== undefined
+  // Orca's account type configures only launches on Orca's own chat home.
+  const usesChatAuth = spec.readsAntigravityChatAuth === true
   if (usesChatAuth) {
     assertAntigravityChatAuthPublished(commandSettings?.antigravityChatAuth)
   }
@@ -166,16 +163,16 @@ async function readAcpLaunchInvocation(
     : undefined
   const envToDelete =
     spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env, antigravityChatAuth) ?? []
-  if (spec.agent === 'antigravity' && spec.managedRuntime) {
-    await prepareAntigravityAcpProxyEnvironment(env, deps.inheritedEnv ?? process.env)
-    assertStructuredAgentResolutionCurrent(deps.operation)
-  }
   if (antigravityChatAuth) {
     Object.assign(env, await antigravityChatAuthEnvironment(antigravityChatAuth, env))
     assertStructuredAgentResolutionCurrent(deps.operation)
   }
   Object.assign(env, spec.env)
-  const invocation = resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings })
+  const invocation = resolveAcpLaunchCommand(spec, env, {
+    commandSettings,
+    ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
+    ...(deps.homePath ? { homePath: deps.homePath } : {})
+  })
   return {
     ...invocation,
     env,
@@ -191,7 +188,7 @@ export function acpStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
-    const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth, version } =
+    const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth } =
       await resolveAcpLaunchInvocation(agentSpec, record.accountHome, {
         resolveEnvironment: basis.baseEnvironment,
         resolveLaunchEnv: () => basis.launchEnv(),
@@ -255,8 +252,7 @@ export function acpStructuredLaunchPart(
       await instructions?.release?.().catch(() => undefined)
       throw error
     })
-    // A managed release's receipt names its version; other programs answer the check.
-    const launchedVersion = version ?? launchVersion.version
+    const launchedVersion = launchVersion.version
     const botServers = acpBotMcpServers(tools)
     // Like its bot tools, a read-only session gets none of the agent's own servers.
     const ownServers = basis.readOnly

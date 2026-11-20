@@ -18,15 +18,12 @@ import { localAccountRuntimeTargetKey } from '../../../../../../shared/agent-acc
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
-import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import { AntigravityChatSignInRow } from '../../../provider-accounts/AntigravityChatSignInRow'
+import { AntigravityChatAuthForm } from '../../../provider-accounts/AntigravityChatAuthForm'
 import {
   antigravityChatDescription,
-  antigravityChatSignInBlocked,
-  antigravityProviderSignInShown,
   type AntigravityChatDescription
-} from '../../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
-import { useAntigravityChatSignIn } from '../../../provider-accounts/use-antigravity-chat-sign-in'
+} from '../../../provider-accounts/antigravity-chat-description'
+import type { AntigravityChatAuthConfig } from '../../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
@@ -53,7 +50,6 @@ function usageMatchesTarget(provenance: string, target: AntigravityAccountTarget
 export function AntigravityAccountsSection({
   owner,
   target,
-  label,
   ownerPlatform
 }: {
   owner: RuntimeClientTarget
@@ -66,6 +62,7 @@ export function AntigravityAccountsSection({
   const [usage, setUsage] = useState<ProviderRateLimits | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [chatMethod, setChatMethod] = useState<AntigravityChatAuthConfig['method'] | null>(null)
   const pending = useRef(false)
   const mounted = useRef(true)
   const ownerKind = owner.kind
@@ -82,9 +79,6 @@ export function AntigravityAccountsSection({
     chatRuntime.snapshot.state.source === 'managed'
       ? chatRuntime.snapshot.state.installedVersion
       : null
-  // A remote host's sign-in finishes from the address pasted back into its row.
-  const chatSignIn = chats && chatRuntime.kind === 'active'
-  const signIn = useAntigravityChatSignIn(chatSignIn ? owner : null)
 
   useEffect(() => {
     mounted.current = true
@@ -195,7 +189,6 @@ export function AntigravityAccountsSection({
       <ManagedRuntimeInstallRow
         observation={chatRuntime}
         agentLabel={t('accounts.antigravity.title', 'Antigravity')}
-        signInRunning={antigravityChatSignInRunning(signIn.flow)}
       >
         {(line, actions) => (
           <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
@@ -211,6 +204,18 @@ export function AntigravityAccountsSection({
 
   const agyVersion = state?.chatAgyVersion
   const chatDescriptions: Record<AntigravityChatDescription, string> = {
+    olderHost: t(
+      'accounts.antigravity.chatDescriptionOlderHost',
+      'Update Orca on this computer so its chats run on agy.'
+    ),
+    orcaHome: t(
+      'accounts.antigravity.chatDescriptionOrcaHome',
+      'Chats run on agy with the key or gcloud login below, apart from agy in the terminal.'
+    ),
+    installAgy: t(
+      'accounts.antigravity.chatDescriptionInstallAgy',
+      'Install agy below to use Chat. It signs in with its own account.'
+    ),
     agySignedOut: t(
       'accounts.antigravity.chatDescriptionAgySignedOut',
       "New chats use agy, which isn't signed in yet. Run agy on this host to sign in."
@@ -234,46 +239,15 @@ export function AntigravityAccountsSection({
       : t(
           'accounts.antigravity.chatDescriptionAgyOwnSignIn',
           "Chats run on agy and use agy's own sign-in."
-        ),
-    installAgy: t(
-      'accounts.antigravity.chatDescriptionInstallAgy',
-      'Install agy below to use Chat. It signs in with its own account.'
-    ),
-    agySignedIn: agyVersion
-      ? t(
-          'accounts.antigravity.chatDescriptionAgyVersion',
-          "New chats run on your agy (v{{version}}) and its account below. This sign-in is used when agy isn't.",
-          { version: agyVersion }
         )
-      : t(
-          'accounts.antigravity.chatDescriptionAgy',
-          "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't."
-        ),
-    orcaSignIn:
-      managedVersion && state?.chatUsesAgy === false
-        ? t(
-            'accounts.antigravity.chatDescriptionManagedVersion',
-            "New chats run on Orca's copy (v{{version}}), so Chat works without agy installed.",
-            { version: managedVersion }
-          )
-        : t(
-            'accounts.antigravity.chatDescription',
-            'Signs in through your browser, so Chat works without agy installed.'
-          )
   }
 
   const chatRows =
     chats && chatRuntime.kind === 'active' ? (
-      antigravityProviderSignInShown(chatRuntime) ? (
-        <AntigravityChatSignInRow
-          owner={owner}
-          label={label}
-          disabled={antigravityChatSignInBlocked(chatRuntime)}
-          runtime={runtimeRow}
-        />
-      ) : (
-        runtimeRow
-      )
+      <>
+        <AntigravityChatAuthForm owner={owner} disabled={busy} onMethod={setChatMethod} />
+        {runtimeRow}
+      </>
     ) : null
 
   return (
@@ -281,7 +255,7 @@ export function AntigravityAccountsSection({
       {chatRows ? (
         <SettingsGroup
           title={logoTitle(t('accounts.antigravity.chatTitle', 'Antigravity Chat'))}
-          description={chatDescriptions[antigravityChatDescription(state, chatRuntime)]}
+          description={chatDescriptions[antigravityChatDescription(state, chatRuntime, chatMethod)]}
         >
           {chatRows}
         </SettingsGroup>

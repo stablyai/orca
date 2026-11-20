@@ -10,19 +10,24 @@ import {
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
 import { acpHostBackendInput } from '../../../../acp/launch/acp-launch-command'
+import { ANTIGRAVITY_LAUNCH_SPEC } from '../../../../antigravity/antigravity-acp-launch-spec'
 import {
-  ANTIGRAVITY_LAUNCH_SPEC,
-  antigravityHostChatRoute
-} from '../../../../antigravity/antigravity-acp-launch-spec'
+  antigravityAgySignIn,
+  antigravityChatUsesOrcaHome
+} from '../../../../antigravity/antigravity-chat-route'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 
 const CHAT_BACKEND_WAIT_MS = 1_500
 
-/** Where new chats on this host run; an unreadable answer reads as Orca's server. */
-async function hostChatRoute(runtime: OrcaRuntimeService) {
+/** agy's sign-in where new chats on this host run on agy's own home; false where they run on
+ *  Orca's chat home, whose key or gcloud Orca holds. */
+async function hostChatAgySignIn(runtime: OrcaRuntimeService) {
   const settings = runtime.requireStore().getSettings()
+  if (antigravityChatUsesOrcaHome(settings.antigravityChatAuth)) {
+    return false
+  }
   const env = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
   const input = await acpHostBackendInput(
     ANTIGRAVITY_LAUNCH_SPEC,
@@ -30,7 +35,7 @@ async function hostChatRoute(runtime: OrcaRuntimeService) {
     getProfileUserDataPath(),
     settings
   )
-  return input ? (await antigravityHostChatRoute(input)).agy : false
+  return input ? antigravityAgySignIn(input) : false
 }
 
 /** Adds whether new chats on this host run on agy, and so on the account these rows switch. */
@@ -45,7 +50,7 @@ export async function withAntigravityChatBackend(
   }
   // A cold agy check takes seconds; the rows don't wait for it, and a later refresh shows it.
   const agy = await withTimeout(
-    hostChatRoute(runtime).catch(() => false as const),
+    hostChatAgySignIn(runtime).catch(() => false as const),
     CHAT_BACKEND_WAIT_MS,
     null
   )

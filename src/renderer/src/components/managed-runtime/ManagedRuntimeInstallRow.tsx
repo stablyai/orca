@@ -24,8 +24,6 @@ export function ManagedRuntimeInstallRow(props: {
   observation: Extract<ManagedRuntimeInstallObservation, { kind: 'active' }>
   agentLabel: string
   children: (line: React.ReactNode, actions: React.ReactNode) => React.ReactNode
-  /** A sign-in runs the installed server, so Install and Remove wait for it; Cancel does not. */
-  signInRunning?: boolean
   buttonSize?: 'xs' | 'default'
   /** False leaves out the ⋯ Reinstall/Remove menu, for rows that only prompt an install. */
   menu?: boolean
@@ -59,7 +57,7 @@ export function ManagedRuntimeInstallRow(props: {
   const button = view.prominent ? view.action : null
   const action = button ? null : view.action
   const removable = observation.removable && view.removable
-  const held = pending !== null || props.signInRunning === true
+  const held = pending !== null
   const primary = (chosen: ManagedRuntimeInstallAction) => () =>
     chosen.kind === 'cancel'
       ? cancelManagedRuntimeInstall(subject, chosen.operationId)

@@ -1,13 +1,9 @@
-// Startup never installs a managed runtime; missing installations must fail before spawn.
+// Prepares a launch's account before its spawn.
 
 import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import {
-  AgentSessionPreSpawnError,
-  launchPreparationFailure
-} from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import { launchPreparationFailure } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { StructuredAgentSessionAcquireInput } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
-import { acpPrivateTempConnect } from './acp-private-temp'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 import type { AcpLaunchSpec } from './acp-launch-contract'
@@ -42,7 +38,6 @@ export async function prepareAcpLaunch<
     throw launchPreparationFailure(error)
   }
   const launch = await resolve().catch(preparationFailure)
-  const { spec } = launch
   // Nothing has spawned yet, so a failure from here on removes the launch's own files at once.
   const failBeforeSpawn = (error: unknown): never => {
     void launch.release?.().catch(() => undefined)
@@ -50,14 +45,7 @@ export async function prepareAcpLaunch<
   }
   try {
     closedBeforeSpawn()
-    // Only a missed lookup returns the bare command; explicit Command settings resolve or fail.
-    if (spec.managedRuntime && launch.command === spec.command) {
-      throw new AgentSessionPreSpawnError(
-        new Error(`${spec.managedRuntime.label} is not installed on this host`),
-        { reason: 'runtimeNotInstalled' }
-      )
-    }
-    const { prepare } = spec.account
+    const { prepare } = launch.spec.account
     if (prepare) {
       await prepare(launch.env, launch.antigravityChatAuth, closedBeforeSpawn).catch(
         preparationFailure
@@ -93,22 +81,17 @@ export function acpReleaseWithChild<
   }
 }
 
-/** The connect function a launch spawns through: private temp folder, and its files released with the child. */
-export async function acpLaunchConnect<
+/** The connect function a launch spawns through, its files released with the child. */
+export function acpLaunchConnect<
   Connection extends Pick<AcpStructuredConnection, 'onExit'> = AcpStructuredConnection
 >(
-  deps: Parameters<typeof acpPrivateTempConnect<Connection>>[0],
+  deps: { connect: ConnectAcpAgent<Connection> },
   launch: Pick<AcpStructuredLaunch, 'release'>,
   closedBeforeSpawn: () => void
-): Promise<ConnectAcpAgent<Connection>> {
-  const connect = deps.spec.privateTempDirectory
-    ? await acpPrivateTempConnect(deps, closedBeforeSpawn).catch((error: unknown) => {
-        void launch.release?.().catch(() => undefined)
-        throw error
-      })
-    : (...args: Parameters<ConnectAcpAgent<Connection>>) => {
-        closedBeforeSpawn()
-        return deps.connect(...args)
-      }
+): ConnectAcpAgent<Connection> {
+  const connect = (...args: Parameters<ConnectAcpAgent<Connection>>) => {
+    closedBeforeSpawn()
+    return deps.connect(...args)
+  }
   return acpReleaseWithChild(connect, launch.release)
 }

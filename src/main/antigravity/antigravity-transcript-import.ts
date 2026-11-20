@@ -5,9 +5,7 @@ import {
   directoryTranscriptImport,
   type StructuredAgentTranscriptImport
 } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
-import { agentSessionRefusalError } from '../../shared/agent-session/failures/agent-session-wire-refusals'
-import { agentSessionAccountHomePath } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { agyUsesApiKey, isAntigravityHostAccountHome } from './antigravity-host-acp'
+import { isAntigravityHostAccountHome } from './antigravity-host-acp'
 
 /** agy keeps terminal conversations here; the host's `agy acp` reads and writes the same store. */
 const AGY_CONVERSATION_FOLDER = 'antigravity-cli'
@@ -64,24 +62,6 @@ const directories = directoryTranscriptImport({
 
 export const ANTIGRAVITY_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
   ...directories,
-  // A host chat drops inherited API keys, so an agy set up for one would fail every prompt.
-  accountHomeCandidates: async (input) => {
-    const homes = await directories.accountHomeCandidates(input)
-    const usable = await Promise.all(
-      homes.map(
-        async (home) => !(await agyUsesApiKey(dirname(agentSessionAccountHomePath(home) ?? '')))
-      )
-    )
-    const candidates = homes.filter((_, index) => usable[index])
-    if (homes.length > 0 && candidates.length === 0) {
-      throw agentSessionRefusalError(
-        'structured_agent_session_unsupported',
-        { reason: 'hostUnsupported' },
-        'agy is set up with an API key, which Antigravity Chat cannot use. Continue this conversation in the terminal.'
-      )
-    }
-    return candidates
-  },
   // A hook may name the compact transcript; import the full one beside it when it exists.
   admitTranscriptPath: async (input) => {
     const admitted = await directories.admitTranscriptPath(input)
