@@ -22,18 +22,47 @@ const NO_HELD_TABS: HeldRelayTabs = () => new Set()
 export class AcknowledgedDesktopRelays {
   private hosts = new Map<ExecutionHostId, AcknowledgedHost>()
   private generation = 0
+  // Writes sent but not yet answered: main may have stored them, so they count as removal evidence.
+  private inFlight = new Set<ReadonlyMap<ExecutionHostId, AcknowledgedHost>>()
 
   forget(): void {
     this.hosts = new Map()
+    this.inFlight = new Set()
     this.generation += 1
   }
 
-  /** Every host resends a baseline, and late answers are ignored; the ids stay as removal evidence. */
+  /** Every host resends a baseline, and late answers are ignored. Ids main may hold from this window
+   *  (accepted, or sent and unanswered) stay as removal evidence. */
   invalidate(): void {
     for (const [hostId, host] of this.hosts) {
       this.hosts.set(hostId, { ...host, stale: true })
     }
+    for (const sent of this.inFlight) {
+      for (const [hostId, host] of sent) {
+        this.markStale(hostId, host)
+      }
+    }
+    this.inFlight = new Set()
     this.generation += 1
+  }
+
+  /** A full replacement (quit, unload) was written without an answer: resend baselines afterwards,
+   *  keeping everything it named as removal evidence in case the window stays open. */
+  replacedBy(write: DesktopRelayWrite): void {
+    this.invalidate()
+    for (const host of write.hosts) {
+      this.markStale(host.hostId, host)
+    }
+  }
+
+  /** Main may hold `sent`'s ids as well as the last accepted ones; a later removal may name either. */
+  private markStale(hostId: ExecutionHostId, sent: AcknowledgedHost): void {
+    const last = this.hosts.get(hostId)
+    this.hosts.set(hostId, {
+      complete: sent.complete,
+      relayIdsByTabId: { ...last?.relayIdsByTabId, ...sent.relayIdsByTabId },
+      stale: true
+    })
   }
 
   /** Narrow a full write to unacknowledged hosts and changed ids; `acknowledge` records main's answer. */
@@ -60,10 +89,21 @@ export class AcknowledgedDesktopRelays {
         this.hosts.delete(hostId)
       }
     }
+    const sent = new Map(
+      hosts.flatMap(({ hostId }) => {
+        const host = wanted.get(hostId)
+        return host ? [[hostId, host] as const] : []
+      })
+    )
+    // A write with no hosts is never sent, so it is never answered.
+    if (sent.size > 0) {
+      this.inFlight.add(sent)
+    }
     const acknowledge = (result: DesktopRelayWriteResult) => {
       if (generation !== this.generation) {
         return
       }
+      this.inFlight.delete(sent)
       const accepted = new Set([...result.applied, ...result.unchanged])
       for (const hostId of result.refused) {
         accepted.delete(hostId)
@@ -73,6 +113,9 @@ export class AcknowledgedDesktopRelays {
         const last = this.hosts.get(hostId)
         if (host && accepted.has(hostId)) {
           this.hosts.set(hostId, host)
+        } else if (host) {
+          // Refused writes are partly applied, and skipped ones may be retried: keep both as evidence.
+          this.markStale(hostId, host)
         } else if (last) {
           this.hosts.set(hostId, { ...last, stale: true })
         }

@@ -84,6 +84,28 @@ describe('relay ids saved by ownership', () => {
     }
   })
 
+  it('clears an ended relay main stored from a write it partly refused', async () => {
+    const main = inMemoryMain()
+    // Main holds another id for tab-b, so the window's first write there is refused for that tab.
+    main.partitions.set(SSH_HOST, {
+      ...main.stored(SSH_HOST),
+      remoteSessionIdsByTabId: { 'tab-b': 'relay-main' }
+    })
+    const { stop, endRelay } = await windowSavingTo(main, { parked: true, secondTab: true })
+    try {
+      expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toEqual({
+        'tab-a': 'relay-a',
+        'tab-b': 'relay-main'
+      })
+
+      await endRelay()
+
+      expect(main.stored(SSH_HOST).remoteSessionIdsByTabId).toEqual({ 'tab-b': 'relay-main' })
+    } finally {
+      stop()
+    }
+  })
+
   it('clears it after a fenced partition opens again', async () => {
     const main = inMemoryMain()
     const { stop, endRelay, renameTab } = await windowSavingTo(main)

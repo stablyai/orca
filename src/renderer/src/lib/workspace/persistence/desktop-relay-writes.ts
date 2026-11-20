@@ -230,11 +230,14 @@ export function planDesktopRelayWrite(
   // The save's slices when its partition writes can carry relay ids (entries writes); else null.
   entrySlices: HostSessionSlices | null
 ): DesktopRelayPlan | null {
-  const { write, acknowledge } = acknowledgedRelays.narrow(full, heldTabsByWrite.get(full))
-  if (write.hosts.length === 0 || !api.applyDesktopRelays) {
+  const applyDesktopRelays = api.applyDesktopRelays
+  if (!applyDesktopRelays) {
     return null
   }
-  const applyDesktopRelays = api.applyDesktopRelays
+  const { write, acknowledge } = acknowledgedRelays.narrow(full, heldTabsByWrite.get(full))
+  if (write.hosts.length === 0) {
+    return null
+  }
   // Local is always written; other hosts only when the save has their slice.
   const carriable = new Set<ExecutionHostId>(
     entrySlices
@@ -332,6 +335,6 @@ export function replaceDesktopRelays(
     const ended = held ? acknowledgedRelays.endedOnIncompleteHost(host, held) : []
     return ended.length > 0 ? { ...host, removedTabIds: ended } : host
   })
-  acknowledgedRelays.forget()
+  acknowledgedRelays.replacedBy(write)
   return write
 }
