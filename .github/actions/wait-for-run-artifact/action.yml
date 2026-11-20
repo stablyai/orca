@@ -27,39 +27,58 @@ runs:
         ARTIFACT_ID: ${{ inputs.artifact-id }}
         TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
       run: |
-        set -uo pipefail
-        if ! [[ "$ARTIFACT_ID" =~ ^[0-9]+$ ]]; then
-          echo "::error::wait-for-run-artifact needs a numeric artifact-id, got '$ARTIFACT_ID'."
+        # Why: runner bash starts with -e; failed polls are expected here, so handle statuses explicitly.
+        set +e -uo pipefail
+        if ! [[ "$ARTIFACT_ID" =~ ^[0-9]+$ && "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]]; then
+          echo "::error::wait-for-run-artifact needs numeric artifact-id and timeout-seconds, got '$ARTIFACT_ID' and '$TIMEOUT_SECONDS'."
           exit 1
         fi
         deadline=$((SECONDS + TIMEOUT_SECONDS))
         delay=2
         sightings=0
-        last=''
+        last='no response yet'
+        out=$(mktemp)
+        trap 'rm -f "$out"' EXIT
         while :; do
-          # Why: SignPath's lookup is run-scoped, so poll the run's artifact list rather than /artifacts/<id>.
-          if ids=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" --jq '.artifacts[].id' 2>&1 | tr -d '\r'); then
-            if grep -qx "$ARTIFACT_ID" <<<"$ids"; then
-              sightings=$((sightings + 1))
-              # Why: two consecutive sightings guard against a single replica answering early.
-              if [ "$sightings" -ge 2 ]; then
-                echo "Artifact $ARTIFACT_ID is listed for run $GITHUB_RUN_ID."
-                exit 0
-              fi
-              delay=2
-            else
-              sightings=0
-              last="run lists $(grep -c . <<<"$ids") other artifact(s)"
-            fi
-          else
-            sightings=0
-            last="gh api failed: ${ids:0:300}"
-          fi
           remaining=$((deadline - SECONDS))
           if [ "$remaining" -le 0 ]; then
             echo "::error::Artifact $ARTIFACT_ID was not listed for run $GITHUB_RUN_ID within ${TIMEOUT_SECONDS}s, so SignPath would reject it ($last)."
             exit 1
           fi
+          # Why: SignPath's lookup is run-scoped, so poll the run's artifact list rather than /artifacts/<id>.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" --jq '.artifacts[].id' >"$out" 2>&1 &
+          pid=$!
+          # Why: bound the read by the deadline without timeout(1); --norc Git Bash may resolve it to System32's timeout.exe.
+          while kill -0 "$pid" 2>/dev/null && [ "$SECONDS" -lt "$deadline" ]; do sleep 0.5; done
+          if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null
+            wait "$pid" 2>/dev/null
+            status=124
+          else
+            wait "$pid"
+            status=$?
+          fi
+          ids=$(tr -d '\r' <"$out")
+          if [ "$SECONDS" -ge "$deadline" ]; then
+            sightings=0
+            last="the last read was still running at the deadline (exit $status)"
+          elif [ "$status" -ne 0 ]; then
+            sightings=0
+            last="gh api failed (exit $status): ${ids:0:300}"
+          elif grep -qx "$ARTIFACT_ID" <<<"$ids"; then
+            sightings=$((sightings + 1))
+            # Why: two consecutive sightings guard against a single replica answering early.
+            if [ "$sightings" -ge 2 ]; then
+              echo "Artifact $ARTIFACT_ID is listed for run $GITHUB_RUN_ID."
+              exit 0
+            fi
+            delay=2
+          else
+            sightings=0
+            last="run lists $(grep -c . <<<"$ids" || true) other artifact(s)"
+          fi
+          remaining=$((deadline - SECONDS))
+          [ "$remaining" -le 0 ] && continue
           [ "$sightings" -eq 0 ] && echo "Artifact $ARTIFACT_ID not listed for run $GITHUB_RUN_ID yet ($last); retrying in ${delay}s."
           sleep "$((delay < remaining ? delay : remaining))"
           delay=$((delay * 2 > 15 ? 15 : delay * 2))
