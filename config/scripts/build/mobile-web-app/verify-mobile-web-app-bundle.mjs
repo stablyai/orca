@@ -40,8 +40,9 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 // budget holds only files outfitSheetsOnDemand proves are fetched when used, and any that the document
 // names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
 // update (shellDownloadedAssets), so this budget also bounds that download.
-// Eager: 11,068,446 bytes measured with the split (2026-11-20), rounded up to the next 64 KiB.
-export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 169 * 64 * 1024
+// Eager: 11,075,895 bytes measured with the split after main's 2026-11-20 merge, rounded up to the next
+// 64 KiB; still under the single 10.75 MiB fence it replaces.
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 170 * 64 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
 
