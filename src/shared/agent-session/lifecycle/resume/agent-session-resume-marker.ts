@@ -98,7 +98,9 @@ const agentSessionResumeMarkerSchema = z.object({
     .object({ epoch: markerField, sequence: z.number().int().nonnegative() })
     .optional()
     .catch(undefined),
-  activity: agentSessionRestartActivitySchema.optional().catch(undefined)
+  activity: agentSessionRestartActivitySchema.optional().catch(undefined),
+  /** State the guard replaced; null when the offer had no activity. */
+  unguardedState: z.enum(AGENT_STATUS_STATES).nullable().optional().catch(undefined)
 })
 
 /** Malformed advisory markers drop as null, never throw and make sessions unreadable. */
@@ -107,8 +109,8 @@ export function parseAgentSessionResumeMarker(value: unknown): AgentSessionResum
   if (!parsed.success) {
     return null
   }
-  const { activity, journalCursor, cause, exitUnproven, ...marker } = parsed.data
-  const readActivity = exitUnproven ? withoutManualOnlyGuard(activity) : activity
+  const { activity, journalCursor, cause, exitUnproven, unguardedState, ...marker } = parsed.data
+  const readActivity = exitUnproven ? withoutManualOnlyGuard(activity, unguardedState) : activity
   return {
     ...marker,
     ...(exitUnproven ? { exitUnproven } : {}),
@@ -137,13 +139,18 @@ function withManualOnlyGuard(
 }
 
 function withoutManualOnlyGuard(
-  activity: AgentSessionRestartActivity | undefined
+  activity: AgentSessionRestartActivity | undefined,
+  unguardedState: AgentSessionRestartActivity['state'] | null | undefined
 ): AgentSessionRestartActivity | undefined {
   if (!activity?.prompts.some((prompt) => prompt.label === MANUAL_ONLY_GUARD_LABEL)) {
     return activity
   }
   const prompts = activity.prompts.filter((prompt) => prompt.label !== MANUAL_ONLY_GUARD_LABEL)
-  return { ...activity, prompts, state: prompts.length > 0 ? 'blocked' : 'working' }
+  if (prompts.length === 0 && activity.tasks.length === 0 && unguardedState === null) {
+    return undefined
+  }
+  const state = prompts.length > 0 ? 'blocked' : (unguardedState ?? 'working')
+  return { ...activity, prompts, state }
 }
 
 /** The marker as the capsule file stores it; see `cause`. */
@@ -153,9 +160,15 @@ export function storedAgentSessionResumeMarker(marker: AgentSessionResumeMarker)
 > & {
   trigger: AgentSessionResumeTrigger
   cause?: 'crash'
+  unguardedState?: AgentSessionRestartActivity['state'] | null
 } {
+  const guarded = marker.exitUnproven && !(marker.activity && marker.activity.prompts.length > 0)
   const stored = marker.exitUnproven
-    ? { ...marker, activity: withManualOnlyGuard(marker.activity) }
+    ? {
+        ...marker,
+        activity: withManualOnlyGuard(marker.activity),
+        ...(guarded ? { unguardedState: marker.activity?.state ?? null } : {})
+      }
     : marker
   return stored.trigger === 'crash'
     ? { ...stored, trigger: 'quit', cause: 'crash' }

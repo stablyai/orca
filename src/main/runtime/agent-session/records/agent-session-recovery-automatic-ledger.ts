@@ -88,7 +88,8 @@ function dropOldestTaken(
 /** Offer ids can be 512 characters; shed the least harmful records first until the file fits well inside its read limit. Entries still inside the rate-limit window go last, so a crash loop stays bounded. */
 function fitLedgerToReadLimit(ledger: AutomaticRestartLedger): AutomaticRestartLedger {
   const fitted = { ...ledger }
-  const tooLarge = (): boolean => Buffer.byteLength(JSON.stringify(fitted)) > MAX_LEDGER_BYTES / 2
+  const exceeds = (limit: number): boolean => Buffer.byteLength(JSON.stringify(fitted)) > limit
+  const tooLarge = (): boolean => exceeds(MAX_LEDGER_BYTES / 2)
   const oldTaken = (): boolean => {
     const entries = takenEntries(fitted.taken)
     const newest = Math.max(0, ...entries.map((item) => item.entry.at))
@@ -101,7 +102,7 @@ function fitLedgerToReadLimit(ledger: AutomaticRestartLedger): AutomaticRestartL
       fitted.dismissed = fitted.dismissed.slice(Math.ceil(fitted.dismissed.length / 10))
     } else if (fitted.passed.length > 0) {
       fitted.passed = fitted.passed.slice(Math.ceil(fitted.passed.length / 10))
-    } else if (Object.keys(fitted.taken).length > 0) {
+    } else if (exceeds(MAX_LEDGER_BYTES) && Object.keys(fitted.taken).length > 0) {
       fitted.taken = dropOldestTaken(fitted.taken, false)
     } else {
       break

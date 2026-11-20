@@ -31,3 +31,17 @@ describe('exitUnproven resume marker storage', () => {
     expect(read).toEqual(marker)
   })
 })
+
+describe('exitUnproven activity round trip', () => {
+  it('keeps a blocked activity without prompts blocked', () => {
+    const blocked = { ...marker, activity: { state: 'blocked' as const, prompts: [], tasks: [] } }
+
+    expect(parseAgentSessionResumeMarker(storedAgentSessionResumeMarker(blocked))).toEqual(blocked)
+  })
+
+  it('keeps an absent activity absent', () => {
+    const { activity: _activity, ...bare } = marker
+
+    expect(parseAgentSessionResumeMarker(storedAgentSessionResumeMarker(bare))).toEqual(bare)
+  })
+})

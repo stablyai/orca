@@ -173,3 +173,18 @@ it('keeps a recent continuation when passed-over offers force the ledger to shri
   const read = await automaticLedger.readAutomaticReservationLedger(path)
   expect(read?.taken['session-a']).toEqual([{ at: 10, work: 'turn:t1' }])
 })
+
+it('keeps in-window continuations that fit within the read limit', async () => {
+  const path = join(directory, 'capsule.json')
+  const taken = Object.fromEntries(
+    Array.from({ length: 260 }, (_, index) => [
+      `${index}`.padEnd(512, 's'),
+      [1, 2, 3].map((at) => ({ at, work: `turn:${'w'.repeat(500)}` }))
+    ])
+  )
+
+  await automaticLedger.writeAutomaticRestartLedger(path, { taken, passed: [], dismissed: [] })
+
+  const read = await automaticLedger.readAutomaticReservationLedger(path)
+  expect(Object.values(read?.taken ?? {}).flat()).toHaveLength(780)
+})
