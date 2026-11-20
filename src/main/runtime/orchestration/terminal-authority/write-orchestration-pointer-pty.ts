@@ -1,6 +1,6 @@
 import { selectExplicitAgentIdentityRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { readAgentTerminalComposerTypedText } from '../../terminal/wait/terminal-delivery-refusal'
-import { isHoldExemptAgent } from '../../terminal/wait/mailbox-unheld-foreground'
+import { isHoldExemptAgent } from '../../terminal/wait/mailbox-foreground-read'
 import type {
   MailboxForeground,
   MailboxForegroundInspection

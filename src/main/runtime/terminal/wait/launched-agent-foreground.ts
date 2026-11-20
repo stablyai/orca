@@ -19,7 +19,6 @@ import { readProcessStartTimeMs } from '../../agent-session/ownership/agent-sess
 import { isTerminalForegroundObservation } from '../../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { readTargetRootPid } from './legacy-owner-root'
 import { judgeLegacyMailboxRows, otherProgram } from './mailbox-foreground-judgment'
-import { unheldForeground } from './mailbox-unheld-foreground'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
@@ -96,7 +95,7 @@ function isLaunchedAgent(processName: string, agent: TuiAgent): boolean {
 /** Local POSIX uses a fresh terminal-scoped process group, avoiding slow global scans and stale icon names.
  * SSH accepts agent-positive group evidence then the relay's fresh name; group evidence never proves shell.
  * Windows cannot prove agent from shell/node.exe names or shared jobs, only shell-alone via confirmShellForeground. */
-type ForegroundController = Pick<
+export type ForegroundController = Pick<
   RuntimePtyController,
   | 'supportsForegroundObservation'
   | 'getForegroundProcess'
@@ -106,7 +105,7 @@ type ForegroundController = Pick<
   | 'listProcesses'
 > | null
 
-async function inspectLaunchedAgentForeground(
+export async function inspectLaunchedAgentForeground(
   controller: ForegroundController,
   host: { remote: boolean; windows: boolean },
   ptyId: string,
@@ -115,7 +114,8 @@ async function inspectLaunchedAgentForeground(
   exact?: ExactAgentName,
   mailboxEvidence = false,
   onAgent?: (agent: TuiAgent, process?: MailboxAgentProcess) => void,
-  adoptedRootPid?: number | null
+  adoptedRootPid?: number | null,
+  onUnprovable?: () => void
 ): Promise<MailboxForeground> {
   if (!controller) {
     return 'unknown'
@@ -226,6 +226,9 @@ async function inspectLaunchedAgentForeground(
     }
     const askedAt = Date.now()
     const evidence = (await controller.inspectProcess?.(ptyId))?.foregroundProcessEvidence
+    if (!evidence) {
+      onUnprovable?.()
+    }
     if (
       evidence?.verdict === 'live' &&
       evidence.fence.platform === 'posix' &&
@@ -312,34 +315,4 @@ export async function readLaunchedAgentForeground(
 ): Promise<LaunchedAgentForeground> {
   const result = await inspectLaunchedAgentForeground(...args)
   return result === 'non-shell' ? 'unknown' : result
-}
-
-export async function readMailboxForeground(
-  controller: ForegroundController,
-  host: { remote: boolean; windows: boolean },
-  ptyId: string,
-  expected?: TuiAgent,
-  expectedIncarnationId?: string,
-  adoptedRootPid?: number | null
-): Promise<MailboxForegroundInspection> {
-  let agent: TuiAgent | undefined
-  let process: MailboxAgentProcess | undefined
-  const foreground = await inspectLaunchedAgentForeground(
-    controller,
-    host,
-    ptyId,
-    expected,
-    expectedIncarnationId,
-    undefined,
-    true,
-    (value, row) => {
-      agent = value
-      process = row
-    },
-    adoptedRootPid
-  )
-  if (foreground === 'agent') {
-    return { foreground, agent: agent ?? expected, ...(process ? { process } : {}) }
-  }
-  return unheldForeground(foreground, host.windows, expected)
 }

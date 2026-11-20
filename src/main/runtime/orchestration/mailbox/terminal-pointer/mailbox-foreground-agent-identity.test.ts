@@ -60,6 +60,17 @@ it('a host that cannot name an agent never holds mail; a shell there only requir
   expect(evidence.screenRecovery('pty-1')).toBe('incarnation-1')
 })
 
+it('a read that cannot name the agent releases a hold set before it knew', () => {
+  const evidence = new MailboxForegroundEvidence()
+  const probe = () => evidence.captureForegroundObservation('pty-1', 'incarnation-1')
+  evidence.applyForeground('pty-1', probe(), 'shell')
+  expect(evidence.foregroundHold('pty-1')).toBe('incarnation-1')
+  expect(evidence.applyForeground('pty-1', { ...probe(), agentUnprovable: true }, 'unknown')).toBe(
+    true
+  )
+  expect(evidence.foregroundHold('pty-1')).toBeUndefined()
+})
+
 it('a new agent resumed after the held agent exited is what held mail awaits', () => {
   const evidence = new MailboxForegroundEvidence()
   const probe = () => evidence.captureForegroundObservation('pty-1', 'incarnation-1')

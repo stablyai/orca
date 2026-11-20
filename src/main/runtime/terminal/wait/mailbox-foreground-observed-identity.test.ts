@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { readMailboxForeground } from './launched-agent-foreground'
+import { readMailboxForeground } from './mailbox-foreground-read'
 
 const observedCodex = (identity: { foregroundPgid: number; agentPid?: number }) => ({
   getForegroundProcess: async () => 'codex',

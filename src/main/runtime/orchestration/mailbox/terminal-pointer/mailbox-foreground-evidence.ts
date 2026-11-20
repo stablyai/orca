@@ -119,14 +119,22 @@ export class MailboxForegroundEvidence {
       return false
     }
     const wasHeld = observation.held
+    // Why: a read that could never name the agent must not hold mail, and releases a hold set before it knew.
+    if (proof.agentUnprovable || proof.holdExempt) {
+      observation.held = false
+      // Why: an exempt agent's composer cannot be read, so the screen could never release it either.
+      if (proof.holdExempt) {
+        observation.screenRequired = false
+      }
+    }
     // Why non-shell too: a known other program in front would read the pointer as its own input.
     if (foreground === 'shell' || foreground === 'non-shell') {
       // TODO(STA-16313): record the suspended agent's process here when no earlier probe named it.
-      // Why exempt agents skip both: their return cannot be shown, so this attempt waits as on main instead.
-      if (!proof.holdExempt) {
-        observation.held = !proof.agentUnprovable
-        observation.screenRequired = true
+      if (!proof.agentUnprovable && !proof.holdExempt) {
+        observation.held = true
       }
+      // Why exempt agents skip it: their return cannot be shown, so this attempt waits as on main instead.
+      observation.screenRequired ||= !proof.holdExempt
       observation.contradiction++
     } else if (foreground === 'agent' && admitted) {
       const known = observation.agentProcess

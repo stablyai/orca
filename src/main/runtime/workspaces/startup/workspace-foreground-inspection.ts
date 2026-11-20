@@ -5,10 +5,10 @@ import {
   describeLaunchedAgentHost,
   readLaunchedAgentForeground,
   type ExactAgentName,
-  readMailboxForeground,
   type LaunchedAgentForeground,
   type LaunchedAgentHost
 } from '../../terminal/wait/launched-agent-foreground'
+import { readMailboxForeground } from '../../terminal/wait/mailbox-foreground-read'
 import {
   readAdoptedRootAgentForeground,
   readExactAgentForeground
