@@ -1,11 +1,3 @@
-import { vi } from 'vitest'
-
-// Why: the process worker's entry is build output, absent when tests run from src/, so every file's
-// first launch would wait on a worker that can't load. Tests of worker routing mock this themselves.
-vi.mock(
-  '../../../../src/main/worker-thread-child-process/worker-thread-child-process',
-  async (importOriginal) => ({
-    ...(await importOriginal<object>()),
-    whenSpawnWorkerReady: async () => false
-  })
-)
+// The process worker's entry is build output, absent when tests run from src/; without this every file's
+// first launch waits on a worker that can't load. Tests of worker routing build or mock their own host.
+process.env.ORCA_CHILD_PROCESS_WORKER_DISABLED = '1'

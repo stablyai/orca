@@ -1,7 +1,7 @@
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import type { ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
+import { hasLocalCommandSelection } from '../../../ipc/command-path/command-path-resolver'
 import {
   isWorkerChildStdinWriteError,
   spawnProcessOnWorkerThread,
@@ -30,21 +30,12 @@ type CaptureCallback = (
  * On POSIX, main keeps what only its launch does: canStart rechecked at creation, and a probed CLI selection run under its own name. */
 export async function capturesOnWorker(
   command: string,
-  options: { canStart?: () => boolean; env?: NodeJS.ProcessEnv; cwd?: string | URL }
+  options: { canStart?: () => boolean }
 ): Promise<boolean> {
-  if (
-    process.platform !== 'win32' &&
-    (options.canStart ||
-      resolveSelectedLocalCommand(command, { env: options.env, cwd: workerCwd(options.cwd) }) !==
-        command)
-  ) {
+  if (process.platform !== 'win32' && (options.canStart || hasLocalCommandSelection(command))) {
     return false
   }
   return whenSpawnWorkerReady()
-}
-
-function workerCwd(cwd: string | URL | undefined): string | undefined {
-  return cwd instanceof URL ? fileURLToPath(cwd) : cwd
 }
 
 /** Capture a worker-owned child; the caller still owns deadlines and aborts. */
@@ -58,7 +49,7 @@ export function workerExecFile(
     spawnProcessOnWorkerThread({
       program: command,
       args,
-      cwd: workerCwd(options.cwd),
+      cwd: options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd,
       // The worker's env is a copy from its start; send main's current one (PATH refreshes after launch).
       env: options.env ?? process.env,
       ...(options.ownedPosixGroup ? { terminationBarrier: true as const } : {})

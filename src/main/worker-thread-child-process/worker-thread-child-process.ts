@@ -343,6 +343,9 @@ export function spawnProcessOnWorkerThread(spec: WorkerThreadChildSpec): WorkerT
 
 /** Resolves true once a spawn would reach a worker that loaded its entry; false means spawn locally. */
 export function whenSpawnWorkerReady(): Promise<boolean> {
+  if (process.env.ORCA_CHILD_PROCESS_WORKER_DISABLED === '1') {
+    return Promise.resolve(false)
+  }
   sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
   return sharedHost.whenReady()
 }
