@@ -60,7 +60,6 @@
       },
       "providers": {
         "title": "공급자",
-        "antigravityAccount": "계정",
         "searchAgents": "에이전트",
         "searchTerminal": "터미널",
         "searchCli": "CLI"
@@ -21451,23 +21450,7 @@
       "cancel": "취소"
     },
     "antigravity": {
-      "chatSignIn": "로그인",
-      "chatChangeAccount": "계정 변경",
-      "chatRetry": "로그인 다시 시도",
       "chatCancel": "취소",
-      "chatCopyLink": "로그인 링크 복사",
-      "chatCopyFailed": "링크를 복사할 수 없습니다.",
-      "chatStarting": "로그인을 시작하는 중…",
-      "chatWaiting": "브라우저에서 로그인을 완료하세요.",
-      "chatOpenFailed": "링크를 복사해 브라우저에서 여세요.",
-      "chatVerifying": "로그인을 마무리하는 중…",
-      "chatPasteHelp": "로그인 후 마지막 페이지가 열리지 않으면 브라우저에서 그 페이지의 전체 주소를 복사해 여기에 붙여 넣으세요.",
-      "chatContinue": "계속",
-      "chatCancelled": "로그인이 취소되었습니다.",
-      "chatExpired": "로그인 시간이 초과되었습니다. 다시 시도하세요.",
-      "chatFailed": "로그인하지 못했습니다. 다시 시도하세요.",
-      "chatOtherClient": "다른 클라이언트에서 로그인이 진행 중입니다.",
-      "chatReadFailed": "{{host}}의 로그인을 확인할 수 없습니다.",
       "retry": "다시 시도",
       "changed": "agy 자체 계정이 변경되었습니다. agy를 시작하기 전에 저장된 계정을 다시 선택하세요.",
       "refresh": "계정 새로고침",
@@ -21484,9 +21467,7 @@
         "accounts": "계정"
       },
       "authMethod": "로그인 방법",
-      "personal": "Google 계정",
       "gcpProject": "Google Cloud 프로젝트",
-      "settingsIncomplete": "Antigravity 계정 유형을 선택하고 Google Cloud 프로젝트와 위치를 입력하세요.",
       "settingsLoadFailed": "Orca에서 Antigravity 로그인 설정을 불러오지 못했습니다. 다시 시도하세요.",
       "settingsSaveFailed": "Orca에서 Antigravity 로그인 설정을 저장하지 못했습니다. 다시 시도하세요.",
       "lastReading": "{{reading}} · {{time}}에 조회",

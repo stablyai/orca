@@ -60,7 +60,6 @@
       },
       "providers": {
         "title": "Proveedores",
-        "antigravityAccount": "Cuenta",
         "searchAgents": "agentes",
         "searchTerminal": "Terminal",
         "searchCli": "CLI"
@@ -21428,23 +21427,7 @@
       "cancel": "Cancelar"
     },
     "antigravity": {
-      "chatSignIn": "Iniciar sesión",
-      "chatChangeAccount": "Cambiar de cuenta",
-      "chatRetry": "Reintentar inicio de sesión",
       "chatCancel": "Cancelar",
-      "chatCopyLink": "Copiar enlace de inicio de sesión",
-      "chatCopyFailed": "No se pudo copiar el enlace.",
-      "chatStarting": "Iniciando sesión…",
-      "chatWaiting": "Termina de iniciar sesión en tu navegador.",
-      "chatOpenFailed": "Copia el enlace y ábrelo en tu navegador.",
-      "chatVerifying": "Finalizando el inicio de sesión…",
-      "chatPasteHelp": "Si la última página después de iniciar sesión no carga, copia su dirección completa desde el navegador y pégala aquí.",
-      "chatContinue": "Continuar",
-      "chatCancelled": "Inicio de sesión cancelado.",
-      "chatExpired": "El inicio de sesión caducó. Inténtalo de nuevo.",
-      "chatFailed": "No se pudo iniciar sesión. Inténtalo de nuevo.",
-      "chatOtherClient": "Hay un inicio de sesión en curso en otro cliente.",
-      "chatReadFailed": "No se pudo comprobar el inicio de sesión en {{host}}.",
       "retry": "Reintentar",
       "remove": "Eliminar",
       "usage": "Actualizar uso",
@@ -21461,9 +21444,7 @@
         "accounts": "accounts"
       },
       "authMethod": "Iniciar sesión con",
-      "personal": "Cuenta de Google",
       "gcpProject": "Proyecto de Google Cloud",
-      "settingsIncomplete": "Elige un tipo de cuenta de Antigravity e introduce su proyecto y ubicación de Google Cloud.",
       "settingsLoadFailed": "Orca no pudo cargar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
       "settingsSaveFailed": "Orca no pudo guardar tus ajustes de inicio de sesión de Antigravity. Inténtalo de nuevo.",
       "lastReading": "{{reading}} · Consultado {{time}}",

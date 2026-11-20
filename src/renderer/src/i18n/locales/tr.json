@@ -583,8 +583,7 @@
         "title": "Sağlayıcılar",
         "searchAgents": "ajanlar",
         "searchCli": "CLI",
-        "searchTerminal": "terminal",
-        "antigravityAccount": "Hesap"
+        "searchTerminal": "terminal"
       },
       "permissionsDescriptionOwnAgents": "Yeni sohbetlerde her ajanın Ayarlar → Ajanlar bölümündeki izni geçerlidir.",
       "launch": {
@@ -21991,23 +21990,7 @@
       "description": "WSL'deki Orca güncellenene kadar buradaki ajanlar dağıtımın varsayılan Claude ve Codex hesaplarını kullanır."
     },
     "antigravity": {
-      "chatSignIn": "Oturum aç",
-      "chatChangeAccount": "Hesabı değiştir",
-      "chatRetry": "Oturum açmayı yeniden dene",
       "chatCancel": "İptal",
-      "chatCopyLink": "Oturum açma bağlantısını kopyala",
-      "chatCopyFailed": "Bağlantı kopyalanamadı.",
-      "chatStarting": "Oturum açma başlatılıyor…",
-      "chatWaiting": "Tarayıcınızda oturum açmayı tamamlayın.",
-      "chatOpenFailed": "Bağlantıyı kopyalayıp tarayıcınızda açın.",
-      "chatVerifying": "Oturum açma tamamlanıyor…",
-      "chatPasteHelp": "Oturum açtıktan sonra son sayfa yüklenmezse tarayıcınızdan tam adresini kopyalayıp buraya yapıştırın.",
-      "chatContinue": "Devam et",
-      "chatCancelled": "Oturum açma iptal edildi.",
-      "chatExpired": "Oturum açma zaman aşımına uğradı. Yeniden deneyin.",
-      "chatFailed": "Oturum açılamadı. Yeniden deneyin.",
-      "chatOtherClient": "Başka bir istemcide oturum açma işlemi devam ediyor.",
-      "chatReadFailed": "{{host}} üzerindeki oturum durumu kontrol edilemedi.",
       "retry": "Tekrar dene",
       "changed": "agy'nin kendi hesabı değişti. agy'yi başlatmadan önce kayıtlı bir hesabı yeniden seçin.",
       "refresh": "Hesapları yenile",
@@ -22024,9 +22007,7 @@
         "accounts": "hesaplar"
       },
       "authMethod": "Şununla oturum aç",
-      "personal": "Google hesabı",
       "gcpProject": "Google Cloud projesi",
-      "settingsIncomplete": "Bir Antigravity hesap türü seçin ve Google Cloud projesini ve konumunu girin.",
       "settingsLoadFailed": "Orca Antigravity oturum açma ayarlarınızı yükleyemedi. Tekrar deneyin.",
       "settingsSaveFailed": "Orca Antigravity oturum açma ayarlarınızı kaydedemedi. Tekrar deneyin.",
       "lastReading": "{{reading}} · Okunma zamanı: {{time}}",
