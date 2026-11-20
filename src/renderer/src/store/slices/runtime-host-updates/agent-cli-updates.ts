@@ -3,7 +3,6 @@ import type { AppState } from '../../types'
 import {
   AGENT_CLI_UPDATE_AGENTS,
   AGENT_CLI_UPDATE_RUNTIME_CAPABILITY,
-  AGENT_CLI_UPDATE_SUBSCRIBE_RUNTIME_CAPABILITY,
   type AgentCliUpdate,
   type AgentCliUpdateAgent,
   type AgentCliUpdateRunResult
@@ -45,10 +44,11 @@ export function agentCliUpdateHostTarget(key: string): RuntimeClientTarget {
 }
 
 const EMPTY_HOST: AgentCliUpdateHost = { updates: [], runs: {} }
+const LOCAL_TARGET = { kind: 'local' } as const
 const checks = new Map<string, Promise<void>>()
 const checkedAt = new Map<string, number>()
-// Hosts this window hears finished updates from; a lost stream is opened again by the next check.
-const follows = new Set<string>()
+// Whether this window follows this computer's finished updates; paired hosts announce them as client events.
+let followsLocal = false
 
 function sameUpdates(a: readonly AgentCliUpdate[], b: readonly AgentCliUpdate[]): boolean {
   return (
@@ -71,6 +71,8 @@ export type AgentCliUpdatesSlice = {
   agentCliUpdates: ReadonlyMap<string, AgentCliUpdateHost>
   /** Asks the host which of the user's own CLIs are behind; the host caches its answer. */
   checkAgentCliUpdates: (target: RuntimeClientTarget) => Promise<void>
+  /** Checks again now, after any answer already on its way, e.g. once an update finished on the host. */
+  recheckAgentCliUpdates: (target: RuntimeClientTarget) => void
   /** Resolves true once the host reports the CLI current. */
   runAgentCliUpdate: (target: RuntimeClientTarget, agent: AgentCliUpdateAgent) => Promise<boolean>
 }
@@ -87,43 +89,29 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     })
   const writeRun = (key: string, agent: AgentCliUpdateAgent, run: AgentCliUpdateRun) =>
     writeHost(key, (host) => ({ ...host, runs: { ...host.runs, [agent]: run } }))
-  const hostHas = (target: RuntimeClientTarget, capability: string): boolean =>
+  const hostAnswers = (target: RuntimeClientTarget): boolean =>
     target.kind === 'local' ||
     lastVerifiedRuntimeStatus(
       get().runtimeStatusByEnvironmentId.get(target.environmentId)
-    )?.capabilities?.includes(capability) === true
-  const hostAnswers = (target: RuntimeClientTarget): boolean =>
-    hostHas(target, AGENT_CLI_UPDATE_RUNTIME_CAPABILITY)
-  // An update run from any client re-checks here at once, so this window drops its older answer.
-  const follow = (key: string, target: RuntimeClientTarget): void => {
-    if (follows.has(key) || !hostHas(target, AGENT_CLI_UPDATE_SUBSCRIBE_RUNTIME_CAPABILITY)) {
+    )?.capabilities?.includes(AGENT_CLI_UPDATE_RUNTIME_CAPABILITY) === true
+  // An update run from any window re-checks here at once, so this window drops its older answer.
+  const followLocal = (): void => {
+    if (followsLocal) {
       return
     }
-    follows.add(key)
-    let subscription: { unsubscribe: () => void } | null = null
-    let lost = false
+    followsLocal = true
     const lose = (): void => {
-      lost = true
-      follows.delete(key)
-      subscription?.unsubscribe()
+      followsLocal = false
     }
-    subscribeRuntimeRpc(target, 'agentCliUpdate.subscribe', null, {
+    subscribeRuntimeRpc(LOCAL_TARGET, 'agentCliUpdate.subscribe', null, {
       onEvent: (result) => {
         if ((result as { agent?: unknown } | null)?.agent) {
-          checkedAt.delete(key)
-          void get().checkAgentCliUpdates(target)
+          get().recheckAgentCliUpdates(LOCAL_TARGET)
         }
       },
       onError: lose,
       onClose: lose
-    })
-      .then((opened) => {
-        subscription = opened
-        if (lost) {
-          opened.unsubscribe()
-        }
-      })
-      .catch(lose)
+    }).catch(lose)
   }
 
   return {
@@ -135,7 +123,9 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       if (!hostAnswers(target)) {
         return checks.get(key) ?? Promise.resolve()
       }
-      follow(key, target)
+      if (target.kind === 'local') {
+        followLocal()
+      }
       if (last !== undefined && Date.now() - last < CHECK_INTERVAL_MS) {
         return checks.get(key) ?? Promise.resolve()
       }
@@ -158,6 +148,18 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
         checks.set(key, check)
       }
       return check
+    },
+
+    recheckAgentCliUpdates: (target) => {
+      const key = agentCliUpdateHostKey(target)
+      // Only a host this window has asked before; an answer still on its way may predate the update.
+      if (!checkedAt.has(key)) {
+        return
+      }
+      void (checks.get(key) ?? Promise.resolve()).then(() => {
+        checkedAt.delete(key)
+        return get().checkAgentCliUpdates(target)
+      })
     },
 
     runAgentCliUpdate: async (target, agent) => {

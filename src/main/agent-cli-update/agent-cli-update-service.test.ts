@@ -32,67 +32,60 @@ const cliAt = (program: string) => ({
   version: { prefixArgs: [], env: {} }
 })
 
+// The CLIs on disk and the one a new chat finds; the updater changes them as a real one would.
+let onDisk = new Map<string, string>()
+let found = ''
+let update = () => {}
+
 beforeEach(() => {
   vi.resetAllMocks()
-  runProcess.mockResolvedValue({ code: 0, stdout: '', stderr: '', timedOut: false })
+  findOwnAgentCli.mockImplementation(async () => cliAt(found))
+  readAgentCliVersion.mockImplementation(async ({ program }: { program: string }) => ({
+    version: onDisk.get(program) ?? null
+  }))
+  runProcess.mockImplementation(async () => {
+    update()
+    return { code: 0, stdout: '', stderr: '', timedOut: false }
+  })
   latestAgentCliRelease.mockResolvedValue('2.0.0')
 })
 
 describe('runAgentCliUpdate', () => {
   it('reads the CLI a new chat finds once the update moved it', async () => {
-    findOwnAgentCli
-      .mockResolvedValueOnce(cliAt('/old/bin/claude'))
-      .mockResolvedValueOnce(cliAt('/new/bin/claude'))
-    readAgentCliVersion.mockImplementation(async ({ program }) => ({
-      version: program === '/new/bin/claude' ? '2.0.0' : '1.0.0'
-    }))
+    onDisk = new Map([['/old/bin/claude', '1.0.0']])
+    found = '/old/bin/claude'
+    update = () => {
+      onDisk.set('/new/bin/claude', '2.0.0')
+      found = '/new/bin/claude'
+    }
 
     expect(await runAgentCliUpdate('claude', {})).toEqual({ ok: true })
   })
 
-  it('answers a check asked during an update with the updated version', async () => {
-    findOwnAgentCli.mockResolvedValue(cliAt('/npm/bin/claude'))
-    let finishUpdate = () => {}
-    runProcess.mockReturnValueOnce(
-      new Promise((resolve) => {
-        finishUpdate = () => resolve({ code: 0, stdout: '', stderr: '', timedOut: false })
-      })
-    )
-    readAgentCliVersion
-      .mockResolvedValueOnce({ version: '1.0.0' })
-      .mockResolvedValueOnce({ version: '2.0.0' })
-
-    const run = runAgentCliUpdate('claude', {})
-    await vi.waitFor(() => expect(runProcess).toHaveBeenCalled())
-    const check = checkAgentCliUpdates({}, ['claude'])
-    // Lets the check run as far as it can while the updater is still going.
-    await new Promise((resolve) => setImmediate(resolve))
-    finishUpdate()
-
-    expect(await run).toEqual({ ok: true })
-    expect(await check).toEqual([])
-  })
-
-  it('answers a check that was still running when an update began with the updated version', async () => {
-    findOwnAgentCli.mockResolvedValue(cliAt('/slow/bin/claude'))
-    readAgentCliVersion
-      .mockResolvedValueOnce({ version: '1.0.0' })
-      .mockResolvedValueOnce({ version: '2.0.0' })
+  it('answers checks asked before and during an update with the updated version', async () => {
+    onDisk = new Map([['/slow/bin/claude', '1.0.0']])
+    found = '/slow/bin/claude'
+    update = () => onDisk.set('/slow/bin/claude', '2.0.0')
+    let lookupStarted = () => {}
+    const started = new Promise<void>((resolve) => {
+      lookupStarted = resolve
+    })
     let answerLookup = () => {}
-    latestAgentCliRelease.mockReturnValueOnce(
-      new Promise((resolve) => {
+    latestAgentCliRelease.mockImplementationOnce(() => {
+      lookupStarted()
+      return new Promise((resolve) => {
         answerLookup = () => resolve('2.0.0')
       })
-    )
+    })
 
-    const check = checkAgentCliUpdates({}, ['claude'])
-    await vi.waitFor(() => expect(latestAgentCliRelease).toHaveBeenCalled())
+    const before = checkAgentCliUpdates({}, ['claude'])
+    await started
     const run = runAgentCliUpdate('claude', {})
-    const later = checkAgentCliUpdates({}, ['claude'])
+    const during = checkAgentCliUpdates({}, ['claude'])
     answerLookup()
 
     expect(await run).toEqual({ ok: true })
-    expect(await check).toEqual([])
-    expect(await later).toEqual([])
+    expect(await before).toEqual([])
+    expect(await during).toEqual([])
   })
 })

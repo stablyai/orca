@@ -1,4 +1,5 @@
 import { RuntimeAgentStatusSources } from './runtime-agent-status-sources'
+import { announceAgentCliUpdatesFinished } from '../../agent-cli-update/agent-cli-update-service'
 import type { ClaudeAccountSelectedHandler } from '../../../shared/agent-accounts/managed-account-types'
 
 import type * as Calls from './runtime-host-service-calls'
@@ -363,4 +364,6 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     this.nativeChatDraftResolutions.snapshot.bind(this.nativeChatDraftResolutions)
 
   protected emitClientEvent = this.clientEvents.emit.bind(this.clientEvents)
+
+  readonly cliUpdateNotices = announceAgentCliUpdatesFinished(this.emitClientEvent)
 }

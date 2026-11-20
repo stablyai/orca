@@ -1,8 +1,5 @@
 // The host answers agentCliUpdate.check and agentCliUpdate.run.
 export const AGENT_CLI_UPDATE_RUNTIME_CAPABILITY = 'agent-cli-update.v1' as const
-// The host also streams agentCliUpdate.subscribe, naming each agent whose update finished.
-export const AGENT_CLI_UPDATE_SUBSCRIBE_RUNTIME_CAPABILITY =
-  'agent-cli-update-subscribe.v1' as const
 
 /** Every agent whose own CLI a native chat runs; Antigravity runs Orca's fixed-version copy. */
 export const AGENT_CLI_UPDATE_AGENTS = [

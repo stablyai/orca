@@ -113,6 +113,10 @@ export function registerRuntimeClientIpcBridge(
       requestProjectRefresh(environmentId)
       return
     }
+    if (event.type === 'agentCliUpdateFinished') {
+      useAppStore.getState().recheckAgentCliUpdates({ kind: 'environment', environmentId })
+      return
+    }
     if (emitRuntimeClientWindowEvent(environmentId, event)) {
       return
     }
@@ -248,6 +252,7 @@ export function registerRuntimeClientIpcBridge(
               requestProjectRefresh(environmentId)
               // Changes during the outage were lost, not queued.
               emitPairedBotsChanged(environmentId)
+              useAppStore.getState().recheckAgentCliUpdates({ kind: 'environment', environmentId })
             },
             markEnvironmentSshStateStale: () =>
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),

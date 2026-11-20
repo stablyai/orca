@@ -237,7 +237,11 @@ export function runAgentCliUpdate(
       runs.delete(agent)
       // Every client re-checks, so none keeps an answer from before the update.
       for (const listener of finishedListeners) {
-        listener(agent)
+        try {
+          listener(agent)
+        } catch (error) {
+          console.warn(`[agent-cli-update] ${agent} finish not announced:`, error)
+        }
       }
     })
     runs.set(agent, run)
@@ -251,4 +255,11 @@ export function onAgentCliUpdateFinished(
 ): () => void {
   finishedListeners.add(listener)
   return () => finishedListeners.delete(listener)
+}
+
+/** Announces each finished update as a client event, so every client checks again. */
+export function announceAgentCliUpdatesFinished(
+  emit: (event: { type: 'agentCliUpdateFinished'; agent: AgentCliUpdateAgent }) => void
+): () => void {
+  return onAgentCliUpdateFinished((agent) => emit({ type: 'agentCliUpdateFinished', agent }))
 }
