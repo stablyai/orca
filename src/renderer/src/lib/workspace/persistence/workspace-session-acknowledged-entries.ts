@@ -116,9 +116,16 @@ export class AcknowledgedWorkspaceSessionEntries {
     return {
       patch,
       acknowledge: () => {
-        // Any forget since the diff (a host, a field, everything) leaves main's copy unknown.
         const host = this.byHost.get(hostId)
-        if (forgets !== this.forgets || !host) {
+        if (!host) {
+          return
+        }
+        if (forgets !== this.forgets) {
+          // A forget landed meanwhile (maybe another host's): main took these keys, but merging them
+          // into a copy that may be stale is unsafe, so these fields go whole next time.
+          for (const [field] of fields) {
+            host.delete(field)
+          }
           return
         }
         for (const [field, values] of fields) {
