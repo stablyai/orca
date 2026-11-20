@@ -59,7 +59,8 @@ export class OrchestrationMailboxNotificationCoordinator<
         return true
       }
       const owned = this.deps.mailboxOwner.resolveAll(terminal, { routeDirectMail: false })
-      const handles = [...new Set([...owned, terminal.handle])]
+      // Why only what delivery visits: mail it never reaches (e.g. pre-Run direct mail) must not arm retries.
+      const handles = [...new Set([...owned, ...this.deps.mailboxOwner.resolveAll(terminal)])]
       const owed = handles.some((mailboxHandle) => {
         const waiters = this.deps.getMessageWaiters(mailboxHandle)
         return (
