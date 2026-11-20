@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, vi } from 'vitest'
-import Database from '../../sqlite/sync-database'
+import type Database from '../../sqlite/sync-database'
 import { openJournalDatabase, runJournalTransaction } from './database/journal-database'
 import {
   initializeJournalDomainDatabase,
@@ -15,7 +15,10 @@ import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { prepareJournalDomainImport } from './journal-domain-import'
-import { journalLegacyConversionSource } from './database/journal-legacy-source'
+import {
+  journalLegacyConversionSource,
+  openJournalLegacySource
+} from './database/journal-legacy-source'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
@@ -81,6 +84,8 @@ export function continueInOlderOrca(filename: string, sessionId: string): void {
 export async function profile(
   options: {
     copiedBy?: string
+    /** Writes the original's chat, as an older Orca did; by default one unconverted chat. */
+    original?: (filename: string) => void
     seed?: (db: Database.Database) => void
     /** Converting this chat fails with this error, as a reader would. */
     failConversion?: { sessionId: string; error: Error }
@@ -89,7 +94,11 @@ export async function profile(
   const root = mkdtempSync(join(tmpdir(), 'orca-legacy-retirement-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const filename = journalDatabasePath(root)
-  olderOrcaChat(filename, 'unopened')
+  if (options.original) {
+    options.original(filename)
+  } else {
+    olderOrcaChat(filename, 'unopened')
+  }
   if (options.seed) {
     const { db: legacy } = openJournalDatabase(filename)
     options.seed(legacy)
@@ -100,8 +109,8 @@ export async function profile(
   const { db } = openJournalDomainDatabase(domainFile)
   cleanup.push(() => db.close())
   let original: Database.Database | undefined
-  const source = () =>
-    (original ??= new Database(filename, { readonly: true, fileMustExist: true }))
+  // As the readers open it: tables an older build never created read as empty.
+  const source = () => (original ??= openJournalLegacySource(filename))
   cleanup.push(() => original?.close())
   const batch = new JournalSqlBatch(db)
   const writer = {

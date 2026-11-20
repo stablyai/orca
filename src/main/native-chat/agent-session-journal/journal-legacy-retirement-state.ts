@@ -10,6 +10,16 @@ import {
 export const JOURNAL_LEGACY_RETIREMENT = 'journal.legacy-retirement.v2'
 export const LEGACY_SOURCE_REFUSAL_POLICY = 3
 /**
+ * Which inventory check a refusal saw. 2 accepts shapes earlier builds left behind; an inventory
+ * or recovery refusal saved without it is proven once more. A separate field, not a policy bump,
+ * so v1.4.265/266 still honour this build's refusals instead of proving again.
+ */
+export const LEGACY_SOURCE_INVENTORY = 2
+const RECHECKED_WITHOUT_INVENTORY: readonly LegacySourceRefusalReason[] = [
+  'source-inventory',
+  'source-recovery'
+]
+/**
  * Per chat, the original's record and waiting text where it and this store differ, kept verbatim
  * once the original retires: no content says which side changed last, so neither is dropped.
  */
@@ -31,6 +41,7 @@ export type LegacySourceRefusal = {
   proof: string
   store: string
   reason: LegacySourceRefusalReason
+  inventory?: typeof LEGACY_SOURCE_INVENTORY
 }
 
 /** The proof's page layout; progress saved under another is walked again from the start. */
@@ -139,14 +150,17 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
     return null
   }
   const reason = LEGACY_SOURCE_REFUSALS.find((known) => known === data.reason)
-  return reason
+  const inventory =
+    'inventory' in data && data.inventory === LEGACY_SOURCE_INVENTORY ? data.inventory : undefined
+  return reason && (inventory || !RECHECKED_WITHOUT_INVENTORY.includes(reason))
     ? {
         version: 2,
         phase: 'refused',
         policy: LEGACY_SOURCE_REFUSAL_POLICY,
         proof: data.proof,
         store: data.store,
-        reason
+        reason,
+        ...(inventory ? { inventory } : {})
       }
     : null
 }
