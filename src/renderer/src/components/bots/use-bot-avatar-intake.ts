@@ -28,6 +28,8 @@ export const BOT_PICTURE_DROP_ATTRIBUTE = 'data-bot-picture-drop'
  *  picture always wins, and a decode outlives any one surface that started it. */
 export type BotAvatarIntake = {
   line: BotAvatarIntakeLine
+  /** A picture is still being read; it lands unless a newer action replaces it. */
+  reading: boolean
   take: (image: Blob) => void
   /** Back to the hint; a decode in flight is dropped. */
   dismiss: () => void
@@ -44,6 +46,7 @@ export function useBotAvatarIntakeState({
   undoable: boolean
 }): BotAvatarIntake {
   const [line, setLineState] = useState<BotAvatarIntakeLine>(HINT)
+  const [reading, setReading] = useState(false)
   // Bumped by every new action, so a late decode is dropped.
   const run = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -66,18 +69,21 @@ export function useBotAvatarIntakeState({
 
   const dismiss = (): void => {
     run.current += 1
+    setReading(false)
     setLine(HINT)
   }
 
   const take = (image: Blob): void => {
     run.current += 1
     const id = run.current
+    setReading(true)
     setLine(HINT)
     void avatarPngFromBlob(image).then(
       (png) => {
         if (run.current !== id) {
           return
         }
+        setReading(false)
         latest.current.onPicture(png)
         if (latest.current.undoable) {
           setLine({ kind: 'saved' }, SAVED_MS)
@@ -86,7 +92,11 @@ export function useBotAvatarIntakeState({
         }
       },
       (error: unknown) => {
-        if (run.current === id && error instanceof BotAvatarIntakeFailure) {
+        if (run.current !== id) {
+          return
+        }
+        setReading(false)
+        if (error instanceof BotAvatarIntakeFailure) {
           setLine({ kind: 'error', error: error.error }, ERROR_MS)
         }
       }
@@ -96,6 +106,7 @@ export function useBotAvatarIntakeState({
   const setDragging = (dragging: boolean): void => {
     if (dragging) {
       run.current += 1
+      setReading(false)
       setLine({ kind: 'drop' })
     } else {
       setLineState((current) => (current.kind === 'drop' ? HINT : current))
@@ -112,7 +123,7 @@ export function useBotAvatarIntakeState({
     []
   )
 
-  return { line, take, dismiss, setDragging }
+  return { line, reading, take, dismiss, setDragging }
 }
 
 /** Takes pasted and dropped pictures into `intake` from the dialog or popover around `rootRef`; whether

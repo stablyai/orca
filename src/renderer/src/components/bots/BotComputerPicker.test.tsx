@@ -17,6 +17,33 @@ const older: BotCreateHost = {
   environmentId: 'lab',
   blocked: 'no-bots'
 }
+const ready: BotCreateHost = { hostId: 'runtime:gpu', label: 'gpu-box', environmentId: 'gpu' }
+
+function choiceOf(
+  hosts: BotCreateHost[],
+  host: BotCreateHost,
+  rest: Partial<BotCreateHostChoice> = {}
+): BotCreateHostChoice {
+  return {
+    hosts,
+    host,
+    setHostId: () => {},
+    otherAccount: null,
+    otherAccountOf: () => null,
+    setListing: () => {},
+    reset: () => {},
+    ...rest
+  }
+}
+
+function renderPicker(choice: BotCreateHostChoice): HTMLElement {
+  render(
+    <TooltipProvider>
+      <BotComputerPicker hostChoice={choice} onAddHost={() => {}} />
+    </TooltipProvider>
+  )
+  return screen.getByRole('combobox', { name: 'Computer' })
+}
 
 describe('BotComputerPicker', () => {
   it('reads the other computers only once the list opens', () => {
@@ -44,5 +71,29 @@ describe('BotComputerPicker', () => {
     fireEvent.focus(screen.getByRole('combobox', { name: 'Computer' }))
     expect(setListing).toHaveBeenLastCalledWith(true)
     expect(refreshRemoteServerUpdates).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks no server about updates while closed, even for an older one that is picked', () => {
+    const refreshRemoteServerUpdates = vi.fn(async () => {})
+    useAppStore.setState({ remoteServerUpdates: new Map(), refreshRemoteServerUpdates })
+    renderPicker(choiceOf([local, older], older))
+
+    expect(refreshRemoteServerUpdates).not.toHaveBeenCalled()
+  })
+
+  it('picks the next computer, not Add host, when a key reopens the list', () => {
+    useAppStore.setState({
+      remoteServerUpdates: new Map(),
+      refreshRemoteServerUpdates: async () => {}
+    })
+    const setHostId = vi.fn()
+    const field = renderPicker(choiceOf([local, ready], local, { setHostId }))
+    fireEvent.focus(field)
+    fireEvent.keyDown(field, { key: 'Escape' })
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    fireEvent.keyDown(field, { key: 'Enter' })
+
+    expect(setHostId).toHaveBeenCalledWith('runtime:gpu')
+    expect(screen.queryByText('Add SSH host')).toBeNull()
   })
 })

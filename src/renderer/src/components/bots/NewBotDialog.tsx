@@ -26,6 +26,7 @@ import { BotImportNudge } from './BotImportNudge'
 import { openCreatedBot } from './bot-create-open'
 import { NewBotPictureButton } from './NewBotPictureButton'
 import { useNewBotPicture } from './use-new-bot-picture'
+import { useBotAvatarIntakeState } from './use-bot-avatar-intake'
 import { useBotAgentMenu } from './use-bot-agent-choices'
 import { useBotCreateHost } from './bot-create-hosts'
 import {
@@ -144,12 +145,16 @@ export function NewBotDialog({
   const agentSetup = useBotAgentSetup(choices, hostId, initialAgent)
   const [creating, setCreating] = useState(false)
   const trimmedName = name.trim()
-  const canCreate = !creating && !blocked && choices.length > 0 && trimmedName.length > 0
   const createdBot = useRef(false)
   const picture = useNewBotPicture(
     useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
     proposal?.mascot
   )
+  // Pasted, dropped and uploaded pictures, from the dialog and the picture popover alike.
+  const intake = useBotAvatarIntakeState({ onPicture: picture.placeUpload, undoable: false })
+  // A picture still being read would miss the bot, so Create waits for it.
+  const canCreate =
+    !creating && !blocked && choices.length > 0 && trimmedName.length > 0 && !intake.reading
   // From Bot templates itself (Blank bot), the row would only lead back to it.
   const fromTemplates = useAppStore((state) => state.activeModal === 'bot-templates')
   // From a template: what it comes with, its skills kept unless unticked; an older host takes the seed only.
@@ -165,6 +170,7 @@ export function NewBotDialog({
     setDraft(draftOf(proposal, initialPurpose))
     agentSetup.reset()
     picture.reset()
+    intake.dismiss()
     hostChoice.reset()
     onOpenChange(false, made)
   }
@@ -296,7 +302,7 @@ export function NewBotDialog({
               />
             ) : null}
             <div className="space-y-3 pt-1">
-              <NewBotPictureButton picture={picture} />
+              <NewBotPictureButton picture={picture} intake={intake} />
               <ImeInput
                 ref={nameRef}
                 className={BARE_HEADING_CLASS}

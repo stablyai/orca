@@ -1,5 +1,6 @@
 // New bot's picture: one tile with a pencil; a click opens the picker in a popover. An image pasted
-// or dropped anywhere in the dialog is taken while the popover is closed.
+// or dropped anywhere in the dialog is taken too, into the dialog's one intake, which the popover's
+// picker shares: a decode outlives the popover, and the newest picture wins across both.
 import React, { useEffect, useRef, useState } from 'react'
 import { CircleAlert, Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -7,31 +8,25 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { BotAvatarTile } from './BotAvatar'
 import { BotPictureVeil, useIntakeErrorMessage } from './BotPictureIntakeLine'
-import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker, pictureMascotIndex } from './BotPicturePicker'
-import { useBotAvatarIntake } from './use-bot-avatar-intake'
+import { BOT_PICTURE_DROP_OUTLINE, BotPicturePicker } from './BotPicturePicker'
+import { useBotAvatarIntakeHost, type BotAvatarIntake } from './use-bot-avatar-intake'
 import type { NewBotPicture } from './use-new-bot-picture'
 
 /** The unified form dialog's padding (`p-5`). */
 const DIALOG_PADDING_PX = 20
 
-export function NewBotPictureButton({ picture }: { picture: NewBotPicture }): React.JSX.Element {
+export function NewBotPictureButton({
+  picture,
+  intake
+}: {
+  picture: NewBotPicture
+  /** The dialog's intake, which places a picture with `picture.placeUpload`. */
+  intake: BotAvatarIntake
+}): React.JSX.Element {
   const t = useTranslate()
   const errorMessage = useIntakeErrorMessage()
   const rootRef = useRef<HTMLDivElement>(null)
-  const showingCustom = picture.value.kind === 'custom' && picture.custom !== null
-  // As the picker does: a new picture replaces the custom one in place, or lands beside the mascot.
-  // The popover's picker shares this intake, so its decodes outlive the popover and one order holds.
-  const intake = useBotAvatarIntake({
-    rootRef,
-    onPicture: (png) =>
-      picture.onUpload(
-        png,
-        showingCustom && picture.custom
-          ? picture.custom.after
-          : pictureMascotIndex(picture.value, picture.custom)
-      ),
-    undoable: false
-  })
+  useBotAvatarIntakeHost(rootRef, intake)
   const { line } = intake
   // The popover stays inside the dialog's padding, so a narrow dialog narrows it rather than its edge.
   const [dialog, setDialog] = useState<HTMLElement | null>(null)

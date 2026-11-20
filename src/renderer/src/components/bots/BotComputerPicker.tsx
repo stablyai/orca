@@ -35,7 +35,8 @@ export function BotComputerPicker({
   const setUpdateDialogOpen = useAppStore((s) => s.setRemoteServerUpdateDialogOpen)
   const updatable = useServerUpdatable()
   const [readyAtOpen, setReadyAtOpen] = useState<ReadonlySet<ExecutionHostId> | null>(null)
-  // Only an open list reads every server's account and update state; the closed field shows one host.
+  // Only an open list reads servers' accounts and update state (both go over the network); its rows are
+  // built from what is already known, closed too, so a key that opens it arms the row it will show.
   const listOpen = readyAtOpen !== null
   const [reconnecting, setReconnecting] = useState<ReadonlySet<string>>(new Set())
   const refreshUpdates = useAppStore((s) => s.refreshRemoteServerUpdates)
@@ -44,13 +45,15 @@ export function BotComputerPicker({
     setListing(listOpen)
     return () => setListing(false)
   }, [listOpen, setListing])
-  const listed = listOpen ? hosts : [host]
-  const needsUpdateCheck = listed.some(
-    (entry) =>
-      entry.blocked === 'no-bots' &&
-      entry.environmentId &&
-      !remoteServerUpdates.has(entry.environmentId)
-  )
+  // The update check asks every server, so it waits for the list, as it did behind New bot's Change.
+  const needsUpdateCheck =
+    listOpen &&
+    hosts.some(
+      (entry) =>
+        entry.blocked === 'no-bots' &&
+        entry.environmentId &&
+        !remoteServerUpdates.has(entry.environmentId)
+    )
   useEffect(() => {
     if (needsUpdateCheck) {
       void refreshUpdates()
@@ -69,7 +72,7 @@ export function BotComputerPicker({
   }
 
   const rows = botCreateHostRows(
-    listed,
+    hosts,
     {
       readyAtOpen,
       otherAccountOf: hostChoice.otherAccountOf,

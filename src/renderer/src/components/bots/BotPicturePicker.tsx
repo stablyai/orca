@@ -181,11 +181,25 @@ export function BotPicturePicker({
   )
   // Generate is current while chosen, even before it holds a picture; selected is applied.
   const [onGenerate, setOnGenerate] = useState(false)
-  const face = useGenerateFace((made) => {
-    if (onGenerate) {
-      onUpload(made.png, -1)
-    }
+  const ownIntake = useBotAvatarIntakeState({
+    // A new picture replaces the custom one in place, or lands beside the mascot shown.
+    onPicture: (png) => {
+      setOnGenerate(false)
+      onUpload(png, showingCustom ? custom.after : mascotIndex)
+    },
+    undoable: onUndo !== undefined
   })
+  const intake = sharedIntake ?? ownIntake
+  const outlinePicker = useBotAvatarIntakeHost(rootRef, intake)
+  const face = useGenerateFace(
+    (made) => {
+      if (onGenerate) {
+        onUpload(made.png, -1)
+      }
+    },
+    // Asking for a picture is the newest action: a picture taken before it, still being read, is dropped.
+    () => intake.dismiss()
+  )
   const withGenerate = face.agent !== null
   const generatedCustom = withGenerate && isGeneratedCustom(custom?.src, face.result?.png ?? null)
   const order = pictureFaceOrder(
@@ -212,16 +226,6 @@ export function BotPicturePicker({
         ? { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
         : { key, src: srcs[key], fallback: '' }
   )
-  const ownIntake = useBotAvatarIntakeState({
-    // A new picture replaces the custom one in place, or lands beside the mascot shown.
-    onPicture: (png) => {
-      setOnGenerate(false)
-      onUpload(png, showingCustom ? custom.after : mascotIndex)
-    },
-    undoable: onUndo !== undefined
-  })
-  const intake = sharedIntake ?? ownIntake
-  const outlinePicker = useBotAvatarIntakeHost(rootRef, intake)
   // A shared intake's picture lands as a new custom one; it leaves Generate as one taken here does.
   const customSrc = custom?.src ?? null
   const [seenCustomSrc, setSeenCustomSrc] = useState(customSrc)

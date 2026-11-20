@@ -251,6 +251,47 @@ describe('NewBotDialog picture intake', () => {
     )
   })
 
+  it('waits for a picture still being read before Create, then saves that picture', async () => {
+    let finish: (png: string) => void = () => {}
+    mocks.squareAvatarPng.mockImplementationOnce(
+      () => new Promise<string>((resolve) => (finish = resolve))
+    )
+    mocks.createBot.mockResolvedValue(created)
+    mocks.uploadBotAvatar.mockResolvedValue(created)
+    const { openPicker } = renderDialog()
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
+    openPicker()
+    chooseUpload()
+    const create = screen.getByRole('button', { name: 'Create' })
+    await waitFor(() => expect(create).toHaveProperty('disabled', true))
+    const form = screen.getByLabelText('Name').closest('form')
+    if (!form) {
+      throw new Error('Expected the bot creation form')
+    }
+    fireEvent.submit(form)
+    expect(mocks.createBot).not.toHaveBeenCalled()
+
+    finish('UE5H')
+    await waitFor(() => expect(create).toHaveProperty('disabled', false))
+    fireEvent.click(create)
+    await waitFor(() =>
+      expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'bot-1' }),
+        'UE5H'
+      )
+    )
+  })
+
+  it('lets Create go again once a picture it waited for is refused', async () => {
+    mocks.squareAvatarPng.mockRejectedValueOnce(new Error('bot_avatar_too_small'))
+    renderDialog()
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
+    fireEvent.drop(screen.getByRole('dialog'), { dataTransfer: transfer({ files: [png()] }) })
+
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create' })).toHaveProperty('disabled', false)
+  })
+
   it('leaves a pasted image URL as text', () => {
     const { picture } = renderDialog()
     const mascot = picture()
@@ -422,5 +463,78 @@ describe('NewBotDialog purpose', () => {
     mocks.createBot.mockClear()
     await renderDialog().submit()
     expect(mocks.createBot.mock.calls[0]?.[1]).not.toHaveProperty('seed')
+  })
+})
+
+describe('NewBotDialog Generate and an upload', () => {
+  const GENERATED = 'R0VO'
+  let finishGenerate: () => void = () => {}
+  let finishUpload: (png: string) => void = () => {}
+
+  function stubGeneration(): void {
+    Reflect.set(window, 'api', {
+      avatarGeneration: {
+        capability: async () => ({ agents: [{ agent: 'codex', status: 'ready' }] }),
+        generate: () =>
+          new Promise((resolve) => {
+            finishGenerate = () =>
+              resolve({
+                ok: true,
+                agent: 'codex',
+                image: { mimeType: 'image/png', base64: 'AAAA' }
+              })
+          }),
+        cancel: async () => {}
+      }
+    })
+    // The upload is read slowly; the generated picture at once.
+    mocks.squareAvatarPng.mockImplementation((blob: Blob) =>
+      blob instanceof File
+        ? new Promise<string>((resolve) => (finishUpload = resolve))
+        : Promise.resolve(GENERATED)
+    )
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'api')
+  })
+
+  // Upload A, then ask for a picture B: B is the newer choice whichever finishes first.
+  async function uploadThenGenerate(): Promise<ReturnType<typeof renderDialog>> {
+    stubGeneration()
+    mocks.createBot.mockResolvedValue(created)
+    mocks.uploadBotAvatar.mockResolvedValue(created)
+    const dialog = renderDialog()
+    dialog.openPicker()
+    chooseUpload()
+    fireEvent.click(await screen.findByRole('button', { name: 'Previous picture' }))
+    const box = await screen.findByRole('textbox', { name: 'Picture description' })
+    fireEvent.change(box, { target: { value: 'a fox' } })
+    fireEvent.keyDown(box, { key: 'Enter' })
+    return dialog
+  }
+
+  it.each([
+    ['the upload finishes first', ['upload', 'generate']],
+    ['the upload finishes last', ['generate', 'upload']]
+  ])('saves the generated picture when %s', async (_name, order) => {
+    const { picture, submit } = await uploadThenGenerate()
+    for (const step of order) {
+      if (step === 'upload') {
+        finishUpload('QUFBQQ')
+      } else {
+        finishGenerate()
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    await waitFor(() => expect(picture()).toBe(`data:image/png;base64,${GENERATED}`))
+    await submit()
+    await waitFor(() =>
+      expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'bot-1' }),
+        GENERATED
+      )
+    )
   })
 })
