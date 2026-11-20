@@ -339,24 +339,22 @@ export function RichMarkdownEditorSurface({
           onCancelPopover={onCancelAnnotationPopover}
           onSubmit={onSubmitAnnotation}
         />
-        {markdownReviewNotes.length > 0 ? (
-          <RichMarkdownReviewRailActions
-            owner={commentOwner}
-            worktreeId={worktreeId}
-            filePath={filePath}
-            noteCount={markdownReviewNotes.length}
-            railOpen={reviewRailOpen}
-            notesCopied={reviewNotesCopied}
-            unsentScope={unsentMarkdownReviewScope}
-            onToggleRail={onToggleReviewRail}
-            onCopyNotes={onCopyReviewNotes}
-            notes={markdownReviewNotes}
-            onClearNotes={(targetOwner, snapshots) =>
-              clearDeliveredDiffComments(targetOwner, snapshots, { suppressLostOwnerToast: true })
-            }
-            onDelivered={onReviewNotesDelivered}
-          />
-        ) : null}
+        <RichMarkdownReviewRailActions
+          owner={commentOwner}
+          worktreeId={worktreeId}
+          filePath={filePath}
+          noteCount={markdownReviewNotes.length}
+          railOpen={reviewRailOpen}
+          notesCopied={reviewNotesCopied}
+          unsentScope={unsentMarkdownReviewScope}
+          onToggleRail={onToggleReviewRail}
+          onCopyNotes={onCopyReviewNotes}
+          notes={markdownReviewNotes}
+          onClearNotes={(targetOwner, snapshots) =>
+            clearDeliveredDiffComments(targetOwner, snapshots, { suppressLostOwnerToast: true })
+          }
+          onDelivered={onReviewNotesDelivered}
+        />
       </div>
     </div>
   )

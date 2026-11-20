@@ -197,4 +197,51 @@ describe('RichMarkdownReviewRailActions', () => {
     renderActions({ owner: null })
     expect(screen.getByRole('button', { name: 'Clear all notes' })).toBeDisabled()
   })
+
+  it('keeps the confirmation mounted for retry if persistence rejects after the last note is optimistically removed', async () => {
+    const lastNote = [makeNote('n1', 'last')]
+    let rejectFirstWrite: ((reason?: unknown) => void) | undefined
+    const onClearNotes = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<boolean>((_resolve, reject) => {
+            rejectFirstWrite = reject
+          })
+      )
+      .mockResolvedValueOnce(true)
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { rerender, props } = renderActions({ notes: lastNote, onClearNotes })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear all notes' }))
+    await screen.findByText('Clear 1 note from guide.md?')
+    await userEvent.click(screen.getByRole('checkbox', { name: "Don't ask again" }))
+    await userEvent.click(screen.getByRole('button', { name: 'Clear Notes' }))
+
+    // Optimistic store removal empties notes before persistence settles.
+    rerender(<RichMarkdownReviewRailActions {...props} notes={[]} noteCount={0} />)
+    expect(screen.queryByRole('button', { name: 'Clear all notes' })).not.toBeInTheDocument()
+    expect(screen.getByText('Clear 1 note from guide.md?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Clear Notes' })).toBeDisabled()
+
+    rejectFirstWrite?.(new Error('disk write failed'))
+    rerender(<RichMarkdownReviewRailActions {...props} notes={lastNote} noteCount={1} />)
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(1))
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+    expect(screen.getByText('Clear 1 note from guide.md?')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: "Don't ask again" })).toBeChecked()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear Notes' }))
+    await waitFor(() => expect(onClearNotes).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(mocks.updateSettings).toHaveBeenCalledWith({
+        skipClearMarkdownReviewNotesConfirm: true
+      })
+    )
+    await waitFor(() =>
+      expect(screen.queryByText('Clear 1 note from guide.md?')).not.toBeInTheDocument()
+    )
+    consoleErrorSpy.mockRestore()
+  })
 })

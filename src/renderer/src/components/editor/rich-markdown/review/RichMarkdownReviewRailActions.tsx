@@ -81,7 +81,7 @@ export function RichMarkdownReviewRailActions({
   onCopyNotes,
   onClearNotes,
   onDelivered
-}: RichMarkdownReviewRailActionsProps): React.JSX.Element {
+}: RichMarkdownReviewRailActionsProps): React.JSX.Element | null {
   const t = useTranslate()
   const dontAskAgainId = useId()
   const skipClearConfirm = useAppStore(
@@ -162,90 +162,107 @@ export function RichMarkdownReviewRailActions({
     await executeClear(pending, dontAskAgain)
   }
 
+  if (noteCount === 0 && activePending === null) {
+    return null
+  }
+
   return (
-    <div className="rich-markdown-review-rail-actions">
-      <button
-        type="button"
-        className="rich-markdown-review-rail-toggle"
-        aria-label={
-          railOpen
-            ? t(
-                'auto.components.editor.RichMarkdownReviewRailActions.af02dc2456',
-                'Hide review notes'
-              )
-            : t(
-                'auto.components.editor.RichMarkdownReviewRailActions.8aaf2c4c69',
-                'Show review notes'
-              )
-        }
-        aria-expanded={railOpen}
-        title={
-          railOpen
-            ? t(
-                'auto.components.editor.RichMarkdownReviewRailActions.af02dc2456',
-                'Hide review notes'
-              )
-            : t(
-                'auto.components.editor.RichMarkdownReviewRailActions.8aaf2c4c69',
-                'Show review notes'
-              )
-        }
-        onClick={onToggleRail}
-      >
-        <MessageSquare className="size-3.5" />
-        <span>{noteCount}</span>
-      </button>
-      <button
-        type="button"
-        className="rich-markdown-review-rail-action"
-        title={
-          notesCopied
-            ? t('auto.components.editor.RichMarkdownReviewRailActions.a807596997', 'Copied notes')
-            : t(
-                'auto.components.editor.RichMarkdownReviewRailActions.636394af72',
-                'Copy notes for agent'
-              )
-        }
-        aria-label={
-          notesCopied
-            ? t('auto.components.editor.RichMarkdownReviewRailActions.a807596997', 'Copied notes')
-            : t(
-                'auto.components.editor.RichMarkdownReviewRailActions.636394af72',
-                'Copy notes for agent'
-              )
-        }
-        onClick={onCopyNotes}
-      >
-        {notesCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-      </button>
-      <NotesSendMenu
-        owner={owner}
-        worktreeId={worktreeId}
-        groupId={worktreeId}
-        modeIdParts={['markdown-notes', worktreeId, filePath, 'rail']}
-        scopes={unsentScope}
-        triggerClassName="rich-markdown-review-rail-action"
-        onDelivered={onDelivered}
-      />
-      <Tooltip>
-        <TooltipTrigger asChild>
+    <>
+      {noteCount > 0 ? (
+        <div className="rich-markdown-review-rail-actions">
           <button
             type="button"
-            className="rich-markdown-review-rail-action rich-markdown-review-rail-action-danger"
-            aria-label={t(
-              'components.editor.RichMarkdownReviewRailActions.clearAllNotes',
-              'Clear all notes'
-            )}
-            disabled={!owner || noteCount === 0 || isClearing}
-            onClick={requestClear}
+            className="rich-markdown-review-rail-toggle"
+            aria-label={
+              railOpen
+                ? t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.af02dc2456',
+                    'Hide review notes'
+                  )
+                : t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.8aaf2c4c69',
+                    'Show review notes'
+                  )
+            }
+            aria-expanded={railOpen}
+            title={
+              railOpen
+                ? t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.af02dc2456',
+                    'Hide review notes'
+                  )
+                : t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.8aaf2c4c69',
+                    'Show review notes'
+                  )
+            }
+            onClick={onToggleRail}
           >
-            <Trash className="size-3.5" />
+            <MessageSquare className="size-3.5" />
+            <span>{noteCount}</span>
           </button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {t('components.editor.RichMarkdownReviewRailActions.clearAllNotes', 'Clear all notes')}
-        </TooltipContent>
-      </Tooltip>
+          <button
+            type="button"
+            className="rich-markdown-review-rail-action"
+            title={
+              notesCopied
+                ? t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.a807596997',
+                    'Copied notes'
+                  )
+                : t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.636394af72',
+                    'Copy notes for agent'
+                  )
+            }
+            aria-label={
+              notesCopied
+                ? t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.a807596997',
+                    'Copied notes'
+                  )
+                : t(
+                    'auto.components.editor.RichMarkdownReviewRailActions.636394af72',
+                    'Copy notes for agent'
+                  )
+            }
+            onClick={onCopyNotes}
+          >
+            {notesCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          </button>
+          <NotesSendMenu
+            owner={owner}
+            worktreeId={worktreeId}
+            groupId={worktreeId}
+            modeIdParts={['markdown-notes', worktreeId, filePath, 'rail']}
+            scopes={unsentScope}
+            triggerClassName="rich-markdown-review-rail-action"
+            onDelivered={onDelivered}
+          />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="rich-markdown-review-rail-action rich-markdown-review-rail-action-danger"
+                aria-label={t(
+                  'components.editor.RichMarkdownReviewRailActions.clearAllNotes',
+                  'Clear all notes'
+                )}
+                disabled={!owner || noteCount === 0 || isClearing}
+                onClick={requestClear}
+              >
+                <Trash className="size-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {t(
+                'components.editor.RichMarkdownReviewRailActions.clearAllNotes',
+                'Clear all notes'
+              )}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      ) : null}
       <Dialog
         open={activePending !== null}
         onOpenChange={(open) => {
@@ -310,6 +327,6 @@ export function RichMarkdownReviewRailActions({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }
