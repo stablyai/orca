@@ -114,7 +114,9 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   droid: {
     skillPrefix: '/',
     skillSourceOwner: 'droid'
-  }
+  },
+  // Qwen lists its skills as commands once a session runs; Orca knows none of its skill folders.
+  'qwen-code': null
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill
