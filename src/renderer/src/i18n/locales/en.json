@@ -29681,6 +29681,8 @@
     "noRemoteBranch": "This branch has no remote branch {{host}} can open",
     "missingRemote": "{{host}}'s clone has no remote {{remote}}",
     "headMismatch": "{{host}}'s copy of {{branch}} is at a different commit than this Mac",
-    "localCommitsStay": "Your {{count}} local commits stay on this Mac"
+    "hostCopyNotLoaded": "{{host}}'s copy of this project isn't loaded yet",
+    "localCommitsStay_one": "Your {{count}} local commit stays on this Mac",
+    "localCommitsStay_other": "Your {{count}} local commits stay on this Mac"
   }
 }

@@ -88,6 +88,18 @@ export async function runOpenOnHost(request: OpenOnHostRequest): Promise<OpenOnH
           })
         )?.repo
   if (!hostRepo) {
+    if (location.kind === 'existing') {
+      toast.error(
+        translate(
+          'openOnHost.hostCopyNotLoaded',
+          "{{host}}'s copy of this project isn't loaded yet",
+          {
+            host: target.label
+          }
+        ),
+        { duration: ERROR_TOAST_DURATION }
+      )
+    }
     return null
   }
   try {
@@ -224,7 +236,8 @@ function getNotice({ target, workspace }: OpenOnHostRequest, hostHead: string): 
       'openOnHost.localCommitsStay',
       'Your {{count}} local commits stay on this Mac',
       {
-        count: plan.localOnlyCommits
+        count: plan.localOnlyCommits,
+        defaultValue_one: 'Your {{count}} local commit stays on this Mac'
       }
     )
   }
