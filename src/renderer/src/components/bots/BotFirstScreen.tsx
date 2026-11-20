@@ -9,12 +9,13 @@ import { cn } from '@/lib/class-names'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { firstLookRows, type FirstLookRow } from '../../../../shared/bots/bot-first-look'
+import { firstLookRowText } from '../../../../shared/bots/bot-first-look-words'
 import type { Bot } from '../../../../shared/bot-types'
 import { botSetupSteps } from '../../../../shared/bots/bot-setup-steps'
 import {
   nativeChatFirstScreenSignIn,
   type NativeChatFirstScreen
-} from '../native-chat/native-chat-bot-kickoff-view'
+} from '../../../../shared/bots/bot-first-screen'
 import { useNativeChatHostSetupView } from '../native-chat/host-access/native-chat-host-setup'
 import {
   nativeChatSignInNoticeView,
@@ -30,129 +31,6 @@ import { useStructuredAgentSessionHostExecutionPhase } from '../native-chat/sess
 import { NativeChatInstallStrip } from '../native-chat/host-access/NativeChatInstallStrip'
 import { NativeChatSignInStrip } from '../native-chat/host-access/NativeChatSignInStrip'
 import { useBotSetupInstall } from './BotSetupInstall'
-
-/** Shown by name; more are counted. */
-const NAMES_SHOWN = 3
-
-function namesText(names: readonly string[]): string {
-  const shown = names.slice(0, NAMES_SHOWN).join(', ')
-  return names.length > NAMES_SHOWN
-    ? translate('bots.firstScreen.namesMore', '{{names}} and {{count}} more', {
-        names: shown,
-        count: names.length - NAMES_SHOWN
-      })
-    : shown
-}
-
-function projectsText(row: FirstLookRow): string {
-  if (row.state !== 'done') {
-    return translate(
-      'bots.firstScreen.projectsReading',
-      'Projects: looking at what you have in Orca…'
-    )
-  }
-  if (row.count === undefined) {
-    return translate('bots.firstScreen.projectsDone', 'Looked at your projects')
-  }
-  if (row.count === 0) {
-    return translate('bots.firstScreen.projectsNone', 'No projects in Orca yet')
-  }
-  const names = namesText(row.names ?? [])
-  return row.count === 1
-    ? translate('bots.firstScreen.projectsOne', 'Found 1 project: {{names}}', {
-        names
-      })
-    : translate('bots.firstScreen.projectsMany', 'Found {{count}} projects: {{names}}', {
-        count: row.count,
-        names
-      })
-}
-
-function githubText(row: FirstLookRow): string {
-  if (row.state !== 'done') {
-    return translate('bots.firstScreen.githubReading', 'GitHub: reading your open PRs…')
-  }
-  if (row.count === undefined) {
-    return translate('bots.firstScreen.githubDone', 'GitHub: looked at your work')
-  }
-  return row.count === 1
-    ? translate('bots.firstScreen.githubOne', 'GitHub: 1 open PR of yours')
-    : translate('bots.firstScreen.githubMany', 'GitHub: {{count}} open PRs of yours', {
-        count: row.count
-      })
-}
-
-function linearText(row: FirstLookRow): string {
-  if (row.state !== 'done') {
-    return translate('bots.firstScreen.linearReading', 'Linear: reading your open issues…')
-  }
-  if (row.count === undefined) {
-    return translate('bots.firstScreen.linearDone', 'Linear: looked at your issues')
-  }
-  if (row.more) {
-    return translate(
-      'bots.firstScreen.linearMore',
-      'Linear: {{count}}+ open issues assigned to you',
-      {
-        count: row.count
-      }
-    )
-  }
-  return row.count === 1
-    ? translate('bots.firstScreen.linearOne', 'Linear: 1 open issue assigned to you')
-    : translate('bots.firstScreen.linearMany', 'Linear: {{count}} open issues assigned to you', {
-        count: row.count
-      })
-}
-
-function workspacesText(row: FirstLookRow): string {
-  if (row.state !== 'done') {
-    return translate(
-      'bots.firstScreen.workspacesReading',
-      'Workspaces: looking at what your agents are doing…'
-    )
-  }
-  if (row.count === undefined) {
-    return translate('bots.firstScreen.workspacesDone', 'Looked at your workspaces')
-  }
-  if (row.count === 0) {
-    return translate('bots.firstScreen.workspacesNone', 'No workspaces with an agent open')
-  }
-  return row.count === 1
-    ? translate('bots.firstScreen.workspacesOne', 'Workspaces: 1 with an agent open')
-    : translate('bots.firstScreen.workspacesMany', 'Workspaces: {{count}} with an agent open', {
-        count: row.count
-      })
-}
-
-function toolsText(row: FirstLookRow): string {
-  if (row.state !== 'done') {
-    return translate('bots.firstScreen.toolsReading', 'Your tools: MCP servers…')
-  }
-  if (row.count === undefined) {
-    return translate('bots.firstScreen.toolsDone', 'Looked at your MCP servers')
-  }
-  if (row.count === 0) {
-    return translate('bots.firstScreen.toolsNone', 'No MCP servers yet')
-  }
-  const names = namesText(row.names ?? [])
-  return row.count === 1
-    ? translate('bots.firstScreen.toolsOne', '1 MCP server: {{names}}', {
-        names
-      })
-    : translate('bots.firstScreen.toolsMany', '{{count}} MCP servers: {{names}}', {
-        count: row.count,
-        names
-      })
-}
-
-const ROW_TEXT = {
-  projects: projectsText,
-  github: githubText,
-  linear: linearText,
-  workspaces: workspacesText,
-  tools: toolsText
-}
 
 function RowMark({ state }: { state: FirstLookRow['state'] }): React.JSX.Element {
   switch (state) {
@@ -377,7 +255,7 @@ export function BotFirstScreen({
               <span className="flex size-4 shrink-0 items-center justify-center">
                 <RowMark state={row.state} />
               </span>
-              <span className="min-w-0 truncate">{ROW_TEXT[row.area](row)}</span>
+              <span className="min-w-0 truncate">{firstLookRowText(row, t)}</span>
             </div>
           ))}
         </div>
