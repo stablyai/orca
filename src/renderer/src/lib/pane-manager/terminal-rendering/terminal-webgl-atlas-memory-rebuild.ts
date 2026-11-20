@@ -1,4 +1,5 @@
 import type { ManagedPaneInternal } from '../pane-manager-types'
+import type { ForegroundTerminalOutputTarget } from '../terminal-output/pane-terminal-foreground-render-settle'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { getVisiblePaneTerminals } from '../pane-manager-registry'
 
@@ -13,7 +14,8 @@ const ATLAS_MEMORY_REBUILD_ENABLED =
   navigator.userAgent.includes('Macintosh') &&
   !(navigator.maxTouchPoints > 0)
 
-type XtermWebglAddonAtlasInternals = { _renderer?: { _charAtlas?: object } }
+// xterm's shared TextureAtlas, read from the addon's private renderer; only its identity is used.
+type GlyphAtlas = object
 type PaneFilter = (pane: ManagedPaneInternal) => boolean
 type AtlasRebuilder = (panes: ManagedPaneInternal[], shouldReattach: PaneFilter) => void
 
@@ -22,13 +24,22 @@ let rebuildTimer: ReturnType<typeof setTimeout> | null = null
 // Successful or deferred, attempts stay an interval apart so per-chunk output can't drive repeated scans.
 let lastAttemptAt = Number.NEGATIVE_INFINITY
 // Per atlas, so one atlas's output never re-arms another; weak so a retired atlas is never kept alive.
-const atlasesWithLargePage = new WeakSet<object>()
-const atlasesWithOutput = new WeakSet<object>()
-const attachedPanes = new Map<object, ManagedPaneInternal>()
-const deferredRetries = new WeakMap<object, number>()
+const atlasesWithLargePage = new WeakSet<GlyphAtlas>()
+const atlasesWithOutput = new WeakSet<GlyphAtlas>()
+const attachedPanes = new Map<unknown, ManagedPaneInternal>()
+const deferredRetries = new WeakMap<GlyphAtlas, number>()
 
-function atlasOf(pane: ManagedPaneInternal): object | undefined {
-  return (pane.webglAddon as unknown as XtermWebglAddonAtlasInternals | null)?._renderer?._charAtlas
+function atlasOf(pane: ManagedPaneInternal): GlyphAtlas | undefined {
+  const addon = pane.webglAddon
+  if (!addon || !('_renderer' in addon)) {
+    return undefined
+  }
+  const renderer = addon._renderer
+  if (typeof renderer !== 'object' || renderer === null || !('_charAtlas' in renderer)) {
+    return undefined
+  }
+  const atlas = renderer._charAtlas
+  return typeof atlas === 'object' && atlas !== null ? atlas : undefined
 }
 
 /** Wired by the reattach module, which owns detaching and reattaching pane renderers. */
@@ -45,13 +56,13 @@ function onScreenPaneFilter(): PaneFilter {
   return (pane) => visibleTerminals.has(pane.terminal) && pane.container.getClientRects().length > 0
 }
 
-function isRebuildDue(atlas: object | undefined): atlas is object {
+function isRebuildDue(atlas: GlyphAtlas | undefined): atlas is GlyphAtlas {
   return atlas !== undefined && atlasesWithLargePage.has(atlas) && atlasesWithOutput.has(atlas)
 }
 
 function rebuildDueAtlases(): void {
   rebuildTimer = null
-  const owners = new Map<object, ManagedPaneInternal[]>()
+  const owners = new Map<GlyphAtlas, ManagedPaneInternal[]>()
   for (const pane of attachedPanes.values()) {
     const atlas = atlasOf(pane)
     if (!isRebuildDue(atlas)) {
@@ -123,7 +134,7 @@ export function untrackTerminalWebglAtlasPane(pane: ManagedPaneInternal): void {
 }
 
 /** Marks PTY output for the pane's atlas; repaints, warm-up, reveals and empty parse barriers never come through here. */
-export function noteTerminalWebglAtlasOutput(terminal: object): void {
+export function noteTerminalWebglAtlasOutput(terminal: ForegroundTerminalOutputTarget): void {
   const pane = attachedPanes.get(terminal)
   const atlas = pane ? atlasOf(pane) : undefined
   if (!atlas) {

@@ -19,18 +19,21 @@ vi.mock('../pane-manager-registry', () => ({
 
 type AtlasModule = typeof AtlasMemoryRebuild
 
-function fakePane(atlasModule: AtlasModule, atlas: object, visible = true, displayed = true) {
+type FakeAtlas = { readonly label?: string }
+
+function fakePane(atlasModule: AtlasModule, atlas: FakeAtlas, visible = true, displayed = true) {
   const terminal = { modes: { synchronizedOutputMode: false } }
   if (visible) {
     visibleTerminals.add(terminal)
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module reads only terminal modes, container rects and the addon's atlas identity, all supplied here.
   const pane = {
     terminal,
     container: { getClientRects: () => (displayed ? [{}] : []) },
     webglAddon: { _renderer: { _charAtlas: atlas } }
   } as unknown as ManagedPaneInternal
   atlasModule.trackTerminalWebglAtlasPane(pane)
-  return { pane, terminal, output: () => atlasModule.noteTerminalWebglAtlasOutput(terminal) }
+  return { pane, terminal, output: () => atlasModule.noteTerminalWebglAtlasOutput(pane.terminal) }
 }
 
 async function loadModule(navigatorStub: { userAgent: string; maxTouchPoints?: number }) {
