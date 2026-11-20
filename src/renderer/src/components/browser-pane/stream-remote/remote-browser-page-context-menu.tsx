@@ -20,6 +20,7 @@ import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyb
 
 export function useRemoteBrowserPageContextMenu({
   busy,
+  pagePointerOwned,
   browserTabUrl,
   imageRef,
   runtimeTarget,
@@ -34,6 +35,8 @@ export function useRemoteBrowserPageContextMenu({
   setPaneNotice
 }: {
   busy: boolean
+  /** The forwarded right press is the page tool's; Orca's menu would cover what it picks. */
+  pagePointerOwned: boolean
   browserTabUrl: string
   imageRef: React.RefObject<HTMLImageElement | null>
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
@@ -71,6 +74,10 @@ export function useRemoteBrowserPageContextMenu({
   }, [contextMenu])
 
   const handleRemoteContextMenu = (event: React.MouseEvent<HTMLImageElement>): void => {
+    if (pagePointerOwned) {
+      event.preventDefault()
+      return
+    }
     if (busy) {
       return
     }

@@ -18809,8 +18809,6 @@
             "27d863542c": "Browser annotations",
             "e48569ac6d": "This site could not be reached.",
             "bbe8f15e83": "This pane is rendered from the active runtime server.",
-            "8b7e6d1f5a": "Browser annotations are only available in local browser tabs.",
-            "deb5293610": "Browser annotations unavailable in remote runtime",
             "90d021f2ad": "Add",
             "0cb3bd6221": "Annotation intent",
             "532bac48c5": "Describe what the agent should change here...",
