@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,7 +9,8 @@ import { ElectronSecretStore } from '../../host/electron-secret-store'
 const safeStorageMock = vi.hoisted(() => ({
   decryptString: vi.fn((value: Buffer) => value.toString('utf-8')),
   encryptString: vi.fn((value: string) => Buffer.from(value, 'utf-8')),
-  isEncryptionAvailable: vi.fn(() => true)
+  isEncryptionAvailable: vi.fn(() => true),
+  getSelectedStorageBackend: vi.fn(() => 'gnome_libsecret')
 }))
 
 let userDataPath = ''
@@ -69,6 +70,7 @@ describe('Orca cloud session store', () => {
     safeStorageMock.encryptString.mockClear()
     safeStorageMock.isEncryptionAvailable.mockClear()
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
+    safeStorageMock.getSelectedStorageBackend.mockReturnValue('gnome_libsecret')
     // The desktop installs this store at startup; the session file must stay readable through it.
     setSecretStore(new ElectronSecretStore())
   })
@@ -76,6 +78,31 @@ describe('Orca cloud session store', () => {
   afterEach(() => {
     rmSync(userDataPath, { recursive: true, force: true })
     vi.unstubAllEnvs()
+  })
+
+  it('keeps a Linux basic_text sign-in on disk through token rotation and restart', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    onTestFinished(() => {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    })
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    safeStorageMock.getSelectedStorageBackend.mockReturnValue('basic_text')
+    const rotated = { ...makeSession(), accessToken: 'rotated-access', refreshToken: 'rotated' }
+
+    const store = await loadSessionStore()
+    expect(store.saveOrcaCloudSession('local-default', userDataPath, makeSession())).toBe(
+      'encrypted'
+    )
+    expect(
+      store.saveOrcaCloudSession('local-default', userDataPath, rotated, { spentOnFailure: true })
+    ).toBe('encrypted')
+
+    const restarted = await loadSessionStore()
+    expect(restarted.readOrcaCloudSession('local-default', userDataPath)).toEqual({
+      status: 'found',
+      session: rotated,
+      persistence: 'encrypted'
+    })
   })
 
   it('rejects dev plaintext files when the escape hatch is disabled', async () => {
