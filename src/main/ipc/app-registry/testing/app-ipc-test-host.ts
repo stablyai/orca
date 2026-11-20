@@ -108,7 +108,10 @@ beforeEach(() => {
         }
       }
     },
-    isCurrent: (caller) => !sources.get(caller.documentId)?.isDestroyed?.(),
+    isCurrent: (caller) => {
+      const source = sources.get(caller.documentId)
+      return source !== undefined && !source.isDestroyed?.()
+    },
     flushDocumentStorage: (caller) => {
       sources.get(caller.documentId)?.session.flushStorageData()
     }
