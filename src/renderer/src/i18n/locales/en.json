@@ -5378,6 +5378,7 @@
             "terminalListNeedsServerUpdate": "Update Orca on this server to list terminal agents",
             "terminalListFailed": "Couldn’t list terminal agents for this workspace",
             "chatNotInstalled": "Not installed",
+            "chatInstallsOnStart": "Installs on start",
             "chatNotOverSsh": "No chat over SSH",
             "chatNotInWsl": "No chat in WSL",
             "chatNotInSubfolder": "No chat in a subfolder",

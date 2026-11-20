@@ -3765,6 +3765,7 @@
             "e518f544b1": "감지된 agents가 없습니다.",
             "8dea9b5cdf": "활성화된 agents가 없습니다.",
             "chatNotInstalled": "설치되지 않음",
+            "chatInstallsOnStart": "시작 시 설치",
             "startChat": "{{value0}} 채팅 시작",
             "chatNotOverSsh": "SSH에서는 채팅을 사용할 수 없음",
             "chatNotOnHost": "이 호스트에서는 채팅을 사용할 수 없음",

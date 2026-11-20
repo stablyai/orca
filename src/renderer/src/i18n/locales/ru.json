@@ -4430,6 +4430,7 @@
             "terminalListNeedsServerUpdate": "Обновите Orca на этом сервере, чтобы увидеть терминальных агентов",
             "terminalListFailed": "Не удалось получить список терминальных агентов этого рабочего пространства",
             "chatNotInstalled": "Не установлено",
+            "chatInstallsOnStart": "Установится при запуске",
             "chatNotOverSsh": "Чат недоступен по SSH",
             "chatNotInWsl": "Чат недоступен в WSL",
             "chatNotInSubfolder": "Чат недоступен во вложенной папке",

@@ -4432,6 +4432,7 @@
             "terminalListNeedsServerUpdate": "Terminal ajanlarını listelemek için bu sunucudaki Orca'yı güncelleyin",
             "terminalListFailed": "Bu çalışma alanındaki terminal ajanları listelenemedi",
             "chatNotInstalled": "Yüklü değil",
+            "chatInstallsOnStart": "Başlatınca yüklenir",
             "chatNotOverSsh": "SSH üzerinden sohbet kullanılamıyor",
             "chatNotInWsl": "WSL'de sohbet kullanılamıyor",
             "chatNotInSubfolder": "Alt klasörde sohbet yok",

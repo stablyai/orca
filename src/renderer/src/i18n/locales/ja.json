@@ -4312,6 +4312,7 @@
             "e518f544b1": "Agent が検出されませんでした",
             "8dea9b5cdf": "有効な Agent がありません",
             "chatNotInstalled": "未インストール",
+            "chatInstallsOnStart": "開始時にインストール",
             "startChat": "{{value0}} とチャットを開始する",
             "chatNotOverSsh": "SSH 接続ではチャットを利用できません",
             "chatNotInWsl": "WSL ではチャットを利用できません",

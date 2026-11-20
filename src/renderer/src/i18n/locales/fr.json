@@ -4104,6 +4104,7 @@
             "e518f544b1": "Aucun agent détecté",
             "8dea9b5cdf": "Aucun agent activé",
             "chatNotInstalled": "Non installé",
+            "chatInstallsOnStart": "S'installe au démarrage",
             "startChat": "Démarrer un chat avec {{value0}}",
             "chatNotOverSsh": "Chat indisponible via SSH",
             "chatCheckFailed": "Impossible de vérifier la disponibilité du chat",

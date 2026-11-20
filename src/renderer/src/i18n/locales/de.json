@@ -4336,6 +4336,7 @@
             "terminalListNeedsServerUpdate": "Orca auf diesem Server aktualisieren, um Terminal-Agenten aufzulisten",
             "terminalListFailed": "Terminal-Agenten für diesen Arbeitsbereich konnten nicht aufgelistet werden",
             "chatNotInstalled": "Nicht installiert",
+            "chatInstallsOnStart": "Wird beim Start installiert",
             "chatNotOverSsh": "Kein Chat über SSH",
             "chatNotInWsl": "Kein Chat in WSL",
             "chatNotInSubfolder": "Kein Chat in einem Unterordner",

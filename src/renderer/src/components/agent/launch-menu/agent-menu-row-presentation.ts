@@ -45,8 +45,17 @@ export function rowStatusLabel(
   return row.kind === 'chat-unavailable'
     ? chatUnavailableLabel(row.reason, t)
     : row.kind === 'chat' && row.setup
-      ? chatUnavailableLabel('not-installed', t)
+      ? t('auto.components.tab.bar.QuickLaunchButton.chatInstallsOnStart', 'Installs on start')
       : undefined
+}
+
+/** An agent's chat that installs the agent when started, for surfaces that list whole agents. */
+export function entrySetupLabel(
+  entry: { rows: readonly NewTabAgentMenuRow[] },
+  t: Translate = translate
+): string | undefined {
+  const row = entry.rows.find((candidate) => candidate.kind === 'chat' && candidate.setup)
+  return row ? rowStatusLabel(row, t) : undefined
 }
 
 export function rowTitle(row: NewTabAgentMenuRow, label: string, t: Translate = translate): string {
