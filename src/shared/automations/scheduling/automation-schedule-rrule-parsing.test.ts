@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { describeAutomationSchedule } from './automation-schedules'
 import {
+  automationScheduleParseError,
   isValidAutomationSchedule,
   needsScheduleRulesCapability,
   parseAutomationRrule,
@@ -62,5 +63,12 @@ describe('strict RRULE parsing', () => {
     expect(needsScheduleRulesCapability(rule)).toBe(true)
     expect(needsScheduleRulesCapability('FREQ=WEEKLY;INTERVAL=1;BYDAY=WE')).toBe(false)
     expect(needsScheduleRulesCapability('0 9 * * 1')).toBe(false)
+  })
+
+  it('escapes control bytes in the refused part it names', () => {
+    expect(automationScheduleParseError('FREQ=DAILY;\u001b[2J\u0007=1')).toBe(
+      'Unsupported RRULE part "\\x1b[2J\\x07" for FREQ=DAILY.'
+    )
+    expect(automationScheduleParseError('FREQ=DAILY;BYHOUR=9')).toBeNull()
   })
 })

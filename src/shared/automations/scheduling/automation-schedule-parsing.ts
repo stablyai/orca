@@ -2,6 +2,7 @@ import type { AutomationSchedulePreset } from '../automation-definition'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
 
 import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
+import { escapeTerminalControlCharacters } from '../../terminal/output/terminal-control-character-escape'
 import {
   DAY_NAMES,
   MONTH_NAMES,
@@ -79,7 +80,9 @@ function parseRrule(rrule: string): ParsedRrule {
   const values = new Map<string, string>()
   for (const { key, value } of entries) {
     if (value === undefined || values.has(key) || !RRULE_PARTS[freq].includes(key)) {
-      throw new Error(`Unsupported RRULE part "${key}" for FREQ=${freq}.`)
+      // Schedules can come from synced hosts, and this message is printed by the CLI and editor.
+      const shownKey = escapeTerminalControlCharacters(key, true)
+      throw new Error(`Unsupported RRULE part "${shownKey}" for FREQ=${freq}.`)
     }
     values.set(key, value)
   }
