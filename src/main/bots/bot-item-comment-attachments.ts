@@ -178,6 +178,12 @@ async function assertLocalImagesFit(
     )
   )
   const total = sizes.reduce((sum, size) => sum + size, 0)
+  const over = sizes.findIndex((size) => size > AGENT_SESSION_ATTACHMENT_MAX_BYTES)
+  if (over !== -1) {
+    throw refused(
+      `${basename(paths[over]!)} is over ${AGENT_SESSION_ATTACHMENT_MAX_BYTES / MB} MB.`
+    )
+  }
   if (total > AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES) {
     throw tooBig(total)
   }

@@ -52,6 +52,10 @@ export class BotAvatarSync {
 
   private pass(): void {
     if (!this.deps.bots.enabled()) {
+      // Queued sends resume when bots are enabled again.
+      if (this.queued.size > 0) {
+        this.retryLater()
+      }
       return
     }
     let waiting = false
@@ -95,6 +99,10 @@ export class BotAvatarSync {
 
   private pump(): void {
     if (!this.deps.bots.enabled()) {
+      // Queued sends resume when bots are enabled again.
+      if (this.queued.size > 0) {
+        this.retryLater()
+      }
       return
     }
     for (const [id, bot] of this.queued) {
