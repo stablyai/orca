@@ -41,6 +41,23 @@ function counted<T extends { id: string }>(row: T, reads: Reads): T {
   return copy
 }
 
+// Reading an unrelated bucket's element counts too, so even an identity compare of its row is caught.
+function countedBucket<T extends { id: string }>(row: T, reads: Reads): T[] {
+  const bucket: T[] = []
+  const element = counted(row, reads)
+  Object.defineProperty(bucket, '0', {
+    enumerable: true,
+    configurable: true,
+    get() {
+      if (reads.measuring) {
+        reads.count += 1
+      }
+      return element
+    }
+  })
+  return bucket
+}
+
 function unifiedTerminalTab(worktreeId: string, tabId: string): Tab {
   return {
     id: `unified-${tabId}`,
@@ -64,9 +81,10 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
   for (let index = 0; index < workspaceCount; index += 1) {
     const worktreeId = `wt-${index}`
     const tab = makeTab({ id: `tab-${index}`, worktreeId, createdAt: 0 })
-    tabsByWorktree[worktreeId] = [index === 0 ? tab : counted(tab, reads)]
+    tabsByWorktree[worktreeId] = index === 0 ? [tab] : countedBucket(tab, reads)
     const unifiedTab = unifiedTerminalTab(worktreeId, tab.id)
-    unifiedTabsByWorktree[worktreeId] = [index === 0 ? unifiedTab : counted(unifiedTab, reads)]
+    unifiedTabsByWorktree[worktreeId] =
+      index === 0 ? [unifiedTab] : countedBucket(unifiedTab, reads)
   }
   // The app store is shared across populations, so every input this test writes starts fresh.
   store.setState({
