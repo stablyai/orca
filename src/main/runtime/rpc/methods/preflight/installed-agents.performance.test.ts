@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   partialRuntimeStore,
@@ -20,12 +20,15 @@ vi.mock('../../../workspaces/catalog/repo-worktree-admin-fingerprint', () => ({
   readRepoWorktreeAdminFingerprint: vi.fn(async () => null)
 }))
 
-afterEach(() => vi.restoreAllMocks())
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
 
 describe('installed-agent workspace resolution bound', () => {
   // #45072 reuses the selected workspace so detection does not read its catalog a second time.
-  it('resolves the selected checkout once in a large worktree inventory', async () => {
-    const count = 7500
+  it.each([750, 7500])('resolves the selected checkout once among %i worktrees', async (count) => {
     const repo = storeRepo({ id: `inventory-${count}`, path: `/work/inventory-${count}` })
     const meta: Record<string, WorktreeMeta> = {}
     scan.mockResolvedValue({
@@ -65,9 +68,11 @@ describe('installed-agent workspace resolution bound', () => {
     expect(resolve).toHaveBeenCalledTimes(1)
   })
 
-  it('acquires the selected folder once in a large folder catalog', async () => {
-    const count = 7500
-    const groupCount = 120
+  it.each([
+    [750, 12],
+    [7500, 12],
+    [750, 120]
+  ])('acquires the selected folder once among %i folders and %i groups', async (count, groupCount) => {
     const folders = Array.from({ length: count }, (_, index) =>
       storeFolderWorkspace({
         id: index === 0 ? 'hub' : `hub-${index}`,

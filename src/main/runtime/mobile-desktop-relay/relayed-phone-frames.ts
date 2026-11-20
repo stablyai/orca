@@ -30,6 +30,17 @@ export function rewriteRelayedPhoneRequest(
   const forwarded = Object.fromEntries(
     Object.entries(parsed).filter(([field]) => !STRIPPED_ENVELOPE_FIELDS.has(field))
   )
+  if (
+    parsed.method === 'preflight.installedAgents' &&
+    typeof parsed.executionHost === 'string' &&
+    parsed.executionHost.startsWith('runtime:') &&
+    isRecord(parsed.params) &&
+    typeof parsed.params.worktreeId === 'string' &&
+    parsed.params.worktreeId.length > 0 &&
+    parsed.params.worktreeHostId === parsed.executionHost
+  ) {
+    forwarded.params = { ...parsed.params, worktreeHostId: 'local' }
+  }
   return JSON.stringify(requestId === undefined ? forwarded : { ...forwarded, id: requestId })
 }
 
