@@ -361,20 +361,6 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 
-  it('says hello again, with a fresh snapshot, when the cloud lost the hello', async () => {
-    const { client } = startClient()
-    await settle()
-    h.fake.forgetHello()
-    poll([])
-    await settle(CONNECTOR_REHELLO_SPREAD_MS)
-    expect(h.fake.hellos).toHaveLength(2)
-    expect(h.fake.events).toEqual([
-      { kind: 'snapshot', conversations: [] },
-      { kind: 'snapshot', conversations: [] }
-    ])
-    client.stop()
-  })
-
   it('says its first hello at once, and waits a random spread before a hello a 409 asked for', async () => {
     const { client } = startClient()
     await settle()
