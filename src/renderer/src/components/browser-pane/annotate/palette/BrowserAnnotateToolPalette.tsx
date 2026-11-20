@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import { Crosshair, Loader2, MessageSquarePlus, PenTool, X } from 'lucide-react'
+import { Crosshair, Hourglass, MessageSquarePlus, PenTool, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -270,7 +270,8 @@ export function BrowserAnnotateToolPalette({
             const checked = option.tool === activeTool
             const unavailable = !canPickElements && !checked
             const waiting = option.tool === 'draw' && drawWaitingForPage
-            const Icon = waiting ? Loader2 : option.icon
+            const Icon = waiting ? Hourglass : option.icon
+            const accessibleLabel = waiting ? `${option.label} · ${waitingMessage}` : option.label
             return (
               <Tooltip
                 key={option.tool}
@@ -296,7 +297,7 @@ export function BrowserAnnotateToolPalette({
                     type="button"
                     aria-pressed={checked}
                     aria-busy={waiting || undefined}
-                    aria-label={option.label}
+                    aria-label={accessibleLabel}
                     aria-keyshortcuts={
                       !showKeyHints
                         ? undefined
@@ -332,17 +333,16 @@ export function BrowserAnnotateToolPalette({
                       }
                     }}
                   >
-                    <Icon
-                      className={cn(
-                        'size-3.5 shrink-0',
-                        waiting && 'animate-spin motion-reduce:animate-none'
-                      )}
-                    />
+                    <Icon className="size-3.5 shrink-0" />
                     {showToolLabels ? <span>{option.label}</span> : null}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {unavailable && unavailableReason ? unavailableReason : option.tooltip}
+                  {unavailable && unavailableReason
+                    ? unavailableReason
+                    : waiting
+                      ? accessibleLabel
+                      : option.tooltip}
                 </TooltipContent>
               </Tooltip>
             )
