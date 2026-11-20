@@ -21,13 +21,20 @@ export async function listPiSubagentSessions(args: {
 }): Promise<AiVaultSubagentListResult> {
   const platform = args.platform ?? process.platform
   const issues: AiVaultScanIssue[] = []
-  const transcriptPaths = (await findPiSubagentTranscripts(args.parentFilePath)) ?? []
+  const walk = await findPiSubagentTranscripts(args.parentFilePath)
+  if (walk.failure) {
+    recordSessionScanIssue(issues, {
+      agent: 'pi',
+      path: walk.failure.path,
+      ...scanIssueTextFromError(walk.failure.error)
+    })
+  }
   // A nested child sits at `<stem>/<agent>/run-N/session.jsonl`, so only its own session record names the parent.
   const parentSessionId = await parentSessionIdFor(args.parentFilePath)
 
   const parsed: (AiVaultSession | null)[] = []
-  for (let index = 0; index < transcriptPaths.length; index += PI_SUBAGENT_PARSE_CONCURRENCY) {
-    const batch = transcriptPaths.slice(index, index + PI_SUBAGENT_PARSE_CONCURRENCY)
+  for (let index = 0; index < walk.paths.length; index += PI_SUBAGENT_PARSE_CONCURRENCY) {
+    const batch = walk.paths.slice(index, index + PI_SUBAGENT_PARSE_CONCURRENCY)
     const batchResults = await Promise.all(
       batch.map((filePath) =>
         parsePiSubagentTranscript({ filePath, parentSessionId, platform, issues })

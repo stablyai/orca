@@ -20,58 +20,51 @@ function isPiSubagentTranscriptFileName(name: string, isFile: boolean): boolean 
   return isFile && extname(name).toLowerCase() === '.jsonl'
 }
 
-/** A missing directory is absence; any other read failure leaves the walk unsettled. */
-async function readSubagentDir(path: string, signal?: AbortSignal): Promise<Dirent[] | null> {
-  try {
-    return await waitForAiVaultScan(wslGatedReaddir(path, 'scan', signal), signal)
-  } catch (err) {
-    throwIfAiVaultScanCancelled(signal)
-    return isMissingTranscriptPathError(err) ? [] : null
-  }
+export type PiSubagentTranscriptWalk = {
+  /** Children found before any failed read; they are real even when the walk is incomplete. */
+  paths: string[]
+  /** The first read that failed for a reason other than absence, so the count stays unknown. */
+  failure: { path: string; error: unknown } | null
 }
 
-/** False once a read fails: a partial walk must never pass for the parent's whole child set. */
+/** A missing directory is absence; any other read failure is recorded and the walk continues. */
 async function collectSubagentTranscripts(
   path: string,
   depth: number,
-  found: string[],
+  walk: PiSubagentTranscriptWalk,
   signal?: AbortSignal
-): Promise<boolean> {
-  const entries = await readSubagentDir(path, signal)
-  if (entries === null) {
-    return false
+): Promise<void> {
+  let entries: Dirent[]
+  try {
+    entries = await waitForAiVaultScan(wslGatedReaddir(path, 'scan', signal), signal)
+  } catch (err) {
+    throwIfAiVaultScanCancelled(signal)
+    if (!isMissingTranscriptPathError(err) && walk.failure === null) {
+      walk.failure = { path, error: err }
+    }
+    return
   }
   for (const entry of entries) {
     const entryPath = join(path, entry.name)
     if (entry.isDirectory()) {
-      if (
-        depth < PI_SUBAGENT_MAX_DEPTH &&
-        !(await collectSubagentTranscripts(entryPath, depth + 1, found, signal))
-      ) {
-        return false
+      if (depth < PI_SUBAGENT_MAX_DEPTH) {
+        await collectSubagentTranscripts(entryPath, depth + 1, walk, signal)
       }
       continue
     }
     if (isPiSubagentTranscriptFileName(entry.name, entry.isFile())) {
-      found.push(entryPath)
+      walk.paths.push(entryPath)
     }
   }
-  return true
 }
 
-/** Null means an unreadable child directory, not a parent without children. */
 export async function findPiSubagentTranscripts(
   transcriptFilePath: string,
   signal?: AbortSignal
-): Promise<string[] | null> {
-  const found: string[] = []
-  const settled = await collectSubagentTranscripts(
-    piSubagentSessionsDirFor(transcriptFilePath),
-    1,
-    found,
-    signal
-  )
-  return settled ? found : null
+): Promise<PiSubagentTranscriptWalk> {
+  const walk: PiSubagentTranscriptWalk = { paths: [], failure: null }
+  await collectSubagentTranscripts(piSubagentSessionsDirFor(transcriptFilePath), 1, walk, signal)
+  return walk
 }
 
 /** Null keeps the stored count: a failed read proves nothing about a parent that may have children. */
@@ -79,6 +72,6 @@ export async function countPiSubagentTranscripts(
   transcriptFilePath: string,
   signal?: AbortSignal
 ): Promise<number | null> {
-  const found = await findPiSubagentTranscripts(transcriptFilePath, signal)
-  return found === null ? null : found.length
+  const walk = await findPiSubagentTranscripts(transcriptFilePath, signal)
+  return walk.failure === null ? walk.paths.length : null
 }
