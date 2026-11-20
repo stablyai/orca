@@ -1,5 +1,8 @@
 import { presentationRecordDraft, finishPresentationRecord } from './presentation-record-drafts'
 import { terminalLayoutEqual } from '../../../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
+import { removeTabsAttention } from '../../../store/slices/workspace-attention/subject-attention-transitions'
+import { hostSnapshotAffirmsWorktreeContents } from '../hydration/host-session-snapshot-authority'
+import { isWebSessionTabsWorktreeRemovalFrame } from '../tracking/session-tabs-inventory-absence'
 import type { prepareWebSessionTabsSnapshotGroups } from './apply-preparation-groups'
 import { sameStringArray, writableWebSessionTabsRecord } from './state-equality-core'
 
@@ -8,10 +11,11 @@ type TerminalRecordContext = ReturnType<typeof prepareWebSessionTabsSnapshotGrou
 export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
   const {
     state,
+    snapshot,
+    nextTerminalTabs,
     batchContext,
     mirroredTerminalTabs,
     removedTerminalResourceIds,
-    removedTerminalIds,
     exactProvisionalHandoffs
   } = context
 
@@ -57,17 +61,25 @@ export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
     delete nextLocalOnlyScrollbackByTabId[removedId]
   }
 
-  let nextUnreadTerminalTabs = state.unreadTerminalTabs
-  for (const removedId of removedTerminalIds) {
-    if (!nextUnreadTerminalTabs[removedId]) {
-      continue
-    }
-    nextUnreadTerminalTabs =
-      nextUnreadTerminalTabs === state.unreadTerminalTabs
-        ? writableWebSessionTabsRecord(state, 'unreadTerminalTabs', batchContext)
-        : nextUnreadTerminalTabs
-    delete nextUnreadTerminalTabs[removedId]
-  }
+  // An unpublished or removal frame can drop the tab bucket without proving the worker closed.
+  const dropsAttention =
+    nextTerminalTabs !== null &&
+    hostSnapshotAffirmsWorktreeContents(snapshot) &&
+    !isWebSessionTabsWorktreeRemovalFrame(snapshot)
+  const attention = dropsAttention
+    ? removeTabsAttention(
+        {
+          unreadTerminalTabs: state.unreadTerminalTabs,
+          unreadTerminalPanes: state.unreadTerminalPanes ?? {},
+          unreadAgentCompletionPanes: state.unreadAgentCompletionPanes ?? {}
+        },
+        removedTerminalResourceIds
+      )
+    : null
+  const nextUnreadTerminalTabs = attention?.unreadTerminalTabs ?? state.unreadTerminalTabs
+  const nextUnreadTerminalPanes = attention?.unreadTerminalPanes ?? state.unreadTerminalPanes
+  const nextUnreadAgentCompletionPanes =
+    attention?.unreadAgentCompletionPanes ?? state.unreadAgentCompletionPanes
 
   const pendingStartupByTabId = state.pendingStartupByTabId ?? {}
   let nextPendingStartupByTabId = pendingStartupByTabId
@@ -96,6 +108,8 @@ export function applyTerminalRecordUpdates(context: TerminalRecordContext) {
     nextTerminalLayoutsByTabId,
     nextLocalOnlyScrollbackByTabId,
     nextUnreadTerminalTabs,
+    nextUnreadTerminalPanes,
+    nextUnreadAgentCompletionPanes,
     pendingStartupByTabId,
     nextPendingStartupByTabId,
     automaticAgentResumeClaimsByTabId,

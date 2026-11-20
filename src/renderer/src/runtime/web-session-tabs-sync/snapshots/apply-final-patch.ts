@@ -41,6 +41,8 @@ export function buildWebSessionTabsFinalPatch(
     nextTerminalLayoutsByTabId,
     nextLocalOnlyScrollbackByTabId,
     nextUnreadTerminalTabs,
+    nextUnreadTerminalPanes,
+    nextUnreadAgentCompletionPanes,
     pendingStartupByTabId,
     nextPendingStartupByTabId,
     automaticAgentResumeClaimsByTabId,
@@ -153,6 +155,12 @@ export function buildWebSessionTabsFinalPatch(
       : {}),
     ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
       ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+      : {}),
+    ...(nextUnreadTerminalPanes !== state.unreadTerminalPanes
+      ? { unreadTerminalPanes: nextUnreadTerminalPanes }
+      : {}),
+    ...(nextUnreadAgentCompletionPanes !== state.unreadAgentCompletionPanes
+      ? { unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes }
       : {}),
     ...(nextPendingStartupByTabId !== pendingStartupByTabId
       ? { pendingStartupByTabId: nextPendingStartupByTabId }

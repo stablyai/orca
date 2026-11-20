@@ -8,8 +8,9 @@ import {
 import { collectCollidingRetractionPaneKeys } from '../agent-status/retraction-pane-ownership'
 import { adoptFrameDrawnClientHostedBrowserHandles } from './frame-drawn-desktop-browser-handles'
 import { isWebSessionTabsWorktreeRemovalFrame } from '../tracking/session-tabs-inventory-absence'
+import { hostSnapshotAffirmsWorktreeContents } from '../hydration/host-session-snapshot-authority'
+import { removeTabsAttention } from '../../../store/slices/workspace-attention/subject-attention-transitions'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from '../state'
-import { writableWebSessionTabsRecord } from '../snapshots/state-equality-core'
 import { buildMirroredTerminalTabs } from '../tab-projection/terminal-build'
 import {
   isMirroredTerminalSurfaceId,
@@ -89,20 +90,22 @@ export function buildFrameDrawnWorkspaceStatusPatch(
     publishedTabIds
   )
 
-  let nextUnreadTerminalTabs = state.unreadTerminalTabs
-  for (const tabId of retractedTabIds) {
-    if (!nextUnreadTerminalTabs[tabId]) {
-      continue
-    }
-    if (nextUnreadTerminalTabs === state.unreadTerminalTabs) {
-      nextUnreadTerminalTabs = writableWebSessionTabsRecord(
-        state,
-        'unreadTerminalTabs',
-        batchContext
-      )
-    }
-    delete nextUnreadTerminalTabs[tabId]
-  }
+  // Layout frames may already have dropped the row; still retire its markers only when this frame affirms the close.
+  const attention =
+    !removalFrame && hostSnapshotAffirmsWorktreeContents(snapshot)
+      ? removeTabsAttention(
+          {
+            unreadTerminalTabs: state.unreadTerminalTabs,
+            unreadTerminalPanes: state.unreadTerminalPanes ?? {},
+            unreadAgentCompletionPanes: state.unreadAgentCompletionPanes ?? {}
+          },
+          retractedTabIds
+        )
+      : null
+  const nextUnreadTerminalTabs = attention?.unreadTerminalTabs ?? state.unreadTerminalTabs
+  const nextUnreadTerminalPanes = attention?.unreadTerminalPanes ?? state.unreadTerminalPanes
+  const nextUnreadAgentCompletionPanes =
+    attention?.unreadAgentCompletionPanes ?? state.unreadAgentCompletionPanes
 
   const patch: Partial<WebSessionTabsSyncState> = {
     ...adoptFrameDrawnClientHostedBrowserHandles(
@@ -117,6 +120,12 @@ export function buildFrameDrawnWorkspaceStatusPatch(
     ...remirroredClosedTabLiftPatch,
     ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
       ? { unreadTerminalTabs: nextUnreadTerminalTabs }
+      : {}),
+    ...(nextUnreadTerminalPanes !== state.unreadTerminalPanes
+      ? { unreadTerminalPanes: nextUnreadTerminalPanes }
+      : {}),
+    ...(nextUnreadAgentCompletionPanes !== state.unreadAgentCompletionPanes
+      ? { unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes }
       : {})
   }
   return Object.keys(patch).length === 0 ? state : patch
