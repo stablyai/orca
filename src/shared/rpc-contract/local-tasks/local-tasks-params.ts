@@ -29,3 +29,4 @@ export const UpdateLocalTask = z.object({
 
 export const ClaimLocalTask = z.object({ id: Id, claimer: Id })
 export const ReleaseLocalTask = ClaimLocalTask
+export const RenewLocalTask = ClaimLocalTask

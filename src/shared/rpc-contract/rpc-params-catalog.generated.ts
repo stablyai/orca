@@ -1767,6 +1767,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'localTasks.create': CreateLocalTask,
   'localTasks.list': null,
   'localTasks.release': ClaimLocalTask,
+  'localTasks.renew': ClaimLocalTask,
   'localTasks.update': UpdateLocalTask,
   'managedRuntime.cancel': ManagedRuntimeCancelParams,
   'managedRuntime.install': ManagedRuntimeAgentParams,

@@ -6,6 +6,7 @@ import {
   claimLocalTask,
   createLocalTask,
   releaseLocalTask,
+  renewLocalTask,
   updateLocalTask
 } from './local-task-writes'
 
@@ -134,5 +135,26 @@ describe('local task writes', () => {
     await expect(releaseLocalTask('r1', 'other')).rejects.toThrow(/not claimed by/)
     const released = await releaseLocalTask('r1', 'owner')
     expect(released).toMatchObject({ status: 'queued', claimedBy: null, claimedAt: null })
+  })
+
+  it('renew bumps claimed_at for the holder, even after the lease lapsed', async () => {
+    const old = '2020-01-01T00:00:00.000Z'
+    write('n1', `---\ntitle: N\nstatus: working\nclaimed_by: me\nclaimed_at: ${old}\n---\n`)
+    const task = await renewLocalTask('n1', 'me')
+    expect(Date.parse(task.claimedAt ?? '')).toBeGreaterThan(Date.parse(old))
+    expect(task).toMatchObject({ claimedBy: 'me', status: 'working' })
+  })
+
+  it('renew is rejected for non-holders, after takeover, unclaimed and non-working tasks', async () => {
+    const old = '2020-01-01T00:00:00.000Z'
+    write('n2', `---\ntitle: N\nstatus: working\nclaimed_by: me\nclaimed_at: ${old}\n---\n`)
+    await expect(renewLocalTask('n2', 'other')).rejects.toThrow(/claimed by me/)
+    write('n3', `---\ntitle: N\nstatus: queued\nclaimed_by: dead\nclaimed_at: ${old}\n---\n`)
+    await claimLocalTask('n3', 'taker')
+    await expect(renewLocalTask('n3', 'dead')).rejects.toThrow(/claimed by taker/)
+    write('n4', '---\ntitle: N\nstatus: queued\n---\n')
+    await expect(renewLocalTask('n4', 'me')).rejects.toThrow(/not claimed/)
+    write('n5', '---\ntitle: N\nstatus: blocked\nclaimed_by: me\n---\n')
+    await expect(renewLocalTask('n5', 'me')).rejects.toThrow(/not working/)
   })
 })

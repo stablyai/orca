@@ -4,12 +4,14 @@ import {
   claimLocalTask,
   createLocalTask,
   releaseLocalTask,
+  renewLocalTask,
   updateLocalTask
 } from '../../../../../local-tasks/local-task-writes'
 import {
   ClaimLocalTask,
   CreateLocalTask,
   ReleaseLocalTask,
+  RenewLocalTask,
   UpdateLocalTask
 } from '../../../../../../shared/rpc-contract/local-tasks/local-tasks-params'
 
@@ -45,5 +47,11 @@ export const LOCAL_TASK_METHODS = [
     permission: 'workspace',
     params: ReleaseLocalTask,
     handler: async (params) => releaseLocalTask(params.id, params.claimer)
+  }),
+  defineMethod({
+    name: 'localTasks.renew',
+    permission: 'workspace',
+    params: RenewLocalTask,
+    handler: async (params) => renewLocalTask(params.id, params.claimer)
   })
 ]

@@ -293,3 +293,23 @@ export async function releaseLocalTask(id: string, claimer: string): Promise<Loc
   })
   return mustRead(id)
 }
+
+// A holder whose lease lapsed but who was never displaced may still renew; takeover changes claimed_by.
+export async function renewLocalTask(id: string, claimer: string): Promise<LocalTask> {
+  assertId(id)
+  const by = assertClaimer(claimer)
+  await withTaskLock(id, async () => {
+    const task = await mustRead(id)
+    if (!task.claimedBy) {
+      throw new Error(`Task ${id} is not claimed`)
+    }
+    if (task.claimedBy !== by) {
+      throw new Error(`Task ${id} is claimed by ${task.claimedBy}, not ${by}`)
+    }
+    if (task.statusCategory !== 'in-progress') {
+      throw new Error(`Task ${id} is ${task.status}, not working; cannot renew`)
+    }
+    await editTask(id, { claimed_at: new Date().toISOString() })
+  })
+  return mustRead(id)
+}
