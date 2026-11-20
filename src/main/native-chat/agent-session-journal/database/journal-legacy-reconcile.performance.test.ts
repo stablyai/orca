@@ -11,6 +11,7 @@ import {
 import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
 import { recoverJournalLegacyClaims } from './journal-legacy-claims'
+import * as legacyClaims from './journal-legacy-claims'
 import { recordJournalLegacyFailure } from './journal-legacy-reconcile-marks'
 
 const cleanup: (() => void)[] = []
@@ -99,6 +100,36 @@ it.each([10, 100])('bounds transaction-ending recovery reads by its %i claims', 
     })
   )
   expect(queries.total()).toBeLessThanOrEqual(3 * count)
+  expect(db.prepare('SELECT COUNT(*) AS held FROM agent_session_attachment_claims').get()).toEqual({
+    held: count - 1
+  })
+})
+
+it.each([10, 100])('fingerprints changed custody once before retrying %i claims', async (count) => {
+  const root = mkdtempSync(join(tmpdir(), 'legacy-claims-perf-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: source } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => source.close())
+  source.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('chat', '{}')
+  const filename = await initializeJournalDomainDatabase(root)
+  const { db } = openJournalDomainDatabase(filename)
+  cleanup.push(() => db.close())
+  source
+    .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    .run('refused', 'chat', 100)
+  db.exec(`CREATE TRIGGER refused BEFORE INSERT ON agent_session_attachment_claims
+    WHEN NEW.upload_id='refused' BEGIN SELECT RAISE(ABORT,'upload unavailable'); END`)
+  reconcileJournalLegacySource(root, db)
+  for (let index = 1; index < count; index++) {
+    source
+      .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+      .run(`upload-${index}`, 'chat', 100)
+  }
+  const fingerprints = vi.spyOn(legacyClaims, 'journalLegacyClaimsFingerprint')
+  reconcileJournalLegacySource(root, db)
+  expect(
+    fingerprints.mock.calls.reduce((sum, [claims]) => sum + claims.length, 0)
+  ).toBeLessThanOrEqual(count + 1)
   expect(db.prepare('SELECT COUNT(*) AS held FROM agent_session_attachment_claims').get()).toEqual({
     held: count - 1
   })
