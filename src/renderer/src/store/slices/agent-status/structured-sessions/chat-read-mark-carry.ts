@@ -18,8 +18,8 @@ const RECORDS = [
 /**
  * COMPAT(2026-11, remove after 2027-05): a chat in a tab whose id isn't its conversation address
  * (a replaced conversation, a `:history-N` duplicate) saved its read marks under the tab's key
- * before pane keys followed the conversation. Copy them to the conversation key once; the saved
- * originals are kept.
+ * before pane keys followed the conversation. Move each to the conversation key, keeping the larger
+ * value on collision as the saved pane-key remap does, so a later clear is never undone.
  */
 export function carriedChatReadMarks(
   marks: ReadMarks,
@@ -37,15 +37,23 @@ export function carriedChatReadMarks(
     const key = chatPaneKey(tab.entityId)
     const tabKey = `${tab.id}${key.slice(address.length)}`
     for (const record of RECORDS) {
-      const current = patch?.[record] ?? marks[record]
-      if (current[tabKey] !== undefined && current[key] === undefined) {
-        patch ??= {}
-        patch[record] = { ...current, [key]: current[tabKey] }
+      const carried = (patch?.[record] ?? marks[record])[tabKey]
+      if (carried === undefined) {
+        continue
       }
+      patch ??= {}
+      // One clone per record per batch; later moves write into it.
+      const next = (patch[record] ??= { ...marks[record] })
+      delete next[tabKey]
+      const existing = next[key]
+      next[key] = existing === undefined ? carried : Math.max(existing, carried)
     }
   }
   return patch
 }
+
+// A workspace's tab list is replaced whenever its tabs change, so each list is checked once.
+const checkedTabLists = new WeakSet<readonly Tab[]>()
 
 /** Carries saved read marks for the chat tabs of the named workspaces, or of every workspace. */
 export function carryChatReadMarks(
@@ -54,13 +62,18 @@ export function carryChatReadMarks(
 ): void {
   const state = store.getState()
   const tabsByWorkspace = state.unifiedTabsByWorktree
-  const ids = workspaceIds ?? Object.keys(tabsByWorkspace)
-  const tabs = function* () {
-    for (const id of ids) {
-      yield* tabsByWorkspace[id] ?? []
+  const unchecked: (readonly Tab[])[] = []
+  for (const id of workspaceIds ?? Object.keys(tabsByWorkspace)) {
+    const list = tabsByWorkspace[id]
+    if (list && !checkedTabLists.has(list)) {
+      checkedTabLists.add(list)
+      unchecked.push(list)
     }
   }
-  const patch = carriedChatReadMarks(state, tabs())
+  if (unchecked.length === 0) {
+    return
+  }
+  const patch = carriedChatReadMarks(state, unchecked.flat())
   if (patch) {
     store.setState(patch)
   }

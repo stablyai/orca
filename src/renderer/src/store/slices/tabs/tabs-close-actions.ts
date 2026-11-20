@@ -1,4 +1,5 @@
 import { editorTabRetirement } from '../editor/tabs/editor-tab-retirement'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { chatPaneAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   landsOnEmptiedWorktree,
@@ -129,12 +130,17 @@ export function createTabsCloseActions(
       const closeHere = (): void =>
         settleAttentionRemovedBy(set, get, () =>
           set((current) => {
-            const currentTabs = current.unifiedTabsByWorktree[worktreeId] ?? []
-            const nextTabs = currentTabs.filter((item) => item.id !== tabId)
-            retireRemovedNativeChatTabs(
-              currentTabs.filter((item) => item.id === tabId),
-              nextTabs
-            )
+            let closed: Tab | undefined
+            const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter((item) => {
+              if (item.id !== tabId) {
+                return true
+              }
+              closed = item
+              return false
+            })
+            if (closed?.contentType === 'agent-session') {
+              retireRemovedNativeChatTabs([closed], nextTabs)
+            }
             // Bulk closes bypass terminals.closeTab, so clear entity-keyed unread markers here too.
             const nextUnreadTerminalTabs = terminalEntityId
               ? omitRecordKeys(current.unreadTerminalTabs, [terminalEntityId])
