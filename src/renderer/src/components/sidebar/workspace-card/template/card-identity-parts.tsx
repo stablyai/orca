@@ -49,6 +49,7 @@ function CardTitle({
   return (
     <WorktreeTitleInlineRename
       displayName={card.visibleCardTitle}
+      titlePrefix={card.titlePrefix}
       disabled={card.isDeleting || affiliateListMode}
       showUnreadEmphasis={card.showUnreadEmphasis || rolledUpUnread}
       dimReadTitle={props.dimWhenRead === true && !card.isActiveSurface}

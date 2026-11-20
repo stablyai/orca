@@ -31,6 +31,7 @@ export function isWorktreeTitleTruncated(
 
 type WorktreeTitleInlineRenameProps = {
   displayName: string
+  titlePrefix?: string
   disabled?: boolean
   showUnreadEmphasis?: boolean
   dimReadTitle?: boolean
@@ -49,6 +50,7 @@ type WorktreeTitleInlineRenameProps = {
 
 export function WorktreeTitleInlineRename({
   displayName,
+  titlePrefix,
   disabled = false,
   showUnreadEmphasis = false,
   dimReadTitle = false,
@@ -349,6 +351,7 @@ export function WorktreeTitleInlineRename({
           {t('auto.components.sidebar.WorktreeTitleInlineRename.2f42ae024f', 'Unread:')}
         </span>
       )}
+      {titlePrefix}
       {displayName}
     </span>
   )
@@ -365,6 +368,7 @@ export function WorktreeTitleInlineRename({
     <Tooltip>
       <TooltipTrigger asChild>{title}</TooltipTrigger>
       <TooltipContent side="right" sideOffset={8}>
+        {titlePrefix}
         {displayName}
       </TooltipContent>
     </Tooltip>
