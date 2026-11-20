@@ -121,6 +121,7 @@ export function pollAntigravityTranscriptStatus(
       retireAntigravityChild(pane, child.id)
     } else if (metadata) {
       child.verified = true
+      pane.awaitingInitialHelperDiscovery = undefined
       child.description = metadata.description
       child.agentType = metadata.agentType
       child.model = metadata.model ?? child.model ?? model

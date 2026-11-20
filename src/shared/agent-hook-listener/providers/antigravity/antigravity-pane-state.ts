@@ -111,6 +111,9 @@ export function recordAntigravityChildHook(
     state: 'working',
     verified: !pane.rootBrainDir
   }
+  if (eventName === 'PreInvocation' && existing) {
+    existing.revision++
+  }
   const tool =
     eventName === 'PreToolUse' ? extractToolFields('antigravity', eventName, payload) : undefined
   const toolName = tool?.toolName
@@ -130,7 +133,9 @@ export function recordAntigravityChildHook(
     pane.dirty = true
   }
   pane.helpersIdleAt = undefined
-  pane.awaitingInitialHelperDiscovery = undefined
+  if (child.verified) {
+    pane.awaitingInitialHelperDiscovery = undefined
+  }
   trackAntigravityBackgroundCommand(pane, eventName, id, payload)
 }
 export function trackAntigravityBackgroundCommand(
