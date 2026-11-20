@@ -354,7 +354,7 @@ export function useBotSlackSetup(
   }
 }
 
-/** A new open of the dialog is a fresh attempt, which opens Slack's page again. */
+/** A new open reads state before the owner starts another install attempt. */
 export function forgetOpenedSlackPages(bot: Pick<Bot, 'hostId' | 'id'>): void {
   for (const key of openedSlackPages.keys()) {
     if (key.startsWith(`${bot.hostId}\0${bot.id}\0`)) {

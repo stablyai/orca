@@ -46,6 +46,7 @@ export const LINEAR_NO_KEY =
 export type LocalSignIns = {
   gh: 'signed-in' | 'signed-out' | 'missing'
   linear: boolean
+  cloudFailure?: string
   google?: readonly GoogleAccountView[]
   googleApp?: boolean
   googleDefault?: string | null
@@ -116,6 +117,8 @@ function googleService(
 const SLACK_NO_APP = 'Run `orca bot connectors --offer slack` to show your owner a Connect card.'
 const SLACK_NOT_INSTALLED =
   "Your Slack app isn't installed. Ask your owner to finish its setup, or remove it, under Slack on your page in Orca."
+const SLACK_NOT_CHECKED =
+  'Orca Cloud could not check whether your Slack app is installed. Try again.'
 
 /** What Orca Cloud says a bot can act through; Slack is listed once its app is installed. */
 export type CloudSource = { source: string; approveUrl?: string }
@@ -163,7 +166,7 @@ export function botConnectorServices(
         : {
             gap:
               hasApp && cloud === undefined
-                ? 'Orca Cloud could not check whether your Slack app is installed. Try again.'
+                ? (local.cloudFailure ?? SLACK_NOT_CHECKED)
                 : hasApp
                   ? SLACK_NOT_INSTALLED
                   : SLACK_NO_APP

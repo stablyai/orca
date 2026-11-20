@@ -153,6 +153,7 @@ function BotSlackSetupFlow({
         return (
           <SlackSetupPrepare
             update={step.update}
+            workspace={step.teamId}
             onContinue={() => void setUp(step.teamId)}
             onClose={onClose}
           />
@@ -373,7 +374,7 @@ function BotSlackSetupFlow({
   )
 }
 
-/** "Add connector → Slack" for one bot: the first bot in a workspace pastes a token, later ones are one click. */
+/** "Add connector → Slack" for one bot; later bots can reuse a workspace's saved grant. */
 export function BotSlackSetupDialog({
   bot,
   teamId,
