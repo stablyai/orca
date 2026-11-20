@@ -10,7 +10,8 @@ export async function resolveQualifiedAgentDetectionHost(
     OrcaRuntimeService,
     'requireStore' | 'resolveAgentDetectionHost' | 'showManagedWorktree'
   >,
-  params: { worktreeId?: string; worktreeHostId?: ExecutionHostId; repoId?: string }
+  params: { worktreeId?: string; worktreeHostId?: ExecutionHostId; repoId?: string },
+  selectedWorktree?: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
 ) {
   const hostId = params.worktreeHostId
   if (!hostId || !params.worktreeId) {
@@ -42,7 +43,8 @@ export async function resolveQualifiedAgentDetectionHost(
       { kind: 'folder', folderWorkspaceId: scope.folderWorkspaceId }
     )
   }
-  const worktree = await runtime.showManagedWorktree(`id:${params.worktreeId}`, hostId)
+  const worktree =
+    selectedWorktree ?? (await runtime.showManagedWorktree(`id:${params.worktreeId}`, hostId))
   const routing = resolveWorktreeHostRouting(store.getRepos(), worktree)
   if (routing.kind !== 'resolved' || !routing.repo || routing.hostId !== hostId) {
     throw new Error('worktree_execution_host_unresolved')

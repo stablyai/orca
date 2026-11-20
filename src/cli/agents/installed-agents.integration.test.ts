@@ -9,6 +9,7 @@ import { RpcDispatcher } from '../../main/runtime/rpc/dispatcher'
 import { defineMethod, type RpcRequest } from '../../main/runtime/rpc/core'
 import { PREFLIGHT_METHODS } from '../../main/runtime/rpc/methods/preflight/preflight'
 import { WorktreeShow } from '../../shared/rpc-contract/workspaces/worktree-params'
+import { OrchestrationError } from '../../main/runtime/orchestration/orchestration-error'
 import { getRuntimeMetadataPath } from '../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import * as detection from '../../main/preflight/workspace-agent-detection'
@@ -181,9 +182,47 @@ describe.skipIf(process.platform === 'win32')('agent installed over CLI RPC', ()
     const previousExit = process.exitCode
     try {
       await main(['agent', 'installed', '--worktree', 'id:repo::/srv/app', '--json'], '/client')
-      expect(JSON.parse(log.mock.calls[0][0]).error.code).toBe('ssh_host_not_served')
+      expect(JSON.parse(log.mock.calls[0][0]).error.code).toBe('runtime_error')
     } finally {
       process.exitCode = previousExit
     }
+  })
+
+  it('reports an older execution owner as incompatible', async () => {
+    const runtime = runtimeFor('runtime:owner', 'repo::/srv/app')
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockResolvedValue({
+      environmentId: 'owner',
+      name: 'Owner',
+      peerFingerprint: 'owner',
+      pairingRevision: 7
+    })
+    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockRejectedValue(
+      new OrchestrationError('method_not_found', 'Unknown method: preflight.installedAgents')
+    )
+    await connectCli(dispatcherFor(runtime))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const previousExit = process.exitCode
+    try {
+      await main(['agent', 'installed', '--worktree', 'id:repo::/srv/app', '--json'], '/client')
+      expect(JSON.parse(log.mock.calls[0][0]).error.code).toBe('incompatible_runtime')
+    } finally {
+      process.exitCode = previousExit
+    }
+  })
+
+  it('refuses a forwarded lookup whose returned owner is not local', async () => {
+    const runtime = runtimeFor('runtime:back', 'repo::/srv/app')
+    const worktree = await runtime.showManagedWorktree('id:repo::/srv/app')
+    vi.mocked(runtime.showManagedWorktree).mockResolvedValue(worktree)
+    const response = await dispatcherFor(runtime).dispatch({
+      id: 'forwarded',
+      authToken: '',
+      method: 'preflight.installedAgents',
+      params: { worktreeId: 'repo::/srv/app', worktreeHostId: 'local' }
+    })
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: 'worktree_execution_host_unresolved' }
+    })
   })
 })

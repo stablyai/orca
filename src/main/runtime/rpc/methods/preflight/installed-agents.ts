@@ -10,6 +10,7 @@ import {
 } from '../../../../preflight/workspace-agent-detection'
 import { agentCommandOverrideDetectionOptions } from '../../../../preflight/installed-agent-detection'
 import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
+import { OrchestrationError } from '../../../orchestration/orchestration-error'
 
 type InstalledAgentsRuntime = Pick<
   OrcaRuntimeService,
@@ -24,14 +25,18 @@ export async function listInstalledWorkspaceAgents(
   runtime: InstalledAgentsRuntime,
   params: z.infer<typeof PreflightAgentDetection>
 ) {
+  let selectedWorktree:
+    | Awaited<ReturnType<InstalledAgentsRuntime['showManagedWorktree']>>
+    | undefined
   if (params.worktreeId) {
     const worktree = await runtime.showManagedWorktree(
       `id:${params.worktreeId}`,
       params.worktreeHostId,
       { matchFolders: true }
     )
+    selectedWorktree = worktree
     const host = parseRoutableExecutionHostId(worktree.hostId)
-    if (!host) {
+    if (!host || (params.worktreeHostId && params.worktreeHostId !== worktree.hostId)) {
       throw new Error('worktree_execution_host_unresolved')
     }
     let environmentId: string | undefined
@@ -46,18 +51,39 @@ export async function listInstalledWorkspaceAgents(
     }
     if (environmentId) {
       const server = await runtime.resolveOrchestrationWorkerServer(environmentId)
-      return runtime.callOrchestrationWorkerServer(
-        environmentId,
-        'preflight.installedAgents',
-        // The execution owner must hold this workspace locally; never follow a pairing cycle.
-        { worktreeId: worktree.id, worktreeHostId: 'local' },
-        undefined,
-        undefined,
-        { expectedEnvironmentPairingRevision: server.pairingRevision }
-      )
+      try {
+        return await runtime.callOrchestrationWorkerServer(
+          environmentId,
+          'preflight.installedAgents',
+          // The execution owner must hold this workspace locally; never follow a pairing cycle.
+          { worktreeId: worktree.id, worktreeHostId: 'local' },
+          undefined,
+          undefined,
+          { expectedEnvironmentPairingRevision: server.pairingRevision }
+        )
+      } catch (error) {
+        if (error instanceof OrchestrationError && error.code === 'method_not_found') {
+          throw new OrchestrationError(
+            'incompatible_runtime',
+            'Update Orca on the workspace host to list its installed agents.'
+          )
+        }
+        if (
+          host.kind === 'ssh' &&
+          error instanceof OrchestrationError &&
+          error.code === 'selector_not_found'
+        ) {
+          throw new SshHostNotServedError(host.targetId)
+        }
+        throw error
+      }
     }
   }
-  const host = await resolveQualifiedAgentDetectionHost(runtime, params)
+  const host = await resolveQualifiedAgentDetectionHost(
+    runtime,
+    selectedWorktree ? { ...params, worktreeHostId: selectedWorktree.hostId } : params,
+    selectedWorktree
+  )
   await assertAgentDetectionHostRunning(host)
   const settings = runtime.requireStore().getSettings()
   return {
