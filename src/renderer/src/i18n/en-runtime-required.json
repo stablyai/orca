@@ -2820,6 +2820,10 @@
     "unhide": "Show All",
     "zoom": "Zoom"
   },
+  "openOnHost": {
+    "localCommitsStay_one": "Your {{count}} local commit stays on this Mac",
+    "localCommitsStay_other": "Your {{count}} local commits stay on this Mac"
+  },
   "perfNotices": {
     "hiddenTabs": {
       "descriptionOneHour_one": "You have {{count}} tab you haven't viewed in over an hour. Turn on Memory Saver to free up its memory.",

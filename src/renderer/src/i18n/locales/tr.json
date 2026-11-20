@@ -23959,5 +23959,30 @@
     "dontSend": "Gönderme",
     "sending": "Gönderiliyor…",
     "sendReport": "Raporu gönder"
+  },
+  "openOnHost": {
+    "projectMenu": "{{host}} üzerinde aç…",
+    "workspaceMenu": "{{host}} üzerinde aç…",
+    "title": "{{name}} öğesini {{host}} üzerinde aç",
+    "existingLocation": "{{path}} içinde açılır",
+    "cloneLocation": "{{url}} adresinden {{path}} içine klonla",
+    "branch": "Dal {{branch}}",
+    "pushFirst": "Önce {{branch}} dalını gönder",
+    "publishFirst": "Önce {{branch}} dalını origin'e yayımla",
+    "unpublishedBlocked": "{{branch}} henüz bir uzak depoda değil, bu yüzden {{host}} onu alamaz. Önce yayımlayın",
+    "detached": "Bu çalışma alanını {{host}} üzerinde açmak için bir dala geçin",
+    "primary": "{{host}} üzerinde aç",
+    "opening": "Açılıyor…",
+    "cancel": "İptal",
+    "noRemote": "Bu projeyi başka bir makinede açmak için bir git uzak deposu ekleyin",
+    "updateOrca": "Bunu kullanmak için {{host}} üzerindeki Orca'yı güncelleyin",
+    "cloneFolderTaken": "{{path}} {{host}} üzerinde zaten kullanılıyor. Bu projenin {{host}} üzerindeki konumunu Proje Ayarları'nda belirleyin",
+    "sourceUnavailable": "Bu çalışma alanının ana makinesine ulaşılamıyor",
+    "noRemoteBranch": "Bu dalın {{host}} tarafından açılabilecek bir uzak dalı yok",
+    "missingRemote": "{{host}} üzerindeki klonda {{remote}} uzak deposu yok",
+    "headMismatch": "{{host}} üzerindeki {{branch}} kopyası bu Mac'ten farklı bir commit'te",
+    "hostCopyNotLoaded": "Bu projenin {{host}} üzerindeki kopyası henüz yüklenmedi",
+    "localCommitsStay_one": "{{count}} yerel commit'iniz bu Mac'te kalır",
+    "localCommitsStay_other": "{{count}} yerel commit'iniz bu Mac'te kalır"
   }
 }

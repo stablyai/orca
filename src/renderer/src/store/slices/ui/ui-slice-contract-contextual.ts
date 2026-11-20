@@ -62,6 +62,7 @@ export type UISliceContextual = {
     | 'chat-account-usage'
     | 'node-dist-mirror'
     | 'agent-cli-update-failed'
+    | 'open-on-host'
   modalData: Record<string, unknown>
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
