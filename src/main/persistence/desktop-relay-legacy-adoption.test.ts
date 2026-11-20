@@ -28,7 +28,7 @@ function storeWith(partitions: Map<string, Partial<WorkspaceSessionState>>) {
 }
 
 describe('adopting relay ids saved before ownership was recorded', () => {
-  it("adopts only the SSH repo tabs' ids, including an older build's copy in another partition", () => {
+  it('adopts SSH repo relays across partitions, including duplicate rows for the same repo', () => {
     const store = storeWith(
       new Map<string, Partial<WorkspaceSessionState>>([
         [
@@ -36,12 +36,16 @@ describe('adopting relay ids saved before ownership was recorded', () => {
           {
             tabsByWorktree: {
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adoption reads tab ids only.
-              'repo-ssh::/w': [tab('tab-a')] as WorkspaceSessionState['tabsByWorktree'][string],
+              'repo-ssh::/w': [
+                tab('tab-a'),
+                tab('tab-duplicate')
+              ] as WorkspaceSessionState['tabsByWorktree'][string],
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adoption reads tab ids only.
               'folder-1': [tab('tab-folder')] as WorkspaceSessionState['tabsByWorktree'][string]
             },
             remoteSessionIdsByTabId: {
               'tab-a': 'ssh:box@@relay-a',
+              'tab-duplicate': 'ssh:box@@relay-duplicate',
               'tab-folder': 'ssh:box@@relay-folder',
               'tab-unknown': 'ssh:box@@relay-unknown'
             }
@@ -50,7 +54,12 @@ describe('adopting relay ids saved before ownership was recorded', () => {
         [
           LOCAL_EXECUTION_HOST_ID,
           {
-            tabsByWorktree: {},
+            tabsByWorktree: {
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adoption reads tab ids only.
+              'repo-ssh::/w': [
+                tab('tab-duplicate')
+              ] as WorkspaceSessionState['tabsByWorktree'][string]
+            },
             remoteSessionIdsByTabId: { 'tab-a': 'ssh:box@@relay-a' }
           }
         ]
@@ -63,7 +72,8 @@ describe('adopting relay ids saved before ownership was recorded', () => {
     ])
 
     expect(adoptionFor(SSH)(store.getWorkspaceSession(SSH))).toEqual({
-      'tab-a': 'ssh:box@@relay-a'
+      'tab-a': 'ssh:box@@relay-a',
+      'tab-duplicate': 'ssh:box@@relay-duplicate'
     })
     expect(
       adoptionFor(LOCAL_EXECUTION_HOST_ID)(store.getWorkspaceSession(LOCAL_EXECUTION_HOST_ID))
@@ -115,24 +125,6 @@ describe('adopting relay ids saved before ownership was recorded', () => {
     expect(
       legacyRelayAdoptionBatch(store, baseline, [SSH])(SSH)(store.getWorkspaceSession(SSH))
     ).toEqual({
-      'tab-a': 'ssh:box@@relay-a'
-    })
-  })
-
-  it('adopts a row an older build left copies of in two partitions under the same repo', () => {
-    const rows = {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: adoption reads tab ids only.
-      'repo-ssh::/w': [tab('tab-a')] as WorkspaceSessionState['tabsByWorktree'][string]
-    }
-    const store = storeWith(
-      new Map<string, Partial<WorkspaceSessionState>>([
-        [LOCAL_EXECUTION_HOST_ID, { tabsByWorktree: rows }],
-        [SSH, { tabsByWorktree: rows, remoteSessionIdsByTabId: { 'tab-a': 'ssh:box@@relay-a' } }]
-      ])
-    )
-    const adoptionFor = legacyRelayAdoptionBatch(store, captureLegacyRelayBaseline(store), [SSH])
-
-    expect(adoptionFor(SSH)(store.getWorkspaceSession(SSH))).toEqual({
       'tab-a': 'ssh:box@@relay-a'
     })
   })
