@@ -124,3 +124,29 @@ export function revisionHoldsHistory(revision: string): boolean {
   const parsed: unknown = JSON.parse(revision)
   return Array.isArray(parsed) && parsed[1] !== 0
 }
+
+/**
+ * Failures whose original chat is gone: unheld ones are dropped, and a held chat whose original no
+ * longer claims uploads has its claim failure cleared.
+ */
+export function failuresWithoutOriginal(
+  source: Database.Database,
+  db: Database.Database,
+  claimOwners: { has(id: string): boolean } | undefined
+): { gone: string[]; clearedClaims: string[] } {
+  const gone: string[] = []
+  const clearedClaims: string[] = []
+  const hasOriginal = source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
+  const hasRecord = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
+  for (const id of metaKeys(db, journalLegacyFailureKey(''))) {
+    const held = Boolean(hasRecord.get(id))
+    if ((!held || (claimOwners && !claimOwners.has(id))) && !hasOriginal.get(id)) {
+      if (held) {
+        clearedClaims.push(id)
+      } else {
+        gone.push(id)
+      }
+    }
+  }
+  return { gone, clearedClaims }
+}

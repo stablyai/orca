@@ -2,18 +2,28 @@ import Database from '../../../sqlite/sync-database'
 import { ensureJournalAdditiveTables, journalPragmaNumber } from './journal-database'
 import { createAgentSessionRecordTablesSql } from './journal-database-schema'
 
+/** An original whose version created tables it no longer has; no chat in it can be read. */
+export class JournalLegacySourceDamagedError extends Error {}
+
 /**
  * Opens the original journal read-only, shaped as this build's writable open would have left it.
  * A table an older build never added reads as empty through a private TEMP table, so the file
- * itself is never written. Columns added later are optional in their row readers.
+ * itself is never written. Columns added later are optional in their row readers. With `complete`,
+ * an original missing a table its version created is refused as a whole.
  */
 export function openJournalLegacySource(
   filename: string,
-  options: { timeout?: number } = {}
+  options: { timeout?: number; complete?: boolean } = {}
 ): Database.Database {
-  const source = new Database(filename, { readonly: true, fileMustExist: true, ...options })
+  const { complete, ...open } = options
+  const source = new Database(filename, { readonly: true, fileMustExist: true, ...open })
   try {
-    presentCurrentSchema(source)
+    const missing = presentCurrentSchema(source)
+    if (complete && missing.length > 0) {
+      throw new JournalLegacySourceDamagedError(
+        `the original journal is missing ${missing.join(', ')}`
+      )
+    }
     return source
   } catch (error) {
     source.close()
@@ -21,26 +31,32 @@ export function openJournalLegacySource(
   }
 }
 
-function presentCurrentSchema(source: Database.Database): void {
+/** Every journal version created these with its first table; history and revisions read them. */
+const HISTORY_TABLES = ['journal_rows', 'journal_sessions']
+
+/** Returns the tables the original's version created that it lacks. */
+function presentCurrentSchema(source: Database.Database): string[] {
   const current = new Database(':memory:')
   try {
     current.exec(createAgentSessionRecordTablesSql())
+    const version = journalPragmaNumber(source, 'user_version')
     // Schema 4 created its record tables with its version; a version-4 file without them is damaged.
-    const required = journalPragmaNumber(source, 'user_version') >= 4 ? tableNames(current) : []
+    const required = [
+      ...(version > 0 ? HISTORY_TABLES : []),
+      ...(version >= 4 ? tableNames(current) : [])
+    ]
     ensureJournalAdditiveTables(current)
-    const tables = current
+    const present = new Set(tableNames(source))
+    for (const { name, sql } of current
       .prepare(
         "SELECT name, sql FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'"
       )
-      .all()
-    for (const { name, sql } of tables) {
-      if (
-        !required.includes(String(name)) &&
-        !source.prepare('SELECT 1 FROM main.sqlite_schema WHERE name=?').get(name)
-      ) {
+      .all()) {
+      if (!required.includes(String(name)) && !present.has(String(name))) {
         source.exec(String(sql).replace(/^CREATE TABLE /, 'CREATE TEMP TABLE '))
       }
     }
+    return required.filter((name) => !present.has(name))
   } finally {
     current.close()
   }
@@ -48,7 +64,7 @@ function presentCurrentSchema(source: Database.Database): void {
 
 function tableNames(db: Database.Database): string[] {
   return db
-    .prepare("SELECT name FROM sqlite_schema WHERE type='table'")
+    .prepare("SELECT name FROM main.sqlite_schema WHERE type='table'")
     .all()
     .map(({ name }) => String(name))
 }

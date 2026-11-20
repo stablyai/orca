@@ -3,13 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
-import { openJournalDatabase } from './journal-database'
+import { openJournalDatabase, runJournalTransaction } from './journal-database'
 import {
   initializeJournalDomainDatabase,
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import { reconcileJournalLegacySource } from './journal-legacy-reconcile'
+import { JOURNAL_LEGACY_SOURCE_DAMAGED } from './journal-legacy-source-damage'
+import { publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { recoverJournalLegacyClaims } from './journal-legacy-claims'
 import * as legacyClaims from './journal-legacy-claims'
 import {
@@ -224,4 +226,55 @@ it('fingerprints changed custody once before retrying claims', async () => {
   expect(db.prepare('SELECT COUNT(*) AS held FROM agent_session_attachment_claims').get()).toEqual({
     held: count - 1
   })
+})
+
+/** Per-launch statement reads over a damaged original of `count` chats, and what it recorded. */
+async function damagedOriginalLaunches(count: number, damage: string) {
+  const root = mkdtempSync(join(tmpdir(), 'legacy-damaged-perf-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: source } = openJournalDatabase(journalDatabasePath(root))
+  runJournalTransaction(source, () => {
+    const record = source.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+    const claim = source.prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
+    for (let index = 0; index < count; index++) {
+      const sessionId = `chat-${index}`
+      publishJournalSessionEpoch(source, { sessionId, workspaceId: 'workspace' }, 'epoch')
+      record.run(sessionId, JSON.stringify({ sessionId, lease: { sessionId } }))
+      claim.run(`upload-${index}`, sessionId, 100)
+    }
+  })
+  const filename = await initializeJournalDomainDatabase(root)
+  const { db } = openJournalDomainDatabase(filename)
+  cleanup.push(() => db.close())
+  source.exec(damage)
+  source.close()
+  const counted = reads(Database.prototype, () => true)
+  const perLaunch: number[] = []
+  for (let launch = 0; launch < 3; launch++) {
+    counted.reset()
+    reconcileJournalLegacySource(root, db)
+    perLaunch.push(counted.total())
+  }
+  vi.restoreAllMocks()
+  const keys = db
+    .prepare("SELECT key FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-%'")
+    .all()
+    .map((row) => String(row.key))
+  return { perLaunch, keys }
+}
+
+it.each([
+  [
+    'its record tables',
+    'DROP TABLE agent_session_command_receipts; DROP TABLE agent_session_records'
+  ],
+  ['its history sessions', 'DROP TABLE journal_sessions']
+])('records a version-four original missing %s once, at flat cost', async (_, damage) => {
+  const small = await damagedOriginalLaunches(20, damage)
+  const large = await damagedOriginalLaunches(200, damage)
+  expect(large.perLaunch).toEqual(small.perLaunch)
+  for (const { keys } of [small, large]) {
+    expect(keys.filter((key) => key.startsWith('journal.legacy-failed:'))).toEqual([])
+    expect(keys).toContain(JOURNAL_LEGACY_SOURCE_DAMAGED)
+  }
 })
