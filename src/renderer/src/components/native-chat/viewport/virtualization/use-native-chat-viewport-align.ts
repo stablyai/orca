@@ -50,12 +50,15 @@ export function useNativeChatViewportAlign({
   scrollRef,
   virtualizer,
   finishReaderTakeover,
-  programmaticScrollMarks
+  programmaticScrollMarks,
+  holdJumpDrawnAbove
 }: {
   scrollRef: React.RefObject<HTMLDivElement | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>
   finishReaderTakeover: () => void
   programmaticScrollMarks: ProgrammaticScrollMarks
+  /** Keeps the virtualizer's `scrollPaddingStart` at the held jump's `drawnAbove` across renders. */
+  holdJumpDrawnAbove: (px: number) => void
 }): {
   /** `end` brings the row's end to the viewport's bottom instead, for the newest of a run. */
   alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
@@ -95,8 +98,16 @@ export function useNativeChatViewportAlign({
       // A row drawn above its own top lands by what it draws, so its first line stays in view.
       const drawnAbove = edge === 'start' ? nativeChatRowDrawnAbove(element) : 0
       // Use the virtualizer to replace its pending jump reconciliation instead of racing it.
-      if (virtualizer.scrollElement && !Number.isNaN(index) && drawnAbove === 0) {
-        // Target the row's index so measurements can correct its landing offset.
+      if (virtualizer.scrollElement && !Number.isNaN(index)) {
+        // Target the row's index so measurements can correct its landing offset. Only these jumps
+        // align by index, so the scroll padding lands just this row by what it draws.
+        if (virtualizer.options.scrollPaddingStart !== drawnAbove) {
+          virtualizer.setOptions({
+            ...virtualizer.options,
+            scrollPaddingStart: drawnAbove
+          })
+          holdJumpDrawnAbove(drawnAbove)
+        }
         alignRef.current = {
           index,
           edge,
@@ -123,7 +134,7 @@ export function useNativeChatViewportAlign({
       }
       container.scrollTo({ top, behavior: 'auto' })
     },
-    [finishReaderTakeover, programmaticScrollMarks, scrollRef, virtualizer]
+    [finishReaderTakeover, holdJumpDrawnAbove, programmaticScrollMarks, scrollRef, virtualizer]
   )
 
   // Read actual geometry; stale scroll marks/end events can precede the jump’s first frame.
