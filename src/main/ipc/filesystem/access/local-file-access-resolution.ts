@@ -35,7 +35,7 @@ export async function resolveDesktopAuthorizedPath(
 ): Promise<string> {
   return resolveAuthorizedPath(targetPath, store, {
     ...options,
-    ...getFloatingWorkspaceFileRoots(store)
+    ...(await getFloatingWorkspaceFileRoots(store))
   })
 }
 
