@@ -526,6 +526,7 @@
     }
   },
   "editor": {
+    "foldOrUnfoldLines": "Zeilen ein- oder ausklappen",
     "richMarkdown": {
       "tooLarge": "Die Datei überschreitet die Grenze von {{limit}} für die visuelle Bearbeitung. Stattdessen wird der Quelltextmodus angezeigt.",
       "openAnyway": "Trotzdem öffnen"

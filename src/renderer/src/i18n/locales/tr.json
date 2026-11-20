@@ -526,6 +526,7 @@
     }
   },
   "editor": {
+    "foldOrUnfoldLines": "Satırları daralt veya genişlet",
     "richMarkdown": {
       "tooLarge": "Dosya, {{limit}} zengin düzenleme sınırından daha büyük. Bunun yerine kaynak modu gösteriliyor.",
       "openAnyway": "Yine de aç"
