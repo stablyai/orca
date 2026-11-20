@@ -47,7 +47,8 @@ export class AcknowledgedDesktopRelays {
   }
 
   /** A full replacement (quit, unload) was written without an answer: resend baselines afterwards,
-   *  keeping everything it named as removal evidence in case the window stays open. */
+   *  keeping everything it named as removal evidence in case the window stays open. Call `invalidate`
+   *  before building the replacement so its removals cover unanswered writes too. */
   replacedBy(write: DesktopRelayWrite): void {
     this.invalidate()
     for (const host of write.hosts) {
@@ -55,12 +56,21 @@ export class AcknowledgedDesktopRelays {
     }
   }
 
-  /** Main may hold `sent`'s ids as well as the last accepted ones; a later removal may name either. */
-  private markStale(hostId: ExecutionHostId, sent: AcknowledgedHost): void {
-    const last = this.hosts.get(hostId)
+  /** Main may hold `sent`'s ids as well as the last accepted ones; a later removal may name either.
+   *  `processed`: main applied the write (refusing some ids), so the ids it removed are gone for good. */
+  private markStale(
+    hostId: ExecutionHostId,
+    sent: AcknowledgedHost,
+    processed?: DesktopRelayWrite['hosts'][number]
+  ): void {
+    const last = processed?.complete ? undefined : this.hosts.get(hostId)
+    const kept = { ...last?.relayIdsByTabId }
+    for (const tabId of processed?.removedTabIds ?? []) {
+      delete kept[tabId]
+    }
     this.hosts.set(hostId, {
       complete: sent.complete,
-      relayIdsByTabId: { ...last?.relayIdsByTabId, ...sent.relayIdsByTabId },
+      relayIdsByTabId: { ...kept, ...sent.relayIdsByTabId },
       stale: true
     })
   }
@@ -105,17 +115,16 @@ export class AcknowledgedDesktopRelays {
       }
       this.inFlight.delete(sent)
       const accepted = new Set([...result.applied, ...result.unchanged])
-      for (const hostId of result.refused) {
-        accepted.delete(hostId)
-      }
-      for (const { hostId } of hosts) {
+      const refused = new Set(result.refused)
+      for (const delta of hosts) {
+        const { hostId } = delta
         const host = wanted.get(hostId)
         const last = this.hosts.get(hostId)
-        if (host && accepted.has(hostId)) {
+        if (host && accepted.has(hostId) && !refused.has(hostId)) {
           this.hosts.set(hostId, host)
         } else if (host) {
-          // Refused writes are partly applied, and skipped ones may be retried: keep both as evidence.
-          this.markStale(hostId, host)
+          // A refused write was applied except the refused ids; a skipped one may still be retried.
+          this.markStale(hostId, host, refused.has(hostId) ? delta : undefined)
         } else if (last) {
           this.hosts.set(hostId, { ...last, stale: true })
         }

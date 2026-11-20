@@ -328,6 +328,8 @@ export function replaceDesktopRelays(
   slices: HostSessionSlices,
   state: RelayHostState
 ): DesktopRelayWrite {
+  // Unanswered writes count as evidence too: main may store them before this replacement.
+  acknowledgedRelays.invalidate()
   const write = takeDesktopRelayWrite(slices, state)
   // An incomplete host's omission removes nothing, so ids the window wrote there that ended are named.
   const held = heldTabsByWrite.get(write)

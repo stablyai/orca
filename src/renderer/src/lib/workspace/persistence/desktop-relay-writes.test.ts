@@ -5,6 +5,13 @@ import {
   SSH_REPO,
   windowSavingTo
 } from './desktop-relay-writes.test-fixture'
+import {
+  probeDesktopRelays,
+  replaceDesktopRelays,
+  sendDesktopRelayWrite,
+  takeDesktopRelayWrite
+} from './desktop-relay-writes'
+import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -121,5 +128,27 @@ describe('relay ids saved by ownership', () => {
     } finally {
       stop()
     }
+  })
+
+  it('names a relay that ended while its save was unanswered when the window quits', async () => {
+    const api = {
+      desktopRelaysVersion: async () => 1,
+      // Main stores the write but its answer never arrives before quit.
+      applyDesktopRelays: () => new Promise<never>(() => {})
+    }
+    probeDesktopRelays(api)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay write reads tab ids only.
+    const parked = {
+      tabsByWorktree: { 'other::/p': [{ id: 'tab-p' }] }
+    } as unknown as WorkspaceSessionState
+    const state = { repos: [SSH_REPO], contestedHostWorkspaceSessions: { [SSH_HOST]: parked } }
+    const slice = (relays: Record<string, string>) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay write reads relay ids only.
+      ({ [SSH_HOST]: { remoteSessionIdsByTabId: relays } as WorkspaceSessionState })
+    void sendDesktopRelayWrite(api, takeDesktopRelayWrite(slice({ 'tab-a': 'relay-a' }), state))
+
+    const quit = replaceDesktopRelays(slice({}), state)
+
+    expect(quit.hosts.find((host) => host.hostId === SSH_HOST)?.removedTabIds).toEqual(['tab-a'])
   })
 })

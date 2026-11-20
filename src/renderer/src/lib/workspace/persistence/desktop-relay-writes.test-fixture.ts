@@ -157,13 +157,18 @@ export async function windowSavingTo(
     hydrationSucceeded: true
   })
   await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
-  const endRelay = async () => {
+  // One tab's relay, or (no tab) every relay as the connection drops.
+  const endRelay = async (tabId?: string) => {
     store.setState((state) => ({
       tabsByWorktree: {
-        [WORKTREE_ID]: state.tabsByWorktree[WORKTREE_ID]!.map((tab) => ({ ...tab, ptyId: null }))
+        [WORKTREE_ID]: state.tabsByWorktree[WORKTREE_ID]!.map((tab) =>
+          !tabId || tab.id === tabId ? { ...tab, ptyId: null } : tab
+        )
       },
-      ptyIdsByTabId: {},
-      sshConnectionStates: new Map([['conn-1', sshState('disconnected')]])
+      ptyIdsByTabId: tabId
+        ? Object.fromEntries(Object.entries(state.ptyIdsByTabId).filter(([id]) => id !== tabId))
+        : {},
+      ...(tabId ? {} : { sshConnectionStates: new Map([['conn-1', sshState('disconnected')]]) })
     }))
     await vi.advanceTimersByTimeAsync(DEBOUNCE_MS)
   }

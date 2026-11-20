@@ -29,3 +29,25 @@ it('sends no relay host for a title change and one id, with its entries, for one
     stop()
   }
 })
+
+it('names an ended relay once on a host whose other tab main keeps refusing', async () => {
+  const main = inMemoryMain()
+  main.partitions.set(SSH_HOST, {
+    ...main.stored(SSH_HOST),
+    remoteSessionIdsByTabId: { 'tab-b': 'relay-main' }
+  })
+  const { stop, endRelay, renameTab } = await windowSavingTo(main, {
+    parked: true,
+    secondTab: true
+  })
+  try {
+    await endRelay('tab-a')
+    main.sentHosts.length = 0
+
+    await renameTab('renamed')
+
+    expect(main.sentHosts.flat().flatMap((host) => host.removedTabIds ?? [])).toEqual([])
+  } finally {
+    stop()
+  }
+})
