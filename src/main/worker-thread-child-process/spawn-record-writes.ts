@@ -5,7 +5,8 @@ import {
   ensurePrivateDirectory,
   findPrivateRuntimeDirectory
 } from '../filesystem/private-runtime-directory'
-import { parseProcStat, SPAWN_KEY_PATTERN, SPAWN_RECORDS_DIR_NAME } from './lost-spawn-processes'
+import { SPAWN_KEY_PATTERN, SPAWN_RECORDS_DIR_NAME } from './lost-spawn-processes'
+import { parseProcStat } from './proc-process-table'
 
 /**
  * The launcher's record of each child: pid and start time. A pid posted to main dies with the

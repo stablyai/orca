@@ -165,6 +165,7 @@ export class WorkerThreadChildProcessHost {
       key,
       recorded: false,
       ownsGroup: spec.terminationBarrier === true,
+      argv: [spec.program, ...(spec.args ?? [])],
       spawnedAtMs: Date.now()
     })
     return { ...spec, env: { ...(spec.env ?? process.env), [SPAWN_KEY_ENV]: key } }
@@ -196,25 +197,38 @@ export class WorkerThreadChildProcessHost {
     if (abandoned.length > 0) {
       console.warn(`[worker-thread-child-process] ${message}; ending ${abandoned.length} children.`)
     }
-    void endLostSpawns([...lost.values()], this.spawnRecordDir).then((started) => {
-      for (const child of abandoned) {
-        const key = lost.get(child)?.key
-        if (child.pid === undefined && (!key || !started.has(key))) {
-          const error = { message, code: PROCESS_LAUNCHER_LOST_CODE }
-          child.receive({ type: 'spawn-error', id: child.id, error })
-          continue
-        }
-        const pid = key === undefined ? undefined : started.get(key)
-        if (child.pid === undefined && pid !== undefined) {
-          child.receive({ type: 'spawn', id: child.id, pid })
-        }
-        child.receive({ type: 'group-terminated', id: child.id })
-        if (!child.closed) {
-          child.receive({ type: 'exit', id: child.id, code: null, signal: 'SIGKILL' })
-          child.receive({ type: 'close', id: child.id, code: null, signal: 'SIGKILL' })
-        }
+    const byKey = new Map([...lost].map(([child, spawn]) => [spawn.key, child]))
+    // Never-tagged children (none in practice) have nothing to end.
+    for (const child of abandoned.filter((candidate) => !lost.has(candidate))) {
+      this.deliverLost(child, child.pid, child.pid !== undefined, message)
+    }
+    void endLostSpawns([...lost.values()], this.spawnRecordDir, (key, pid, started) => {
+      const child = byKey.get(key)
+      if (child) {
+        this.deliverLost(child, child.pid ?? pid, started, message)
       }
     })
+  }
+
+  private deliverLost(
+    child: WorkerThreadChildProcess,
+    pid: number | undefined,
+    started: boolean,
+    message: string
+  ): void {
+    if (child.pid === undefined && !started) {
+      const error = { message, code: PROCESS_LAUNCHER_LOST_CODE }
+      child.receive({ type: 'spawn-error', id: child.id, error })
+      return
+    }
+    if (child.pid === undefined && pid !== undefined) {
+      child.receive({ type: 'spawn', id: child.id, pid })
+    }
+    child.receive({ type: 'group-terminated', id: child.id })
+    if (!child.closed) {
+      child.receive({ type: 'exit', id: child.id, code: null, signal: 'SIGKILL' })
+      child.receive({ type: 'close', id: child.id, code: null, signal: 'SIGKILL' })
+    }
   }
 
   // Worker death closes stdin for graceful stop but proves no child exit; omit close so drain windows/home locks still expire normally.

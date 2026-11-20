@@ -378,6 +378,27 @@ describe.runIf(process.platform === 'linux')(
       expect(await processesRunning(writer)).toEqual([])
     })
 
+    it('leaves a daemon that a lost child detached into its own session running', async () => {
+      const { host, loseLauncher } = hostLosingItsLauncher(null)
+      const daemon = ['/bin/sleep', '3019']
+      const child = host.spawn({
+        program: '/bin/sh',
+        args: ['-c', `setsid ${daemon.join(' ')} </dev/null >/dev/null 2>&1 & exit 0`],
+        terminationBarrier: true
+      })
+      const closed = waitForClose(child)
+      await vi.waitFor(async () => expect(await processesRunning(daemon)).not.toEqual([]), {
+        timeout: 5_000
+      })
+      loseLauncher()
+      await expect(closed).resolves.toEqual([null, 'SIGKILL'])
+      const survivors = await processesRunning(daemon)
+      for (const pid of survivors) {
+        process.kill(pid, 'SIGKILL')
+      }
+      expect(survivors).toHaveLength(1)
+    })
+
     it('ends a child the launcher never recorded and main never heard of', async () => {
       const { host, loseLauncher } = hostLosingItsLauncher(null)
       const sleeper = ['/bin/sleep', '3018']
