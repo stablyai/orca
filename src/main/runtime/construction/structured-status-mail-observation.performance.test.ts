@@ -54,6 +54,7 @@ it.each([300, 3000])(
           connectionId: null,
           structuredHost: 'owned',
           receivedAt: i,
+          stateStartedAt: i,
           payload: { state: 'working', prompt: '', agentType: 'claude' }
         }
         for (const listener of listeners) {
