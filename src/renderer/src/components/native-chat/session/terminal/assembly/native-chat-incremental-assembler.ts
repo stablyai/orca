@@ -40,22 +40,37 @@ export function rewind(
   applied: readonly NativeChatMessage[],
   keep: number
 ): IncrementalChatAssembler | null {
-  const removed = applied.length - keep
-  const at = committed.messages.length - removed
-  // Any merge means a dropped row may have displaced or outranked a kept one.
-  if (committed.byId.size !== applied.length || at < 0) {
+  const dropped = new Set(applied.slice(keep))
+  const kept = new Set<NativeChatMessage>()
+  // A live tail repeats rows already held; re-merging the same object is a no-op, any other merge is not.
+  for (
+    let index = 0;
+    committed.byId.size !== applied.length && index < applied.length;
+    index += 1
+  ) {
+    const message = applied[index]!
+    if (committed.byId.get(message.id) !== message) {
+      return null
+    }
+    if (index < keep && dropped.has(message)) {
+      kept.add(message)
+    }
+  }
+  const removed = Array.from(dropped).filter((message) => !kept.has(message))
+  const at = committed.messages.length - removed.length
+  if (at < 0) {
     return null
   }
-  const dropped = new Set(applied.slice(keep))
   const last = committed.messages[at - 1]
   if (last && isImageRow(last)) {
     return null
   }
+  const removing = new Set(removed)
   for (let index = at; index < committed.messages.length; index += 1) {
     const message = committed.messages[index]!
-    // Dropped rows must be the sorted tail, after the kept rows and outside any image unit.
+    // Removed rows must be the sorted tail, after the kept rows and outside any image unit.
     if (
-      !dropped.has(message) ||
+      !removing.has(message) ||
       isImageRow(message) ||
       (last !== undefined && compareMessages(message, last) <= 0)
     ) {
@@ -63,7 +78,10 @@ export function rewind(
     }
   }
   // A kept window without source positions is not resorted, so it would not keep this order.
-  if (hasSourcePosition(applied, keep, applied.length) && !hasSourcePosition(applied, 0, keep)) {
+  if (
+    removed.some((message) => message.transcriptOrder !== undefined) &&
+    !hasSourcePosition(applied, keep)
+  ) {
     return null
   }
   const assembler: IncrementalChatAssembler = {
@@ -72,7 +90,7 @@ export function rewind(
     messages: committed.messages.slice(0, at)
   }
   const lostKeys = new Set<string>()
-  for (const message of dropped) {
+  for (const message of removed) {
     assembler.byId.delete(message.id)
     const key = turnKey(message)
     if (assembler.byTurn.get(key) === message) {
@@ -90,12 +108,8 @@ export function rewind(
   return assembler
 }
 
-function hasSourcePosition(
-  messages: readonly NativeChatMessage[],
-  from: number,
-  to: number
-): boolean {
-  for (let index = from; index < to; index += 1) {
+function hasSourcePosition(messages: readonly NativeChatMessage[], to: number): boolean {
+  for (let index = 0; index < to; index += 1) {
     if (messages[index]!.transcriptOrder !== undefined) {
       return true
     }
