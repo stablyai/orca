@@ -11,7 +11,12 @@ export type BotSetupStepState = 'pending' | 'running' | 'done' | 'failed'
 export type BotSetupStep = { state: BotSetupStepState; detail?: string; providerDetail?: string }
 
 /** Why the host refused the kickoff before any turn opened, with the agent's own words when it has them. */
-export type BotSetupRefusal = { reason: string; providerDetail?: string }
+export type BotSetupRefusal = {
+  reason: string
+  providerDetail?: string
+  /** The refusal's failure kind, which picks the action that fixes it. */
+  kind?: string
+}
 
 type Problem = { detail?: string; providerDetail?: string }
 

@@ -17,6 +17,7 @@ import { useBotForWorkspace } from './bot-workspace'
 import { BotAvatar } from './BotAvatar'
 import { StepIcon } from '../worktree-creation/WorktreeSetupSteps'
 import { NativeChatDetailsDisclosure } from '../native-chat/messages/diagnostics/NativeChatProviderDetails'
+import { openAgentSettingsAction } from '../settings/navigation/open-agent-settings'
 import { useStructuredAgentSessionHostExecutionPhase } from '../native-chat/session/status/structured-agent-session-status-hooks'
 import { NativeChatInstallStrip } from '../native-chat/host-access/NativeChatInstallStrip'
 import { NativeChatSignInStrip } from '../native-chat/host-access/NativeChatSignInStrip'
@@ -165,14 +166,27 @@ async function tryAgain(bot: Bot): Promise<void> {
   }
 }
 
-function TryAgain({ bot }: { bot: Bot }): React.JSX.Element {
+function TryAgain({
+  bot,
+  commandSetting
+}: {
+  bot: Bot
+  /** The agent's Command setting is why it failed, so its fix is one press away. */
+  commandSetting: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const [asked, setAsked] = useState(false)
+  const settingsAction = openAgentSettingsAction(botTarget(bot), t)
   return (
     <div className="mt-1 flex items-center gap-2 border-t border-border pt-2">
       <span className="min-w-0 flex-1 text-xs text-muted-foreground">
         {t('bots.firstScreen.failed', 'Couldn’t finish setting up')}
       </span>
+      {commandSetting ? (
+        <Button variant="outline" size="xs" onClick={settingsAction.onClick}>
+          {settingsAction.label}
+        </Button>
+      ) : null}
       <Button
         variant="outline"
         size="xs"
@@ -276,7 +290,10 @@ function BotSetupSteps({
           ) : null}
         </div>
       ) : failed ? (
-        <TryAgain bot={bot} />
+        <TryAgain
+          bot={bot}
+          commandSetting={firstScreen.refused?.kind === 'agentCommandNotRunnable'}
+        />
       ) : null}
     </div>
   )
