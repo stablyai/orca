@@ -144,7 +144,7 @@ function ownerUsage(): OwnerUsageRateLimits & { accounts: ProviderAccountsSnapsh
 }
 
 async function showMenu(owned: OwnerUsageRateLimits) {
-  render(<CodexSwitcherMenu codex={usage(4)} ownerUsage={owned} compact={false} iconOnly={false} />)
+  render(<CodexSwitcherMenu codex={usage(4)} ownerUsage={owned} />)
   return openMenu()
 }
 
@@ -189,14 +189,7 @@ describe('Codex account usage on a paired host', () => {
   it('keeps the account identity and quota together when another client switches the host account', async () => {
     function ObservedMenu() {
       const owned = useOwnerUsageRateLimits(mocks.state().rateLimits)
-      return (
-        <CodexSwitcherMenu
-          codex={owned.rateLimits.codex ?? usage(0)}
-          ownerUsage={owned}
-          compact={false}
-          iconOnly={false}
-        />
-      )
+      return <CodexSwitcherMenu codex={owned.rateLimits.codex ?? usage(0)} ownerUsage={owned} />
     }
     render(<ObservedMenu />)
     const { handlers } = mocks.watchers[0]
@@ -249,7 +242,7 @@ describe('Codex account usage on a paired host', () => {
     const owned = ownerUsage()
     const codex = { ...usage(4), rateLimitResetCredits: { availableCount: 1, nextExpiresAt: null } }
     owned.rateLimits.codex = codex
-    render(<CodexSwitcherMenu codex={codex} ownerUsage={owned} compact={false} iconOnly={false} />)
+    render(<CodexSwitcherMenu codex={codex} ownerUsage={owned} />)
     await openMenu()
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Reset now' }))
     await vi.waitFor(() => expect(mocks.consumeHostReset).toHaveBeenCalledTimes(1))
@@ -310,9 +303,7 @@ describe('Claude account usage on a paired host', () => {
         isFetching: false
       }
     ]
-    render(
-      <ClaudeSwitcherMenu claude={claude} ownerUsage={owned} compact={false} iconOnly={false} />
-    )
+    render(<ClaudeSwitcherMenu claude={claude} ownerUsage={owned} />)
     fireEvent.pointerDown(
       screen.getByRole('button', { name: 'Open Claude details and account switcher' }),
       { button: 0, ctrlKey: false }
@@ -361,7 +352,6 @@ describe('Claude account rows outside the status bar owner', () => {
       <TooltipProvider>
         <ClaudeSwitcherMenu
           claude={null}
-          compact
           iconOnly
           chatAction={{ target, canSwitch: async () => true }}
         />
@@ -381,9 +371,7 @@ describe('Claude account rows outside the status bar owner', () => {
   it("names no account before the server's list arrives", async () => {
     const owned: OwnerUsageRateLimits = { ...claudeOwner(), accounts: null }
     const claude: ProviderRateLimits = { ...usage(4), provider: 'claude' }
-    render(
-      <ClaudeSwitcherMenu claude={claude} ownerUsage={owned} compact={false} iconOnly={false} />
-    )
+    render(<ClaudeSwitcherMenu claude={claude} ownerUsage={owned} iconOnly={false} />)
     fireEvent.pointerDown(
       screen.getByRole('button', { name: 'Open Claude details and account switcher' }),
       { button: 0, ctrlKey: false }
