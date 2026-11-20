@@ -16,6 +16,7 @@ import { getBrowserPageIdleDiscard } from '../browser/guest-lifecycle/browser-pa
 import {
   computeWorkspaceRoot,
   getWorktreePathSettings,
+  hasRepoWorktreeBasePath,
   workspaceRootMirrorsIntoWsl
 } from '../ipc/worktrees/paths/worktree-logic'
 import { getWorktreeMirrorDistro } from '../workspaces/execution-host/project-runtime-git-options'
@@ -79,12 +80,18 @@ function localWorktreeRoots(store: PerfNoticeSignalStore): DiskRoot[] {
       continue
     }
     add(computeWorkspaceRoot(repo.path, pathSettings), false)
-    if (repo.worktreeBasePath) {
+    // Why: a root that would mirror into WSL needs a blocking wsl.exe probe to resolve.
+    const addEarlier = (workspaceDir: string): void => {
+      if (!workspaceRootMirrorsIntoWsl(repo.path, { workspaceDir })) {
+        earlierRoots.push(computeWorkspaceRoot(repo.path, { workspaceDir }))
+      }
+    }
+    if (hasRepoWorktreeBasePath(repo)) {
       // Workspaces made before the repo got its own folder stay in the global one.
-      earlierRoots.push(computeWorkspaceRoot(repo.path, { workspaceDir: settings.workspaceDir }))
+      addEarlier(settings.workspaceDir)
     }
     for (const layout of relativeHistory) {
-      earlierRoots.push(computeWorkspaceRoot(repo.path, { workspaceDir: layout.path }))
+      addEarlier(layout.path)
     }
   }
   if (roots.size > 0) {
