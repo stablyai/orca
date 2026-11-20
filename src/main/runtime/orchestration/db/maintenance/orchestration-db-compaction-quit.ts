@@ -17,11 +17,10 @@ export async function swapCompactedOrchestrationDbAtQuit(
   }
   try {
     const settled = await settleWithinMs(owner.swapCompactedOrchestrationDbForQuit(), SWAP_CAP_MS)
-    const result = settled.outcome === 'settled' ? settled.value : settled
-    if (settled.outcome !== 'settled' || result.kind === 'failed') {
-      console.warn('[orchestration] database compaction failed', result)
-    } else if (result.kind !== 'none') {
-      console.info('[orchestration] database compaction', result)
+    if (settled.outcome !== 'settled' || settled.value.kind === 'failed') {
+      console.warn('[orchestration] database compaction failed', settled)
+    } else if (settled.value.kind !== 'none') {
+      console.info('[orchestration] database compaction', settled.value)
     }
   } catch (error) {
     console.warn('[orchestration] database compaction failed', error)

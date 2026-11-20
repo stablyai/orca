@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import '../contract-constants'
 import '../messages/mailbox-routing-page'
@@ -61,6 +61,7 @@ async function copiedWhileQuiet(file: string): Promise<{
 }
 
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -93,6 +94,8 @@ describe('OrchestrationDbCompaction', () => {
 
   it('waits longer after each copy that went stale, and never gives up', async () => {
     const hour = 60 * 60_000
+    const now = Date.UTC(2026, 10, 20)
+    vi.spyOn(Date, 'now').mockReturnValue(now)
     const copiesAfter = async (attempts: string): Promise<boolean> => {
       const file = legacyDatabase()
       writeFileSync(`${file}-compaction-attempts`, attempts)
@@ -106,10 +109,10 @@ describe('OrchestrationDbCompaction', () => {
       return copied
     }
 
-    expect(await copiesAfter(`1 ${Date.now() - 0.5 * hour}`)).toBe(false)
-    expect(await copiesAfter(`1 ${Date.now() - 1.5 * hour}`)).toBe(true)
-    expect(await copiesAfter(`3 ${Date.now() - 3 * hour}`)).toBe(false)
-    expect(await copiesAfter(`9 ${Date.now() - 25 * hour}`)).toBe(true)
+    expect(await copiesAfter(`1 ${now - 0.5 * hour}`)).toBe(false)
+    expect(await copiesAfter(`1 ${now - 1.5 * hour}`)).toBe(true)
+    expect(await copiesAfter(`3 ${now - 3 * hour}`)).toBe(false)
+    expect(await copiesAfter(`9 ${now - 25 * hour}`)).toBe(true)
   })
 
   it('converts a legacy file with little free space', async () => {
