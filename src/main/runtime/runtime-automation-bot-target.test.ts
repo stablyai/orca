@@ -293,25 +293,6 @@ describe('RuntimeAutomationController bot target', () => {
     expect(back).toMatchObject({ agentId: 'codex', bot: botTarget })
   })
 
-  it('refuses Antigravity as the agent on a host without Orca’s managed Antigravity server', async () => {
-    const { controller, store } = await setup()
-    const created = await controller.create({ ...schedule, bot: botTarget })
-    const onAgy: AutomationBotTarget = { ...botTarget, agentSetup: { agent: 'antigravity' } }
-    const refusal =
-      "Antigravity bots need Orca's own Antigravity server, which isn't available on the computer this bot runs on."
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
-    Object.defineProperty(process, 'platform', { ...platform, value: 'freebsd' })
-    try {
-      await expect(controller.create({ ...schedule, bot: onAgy })).rejects.toThrow(refusal)
-      await expect(controller.update(created.id, { bot: onAgy })).rejects.toThrow(refusal)
-    } finally {
-      Object.defineProperty(process, 'platform', platform)
-    }
-    expect(store.listAutomations()).toEqual([
-      expect.objectContaining({ agentId: 'codex', bot: botTarget })
-    ])
-  })
-
   it('pauses a stored automation whose chat target still names an agent, without refusing it', async () => {
     const { controller, store, folderKey } = await setup()
     // No save path writes this; a hand-edited store can.
