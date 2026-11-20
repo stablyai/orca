@@ -365,5 +365,5 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
 
   protected emitClientEvent = this.clientEvents.emit.bind(this.clientEvents)
 
-  readonly cliUpdateNotices = announceAgentCliUpdatesFinished(this.emitClientEvent)
+  protected readonly cliUpdateNotices = announceAgentCliUpdatesFinished(this.emitClientEvent)
 }

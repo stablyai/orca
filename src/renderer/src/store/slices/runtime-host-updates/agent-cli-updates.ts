@@ -49,6 +49,8 @@ const checks = new Map<string, Promise<void>>()
 const checkedAt = new Map<string, number>()
 // Whether this window follows this computer's finished updates; paired hosts announce them as client events.
 let followsLocal = false
+// Hosts with a re-check already waiting on an answer in flight; more finished updates join it.
+const rechecking = new Set<string>()
 
 function sameUpdates(a: readonly AgentCliUpdate[], b: readonly AgentCliUpdate[]): boolean {
   return (
@@ -153,11 +155,14 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     recheckAgentCliUpdates: (target) => {
       const key = agentCliUpdateHostKey(target)
       // Only a host this window has asked before; an answer still on its way may predate the update.
-      if (!checkedAt.has(key)) {
+      if (!checkedAt.has(key) || rechecking.has(key)) {
         return
       }
+      rechecking.add(key)
       void (checks.get(key) ?? Promise.resolve()).then(() => {
-        checkedAt.delete(key)
+        rechecking.delete(key)
+        // Past the interval, so this checks now, while the host stays one this window asked.
+        checkedAt.set(key, 0)
         return get().checkAgentCliUpdates(target)
       })
     },

@@ -257,9 +257,14 @@ export function onAgentCliUpdateFinished(
   return () => finishedListeners.delete(listener)
 }
 
-/** Announces each finished update as a client event, so every client checks again. */
+let stopAnnouncing = (): void => {}
+
+/** Announces each finished update as a client event, so every client checks again; the latest runtime's emitter replaces the last. */
 export function announceAgentCliUpdatesFinished(
   emit: (event: { type: 'agentCliUpdateFinished'; agent: AgentCliUpdateAgent }) => void
-): () => void {
-  return onAgentCliUpdateFinished((agent) => emit({ type: 'agentCliUpdateFinished', agent }))
+): void {
+  stopAnnouncing()
+  stopAnnouncing = onAgentCliUpdateFinished((agent) =>
+    emit({ type: 'agentCliUpdateFinished', agent })
+  )
 }
