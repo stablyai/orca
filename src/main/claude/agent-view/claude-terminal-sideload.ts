@@ -1,4 +1,7 @@
-import { resolveSetupAgentSequenceLaunchCommand } from '../../../shared/agent-launch/startup/setup-agent-sequencing'
+import {
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  resolveSetupAgentSequenceLaunchCommand
+} from '../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { claudeConfigDirEnvPatch } from '../structured/launch/claude-config-dir-pin'
 import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
@@ -222,9 +225,19 @@ export function prepareClaudeTerminalSideload(
 export function prepareClaudeTerminalLaunch(input: TerminalLaunch): string | undefined {
   prepareClaudeTerminalSideload(input)
   const root = input.env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR
-  return root && input.command
-    ? withClaudeAgentViewPlugin(input.command, root, input.shell)
-    : input.command
+  if (!root || !input.command) {
+    return input.command
+  }
+  const child = input.env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+  if (child) {
+    input.env[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV] = withClaudeAgentViewPlugin(
+      child,
+      root,
+      input.shell
+    )
+    return input.command
+  }
+  return withClaudeAgentViewPlugin(input.command, root, input.shell)
 }
 
 export function prepareClaudeTerminalHooks(

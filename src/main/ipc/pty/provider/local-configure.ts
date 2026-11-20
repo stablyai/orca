@@ -139,7 +139,6 @@ export function configureLocalPtyProvider(args: {
     if (ctx?.isWsl === true) {
       addOrcaWslInteropEnv(env)
     }
-
     return env
   }
   localProvider.configure({
