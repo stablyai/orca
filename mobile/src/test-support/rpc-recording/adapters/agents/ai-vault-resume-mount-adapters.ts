@@ -5,7 +5,7 @@ import { mountFixture } from '../../react-mounting/recorder-fixture-shape'
 import type { operationModuleLoader } from '../../module-mounting/operation-module-loader'
 
 const WORKTREE = 'workspace-1'
-// Use a path accepted by the legacy shared-Codex-home guard so preparation can reach the wire.
+// A legacy shared Codex home, so the host's repin reply is applied.
 const LEGACY_CODEX_HOME = '/hosts/codex-runtime-home/home'
 
 export function aiVaultResumeMountAdapters(
