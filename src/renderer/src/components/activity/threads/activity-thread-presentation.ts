@@ -14,6 +14,8 @@ import {
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { Worktree } from '../../../../../shared/worktree/types'
 import type { ActivityGroupBy } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type {
   AgentStatusEntry,
@@ -297,7 +299,10 @@ export function activityThreadRowCopy(
 
 /** The row names what its group header doesn't: the project chip, the workspace, or both. */
 export function activityThreadRowIdentity(
-  thread: Pick<AgentPaneThread, 'repo' | 'worktree'>,
+  thread: {
+    repo: Pick<Repo, 'displayName'> | null
+    worktree: Pick<Worktree, 'displayName' | 'branch'>
+  },
   groupBy: ActivityGroupBy
 ): { showProject: boolean; showWorkspace: boolean } {
   const showProject = thread.repo !== null && groupBy !== 'project'

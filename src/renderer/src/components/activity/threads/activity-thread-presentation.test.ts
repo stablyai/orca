@@ -1,15 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { activityThreadRowIdentity } from './activity-thread-presentation'
-import type { AgentPaneThread } from './activity-thread-types'
 
-function thread(
-  repoName: string | null,
-  worktree: { displayName: string; branch: string }
-): Pick<AgentPaneThread, 'repo' | 'worktree'> {
-  return {
-    repo: repoName ? ({ displayName: repoName } as AgentPaneThread['repo']) : null,
-    worktree: worktree as AgentPaneThread['worktree']
-  }
+function thread(repoName: string | null, worktree: { displayName: string; branch: string }) {
+  return { repo: repoName ? { displayName: repoName } : null, worktree }
 }
 
 describe('activityThreadRowIdentity', () => {
