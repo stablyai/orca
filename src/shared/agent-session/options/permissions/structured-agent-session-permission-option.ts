@@ -1,6 +1,4 @@
 // Saved choices describe requested policy; runtime observations never replace that intent.
-
-// Saved choices describe requested policy; runtime observations never replace that intent.
 import type { AgentChatPermissionMode } from '../../../agent-launch/permissions/agent-chat-permission-mode'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../agent-launch/permissions/agent-chat-permission-mode-option-id'
 import { agentChatPermissionModes } from '../../../agent-launch/permissions/agent-chat-permission-support'
