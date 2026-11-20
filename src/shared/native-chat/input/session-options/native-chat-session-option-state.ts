@@ -5,7 +5,13 @@ import type {
 } from '../../../agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type { SessionOptionValue, SessionOptionValueSource } from '../native-chat-session-options'
 
+export type NativeChatOptionReport = {
+  values: Record<string, SessionOptionValue>
+  reportedModelLabel?: string
+}
+
 export type TrackedNativeChatSessionOption = {
+  reportedModelLabel?: string
   value: SessionOptionValue
   source: Exclude<SessionOptionValueSource, 'unknown'>
 }
@@ -121,7 +127,7 @@ export function flattenNativeChatSessionOptionRecord(
 
 export function applyNativeChatReportedSessionOptions(
   record: NativeChatSessionOptionRecord,
-  values: Record<string, SessionOptionValue>,
+  { values, reportedModelLabel }: NativeChatOptionReport,
   /** Provider-confirmed ids; omitted means all values are read-back reports. */
   confirmed?: readonly string[]
 ): boolean {
@@ -131,9 +137,21 @@ export function applyNativeChatReportedSessionOptions(
   if (!modelId) {
     return false
   }
-  const modelChanged = record.model?.value !== modelId
-  let changed = modelChanged || record.model?.source !== sourceFor('model')
-  record.model = { value: modelId, source: sourceFor('model') }
+  const previousLabel = record.model?.reportedModelLabel
+  const modelChanged =
+    record.model?.value !== modelId ||
+    (previousLabel !== undefined &&
+      reportedModelLabel !== undefined &&
+      previousLabel !== reportedModelLabel)
+  let changed =
+    modelChanged ||
+    previousLabel !== reportedModelLabel ||
+    record.model?.source !== sourceFor('model')
+  record.model = {
+    value: modelId,
+    source: sourceFor('model'),
+    ...(reportedModelLabel ? { reportedModelLabel } : {})
+  }
   const modelValues = modelChanged ? {} : { ...record.valuesByModel[modelId] }
   for (const [id, value] of Object.entries(values)) {
     if (id === 'model') {

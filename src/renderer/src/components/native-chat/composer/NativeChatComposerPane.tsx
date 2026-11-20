@@ -213,6 +213,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     }
     const sessionOptions = useNativeChatComposerSessionOptions({
       ...ptyCommandTarget,
+      messages: recallSource?.messages,
       terminalTabId,
       targetPtyId,
       onSwitchToTerminal,

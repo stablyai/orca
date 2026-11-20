@@ -4,7 +4,9 @@ import type { NativeChatComposerProps } from '../native-chat-composer-types'
 import type { NativeChatSendHandle } from '../../session/terminal/send/native-chat-runtime-send'
 import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 import { nativeChatCommandOpensTerminal } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
+import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import { withClaudeTranscriptModelLabel } from '../../session/options/terminal/claude-terminal-session-options'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -25,7 +27,7 @@ type ComposerSessionOptionsArgs = Pick<
   Pick<
     Parameters<typeof useNativeChatSessionOptionCommand>[0],
     'disabled' | 'resolveTarget' | 'readTerminalDraft'
-  >
+  > & { messages?: readonly NativeChatMessage[] }
 
 export function useNativeChatComposerSessionOptions({
   agent,
@@ -39,6 +41,7 @@ export function useNativeChatComposerSessionOptions({
   onSwitchToTerminal,
   readTerminalScreen,
   paneKey,
+  messages,
   structuredTransport
 }: ComposerSessionOptionsArgs): {
   /** What a PTY command send needs from the session options. */
@@ -68,6 +71,13 @@ export function useNativeChatComposerSessionOptions({
     readTerminalScreen,
     paneKey
   })
+  const structuredSnapshot = structuredTransport?.optionSnapshot
+  const snapshot = useMemo(
+    () =>
+      structuredSnapshot ??
+      (agent === 'claude' ? withClaudeTranscriptModelLabel(pty.snapshot, messages) : pty.snapshot),
+    [structuredSnapshot, agent, pty.snapshot, messages]
+  )
   const onCommandSent = useCallback(
     (command: string, delivery: NativeChatSendHandle) => {
       if (!onSwitchToTerminal || !nativeChatCommandOpensTerminal(agent, command)) {
@@ -89,6 +99,6 @@ export function useNativeChatComposerSessionOptions({
       onCommandSent
     },
     surface: structuredTransport?.optionsSurface ?? pty.surface,
-    snapshot: structuredTransport?.optionSnapshot ?? pty.snapshot
+    snapshot
   }
 }

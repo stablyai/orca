@@ -42,6 +42,10 @@ export type SessionOptionDescriptor = {
         choices: SessionOptionSelectChoice[]
         /** Presentation when no value is known; never an input selection. */
         placeholder?: string
+        /** Display-only when the latest response supplies the effort missing from live options. */
+        lastResponseEffort?: string
+        /** Exact banner label before catalog matching reduces a version to its picker alias. */
+        reportedModelLabel?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {

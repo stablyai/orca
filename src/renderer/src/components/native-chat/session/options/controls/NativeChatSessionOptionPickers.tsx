@@ -193,17 +193,34 @@ function SessionOptionPopover(props: {
   const effortChoice =
     effort && effort.valueSource !== 'unknown' ? selectedNativeChatChoice(effort) : null
   const knownModel = model.valueSource !== 'unknown' && selectedNativeChatChoice(model)
-  const tooltipLabel = knownModel
-    ? effortChoice
-      ? t('components.native-chat.composer.modelAndEffortValue', '{{model}} · {{effort}}', {
-          model: modelLabel,
-          effort: nativeChatSessionChoiceLabel(effortChoice, say, 'effort')
-        })
-      : modelLabel
-    : t('components.native-chat.composer.modelAndEffort', 'Model and effort')
+  const previousEffort = model.kind.type === 'select' ? model.kind.lastResponseEffort : undefined
+  const previousEffortLabel = previousEffort
+    ? nativeChatSessionChoiceLabel({ value: previousEffort, label: previousEffort }, say, 'effort')
+    : ''
+  const effortLabel = effortChoice
+    ? nativeChatSessionChoiceLabel(effortChoice, say, 'effort')
+    : previousEffortLabel
+  const modelAndEffort = effortLabel
+    ? t('components.native-chat.composer.modelAndEffortValue', '{{model}} · {{effort}}', {
+        model: modelLabel,
+        effort: effortLabel
+      })
+    : modelLabel
+  const lastResponseLabel = previousEffortLabel ? modelAndEffort : modelLabel
+  const tooltipLabel =
+    knownModel && !previousEffortLabel
+      ? modelAndEffort
+      : previousEffortLabel ||
+          (model.transport === 'catalog' && model.kind.type === 'select' && model.kind.placeholder)
+        ? t('components.native-chat.composer.lastResponseModel', 'Last response used {{model}}', {
+            model: lastResponseLabel
+          })
+        : t('components.native-chat.composer.modelAndEffort', 'Model and effort')
   const modelName = knownModel ? pillAccessibleName(modelTitle, tooltipLabel, t) : tooltipLabel
   const optionsTitle = nativeChatOptionsPillTitle(options, say)
-  const optionsLabel = nativeChatOptionValuesLabel(options, say)
+  const optionsLabel = [previousEffortLabel, nativeChatOptionValuesLabel(options, say)]
+    .filter(Boolean)
+    .join(' · ')
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason, say)
   const optionsReason =
     options.length > 0 && options.every((descriptor) => !descriptor.settable)

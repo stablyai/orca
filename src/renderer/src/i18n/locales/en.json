@@ -21273,6 +21273,7 @@
         "noOtherChats": "No other chats",
         "retryChats": "Retry",
         "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
+        "lastResponseModel": "Last response used {{model}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Model and effort"
       },

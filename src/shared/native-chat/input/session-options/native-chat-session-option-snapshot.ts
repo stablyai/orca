@@ -249,6 +249,9 @@ export function nativeChatSessionOptionDescriptors(args: {
       kind: {
         type: 'select',
         ...(model.currentId ? { currentValue: model.currentId } : {}),
+        ...(model.tracked?.reportedModelLabel
+          ? { reportedModelLabel: model.tracked.reportedModelLabel }
+          : {}),
         choices: modelChoices
       },
       valueSource: model.valueSource,

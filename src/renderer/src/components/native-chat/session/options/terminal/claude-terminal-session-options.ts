@@ -1,6 +1,13 @@
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
-import type { SessionOptionValue } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
+import { labelFromModelId } from '../../../../../../../shared/agent-session/options/model-catalog/model-id-label'
+import { claudeListedModelLabel } from '../../../../../../../shared/agent-session/options/model-catalog/claude-model-list-probe'
+import type { NativeChatOptionReport } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-state'
+import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionValue
+} from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { stripScrollbackAnsi } from '../../terminal/assembly/native-chat-scrape-fallback'
 
 const EFFORT_ID_BY_LABEL: Record<string, string> = {
@@ -180,7 +187,7 @@ function findClaudeCatalogModel(
 export function readClaudeSessionOptionsFromTerminalScreen(
   screen: string | null | undefined,
   models?: readonly CatalogModel[]
-): Record<string, SessionOptionValue> | null {
+): NativeChatOptionReport | null {
   if (!screen) {
     return null
   }
@@ -197,7 +204,7 @@ export function readClaudeSessionOptionsFromTerminalScreen(
   const model = findClaudeCatalogModel(reportedModel, models)
   if (!model) {
     // A custom model carries no catalog options, so no effort is reported.
-    return { model: reportedModel }
+    return { values: { model: reportedModel } }
   }
   const result: Record<string, SessionOptionValue> = { model: model.id }
   const effortLabel = descriptorCell?.match(CLAUDE_MODEL_EFFORT)?.[1]
@@ -205,5 +212,53 @@ export function readClaudeSessionOptionsFromTerminalScreen(
   if (effort && model.options.some((option) => option.id === 'effort')) {
     result.effort = effort
   }
-  return result
+  return {
+    values: result,
+    ...(model.id.startsWith('claude-') ? {} : { reportedModelLabel: reportedModel })
+  }
+}
+
+/** A previous response can name the pill without confirming the next send's model. */
+export function withClaudeTranscriptModelLabel(
+  snapshot: SessionOptionDescriptor[],
+  messages: readonly NativeChatMessage[] | undefined
+): SessionOptionDescriptor[] {
+  const model = snapshot.find((row) => row.id === 'model')
+  if (
+    model?.kind.type !== 'select' ||
+    (model.valueSource !== 'unknown' && model.valueSource !== 'reported')
+  ) {
+    return snapshot
+  }
+  const previous = messages?.findLast(
+    (message) =>
+      message.source === 'transcript' &&
+      (message.role === 'assistant' || message.role === 'reasoning') &&
+      message.model
+  )
+  if (!previous?.model) {
+    return snapshot
+  }
+  const unknown = model.valueSource === 'unknown'
+  const banner = model.kind.reportedModelLabel
+  const bannerMatches =
+    banner !== undefined &&
+    previous.model.startsWith('claude-') &&
+    withoutClaudeVendor(banner).toLowerCase() ===
+      withoutClaudeVendor(claudeListedModelLabel(previous.model)).toLowerCase()
+  if (!unknown && model.kind.currentValue !== previous.model && !bannerMatches) {
+    return snapshot
+  }
+  const effort = snapshot.find((row) => row.id === 'effort')
+  const lastResponseEffort =
+    !effort || effort.valueSource === 'unknown' ? previous.effort : undefined
+  if (!unknown && !lastResponseEffort) {
+    return snapshot
+  }
+  const kind = {
+    ...model.kind,
+    ...(unknown ? { placeholder: labelFromModelId(previous.model) } : {}),
+    ...(lastResponseEffort ? { lastResponseEffort } : {})
+  }
+  return snapshot.map((row) => (row === model ? { ...model, kind } : row))
 }

@@ -19,7 +19,7 @@ describe('applyNativeChatReportedSessionOptions', () => {
     const record = claudeRecord()
     record.model = { value: 'sonnet', source: 'dispatched' }
     record.valuesByModel.opus = { effort: { value: 'high', source: 'dispatched' } }
-    expect(applyNativeChatReportedSessionOptions(record, { model: 'opus' })).toBe(true)
+    expect(applyNativeChatReportedSessionOptions(record, { values: { model: 'opus' } })).toBe(true)
     expect(record.model).toEqual({ value: 'opus', source: 'reported' })
     // A model change invalidates previously tracked values for the destination.
     expect(record.valuesByModel.opus).toEqual({})
@@ -28,7 +28,9 @@ describe('applyNativeChatReportedSessionOptions', () => {
   it('promotes a dispatched guess the report confirms', () => {
     const record = claudeRecord()
     record.model = { value: 'sonnet', source: 'dispatched' }
-    expect(applyNativeChatReportedSessionOptions(record, { model: 'sonnet' })).toBe(true)
+    expect(applyNativeChatReportedSessionOptions(record, { values: { model: 'sonnet' } })).toBe(
+      true
+    )
     expect(record.model).toEqual({ value: 'sonnet', source: 'reported' })
   })
 
@@ -36,7 +38,9 @@ describe('applyNativeChatReportedSessionOptions', () => {
     const record = claudeRecord()
     record.model = { value: 'sonnet', source: 'reported' }
     record.valuesByModel.sonnet = { effort: { value: 'high', source: 'dispatched' } }
-    expect(applyNativeChatReportedSessionOptions(record, { model: 'sonnet' })).toBe(false)
+    expect(applyNativeChatReportedSessionOptions(record, { values: { model: 'sonnet' } })).toBe(
+      false
+    )
     expect(record.valuesByModel.sonnet?.effort).toEqual({ value: 'high', source: 'dispatched' })
   })
 })

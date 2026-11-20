@@ -19677,6 +19677,7 @@
         "pastedTextTooLarge": "此次粘贴会使消息超过单条消息 256 KB 的上限。请缩短后再粘贴",
         "imageUnavailable": "预览不可用",
         "permissionAppliesNextMessage": "{{saved}} 从下一条消息起生效；当前为 {{active}}",
+        "lastResponseModel": "上一条回复使用了 {{model}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "模型和推理强度",
         "draftNotSaved": "此草稿尚未保存成功，Orca 会继续尝试",
