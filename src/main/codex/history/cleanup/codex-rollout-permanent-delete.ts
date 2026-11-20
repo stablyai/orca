@@ -225,7 +225,10 @@ async function deleteRollout(
     if (await isOpenInCodex(homes, stem)) {
       return
     }
-    const names = [...rolloutNames(homes, stem), ...legacyCopyAsideNames(homes, stem)]
+    const names = [
+      ...rolloutNames(homes, stem),
+      ...legacyCopyAsideNames(resolveOrcaManagedCodexHomePath(), stem)
+    ]
     // After the open check: a chat still open never reads the import folder (which can start WSL).
     const protectedRoots = await resolveProtectedRoots(listed, stem)
     const found = await readNames(names)
