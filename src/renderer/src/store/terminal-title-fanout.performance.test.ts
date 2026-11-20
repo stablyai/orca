@@ -68,7 +68,14 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
     const unifiedTab = unifiedTerminalTab(worktreeId, tab.id)
     unifiedTabsByWorktree[worktreeId] = [index === 0 ? unifiedTab : counted(unifiedTab, reads)]
   }
-  store.setState({ tabsByWorktree, unifiedTabsByWorktree, activeWorktreeId: 'wt-0' })
+  // The app store is shared across populations, so every input this test writes starts fresh.
+  store.setState({
+    tabsByWorktree,
+    unifiedTabsByWorktree,
+    runtimePaneTitlesByTabId: {},
+    ptyIdsByTabId: {},
+    activeWorktreeId: 'wt-0'
+  })
 
   const records = (state: AppState): unknown[] => [
     state.tabsByWorktree,
@@ -115,6 +122,7 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
   // One terminal title change, as pane title observation applies it.
   store.getState().setRuntimePaneTitle('tab-0', 1, 'build: step 2')
   store.getState().updateTabTitle('tab-0', 'build: step 2')
+  expect(store.getState().runtimePaneTitlesByTabId['tab-0']?.[1]).toBe('build: step 2')
   expect(store.getState().tabsByWorktree['wt-0']?.[0]?.title).toBe('build: step 2')
   stopMeasuring()
   stopPresence()
