@@ -8,6 +8,8 @@ import type {
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
 } from '../environment-transport'
+import { pairedOrchestrationPeers } from '../environment-transport'
+import type { PairedRuntimeConnection } from '../../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { classifyWorkerPlacementCatalog } from './worker-placement-eligibility'
 import { OrchestrationError } from '../../orchestration-error'
@@ -273,6 +275,206 @@ it('returns unchecked at the soft deadline when the proven pairing generation ch
   generation = 1
   await vi.advanceTimersByTimeAsync(5_000)
   expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+})
+
+it.each(['removed', 'repaired'] as const)(
+  'invalidates captured retention after an external pairing is %s through the registry watcher',
+  async (change) => {
+    await owner.discover()
+    await vi.advanceTimersByTimeAsync(30_001)
+    let finish!: () => void
+    const wait = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    response = async (method) => {
+      await wait
+      return complete(method)
+    }
+    const discovery = owner.discover('server')
+    await vi.advanceTimersByTimeAsync(0)
+    if (change === 'removed') {
+      list = []
+    } else {
+      server = {
+        ...server,
+        peerFingerprint: 'new-peer',
+        homePeerFingerprint: 'new-home',
+        pairingRevision: 2
+      }
+    }
+    notify!()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+    finish()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+  }
+)
+
+it('keeps sleeping-server retention when the watcher re-establishes the unchanged full pairing', async () => {
+  await owner.discover()
+  await vi.advanceTimersByTimeAsync(30_001)
+  response = () => new Promise(() => {})
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(0)
+  notify!()
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(await discovery).toMatchObject([
+    { status: 'retained', reason: 'no_answer', observedAt: 1795204800000 }
+  ])
+})
+
+it('fails closed when watcher reconciliation cannot re-establish a captured pairing', async () => {
+  await owner.discover()
+  await vi.advanceTimersByTimeAsync(30_001)
+  response = () => new Promise(() => {})
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(0)
+  registry.resolve = () => new Promise(() => {})
+  notify!()
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+})
+
+it('rejects an initial pairing proof that straddles an external registry change', async () => {
+  await owner.discover()
+  let finish!: () => void
+  const wait = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  registry.resolve = async () => {
+    const captured = { ...server }
+    await wait
+    return captured
+  }
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(0)
+  list = []
+  notify!()
+  await vi.advanceTimersByTimeAsync(0)
+  finish()
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+  expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+})
+
+it('rejects persistence proof that straddles an external re-pair', async () => {
+  await owner.discover()
+  await vi.advanceTimersByTimeAsync(30_001)
+  let finish!: () => void
+  const wait = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  let validating = false
+  registry.resolve = async () => {
+    const captured = { ...server }
+    if (validating) {
+      await wait
+    }
+    return captured
+  }
+  response = async (method) => {
+    validating = true
+    return complete(method)
+  }
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(0)
+  server = { ...server, pairingRevision: 2 }
+  notify!()
+  await vi.advanceTimersByTimeAsync(0)
+  finish()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+  expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+})
+
+it('rejects a completed catalog when its final snapshot proof straddles an external removal', async () => {
+  await owner.discover()
+  await vi.advanceTimersByTimeAsync(30_001)
+  let finish!: () => void
+  const wait = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  registry.resolve = vi
+    .fn()
+    .mockResolvedValueOnce({ ...server })
+    .mockResolvedValueOnce({ ...server })
+    .mockImplementation(async () => {
+      const captured = { ...server }
+      await wait
+      return captured
+    })
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(0)
+  list = []
+  notify!()
+  await vi.advanceTimersByTimeAsync(0)
+  finish()
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+  expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+})
+
+it.each(['preparation', 'dispatch'] as const)(
+  'invalidates socket proof when an external registry change straddles %s',
+  async (phase) => {
+    await vi.advanceTimersByTimeAsync(0)
+    const connection: PairedRuntimeConnection = {
+      endpoint: 'ws://server',
+      hostPublicKeyB64: Buffer.from('server-key').toString('base64'),
+      credential: { kind: 'token', deviceToken: 'home-token' }
+    }
+    server = { ...server, ...pairedOrchestrationPeers(connection.hostPublicKeyB64, 'home-token') }
+    let finish!: () => void
+    const wait = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    let preparing = false
+    let allowed: boolean | void = undefined
+    registry.resolve = async () => {
+      const captured = { ...server }
+      if (preparing && phase === 'preparation') {
+        await wait
+      }
+      return captured
+    }
+    registry.call = async (_id, _method, _params, _timeout, _envelope, _revision, options) => {
+      preparing = true
+      const guard = await options!.prepareGuard!(connection)
+      await wait
+      allowed = guard()
+      throw new Error('Invalidated socket proof')
+    }
+    const discovery = owner.discover('server')
+    await vi.advanceTimersByTimeAsync(0)
+    server = { ...server, pairingRevision: 2 }
+    notify!()
+    await vi.advanceTimersByTimeAsync(0)
+    finish()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(allowed).toBe(false)
+    expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+    expect(db.db.prepare('SELECT environment_id FROM worker_placement_catalogs').all()).toEqual([])
+  }
+)
+
+it('retains a safe late reply after the watcher fires and the full pairing is re-established', async () => {
+  let finish!: () => void
+  const wait = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  response = async (method) => {
+    await wait
+    return complete(method)
+  }
+  const discovery = owner.discover('server')
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(await discovery).toMatchObject([{ status: 'unchecked', reason: 'no_answer' }])
+  notify!()
+  await vi.advanceTimersByTimeAsync(0)
+  finish()
+  await vi.advanceTimersByTimeAsync(0)
+  expect((await owner.discover())[0]).toMatchObject({ status: 'fresh', observedAt: 1795204805000 })
 })
 
 it('spends only the remaining discovery budget after a slow registry enumeration', async () => {

@@ -153,6 +153,68 @@ it('does not allocate pairing reads for concurrent queries naming unregistered e
   }
 })
 
+// #45148 F3: watcher invalidation must fence stale proof without replacing stalled operation slots.
+it.each(['registry', 'pairing', 'catalog'] as const)(
+  'keeps stalled %s work bounded across external registry notifications',
+  async (phase) => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    let notify!: () => void
+    let pairingRevision = 1
+    const list = vi.fn<NonNullable<OrchestrationEnvironmentTransport['list']>>(() =>
+      phase === 'registry'
+        ? new Promise(() => {})
+        : Promise.resolve([{ environmentId: 'server', name: 'server' }])
+    )
+    const resolve = vi.fn<OrchestrationEnvironmentTransport['resolve']>(() =>
+      phase === 'pairing'
+        ? new Promise(() => {})
+        : Promise.resolve({
+            environmentId: 'server',
+            name: 'server',
+            peerFingerprint: 'peer',
+            homePeerFingerprint: 'home',
+            pairingRevision
+          })
+    )
+    const call = vi.fn<OrchestrationEnvironmentTransport['call']>(() => new Promise(() => {}))
+    const owner = new WorkerPlacementCatalogOwner(db, {
+      list,
+      resolve,
+      call,
+      onCatalogChanged: (listener) => {
+        notify = listener
+        return () => {}
+      }
+    })
+    try {
+      for (let wave = 0; wave < 4; wave++) {
+        const pending = Promise.allSettled([owner.discover(), owner.discover(), owner.discover()])
+        await vi.advanceTimersByTimeAsync(0)
+        pairingRevision++
+        notify()
+        await vi.advanceTimersByTimeAsync(5_000)
+        expect(await pending).toEqual(
+          Array(3).fill(
+            phase === 'registry'
+              ? { status: 'rejected', reason: expect.objectContaining({ code: 'runtime_timeout' }) }
+              : { status: 'fulfilled', value: [expect.objectContaining({ status: 'unchecked' })] }
+          )
+        )
+      }
+      if (phase === 'registry') {
+        expect(list).toHaveBeenCalledTimes(1)
+      }
+      if (phase !== 'catalog') {
+        expect(resolve).toHaveBeenCalledTimes(phase === 'registry' ? 0 : 1)
+      }
+      expect(call).toHaveBeenCalledTimes(phase === 'catalog' ? 2 : 0)
+    } finally {
+      db.close()
+    }
+  }
+)
+
 it('indexes a full-size shared project once and resolves a shared worktree scope once', () => {
   const resolve = vi.spyOn(resolution, 'resolveLocalWorkspaceRuntime')
   const repos = Array.from({ length: 5_000 }, (_, index) =>

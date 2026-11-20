@@ -19,8 +19,7 @@ import { readWorkerPlacementCatalog } from './worker-placement-catalog-read'
 import {
   CatalogDeadline,
   CatalogOwnerRead,
-  CatalogOwnerRegistry,
-  type PairingObservation
+  CatalogOwnerRegistry
 } from './worker-placement-catalog-deadline'
 
 const FRESH_MS = 30_000
@@ -41,10 +40,6 @@ export type PlacementCatalogSnapshot = {
 
 type Flight = { server: OrchestrationWorkerServer; pending: CatalogOwnerRead<ReadResult> }
 
-function isCurrent(observation: PairingObservation | undefined): observation is PairingObservation {
-  return !!observation?.current && observation.generation === environmentStoreWriteCount()
-}
-
 /** Shipped discovery owner, idle until queried; no sidebar, worker-start or Run dependency. */
 export class WorkerPlacementCatalogOwner {
   private readonly flights = new Map<string, Flight>()
@@ -64,6 +59,7 @@ export class WorkerPlacementCatalogOwner {
   ) {
     this.registry = transport ? new CatalogOwnerRegistry(transport) : undefined
     const reconcile = (): void => {
+      this.registry!.invalidate()
       this.dirty = true
       if (this.reconciliation) {
         return
@@ -124,7 +120,7 @@ export class WorkerPlacementCatalogOwner {
       const snapshots = await Promise.all(
         servers.map(async ({ environmentId, name }): Promise<PlacementCatalogSnapshot> => {
           const initial = await this.registry!.resolve(environmentId, deadline)
-          if (this.stopped || !isCurrent(initial)) {
+          if (this.stopped || !this.registry!.isCurrent(initial)) {
             return { server: { environmentId, name }, status: 'unchecked', reason: 'no_answer' }
           }
           const server = initial.value
@@ -136,10 +132,10 @@ export class WorkerPlacementCatalogOwner {
           const result = await this.read(server, deadline)
           const current = deadline.active
             ? await this.registry!.resolve(environmentId, deadline)
-            : initial
+            : this.registry!.current(environmentId)
           if (
             this.stopped ||
-            !isCurrent(current) ||
+            !this.registry!.isCurrent(current) ||
             !remoteRunLinkPinMatches(pin, remoteServerPin(current.value))
           ) {
             return {
@@ -221,7 +217,7 @@ export class WorkerPlacementCatalogOwner {
         if (
           this.stopped ||
           !deadline.active ||
-          !isCurrent(observation) ||
+          !this.registry!.isCurrent(observation) ||
           generation !== environmentStoreWriteCount()
         ) {
           return false
@@ -247,7 +243,7 @@ export class WorkerPlacementCatalogOwner {
     if (
       this.stopped ||
       !deadline.active ||
-      !isCurrent(current) ||
+      !this.registry!.isCurrent(current) ||
       !remoteRunLinkPinMatches(pin, remoteServerPin(current.value))
     ) {
       return { kind: 'failed', reason: 'no_answer' }
@@ -294,8 +290,10 @@ export class WorkerPlacementCatalogOwner {
               return
             }
             const current = await this.registry!.resolve(environment_id, deadline)
-            if (!this.stopped && isCurrent(current)) {
+            if (!this.stopped && this.registry!.isCurrent(current)) {
               this.retainedCatalog(current.value)
+            } else if (current) {
+              this.dirty = true
             }
           })
         )

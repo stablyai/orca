@@ -8,7 +8,7 @@ import { environmentStoreWriteCount } from '../../../../../shared/remote-runtime
 
 export type PairingObservation = Awaited<
   ReturnType<typeof observeEnvironmentStoreReads<OrchestrationWorkerServer>>
->
+> & { registryRevision: number }
 type RegistryServers = readonly { environmentId: string; name: string }[]
 
 export class CatalogDeadline {
@@ -111,12 +111,32 @@ class CatalogOwnerReadSlots<T> {
   }
 }
 export class CatalogOwnerRegistry {
+  private revision = 0
+  private readonly observations = new Map<string, PairingObservation>()
   private readonly lists = new CatalogOwnerReadSlots<
     { servers: RegistryServers } | { error: unknown }
   >()
   private readonly pairings = new CatalogOwnerReadSlots<PairingObservation>()
 
   constructor(private readonly transport: OrchestrationEnvironmentTransport) {}
+
+  invalidate(): void {
+    this.revision++
+    this.observations.clear()
+  }
+
+  isCurrent(observation: PairingObservation | undefined): observation is PairingObservation {
+    return (
+      !!observation?.current &&
+      observation.registryRevision === this.revision &&
+      observation.generation === environmentStoreWriteCount()
+    )
+  }
+
+  current(environmentId: string): PairingObservation | undefined {
+    const observation = this.observations.get(environmentId)
+    return this.isCurrent(observation) ? observation : undefined
+  }
 
   async list(deadline: CatalogDeadline): Promise<RegistryServers> {
     const result = await this.lists.read('registry', deadline, async () => {
@@ -143,11 +163,19 @@ export class CatalogOwnerRegistry {
     environmentId: string,
     deadline: CatalogDeadline
   ): Promise<PairingObservation | undefined> {
-    return this.pairings.read(environmentId, deadline, () =>
-      observeEnvironmentStoreReads(
-        async () => await this.transport.resolve(environmentId),
-        environmentStoreWriteCount
-      )
-    )
+    return this.pairings.read(environmentId, deadline, async () => {
+      const registryRevision = this.revision
+      const observation = {
+        ...(await observeEnvironmentStoreReads(
+          async () => await this.transport.resolve(environmentId),
+          environmentStoreWriteCount
+        )),
+        registryRevision
+      }
+      if (this.isCurrent(observation)) {
+        this.observations.set(environmentId, observation)
+      }
+      return observation
+    })
   }
 }
