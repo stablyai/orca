@@ -231,7 +231,9 @@ export class SimulatorHardwareKeyboardSync {
     // A Mac layout iOS lacks puts back the user's own layouts without dropping keyboards added since.
     const next = hardwareLayout
       ? withHardwareLayout(current, hardwareLayout)
-      : withOriginalHardwareLayouts(current, state.original)
+      : state.rewritten
+        ? withOriginalHardwareLayouts(current, state.original)
+        : current
     if (JSON.stringify(next) !== JSON.stringify(current)) {
       state.rewritten = true
       this.keyboards.delete(udid)
