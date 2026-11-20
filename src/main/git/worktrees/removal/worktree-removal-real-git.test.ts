@@ -101,6 +101,7 @@ describe('worktree removal against the real Git binary', () => {
         }
       }
     })
+    // ast-grep-ignore: test-no-real-time-wait -- no signal marks a request as queued; this lets it reach the slot wait
     await new Promise((resolve) => setTimeout(resolve, 50))
     // Swapped while the request queued for a slot.
     replaced = true

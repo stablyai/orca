@@ -12,7 +12,6 @@ import {
 import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
 import { describeWslProcessFailure } from '../../wsl/execution/wsl-process-failure'
 import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
-import { getErrorCode } from '../../git/worktrees/worktree-operation-options'
 
 export type LocalWorktreeFilesystemOptions = {
   wslDistro?: string
@@ -152,14 +151,13 @@ export async function removeLocalWorktreePath(
   }
 
   // Delete guest paths inside their distro; Windows Node cannot safely remove them.
+  const inGuest = (script: (target: string) => string) =>
+    runWslCommand(distro, guestCommand(targetPath, script))
   try {
-    await runWslCommand(
-      distro,
-      guestCommand(targetPath, (target) =>
-        markerLast
-          ? `if [ -L ${target} ] || { [ -e ${target} ] && [ ! -d ${target} ]; }; then echo "Refusing to delete non-directory worktree path" >&2; exit 3; fi; if [ -e ${target}/.git ] || [ -L ${target}/.git ]; then LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -samefile ${target}/.git -exec rm -rf -- {} +; else LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; fi && rm -f -- ${target}/.git && LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && LC_ALL=C rmdir -- ${target}`
-          : `rm -rf -- ${target}`
-      )
+    await inGuest((target) =>
+      markerLast
+        ? `if [ -L ${target} ] || { [ -e ${target} ] && [ ! -d ${target} ]; }; then echo "Refusing to delete non-directory worktree path" >&2; exit 3; fi; if [ -e ${target}/.git ] || [ -L ${target}/.git ]; then LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 ! -samefile ${target}/.git -exec rm -rf -- {} +; else LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +; fi && rm -f -- ${target}/.git && LC_ALL=C find ${target} -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + && LC_ALL=C rmdir -- ${target}`
+        : `rm -rf -- ${target}`
     )
   } catch (error) {
     // Only a definitive "No such file" means done; permission errors must not read as removed.
@@ -167,12 +165,10 @@ export async function removeLocalWorktreePath(
       throw error
     }
     // A child (the marker) vanishing mid-command also reads as missing; only an absent root is done.
-    const rootStillPresent = await getLocalWorktreePathAccess(options)
-      .statPath(targetPath)
-      .then(
-        () => true,
-        (statError: unknown) => getErrorCode(statError) !== 'ENOENT'
-      )
+    const rootStillPresent = await inGuest((target) => `LC_ALL=C stat -c %F -- ${target}`).then(
+      () => true,
+      (statError: unknown) => !isWslMissingPathError(statError)
+    )
     if (rootStillPresent) {
       throw error
     }
