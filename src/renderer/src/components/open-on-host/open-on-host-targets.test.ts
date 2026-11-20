@@ -155,4 +155,25 @@ describe('listOpenOnHostTargets', () => {
       ['runtime:devbox', 'devbox']
     ])
   })
+
+  it('disables a relay-served server that cannot set up projects', () => {
+    const targets = listOpenOnHostTargets(
+      {
+        ...input,
+        hosts: [
+          {
+            id: 'ssh:x',
+            kind: 'ssh',
+            label: 'x',
+            detail: '',
+            health: 'available',
+            aliasHostIds: ['runtime:x']
+          },
+          { ...runtimeHost('runtime:x', ['workspace-run-context.v1']), mergedIntoHostId: 'ssh:x' }
+        ]
+      },
+      t
+    )
+    expect(byHost('runtime:x', targets).disabledReason).not.toBeNull()
+  })
 })
