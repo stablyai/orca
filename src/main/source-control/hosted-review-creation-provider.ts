@@ -1,7 +1,11 @@
 import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type { HostedReviewProvider } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { HostedReviewCreationProvider } from '../../shared/source-control/hosted-review/hosted-review-creation-providers'
-import { resolveAzureDevOpsCredentials } from '../azure-devops/azure-devops-credentials'
+import {
+  getAzureDevOpsAuthMethod,
+  resolveAzureDevOpsCredentials
+} from '../azure-devops/azure-devops-credentials'
+import { AzureDevOpsAuthError } from '../azure-devops/azure-cli-access-token'
 import { isBitbucketReviewCreationAuthenticated } from '../bitbucket/pull-request-creation'
 import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creation'
 import { getEnterpriseGitHubRepoSlug } from '../github/repositories/github-enterprise-repository'
@@ -88,7 +92,10 @@ export function reviewCopy(provider: HostedReviewProvider): {
       shortLabel: 'PR',
       reviewLabel: 'pull request',
       providerName: 'Azure DevOps',
-      authInstruction: 'Set ORCA_AZURE_DEVOPS_TOKEN'
+      authInstruction:
+        getAzureDevOpsAuthMethod() === 'azure-cli'
+          ? 'Run az login, then Re-check Azure DevOps in Settings > Integrations'
+          : 'Set ORCA_AZURE_DEVOPS_TOKEN'
     }
   }
   if (provider === 'gitea') {
@@ -122,8 +129,14 @@ export async function isProviderAuthenticated(
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
   if (provider === 'azure-devops') {
-    const { credentialAvailable } = await resolveAzureDevOpsCredentials()
-    return credentialAvailable
+    try {
+      return (await resolveAzureDevOpsCredentials()).credentialAvailable
+    } catch (error) {
+      if (error instanceof AzureDevOpsAuthError) {
+        return false
+      }
+      throw error
+    }
   }
   if (provider === 'gitea') {
     return isGiteaReviewCreationAuthenticated()

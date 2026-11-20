@@ -1,6 +1,14 @@
 import type { AzureDevOpsRepoRef } from './repository-ref'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
-import { resolveAzureDevOpsCredentials } from './azure-devops-credentials'
+import { isAzureDevOpsOrganizationName } from '../../shared/git/remotes/azure-devops-organization-name'
+import { AzureDevOpsAuthError } from './azure-cli-access-token'
+import {
+  assertAzureDevOpsCredentialsCurrent,
+  getAzureDevOpsAuthMethod,
+  invalidateAzureDevOpsCredentials,
+  resolveAzureDevOpsCredentials,
+  type AzureDevOpsCredentials
+} from './azure-devops-credentials'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Newest first: older on-prem Servers reject newer versions with VssVersionOutOfRangeException.
@@ -78,6 +86,35 @@ export function getConfiguredAzureDevOpsApiBaseUrl(): string | null {
   return process.env.ORCA_AZURE_DEVOPS_API_BASE_URL?.trim() || null
 }
 
+export function assertAzureDevOpsCliEndpoint(destination: string | URL): void {
+  const url = typeof destination === 'string' ? URL.parse(destination) : destination
+  if (!url) {
+    throw new AzureDevOpsAuthError('unsupported-endpoint')
+  }
+  const legacySuffix = '.visualstudio.com'
+  const host = url.hostname
+  if (
+    url.protocol !== 'https:' ||
+    url.port ||
+    url.username ||
+    url.password ||
+    (host !== 'dev.azure.com' &&
+      !(
+        host.endsWith(legacySuffix) &&
+        isAzureDevOpsOrganizationName(host.slice(0, -legacySuffix.length))
+      ))
+  ) {
+    throw new AzureDevOpsAuthError('unsupported-endpoint')
+  }
+}
+
+export class AzureDevOpsHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`Azure DevOps request failed: HTTP ${status}`)
+    this.name = 'AzureDevOpsHttpError'
+  }
+}
+
 function isUrlPathAncestor(ancestor: string, descendant: string): boolean {
   try {
     const ancestorUrl = new URL(ancestor)
@@ -124,14 +161,25 @@ export async function requestAzureDevOpsJsonAtBase<T>(
   path: string,
   options: AzureDevOpsRequestOptions = {},
   // Creation preflight must distinguish lookup failure from an absent PR.
-  throwOnFailure = false
+  throwOnFailure = false,
+  initialCredentials?: AzureDevOpsCredentials
 ): Promise<T | null> {
   try {
-    const { headers } = await resolveAzureDevOpsCredentials()
-    for (let attempt = 1; ; attempt++) {
+    if (getAzureDevOpsAuthMethod() === 'azure-cli') {
+      assertAzureDevOpsCliEndpoint(baseUrl)
+    }
+    let credentials = initialCredentials ?? (await resolveAzureDevOpsCredentials())
+    let refreshed = false
+    for (let attempt = 1; ;) {
       const url = apiUrl(baseUrl, path, options.searchParams)
+      assertAzureDevOpsCredentialsCurrent(credentials)
+      const cli = credentials.method === 'azure-cli' ? credentials : null
+      if (cli) {
+        assertAzureDevOpsCliEndpoint(url)
+      }
       const response = await fetch(url, {
-        headers: { Accept: 'application/json', ...headers },
+        headers: { Accept: 'application/json', ...credentials.headers },
+        ...(cli ? { redirect: 'error' } : {}),
         signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
       })
       if (response.ok) {
@@ -140,15 +188,27 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       }
       const body = response.status === 400 ? await response.text().catch(() => '') : ''
       await cancelUnreadResponseBody(response)
+      if (cli && response.status === 401) {
+        invalidateAzureDevOpsCredentials({ generation: cli.generation })
+        if (!refreshed) {
+          refreshed = true
+          credentials = await resolveAzureDevOpsCredentials()
+          if (credentials.method !== 'azure-cli') {
+            throw new AzureDevOpsHttpError(401)
+          }
+          continue
+        }
+      }
       if (
         attempt >= AZURE_DEVOPS_MAX_REQUEST_ATTEMPTS ||
         !recordAzureDevOpsApiVersionRejection(url, response.status, body)
       ) {
         if (throwOnFailure) {
-          throw new Error(`Azure DevOps request failed: HTTP ${response.status}`)
+          throw new AzureDevOpsHttpError(response.status)
         }
         return null
       }
+      attempt++
     }
   } catch (error) {
     if (throwOnFailure) {

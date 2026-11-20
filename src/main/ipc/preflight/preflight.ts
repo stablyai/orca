@@ -51,9 +51,12 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
     'preflight:check',
     async (
       _event,
-      args?: PreflightRuntimeContext & PreflightWake & { force?: boolean }
+      args?: PreflightRuntimeContext &
+        PreflightWake & { force?: boolean; refreshAzureDevOps?: boolean }
     ): Promise<PreflightStatus> => {
-      return runPreflightAct(args, () => runPreflightCheck(args?.force, args))
+      return runPreflightAct(args, () =>
+        runPreflightCheck(args?.force, args, args?.refreshAzureDevOps)
+      )
     }
   )
 

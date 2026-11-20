@@ -1,33 +1,16 @@
 import { ipcRenderer } from 'electron'
-import type { PreflightRuntimeContext, RefreshAgentsResult } from './preflight-api'
+import type {
+  PreflightCheckOptions,
+  PreflightRuntimeContext,
+  PreflightStatus,
+  RefreshAgentsResult
+} from './preflight-api'
 import type { PreloadApi } from '../../api-types'
 import type { ZCodeInteractiveCapability } from '../../../shared/agent-launch/installation/zcode-missing-tui'
 
 export const preflightApi = {
-  check: (args?: {
-    force?: boolean
-    wakeWslDistro?: boolean
-  }): Promise<{
-    git: { installed: boolean }
-    gh: { installed: boolean; authenticated: boolean }
-    glab?: { installed: boolean; authenticated: boolean }
-    bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
-    azureDevOps?: {
-      configured: boolean
-      authenticated: boolean
-      account: string | null
-      baseUrl: string | null
-      tokenConfigured: boolean
-    }
-    gitea?: {
-      configured: boolean
-      authenticated: boolean
-      account: string | null
-      baseUrl: string | null
-      tokenConfigured: boolean
-    }
-    linear: { connected: boolean }
-  }> => ipcRenderer.invoke('preflight:check', args),
+  check: (args?: PreflightCheckOptions): Promise<PreflightStatus> =>
+    ipcRenderer.invoke('preflight:check', args),
   detectAgents: (
     args?: PreflightRuntimeContext & {
       enabledOnly?: boolean

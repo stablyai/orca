@@ -13,22 +13,9 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
-import {
-  getConfiguredAzureDevOpsApiBaseUrl,
-  normalizeAzureDevOpsApiBaseUrl,
-  requestAzureDevOpsJson,
-  requestAzureDevOpsJsonAtBase
-} from './azure-devops-api-request'
-import { resolveAzureDevOpsCredentials } from './azure-devops-credentials'
+import { requestAzureDevOpsJson } from './azure-devops-api-request'
 export { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-api-request'
-
-export type AzureDevOpsAuthStatus = {
-  configured: boolean
-  authenticated: boolean
-  account: string | null
-  baseUrl: string | null
-  tokenConfigured: boolean
-}
+export { getAzureDevOpsAuthStatus } from './azure-devops-auth-status'
 
 type RawAzureDevOpsRepository = {
   id?: string | null
@@ -139,46 +126,6 @@ function sortPullRequestsForBranch(
     return rightTime - leftTime
   }
   return Number(rightStatus === 'active') - Number(leftStatus === 'active')
-}
-
-export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {
-  const configured = getConfiguredAzureDevOpsApiBaseUrl()
-  const baseUrl = configured ? normalizeAzureDevOpsApiBaseUrl(configured) : null
-  const { credentialAvailable: hasToken } = await resolveAzureDevOpsCredentials()
-  if (!baseUrl && !hasToken) {
-    return {
-      configured: false,
-      authenticated: false,
-      account: null,
-      baseUrl: null,
-      tokenConfigured: false
-    }
-  }
-  if (!baseUrl) {
-    return {
-      configured: true,
-      authenticated: false,
-      account: null,
-      baseUrl: null,
-      tokenConfigured: hasToken
-    }
-  }
-
-  const connection = await requestAzureDevOpsJsonAtBase<{
-    authenticatedUser?: {
-      providerDisplayName?: string | null
-      customDisplayName?: string | null
-      uniqueName?: string | null
-    } | null
-  }>(baseUrl, '/_apis/connectionData', { timeoutMs: 4000 })
-  const user = connection?.authenticatedUser
-  return {
-    configured: hasToken || connection !== null,
-    authenticated: connection !== null && (hasToken || user !== null),
-    account: user?.providerDisplayName ?? user?.customDisplayName ?? user?.uniqueName ?? null,
-    baseUrl,
-    tokenConfigured: hasToken
-  }
 }
 
 export async function getAzureDevOpsPullRequest(

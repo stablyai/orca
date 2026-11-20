@@ -15,6 +15,8 @@ import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-d
 import { app } from 'electron'
 import { translateMain } from '../../i18n/main-i18n'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { installAzureDevOpsAuthSource } from '../../azure-devops/azure-devops-credentials'
+import { invalidatePreflightCache } from '../../preflight/agent-detection'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../../ipc/pty/provider/state-cleanup'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
@@ -143,6 +145,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Each host titles its own workspaces' untitled GitHub issue links once, when they are linked.
   const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
   app.once('will-quit', disposeIssueLinkTitleFill)
+  app.once('will-quit', installAzureDevOpsAuthSource(store, invalidatePreflightCache))
   bindTerminalPaneStatusLifecycle(runtime, store)
   state.runtime = runtime
   providePairedDesktopComputerName(() => runtime.readMachineName())

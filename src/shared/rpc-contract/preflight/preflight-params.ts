@@ -8,7 +8,8 @@ import type { WorkspaceLaunchKind } from '../../agent-launch/contracts/workspace
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
 
 export const PreflightCheck = z.object({
-  force: z.boolean().optional()
+  force: z.boolean().optional(),
+  refreshAzureDevOps: z.boolean().optional()
 })
 
 export const PreflightDetectRemoteAgents = z.object({

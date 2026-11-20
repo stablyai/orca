@@ -8,6 +8,8 @@ import {
   mergePathSegments
 } from '../startup/shell-environment/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
+import { invalidateAzureDevOpsCredentials } from '../azure-devops/azure-devops-credentials'
+import type { AzureDevOpsAuthStatus } from '../../shared/source-control/azure-devops-auth-types'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/projects/gitlab-known-host-probe'
@@ -52,13 +54,7 @@ export type PreflightStatus = {
   // Optional for older git/gh-only clients; GitLab consumers gate on authenticated.
   glab?: { installed: boolean; authenticated: boolean }
   bitbucket?: { configured: boolean; authenticated: boolean; account: string | null }
-  azureDevOps?: {
-    configured: boolean
-    authenticated: boolean
-    account: string | null
-    baseUrl: string | null
-    tokenConfigured: boolean
-  }
+  azureDevOps?: AzureDevOpsAuthStatus
   gitea?: {
     configured: boolean
     authenticated: boolean
@@ -92,6 +88,10 @@ function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
 
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
+  invalidatePreflightCache()
+}
+
+export function invalidatePreflightCache(): void {
   cached = null
   cachedByWslDistro.clear()
   preflightInFlight.clear()
@@ -197,8 +197,13 @@ async function isGlabAuthenticated(probe: CommandRuntime): Promise<boolean> {
 
 export async function runPreflightCheck(
   force = false,
-  context?: PreflightRuntimeContext
+  context?: PreflightRuntimeContext,
+  refreshAzureDevOps = false
 ): Promise<PreflightStatus> {
+  if (refreshAzureDevOps) {
+    invalidateAzureDevOpsCredentials({ forcePathRefresh: true })
+    invalidatePreflightCache()
+  }
   const wslTarget = getPreflightWslTarget(context)
   const cacheKey = preflightCacheKey(wslTarget)
   prunePreflightWslCache(
@@ -227,7 +232,9 @@ export async function runPreflightCheck(
   const epochAtStart = preflightCacheEpoch
   latestPreflightRun.set(cacheKey, runId)
 
-  const run = executePreflightCheck(force, context, wslTarget)
+  const run = executePreflightCheck(force, context, wslTarget).then((result) =>
+    epochAtStart === preflightCacheEpoch ? result : { ...result, azureDevOps: undefined }
+  )
   preflightInFlight.set(cacheKey, run)
   try {
     const result = await run
