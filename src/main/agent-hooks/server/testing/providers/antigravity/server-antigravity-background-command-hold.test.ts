@@ -356,3 +356,19 @@ it('holds a relayed done while the remote host reports a pending spawn', async (
   await vi.advanceTimersByTimeAsync(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 3)
   expect(state()).toBe('done')
 })
+
+it('ends the run on agy done that arrived before a messaged subagent was proven', async () => {
+  const transcriptPath = brainWithChildDescriptor()
+  const message = { stepIdx: 2, toolCall: { name: 'send_message', args: {} }, transcriptPath }
+  await agyHook('PreInvocation', { transcriptPath })
+  await agyHook('PreToolUse', message)
+  await agyHook('PostToolUse', message)
+  await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL', transcriptPath })
+  programDone()
+  await agyHook('PreInvocation', child)
+  await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1), {
+    timeout: 10000
+  })
+  await subagentIdleStop()
+  await vi.waitFor(() => expect(state()).toBe('done'), { timeout: 10000 })
+})

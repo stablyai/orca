@@ -206,6 +206,11 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
           previous !== undefined &&
           (payload.agentType === undefined || payload.agentType === 'antigravity') &&
           isAntigravityHelperHeldDone(previous, payload),
+        antigravityDone:
+          previous?.payload.agentType === 'antigravity' &&
+          (payload.agentType === undefined || payload.agentType === 'antigravity') &&
+          payload.state === 'done' &&
+          payload.sessionBoundary !== true,
         event,
         reoffer: (retried) => this.ingestTerminalStatus(retried)
       })

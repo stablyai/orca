@@ -1,5 +1,7 @@
 type PaneTimer = {
   timer?: ReturnType<typeof setTimeout>
+  /** A timed entry that wake() may also run early. */
+  wakeable?: boolean
   paneKey: string
   run: (paneKey: string) => void
 }
@@ -8,9 +10,9 @@ type PaneTimer = {
 export class PaneTimers {
   private readonly byPaneKey = new Map<string, PaneTimer>()
 
-  defer(paneKey: string, delayMs: number, run: (paneKey: string) => void): void {
+  defer(paneKey: string, delayMs: number, run: (paneKey: string) => void, wakeable = false): void {
     this.cancel(paneKey)
-    this.start(paneKey, delayMs, run)
+    this.start(paneKey, delayMs, run, wakeable)
   }
 
   deferUnlessPending(paneKey: string, delayMs: number, run: (paneKey: string) => void): void {
@@ -26,7 +28,8 @@ export class PaneTimers {
 
   wake(paneKey: string): void {
     const entry = this.byPaneKey.get(paneKey)
-    if (entry && entry.timer === undefined) {
+    if (entry && (entry.timer === undefined || entry.wakeable)) {
+      clearTimeout(entry.timer)
       this.start(paneKey, 0, entry.run)
     }
   }
@@ -59,10 +62,16 @@ export class PaneTimers {
     this.byPaneKey.clear()
   }
 
-  private start(paneKey: string, delayMs: number, run: (paneKey: string) => void): void {
+  private start(
+    paneKey: string,
+    delayMs: number,
+    run: (paneKey: string) => void,
+    wakeable?: boolean
+  ): void {
     const entry: PaneTimer = {
       paneKey,
       run,
+      wakeable,
       timer: setTimeout(
         () => {
           this.byPaneKey.delete(entry.paneKey)
