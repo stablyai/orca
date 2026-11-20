@@ -14,6 +14,9 @@ export const NativeChatViewTabContext = createContext<NativeChatViewTab | null>(
 // Why: chat views are released while hidden to bound memory. Their small view state (expanded turns and
 // details, goal entry, a half-made answer, the reading position) lives here per tab, like an editor's view-state
 // memento, and ends exactly when the tab closes. Layers report which tabs are open, so writes check in O(1).
+/** Per-transcript state keeps this many transcripts per tab: a rewind or /clear leaves the old one's behind. */
+export const KEPT_TRANSCRIPTS_PER_TAB = 16
+
 const openTabs = new Set<string>()
 const records = new Map<string, Map<string, unknown>>()
 const listeners = new Map<string, Set<() => void>>()
@@ -44,7 +47,7 @@ export function readNativeChatViewMemory<T>(tab: NativeChatViewTab, key: string)
 }
 
 /** Writes after the tab closed are dropped, so a late settlement can't recreate a closed tab's record. */
-/** With `keepNewest`, keys sharing this key's prefix (up to its last ':') beyond the newest few are dropped. */
+/** With `keepNewest`, keys sharing this key's prefix (up to its first ':') beyond the newest few are dropped. */
 export function writeNativeChatViewMemory(
   tab: NativeChatViewTab,
   key: string,
@@ -106,7 +109,8 @@ const NO_SUBSCRIPTION = (): (() => void) => () => {}
  */
 export function useNativeChatViewState<T>(
   key: string,
-  initial: T
+  initial: T,
+  keepNewest?: number
 ): [T, (action: SetStateAction<T>) => void] {
   const tab = useContext(NativeChatViewTabContext)
   const [local, setLocal] = useState(initial)
@@ -125,9 +129,9 @@ export function useNativeChatViewState<T>(
         return
       }
       const next = apply(readNativeChatViewMemory<T>(tab, key) ?? initial)
-      writeNativeChatViewMemory(tab, key, next === initial ? undefined : next)
+      writeNativeChatViewMemory(tab, key, next === initial ? undefined : next, keepNewest)
     },
-    [tab, key, initial]
+    [tab, key, initial, keepNewest]
   )
   return [tab ? kept : local, setValue]
 }

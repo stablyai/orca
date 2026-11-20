@@ -74,6 +74,7 @@ export function useNativeChatNavigation({
   journalItems,
   subagentId,
   sessionKey,
+  transcriptKey,
   sessionId,
   ready = true,
   isVisible,
@@ -96,6 +97,8 @@ export function useNativeChatNavigation({
   /** A subagent's view, which pages older history until the agent's spawn is loaded. */
   subagentId: string | null
   sessionKey: string
+  /** This transcript within its chat tab: session, subagent and conversation. */
+  transcriptKey: string
   sessionId?: string | null
   ready?: boolean
   isVisible: boolean
@@ -191,7 +194,7 @@ export function useNativeChatNavigation({
     [beginNavigation, issue, nextRequestId, readerLeavesEnd]
   )
   const restoring = useNativeChatReadingPosition({
-    positionKey: `${sessionKey}:${subagentId ?? ''}`,
+    positionKey: transcriptKey,
     isVisible,
     ready,
     scrollRef,

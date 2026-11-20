@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import {
+  KEPT_TRANSCRIPTS_PER_TAB,
   useNativeChatViewMemory,
   useNativeChatViewState
 } from '../../pane/ownership/native-chat-view-memory'
@@ -36,10 +37,12 @@ const NO_DISCLOSURES: ReadonlyMap<string, boolean> = new Map()
 export function useNativeChatDisclosures(memoryKey?: string): NativeChatDisclosureStore {
   const [open, setOpen] = useNativeChatViewState<ReadonlyMap<string, boolean>>(
     `disclosures:${memoryKey ?? ''}`,
-    NO_DISCLOSURES
+    NO_DISCLOSURES,
+    KEPT_TRANSCRIPTS_PER_TAB
   )
   const keptRunScroll = useNativeChatViewMemory<Map<string, NativeChatRunScroll>>(
-    memoryKey === undefined ? undefined : `run-scroll:${memoryKey}`
+    memoryKey === undefined ? undefined : `run-scroll:${memoryKey}`,
+    KEPT_TRANSCRIPTS_PER_TAB
   )
   const [runScroll] = useState(() => keptRunScroll.saved ?? new Map<string, NativeChatRunScroll>())
   const { write: keepRunScroll } = keptRunScroll

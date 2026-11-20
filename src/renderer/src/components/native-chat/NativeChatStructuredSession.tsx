@@ -107,6 +107,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     transportEnabled: provisionalLaunch.transportEnabled,
     ...(provisionalLaunch.launch ? { launch: provisionalLaunch.launch } : {})
   })
+  const conversationKey = `${controller.epoch}:${controller.contextClear.clears}`
   useRecheckNativeChatFileLinksWhenTurnEnds(controller.isWorking)
   const { composerError, reportComposerError } = useNativeChatComposerError(
     controller.commandRefusalCauses
@@ -299,7 +300,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                             <NativeChatSubagentTranscripts
                               find={surface.find}
                               // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
-                              key={`${controller.epoch}:${controller.contextClear.clears}`}
+                              key={conversationKey}
+                              conversationKey={conversationKey}
                               paneKey={paneKey}
                               ref={submits.messageListRef}
                               session={session}

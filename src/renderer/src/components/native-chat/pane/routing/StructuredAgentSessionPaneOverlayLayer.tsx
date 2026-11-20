@@ -24,6 +24,15 @@ import {
   releaseNativeChatViewTabs
 } from '../ownership/native-chat-view-memory'
 import { chatViewRetention, useRetainedChatViewKey } from './native-chat-view-retention'
+import { forgetNativeChatAsyncSkipsForTabs } from '../../prompts/use-native-chat-async-questions'
+
+/** A closed chat tab's place, kept editor, view state and kept skips end with it. */
+function releaseClosedChatTabs(closed: ReadonlySet<string>): void {
+  chatViewRetention.forget(closed)
+  releaseNativeChatComposerEditors(closed)
+  releaseNativeChatViewTabs(closed)
+  forgetNativeChatAsyncSkipsForTabs(closed)
+}
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -195,9 +204,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       ownedTabIdsRef.current = ownedTabIds
       openNativeChatViewTabs(ownedTabIds)
       if (closed.size > 0) {
-        chatViewRetention.forget(closed)
-        releaseNativeChatComposerEditors(closed)
-        releaseNativeChatViewTabs(closed)
+        releaseClosedChatTabs(closed)
       }
     }, [ownedTabIds])
     // A removed workspace unmounts this layer without a tab close; tabs gone from the store are closed.
@@ -208,9 +215,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
         )
         const closed = new Set([...ownedTabIdsRef.current].filter((id) => !live.has(id)))
         if (closed.size > 0) {
-          chatViewRetention.forget(closed)
-          releaseNativeChatComposerEditors(closed)
-          releaseNativeChatViewTabs(closed)
+          releaseClosedChatTabs(closed)
         }
       },
       [worktreeId]

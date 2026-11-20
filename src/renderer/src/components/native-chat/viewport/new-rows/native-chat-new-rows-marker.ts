@@ -1,7 +1,10 @@
 // Mark the first row that arrived or kept growing while the reader was away.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useNativeChatViewMemory } from '../../pane/ownership/native-chat-view-memory'
+import {
+  KEPT_TRANSCRIPTS_PER_TAB,
+  useNativeChatViewMemory
+} from '../../pane/ownership/native-chat-view-memory'
 import { useOrcaWindowForegroundFocused } from '@/attention/use-orca-window-foreground-focused'
 import { compareAgentJournalPositions } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentJournalPosition } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -200,7 +203,8 @@ export function useNativeChatNewRowsMarker(
   const focused = useOrcaWindowForegroundFocused(enabled && isShowingLatest)
   const watching = !enabled || focused
   const kept = useNativeChatViewMemory<Seen>(
-    memoryKey === undefined ? undefined : `new-rows:${memoryKey}`
+    memoryKey === undefined ? undefined : `new-rows:${memoryKey}`,
+    KEPT_TRANSCRIPTS_PER_TAB
   )
   const [seen, setSeen] = useState<Seen>(
     () => kept.saved ?? { watching, left: null, missed: null, arriving: false }

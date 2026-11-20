@@ -21,6 +21,23 @@ import { nativeChatPromptDismissals as dismissals } from './native-chat-prompt-d
 import { shownStructuredAgentSessionAsyncQuestions } from '../../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { StructuredAgentSessionAsyncQuestionSkip } from './use-structured-agent-session-async-question-skip'
 
+
+// Skips a released view left behind, by tab, so closing the tab sweeps them.
+const keptAsyncScopesByTab = new Map<string, Set<string>>()
+
+function keepAsyncScopeForTab(tabId: string, scopeKey: string): void {
+  const scopes = keptAsyncScopesByTab.get(tabId) ?? new Set<string>()
+  scopes.add(scopeKey)
+  keptAsyncScopesByTab.set(tabId, scopes)
+}
+
+export function forgetNativeChatAsyncSkipsForTabs(tabIds: Iterable<string>): void {
+  for (const tabId of tabIds) {
+    keptAsyncScopesByTab.get(tabId)?.forEach((scopeKey) => dismissals.forgetAsync(scopeKey))
+    keptAsyncScopesByTab.delete(tabId)
+  }
+}
+
 export function useNativeChatAsyncQuestions({
   paneKey,
   sourceKey,
@@ -56,7 +73,9 @@ export function useNativeChatAsyncQuestions({
   useNativeChatPaneLifetimeEffect(
     useCallback(
       () => () => {
-        if (!viewTab || !isNativeChatViewTabOpen(viewTab)) {
+        if (viewTab && isNativeChatViewTabOpen(viewTab)) {
+          keepAsyncScopeForTab(viewTab.tabId, scopeKey)
+        } else {
           dismissals.forgetAsync(scopeKey)
         }
       },

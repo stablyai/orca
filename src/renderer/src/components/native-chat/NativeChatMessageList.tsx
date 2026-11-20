@@ -98,9 +98,12 @@ export function NativeChatMessageList({
   runtimeContext,
   botHome,
   turnBot,
-  structuredAttachments = false
+  structuredAttachments = false,
+  conversationKey = ''
 }: {
   turnBot?: BotChatIdentity | null
+  /** Names the conversation a rewind or /clear replaced, so its view state never carries over. */
+  conversationKey?: string
   ref?: Parameters<typeof useNativeChatMessageListHandle>[0]
   session: NativeChatLiveSession
   structuredAttachments?: boolean
@@ -139,7 +142,12 @@ export function NativeChatMessageList({
   const receipts = useNativeChatQuestionReceipts(journalItems)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const transcriptKey = `${session.agent}:${session.sessionId ?? ''}:${subagentView?.agentId ?? ''}`
+  const transcriptKey = [
+    session.agent,
+    session.sessionId ?? '',
+    subagentView?.agentId ?? '',
+    conversationKey
+  ].join(':')
   const [expandedTurnIds, toggleExpandedTurn] = useNativeChatExpandedTurns(transcriptKey)
 
   const { hasMore, loadingEarlier, loadEarlier } = session
@@ -306,6 +314,7 @@ export function NativeChatMessageList({
     journalItems,
     subagentId,
     sessionKey: `${session.agent}:${session.sessionId}`,
+    transcriptKey,
     sessionId: session.sessionId,
     ready: session.readPhase === 'ready',
     isVisible,

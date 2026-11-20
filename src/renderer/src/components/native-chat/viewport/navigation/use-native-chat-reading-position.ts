@@ -1,6 +1,7 @@
 import { useCallback, useContext, useLayoutEffect, useRef } from 'react'
 import type { HistoryJumpResult } from './use-native-chat-history-jump'
 import {
+  KEPT_TRANSCRIPTS_PER_TAB,
   NativeChatViewTabContext,
   readNativeChatViewMemory,
   writeNativeChatViewMemory
@@ -121,7 +122,7 @@ export function useNativeChatReadingPosition({
         return
       }
       freshMountRef.current = false
-      writeNativeChatViewMemory(tab, key, next ?? undefined)
+      writeNativeChatViewMemory(tab, key, next ?? undefined, KEPT_TRANSCRIPTS_PER_TAB)
     }
   }, [isVisible, ready, tab, key, scrollRef])
   return useCallback(() => restoringRef.current !== null, [])
