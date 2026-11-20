@@ -1538,7 +1538,7 @@
         "waiting": "Waiting for install",
         "updateNeeded": "Update needed"
       },
-      "avatarSlackNote": "Changes your bot's picture in Slack too.",
+      "avatarSlackNote": "Slack gets the picture, not the color or outfit.",
       "linearStatus": {
         "checking": "Checking",
         "unknown": "Can’t check",

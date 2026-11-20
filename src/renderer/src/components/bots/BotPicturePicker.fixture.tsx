@@ -140,7 +140,7 @@ function Settings(): React.JSX.Element {
               onOutfitChange={picture.pickOutfit}
             />
             <p className="text-center text-xs text-muted-foreground">
-              Changes your bot&apos;s picture in Slack too.
+              Slack gets the picture, not the color or outfit.
             </p>
           </div>
         </PopoverContent>
