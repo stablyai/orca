@@ -64,7 +64,7 @@ export function isAntigravityHostAccountHome(home: AgentSessionAccountHome): boo
 }
 
 // Keyed by the binary's identity so an upgrade or reinstall is checked again.
-type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number }
+type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number; version?: string }
 const checks = new Map<string, HostCheck>()
 
 class IncompatibleHostAcp extends Error {}
@@ -72,16 +72,16 @@ class IncompatibleHostAcp extends Error {}
 /** After agy's login changes, the next check asks again instead of trusting the last answer. */
 export function forgetAntigravityHostAcpChecks(): void {
   checks.clear()
-  lastReady = null
+  latestAsked = null
 }
 
-// The latest check wins, so a changed PATH or command never names another binary's version.
-let lastReady: { command: string; version: string } | null = null
+// The check behind the latest answer, cached or not, so the version is never another binary's.
+let latestAsked: HostCheck | null = null
 
-/** The version of the agy that passed the latest check, for naming what chats run on; null before
- *  one has. Reads the cache only, so it never starts agy. */
+/** The version of the agy the latest answer vouched for, for naming what chats run on; null when it
+ *  did not pass. Reads the cache only, so it never starts agy. */
 export function readyAntigravityHostAcpVersion(): string | null {
-  return lastReady?.version ?? null
+  return latestAsked?.version ?? null
 }
 
 /** Whether `command acp` initializes as a compatible server that serves session requests. An
@@ -100,6 +100,7 @@ export async function antigravityHostAcpReady(
   const identity = `${stats.size}:${stats.mtimeMs}`
   const cached = checks.get(command)
   if (cached?.identity === identity && (cached.retryAt === undefined || now() < cached.retryAt)) {
+    latestAsked = cached
     return cached.answer
   }
   let answered = false
@@ -122,8 +123,7 @@ export async function antigravityHostAcpReady(
       }
     ).then(
       (initialized) => {
-        const version = initialized.agentInfo?.version
-        lastReady = version ? { command, version } : null
+        check.version = initialized.agentInfo?.version
         return true
       },
       (error: unknown) => {
@@ -134,12 +134,12 @@ export async function antigravityHostAcpReady(
         ) {
           check.retryAt = undefined
         }
-        lastReady = null
         return false
       }
     )
   }
   checks.set(command, check)
+  latestAsked = check
   return check.answer
 }
 
