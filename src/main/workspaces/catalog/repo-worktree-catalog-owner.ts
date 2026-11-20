@@ -1,4 +1,5 @@
 import type { Repo } from '../../../shared/repository/repo-types'
+import type { GitAdminProbeResult } from '../../../shared/git/metadata/git-admin-probe-result'
 import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { onWorktreeScanGenerationBump } from '../../git/worktrees/catalog/worktree-scan-cache'
@@ -122,7 +123,7 @@ function startFlight(
   repo: Repo,
   requirement: WorktreeCatalogRequirement,
   plan: WorktreeCatalogFlightPlan,
-  pendingProbe: Promise<string | null> | null
+  pendingProbe: Promise<GitAdminProbeResult> | null
 ): Flight {
   // Capture before Git can yield so a concurrent mutation is never stamped as observed.
   const revision = entry.revision
@@ -235,7 +236,7 @@ export async function readWorktreeCatalog(
       return { observation: failure, superseded: false }
     }
     const success = entry.success
-    let pendingProbe: Promise<string | null> | null = null
+    let pendingProbe: Promise<GitAdminProbeResult> | null = null
     if (success && isCurrent(entry, success)) {
       if (acceptable(success, requirement, now)) {
         return { observation: success, superseded: false }

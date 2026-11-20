@@ -33,6 +33,7 @@ import {
 } from '../../../ipc/worktrees/listing/worktree-catalog-observation-hygiene'
 import type { Store } from '../../../persistence/loading-store/store'
 import { SUPERSEDED_SCAN_RESCANS } from '../../../ipc/worktrees/listing/overtaken-scan-rerun'
+import type { GitAdminProbeResult } from '../../../../shared/git/metadata/git-admin-probe-result'
 
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
 
@@ -139,7 +140,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
   /** Allow one outstanding filesystem probe per repo: timeouts do not cancel readdir/stat, so repeated probes could exhaust libuv on wedged mounts. */
   protected startRepoWorktreeAdminFingerprintProbe(
     repo: Repo
-  ): Promise<string | null> | 'in-flight' {
+  ): Promise<GitAdminProbeResult> | 'in-flight' {
     if (this.worktreeAdminFingerprintProbes.has(repo.id)) {
       return 'in-flight'
     }

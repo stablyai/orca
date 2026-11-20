@@ -251,6 +251,7 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'profile-state-writer-worker-entry.js' },
   { filename: 'profile-state-backup-worker-entry.js' },
   { filename: 'command-path-directory-worker-entry.js' },
+  { filename: 'repo-worktree-admin-fingerprint-process-entry.js' },
   // Worker thread that reads other apps' SQLite (the OpenCode binder and history) off the event loop.
   { filename: ORCAD_FOREIGN_SQLITE_READER_ENTRY },
   { filename: 'journal-sql-worker-entry.js' },

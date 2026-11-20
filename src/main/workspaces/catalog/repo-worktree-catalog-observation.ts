@@ -1,4 +1,5 @@
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
+import type { GitAdminProbeResult } from '../../../shared/git/metadata/git-admin-probe-result'
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
 
 /** One `git worktree list`; a confirmed missing/non-repo stays distinct from a failed run. */
@@ -25,7 +26,7 @@ export type WorktreeCatalogObservation = {
   readonly generation: number
   readonly revision: number
   /** Only runtime-started flights fingerprint first; without one the rows cannot be verified. */
-  readonly adminFingerprint: Promise<string | null> | null
+  readonly adminFingerprint: Promise<GitAdminProbeResult> | null
   readonly startedBy: WorktreeCatalogReaderKind
   witness: WorktreeCatalogWitness | undefined
   /** Scan start, or the latest verifier answer that let a runtime reader reuse these rows. */
@@ -42,7 +43,7 @@ export type WorktreeCatalogVerifier = {
   /** Full-list ceiling measured from scan start. */
   ceilingMs: number
   /** One outstanding probe per repo; 'in-flight' and timeouts reuse rows without proving them (#19312). */
-  probe: () => Promise<string | null> | 'in-flight'
+  probe: () => Promise<GitAdminProbeResult> | 'in-flight'
   timeoutMs: number
   onUnknown?: (reason: string) => void
 }

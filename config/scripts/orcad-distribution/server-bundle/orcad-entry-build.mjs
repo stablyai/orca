@@ -34,6 +34,8 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
     'src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
   commandPathDirectoryWorker: 'src/main/ipc/command-path/command-path-directory-worker-entry.ts',
+  worktreeAdminFingerprint:
+    'src/main/runtime/workspaces/catalog/repo-worktree-admin-fingerprint-process-entry.ts',
   sessionScanner: 'src/main/ai-vault/scan-service/session-scanner-service-entry.ts',
   workerThreadChildProcess:
     'src/main/worker-thread-child-process/worker-thread-child-process-entry.ts',
