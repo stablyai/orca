@@ -27861,7 +27861,7 @@
       "description": "{{name}} 的 Home Chat 将在 {{agent}} 上重新开始。当前对话会保留在历史记录中。",
       "kept": "保留：灵魂、记忆、自动化、连接器",
       "notKept": "不保留：当前对话",
-      "threads": "{{name}} 已回复过的 Slack 话题会保留原来的智能体",
+      "threads": "已有 Orca 聊天的 Slack 话题会保留该聊天的智能体",
       "action": "切换为 {{agent}}"
     },
     "paused": {

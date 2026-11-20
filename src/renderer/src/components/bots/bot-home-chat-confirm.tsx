@@ -70,8 +70,7 @@ export function useConfirmBotAgentSwitch(): (
             <li>
               {translate(
                 'bots.agentSwitch.threads',
-                'Slack threads {{name}} already replied in keep their agent',
-                { name: bot.name }
+                "Slack threads with an existing Orca chat keep that chat's agent"
               )}
             </li>
           </ul>
