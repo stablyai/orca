@@ -571,7 +571,8 @@ describe('NewBotDialog Generate and an upload', () => {
       finishUpload(first)
       await waitFor(() => expect(picture()).toBe(`data:image/png;base64,${first}`))
       openPicker()
-      fireEvent.click(await screen.findByRole('button', { name: 'Previous picture' }))
+      // The pasted picture holds the Generate slot; clicking it opens its description.
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit description' }))
       const box = await screen.findByRole('textbox', { name: 'Picture description' })
       fireEvent.change(box, { target: { value: 'a fox' } })
       fireEvent.keyDown(box, { key: 'Enter' })
@@ -720,7 +721,8 @@ describe('NewBotDialog Generate and an upload', () => {
     finishUpload('UE5H')
     await waitFor(() => expect(picture()).toBe('data:image/png;base64,UE5H'))
     openPicker()
-    fireEvent.click(await screen.findByRole('button', { name: 'Previous picture' }))
+    // The pasted picture holds the Generate slot; clicking it opens its description.
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit description' }))
     const box = await screen.findByRole('textbox', { name: 'Picture description' })
     fireEvent.change(box, { target: { value: 'a fox' } })
     fireEvent.keyDown(box, { key: 'Enter' })

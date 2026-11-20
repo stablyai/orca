@@ -2,6 +2,7 @@
 // render whether it has a Generate face. Fetched after startup settles and again on each open.
 import { useEffect, useSyncExternalStore } from 'react'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useAppStore } from '@/store'
 import { scheduleAfterInputQuiet } from '@/lib/window-activity/input-quiet-scheduler'
 import type {
   AvatarGenerationApi,
@@ -20,7 +21,22 @@ export function avatarGenerationApi(): AvatarGenerationApi | null {
   return isWebClientLocation() ? null : (window.api?.avatarGeneration ?? null)
 }
 
+function sameAgents(
+  a: readonly AvatarImageAgentStatus[] | null,
+  b: readonly AvatarImageAgentStatus[]
+): boolean {
+  return (
+    a !== null &&
+    a.length === b.length &&
+    a.every((entry, i) => entry.agent === b[i]?.agent && entry.status === b[i]?.status)
+  )
+}
+
 function publish(next: readonly AvatarImageAgentStatus[]): void {
+  // An unchanged answer (most refreshes) wakes nobody.
+  if (sameAgents(agents, next)) {
+    return
+  }
   agents = next
   for (const listener of listeners) {
     listener()
@@ -70,18 +86,43 @@ export function useAvatarCapability(): readonly AvatarImageAgentStatus[] | null 
   return useSyncExternalStore(subscribe, readAvatarCapability)
 }
 
-/** Checks once startup settles, so the first picture picker opened already knows the answer. */
+function detectedAgentsKey(ids: readonly string[] | null): string | null {
+  return ids ? [...ids].sort().join(' ') : null
+}
+
+/** Checks once startup settles, so the first picture picker opened already knows the answer,
+ *  and again whenever the launcher detects a different set of installed agents. */
 export function usePrefetchAvatarCapability(): void {
-  useEffect(
-    () =>
-      scheduleAfterInputQuiet(refreshAvatarCapability, {
-        delayMs: 3_000,
-        quietMs: 500,
-        idleTimeoutMs: 2_000,
-        maxWaitMs: 10_000
-      }),
-    []
-  )
+  useEffect(() => {
+    const cancel = scheduleAfterInputQuiet(refreshAvatarCapability, {
+      delayMs: 3_000,
+      quietMs: 500,
+      idleTimeoutMs: 2_000,
+      maxWaitMs: 10_000
+    })
+    let seenIds = useAppStore.getState().detectedAgentIds
+    let seen = detectedAgentsKey(seenIds)
+    const unsubscribe = useAppStore.subscribe((state) => {
+      if (state.detectedAgentIds === seenIds) {
+        return
+      }
+      seenIds = state.detectedAgentIds
+      const key = detectedAgentsKey(seenIds)
+      if (key === seen) {
+        return
+      }
+      const first = seen === null
+      seen = key
+      // The first detection only confirms what the startup check will ask anyway.
+      if (!first && key !== null) {
+        refreshAvatarCapability()
+      }
+    })
+    return () => {
+      cancel()
+      unsubscribe()
+    }
+  }, [])
 }
 
 /** As if the check had already answered `next` before anything opened. */

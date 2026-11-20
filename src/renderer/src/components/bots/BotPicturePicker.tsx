@@ -361,8 +361,11 @@ export function BotPicturePicker({
       {withGenerate ? (
         <BotPictureRowFold open={generating}>
           <GenerateField face={face} />
-          {/* A picture just taken in lands in this slot: its Undo or error stays in reach. */}
-          <BotPictureRowFold open={line.kind !== 'hint'}>{uploadLine}</BotPictureRowFold>
+          {/* While the slot holds a picture, Upload stays in reach under its description, as do a
+              new picture's Undo and errors. */}
+          <BotPictureRowFold open={face.folded || line.kind !== 'hint'}>
+            {uploadLine}
+          </BotPictureRowFold>
         </BotPictureRowFold>
       ) : null}
       <input
