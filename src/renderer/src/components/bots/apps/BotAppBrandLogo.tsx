@@ -94,6 +94,8 @@ export function BotAppBrandLogo({
   const Icon = app.Icon ?? brand?.Icon
   if (size === 'xs' || bare) {
     const box = size === 'xs' ? 'size-3.5' : 'size-5'
+    // Only a connector row's marks follow the theme; xs elsewhere keeps its logos as they were.
+    const darkLogo = bare ? brand?.darkLogo : undefined
     const mark = brand?.logo ? (
       <>
         <img
@@ -103,13 +105,13 @@ export function BotAppBrandLogo({
           className={cn(
             box,
             'object-contain',
-            brand.whiteMark && 'brightness-0 dark:brightness-100',
-            brand.darkLogo && 'dark:hidden'
+            bare && brand.whiteMark && 'brightness-0 dark:brightness-100',
+            darkLogo && 'dark:hidden'
           )}
         />
-        {brand.darkLogo ? (
+        {darkLogo ? (
           <img
-            src={brand.darkLogo}
+            src={darkLogo}
             alt=""
             draggable={false}
             className={cn(box, 'hidden object-contain dark:block')}
