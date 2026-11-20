@@ -141,7 +141,8 @@ export function ChecksTab({
       return undefined
     }
     const fact = resolveRepoExecutionHostPlatform(
-      { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+      { sshConnectionStates, sshStateByEnvironment },
+      runtimeStatusByEnvironmentId,
       repo,
       () =>
         getLocalRepoProjectExecutionRuntimeContext(

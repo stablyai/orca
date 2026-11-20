@@ -12,6 +12,8 @@ import {
 import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
 import { restartIdleAgyChats, withAntigravityChatBackend } from './antigravity-chat-backend'
+import { lastAntigravityAgySignedOut } from '../../../../antigravity/antigravity-chat-route'
+import { readyAntigravityHostAcpVersion } from '../../../../antigravity/antigravity-host-acp'
 import {
   cancelAntigravityChatSignIn,
   completeAntigravityChatSignIn,
@@ -67,7 +69,9 @@ function detectChatAuth(runtime: OrcaRuntimeService) {
     config: () => readAntigravityChatAuthConfig(runtime.requireStore()),
     launchEnv,
     apiKeyStatus: () => readAntigravityChatApiKeyStatus(launchEnv),
-    liveChats: () => countStructuredAgentChats('antigravity')
+    liveChats: () => countStructuredAgentChats('antigravity'),
+    agyVersion: readyAntigravityHostAcpVersion,
+    agySignedOut: lastAntigravityAgySignedOut
   })
 }
 

@@ -1,4 +1,4 @@
-// A recorded answer's quote of the question it answers: one muted line above the answer's text.
+// A reply's quote of the question it answers: one muted line above its text.
 import { Text, View } from 'react-native'
 import { CornerDownRight } from 'lucide-react-native'
 import { colors, spacing, typography } from '../../theme/mobile-theme'

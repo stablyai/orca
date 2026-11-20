@@ -5,6 +5,7 @@ import {
   type InstalledAgentDetectionOptions
 } from '../../../../preflight/installed-agent-detection'
 import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
+import { listInstalledWorkspaceAgents } from './installed-agents'
 import { runPreflightCheck } from '../../../../preflight/agent-detection'
 import { detectRemoteWindowsTerminalCapabilities } from '../../../../ipc/preflight/preflight-remote-windows-terminal-capabilities'
 
@@ -15,6 +16,7 @@ import {
 } from '../../../../preflight/workspace-agent-detection'
 import {
   PreflightAgentRefresh,
+  PreflightAgentDetection,
   PreflightProjectAgentDetection,
   PreflightCheck,
   PreflightDetectRemoteAgents,
@@ -36,6 +38,12 @@ export function hostDetectionOptions(
 }
 
 export const PREFLIGHT_METHODS = [
+  defineMethod({
+    name: 'preflight.installedAgents',
+    permission: 'workspace',
+    params: PreflightAgentDetection,
+    handler: (params, { runtime }) => listInstalledWorkspaceAgents(runtime, params)
+  }),
   defineMethod({
     name: 'preflight.check',
     permission: 'workspace',

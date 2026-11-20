@@ -1,5 +1,5 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CircleHelp, Layers, Settings } from 'lucide-react'
+import { CalendarClock, CircleHelp, Layers, List, Settings } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsTooltipLabel } from '@/components/sidebar/chrome/SidebarSettingsHelpMenu'
@@ -24,6 +24,12 @@ import { AppRailMoreMenu, useAppRailSlotCapacity } from './AppRailMoreMenu'
 import { partitionAppRail } from './app-rail-overflow'
 import { railItemOwningFocus } from './app-rail-focus-ownership'
 import { useWorkspaceListRegionPresent } from './workspace-list-region-presence'
+import {
+  activateRailDestination,
+  selectRailAutomationsVisible,
+  selectRailTasksVisible,
+  type AppRailDestinationId
+} from './app-rail-destinations'
 import { getTitlebarSidebarToggle } from '@/app-shell/chrome/titlebar-sidebar-toggle-ref'
 
 const ICON_SIZE = 18
@@ -39,6 +45,10 @@ export function AppRail({
   const t = useTranslate()
   const workspacesActive = useAppStore(isWorkspacesRailItemActive)
   const settingsActive = useAppStore((s) => s.activeView === 'settings')
+  const tasksVisible = useAppStore(selectRailTasksVisible)
+  const automationsVisible = useAppStore(selectRailAutomationsVisible)
+  const tasksActive = useAppStore((s) => s.activeView === 'tasks')
+  const automationsActive = useAppStore((s) => s.activeView === 'automations')
   const listShowsWorkspaces = useAppStore((s) => (s.sidebarBody ?? 'workspaces') === 'workspaces')
   const listRegionPresent = useWorkspaceListRegionPresent()
   const setupProgress = useSetupGuideProgressSnapshot()
@@ -66,21 +76,36 @@ export function AppRail({
   const capacity = useAppRailSlotCapacity(toolbar, () => {
     transitionOwnerRef.current = toolbarRef.current ? railItemOwningFocus(toolbarRef.current) : null
   })
-  const partition = partitionAppRail(0, capacity)
+  // Hidden destinations are left out before partitioning; hidden is never folded.
+  const shownDestinations: AppRailDestinationId[] = [
+    ...(tasksVisible ? (['tasks'] as const) : []),
+    ...(automationsVisible ? (['automations'] as const) : [])
+  ]
+  const partition = partitionAppRail(shownDestinations.length, capacity)
+  const railDestinations = shownDestinations.slice(0, partition.shownDestinations)
+  const foldedDestinations = shownDestinations.slice(partition.shownDestinations)
+  const destinationActive = (id: AppRailDestinationId): boolean =>
+    id === 'tasks' ? tasksActive : automationsActive
 
   const renderedItems: AppRailItemId[] = [
     'workspaces',
+    ...railDestinations,
     ...(partition.more ? (['more'] as const) : []),
     ...(partition.helpInMore ? [] : (['help'] as const)),
     ...(partition.settingsInMore ? [] : (['settings'] as const))
   ]
+  const currentDestination = shownDestinations.find(destinationActive) ?? null
   const activeItem: AppRailItemId | null = workspacesActive
     ? 'workspaces'
-    : settingsActive
-      ? partition.settingsInMore
-        ? 'more'
-        : 'settings'
-      : null
+    : currentDestination
+      ? railDestinations.includes(currentDestination)
+        ? currentDestination
+        : 'more'
+      : settingsActive
+        ? partition.settingsInMore
+          ? 'more'
+          : 'settings'
+        : null
   const [lastFocusedItem, setLastFocusedItem] = useState<AppRailItemId | null>(null)
   const tabStopItem =
     lastFocusedItem && renderedItems.includes(lastFocusedItem)
@@ -148,6 +173,12 @@ export function AppRail({
   const workspacesLabel = t('appRail.workspaces', 'Workspaces')
   const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
   const helpLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c', 'Help')
+  const destinationLabel = (id: AppRailDestinationId): string =>
+    id === 'tasks'
+      ? t('auto.components.sidebar.SidebarNav.fee535205b', 'Tasks')
+      : t('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')
+  const destinationIcon = (id: AppRailDestinationId, size: number): React.ReactNode =>
+    id === 'tasks' ? <List size={size} aria-hidden /> : <CalendarClock size={size} aria-hidden />
   const openSettings = (): void => useAppStore.getState().openSettingsPage()
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -210,6 +241,18 @@ export function AppRail({
               onClick={() => navigateFromRail(() => activateWorkspacesRailItem(useAppStore))}
             />
           </RailItem>
+          {railDestinations.map((id) => (
+            <RailItem key={id} tooltip={destinationLabel(id)}>
+              <AppRailButton
+                itemId={id}
+                icon={destinationIcon(id, ICON_SIZE)}
+                label={destinationLabel(id)}
+                active={destinationActive(id)}
+                tabStop={tabStopItem === id}
+                onClick={() => activateRailDestination(id)}
+              />
+            </RailItem>
+          ))}
           {partition.more ? (
             <AppRailMoreMenu
               help={help}
@@ -218,6 +261,13 @@ export function AppRail({
               settingsActive={settingsActive}
               onOpenSettings={openSettings}
               tabStop={tabStopItem === 'more'}
+              destinations={foldedDestinations.map((id) => ({
+                id,
+                label: destinationLabel(id),
+                icon: destinationIcon(id, 14),
+                current: destinationActive(id),
+                onSelect: () => activateRailDestination(id)
+              }))}
             />
           ) : null}
         </div>

@@ -1,4 +1,6 @@
 import type { Bot } from '../bot-types'
+import { replaceImageReferences } from '../native-chat/attachments/native-chat-image-reference'
+import { NATIVE_CHAT_QUOTED_FILE_REFERENCE } from '../native-chat/input/composer/agent-image-paste'
 import type { BotGroup } from './bot-group-schema'
 
 type Room = Pick<BotGroup, 'members' | 'replyMode'>
@@ -20,6 +22,11 @@ const LEADING_GAP = /^[\s,:!?]*$/u
 // Code and quoted prose is data, never an address; blanked to keep every offset in place.
 const UNADDRESSED_PROSE =
   /```[\s\S]*?(?:```|(?![\s\S]))|`[^`\n]*`|^[ \t]*>.*$|\u201c[^\u201d]*\u201d|"[^"\n]*"/gmu
+// A file's `@path`, as drops and attachments write it, is data too: quoted, or rooted at a path.
+const FILE_REFERENCE = new RegExp(
+  `${NATIVE_CHAT_QUOTED_FILE_REFERENCE.source}|@(?:[\\\\/~]|[a-z]:[\\\\/])\\S*`,
+  'giu'
+)
 
 /** Every `@` in `text` that could address someone: the longest member name it spells, `@everyone`,
  *  or `none` with the unmatched `@word`. Send, draft and display all read mentions through this. */
@@ -74,7 +81,9 @@ export function botGroupMentions(
 
 function roomMentions(text: string, group: Room, bots: readonly Named[]): BotGroupMention[] {
   return botGroupMentions(
-    text.replace(UNADDRESSED_PROSE, (prose) => ' '.repeat(prose.length)),
+    text
+      .replace(FILE_REFERENCE, (file) => ' '.repeat(file.length))
+      .replace(UNADDRESSED_PROSE, (prose) => ' '.repeat(prose.length)),
     bots.filter((bot) => group.members.some((member) => member.botId === bot.id)),
     group.members.map((member) => member.botId)
   )
@@ -137,8 +146,9 @@ export function botGroupDraftAudience(
   group: Room,
   bots: readonly Named[]
 ): { ids: string[]; addressed: boolean } | 'invalid' {
-  const mentions = roomMentions(draft, group, bots).filter(
-    (mention) => !(mention.match === 'none' && mention.end === draft.length)
+  const prose = replaceImageReferences(draft, () => '')
+  const mentions = roomMentions(prose, group, bots).filter(
+    (mention) => !(mention.match === 'none' && mention.end === prose.length)
   )
   if (
     mentions.some(

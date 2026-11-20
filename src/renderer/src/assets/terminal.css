@@ -57,12 +57,29 @@
   visibility: hidden;
 }
 
-/* Divider: the element is a wide transparent hit area; the visible line is
-   drawn by ::after so that setting `background` on the element never hides it. */
+/* Divider: the element is as wide as the visible line, drawn by ::after so that setting `background`
+   on the element never hides it. ::before is an invisible grab area reaching into one neighbor: right
+   of a vertical line (the left pane's scrollbar is on its right edge) and above a horizontal line (the
+   lower pane's drag handle is on its top edge). */
 .pane-divider.is-vertical,
 .pane-divider.is-horizontal {
   --divider-thickness: 4px;
+  z-index: 11;
   background: transparent !important;
+}
+
+.pane-divider::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.pane-divider.is-vertical::before {
+  right: calc(-1 * var(--divider-grab-reach, 7px));
+}
+
+.pane-divider.is-horizontal::before {
+  top: calc(-1 * var(--divider-grab-reach, 7px));
 }
 
 .pane-divider::after {
@@ -77,30 +94,38 @@
 
 .pane-divider.is-vertical::after {
   /* Negative insets on the cross axis extend the line into perpendicular
-     divider hit zones so that intersecting splits visually connect (├ not |-). */
-  top: calc(-1 * var(--divider-extension, 5px));
-  bottom: calc(-1 * var(--divider-extension, 5px));
-  left: 50%;
-  width: var(--divider-thickness);
-  transform: translateX(-50%);
+     dividers so that intersecting splits visually connect (├ not |-). */
+  top: calc(-1 * var(--divider-extension, calc(var(--divider-thickness) / 2)));
+  bottom: calc(-1 * var(--divider-extension, calc(var(--divider-thickness) / 2)));
+  left: 0;
+  right: 0;
 }
 
 .pane-divider.is-horizontal::after {
-  left: calc(-1 * var(--divider-extension, 5px));
-  right: calc(-1 * var(--divider-extension, 5px));
-  top: 50%;
-  height: var(--divider-thickness);
-  transform: translateY(-50%);
+  left: calc(-1 * var(--divider-extension, calc(var(--divider-thickness) / 2)));
+  right: calc(-1 * var(--divider-extension, calc(var(--divider-thickness) / 2)));
+  top: 0;
+  bottom: 0;
 }
 
+/* Crossing a divider should not flash it; the highlight waits for a resting pointer, a drag shows it at once. */
 .pane-divider.is-vertical:hover::after,
+.pane-divider.is-horizontal:hover::after {
+  background: var(
+    --orca-terminal-divider-color-strong,
+    var(--orca-terminal-divider-color, transparent)
+  );
+  transition-delay: var(--divider-hover-delay, 200ms);
+}
+
 .pane-divider.is-vertical.is-dragging::after,
-.pane-divider.is-horizontal:hover::after,
 .pane-divider.is-horizontal.is-dragging::after {
   background: var(
     --orca-terminal-divider-color-strong,
     var(--orca-terminal-divider-color, transparent)
   );
+  /* Dropping the transition also cancels a hover delay still pending from a quick grab. */
+  transition: none;
 }
 
 .pane-drag-handle {

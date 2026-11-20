@@ -97,7 +97,11 @@ export function BotAppRow({
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5 text-sm leading-[18px] font-medium whitespace-nowrap">
           {name}
-          {tag ? <span className="text-xs font-normal text-muted-foreground">{tag}</span> : null}
+          {tag ? (
+            <span className="min-w-0 truncate text-xs font-normal text-muted-foreground">
+              {tag}
+            </span>
+          ) : null}
         </span>
         <span className="block truncate text-xs leading-4 text-muted-foreground">{line}</span>
       </span>

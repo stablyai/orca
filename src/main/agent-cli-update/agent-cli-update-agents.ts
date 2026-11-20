@@ -92,7 +92,9 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
     plan: selfUpdate('update')
   },
   // `hermes update` restarts the profile's gateways, which serve its open chats, so the user runs it.
+  // It updates the checkout the launcher execs and leaves the launcher itself untouched.
   hermes: {
+    updatesOutsideLauncher: true,
     latest: () => ({ kind: 'github', repo: 'NousResearch/hermes-agent', tagPrefix: 'v' }),
     plan: () => ({ runnable: false, command: 'hermes update' })
   }
