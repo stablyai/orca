@@ -17,10 +17,16 @@ const agy = vi.hoisted(
     login: 'present'
   })
 )
+// Answers only when agy may be started, as the real check does.
+const compatibility = vi.hoisted(() =>
+  vi.fn(async (_command: string, _env: unknown, _envToDelete: unknown, ask: { start: boolean }) =>
+    ask.start ? agy.compatible : 'unanswered'
+  )
+)
 vi.mock('./antigravity-host-acp', async (importOriginal) => ({
   ...(await importOriginal<typeof HostAcp>()),
   checkAntigravityHostAcp: async () => agy.answer,
-  checkAntigravityHostAcpCompatible: async () => agy.compatible
+  checkAntigravityHostAcpCompatible: compatibility
 }))
 vi.mock('./agy-credential-presence', () => ({ agyCredentialPresence: async () => agy.login }))
 
@@ -98,6 +104,8 @@ function host(options: Host = {}) {
     envToDelete: [],
     homePath,
     stateDirectory,
+    // A chat starting: someone is using Antigravity.
+    startsProgram: true,
     settings: {
       ...(options.apiKeyChat ? { antigravityChatAuth: { method: 'gemini-api-key' as const } } : {}),
       ...(options.managedAgyOff ? { antigravityManagedAgyEnabled: false } : {})
@@ -217,7 +225,15 @@ describe('a fresh host with neither agy nor Orca’s server', () => {
     const shell = { PATH: '', HOME: homePath, USERPROFILE: homePath }
 
     expect(
-      await selectAcpHostAccountHome(ANTIGRAVITY_LAUNCH_SPEC, shell, stateDirectory, {})
+      await selectAcpHostAccountHome(
+        ANTIGRAVITY_LAUNCH_SPEC,
+        shell,
+        stateDirectory,
+        {},
+        {
+          startsProgram: true
+        }
+      )
     ).not.toBeNull()
     expect(
       await acpHostProgramTakesNewChats(ANTIGRAVITY_LAUNCH_SPEC, shell, stateDirectory, {})
@@ -300,21 +316,80 @@ describe('with Orca’s copy of agy switched off', () => {
     expect(await select(input)).not.toBeNull()
   })
 
-  it('still launches a chat already pinned to Orca’s agy on that copy', async () => {
+  it.each<[string, boolean, string | null]>([
+    ['Orca’s agy while it may run', true, 'orca'],
+    ['nothing once switched off, so the chat refuses as agy not found', false, null],
+    ['the user’s own agy once switched off, which reads the same history', false, 'own']
+  ])('launches a chat already pinned to agy on %s', async (_case, on, expected) => {
     const { rememberManagedAgentRelease } =
       await import('../managed-agent-cli/managed-agent-cli-registry')
     const { resolveAcpLaunchCommand } = await import('../acp/launch/acp-launch-command')
-    const { homePath, stateDirectory } = host({ noAgy: true, managedAgyOff: true })
+    const { homePath, stateDirectory } = host({ noAgy: true })
     const release = join(stateDirectory, 'agent-runtimes', 'agy', '1.5.13')
+    const ownBin = join(homePath, 'bin')
+    const agyName = process.platform === 'win32' ? 'agy.exe' : 'agy'
+    if (expected === 'own') {
+      mkdirSync(ownBin)
+      writeFileSync(join(ownBin, agyName), '', { mode: 0o755 })
+    }
     rememberManagedAgentRelease('antigravity', release)
 
     const { command } = resolveAcpLaunchCommand(
       ANTIGRAVITY_LAUNCH_SPEC.hostBackend.spec,
-      { PATH: '', HOME: homePath, USERPROFILE: homePath },
-      { dataDirectory: null }
+      { PATH: expected === 'own' ? ownBin : '', HOME: homePath, USERPROFILE: homePath },
+      { dataDirectory: null, commandSettings: { antigravityManagedAgyEnabled: on } }
+    )
+    rememberManagedAgentRelease('antigravity', null)
+
+    expect(command).toBe(
+      expected === 'orca'
+        ? join(release, agyName)
+        : expected === 'own'
+          ? join(ownBin, agyName)
+          : 'agy'
+    )
+  })
+})
+
+describe('a timed-out agy', () => {
+  it("leaves new chats on Orca's server where it is installed, as main did", async () => {
+    agy.answer = 'unanswered'
+
+    expect(await select(host({ server: true }))).toBeNull()
+  })
+})
+
+describe('before anyone uses Antigravity', () => {
+  it.each<[HostAcp.AntigravityHostAcpAnswer, boolean]>([
+    ['ready', true],
+    ['signedOut', false]
+  ])('names agy that answered %s only when it is signed in, as main did', async (answer, named) => {
+    agy.answer = answer
+
+    expect((await select({ ...host(), startsProgram: false })) !== null).toBe(named)
+  })
+
+  it('reads what agy runs without starting it', async () => {
+    const { acpHostProgramTakesNewChats } = await import('../acp/launch/acp-launch-command')
+    const { homePath, stateDirectory } = host()
+    const bin = join(homePath, 'bin')
+    mkdirSync(bin)
+    writeFileSync(join(bin, process.platform === 'win32' ? 'agy.exe' : 'agy'), '', { mode: 0o755 })
+    agy.login = 'absent'
+    compatibility.mockClear()
+
+    await acpHostProgramTakesNewChats(
+      ANTIGRAVITY_LAUNCH_SPEC,
+      { PATH: bin, HOME: homePath, USERPROFILE: homePath },
+      stateDirectory,
+      {}
     )
 
-    expect(command).toBe(join(release, process.platform === 'win32' ? 'agy.exe' : 'agy'))
-    rememberManagedAgentRelease('antigravity', null)
+    expect(compatibility).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      expect.anything(),
+      { start: false }
+    )
   })
 })

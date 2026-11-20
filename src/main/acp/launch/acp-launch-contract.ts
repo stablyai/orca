@@ -106,7 +106,11 @@ export type AcpLaunchSpec = {
   keepsEverySession?: true
   /** A program on the host preferred for new chats; chats whose account home it pins keep it. */
   hostBackend?: AcpHostBackend
+  /** Whether Orca's own copy of this program may run (and be kept updated); absent means it may. */
+  managedCopyAllowed?(settings: ManagedCopySettings): boolean
 }
+
+export type ManagedCopySettings = Partial<Pick<GlobalSettings, 'antigravityManagedAgyEnabled'>>
 
 /** What the host backend weighs: the host program a launch would run, and this host's facts. */
 export type AcpHostBackendInput = {
@@ -119,6 +123,9 @@ export type AcpHostBackendInput = {
   stateDirectory: string
   /** The account type Orca's own Chat signs in with, saved on this host. */
   settings: AcpHostBackendSettings
+  /** The question comes from someone using the agent, so it may start the program to answer;
+   *  otherwise only what is already known (files, earlier answers) decides. */
+  startsProgram: boolean
 }
 
 export type AcpHostBackend = {
@@ -134,9 +141,6 @@ export type AcpHostBackend = {
   /** Where Orca also keeps its own copy of the host program: whether Install, its status and
    *  removal act on the outer spec's `managedRuntime` instead of that copy. */
   installsManagedRuntime?(input: AcpHostBackendInput): Promise<boolean>
-  /** Whether Orca's own copy of the host program may take new chats and be kept updated; absent
-   *  means it may. Chats already pinned to the program still launch Orca's copy either way. */
-  managedCopyServesNewChats?(settings: AcpHostBackendSettings): boolean
 }
 
 /** The settings a host backend weighs; a change to any of them can change its answers. */

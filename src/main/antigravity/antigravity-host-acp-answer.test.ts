@@ -55,3 +55,12 @@ it.each([
 
   expect(await checkAntigravityHostAcp(agyBinary(), {}, [])).toBe(expected)
 })
+
+it('never starts agy to answer a question nobody using Antigravity asked', async () => {
+  const { checkAntigravityHostAcpCompatible } = await import('./antigravity-host-acp')
+  // Started, this agy would answer as compatible.
+
+  expect(await checkAntigravityHostAcpCompatible(agyBinary(), {}, [], { start: false })).toBe(
+    'unanswered'
+  )
+})

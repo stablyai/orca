@@ -131,6 +131,9 @@ function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.Proc
 const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
   command: 'agy',
+  // Off, Orca's agy runs no chat: chats pinned to agy run the user's own (same ~/.gemini history),
+  // and on a host without one they get launch's cliMissing refusal.
+  managedCopyAllowed: (settings) => settings.antigravityManagedAgyEnabled !== false,
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
   // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
   // and can replace agy mid-probe.
@@ -197,14 +200,16 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   hostBackend: {
     spec: ANTIGRAVITY_HOST_LAUNCH_SPEC,
     pins: isAntigravityHostAccountHome,
-    select: async (input) =>
-      (await antigravityHostChatRoute(input)).agy
+    // Unasked (menus, model catalogs before anyone uses Antigravity), only a signed-in agy is named,
+    // as before Orca installed one, so nothing starts agy for a person who never opens it.
+    select: async (input) => {
+      const { agy } = await antigravityHostChatRoute(input)
+      return agy === 'signedIn' || (input.startsProgram && agy)
         ? antigravityHostAccountHome(input.homePath)
-        : null,
+        : null
+    },
     installsManagedRuntime: async (input) =>
       (await antigravityHostChatRoute(input)).installs === 'server',
-    // Off, a chat pinned to agy on a host without any agy keeps launch's cliMissing refusal.
-    managedCopyServesNewChats: (settings) => settings.antigravityManagedAgyEnabled !== false,
     // Installing Orca's agy, a new agy login or a changed agy answer changes the route.
     selectionRevision: () => managedRuntimeReleasesRevision() + antigravityHostAcpChecksRevision(),
     onSelectionChanged: onAntigravityHostAcpAnswersChanged

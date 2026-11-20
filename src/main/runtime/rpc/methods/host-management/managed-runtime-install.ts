@@ -94,7 +94,9 @@ async function selectedInstallation(
   }
   const settings = runtime.requireStore().getSettings()
   const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
-  const input = await acpHostBackendInput(spec, env, getProfileUserDataPath(), settings)
+  const input = await acpHostBackendInput(spec, env, getProfileUserDataPath(), settings, {
+    startsProgram: true
+  })
   const server = input !== null && (await choose(input))
   return installationOf(agent, server ? 'server' : 'cli', runtime)
 }
@@ -181,8 +183,7 @@ function agentCliInstallation(
     program: 'cli',
     findExternal,
     updatesEnabled: () =>
-      outer?.hostBackend?.managedCopyServesNewChats?.(runtime.requireStore().getSettings()) !==
-      false,
+      spec?.managedCopyAllowed?.(runtime.requireStore().getSettings()) !== false,
     onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
     // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.
     fence: (work) => stopStructuredAgentChats(agent, managedRuntime.label).then(work),

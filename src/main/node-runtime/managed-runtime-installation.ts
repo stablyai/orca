@@ -127,7 +127,9 @@ export class ManagedRuntimeInstallation {
       ...(pin && !release?.current && broken.includes(pin.version) && { damaged: true }),
       canRemove: release !== null || broken.length > 0,
       source,
-      ...(this.runtime.refreshPin && { updatesAutomatically: true as const })
+      // A copy Orca isn't keeping current offers its own Update.
+      ...(this.runtime.refreshPin &&
+        this.deps.updatesEnabled?.() !== false && { updatesAutomatically: true as const })
     }
   }
 

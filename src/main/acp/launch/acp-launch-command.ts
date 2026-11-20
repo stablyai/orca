@@ -39,6 +39,7 @@ export function resolveAcpLaunchCommand(
     .filter((entry): entry is string => Boolean(entry))
     .join(delimiter)
   const settings = spec.ignoreAgentCommandSetting ? {} : (options.commandSettings ?? {})
+  const managedCopy = spec.managedCopyAllowed?.(options.commandSettings ?? {}) !== false
   const resolve = (searchPath: string) =>
     resolveStructuredAgentCommand(
       spec.agent,
@@ -46,6 +47,7 @@ export function resolveAcpLaunchCommand(
       { pathEnv: searchPath, homePath },
       {
         command: spec.command,
+        managedCopy,
         ...(options.resolveCommand ? { resolve: options.resolveCommand } : {})
       }
     )
@@ -124,13 +126,16 @@ export async function findHostProgram(
   return isAbsolute(resolved) && !WINDOWS_DRIVE_MOUNT.test(resolved) ? resolved : null
 }
 
+/** `startsProgram`: someone is using the agent, so answering may start its program. */
+export type AcpHostQuestion = { startsProgram?: boolean; inherited?: NodeJS.ProcessEnv }
+
 /** What the host backend weighs for a new chat; its command is bare when nothing resolves. */
 export async function acpHostBackendInput(
   spec: AcpLaunchSpec,
   shellEnv: Readonly<Record<string, string>>,
   stateDirectory: string,
   settings: AcpHostBackendSettings,
-  inherited: NodeJS.ProcessEnv = process.env
+  { startsProgram = false, inherited = process.env }: AcpHostQuestion = {}
 ): Promise<AcpHostBackendInput | null> {
   const backend = spec.hostBackend
   if (!backend) {
@@ -149,13 +154,13 @@ export async function acpHostBackendInput(
     env,
     backend.spec.installDirectories({ env, homePath })
   )
-  // The user's own program wins; Orca's copy serves hosts that have none.
-  const managedCopy =
-    backend.managedCopyServesNewChats?.(settings) !== false
-      ? managedAgentCommandFor(spec.agent, command, { use: false })
-      : null
-  const program = found ?? managedCopy ?? command
-  return { command: program, env, envToDelete, homePath, stateDirectory, settings }
+  // The user's own program wins; Orca's copy serves hosts that have none, where it may run. A copy
+  // found on PATH (inherited from an Orca terminal) is Orca's, never the user's own.
+  const managedCopy = managedAgentCommandFor(spec.agent, command, { use: false })
+  const allowed = backend.spec.managedCopyAllowed?.(settings) !== false
+  const own = found !== null && found !== managedCopy ? found : null
+  const program = own ?? (allowed ? managedCopy : null) ?? command
+  return { command: program, env, envToDelete, homePath, stateDirectory, settings, startsProgram }
 }
 
 /** The account home pinning a new chat to the compatible host program `env` finds, or null. */
@@ -164,9 +169,9 @@ export async function selectAcpHostAccountHome(
   shellEnv: Readonly<Record<string, string>>,
   stateDirectory: string,
   settings: AcpHostBackendSettings,
-  inherited: NodeJS.ProcessEnv = process.env
+  question: AcpHostQuestion = {}
 ): Promise<AgentSessionAccountHome | null> {
-  const input = await acpHostBackendInput(spec, shellEnv, stateDirectory, settings, inherited)
+  const input = await acpHostBackendInput(spec, shellEnv, stateDirectory, settings, question)
   // A backend may pin new chats to a program not installed yet, so Install lands where they run.
   return input && spec.hostBackend ? spec.hostBackend.select(input) : null
 }

@@ -116,9 +116,12 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
           ? await hostLaunchEnvironment(spec.agent)
               .then((env) =>
-                (purpose === 'catalog'
-                  ? selectAcpHostAccountHomeForCatalog
-                  : selectAcpHostAccountHome)(spec, env, stateDirectory, hostSettings())
+                purpose === 'catalog'
+                  ? selectAcpHostAccountHomeForCatalog(spec, env, stateDirectory, hostSettings())
+                  : // A chat starting is someone using the agent, so its program may be asked.
+                    selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings(), {
+                      startsProgram: true
+                    })
               )
               .catch(() => null)
           : null

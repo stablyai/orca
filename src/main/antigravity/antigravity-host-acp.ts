@@ -132,9 +132,10 @@ export function checkAntigravityHostAcp(
 export function checkAntigravityHostAcpCompatible(
   command: string,
   env: Record<string, string>,
-  envToDelete: string[]
+  envToDelete: string[],
+  { start }: { start: boolean }
 ): Promise<AntigravityHostAcpAnswer> {
-  return askAntigravityHostAcp(command, env, envToDelete, Date.now, false)
+  return askAntigravityHostAcp(command, env, envToDelete, Date.now, false, start)
 }
 
 async function askAntigravityHostAcp(
@@ -142,7 +143,8 @@ async function askAntigravityHostAcp(
   env: Record<string, string>,
   envToDelete: string[],
   now: () => number,
-  sessions: boolean
+  sessions: boolean,
+  start = true
 ): Promise<AntigravityHostAcpAnswer> {
   const stats = await stat(command).catch(() => null)
   if (!stats?.isFile()) {
@@ -156,6 +158,10 @@ async function askAntigravityHostAcp(
       latestAsked = cached
     }
     return cached.answer
+  }
+  // Nobody is using Antigravity yet, so agy isn't started to answer.
+  if (!start) {
+    return 'unanswered'
   }
   let answered = false
   const check: HostCheck = {

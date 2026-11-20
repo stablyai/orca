@@ -46,7 +46,7 @@ export function assertStructuredAgentResolutionCurrent(
 }
 
 export type StructuredAgentCommandSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv'>
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultEnv' | 'antigravityManagedAgyEnabled'>
 >
 type CommandSettings = StructuredAgentCommandSettings
 type CommandOptions = NonNullable<Parameters<typeof resolveExecutableCommand>[1]>
@@ -87,15 +87,17 @@ export function resolveStructuredAgentCommand(
   agent: TuiAgent,
   settings: CommandSettings,
   options: CommandOptions = {},
-  stock: { command?: string; resolve?: typeof resolveCliCommand } = {}
+  stock: { command?: string; resolve?: typeof resolveCliCommand; managedCopy?: boolean } = {}
 ): StructuredAgentCommand {
   if (!hasExplicitTuiLaunchCommand(settings, agent)) {
     // WSL PATH may contain drive-mounted Windows shims after native entries.
     const command = stock.command ?? agent
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
-    // The user's own install wins; Orca's copy serves hosts that have none.
+    // The user's own install wins; Orca's copy serves hosts that have none, where it may run.
     const managed =
-      resolved === null || !isAbsolute(resolved) ? managedAgentCommandFor(agent, command) : null
+      stock.managedCopy !== false && (resolved === null || !isAbsolute(resolved))
+        ? managedAgentCommandFor(agent, command)
+        : null
     if (managed) {
       return { command: managed, prefixArgs: [] }
     }

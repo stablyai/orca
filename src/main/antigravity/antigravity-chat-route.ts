@@ -100,7 +100,9 @@ export async function antigravityChatRoute(
   // locked-keyring host: `agy acp` opens no D-Bus connection for initialize, but a session request
   // calls Secret Service Unlock and raises its prompt; agy asks for the keyring when a chat starts.
   if (presence !== 'present') {
-    const compatible = await checkAntigravityHostAcpCompatible(command, env, envToDelete)
+    const compatible = await checkAntigravityHostAcpCompatible(command, env, envToDelete, {
+      start: input.startsProgram
+    })
     if (compatible === 'incompatible') {
       return ON_SERVER
     }
@@ -114,7 +116,9 @@ export async function antigravityChatRoute(
   if (answer === 'incompatible') {
     return ON_SERVER
   }
-  // A hang or crash shows in the chat's own launch of agy; Orca's server isn't here to run instead.
+  // A hang or crash shows in the chat's own launch of agy: unlike main, which then fell back to
+  // Orca's server, no server is installed here to run instead (where one is, the branch above
+  // treats any answer but `ready`, a timeout included, as not ready).
   return {
     agy: answer === 'ready' ? 'signedIn' : answer === 'signedOut' ? 'signedOut' : 'unknown',
     installs: 'agy'
