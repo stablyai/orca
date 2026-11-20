@@ -24,8 +24,9 @@ export function BotPictureRowFold({
         open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
       )}
     >
-      {/* Padding lives inside the clipped box, or a closed row would keep it as height. */}
-      <div className="min-h-0 overflow-hidden">
+      {/* Padding lives inside the clipped box, or a closed row would keep it as height; the clip
+          margin leaves room for selection and focus rings. */}
+      <div className="min-h-0 overflow-clip [overflow-clip-margin:6px]">
         {className ? <div className={className}>{children}</div> : children}
       </div>
     </div>

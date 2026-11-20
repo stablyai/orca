@@ -1,7 +1,7 @@
 // The carousel's Generate face (the prompt icon, the run's progress, then the picture it made) and
 // the description field that takes the swatch row's place under it.
 import React, { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Check, CircleAlert, Pencil, Sparkles, X } from 'lucide-react'
+import { ArrowUp, Check, Pencil, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -17,11 +17,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { cn } from '@/lib/class-names'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import {
-  MAX_AVATAR_DESCRIPTION_CHARS,
-  type AvatarGenerationFailure
-} from '../../../../shared/avatar-generation/avatar-generation-contract'
+import { MAX_AVATAR_DESCRIPTION_CHARS } from '../../../../shared/avatar-generation/avatar-generation-contract'
 import { BOT_EDIT_HINT } from './bot-edit-hint'
+import { FieldNoteLine, sameNote, type FieldNote } from './AvatarGenerateFieldNote'
 import { BotPictureRowFold } from './BotPictureRowFold'
 import { useAvatarGeneration, type GeneratedAvatar } from './use-avatar-generation'
 
@@ -64,48 +62,6 @@ export function useGenerateFace(onResult: (result: GeneratedAvatar) => void) {
 }
 
 export type GenerateFace = ReturnType<typeof useGenerateFace>
-
-function useFailureMessage(): (failure: AvatarGenerationFailure, agent: string) => string {
-  const t = useTranslate()
-  return (failure, agent) => {
-    switch (failure) {
-      case 'real-person':
-        return t(
-          'bots.avatar.generate.realPerson',
-          "Avatars can't show real people. Describe a character instead."
-        )
-      case 'signed-out':
-        return t(
-          'bots.avatar.generate.signedOut',
-          "{{agent}} isn't signed in. Sign in to it, then try again.",
-          { agent }
-        )
-      case 'usage-limit':
-        return t(
-          'bots.avatar.generate.usageLimit',
-          '{{agent}} hit its usage limit. Try again later.',
-          { agent }
-        )
-      case 'no-image':
-        return t(
-          'bots.avatar.generate.noImage',
-          "{{agent}} didn't make an image. Try rewording your description.",
-          { agent }
-        )
-      case 'timed-out':
-        return t('bots.avatar.generate.timedOut', '{{agent}} took too long. Try again.', {
-          agent
-        })
-      case 'unavailable':
-        return t('bots.avatar.generate.unavailable', 'No installed agent can make images.')
-      case 'failed':
-      case 'canceled':
-        return t('bots.avatar.generate.failed', "{{agent}} couldn't make an image. Try again.", {
-          agent
-        })
-    }
-  }
-}
 
 function Elapsed({ since }: { since: number }): React.JSX.Element {
   const [now, setNow] = useState(() => Date.now())
@@ -321,13 +277,24 @@ function DescriptionField({ face }: { face: GenerateFace }): React.JSX.Element {
  */
 export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Element {
   const t = useTranslate()
-  const failureMessage = useFailureMessage()
   const { run } = face
   const signedOut =
     run.kind === 'idle' &&
     face.agents.find((entry) => entry.agent === face.agent)?.status === 'signed-out'
-  const failure = run.kind === 'error' ? run.failure : signedOut ? 'signed-out' : null
-  const failureAgent = (run.kind === 'error' ? run.agent : undefined) ?? face.agent
+  const note: FieldNote | null =
+    run.kind === 'running'
+      ? { kind: 'running', agent: run.agent }
+      : run.kind === 'error'
+        ? { kind: 'failure', failure: run.failure, agent: run.agent ?? face.agent }
+        : signedOut
+          ? { kind: 'failure', failure: 'signed-out', agent: face.agent }
+          : null
+  // The last note stays while its row folds away, so the row shrinks instead of vanishing.
+  const [lastNote, setLastNote] = useState<FieldNote | null>(note)
+  if (note && !sameNote(note, lastNote)) {
+    setLastNote(note)
+  }
+  const shownNote = note ?? lastNote
   return (
     <>
       <BotPictureRowFold open={face.folded}>
@@ -344,28 +311,9 @@ export function GenerateField({ face }: { face: GenerateFace }): React.JSX.Eleme
       </BotPictureRowFold>
       <BotPictureRowFold open={!face.folded} className="px-1 pt-2 pb-1">
         <DescriptionField face={face} />
-        {run.kind === 'running' ? (
-          <div className="mt-1 flex h-7 items-center justify-center gap-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <LoadingSpinner className="size-3.5" />
-              {t('bots.avatar.generate.running', 'Generating with {{agent}}…', {
-                agent: getAgentLabel(run.agent)
-              })}
-            </span>
-            <Button type="button" variant="ghost" size="xs" onClick={face.cancel}>
-              <X />
-              {t('bots.avatar.generate.cancel', 'Cancel')}
-            </Button>
-          </div>
-        ) : failure ? (
-          <p
-            role="alert"
-            className="mt-1.5 flex items-start gap-1.5 px-0.5 text-xs leading-snug text-destructive"
-          >
-            <CircleAlert className="mt-px size-3.5 shrink-0" />
-            {failureMessage(failure, failureAgent ? getAgentLabel(failureAgent) : '')}
-          </p>
-        ) : null}
+        <BotPictureRowFold open={note !== null}>
+          {shownNote ? <FieldNoteLine note={shownNote} onCancel={face.cancel} /> : null}
+        </BotPictureRowFold>
       </BotPictureRowFold>
     </>
   )
