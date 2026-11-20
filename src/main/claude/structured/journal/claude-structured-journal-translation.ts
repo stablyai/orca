@@ -188,7 +188,7 @@ export function createClaudeJournalTranslator(
             event.startedSend != null
         }
         // Checked on every root frame: an approved plan settles the fallback without a new init.
-        journalClaudeFullAccessRefusal(deps, turnScope())
+        journalClaudeFullAccessRefusal(deps, fallbackId, turnScope())
       }
     }
     if (event.type === 'message' && absorbClaudeCommandFrame(messageContext, event.message)) {

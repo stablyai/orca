@@ -6,7 +6,8 @@ import {
 import {
   claimClaudePermissionModeRequest,
   setClaudeAllowedPermissionMode
-} from './claude-full-access-refusal'
+} from './claude-permission-mode-ladder'
+import { claudeOwesFullAccessFallback } from './claude-full-access-refusal'
 import { ClaudeControlRequestTimeoutError } from '../../sdk-transport/claude-agent-sdk-control-requests'
 
 const BYPASS_REFUSAL =
@@ -277,7 +278,71 @@ describe('leaving Plan mode after an approved plan', () => {
     await expect(send(session)).rejects.toThrow('timed out')
     expect(session.appliedInputOptions.has('buildPermissionMode')).toBe(false)
     answered = true
-    expect(await send(session)).toBe('auto')
+    // Asked again after a short pause, not on every input.
+    expect(await send(session)).toBe('default')
+    vi.setSystemTime(Date.now() + 10_000)
+    try {
+      expect(await send(session)).toBe('auto')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('leaves Plan when Claude accepted Ask before the Approve for me switch went unanswered', async () => {
+    const setPermissionMode = vi.fn((mode: string) =>
+      mode === 'auto'
+        ? Promise.reject(new ClaudeControlRequestTimeoutError('set_permission_mode'))
+        : Promise.resolve()
+    )
+    const appliedInputOptions = new Map<string, string>([
+      ['interactionMode', 'plan'],
+      ['buildPermissionMode', 'auto']
+    ])
+    leaveClaudePlanModeOnApproval(
+      {
+        launchIntent: { permissionMode: 'bypassPermissions' },
+        firstRootInit: { permissionMode: 'default' },
+        bypassDisabled: true,
+        reportedOptions: { reportedPermissionMode: 'plan' },
+        appliedInputOptions,
+        connection: { setPermissionMode }
+      },
+      { toolName: 'ExitPlanMode' },
+      { behavior: 'allow', updatedInput: {} }
+    )
+    await vi.waitFor(() => expect(appliedInputOptions.get('interactionMode')).toBe('default'))
+    expect(appliedInputOptions.has('buildPermissionMode')).toBe(false)
+  })
+
+  it('falls back when Claude started outside Full access though its settings read allowed it', async () => {
+    const setPermissionMode = claude([])
+    const session = {
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      firstRootInit: { permissionMode: 'default' },
+      bypassDisabled: false,
+      connection: { setPermissionMode }
+    }
+    expect(await setClaudeAllowedPermissionMode(session, 'bypassPermissions')).toBe('auto')
+    expect(setPermissionMode.mock.calls.map(([mode]) => mode)).toEqual(['default', 'auto'])
+  })
+
+  it('owes the fallback while Full access is unknown, and when Claude left Approve for me', () => {
+    const facts = (
+      extra: { firstRootInit?: { permissionMode: string }; bypassDisabled?: boolean },
+      build?: string,
+      running?: string
+    ) => ({
+      launchIntent: { permissionMode: 'bypassPermissions' },
+      appliedInputOptions: new Map<string, string>(
+        build === undefined ? [] : [['buildPermissionMode', build]]
+      ),
+      reportedOptions: running === undefined ? {} : { reportedPermissionMode: running },
+      ...extra
+    })
+    const refused = { firstRootInit: { permissionMode: 'default' }, bypassDisabled: true }
+    expect(claudeOwesFullAccessFallback(facts({}))).toBe(true)
+    expect(claudeOwesFullAccessFallback(facts(refused, 'auto', 'auto'))).toBe(false)
+    expect(claudeOwesFullAccessFallback(facts(refused, 'auto', 'ask'))).toBe(true)
   })
 
   it('fails the send when Claude settings turn off the Approve for me the chat chose', async () => {

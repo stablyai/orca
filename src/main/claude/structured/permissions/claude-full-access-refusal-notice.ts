@@ -13,7 +13,12 @@ import { claudeBypassRefused, type ClaudeBypassFacts } from './claude-full-acces
 type ClaudeNoticeFacts = ClaudeBypassFacts &
   Partial<Pick<ClaudeSession, 'appliedInputOptions' | 'reportedOptions'>>
 
-export type ClaudeFullAccessRefusalNotice = { id: string; body: AgentJournalStatusItem }
+export type ClaudeFullAccessRefusalNotice = {
+  id: string
+  /** Which change of this process's warning, absent for its first. */
+  change?: number
+  body: AgentJournalStatusItem
+}
 
 /** The chat's permission mode for the fallback Claude accepted. */
 function claudeFallbackChoice(applied: string): string {
@@ -82,11 +87,12 @@ function claudeFullAccessRefusalRow(
   }
 }
 
-/** The warning this chat is due when it differs from the last one this process wrote. The row's
- *  journal identity names the change, so a relaunch that finds the chat as it started revises
- *  the first row instead of adding another, and each later change lands in the current turn. */
+/** The warning this chat is due when it differs from the last one this process wrote. A first
+ *  warning keeps one journal identity, so a relaunch that finds the chat as it started revises
+ *  that row instead of adding another; each later change is a new row where it happens. */
 export function claimClaudeFullAccessRefusalNotice(
-  session: ClaudeNoticeFacts & Pick<ClaudeSession, 'fullAccessRefusalNoticeId'>
+  session: ClaudeNoticeFacts &
+    Pick<ClaudeSession, 'fullAccessRefusalNoticeId' | 'fullAccessRefusalNoticeChanges'>
 ): ClaudeFullAccessRefusalNotice | null {
   const id = claudeFullAccessRefusalNoticeId(session)
   const applied = session.appliedInputOptions?.get('buildPermissionMode')
@@ -95,23 +101,28 @@ export function claimClaudeFullAccessRefusalNotice(
     return null
   }
   session.fullAccessRefusalNoticeId = id
-  return {
-    id: previous === undefined ? id : `${previous}->${id}`,
-    body: claudeFullAccessRefusalRow(session, applied)
+  const body = claudeFullAccessRefusalRow(session, applied)
+  if (previous === undefined) {
+    return { id, body }
   }
+  const change = (session.fullAccessRefusalNoticeChanges ?? 0) + 1
+  session.fullAccessRefusalNoticeChanges = change
+  return { id: `${previous}->${id}`, change, body }
 }
 
 /** Checked on every root frame; writes only the warning the chat is due. */
 export function journalClaudeFullAccessRefusal(
   deps: Pick<ClaudeJournalTranslatorDeps, 'sink' | 'fullAccessRefusalNotice'>,
+  idPrefix: string,
   turnScope: AgentJournalTurnScope
 ): void {
   const notice = deps.fullAccessRefusalNotice?.()
   if (!notice) {
     return
   }
+  const change = notice.change === undefined ? '' : `#${idPrefix}:${notice.change}`
   deps.sink.appendItem(
-    { provider: 'orca', clientMessageId: `full-access-refused:claude:${notice.id}` },
+    { provider: 'orca', clientMessageId: `full-access-refused:claude:${notice.id}${change}` },
     notice.body,
     { turnScope }
   )

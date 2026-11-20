@@ -157,10 +157,14 @@ export type ClaudeSession = {
   firstRootInit?: { permissionMode: string | null }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
   bypassDisabled?: boolean
+  /** Claude accepted a bypass switch in this process, which overrules a start outside it. */
+  bypassAccepted?: boolean
   /** Why Claude refused a bypass switch, where one told; a settings read or start says settings. */
   bypassRefusal?: ClaudeBypassRefusal
   /** The Full access refusal warning this process last wrote, so each change gets one row. */
   fullAccessRefusalNoticeId?: string
+  /** How many times this process's warning changed, so each change is its own row. */
+  fullAccessRefusalNoticeChanges?: number
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number

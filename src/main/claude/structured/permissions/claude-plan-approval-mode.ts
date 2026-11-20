@@ -1,7 +1,11 @@
 import type { PermissionMode, PermissionResult } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudePendingPrompt } from './claude-prompt-registry'
 import type { ClaudeSession } from '../claude-structured-session-state'
-import { claudeBypassRefused, setClaudeAllowedPermissionMode } from './claude-full-access-refusal'
+import { claudeBypassRefused } from './claude-full-access-refusal'
+import {
+  ClaudePermissionModeUnsettled,
+  setClaudeAllowedPermissionMode
+} from './claude-permission-mode-ladder'
 
 /** This process's requested mode, else its first init's; anything else asks for each edit. */
 export function claudePlanApprovalMode(
@@ -71,10 +75,21 @@ export function leaveClaudePlanModeOnApproval(
     return
   }
   try {
-    setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session)).then((restored) => {
-      session.appliedInputOptions?.set('interactionMode', 'default')
-      session.appliedInputOptions?.set('buildPermissionMode', restored)
-    }, logPlanExitFailure)
+    setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session)).then(
+      (restored) => {
+        session.appliedInputOptions?.set('interactionMode', 'default')
+        session.appliedInputOptions?.set('buildPermissionMode', restored)
+      },
+      (error: unknown) => {
+        // Claude accepted a step out of Plan before a later one went unanswered: the chat has
+        // left Plan, and its fallback is owed again.
+        if (error instanceof ClaudePermissionModeUnsettled) {
+          session.appliedInputOptions?.set('interactionMode', 'default')
+          session.appliedInputOptions?.delete('buildPermissionMode')
+        }
+        logPlanExitFailure(error)
+      }
+    )
   } catch (error) {
     logPlanExitFailure(error)
   }

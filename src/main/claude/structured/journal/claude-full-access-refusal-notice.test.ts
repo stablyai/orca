@@ -50,6 +50,7 @@ function launch(sessionId: string, facts: Launch, acquisition = '1') {
     () => session as ClaudeSession,
     () => false
   )
+  let inits = 0
   const init = (permissionMode: string) =>
     translator?.handle({
       type: 'message',
@@ -59,7 +60,7 @@ function launch(sessionId: string, facts: Launch, acquisition = '1') {
         subtype: 'init',
         permissionMode,
         session_id: 'claude-session',
-        uuid: `init-${permissionMode}`
+        uuid: `init-${permissionMode}-${(inits += 1)}`
       }
     })
   const status = () =>
@@ -107,20 +108,31 @@ describe('a Full access chat whose Claude refuses bypass', () => {
       launchIntent: FULL_ACCESS,
       firstRootInit: { permissionMode: 'default' }
     })
-    moved.session.appliedInputOptions.set('buildPermissionMode', 'auto')
+    const toAuto = () => {
+      Object.assign(moved.session, { autoUnsettled: undefined })
+      moved.session.appliedInputOptions.set('buildPermissionMode', 'auto')
+    }
+    const toAskForNow = () => {
+      Object.assign(moved.session, { autoUnsettled: { kind: 'time', retryAt: 0 } })
+      moved.session.appliedInputOptions.set('buildPermissionMode', 'default')
+    }
+    toAuto()
     moved.init('auto')
-    Object.assign(moved.session, { autoUnsettled: { kind: 'time', retryAt: 0 } })
-    moved.session.appliedInputOptions.set('buildPermissionMode', 'default')
+    toAskForNow()
+    moved.init('default')
     moved.status()
-    moved.status()
-    Object.assign(moved.session, { autoUnsettled: undefined })
-    moved.session.appliedInputOptions.set('buildPermissionMode', 'auto')
-    moved.status()
+    toAuto()
+    moved.init('auto')
+    toAskForNow()
+    moved.init('default')
     expect(moved.ids).toEqual([
       'full-access-refused:claude:settings:auto',
-      'full-access-refused:claude:settings:auto->settings:ask:auto-for-now',
-      'full-access-refused:claude:settings:ask:auto-for-now->settings:auto'
+      expect.stringMatching(/:settings:auto->settings:ask:auto-for-now#/),
+      expect.stringMatching(/:settings:ask:auto-for-now->settings:auto#/),
+      expect.stringMatching(/:settings:auto->settings:ask:auto-for-now#/)
     ])
+    // A repeated change is a new row where it happens, not a revision of the old one.
+    expect(moved.ids[3]).not.toBe(moved.ids[1])
     expect(moved.warnings().slice(0, 2)).toEqual([
       expect.objectContaining({
         text: "Claude's settings turn off Full access (permissions.disableBypassPermissionsMode), so Claude uses Approve for me instead."
