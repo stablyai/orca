@@ -237,6 +237,23 @@ export function resolveOwnerUsageRateLimits(
   const base = owner.lastKnown ? adoptRemoteRateLimits(owner.lastKnown) : null
   const stamp = (key: UsageProviderKey): ProviderRateLimits =>
     ownerPlaceholderSnapshot(key, message, { unverifiableOwner: true })
+  const hasNoAccountUsage = (provider: ProviderRateLimits): boolean =>
+    provider.status !== 'fetching' && !isProviderConfigured(provider) && !hasUsageData(provider)
+  const markAccountProviderUnverifiable = (
+    key: UsageProviderKey,
+    provider: ProviderRateLimits | null
+  ): ProviderRateLimits | null => {
+    if (!provider) {
+      return null
+    }
+    if (hasNoAccountUsage(provider)) {
+      return {
+        ...provider,
+        usageMetadata: { ...provider.usageMetadata, unverifiableOwner: true }
+      }
+    }
+    return stamp(key)
+  }
   if (!base) {
     return createEmptyRateLimitState(mapProviders(() => null))
   }
@@ -245,15 +262,7 @@ export function resolveOwnerUsageRateLimits(
     ...mapProviders((key) => {
       const provider = base[key]
       if (ACCOUNT_OWNED_PROVIDERS.has(key)) {
-        if (
-          !provider ||
-          (provider.status !== 'fetching' &&
-            !isProviderConfigured(provider) &&
-            !hasUsageData(provider))
-        ) {
-          return provider
-        }
-        return stamp(key)
+        return markAccountProviderUnverifiable(key, provider)
       }
       // Preserve absent slots, but end loading for real fetching slots when contact is lost.
       if (

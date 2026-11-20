@@ -19,7 +19,12 @@ it('keeps absent and empty account-owned slots hidden when their host is unreach
     lastKnown: state
   })
   expect(unresolved.codex).toBeNull()
-  expect(unresolved.claude).toEqual(state.claude)
+  expect(unresolved.claude).toMatchObject({
+    status: 'unavailable',
+    session: null,
+    weekly: null,
+    usageMetadata: { unverifiableOwner: true }
+  })
 })
 
 it('marks account-owned slots with quota unverifiable when their host is unreachable', () => {
