@@ -1,11 +1,41 @@
 import {
   cacheKey,
+  observedListenersByPort,
   scanStateChanged,
   shouldReplace,
+  worktreeIdFromCacheKey,
   type CacheKey,
   type ListenerScanState
 } from './advertised-url-parsing'
-import type { AdvertisedUrl } from './advertised-url-watcher'
+import type { AdvertisedUrl, AdvertisedUrlListenerObservation } from './advertised-url-watcher'
+
+/** Whether a scan with these observations could drop a printed URL: its listener is absent or changed pid. */
+export function couldDropAdvertisedUrls(
+  cache: ReadonlyMap<CacheKey, AdvertisedUrl>,
+  observations: ReadonlyMap<string, readonly AdvertisedUrlListenerObservation[]>
+): boolean {
+  const observedByWorktree = new Map(
+    [...observations].map(([id, listeners]) => [id, observedListenersByPort(listeners)])
+  )
+  for (const [key, entry] of cache) {
+    const observedByPort = observedByWorktree.get(worktreeIdFromCacheKey(key, entry.port))
+    if (!observedByPort) {
+      continue
+    }
+    if (!observedByPort.has(entry.port)) {
+      return true
+    }
+    const pid = observedByPort.get(entry.port)
+    if (
+      entry.validatedListenerPid !== undefined &&
+      pid !== undefined &&
+      entry.validatedListenerPid !== pid
+    ) {
+      return true
+    }
+  }
+  return false
+}
 
 export function shouldEvictAdvertisedUrlAfterScan(args: {
   key: CacheKey

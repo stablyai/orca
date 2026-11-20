@@ -8,7 +8,8 @@ import {
   compareWorkspacePorts,
   enrichPort,
   resolveWorkspacePortProbes,
-  reconcileAdvertisedUrls
+  reconcileAdvertisedUrls,
+  workspaceListenerObservations
 } from './local-workspace-port-attribution'
 import { scanPlatformListeningPorts } from './local-workspace-platform-port-scanner'
 import {
@@ -24,7 +25,10 @@ const MAX_PORTS = 200
 
 export async function scanWorkspacePorts(
   worktrees: WorkspacePortProbe[],
-  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileWorkspaces'> = advertisedUrlWatcher,
+  urlWatcher: Pick<
+    AdvertisedUrlWatcher,
+    'lookup' | 'reconcileWorkspaces' | 'couldDropUrls'
+  > = advertisedUrlWatcher,
   options: WorkspacePortScanOptions = {}
 ): Promise<WorkspacePortScanResult> {
   const cooldown = getWorkspacePortScanCooldown()
@@ -37,22 +41,33 @@ export async function scanWorkspacePorts(
   }
 
   try {
-    const { ports: rawPorts, metadataAvailable } = await scanPlatformListeningPorts(options)
-    recordWorkspacePortScanSuccess()
-    const { probes: normalizedWorktrees, complete } = await resolveWorkspacePortProbes(
-      worktrees,
-      options.requireMetadata
-    )
-    const attributedPorts = attributePortsToWorkspaces(rawPorts, normalizedWorktrees)
-    // Missing metadata cannot prove listener loss; eviction would discard URLs only PTY output can restore (#11161).
-    if (metadataAvailable && complete) {
-      reconcileAdvertisedUrls(attributedPorts, normalizedWorktrees, urlWatcher)
+    let freshOwners = false
+    let resolved: Awaited<ReturnType<typeof resolveWorkspacePortProbes>> | undefined
+    for (;;) {
+      const scan = await scanPlatformListeningPorts({ ...options, freshOwners })
+      recordWorkspacePortScanSuccess()
+      resolved ??= await resolveWorkspacePortProbes(worktrees, options.requireMetadata)
+      const { probes, complete } = resolved
+      const attributedPorts = attributePortsToWorkspaces(scan.ports, probes)
+      // Cached owners can miss a socket passed to a running process; only a full walk may drop a printed URL.
+      if (
+        !freshOwners &&
+        scan.ownersFromCache &&
+        urlWatcher.couldDropUrls(workspaceListenerObservations(attributedPorts, probes))
+      ) {
+        freshOwners = true
+        continue
+      }
+      // Missing metadata cannot prove listener loss; eviction would discard URLs only PTY output can restore (#11161).
+      if (scan.metadataAvailable && complete) {
+        reconcileAdvertisedUrls(attributedPorts, probes, urlWatcher)
+      }
+      const ports = attributedPorts
+        .map((port) => enrichPort(port, urlWatcher))
+        .sort(compareWorkspacePorts)
+        .slice(0, MAX_PORTS)
+      return { platform: process.platform, scannedAt: Date.now(), ports }
     }
-    const ports = attributedPorts
-      .map((port) => enrichPort(port, urlWatcher))
-      .sort(compareWorkspacePorts)
-      .slice(0, MAX_PORTS)
-    return { platform: process.platform, scannedAt: Date.now(), ports }
   } catch (error) {
     if (isWorkspacePortScanCommandTimeout(error)) {
       recordWorkspacePortScanTimeout()

@@ -18,7 +18,7 @@ let lastFullWalkScan = Number.NEGATIVE_INFINITY
 export async function resolveLinuxSocketOwners(
   inodes: ReadonlySet<number>,
   { fresh }: { fresh?: boolean } = {}
-): Promise<Map<number, number>> {
+): Promise<{ owners: Map<number, number>; fullWalk: boolean }> {
   const sequence = ++scanSequence
   // Overlapping scans replace the module state, so each call works from the state it started with.
   const cachedOwners = ownerPidByInode
@@ -28,7 +28,7 @@ export async function resolveLinuxSocketOwners(
   if (inodes.size === 0) {
     ownerPidByInode = new Map()
     previousInodes = new Set()
-    return owners
+    return { owners, fullWalk: true }
   }
   let pids: number[]
   try {
@@ -36,7 +36,7 @@ export async function resolveLinuxSocketOwners(
       .filter((entry) => /^\d+$/.test(entry))
       .map((entry) => Number.parseInt(entry, 10))
   } catch {
-    return owners
+    return { owners, fullWalk: true }
   }
 
   // A cached pair counts only after re-reading that pid's fds, so pid reuse or a closed socket drops it.
@@ -56,30 +56,51 @@ export async function resolveLinuxSocketOwners(
       lostOwner = true
     }
   }
-  const fullWalk =
+  let fullWalk =
     fresh ||
     seenBefore === undefined ||
     lostOwner ||
     sequence - lastFullWalkScan >= FULL_WALK_INTERVAL_SCANS ||
     [...inodes].some((inode) => !knownInodes.has(inode))
 
-  for (const pid of pids) {
-    const cached = cachedOwnerSockets.get(pid)
-    cachedOwnerSockets.delete(pid)
-    if (cached || fullWalk || !seenBefore?.has(pid)) {
-      for (const inode of cached ?? (await readPidListenerSockets(pid, inodes))) {
+  // Holders seen by a partial pass, kept so a confirming full walk does not read them again.
+  const holderSockets = new Map<number, ReadonlySet<number>>()
+  if (!fullWalk) {
+    for (const pid of pids) {
+      const cached = cachedOwnerSockets.get(pid)
+      cachedOwnerSockets.delete(pid)
+      if (cached || !seenBefore?.has(pid)) {
+        const sockets = cached ?? (await readPidListenerSockets(pid, inodes))
+        if (sockets.size > 0) {
+          holderSockets.set(pid, sockets)
+        }
+        for (const inode of sockets) {
+          owners.set(inode, pid)
+        }
+      }
+    }
+    // An owner change is user-visible (attribution, Stop, printed URLs), so only a full walk may make it.
+    fullWalk = [...cachedOwners].some(
+      ([inode, pid]) => inodes.has(inode) && owners.get(inode) !== pid
+    )
+  }
+  if (fullWalk) {
+    owners.clear()
+    for (const pid of pids) {
+      const known = holderSockets.get(pid) ?? cachedOwnerSockets.get(pid)
+      holderSockets.delete(pid)
+      cachedOwnerSockets.delete(pid)
+      for (const inode of known ?? (await readPidListenerSockets(pid, inodes))) {
         owners.set(inode, pid)
       }
     }
-  }
-
-  if (fullWalk) {
     lastFullWalkScan = Math.max(lastFullWalkScan, sequence)
   }
+
   ownerPidByInode = owners
   previousInodes = new Set(inodes)
   previousPids = new Set(pids)
-  return new Map(owners)
+  return { owners: new Map(owners), fullWalk }
 }
 
 /** Keeps only listener inodes, not every connection the process holds. */

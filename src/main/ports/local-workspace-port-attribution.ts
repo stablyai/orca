@@ -10,7 +10,10 @@ import type {
   WorkspacePortOwner,
   WorkspacePortProbe
 } from '../../shared/workspace/ports/workspace-ports'
-import type { AdvertisedUrlWatcher } from './advertised-url-watcher'
+import type {
+  AdvertisedUrlListenerObservation,
+  AdvertisedUrlWatcher
+} from './advertised-url-watcher'
 import { connectHostForBindHost } from './local-workspace-port-address'
 import type {
   NormalizedWorkspacePortProbe,
@@ -207,12 +210,11 @@ export function enrichPort(
   return { ...base, kind: 'external' }
 }
 
-export function reconcileAdvertisedUrls(
+export function workspaceListenerObservations(
   ports: readonly AttributedListeningPort[],
-  worktrees: readonly NormalizedWorkspacePortProbe[],
-  urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileWorkspaces'>
-): void {
-  const observationsByWorktree = new Map<string, { port: number; pid?: number }[]>()
+  worktrees: readonly NormalizedWorkspacePortProbe[]
+): Map<string, AdvertisedUrlListenerObservation[]> {
+  const observationsByWorktree = new Map<string, AdvertisedUrlListenerObservation[]>()
   for (const worktree of worktrees) {
     observationsByWorktree.set(worktree.worktree.id, [])
   }
@@ -222,8 +224,16 @@ export function reconcileAdvertisedUrls(
     }
     observationsByWorktree.get(owner.worktreeId)?.push({ port: port.port, pid: port.pid })
   }
+  return observationsByWorktree
+}
+
+export function reconcileAdvertisedUrls(
+  ports: readonly AttributedListeningPort[],
+  worktrees: readonly NormalizedWorkspacePortProbe[],
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileWorkspaces'>
+): void {
   // Invalidate disappeared/changed listeners before lazy lookup can pin a stale banner.
-  urlWatcher.reconcileWorkspaces(observationsByWorktree)
+  urlWatcher.reconcileWorkspaces(workspaceListenerObservations(ports, worktrees))
 }
 
 export function compareWorkspacePorts(a: WorkspacePort, b: WorkspacePort): number {

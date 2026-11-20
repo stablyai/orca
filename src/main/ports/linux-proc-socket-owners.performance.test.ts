@@ -1,6 +1,8 @@
 import type * as FsPromises from 'node:fs/promises'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AdvertisedUrlWatcher } from './advertised-url-watcher'
 import { scanPlatformListeningPorts } from './local-workspace-platform-port-scanner'
+import { scanWorkspacePorts } from './local-workspace-port-scanner'
 
 // Guards the Linux port scan walking every process's fds on each pass (#45700).
 const PROC_NET_HEADER =
@@ -29,6 +31,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   }
   return {
     ...actual,
+    realpath: (path: string) => Promise.resolve(path),
     readFile: (path: string) => {
       if (path === '/proc/net/tcp') {
         return Promise.resolve(fakeProc.tcp)
@@ -90,7 +93,7 @@ describe('Linux listener owner lookup', () => {
     vi.restoreAllMocks()
   })
 
-  it('reads only cached owners and new pids between full walks, and finds a forked holder', async () => {
+  it('reads only cached owners and new pids between full walks, and confirms a forked holder', async () => {
     fakeProc.tcp = PROC_NET_HEADER + procNetRow('1F90', OWN_UID, 5001) + procNetRow('0016', 0, 6001)
     const nodePort = {
       host: '127.0.0.1',
@@ -126,7 +129,14 @@ describe('Linux listener owner lookup', () => {
       [8080, 400, '/repo/app'],
       [22, undefined, undefined]
     ])
-    expect(fakeProc.readdirPaths).toEqual(['/proc', '/proc/100/fd', '/proc/400/fd'])
+    // The owner change is confirmed by a full walk that reuses the holders already read.
+    expect(fakeProc.readdirPaths).toEqual([
+      '/proc',
+      '/proc/100/fd',
+      '/proc/400/fd',
+      '/proc/200/fd',
+      '/proc/300/fd'
+    ])
 
     fakeProc.processes.get(200)!.fds.push('socket:[5002]')
     fakeProc.tcp += procNetRow('1F91', OWN_UID, 5002)
@@ -161,5 +171,31 @@ describe('Linux listener owner lookup', () => {
       '/proc/100/fd',
       '/proc/300/fd'
     ])
+  })
+
+  it('keeps a printed URL when a running workspace process is handed the listener', async () => {
+    const worktree = { id: 'repo::/repo', repoId: 'repo', displayName: 'main', path: '/repo' }
+    const watcher = new AdvertisedUrlWatcher()
+    fakeProc.tcp = PROC_NET_HEADER + procNetRow('1F90', OWN_UID, 5001)
+    fakeProc.processes = new Map([
+      [100, { uid: OWN_UID, comm: 'sup', cmdline: 'sup', cwd: '/home', fds: ['socket:[5001]'] }],
+      [200, { uid: OWN_UID, comm: 'node', cmdline: 'node', cwd: '/repo', fds: [] }]
+    ])
+    const before = await scanWorkspacePorts([worktree], watcher)
+    expect(before.ports.map((port) => [port.port, port.pid, port.kind])).toEqual([
+      [8080, 100, 'external']
+    ])
+
+    // The supervisor passes its listener to the existing worker (SCM_RIGHTS); no new pid or socket appears.
+    fakeProc.processes.get(200)!.fds.push('socket:[5001]')
+    watcher.bindPty('pty-1', worktree.id)
+    watcher.ingest('pty-1', 'ready on https://dev.example.test:8080\n')
+    for (let scan = 0; scan < 3; scan++) {
+      const after = await scanWorkspacePorts([worktree], watcher)
+      expect(after.ports.map((port) => [port.port, port.pid, port.kind])).toEqual([
+        [8080, 200, 'workspace']
+      ])
+    }
+    expect(watcher.lookup(worktree.id, 8080)?.origin).toBe('https://dev.example.test:8080')
   })
 })

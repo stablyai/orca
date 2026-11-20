@@ -30,8 +30,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 const LSOF_LISTEN_OUTPUT = ['p123', 'cnode', 'd0x1', 'n127.0.0.1:5173'].join('\n')
 
-function urlWatcherStub(): { lookup: () => undefined; reconcileWorkspaces: Mock } {
-  return { lookup: () => undefined, reconcileWorkspaces: vi.fn() }
+function urlWatcherStub(): {
+  lookup: () => undefined
+  reconcileWorkspaces: Mock
+  couldDropUrls: () => boolean
+} {
+  return { lookup: () => undefined, reconcileWorkspaces: vi.fn(), couldDropUrls: () => false }
 }
 
 const worktrees = [

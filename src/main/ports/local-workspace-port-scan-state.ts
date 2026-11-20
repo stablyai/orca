@@ -21,6 +21,8 @@ let reusedListenerKeys = new Set<string>()
 
 export type WorkspacePortScanOptions = {
   requireMetadata?: boolean
+  /** Linux: resolve socket owners with a full /proc walk instead of the cached owners. */
+  freshOwners?: boolean
 }
 
 export type RawListeningPort = {
@@ -53,6 +55,8 @@ export type NormalizedWorkspacePortProbe = {
 export type PlatformListeningPortScan = {
   ports: RawListeningPort[]
   metadataAvailable: boolean
+  /** Linux: owners came from cached owners plus new pids, not a full /proc walk. */
+  ownersFromCache?: boolean
 }
 
 export function getWorkspacePortScanCooldown(): WorkspacePortScanTimeoutBackoffSnapshot {

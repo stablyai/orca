@@ -14,6 +14,7 @@ import {
 } from './advertised-url-parsing'
 import { considerAdvertisedUrl } from './advertised-url-cache-update'
 import {
+  couldDropAdvertisedUrls,
   lookupBestAdvertisedUrl,
   shouldEvictAdvertisedUrlAfterScan
 } from './advertised-url-reconciliation'
@@ -94,9 +95,7 @@ export class AdvertisedUrlWatcher {
         continue
       }
       // SSH forwards lack listener PIDs; PTY teardown supplies expiry evidence.
-      this.cache.delete(key)
-      this.validationBaselines.delete(key)
-      this.startupAbsentAllowances.delete(key)
+      this.dropKey(key)
       const worktreeId = worktreeIdFromCacheKey(key, entry.port)
       removedEvents.push({ worktreeId, port: entry.port })
     }
@@ -122,9 +121,7 @@ export class AdvertisedUrlWatcher {
       if (entryWorktreeId !== worktreeId) {
         continue
       }
-      this.cache.delete(key)
-      this.validationBaselines.delete(key)
-      this.startupAbsentAllowances.delete(key)
+      this.dropKey(key)
       removedEvents.push({ worktreeId, port: entry.port })
     }
     for (const event of dedupeChangeEvents(removedEvents)) {
@@ -188,6 +185,12 @@ export class AdvertisedUrlWatcher {
     }
   }
 
+  private dropKey(key: CacheKey): boolean {
+    this.validationBaselines.delete(key)
+    this.startupAbsentAllowances.delete(key)
+    return this.cache.delete(key)
+  }
+
   private emitChange(event: AdvertisedUrlChangeEvent): void {
     for (const listener of this.listeners) {
       try {
@@ -209,9 +212,7 @@ export class AdvertisedUrlWatcher {
         entry.validatedListenerPid = currentListenerPid
       } else if (entry.validatedListenerPid !== currentListenerPid) {
         // A changed listener PID invalidates the old banner.
-        this.cache.delete(key)
-        this.validationBaselines.delete(key)
-        this.startupAbsentAllowances.delete(key)
+        this.dropKey(key)
         this.emitChange({ worktreeId, port })
         return undefined
       }
@@ -221,9 +222,7 @@ export class AdvertisedUrlWatcher {
 
   invalidate(worktreeId: string, port: number): void {
     const key = cacheKey(worktreeId, port)
-    this.validationBaselines.delete(key)
-    this.startupAbsentAllowances.delete(key)
-    if (this.cache.delete(key)) {
+    if (this.dropKey(key)) {
       this.emitChange({ worktreeId, port })
     }
   }
@@ -235,6 +234,12 @@ export class AdvertisedUrlWatcher {
   ): void {
     const observedByPort = observedListenersByPort(observations)
     this.reconcileObservedWorkspaces(new Map(worktreeIds.map((id) => [id, observedByPort])))
+  }
+
+  couldDropUrls(
+    observations: ReadonlyMap<string, readonly AdvertisedUrlListenerObservation[]>
+  ): boolean {
+    return couldDropAdvertisedUrls(this.cache, observations)
   }
 
   reconcileWorkspaces(
@@ -269,9 +274,7 @@ export class AdvertisedUrlWatcher {
           startupAbsentAllowances: this.startupAbsentAllowances
         })
       ) {
-        this.cache.delete(key)
-        this.validationBaselines.delete(key)
-        this.startupAbsentAllowances.delete(key)
+        this.dropKey(key)
         removedEvents.push({ worktreeId, port: entry.port })
       } else if (entry.validatedListenerPid === undefined) {
         this.validationBaselines.set(key, current)

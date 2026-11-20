@@ -174,9 +174,9 @@ async function scanLinuxProcPorts(
     readProcNet('/proc/net/tcp6', ownUid)
   ])
   const sockets = [...tcp4, ...tcp6]
-  const inodeToPid = await resolveLinuxSocketOwners(
+  const { owners: inodeToPid, fullWalk } = await resolveLinuxSocketOwners(
     new Set(sockets.map((socket) => socket.inode)),
-    { fresh: options.requireMetadata }
+    { fresh: options.requireMetadata || options.freshOwners }
   )
   const metadata = new Map<number, ProcessMetadata>()
   const rawPorts: RawListeningPort[] = []
@@ -194,7 +194,7 @@ async function scanLinuxProcPorts(
     })
   }
 
-  return { ports: dedupeRawPorts(rawPorts), metadataAvailable: true }
+  return { ports: dedupeRawPorts(rawPorts), metadataAvailable: true, ownersFromCache: !fullWalk }
 }
 
 async function readProcNet(
