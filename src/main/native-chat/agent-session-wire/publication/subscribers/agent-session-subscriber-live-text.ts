@@ -5,13 +5,22 @@ import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { subscriberHistoryReader } from '../history/agent-session-bounded-frames'
-import type { HistoryReader } from '../history/agent-session-history-page-bounds'
+import {
+  HISTORY_PAGE_CONTENT_BUDGET_BYTES,
+  type HistoryReader
+} from '../history/agent-session-history-page-bounds'
+import { BOUNDED_FRAME_ROW_BYTES } from '../history/agent-session-bounded-frame-item'
+import { jsonBytes } from '../history/json-string-shortening'
 
 type BatchEvent = Extract<AgentSessionSubscribeEvent, { type: 'batch' }>
 /** Host facts a row-carrying batch must restate, or the client clears them. */
 export type SubscriberHostWork = Pick<BatchEvent, 'latestTurn' | 'working' | 'actionablePromptIds'>
-/** A live row as built and as this subscriber was sent it. */
-export type SubscriberLiveRow = { source: AgentJournalRenderItem; sent: AgentJournalRenderItem }
+/** A live row as built and as this subscriber was sent it, with the sent form's JSON size. */
+export type SubscriberLiveRow = {
+  source: AgentJournalRenderItem
+  sent: AgentJournalRenderItem
+  bytes: number
+}
 
 /** What the client holds for the host facts after this frame, by the reducer's restatement rule. */
 export function rememberSubscriberHostWork(
@@ -61,9 +70,36 @@ function sameSentForm(row: SubscriberLiveRow | undefined, sent: AgentJournalRend
 
 /** Record live rows a durable frame already carried, so the next live frame skips them. */
 export function noteSubscriberLiveRow(subscriber: Subscriber) {
-  return (source: AgentJournalRenderItem, sent: AgentJournalRenderItem): void => {
-    ;(subscriber.liveSent ??= new Map()).set(source.itemId, { source, sent })
+  return (source: AgentJournalRenderItem, sent: AgentJournalRenderItem, bytes: number): void => {
+    ;(subscriber.liveSent ??= new Map()).set(source.itemId, { source, sent, bytes })
   }
+}
+
+/** Escapes that straddle the appended text's edge can shift its JSON size by a few bytes. */
+const GROWTH_SIZE_SLACK_BYTES = 16
+
+/** A live row sized from its previous form when only its text grew, so a long reply is not
+ *  stringified or shortened again every window. */
+function liveRow(
+  prior: SubscriberLiveRow | undefined,
+  source: AgentJournalRenderItem,
+  form: HistoryReader['form'],
+  maxBytes: number
+): SubscriberLiveRow {
+  const before = prior && prior.source.revision === source.revision ? bodyText(prior.source) : null
+  const after = bodyText(source)
+  if (prior && before !== null && after !== null && after.startsWith(before)) {
+    // A shortened row shows its head, which more text cannot move.
+    if (prior.sent.shortened) {
+      return { ...prior, source }
+    }
+    const bytes = prior.bytes + jsonBytes(after.slice(before.length)) - jsonBytes('')
+    if (prior.sent === prior.source && bytes + GROWTH_SIZE_SLACK_BYTES <= maxBytes) {
+      return { source, sent: source, bytes }
+    }
+  }
+  const formed = form(source)
+  return { source, sent: formed.item, bytes: formed.bytes }
 }
 
 /** A durable frame takes newer live text for rows at the revision that text was placed on, so a
@@ -72,7 +108,7 @@ export function withSubscriberLiveText(
   items: AgentJournalRenderItem[],
   readLive: () => readonly AgentJournalRenderItem[],
   form: HistoryReader['form'],
-  applied?: (live: AgentJournalRenderItem, sent: AgentJournalRenderItem) => void
+  applied?: (live: AgentJournalRenderItem, sent: AgentJournalRenderItem, bytes: number) => void
 ): AgentJournalRenderItem[] {
   const live = items.length > 0 ? readLive() : []
   if (live.length === 0) {
@@ -87,8 +123,8 @@ export function withSubscriberLiveText(
     }
     changed = true
     // The live row shares this revision's placement, and its object keeps one cached wire form.
-    const sent = form(shown).item
-    applied?.(shown, sent)
+    const { item: sent, bytes } = form(shown)
+    applied?.(shown, sent, bytes)
     return sent
   })
   return changed ? next : items
@@ -165,12 +201,19 @@ export async function publishSubscriberLiveText(
     const sent = subscriber.liveSent
     // Live rows get the same per-row bounds a durable read gives this subscriber.
     const { form } = subscriberHistoryReader(subscriber)
+    const maxBytes = subscriber.boundedFrames
+      ? BOUNDED_FRAME_ROW_BYTES
+      : HISTORY_PAGE_CONTENT_BUDGET_BYTES
     const rows: SubscriberLiveRow[] = []
     const fresh: AgentJournalRenderItem[] = []
     for (const source of items) {
+      // Without the row's text to append to, it would go whole every window; its save carries it.
+      if (subscriber.holdsTextBase?.(source.itemId) === false) {
+        continue
+      }
       const prior = sent?.get(source.itemId)
       // An unchanged row keeps its object, so a row this subscriber already has is not rebuilt.
-      const row = prior?.source === source ? prior : { source, sent: form(source).item }
+      const row = prior?.source === source ? prior : liveRow(prior, source, form, maxBytes)
       rows.push(row)
       if (row !== prior && !sameSentForm(prior, row.sent)) {
         fresh.push(row.sent)

@@ -19,8 +19,9 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
   params: SubscribeParams,
   handler: async (params, ctx, emitFrame) => {
     const { capabilities } = params
-    const emit =
-      capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame, capabilities) : emitFrame
+    const appends =
+      capabilities?.textAppend === 1 ? sendingTextAppends(emitFrame, capabilities) : null
+    const emit = appends ?? emitFrame
     const host = await requireInstalledHost(ctx, params.sessionId)
     const subscriptionId = subscriptionIdFor(ctx, params.sessionId)
     // A stream reads; it never keeps an agent alive or starts one.
@@ -64,6 +65,7 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
       ...(params.cursor ? { cursor: params.cursor } : {}),
       snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
       ...(capabilities?.promptSuggestions === 1 ? { showsPromptSuggestions: true } : {}),
+      ...(appends ? { holdsTextBase: appends.holdsBase } : {}),
       // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
       ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
     })

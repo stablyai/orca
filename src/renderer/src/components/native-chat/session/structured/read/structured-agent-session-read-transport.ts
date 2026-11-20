@@ -15,6 +15,8 @@ import { runtimeEnvironmentSupportsCapabilities } from '@/runtime/rpc/compatibil
 
 type LiveReadArgs = Parameters<typeof startStructuredAgentSessionLiveRead>[0]
 
+const LOCAL_TEXT_APPEND: AgentSessionTextAppendCapabilities = { textAppend: 1, toolOutputAppend: 1 }
+
 // Read once per chat run, overlapping hydration; a host that later refuses the param drops what
 // it asked for. Older hosts' params predate each key, and a failed check asks for none.
 function environmentSubscribeAsks(environmentId: string): {
@@ -42,11 +44,12 @@ export function startStructuredAgentSessionReadTransport(
   }
 ): ReturnType<typeof startStructuredAgentSessionLiveRead> {
   const { target, showsPromptSuggestions, ...read } = args
-  // Only a network hop pays for whole-reply restatements; local IPC keeps opening in the same turn.
   const asks = target.kind === 'environment' ? environmentSubscribeAsks(target.environmentId) : null
   return startStructuredAgentSessionLiveRead({
     ...read,
-    ...(asks ? { textAppend: asks.textAppend } : {}),
+    // A streaming reply goes out as its new text every window. The local host ships with this
+    // renderer, so it is asked without a check and the read still opens in the same turn.
+    textAppend: asks ? asks.textAppend : LOCAL_TEXT_APPEND,
     ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
     readCurrentRequests: (request) =>
       callStructuredAgentSession(target, 'agentSession.currentRequests', request),

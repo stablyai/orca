@@ -28,19 +28,22 @@ export function createLiveTextPublication(
   submit: (
     operation: Omit<StructuredAgentSessionSinkOperation, 'sequence'>
   ) => StructuredAgentSessionSinkAdmission,
-  current: (bound: StructuredAgentSessionEventTarget) => boolean,
+  target: () => StructuredAgentSessionEventTarget | null,
   read: () => readonly AgentJournalRenderItem[]
 ): () => StructuredAgentSessionSinkAdmission {
+  // Asked each window, so a viewer who arrives mid-stream gets the next one.
   return () =>
-    submit({
-      bytes: 1,
-      publicationKey: 'live-text',
-      run: (bound) => {
-        if (current(bound)) {
-          bound.publishLiveText?.(read)
-        }
-      }
-    })
+    target()?.hasLiveTextSubscribers?.() === false
+      ? { accepted: true }
+      : submit({
+          bytes: 1,
+          publicationKey: 'live-text',
+          run: (bound) => {
+            if (target() === bound) {
+              bound.publishLiveText?.(read)
+            }
+          }
+        })
 }
 
 export function createChildWorkPublication(

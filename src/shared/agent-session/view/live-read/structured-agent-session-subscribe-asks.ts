@@ -14,7 +14,9 @@ type StructuredAgentSessionSubscribeAsk = {
 
 /** What each open of one read asks the host for, and what earlier opens learned it refuses. */
 export function createStructuredAgentSessionSubscribeAsks(asks: {
-  textAppend?: Promise<AgentSessionTextAppendCapabilities | null>
+  textAppend?:
+    | Promise<AgentSessionTextAppendCapabilities | null>
+    | AgentSessionTextAppendCapabilities
   promptSuggestions?: Promise<boolean> | boolean
 }) {
   // A refused append means the two sides disagree; later streams take whole items so it cannot loop.
@@ -47,12 +49,12 @@ export function createStructuredAgentSessionSubscribeAsks(asks: {
       const textAppend =
         asks.textAppend && !appendsRefused && !paramRefused ? asks.textAppend : null
       const promptSuggestions = !paramRefused && (asks.promptSuggestions ?? false)
-      if (textAppend === null && typeof promptSuggestions === 'boolean') {
-        return settle(null, promptSuggestions)
+      if (!(textAppend instanceof Promise) && typeof promptSuggestions === 'boolean') {
+        return settle(textAppend, promptSuggestions)
       }
       sent = false
       return Promise.all([
-        textAppend?.catch(() => null) ?? null,
+        textAppend instanceof Promise ? textAppend.catch(() => null) : textAppend,
         Promise.resolve(promptSuggestions).catch(() => false)
       ]).then(([append, suggestions]) => settle(append, suggestions))
     }

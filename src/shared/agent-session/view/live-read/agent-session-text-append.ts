@@ -86,7 +86,9 @@ function withText(item: AgentJournalRenderItem, text: string): AgentJournalRende
 function textAppendStream(
   rules: TextAppendRules,
   mapItem: (base: string | undefined, item: AgentJournalRenderItem) => AgentJournalRenderItem | null
-): (event: AgentSessionSubscribeEvent) => AgentSessionSubscribeEvent | null {
+): ((event: AgentSessionSubscribeEvent) => AgentSessionSubscribeEvent | null) & {
+  holds: (itemId: string) => boolean
+} {
   const bases = new Map<string, string>()
   let epoch: string | null = null
   const note = (item: AgentJournalRenderItem): void => {
@@ -102,7 +104,7 @@ function textAppendStream(
       bases.delete(oldest)
     }
   }
-  return (event) => {
+  const stream = (event: AgentSessionSubscribeEvent): AgentSessionSubscribeEvent | null => {
     if (event.type === 'end') {
       return event
     }
@@ -133,6 +135,7 @@ function textAppendStream(
     }
     return changed ? { ...event, batch: { ...event.batch, items } } : event
   }
+  return Object.assign(stream, { holds: (itemId: string) => bases.has(itemId) })
 }
 
 /** Host side, wrapping a stream's emit after every other projection: text that extends what this
@@ -140,7 +143,7 @@ function textAppendStream(
 export function sendingTextAppends<R>(
   emit: (event: AgentSessionSubscribeEvent) => R,
   rules: TextAppendRules
-): (event: AgentSessionSubscribeEvent) => R {
+): ((event: AgentSessionSubscribeEvent) => R) & { holdsBase: (itemId: string) => boolean } {
   const send = textAppendStream(rules, (base, item) => {
     const text = growingText(item, rules)
     if (base === undefined || text === null || !text.startsWith(base)) {
@@ -151,7 +154,9 @@ export function sendingTextAppends<R>(
       textAppend: { from: base.length, text: text.slice(base.length) }
     } satisfies AgentSessionTextAppendItem
   })
-  return (event) => emit(send(event) ?? event)
+  return Object.assign((event: AgentSessionSubscribeEvent) => emit(send(event) ?? event), {
+    holdsBase: send.holds
+  })
 }
 
 /** Client side: whole items back from appends; null when an append does not start where this

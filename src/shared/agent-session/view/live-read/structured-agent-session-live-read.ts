@@ -51,7 +51,9 @@ export function startStructuredAgentSessionLiveRead(args: {
   /** How long streamed text batches wait to merge; defaults to the coalescer's own window. */
   coalesceMs?: number
   /** The appends the host advertises; opens wait for it, and null or a rejection means none. */
-  textAppend?: Promise<AgentSessionTextAppendCapabilities | null>
+  textAppend?:
+    | Promise<AgentSessionTextAppendCapabilities | null>
+    | AgentSessionTextAppendCapabilities
   /** Whether this reader shows prompt suggestions and the host takes the param; a rejection means no. */
   promptSuggestions?: Promise<boolean> | boolean
   readCurrentRequests: (
@@ -223,7 +225,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     unsubscribe()
     unsubscribe = (): void => {}
     try {
-      // Local desktop reads ask for no appends, so their subscribe still goes out in the same turn.
+      // Local reads answer at once, so their subscribe still goes out in the same turn.
       const asked = asks.read()
       const { textAppend, capabilities } = asked instanceof Promise ? await asked : asked
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {

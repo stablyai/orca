@@ -52,7 +52,7 @@ export class StructuredAgentSessionSinkQueue {
 
   publishLiveText = createLiveTextPublication(
     (operation) => this.submit(operation),
-    (bound) => this.target === bound,
+    () => this.target,
     this.liveText
   )
 

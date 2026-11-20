@@ -235,6 +235,8 @@ export class AgentSessionSubscribers {
     this.forkMarkers.refreshSources(readJournal, sourceIds)
   }
 
+  hasSubscribers = (sessionId: string): boolean => (this.bySession.get(sessionId)?.size ?? 0) > 0
+
   private subscribers = (sessionId: string): Subscriber[] => [
     ...(this.bySession.get(sessionId)?.values() ?? [])
   ]

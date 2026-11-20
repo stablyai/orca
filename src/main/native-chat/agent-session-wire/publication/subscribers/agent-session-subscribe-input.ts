@@ -32,6 +32,8 @@ export type AgentSessionSubscribeInput = {
   snapshotCatchUp?: boolean
   /** The reader shows prompt suggestions on screen; only these receive them or keep them generated. */
   showsPromptSuggestions?: boolean
+  /** Whether this stream's append transport holds a row's text; live rows go only where it does. */
+  holdsTextBase?: (itemId: string) => boolean
 }
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void
@@ -53,6 +55,7 @@ export type Subscriber = {
    *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
   workView?: string
   historyView?: string
+  holdsTextBase?: (itemId: string) => boolean
   /** Live rows last sent, by row; a page that replaces the view clears it. */
   liveSent?: Map<string, SubscriberLiveRow>
   /** Host facts the client holds, which a live row-carrying frame must restate. */
