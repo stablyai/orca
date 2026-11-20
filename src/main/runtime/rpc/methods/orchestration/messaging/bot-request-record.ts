@@ -37,9 +37,8 @@ export function botRequestActsFor(
   }
 }
 
-/** A chat's request or item question sent while its conversation's turn ran: a thread ask passed on
- *  to another bot or the owner, whose answer finishes it there (conversation-ask-answer.ts reads it).
- *  A worker's is its own. */
+/** A chat's request sent while its conversation's turn ran: a thread ask passed on to another bot,
+ *  whose answer finishes it there (conversation-ask-answer.ts reads it). A worker's is its own. */
 export function askedInConversation(
   runtime: OrcaRuntimeService,
   acting: Pick<ActingSender, 'sessionId' | 'worker'>

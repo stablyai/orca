@@ -15,8 +15,10 @@ vi.mock('../../../bots/bot-item-chat-notes', async (importOriginal) => ({
 // `closed`: the item's chat takes no mail, so it lands in Home Chat. `gone`: chats that no longer exist.
 const mailbox = vi.hoisted(() => ({ closed: false, gone: new Set<string>() }))
 vi.mock('./bots-chats', () => ({
-  botChatTakingMail: async (_runtime: unknown, _bot: unknown, chatId: string) =>
-    mailbox.closed || mailbox.gone.has(chatId) ? null : { sessionId: chatId }
+  botChatTakingMail: async (_runtime: unknown, _bot: unknown, ids: string | string[]) => {
+    const chatId = [ids].flat().find((id) => !mailbox.closed && !mailbox.gone.has(id))
+    return chatId ? { sessionId: chatId } : null
+  }
 }))
 vi.mock('../../../bots/bot-chat-session', () => ({
   runtimeBotChats: () => ({ ensure: async () => 'home-chat' })

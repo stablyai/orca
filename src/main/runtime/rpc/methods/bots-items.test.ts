@@ -118,7 +118,7 @@ const request = (
 
 let host: BotItemsHost | null = null
 
-function itemsRuntime() {
+function itemsRuntime({ thread = false } = {}) {
   const bots = [
     makeTestBot({ id: 'ranger', name: 'Ranger' }),
     makeTestBot({ id: 'docs', name: 'Docs' })
@@ -136,7 +136,7 @@ function itemsRuntime() {
     chatTitle: () => null,
     chatExists: () => true,
     chatRoot: (id: string) => id,
-    threadChats: () => [],
+    threadChats: () => (thread ? [{ sessionId: RANGER_CHAT, title: 'Slack thread' }] : []),
     automationRunChats: () => [],
     notify: () => {},
     sendMail: async (mail: BotItemMail) => {
@@ -162,8 +162,8 @@ function itemsRuntime() {
     botItems: host,
     getOrchestrationDb: () => db,
     ensureStructuredAgentSessionHost: async () => {},
-    // No connector: no chat's turn is its conversation's.
-    getExternalConversationSeam: () => null
+    // The running turn is its conversation's.
+    getExternalConversationSeam: () => ({ conversationTurn: () => true })
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these methods read only bots, lookAround, botItems, the orchestration database, the conversation seam and the runtime id, which the stub provides.
   const service = runtime as unknown as OrcaRuntimeService
@@ -308,6 +308,31 @@ describe('bot items over RPC', () => {
       { chatId: RANGER_CHAT, eventId: 3, kind: 'status' }
     ])
   })
+
+  it.each([
+    ["a thread's", true],
+    ['Home Chat', false]
+  ])(
+    "records %s ask as its conversation's while its turn is the conversation's",
+    async (_name, thread) => {
+      const { dispatcher, service } = itemsRuntime({ thread })
+      await dispatcher.dispatch(
+        request('bots.items.add', { callerSessionId: RANGER_CHAT, title: 'Run date' })
+      )
+      await dispatcher.dispatch(
+        request('bots.items.set', {
+          callerSessionId: RANGER_CHAT,
+          item: '1',
+          status: 'needs_you',
+          ask: { questions: [{ prompt: 'Run it?', options: [{ label: 'Yes' }, { label: 'No' }] }] }
+        })
+      )
+      const store = service.botItems.store()
+      const uid = (await store.byNumber(1))!.uid
+      const asked = (await store.events(uid, 0, 50)).find((event) => event.kind === 'commented')
+      expect(asked?.data.askedInConversation).toBe(thread ? RANGER_CHAT : undefined)
+    }
+  )
 
   it('posts a hard-to-read ask as written and tips the bot; a clean ask gets no tip', async () => {
     const { dispatcher } = itemsRuntime()

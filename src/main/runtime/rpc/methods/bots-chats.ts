@@ -98,9 +98,12 @@ export async function botChatTakingMail(
     'ensureStructuredAgentSessionHost' | 'getOrchestrationDb' | 'lookAround'
   >,
   bot: Pick<Bot, 'folderWorkspaceId' | 'chatSessionId'>,
-  id: string
+  id: string | readonly string[]
 ): Promise<{ title: string | null; sessionId: string } | null> {
-  const row = (await readBotChats(runtime, bot, null)).find((chat) => chat.id === id)
+  // Several ids: the first that takes mail, from one read of the bot's chats.
+  const ids = typeof id === 'string' ? [id] : id
+  const chats = await readBotChats(runtime, bot, null)
+  const row = ids.map((each) => chats.find((chat) => chat.id === each)).find(Boolean)
   if (!row) {
     return null
   }

@@ -36,21 +36,23 @@ const sameSession = (a: string, b: string): boolean =>
     isOrcaSessionId(b) &&
     canonicalOrcaSessionId(a) === canonicalOrcaSessionId(b))
 
-/** The chat that asked the item question this mail answers, as Orca wrote it; only Orca's item mail. */
-function itemAnswerAskedIn(message: Pick<MessageRow, 'from_handle' | 'payload'>): string | null {
-  if (message.from_handle !== BOT_ITEM_MAIL_SENDER || !message.payload) {
-    return null
+/** Whether Orca's item mail carries the owner's answer to a question the reading chat asked; item
+ *  mail answers no request, so this is its whole check. */
+function answersItemAsk(payloadText: string | null, readerSessionId: string): boolean {
+  if (!payloadText) {
+    return false
   }
   try {
-    const payload: unknown = JSON.parse(message.payload)
-    return typeof payload === 'object' &&
+    const payload: unknown = JSON.parse(payloadText)
+    return (
+      typeof payload === 'object' &&
       payload !== null &&
       'askedInConversation' in payload &&
-      typeof payload.askedInConversation === 'string'
-      ? payload.askedInConversation
-      : null
+      typeof payload.askedInConversation === 'string' &&
+      sameSession(payload.askedInConversation, readerSessionId)
+    )
   } catch {
-    return null
+    return false
   }
 }
 
@@ -61,12 +63,14 @@ export function answersConversationAsk(
   message: Pick<MessageRow, 'id' | 'from_handle' | 'payload'> & { thread_id?: string | null },
   readerSessionId: string | undefined
 ): boolean {
-  const itemAsker = itemAnswerAskedIn(message)
-  if (itemAsker !== null) {
-    return Boolean(readerSessionId && sameSession(itemAsker, readerSessionId))
+  if (!readerSessionId) {
+    return false
+  }
+  if (message.from_handle === BOT_ITEM_MAIL_SENDER) {
+    return answersItemAsk(message.payload, readerSessionId)
   }
   const requestId = answeredRequestId(message)
-  if (!db || !readerSessionId || !requestId || requestId === message.id) {
+  if (!db || !requestId || requestId === message.id) {
     return false
   }
   const row = db.getBotRequest(requestId)

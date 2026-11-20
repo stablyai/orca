@@ -73,10 +73,15 @@ export async function sendBotItemMail(
   // The owner's answer to a question a conversation's turn asked goes to the chat that asked, which
   // answers in that conversation; gone, it goes where any other item mail does.
   const asker = answerAskedIn(owed)
-  const askingChat = asker
-    ? await botChatTakingMail(runtime, bot, runtime.botItems.chatRootOf(asker))
-    : null
-  const chat = askingChat ?? (await botChatTakingMail(runtime, bot, owed.chatId))
+  const askerChat = asker ? runtime.botItems.chatRootOf(asker) : null
+  const chat = await botChatTakingMail(
+    runtime,
+    bot,
+    askerChat ? [askerChat, owed.chatId] : owed.chatId
+  )
+  const toAsker = Boolean(
+    chat && askerChat && runtime.botItems.chatRootOf(chat.sessionId) === askerChat
+  )
   const sessionId = chat?.sessionId ?? (await runtimeBotChats(runtime).ensure(bot.id))
   const to = `orca_session_id:${sessionId}`
   const images = botItemMailImages(owed.changes)
@@ -89,7 +94,7 @@ export async function sendBotItemMail(
     })),
     // Delivered as the chat's image blocks, as chat sends a pasted image.
     ...(images.length > 0 ? { images } : {}),
-    ...(askingChat && asker ? { askedInConversation: asker } : {})
+    ...(toAsker && asker ? { askedInConversation: asker } : {})
   })
   db.insertMessage({
     id,

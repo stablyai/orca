@@ -17,7 +17,7 @@ import { BotItemError } from '../../../bots/bot-item-error'
 import { assertBotItemSetInput } from '../../../bots/bot-items-edits'
 import { assertBotItemOwnerWrite } from '../../../bots/bot-items-tables'
 import { commentAsMaker } from './bots-items-maker-comment'
-import { askedInConversation } from './orchestration/messaging/bot-request-record'
+import { runtimeChatHost } from '../../../external-conversations/external-conversation-chat'
 import { parseItemLink, resolveItem, writeResult, writerOf } from './bots-items-write-support'
 
 const ADD = defineMethod({
@@ -54,8 +54,16 @@ const SET = defineMethod({
       comment = attached.text
     }
     const images = attached.images.length > 0 ? attached.images : undefined
-    // Asked while its conversation's turn ran, the owner's answer goes back to that conversation.
-    const asked = ask ? askedInConversation(context.runtime, { sessionId: writer.sessionId }) : {}
+    // Asked while its thread's turn ran, the owner's answer goes back to that thread. Home Chat, which
+    // the bot's direct messages share with its owner in Orca, keeps it in Orca.
+    const asked =
+      ask &&
+      writer.source.kind === 'thread' &&
+      context.runtime
+        .getExternalConversationSeam()
+        ?.conversationTurn(runtimeChatHost(context.runtime), writer.sessionId)
+        ? { askedInConversation: writer.sessionId }
+        : {}
     const changes = {
       title,
       description,
