@@ -28,11 +28,11 @@ import type { NativeChatAlignEdge } from '../virtualization/use-native-chat-view
 
 type NavigationRequest =
   | { kind: 'diff'; target: NativeChatDiffReveal }
-  | { kind: 'rail'; messageId: string; requestId: number; fromLink?: true }
+  | { kind: 'rail'; messageId: string; requestId: number; fromLink?: true; offset?: number }
 
 export type NativeChatNavigationRequest = {
   revealedDiff: NativeChatDiffReveal | null
-  railJump: { messageId: string; requestId: number; fromLink?: true } | null
+  railJump: { messageId: string; requestId: number; fromLink?: true; offset?: number } | null
   /** The one slot the window keeps mounted until the request lands. */
   revealIndex: number
   issue: (request: NavigationRequest | null) => void
@@ -128,7 +128,13 @@ export function useNativeChatNavigation({
           holdHistory()
           return 'page'
         }
-        issue({ kind: 'rail', messageId: target.id, requestId: nextRequestId(), fromLink: true })
+        issue({
+          kind: 'rail',
+          messageId: target.id,
+          requestId: nextRequestId(),
+          fromLink: true,
+          offset: target.offset
+        })
         return 'landed'
       }
       if (target.kind === 'rail') {
@@ -211,13 +217,13 @@ export function useNativeChatNavigation({
     scrollToBottom
   ])
   useNativeChatReadingPosition({
-    sessionKey,
+    positionKey: `${sessionKey}:${subagentId ?? ''}`,
     isVisible,
     ready,
     scrollRef,
     readerAtEnd,
-    jumpTo: (messageId) =>
-      startHistoryJump({ kind: 'item', id: messageId }, (result) => {
+    jumpTo: ({ messageId, offset }) =>
+      startHistoryJump({ kind: 'item', id: messageId, offset }, (result) => {
         if (result === 'missing') {
           releaseHistory()
           scrollToBottom()

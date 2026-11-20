@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef } from 'react'
 import { nativeChatSlotIndexOf } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
+import { nativeChatElementAtOffset } from './use-native-chat-reading-position'
 
 export function useNativeChatRailJumpLanding({
   railJump,
@@ -13,7 +14,7 @@ export function useNativeChatRailJumpLanding({
   onScroll,
   release
 }: {
-  railJump: { messageId: string; requestId: number } | null
+  railJump: { messageId: string; requestId: number; offset?: number } | null
   slots: readonly NativeChatTranscriptSlot[]
   scrollRef: React.RefObject<HTMLDivElement | null>
   scrollMessageToTop: (element: HTMLElement) => void
@@ -31,7 +32,7 @@ export function useNativeChatRailJumpLanding({
     const row = scrollRef.current?.querySelector<HTMLElement>(`[data-index="${index}"]`)
     if (row) {
       onScroll?.()
-      scrollMessageToTop(row)
+      scrollMessageToTop(nativeChatElementAtOffset(row, railJump.offset ?? 0))
     }
     onActivate(railJump.messageId)
     release(null)

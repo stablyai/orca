@@ -1,5 +1,6 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useRef, useState, type RefObject } from 'react'
+import { useHoldChatViewMounted } from '../pane/routing/native-chat-view-retention'
 import { Check, Pencil } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
@@ -91,6 +92,11 @@ export function NativeChatQuestionCard({
       draft?.otherText ?? prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
   )
   useReportNativeChatQuestionDraft(draft, selections, otherText)
+  // A started answer lives only in this card; keep its chat mounted until it is sent or dismissed.
+  useHoldChatViewMounted(
+    selections.some((picked) => picked.length > 0) ||
+      otherText.some((text, qi) => text !== (freeTextInputs?.[qi]?.initialValue ?? ''))
+  )
 
   const total = prompt.questions.length
   const isLast = index === total - 1

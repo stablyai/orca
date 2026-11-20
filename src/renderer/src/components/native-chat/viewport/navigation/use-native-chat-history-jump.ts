@@ -10,7 +10,7 @@ export const NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES = 1000
 /** A rail pick, or the subagent a view shows, whose spawn may sit in older history. */
 export type NativeChatHistoryJumpTarget =
   | { kind: 'rail'; id: string }
-  | { kind: 'item'; id: string }
+  | { kind: 'item'; id: string; offset?: number }
   | { kind: 'subagent'; agentId: string }
 
 /** What the committed transcript can do for a target now: it landed, it needs older history, or it cannot be reached. */

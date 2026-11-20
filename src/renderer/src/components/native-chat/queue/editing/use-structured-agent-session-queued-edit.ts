@@ -27,6 +27,7 @@ import { settleNativeChatQueuedEdit } from './native-chat-queued-edit-outcome'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { structuredSessionOperationId } from '../../session/structured/writes/structured-agent-session-operation-id'
 import { startQueuedEditLease } from './structured-agent-session-queued-edit-lease'
+import { useHoldChatViewMounted } from '../../pane/routing/native-chat-view-retention'
 import {
   useNativeChatQueuedEditLifetime,
   nativeChatQueuedEditSaving,
@@ -173,6 +174,8 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
     close,
     render
   })
+  // An open edit holds the host's delivery; unmounting would hand it back before Save or Cancel.
+  useHoldChatViewMounted(shown !== null)
 
   const begin = useCallback(
     async (messageId: string): Promise<void> => {

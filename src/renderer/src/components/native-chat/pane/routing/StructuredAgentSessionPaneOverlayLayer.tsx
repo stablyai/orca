@@ -1,4 +1,4 @@
-import { Activity, memo, useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { Activity, memo, useCallback, useId, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store'
@@ -15,7 +15,11 @@ import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
-import { chatViewRecency, useRetainedChatViewKey } from './native-chat-view-retention'
+import {
+  ChatViewTabContext,
+  chatViewRetention,
+  useRetainedChatViewKey
+} from './native-chat-view-retention'
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -59,6 +63,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       data-structured-agent-session-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
     >
+      <ChatViewTabContext value={tab.id}>
       <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
         <NativeChatHostOutageOwner target={target}>
           <NativeChatComposerEditorOwner>
@@ -79,6 +84,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
           </NativeChatComposerEditorOwner>
         </NativeChatHostOutageOwner>
       </NativeChatPaneLifetime>
+      </ChatViewTabContext>
     </RetainedPaneHost>
   )
 })
@@ -161,25 +167,22 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       Boolean(
         (isWorktreeActive || preparingHandoff) && groupActiveTabById.get(tab.groupId) === tab.id
       )
-    const shownKey = [...structuredTabs, ...roomTabs]
+    const layerId = useId()
+    const shownKey = structuredTabs
       .filter(isShown)
       .map((tab) => tab.id)
       .join('\n')
     useLayoutEffect(() => {
-      if (shownKey) {
-        chatViewRecency.reveal(shownKey.split('\n'))
-      }
-    }, [shownKey])
-    const ownedTabIds = useMemo(
-      () => new Set([...structuredTabs, ...roomTabs].map((tab) => tab.id)),
-      [structuredTabs, roomTabs]
-    )
+      chatViewRetention.show(layerId, shownKey ? shownKey.split('\n') : [])
+    }, [layerId, shownKey])
+    useLayoutEffect(() => () => chatViewRetention.show(layerId, []), [layerId])
+    const ownedTabIds = useMemo(() => new Set(structuredTabs.map((tab) => tab.id)), [structuredTabs])
     const ownedTabIdsRef = useRef<ReadonlySet<string>>(new Set())
     useLayoutEffect(() => {
       const closed = new Set([...ownedTabIdsRef.current].filter((id) => !ownedTabIds.has(id)))
       ownedTabIdsRef.current = ownedTabIds
       if (closed.size > 0) {
-        chatViewRecency.forget(closed)
+        chatViewRetention.forget(closed)
       }
     }, [ownedTabIds])
     // Why: only shown chats and a few recently shown ones stay mounted, so memory doesn't grow with chats visited.
@@ -206,7 +209,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
             onFocusOwningGroup={focusOwningGroup}
           />
         ))}
-        {roomTabs.filter(isMounted).map((tab) => (
+        {roomTabs.map((tab) => (
           <RoomOverlaySlot
             key={tab.id}
             tab={tab}
