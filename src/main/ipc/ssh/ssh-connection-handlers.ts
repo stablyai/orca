@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import type { RegisterSshRequest } from '../../ssh/application/ssh-application-requests'
 import {
   setSshTargetRegistryHandlers,
   getSshTargetRegistryStore
@@ -18,28 +18,26 @@ import {
   isSshCredentialDeclined
 } from '../../ssh/authentication/ssh-credential-decline'
 
-export function registerSshConnectionHandlers(
-  handle: typeof ipcMain.handle = ipcMain.handle.bind(ipcMain)
-): void {
+export function registerSshConnectionHandlers(handle: RegisterSshRequest): void {
   setSshTargetRegistryHandlers({
     connect: connectTarget,
     getState: (targetId: string) => getPublicSshState(targetId)
   })
 
-  handle('ssh:connect', async (_event, args: { targetId: string; automatic?: boolean }) => {
+  handle('ssh:connect', async (args: { targetId: string; automatic?: boolean }) => {
     return connectTarget(args.targetId, { automatic: args.automatic === true })
   })
 
-  handle('ssh:disconnect', async (_event, args: { targetId: string }) => {
+  handle('ssh:disconnect', async (args: { targetId: string }) => {
     await disconnectSshHostForUser(args.targetId)
   })
 
-  handle('ssh:getState', (_event, args: { targetId: string }) => {
+  handle('ssh:getState', (args: { targetId: string }) => {
     return getPublicSshState(args.targetId)
   })
 
   // Auto-connect callers need to avoid prompts when credentials were declined or are no longer cached.
-  handle('ssh:needsPassphrasePrompt', (_event, args: { targetId: string }) => {
+  handle('ssh:needsPassphrasePrompt', (args: { targetId: string }) => {
     if (isSshCredentialDeclined(args.targetId)) {
       return true
     }
@@ -50,7 +48,7 @@ export function registerSshConnectionHandlers(
     return !connectionManager!.hasCachedCredential(target)
   })
 
-  handle('ssh:testConnection', async (_event, args: { targetId: string }) => {
+  handle('ssh:testConnection', async (args: { targetId: string }) => {
     const target = getSshTargetRegistryStore()!.getTarget(args.targetId)
     if (!target) {
       throw new Error(`SSH target "${args.targetId}" not found`)

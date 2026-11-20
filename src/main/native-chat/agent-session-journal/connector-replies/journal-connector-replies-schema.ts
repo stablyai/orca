@@ -22,8 +22,23 @@ CREATE TABLE IF NOT EXISTS journal_connector_replies (
   links_json TEXT,
   filled_at INTEGER,
   sent_at INTEGER,
+  took_ms INTEGER,
   PRIMARY KEY(account, delivery_id)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_connector_replies_open
   ON journal_connector_replies(session_id, outcome, sent_at);
 `
+
+/** A table an earlier build made has no took_ms; added the same way, with no user_version change. */
+export function ensureJournalConnectorRepliesSchema(db: {
+  exec(sql: string): unknown
+  prepare(sql: string): { get(): unknown }
+}): void {
+  db.exec(JOURNAL_CONNECTOR_REPLIES_SCHEMA)
+  const present = db
+    .prepare(`SELECT 1 FROM pragma_table_info('journal_connector_replies') WHERE name='took_ms'`)
+    .get()
+  if (!present) {
+    db.exec('ALTER TABLE journal_connector_replies ADD COLUMN took_ms INTEGER')
+  }
+}

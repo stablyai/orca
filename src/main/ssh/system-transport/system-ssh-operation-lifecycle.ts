@@ -4,7 +4,7 @@ import type { SystemSshCommandChannel } from './system-ssh-command'
 export type ProcessResult = { label: string; stderr: string }
 
 /** OpenSSH's own exit status for a connection-level failure, never the remote command's. */
-const SYSTEM_SSH_TRANSPORT_EXIT_CODE = 255
+export const SYSTEM_SSH_TRANSPORT_EXIT_CODE = 255
 
 export class SystemSshCommandExitError extends Error {
   constructor(

@@ -58,6 +58,7 @@ import { shellApi } from './api/terminal/shell-bridge'
 import { botChangesApi } from './api/bot-changes-bridge'
 import { googleSetupApi } from './api/google-setup-bridge'
 import { slackHandOffApi } from './api/slack-hand-off-bridge'
+import { avatarGenerationApi } from './api/avatar-generation-bridge'
 import { skillsApi } from './api/skills/skills-bridge'
 import { petApi } from './api/pets/pet-bridge'
 import { appIconApi } from './api/window-ui/app-icon-bridge'
@@ -173,6 +174,7 @@ const api = {
   botChanges: botChangesApi,
   googleSetup: googleSetupApi,
   slackHandOff: slackHandOffApi,
+  avatarGeneration: avatarGenerationApi,
   skills: skillsApi,
   pet: petApi,
   appIcon: appIconApi,

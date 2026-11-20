@@ -2,7 +2,8 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { ResumeFailure } from '../tree/native-chat-resume-on-restart-grouping'
 
-/** Offer retry only for recoverable refusals; newer chat work or a standing provider refusal requires continuing in the chat. */
+/** Offer retry only for recoverable refusals; newer chat work or a standing provider refusal requires continuing in the chat.
+ * Each text is a one-line reason beside the row's own action buttons, so it names the cause, not the fix. */
 
 export type ResumeFailureAction = 'open' | 'retry' | 'dismiss'
 
@@ -40,10 +41,7 @@ export function resumeFailureGuidance(
 }
 
 function manualContinuationText(t: Translate = translate): string {
-  return t(
-    'auto.components.NativeChatResumeFailureGuidance.fallback',
-    'Orca couldn’t resume this chat. Open it to continue manually.'
-  )
+  return t('auto.components.NativeChatResumeFailureGuidance.fallbackShort', 'Couldn’t resume.')
 }
 
 function reasonGuidance(
@@ -53,8 +51,8 @@ function reasonGuidance(
   if (failure.outcome === 'unconfirmed') {
     return {
       text: t(
-        'auto.components.NativeChatResumeFailureGuidance.unconfirmed',
-        'Orca couldn’t confirm the “continue” message was delivered. Open the chat and check before sending another.'
+        'auto.components.NativeChatResumeFailureGuidance.unconfirmedShort',
+        'Couldn’t confirm it continued.'
       ),
       primary: 'open',
       secondary: null
@@ -64,8 +62,8 @@ function reasonGuidance(
   if (reason === 'agent_session_restart_work_superseded') {
     return {
       text: t(
-        'auto.components.NativeChatResumeFailureGuidance.superseded',
-        'Open the chat and reply. New work arrived in it right after the restart, so Orca didn’t send its “continue” message.'
+        'auto.components.NativeChatResumeFailureGuidance.supersededShort',
+        'New work arrived after the restart.'
       ),
       primary: 'open',
       secondary: null
@@ -74,8 +72,8 @@ function reasonGuidance(
   if (reason === 'agent_session_conflict') {
     return {
       text: t(
-        'auto.components.NativeChatResumeFailureGuidance.conflict',
-        'This chat is open in another Orca window or terminal. Close it there, then retry.'
+        'auto.components.NativeChatResumeFailureGuidance.conflictShort',
+        'Open in another window or terminal.'
       ),
       primary: 'retry',
       secondary: 'open'
@@ -84,8 +82,8 @@ function reasonGuidance(
   if (RETRYABLE_OWNERSHIP.has(reason)) {
     return {
       text: t(
-        'auto.components.NativeChatResumeFailureGuidance.ownershipUnknown',
-        'This chat isn’t ready to resume yet. Wait a moment, then retry.'
+        'auto.components.NativeChatResumeFailureGuidance.ownershipUnknownShort',
+        'Not ready to resume yet.'
       ),
       primary: 'retry',
       secondary: 'open'
@@ -94,8 +92,8 @@ function reasonGuidance(
   if (RETRYABLE_DELIVERY.has(reason)) {
     return {
       text: t(
-        'auto.components.NativeChatResumeFailureGuidance.notAttached',
-        'The chat didn’t reconnect. Retry, or open it to start a fresh turn.'
+        'auto.components.NativeChatResumeFailureGuidance.notAttachedShort',
+        'Didn’t reconnect.'
       ),
       primary: 'retry',
       secondary: 'open'
@@ -104,8 +102,8 @@ function reasonGuidance(
   if (reason === 'agent_session_dispatch_rejected') {
     return {
       text: t(
-        'auto.components.NativeChatResumeFailureGuidance.dispatchRejected',
-        'The agent refused the “continue” message. Open the chat and send one yourself.'
+        'auto.components.NativeChatResumeFailureGuidance.dispatchRejectedShort',
+        'The agent declined to continue.'
       ),
       primary: 'open',
       secondary: null
@@ -114,8 +112,8 @@ function reasonGuidance(
   if (NOT_RESUMABLE.has(reason)) {
     return {
       text: t(
-        'auto.components.NativeChatResumeFailureGuidance.unsupported',
-        'This chat can’t be resumed by Orca. Open it to see where it stopped.'
+        'auto.components.NativeChatResumeFailureGuidance.unsupportedShort',
+        'Orca can’t resume this chat.'
       ),
       primary: 'open',
       secondary: 'dismiss'

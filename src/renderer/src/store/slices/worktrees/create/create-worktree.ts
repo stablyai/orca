@@ -1,6 +1,5 @@
 import { showWorktreeCreateWarningToast } from './worktree-create-warning-toast'
 import { reviewSetupTrustMismatch } from './created-worktree-setup-trust'
-import { createWorktreeOnRuntimeHost, type HostCreateSettings } from './host-planned-agent-launch'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import { repoHostId } from '../listing/worktree-host-ownership'
 import {
@@ -18,7 +17,6 @@ import {
 } from '../../../../../../shared/new-workspace/worktree-create-retry-policy'
 import { assertRuntimeEnvironmentCapability } from '../../../../runtime/rpc/compatibility/runtime-capability-proof'
 import { runtimeTargetSupportsCapability } from '../../../../runtime/rpc/compatibility/runtime-target-capability'
-import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import {
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
@@ -31,76 +29,21 @@ import { requestWorktreeBaseFallbackNotice } from '@/components/sidebar/workspac
 import { announcePerforceCopy } from '@/components/perforce-copies/perforce-copy-announcement'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
 import { applyCreatedWorktree } from './created-worktree-state-merge'
-import { adoptRuntimeProvisionedRoot } from './runtime-provisioned-root-adoption'
-import { isRuntimeLineageParentMissingError } from '../listing/runtime-worktree-rpc-errors'
-import {
-  buildLocalWorktreeCreateArgs,
-  type CreatedWorktreeResult,
-  type WorktreeCreateAttempt,
-  type WorktreeCreateRequest
-} from './worktree-create-payload'
+import type { WorktreeCreateRequest } from './worktree-create-payload'
 import { holdCreatedSidebarWorkspace } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
-import {
-  resolveCreateCrossStoreParent,
-  withoutRefusedInferredParent
-} from './worktree-create-cross-store-parent'
+import { resolveCreateCrossStoreParent } from './worktree-create-cross-store-parent'
+import { runCreateAttempt } from './worktree-create-attempt'
+import type { RuntimeStatuses } from '../../runtime-status/views/runtime-status-owner'
 import {
   lostRequestedParent,
   notifyWorktreeParentDropped,
-  resolveWorktreeCreateParent,
-  type CreateAttemptOutcome
+  resolveWorktreeCreateParent
 } from './worktree-create-parent-pick'
-
-async function runCreateAttempt(
-  request: WorktreeCreateRequest,
-  attempt: WorktreeCreateAttempt,
-  target: RuntimeClientTarget,
-  settings: HostCreateSettings
-): Promise<CreateAttemptOutcome> {
-  const provisionedRoot = request.options?.provisionedRoot
-  const create = async (
-    parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
-  ): Promise<CreatedWorktreeResult> =>
-    provisionedRoot
-      ? target.kind === 'environment'
-        ? await adoptRuntimeProvisionedRoot(
-            target,
-            request,
-            { ...attempt, parentWorkspace },
-            provisionedRoot
-          )
-        : await window.api.worktrees.adoptProvisionedRoot({
-            ...buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace }),
-            ...provisionedRoot
-          })
-      : target.kind === 'local'
-        ? // Why local can still reject on the parent: paired web clients route this API to their host.
-          await window.api.worktrees.create(
-            buildLocalWorktreeCreateArgs(request, { ...attempt, parentWorkspace })
-          )
-        : await createWorktreeOnRuntimeHost(
-            target.environmentId,
-            request,
-            { ...attempt, parentWorkspace },
-            settings
-          )
-  try {
-    return { result: await create(attempt.parentWorkspace), droppedParent: false }
-  } catch (error) {
-    const unnested = withoutRefusedInferredParent(attempt, error)
-    if (unnested) {
-      return await runCreateAttempt(request, unnested, target, settings)
-    }
-    if (!attempt.parentWorkspace || !isRuntimeLineageParentMissingError(error)) {
-      throw error
-    }
-    return { result: await create(undefined), droppedParent: true }
-  }
-}
 
 export function createCreateWorktree(
   set: WorktreeSliceSet,
-  get: WorktreeSliceGet
+  get: WorktreeSliceGet,
+  readStatuses: () => RuntimeStatuses
 ): WorktreeSlice['createWorktree'] {
   return async (
     repoId,
@@ -210,7 +153,7 @@ export function createCreateWorktree(
       if (parent.staleBeforeCreate) {
         warnParentDroppedOnce()
       }
-      const crossStoreParent = await resolveCreateCrossStoreParent(get(), target, {
+      const crossStoreParent = await resolveCreateCrossStoreParent(get(), readStatuses(), target, {
         pick: parent,
         requestedParentWorktreeId: options?.parentWorktreeId,
         note: options?.note,

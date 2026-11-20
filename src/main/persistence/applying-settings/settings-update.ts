@@ -79,6 +79,9 @@ export function updateSettings(
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
   }
+  if ('linuxTilingWindowMode' in updates) {
+    sanitizedUpdates.linuxTilingWindowMode = updates.linuxTilingWindowMode === true
+  }
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
   }

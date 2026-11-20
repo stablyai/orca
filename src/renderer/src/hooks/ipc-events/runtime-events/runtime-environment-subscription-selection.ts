@@ -4,11 +4,52 @@ import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtim
 import { getEnvironmentSshStateGeneration } from '@/store/slices/ssh/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { AppState } from '../../../store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 
 export type RuntimeEnvironmentStoreSyncState = Pick<
   AppState,
-  'runtimeEnvironments' | 'runtimeStatusByEnvironmentId' | 'settings' | 'sshStateByEnvironment'
->
+  'runtimeEnvironments' | 'settings' | 'sshStateByEnvironment'
+> & { runtimeStatusByEnvironmentId: RuntimeStatuses }
+
+export function pickRuntimeEnvironmentSyncState(
+  state: AppState,
+  statuses: RuntimeStatuses
+): RuntimeEnvironmentStoreSyncState {
+  return {
+    runtimeEnvironments: state.runtimeEnvironments,
+    settings: state.settings,
+    sshStateByEnvironment: state.sshStateByEnvironment,
+    runtimeStatusByEnvironmentId: statuses
+  }
+}
+
+/** One call per publication; only a write touching these inputs builds the picked views. */
+export function runtimeEnvironmentSyncWrites(
+  handle: (
+    state: RuntimeEnvironmentStoreSyncState,
+    previous: RuntimeEnvironmentStoreSyncState
+  ) => void
+) {
+  return (
+    state: AppState,
+    previous: AppState,
+    statuses: RuntimeStatuses,
+    previousStatuses: RuntimeStatuses
+  ): void => {
+    if (
+      statuses === previousStatuses &&
+      state.runtimeEnvironments === previous.runtimeEnvironments &&
+      state.sshStateByEnvironment === previous.sshStateByEnvironment &&
+      state.settings === previous.settings
+    ) {
+      return
+    }
+    handle(
+      pickRuntimeEnvironmentSyncState(state, statuses),
+      pickRuntimeEnvironmentSyncState(previous, previousStatuses)
+    )
+  }
+}
 
 function getActiveRuntimeEnvironmentId(state: RuntimeEnvironmentStoreSyncState): string | null {
   return state.settings?.activeRuntimeEnvironmentId?.trim() || null

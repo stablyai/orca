@@ -1,3 +1,4 @@
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from '@/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-shell'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -64,30 +65,27 @@ export function resolveSshHostReportedPlatform(
   return sshState?.remotePlatform ?? null
 }
 
-function lastRuntimeHostStatus(
-  state: Pick<AppState, 'runtimeStatusByEnvironmentId'>,
-  executionHostId: string | null
-) {
+function lastRuntimeHostStatus(statuses: RuntimeStatuses, executionHostId: string | null) {
   const host = parseExecutionHostId(executionHostId)
   return host?.kind === 'runtime'
-    ? lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(host.environmentId))
+    ? lastVerifiedRuntimeStatus(statuses.get(host.environmentId))
     : null
 }
 
 /** OS a paired Orca server last reported, for `runtime:` hosts only. */
 export function resolveRuntimeHostReportedPlatform(
-  state: Pick<AppState, 'runtimeStatusByEnvironmentId'>,
+  statuses: RuntimeStatuses,
   executionHostId: string | null
 ): NodeJS.Platform | null {
-  return lastRuntimeHostStatus(state, executionHostId)?.hostPlatform ?? null
+  return lastRuntimeHostStatus(statuses, executionHostId)?.hostPlatform ?? null
 }
 
 /** The Windows shell a paired Orca server last reported for its terminals, for `runtime:` hosts only. */
 export function resolveRuntimeHostTerminalWindowsShell(
-  state: Pick<AppState, 'runtimeStatusByEnvironmentId'>,
+  statuses: RuntimeStatuses,
   executionHostId: string | null
 ): string | null {
-  return lastRuntimeHostStatus(state, executionHostId)?.terminalWindowsShell ?? null
+  return lastRuntimeHostStatus(statuses, executionHostId)?.terminalWindowsShell ?? null
 }
 
 /** The OS a remote host reported: SSH from its connection, a paired server from its status. */

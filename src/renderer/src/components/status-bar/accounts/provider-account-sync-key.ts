@@ -1,6 +1,29 @@
-import { sameProviderAccountData } from '@/runtime/provider-accounts/observations/observed-provider-accounts'
 import type { ClaudeAccountSettings } from './status-bar-claude-accounts'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+
+function record(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function sameProviderAccountData(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) {
+    return true
+  }
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return (
+      left.length === right.length &&
+      left.every((item, index) => sameProviderAccountData(item, right[index]))
+    )
+  }
+  if (!record(left) || !record(right)) {
+    return false
+  }
+  const keys = Object.keys(left)
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every((key) => Object.hasOwn(right, key) && sameProviderAccountData(left[key], right[key]))
+  )
+}
 
 // Cache by settings identity because Zustand reevaluates selectors on every store write and roster serialization is expensive.
 const claudeKeyBySettings = new WeakMap<GlobalSettings, string>()

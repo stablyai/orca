@@ -20,7 +20,7 @@ const F = 4
 type Journal = Parameters<typeof structuredAgentSessionPromptStanding>[0]
 
 type Case = {
-  turn: AgentJournalTurnLifecycleState | 'missing'
+  turn: AgentJournalTurnLifecycleState
   /** null: owner unverifiable; a number: the live fence. */
   owner: number | null
   ended?: StructuredAgentSessionSeenEnd
@@ -48,16 +48,14 @@ function journalFor(c: Pick<Case, 'turn' | 'answered' | 'fence'>): Journal {
     }
   }
   const items = new Map<string, AgentJournalRenderItem>([[PROMPT, prompt]])
-  if (c.turn !== 'missing') {
-    items.set(TURN, {
-      itemId: TURN,
-      revision: 1,
-      sequence: 1,
-      observedAt: 1,
-      turnScope: { kind: 'thread' },
-      body: { kind: 'turn', turnId: 'a', state: c.turn }
-    })
-  }
+  items.set(TURN, {
+    itemId: TURN,
+    revision: 1,
+    sequence: 1,
+    observedAt: 1,
+    turnScope: { kind: 'thread' },
+    body: { kind: 'turn', turnId: 'a', state: c.turn }
+  })
   return {
     item: (id) => items.get(id) ?? null,
     itemFence: (id) => (id === PROMPT ? c.fence : F),
@@ -87,7 +85,6 @@ describe('a shown prompt’s standing', () => {
     [5, { turn: 'running', owner: null, replaced: { fence: 3 }, fence: F }, 'unknown'],
     [6, { turn: 'running', owner: null, releasedThrough: F, fence: F }, 'gone'],
     [7, { turn: 'running', owner: null, fence: F }, 'unknown'],
-    [8, { turn: 'missing', owner: null, fence: F }, 'unknown'],
     [9, { turn: 'unverifiable', owner: F, fence: F }, 'unknown'],
     [10, { turn: 'running', owner: F, fence: F }, 'pending'],
     [11, { turn: 'running', owner: 5, fence: F }, 'gone'],

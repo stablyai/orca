@@ -1,5 +1,3 @@
-import { useRef } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { useAppStore } from '@/store'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
@@ -24,6 +22,7 @@ export type AllAgentPaneThreadsStoreData = Pick<
   | 'tabsByWorktree'
   | 'ptyIdsByTabId'
   | 'repos'
+  | 'projectGroups'
   | 'worktreesByRepo'
   | 'folderWorkspaces'
   | 'floatingWorkspacePath'
@@ -51,42 +50,50 @@ export function useAgentPaneThreadsDefaultHostId(): ExecutionHostId {
   return useAppStore((s) => getSettingsFocusedExecutionHostId(s.settings))
 }
 
-/** Store inputs for every Activity thread, before any view scope. */
-export function useAllAgentPaneThreadStoreData(): AllAgentPaneThreadsStoreData {
-  // Keep original native tabs for owner-qualified names; preserve terminal projections across focus writes.
-  const tabProjectionRef = useRef<{
-    raw: AppState['unifiedTabsByWorktree'] | null
-    projected: ActivityTabProjection | null
-  }>({ raw: null, projected: null })
-  return useAppStore(
-    useShallow((s) => ({
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
-      migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
-      tabsByWorktree: s.tabsByWorktree,
-      ptyIdsByTabId: s.ptyIdsByTabId,
-      activityTabs: (() => {
-        const cache = tabProjectionRef.current
-        if (cache.raw === s.unifiedTabsByWorktree && cache.projected) {
-          return cache.projected
-        }
-        const projected = projectActivityTabs(s.unifiedTabsByWorktree, cache.projected)
-        tabProjectionRef.current = { raw: s.unifiedTabsByWorktree, projected }
-        return projected
-      })(),
-      repos: s.repos,
-      worktreesByRepo: selectWorktreesByRepo(s),
-      folderWorkspaces: selectFolderWorkspaces(s),
-      floatingWorkspacePath: s.floatingWorkspacePath,
-      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
-      getKnownWorktreeById: s.getKnownWorktreeById,
-      worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(s)),
-      repoMap: getIndexedRepoMap(s.repos),
-      acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
-      activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
-      acknowledgeAgents: s.acknowledgeAgents,
-      unacknowledgeAgents: s.unacknowledgeAgents,
-      generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true
-    }))
-  )
+// Window-wide so every consumer passes the same tab identities to the shared Activity projection.
+// Keep original native tabs for owner-qualified names; preserve terminal projections across focus writes.
+let tabProjection: {
+  raw: AppState['unifiedTabsByWorktree'] | null
+  projected: ActivityTabProjection | null
+} = { raw: null, projected: null }
+
+/** Drop the window-wide tab projection once no Activity reader is mounted. */
+export function releaseActivityTabProjection(): void {
+  tabProjection = { raw: null, projected: null }
+}
+
+function selectActivityTabs(raw: AppState['unifiedTabsByWorktree']): ActivityTabProjection {
+  if (tabProjection.raw === raw && tabProjection.projected) {
+    return tabProjection.projected
+  }
+  const projected = projectActivityTabs(raw, tabProjection.projected)
+  tabProjection = { raw, projected }
+  return projected
+}
+
+/** Store inputs for every Activity thread, before any view scope; compare shallowly. */
+export function selectAllAgentPaneThreadStoreData(s: AppState): AllAgentPaneThreadsStoreData {
+  return {
+    agentStatusByPaneKey: s.agentStatusByPaneKey,
+    runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
+    migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
+    tabsByWorktree: s.tabsByWorktree,
+    ptyIdsByTabId: s.ptyIdsByTabId,
+    activityTabs: selectActivityTabs(s.unifiedTabsByWorktree),
+    repos: s.repos,
+    // Read by getKnownWorktreeById for folder owners, so a change must rebuild Activity owners.
+    projectGroups: s.projectGroups,
+    worktreesByRepo: selectWorktreesByRepo(s),
+    folderWorkspaces: selectFolderWorkspaces(s),
+    floatingWorkspacePath: s.floatingWorkspacePath,
+    detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
+    getKnownWorktreeById: s.getKnownWorktreeById,
+    worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(s)),
+    repoMap: getIndexedRepoMap(s.repos),
+    acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
+    activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
+    acknowledgeAgents: s.acknowledgeAgents,
+    unacknowledgeAgents: s.unacknowledgeAgents,
+    generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true
+  }
 }
