@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { findRegisteredWorktreeRoot } from './registered-worktree-root-match'
+import { findRegisteredWorktreeRootAsync } from './registered-worktree-root-match'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RegisteredWorktreeRootStore as Store } from './registered-worktree-root-store'
 import {
@@ -8,6 +8,7 @@ import {
 } from './registered-worktree-root-probes'
 import {
   isDescendantOrEqual,
+  isDescendantOrEqualAsync,
   normalizeExistingPath
 } from '../../../filesystem/local-file-io/filesystem-path-containment'
 import {
@@ -16,6 +17,8 @@ import {
 } from './registered-worktree-root-relist-policy'
 import {
   createRegisteredOwner,
+  registeredOwnerIncludesRoot,
+  replaceRegisteredWorktreeRootSet,
   getLocalWorktreeRootOwners,
   resolveWorktreeRootOwner,
   type RegisteredOwner
@@ -257,16 +260,7 @@ export async function resolveRegisteredWorktreePath(
 }
 
 function refreshRegisteredWorktreeRoots(): void {
-  registeredWorktreeRoots.clear()
-  for (const owner of registeredOwners.values()) {
-    for (const roots of [owner.listed, owner.recovered, owner.aliases]) {
-      if (roots) {
-        for (const root of roots) {
-          registeredWorktreeRoots.add(root)
-        }
-      }
-    }
-  }
+  replaceRegisteredWorktreeRootSet(registeredWorktreeRoots, registeredOwners.values())
 }
 
 export function isRegisteredWorktreePath(targetPath: string, store: Store): boolean {
@@ -274,6 +268,21 @@ export function isRegisteredWorktreePath(targetPath: string, store: Store): bool
   for (const root of registeredWorktreeRoots) {
     if (isDescendantOrEqual(targetPath, root)) {
       return true
+    }
+  }
+  return false
+}
+
+export async function isRegisteredWorktreePathAsync(
+  targetPath: string,
+  store: Store
+): Promise<boolean> {
+  synchronizeOwners(store)
+  const generation = invalidationGeneration
+  for (const root of registeredWorktreeRoots) {
+    if (await isDescendantOrEqualAsync(targetPath, root)) {
+      synchronizeOwners(store)
+      return generation === invalidationGeneration && registeredWorktreeRoots.has(root)
     }
   }
   return false
@@ -288,22 +297,18 @@ export async function isPathAllowedByCanonicalRegisteredRoot(
     return false
   }
   synchronizeOwners(store)
-  const textualRoot = findRegisteredWorktreeRoot(sourcePath, registeredWorktreeRoots)
+  const textualRoot = await findRegisteredWorktreeRootAsync(sourcePath, registeredWorktreeRoots)
   if (!textualRoot) {
     return false
   }
   const generation = invalidationGeneration
   const owners = [...registeredOwners.values()]
-    .filter(
-      (owner) =>
-        owner.listed?.has(textualRoot) ||
-        owner.recovered.has(textualRoot) ||
-        owner.aliases.has(textualRoot)
-    )
+    .filter((owner) => registeredOwnerIncludesRoot(owner, textualRoot))
     .map((owner) => ({ owner, revision: owner.revision }))
   const canonicalRoot = await normalizeExistingPath(textualRoot)
+  const contained = await isDescendantOrEqualAsync(targetPath, canonicalRoot)
   synchronizeOwners(store)
-  if (generation !== invalidationGeneration || !isDescendantOrEqual(targetPath, canonicalRoot)) {
+  if (generation !== invalidationGeneration || !contained) {
     return false
   }
   let allowed = false

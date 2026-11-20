@@ -34,7 +34,7 @@ it.each([20, 200])(
       afterMessageId: 'boundary'
     }
     const transcript: NativeChatMessage[] = [
-      { id: 'boundary', role: 'assistant', blocks: [], timestamp: 0 }
+      { id: 'boundary', role: 'assistant', blocks: [], timestamp: 0, source: 'transcript' }
     ]
     let pending = [failed]
     for (let i = 0; i < count; i++) {
@@ -52,6 +52,7 @@ it.each([20, 200])(
         {
           id: `user-${i}`,
           role: 'user',
+          source: 'transcript',
           timestamp: i * 2 + 1,
           blocks: [
             { type: 'image-ref', path: copy },
@@ -61,7 +62,13 @@ it.each([20, 200])(
             }
           ]
         },
-        { id: `reply-${i}`, role: 'assistant', timestamp: i * 2 + 2, blocks: [] }
+        {
+          id: `reply-${i}`,
+          role: 'assistant',
+          timestamp: i * 2 + 2,
+          blocks: [],
+          source: 'transcript'
+        }
       )
       pending = prunePendingSends([...pending, send], transcript)
       expect(pending.map((entry) => entry.id)).toEqual(['failed'])

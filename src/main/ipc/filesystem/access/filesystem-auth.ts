@@ -8,7 +8,7 @@ import {
 import { PATH_OUTSIDE_ALLOWED_DIRECTORIES } from '../../../../shared/file-access/local-file-access'
 import { getAllowedRoots } from './filesystem-allowed-roots'
 import {
-  isDescendantOrEqual,
+  isDescendantOrEqualAsync,
   isDescendantOrEqualExact,
   isENOENT,
   normalizeExistingPath
@@ -16,7 +16,7 @@ import {
 import {
   ensureAuthorizedRootsCache,
   isPathAllowedByCanonicalRegisteredRoot,
-  isRegisteredWorktreePath
+  isRegisteredWorktreePathAsync
 } from '../../worktrees/removal/registered-worktree-roots-cache'
 
 export const PATH_ACCESS_DENIED_MESSAGE = `${PATH_OUTSIDE_ALLOWED_DIRECTORIES}. If this blocks a legitimate workflow, please file a GitHub issue.`
@@ -50,9 +50,12 @@ export async function isPathAllowed(
   ) {
     return true
   }
-  return (await (allowedRoots?.getCanonicalizable() ?? getAllowedRoots(store))).some((root) =>
-    isDescendantOrEqual(resolvedTarget, root)
-  )
+  for (const root of await (allowedRoots?.getCanonicalizable() ?? getAllowedRoots(store))) {
+    if (await isDescendantOrEqualAsync(resolvedTarget, root)) {
+      return true
+    }
+  }
+  return false
 }
 
 export type ResolveAuthorizedPathOptions = {
@@ -180,7 +183,7 @@ async function isPathAllowedIncludingRegisteredWorktrees(
     return true
   }
 
-  if (isRegisteredWorktreePath(targetPath, store)) {
+  if (await isRegisteredWorktreePathAsync(targetPath, store)) {
     return true
   }
 
@@ -205,7 +208,7 @@ async function isPathAllowedIncludingRegisteredWorktrees(
 
   // Reuse git-trusted registered roots without spawning git worktree list on each read.
   return (
-    isRegisteredWorktreePath(targetPath, store) ||
+    (await isRegisteredWorktreePathAsync(targetPath, store)) ||
     (await isPathAllowedByCanonicalRegisteredRoot(targetPath, options.canonicalSourcePath, store))
   )
 }
@@ -221,12 +224,12 @@ async function isPathAllowedByCanonicalAllowedRoot(
   }
   for (const root of await (allowedRoots?.getCanonicalizable() ?? getAllowedRoots(store))) {
     const resolvedRoot = resolve(root)
-    if (!isDescendantOrEqual(sourcePath, resolvedRoot)) {
+    if (!(await isDescendantOrEqualAsync(sourcePath, resolvedRoot))) {
       continue
     }
     // Resolve macOS /var symlinks only for the matching root, not every repo.
     const canonicalRoot = await normalizeExistingPath(resolvedRoot)
-    if (isDescendantOrEqual(targetPath, canonicalRoot)) {
+    if (await isDescendantOrEqualAsync(targetPath, canonicalRoot)) {
       return true
     }
   }

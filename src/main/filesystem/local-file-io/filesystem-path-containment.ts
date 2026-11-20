@@ -1,5 +1,6 @@
 import { resolve, relative, isAbsolute, sep, dirname } from 'node:path'
 import { statSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { realpathAcrossWslDriveMount } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 
@@ -10,6 +11,26 @@ export function isDescendantOrEqual(resolvedTarget: string, resolvedBase: string
   }
   const ancestor = foldedContainmentAncestor(resolvedTarget, resolvedBase)
   return ancestor !== null && isSameFilesystemObject(ancestor, resolvedBase)
+}
+
+/** Preserve Unicode identity checks without blocking an async authorization request. */
+export async function isDescendantOrEqualAsync(
+  resolvedTarget: string,
+  resolvedBase: string
+): Promise<boolean> {
+  if (isDescendantOrEqualExact(resolvedTarget, resolvedBase)) {
+    return true
+  }
+  const ancestor = foldedContainmentAncestor(resolvedTarget, resolvedBase)
+  if (ancestor === null) {
+    return false
+  }
+  try {
+    const [target, base] = await Promise.all([stat(ancestor), stat(resolvedBase)])
+    return target.ino !== 0 && target.dev === base.dev && target.ino === base.ino
+  } catch {
+    return false
+  }
 }
 
 /** Containment as spelled, with no filesystem I/O. */

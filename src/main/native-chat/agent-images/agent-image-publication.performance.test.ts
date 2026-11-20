@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { publishAgentImage } from './agent-image-publication'
 
-const publication = vi.hoisted(() => ({ controller: null as AbortController | null }))
+const publication = vi.hoisted((): { controller: AbortController | null } => ({ controller: null }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FileSystem>()
   return {

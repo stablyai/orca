@@ -1,13 +1,12 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { prepareAgentImagePaths } from './agent-image-preparation'
 
-const transport = vi.hoisted(() => ({
-  opened: [] as {
-    onEvent: (value: unknown) => void
-    onError: (error: unknown) => void
-    unsubscribe: ReturnType<typeof vi.fn>
-  }[]
-}))
+type PreparedImageSubscription = {
+  onEvent: (value: unknown) => void
+  onError: (error: unknown) => void
+  unsubscribe: ReturnType<typeof vi.fn>
+}
+const transport = vi.hoisted((): { opened: PreparedImageSubscription[] } => ({ opened: [] }))
 vi.mock('../rpc/subscriptions/runtime-rpc-subscribe', () => ({
   subscribeRuntimeRpc: vi.fn(async (_target, _method, _params, handlers) => {
     const unsubscribe = vi.fn()

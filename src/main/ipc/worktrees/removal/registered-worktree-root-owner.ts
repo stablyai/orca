@@ -55,3 +55,23 @@ export function resolveWorktreeRootOwner(
   const key = getWorktreeRootOwnerKey(repo)
   return !repo.connectionId && owners.has(key) ? key : undefined
 }
+
+export function replaceRegisteredWorktreeRootSet(
+  target: Set<string>,
+  owners: Iterable<RegisteredOwner>
+): void {
+  target.clear()
+  for (const owner of owners) {
+    for (const roots of [owner.listed, owner.recovered, owner.aliases]) {
+      if (roots) {
+        for (const root of roots) {
+          target.add(root)
+        }
+      }
+    }
+  }
+}
+
+export function registeredOwnerIncludesRoot(owner: RegisteredOwner, root: string): boolean {
+  return owner.listed?.has(root) === true || owner.recovered.has(root) || owner.aliases.has(root)
+}

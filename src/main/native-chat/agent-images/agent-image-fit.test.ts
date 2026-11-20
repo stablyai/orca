@@ -13,6 +13,7 @@ afterEach(async () => {
   }
 })
 
+// The real 7.7MP codec fixture can exceed the default timeout on shared runners.
 it('fits a retina screenshot into an immutable agent-readable copy while preserving its source and alpha', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-image-fit-'))
   roots.push(root)

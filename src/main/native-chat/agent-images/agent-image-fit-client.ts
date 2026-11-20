@@ -8,7 +8,10 @@ import { toLinuxPath, toWindowsWslDrivePath } from '../../../shared/file-access/
 import { stat } from 'node:fs/promises'
 import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
 import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
-import { isInsideNativeChatPasteFolder } from '../paste-files/native-chat-paste-files'
+import {
+  isInsideNativeChatPasteFolder,
+  nativeChatPasteFolder
+} from '../paste-files/native-chat-paste-files'
 import { dirname, join } from 'node:path'
 import {
   AGENT_IMAGE_MAX_BYTES,
@@ -21,7 +24,6 @@ import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../../worker-threads/worker-thread-entry-path'
-import { nativeChatPasteFolder } from '../paste-files/native-chat-paste-files'
 import { getAgentSessionAttachmentStore } from '../agent-session-attachments/agent-session-attachment-store-registry'
 import { parseAgentSessionAttachmentStorePath } from '../agent-session-attachments/agent-session-attachment-references'
 import { publishAgentImage } from './agent-image-publication'

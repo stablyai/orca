@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { partialRuntimeStore } from '../construction/test-context/runtime-store-partial-fixture'
 import { prepareAgentImagePathsOnHost } from './agent-image-preparation'
 
 const image = vi.hoisted(() => ({
@@ -23,7 +23,7 @@ afterEach(() => {
 
 it('fits local WSL execution paths through the Windows file path and returns an execution path', async () => {
   Object.defineProperty(process, 'platform', { value: 'win32' })
-  const store = {} as RuntimeStore
+  const store = partialRuntimeStore()
   expect(await prepareAgentImagePathsOnHost(['/mnt/c/Users/me/shot.png'], store)).toEqual([
     '/mnt/c/Temp/fit.png'
   ])
@@ -37,11 +37,11 @@ it('fits local WSL execution paths through the Windows file path and returns an 
 it('preserves the supplied path when a file needs no fitting or cannot be resolved here', async () => {
   image.resolve.mockResolvedValueOnce('/private/var/shot.png')
   image.fit.mockResolvedValueOnce('/private/var/shot.png')
-  expect(await prepareAgentImagePathsOnHost(['/var/shot.png'], {} as RuntimeStore)).toEqual([
+  expect(await prepareAgentImagePathsOnHost(['/var/shot.png'], partialRuntimeStore())).toEqual([
     '/var/shot.png'
   ])
   image.resolve.mockRejectedValueOnce(new Error('Path access denied'))
   expect(
-    await prepareAgentImagePathsOnHost(['\\\\nas\\share\\shot.png'], {} as RuntimeStore)
+    await prepareAgentImagePathsOnHost(['\\\\nas\\share\\shot.png'], partialRuntimeStore())
   ).toEqual(['\\\\nas\\share\\shot.png'])
 })
