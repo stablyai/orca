@@ -11,6 +11,7 @@ import {
   readJournalConnectorReplies,
   sentJournalConnectorReplies
 } from './journal-connector-replies'
+import { ensureJournalConnectorRepliesSchema } from './journal-connector-replies-schema'
 
 // Design item 125 §8, journal layer: the outbox row commits with its admission, its first fill
 // wins, and a rewind, a chat delete and the cloud's acceptance settle it.
@@ -157,4 +158,26 @@ it('keeps the first fill, clears what a rewind removed, and forgets a deleted ch
     ['d2', 'cleared'],
     ['d3', 'not_found']
   ])
+})
+
+it('keeps how long the answered turn ran, in a table an earlier build made too', async () => {
+  const f = fixture()
+  await f.send('first', stamped('review', { deliveryId: 'd1' }))
+  await f.send('second', stamped('and tests', { deliveryId: 'd2' }))
+  // As an earlier build left it: no took_ms. Opening the journal again adds it, once.
+  f.db.exec('ALTER TABLE journal_connector_replies DROP COLUMN took_ms')
+  ensureJournalConnectorRepliesSchema(f.db)
+  ensureJournalConnectorRepliesSchema(f.db)
+  const fill = { account: 'account-a', outcome: 'answered' as const, prose: 'Done.' }
+  fillJournalConnectorReplies(
+    f.db,
+    [
+      { ...fill, deliveryId: 'd1', answerDeliveryId: 'd1', tookMs: 98_000 },
+      { ...fill, deliveryId: 'd2', answerDeliveryId: 'd2' }
+    ],
+    10
+  )
+  const [first, second] = readJournalConnectorReplies(f.db)
+  expect(first?.fill?.tookMs).toBe(98_000)
+  expect(second?.fill).not.toHaveProperty('tookMs')
 })

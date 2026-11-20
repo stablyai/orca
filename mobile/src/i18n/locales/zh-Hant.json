@@ -2121,6 +2121,7 @@
     "failure": {
       "accountSwitchInProgress": "{{agent}} 在此主機上的設定正在變更。請在完成後重試。",
       "agentCommandNotRunnable": "{{agent}} 在「設定 → 代理程式」中的命令必須是 Orca 能找到的程式路徑或名稱，且不能包含引數或變數。請修改或重設。",
+      "agentCommandFailed": "{{agent}} 在「設定 → 代理程式」中的命令未能啟動 {{agent}}：{{detail}}。請修改或重設。",
       "agentCommandNotSignedIn": "請在執行此聊天的電腦上使用 `{{loginCommand}}` 登入 {{agent}}。",
       "agentNotSignedIn": "請登入 {{agent}}。",
       "agentStarting": "代理程式仍在啟動。",

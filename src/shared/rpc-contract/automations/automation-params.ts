@@ -16,7 +16,7 @@ import {
   requiredString
 } from '../rpc-param-primitives'
 import { normalizeExecutionHostId } from '../../execution-host/execution-host'
-import { isValidAutomationSchedule } from '../../automations/scheduling/automation-schedule-parsing'
+import { getAutomationScheduleInputError } from '../../automations/scheduling/automation-schedule-parsing'
 import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
@@ -39,12 +39,12 @@ export const ExecutionHostId = requiredString('Missing host id').transform((valu
   return hostId
 })
 
-export const AutomationSchedule = requiredString('Missing trigger').refine(
-  isValidAutomationSchedule,
-  {
-    message: 'Invalid automation trigger'
+export const AutomationSchedule = requiredString('Missing trigger').superRefine((value, ctx) => {
+  const message = getAutomationScheduleInputError(value)
+  if (message) {
+    ctx.addIssue({ code: 'custom', message })
   }
-)
+})
 
 export const AutomationPrecheck = z
   .object({

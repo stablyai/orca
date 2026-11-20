@@ -3,7 +3,7 @@ import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/a
 import Database from '../../sqlite/sync-database'
 
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -234,6 +234,7 @@ it('preserves a corrupt database on worker startup refusal', async () => {
     refusal: { details: { reason: 'journalCorrupt' } }
   })
   expect(await readFile(path)).toEqual(bytes)
+  await expect(access(journalDomainDatabasePath(root))).rejects.toMatchObject({ code: 'ENOENT' })
 })
 
 it('rechecks row-free owner death before answering an attempt-end action read', async () => {

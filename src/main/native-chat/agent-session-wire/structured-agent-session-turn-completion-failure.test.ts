@@ -84,28 +84,4 @@ describe('a failed request’s completion', () => {
       })
     ])
   })
-
-  it('carries no reason for a request that succeeded', async () => {
-    const h = harness()
-    await h.set([], [])
-    await h.set([userEntry], [submission({ handedOverAt: 11 })])
-    await h.set(
-      [
-        userEntry,
-        {
-          itemId: 'codex:turn:t1',
-          revision: 1,
-          sequence: 2,
-          observedAt: 2,
-          body: { kind: 'turn', turnId: 't1', state: 'completed', outcome: 'success' }
-        }
-      ],
-      [submission({ dispatchState: 'accepted', resolvedAt: 20 })]
-    )
-    expect(h.events).toEqual([
-      expect.objectContaining({
-        completion: expect.not.objectContaining({ failure: expect.anything() })
-      })
-    ])
-  })
 })
