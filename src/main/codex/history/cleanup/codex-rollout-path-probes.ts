@@ -30,7 +30,10 @@ export async function linksIntoWsl(path: string): Promise<boolean> {
   if (target === null) {
     return false
   }
-  // `\\?\UNC\host\share` and `\\?\C:\` spell the same paths as `\\host\share` and `C:\`.
-  const plain = target.replace(/^\\\\\?\\UNC\\/i, '\\\\').replace(/^\\\\\?\\/, '')
+  // `\\?\UNC\host\share`, `\\.\UNC\…` and `//?/UNC/…` spell the same path as `\\host\share`.
+  const plain = target
+    .replace(/\//g, '\\')
+    .replace(/^\\\\[?.]\\UNC\\/i, '\\\\')
+    .replace(/^\\\\[?.]\\/, '')
   return parseWslUncPath(resolve(dirname(path), plain)) !== null
 }

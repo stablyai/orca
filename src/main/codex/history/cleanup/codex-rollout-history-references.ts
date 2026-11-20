@@ -14,6 +14,7 @@ import {
 
 // Codex creates a rollout empty and writes its header after collecting git info.
 const UNFINISHED_HEADER_GRACE_MS = 10 * 60 * 1000
+const PENDING_RETRY_MS = 5000
 
 /**
  * Which rollouts other rollouts read their history prefix from (`session_meta.history_base`); a
@@ -56,6 +57,7 @@ export function createCodexRolloutHistoryReferences(
   const listedNames = new Map<string, Set<string>>()
   // Read again on every pass; while any is left, no rollout is proven unreferenced.
   const pending = new Map<string, Pending>()
+  let pendingRetriedAt = 0
   // Recently named rollout links with no target: a target can appear without a folder changing.
   const dangling = new Map<string, string>()
 
@@ -211,6 +213,10 @@ export function createCodexRolloutHistoryReferences(
 
   /** Lists a flat folder again only when its entries changed since the last listing. */
   const relist = async (folder: string, visited: Set<string>): Promise<boolean> => {
+    // A dated folder linked into WSL is skipped like any link below the roots.
+    if (await linksIntoWsl(folder)) {
+      return true
+    }
     const statAt = Date.now()
     const entry = await statUnlessAbsent(folder)
     if (entry === undefined || entry === null) {
@@ -232,9 +238,14 @@ export function createCodexRolloutHistoryReferences(
       cache ??= await loadCodexRolloutHistoryBaseCache(cachePath)
       const visited = new Set<string>()
       const dates = recentDates()
-      for (const [path, entry] of Array.from(pending)) {
-        signal?.throwIfAborted()
-        await visit(path, entry, visited)
+      // A header still being written settles in seconds to minutes: retrying it for every candidate
+      // in a burst would only repeat the same reads.
+      if (Date.now() - pendingRetriedAt >= PENDING_RETRY_MS) {
+        pendingRetriedAt = Date.now()
+        for (const [path, entry] of Array.from(pending)) {
+          signal?.throwIfAborted()
+          await visit(path, entry, visited)
+        }
       }
       if (recent) {
         for (const [path, rolloutId] of Array.from(dangling)) {

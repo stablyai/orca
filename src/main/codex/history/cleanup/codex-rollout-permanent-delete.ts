@@ -55,9 +55,6 @@ async function removeCopyMarker(
 
 type DeleteOutcome = 'done' | { referencedId: string }
 
-const QUICK_REFRESH_MS = 100
-const MAX_REFRESH_ROUNDS = 3
-
 async function deleteRollout(
   target: RolloutTarget,
   listHomes: () => Promise<RolloutHomes>,
@@ -124,22 +121,12 @@ async function deleteRollout(
     ) {
       return 'done'
     }
-    // The checks above take a while: a fork Codex started meanwhile is in today's folders. A slow
-    // refresh leaves those checks stale, and asking them again is slow: refresh until one is quick.
-    for (let round = 0; ; round += 1) {
-      const refreshedAt = Date.now()
-      if (!(await references.refresh(homes))) {
-        return 'done'
-      }
-      if (await references.isReferenced(rolloutId)) {
-        return { referencedId: rolloutId }
-      }
-      if (Date.now() - refreshedAt <= QUICK_REFRESH_MS) {
-        break
-      }
-      if (round === MAX_REFRESH_ROUNDS || !(await stillEligible())) {
-        return 'done'
-      }
+    // The checks above take a while: a fork Codex started meanwhile is in today's folders.
+    if (!(await references.refresh(homes))) {
+      return 'done'
+    }
+    if (await references.isReferenced(rolloutId)) {
+      return { referencedId: rolloutId }
     }
     // The setting, rows and folder, asked once more nearest the unlink.
     if (!(await stillAllowed())) {
