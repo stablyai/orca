@@ -10,7 +10,7 @@ import type {
 export function codexConnectionOpener(
   deps: Pick<CodexStructuredSessionAdapterDeps, 'openConnection' | 'sharedServers'>,
   sessionId: string,
-  launch: Pick<CodexStructuredLaunch, 'visuals' | 'linkedSkillsRoot'>
+  launch: Pick<CodexStructuredLaunch, 'visuals' | 'linkedSkillsRoot' | 'codexVersion'>
 ): NonNullable<CodexStructuredSessionAdapterDeps['openConnection']> {
   if (deps.openConnection) {
     return deps.openConnection
@@ -23,5 +23,9 @@ export function codexConnectionOpener(
     ...(launch.linkedSkillsRoot ? { linkedSkillsRoot: launch.linkedSkillsRoot } : {})
   })
   return (connectionLaunch, handlers) =>
-    sharedCodexServerPool().open(connectionLaunch, handlers ?? {}, { sessionId, skillRoots })
+    sharedCodexServerPool().open(connectionLaunch, handlers ?? {}, {
+      sessionId,
+      skillRoots,
+      codexVersion: launch.codexVersion ?? null
+    })
 }

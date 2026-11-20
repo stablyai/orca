@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -12,9 +12,12 @@ type FakeServer = {
   handlers: CodexAppServerConnectionHandlers
   requests: { method: string; params?: Record<string, unknown> }[]
   crash: () => void
+  /** The server goes unusable without its exit being proven yet. */
+  closeTransport: () => void
 }
 
-function fakeCodex() {
+/** interrupt: 'ends' completes the turn at once, 'later' after 3 s, 'ignored' never. */
+function fakeCodex(interrupt: 'ends' | 'later' | 'ignored' = 'ends') {
   const servers: FakeServer[] = []
   let nextThread = 1
   const connect = async (
@@ -22,6 +25,7 @@ function fakeCodex() {
     handlers: CodexAppServerConnectionHandlers = {}
   ): Promise<CodexAppServerConnection> => {
     let closed = false
+    let closeResult: CodexAppServerConnection['closeResult'] = null
     const server: FakeServer = {
       pid: 5000 + servers.length,
       handlers,
@@ -30,6 +34,10 @@ function fakeCodex() {
         closed = true
         handlers.onClose?.(new Error('codex crashed'))
         handlers.onExit?.(new Error('codex crashed'), { expected: false })
+      },
+      closeTransport: () => {
+        closed = true
+        handlers.onClose?.(new Error('broken pipe'))
       }
     }
     servers.push(server)
@@ -37,6 +45,9 @@ function fakeCodex() {
       pid: server.pid,
       get closed() {
         return closed
+      },
+      get closeResult() {
+        return closeResult
       },
       request: async (method, params, options) => {
         server.requests.push({ method, ...(params ? { params } : {}) })
@@ -46,6 +57,19 @@ function fakeCodex() {
           // Codex announces the thread before it answers the start.
           handlers.onNotification?.('thread/started', { thread: { id } })
           result = { thread: { id } }
+        } else if (method === 'thread/resume') {
+          result = { thread: { id: params?.threadId } }
+        } else if (method === 'turn/interrupt' && interrupt !== 'ignored') {
+          const end = () =>
+            handlers.onNotification?.('turn/completed', {
+              threadId: params?.threadId,
+              turn: { id: params?.turnId, status: 'interrupted' }
+            })
+          if (interrupt === 'ends') {
+            end()
+          } else {
+            setTimeout(end, 3_000)
+          }
         }
         options?.onReply?.(result)
         return result
@@ -55,6 +79,7 @@ function fakeCodex() {
       respondWithError: () => {},
       close: async () => {
         closed = true
+        closeResult = { root: 'exited', tree: 'exited' }
         handlers.onExit?.(new Error('closed'), { expected: true })
         return true
       }
@@ -85,6 +110,10 @@ async function startThread(connection: CodexAppServerConnection): Promise<string
   expect(threadId).not.toBeNull()
   return threadId ?? ''
 }
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 describe('shared Codex app-servers', () => {
   it('routes each thread to its own chat on one server and copies server-wide frames to all', async () => {
@@ -172,9 +201,91 @@ describe('shared Codex app-servers', () => {
       servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadA })
     }
     servers[0]!.handlers.onNotification?.('item/started', { threadId: threadB })
-    expect(a.exits).toHaveLength(1)
+    await vi.waitFor(() => expect(a.exits).toHaveLength(1))
     expect(a.exits[0]?.expected).toBe(false)
     expect(connB.closed).toBe(false)
     expect(b.notifications.at(-1)?.method).toBe('item/started')
+  })
+
+  it('interrupts a turn whose start is still queued behind a paused chat', async () => {
+    const { servers, pool } = fakeCodex()
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const threadA = await startThread(connA)
+    connA.pauseReading?.()
+    servers[0]!.handlers.onNotification?.('turn/started', {
+      threadId: threadA,
+      turn: { id: 'turn-q' }
+    })
+    await connA.close()
+    expect(servers[0]!.requests).toContainEqual({
+      method: 'turn/interrupt',
+      params: { threadId: threadA, turnId: 'turn-q' }
+    })
+    expect(connA.processTreeUnproven).toBe(false)
+  })
+
+  it('reports Stop unproven when the turn ignores the interrupt, stopping a server no other chat is using', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex('ignored')
+    const connA = await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    const idle = await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    const closing = connA.close()
+    await vi.advanceTimersByTimeAsync(20_000)
+    await closing
+    expect(connA.processTreeUnproven).toBe(false)
+    expect(idle.closed).toBe(true)
+    const busy = fakeCodex('ignored')
+    const x = await busy.pool.open(launch(), chat().handlers, { sessionId: 'x', skillRoots: [] })
+    const y = await busy.pool.open(launch(), chat().handlers, { sessionId: 'y', skillRoots: [] })
+    const threadX = await startThread(x)
+    const threadY = await startThread(y)
+    for (const [threadId, id] of [
+      [threadX, 'tx'],
+      [threadY, 'ty']
+    ] as const) {
+      busy.servers[0]!.handlers.onNotification?.('turn/started', { threadId, turn: { id } })
+    }
+    const closingX = x.close()
+    await vi.advanceTimersByTimeAsync(20_000)
+    await closingX
+    expect(x.processTreeUnproven).toBe(true)
+    expect(y.closed).toBe(false)
+  })
+
+  it('never unsubscribes a thread a recovering chat already resumed while the old lease was stopping', async () => {
+    vi.useFakeTimers()
+    const { servers, pool } = fakeCodex('later')
+    const a = chat()
+    const connA = await pool.open(launch(), a.handlers, { sessionId: 'a', skillRoots: [] })
+    const threadA = await startThread(connA)
+    servers[0]!.handlers.onNotification?.('turn/started', { threadId: threadA, turn: { id: 't' } })
+    connA.pauseReading?.()
+    for (let i = 0; i <= CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES; i += 1) {
+      servers[0]!.handlers.onNotification?.('item/agentMessage/delta', { threadId: threadA })
+    }
+    // The chat hears its exit only once its turn is stopped.
+    expect(a.exits).toEqual([])
+    const replacement = await pool.open(launch(), chat().handlers, {
+      sessionId: 'a',
+      skillRoots: []
+    })
+    await replacement.request('thread/resume', { threadId: threadA })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(a.exits).toHaveLength(1)
+    expect(servers[0]!.requests).not.toContainEqual({
+      method: 'thread/unsubscribe',
+      params: { threadId: threadA }
+    })
+  })
+
+  it('starts a fresh server once the current one can no longer take requests', async () => {
+    const { servers, pool } = fakeCodex()
+    await pool.open(launch(), chat().handlers, { sessionId: 'a', skillRoots: [] })
+    servers[0]!.closeTransport()
+    await pool.open(launch(), chat().handlers, { sessionId: 'b', skillRoots: [] })
+    expect(servers).toHaveLength(2)
   })
 })

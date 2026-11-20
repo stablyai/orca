@@ -51,6 +51,8 @@ export type CodexStructuredLaunch = CodexBotLaunchOptions & {
   /** Command values that must survive the user's shell environment policy. */
   commandEnv?: Record<string, string>
   visuals?: NativeChatVisualsLaunch
+  /** What this launch's `codex --version` reported, when it could be read. */
+  codexVersion?: string
 }
 
 /** Boundaries retain host receipt time through buffering and retries. */

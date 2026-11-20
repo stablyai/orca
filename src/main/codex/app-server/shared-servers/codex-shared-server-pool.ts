@@ -18,11 +18,15 @@ import {
 export const CODEX_SHARED_SERVER_MAX_CHATS = 20
 /** A server with no chats waits this long for the next one before it stops. */
 const IDLE_SERVER_STOP_MS = 60_000
+/** Waits between attempts to stop a server whose exit could not be proven. */
+const STOP_RETRY_DELAYS_MS = [2_000, 10_000, 60_000, 300_000]
 
 export type CodexSharedServerOpenOptions = {
   sessionId: string
   /** skills/extraRoots/set replaces the whole process's list, so the roots are part of the key. */
   skillRoots: readonly string[]
+  /** What the launch's `codex --version` reported; part of the drain generation. */
+  codexVersion?: string | null
 }
 
 export type CodexSharedServerSummary = {
@@ -37,6 +41,8 @@ export type CodexSharedServerSummary = {
 export class CodexSharedServerPool {
   private readonly servers = new Map<string, CodexSharedServer[]>()
   private readonly idleTimers = new Map<CodexSharedServer, ReturnType<typeof setTimeout>>()
+  /** Out of selection, kept until their exit is proven so none is orphaned. */
+  private readonly stopping = new Set<CodexSharedServer>()
   private readonly ceiling = new CodexSharedServerMemoryCeiling(
     () => this.allServers(),
     (server) => this.onServerFreed(server)
@@ -49,7 +55,11 @@ export class CodexSharedServerPool {
     handlers: CodexAppServerConnectionHandlers,
     options: CodexSharedServerOpenOptions
   ): Promise<CodexAppServerConnection> {
-    const spec = await codexSharedServerSpec(launch, options.skillRoots)
+    const spec = await codexSharedServerSpec(
+      launch,
+      options.skillRoots,
+      options.codexVersion ?? null
+    )
     this.ceiling.sampleIfStale()
     const server = this.serverWithRoom(spec.key) ?? this.startServer(spec)
     this.cancelIdleStop(server)
@@ -80,7 +90,7 @@ export class CodexSharedServerPool {
   }
 
   private allServers(): CodexSharedServer[] {
-    return [...this.servers.values()].flat()
+    return [...[...this.servers.values()].flat(), ...this.stopping]
   }
 
   private serverWithRoom(key: string): CodexSharedServer | undefined {
@@ -102,6 +112,7 @@ export class CodexSharedServerPool {
   private onServerFreed(server: CodexSharedServer): void {
     if (server.exited) {
       this.remove(server)
+      this.stopping.delete(server)
       return
     }
     if (server.leases.size > 0) {
@@ -131,9 +142,22 @@ export class CodexSharedServerPool {
     }
   }
 
-  private stop(server: CodexSharedServer): void {
+  private stop(server: CodexSharedServer, attempt = 0): void {
     this.remove(server)
-    void server.stop()
+    this.stopping.add(server)
+    void server.stop().then((proven) => {
+      if (proven || server.exited || server.leases.size > 0) {
+        this.stopping.delete(server)
+        return
+      }
+      const delay = STOP_RETRY_DELAYS_MS[attempt]
+      if (delay === undefined) {
+        console.warn(`[codex-shared-server] pid ${server.pid ?? '?'} did not prove its exit`)
+        return
+      }
+      const timer = setTimeout(() => this.stop(server, attempt + 1), delay)
+      timer.unref?.()
+    })
   }
 
   private remove(server: CodexSharedServer): void {

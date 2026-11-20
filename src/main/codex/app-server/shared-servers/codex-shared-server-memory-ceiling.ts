@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { enumerateHostProcesses } from '../../../memory/host-process-index'
+import { enumerateHostProcesses, readExecutableNames } from '../../../memory/host-process-index'
 import { collectSubtree, type ProcIndex } from '../../../memory/process-index'
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import { spawnTokenFromEnvironBlock } from '../../../runtime/agent-session/ownership/agent-session-spawn-token-readback'
@@ -49,6 +49,17 @@ export class CodexSharedServerMemoryCeiling {
     try {
       const processes =
         index ?? (await enumerateHostProcesses({ trackCpu: false, withNames: true }))
+      // Linux sweeps carry no names; read them for the servers' trees, or the walk can't stop at Codex.
+      await readExecutableNames(
+        this.servers().flatMap((server) =>
+          server.pid === undefined
+            ? []
+            : collectSubtree(processes, server.pid).flatMap((pid) => {
+                const row = processes.byPid.get(pid)
+                return row && row.name === undefined ? [row] : []
+              })
+        )
+      )
       for (const server of this.servers()) {
         const pid = server.pid
         const memory = pid === undefined ? null : codexServerOwnMemory(processes, pid)
@@ -71,12 +82,14 @@ export class CodexSharedServerMemoryCeiling {
   }
 }
 
-/** The launcher chain down to the native codex process, without the tools it runs. */
+/** The launcher chain down to the native codex process, without the tools it runs; null when no
+ *  process in the tree is named codex, rather than counting its tools as the server. */
 export function codexServerOwnMemory(index: ProcIndex, rootPid: number): number | null {
   if (!index.byPid.has(rootPid)) {
     return null
   }
   let total = 0
+  let foundCodex = false
   const queue = [rootPid]
   while (queue.length > 0) {
     const pid = queue.pop()!
@@ -85,11 +98,13 @@ export function codexServerOwnMemory(index: ProcIndex, rootPid: number): number 
       continue
     }
     total += row.memory
-    if (!/^codex/i.test(row.name ?? '')) {
+    if (/^codex/i.test(row.name ?? '')) {
+      foundCodex = true
+    } else {
       queue.push(...(index.childrenOf.get(pid) ?? []))
     }
   }
-  return total
+  return foundCodex ? total : null
 }
 
 /** Codex runs each chat's commands with that chat's ORCA_AGENT_SESSION_ID (shell_environment_policy),

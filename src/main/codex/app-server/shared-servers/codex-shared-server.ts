@@ -13,16 +13,15 @@ import {
 import type { CodexSharedServerSpec } from './codex-shared-server-key'
 import type { CodexSharedServerToolUsage } from './codex-shared-server-memory-ceiling'
 import type { CodexSharedLeaseHost, CodexSharedServerLease } from './codex-shared-server-lease'
+import { CodexSharedServerTurns, withDeadline } from './codex-shared-server-turns'
+import { CodexSharedServerUnrouted } from './codex-shared-server-unrouted'
 
-/** Frames for a thread no chat has claimed yet (e.g. thread/started before thread/start replies). */
-const MAX_UNROUTED_FRAMES = 2_000
-const UNROUTED_TTL_MS = 30_000
 const MAX_RETIRED_THREADS = 4_096
 const RELEASE_REQUEST_TIMEOUT_MS = 5_000
+/** How long an interrupted turn has to report turn/completed before Stop counts it unproven. */
+const TURN_STOP_PROOF_MS = 10_000
 const INITIALIZE_TIMEOUT_MS = 15_000
 const NO_OWNER_ERROR_CODE = -32000
-
-type UnroutedFrames = { frames: CodexSharedServerFrame[]; since: number }
 
 /** One Codex app-server many chats lease; each chat's threads route to that chat alone. */
 export class CodexSharedServer implements CodexSharedLeaseHost {
@@ -36,10 +35,9 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   private physical: CodexAppServerConnection | null = null
   private hasExited = false
   private readonly owners = new Map<string, CodexSharedServerLease>()
+  private readonly turns = new CodexSharedServerTurns()
   private readonly retired = new Set<string>()
-  private readonly unrouted = new Map<string, UnroutedFrames>()
-  private unroutedCount = 0
-  private unroutedTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly unrouted = new CodexSharedServerUnrouted((frame) => this.refuse(frame))
   readonly ready: Promise<void>
 
   constructor(
@@ -59,6 +57,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         void payload
       },
       onClose: (error) => {
+        // Unusable from here even before its exit is proven; new chats must not pick it.
+        this.draining = true
         for (const lease of this.leases) {
           lease.serverClosing(error)
         }
@@ -106,23 +106,27 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     this.owners.set(threadId, lease)
     lease.threads.add(threadId)
     this.retired.delete(threadId)
-    const waiting = this.unrouted.get(threadId)
-    if (waiting) {
-      this.unrouted.delete(threadId)
-      this.unroutedCount -= waiting.frames.length
-      for (const frame of waiting.frames) {
-        lease.deliver(frame)
-      }
+    for (const frame of this.unrouted.take(threadId)) {
+      lease.deliver(frame)
     }
   }
 
-  /** Interrupts the chat's running turns and unsubscribes its threads; the server keeps running. */
-  async release(lease: CodexSharedServerLease): Promise<void> {
+  trackTurnStart(threadId: string, request: Promise<unknown>): void {
+    this.turns.trackStart(threadId, request)
+  }
+
+  noteTurnStarted(threadId: string, turnId: string): void {
+    this.turns.noteStarted(threadId, turnId)
+  }
+
+  /** Interrupts the chat's turns and waits for each to end, then unsubscribes the threads no
+   *  later chat claimed. Resolves whether every turn is proven over; the server keeps running
+   *  for other chats unless a stuck turn leaves no other chat working, when it stops. */
+  async release(lease: CodexSharedServerLease): Promise<boolean> {
     if (!this.leases.delete(lease)) {
-      return
+      return true
     }
     const threads = [...lease.threads]
-    const turns = [...lease.activeTurns]
     for (const threadId of threads) {
       if (this.owners.get(threadId) === lease) {
         this.owners.delete(threadId)
@@ -130,31 +134,66 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       }
     }
     lease.threads.clear()
-    lease.activeTurns.clear()
+    let proven = true
     const physical = this.physical
     if (physical && !this.closed) {
       const options = { timeoutMs: RELEASE_REQUEST_TIMEOUT_MS }
-      const interrupts = await Promise.allSettled(
-        turns.map(([threadId, turnId]) =>
-          physical.request('turn/interrupt', { threadId, turnId }, options)
-        )
+      await withDeadline(
+        Promise.allSettled(this.turns.startsPending(threads)),
+        RELEASE_REQUEST_TIMEOUT_MS
       )
-      // A turn that ignores Stop keeps running here; take no new chats so the server can drain.
-      if (interrupts.some((result) => result.status === 'rejected')) {
-        this.draining = true
+      proven = !this.turns.anyStartPending(threads)
+      const turns = threads.flatMap((threadId) => {
+        const turnId = this.turns.runningOn(threadId)
+        return turnId ? [{ threadId, turnId }] : []
+      })
+      const stopped = await Promise.all(
+        turns.map(async ({ threadId, turnId }) => {
+          const ended = this.turns.ended(turnId)
+          await physical.request('turn/interrupt', { threadId, turnId }, options).catch(() => {})
+          return withDeadline(ended, TURN_STOP_PROOF_MS)
+        })
+      )
+      proven &&= stopped.every(Boolean)
+      if (!proven) {
+        proven = await this.handleStuckTurn()
       }
-      await Promise.allSettled(
-        threads.map((threadId) => physical.request('thread/unsubscribe', { threadId }, options))
-      )
+      if (!this.closed) {
+        // A chat that already resumed one of these threads here owns its subscription now.
+        const unclaimed = threads.filter((threadId) => !this.owners.has(threadId))
+        await Promise.allSettled(
+          unclaimed.map((threadId) => physical.request('thread/unsubscribe', { threadId }, options))
+        )
+      }
     }
     this.onEnded(this)
+    return proven
   }
 
-  /** Stops the process; only the pool calls this, for a server with no chats left. */
-  async stop(): Promise<void> {
+  /** A turn that ignores Stop: stop the server if no other chat is working, else drain it. */
+  private async handleStuckTurn(): Promise<boolean> {
+    this.draining = true
+    const othersWorking = [...this.leases].some((other) =>
+      [...other.threads].some((threadId) => this.turns.runningOn(threadId) !== undefined)
+    )
+    if (othersWorking || !this.physical) {
+      console.warn(`[codex-shared-server] pid ${this.pid ?? '?'}: a stopped turn kept running`)
+      return false
+    }
+    await this.physical.close()
+    const result = this.physical.closeResult
+    return result?.root === 'exited' && result.tree === 'exited'
+  }
+
+  /** Stops the process (only the pool calls this, for a server with no chats left); resolves
+   *  whether its exit is proven. */
+  async stop(): Promise<boolean> {
     this.draining = true
     await this.ready.catch(() => {})
-    await this.physical?.close()
+    if (!this.physical) {
+      return true
+    }
+    return (await this.physical.close()) && this.physical.closeResult?.root === 'exited'
   }
 
   private retire(threadId: string): void {
@@ -168,6 +207,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
   }
 
   private onNotification(method: string, params: unknown): void {
+    this.turns.observe(method, params)
     if (method === 'thread/started') {
       const parent = codexSubagentParentThreadId(params)
       const threadId = codexFrameThreadId(params)
@@ -198,7 +238,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       this.refuse(frame)
       return
     }
-    this.hold(threadId, frame)
+    this.unrouted.hold(threadId, frame)
   }
 
   /** Account and rate-limit frames: each chat would have had its own copy from its own server. */
@@ -227,62 +267,14 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
     }
   }
 
-  private hold(threadId: string, frame: CodexSharedServerFrame): void {
-    const bucket = this.unrouted.get(threadId) ?? { frames: [], since: Date.now() }
-    bucket.frames.push(frame)
-    this.unrouted.set(threadId, bucket)
-    this.unroutedCount += 1
-    while (this.unroutedCount > MAX_UNROUTED_FRAMES) {
-      this.dropOldestUnrouted()
-    }
-    this.unroutedTimer ??= setTimeout(() => this.sweepUnrouted(), UNROUTED_TTL_MS)
-    this.unroutedTimer.unref?.()
-  }
-
-  private dropOldestUnrouted(): void {
-    const oldest = this.unrouted.entries().next()
-    if (oldest.done) {
-      this.unroutedCount = 0
-      return
-    }
-    const [threadId, bucket] = oldest.value
-    this.unrouted.delete(threadId)
-    this.unroutedCount -= bucket.frames.length
-    for (const frame of bucket.frames) {
-      this.refuse(frame)
-    }
-  }
-
-  private sweepUnrouted(): void {
-    this.unroutedTimer = null
-    const cutoff = Date.now() - UNROUTED_TTL_MS
-    for (const [threadId, bucket] of this.unrouted) {
-      if (bucket.since <= cutoff) {
-        this.unrouted.delete(threadId)
-        this.unroutedCount -= bucket.frames.length
-        for (const frame of bucket.frames) {
-          this.refuse(frame)
-        }
-      }
-    }
-    if (this.unrouted.size > 0) {
-      this.unroutedTimer = setTimeout(() => this.sweepUnrouted(), UNROUTED_TTL_MS)
-      this.unroutedTimer.unref?.()
-    }
-  }
-
   private onExit(error: Error): void {
     if (this.hasExited) {
       return
     }
     this.hasExited = true
     this.draining = true
-    if (this.unroutedTimer) {
-      clearTimeout(this.unroutedTimer)
-      this.unroutedTimer = null
-    }
     this.unrouted.clear()
-    this.unroutedCount = 0
+    this.turns.endAll()
     // Every chat on it sees its own unexpected exit and reopens its thread on its next send.
     for (const lease of this.leases) {
       lease.fail(error, false)

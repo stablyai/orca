@@ -4,7 +4,6 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../codex-app-server-connection-types'
 import {
-  codexFrameThreadId,
   codexOpenedThreadId,
   codexSharedFrameParams,
   codexTurnId,
@@ -16,7 +15,6 @@ export const CODEX_SHARED_LEASE_MAX_QUEUED_FRAMES = 20_000
 export const CODEX_SHARED_LEASE_MAX_QUEUED_BYTES = 64 * 1024 * 1024
 
 const OPENS_THREAD = new Set(['thread/start', 'thread/resume', 'thread/fork'])
-const CLOSED_RESULT: ProviderProcessCloseResult = { root: 'exited', tree: 'exited' }
 
 /** What a lease needs from the server it rides on. */
 export type CodexSharedLeaseHost = {
@@ -24,15 +22,16 @@ export type CodexSharedLeaseHost = {
   readonly closed: boolean
   readonly connection: CodexAppServerConnection
   claim: (threadId: string, lease: CodexSharedServerLease) => void
-  release: (lease: CodexSharedServerLease) => Promise<void>
+  /** Records a turn/start in flight, so a release that races it still interrupts its turn. */
+  trackTurnStart: (threadId: string, request: Promise<unknown>) => void
+  noteTurnStarted: (threadId: string, turnId: string) => void
+  /** True only once every turn this chat ran is proven over. */
+  release: (lease: CodexSharedServerLease) => Promise<boolean>
 }
 
 /** One chat's view of a shared app-server: its threads' frames, its own backpressure and close. */
 export class CodexSharedServerLease implements CodexAppServerConnection {
   readonly threads = new Set<string>()
-  /** Running turn per thread, interrupted when the chat closes (the server outlives it). */
-  readonly activeTurns = new Map<string, string>()
-  readonly processTreeUnproven = false
   closeResult: ProviderProcessCloseResult | null = null
   private state: 'open' | 'closing' | 'ended' = 'open'
   private closing: Promise<boolean> | null = null
@@ -62,6 +61,11 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     return this.state === 'open'
   }
 
+  /** The lease ended without proof that its turns stopped (Stop reports it, as for a live tree). */
+  get processTreeUnproven(): boolean {
+    return this.closeResult !== null && this.closeResult.tree !== 'exited'
+  }
+
   request(
     method: string,
     params?: Record<string, unknown>,
@@ -78,7 +82,9 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
       this.host.claim(params.threadId, this)
     }
     const opensThread = OPENS_THREAD.has(method)
-    return this.host.connection.request(method, params, {
+    const turnThreadId =
+      method === 'turn/start' && typeof params?.threadId === 'string' ? params.threadId : null
+    const request = this.host.connection.request(method, params, {
       ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
       // Claimed before the reply's continuation, so frames Codex sent first reach this chat first.
       onReply: (result) => {
@@ -86,9 +92,17 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
         if (threadId && this.state === 'open') {
           this.host.claim(threadId, this)
         }
+        const turnId = turnThreadId ? codexTurnId(result) : null
+        if (turnThreadId && turnId) {
+          this.host.noteTurnStarted(turnThreadId, turnId)
+        }
         options.onReply?.(result)
       }
     })
+    if (turnThreadId) {
+      this.host.trackTurnStart(turnThreadId, request)
+    }
+    return request
   }
 
   notify(method: string, params?: Record<string, unknown>): void {
@@ -163,26 +177,10 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
         this.handlers.onServerRequest?.(frame.request)
         return
       }
-      this.trackTurn(frame.method, frame.params)
       this.handlers.onNotification?.(frame.method, frame.params)
     } catch (error) {
       // One chat's handler failing must not reach the shared reader and end every chat.
       this.fail(error instanceof Error ? error : new Error(String(error)), true)
-    }
-  }
-
-  private trackTurn(method: string, params: unknown): void {
-    const threadId = codexFrameThreadId(params)
-    if (!threadId) {
-      return
-    }
-    if (method === 'turn/started') {
-      const turnId = codexTurnId(params)
-      if (turnId) {
-        this.activeTurns.set(threadId, turnId)
-      }
-    } else if (method === 'turn/completed') {
-      this.activeTurns.delete(threadId)
     }
   }
 
@@ -206,9 +204,9 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     this.announceClose(error)
     this.closing = this.host
       .release(this)
-      .catch(() => {})
-      .then(() => {
-        this.finish(error, true)
+      .catch(() => false)
+      .then((proven) => {
+        this.finish(error, true, proven)
         return true
       })
     return this.closing
@@ -231,18 +229,28 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     if (this.state === 'ended') {
       return
     }
-    const expected = this.state === 'closing'
-    if (!expected) {
-      this.state = 'closing'
-      this.announceClose(error)
-      if (releaseOnServer) {
-        void this.host.release(this).catch(() => {})
+    if (this.state === 'closing') {
+      // A dead server proves its turns ended; anything else leaves the close's own proof pending.
+      if (!releaseOnServer) {
+        this.finish(error, true, true)
       }
+      return
     }
-    this.finish(error, expected)
+    this.state = 'closing'
+    this.announceClose(error)
+    this.paused = true
+    if (!releaseOnServer) {
+      this.finish(error, false, true)
+      return
+    }
+    // The chat hears its exit only after its turns are stopped, so a recovery can't race them.
+    void this.host
+      .release(this)
+      .catch(() => false)
+      .then((proven) => this.finish(error, false, proven))
   }
 
-  private finish(error: Error, expected: boolean): void {
+  private finish(error: Error, expected: boolean, proven: boolean): void {
     if (this.state === 'ended') {
       return
     }
@@ -250,7 +258,7 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
     this.queue = []
     this.queueHead = 0
     this.queuedBytes = 0
-    this.closeResult = CLOSED_RESULT
+    this.closeResult = { root: 'exited', tree: proven ? 'exited' : 'live' }
     this.handlers.onExit?.(error, { expected })
   }
 }
