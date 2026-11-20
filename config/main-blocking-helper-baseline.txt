@@ -266,7 +266,8 @@
 5 src/main/codex-accounts/managed-homes/host-codex-managed-home-ownership.ts
 3 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts
 1 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-provenance.ts
-4 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
+1 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
+3 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-system-default-snapshot.ts
 19 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-config-compatibility.ts
 3 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
