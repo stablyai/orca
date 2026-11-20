@@ -43,7 +43,10 @@ function shouldStack(
 }
 
 // Shrink the filled pill to its label after Recommended wraps; CSS wrap alone keeps it full-width.
-export function useBotItemChipStacked(enabled: boolean): {
+export function useBotItemChipStacked(
+  enabled: boolean,
+  recommendedText: string
+): {
   root: RefObject<HTMLSpanElement | null>
   label: RefObject<HTMLSpanElement | null>
   tag: RefObject<HTMLSpanElement | null>
@@ -79,6 +82,6 @@ export function useBotItemChipStacked(enabled: boolean): {
     const observer = new ResizeObserver(measure)
     observer.observe(row)
     return () => observer.disconnect()
-  }, [enabled])
+  }, [enabled, recommendedText])
   return { root, label, tag, stacked }
 }

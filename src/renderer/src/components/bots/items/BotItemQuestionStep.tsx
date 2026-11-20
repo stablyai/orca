@@ -46,8 +46,8 @@ export function BotItemChipWords({
   filled?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const { root, label, tag, stacked } = useBotItemChipStacked(filled)
   const recommended = t('bots.items.ask.recommended', 'Recommended')
+  const { root, label, tag, stacked } = useBotItemChipStacked(filled, recommended)
   if (filled) {
     return (
       <span
