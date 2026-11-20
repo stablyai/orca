@@ -703,7 +703,7 @@
         "failedReason": "Başarısız: {{error}}",
         "finishOnPage": "Açılan sayfada tamamlayın",
         "needsAuth": "Oturum açılmalı",
-        "needsAuthAfterSend": "Oturum açılması gerekiyor. Burada oturum açmak için bir mesaj gönderin.",
+        "needsAuthAfterSend": "Oturum açılmalı. Burada oturum açmak için bir mesaj gönderin.",
         "off": "Kapalı",
         "pending": "Bağlanıyor…",
         "tools_one": "{{count}} araç",
@@ -735,8 +735,8 @@
       "summary": {
         "signingIn": "{{name}} için oturum açılıyor",
         "connected": "Bağlı: {{count}}",
-        "needsAuth_one": "Oturum açılmalı: {{count}}",
-        "needsAuth_other": "Oturum açılmalı: {{count}}",
+        "needsAuth_one": "{{count}} sunucuda oturum açılmalı",
+        "needsAuth_other": "{{count}} sunucuda oturum açılmalı",
         "failed": "Başarısız: {{count}}"
       },
       "pasteHint": "Tarayıcı yüklenmeyen bir sayfaya yönlendiğinde adresi kopyalayıp buraya yapıştırın."

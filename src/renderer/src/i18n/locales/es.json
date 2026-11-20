@@ -19954,7 +19954,7 @@
           "failed": "Error",
           "failedReason": "Error: {{error}}",
           "needsAuth": "Sesión requerida",
-          "needsAuthAfterSend": "Requiere iniciar sesión. Envía un mensaje para iniciar sesión aquí.",
+          "needsAuthAfterSend": "Sesión requerida. Envía un mensaje para iniciar sesión aquí.",
           "pending": "Conectando…",
           "tools_many": "{{count}} herramientas",
           "tools_one": "{{count}} herramienta",
@@ -19986,11 +19986,11 @@
         "actionFailed": "No se pudo realizar la acción. Inténtalo de nuevo.",
         "summary": {
           "connected": "Conectados: {{count}}",
-          "needsAuth_one": "Sesión requerida: {{count}}",
-          "needsAuth_other": "Sesión requerida: {{count}}",
+          "needsAuth_one": "{{count}} requiere iniciar sesión",
+          "needsAuth_other": "{{count}} requieren iniciar sesión",
           "failed": "Fallidos: {{count}}",
           "signingIn": "iniciando sesión en {{name}}",
-          "needsAuth_many": "Sesión requerida: {{count}}"
+          "needsAuth_many": "{{count}} requieren iniciar sesión"
         },
         "source": {
           "project": "Proyecto",

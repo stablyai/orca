@@ -771,10 +771,10 @@
       "summary": {
         "signingIn": "connexion à {{name}}",
         "connected": "Connectés : {{count}}",
-        "needsAuth_one": "Connexion requise : {{count}}",
-        "needsAuth_other": "Connexion requise : {{count}}",
+        "needsAuth_one": "{{count}} connexion requise",
+        "needsAuth_other": "{{count}} connexions requises",
         "failed": "Échecs : {{count}}",
-        "needsAuth_many": "Connexion requise : {{count}}"
+        "needsAuth_many": "{{count}} connexions requises"
       },
       "pasteHint": "Lorsque le navigateur arrive sur une page qui ne se charge pas, copiez son adresse et collez-la ici."
     }

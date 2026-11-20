@@ -20257,11 +20257,11 @@
         "actionFailed": "Impossible d’effectuer cette action. Réessayez.",
         "summary": {
           "connected": "Connectés : {{count}}",
-          "needsAuth_one": "Connexion requise : {{count}}",
-          "needsAuth_other": "Connexion requise : {{count}}",
+          "needsAuth_one": "{{count}} connexion requise",
+          "needsAuth_other": "{{count}} connexions requises",
           "failed": "Échecs : {{count}}",
           "signingIn": "connexion à {{name}}",
-          "needsAuth_many": "Connexion requise : {{count}}"
+          "needsAuth_many": "{{count}} connexions requises"
         },
         "source": {
           "project": "Projet",

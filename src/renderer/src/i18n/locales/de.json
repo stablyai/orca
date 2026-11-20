@@ -20210,8 +20210,8 @@
         "loading": "Wird geladen…",
         "notRunning": "Verbindung beim Senden der nächsten Nachricht",
         "unsupported": "Orca auf dem Host dieses Chats aktualisieren, um sie hier zu verwalten",
-        "readFailed": "Ladefehler",
-        "retry": "Wiederholen",
+        "readFailed": "Laden fehlgeschlagen",
+        "retry": "Erneut versuchen",
         "empty": "Für diesen Chat nicht eingerichtet",
         "cancel": "Abbrechen",
         "reconnect": "Neu verbinden",
@@ -20221,7 +20221,7 @@
           "connected": "Verbunden: {{count}}",
           "needsAuth_one": "{{count}} benötigt Anmeldung",
           "needsAuth_other": "{{count}} benötigen Anmeldung",
-          "failed": "Fehlgeschlagen: {{count}}",
+          "failed": "Fehler: {{count}}",
           "signingIn": "Anmeldung bei {{name}}"
         },
         "source": {

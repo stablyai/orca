@@ -20335,7 +20335,7 @@
           "failed": "Başarısız",
           "failedReason": "Başarısız: {{error}}",
           "needsAuth": "Oturum açılmalı",
-          "needsAuthAfterSend": "Oturum açılması gerekiyor. Burada oturum açmak için bir mesaj gönderin.",
+          "needsAuthAfterSend": "Oturum açılmalı. Burada oturum açmak için bir mesaj gönderin.",
           "pending": "Bağlanıyor…",
           "tools_one": "{{count}} araç",
           "tools_other": "{{count}} araç"
@@ -20366,8 +20366,8 @@
         "actionFailed": "İşlem gerçekleştirilemedi. Yeniden deneyin.",
         "summary": {
           "connected": "Bağlı: {{count}}",
-          "needsAuth_one": "Oturum açılmalı: {{count}}",
-          "needsAuth_other": "Oturum açılmalı: {{count}}",
+          "needsAuth_one": "{{count}} sunucuda oturum açılmalı",
+          "needsAuth_other": "{{count}} sunucuda oturum açılmalı",
           "failed": "Başarısız: {{count}}",
           "signingIn": "{{name}} için oturum açılıyor"
         },

@@ -737,7 +737,7 @@
         "connected": "Verbunden: {{count}}",
         "needsAuth_one": "{{count}} benötigt Anmeldung",
         "needsAuth_other": "{{count}} benötigen Anmeldung",
-        "failed": "Fehlgeschlagen: {{count}}"
+        "failed": "Fehler: {{count}}"
       },
       "pasteHint": "Wenn der Browser auf einer Seite landet, die nicht lädt, ihre Adresse kopieren und hier einfügen."
     }

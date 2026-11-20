@@ -730,7 +730,7 @@
       "summary": {
         "signingIn": "{{name}} にサインイン中",
         "connected": "接続済み: {{count}}",
-        "needsAuth_other": "サインインが必要: {{count}}",
+        "needsAuth_other": "{{count}} 件サインインが必要",
         "failed": "失敗: {{count}}"
       },
       "pasteHint": "ブラウザーが読み込めないページに移動したら、そのアドレスをコピーしてここに貼り付けてください。"
