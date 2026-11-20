@@ -45,8 +45,23 @@ describe('a host signed out of Orca', () => {
   const signedOut = { name: 'Ranger', slack: SLACK, webhooks: false, cloudSignedOut: true }
 
   it('refuses a Slack event rule before saving, saying why and how the owner signs in', () => {
+    expect(botEventTriggerRefusal({ ...signedOut, signInServer: null }, [MENTIONED])).toBe(
+      "This computer isn't signed in to Orca Cloud, and Slack events reach Ranger through Orca Cloud, so nothing was saved. Run `orca bot connectors --offer slack` to show your owner a Sign in line in this chat, then save it again once they say they're signed in."
+    )
+  })
+
+  it("keeps a headless server's terminal sign-in in view for an older host that doesn't say which it is", () => {
     expect(botEventTriggerRefusal(signedOut, [MENTIONED])).toBe(
-      "This computer is signed out of Orca, and Slack events reach Ranger through Orca Cloud, so nothing was saved. Run `orca bot connectors --offer slack` to show your owner a Sign in line in this chat, then save it again once they say they're signed in."
+      "This computer isn't signed in to Orca Cloud, and Slack events reach Ranger through Orca Cloud, so nothing was saved. Run `orca bot connectors --offer slack` to show your owner a Sign in line in this chat, then save it again once they say they're signed in. On a server with no Orca window, `orca auth login` on it signs it in."
+    )
+  })
+
+  it('names a headless server and the command its owner runs there', () => {
+    expect(botEventTriggerRefusal({ ...signedOut, signInServer: 'box1' }, [MENTIONED])).toBe(
+      "This Orca server (box1) isn't signed in to Orca Cloud, and Slack events reach Ranger through Orca Cloud, so nothing was saved. Run `orca bot connectors --offer slack` to show your owner a Sign in line in this chat, then save it again once they say they're signed in. Your owner can sign it in by running `orca auth login` in a terminal on box1 (`orca auth login --switch` if it says the server is already signed in), or with Sign in on Ranger's Connectors tab in Orca on their computer."
+    )
+    expect(wontFireNote({ ...signedOut, signInServer: 'box1' }, [MENTIONED])).toBe(
+      "won't fire until box1 signs in to Orca Cloud (slack.mentioned)"
     )
   })
 
@@ -59,7 +74,7 @@ describe('a host signed out of Orca', () => {
 
   it('notes a saved rule as paused by sign-in', () => {
     expect(wontFireNote(signedOut, [MENTIONED])).toBe(
-      "won't fire while signed out of Orca (slack.mentioned)"
+      "won't fire until this computer signs in to Orca Cloud (slack.mentioned)"
     )
   })
 })
