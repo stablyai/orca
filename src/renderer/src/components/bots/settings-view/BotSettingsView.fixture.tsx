@@ -1,4 +1,8 @@
 // A bot's settings view with real-shaped data: the root and every subpage in the panel host, the root at page width.
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Copy } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { withBotConnectorRuntime } from '@/lib/bot-connector-host-calls.test-fixture'
 import { botPackageName } from '../../../../../shared/bots/bot-share-status'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
@@ -299,4 +303,32 @@ export const rootFromLinkLongName = at('panel', null, 260, {
     ...fromLink.sharedFrom,
     sharedBy: 'Alexandria Catherine Montgomery-Whitfield'
   }
+})
+
+// The fixture frame adds 16px padding on each side of the panel.
+export const density280 = at('panel', null, 280 + 32)
+export const density353 = at('panel', null, 353 + 32)
+export const density480 = at('panel', null, 480 + 32)
+
+function HeaderWithDuplicate(): React.JSX.Element {
+  const [frame, setFrame] = useState<HTMLDivElement | null>(null)
+  const actions = frame?.querySelector('[data-slot="bot-settings-actions"]')
+  return (
+    <div ref={setFrame}>
+      {density280.render()}
+      {actions &&
+        createPortal(
+          <Button variant="outline" size="xs" className="h-7">
+            <Copy className="size-3.5" />
+            Duplicate
+          </Button>,
+          actions
+        )}
+    </div>
+  )
+}
+
+export const density280WithDuplicate = defineFixture({
+  ...density280,
+  render: () => <HeaderWithDuplicate />
 })

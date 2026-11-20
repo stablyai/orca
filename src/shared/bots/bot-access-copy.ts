@@ -45,6 +45,11 @@ export const BOT_ACCESS_COPY = {
     '{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.',
   controlMany:
     'They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.',
+  // A connector's own page: the warning under its Who can ask, in one line.
+  controlBrief: 'They can act as you here.',
+  controlBriefIfAdded: 'Anyone you add can act as you here.',
+  controlBriefOnHost: 'They can act as you on {{computer}}.',
+  controlBriefIfAddedOnHost: 'Anyone you add can act as you on {{computer}}.',
   reachHeading: 'What {{name}} can reach',
   reachComputer: 'Your files, commands and accounts on {{computer}}',
   reachComputerDetail: 'As you, as far as the permission below allows.',

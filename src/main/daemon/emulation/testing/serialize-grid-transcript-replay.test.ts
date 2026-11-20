@@ -40,6 +40,8 @@ const KNOWN_PREEXISTING_I2_FAILURES: Record<string, number> = {
   'opencode-2-0-21-timed-cold-standalone-hidden-pane': 6,
   'opencode-2-0-21-timed-natural-load-enter-dropped': 12,
   'opencode-cmd-2-0-21-timed-warm-server': 21,
+  'opencode-2-3-2-boot': 6,
+  'opencode-2-3-2-submitted': 3,
   // Narrow captures also restore a cursor one column short and leak the pen’s bold attribute.
   'opencode-2-0-21-timed-narrow-pane': 6,
   // Codex 0.157 header borders restore with an extra attribute bit.

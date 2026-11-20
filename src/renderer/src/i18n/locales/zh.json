@@ -25410,7 +25410,8 @@
       "when": "何时运行",
       "option": "机器人 · {{name}}",
       "channelMissing": "请输入接收结果的频道。",
-      "hostUnavailable": "这台电脑暂时无法承载新的自动化。请稍后重试。",
+      "hostUnavailable": "机器人所在的电脑暂时无法承载新的自动化。请稍后重试。",
+      "hostNeedsUpdate": "请更新 {host} 上的 Orca 服务器，它的机器人才能使用自动化。",
       "promptMissing": "请输入要做的事。",
       "deletedBot": "已删除的机器人",
       "fieldLabel": "机器人或项目",
@@ -27694,6 +27695,10 @@
       "controlNone": "你添加的任何人都能通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号。",
       "controlOne": "{{person}} 可以通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号。",
       "controlMany": "他们可以通过 {{name}}，以你的身份在 {{computer}} 上工作：运行命令、打开和修改文件，以及使用你已连接的账号。",
+      "controlBrief": "他们可以在这里以你的身份操作。",
+      "controlBriefIfAdded": "你添加的人可以在这里以你的身份操作。",
+      "controlBriefOnHost": "他们可以在{{computer}}上以你的身份操作。",
+      "controlBriefIfAddedOnHost": "你添加的人可以在{{computer}}上以你的身份操作。",
       "reachHeading": "{{name}} 可以访问什么",
       "reachComputer": "你在 {{computer}} 上的文件、命令和账号",
       "reachComputerDetail": "以你的身份操作，范围由下方权限决定。",
@@ -28360,5 +28365,8 @@
     "includeRecentLogsRedacted": "包含近期日志（已脱敏）",
     "details": "详情",
     "sending": "正在发送…"
+  },
+  "agentCliUpdate": {
+    "thisComputer": "此计算机"
   }
 }

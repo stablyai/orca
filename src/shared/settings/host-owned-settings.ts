@@ -1,13 +1,23 @@
 import * as z from 'zod'
 import type { GlobalSettings } from './global-settings-types'
+import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/native-chat-idle-stop'
 
 /** Settings a host reads for its own work, so Settings edits them on the host its picker names. */
 const HostOwnedSettingsSchema = z.object({
   branchPrefix: z.enum(['git-username', 'custom', 'none']),
   branchPrefixCustom: z.string(),
+  nestWorkspaces: z.boolean(),
+  refreshLocalBaseRefOnWorktreeCreate: z.boolean(),
+  localBaseRefSuggestionDismissed: z.boolean(),
   codexShareHistoryAcrossAccounts: z.boolean(),
   deleteChatHistoryWithWorkspace: z.boolean(),
-  nativeChatAutoContinueAfterUsageLimit: z.boolean()
+  nativeChatAutoContinueAfterUsageLimit: z.boolean(),
+  nativeChatIdleStopMinutes: z.number().min(0),
+  nativeChatInheritShellEnvironment: z.boolean(),
+  // Names are filtered when a chat starts (normalizeNativeChatShellEnvironmentVariables).
+  nativeChatShellEnvironmentVariables: z.array(z.string()),
+  // Launches the host starts itself (CLI, orchestration workers); desktop launches send their own.
+  agentDefaultSurface: z.enum(['chat', 'terminal'])
 } satisfies { [K in keyof GlobalSettings]?: z.ZodType<NonNullable<GlobalSettings[K]>> })
 
 export type HostOwnedSettings = z.output<typeof HostOwnedSettingsSchema>
@@ -17,9 +27,16 @@ export type HostOwnedSettingKey = keyof HostOwnedSettings
 const HOST_OWNED_SETTING_FALLBACKS: HostOwnedSettings = {
   branchPrefix: 'git-username',
   branchPrefixCustom: '',
+  nestWorkspaces: true,
+  refreshLocalBaseRefOnWorktreeCreate: false,
+  localBaseRefSuggestionDismissed: false,
   codexShareHistoryAcrossAccounts: true,
   deleteChatHistoryWithWorkspace: false,
-  nativeChatAutoContinueAfterUsageLimit: false
+  nativeChatAutoContinueAfterUsageLimit: false,
+  nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
+  nativeChatInheritShellEnvironment: true,
+  nativeChatShellEnvironmentVariables: [],
+  agentDefaultSurface: 'terminal'
 }
 
 export const HOST_OWNED_SETTING_KEYS = HostOwnedSettingsSchema.keyof().options

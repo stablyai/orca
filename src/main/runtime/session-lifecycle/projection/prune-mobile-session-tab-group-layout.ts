@@ -13,7 +13,7 @@ import type {
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { mergeMobileSessionTabGroups } from './mobile-session-tab-merge'
 import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
-import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
+import { projectTabsWithBotHomePins } from './bot-home-pinned-projection'
 import { inlineRuntimeBrowserTabFavicons } from './browser-tab-favicon-data-urls'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
@@ -93,7 +93,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       (sessionId) => this.structuredConversationTabName(snapshot.worktree, sessionId),
       structuredConversationForked
     )
-    return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
+    return projectTabsWithBotHomePins(this.store, snapshot, this.getMobileSessionProjectionHost())
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {

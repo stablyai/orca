@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { Trans } from 'react-i18next'
 import type { AppState } from '@/store/types'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { LocalBaseRefUpdateSuggestion } from '../../../../../../shared/worktree/base-refs/base-ref-drift-types'
 import { Button } from '../../../ui/button'
 import {
@@ -15,10 +16,18 @@ type SuggestionToastDeps = {
   getSettings: () => AppState['settings']
   openSettingsPage: AppState['openSettingsPage']
   openSettingsTarget: AppState['openSettingsTarget']
+  /** The host whose Settings own the switch; absent means this app. */
+  settingsHostScope?: RuntimeClientTarget
 }
 
-function toastId(suggestion: LocalBaseRefUpdateSuggestion): string {
-  return `local-base-ref-update-suggestion:${suggestion.baseRef}:${suggestion.localBranch}`
+function toastId(
+  suggestion: LocalBaseRefUpdateSuggestion,
+  settingsHostScope?: RuntimeClientTarget
+): string {
+  // One per settings owner: a server's prompt must not take over this app's, since each saves to its own host.
+  const owner =
+    settingsHostScope?.kind === 'environment' ? `:${settingsHostScope.environmentId}` : ''
+  return `local-base-ref-update-suggestion:${suggestion.baseRef}:${suggestion.localBranch}${owner}`
 }
 
 const inspectSettingsDismissals = new Set<string>()
@@ -32,7 +41,8 @@ function SuggestionToastBody({
   deps: SuggestionToastDeps
 }): React.JSX.Element {
   const t = useTranslate()
-  const { updateSettings, getSettings, openSettingsPage, openSettingsTarget } = deps
+  const { updateSettings, getSettings, openSettingsPage, openSettingsTarget, settingsHostScope } =
+    deps
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle(t)
 
   const turnOn = (): void => {
@@ -41,7 +51,7 @@ function SuggestionToastBody({
         if (getSettings()?.refreshLocalBaseRefOnWorktreeCreate !== true) {
           throw new Error('settings_not_persisted')
         }
-        toast.dismiss(toastId(suggestion))
+        toast.dismiss(toastId(suggestion, deps.settingsHostScope))
         toast.success(
           t(
             'auto.components.sidebar.local.base.ref.suggestion.toast.670864ab52',
@@ -68,12 +78,13 @@ function SuggestionToastBody({
   }
 
   const openSetting = (): void => {
-    const id = toastId(suggestion)
+    const id = toastId(suggestion, deps.settingsHostScope)
     openSettingsPage()
     openSettingsTarget({
       pane: 'git',
       repoId: null,
-      sectionId: KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID
+      sectionId: KEEP_LOCAL_MAIN_UP_TO_DATE_SECTION_ID,
+      ...(settingsHostScope ? { hostScope: settingsHostScope } : {})
     })
     // Opening Settings is informational; suppress Sonner’s decline recording for this dismissal.
     inspectSettingsDismissals.add(id)
@@ -139,13 +150,13 @@ export function showLocalBaseRefUpdateSuggestionToast(
       { value0: suggestion.localBranch, value1: suggestion.baseRef }
     ),
     {
-      id: toastId(suggestion),
+      id: toastId(suggestion, deps.settingsHostScope),
       description: <SuggestionToastBody suggestion={suggestion} deps={deps} />,
       duration: Infinity,
       dismissible: true,
       // Close/swipe uses onDismiss; custom body actions handle their own dismissal.
       onDismiss: () => {
-        if (inspectSettingsDismissals.delete(toastId(suggestion))) {
+        if (inspectSettingsDismissals.delete(toastId(suggestion, deps.settingsHostScope))) {
           return
         }
         if (deps.getSettings()?.refreshLocalBaseRefOnWorktreeCreate === true) {
