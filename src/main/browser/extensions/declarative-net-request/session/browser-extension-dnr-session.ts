@@ -307,14 +307,8 @@ export async function clearBrowserExtensionDnrSessionRules(
   session: Electron.Session,
   extensionId: string
 ): Promise<void> {
-  const rules = runtimes.get(session)?.extensions.get(extensionId)?.rules
-  // Why wait first: the rules restored at load are only listed once that load ran.
-  await rules?.enqueue(() => undefined)
-  await rules?.updateRules(
-    'session',
-    rules.getRules('session').map((rule) => rule.id),
-    []
-  )
+  // Why one queued step: a call the extension makes meanwhile must not see the old rules.
+  await runtimes.get(session)?.extensions.get(extensionId)?.rules.updateRules('session', 'all', [])
 }
 
 /** Startup waits for an extension's rules with its other restored state. */

@@ -290,10 +290,11 @@ export class DnrExtensionRules {
   }
 
   /** updateDynamicRules / updateSessionRules: removals first, then additions, all or nothing. */
-  updateRules(scope: DnrRuleScope, removeIds: number[], addRules: unknown[]): Promise<void> {
+  /** `removeIds` 'all' empties the scope inside the same queued step (a clean start). */
+  updateRules(scope: DnrRuleScope, removeIds: number[] | 'all', addRules: unknown[]) {
     return this.enqueue(async () => {
-      const remove = new Set(removeIds)
-      const kept = this.scoped[scope].rules.filter((rule) => !remove.has(rule.id))
+      const remove = removeIds === 'all' ? null : new Set(removeIds)
+      const kept = remove ? this.scoped[scope].rules.filter((rule) => !remove.has(rule.id)) : []
       const candidates = [...kept, ...addRules]
       const added = readableDnrRules(addRules)
       const result = await buildDnrRules(candidates, this.extension.id, { kind: scope }, 'error')

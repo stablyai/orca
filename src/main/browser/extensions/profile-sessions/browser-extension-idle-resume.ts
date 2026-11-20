@@ -53,9 +53,19 @@ export async function settleBrowserExtensionResume(
     }
     console.warn(`[browser-extensions] Could not resume ${extension.id}; starting it clean:`, error)
     dropBrowserExtensionIdleState({ profileId, extensionId: extension.id })
-    await Promise.all([
+    // Why settled: onStartup must not run while either cleanup could still change what it sees.
+    const cleanup = await Promise.allSettled([
       restartBrowserExtensionContentScripts(sess, profileId, extension, restoreTimeoutMs),
       clearBrowserExtensionDnrSessionRules(sess, extension.id)
-    ]).finally(() => fireRuntimeLifecycleEvents(sess, profileId, extension, 'startup'))
+    ])
+    fireRuntimeLifecycleEvents(sess, profileId, extension, 'startup')
+    for (const result of cleanup) {
+      if (result.status === 'rejected') {
+        console.warn(
+          `[browser-extensions] Clean start of ${extension.id} was partial:`,
+          result.reason
+        )
+      }
+    }
   }
 }
