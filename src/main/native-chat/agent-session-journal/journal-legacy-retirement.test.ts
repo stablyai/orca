@@ -713,7 +713,11 @@ const savedRetirement = (db: Database.Database) =>
 it('retires a journal v1.4.219 wrote, with or without its Stop pauses, upgraded or not', async () => {
   const shapes = [
     (filename: string) => v1_4_219Journal(filename, 'unopened', false),
-    (filename: string) => v1_4_219Journal(filename, 'unopened', true),
+    // As Stop left it: a pause and the cards still waiting.
+    (filename: string) => {
+      v1_4_219Journal(filename, 'unopened', true)
+      queue(filename, 'unopened', 'queued before Stop in v1.4.219')
+    },
     // A later build's writable open upgrades the rest of the file, never the pause table.
     (filename: string) => {
       v1_4_219Journal(filename, 'unopened', true)
@@ -782,7 +786,13 @@ it('retires a journal with the queue sender column, counting it against what a k
 
 it('proves once more an inventory refusal saved before historical shapes were accepted', async () => {
   const refusedAs = async (refusal: Record<string, unknown>) => {
-    const refused = await profile()
+    // The journal those builds refused: v1.4.219's, with a pause and a card waiting.
+    const refused = await profile({
+      original: (filename) => {
+        v1_4_219Journal(filename, 'unopened', true)
+        queue(filename, 'unopened', 'queued before Stop in v1.4.219')
+      }
+    })
     const proof = JSON.stringify(await readJournalLegacySourceReceipt(refused.filename))
     const store = await legacyDestinationMain(journalDomainDatabasePath(refused.root))
     refused.db
@@ -793,7 +803,7 @@ it('proves once more an inventory refusal saved before historical shapes were ac
       )
     return refused
   }
-  // As v1.4.265/266 saved them.
+  // As builds before this one saved them.
   for (const reason of ['source-inventory', 'source-recovery']) {
     const earlier = await refusedAs({ reason })
     await earlier.launch().run()
@@ -803,6 +813,8 @@ it('proves once more an inventory refusal saved before historical shapes were ac
   // Saved under this inventory check, or for content: honoured without a proof.
   for (const refusal of [
     { reason: 'source-inventory', inventory: 2 },
+    // A later build's own inventory check refused it.
+    { reason: 'source-inventory', inventory: 3 },
     { reason: 'source-oversize' }
   ]) {
     const kept = await refusedAs(refusal)
