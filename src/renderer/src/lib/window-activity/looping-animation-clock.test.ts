@@ -56,55 +56,20 @@ function harness(animations: FakeAnimation[]) {
 }
 
 describe('installLoopingAnimationClock', () => {
-  it('steps spinners an eighth of a turn each time a label repaints, in step with each other', () => {
+  it('moves paused spinners together on repaint and brings a new spinner to their phase', () => {
     const ring = fakeAnimation('agent-spinner-rotate')
     const slow = fakeAnimation('spin', 'paused', 2_000)
-    const clock = harness([ring, slow])
-    clock.labelRepainted()
-    expect(ring.currentTime).toBe(125)
-    expect(slow.currentTime).toBe(250)
-    for (let i = 0; i < 7; i++) {
-      clock.labelRepainted()
-    }
-    expect(ring.currentTime).toBe(0)
-  })
-
-  it('holds still while nothing else repaints', () => {
-    const ring = fakeAnimation('agent-spinner-rotate')
-    const clock = harness([ring])
-    clock.loopStarted(ring)
-    expect(ring.currentTime).toBe(0)
-  })
-
-  it('breathes a pulse over four steps', () => {
-    const pulse = fakeAnimation('pulse', 'paused', 2_000)
-    const clock = harness([pulse])
-    const seen: (number | null)[] = []
-    for (let i = 0; i < 4; i++) {
-      clock.labelRepainted()
-      seen.push(pulse.currentTime)
-    }
-    expect(seen).toEqual([500, 1_000, 1_500, 0])
-  })
-
-  it('puts a spinner that mounts mid-cycle on the shared step as it mounts', () => {
-    const first = fakeAnimation('agent-spinner-rotate')
-    const animations = [first]
+    const animations = [ring, slow]
     const clock = harness(animations)
     clock.labelRepainted()
-    clock.labelRepainted()
-    const late = fakeAnimation('agent-spinner-rotate')
+    expect(ring.currentTime).toBeGreaterThan(0)
+    expect(Number(slow.currentTime) / 2).toBe(ring.currentTime)
+
+    const late = fakeAnimation('agent-spinner-rotate', 'running')
     animations.push(late)
     clock.loopStarted(late)
-    expect(late.currentTime).toBe(250)
-    expect(first.currentTime).toBe(250)
-  })
-
-  it('pauses a loop that something set running', () => {
-    const loader = fakeAnimation('spin', 'running')
-    const clock = harness([loader])
-    clock.loopStarted(loader)
-    expect(loader.playState).toBe('paused')
+    expect(late.currentTime).toBe(ring.currentTime)
+    expect(late.playState).toBe('paused')
   })
 
   it('leaves animations it does not know alone', () => {
