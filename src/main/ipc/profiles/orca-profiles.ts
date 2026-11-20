@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { ipcMain, type WebContents } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import {
@@ -174,6 +175,9 @@ export function registerOrcaProfileHandlers(
         return { status: 'already-active' }
       }
 
+      const selectProfile = (): void => {
+        setActiveOrcaProfile(profileId)
+      }
       const restart = await prepareAppRelaunch('profile-switch')
       try {
         // Flush the source before switching the startup index.
@@ -181,12 +185,13 @@ export function registerOrcaProfileHandlers(
         if (restart) {
           await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
           restart.signal.throwIfAborted()
-        }
-        setActiveOrcaProfile(profileId)
-        if (!restart) {
+          await delay(150)
+          await restart.quit(selectProfile)
+        } else {
+          selectProfile()
           await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
+          scheduleProfileRelaunch('profile-switch', event.sender, undefined)
         }
-        scheduleProfileRelaunch('profile-switch', event.sender, restart)
       } catch (error) {
         restart?.cancel()
         throw error
@@ -211,6 +216,7 @@ export function registerOrcaProfileHandlers(
         const restart = await prepareAppRelaunch('profile-transfer')
         let mustRestart = false
         try {
+          restart?.protectProfileMove()
           const result = await transferActiveProfileProject(
             args,
             getProfileUserDataPath(),

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { electron, prepare, state } = vi.hoisted(() => ({
+const { electron, prepare, state, getAllWindows } = vi.hoisted(() => ({
   electron: {
     isPackaged: true,
     quit: vi.fn(),
@@ -9,10 +9,14 @@ const { electron, prepare, state } = vi.hoisted(() => ({
     relaunch: vi.fn()
   },
   prepare: vi.fn(),
+  getAllWindows: vi.fn<() => { isDestroyed(): boolean; destroy(): void }[]>(() => []),
   state: { isQuitting: false }
 }))
 
-vi.mock('electron', () => ({ app: Object.assign(new EventEmitter(), electron) }))
+vi.mock('electron', () => ({
+  app: Object.assign(new EventEmitter(), electron),
+  BrowserWindow: { getAllWindows }
+}))
 vi.mock('../main-process-state', () => ({ mainProcessState: state }))
 vi.mock('../../updater/linux-package/appimage-runtime-identity', () => ({
   isEphemeralAppImageRuntime: () => electron.isPackaged
@@ -39,18 +43,26 @@ describe('process relaunch', () => {
     const lifecycle = await import('./process-relaunch')
     const first = launcher()
     const second = launcher()
+    let selectedProfile = 'source'
+    const selectTarget = (): void => {
+      selectedProfile = 'target'
+    }
+    second.commit.mockImplementationOnce(async () => {
+      expect(selectedProfile).toBe('target')
+    })
     prepare.mockResolvedValueOnce(first).mockResolvedValueOnce(second)
     const restart = await lifecycle.prepareProcessRelaunch({ args: ['--first'] })
-    const quitting = restart?.quit()
+    const quitting = restart?.quit(selectTarget)
     lifecycle.cancelProcessRelaunch()
     await expect(quitting).rejects.toThrow('Orca restart was canceled.')
     await lifecycle.finishGracefulAppImageRelaunch()
     expect(first.commit).not.toHaveBeenCalled()
+    expect(selectedProfile).toBe('source')
     expect(electron.exit).not.toHaveBeenCalled()
 
     const retry = await lifecycle.prepareProcessRelaunch({ args: ['--retry', 'new file'] })
     expect(prepare).toHaveBeenLastCalledWith(['--retry', 'new file'], expect.any(AbortSignal))
-    const retryQuit = retry?.quit()
+    const retryQuit = retry?.quit(selectTarget)
     await lifecycle.finishGracefulAppImageRelaunch()
     await lifecycle.finishGracefulAppImageRelaunch()
     await retryQuit
@@ -103,6 +115,48 @@ describe('process relaunch', () => {
     expect(stale.cancel).toHaveBeenCalled()
     expect(stale.commit).not.toHaveBeenCalled()
     expect(electron.relaunch).not.toHaveBeenCalled()
+  })
+
+  it('preserves and finishes an active profile move restart through quit attempts', async () => {
+    const lifecycle = await import('./process-relaunch')
+    const replacement = launcher()
+    prepare.mockResolvedValueOnce(replacement)
+    const restart = await lifecycle.prepareProcessRelaunch()
+    restart?.protectProfileMove()
+
+    const event = {
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true
+      }
+    }
+    expect(lifecycle.skipBeforeQuitForRelaunch(event)).toBe(true)
+    expect(event.defaultPrevented).toBe(true)
+    expect(replacement.commit).not.toHaveBeenCalled()
+
+    let desktopClosed = false
+    getAllWindows.mockReturnValueOnce([
+      {
+        isDestroyed: () => desktopClosed,
+        destroy: () => {
+          desktopClosed = true
+        }
+      }
+    ])
+    electron.quit.mockImplementation(() => {
+      app.emit('before-quit', { defaultPrevented: false })
+      if (!desktopClosed) {
+        lifecycle.cancelProcessRelaunch()
+      }
+    })
+    const quitting = restart?.quit()
+    expect(desktopClosed).toBe(true)
+    expect(replacement.commit).not.toHaveBeenCalled()
+
+    await lifecycle.finishGracefulAppImageRelaunch()
+    await expect(quitting).resolves.toBeUndefined()
+    expect(replacement.commit).toHaveBeenCalled()
+    expect(electron.exit).toHaveBeenCalledWith(0)
   })
 
   it('keeps the app open after failed preparation and can subsequently use a direct exit', async () => {

@@ -1,4 +1,4 @@
-import { app, type Event } from 'electron'
+import { app, BrowserWindow, type Event } from 'electron'
 import { isEphemeralAppImageRuntime } from '../../updater/linux-package/appimage-runtime-identity'
 import { mainProcessState } from '../main-process-state'
 import { prepareAppImageRelaunch, type PreparedAppRelaunch } from './appimage-relaunch'
@@ -8,6 +8,8 @@ import { quitProcess } from './process-quit-request'
 type RelaunchAttempt = {
   abort: AbortController
   phase: 'preparing' | 'quitting' | 'committing'
+  profileMove: boolean
+  beforeCommit?: () => void
   launcher?: PreparedAppRelaunch
   quitResult?: PromiseWithResolvers<void>
 }
@@ -27,7 +29,7 @@ function cancel(
 }
 
 export function cancelProcessRelaunch(): void {
-  if (active && active.phase !== 'committing' && !isHostShuttingDown()) {
+  if (active && !active.profileMove && active.phase !== 'committing' && !isHostShuttingDown()) {
     cancel(active)
   }
 }
@@ -35,7 +37,7 @@ export function cancelProcessRelaunch(): void {
 export function skipBeforeQuitForRelaunch(
   event: Pick<Event, 'defaultPrevented' | 'preventDefault'>
 ): boolean {
-  if (active?.phase === 'committing') {
+  if (active?.phase === 'committing' || (active?.phase === 'preparing' && active.profileMove)) {
     event.preventDefault()
     return true
   }
@@ -47,7 +49,8 @@ export function skipBeforeQuitForRelaunch(
 
 export type AppImageProcessRelaunch = {
   readonly signal: AbortSignal
-  quit(): Promise<void>
+  protectProfileMove(): void
+  quit(beforeCommit?: () => void): Promise<void>
   exit(code: number, beforeExit?: () => void | Promise<void>): Promise<void>
   cancel(): void
 }
@@ -65,7 +68,11 @@ async function prepareAppImageProcessRelaunch(args: string[]): Promise<AppImageP
   if (active || mainProcessState.isQuitting || isHostShuttingDown()) {
     throw new Error('Orca is already restarting or quitting.')
   }
-  const attempt: RelaunchAttempt = { abort: new AbortController(), phase: 'preparing' }
+  const attempt: RelaunchAttempt = {
+    abort: new AbortController(),
+    phase: 'preparing',
+    profileMove: false
+  }
   active = attempt
   try {
     const launcher = await prepareAppImageRelaunch(args, attempt.abort.signal)
@@ -73,17 +80,24 @@ async function prepareAppImageProcessRelaunch(args: string[]): Promise<AppImageP
     attempt.abort.signal.throwIfAborted()
     return {
       signal: attempt.abort.signal,
+      protectProfileMove() {
+        attempt.abort.signal.throwIfAborted()
+        attempt.profileMove = true
+      },
       cancel() {
         if (attempt.phase === 'preparing') {
           cancel(attempt)
         }
       },
-      async quit() {
+      async quit(beforeCommit) {
         attempt.abort.signal.throwIfAborted()
         if (attempt.phase !== 'preparing') {
           return attempt.quitResult?.promise
         }
         attempt.phase = 'quitting'
+        if (beforeCommit) {
+          attempt.beforeCommit = beforeCommit
+        }
         const result = Promise.withResolvers<void>()
         attempt.quitResult = result
         // app.quit() emits before-quit synchronously. Window vetoes arrive through onQuitAborted.
@@ -94,7 +108,17 @@ async function prepareAppImageProcessRelaunch(args: string[]): Promise<AppImageP
         app.prependOnceListener('before-quit', captureQuitEvent)
         try {
           quitProcess()
-          if (!quitEvent || quitEvent.defaultPrevented) {
+          if (attempt.profileMove) {
+            // The preload checkpoint is complete and the old profile writer cannot resume.
+            for (const window of BrowserWindow.getAllWindows()) {
+              if (!window.isDestroyed()) {
+                window.destroy()
+              }
+            }
+            if (!isHostShuttingDown()) {
+              quitProcess()
+            }
+          } else if (!quitEvent || quitEvent.defaultPrevented) {
             mainProcessState.isQuitting = false
             cancel(attempt)
           }
@@ -142,9 +166,11 @@ export async function finishGracefulAppImageRelaunch(): Promise<void> {
   }
   attempt.phase = 'committing'
   try {
+    attempt.beforeCommit?.()
     await attempt.launcher?.commit()
     attempt.quitResult?.resolve()
   } catch (error) {
+    attempt.launcher?.cancel()
     console.error('[app] Committed AppImage restart failed. Reopen Orca manually.', error)
     await attempt.launcher?.reportFailure(error)
     attempt.quitResult?.reject(error)
