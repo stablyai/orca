@@ -20,6 +20,7 @@ import { BotHostSignInButton } from '../BotHostSignInButton'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { botLinearWorkspaces, type Bot } from '../../../../../shared/bot-types'
 import type { ConnectorLinearWorkspace } from '../../../../../shared/connector-bot-linear-contract'
+import { signedOutHere } from '../bot-host-copy'
 import { BOT_SLACK_DESKTOP_ERRORS } from '../../../../../shared/connector-bot-slack-contract'
 import { botErrorMessage } from '../bot-presentation'
 import {
@@ -179,7 +180,7 @@ export function BotLinearSetupFlow({
 
   // This computer's sign-in lapsed while open: the same ask, then setup again. A server's failed
   // step signs in that server instead.
-  if (step.kind === 'failed' && step.code === BOT_SLACK_DESKTOP_ERRORS.signedOut && !hostName) {
+  if (step.kind === 'failed' && signedOutHere(step, hostName)) {
     return (
       <OrcaCloudSignInDialogBody
         title={title}

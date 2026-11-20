@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { useBots } from '@/lib/bot-catalog'
+import { useBotHostConnectorStatus, useCardBot } from '@/lib/bot-catalog'
 import { useBotGitHub } from '@/lib/bot-github-state'
 import { slackTeamState, useBotSlack } from '@/lib/bot-slack-state'
 import { connectorDescription } from '../bots/AddConnectorDialog'
@@ -239,11 +239,15 @@ function ServerSignInOffer({
   const t = useTranslate()
   const answering = useNativeChatOffer(bot.id, messageId)
   const account = useBotHostOrcaAccount(bot.hostId)
+  // The host's own fact, as its CLI and the phone read it: events wait while its connector is signed out.
+  const connector = useBotHostConnectorStatus(bot.hostId)
   // An Orca that can't say its sign-in, or can't sign in, keeps its own line.
   if (!account || account.state === 'unconfigured') {
     return <p className="text-sm text-chat-foreground-faint">{fallback}</p>
   }
-  if (account.state === 'signed-in' || answering.sent) {
+  const signedIn =
+    account.state === 'signed-in' && connector !== 'signed-out' && connector !== 'needs-sign-in'
+  if (signedIn || answering.sent) {
     return <SignedInLine answering={answering} />
   }
   return (
@@ -253,7 +257,11 @@ function ServerSignInOffer({
         hostId={bot.hostId}
         host={host}
         bot={bot}
-        label={t('bots.host.signIn.start', 'Sign in on {{host}}', { host })}
+        label={
+          account.state === 'signed-out'
+            ? t('bots.host.signIn.start', 'Sign in on {{host}}', { host })
+            : t('bots.host.signIn.again', 'Sign {{host}} in again', { host })
+        }
         firstSignIn={account.state === 'signed-out'}
       />
     </div>
@@ -270,7 +278,7 @@ export function NativeChatConnectorOfferCard({
   /** The host's line, for a bot this window doesn't list. */
   fallback: string
 }): React.JSX.Element {
-  const bot = useBots().find((entry) => entry.id === offer.botId)
+  const { bot } = useCardBot(offer.botId)
   const host = useBotHostLabel(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID)
   if (!bot) {
     return <p className="text-sm text-chat-foreground-faint">{fallback}</p>

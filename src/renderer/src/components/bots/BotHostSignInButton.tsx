@@ -4,7 +4,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useBotHostLabel } from './use-bot-host-label'
 import { startBotHostSignIn } from '@/lib/bot-host-orca-account'
-import { showSignInBesidePage } from './BotConnectorsHostNotice'
+import { openBotConnectorsTab } from './bot-settings-open'
 import type { Bot } from '../../../../shared/bot-types'
 
 /**
@@ -27,7 +27,7 @@ export function BotHostSignInButton({
       <Button
         onClick={() => {
           onClose()
-          showSignInBesidePage(bot.hostId, bot)
+          openBotConnectorsTab(bot)
           void startBotHostSignIn(bot.hostId, bot)
         }}
       >

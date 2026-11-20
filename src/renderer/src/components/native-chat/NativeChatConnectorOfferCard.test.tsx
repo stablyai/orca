@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({ bots: new Array<Bot>(), start: vi.fn(), update
 vi.mock('@/lib/bot-catalog', () => ({
   useBots: () => mocks.bots,
   updateBot: mocks.updateBot,
+  useBotHostConnectorStatus: () => undefined,
   useCardBot: (id: string) => ({
     bot: mocks.bots.find((bot: { id: string }) => bot.id === id) ?? null,
     ref: { hostId: 'local', id }
@@ -147,7 +148,7 @@ describe('the Sign in card for a host signed out of Orca', () => {
     }
   })
 
-  it("leaves a paired server's sign-in to the server: its line, no check and no Continue", () => {
+  it("keeps a paired server's own line while it hasn't said its sign-in: no check and no Continue", () => {
     const initial = useAppStore.getState()
     useAppStore.setState({ orcaProfileAuthStatus: ORCA_CONNECTED })
     mocks.bots = [
