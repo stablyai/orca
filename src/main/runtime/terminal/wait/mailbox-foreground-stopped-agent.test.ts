@@ -92,4 +92,9 @@ it("an older daemon's rows name a resumed native install of the agent by its ver
   // `claude "Explain --print"` as ps flattens it.
   const flattened = [rows[0], { ...rows[1], command: `${rows[1].command} Explain --print` }]
   await expect(judgeLegacyMailboxRows(flattened, 100, 'agent', 'claude')).resolves.toBe('agent')
+  const spaced = [
+    rows[0],
+    { ...rows[1], command: '/Users/Alice Smith/.local/share/claude/versions/2.1.316' }
+  ]
+  await expect(judgeLegacyMailboxRows(spaced, 100, 'agent', 'claude')).resolves.toBe('agent')
 })

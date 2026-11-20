@@ -41,5 +41,8 @@ export async function judgeLegacyMailboxRows(
     onAgent?.(agent ?? found, startedAtMs === null ? undefined : { pid: agentRow.pid, startedAtMs })
     return 'agent'
   }
-  return verdict === 'agent' ? otherProgram(findStoppedAgents(rows, group), agent) : verdict
+  // Why the old verdict otherwise: ps text can hide the agent (a space in its path), and holding on that never releases.
+  return verdict === 'agent' && otherProgram(findStoppedAgents(rows, group), agent) === 'non-shell'
+    ? 'non-shell'
+    : verdict
 }
