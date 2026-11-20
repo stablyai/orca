@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { Worker } from 'node:worker_threads'
+import { WorkerThreadChildOutput } from './worker-thread-child-output'
 import { assertWslNotLatchedAbsent } from '@orca/process-host/wsl-not-installed-latch'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../worker-threads/lazy-worker-thread-host'
@@ -75,12 +76,13 @@ export class WorkerThreadChildProcess extends EventEmitter {
   ownedGroupStopping = false
   ownedGroupTerminated = false
   closed = false
-  pid: number | undefined = undefined
   exitCode: number | null = null
   signalCode: NodeJS.Signals | null = null
   readonly stdin: WorkerThreadChildStdin
-  readonly stdout = new EventEmitter()
-  readonly stderr = new EventEmitter()
+  readonly stdout = new WorkerThreadChildOutput()
+  readonly stderr = new WorkerThreadChildOutput()
+  // Not an own property until spawn: an own undefined pid means a failed Node spawn, but this child learns its pid late and is killed by id.
+  declare pid: number | undefined
 
   constructor(
     readonly id: number,
@@ -131,8 +133,7 @@ export class WorkerThreadChildProcess extends EventEmitter {
       case 'stdout':
       case 'stderr':
         try {
-          this[event.type].emit(
-            'data',
+          this[event.type].push(
             Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
           )
         } finally {
@@ -159,6 +160,8 @@ export class WorkerThreadChildProcess extends EventEmitter {
         return
       case 'close':
         this.closed = true
+        this.stdout.flush()
+        this.stderr.flush()
         this.emit('close', event.code, event.signal)
     }
   }
