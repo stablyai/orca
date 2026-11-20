@@ -144,7 +144,8 @@ function normalizeStdio(stdio: SpawnOptions['stdio']): StdioSlot[] {
 
 // execvp's lookup, unnormalized so symlinks and `..` resolve as the kernel does.
 function onSearchPath(file: string, options: Pick<SpawnOptions, 'cwd' | 'env'>): boolean {
-  const cwd = options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd
+  const cwd =
+    typeof options.cwd === 'string' ? options.cwd : options.cwd && fileURLToPath(options.cwd)
   const inCwd = (path: string): string =>
     path.startsWith('/') || cwd === undefined ? path : `${cwd}/${path}`
   if (file.includes('/')) {
