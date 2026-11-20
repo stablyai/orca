@@ -279,7 +279,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
-        taskId: args.taskId,
+        title: args.db.getTask(args.taskId)?.display_name || `worker-${args.taskId}`,
         effects: args.effects
       })
       onTerminalCreation(terminal)

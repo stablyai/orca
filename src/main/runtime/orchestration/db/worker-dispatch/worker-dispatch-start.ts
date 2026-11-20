@@ -24,6 +24,7 @@ export function createStartingWorkerDispatch(
     taskCreatedByProcessIncarnation?: string
     taskCreatedByRunGeneration?: number
     taskTitle?: string
+    taskDisplayName?: string
     taskDeps?: string[]
     taskParentId?: string
     startOptions: unknown
@@ -104,6 +105,7 @@ export function createStartingWorkerDispatch(
               id: params.adoptTaskId,
               spec: params.taskSpec,
               taskTitle: params.taskTitle,
+              displayName: params.taskDisplayName,
               deps: params.taskDeps,
               parentId: params.taskParentId,
               createdByTerminalHandle: params.taskCreatedByTerminalHandle,
