@@ -24,7 +24,12 @@ import { selectIsSleepingWorktree } from '../../workspace-actions/sleep/use-work
 import { getEphemeralVmHostState } from '../../../../../../shared/execution-host/execution-host-health'
 import { getVmStateLabel, VmStateIcon, WorktreeCardVmStateBadge } from './WorktreeCardVmStateBadge'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
-import { getReviewLabel, ReviewIcon } from '../review/worktree-review-presentation'
+import {
+  getReviewLabel,
+  ReviewIcon,
+  STALE_REVIEW_SHIMMER
+} from '../review/worktree-review-presentation'
+import { handleShimmerAnimationStart } from '@/components/ui/shared-animation-clock'
 import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import {
   WorkspaceReviewChecksIndicator,
@@ -200,11 +205,13 @@ export function WorktreeCardStatusSlot({
   // The lane holds the card's only unread dot (agent rows and the folded pill draw none), so it
   // stays on over working/permission glyphs; the corner ring keeps it legible against them.
   const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus
-  const reviewStaleRef = isReviewStale ? observeOffscreenAnimation : undefined
+  const reviewStaleProps = isReviewStale
+    ? { ref: observeOffscreenAnimation, onAnimationStart: handleShimmerAnimationStart }
+    : undefined
   const reviewStatusIconClassName = cn(
     compactReviewAndBranchStatusIconClassName,
     // Same last-known treatment as the hover card's reference rows.
-    isReviewStale && 'shimmer shimmer-duration-2400 shimmer-steps-30'
+    isReviewStale && STALE_REVIEW_SHIMMER
   )
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const sleepingStatusIcon = <Moon className={sleepingStatusIconClassName} aria-hidden="true" />
@@ -215,7 +222,7 @@ export function WorktreeCardStatusSlot({
     </span>
   ) : canShowReviewStatus && (collectionChecks || prDisplay) ? (
     <span
-      ref={reviewStaleRef}
+      {...reviewStaleProps}
       className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}
     >
       {collectionChecks ? (
@@ -304,7 +311,7 @@ export function WorktreeCardStatusSlot({
             {newCardStyle ? (
               showStatus && canShowReviewStatus && prDisplay ? (
                 <span
-                  ref={reviewStaleRef}
+                  {...reviewStaleProps}
                   className="inline-flex size-5 items-center justify-center p-0.5"
                 >
                   <ReviewIcon
