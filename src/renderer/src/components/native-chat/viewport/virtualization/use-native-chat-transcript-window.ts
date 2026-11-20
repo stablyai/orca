@@ -332,14 +332,12 @@ export function useNativeChatTranscriptWindow({
     }
   }, [isAlignHeld, reconcileReaderScroll])
 
-  const measureRow = useNativeChatRowMeasure(virtualizer, isVisible)
-
   return {
     virtualItems: virtualizer.getVirtualItems(),
     totalSize: virtualizer.getTotalSize(),
     scrollMargin,
     sizerRef,
-    measureRow,
+    measureRow: useNativeChatRowMeasure(virtualizer, isVisible),
     alignToViewportTop,
     isAlignPending,
     cancelAlign,
