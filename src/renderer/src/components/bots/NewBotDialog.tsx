@@ -50,6 +50,7 @@ import { NewBotPurposeField } from './NewBotPurposeField'
 import { BotCreateButton } from './BotCreateButton'
 import { BARE_HEADING_CLASS, keyboardNavMarkerHandlers } from './new-bot-bare-fields'
 import { openBotTemplates } from './templates/bot-templates-open'
+import { pictureTintFor } from './avatar-picture-tint'
 
 type NewBotDraft = NewBotProposalDraft & { purpose: string }
 
@@ -231,8 +232,12 @@ export function NewBotDialog({
   }
 
   const showTemplateLink = !proposal && !fromTemplates && !name && !draft.purpose
+  // A mascot's band is its tile color; a picture's is its background's, read when it was taken in.
+  const band = picture.shownUpload
+    ? pictureTintFor(picture.shownUpload)
+    : (picture.color ?? DEFAULT_BOT_AVATAR_COLOR)
   const bandStyle: React.CSSProperties & { '--new-bot-band': string } = {
-    '--new-bot-band': picture.color ?? DEFAULT_BOT_AVATAR_COLOR
+    '--new-bot-band': band ?? DEFAULT_BOT_AVATAR_COLOR
   }
 
   return (
@@ -263,8 +268,9 @@ export function NewBotDialog({
           }
         }}
       >
-        {/* A soft band of the picture's colour behind the top of the dialog; an upload has none. */}
-        {picture.shownUpload ? null : (
+        {/* A soft band of the picture's colour behind the top of the dialog; none for a picture whose
+            edge is transparent. */}
+        {band === null ? null : (
           <div
             aria-hidden
             style={bandStyle}
