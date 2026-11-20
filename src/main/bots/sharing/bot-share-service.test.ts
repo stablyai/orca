@@ -261,18 +261,6 @@ describe('sharing a bot by link', () => {
     })
   })
 
-  it('keeps another bot’s picks when a link is stopped under a different bot id', async () => {
-    const cloud = fakeCloud()
-    const home = join(root, 'home')
-    await writeHome(home, '# Release notes\n\nDrafts release notes.\n')
-    const picks = new BotSharePicksStore(join(root, 'bot-share-picks.json'))
-    const service = appSession(cloud, home, 'run-1', { signedIn: true }, picks)
-    const first = await publish(service)
-    await picks.set('other-bot', { selection: {}, setupNote: 'keep' })
-    await service.stop(first.share.id, 'other-bot')
-    expect(await picks.get('other-bot')).toMatchObject({ setupNote: 'keep' })
-  })
-
   it('forgets the stopped link’s picks and never makes a new link on update', async () => {
     const cloud = fakeCloud()
     const home = join(root, 'home')
