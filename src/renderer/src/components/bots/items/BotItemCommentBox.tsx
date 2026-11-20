@@ -75,8 +75,6 @@ export type BotItemCommentBoxHandle = {
   fill: (text: string, plain?: boolean) => void
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
-  /** The waiting question "Replying to" names, by its id; null once hidden. */
-  replyingTo: () => string | null
 }
 
 const NO_TARGET = () => null
@@ -98,8 +96,9 @@ export function BotItemCommentBox({
   item: BotItem
   /** The bot's folder workspace and host, which file drops and uploads resolve against. */
   attachTo: BotItemCommentAttachTarget | null
-  /** Takes the comment as the box empties: it shows and goes to the host from there. */
-  onSend: (text: string, paths: readonly string[]) => void
+  /** Takes the comment as the box empties, with the waiting line "Replying to" names (null once
+   *  hidden): it shows and goes to the host from there. */
+  onSend: (text: string, paths: readonly string[], replyingTo: string | null) => void
   /** Not on screen: files dropped on the pane are not taken into its hidden draft. */
   hidden?: boolean
   /** The agent's question the item waits on: its first line, and whether it gave quick replies. */
@@ -239,7 +238,6 @@ export function BotItemCommentBox({
     focus: () => input.current?.focus(),
     focusEnd: caretToEnd,
     type: (typed) => void composer.current?.insertTypedText(typed),
-    replyingTo: () => reply.quote?.id ?? null,
     answer: () => {
       reply.show()
       composer.current?.focus({ caretAtEnd: true, glow: true })
@@ -279,7 +277,7 @@ export function BotItemCommentBox({
       attachments.clearImageAttachments()
     }
     setNotice(null)
-    onSend(text, paths)
+    onSend(text, paths, reply.quote?.id ?? null)
   }
   // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
   const editorChange = useLatestHandler((node: NativeChatComposerInput) => {

@@ -5271,6 +5271,7 @@
       "repliesValue": "Replies: {{value0}}",
       "whoAnswers": "Who answers your messages",
       "peerAsked": "{{from}} asked {{to}}",
+      "peerTold": "{{from}} told {{to}}",
       "peerFollowedUp": "{{bot}} followed up",
       "peerReplyRead": "{{reader}} read {{peer}}'s reply",
       "deleteTitle": "Delete {{name}}?",

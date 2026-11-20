@@ -289,7 +289,8 @@ export function BotSettingsView({
               </fieldset>
             ) : (
               <div
-                className={cn('flex min-w-0 flex-col gap-[18px]', offline ? 'opacity-60' : null)}
+                data-bot-settings-root
+                className={cn('flex min-w-0 flex-col gap-3', offline ? 'opacity-60' : null)}
               >
                 <BotSettingsRoot
                   bot={bot}
