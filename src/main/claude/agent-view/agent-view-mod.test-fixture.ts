@@ -36,12 +36,17 @@ export function fixture(legacy = false) {
       handlers.set(name, hook)
     }
   })
-  const state = {
+  const state: {
+    sessionId: string
+    keybindings: string
+    port: number
+    token: string
+    viewed?: { agentId?: string }
+  } = {
     sessionId: 'session',
     keybindings: bindings('ctrl+alt+g'),
     port: 1234,
-    token: 'test-token',
-    viewed: undefined as { agentId?: string } | undefined
+    token: 'test-token'
   }
   let legacySeenAt = -Infinity
   const posts: { action: string; sessionId: string }[] = []
