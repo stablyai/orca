@@ -19,6 +19,8 @@ export type BotChatTreeWorker = {
   dispatchId?: string
   /** `runtime:<id>` when the workspace runs on another paired computer. */
   hostId?: string
+  /** Where its record places it, relative to the host that answered; absent from older hosts. */
+  host?: 'local' | 'remote'
   agent?: string
   summary?: string
   /** A terminal-only automation run, opened as a run rather than a pane. */
