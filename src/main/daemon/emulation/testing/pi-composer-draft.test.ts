@@ -96,7 +96,7 @@ describe('piComposerHoldsDraft', () => {
       launchAgent: agent,
       data: ''
     })
-    const paneAgent = runtime['mailDeliveryAgent'](TRANSCRIPT_PANE_PTY_ID)
+    const paneAgent = runtime['mailDeliveryAgent'](TRANSCRIPT_PANE_PTY_ID) ?? null
     expect(mailboxComposerHoldsDraft(paneAgent, context)).toBe(held)
   })
 })
