@@ -1,5 +1,6 @@
 import { runInNewContext } from 'node:vm'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { bindings, fixture } from './agent-view-mod.test-fixture'
 import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from './agent-view-mod-source'
 
 it.each(['not-json'])(
@@ -180,3 +181,47 @@ it.each(['not-json'])(
     ).resolves.toEqual({})
   }
 )
+
+afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
+})
+
+it('recovers forgotten sessions and changed endpoints or bindings, including clear and resume', async () => {
+  vi.useFakeTimers()
+  const app = fixture()
+  await app.start()
+  for (const reason of ['clear', 'resume']) {
+    await app.invoke('session.end', { sessionId: app.state.sessionId, reason })
+    app.state.sessionId = `after-${reason}`
+    await app.render()
+    expect(await app.view('child')).toEqual({ status: 'viewed' })
+  }
+  app.bridge.clear()
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(app.posts.slice(-2).map(({ action }) => action)).toEqual(['renew', 'register'])
+  expect(await app.view('child')).toEqual({ status: 'viewed' })
+  app.state.port++
+  app.state.token = 'new-token'
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(app.posts.at(-1)?.action).toBe('register')
+  app.state.keybindings = bindings('ctrl+alt+h')
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(await app.view('child', '\u001b[104;7u')).toEqual({ status: 'viewed' })
+  app.state.keybindings = '{"bindings":[]}'
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(await app.view('child')).toEqual({ status: 'unsupported' })
+  app.state.keybindings = bindings('ctrl+alt+g')
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(await app.view('child')).toEqual({ status: 'viewed' })
+  app.bridge.clear()
+})
+
+it('keeps an older runtime registration alive beyond its fifteen-second expiry', async () => {
+  vi.useFakeTimers()
+  const app = fixture(true)
+  await app.start()
+  await vi.advanceTimersByTimeAsync(32_000)
+  expect(await app.view('child')).toEqual({ status: 'viewed' })
+  app.bridge.clear()
+})

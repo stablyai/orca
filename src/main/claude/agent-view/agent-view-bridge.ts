@@ -1,105 +1,74 @@
 import { randomUUID } from 'node:crypto'
-import { z } from 'zod'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { z } from 'zod'
 import { claudeAgentViewChord } from './agent-view-keybindings'
 import {
   CLAUDE_AGENT_VIEW_SHORTCUTS,
-  ClaudeAgentViewObservation,
+  type ClaudeAgentViewObservation,
   type ClaudeAgentViewSnapshot,
   type ClaudeAgentViewResult
 } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
+import {
+  Message,
+  type BridgeReply,
+  type PendingView,
+  type ViewSession
+} from './agent-view-bridge-protocol'
 
-const Identity = z.object({
-  paneKey: z
-    .string()
-    .max(256)
-    .refine((value) => parsePaneKey(value) !== null),
-  sessionId: z.string().min(1).max(256),
-  instanceId: z.string().min(1).max(256)
-})
-const Message = z.discriminatedUnion('action', [
-  Identity.extend({
-    action: z.literal('register'),
-    keybindings: z.string().max(128 * 1024),
-    view: ClaudeAgentViewObservation.optional()
-  }),
-  Identity.extend({ action: z.literal('observe'), view: ClaudeAgentViewObservation }),
-  Identity.extend({ action: z.literal('take') }),
-  Identity.extend({
-    action: z.literal('ack'),
-    requestId: z.string().max(64),
-    deny: z.string().max(1024).optional()
-  }),
-  Identity.extend({ action: z.literal('end') })
-])
-
-type PendingView = {
-  requestId: string
-  agentId?: string
-  expiresAt: number
-  taken: boolean
-  finish: (result: ClaudeAgentViewResult) => void
-}
-
-type ViewSession = z.infer<typeof Identity> & {
-  chord: string
-  seenAt: number
-  pending?: PendingView
-  view?: z.infer<typeof ClaudeAgentViewObservation>
-}
-
-type BridgeReply = { registered?: true; requestId?: string; agentId?: string; expiresAt?: number }
+const SESSION_TTL_MS = 150_000
+// Expire sessions whose deadlines fall close together in one pass and one publish.
+const EXPIRY_BATCH_MS = 5_000
 
 export class ClaudeAgentViewBridge {
   private readonly sessions = new Map<string, ViewSession>()
   private readonly listeners = new Set<(snapshot: ClaudeAgentViewSnapshot) => void>()
-  private expiryTimer?: ReturnType<typeof setInterval>
+  private expiryTimer?: ReturnType<typeof setTimeout>
+  private publishedSnapshot: ClaudeAgentViewSnapshot = []
 
   subscribe(listener: (snapshot: ClaudeAgentViewSnapshot) => void): () => void {
     this.prune()
     this.listeners.add(listener)
     listener(this.snapshot())
-    this.expiryTimer ??= setInterval(() => this.prune(), 1000)
-    this.expiryTimer.unref()
-    return () => {
-      this.listeners.delete(listener)
-      if (this.listeners.size === 0) {
-        clearInterval(this.expiryTimer)
-        this.expiryTimer = undefined
-      }
-    }
+    return () => void this.listeners.delete(listener)
   }
 
   private snapshot(): ClaudeAgentViewSnapshot {
-    return [...this.sessions.values()].flatMap((session) =>
-      session.view
-        ? [
-            {
-              paneKey: session.paneKey,
-              sessionId: session.sessionId,
-              ...(session.view.agentId ? { agentId: session.view.agentId } : {})
-            }
-          ]
-        : []
-    )
+    return [...this.sessions.values()]
+      .filter((session) => session.view)
+      .map((session) => ({
+        paneKey: session.paneKey,
+        sessionId: session.sessionId,
+        ...(session.view?.agentId ? { agentId: session.view.agentId } : {})
+      }))
   }
 
   private publish(): void {
     const snapshot = this.snapshot()
+    const previous = this.publishedSnapshot
+    if (
+      snapshot.length === previous.length &&
+      snapshot.every(
+        (entry, index) =>
+          entry.paneKey === previous[index].paneKey &&
+          entry.sessionId === previous[index].sessionId &&
+          entry.agentId === previous[index].agentId
+      )
+    ) {
+      return
+    }
+    this.publishedSnapshot = snapshot
     for (const listener of this.listeners) {
       listener(snapshot)
     }
   }
 
-  private observe(session: ViewSession, view: z.infer<typeof ClaudeAgentViewObservation>): void {
+  /** Returns whether the published snapshot can change. */
+  private observe(session: ViewSession, view: z.infer<typeof ClaudeAgentViewObservation>): boolean {
     if (session.view && session.view.revision >= view.revision) {
-      return
+      return false
     }
     const changed = !session.view || session.view.agentId !== view.agentId
     session.view = view
-    if (changed) {
-      this.publish()
-    }
+    return changed
   }
 
   receive(body: unknown): BridgeReply {
@@ -108,24 +77,30 @@ export class ClaudeAgentViewBridge {
       return {}
     }
     const message = parsed.data
-    this.prune()
     const current = this.sessions.get(message.paneKey)
     if (message.action === 'register') {
-      const chord = claudeAgentViewChord(message.keybindings)
+      const chord =
+        current?.keybindings === message.keybindings
+          ? current.chord
+          : claudeAgentViewChord(message.keybindings)
       if (!chord) {
         if (current?.instanceId === message.instanceId && current.sessionId === message.sessionId) {
           current.pending?.finish({ status: 'unavailable' })
           this.sessions.delete(message.paneKey)
+          this.armExpiry()
           this.publish()
         }
-        return {}
+        return { renew: true }
       }
       if (!current && this.sessions.size >= 1024) {
         return {}
       }
-      if (current?.instanceId === message.instanceId && current.sessionId === message.sessionId) {
+      const known =
+        current?.instanceId === message.instanceId && current.sessionId === message.sessionId
+      if (known) {
         current.seenAt = Date.now()
         current.chord = chord
+        current.keybindings = message.keybindings
       } else {
         current?.pending?.finish({ status: 'unavailable' })
         this.sessions.set(message.paneKey, {
@@ -133,15 +108,17 @@ export class ClaudeAgentViewBridge {
           sessionId: message.sessionId,
           instanceId: message.instanceId,
           chord,
+          keybindings: message.keybindings,
           seenAt: Date.now()
         })
-        this.publish()
       }
       const session = this.sessions.get(message.paneKey)
-      if (session && message.view) {
-        this.observe(session, message.view)
+      const viewChanged = session && message.view ? this.observe(session, message.view) : false
+      this.armExpiry()
+      if (!known || viewChanged) {
+        this.publish()
       }
-      return { registered: true }
+      return { registered: true, renew: true }
     }
     if (
       !current ||
@@ -150,14 +127,26 @@ export class ClaudeAgentViewBridge {
     ) {
       return {}
     }
+    if (message.action === 'renew') {
+      current.seenAt = Date.now()
+      this.armExpiry()
+      // Carrying the view repairs a lost observe without a full registration.
+      if (message.view && this.observe(current, message.view)) {
+        this.publish()
+      }
+      return { registered: true }
+    }
     if (message.action === 'end') {
       current.pending?.finish({ status: 'unavailable' })
       this.sessions.delete(message.paneKey)
+      this.armExpiry()
       this.publish()
       return {}
     }
     if (message.action === 'observe') {
-      this.observe(current, message.view)
+      if (this.observe(current, message.view)) {
+        this.publish()
+      }
       return {}
     }
     const request = current.pending
@@ -227,7 +216,7 @@ export class ClaudeAgentViewBridge {
       session.chord === shortcut.chord &&
       session.pending === pending &&
       pending.expiresAt >= Date.now() &&
-      Date.now() - session.seenAt <= 15000
+      Date.now() - session.seenAt < SESSION_TTL_MS
     const timeout = setTimeout(() => finish({ status: 'timeout' }), 5500)
     const abort = () => finish({ status: 'unavailable' })
     args.signal?.addEventListener('abort', abort, { once: true })
@@ -255,19 +244,40 @@ export class ClaudeAgentViewBridge {
       session.pending?.finish({ status: 'unavailable' })
     }
     this.sessions.clear()
+    clearTimeout(this.expiryTimer)
+    this.expiryTimer = undefined
     this.publish()
   }
 
+  // Renewals only move deadlines later, so a pending timer may fire early but never late.
+  private armExpiry(): void {
+    if (this.expiryTimer || this.sessions.size === 0) {
+      return
+    }
+    let deadline = Infinity
+    for (const session of this.sessions.values()) {
+      deadline = Math.min(deadline, session.seenAt + SESSION_TTL_MS)
+    }
+    this.expiryTimer = setTimeout(
+      () => {
+        this.expiryTimer = undefined
+        this.prune()
+        this.armExpiry()
+      },
+      Math.max(0, deadline - Date.now()) + EXPIRY_BATCH_MS
+    )
+    this.expiryTimer.unref()
+  }
+
   private prune(): void {
-    let changed = false
+    const size = this.sessions.size
     for (const [paneKey, session] of this.sessions) {
-      if (Date.now() - session.seenAt > 15000) {
+      if (Date.now() - session.seenAt >= SESSION_TTL_MS) {
         session.pending?.finish({ status: 'unavailable' })
         this.sessions.delete(paneKey)
-        changed = true
       }
     }
-    if (changed) {
+    if (this.sessions.size !== size) {
       this.publish()
     }
   }

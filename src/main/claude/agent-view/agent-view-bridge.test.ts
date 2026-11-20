@@ -7,7 +7,10 @@ const identity = {
   instanceId: 'instance'
 }
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
+})
 
 describe('Claude agent view delivery', () => {
   it('requires a matching live mod and its acknowledgement, and consumes each request once', async () => {
@@ -83,4 +86,26 @@ describe('Claude agent view delivery', () => {
     expect(await result).toEqual({ status: 'timeout' })
     expect(bridge.receive({ ...identity, action: 'take' })).toEqual({})
   })
+})
+
+it('repairs a lost view observation from the next renewal', () => {
+  const bridge = new ClaudeAgentViewBridge()
+  const frames: unknown[] = []
+  bridge.subscribe((snapshot) => frames.push(snapshot))
+  bridge.receive({
+    ...identity,
+    action: 'register',
+    view: { revision: 1 },
+    keybindings:
+      '{"bindings":[{"context":"Chat","bindings":{"ctrl+alt+g":"command:orca-agent-view"}}]}'
+  })
+  expect(
+    bridge.receive({ ...identity, action: 'renew', view: { agentId: 'child', revision: 2 } })
+  ).toEqual({
+    registered: true
+  })
+  expect(frames.at(-1)).toEqual([
+    { paneKey: identity.paneKey, sessionId: identity.sessionId, agentId: 'child' }
+  ])
+  bridge.clear()
 })
